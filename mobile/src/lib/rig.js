@@ -229,6 +229,8 @@ export const chainViewOf = (s) =>
  * would leave it at -1 for good.
  */
 export function reset() {
+  /* The AM4's own tuner is no longer kept up for a tuner that is going (see keepUnitTuner). */
+  stopTunerKeep()
   clearTimeout(settleTimer)
   settleTimer = null
   for (const done of settleWaiting.splice(0)) done()
@@ -3126,6 +3128,82 @@ const unitTunerOf = (res) => {
 /* Which press of the tuner this is, so a slow answer to an earlier one is not shown under a later one. */
 let tunerPress = 0
 
+/*
+ * OPENS OF THE TUNER NOT YET ANSWERED. tunerOn goes up as an open is
+ * pressed, long before the unit has it: pressed is not landed, and an open
+ * dropped at its deadline, refused or failed puts it back down. So every
+ * open is counted from its press until its answer (writeTuner), and a
+ * request that has to wait for the link before it can press, as a watch
+ * tap that woke the phone does, from the moment it arrives. A close tried
+ * a second time waits until none is left, then goes only over a tuner
+ * that is not open (lib/watchBridge): never over an open that landed, nor
+ * first to the link ahead of one still on its way, and never kept back by
+ * one that opened nothing.
+ */
+let tunerWaiting = 0
+/** An open of the tuner is on its way: call what this returns once it has its answer, or never will press. */
+export function tunerAskWaits() {
+  tunerWaiting++
+  let open = true
+  return () => {
+    if (!open) return
+    open = false
+    tunerWaiting--
+  }
+}
+/** How many opens of the tuner are on their way, unanswered. */
+export const tunerAsksWaiting = () => tunerWaiting
+
+/*
+ * THE AM4'S OWN TUNER, KEPT UP ONLY WHILE THIS TUNER IS ON SCREEN.
+ *
+ * A computer that keeps the AM4's own tuner up until Close does it on a
+ * lease, and says how long in the open's answer (`keepMs`): with nobody
+ * renewing it, it stops by itself, and the AM4 lets go of its tuner about
+ * 15 seconds later, as it always did. Without that, a Close that never
+ * arrived (the battery gone flat, the app swiped away, the link gone, a
+ * sign-out, which resets this tuner with no close sent) held the AM4 on its
+ * tuner, muted, for as long as the computer ran.
+ *
+ * So this renews it, a few times a lease, for as long as the tuner it was
+ * opened for is open and the app has stayed on screen. Once the app goes
+ * off screen during it, that is the end for this tuner: a phone in a pocket
+ * stops holding the AM4 on its tuner, and coming back does not put the AM4
+ * back on its tuner, muted, before Close can be tapped. Opening the tuner
+ * again starts it again.
+ *
+ * Never over Bluetooth, which keeps the AM4's tuner itself, nor to an older
+ * computer, whose answer has no `keepMs`: there a renewal would be an open.
+ * Each renewal is a tap, so it is dropped rather than sent late, and a Close
+ * made after it goes after it. What it answers is not shown.
+ */
+let tunerKeep = null
+let appOnScreen = true
+function stopTunerKeep() {
+  if (tunerKeep) clearTimeout(tunerKeep.timer)
+  tunerKeep = null
+}
+function keepUnitTuner(press, keepMs) {
+  stopTunerKeep()
+  if (!appOnScreen || !Number.isFinite(keepMs) || keepMs <= 0) return
+  const every = Math.max(1000, Math.floor(keepMs / 4))
+  const keep = { timer: null }
+  const renew = () => {
+    if (tunerKeep !== keep) return
+    if (press !== tunerPress || !state.tunerOn) return stopTunerKeep()
+    device.renewTuner({ deadline: tapDeadline() }).catch(() => {})
+    keep.timer = setTimeout(renew, every)
+  }
+  keep.timer = setTimeout(renew, every)
+  tunerKeep = keep
+}
+
+/** Whether the app is on screen, as the link hears it from the phone: gone off it, the tuner's keep stops for good. */
+export function setOnScreen(on) {
+  appOnScreen = on !== false
+  if (!appOnScreen) stopTunerKeep()
+}
+
 /**
  * Turn the tuner on or off.
  *
@@ -3142,22 +3220,43 @@ export async function writeTuner(on, at = Date.now()) {
   pressed()
   const press = ++tunerPress
   const card = linkCard()
+  stopTunerKeep()
   set({ tunerOn: on, tuning: on ? state.tuning : null, unitTuner: null, error: null, errorLink: false, dropped: null })
   if (!on) stopDemoTuner()
+  /* An open is on its way until its answer, whatever tunerOn says meanwhile (tunerAskWaits). */
+  const answered = on ? tunerAskWaits() : () => {}
   try {
     const res = await device.setTuner(on, on ? { deadline: tapDeadline(at) } : undefined)
-    /* Kept only while it is still the open tuner it is about. */
-    if (on && press === tunerPress && state.tunerOn) set({ unitTuner: unitTunerOf(res) })
+    /* Kept only while it is still the open tuner it is about, and so is the keep of the AM4's own. */
+    if (on && press === tunerPress && state.tunerOn) {
+      set({ unitTuner: unitTunerOf(res) })
+      keepUnitTuner(press, res?.keepMs)
+    }
     /* Only once the unit has agreed, and only in the demo — on a real rig the
        readings come off the relay and a second source would fight them. */
     if (on) startDemoTuner()
     return true
   } catch (err) {
-    /* An opening taken over by a newer one (relay-rules newestPresses): the tuner that one opened stays open. */
-    if (err?.overtaken) return false
+    /*
+     * An older press's failure is not said over a newer one, which is the
+     * tuner now and says its own. An opening a newer one took over
+     * (relay-rules newestPresses) leaves the tuner that one opened; and a
+     * close that failed 20 seconds late used to put the flag down over an
+     * open made since and landed, so the screens said off over a tuner on,
+     * and the watch's second close then shut it mid-tune.
+     *
+     * Taken over while it is still the newest press, though, an opening can
+     * only have been overtaken by a close pressed before it and handed to
+     * the relay after (a close has no deadline, so it is stamped as it is
+     * sent): the unit is closed, so the flag goes down here too, with the
+     * open said as not sent.
+     */
+    if (press !== tunerPress) return false
     stopDemoTuner()
     set({ tunerOn: false, tuning: null, ...faultFrom(err), ...keptOver(err, card) })
     return false
+  } finally {
+    answered()
   }
 }
 

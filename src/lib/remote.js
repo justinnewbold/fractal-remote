@@ -73,7 +73,9 @@ export {
   /* And Play's words for a pick that never answers, and its row under Which unit; and for a unit on another computer. */
   missingPickCard,
   missingPickRow,
-  unitElsewhereCard
+  unitElsewhereCard,
+  /* And how a computer you don't use comes off Which unit, at that computer. */
+  notUsingOne
 } from '../../shared/relay-rules.mjs'
 import {
   forbiddenRemotely,
@@ -85,6 +87,7 @@ import {
   hostConflict as conflictBetween,
   hostNamesFrom as namesFrom,
   firstUnitHost,
+  onceNames,
   rollCallLine,
   unitChoices,
   unitFrom,
@@ -744,7 +747,7 @@ async function askAlone(name, { windowMs, sleep }) {
  * answer that does not come back alone is not believed either.
  */
 async function readUnits({ windowMs, sleep, only = null }) {
-  const once = hosts.filter((name, i) => hosts.indexOf(name) === i && hosts.lastIndexOf(name) === i && (!only || only.includes(name)))
+  const once = onceNames(hosts).filter((name) => !only || only.includes(name))
   const found = await Promise.all(
     once.map(async (name) => {
       const [health, device] = await Promise.all([

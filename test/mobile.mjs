@@ -15,9 +15,9 @@
  */
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parse } from '@babel/parser'
 import babelTraverse from '@babel/traverse'
@@ -2578,7 +2578,9 @@ export function run(test) {
     /* Blocks take their column count from `fxCols`, which is the setting's
        own `fx` until fit is measuring — fit widens the rows rather than let a
        tile drop under a thumb. Either way it comes from the setting. */
-    assert.match(stage, /const fxCols = fitted \? fitted\.fxCols : size\.fx/, 'the chain column count is no longer the chosen one')
+    /* Play's shape's, which is the setting's own `fx` under 621 points of row (lib/playShape; test/duo.mjs holds it). */
+    assert.match(stage, /const fxCols = fitted \? fitted\.fxCols : shape\.fxCols/, 'the chain column count is no longer the chosen one')
+    assert.match(stage, /fxCols: shape\.fxCols,/, 'Fit starts the chain from something other than the chosen count')
     assert.match(stage, /width: tileWidth\(row, fxCols\)/, 'the chain is a fixed number across whatever the setting says')
     /*
      * And `row` is not the raw measurement, which is zero on the first frame of
@@ -2591,9 +2593,10 @@ export function run(test) {
      * the same answer the measurement gives, and `onLayout` still wins the
      * moment it lands.
      */
+    /* Play's own width less its padding: on its first frame the window's less the phone's own down its sides, or, back to a window the same width, the width it was last measured at (lib/screenShape firstFrame; test/duo.mjs runs it, mount after mount). */
     assert.match(
       stage,
-      /const row = grid \|\| Math\.max\(0, screen - space\.lg \* 2\)/,
+      /const row = grid \|\| Math\.max\(0, pageRow\(playWidth, space\.lg\) - fold\.left - fold\.right\)\n/,
       'the tiles are drawn from a width that is zero until the screen has been measured'
     )
     assert.match(stage, /setGrid\(e\.nativeEvent\.layout\.width\)/, 'nothing measures the row any more, so an unusual screen stays guessed at')
@@ -3091,21 +3094,52 @@ export function run(test) {
      * screen rather than the one it was found on.
      */
     const bad = []
+    /*
+     * Every contentContainerStyle in every file, read as code, and every
+     * style object it can be: one written in place, either side of a
+     * condition (Play's page is one of two, by its shape), or one inside an
+     * array. A pattern over the text read only the first kind, and stopped
+     * reading Play's page without saying so when it became a condition.
+     */
+    const styles = new Map()
+    const objectsIn = (node, out = []) => {
+      if (!node || typeof node !== 'object') return out
+      if (node.type === 'ObjectExpression') out.push(node)
+      else if (node.type === 'ConditionalExpression') [node.consequent, node.alternate].forEach((n) => objectsIn(n, out))
+      else if (node.type === 'LogicalExpression') [node.left, node.right].forEach((n) => objectsIn(n, out))
+      else if (node.type === 'ArrayExpression') node.elements.forEach((n) => objectsIn(n, out))
+      return out
+    }
+    const said = (obj, key) => {
+      const prop = obj.properties.find((p) => p.type === 'ObjectProperty' && (p.key.name || p.key.value) === key)
+      return prop ? prop.value.value : undefined
+    }
     for (const file of [
       ...walk(new URL('../mobile/src/screens/', import.meta.url)),
       ...walk(new URL('../mobile/src/components/', import.meta.url))
     ]) {
-      const text = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ')
-      /* Every contentContainerStyle in the file, brace-balanced enough for a
-         style object one level deep. */
-      for (const m of text.matchAll(/contentContainerStyle=\{\{([^{}]*)\}\}/g)) {
-        const style = m[1].replace(/\s+/g, ' ')
-        if (/flexGrow: 1/.test(style) && /justifyContent: 'center'/.test(style)) {
-          bad.push(`${String(file).split('/mobile/')[1]}: ${style.trim()}`)
+      const name = String(file).split('/mobile/')[1]
+      const src = readFileSync(file, 'utf8')
+      if (!src.includes('contentContainerStyle')) continue
+      traverse(parse(src, { sourceType: 'module', plugins: ['jsx'] }), {
+        JSXAttribute(path) {
+          if (path.node.name.name !== 'contentContainerStyle') return
+          const value = path.node.value?.type === 'JSXExpressionContainer' ? path.node.value.expression : null
+          for (const obj of objectsIn(value)) {
+            styles.set(name, (styles.get(name) || 0) + 1)
+            if (said(obj, 'flexGrow') === 1 && said(obj, 'justifyContent') === 'center') {
+              bad.push(`${name}:${obj.loc.start.line}: flexGrow: 1 with justifyContent: 'center'`)
+            }
+          }
         }
-      }
+      })
     }
     assert.deepEqual(bad, [], `a scroll view centres content that can outgrow it:\n${bad.join('\n')}`)
+    /* And it read what it is for: both of Play's pages, the opened-up one and today's, and every screen's own. */
+    assert.equal(styles.get('src/screens/Stage.js'), 2, 'the check did not read both of Play’s pages')
+    for (const screen of ['src/screens/SignIn.js', 'src/screens/Settings.js', 'src/screens/Edit.js', 'src/screens/Setlists.js']) {
+      assert.ok(styles.get(screen) > 0, `the check did not read ${screen}`)
+    }
 
     /* And the screen it was found on starts at the top, with room under the
        last thing on it for the home indicator. */
@@ -3207,12 +3241,18 @@ export function run(test) {
 
     /* Everything that pops up is drawn AFTER the content, outside the scrolling
        part of the screen — an overlay nested in the flow is an overlay that can
-       still push things around. */
+       still push things around. Outside the page itself, too, on Play's own
+       frame, so a page drawn again in another shape cannot take one with it
+       (test/duo.mjs holds that part); and still on Play, before its frame
+       closes. */
     const scroll = stage.indexOf('</ScrollView>')
+    const frameEnd = stage.indexOf('\n    </View>\n  )\n}\n', scroll)
+    assert.ok(frameEnd > scroll, 'Play’s own frame moved; this check reads it')
     for (const tag of ['<ChannelSheet', '<Tuner']) {
       const at = stage.indexOf(tag)
       assert.ok(at > 0, `${tag} is gone from the stage screen`)
-      assert.ok(at < scroll, `${tag} escaped the screen entirely`)
+      assert.ok(at > scroll, `${tag} is inside the scrolling page`)
+      assert.ok(at < frameEnd, `${tag} escaped the screen entirely`)
     }
     /* The volume is no longer one of them: its speaker moved to the bar at the
        top of the app, and the sheet went with the button that opens it. It is
@@ -3630,6 +3670,54 @@ export function run(test) {
           `${name} touches ${file}, which moves the phones' fingerprint: a build with it would stop updates reaching the phones already out there`
         )
       }
+    }
+  })
+
+  test('the patches waiting for a build apply one after another, in the README’s order', () => {
+    /*
+     * The day a build is agreed, the README says to apply them "in the order
+     * of the table". Each one applying alone (above) is not that: on 23
+     * October 2026 photo-picker.patch applied alone and stopped once r8.patch
+     * was in ("patch failed: mobile/package.json:21"), because both add to
+     * mobile/package.json beside each other and its context was the line r8
+     * puts a package after. So they are tried as the build will take them, in
+     * a copy of the files they touch, never in the tree.
+     */
+    const root = fileURLToPath(new URL('../', import.meta.url))
+    const readme = readFileSync(join(root, 'docs/pending/README.md'), 'utf8')
+    const order = [...readme.matchAll(/^\| `([^`]+\.patch)` \|/gm)].map((m) => m[1])
+    /*
+     * With one patch waiting, or none, there is no order to try: each alone is
+     * tried above. That is the branch carrying the build pair after 1.87.52,
+     * which applied all four and deleted their files.
+     */
+    const listed = readdirSync(join(root, 'docs/pending')).filter((f) => f.endsWith('.patch'))
+    assert.deepEqual([...order].sort(), [...listed].sort(), 'the README’s table and the patches in docs/pending are not the same list')
+    if (order.length < 2) return
+    const copy = mkdtempSync(join(tmpdir(), 'pending-'))
+    try {
+      for (const name of order) {
+        const patch = readFileSync(join(root, 'docs/pending', name), 'utf8')
+        for (const [, file] of patch.matchAll(/^--- a\/(\S+)$/gm)) {
+          if (existsSync(join(copy, file)) || !existsSync(join(root, file))) continue
+          mkdirSync(dirname(join(copy, file)), { recursive: true })
+          copyFileSync(join(root, file), join(copy, file))
+        }
+      }
+      /* Git outside any repository, so it applies to the copy and to nothing else. */
+      const plain = { ...process.env, GIT_CEILING_DIRECTORIES: dirname(copy) }
+      for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) delete plain[key]
+      const done = []
+      for (const name of order) {
+        try {
+          execFileSync('git', ['apply', join(root, 'docs/pending', name)], { cwd: copy, stdio: 'pipe', env: plain })
+        } catch (err) {
+          assert.fail(`docs/pending/${name} does not apply after ${done.join(', ') || 'nothing'}, the order the README asks for: ${String(err.stderr || err.message).trim()}`)
+        }
+        done.push(name)
+      }
+    } finally {
+      rmSync(copy, { recursive: true, force: true })
     }
   })
 
@@ -8066,7 +8154,8 @@ export function run(test) {
     assert.ok(four.tile > two.tile, 'Fit did not give the saved rows back to the tiles')
 
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(stage, /const sceneLayout = loadSceneLayout\(sync\)\n\s+const sceneCols = sceneColsFor\(size, sceneLayout\)/, 'the phone ignores the choice')
+    /* Through Play's shape (lib/playShape), which is the layout's own sceneColsFor under 621 points of row: test/duo.mjs holds that. */
+    assert.match(stage, /const sceneLayout = loadSceneLayout\(sync\)\n[\s\S]{0,1200}const shape = playShape\(pageRow\(playWidth, space\.lg\), SIZES\.indexOf\(size\), sceneLayout, shapeWas\.current\)\n[\s\S]{0,600}const sceneCols = shape\.sceneCols\n/, 'the phone ignores the choice')
     assert.match(stage, /sceneOrderFor\(sceneLayout, scenes\.count, loadSceneOrder\(sync\)\)\.map\(\(i\) => \{/, 'the phone draws the scenes in their own order whatever was chosen')
     assert.match(stage, /caption=\{String\(i \+ 1\)\}[\s\S]{0,600}onPress=\{\(\) => writeScene\(i\)\}/, 'a moved tile no longer picks its own scene')
     assert.match(stage, /tileWidth\(row, sceneCols\)/, 'the phone draws scenes at the size step’s width regardless')
@@ -13614,10 +13703,11 @@ export function run(test) {
     assert.match(stage, /setTrim\(\(was\) => was \+ over\)/, 'the overflow is measured and then not used')
     assert.match(stage, /if \(over > 2\)/, 'a rounding pixel starts another fitting pass')
     /* Reset when what is being fitted changes, or a preset with fewer blocks
-       inherits the trim from a bigger one and draws tiny tiles. */
+       inherits the trim from a bigger one and draws tiny tiles. And when Play
+       only gets wider or narrower (test/duo.mjs runs that part). */
     assert.match(
       stage,
-      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{fitBlocks\}:\$\{fitOn\}:\$\{sceneCols\}:\$\{chainNow\.late\}`/,
+      /const fitKey = `\$\{viewport\}:\$\{widthKey\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{fitBlocks\}:\$\{fitOn\}:\$\{sceneCols\}:\$\{chainNow\.late\}`/,
       'the trim is not thrown away when the rig or the screen changes'
     )
     assert.match(stage, /if \(trim !== 0\) setTrim\(0\)/, 'the trim survives a change of preset, so a smaller rig gets a smaller tile')
@@ -16716,6 +16806,70 @@ export function run(test) {
     holds[4].go({ ok: true })
     assert.equal(await again, true)
     await rig.writeTuner(false)
+    /*
+     * A close that failed late, under an open made since that landed: the
+     * open is the tuner now. Its flag stays up and the close's failure is
+     * not said over it. The flag going down there made the screens say off
+     * over a tuner on, and the watch's second close, which reads it, then
+     * shut the tuner mid-tune (lib/watchBridge).
+     */
+    unit.tunerAnswer = () => new Promise((go, no) => holds.push({ go, no }))
+    const shut = rig.writeTuner(false)
+    await clock.advance(10)
+    const reopen = rig.writeTuner(true)
+    await clock.advance(10)
+    holds[6].go({ ok: true })
+    assert.equal(await reopen, true)
+    holds[5].no(new Error('Your computer didn’t answer.'))
+    assert.equal(await shut, false)
+    assert.equal(rig.getState().tunerOn, true, 'a close that failed late put the flag down over an open made since')
+    assert.equal(rig.getState().error, null, 'a close that failed late was said over the open made since')
+    /* The newest press's own failure is still said, and puts the flag down. */
+    const last = rig.writeTuner(false)
+    await clock.advance(10)
+    holds[7].no(new Error('Your computer didn’t answer.'))
+    assert.equal(await last, false)
+    assert.equal(rig.getState().tunerOn, false)
+    assert.ok(rig.getState().error, 'the newest press’s failure was not said')
+    /*
+     * An open overtaken while it is still the newest press: what overtook it
+     * can only be a close pressed before it and handed to the relay after,
+     * stamped as sent. The unit is closed, so the flag goes down, and the
+     * open is said as not sent.
+     */
+    const lone = rig.writeTuner(true)
+    await clock.advance(10)
+    holds[8].no(overtaken())
+    assert.equal(await lone, false)
+    assert.equal(rig.getState().tunerOn, false, 'an open a close overtook left the screens saying on over a closed unit')
+    assert.ok(rig.getState().dropped, 'an open a close overtook was not said as not sent')
+    unit.tunerAnswer = () => ({ ok: true })
+    await rig.writeTuner(false)
+    /* And a request waiting for the link is counted until it is let go of, once, however often it says so. */
+    assert.equal(rig.tunerAsksWaiting(), 0)
+    const one = rig.tunerAskWaits()
+    const two = rig.tunerAskWaits()
+    assert.equal(rig.tunerAsksWaiting(), 2)
+    one()
+    one()
+    assert.equal(rig.tunerAsksWaiting(), 1, 'a request let go of twice was counted off twice')
+    two()
+    assert.equal(rig.tunerAsksWaiting(), 0)
+    /* And every open counts itself, from its press until its answer, whichever answer: pressed is not landed. */
+    unit.tunerAnswer = (body) => (body.on ? new Promise((go, no) => holds.push({ go, no })) : { ok: true })
+    const flight = rig.writeTuner(true)
+    await clock.advance(10)
+    assert.equal(rig.tunerAsksWaiting(), 1, 'an open on its way is not counted')
+    holds[9].no(new Error('Your computer didn’t answer.'))
+    assert.equal(await flight, false)
+    assert.equal(rig.tunerAsksWaiting(), 0, 'an open that failed is still counted')
+    const landed = rig.writeTuner(true)
+    await clock.advance(10)
+    holds[10].go({ ok: true })
+    assert.equal(await landed, true)
+    assert.equal(rig.tunerAsksWaiting(), 0, 'an open that landed is still counted')
+    await rig.writeTuner(false)
+    assert.equal(rig.tunerAsksWaiting(), 0, 'a close counted itself as an open')
     /* And a typed tempo over a tapped one still on its way: the typed one stays on the button. */
     const rigSrc = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
     assert.match(rigSrc, /\(err\) => \{ \/\*[^*]*\*\/ if \(err\?\.overtaken\) return if \(err\?\.notSent && unitBpm != null\) set\(\{ bpm: unitBpm \}\)/, 'a tapped tempo a newer one took over puts the button back')
@@ -17841,7 +17995,8 @@ export function run(test) {
 
   test('the phone’s Stage and Edit draw another preset’s chain as a wait, not as tiles', () => {
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(stage, /\{chainNow\.elsewhere \? \(\s*<View style=\{\{ width: '100%', height: held \? held\.height : undefined, overflow: 'hidden' \}\}>\s*<ChainWait\s+chain=\{chainNow\}/, 'the stage draws the last song’s tiles under this song’s name')
+    assert.match(stage, /\{chainNow\.elsewhere \? \(\s*<View style=\{\{ width: '100%', height: held\?\.height \|\| undefined, overflow: 'hidden' \}\}>\s*<ChainWait\s+chain=\{chainNow\}/, 'the stage draws the last song’s tiles under this song’s name')
+    /* Held to the last chain's height while it was measured at this width; at a new one (an iPad's divider, a Duo folded), its count of cards in their own rows (test/duo.mjs). */
     /* "It shrinks the screen down for about a half a second." The wait keeps
        the last chain's room — as many cards, as wide, as high — and the fit
        keeps counting those blocks, so nothing below the pedals jumps. */

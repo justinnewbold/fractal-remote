@@ -341,12 +341,13 @@ async function linkOnABench() {
       }
     `,
     'demo.mjs': "import { bench } from './bench.mjs'\nexport const isDemo = () => bench.demo\n",
-    'debugLog.mjs': 'export const logDebug = () => {}\n',
+    /* What the phone wrote in its log, as `bench.logged`: "<tag> <line>". */
+    'debugLog.mjs': "import { bench } from './bench.mjs'\nexport const logDebug = (tag, line) => { (bench.logged = bench.logged || []).push(`${tag} ${line}`) }\n",
     'bleSwitch.mjs': 'export const bluetoothOn = () => false\n',
     'bleLink.mjs': 'export const pokeBluetooth = () => {}\nexport const startBluetoothLink = () => {}\nexport const stopBluetoothLink = () => {}\n',
     'tapGate.mjs': read('mobile/src/lib/tapGate.js'),
     'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
-    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const startClean = () => { bench.order.push('startClean') }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const unitReadSince = () => bench.unitRead !== false\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\n",
+    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const startClean = () => { bench.order.push('startClean') }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const unitReadSince = () => bench.unitRead !== false\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\nexport const setOnScreen = (on) => { (bench.onScreen = bench.onScreen || []).push(on) }\n",
     'phone-note.mjs': "export const PHONE_NOTE_PATH = '/store/config/phone'\nexport const phoneNote = () => ({})\nexport const timeToTell = () => false\n",
     /* The relay as link.js hears it: the same order of news as relay.js gives it. */
     'relay.mjs': `
@@ -509,6 +510,8 @@ const STACK_SERVICE = `
     if (path.startsWith('/store/config/')) return p.method === 'GET' ? { data: null } : { ok: true }
     if (path === '/telemetry/meters') return { ok: true }
     if (!c.unit) return { status: 503, body: JSON.stringify({ error: NO_UNIT }) }
+    /* \`c.tuner(body)\`: what this computer answers about the tuner, the AM4's own kept up or not. */
+    if (path === '/tuner' && c.tuner) return c.tuner(JSON.parse(p.body || '{}'))
     if (path === '/preset') return c.unit === 'FM3' ? { number: 479, name: 'Nothing Else Matters' } : { number: 53, name: 'AM4 53' }
     if (path === '/scene') return { index: c.unit === 'FM3' ? 6 : 1 }
     if (path === '/tempo') return { bpm: c.unit === 'FM3' ? 120 : 0 }
@@ -973,6 +976,111 @@ async function tapTempoOnABench() {
     const button = find(tree)
     assert.ok(button, 'the bench could not find the Tap button')
     return { press: () => button.props.onClick(), sent, faces: react.faces, dropped, errors, gate, clock, unit }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+/*
+ * THE WATCH'S REQUESTS ON A BENCH: lib/watchBridge.js itself, run rather
+ * than read, on the hand-turned clock. The hook's first effect (the one
+ * listener for the life of the screen) is run once; the rig, the link and
+ * the log are stand-ins that record. `send(msg)` is a request arriving from
+ * the wrist, `app(status)` the phone's AppState, `bench.answers` what each
+ * writeTuner answers in turn (true when it is empty; a promise holds it),
+ * `bench.onTuner` a hook run as each one is asked, so a test can play the
+ * player opening the tuner in between, and `bench.gate`, when set, a link
+ * that is down: untilConnected waits for the test to settle it, or for its
+ * own time to run out, as link.js's does.
+ */
+async function watchOnABench() {
+  const dir = mkdtempSync(join(tmpdir(), 'watch-bridge-'))
+  const stub = (names) => names.map((n) => `export const ${n}`).join('\n') + '\n'
+  const files = {
+    'package.json': '{ "type": "module" }',
+    'clock.mjs': CLOCK,
+    'bench.mjs': 'export const bench = { rig: { tunerOn: false }, tuner: [], answers: [], onTuner: null, log: [], probes: 0, listener: null, effects: 0, waiting: 0, press: 0, gate: null }\n',
+    'react.mjs': "import { bench } from './bench.mjs'\nexport const useEffect = (fn) => { if (bench.effects++ === 0) fn() }\nexport const useRef = (v) => ({ current: v })\n",
+    'react-native.mjs': "import { bench } from './bench.mjs'\nexport const AppState = { currentState: 'active' }\nbench.AppState = AppState\n",
+    'expo.mjs': "import { bench } from './bench.mjs'\nexport const requireOptionalNativeModule = () => ({ addListener: (name, fn) => { if (name === 'onCommand') bench.listener = fn; return { remove() {} } }, sendState() {} })\n",
+    /* sameBlock and writeChannel are docs/pending/watch-channels.patch's, so this bench still runs once it is applied. */
+    'stub.mjs': stub(['blockColor = () => ({})', 'idOf = (b) => b?.id', 'sameBlock = () => false', 'shortBlock = () => ""', 'metronome = () => ({ on: false })', 'boostPedals = (chain) => chain || []']),
+    'debugLog.mjs': "import { bench } from './bench.mjs'\nexport const logDebug = (...a) => { bench.log.push(a.join(' ')) }\n",
+    /* untilConnected as link.js's: true at once while the link is up, else when it comes back, or false once `ms` (8 s if not said) is up. */
+    'link.mjs': "import * as clock from './clock.mjs'\nimport { bench } from './bench.mjs'\nexport const probeNow = () => { bench.probes++ }\nexport const untilConnected = (ms = 8000) => (bench.gate ? Promise.race([bench.gate.promise, new Promise((r) => clock.setTimeout(() => r(false), ms))]) : Promise.resolve(true))\n",
+    'rig.mjs': `import { bench } from './bench.mjs'
+      export const getState = () => bench.rig
+      export const writeScene = () => true
+      export const writeBypass = () => true
+      export const boostNow = () => null
+      export const pedalSlug = () => null
+      export const writeChannel = () => true
+      export function tunerAskWaits() {
+        bench.waiting++
+        let open = true
+        return () => {
+          if (open) bench.waiting--
+          open = false
+        }
+      }
+      export const tunerAsksWaiting = () => bench.waiting
+      /* As rig.writeTuner: the flag goes as pressed, an open counts as on its way until answered, and only the newest press's failure puts the flag down. */
+      export async function writeTuner(on) {
+        bench.tuner.push(on)
+        const press = ++bench.press
+        bench.rig.tunerOn = on
+        const answered = on ? tunerAskWaits() : () => {}
+        bench.onTuner?.(bench.tuner.length)
+        try {
+          const ok = await (bench.answers.length ? bench.answers.shift() : true)
+          if (!ok && press === bench.press) bench.rig.tunerOn = false
+          return ok
+        } finally {
+          answered()
+        }
+      }
+`,
+    'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
+    'watch-link.mjs': clocked(read('shared/watch-link.mjs'))
+  }
+  let src = read('mobile/src/lib/watchBridge.js')
+  for (const [from, to] of [
+    ["from 'react'", "from './react.mjs'"],
+    ["from 'react-native'", "from './react-native.mjs'"],
+    ["from 'expo'", "from './expo.mjs'"],
+    ["from './blockColors'", "from './stub.mjs'"],
+    ["from './debugLog'", "from './debugLog.mjs'"],
+    ["from './device'", "from './stub.mjs'"],
+    ["from './link'", "from './link.mjs'"],
+    ["from './shortName'", "from './stub.mjs'"],
+    ["from './relay-rules'", "from './relay-rules.mjs'"],
+    ["from './watch-link'", "from './watch-link.mjs'"],
+    ["from './metronome'", "from './stub.mjs'"],
+    ["from './am4-boost'", "from './stub.mjs'"]
+  ]) {
+    assert.ok(src.includes(from), `lib/watchBridge no longer imports ${from}: the bench needs telling`)
+    src = src.replace(from, to)
+  }
+  src = src.replaceAll("from './rig'", "from './rig.mjs'")
+  const left = [...src.matchAll(/^import[\s\S]*?from\s+'([^']+)'/gm)].map((m) => m[1]).filter((m) => !m.endsWith('.mjs'))
+  assert.deepEqual(left, [], 'lib/watchBridge imports something the bench has no stand-in for')
+  files['watchBridge.mjs'] = clocked(src)
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+  const at = (f) => pathToFileURL(join(dir, f)).href
+  try {
+    const { bench } = await import(at('bench.mjs'))
+    const clock = await import(at('clock.mjs'))
+    const bridge = await import(at('watchBridge.mjs'))
+    const rig = await import(at('rig.mjs'))
+    bridge.useWatchBridge({ chain: [] }, () => {})
+    assert.ok(bench.listener, 'the bench never heard the bridge listen for the watch')
+    return {
+      bench,
+      clock,
+      rig,
+      app: (status) => (bench.AppState.currentState = status),
+      send: (msg) => bench.listener({ json: JSON.stringify(msg) })
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -1864,6 +1972,42 @@ export function run(test) {
     assert.equal(t.gate.linkIsDown(), true)
   })
 
+  /*
+   * The AM4's own tuner is kept up while the app is on screen (rig
+   * keepUnitTuner), and the rig is told when it is put away. Put away is
+   * 'background'. iOS's 'inactive' is Control Center pulled down, Siri
+   * listening, the app switcher's first peek: Play is still there under it,
+   * and the tuner open on it was let go 15 seconds into one of those.
+   */
+  test('phone: Control Center or Siri over Play leaves the AM4 on its tuner; putting the app away lets it go', async () => {
+    const t = await linkOnABench()
+    t.link.startLink()
+    await t.clock.advance(1000)
+    assert.deepEqual(t.bench.onScreen, [true], 'the rig is not told the app is on screen at the start')
+    t.app.change('inactive')
+    assert.equal(t.bench.onScreen.at(-1), true, 'Control Center pulled down over Play was taken as the app put away')
+    t.app.change('active')
+    assert.equal(t.bench.onScreen.at(-1), true)
+    /* iOS goes through 'inactive' on the way to 'background', and back the same way. */
+    t.app.change('inactive')
+    t.app.change('background')
+    assert.equal(t.bench.onScreen.at(-1), false, 'the app put away is not said to the rig')
+    t.app.change('inactive')
+    t.app.change('active')
+    assert.equal(t.bench.onScreen.at(-1), true)
+  })
+
+  /* And a loop started with the app already inactive (a launch under Control Center): on screen. Started in the background: not. */
+  test('phone: a link started under Control Center keeps the AM4 on its tuner; one started in the background does not', async () => {
+    for (const [state, on] of [['inactive', true], ['background', false]]) {
+      const t = await linkOnABench()
+      t.app.change(state)
+      t.link.startLink()
+      await t.clock.advance(1000)
+      assert.equal(t.bench.onScreen?.at(-1), on, `a link started with the app ${state} told the rig ${t.bench.onScreen?.at(-1)}`)
+    }
+  })
+
   test('phone: NOT CONNECTED before the phone slept is still NOT CONNECTED when it wakes, with no gap', async () => {
     /* Taking the band down for two seconds only to put it back would be it flickering over a link that never came back. */
     const t = await connectedLoop()
@@ -2046,6 +2190,84 @@ export function run(test) {
     s.app.change('active')
     await s.clock.advance(5000)
     assert.ok(up !== null && up < 1500, `connected ${up === null ? 'never' : `${up} ms`} after the app came back\n${s.lines().join('\n')}`)
+  })
+
+  /*
+   * THE AM4'S OWN TUNER, KEPT UP ON A LEASE THE PHONE RENEWS. A computer
+   * that keeps the AM4's own tuner up says how long in the open's answer
+   * (keepMs), and stops by itself once nobody renews it: a Close that never
+   * arrives (a battery gone, the app swiped away or put away, a sign-out)
+   * then costs that lease and the AM4's own 15 seconds, not the rest of the
+   * gig on a muted tuner. The phone renews it a few times a lease while its
+   * tuner is open and the app is on screen; once it has gone off screen
+   * during that tuner, never again for it, so coming back does not put the
+   * AM4 back on its tuner before Close can be tapped. Never to a computer
+   * that did not say keepMs: there a renewal would be an open.
+   */
+  test('phone: the AM4’s own tuner is kept up only while the tuner is open and on screen, never after a Close, a sign-out or to an older computer', async () => {
+    const s = await stackOnABench()
+    const am4 = {
+      ...AM4_PI,
+      lag: () => 150,
+      old: false,
+      tuners: [],
+      tuner(body) {
+        this.tuners.push({ at: s.clock.now(), ...body })
+        if (body.keep) return this.old ? { ok: true, screen: 'opened' } : { ok: true, keepMs: 20000 }
+        return body.on ? { ok: true, screen: 'opened', ...(this.old ? {} : { keepMs: 20000 }) } : { ok: true, screen: 'closed' }
+      }
+    }
+    s.bench.computers = [am4]
+    s.link.startLink()
+    await s.clock.advance(6000)
+    assert.equal(s.link.linkState().link, 'connected', 'the bench never connected')
+    const renewals = () => am4.tuners.filter((t) => t.keep === true).length
+    const opened = s.rig.writeTuner(true)
+    await s.clock.advance(1000)
+    assert.equal(await opened, true, 'the tuner opened')
+    assert.deepEqual(am4.tuners.map((t) => JSON.stringify(t.keep ? { on: t.on, keep: t.keep } : { on: t.on })), ['{"on":true}'], 'the open, as it always was')
+    await s.clock.advance(60_000)
+    assert.ok(renewals() >= 10 && renewals() <= 13, `renewed every five seconds or so while open and on screen (${renewals()})`)
+    assert.ok(am4.tuners.every((t) => t.on === true), 'every renewal says on, with keep')
+    /* Put away: no more, however long, and not on the way back either. */
+    s.app.change('background')
+    const away = renewals()
+    await s.clock.advance(60_000)
+    assert.equal(renewals(), away, 'renewed with the app off screen')
+    s.app.change('active')
+    await s.clock.advance(60_000)
+    assert.equal(renewals(), away, 'renewed again on the way back, which would put the AM4 back on its tuner, muted')
+    /* Closed: the 0 goes, and nothing after it. */
+    const closed = s.rig.writeTuner(false)
+    await s.clock.advance(1000)
+    await closed
+    assert.equal(am4.tuners.at(-1).on, false, 'the close')
+    await s.clock.advance(30_000)
+    assert.equal(am4.tuners.at(-1).on, false, 'something went after the close')
+    /* Opened again, on screen: kept again. Then a sign-out (the rig reset, no close sent): no more. */
+    const again = s.rig.writeTuner(true)
+    await s.clock.advance(20_000)
+    await again
+    assert.ok(renewals() > away, 'not kept again once opened again')
+    const stopped = s.link.stopLink()
+    await s.clock.advance(1000)
+    await stopped
+    const out = am4.tuners.length
+    await s.clock.advance(60_000)
+    assert.equal(am4.tuners.length, out, 'renewed after the link stopped and the tuner was reset')
+    /* An older computer, whose open says no keepMs: never a renewal, which it would take for an open. */
+    am4.old = true
+    s.link.startLink()
+    await s.clock.advance(6000)
+    const older = s.rig.writeTuner(true)
+    await s.clock.advance(1000)
+    await older
+    const before = renewals()
+    await s.clock.advance(60_000)
+    assert.equal(renewals(), before, 'a renewal sent to a computer that never said keepMs')
+    const last = s.rig.writeTuner(false)
+    await s.clock.advance(1000)
+    await last
   })
 
   /*
@@ -2353,6 +2575,216 @@ export function run(test) {
       assert.equal(t.link.linkState().unitsAsking, false)
     })
   }
+
+  /*
+   * TWO COMPUTERS ANSWERING TO ONE NAME are never asked their unit
+   * (readUnits: asked by it, both answer), so they are never asked again
+   * either: no "Asking it which unit…" under them that cannot end, and no
+   * "did not say its unit, asked again for 4 s" in the log about a name
+   * nothing asked. A new Pi 5 given the old one's Hostname by Imager.
+   */
+  for (const end of ['phone', 'browser']) {
+    test(`${end}: two computers sharing a name are not asked again, and Which unit never says it is asking about them`, async () => {
+      const t = end === 'phone' ? await linkOnABench() : await webLinkOnABench()
+      const { UNIT_ASK_MS } = await import('../shared/relay-rules.mjs')
+      t.bench.unitsAsked = 0
+      t.bench.unitsAskedWith = []
+      t.bench.logged = []
+      t.bench.hosts = ['raspberry pi 5', 'MacBook Pro SG 566', 'raspberry pi 5']
+      t.bench.unitsNow = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true } }
+      const asking = []
+      const stop = t.link.subscribeLink((st) => asking.push(st.unitsAsking))
+      await t.link.askUnknownUnits()
+      await t.clock.advance(0)
+      assert.equal(t.bench.unitsAsked, 0, 'two computers that share a name were asked again, though neither can be asked alone')
+      assert.ok(!asking.includes(true), 'Which unit said it was asking two computers that are never asked')
+      assert.equal(t.link.linkState().unitsAsking, false)
+      /* A third that has not said is asked, alone; the shared name is not in the ask, nor in the log. */
+      t.bench.hosts = ['raspberry pi 5', 'MacBook Pro SG 566', 'raspberry pi 5', 'raspberry pi 3']
+      await t.link.askUnknownUnits()
+      assert.equal(t.bench.unitsAsked, 1)
+      assert.deepEqual(t.bench.unitsAskedWith[0], { windowMs: UNIT_ASK_MS, only: ['raspberry pi 3'] })
+      if (end === 'phone') {
+        const said = t.bench.logged.filter((l) => /asked again/.test(l))
+        assert.deepEqual(said, [`link raspberry pi 3 did not say its unit, asked again for ${UNIT_ASK_MS / 1000} s`], said.join('\n'))
+      }
+      stop?.()
+    })
+  }
+
+  /*
+   * "How can a user remove old units they aren't connected to." The list is
+   * a roll call: a computer leaves it by not answering, and only that
+   * computer can stop answering. So under Which unit, the way, in words that
+   * are true of the code they describe.
+   */
+  test('Which unit says how to take a computer off the list, at that computer, true of the computer app', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const app = r.notUsingOne('app')
+    const page = r.notUsingOne('page')
+    assert.equal(
+      app,
+      'Not using one of these? On that computer, open Fractal Remote, go to Settings → Phone & computer → Phone remote and press Turn off, or switch that computer off. Then close Fractal Remote here all the way (swipe it away) and open it again: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.'
+    )
+    assert.equal(
+      page,
+      'Not using one of these? On that computer, open Fractal Remote, go to Settings → Phone & computer → Phone remote and press Turn off, or switch that computer off. Then reload this page: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.'
+    )
+    for (const words of [app, page]) {
+      for (const must of ['On that computer, open Fractal Remote', 'Settings → Phone & computer → Phone remote', 'press Turn off', 'switch that computer off', 'gone from this list', 'press Forget', 'Turn off lasts until someone presses Turn on there.']) {
+        assert.ok(words.includes(must), `the line lost "${must}": ${words}`)
+      }
+      for (const never of [/this phone/i, /sign out/i, /official/i, /grey/i, /Inc\./]) assert.ok(!never.test(words), `${never} in: ${words}`)
+    }
+    /* Each end its own way to a fresh roll call: the app closed and opened, the page reloaded. Never the other's. */
+    assert.ok(app.includes('close Fractal Remote here all the way (swipe it away) and open it again') && !/reload/i.test(app), app)
+    assert.ok(page.includes('Then reload this page:') && !/swipe/i.test(page), page)
+
+    /* The words are the computer's: its Settings sheet, its page, the fold, the button, and Turn off kept through a restart. */
+    const web = read('src/App.jsx')
+    assert.match(web, /title="Settings"/)
+    assert.match(web, /link: 'Phone & computer',/, 'the computer’s page is not called Phone & computer: say what it is')
+    assert.match(web, /<Section key="phone-remote" title="Phone remote"[\s\S]{0,400}<PhoneRemote /, 'Turn off is not in the Phone remote fold')
+    const panel = read('src/components/PhoneRemote.jsx')
+    assert.match(panel, /onAction\('mac-off'\)[^>]*>\s*Turn off\s*</)
+    assert.match(panel, /onAction\('mac-on'\)[^>]*>\s*Turn on\s*</)
+    assert.match(read('src/lib/link.js'), /export async function setMacRemote\(on\)[\s\S]{0,300}writeHostDoc\('remote\.host', \{ wanted: !!on/, 'Turn off is not written down, so a restart undoes it')
+    assert.match(read('desktop/lib/host.mjs'), /if \(wanted && wanted\.wanted === false\) \{\s*log\('Phone remote: off — it was turned off in the app\.'\)\s*return \{ on: false, reason: 'turned-off'/, 'the computer app no longer keeps Turn off through a restart')
+    /* And a fresh link forgets who answered on the last one (relay.js remoteDisconnect), so one that no longer answers is not listed. */
+    for (const file of ['mobile/src/lib/relay.js', 'src/lib/remote.js']) assert.match(read(file), /export async function remoteDisconnect\(\)[\s\S]{0,700}hosts = \[\]/, file)
+    /* The pick that did not answer is the one left, grayed, with Forget. */
+    assert.deepEqual(r.missingPickRow('raspberry pi 5'), { name: 'raspberry pi 5', label: 'raspberry pi 5 — not answering', forget: 'Forget' })
+  })
+
+  /*
+   * On the phone, the line sits under the Which unit buttons and the pick
+   * that does not answer, in Settings and in the sheet off the unit's name,
+   * dim as each button's own line, and only with two or more computers
+   * listed: one computer has no list to take one off. The app's words, never
+   * the page's. And it keeps nothing: no storage, no new key.
+   */
+  test('phone: how to take a computer off the list is under Which unit, in Settings and the sheet, only with two or more', () => {
+    const detail = "<Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>"
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const settings = read('mobile/src/screens/Settings.js')
+    /* The live one: the demo has a Which unit of its own, for its five pretend units. */
+    const open = settings.indexOf('{hosts.length > 1 ? (')
+    const at = settings.indexOf('<Section>Which unit</Section>', open)
+    assert.ok(open !== -1 && at !== -1 && at - open < 120, 'Which unit is not inside its two-or-more check')
+    const block = settings.slice(open, settings.indexOf(') : null}', at))
+    assert.ok(block.includes(`${detail}{row.detail}</Text>`), 'each button’s own line changed its look: say how')
+    assert.match(block, new RegExp(`<MissingPick[\\s\\S]*?/>\\s*\\{/\\*[^*]*\\*/\\}\\s*${esc(detail)}\\{notUsingOne\\('app'\\)\\}</Text>\\s*</View>\\s*$`), 'the line is not last under Which unit, after the pick that does not answer, dim as a button’s line')
+    assert.match(settings, /import \{ notUsingOne \} from '\.\.\/lib\/relay-rules'/)
+    const sheet = read('mobile/src/components/LiveUnit.js')
+    assert.match(sheet, new RegExp(`<MissingPick name=\\{missing\\} onForget=\\{\\(\\) => forgetMissing\\(\\)\\} />\\s*\\{/\\*[^*]*\\*/\\}\\s*\\{hosts\\.length > 1 \\? ${esc(detail)}\\{notUsingOne\\('app'\\)\\}</Text> : null\\}\\s*</View>\\s*</Sheet>`), 'the sheet off the unit’s name does not end on the line, behind two or more computers')
+    for (const [src, where] of [[settings, 'Settings'], [sheet, 'the sheet']]) {
+      assert.equal(src.match(/notUsingOne\(/g)?.length, 1, `${where} says it more than once, or not at all`)
+      assert.ok(!src.includes("notUsingOne('page')"), `${where} tells a phone to reload a page`)
+    }
+    for (const src of [block, sheet]) assert.ok(!/AsyncStorage|setItem|localStorage/.test(src), 'Which unit keeps something now')
+  })
+
+  /*
+   * On the website, the same line with a reload for the fresh roll call,
+   * under both of its Which unit lists (the section on Phone & computer and
+   * the sheet off the unit's name), after the rows, and only with two or
+   * more computers listed. The section's own opening is written once in
+   * App.jsx and nowhere else (test/structure.mjs reads the file as text).
+   */
+  test('browser: how to take a computer off the list is under both Which unit lists, only with two or more', () => {
+    const app = read('src/App.jsx')
+    const line = `<p className="hint">{notUsingOne('page')}</p>`
+    const opening = "{link.role === 'remote' && link.hosts.length > 1 ? ("
+    assert.equal(app.split(opening).length - 1, 1, 'the Which unit section’s opening is written twice in App.jsx')
+    const at = app.indexOf(opening)
+    const section = app.slice(at, app.indexOf('</Section>', at) + '</Section>'.length)
+    assert.match(section, /^\{link\.role === 'remote' && link\.hosts\.length > 1 \? \(\s*<Section key="which-unit" title="Which unit"/, 'Which unit is not inside its two-or-more check')
+    assert.ok(section.endsWith(`</div>\n                {/* How one you don't use comes off this list, at that computer: the phone's line, with a reload for a fresh roll call. */}\n                ${line}\n              </Section>`), `the line is not last in the Which unit section, after its rows:\n${section.slice(-400)}`)
+    const sheetAt = app.indexOf("<Sheet open={sheet === 'units'}")
+    assert.ok(sheetAt !== -1, 'the Which unit sheet moved: say where')
+    const sheet = app.slice(sheetAt, app.indexOf('</Sheet>', sheetAt) + '</Sheet>'.length)
+    assert.match(sheet, /<\/div>\s*\{\/\*[^*]*\*\/\}\s*\{link\.hosts\.length > 1 \? <p className="hint">\{notUsingOne\('page'\)\}<\/p> : null\}\s*<\/Sheet>$/, 'the sheet off the unit’s name does not end on the line, behind two or more computers')
+    assert.ok(/setSheet\('units'\)/.test(app) && /if \(!isDemo\(\) && link\.role === 'remote' && link\.hosts\.length > 1\) \{\s*setSheet\('units'\)/.test(app), 'the sheet opens with fewer than two computers')
+    assert.equal(app.match(/notUsingOne\('page'\)/g)?.length, 2, 'the line is not under both lists, or is somewhere else too')
+    assert.ok(!app.includes("notUsingOne('app')"), 'the website tells somebody to swipe a page away')
+    assert.equal(app.match(/unitChoices\(link\.hosts, /g)?.length, 2, 'the website has a third Which unit list, or lost one')
+    assert.match(read('src/lib/remote.js'), /\n  notUsingOne\n\} from '\.\.\/\.\.\/shared\/relay-rules\.mjs'/)
+    for (const src of [section, sheet]) assert.ok(!/localStorage|sessionStorage|setItem/.test(src), 'Which unit keeps something now')
+  })
+
+  /*
+   * And under each of two computers with one name, that it is shared: never
+   * "Asking it which unit…", which is never going to end.
+   */
+  test('Which unit says two computers share a name under each, and nothing else moves', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const shared = 'Two computers are called raspberry pi 5, so they can’t be told apart. Switch one off, or give one a new name and restart it.'
+    assert.equal(r.sharedName('raspberry pi 5'), shared)
+    assert.deepEqual(r.onceNames(['raspberry pi 5', 'MacBook Pro SG 566', 'raspberry pi 5', 'raspberry pi 3']), ['MacBook Pro SG 566', 'raspberry pi 3'])
+    assert.deepEqual(r.onceNames([]), [])
+    const hosts = ['raspberry pi 5', 'MacBook Pro SG 566', 'raspberry pi 5', 'raspberry pi 3']
+    const units = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true } }
+    for (const asking of [false, true]) {
+      const rows = r.unitChoices(hosts, units, 'MacBook Pro SG 566', asking)
+      assert.deepEqual(
+        rows.map((x) => [x.name, x.label, x.detail, x.on]),
+        [
+          ['MacBook Pro SG 566', 'FM3', 'on MacBook Pro SG 566', true],
+          ['raspberry pi 5', 'raspberry pi 5', shared, false],
+          ['raspberry pi 5', 'raspberry pi 5', shared, false],
+          ['raspberry pi 3', 'raspberry pi 3', r.unitNotSaid(asking), false]
+        ]
+      )
+      assert.equal(new Set(rows.map((x) => x.key)).size, rows.length, 'two rows share a key')
+    }
+    /* With no name heard twice, exactly as 1.87.52 had it. */
+    const before = (hostNames = [], units = {}, chosen = null, asking = false) => {
+      const rows = hostNames.map((name, i) => {
+        const unit = units?.[name] || null
+        return { name, key: `${name}-${i}`, label: unit ? (unit.plugged ? unit.model : 'No unit plugged in') : name, detail: unit ? `on ${name}` : r.unitNotSaid(asking), plugged: Boolean(unit?.plugged), on: name === chosen }
+      })
+      return [...rows.filter((x) => x.plugged), ...rows.filter((x) => !x.plugged)]
+    }
+    const cases = [
+      [[], {}, null, false],
+      [['raspberry pi 5', 'MacBook Pro SG 566', 'raspberry pi 3'], { 'raspberry pi 5': { model: 'FM3', plugged: false }, 'MacBook Pro SG 566': { model: 'FM3', plugged: true }, 'raspberry pi 3': { model: 'AM4', plugged: true } }, 'raspberry pi 3', false],
+      [['Old Mac', 'MacBook Pro'], { 'MacBook Pro': { model: 'FM3', plugged: true } }, null, true],
+      [['Old Mac', 'MacBook Pro'], {}, 'Old Mac', false]
+    ]
+    for (const args of cases) assert.deepEqual(r.unitChoices(...args), before(...args), JSON.stringify(args))
+  })
+
+  /*
+   * Three answering to one name are three, not two, and switching one off
+   * leaves two. Three Pis set up the keyboard-and-screen way, which never
+   * asks for a Hostname, all keep the default. And answers whose name could
+   * not be read are all called 'a computer' (hostNamesFrom): neither computer
+   * is called that, and a new name would not make the answer readable.
+   */
+  test('Which unit says how many share a name, and never calls an unreadable answer a name to change', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const three = 'Three computers are called raspberrypi, so they can’t be told apart. Switch all but one off, or give the others new names and restart them.'
+    assert.equal(r.sharedName('raspberrypi', 3), three)
+    assert.equal(r.sharedName('raspberrypi', 2), r.sharedName('raspberrypi'))
+    assert.match(r.sharedName('raspberrypi', 4), /^Four computers are called raspberrypi,/)
+    for (const asking of [false, true]) {
+      const rows = r.unitChoices(['raspberrypi', 'MacBook Pro SG 566', 'raspberrypi', 'raspberrypi'], { 'MacBook Pro SG 566': { model: 'FM3', plugged: true } }, null, asking)
+      assert.deepEqual(rows.map((x) => [x.label, x.detail]), [['FM3', 'on MacBook Pro SG 566'], ['raspberrypi', three], ['raspberrypi', three], ['raspberrypi', three]])
+      assert.equal(new Set(rows.map((x) => x.key)).size, rows.length, 'two rows share a key')
+    }
+    /* What hostNamesFrom calls an answer it cannot read, so the two are held to each other. */
+    const unread = await r.hostNamesFrom(['not json', '{"data":{}}', '{"data":{"name":"MacBook Pro"}}'], async (a) => a)
+    assert.deepEqual(unread, [r.NO_NAME, r.NO_NAME, 'MacBook Pro'])
+    for (const asking of [false, true]) {
+      const rows = r.unitChoices(unread, { 'MacBook Pro': { model: 'FM3', plugged: true } }, 'MacBook Pro', asking)
+      assert.deepEqual(rows.map((x) => [x.label, x.detail]), [['FM3', 'on MacBook Pro'], [r.NO_NAME, r.NO_NAME_SAID], [r.NO_NAME, r.NO_NAME_SAID]])
+      for (const x of rows) assert.ok(!/computers are called|new name|Asking it/.test(x.detail), `an answer with no name is told to rename, or is said to be asked: ${x.detail}`)
+    }
+    assert.equal(r.NO_NAME_SAID, 'It answered, but didn’t say its name, so it can’t be asked which unit.')
+    /* One such answer alone is as it was: it is asked, so it says so while it is. */
+    assert.equal(r.unitChoices([r.NO_NAME, 'MacBook Pro'], {}, null, true).find((x) => x.name === r.NO_NAME).detail, r.unitNotSaid(true))
+    for (const words of [three, r.NO_NAME_SAID]) for (const never of [/this phone/i, /official/i, /grey/i, /Inc\./]) assert.ok(!never.test(words), `${never} in: ${words}`)
+  })
 
   test('a computer that has not said its unit is asked again once the count is done and whenever Which unit opens', () => {
     const phone = read('mobile/src/lib/link.js')
@@ -2765,14 +3197,18 @@ export function run(test) {
     assert.match(flat, /\{error && onOpenFix && fixFor\(error\) \? \(/)
     /*
      * Inside the scrolling content `down` only ever sets an opacity: never a
-     * row, never `disabled`. The one exception is handed on, not drawn: the
-     * tuner is a modal over the whole screen, and says it itself (the test
-     * after this one).
+     * row, never `disabled`. The one place it is handed on, not drawn, is the
+     * tuner, a modal over the whole screen that says it itself (the test
+     * after this one); it sits on Play's own frame now, outside the scrolling
+     * content (test/duo.mjs), and is taken out here all the same in case it
+     * ever comes back in.
      */
     const tunerTag = '<Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} down={down} />'
     assert.ok(stage.includes(tunerTag), 'the open tuner is not told the link is down')
-    const inside = stage
-      .slice(stage.indexOf('<ScrollView'), stage.indexOf('</ScrollView>'))
+    /* The page, and the six buttons, which are drawn in it under 621 points of row and in their strip under it from there (PlayFoot). */
+    const footAt = stage.indexOf('function PlayFoot(')
+    assert.ok(footAt > 0, 'the six buttons moved; this check reads them')
+    const inside = (stage.slice(stage.indexOf('<ScrollView'), stage.indexOf('</ScrollView>')) + stage.slice(footAt, stage.indexOf('\n}\n', footAt)))
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(tunerTag, '')
     assert.ok(!/\{\s*down\b|\bdown\s*\?|\bdown\s*&&/.test(inside), 'the scrolling content draws something of its own for the link being down')
@@ -3080,11 +3516,11 @@ export function run(test) {
     assert.match(watchSwift, /sendEvent\("onCommand", \["json": json, "at": at\.timeIntervalSince1970 \* 1000\]\)/, 'a watch request handed over at once carries no time')
     assert.match(watchSwift, /held\.append\(\(json, at\)\)/)
     assert.match(watchSwift, /sendEvent\("onCommand", \["json": item\.json, "at": item\.at\.timeIntervalSince1970 \* 1000\]\)/, 'a held watch request loses the time it arrived')
-    assert.match(flat, /const deadline = tapDeadline\(receivedAt\) probeNow\(\) untilConnected\(Math\.max\(0, deadline - Date\.now\(\)\)\) \.then\(\(up\) => \{ if \(!up \|\| Date\.now\(\) >= deadline\) \{/, 'a woken watch tap waits past its deadline')
+    assert.match(flat, /const deadline = tapDeadline\(receivedAt\) \/\*[^*]*\*\/ const waiting = cmd\.do === 'tuner' \? tunerAskWaits\(\) : \(\) => \{\} probeNow\(\) untilConnected\(Math\.max\(0, deadline - Date\.now\(\)\)\) \.then\(\(up\) => \{ try \{ if \(!up \|\| Date\.now\(\) >= deadline\) \{/, 'a woken watch tap waits past its deadline')
     /* The second try after a pause is only for the tuner closing. */
     const tapPath = flat.slice(flat.indexOf('const deadline = tapDeadline(receivedAt)'))
     assert.ok(!/pause\(1500\)/.test(tapPath.slice(0, tapPath.indexOf('return () =>'))), 'a woken watch tap is tried a second time, later still')
-    assert.match(flat, /if \(cmd\.do === 'tuner' && !cmd\.on\) \{ probeNow\(\) pause\(400\)/, 'the tuner closing from a woken phone can be dropped')
+    assert.match(flat, /if \(cmd\.do === 'tuner' && !cmd\.on\) \{ const close = \(\) => writeTuner\(false, receivedAt\) const left = \(\) => Math\.max\(0, receivedAt \+ WATCH_CLOSE_WINDOW_MS - Date\.now\(\)\) probeNow\(\) pause\(400\)/, 'the tuner closing from a woken phone can be dropped')
     /* And the watch shows its own "not connected" page while Play says NOT CONNECTED — but never while it is tuning, see the next test. */
     assert.match(read('mobile/src/screens/Stage.js'), /linked: Number\.isInteger\(preset\?\.number\) && \(!down \|\| tunerOn\),/)
   })
@@ -3109,6 +3545,179 @@ export function run(test) {
     assert.match(read('mobile/src/lib/rig.js'), /export function writeScene\(index, at = Date\.now\(\)\) \{\n  if \(refusedNow\(/)
     /* A tuner-off the watch sends as its page goes, with the phone's tuner already off, does nothing. */
     assert.match(bridge, /if \(cmd\.do === 'tuner' && getState\(\)\.tunerOn !== cmd\.on\) return writeTuner\(cmd\.on, receivedAt\)/)
+  })
+
+  /*
+   * TUNER OFF FROM THE WRIST, WITH THE PHONE WOKEN BY IT. The tuner mutes the
+   * unit, so this close is never dropped: it waits for the link and is tried
+   * once more. rig.writeTuner never throws (a close that did not go answers
+   * false), so a retry kept behind a .catch could never run. And a phone
+   * started afresh by the request knows nothing of the tuner: the close goes
+   * whatever the app thinks. Awake, the phone knows, and a close over a
+   * tuner already off still does nothing (the test above).
+   */
+  test('watch: Tuner off from a woken phone is sent even when the app thinks the tuner is off, and tried once more when it did not go', async () => {
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [false], 'a phone started afresh by the watch left the unit muted on its tuner')
+    }
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.rig.tunerOn = true
+      t.bench.answers = [false]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(1000)
+      assert.deepEqual(t.bench.tuner, [false])
+      await t.clock.advance(4000)
+      assert.deepEqual(t.bench.tuner, [false, false], 'a close that did not go was not tried again')
+      assert.ok(t.bench.log.some((l) => /tuner off: the first try did not go; trying once more/.test(l)))
+    }
+    /* Twice not gone: said, and left there. */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.answers = [false, false]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(10000)
+      assert.deepEqual(t.bench.tuner, [false, false], 'tried more than twice')
+      assert.ok(t.bench.log.some((l) => /tuner off: gave up/.test(l)))
+    }
+    /* Opened again on the phone between the two tries: never closed over it. */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.answers = [false]
+      /* The open on Play, a newer press, made while the first close is out. */
+      t.bench.onTuner = (n) => {
+        if (n !== 1) return
+        t.bench.press++
+        t.bench.rig.tunerOn = true
+      }
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(10000)
+      assert.deepEqual(t.bench.tuner, [false], 'the second try shut a tuner the player had opened since')
+      assert.ok(t.bench.log.some((l) => /tuner off: opened again since, so not tried again/.test(l)))
+    }
+    /*
+     * Tuner on from the watch while the second try waits for the link: it
+     * woke the phone too, and waits for the same link, pressing nothing yet.
+     * The second try is first to hear the link back, and finds the tuner
+     * off; only the request still waiting says an open is coming. Sent, the
+     * close would be the newer press and take the open's place before it
+     * landed. So the second try waits for it, then finds the tuner open.
+     */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.answers = [false]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(1000)
+      assert.deepEqual(t.bench.tuner, [false])
+      let up = null
+      t.bench.gate = { promise: new Promise((r) => (up = r)) }
+      await t.clock.advance(1000)
+      t.send({ do: 'tuner', on: true })
+      await t.clock.advance(100)
+      assert.deepEqual(t.bench.tuner, [false], 'the open went before the link was back')
+      t.bench.gate = null
+      up(true)
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [false, true], 'the second try went ahead of an open still waiting for the link')
+      assert.ok(t.bench.log.some((l) => /tuner off: opened again since, so not tried again/.test(l)))
+      assert.equal(t.bench.waiting, 0, 'the open is still counted as waiting after it pressed')
+    }
+    /*
+     * A Tuner on that never opened anything keeps nothing back. Dropped at
+     * its deadline with the link still down, it is let go of, and the second
+     * try, the link back, closes the tuner the first try never reached.
+     */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.answers = [false]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(1000)
+      let up = null
+      t.bench.gate = { promise: new Promise((r) => (up = r)) }
+      t.send({ do: 'tuner', on: true })
+      await t.clock.advance(2000)
+      assert.equal(t.bench.waiting, 0, 'an open dropped at its deadline is still counted as waiting')
+      assert.ok(t.bench.log.some((l) => /tuner not sent: the phone could not reach the rig in time after waking/.test(l)))
+      t.bench.gate = null
+      up(true)
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [false, false], 'a dropped open kept the second try back: the rig stays muted, the screens say off')
+    }
+    /*
+     * And one that pressed and then never went: dropped at the computer, or
+     * refused, after the flag had gone up. Pressed is not landed, so the
+     * second try waits for its answer, not its press, then closes the tuner
+     * neither close reached.
+     */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      let no = null
+      t.bench.answers = [false, new Promise((r) => (no = r))]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(1000)
+      t.send({ do: 'tuner', on: true })
+      await t.clock.advance(100)
+      assert.deepEqual(t.bench.tuner, [false, true])
+      assert.equal(t.bench.rig.tunerOn, true)
+      await t.clock.advance(1500)
+      assert.deepEqual(t.bench.tuner, [false, true], 'the second try went over an open still waiting for its answer')
+      no(false)
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [false, true, false], 'an open that pressed and failed kept the second try back: the rig stays muted, the screens say off')
+      assert.equal(t.bench.waiting, 0)
+    }
+    /*
+     * Never late. The link not back inside WATCH_CLOSE_WINDOW_MS of the
+     * request, the second try is let go of, not left to go at the next
+     * launch over whatever tuner is up by then.
+     */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.answers = [false]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(1000)
+      let up = null
+      t.bench.gate = { promise: new Promise((r) => (up = r)) }
+      await t.clock.advance(30000)
+      t.bench.gate = null
+      up(true)
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [false], 'a second try went after its window')
+      assert.ok(t.bench.log.some((l) => /tuner off: too late to try again/.test(l)))
+    }
+    /* And a Close tapped on Play between the tries: one more close after it does no harm, and closes are never held back. */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.answers = [false]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(1000)
+      await t.rig.writeTuner(false)
+      await t.clock.advance(10000)
+      assert.deepEqual(t.bench.tuner, [false, false, false])
+    }
+    /* Awake: as before, a close over a tuner already off does nothing, and one over an open tuner goes once. */
+    {
+      const t = await watchOnABench()
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [], 'a phone awake closed a tuner it knows is off')
+      t.bench.rig.tunerOn = true
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [false])
+    }
   })
 
   test('a song’s scene and tempo go only after its preset landed', () => {

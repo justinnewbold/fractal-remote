@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Image, PixelRatio, Pressable, RefreshControl, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native'
+import { Image, PixelRatio, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useKeepAwake } from 'expo-keep-awake'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { bandTop, tileWidth as tileWidthIn } from '../lib/tileGrid'
+import { bandTop, pedalName, tileWidth as tileWidthIn } from '../lib/tileGrid'
+import { firstFrame } from '../lib/screenShape'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
 import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot, vp4Here } from '../lib/device'
 import { VP4_ON_OFF_UNKNOWN, vp4StepWords } from '../lib/vp4-safety'
@@ -23,17 +25,8 @@ import {
 } from '../lib/lists'
 import { sync, useStored } from '../lib/store'
 import { nameOf, useNamesHeard } from '../lib/presetNames'
-import {
-  SIZES,
-  fitTiles,
-  loadFit,
-  loadIcons,
-  loadSceneLayout,
-  loadSceneOrder,
-  loadSize,
-  sceneColsFor,
-  sceneOrderFor
-} from '../lib/gigSize'
+import { SIZES, loadFit, loadIcons, loadSceneLayout, loadSceneOrder, loadSize, sceneOrderFor } from '../lib/gigSize'
+import { PAGE_MAX, fitWide, foldInset, pageRow, playShape } from '../lib/playShape'
 import {
   arrivedCurrent,
   clearError,
@@ -122,6 +115,20 @@ const ofSlug = (s) => s.deviceSlug
 const ofBoost = (s) => s.boost
 const ofLastUnit = (s) => s.lastUnit
 const ofUnit = (s) => s.unit
+/*
+ * Play as it was last drawn, kept while the app runs: { width, window, shape },
+ * the width Play measured, how wide the window said it was at that moment,
+ * and the shape it was drawn in (lib/playShape's `was`, so a line Play was
+ * inside the gap of is remembered across a return too). Play is drawn afresh
+ * every time it comes back (from Setlists, Settings, Edit), and its first
+ * frame is drawn before it can be measured: from this while the window is the
+ * width it was (lib/screenShape firstFrame), rather than a phone's shape for
+ * a frame on an iPad or a Duo opened. null until Play has been drawn once in
+ * this run of the app.
+ */
+let lastPlay = null
+/* No extra padding on either side: every shape but the spread one. */
+const NO_FOLD = { left: 0, right: 0 }
 /* The raw words a computer with nothing plugged in answers every unit read with (ForgeFX, registryCore). */
 const NO_DEVICE = /no fractal device found/i
 /* The fault for the card at the top, but not those words while Play says where the unit is instead. */
@@ -307,7 +314,29 @@ export default function Stage({
    * a tablet in split view among them.
    */
   const { width: screen } = useWindowDimensions()
-  const row = grid || Math.max(0, screen - space.lg * 2)
+  const insets = useSafeAreaInsets()
+  /*
+   * Play's first frame, before it can be measured (lib/screenShape
+   * firstFrame): the width and shape it was last drawn in while the window
+   * is the width it was then, and otherwise the window's width less the
+   * phone's own down its sides. On a phone held upright that is the window's
+   * width, to the fraction an Android phone's has: what the first frame was
+   * always drawn at.
+   */
+  const [first] = useState(() => firstFrame(screen, [lastPlay], insets))
+  /*
+   * HOW WIDE PLAY ITSELF IS, measured on the page that fills it, with the
+   * height the fit already measures there: never the window's width, and
+   * never which kind of device this is or which way up it is held. An iPad
+   * beside another app, a Galaxy Fold opened, and the iPhone Duo opened or
+   * closed each change it while a song plays, and a measurement of Play
+   * itself hears every one of them, whatever the window's own size says.
+   * Kept as measured, fraction and all, so the row is the one the grid
+   * measures; only where one width is told from another is it taken to the
+   * point (`widthKey`). On a phone held upright it is measured once, in the
+   * same moment as the height, and is the number the first frame had.
+   */
+  const [playWidth, setPlayWidth] = useState(first.width)
   /*
    * How big the tiles are, chosen in Setup and kept under the browser's own
    * key. Read here rather than passed down, because `useStored` above already
@@ -319,7 +348,41 @@ export default function Stage({
   /* Across, down the two sides, like the unit, or in his own order — chosen
      on the Appearance page and only there. See gigSize. */
   const sceneLayout = loadSceneLayout(sync)
-  const sceneCols = sceneColsFor(size, sceneLayout)
+  /*
+   * PLAY'S SHAPE, FROM PLAY'S OWN WIDTH (lib/playShape). Under 621 points
+   * of row it is today's Play, exactly: the size step's own counts, the
+   * scene layout's own columns, Fit's own caps, three letters on the pedals,
+   * the buttons at the end of the page. From 621 the pedals spell their
+   * names, the buttons are fixed to the bottom and the page stops at 1180;
+   * from 700, at Smallest or Small with the scenes Across or Like the unit,
+   * four scenes and six pedals to a row and the buttons in one row. The last
+   * shape is remembered so each line goes off 40 under where it came on.
+   */
+  const shapeWas = useRef(first.shape)
+  const shape = playShape(pageRow(playWidth, space.lg), SIZES.indexOf(size), sceneLayout, shapeWas.current)
+  shapeWas.current = shape
+  /* Kept for the next time Play is drawn (see lastPlay): a Play that comes
+     back from Setlists to a window the same width draws its first frame in
+     the shape it left in. */
+  useEffect(() => {
+    if (playWidth > 0) lastPlay = { width: playWidth, window: screen, shape }
+  })
+  const sceneCols = shape.sceneCols
+  /*
+   * And, on the spread layout only, Play centered on the screen rather than
+   * between its own edges: the iPhone Duo opened like a book has its fold
+   * down the middle and its clock and camera down one side, so the side
+   * without them is padded out to match and every row's middle gap is the
+   * fold. Nothing on any other shape.
+   */
+  const fold = shape.foldPad ? foldInset(insets.left, insets.right) : NO_FOLD
+  /*
+   * The row the tiles share: measured, or until it is (the first frame of
+   * every mount) Play's own width less its padding, by the same rule the
+   * shape is worked out with. On a phone held upright that is the window's
+   * width less 16 a side, exactly the number it always was.
+   */
+  const row = grid || Math.max(0, pageRow(playWidth, space.lg) - fold.left - fold.right)
   /*
    * SMALLEST MEANS IT FITS. "On the smallest setting, if we could make it so
    * the screen won't scroll and everything fits on the screen — it's barely
@@ -386,6 +449,22 @@ export default function Stage({
    */
   const [trim, setTrim] = useState(0)
   /*
+   * AND LOOKED AT AGAIN ONCE FIT'S NEW ANSWER IS ON THE SCREEN. A trim that
+   * moves Fit's answer without moving anything drawn (the pedals already at
+   * their 44 floor, the scene tiles as tall as their words) left the page's
+   * height where it was, so the check below never ran again and Play stayed
+   * overflowing: a Galaxy Fold folded shut on Play left the cover screen
+   * scrolling, with fewer pedals to a row than it had room for. So an unseen
+   * box the size of Fit's answer is laid out beside the page, and its size is
+   * one more thing the check waits on: it looks again in the same layout pass
+   * as the page's own new height, so a trim that only moved Fit's answer is
+   * followed by another, until Fit takes more pedals to a row and the page
+   * fits. It stops when the answer stops changing (44 tall and the widest
+   * row, or a trim too small to move the tile a whole point), so a rig that
+   * fits nowhere does not go round for ever.
+   */
+  const [laid, setLaid] = useState('')
+  /*
    * THE PEDALS' ROOM IS KEPT WHILE THE NEXT PRESET LOADS.
    *
    * "When changing presets using previous or Next it shrinks the screen down
@@ -424,13 +503,38 @@ export default function Stage({
   const looperState = typeof looperHere?.bypassed === 'boolean' ? (looperHere.bypassed ? 'Off' : 'On') : '\u00a0'
   const tiles = blocks.length + (looperTile ? 1 : 0)
   const heldGrid = useRef({ count: 0, height: 0 })
+  /*
+   * AND ITS HEIGHT FORGOTTEN WHEN PLAY CHANGES WIDTH. The room is a height
+   * measured at one width, and a chain of nine is two rows on one screen and
+   * three on a narrower one: an iPad's divider dragged, or a Duo folded,
+   * while the next preset loads drew the grey cards at the old screen's
+   * height, and the fit counted that height until the chain landed. So a new
+   * width drops the height and keeps the count: the wait is that many cards
+   * at the new width, in as many rows as the chain will take there, with no
+   * height held over them. Not four cards and a sentence, which is the wait
+   * of a first load with nothing known, and moved everything under it up
+   * and back down when the chain landed. The first measurement is not a
+   * change: there was nothing kept before it.
+   */
+  /* Play's width to the point: what tells one width from another, so a fraction of a point of layout is never a new width. */
+  const widthKey = Math.round(playWidth)
+  const heldAt = useRef(widthKey)
+  if (heldAt.current !== widthKey) {
+    if (heldAt.current > 0) heldGrid.current = { count: heldGrid.current.count, height: 0 }
+    heldAt.current = widthKey
+  }
   if (!chainNow.elsewhere && tiles > 0 && blockGrid > 0) heldGrid.current = { count: tiles, height: blockGrid }
-  const held = chainNow.elsewhere && heldGrid.current.height > 0 ? heldGrid.current : null
+  const held = chainNow.elsewhere && heldGrid.current.count > 0 ? heldGrid.current : null
   const fitBlocks = held ? held.count : tiles
   /* The "Updating…" line stands in for a moment and goes: a trim measured
      over it is not the grid's, and is dropped with it. The grey cards no
-     longer count — they hold the grid's own height. */
-  const fitKey = `${viewport}:${scenes.hasScenes ? scenes.count : 0}:${fitBlocks}:${fitOn}:${sceneCols}:${chainNow.late}`
+     longer count — they hold the grid's own height.
+     And Play's width beside its height: the trim is an overflow measured at
+     one size, and only ever grows, so a screen that only got WIDER (an iPad's
+     divider dragged, a Duo opened sideways) kept the narrow screen's
+     correction and drew every tile smaller than it had room for until the
+     next preset. */
+  const fitKey = `${viewport}:${widthKey}:${scenes.hasScenes ? scenes.count : 0}:${fitBlocks}:${fitOn}:${sceneCols}:${chainNow.late}`
   const lastKey = useRef(fitKey)
   if (lastKey.current !== fitKey) {
     lastKey.current = fitKey
@@ -441,18 +545,25 @@ export default function Stage({
     const over = content - viewport
     /* A pixel or two is rounding, not an overflow worth another pass. */
     if (over > 2) setTrim((was) => was + over)
-  }, [fitOn, content, viewport])
+  }, [fitOn, content, viewport, laid])
   /* Only once every piece has been measured. Fitting against a chrome of
      zero would hand the grids the whole screen for one frame, which is the
      flash of wrong sizes this screen already learned to avoid. */
+  /* fitWide is fitTiles' phone-only twin (lib/playShape): fitTiles exactly,
+     answer for answer, except that on the spread layout it may go past the
+     phone's four pedals to a row. */
   const fitted =
     fitOn && viewport > 0 && content > 0 && (sceneGrid > 0 || blockGrid > 0)
-      ? fitTiles({
+      ? fitWide({
           available: viewport - chrome - trim,
           scenes: scenes.hasScenes ? scenes.count : 0,
           blocks: fitBlocks,
           sceneCols,
-          fxCols: size.fx,
+          fxCols: shape.fxCols,
+          /* Four, the phone's own most, except on the spread layout; and
+             fitTiles' own 96 under 621 points, 120 from there. */
+          most: shape.fxMost,
+          max: shape.tileMax,
           gap: space.sm,
           /* The row the blocks sit in, so a small phone is not sent six
              across with tiles too narrow for a picture — see fitTiles. */
@@ -461,7 +572,7 @@ export default function Stage({
       : null
   /** The two numbers the tiles are actually drawn with. */
   const tileH = fitted ? fitted.tile : size.tile
-  const fxCols = fitted ? fitted.fxCols : size.fx
+  const fxCols = fitted ? fitted.fxCols : shape.fxCols
   /** Which block's channel picker is open, by effect id. */
   const [picking, setPicking] = useState(null)
   /* Closed, not only hidden: kept, the sheet came back over the new song's
@@ -819,6 +930,28 @@ export default function Stage({
 
   /* The foot's buttons: the stage floor, or 48 when the screen is asked to fit. */
   const foot = tight ? 48 : TAP
+  /* Everything the six buttons show and do, for PlayFoot in whichever place this shape draws it. */
+  const footing = {
+    oneRow: shape.footRow,
+    foot,
+    dimmed,
+    behind,
+    ahead,
+    landing,
+    noSlotSteps,
+    order,
+    step,
+    source,
+    favourites,
+    lists,
+    where,
+    onOpenSetlists,
+    caps,
+    tunerOn,
+    onOpenEdit,
+    bpm,
+    setTyping
+  }
 
   /*
    * The Apple Watch's four pages, drawn from this screen and worked by its own
@@ -869,17 +1002,50 @@ export default function Stage({
 
   return (
     <View style={{ flex: 1 }}>
+      {fitted ? (
+        <View
+          /* Fit's answer, laid out unseen and untouchable: its size changing
+             is what lets the overflow check look again (`laid`, above). */
+          pointerEvents="none"
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          collapsable={false}
+          onLayout={(e) => setLaid(`${e.nativeEvent.layout.width}:${e.nativeEvent.layout.height}`)}
+          style={{ position: 'absolute', left: 0, top: 0, width: fitted.fxCols, height: fitted.tile, opacity: 0 }}
+        />
+      ) : null}
       <ScrollView
         style={{ flex: 1 }}
         /* The viewport, and everything in it: fit is the difference between
-           the two, less the grids. */
-        onLayout={(e) => setViewport(e.nativeEvent.layout.height)}
-        onContentSizeChange={(_w, h) => setContent(h)}
-        contentContainerStyle={{
-          padding: space.lg,
-          gap: tight ? space.md : space.lg,
-          paddingBottom: tight ? space.lg : space.xxl
+           the two, less the grids. And how wide Play is, from the same
+           measurement, so the two always change together. */
+        onLayout={(e) => {
+          setViewport(e.nativeEvent.layout.height)
+          setPlayWidth(e.nativeEvent.layout.width)
         }}
+        onContentSizeChange={(_w, h) => setContent(h)}
+        contentContainerStyle={
+          shape.wide
+            ? {
+                /* The page no wider than PAGE_MAX, centered, as the browser's;
+                   the fold's padding on the spread layout; and only the
+                   section gap under the chain, since the buttons are in their
+                   own strip below. */
+                width: '100%',
+                maxWidth: PAGE_MAX,
+                alignSelf: 'center',
+                paddingTop: space.lg,
+                paddingLeft: space.lg + fold.left,
+                paddingRight: space.lg + fold.right,
+                gap: tight ? space.md : space.lg,
+                paddingBottom: tight ? space.md : space.lg
+              }
+            : {
+                padding: space.lg,
+                gap: tight ? space.md : space.lg,
+                paddingBottom: tight ? space.lg : space.xxl
+              }
+        }
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => reload()} tintColor={color.silkDim} />
         }
@@ -1107,16 +1273,6 @@ export default function Stage({
             the bottom of somebody's phone.
           */}
           <Coach open={coach && !notesUp} stage={coachStage} onTry={tryCoach} onSkip={closeCoach} onDone={closeCoach} />
-          <Sheet open={watchTip && !coach && !notesUp} onClose={() => setWatchTip(false)} title="Your Apple Watch" note="Fractal Remote is on your watch">
-            <View style={{ gap: space.md }}>
-              {watchHow().map((line) => (
-                <Text key={line} style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
-                  {line}
-                </Text>
-              ))}
-              <Press label="Got it" tone="signal" on onPress={() => setWatchTip(false)} />
-            </View>
-          </Sheet>
 
           {/*
             A wrapped grid of coloured tiles, which is the browser's chain and
@@ -1149,7 +1305,7 @@ export default function Stage({
             style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, opacity: dim ?? (chainNow.late ? 0.55 : chainNow.outline ? 0.72 : 1) }}
           >
             {chainNow.elsewhere ? (
-              <View style={{ width: '100%', height: held ? held.height : undefined, overflow: 'hidden' }}>
+              <View style={{ width: '100%', height: held?.height || undefined, overflow: 'hidden' }}>
                 <ChainWait
                   chain={chainNow}
                   height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
@@ -1184,6 +1340,8 @@ export default function Stage({
                 <Tile
                   key={idOf(block)}
                   label={shortBlock(block)}
+                  /* The whole name from 621 points of row, where it fits; the three letters otherwise, as always. */
+                  full={shape.names ? pedalName(block) : undefined}
                   icon={showIcons ? blockIcon(block.slug) : undefined}
                   topLeft={state}
                   topRight={block.channel || undefined}
@@ -1244,6 +1402,8 @@ export default function Stage({
                 height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
                 onPress={() => setLooping(true)}
                 onLongPress={() => setLooping(true)}
+                /* "Looper" from 621 points of row, as the other pedals spell theirs. */
+                full={shape.names ? pedalName(looperHere) : undefined}
                 style={{ width: tileWidth(row, fxCols) }}
               />
             ) : null}
@@ -1268,112 +1428,9 @@ export default function Stage({
           second time — so stepping presets was at the top of the screen and the
           tuner was off the bottom of it.
         */}
-        <View style={{ gap: space.sm }}>
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            <Press
-              grow
-              label="Previous"
-              icon={chevronIcon}
-              flip
-              /* What Previous will load, on a line as tall as Next's, so the two words sit level. */
-              under={behind.shown}
-              accessibilityLabel={behind.said}
-              height={foot}
-              disabled={landing(-1) === null && !(noSlotSteps && !order)}
-              onPress={() => step(-1)}
-              style={dimmed}
-            />
-            <Press
-              grow
-              caption="Setlists"
-              label={order ? sourceLabel(source, { favourites, lists }) : 'All'}
-              sub={where || undefined}
-              tone="signal"
-              on={Boolean(order)}
-              height={foot}
-              disabled={!onOpenSetlists}
-              onPress={onOpenSetlists}
-            />
-            <Press
-              grow
-              label="Next"
-              after={chevronIcon}
-              under={ahead.shown}
-              accessibilityLabel={ahead.said}
-              height={foot}
-              disabled={landing(1) === null && !(noSlotSteps && !order)}
-              onPress={() => step(1)}
-              style={dimmed}
-            />
-          </View>
-
-          {/*
-            Tuner and Tap on one row, and the tempo ON the Tap button rather than
-            beside it as its own heading with a forty-point number. That number
-            was answering "what is this preset at" with a third of the screen; on
-            the button it answers the same question and costs nothing.
-
-            Tuner only where the unit has one. Absent means unknown — an older
-            host predating the flag — and unknown still gets to try.
-          */}
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            {caps?.tuner !== false ? (
-              <Press
-                grow
-                label={tunerOn ? 'Stop tuner' : 'Tuner'}
-                icon={tunerIcon}
-                tone="live"
-                on={tunerOn}
-                height={foot}
-                onPress={() => writeTuner(!tunerOn)}
-                style={tunerOn ? undefined : dimmed}
-              />
-            ) : null}
-            {/*
-              The way to the bench, in the middle. "Let's move the edit button to
-              the center and the tap tempo button to the right."
-
-              It sat on the right because it is the only one of the three that
-              leaves this screen, and last felt like the place for that. What
-              that reasoning missed is which hand is holding the phone: the
-              right edge is where a thumb rests, and the button under the thumb
-              should be the one pressed mid-song, not the one pressed between
-              them.
-            */}
-            {onOpenEdit ? (
-              <Press grow label="Edit" icon={editIcon} height={foot} onPress={onOpenEdit} />
-            ) : null}
-            {/*
-              Tap Tempo on the right, where the thumb is.
-
-              The one thing in this app that must never be sent twice. A parameter
-              arriving twice leaves the unit where it was; a beat arriving twice is
-              a beat that never happened, so the relay excludes this route from its
-              retry.
-
-              Hold it to type a tempo: "on the tap button, let's do where they hold
-              the tap button they can manually enter in the beats per minute they
-              want."
-            */}
-            <Press
-              grow
-              /* "Change the label on the tap tempo button to just say Tap." */
-              label="Tap"
-              accessibilityLabel={Number.isFinite(bpm) ? `Tap tempo, ${Math.round(bpm)}` : 'Tap tempo'}
-              sub={Number.isFinite(bpm) ? String(Math.round(bpm)) : undefined}
-              icon={tempoIcon}
-              tone="signal"
-              height={foot}
-              onPress={tapTempo}
-              onLongPress={() => setTyping(true)}
-              /* "A green light dot ... that flashes at the current tempo." */
-              badge={<TempoDot bpm={bpm} />}
-              style={dimmed}
-            />
-          </View>
-
-
-        </View>
+        {/* In the page under 621 points of row, as it always was; from there in
+            its own strip fixed to the bottom, below the page (`footFixed`). */}
+        {shape.footFixed ? null : <PlayFoot {...footing} />}
 
         {/*
           NO FOOTER. "Get rid of the everything you change here text at the bottom
@@ -1384,56 +1441,109 @@ export default function Stage({
           top already says which unit is being driven and that the link is up,
           which is the part that goes on mattering.
         */}
-
-        {/*
-          The two things that cover the screen rather than sitting in it, drawn
-          last and outside the foot because both are modals.
-
-          The volume is not among them any more: the speaker moved to the bar at
-          the top of the app, which is where the browser keeps it, and the sheet
-          moved with the button that opens it. See components/TopBar.
-        */}
-        {/*
-          The channel picker, over the screen rather than inside it.
-
-          "When holding a block to change channel have it be an overlay on the
-          screen instead of inserting itself into the screen like the web
-          version." It opened underneath the chain, which pushed everything below
-          it down — so the tiles a thumb was aimed at moved while the thumb was on
-          its way, on the one screen where that can happen mid-song.
-        */}
-        {/*
-          Typing a tempo, high on the screen.
-
-          "When holding tap button to manually enter tempo the keyboard blocks the
-          numbers so you can see what your typing." It was in the foot — which is
-          where a thumb rests and therefore exactly where the keyboard opens.
-        */}
-        <TempoBox
-          open={typing}
-          bpm={bpm}
-          range={tempoRange(device, caps?.via)}
-          onSet={writeTempo}
-          onClose={() => setTyping(false)}
-        />
-
-        <ChannelSheet
-          block={chainNow.elsewhere || chainNow.outline ? null : blocks.find((b) => sameBlock(b, picking)) || null}
-          channels={channels}
-          onClose={() => setPicking(null)}
-          onPick={(ch) => {
-            writeChannel(picking, ch)
-            setPicking(null)
-          }}
-        />
-
-        <Sheet open={looping && !!looperHere && !chainNow.elsewhere} onClose={() => setLooping(false)} title="Looper">
-          {looperHere ? <Looper block={looperHere} /> : null}
-        </Sheet>
-
-        {/* Closing the tuner stops it at the unit, which is what the button does. It says NOT CONNECTED itself: nothing here is drawn over it. */}
-        <Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} down={down} />
       </ScrollView>
+
+      {/*
+        THE SIX BUTTONS FIXED TO THE BOTTOM, from 621 points of row: in their
+        own strip under the page rather than at the end of it, so a short
+        preset leaves its spare room above them and they never float up the
+        screen. Its width and padding are the page's, so its buttons line up
+        with the tiles over them, and on the spread layout the gap between
+        its two halves is the fold. Never drawn under 621: there they are in
+        the page, as they always were.
+      */}
+      {shape.footFixed ? (
+        <View
+          style={{
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: color.rule,
+            paddingTop: space.sm,
+            paddingBottom: tight ? space.lg : space.xxl
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: PAGE_MAX,
+              alignSelf: 'center',
+              paddingLeft: space.lg + fold.left,
+              paddingRight: space.lg + fold.right
+            }}
+          >
+            <PlayFoot {...footing} />
+          </View>
+        </View>
+      ) : null}
+
+      {/*
+        WHAT COMES UP OVER PLAY, on Play's own frame and never inside its
+        scrolling page: the tempo box, the channel picker, the Looper, the
+        tuner and the Apple Watch tip. Each is a modal, so where it sits in
+        here moves nothing on the screen; what it sits IN decides what can
+        take it away. Inside the page, anything that ever draws the page
+        again in another shape (the iPhone Duo opened or folded, an iPad's
+        divider dragged, a layout for a wider screen) could take an open
+        picker with it, and a tempo typed half-way into the box. This frame
+        is the one part of Play that every shape of screen keeps, so a resize
+        leaves each one open as it was.
+
+        The volume is not among them any more: the speaker moved to the bar at
+        the top of the app, which is where the browser keeps it, and the sheet
+        moved with the button that opens it. See components/TopBar.
+      */}
+      {/*
+        The channel picker, over the screen rather than inside it.
+
+        "When holding a block to change channel have it be an overlay on the
+        screen instead of inserting itself into the screen like the web
+        version." It opened underneath the chain, which pushed everything below
+        it down — so the tiles a thumb was aimed at moved while the thumb was on
+        its way, on the one screen where that can happen mid-song.
+      */}
+      {/*
+        Typing a tempo, high on the screen.
+
+        "When holding tap button to manually enter tempo the keyboard blocks the
+        numbers so you can see what your typing." It was in the foot — which is
+        where a thumb rests and therefore exactly where the keyboard opens.
+      */}
+      <TempoBox
+        open={typing}
+        bpm={bpm}
+        range={tempoRange(device, caps?.via)}
+        onSet={writeTempo}
+        onClose={() => setTyping(false)}
+      />
+
+      <ChannelSheet
+        block={chainNow.elsewhere || chainNow.outline ? null : blocks.find((b) => sameBlock(b, picking)) || null}
+        channels={channels}
+        onClose={() => setPicking(null)}
+        onPick={(ch) => {
+          writeChannel(picking, ch)
+          setPicking(null)
+        }}
+      />
+
+      <Sheet open={looping && !!looperHere && !chainNow.elsewhere} onClose={() => setLooping(false)} title="Looper">
+        {looperHere ? <Looper block={looperHere} /> : null}
+      </Sheet>
+
+      {/* Closing the tuner stops it at the unit, which is what the button does. It says NOT CONNECTED itself: nothing here is drawn over it. */}
+      <Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} down={down} />
+
+      {/* The Apple Watch's one-time tip, after the channel tip: a sheet like
+          the others, so on the frame with them. */}
+      <Sheet open={watchTip && !coach && !notesUp} onClose={() => setWatchTip(false)} title="Your Apple Watch" note="Fractal Remote is on your watch">
+        <View style={{ gap: space.md }}>
+          {watchHow().map((line) => (
+            <Text key={line} style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
+              {line}
+            </Text>
+          ))}
+          <Press label="Got it" tone="signal" on onPress={() => setWatchTip(false)} />
+        </View>
+      </Sheet>
 
       {/*
         NOT CONNECTED, OVER THE TILES AND NEVER AMONG THEM. "When the link
@@ -1571,6 +1681,155 @@ export default function Stage({
  * lib/tileGrid for the tablet that wrapped every row without it.
  */
 const tileWidth = (width, n) => tileWidthIn(width, n, space.sm, PixelRatio.get())
+
+/**
+ * PLAY'S SIX BUTTONS: Previous, Setlists and Next over Tuner, Edit and Tap.
+ *
+ * At the end of Play's page under 621 points of row, exactly as they always
+ * were; from there in a strip fixed to the bottom, below the page, so on a
+ * short preset the spare room gathers above them and Previous, Next and Tap
+ * never move from preset to preset (the browser's .gig-foot does the same).
+ * On the spread layout (`oneRow`, lib/playShape `footRow`) they are one
+ * row in two halves: the three that change the preset on the left, the tools
+ * on the right, so with Play centered on the iPhone Duo's fold the fold runs
+ * between Next and Tuner. Tap is the rightmost in every shape: only Tuner
+ * and Edit are ever left out (a unit with no tuner, nowhere to edit).
+ *
+ * Its own component so the one set of buttons can be drawn in either place;
+ * everything it shows and does is Play's, handed in by name.
+ */
+function PlayFoot({
+  oneRow,
+  foot,
+  dimmed,
+  behind,
+  ahead,
+  landing,
+  noSlotSteps,
+  order,
+  step,
+  source,
+  favourites,
+  lists,
+  where,
+  onOpenSetlists,
+  caps,
+  tunerOn,
+  onOpenEdit,
+  bpm,
+  setTyping
+}) {
+  return (
+    <View style={oneRow ? FOOT_ONE_ROW : { gap: space.sm }}>
+      <View style={oneRow ? FOOT_HALF : { flexDirection: 'row', gap: space.sm }}>
+        <Press
+          grow
+          label="Previous"
+          icon={chevronIcon}
+          flip
+          /* What Previous will load, on a line as tall as Next's, so the two words sit level. */
+          under={behind.shown}
+          accessibilityLabel={behind.said}
+          height={foot}
+          disabled={landing(-1) === null && !(noSlotSteps && !order)}
+          onPress={() => step(-1)}
+          style={dimmed}
+        />
+        <Press
+          grow
+          caption="Setlists"
+          label={order ? sourceLabel(source, { favourites, lists }) : 'All'}
+          sub={where || undefined}
+          tone="signal"
+          on={Boolean(order)}
+          height={foot}
+          disabled={!onOpenSetlists}
+          onPress={onOpenSetlists}
+        />
+        <Press
+          grow
+          label="Next"
+          after={chevronIcon}
+          under={ahead.shown}
+          accessibilityLabel={ahead.said}
+          height={foot}
+          disabled={landing(1) === null && !(noSlotSteps && !order)}
+          onPress={() => step(1)}
+          style={dimmed}
+        />
+      </View>
+
+      {/*
+        Tuner and Tap on one row, and the tempo ON the Tap button rather than
+        beside it as its own heading with a forty-point number. That number
+        was answering "what is this preset at" with a third of the screen; on
+        the button it answers the same question and costs nothing.
+
+        Tuner only where the unit has one. Absent means unknown — an older
+        host predating the flag — and unknown still gets to try.
+      */}
+      <View style={oneRow ? FOOT_HALF : { flexDirection: 'row', gap: space.sm }}>
+        {caps?.tuner !== false ? (
+          <Press
+            grow
+            label={tunerOn ? 'Stop tuner' : 'Tuner'}
+            icon={tunerIcon}
+            tone="live"
+            on={tunerOn}
+            height={foot}
+            onPress={() => writeTuner(!tunerOn)}
+            style={tunerOn ? undefined : dimmed}
+          />
+        ) : null}
+        {/*
+          The way to the bench, in the middle. "Let's move the edit button to
+          the center and the tap tempo button to the right."
+
+          It sat on the right because it is the only one of the three that
+          leaves this screen, and last felt like the place for that. What
+          that reasoning missed is which hand is holding the phone: the
+          right edge is where a thumb rests, and the button under the thumb
+          should be the one pressed mid-song, not the one pressed between
+          them.
+        */}
+        {onOpenEdit ? (
+          <Press grow label="Edit" icon={editIcon} height={foot} onPress={onOpenEdit} />
+        ) : null}
+        {/*
+          Tap Tempo on the right, where the thumb is.
+
+          The one thing in this app that must never be sent twice. A parameter
+          arriving twice leaves the unit where it was; a beat arriving twice is
+          a beat that never happened, so the relay excludes this route from its
+          retry.
+
+          Hold it to type a tempo: "on the tap button, let's do where they hold
+          the tap button they can manually enter in the beats per minute they
+          want."
+        */}
+        <Press
+          grow
+          /* "Change the label on the tap tempo button to just say Tap." */
+          label="Tap"
+          accessibilityLabel={Number.isFinite(bpm) ? `Tap tempo, ${Math.round(bpm)}` : 'Tap tempo'}
+          sub={Number.isFinite(bpm) ? String(Math.round(bpm)) : undefined}
+          icon={tempoIcon}
+          tone="signal"
+          height={foot}
+          onPress={tapTempo}
+          onLongPress={() => setTyping(true)}
+          /* "A green light dot ... that flashes at the current tempo." */
+          badge={<TempoDot bpm={bpm} />}
+          style={dimmed}
+        />
+      </View>
+    </View>
+  )
+}
+
+/* The spread layout's one row of buttons, in two halves with the gap between them in the middle. */
+const FOOT_ONE_ROW = { flexDirection: 'row', gap: space.sm }
+const FOOT_HALF = { flex: 1, flexDirection: 'row', gap: space.sm }
 
 /**
  * Which channel a block is on.

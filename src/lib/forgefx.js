@@ -1986,6 +1986,16 @@ export const setTuner = (on, opts) =>
     ? tick().then(() => ({ ok: true }))
     : request('/tuner', { method: 'POST', body: JSON.stringify({ on }), ...tapOf(opts) })
 
+/**
+ * Keep the AM4's own tuner up a while longer, on a computer whose open said
+ * it would (`keepMs`; see deviceState keepUnitTuner). It opens nothing: with
+ * the tuner closed, that computer answers {ok: false} and does nothing.
+ */
+export const renewTuner = (opts) =>
+  mock
+    ? tick().then(() => ({ ok: false }))
+    : request('/tuner', { method: 'POST', body: JSON.stringify({ on: true, keep: true }), ...tapOf(opts) })
+
 
 /**
  * ForgeFX's own preset version history.

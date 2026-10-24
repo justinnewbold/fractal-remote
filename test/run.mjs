@@ -1006,8 +1006,25 @@ test('each computer advertises itself under its own name', async () => {
   // Nothing to go on is the one case where the old constant is still right.
   assert.equal(host.mdnsName(''), 'fractal')
 
-  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
-  assert.match(main, /FRACTAL_MDNS_NAME \|\| mdnsName\(\)/, 'the computer app still advertises a constant')
+  // Both launchers take the name from the one function, and neither reads the override itself:
+  // a raw FRACTAL_MDNS_NAME went out exactly as written, and the device server refused it.
+  for (const file of ['../desktop/main.js', '../scripts/serve.mjs']) {
+    const src = readSrc(new URL(file, import.meta.url), 'utf8')
+    assert.match(src, /const name = advertisedName\(\)/, `${file} does not advertise the name advertisedName makes`)
+    assert.doesNotMatch(src, /process\.env\.FRACTAL_MDNS_NAME/, `${file} reads FRACTAL_MDNS_NAME itself, past advertisedName`)
+  }
+  // With no override, it is this machine's own name.
+  assert.equal(host.advertisedName({ env: {}, machine: 'Studio Mac' }), 'fractal-studio-mac')
+  // An override is the whole name, as one label the network and the device server can carry.
+  const over = (v) => host.advertisedName({ env: { FRACTAL_MDNS_NAME: v }, machine: 'Studio Mac' })
+  assert.equal(over('pedal_board'), 'pedal-board')
+  assert.equal(over('Studio.Rig'), 'studio-rig')
+  assert.equal(over('pedalboard.local'), 'pedalboard', 'an override that names .local itself is advertised as .local.local')
+  assert.equal(over('  Pedal Board!  '), 'pedal-board')
+  assert.ok(over('x'.repeat(80)).length <= 63, 'an override longer than one DNS label is advertised whole')
+  // One with nothing usable in it is no override at all.
+  assert.equal(over('___'), 'fractal-studio-mac')
+  assert.equal(over(''), 'fractal-studio-mac')
 })
 
 test('a model roster with no lineage on it gets one', () => {
@@ -1519,7 +1536,7 @@ test('an update never depends on the quit working', () => {
   assert.match(updates, /install: \(\) => \{/, 'the updater cannot be told to install')
   assert.match(updates, /updater\.quitAndInstall\(\)/, 'installing does not install')
   assert.match(preload, /install: \(\) => ipcRenderer\.invoke\('updates:install'\)/, 'the page cannot ask')
-  assert.match(main, /ipcMain\.handle\('updates:install'/, 'nothing answers the page')
+  assert.match(main, /answerOwnPage\('updates:install'/, 'nothing answers the page')
   assert.match(ui, /bridge\.updates\.install\(\)/, 'the notice never offers it')
 
   // And only for an update that is actually sitting there, so this cannot
@@ -1683,6 +1700,107 @@ test('the web app and the launchers name the same project', async () => {
   const { DEFAULT_PROJECT } = await import('../desktop/lib/project.mjs')
   const remote = await import('../src/lib/remote.js')
   assert.equal(remote.DEFAULT_PROJECT, DEFAULT_PROJECT, 'remote.js carries its own copy of the project again')
+})
+
+test('the device server lets the public site in, and nothing else unless somebody says so', async () => {
+  /*
+   * Since its guard (23 October 2026) ForgeFX answers a page from another
+   * address only when FORGEFX_ALLOWED_ORIGINS names it. The public site,
+   * opened on the computer from the tray, is the computer's own page there:
+   * it signs the computer in and turns the phone remote on. Without this it
+   * would quietly fall back to being a remote.
+   */
+  const { HOSTED_ORIGIN } = await import('../shared/pairing.mjs')
+  const project = await import('../desktop/lib/project.mjs')
+  assert.equal(project.HOSTED_ORIGIN, HOSTED_ORIGIN, 'desktop/lib/project.mjs names a different site from shared/pairing.mjs')
+  assert.equal(host.serverEnv({ env: { PATH: '/bin' }, port: 5056, dist: '/d' }).FORGEFX_ALLOWED_ORIGINS, HOSTED_ORIGIN)
+  assert.equal(host.serverEnv({ env: {}, port: 5056, dist: '/d', asNode: true }).FORGEFX_ALLOWED_ORIGINS, HOSTED_ORIGIN, 'the packaged app starts its device server without the site')
+  // A developer's own page, added by hand, is passed through as written.
+  const dev = `${HOSTED_ORIGIN},http://localhost:5173`
+  assert.equal(host.serverEnv({ env: { FORGEFX_ALLOWED_ORIGINS: dev }, port: 5056, dist: '/d' }).FORGEFX_ALLOWED_ORIGINS, dev)
+  // And an empty one stays empty: somebody turning the site off is not overruled.
+  assert.equal(host.serverEnv({ env: { FORGEFX_ALLOWED_ORIGINS: '' }, port: 5056, dist: '/d' }).FORGEFX_ALLOWED_ORIGINS, '')
+  // The launch passes it on: both launchers start the server with serverEnv.
+  assert.match(readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8'), /serverEnv\(\{ port, dist: distPath\(\), asNode: true \}\)/)
+  assert.match(readSrc(new URL('../scripts/serve.mjs', import.meta.url), 'utf8'), /serverEnv\(/)
+})
+
+/*
+ * ForgeFX's guard, steps 1 and 2 (server/src/guard.ts splitHost, hostAccepted,
+ * selfNames and the Origin classes in decide), transcribed so the addresses
+ * this app hands out are held to what the server answers. The CI step "Every
+ * address the computer hands out is answered" asks the real server the same
+ * question on every Linux build.
+ */
+const guardHost = {
+  split(hostHeader) {
+    const m = /^(\[[0-9a-f:.]+\]|[a-z0-9._-]+)(?::(\d{1,5}))?$/i.exec(hostHeader)
+    return m ? { name: m[1].toLowerCase(), port: m[2] ?? null } : null
+  },
+  own(hostname) {
+    const h = hostname.trim().toLowerCase().replace(/\.$/, '')
+    if (!h) return new Set()
+    const bare = h.replace(/\.local$/, '')
+    return new Set([bare, `${bare}.local`])
+  },
+  accepted(name, own) {
+    return name === 'localhost' || /^\d{1,3}(\.\d{1,3}){3}$/.test(name) || /^\[[0-9a-f.]*:[0-9a-f:.]*\]$/.test(name) || /^[a-z0-9-]+\.local$/.test(name) || own.has(name)
+  },
+  /* What a same-origin page at `url` is, as the server's step 2 sorts its Origin, with the server bound to `bound`. */
+  originClass(url, bound, hostname) {
+    const u = new URL(url)
+    const h = guardHost.split(u.host)
+    if (!h || !guardHost.accepted(h.name, guardHost.own(hostname))) return 'refused host'
+    const o = u.origin.toLowerCase()
+    const self = `http://${h.name}${h.port ? `:${h.port}` : ''}`
+    if (o === `http://localhost:${bound}` || o === `http://127.0.0.1:${bound}` || o === `http://[::1]:${bound}`) return 'loopback'
+    if (o === self) return h.name === 'localhost' || h.name === '[::1]' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h.name) ? 'loopback' : 'lan'
+    return 'refused origin'
+  }
+}
+
+test('every address the computer hands out is one its device server answers, the window’s own first', () => {
+  /*
+   * The guard refuses a Host it does not know (a page handed this computer's
+   * address under its own name), and a bug there would take the window down
+   * with everything else. So every address the tray lists and the QR code
+   * carries is held to it, for machines with odd names, at the usual port
+   * and at a port the system picked, and each one's own page sorts as the
+   * server's own (loopback for the window, lan for the Wi-Fi page) and never
+   * as a stranger.
+   */
+  const machines = ['Justins-MacBook-Pro.local', 'Justin’s MacBook Pro', 'raspberrypi', 'pi.home.arpa', 'DESKTOP-4F2K9QZ', 'MacBook Air (2)', 'x'.repeat(70), '', '.local', 'Åsa']
+  // And FRACTAL_MDNS_NAME, which both launchers advertise and list in place of the machine's own
+  // name: an underscore, a dot, a '.local' of its own, a space, a letter no DNS label carries.
+  const overrides = [undefined, 'pedal_board', 'Studio.Rig', 'pedalboard.local', 'Pedal Board', 'pédal+board', '___', 'y'.repeat(80)]
+  const runs = machines.flatMap((machine) => overrides.map((o) => ({ machine, env: o === undefined ? {} : { FRACTAL_MDNS_NAME: o } })))
+  for (const { machine, env } of runs) {
+    const name = host.advertisedName({ env, machine })
+    assert.match(name, /^[a-z0-9-]+$/, `${JSON.stringify(machine)} with ${JSON.stringify(env)} makes a .local name the network cannot carry: ${name}`)
+    for (const port of [5056, 49731]) {
+      for (const ip of ['192.168.1.20', '10.0.0.7', null]) {
+        const at = host.addresses({ port, name, ip })
+        const handed = [...at.all, at.forPhone].filter(Boolean)
+        assert.ok(handed.includes(`http://localhost:${port}`), 'the window’s own address is not among them')
+        for (const url of handed) {
+          const cls = guardHost.originClass(url, port, machine)
+          assert.ok(cls === 'loopback' || cls === 'lan', `${url} (on ${JSON.stringify(machine)}, ${JSON.stringify(env)}) is ${cls} to the device server`)
+          if (new URL(url).hostname === 'localhost') assert.equal(cls, 'loopback', 'the window is not the server’s own page')
+        }
+      }
+    }
+  }
+  // 127.0.0.1, which the window can be pointed at, and the computer's own name as the system says it.
+  assert.equal(guardHost.originClass('http://127.0.0.1:5056', 5056, 'raspberrypi'), 'loopback')
+  assert.equal(guardHost.originClass('http://raspberrypi.local:5056', 5056, 'raspberrypi'), 'lan')
+  assert.equal(guardHost.originClass('http://raspberrypi:5056', 5056, 'raspberrypi'), 'lan')
+  assert.equal(guardHost.originClass('http://pi.home.arpa:5056', 5056, 'pi.home.arpa'), 'lan')
+  // At a port the server fell back to, the page there is its own and the usual port's is not.
+  assert.equal(guardHost.originClass('http://localhost:49731', 49731, 'x'), 'loopback')
+  assert.equal(new URL('http://localhost:5056').origin === `http://localhost:${49731}`, false)
+  // What it refuses, said so the list stays honest: names the app never shows, which a person may type.
+  for (const typed of ['http://raspberrypi.lan:5056', 'http://studio.fritz.box:5056', 'http://pi.tail1234.ts.net:5056', 'http://evil.example:5056'])
+    assert.equal(guardHost.originClass(typed, 5056, 'raspberrypi'), 'refused host', `${typed} is answered`)
 })
 
 test('a hostname reads like a name', () => {
@@ -3579,7 +3697,12 @@ test('live performance edits travel fine', () => {
   // backup and port lists on the phone, and these assertions encoded that bug.
   assert.equal(forbiddenRemotely('GET', '/backups'), null)
   assert.equal(forbiddenRemotely('GET', '/ports'), null)
-  assert.equal(forbiddenRemotely('GET', '/local/presets'), null)
+  /*
+   * But not the library folder on the computer, since the device server's
+   * guard (23 October 2026): where it is and what is in it are the
+   * computer's own. Nothing on a phone asks for either.
+   */
+  assert.equal(forbiddenRemotely('GET', '/local/presets'), 'reach the library on your computer')
   // Trailing slashes and query strings must not sneak past the check.
   assert.ok(forbiddenRemotely('POST', '/preset/store/'))
   assert.ok(forbiddenRemotely('POST', '/preset/backup?x=1'))
@@ -3595,7 +3718,14 @@ test('the mirror agrees with the host about every route this app calls', () => {
    */
   const hostAllows = (method, p) => {
     if (method === 'GET')
-      return !p.startsWith('/cloud') && !p.startsWith('/remote') && p !== '/debug/raw'
+      return (
+        !p.startsWith('/cloud') &&
+        !p.startsWith('/remote') &&
+        !p.startsWith('/local') &&
+        !p.startsWith('/device/cache/cloud') &&
+        p !== '/debug/raw' &&
+        !/^\/store\/(?!config(\/[^/]+)?$)/.test(p)
+      )
     if (method === 'PUT')
       return (
         /^\/preset\/blocks\/\d+\/params(\/\d+)?$/.test(p) ||
@@ -3641,6 +3771,22 @@ test('the mirror agrees with the host about every route this app calls', () => {
   const calls = [
     ['DELETE', '/device/cache'],
     ['DELETE', '/store/config/x'],
+    // The reads the guard of 23 October 2026 took off the relay, and the ones it left.
+    ['GET', '/cloud/status'],
+    ['GET', '/remote/status'],
+    ['GET', '/local/config'],
+    ['GET', '/local/presets'],
+    ['GET', '/device/cache/cloud'],
+    ['GET', '/store/cloud'],
+    ['GET', '/store/cloud/sb-x-auth-token'],
+    ['GET', '/store/Cloud'],
+    ['GET', '/store/local'],
+    ['GET', '/store/config'],
+    ['GET', '/store/config/host.name'],
+    ['GET', '/store/config/scene-names-fm3%3A12'],
+    ['GET', '/presets/3/scenes'],
+    ['GET', '/diag'],
+    ['GET', '/device/cache'],
     ['GET', '/backups'],
     ['GET', '/blocks'],
     ['GET', '/device/detect'],
@@ -3687,6 +3833,83 @@ test('the mirror agrees with the host about every route this app calls', () => {
       `${m} ${p}: mirror says ${mirror ? 'allowed' : 'blocked'}, host says the opposite`
     )
   }
+})
+
+test('the computer’s own sign-in never travels the relay, and the store’s settings still do', () => {
+  /*
+   * GET /store/cloud returned the computer's saved sign-in, refresh token and
+   * all, to any device on the account: the host allowed every GET outside
+   * /cloud and /remote, and this mirror said the same. The guard on the
+   * device server (23 October 2026) closes the store's other collections to
+   * everybody, and the relay rule refuses them on both ends. `config` is the
+   * one collection either app reads or writes.
+   */
+  const words = 'reach the sign-in and settings the computer keeps for itself'
+  for (const path of ['/store/cloud', '/store/cloud/sb-x-auth-token', '/store/Cloud', '/store/local', '/store/cloud?x=1', '/store/cloud/'])
+    assert.equal(forbiddenRemotely('GET', path), words, `GET ${path} still travels`)
+  assert.equal(forbiddenRemotely('PUT', '/store/cloud/sb-x-auth-token'), words)
+  assert.equal(forbiddenRemotely('GET', '/device/cache/cloud'), 'do that')
+  for (const path of ['/store/config', '/store/config/x', '/store/config/host.name', '/store/config/scene-names-fm3%3A12'])
+    assert.equal(forbiddenRemotely('GET', path), null, `GET ${path} is refused`)
+  assert.equal(forbiddenRemotely('PUT', '/store/config/x'), null)
+})
+
+test('every settings name either app keeps on the computer travels the relay as the host reads it', async () => {
+  /*
+   * The host now checks the relay's rule on the path as its router reads it:
+   * one leading slash, no backslash, no escaped slash or backslash at all,
+   * resolved against a host that is nobody's, then decoded (ForgeFX
+   * server/src/remote.ts relayPath, transcribed here). A settings name with a
+   * '/' in it would now be refused for its write and its read alike, so
+   * every name the browser and the phone build is held to the plain shape,
+   * for every unit, through encodeURIComponent exactly as both ends send it.
+   */
+  const relayPath = (path) => {
+    if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || path.includes('\\')) return null
+    if (/%2f|%5c/i.test(path)) return null
+    let u
+    try {
+      u = new URL(path, 'http://relay.invalid')
+    } catch {
+      return null
+    }
+    if (u.origin !== 'http://relay.invalid') return null
+    try {
+      return { url: u.pathname + u.search, rule: decodeURIComponent(u.pathname) }
+    } catch {
+      return null
+    }
+  }
+  const { hostAllows } = await import('../shared/relay-rules.mjs')
+  const { deviceSlug } = await import('../shared/device-slug.mjs')
+  const { PHONE_NOTE_ID } = await import('../shared/phone-note.mjs')
+  const save = await import('../shared/save-wait.mjs')
+  const restore = await import('../src/lib/restoreViaComputer.js')
+
+  // Every way a unit is named, the odd ones included: a slug is what the names are built from.
+  const slugs = ['FM3', 'FM3 Mk II', 'FM9', 'Axe-Fx III', 'AM4', 'VP4', '', 'a/b\\c%2F', { short: 'Axe-Fx III Mk II' }, null].map((u) => deviceSlug(u))
+  const ids = ['host.name', 'remote.host', PHONE_NOTE_ID]
+  for (const slug of slugs) {
+    ids.push(`preset-names-${slug}`, `fractal.pendingName.${slug}.97`)
+    for (const n of [1, 8, 486]) ids.push(`scene-names-${slug}:${n}`)
+    for (const make of [save.pendingSaveDoc, save.saveResultDoc, save.saveProgressDoc, restore.pendingRestoreDoc, restore.restoreResultDoc, restore.restoreProgressDoc]) ids.push(make(slug))
+  }
+  for (const id of ids) {
+    assert.ok(!id.includes('/') && !id.includes('\\'), `the settings name ${id} has a slash in it`)
+    const path = `/store/config/${encodeURIComponent(id)}`
+    const at = relayPath(path)
+    assert.ok(at, `the host refuses ${path} before reading its rule`)
+    assert.equal(at.url, path, `the host injects ${at.url} for ${path}: the name would change on the way`)
+    for (const method of ['GET', 'PUT']) {
+      assert.ok(hostAllows(method, at.rule), `the host refuses ${method} ${at.rule}`)
+      assert.equal(forbiddenRemotely(method, path), null, `this end refuses ${method} ${path}`)
+    }
+  }
+  // And the shapes the host now refuses before its rule, which neither app sends.
+  for (const path of ['http://x/cloud/status', '/\\evil.com/cloud/status', '//cloud/status', '/store/config/a%2Fb', '/store/config/a%5cb'])
+    assert.equal(relayPath(path), null, `${path} reaches the rule`)
+  for (const path of ['/%63loud/status', '/x/../cloud/status', '/x/%2e%2e/cloud/status', '/store/%63loud'])
+    assert.equal(hostAllows('GET', relayPath(path).rule), false, `${path} reaches the account or the sign-in`)
 })
 
 test('an unconfirmed account is not reported as a bad password', () => {
@@ -6268,6 +6491,10 @@ console.log('\nthe fold sensor: the iPhone Duo’s hinge and fold, written to th
 const { run: foldNative } = await import('./fold-native.mjs')
 foldNative(test)
 
+console.log('\nPlay on a screen of any shape: the groundwork, and a phone held upright as it was')
+const { run: duo } = await import('./duo.mjs')
+duo(test)
+
 test('both file kinds are listed and told apart', async () => {
   // A .syx goes back to the unit verbatim; a design re-validates first. Load
   // treating one as the other would either corrupt or silently no-op.
@@ -7081,6 +7308,80 @@ const onTheBench = (name, body) =>
       ds.attachClock(null)
     }
   })
+
+/*
+ * THE AM4'S OWN TUNER, KEPT UP ON A LEASE THE BROWSER RENEWS, as the phone
+ * does (test/link-now.mjs). A computer that keeps it up says keepMs in the
+ * open's answer and stops by itself once nobody renews it, so a tab shut, a
+ * page reloaded or a link gone mid-tuner no longer holds the AM4 on its
+ * tuner, muted, until the computer is quit. The page renews it a few times a
+ * lease while the tuner is open and the page is in view; once it has been
+ * hidden during that tuner, never again for it. Never to a computer whose
+ * open said no keepMs, where a renewal would be an open.
+ */
+onTheBench('browser: the AM4’s own tuner is kept up only while the tuner is open and the page in view, never after a Close, a reset or to an older computer', async () => {
+  const clock = handClock()
+  const calls = []
+  let keepMs = 20000
+  ds.reset()
+  ds.attachClock(clock)
+  ds.attachDriver({
+    setTuner: async (on) => (calls.push(['open', on]), on ? { ok: true, screen: 'opened', ...(keepMs ? { keepMs } : {}) } : { ok: true, screen: 'closed' }),
+    renewTuner: async (opts) => (calls.push(['renew', Number.isFinite(opts?.deadline)]), { ok: true, keepMs: 20000 })
+  })
+  const renewals = () => calls.filter((c) => c[0] === 'renew').length
+  try {
+    ds.setOnScreen(true)
+    await ds.writeTuner(true)
+    await clock.advance(60_000)
+    assert.ok(renewals() >= 11 && renewals() <= 12, `renewed every five seconds while open and in view (${renewals()})`)
+    assert.ok(calls.filter((c) => c[0] === 'renew').every((c) => c[1] === true), 'a renewal went with no deadline: it could land late')
+    ds.setOnScreen(false)
+    const away = renewals()
+    await clock.advance(60_000)
+    assert.equal(renewals(), away, 'renewed with the page hidden')
+    ds.setOnScreen(true)
+    await clock.advance(60_000)
+    assert.equal(renewals(), away, 'renewed again once back in view, which would put the AM4 back on its tuner, muted')
+    await ds.writeTuner(false)
+    await clock.advance(30_000)
+    assert.deepEqual(calls.at(-1), ['open', false], 'something went after the close')
+    await ds.writeTuner(true)
+    await clock.advance(20_000)
+    assert.ok(renewals() > away, 'not kept again once opened again')
+    ds.reset()
+    const left = calls.length
+    await clock.advance(60_000)
+    assert.equal(calls.length, left, 'renewed after the store was reset')
+    /* An older computer: its open says no keepMs. And a page hidden at the open: nothing either. */
+    keepMs = 0
+    ds.attachClock(clock)
+    const older = renewals()
+    await ds.writeTuner(true)
+    await clock.advance(60_000)
+    assert.equal(renewals(), older, 'a renewal sent to a computer that never said keepMs')
+    await ds.writeTuner(false)
+    keepMs = 20000
+    ds.setOnScreen(false)
+    await ds.writeTuner(true)
+    await clock.advance(60_000)
+    assert.equal(renewals(), older, 'renewed for a tuner opened with the page hidden')
+    await ds.writeTuner(false)
+  } finally {
+    ds.setOnScreen(true)
+  }
+  /* And the page and the phone are wired to it: the renewal handed to the store, and whether each is on screen. */
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const attached = app.slice(app.indexOf('attachDriver({'), app.indexOf('})', app.indexOf('attachDriver({')))
+  assert.match(attached, /^  setTuner,\n  renewTuner,$/m, 'the browser store is not handed the renewal')
+  assert.match(app, /document\.addEventListener\('visibilitychange', \(\) => storeOnScreen\(document\.visibilityState !== 'hidden'\)\)/)
+  const phoneLink = readSrc(new URL('../mobile/src/lib/link.js', import.meta.url), 'utf8')
+  /* Control Center or Siri over Play ('inactive') is not put away: the AM4 stays on its tuner (test/link-now.mjs runs it). */
+  assert.match(phoneLink, /^      rigOnScreen\(status === 'active' \|\| status === 'inactive'\)$/m, 'the phone’s rig is not told when the app is put away')
+  assert.match(phoneLink, /^  rigOnScreen\(!asleep \|\| AppState\.currentState === 'inactive'\)$/m)
+  assert.match(readSrc(new URL('../mobile/src/lib/device.js', import.meta.url), 'utf8'), /^export const renewTuner = \(opts\) => post\('\/tuner', \{ on: true, keep: true \}, tapOf\(opts\)\)$/m)
+  assert.match(readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8'), /request\('\/tuner', \{ method: 'POST', body: JSON\.stringify\(\{ on: true, keep: true \}\), \.\.\.tapOf\(opts\) \}\)/)
+})
 
 /*
  * THE PRESETS EITHER SIDE. "The amp pedal names are blank for about half a
@@ -9925,7 +10226,7 @@ test('an install that did not take is said so, with why', async () => {
    * power-on goes through exactly the same steps as the button, and this
    * reads installNow itself — and checks the button still goes through it.
    */
-  assert.match(main, /ipcMain\.handle\('updates:install', async \(\) => installNow\(\)\)/, 'the button no longer goes through the one install path')
+  assert.match(main, /answerOwnPage\('updates:install', async \(\) => installNow\(\)\)/, 'the button no longer goes through the one install path')
   const install = main.slice(main.indexOf('async function installNow('), main.indexOf('updates.install()'))
   assert.ok(install.length > 0, 'there is no installNow to read')
   assert.match(install, /writeMarker\(\{ version: update\.version/, 'nothing records which version the install was meant to reach')
@@ -10409,6 +10710,8 @@ function loadDesktopMain({
   }
 
   const events = {}
+  // What the page may ask the app, by channel: ipcMain.handle's handlers.
+  const handlers = {}
   const menus = []
   const windows = []
   const dialogs = []
@@ -10477,7 +10780,11 @@ function loadDesktopMain({
       showMessageBox: async (options) => dialogs.push(options?.message),
       showMessageBoxSync: (options) => dialogs.push(options?.message)
     },
-    ipcMain: { handle() {} },
+    ipcMain: {
+      handle: (channel, fn) => {
+        handlers[channel] = fn
+      }
+    },
     autoUpdater: {},
     powerMonitor: {
       on: (event, fn) => {
@@ -10524,9 +10831,41 @@ function loadDesktopMain({
     'setInterval',
     `${src}\n;return (__code, __given) => eval(__code)`
   )((id) => stand[id] || real(id), '/opt/Fractal Remote/resources/app.asar', proc, quiet, timer, () => {}, timer)
-  return { run, disk, dirs, events, menus, windows, dialogs, exits, logs, timers, listeners, power, awake, process: proc }
+  return { run, disk, dirs, events, handlers, menus, windows, dialogs, exits, logs, timers, listeners, power, awake, process: proc }
 }
 const ENTRY = '/home/pi/.config/autostart/fractal-remote.desktop'
+
+test('only the window’s own page may ask the app anything: not a page it opened, and not before it knows its own address', async () => {
+  /*
+   * The bridge in preload.js is handed to whatever a window has loaded, and a
+   * link with target=_blank opens a window of its own: the privacy page, a
+   * store page, the public site. None of those may read the Wi-Fi address,
+   * switch the start at power-on, or install an update. main.js's own
+   * handlers, run: the frame that asked is held to `where.local`.
+   */
+  const main = loadDesktopMain()
+  main.run('wireUpdateChannel()')
+  const channels = Object.keys(main.handlers).sort()
+  assert.deepEqual(channels, ['host:wifi', 'login:get', 'login:set', 'updates:check', 'updates:install', 'updates:move', 'updates:releases', 'updates:state'], 'a channel was added or dropped: hold it here too')
+  const ask = (channel, origin, ...args) => main.handlers[channel](origin === undefined ? {} : { senderFrame: origin === null ? null : { origin } }, ...args)
+  const refused = /Only the Fractal Remote window on this computer can ask that/
+
+  // Before the app knows its own address, nobody, its own page included.
+  for (const channel of channels) await assert.rejects(async () => ask(channel, 'http://localhost:5056', true), refused, `${channel} answered before the address was known`)
+
+  main.run("where = { local: 'http://localhost:5056', lan: 'http://192.168.1.20:5056', mdns: 'http://fractal-pi.local:5056', all: [] }")
+  const strangers = ['http://192.168.1.20:5056', 'http://fractal-pi.local:5056', 'http://127.0.0.1:5056', 'http://localhost:5057', 'https://fractal.newbold.cloud', 'https://evil.example', 'http://localhost:5173', 'null', '', null, undefined]
+  for (const channel of channels)
+    for (const who of strangers) await assert.rejects(async () => ask(channel, who, true), refused, `${channel} answered ${JSON.stringify(who)}`)
+  // Said in the log, once a channel and page, not once a call.
+  assert.equal(main.logs.filter((l) => l.includes('[window] refused updates:install: asked by https://evil.example')).length, 1)
+
+  // Its own page is answered as before: these three change nothing.
+  assert.deepEqual(await ask('updates:state', 'http://localhost:5056'), { kind: 'idle', line: null })
+  assert.deepEqual(await ask('host:wifi', 'http://localhost:5056'), { lan: null, mdns: null })
+  assert.equal(typeof (await ask('login:get', 'http://localhost:5056')).supported, 'boolean')
+})
+
 const trayItem = (menu, label) => (menu || []).find((item) => typeof item.label === 'string' && item.label.startsWith(label))
 
 test('the tray says whose app this is not, greyed, just above Quit, and asks nobody anything', async () => {
@@ -11232,7 +11571,7 @@ test('every computer looks for updates by itself: six hours on, sooner while it 
   {
     const src = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
     assert.equal((src.match(/updates\??\.check\(/g) || []).length, 3, 'a look for updates is taken somewhere other than the first look, the loop and lookNow, and leaves the next look where it was')
-    assert.match(src, /ipcMain\.handle\('updates:check', async \(\) => \{[\s\S]{0,120}await lookNow\(\)/, "the window's Check for updates does not set the next look")
+    assert.match(src, /answerOwnPage\('updates:check', async \(\) => \{[\s\S]{0,120}await lookNow\(\)/, "the window's Check for updates does not set the next look")
     assert.match(src.slice(src.indexOf('function retryUpdateCheck()'), src.indexOf('function networkIsUp()')), /lookNow\(\)/)
     assert.match(src.slice(src.indexOf('function networkIsUp()')), /^\s*if \(startHidden && update\?\.kind === 'trouble' && updates\) lookNow\(\)$/m)
   }
@@ -11521,8 +11860,8 @@ test('the switch is in Settings and the tray, and the page reaches it only throu
   const appSrc = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
   const builder = readSrc(new URL('../desktop/electron-builder.yml', import.meta.url), 'utf8')
 
-  assert.match(main, /ipcMain\.handle\('login:get', \(\) => startAtBootState\(\)\)/)
-  assert.match(main, /ipcMain\.handle\('login:set', \(_event, on\) => setStartAtBoot\(on === true\)\)/, 'anything but true turns it on')
+  assert.match(main, /answerOwnPage\('login:get', \(\) => startAtBootState\(\)\)/)
+  assert.match(main, /answerOwnPage\('login:set', \(_event, on\) => setStartAtBoot\(on === true\)\)/, 'anything but true turns it on')
   // Registered with the others, once.
   const channel = main.slice(main.indexOf('function wireUpdateChannel()'), main.indexOf('async function installNow('))
   assert.ok(channel.includes("'login:get'") && channel.includes("'login:set'"), 'the switch is answered from somewhere other than the one channel')
@@ -15683,6 +16022,89 @@ test('the computer app carries the server that opens the AM4’s own tuner scree
     assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
   }
   assert.ok(lock._why.some((line) => /AM4's own tuner screen/.test(line) && /never sends its 0 on a number the AM4 no longer names/.test(line)), 'the lock does not say why it moved')
+})
+
+/*
+ * "On the AM4 when turning on the tuner it stays on for about 15 seconds on
+ * the unit and then turns off. On the phone it stays on until you hit close.
+ * We want it to stay on until the user hits close." (23 October 2026) The
+ * server the computer carries sends the AM4's Tuner CC at 127 again every
+ * three seconds while the app's tuner is open (ForgeFX ab7561e), as the
+ * phone's own Bluetooth wire does. Nothing on the phone or in the browser
+ * needs it, so the red update line does not move for it.
+ */
+test('the computer app carries the server that keeps the AM4’s own tuner screen up until Close', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+am4keywrite\+am4tunerkeep(\+|$)/, 'the computer app does not keep the AM4’s own tuner up')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  for (const piece of ['am4tunercc', 'am4boosttap', 'am4crossedcopy', 'am4keywrite', 'linuxmidi', 'vp4midi', 'quietMeters']) {
+    assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
+  }
+  const why = lock._why.find((w) => /ab7561e/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/every 3 seconds/, /a level/, /the number it went out on/, /No 127 follows a Close/, /COMPUTER_NEEDED stays/, /on top of 5b6e889/, /no capture of the CC on an AM4 proves it/, /its tuner mute with it/, /Only Justin's AM4 can settle it/]) {
+    assert.match(why, said, `the lock's reason leaves out ${said}`)
+  }
+  const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
+  assert.match(mods, /\| Send an AM4's Tuner CC at 127 again every 3 seconds while the app's tuner is open, after reading the Tuner setting again, and only on the number it went out on \|/)
+  assert.match(mods, /The CC is taken to be a level \(127 opens, 0 closes\)[^|]*no capture on an AM4 proves it/, 'MODIFICATIONS says the CC is a level as if it were proved')
+})
+
+/*
+ * And the device server answers only its own callers (ForgeFX 5350623,
+ * e849c58, 93c1530, on top of the tuner lease): Sign out on the computer
+ * signs out the computer only, a web page on the computer or someone on the
+ * Wi-Fi can no longer sign it out, sign it into another account or read its
+ * saved sign-in, and the relay's rule reads the path the router will match.
+ */
+test('the computer app carries the device server that answers only its own callers', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+am4tunerlease\+serverguard$/, 'the computer app carries a device server any web page can sign out')
+  assert.equal(lock.forgefx.commit, '93c153067c06834e9aef6cf06f62e5ed4f093f03')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  const why = lock._why.find((w) => /93c1530/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/scope 'local'/, /FORGEFX_ALLOWED_ORIGINS/, /config collection only/, /x-forgefx-via: relay/, /COMPUTER_NEEDED stays/, /three commits on top of 41a0c1b/]) {
+    assert.match(why, said)
+  }
+  const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
+  for (const row of ['Sign out on the computer with scope `local`', 'Answer only the device server\u2019s own callers'.replace('\u2019', "'"), 'Check the relay\u2019s rule on the path the router will match'.replace('\u2019', "'")]) {
+    assert.ok(mods.includes(row), `licences/MODIFICATIONS.md has no row for: ${row}`)
+  }
+})
+
+/*
+ * And the keep is a lease (ForgeFX 41a0c1b), so a Close that never reaches
+ * the computer (a phone gone flat or put away, a sign-out, a tab shut) can
+ * no longer hold the AM4 on its tuner, muted, until the computer app is
+ * quit. The phone and the browser renew it while their tuner is on screen,
+ * only to a computer that said keepMs, so an older computer is sent
+ * nothing new and the red update line does not move.
+ */
+test('the computer app carries the server whose keep of the AM4’s own tuner ends by itself when nobody renews it', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+am4tunerkeep\+am4tunerlease(\+|$)/, 'the computer app carries a keep that only a Close can end')
+  /* Pinned at 41a0c1b, or at a later commit of the same branch that carries it (the device server's guard, 93c1530, sits on top). */
+  assert.ok(['41a0c1b05d6172b057223c70565eec364dff4d67', '93c153067c06834e9aef6cf06f62e5ed4f093f03'].includes(lock.forgefx.commit), 'the pin moved off the tuner lease')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  for (const piece of ['am4tunercc', 'am4tunerkeep', 'am4boosttap', 'am4crossedcopy', 'am4keywrite', 'linuxmidi', 'vp4midi', 'quietMeters']) {
+    assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
+  }
+  const why = lock._why.find((w) => /41a0c1b/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/TUNER_KEEP_LEASE_MS \(20 s\)/, /keepMs/, /\{on: true, keep: true\}/, /opens nothing and sends nothing/, /on screen/, /comes back within 3 seconds/, /a new connection/, /9809e37/, /COMPUTER_NEEDED stays/, /two commits on top of ab7561e/]) {
+    assert.match(why, said, `the lock's reason leaves out ${said}`)
+  }
+  assert.match(
+    readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8'),
+    /\| Keep the AM4's tuner screen up only on a lease, 20 seconds from the open and from each renewal \(POST \/tuner with on and keep both true\), which the app sends only while its tuner is on screen \|/
+  )
+  /* And the store notes wait for his AM4, with no version number written in before the merge. */
+  const notes = readSrc(new URL('../docs/app-store.md', import.meta.url), 'utf8')
+  const para = notes.slice(notes.indexOf("**For the next version's notes: the AM4's own tuner stays up**"), notes.indexOf('### Notes for App Review, 1.87.11'))
+  assert.match(para.replace(/\s+/g, ' '), /Waiting: not for a store version until Justin has watched his own AM4 hold its tuner steady past 15 seconds/)
+  assert.ok(!/1\.87\.5\d/.test(para), 'the store notes name a version before the merge has given it one')
+  assert.ok(para.split('\n').every((line) => line.length <= 80), 'a line of the store notes runs past 80 characters')
 })
 
 /*

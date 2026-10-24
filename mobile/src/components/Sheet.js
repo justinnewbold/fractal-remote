@@ -1,12 +1,31 @@
+import { useEffect, useRef, useState } from 'react'
 import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native'
 import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, radius, space } from '../lib/theme'
+import { ANY_WAY_UP, clearSides, firstFrame } from '../lib/screenShape'
+import { SHEET_MAX, pageRow, playLines } from '../lib/playShape'
 
 /* Above a tall sheet: the status bar — this much where the phone does not say — and a strip of glass. */
 const STATUS_AT_LEAST = 20
 const GLASS = 8
+/*
+ * And under the last row: the phone's own bottom edge by its own measure
+ * (the home bar, Android's buttons, an iPad's or a turned screen's), and
+ * never less than the 32 every sheet had when this was a fixed number. So no
+ * sheet comes up shorter at its foot than it did, on any phone, and on a
+ * screen whose bottom edge is taller than 32 (Android's three buttons, which
+ * a sheet is drawn behind) the last row now clears it.
+ */
+const FOOT_AT_LEAST = space.xxl
+/*
+ * How wide the last sheet found the screen it came up over, and how wide the
+ * window was then ({ width, window }), kept while the app runs: a sheet
+ * opening in a window that width starts from it (lib/screenShape
+ * firstFrame). null until a sheet has been shown.
+ */
+let lastFrame = null
 
 /**
  * Something that comes up over the screen rather than into it.
@@ -44,18 +63,45 @@ const GLASS = 8
  * clear of the clock. Every other sheet keeps the four fifths.
  */
 export default function Sheet({ open, onClose, title, note, head, foot, tall = false, children }) {
-  const { height } = useWindowDimensions()
-  const { top } = useSafeAreaInsets()
+  const { width: across, height } = useWindowDimensions()
+  const { top, bottom, left, right } = useSafeAreaInsets()
   /* Tall: everything but the status bar and a strip of glass to tap out on. */
   const highest = tall ? Math.max(height * 0.8, height - Math.max(top, STATUS_AT_LEAST) - GLASS) : height * 0.8
+  /*
+   * NO WIDER THAN SHEET_MAX, CENTERED, on a screen where Play opens up
+   * (lib/playShape): the channel picker and Which unit ran nine hundred
+   * points edge to edge on an iPad on its side or a Duo opened. By the same
+   * line as Play's, from 621 points of row, and off 40 under it, measured on
+   * the sheet's own frame (the screen it comes up over) and never the
+   * window's size or the kind of device. Under the line, as on every phone,
+   * the sheet is the full width it always was.
+   *
+   * Until it has measured itself in this window, it is drawn at what a sheet
+   * last measured in a window this wide, or else at the window's own width,
+   * which is what a sheet fills: so the first sheet on an iPad slides up
+   * 480 wide rather than snapping to it half way, and one last opened on a
+   * Duo folded does not open full width on the Duo opened, nor capped on a
+   * phone-sized window after a wide one. Each sheet stays drawn while it is
+   * shut, so what it measured is kept with the window it measured it in.
+   */
+  const [seen, setSeen] = useState(null)
+  useEffect(() => {
+    if (seen) lastFrame = seen
+  }, [seen])
+  const frame = firstFrame(across, [seen, lastFrame]).width
+  const linesWere = useRef(null)
+  const lines = playLines(pageRow(frame, space.lg), linesWere.current)
+  linesWere.current = lines
+  const capped = lines.opens
 
   return (
-    <Modal visible={!!open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={!!open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent supportedOrientations={ANY_WAY_UP}>
       {/* The glass, and the way out. */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Close ${title || 'this'}`}
         onPress={onClose}
+        onLayout={(e) => setSeen({ width: e.nativeEvent.layout.width, window: across })}
         style={{ flex: 1 }}
       >
         <BlurView
@@ -69,13 +115,18 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
                are reaching for. */
             onPress={() => {}}
             style={{
+              /* Its sides edged like its top, since it no longer meets the screen's;
+                 or, edge to edge, everything on it kept clear of the phone's own
+                 down its sides (lib/screenShape clearSides: the Duo's strip). A
+                 sheet capped in the middle of a wide screen is already clear. */
+              ...(capped ? { width: '100%', maxWidth: SHEET_MAX, alignSelf: 'center', borderLeftWidth: 1, borderRightWidth: 1 } : clearSides({ left, right })),
               maxHeight: highest,
               backgroundColor: color.chassis,
               borderTopLeftRadius: radius.lg * 2,
               borderTopRightRadius: radius.lg * 2,
               borderTopWidth: 1,
               borderColor: 'rgba(255,255,255,0.14)',
-              paddingBottom: space.xxl
+              paddingBottom: Math.max(bottom, FOOT_AT_LEAST)
             }}
           >
             {/* The grab handle. It does not drag — it says which way this came

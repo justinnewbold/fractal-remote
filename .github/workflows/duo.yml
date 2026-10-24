@@ -34,6 +34,12 @@
 # By hand only (Actions → duo → Run workflow on the branch): the runner
 # image is a public preview, and a label no runner answers would leave a
 # pull request waiting on a check that never starts.
+#
+# It is kept on main so that it can be started at all: GitHub offers Run
+# workflow only for a workflow the default branch has. Until the build pull
+# request lands, main has none of the three (the Xcode 27.1 pin, scene
+# support, the Siri phrases) and stops at the first; it is run on the branch
+# that carries the build work.
 name: duo
 
 on:

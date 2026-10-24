@@ -13,7 +13,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { networkInterfaces, hostname as osHostname } from 'node:os'
-import { DEFAULT_PROJECT } from './project.mjs'
+import { DEFAULT_PROJECT, HOSTED_ORIGIN } from './project.mjs'
 
 export const DEFAULT_PORT = 5056
 export const DEFAULT_NAME = 'fractal'
@@ -36,15 +36,39 @@ export const DEFAULT_NAME = 'fractal'
  * whole name on a Mac whose hostname tells us nothing.
  */
 export function mdnsName(machine = osHostname()) {
-  const slug = String(machine || '')
-    .replace(/\.local$/i, '')
+  const slug = dnsLabel(machine, 40)
+  return slug ? `${DEFAULT_NAME}-${slug}` : DEFAULT_NAME
+}
+
+/** A name as one DNS label: no '.local', lowercase, and anything a label may
+ *  not carry turned into the one separator it may. Empty when nothing is left. */
+function dnsLabel(raw, max) {
+  return String(raw || '')
+    .trim()
+    .replace(/\.local\.?$/i, '')
     .toLowerCase()
-    // Anything a DNS label may not carry becomes the one separator it may.
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
+    .slice(0, max)
     .replace(/-+$/, '')
-  return slug ? `${DEFAULT_NAME}-${slug}` : DEFAULT_NAME
+}
+
+/**
+ * The name both launchers advertise and list: FRACTAL_MDNS_NAME when it is
+ * set, this machine's own mdnsName otherwise.
+ *
+ * The override went out exactly as written, and a name the network or the
+ * device server cannot carry went out with it: `pedal_board` was advertised
+ * and listed in the menu as http://pedal_board.local:5056, which the device
+ * server's guard (ForgeFX server/src/guard.ts) answers with "This computer
+ * does not answer to that name", because it knows a .local name only as
+ * letters, digits and hyphens. A dot made two labels it refuses the same way,
+ * and `pedalboard.local` made pedalboard.local.local. So the override is
+ * turned into one label the same way the machine's name is (`pedal-board`),
+ * and one with nothing usable in it is no override at all.
+ */
+export function advertisedName({ env = process.env, machine = osHostname() } = {}) {
+  return dnsLabel(env.FRACTAL_MDNS_NAME, 63) || mdnsName(machine)
 }
 
 /**
@@ -117,12 +141,23 @@ export function addresses({ port = DEFAULT_PORT, name = DEFAULT_NAME, ip } = {})
  * An operator's own values still win, for a second project or a rotated key;
  * and ForgeFX's own `.env` cannot override these, because Node's loader does
  * not replace a variable that is already in the environment.
+ *
+ * FORGEFX_ALLOWED_ORIGINS is who else may use the device server from a web
+ * page. Its guard (ForgeFX server/src/guard.ts) answers the computer's own
+ * window and the Wi-Fi page it served by itself, and a page from any other
+ * address only when this names it exactly. The public site, opened in a
+ * browser on the computer from the tray, is the one: it is the computer's own
+ * page there, and signs it in. A developer's own page (Vite, at
+ * http://localhost:5173) is added by setting the variable, comma-separated;
+ * set to an empty string, nothing else is let in. A device server older than
+ * the guard reads nothing from it.
  */
 export function serverEnv({
   env = process.env,
   port = DEFAULT_PORT,
   dist,
   project = DEFAULT_PROJECT,
+  hosted = HOSTED_ORIGIN,
   asNode = false
 }) {
   /* Not passed on: see PYTHON, below. */
@@ -163,7 +198,8 @@ export function serverEnv({
     FORGEFX_STATIC: dist,
     AXIS_CLOUD: env.AXIS_CLOUD ?? '1',
     SUPABASE_URL: env.SUPABASE_URL ?? project.url,
-    SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY ?? project.anonKey
+    SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY ?? project.anonKey,
+    FORGEFX_ALLOWED_ORIGINS: env.FORGEFX_ALLOWED_ORIGINS ?? hosted
   }
 }
 
