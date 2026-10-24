@@ -1932,9 +1932,12 @@ export function run(test) {
     const bar = read('src/components/TopBar.jsx')
     const phone = read('mobile/src/components/TopBar.js')
 
-    /* The same rule at both ends: the word is UNLOCK only while there is
-       something to sell this person. */
-    assert.match(phone, /const word = canBuy \? 'unlock' : demo \? 'demo'/, 'the phone bar stopped saying unlock in the demo')
+    /* The same rule at both ends: UNLOCK only while there is something to
+       sell this person. On the phone the word beside the price is the pill
+       that switches units since 24 October 2026, so its unlock pill says
+       Unlock on its own, over the price. */
+    assert.match(phone, /\{canBuy \? \(/, 'the phone bar stopped offering the unlock in the demo')
+    assert.match(phone, />Unlock<\/Text>\s*\{purchase\.price \? \(\s*<Text numberOfLines=\{1\}[^>]*>\s*\{purchase\.price\}/, 'the phone bar stopped saying unlock in the demo')
     assert.match(bar, /const canBuy = demo && Boolean\(onUnlock\)/, 'the browser bar offers the unlock outside the demo')
     assert.match(bar, /\? canBuy\s*\? 'unlock'\s*: 'demo'/, 'the browser bar does not say unlock in the demo')
 
@@ -2156,7 +2159,7 @@ export function run(test) {
   test('Phone & computer opens from the unit name and shows the same chain, at both ends', async () => {
     const phoneApp = read('mobile/App.js')
     const webApp = read('src/App.jsx').replace(/\s+/g, ' ')
-    assert.match(phoneApp, /onOpenUnit=\{\(\) => \(demo \? setPickUnit\(true\) : link\.hosts\?\.length > 1 \? setPickLive\(true\) : openSettings\('link'\)\)\}/, 'the phone’s unit name no longer opens Phone & computer')
+    assert.match(phoneApp, /onOpenUnit=\{\(\) => \(unitGoes === 'demo' \? setPickUnit\(true\) : unitGoes === 'which' \? setPickLive\(true\) : openSettings\('link'\)\)\}\s*unitGoes=\{unitGoes\}/, 'the phone’s unit name no longer opens Phone & computer')
     assert.match(read('mobile/src/screens/Settings.js'), /const \[page, setPage\] = useState\(startPage\)/, 'the phone’s Settings cannot open on a page')
     assert.match(webApp, /onOpenUnit=\{\(\) => \{.*setSetupPage\(isDemo\(\) \? 'demo' : 'link'\)/, 'the browser’s unit name no longer opens Phone & computer')
 
@@ -2169,11 +2172,18 @@ export function run(test) {
     assert.deepEqual(cards.map((c) => c.body), ['FM3 · firmware 13.0', 'MacBook Pro · v1.86.8', 'v1.86.8'])
     assert.deepEqual(cards.map((c) => c.lit), [true, true, undefined], 'a wire between two answering ends is not lit')
 
-    /* And CONNECTED says which computer, at both ends. */
+    /*
+     * And the bar says which computer, at both ends: the browser's CONNECTED
+     * in its note, the phone's pill on its second line (since 24 October
+     * 2026, Axiom's "Live ● AM4" over "on Raspberry Pi"), which is pressed
+     * for another unit as the name was.
+     */
     assert.match(read('src/components/LinkChip.jsx'), /<p className="hint">\{said\.sentence\}\.<\/p>/, 'the browser’s CONNECTED stopped saying which computer')
     const bar = read('mobile/src/components/TopBar.js')
-    assert.match(bar, /setSaying\(\(open\) => !open\)/, 'the phone’s CONNECTED is a label again')
-    assert.match(bar, /`Connected to \$\{where\}\.`/, 'the phone’s CONNECTED note does not name the computer')
+    assert.match(bar, /computer: link\?\.macName/, 'the phone’s pill does not name the computer')
+    const { pillWords } = await import('../shared/pill-words.mjs')
+    assert.equal(pillWords({ tone: 'good', unitState: 'present', unit: 'FM3', computer: 'MacBook Pro' }).where, 'on MacBook Pro', 'the phone’s pill does not name the computer')
+    assert.match(bar, /;\(onOpenUnit \|\| onOpenSettings\)\?\.\(\)/, 'the phone’s pill is a label')
   })
 
   /*

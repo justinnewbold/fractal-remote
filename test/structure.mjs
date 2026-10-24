@@ -632,7 +632,8 @@ export function run(test) {
      * now, too: Settings takes the page to open on (see both-ends.mjs).
      */
     const phone = readFileSync(new URL('../mobile/src/components/TopBar.js', import.meta.url), 'utf8')
-    assert.match(phone, /onPress=\{onOpenUnit \|\| onOpenSettings\}/, 'the phone still reads its unit name without pressing it')
+    /* On the phone the unit's name is in the pill since 24 October 2026, and the pill is what is pressed. */
+    assert.match(phone, /;\(onOpenUnit \|\| onOpenSettings\)\?\.\(\)/, 'the phone still reads its unit name without pressing it')
   })
 
   test('the bar says whether it is carrying a preset, and says it once', () => {

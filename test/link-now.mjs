@@ -347,7 +347,7 @@ async function linkOnABench() {
     'bleLink.mjs': 'export const pokeBluetooth = () => {}\nexport const startBluetoothLink = () => {}\nexport const stopBluetoothLink = () => {}\n',
     'tapGate.mjs': read('mobile/src/lib/tapGate.js'),
     'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
-    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const startClean = () => { bench.order.push('startClean') }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const unitReadSince = () => bench.unitRead !== false\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\nexport const setOnScreen = (on) => { (bench.onScreen = bench.onScreen || []).push(on) }\n",
+    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const startClean = (o) => { bench.order.push('startClean'); (bench.cleans = bench.cleans || []).push(o ?? null) }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const unitReadSince = () => bench.unitRead !== false\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\nexport const setOnScreen = (on) => { (bench.onScreen = bench.onScreen || []).push(on) }\n",
     'phone-note.mjs': "export const PHONE_NOTE_PATH = '/store/config/phone'\nexport const phoneNote = () => ({})\nexport const timeToTell = () => false\n",
     /* The relay as link.js hears it: the same order of news as relay.js gives it. */
     'relay.mjs': `
@@ -423,6 +423,8 @@ async function linkOnABench() {
         bench.order.push(path)
         if (path === '/telemetry/meters' && bench.holdMeters) return new Promise(() => {})
         if (path === '/telemetry/meters' && bench.refuseMeters) throw Object.assign(new Error('not allowed remotely'), { status: 403, remoteBlocked: true })
+        /* A computer's name read that times out (a slow Pi 3): nameFails. */
+        if (path === '/store/config/host.name' && bench.nameFails) throw new Error('timed out')
         return { data: { name: bench.named || 'Studio', version: '1.87.4' } }
       }
     `
@@ -2508,6 +2510,10 @@ export function run(test) {
     s.rig.startClean()
     const kept = s.rig.getState()
     assert.deepEqual([kept.deviceName, kept.unit, kept.preset?.number, kept.sceneIndex, kept.sceneNames, kept.blocks.length, kept.capabilities?.scenes], ['FM3', 'present', 479, 6, [], 1, 8])
+    /* Which unit's switch (link.js chooseHost): the bar's unit and nothing else, so the bar says Looking and Play stays up. */
+    s.rig.startClean({ unit: true })
+    const named = s.rig.getState()
+    assert.deepEqual([named.deviceName, named.unit, named.preset?.number, named.blocks.length, named.capabilities?.scenes], ['', 'unknown', 479, 1, 8], 'the switch takes Play down, or leaves the last unit on the bar')
     s.rig.startClean({ header: true })
     const gone = s.rig.getState()
     assert.deepEqual([gone.deviceName, gone.unit, gone.error, gone.preset, gone.sceneIndex], ['', 'unknown', null, null, 0])
@@ -5730,8 +5736,20 @@ export function run(test) {
       return true
     }
     t.bench.order.length = 0
+    t.bench.cleans = []
+    /* And its name read lost, as on a slow Pi 3. */
+    t.bench.nameFails = true
     await t.link.chooseHost('raspberry pi 3')
     assert.deepEqual(t.bench.order.filter((x) => ['computerChanged', 'proved', 'startClean', 'refreshAll'].includes(x)), ['computerChanged', 'proved', 'startClean', 'refreshAll'])
+    /*
+     * The bar's unit goes with it, and nothing else of Play (rig startClean
+     * `unit`), and the bar's computer is the one just picked at once: it read
+     * "Live ● FM3 / on raspberry pi 3" about the Mac's FM3, or the Mac's name
+     * under the Pi's AM4 for two minutes when the name read was lost.
+     */
+    assert.deepEqual(t.bench.cleans, [{ unit: true }], 'the switch leaves the last unit on the bar beside the new computer')
+    assert.equal(t.link.linkState().macName, 'raspberry pi 3', 'the bar names the computer left until its name has been read')
+    assert.equal(t.link.linkState().hostVersion, null, 'the computer left’s version is shown under the new one’s name')
   })
 
   test('both ends: Play says where the unit is when the computer driven has none and another has one, judged by plugged, never the model', async () => {
@@ -6034,7 +6052,7 @@ export function run(test) {
     /* And App's read, with the unit's answer in hand, is where the browser's clean start lands. */
     assert.match(read('src/App.jsx'), /answered = true\s*\/\*[^*]*\*\/\s*unitRead\(currentDeviceSlug\(\), \{ demo: isDemo\(\), since: unitAt \}\)\s*doneReading = beginChainRead\(\)/)
     const phone = read('mobile/src/lib/link.js')
-    assert.match(phone, /const ok = await pickHost\(name\)\s*const moved = switchOwed\s*switchOwed = false[\s\S]{0,120}if \(moved\) startClean\(\)\s*readMacName\(\)/)
+    assert.match(phone, /const ok = await pickHost\(name\)\s*const moved = switchOwed\s*switchOwed = false[\s\S]{0,800}if \(moved\) \{\s*startClean\(\{ unit: true \}\)\s*const picked = remoteChosenHost\(\)\s*if \(picked\) set\(\{ macName: picked, hostVersion: null \}\)\s*\}\s*readMacName\(\)/)
     assert.match(phone, /function switchedComputer\(\) \{\s*switchOwed = true\s*computerChanged\(\)\s*\}/)
     assert.match(phone, /subscribeSwitching\(switchedComputer\)/, 'the phone is not told before a read goes to the new computer')
   })

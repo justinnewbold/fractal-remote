@@ -362,8 +362,17 @@ export function computerChanged() {
  * out of several computers' answers (link.js, relay.js subscribeMixed): Play
  * says Looking… until the computer driven has been read, rather than one
  * computer's unit over another's card.
+ *
+ * `unit`: the unit's name and whether it is there, and nothing else, for
+ * Which unit's switch (link.js chooseHost). The top bar names the computer
+ * since 24 October 2026, and the unit left of the last one read beside the
+ * new computer's name says "Live ● FM3 / on raspberry pi 3" about an FM3
+ * that is on the Mac. Play keeps what it can do meanwhile (capabilities), so
+ * the switch does not take Play down to the waiting screen: the bar says
+ * Looking until the new unit answers (rig readAll, or the watch's own read
+ * if that one never does).
  */
-export function startClean({ header = false } = {}) {
+export function startClean({ header = false, unit = false } = {}) {
   unitEra += 1
   unitSettled = false
   changedAt = 0
@@ -401,7 +410,11 @@ export function startClean({ header = false } = {}) {
      * tiles and "OF 512" while the AM4 was being read, where the browser
      * shows nothing of it. Play then shows what it shows before a first read.
      */
-    ...(header ? { deviceName: '', unit: 'unknown', error: null, errorLink: false, preset: null, sceneIndex: 0, blocks: [], allBlocks: [], capabilities: null } : {})
+    ...(header
+      ? { deviceName: '', unit: 'unknown', error: null, errorLink: false, preset: null, sceneIndex: 0, blocks: [], allBlocks: [], capabilities: null }
+      : unit
+        ? { deviceName: '', unit: 'unknown' }
+        : {})
   })
   syncChainBusy()
 }

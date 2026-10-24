@@ -5006,7 +5006,7 @@ export function run(test) {
     assert.ok(wake > 0 && wake < link.indexOf('await refreshAll()', wake), 'the rig asks its questions before the link is woken')
   })
 
-  test('over Bluetooth the bar is blue and its lamp is the Bluetooth mark', () => {
+  test('over Bluetooth the bar is blue and its lamp is the Bluetooth mark', async () => {
     /*
      * "Can we change the connected thing to be blue when it's on a Bluetooth
      * connection instead of green? And instead of a green dot next to the unit
@@ -5014,15 +5014,19 @@ export function run(test) {
      */
     const bar = flat('mobile/src/components/TopBar.js')
     assert.match(bar, /const bluetooth = useBluetoothOn\(\) && !demo/, 'the demo would wear the Bluetooth look')
-    assert.match(bar, /\{bluetooth \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} \/>\}/, 'the lamp is not the Bluetooth mark over Bluetooth')
-    assert.match(bar, /mark === 'ok' \? bluetooth \? color\.ble : color\.ok/, 'CONNECTED is not blue over Bluetooth')
+    /* In the pill since 24 October 2026, beside the state word, as the lamp is. */
+    /* And none in the demo, where it is always grey and says nothing. */
+    assert.match(bar, /\{demo \? null : bluetooth \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} size=\{8\} \/>\}/, 'the lamp is not the Bluetooth mark over Bluetooth')
+    assert.match(bar, /pill\.mark === 'ok' \? \(bluetooth \? color\.ble : color\.ok\)/, 'Live is not blue over Bluetooth')
     /* The mark is lit the way the lamp is: blue answering, red not, dim not yet asked. */
     assert.match(bar, /const tint = state === 'good' \? color\.ble : state === 'fault' \? color\.fault : color\.silkFaint/, 'the mark stays blue over a unit that stopped answering')
     assert.match(bar, /source=\{bluetoothIcon\}/)
-    /* No computer to be missing over Bluetooth, and a screen reader is told it is Bluetooth. */
-    assert.match(bar, /bluetooth && linkSays === 'no computer' \? 'not connected' : linkSays/, 'the bar says NO COMPUTER over Bluetooth')
-    assert.match(bar, /over Bluetooth\. Which adapter/, 'a screen reader is not told the link is Bluetooth')
-    assert.match(bar, /<Which link=\{link\} bluetooth=\{bluetooth\}/)
+    /* No computer to be missing over Bluetooth, the pill's second line says Bluetooth, and so does a screen reader. */
+    const { pillWords } = await import('../shared/pill-words.mjs')
+    assert.equal(pillWords({ tone: 'dim', bluetooth: true }).status, 'Not connected', 'the bar says No computer over Bluetooth')
+    assert.equal(pillWords({ tone: 'good', unitState: 'present', unit: 'AM4', computer: 'WIDI Uhost', bluetooth: true }).where, 'over Bluetooth', 'the pill names a computer over Bluetooth')
+    assert.match(bar, /\[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)/, 'a screen reader is not told the link is Bluetooth')
+    assert.match(bar, /<Which link=\{link\} onClose=/)
     /* A blue in both themes, and plainly not the computer's cyan or the unit's green: at least 20 degrees of hue from each, theme by theme. */
     const theme = src('mobile/src/lib/theme.js')
     const hue = (hex) => {
@@ -5053,12 +5057,16 @@ export function run(test) {
     /* "Make it so you can click the connected button at the top of the screen and have a button that pop up that says turn off Bluetooth." */
     const bar = flat('mobile/src/components/TopBar.js')
     assert.match(bar, /import \{ setBluetooth, useBluetoothOn \} from '\.\.\/lib\/bluetooth'/, 'the bar cannot turn Bluetooth off')
-    /* Pressable over Bluetooth whatever the word says; only the demo keeps it a label. */
-    assert.match(bar, /: demo \? null : \{ accessibilityRole: 'button',/, 'the word is not pressable outside the demo')
-    assert.match(bar, /\{saying && !demo \? <Which link=\{link\} bluetooth=\{bluetooth\} onClose=\{\(\) => setSaying\(false\)\} \/> : null\}/)
-    const which = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
-    const ble = which.slice(0, which.indexOf("const where = link?.macName || 'your computer'"))
-    assert.ok(ble.length > 0 && ble.includes('if (bluetooth) {'), 'the Bluetooth note is not where this looks')
+    /*
+     * The word CONNECTED is the pill since 24 October 2026 (Axiom's "Live ●
+     * AM4" over "on Raspberry Pi"), and over Bluetooth, in every state of the
+     * link, the pill opens this note: one adapter, nothing to switch to.
+     */
+    assert.match(bar, /onPress=\{\(\) => \{ tick\(\) if \(bluetooth\) \{ setSaying\(\(open\) => !open\) return \}/, 'the pill does not open the note over Bluetooth')
+    assert.match(bar, /\{saying && bluetooth \? <Which link=\{link\} onClose=\{\(\) => setSaying\(false\)\} \/> : null\}/)
+    assert.match(bar, /useEffect\(\(\) => \{ if \(!bluetooth\) setSaying\(false\) \}, \[bluetooth\]\)/, 'the note is left open, to come back by itself when Bluetooth next comes on')
+    const ble = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
+    assert.ok(ble.length > 0 && ble.includes('Connected over Bluetooth, through'), 'the Bluetooth note is not where this looks')
     assert.match(ble, />Turn off Bluetooth<\/Text>/, 'the note has no Turn off Bluetooth')
     assert.match(ble, /accessibilityRole="button" accessibilityLabel="Turn off Bluetooth"/)
     assert.ok(!/\? \( <Pressable accessibilityRole="button" accessibilityLabel="Turn off Bluetooth"/.test(ble), 'Turn off Bluetooth only shows in some states of the link')

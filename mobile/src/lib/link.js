@@ -793,7 +793,19 @@ export async function chooseHost(name) {
   if (remoteCountOwed()) countIfDue()
   metersAgain()
   quietMeters()
-  if (moved) startClean()
+  /*
+   * Moved: the bar's unit goes until the new one answers, and its computer is
+   * the one just picked at once, by the name Which unit showed (the roll
+   * call's names are the computers' own, from the document readMacName
+   * reads). It was the one left until that read came back, or for two
+   * minutes if it did not. Its version is not known until that read: the
+   * one left's beside the new name would be a version of another computer.
+   */
+  if (moved) {
+    startClean({ unit: true })
+    const picked = remoteChosenHost()
+    if (picked) set({ macName: picked, hostVersion: null })
+  }
   readMacName()
   try {
     await refreshAll()
