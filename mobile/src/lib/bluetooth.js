@@ -7,7 +7,7 @@ import { BLE_UNITS, CHECK_STEPS, createBleWire, settleMethods } from './bleWire'
 import { createJoiner } from './fractal-sysex.mjs'
 import { blockCatalog } from './blockCatalog'
 import { setSwitch } from './bleSwitch'
-import { isAdapter, pickAdapter } from './bleAdapters'
+import { isAdapter, pickAdapter, pairScreenCrashes, PAIR_SCREEN_IOS27 } from './bleAdapters'
 import { logDebug } from './debugLog'
 import { isAdmin } from './admin'
 import { accountId } from './owner-unlock'
@@ -588,6 +588,28 @@ export async function findAdapters() {
     if (access === 'denied' || access === 'restricted') {
       logDebug('ble', `Bluetooth is not allowed for Fractal Remote (${access}): Apple’s screen not opened`)
       return noteBluetooth({ trouble: access === 'restricted' ? 'restricted' : 'permission' })
+    }
+    /*
+     * NOT OPENED WHERE IT CRASHES (bleAdapters pairScreenCrashes): on iOS 27
+     * in a build without Apple's fix, the list as it stands instead, and the
+     * page says why. Asked if it is there, as authorization is: no answer is
+     * a build without the fix.
+     */
+    let fixed = false
+    try {
+      fixed = mod.pairsOnIOS27?.() === true
+    } catch {
+      fixed = false
+    }
+    if (pairScreenCrashes({ os: Platform.OS, version: Platform.Version, fixed })) {
+      logDebug('ble', `Apple’s Bluetooth screen not opened: it crashes on iOS ${Platform.Version} in a build without Apple’s fix`)
+      fresh = new Set()
+      const list = adapterDevices()
+      showList(list)
+      noteBluetooth({ said: PAIR_SCREEN_IOS27 })
+      const pick = pickAdapter(list, fresh)
+      if (pick) chooseAdapter(pick)
+      return pick
     }
     const before = new Set(adapterDevices().map((d) => d.id))
     try {

@@ -20,12 +20,39 @@ those must still pass the other.
 
 | Patch | What it does | Moves |
 |---|---|---|
+| `ble-pair-ios27.patch` | Apple's Bluetooth MIDI screen opens on iOS 27 instead of crashing the app (Apple's own workaround), and says so to the JavaScript | **iPhone only**: Android's fingerprint stays |
 
-Nothing is waiting today. The four that were here (watch-name, r8,
-watch-channels and photo-picker) were applied on 23 October 2026 for the
-build pair after 1.87.52, and their files deleted in the same change; what
-each one carried, and what goes with it that was not in it, is in its
-section below until that build is out.
+The four that were here before it (watch-name, r8, watch-channels and
+photo-picker) were applied on 23 October 2026 for the build pair after
+1.87.52 (1.88.0), and their files deleted in the same change; what each one
+carried, and what goes with it that was not in it, is in its section below.
+
+**ble-pair-ios27.patch, and why it waits.** Justin, 24 October 2026, with a
+TestFlight crash report from 1.88.0 (28) on iOS 27.0.1: "iPhone App crashed
+when trying to enable Bluetooth." The crash is inside Apple's screen, not
+ours: `-[CABTMIDICentralViewController loadView]` builds its list from the
+status bar's height, which iOS 27 no longer answers, so the table is NaN
+points tall and Core Animation throws (CALayerInvalidGeometry, "CALayer
+bounds contains NaN"). It is iOS 27's bug in every app that opens that
+screen, however it is presented (so 1.87.11 on iOS 27 most likely has it
+too: the forum's reports do not say which Xcode built them); Apple's
+engineers confirmed it and posted the workaround
+this patch uses (developer.apple.com/forums/thread/850584, FB25301268): hand
+the screen a table before it loads, so its loadView never runs, then run its
+viewDidLoad once by hand, which starts the search. Apple tested it with a
+Bluetooth LE MIDI adapter, and other apps have shipped it.
+
+The simulator has no CoreAudioKit Bluetooth screen, so nothing free can open
+it. What is checked for free: the patch still applies (test/mobile.mjs), and
+duo.yml applies every waiting patch before it builds, so the device build
+with Xcode 27.1 compiles this one.
+
+What goes with it that is not in it: until a build carries it, an update on
+main keeps Apple's screen shut on iOS 27 (mobile/src/lib/bluetooth.js
+pairScreenCrashes), with a line on the Bluetooth page saying why, and lists
+any adapter that is already connected. The patch adds `pairsOnIOS27()`,
+which reopens it. Bluetooth is the developer's alone, so nothing in the
+store texts changes.
 
 **photo-picker.patch, and why it waits.** Justin, 22 October 2026: "Where's
 the space to enter a message and upload photos?" The note and the screenshots

@@ -4921,6 +4921,45 @@ export function run(test) {
     assert.match(page, /The adapter has to carry MIDI both ways\./)
   })
 
+  /*
+   * "iPhone App crashed when trying to enable Bluetooth." (24 October 2026,
+   * TestFlight 1.88.0 (28), iOS 27.0.1.) iOS 27 broke Apple's own Bluetooth
+   * MIDI screen in every app: its loadView builds a NaN-tall table. Apple's
+   * workaround waits for the next iPhone build as a patch; until then an
+   * update keeps the screen shut on iOS 27 and says why.
+   */
+  test('on iOS 27 Apple’s Bluetooth screen stays shut until a build carries Apple’s fix, which waits as a patch', async () => {
+    const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+    const { pairScreenCrashes, PAIR_SCREEN_IOS27 } = await import('../mobile/src/lib/bleAdapters.js')
+    assert.equal(pairScreenCrashes({ os: 'ios', version: '27.0.1', fixed: false }), true, 'Apple’s screen is opened on iOS 27 in a build that crashes there')
+    assert.equal(pairScreenCrashes({ os: 'ios', version: '27.1', fixed: undefined }), true, 'a build with no answer is taken for one with the fix')
+    assert.equal(pairScreenCrashes({ os: 'ios', version: '27.0.1', fixed: true }), false, 'the fixed build keeps the screen shut')
+    assert.equal(pairScreenCrashes({ os: 'ios', version: '26.6.2', fixed: false }), false, 'iOS 26, where the screen works, is kept from it')
+    assert.equal(pairScreenCrashes({ os: 'ios', version: '28.0', fixed: false }), true)
+    assert.equal(pairScreenCrashes({ os: 'android', version: 36, fixed: false }), false, 'Android has no such screen')
+    assert.equal(pairScreenCrashes({ os: 'ios', version: undefined, fixed: false }), false)
+    assert.doesNotMatch(PAIR_SCREEN_IOS27, /this phone/i)
+    /* Asked before Apple's screen, the way authorization is: an older build has no such function. */
+    const lib = read('mobile/src/lib/bluetooth.js')
+    const ios = lib.slice(lib.indexOf("if (Platform.OS === 'ios') {", lib.indexOf('export async function findAdapters')))
+    const guard = ios.indexOf('pairScreenCrashes({ os: Platform.OS, version: Platform.Version, fixed })')
+    assert.ok(guard > 0 && guard < ios.indexOf('await mod.pair()'), 'Apple’s screen is opened before anything asks whether it crashes')
+    assert.match(ios, /fixed = mod\.pairsOnIOS27\?\.\(\) === true/, 'the build’s own answer is not asked for')
+    assert.match(ios.slice(guard, ios.indexOf('await mod.pair()')), /noteBluetooth\(\{ said: PAIR_SCREEN_IOS27 \}\)[\s\S]*return pick/, 'the page does not say why the screen stays shut')
+
+    /* The native half waits for a build: Apple's workaround, device side, before Done goes on, and the answer the JavaScript asks for. */
+    const patch = read('docs/pending/ble-pair-ios27.patch')
+    const added = patch.split('\n').filter((l) => l.startsWith('+')).map((l) => l.slice(1)).join('\n')
+    assert.match(added, /if #available\(iOS 27, \*\) \{\s*central\.tableView = UITableView\(frame: \.zero, style: \.grouped\)\s*central\.viewDidLoad\(\)\s*\}/, 'the patch does not hand Apple’s screen a table and start its search, as Apple’s workaround does')
+    assert.match(added, /Function\("pairsOnIOS27"\) \{ \(\) -> Bool in\s*true\s*\}/, 'the patched build does not tell the JavaScript it has the fix')
+    assert.match(patch, /central\.viewDidLoad\(\)\s*\+?\s*\}\s*\n\s*let sheet = UINavigationController\(rootViewController: central\)/, 'the workaround is not between making the screen and putting it in its sheet')
+    assert.match(read('docs/pending/README.md'), /^\| `ble-pair-ios27\.patch` \|.*\| \*\*iPhone only\*\*/m, 'the README does not say the fix moves only the iPhone')
+    /* And duo.yml builds the next build: every waiting patch applied, so the device build compiles this one on Xcode 27.1. */
+    const duo = read('.github/workflows/duo.yml')
+    const applied = duo.indexOf('name: The waiting patches, applied')
+    assert.ok(applied > 0 && applied < duo.indexOf('name: Install'), 'duo.yml builds main without the patches the next build carries')
+  })
+
   test('setting it up is two steps and one button, and the phone picks the adapter when only one could be meant', async () => {
     /*
      * "Setting up the Bluetooth is kind of weird. A lot of different buttons

@@ -52,6 +52,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The next build is main with every patch waiting in docs/pending in
+      # it, applied in the README's order the way the build day applies them,
+      # so this builds that. The device build at the end is the one free
+      # compile native code waiting there gets on Xcode 27.1: Apple's iOS 27
+      # workaround for its Bluetooth MIDI screen (ble-pair-ios27.patch) is
+      # device code only, since the simulator has no such screen.
+      - name: The waiting patches, applied
+        run: |
+          for P in $(grep -oE '^\| `[^`]+\.patch`' docs/pending/README.md | tr -d '|` '); do
+            echo "::notice::Applying docs/pending/$P, which waits for the next build"
+            git apply "docs/pending/$P"
+          done
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24

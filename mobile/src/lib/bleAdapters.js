@@ -32,3 +32,25 @@ export function pickAdapter(list, fresh = new Set()) {
   if (!just.length && here.length === 1) return here[0]
   return null
 }
+
+/*
+ * APPLE'S BLUETOOTH SCREEN CRASHES ON iOS 27, in a build without Apple's fix.
+ *
+ * "iPhone App crashed when trying to enable Bluetooth." (24 October 2026,
+ * TestFlight 1.88.0 (28), iOS 27.0.1.) iOS 27's own screen builds its list
+ * from the status bar's height, which iOS 27 no longer answers, and the app
+ * is gone the moment Connect opens it, in every app that uses that screen.
+ * Apple's workaround is native code, so it waits for the next iPhone build
+ * (docs/pending/ble-pair-ios27.patch); the build that has it answers true to
+ * pairsOnIOS27(). Until then, on iOS 27 the screen stays shut and the page
+ * says why. `version` is Platform.Version: '27.0.1' on an iPhone.
+ */
+export function pairScreenCrashes({ os, version, fixed } = {}) {
+  if (os !== 'ios') return false
+  const major = parseInt(String(version ?? ''), 10)
+  return major >= 27 && fixed !== true
+}
+
+/* What the Bluetooth page says instead (the developer's own page). */
+export const PAIR_SCREEN_IOS27 =
+  'Apple’s Bluetooth screen crashes on iOS 27, so it stays closed until the next build of the app, which has Apple’s fix. An adapter that is already connected is listed below.'
