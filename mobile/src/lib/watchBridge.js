@@ -7,7 +7,7 @@ import { logDebug } from './debugLog'
 import { idOf } from './device'
 import { probeNow, untilConnected } from './link'
 import { shortBlock } from './shortName'
-import { getState, writeBypass, writeScene, writeTuner } from './rig'
+import { getState, tunerAskWaits, tunerAsksWaiting, writeBypass, writeScene, writeTuner } from './rig'
 import { tapDeadline } from './relay-rules'
 import { createWatchSender, watchCommand, watchState } from './watch-link'
 import { metronome } from './metronome'
@@ -44,6 +44,14 @@ function link() {
 
 /** Whether this build can talk to a watch at all. */
 export const watchSupported = () => !!link()
+
+/*
+ * How long after the phone heard a Tuner off from a woken phone its second
+ * try may still go: under the 25 seconds the phone is kept awake for a
+ * watch request (FractalWatchModule WAKE_SECONDS), so it is never left to
+ * go at the next launch, over whatever tuner is up by then.
+ */
+export const WATCH_CLOSE_WINDOW_MS = 20000
 
 /*
  * HOW THE WATCH IS USED, in the order somebody meets it. One list for both
@@ -148,17 +156,57 @@ export function useWatchBridge(picture, step) {
        * mutes the unit, and leaving its page is the watch saying "stop" — a
        * close that was dropped would leave the unit muted. So it waits for
        * the connection and is tried once more, and is never dropped.
+       *
+       * SENT WHATEVER THE APP THINKS THE TUNER IS DOING, unlike run()'s
+       * close on a phone awake. A woken phone may have been started afresh
+       * by this very request, with the app gone from memory in the pocket:
+       * it knows nothing of the tuner, and the rig may still be muted on it.
+       *
+       * AND TRIED AGAIN WHEN IT DID NOT GO. rig.writeTuner never throws: a
+       * close that did not go answers false, so that is what is asked here.
+       *
+       * NEVER OVER A TUNER OPENED SINCE. While the first try is out and the
+       * second waits, the screens say the tuner is off, so the watch offers
+       * Tuner on, and Play does too. An open tapped then is the player's to
+       * keep. One that pressed is in tunerOn. One that woke the phone and
+       * waits for the same link has pressed nothing yet, so the second try
+       * waits for every such request to press or be dropped (rig
+       * tunerAskWaits) before it reads tunerOn: first to hear the link
+       * back, it would otherwise close as the newer press and take the
+       * open's place before it landed. And one that was dropped or refused
+       * opened nothing, so it keeps nothing back: the rig still wants its
+       * close.
+       *
+       * AND ONLY WHILE THE WATCH IS STILL WAITING FOR IT. The phone is woken
+       * for 25 seconds (FractalWatchModule WAKE_SECONDS) and the code then
+       * stops where it is, so a second try still waiting for a link that
+       * never came would go at the next launch or wake, minutes or hours
+       * later, over a tuner opened on the unit or another device since. It
+       * goes inside WATCH_CLOSE_WINDOW_MS of the request or not at all, and
+       * the clock, which runs on while the code is stopped, is what says so.
        */
       if (cmd.do === 'tuner' && !cmd.on) {
+        const close = () => writeTuner(false, receivedAt)
+        const left = () => Math.max(0, receivedAt + WATCH_CLOSE_WINDOW_MS - Date.now())
         probeNow()
         pause(400)
           .then(() => untilConnected())
-          .then(() => Promise.resolve(run()))
-          .catch(async (err) => {
-            logDebug('watch', 'first try failed while waking', err?.message || String(err))
+          .then(close)
+          .then(async (ok) => {
+            if (ok) return
+            logDebug('watch', 'tuner off: the first try did not go; trying once more')
             await pause(1500)
-            await untilConnected()
-            return run()
+            await untilConnected(left())
+            while (tunerAsksWaiting() > 0 && left() > 0) await pause(100)
+            if (left() <= 0) {
+              logDebug('watch', 'tuner off: too late to try again')
+              return
+            }
+            if (getState().tunerOn) {
+              logDebug('watch', 'tuner off: opened again since, so not tried again')
+              return
+            }
+            if (!(await close())) logDebug('watch', 'tuner off: gave up')
           })
           .catch((err) => logDebug('watch', 'gave up', err?.message || String(err)))
         return
@@ -179,15 +227,22 @@ export function useWatchBridge(picture, step) {
        * back, inside the same deadline, so no pause is put in front of it.
        */
       const deadline = tapDeadline(receivedAt)
+      /* A Tuner on waiting here is one a Tuner off's second try waits for (rig tunerAskWaits): let go of once it has pressed, when its open counts itself until answered, or never will press. */
+      const waiting = cmd.do === 'tuner' ? tunerAskWaits() : () => {}
       probeNow()
       untilConnected(Math.max(0, deadline - Date.now()))
         .then((up) => {
-          if (!up || Date.now() >= deadline) {
-            logDebug('watch', `${cmd.do} not sent: the phone could not reach the rig in time after waking`)
-            return undefined
+          try {
+            if (!up || Date.now() >= deadline) {
+              logDebug('watch', `${cmd.do} not sent: the phone could not reach the rig in time after waking`)
+              return undefined
+            }
+            return run()
+          } finally {
+            waiting()
           }
-          return run()
         })
+        .finally(waiting)
         .catch((err) => logDebug('watch', 'not sent', err?.message || String(err)))
     })
     return () => {
