@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # A picture of each watch page, from a simulated Apple Watch, in demo mode.
-set -euo pipefail
+set -eEuo pipefail
+# Whatever fails says so in the run's summary, which is all that can be read
+# of a run from outside: the log itself is behind a sign-in.
+trap 'c=$?; echo "::error::$BASH_COMMAND failed with exit code $c"' ERR
 cd "$(dirname "$0")"
 APP=build/Build/Products/Debug-watchsimulator/FractalWatch.app
 ID=cloud.newbold.fractalremote.watchkitapp
@@ -10,7 +13,11 @@ d = json.load(sys.stdin)["devices"]
 watches = [x for k, v in d.items() if "watchOS" in k for x in v if "Apple Watch" in x["name"]]
 pref = [x for x in watches if "45mm" in x["name"] or "46mm" in x["name"]] or watches
 print(pref[-1]["udid"])')
-echo "watch simulator: $UDID"
+echo "::notice::watch simulator: $(xcrun simctl list devices -j | python3 -c '
+import json, sys
+for k, v in json.load(sys.stdin)["devices"].items():
+    for x in v:
+        if x["udid"] == sys.argv[1]: print(x["name"], "on", k.split(".")[-1])' "$UDID")"
 xcrun simctl boot "$UDID" || true
 xcrun simctl bootstatus "$UDID" -b
 xcrun simctl install "$UDID" "$APP"
