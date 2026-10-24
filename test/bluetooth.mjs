@@ -165,6 +165,8 @@ function fakeGen3(sx, o) {
     scene: 0,
     bpm: 120,
     page: false,
+    /* Its published tuner, sent on or off (0x11): on, it is on its tuner, whether it pushes readings or not. */
+    tuner: false,
     hz: 110,
     cc0: 0,
     cc32: 0,
@@ -235,6 +237,7 @@ function fakeGen3(sx, o) {
       case 0x10:
         return
       case 0x11:
+        state.tuner = p[0] === 1
         state.pushing = p[0] === 1 && opt.pushes
         return
       case 0x12:
@@ -2194,6 +2197,143 @@ export function run(test) {
     assert.ok(quiet.frames().some((f) => sameFrame(f, quiet.sx.buildTunerPage(0x11, true))), 'never fell back to asking')
     assert.ok(quiet.logs.some((l) => /asking for the frequency instead/.test(l)))
     quiet.wire.close()
+  })
+
+  /*
+   * THE GEN 3 TUNER, PRESSED FASTER THAN IT ANSWERS. A Close and then a Tuner
+   * pressed without waiting ran side by side: the close's off went, the
+   * open's on went after it, and only then did the close put down what it
+   * believed the unit had open, over the open's. The next Close sent nothing
+   * and the unit stayed on its tuner, muted, under a Play that showed it
+   * closed. Each is held here to what the unit heard, in order, and to where
+   * the unit was left.
+   */
+  const gen3TunerHeard = (t) =>
+    t.frames().flatMap((f) => {
+      const words = [
+        [t.sx.buildTuner(0x11, true), 'tuner on'],
+        [t.sx.buildTuner(0x11, false), 'tuner off'],
+        [t.sx.buildTunerPage(0x11, true), 'page open'],
+        [t.sx.buildTunerPage(0x11, false), 'page closed']
+      ].find(([m]) => sameFrame(f, m))
+      return words ? [words[1]] : []
+    })
+  const pressTuner = (t, on, deadline) => t.wire.request('/tuner', { method: 'POST', body: JSON.stringify({ on }), deadline })
+
+  test('the published tuner: Close then Tuner pressed without waiting, then Close, leaves the unit off its tuner', async () => {
+    /* The report's own: open, then Close and Tuner at once, then Close. */
+    {
+      const t = await onTheLine('fm3', { methods: { tuner: 'push' } })
+      await t.post('/tuner', { on: true })
+      await advance(t.clock, 200)
+      assert.deepEqual(await drive(t.clock, Promise.all([pressTuner(t, false), pressTuner(t, true)])), [{ ok: true }, { ok: true }])
+      await advance(t.clock, 200)
+      assert.equal(t.unit.state.tuner, true, 'the Tuner pressed after the Close did not open')
+      await t.post('/tuner', { on: false })
+      assert.deepEqual(gen3TunerHeard(t), ['tuner on', 'tuner off', 'tuner on', 'tuner off'])
+      assert.equal(t.unit.state.tuner, false, 'the last Close sent nothing, and the unit was left on its tuner')
+    }
+    /* Faster still: Tuner, Close, Tuner, Close, Tuner all at once, then Close. */
+    {
+      const t = await onTheLine('fm3', { methods: { tuner: 'push' } })
+      await drive(t.clock, Promise.all([true, false, true, false, true].map((on) => pressTuner(t, on))))
+      await advance(t.clock, 200)
+      assert.equal(t.unit.state.tuner, true)
+      await t.post('/tuner', { on: false })
+      assert.deepEqual(gen3TunerHeard(t), ['tuner on', 'tuner off', 'tuner on', 'tuner off', 'tuner on', 'tuner off'])
+      assert.equal(t.unit.state.tuner, false, 'the unit was left on its tuner after a burst')
+      const before = t.sent.length
+      await advance(t.clock, 2000)
+      assert.equal(t.sent.length, before, 'something of the tuner went on after the last Close')
+    }
+    /* A unit that sent no readings, so the phone opened the page to ask: the Close shuts both, and so does the next. */
+    {
+      const t = await onTheLine('fm3', { methods: { tuner: 'push' } })
+      await t.post('/tuner', { on: true })
+      await advance(t.clock, 1500)
+      assert.equal(t.unit.state.page, true, 'the phone never fell back to asking')
+      await drive(t.clock, Promise.all([pressTuner(t, false), pressTuner(t, true)]))
+      await advance(t.clock, 1500)
+      await t.post('/tuner', { on: false })
+      assert.deepEqual(gen3TunerHeard(t), ['tuner on', 'page open', 'tuner off', 'page closed', 'tuner on', 'page open', 'tuner off', 'page closed'])
+      assert.equal(t.unit.state.tuner, false, 'the unit was left on its tuner')
+      assert.equal(t.unit.state.page, false, 'the unit was left on its tuner page')
+    }
+  })
+
+  test('the asked-for tuner: Close then Tuner pressed without waiting opens the page again, so it reads, and the next Close shuts it', async () => {
+    const t = await onTheLine('fm3')
+    await t.post('/tuner', { on: true })
+    await advance(t.clock, 500)
+    await drive(t.clock, Promise.all([pressTuner(t, false), pressTuner(t, true)]))
+    t.events.length = 0
+    await advance(t.clock, 1000)
+    assert.equal(t.unit.state.page, true, 'the Tuner pressed after the Close asked a page the Close had shut')
+    const readings = t.events.filter((e) => e.type === 'tuner')
+    assert.ok(readings.length >= 3 && readings.every((r) => r.note === 'A'), `the tuner did not read: ${JSON.stringify(readings.at(-1))}`)
+    await t.post('/tuner', { on: false })
+    assert.deepEqual(gen3TunerHeard(t), ['page open', 'page closed', 'page open', 'page closed'])
+    assert.equal(t.unit.state.page, false, 'the unit was left on its tuner page')
+  })
+
+  test('a Gen 3 tuner open that fails leaves nothing behind: the Close and Tuner after it work, on both ways', async () => {
+    /* Dropped at its deadline behind a read the unit is slow to answer, with a Close and a Tuner pressed after it. */
+    {
+      const t = await onTheLine('fm3', { methods: { tuner: 'push' } })
+      t.unit.opt.silent = true
+      t.wire.request('/scene').catch(() => {})
+      await advance(t.clock, 10)
+      let dropped = null
+      pressTuner(t, true, t.clock.now() + 300).catch((e) => (dropped = e))
+      const closing = pressTuner(t, false)
+      const opening = pressTuner(t, true, t.clock.now() + 1500)
+      await advance(t.clock, 500)
+      t.unit.opt.silent = false
+      assert.deepEqual(await drive(t.clock, Promise.all([closing, opening])), [{ ok: true }, { ok: true }])
+      assert.equal(dropped?.late, true, `the first open was not dropped at its deadline: ${dropped?.message}`)
+      await advance(t.clock, 200)
+      assert.equal(t.unit.state.tuner, true, 'the Tuner after the dropped one did not open')
+      await t.post('/tuner', { on: false })
+      assert.deepEqual(gen3TunerHeard(t), ['tuner on', 'tuner off'])
+      assert.equal(t.unit.state.tuner, false, 'the last Close sent nothing, and the unit was left on its tuner')
+    }
+    /* The adapter not taking the page's message once: the next Tuner opens the page, and reads. */
+    {
+      const t = await onTheLine('fm3')
+      let refused = 0
+      t.line.refuses = (b) => sameFrame(b, t.sx.buildTunerPage(0x11, true)) && refused++ === 0
+      await assert.rejects(drive(t.clock, pressTuner(t, true)), (e) => e.status === 503)
+      await t.post('/tuner', { on: true })
+      t.events.length = 0
+      await advance(t.clock, 1000)
+      assert.equal(t.unit.state.page, true, 'the Tuner after a failed one never opened the page')
+      assert.ok(t.events.some((e) => e.type === 'tuner' && e.note === 'A'), 'the tuner did not read')
+      await t.post('/tuner', { on: false })
+      assert.deepEqual(gen3TunerHeard(t), ['page open', 'page closed'])
+      assert.equal(t.unit.state.page, false)
+    }
+  })
+
+  test('a Gen 3 tuner close that fails is sent again by the next Close, on both ways', async () => {
+    for (const [methods, shut, heard, left] of [
+      [{ tuner: 'push' }, (sx) => sx.buildTuner(0x11, false), ['tuner on', 'tuner off'], (u) => u.state.tuner],
+      [undefined, (sx) => sx.buildTunerPage(0x11, false), ['page open', 'page closed'], (u) => u.state.page]
+    ]) {
+      const way = methods ? 'published' : 'asked-for'
+      const t = await onTheLine('fm3', { methods })
+      await t.post('/tuner', { on: true })
+      await advance(t.clock, 200)
+      let refused = 0
+      t.line.refuses = (b) => sameFrame(b, shut(t.sx)) && refused++ === 0
+      await assert.rejects(drive(t.clock, pressTuner(t, false)), (e) => e.status === 503)
+      assert.equal(left(t.unit), true, `the ${way} tuner: the close the adapter did not take reached the unit`)
+      assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true })
+      assert.deepEqual(gen3TunerHeard(t), heard, `the ${way} tuner`)
+      assert.equal(left(t.unit), false, `the ${way} tuner: the next Close sent nothing, and the unit was left on its tuner`)
+      const before = t.sent.length
+      await advance(t.clock, 1000)
+      assert.equal(t.sent.length, before, `the ${way} tuner went on asking after it closed`)
+    }
   })
 
   test('a Program Change from the unit is a preset change; the phone’s own, echoed back, is not', async () => {
