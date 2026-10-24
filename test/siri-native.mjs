@@ -410,8 +410,9 @@ export function run(test) {
     const launch = duo.slice(duo.indexOf('- name: It opens, and stays open'))
     const opened = launch.indexOf('xcrun simctl openurl "$UDID" fractalremote://scene/3')
     assert.ok(opened > launch.indexOf('xcrun simctl launch'), 'duo.yml never opens a fractalremote:// link on the running app')
-    assert.ok(opened < launch.indexOf('done'), 'the link is opened outside the loop over simulators')
-    assert.match(launch.slice(opened), /^[^\n]*\n\s*sleep \d+\n[\s\S]*?launchctl list \| grep -q 'cloud\.newbold\.fractalremote' \\\n\s*\|\| \{ echo "The app is not running 10 seconds after fractalremote:\/\/scene\/3 was opened/)
+    const loop = launch.indexOf('for PAIR in')
+    assert.ok(loop > 0 && opened > loop && opened < launch.indexOf('\n          done', loop), 'the link is opened outside the loop over simulators')
+    assert.match(launch.slice(opened), /^[^\n]*\n\s*sleep \d+\n[\s\S]*?launchctl list \| grep -q 'cloud\.newbold\.fractalremote' \\\n\s*\|\| \{ echo "(?:::error::)?The app is not running 10 seconds after fractalremote:\/\/scene\/3 was opened/)
     assert.doesNotMatch(duo, /pull_request:/, 'duo.yml runs on every pull request, on a preview runner that may never start')
   })
 }

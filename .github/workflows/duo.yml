@@ -125,7 +125,7 @@ jobs:
         run: |
           set -e
           python3 - <<'PY' >> "$GITHUB_ENV"
-          import json, subprocess, sys
+          import json, re, subprocess, sys
           runtimes = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'runtimes', '-j']))['runtimes']
           ios = [r for r in runtimes if r.get('platform') == 'iOS' and r.get('isAvailable')]
           ios.sort(key=lambda r: [int(p) for p in r['version'].split('.')])
@@ -141,13 +141,20 @@ jobs:
               return None, []
           duo_rt, duo = newest(lambda n: 'Duo' in n)
           phone_rt, phones = newest(lambda n: n.startswith('iPhone') and 'Duo' not in n)
+          # The newest iPhone by its model number (iPhone18,2), from the device
+          # types' own list; the runtime's list is in no promised order.
+          types = {t['identifier']: t for t in json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devicetypes', '-j']))['devicetypes']}
+          def model(d):
+              m = re.match(r'iPhone(\d+),(\d+)$', types.get(d['identifier'], {}).get('modelIdentifier') or '')
+              return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+          phones.sort(key=model, reverse=True)
           if not phones and not duo:
               raise SystemExit('::error::No iOS runtime on this image runs an iPhone simulator')
           print('DUO=' + (duo[0]['identifier'] if duo else ''))
           print('DUO_RUNTIME=' + (duo_rt['identifier'] if duo else ''))
-          print('PHONE=' + (phones[-1]['identifier'] if phones else ''))
+          print('PHONE=' + (phones[0]['identifier'] if phones else ''))
           print('PHONE_RUNTIME=' + (phone_rt['identifier'] if phones else ''))
-          note('Picked ' + (duo[0]['name'] + ' on ' + duo_rt['name'] if duo else 'no iPhone Duo') + ', and ' + (phones[-1]['name'] + ' on ' + phone_rt['name'] if phones else 'no other iPhone'))
+          note('Picked ' + (duo[0]['name'] + ' on ' + duo_rt['name'] if duo else 'no iPhone Duo') + ', and ' + (phones[0]['name'] + ' on ' + phone_rt['name'] if phones else 'no other iPhone'))
           PY
 
       - name: It opens, and stays open
@@ -159,6 +166,38 @@ jobs:
           APP=$(find build/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphonesimulator*' | head -n 1)
           test -n "$APP"
           mkdir -p screens
+          # A picture is for looking at, not the check: one simctl will not
+          # take (the third run's first picture answered exit 22) is tried on
+          # each named display, then said with the displays the simulator has,
+          # and the run goes on to ask whether the app is running.
+          shot() {
+            xcrun simctl io "$UDID" screenshot "$1" 2>/dev/null && return 0
+            for D in internal external; do
+              xcrun simctl io "$UDID" screenshot --display="$D" "$1" 2>/dev/null && return 0
+            done
+            echo "::warning::No picture of $NAME: simctl io screenshot refused it. Its displays: $(xcrun simctl io "$UDID" enumerate 2>&1 | tr -s ' \n' ' ' | cut -c1-700)"
+          }
+          # Why the app is gone, from the newest crash report the simulator
+          # left on the runner: its exception, termination and the reason the
+          # system gave, each as an error line in the run's summary.
+          crashed() {
+            python3 - <<'PY' || true
+          import glob, json, os
+          found = sorted(glob.glob(os.path.expanduser('~/Library/Logs/DiagnosticReports/FractalRemote*')), key=os.path.getmtime)
+          if not found:
+              print('::error::No crash report for FractalRemote on the runner.')
+          else:
+              text = open(found[-1], errors='replace').read()
+              head, _, body = text.partition('\n')
+              try:
+                  report = json.loads(body)
+                  for key in ('exception', 'termination', 'asi', 'crashedThread'):
+                      if key in report:
+                          print('::error::' + os.path.basename(found[-1]) + ' ' + key + ': ' + json.dumps(report[key])[:600])
+              except ValueError:
+                  print('::error::' + os.path.basename(found[-1]) + ': ' + ' '.join(text.split())[:700])
+          PY
+          }
           for PAIR in "$DUO:$DUO_RUNTIME" "$PHONE:$PHONE_RUNTIME"; do
             TYPE=${PAIR%%:*}
             RUNTIME=${PAIR#*:}
@@ -171,15 +210,16 @@ jobs:
             xcrun simctl launch "$UDID" cloud.newbold.fractalremote
             sleep 30
             NAME=$(echo "$TYPE" | sed 's/.*SimDeviceType\.//')
-            xcrun simctl io "$UDID" screenshot "screens/$NAME.png"
+            shot "screens/$NAME.png"
             xcrun simctl spawn "$UDID" launchctl list | grep -q 'cloud.newbold.fractalremote' \
-              || { echo "The app is not running 30 seconds after it was opened on $NAME."; exit 1; }
+              || { echo "::error::The app is not running 30 seconds after it was opened on $NAME."; crashed; exit 1; }
             # A link, as a shortcut's Open URLs step sends it, through the scene delegate.
             xcrun simctl openurl "$UDID" fractalremote://scene/3
             sleep 10
-            xcrun simctl io "$UDID" screenshot "screens/$NAME-link.png"
+            shot "screens/$NAME-link.png"
             xcrun simctl spawn "$UDID" launchctl list | grep -q 'cloud.newbold.fractalremote' \
-              || { echo "The app is not running 10 seconds after fractalremote://scene/3 was opened on $NAME."; exit 1; }
+              || { echo "::error::The app is not running 10 seconds after fractalremote://scene/3 was opened on $NAME."; crashed; exit 1; }
+            echo "::notice::$NAME on $RUNTIME: opened, still running after 30 seconds, and after the fractalremote://scene/3 link."
             xcrun simctl shutdown "$UDID"
             xcrun simctl delete "$UDID"
           done
