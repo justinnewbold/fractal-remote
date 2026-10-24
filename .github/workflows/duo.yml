@@ -113,16 +113,41 @@ jobs:
 
       # Opened, then asked again 30 seconds later whether it is still running:
       # an app the scene rule refuses is gone by then.
+      # Which simulators to open it on: the newest iOS the image has, and of
+      # the iPhones THAT iOS says it supports, an iPhone Duo if there is one
+      # and the newest other iPhone. A device type the runtime does not
+      # support is refused by simctl create (exit 22, its "invalid argument"),
+      # which is how the first run on this image stopped. What was picked is
+      # written as a notice, so the run says it without its log.
+      - name: Pick the simulators
+        run: |
+          set -e
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json, subprocess
+          runtimes = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'runtimes', '-j']))['runtimes']
+          ios = [r for r in runtimes if r.get('platform') == 'iOS' and r.get('isAvailable')]
+          ios.sort(key=lambda r: [int(p) for p in r['version'].split('.')])
+          print('::notice::iOS runtimes on this image: ' + ', '.join(r['name'] for r in ios), file=__import__('sys').stderr)
+          runtime = ios[-1]
+          supported = runtime.get('supportedDeviceTypes') or json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devicetypes', '-j']))['devicetypes']
+          duo = [d for d in supported if 'Duo' in d['name']]
+          phones = [d for d in supported if d['name'].startswith('iPhone') and 'Duo' not in d['name']]
+          if not phones:
+              raise SystemExit('::error::' + runtime['name'] + ' supports no iPhone simulator')
+          print('RUNTIME=' + runtime['identifier'])
+          print('DUO=' + (duo[0]['identifier'] if duo else ''))
+          print('PHONE=' + phones[-1]['identifier'])
+          print('::notice::Picked ' + runtime['name'] + ', ' + (duo[0]['name'] if duo else 'no iPhone Duo') + ' and ' + phones[-1]['name'], file=__import__('sys').stderr)
+          PY
+
       - name: It opens, and stays open
         working-directory: mobile/ios
         run: |
-          set -e
+          set -eE
+          # Whatever fails says so where the run's summary shows it.
+          trap 'c=$?; echo "::error::$BASH_COMMAND failed with exit code $c"' ERR
           APP=$(find build/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphonesimulator*' | head -n 1)
           test -n "$APP"
-          RUNTIME=$(xcrun simctl list runtimes -j | python3 -c "import json,sys; r=[x for x in json.load(sys.stdin)['runtimes'] if x.get('platform')=='iOS' and x.get('isAvailable')]; print(sorted(r, key=lambda x: [int(p) for p in x['version'].split('.')])[-1]['identifier'])")
-          TYPES=$(xcrun simctl list devicetypes -j)
-          DUO=$(echo "$TYPES" | python3 -c "import json,sys; t=[x for x in json.load(sys.stdin)['devicetypes'] if 'Duo' in x['name']]; print(t[0]['identifier'] if t else '')")
-          PHONE=$(echo "$TYPES" | python3 -c "import json,sys; t=[x for x in json.load(sys.stdin)['devicetypes'] if x['name'].startswith('iPhone') and 'Duo' not in x['name']]; print(t[-1]['identifier'])")
           mkdir -p screens
           for TYPE in $DUO $PHONE; do
             echo "== $TYPE on $RUNTIME"
@@ -155,11 +180,11 @@ jobs:
       - name: The fold sensor is compiled in
         working-directory: mobile/ios
         run: |
-          set -e
+          set -eE
+          trap 'c=$?; echo "::error::$BASH_COMMAND failed with exit code $c"' ERR
           APP=$(find build/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphonesimulator*' | head -n 1)
           test -n "$APP"
-          RUNTIME=$(xcrun simctl list runtimes -j | python3 -c "import json,sys; r=[x for x in json.load(sys.stdin)['runtimes'] if x.get('platform')=='iOS' and x.get('isAvailable')]; print(sorted(r, key=lambda x: [int(p) for p in x['version'].split('.')])[-1]['identifier'])")
-          TYPE=$(xcrun simctl list devicetypes -j | python3 -c "import json,sys; t=json.load(sys.stdin)['devicetypes']; d=[x for x in t if 'Duo' in x['name']]; p=[x for x in t if x['name'].startswith('iPhone') and 'Duo' not in x['name']]; print((d or p[-1:])[0]['identifier'])")
+          TYPE=${DUO:-$PHONE}
           mkdir -p screens
           OUT="$PWD/screens/fold-check.txt"
           echo "== $TYPE on $RUNTIME"
