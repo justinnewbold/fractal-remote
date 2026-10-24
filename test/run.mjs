@@ -16101,7 +16101,9 @@ test('the computer app carries the server whose keep of the AM4’s own tuner en
   )
   /* And the store notes wait for his AM4, with no version number written in before the merge. */
   const notes = readSrc(new URL('../docs/app-store.md', import.meta.url), 'utf8')
-  const para = notes.slice(notes.indexOf("**For the next version's notes: the AM4's own tuner stays up**"), notes.indexOf('### Notes for App Review, 1.87.11'))
+  const paraAt = notes.indexOf("**For the next version's notes: the AM4's own tuner stays up**")
+  /* To the next heading: the next version's notes block, one long line a paragraph, comes after it. */
+  const para = notes.slice(paraAt, notes.indexOf('\n### ', paraAt))
   assert.match(para.replace(/\s+/g, ' '), /Waiting: not for a store version until Justin has watched his own AM4 hold its tuner steady past 15 seconds/)
   assert.ok(!/1\.87\.5\d/.test(para), 'the store notes name a version before the merge has given it one')
   assert.ok(para.split('\n').every((line) => line.length <= 80), 'a line of the store notes runs past 80 characters')

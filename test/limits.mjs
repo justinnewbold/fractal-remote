@@ -4585,8 +4585,8 @@ export function run(test) {
     assert.ok(blocks.length >= 8, 'the blocks to paste could not be read')
     const offering = blocks.filter((b) => /bluetooth/i.test(b) && !/switched on only for the developer's own account/.test(b))
     assert.deepEqual(offering, [], 'a block to paste offers Bluetooth (beta), and customers cannot open it')
-    /* Apple's notes, Google's App access note, and its short version for a box that will not take the long one. */
-    assert.equal(blocks.filter((b) => /bluetooth/i.test(b)).length, 3, 'Bluetooth is disclosed in some other block than Apple’s notes and Google’s App access (long and short)')
+    /* Apple's notes (1.87.11's, and the next version's), Google's App access note, and its short version for a box that will not take the long one. */
+    assert.equal(blocks.filter((b) => /bluetooth/i.test(b)).length, 4, 'Bluetooth is disclosed in some other block than Apple’s notes and Google’s App access (long and short)')
     const draftNote = section.slice(withdrawn, section.indexOf('### By hand in Play Console for 1.87.11'))
     assert.ok(!/```/.test(draftNote), 'the withdrawn draft still has a block to paste')
     /* The 1.87.1 texts are kept at the end for the record, quoted rather than fenced, so none of them is a block to paste. */
@@ -4658,6 +4658,61 @@ export function run(test) {
     assert.match(playHand, /\*\*Short description:\*\* the one under \*Google Play: short description\*/, 'the Play checklist does not say to paste the lower-case short description')
     assert.match(playHand, /\*\*The trademark line\*\* in the second paragraph has to be the one in this\s+file, which names the VP4/, 'the Play checklist does not say the trademark line must name the VP4')
     assert.ok(AFFILIATION.includes('“VP4”'), 'the shared trademark line no longer names the VP4, and the Play checklist says it does')
+  })
+
+  test('the next version’s review notes describe what is new since 1.87.11, fit Apple’s box, and keep the 2.5.19 pair', () => {
+    /*
+     * Written on 24 October 2026, ahead of the next build pair,
+     * because the paragraphs each change asked for came to about 5300 bytes
+     * together, and Apple's Notes box takes 4000: cut on the day of
+     * submitting, one of the descriptions 2.3.1(a) wants would have been
+     * the one to go. Measured the way the 1.87.11 block is, with each video
+     * bracket as long as a Drive link and each Tested on bracket 30 long.
+     */
+    const store = read('docs/app-store.md')
+    const at = store.indexOf('### Notes for App Review, the next version')
+    assert.ok(at > 0, 'the next version has no Notes for App Review yet')
+    const open = store.indexOf('```', at)
+    const pasted = store.slice(open + 3, store.indexOf('```', open + 3))
+    const drive = 'https://drive.google.com/file/d/' + 'x'.repeat(33) + '/view?usp=drive_link'
+    const brackets = pasted.match(/\[[^\]\n]*\]/g) || []
+    assert.equal(brackets.filter((b) => /video link/.test(b)).length, 3, 'the next notes do not hold a place for the three video links')
+    const filled = brackets.reduce((t, b) => t.replace(b, /video link/.test(b) ? drive : 'x'.repeat(30)), pasted.trim())
+    const bytes = Buffer.byteLength(filled, 'utf8')
+    assert.ok(bytes <= 3950, `the next notes are ${bytes} bytes with the links and brackets filled; Apple's Notes box takes 4000`)
+
+    /* The demo steps, in the walkthrough's words, with the startup card's OK first: a first launch meets the card before Get started. */
+    const steps = [...pasted.matchAll(/^(\d)\. (.+)$/gm)].map((m) => m[2]).slice(0, 5)
+    assert.match(steps[0], /^Tap "OK" on the card that says the app is independent$/, 'the demo steps do not start on the startup card')
+    assert.match(read('mobile/src/components/IndependentNotice.js'), /<Press label="OK"/, 'the startup card has no OK button, and the notes say to tap it')
+    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ']) {
+      assert.ok(steps.some((t) => t.includes(label)), `the next notes do not say to tap "${label}"`)
+      assert.ok(read('shared/onboarding.mjs').includes(label), `the next notes say to tap "${label}", which the walkthrough no longer says`)
+    }
+
+    /* Every new thing, one paragraph each, and each held to the app it describes. */
+    for (const [line, what] of [
+      [/^Siri\. Nine App Shortcuts, each phrase with the app's name/m, 'Siri'],
+      [/^Startup card\./m, 'the startup card'],
+      [/^Colors\. Settings, then Colors, has six looks/m, 'Settings → Colors'],
+      [/^Bigger screens\. On iPad and an opened iPhone Duo/m, 'the wider Play'],
+      [/^AM4\. The amp's pedal on Play now switches the amp's boost/m, 'the AM4 boost'],
+      [/^VP4\. The app changes a VP4's presets/m, 'the VP4'],
+      [/^Apple Watch\. Hold a pedal on the watch to choose its channel\. The watch app is now named Fractal Remote\./m, 'the watch channels and the watch name'],
+      [/^Screenshots\. Feedback and Log \(Settings, Troubleshooting\) can add up to three screenshots/m, 'the screenshots']
+    ]) assert.match(pasted, line, `the next notes do not describe ${what}`)
+    assert.equal((read('mobile/targets/watch/_shared/SiriShortcuts.swift').match(/AppShortcut\(/g) || []).length, 9, 'the notes say nine App Shortcuts, and the Swift has another number')
+    assert.match(read('mobile/src/lib/vp4-safety.js'), /VP4_SETUP_TITLE = 'VP4 scenes & presets'/, 'the notes name the VP4 page by a title it no longer has')
+    assert.match(read('mobile/targets/watch/expo-target.config.js'), /displayName: 'Fractal Remote'/, 'the notes say the watch app is named Fractal Remote, and it is not')
+    assert.match(pasted, /open Fractal Remote on the watch/, 'the notes send the reviewer to the watch app by its old name')
+    assert.match(read('mobile/src/components/Shots.js'), /'Choose a screenshot'/, 'the notes say screenshots are picked, and the button is gone')
+
+    /* The 2.5.19 pair, said whole: the Bluetooth code and the Developer pages. */
+    assert.match(pasted, /This build contains Bluetooth MIDI code for a feature that lets the phone reach the guitar unit through a Bluetooth MIDI adapter instead of a computer\. While it is tested, it is switched on only for the developer's own account\. Customers and the review account don't see it in this build, and the app doesn't ask them for Bluetooth permission\./)
+    assert.match(pasted, /Settings also has Developer pages \(accounts, sales, messages\) that open only for the developer's own account; the server checks which account is asking\./)
+    /* And the deletion paragraph as Apple approved it, with where an unpaid account deletes. */
+    assert.match(pasted, /Deleting an account \(Guideline 5\.1\.1\(v\), video 3 below\):[^\n]*purchase page[^\n]{0,80}Delete account is at the foot of that page\. Please try it on a new account, not the demo account\./)
+    assert.doesNotMatch(pasted, /\b(official|approved by|endorsed|certified|sponsored)\b/i, 'the notes call the app something Fractal Audio has not made it')
   })
 
   test('the licences of what we ship travel with it', () => {

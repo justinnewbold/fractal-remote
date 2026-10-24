@@ -303,12 +303,12 @@ Tracking Transparency entirely.
 |---|---|---|---|
 | Contact Info → **Email Address** | Yes | Yes | Account sign-in, and answering a support message: the address they leave, or, when they leave none and are signed in, the account's own (22 October 2026) |
 | User Content → **Other User Content** | Yes | Yes | Setlists, so they follow you between devices |
-| User Content → **Photos or Videos** | Yes | Yes | Screenshots somebody chooses to add to a bug report (up to three, pasted on a phone, picked on the website), sent only when they press Send. Added 22 October 2026: **not on the live label yet** |
+| User Content → **Photos or Videos** | Yes | Yes | Screenshots somebody chooses to add to a bug report (up to three, pasted or picked on a phone, picked on the website), sent only when they press Send. Added 22 October 2026: **not on the live label yet** |
 | User Content → **Customer Support** | Yes | Yes | What somebody writes in a bug report or suggestion: the Feedback form, and the note beside Send logs to developer. It was true before the note came, and was never on the label; add it with Photos or Videos. **Not on the live label yet** |
 | Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you |
 | Diagnostics → **Other Diagnostic Data** | Yes | Yes | The debug log, and only when somebody presses Send on a bug report |
 | Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices |
-| Diagnostics → **Crash Data** | Yes | No | After a launch that crashed, the phone's update check sends Expo the error message the app stopped on, so a broken update can be found and taken back. The privacy page says so. Added 11 October 2026: the live label does not have it yet, and it can be added any time in App Store Connect → App Privacy, with no build |
+| Diagnostics → **Crash Data** | Yes | No | After a launch that crashed, the phone's update check sends Expo the error message the app stopped on, so a broken update can be found and taken back. The privacy page says so. Added 11 October 2026, and on the live label by 24 October 2026 (apps.apple.com shows Crash Data under Not Linked) |
 
 Do **not** declare location, contacts, audio, search history, browsing
 history or advertising data. None are collected — and the
@@ -324,7 +324,10 @@ switching the sentence off would have cost the build. The app never opens
 the camera, so nobody is ever shown it. On Android the camera is blocked,
 and the microphone is off on both.
 
-**22 October 2026: two rows to add in App Store Connect → App Privacy**, both
+**Before the next version is sent to Apple** (still not on the live label
+on 24 October 2026, which shows Purchase History, Email Address, Other User
+Content, User ID, Other Diagnostic Data and Crash Data). **22 October 2026:
+two rows to add in App Store Connect → App Privacy**, both
 "used for App Functionality", linked to the user, not used for tracking:
 Photos or Videos, and Customer Support. And one to edit: Email Address's use
 now includes replying from the account's own address. None needs a build.
@@ -731,6 +734,75 @@ review notes need nothing new. What's New gets one line: "With an AM4, the
 tuner on the AM4 itself now stays up until you close the tuner in the app.
 Needs the newest desktop app."
 
+### Notes for App Review, the next version
+
+**Written on 24 October 2026 for the next build pair, to paste when it goes
+to Apple.** It starts from the 1.87.11 block below, with the five
+*New since 1.86.83* paragraphs out (Apple has seen them) and one paragraph
+for each *For the next version's notes* above, cut to fit: every one
+together came to about 5300 bytes, and Apple's box takes 4000. The longer
+words for each stay in their paragraphs above, and the Siri page in the app
+says the rest, so the notes point at it rather than listing every phrase.
+The 2.5.19 pair is in it whole: the Bluetooth code, and the Developer pages.
+test/limits.mjs holds it under 3950 bytes with the brackets filled the way
+it holds the 1.87.11 block, and to the facts below. The four things to do
+every time a block is pasted (under the 1.87.11 block) apply to this one
+too, and so does the AM4 tuner paragraph's wait: until Justin has seen it on
+his own AM4, What's New leaves that line out.
+
+```
+This app is a remote control for Fractal Audio guitar units, through a computer the unit is plugged into by USB.
+
+Without that hardware, use the demo. It needs no account:
+
+1. Tap "OK" on the card that says the app is independent
+2. Tap "Get started"
+3. Tap "Got it"
+4. Tap "Start free demo"
+5. Choose any unit, then tap "Play with ..."
+
+Every screen works in the demo, and nothing in it reaches real hardware. The in-app purchase: in the demo, tap Unlock at the top of the Play screen; Restore a purchase is under the price. For the signed-in screens, use the demo account in App Review Information. It has the full version.
+
+New since 1.87.11:
+
+Siri. Nine App Shortcuts, each phrase with the app's name, such as "Scene 3 in Fractal Remote". Settings, then Siri, lists them all. Try them with the demo's Play screen open: elsewhere the app says to open Play, but Tuner off works from any screen. The links fractalremote://next, /previous, /scene/1 to /scene/8 and /tuner/off do the same from a shortcut. The app receives only the command, never the audio.
+
+Startup card. The app opens once on a card saying it is independent of Fractal Audio.
+
+Colors. Settings, then Colors, has six looks for the tiles. A first launch is in the app's own colors, and Dark.
+
+Bigger screens. On iPad and an opened iPhone Duo, Play spreads across the wider screen.
+
+AM4. The amp's pedal on Play now switches the amp's boost, saying Boost on or Boost off, on the watch too. The demo's AM4 shows it.
+
+VP4. The app changes a VP4's presets, and its scenes once a number is set on the VP4 (Settings, VP4 scenes & presets, shown only with a real VP4).
+
+Apple Watch. Hold a pedal on the watch to choose its channel. The watch app is now named Fractal Remote.
+
+Screenshots. Feedback and Log (Settings, Troubleshooting) can add up to three screenshots, picked in the system photo picker or pasted. Only those are sent; the camera is never used.
+
+Bluetooth MIDI code, switched on only for the developer. This build contains Bluetooth MIDI code for a feature that lets the phone reach the guitar unit through a Bluetooth MIDI adapter instead of a computer. While it is tested, it is switched on only for the developer's own account. Customers and the review account don't see it in this build, and the app doesn't ask them for Bluetooth permission.
+
+Settings also has Developer pages (accounts, sales, messages) that open only for the developer's own account; the server checks which account is asking.
+
+Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and everything stored under it at once. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page. Please try it on a new account, not the demo account.
+
+Hardware (Guideline 2.1): a video filmed on an iPhone with a real FM3 on screen, from the first pairing through the whole workflow, is video 1 below.
+
+Apple Watch (it comes with the iPhone app): keep the demo's Play screen open on the iPhone, open Fractal Remote on the watch, and swipe up or down between Scenes, Pedals, Presets and Tuner.
+
+Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].
+
+Services the app uses: Supabase (accounts, setlists, the phone-to-computer link), RevenueCat with Apple in-app purchase, Resend (emails), Expo (updates).
+
+Regions: the app works the same in every country.
+
+Videos:
+1. FM3 hardware: [FM3 video link]
+2. Presets: [presets video link]
+3. Deleting an account: [account deletion video link]
+```
+
 ### Notes for App Review, 1.87.11
 
 **These are the ones Apple approved with this build,** and the ones the next
@@ -978,8 +1050,11 @@ sitting: Google can hold back any update over them, 1.87.11 included, and
 whether Google had finished reviewing 1.87.11 was not known on 12 October
 2026.
 
-**1. Data safety** (App content → Data safety → Manage). **Still not done on
-11 October 2026:** Google Play's public Data safety page for the app lists
+**1. Data safety** (App content → Data safety → Manage). **The four below
+are done:** on 24 October 2026 Google Play's public page shows User IDs,
+Purchase history, Device or other IDs and App interactions. What is left is
+Photos and the Email address purpose, further down. As it was, **still not
+done on 11 October 2026:** Google Play's public Data safety page for the app lists
 only Email address, Other user-generated content, Crash logs and
 Diagnostics. Add these four, each **collected** and **not shared**:
 
