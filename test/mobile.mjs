@@ -4193,7 +4193,7 @@ export function run(test) {
     const bar = read('mobile/src/components/TopBar.js')
     const flat = bar.replace(/\s+/g, ' ')
 
-    const order = ['v${APP_VERSION}', '{pill.status}', '<Lamp state=', '{pill.unit}', '{pill.where}', 'accessibilityLabel="Volume"', 'accessibilityLabel="Connection and setup"']
+    const order = ['v${APP_VERSION}', '{pill.status}', '<Lamp state=', '{pill.unit}', '{pill.where ||', 'accessibilityLabel="Volume"', 'accessibilityLabel="Connection and setup"']
     let last = -1
     for (const piece of order) {
       const at = bar.indexOf(piece)
@@ -4938,7 +4938,7 @@ export function run(test) {
     }
     /* Picking a unit on the phone reads it again, start to finish. */
     const link = read('mobile/src/lib/link.js')
-    assert.match(link, /export async function chooseHost\(name\) \{\s*const ok = await pickHost\(name\)[\s\S]{0,200}await refreshAll\(\)/, 'the phone switches unit but keeps the old one on screen')
+    assert.match(link, /export async function chooseHost\(name\) \{\s*const ok = await pickHost\(name\)[\s\S]{0,900}await refreshAll\(\)/, 'the phone switches unit but keeps the old one on screen')
     const settings = read('mobile/src/screens/Settings.js')
     assert.match(settings, /<Section>Which unit<\/Section>[\s\S]{0,300}unitChoices\(hosts, units, chosen, unitsAsking\)/)
     assert.ok(!settings.includes('<Section>Which computer</Section>'), 'the phone still says Which computer')
@@ -12661,6 +12661,37 @@ export function run(test) {
     assert.match(settings, /unitState === 'silent' \? `Computer connected · \$\{deviceName \|\| 'unit'\} not answering`/, 'Setup still says connected over a silent unit')
   })
 
+  /*
+   * The pill's first review (24 October 2026): one height whatever has been
+   * heard, words that read in Light mode, a tap that goes where the label
+   * says, and the demo unit's name whole on a 360-wide phone.
+   */
+  test('the pill keeps one height, reads in both themes, goes where it says, and leaves room for the demo unit', async () => {
+    const bar = read('mobile/src/components/TopBar.js')
+    const flat = bar.replace(/\s+/g, ' ')
+    /* Always two lines: the computer's name landing late moved Play down under a thumb. */
+    assert.match(bar, /\{pill\.where \|\| '\\u00a0'\}/, 'the pill is one line until the computer has said its name')
+    assert.ok(!/\{pill\.where \? \(/.test(bar), 'the second line is drawn only once the name is known')
+    const { pillWords } = await import('../shared/pill-words.mjs')
+    assert.equal(pillWords({ tone: 'good', unitState: 'present', unit: 'FM3' }).where, 'on your computer', 'a computer not yet named leaves the second line empty')
+    assert.equal(pillWords({ tone: 'busy' }).where, 'on your computer')
+    assert.equal(pillWords({ tone: 'bad', unit: 'FM3' }).where, 'on your computer')
+    assert.equal(pillWords({ tone: 'dim' }).where, null, 'No computer is said to be on a computer')
+    /* Light mode: the panel's own fill and silkDim keep every word at 4.5:1. */
+    assert.match(flat, /backgroundColor: pressed \? color\.panelHi : at\(color\.panel, 0\.6\)/, 'the pill’s fill takes its words under 4.5:1 in Light mode')
+    assert.match(flat, /pill\.mark === 'wait' \? color\.signal : color\.silkDim/, 'Looking and No computer are drawn in the faint grey')
+    /* Where it goes, named once in App.js: Which unit only over a link that is up. */
+    const app = read('mobile/App.js')
+    assert.match(app, /const unitGoes = demo \? 'demo' : link\.hosts\?\.length > 1 && link\.link === 'connected' \? 'which' : 'link'/, 'a pill tapped over a dropped link opens Which unit, with no way to look again')
+    assert.match(flat, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes,/, 'the bar is not told where its pill goes')
+    assert.match(flat, /const pillGoes = demo \? 'Change the demo unit' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/, 'a screen reader is told Switch unit for a page with nothing to switch')
+    assert.match(flat, /accessibilityLabel=\{`\$\{\[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)\}\. \$\{pillGoes\}`\}/)
+    assert.ok(!/'Switch unit'/.test(bar), 'the pill still says Switch unit')
+    /* The demo on a 360-wide phone: Unlock over the price, and the pill's edge at space.sm. */
+    assert.match(bar, />Unlock<\/Text>\s*\{purchase\.price \? \(/, 'Unlock $9.99 on one line takes the demo unit’s name off a narrow phone')
+    assert.match(flat, /paddingHorizontal: space\.sm, paddingVertical: 3, borderRadius: radius\.lg, borderWidth: 1/, 'the pill’s wide edge is paid for by the unit’s name')
+  })
+
   test('somebody asks whether the unit is still there, rather than waiting to be told', async () => {
     /*
      * "I purposefully unplugged the FM3 from the computer and it still said
@@ -13125,7 +13156,7 @@ export function run(test) {
     const app = read('mobile/App.js')
     assert.match(
       app,
-      /onOpenUnit=\{\(\) => \(demo \? setPickUnit\(true\) : link\.hosts\?\.length > 1 \? setPickLive\(true\) : openSettings\('link'\)\)\}/,
+      /onOpenUnit=\{\(\) => \(unitGoes === 'demo' \? setPickUnit\(true\) : unitGoes === 'which' \? setPickLive\(true\) : openSettings\('link'\)\)\}\s*unitGoes=\{unitGoes\}/,
       'the unit name opens Setup in the demo again, with the five units two doors further in'
     )
     assert.match(app, /<DemoUnit open=\{pickUnit\} onClose=\{\(\) => setPickUnit\(false\)\}/, 'the picker is never drawn')
@@ -13137,10 +13168,10 @@ export function run(test) {
     assert.match(web, /aria-label=\{demo \? 'Demo Unit' : 'Phone & computer'\}/, 'the browser’s unit name stopped being two destinations')
     /* Each end's name says where it goes. "About this unit" opened Phone &
        computer in the browser and Setup on the phone. */
-    /* On the phone the name is in the pill since 24 October 2026, and the pill says what it does: change the demo unit, or switch unit. */
+    /* On the phone the name is in the pill since 24 October 2026, and the pill says where it goes: the demo units, Which unit, or Phone & computer (App.js unitGoes). */
     assert.match(
       read('mobile/src/components/TopBar.js').replace(/\s+/g, ' '),
-      /demo \? 'Change the demo unit' : bluetooth \? 'Bluetooth' : 'Switch unit'/,
+      /demo \? 'Change the demo unit' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/,
       'the phone’s unit name is labelled for a page it does not open'
     )
     assert.ok(!/About this unit/.test(web + read('mobile/src/components/TopBar.js')), 'the unit name still promises a page that is not there')
@@ -14579,7 +14610,7 @@ export function run(test) {
      */
     assert.match(
       bar,
-      /\{purchase\.price \? `Unlock \$\{purchase\.price\}` : 'Unlock'\}/,
+      />Unlock<\/Text>\s*\{purchase\.price \? \(\s*<Text numberOfLines=\{1\}[^>]*>\s*\{purchase\.price\}/,
       'the unlock pill no longer says Unlock, or hides until the store has said the price'
     )
 
@@ -14764,10 +14795,10 @@ export function run(test) {
      * The bar's says it the same way since 24 October 2026. It was the
      * exception while the word beside it read UNLOCK (the pill carried the
      * price alone, and drew nothing before a price arrived); that word is the
-     * pill that switches units now, so the unlock carries its own verb, and
-     * says Unlock alone rather than drawing an empty amber blob.
+     * pill that switches units now, so the unlock carries its own verb, over
+     * the price, and says Unlock alone rather than drawing an empty amber blob.
      */
-    assert.match(bar, /purchase\.price \? `Unlock \$\{purchase\.price\}` : 'Unlock'/, 'the bar does not show the price on the button')
+    assert.match(bar, />Unlock<\/Text>\s*\{purchase\.price \? \(\s*<Text numberOfLines=\{1\}[^>]*>\s*\{purchase\.price\}/, 'the bar does not show the price on the button')
 
     /* And it can be put away, or it is an advertisement rather than an offer —
        on a screen that is open on a dark stage between songs. */

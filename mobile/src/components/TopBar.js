@@ -48,7 +48,7 @@ const face = Platform.select(mono)
  * The words come from shared/link-word.mjs rather than from here, so the two
  * apps cannot drift into saying different things about the same link.
  */
-export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, saveHere: saveWanted = true }) {
+export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, saveHere: saveWanted = true }) {
   const unit = useRig(ofDeviceName)
   const unitState = useRig(ofUnitState)
   const blocks = useRig(ofAllBlocks)
@@ -182,9 +182,27 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
    * said it, since 'FM3' comes back from the unit itself.
    */
   const pill = pillWords({ tone, unitState, unit, computer: link?.macName, demo, bluetooth })
-  /* Blue rather than green over Bluetooth, as the word was. */
+  /*
+   * Blue rather than green over Bluetooth, as the word was. Looking and No
+   * computer in silkDim, not the faint grey the word had: on the pill's fill
+   * that grey was under 4.5:1 in Light mode, and these are the words read
+   * under stage light to see whether the rig is ready.
+   */
   const pillHue =
-    pill.mark === 'ok' ? (bluetooth ? color.ble : color.ok) : pill.mark === 'no' ? color.fault : pill.mark === 'wait' ? color.signal : color.silkFaint
+    pill.mark === 'ok' ? (bluetooth ? color.ble : color.ok) : pill.mark === 'no' ? color.fault : pill.mark === 'wait' ? color.signal : color.silkDim
+  /*
+   * And where the pill goes, in words, for a screen reader: App.js decides it
+   * (unitGoes) and the tap goes there, so the two cannot disagree. "Switch
+   * unit" on a pill that opened Phone & computer named a page with nothing
+   * to switch to.
+   */
+  const pillGoes = demo
+    ? 'Change the demo unit'
+    : bluetooth
+      ? 'Which adapter'
+      : unitGoes === 'which'
+        ? 'Which unit'
+        : 'Phone and computer'
 
   /*
    * Only where there is an output block to move, the same rule the browser
@@ -291,8 +309,8 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
         computer, by the name it gives itself. It takes the place of two
         things that were at either end of the bar, the unit's name and the
         word CONNECTED, and does what the name did: in the demo it opens the
-        five demo units, with two or more computers Which unit, and with one
-        Phone & computer (App.js onOpenUnit). Over Bluetooth there is one
+        five demo units, with two or more computers Which unit, and with one,
+        or with the link down, Phone & computer (App.js unitGoes). Over Bluetooth there is one
         adapter and nothing to switch to, so it opens the note with Turn off
         Bluetooth, as the word did.
 
@@ -311,20 +329,25 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
           ;(onOpenUnit || onOpenSettings)?.()
         }}
         accessibilityRole="button"
-        accessibilityLabel={`${[pill.status, pill.unit, pill.where].filter(Boolean).join(', ')}. ${
-          demo ? 'Change the demo unit' : bluetooth ? 'Bluetooth' : 'Switch unit'
-        }`}
+        accessibilityLabel={`${[pill.status, pill.unit, pill.where].filter(Boolean).join(', ')}. ${pillGoes}`}
         hitSlop={6}
         style={({ pressed }) => ({
           flexShrink: 1,
           minWidth: 0,
           alignItems: 'center',
-          paddingHorizontal: space.md,
+          /* space.sm, not md: in the demo on a 360-wide phone the unit's name was what paid for the wider edge. */
+          paddingHorizontal: space.sm,
           paddingVertical: 3,
           borderRadius: radius.lg,
           borderWidth: 1,
           borderColor: color.rule,
-          backgroundColor: pressed ? color.panel : at(color.panelHi, 0.6)
+          /*
+           * The panel's own colour, which is lighter than the bar in Light
+           * mode and darker in Dark: the text on it reads at 4.5:1 or better
+           * in both (panelHi under it took Connecting and Demo below that in
+           * Light). The border is what draws the pill.
+           */
+          backgroundColor: pressed ? color.panelHi : at(color.panel, 0.6)
         })}
       >
         {/* Held inside the pill on a narrow phone: the unit's name gives way (an ellipsis), never the edge of the pill. */}
@@ -332,18 +355,18 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
           <Text numberOfLines={1} style={{ flexShrink: 0, color: pillHue, fontSize: font.small, fontFamily: face, fontWeight: '700' }}>
             {pill.status}
           </Text>
-          {bluetooth ? <BluetoothMark state={unitLamp} /> : <Lamp state={unitLamp} size={8} />}
+          {/* Not in the demo: its lamp is always grey there and says nothing, and on a narrow phone its room is the version's. */}
+          {demo ? null : bluetooth ? <BluetoothMark state={unitLamp} /> : <Lamp state={unitLamp} size={8} />}
           {pill.unit ? (
             <Text numberOfLines={1} style={{ flexShrink: 1, color: color.silk, fontSize: font.small, fontFamily: face, fontWeight: '700' }}>
               {pill.unit}
             </Text>
           ) : null}
         </View>
-        {pill.where ? (
-          <Text numberOfLines={1} style={{ maxWidth: '100%', color: color.silkDim, fontSize: font.micro }}>
-            {pill.where}
-          </Text>
-        ) : null}
+        {/* Always two lines, so the bar is one height whatever has been heard: a space where there is nothing to say (No computer). */}
+        <Text numberOfLines={1} style={{ maxWidth: '100%', color: color.silkDim, fontSize: font.micro }}>
+          {pill.where || '\u00a0'}
+        </Text>
       </Pressable>
 
       {/*
@@ -417,30 +440,29 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
              chrome in a bar that is mostly lamps and labels; this is the only
              thing on the screen anybody is being asked to DO. */
           style={({ pressed }) => ({
+            alignItems: 'center',
             paddingHorizontal: space.md,
             paddingVertical: 4,
-            borderRadius: radius.pill,
+            borderRadius: radius.lg,
             backgroundColor: pressed ? color.signalWash : color.signal
           })}
         >
-          <Text
-            style={{
-              color: color.onSignal,
-              fontSize: font.micro,
-              fontWeight: '700',
-              letterSpacing: 0.6
-            }}
-          >
-            {/* The price belongs on the button. "Unlock" alone asks somebody
-                to tap to find out what it costs, which is the tap most people
-                will not make; but before the store has said the price,
-                "Unlock" alone is still the way in.
+          {/* The price belongs on the button. "Unlock" alone asks somebody
+              to tap to find out what it costs, which is the tap most people
+              will not make; but before the store has said the price,
+              "Unlock" alone is still the way in.
 
-                The verb is back on it: it had moved onto the word beside it,
-                UNLOCK $9.99 reading across the two, and that word is the
-                pill now. */}
-            {purchase.price ? `Unlock ${purchase.price}` : 'Unlock'}
-          </Text>
+              The verb is back on it: it had moved onto the word beside it,
+              UNLOCK $9.99 reading across the two, and that word is the
+              pill now. Over the price rather than beside it, as the pill
+              has the computer under the unit: "Unlock $9.99" in one line
+              took the demo unit's name off a 360-wide phone. */}
+          <Text style={{ color: color.onSignal, fontSize: font.micro, fontWeight: '700', letterSpacing: 0.6 }}>Unlock</Text>
+          {purchase.price ? (
+            <Text numberOfLines={1} style={{ color: color.onSignal, fontSize: font.micro, fontWeight: '700', letterSpacing: 0.6 }}>
+              {purchase.price}
+            </Text>
+          ) : null}
         </Pressable>
       ) : null}
 

@@ -41,7 +41,13 @@ export function pillWords({ tone, unitState = 'unknown', unit = '', computer = n
   const name = typeof unit === 'string' ? unit.trim() : ''
   if (demo) return { status: 'Demo', mark: 'wait', unit: name, where: 'simulated' }
   const host = typeof computer === 'string' ? computer.trim() : ''
-  const where = bluetooth ? 'over Bluetooth' : host ? `on ${host}` : null
+  /*
+   * "on your computer" until the computer has said its name: the second line
+   * is always there, so the bar is one height and Play does not move down
+   * under a thumb when a late name read lands (a slow Pi 3, a computer that
+   * has not written its name yet).
+   */
+  const where = bluetooth ? 'over Bluetooth' : host ? `on ${host}` : 'on your computer'
   if (tone === 'good') {
     const said = unitWord(tone, unitState)
     if (said === 'no unit') return { status: 'No unit', mark: 'no', unit: '', where }
@@ -51,6 +57,6 @@ export function pillWords({ tone, unitState = 'unknown', unit = '', computer = n
   }
   if (tone === 'busy') return { status: 'Connecting', mark: 'wait', unit: name, where }
   if (tone === 'bad') return { status: 'Disconnected', mark: 'no', unit: name, where }
-  /* Nothing turned on yet: no unit to name, and no computer to say it is on. */
+  /* Nothing turned on yet: no unit to name, and no computer to say it is on (the bar keeps the empty line). */
   return { status: bluetooth ? 'Not connected' : 'No computer', mark: 'off', unit: '', where: bluetooth ? where : null }
 }

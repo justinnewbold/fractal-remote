@@ -5015,7 +5015,8 @@ export function run(test) {
     const bar = flat('mobile/src/components/TopBar.js')
     assert.match(bar, /const bluetooth = useBluetoothOn\(\) && !demo/, 'the demo would wear the Bluetooth look')
     /* In the pill since 24 October 2026, beside the state word, as the lamp is. */
-    assert.match(bar, /\{bluetooth \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} size=\{8\} \/>\}/, 'the lamp is not the Bluetooth mark over Bluetooth')
+    /* And none in the demo, where it is always grey and says nothing. */
+    assert.match(bar, /\{demo \? null : bluetooth \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} size=\{8\} \/>\}/, 'the lamp is not the Bluetooth mark over Bluetooth')
     assert.match(bar, /pill\.mark === 'ok' \? \(bluetooth \? color\.ble : color\.ok\)/, 'Live is not blue over Bluetooth')
     /* The mark is lit the way the lamp is: blue answering, red not, dim not yet asked. */
     assert.match(bar, /const tint = state === 'good' \? color\.ble : state === 'fault' \? color\.fault : color\.silkFaint/, 'the mark stays blue over a unit that stopped answering')
