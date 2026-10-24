@@ -4526,7 +4526,8 @@ export function run(test) {
     assert.match(section, /\*\*Never switched on for customers by an update\.\*\*/, 'the 1.87.11 section does not say Bluetooth is never opened to customers by an update')
     assert.match(section, /3\.3\.1\(C\)/, 'the 1.87.11 section does not name Apple’s licence on changing a reviewed app')
     assert.match(section, /activated remotely/, 'the 1.87.11 section does not name Google’s rule on features activated remotely')
-    assert.match(section, /2\.3\.1\(a\) says "Don't include any\s+hidden, dormant, or undocumented features in your app"/, 'the 1.87.11 section does not say why the code is disclosed at all')
+    /* The rule's own words, in 2.5.19 since Apple's guidelines of 16 October 2026 (2.3.1(a) before). */
+    assert.match(section, /2\.5\.19 says\s+since 16 October 2026, "Don't include any\s+hidden, dormant, or undocumented\s+features in your app"/, 'the 1.87.11 section does not say why the code is disclosed at all')
     assert.match(section, /"accessible for review"/, 'the 1.87.11 section hides the one place Apple could push back')
     assert.ok(!/- \*\*The video\.\*\*|\*\*The guide is live\.\*\*/.test(section), 'the 1.87.11 section still asks for a Bluetooth video or a live guide before pasting')
     assert.match(section, /\*\*Four things every time that block is pasted\*\*/, 'the 1.87.11 section no longer lists what to check each time the notes are pasted')

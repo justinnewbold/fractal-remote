@@ -263,6 +263,13 @@ tablet support off is the alternative and would be a worse app.
 Up to 10 each; 3–5 is plenty. Take them **in the demo**, so every screen is
 full of real-looking presets rather than "no computer".
 
+**iPhone Duo screenshots: optional now, required from April 2027.** Apple's
+post of 5 October 2026 ("Prepare and submit your apps for iPhone Duo"): the
+Duo went on sale on 23 October 2026, its screenshots put a badge on the
+product page, and "starting April 2027, all submitted apps and games must
+include iPhone Duo screenshots". So the first submission from April 2027
+needs a set taken on a Duo, opened up, in the demo, with Play's wide layout.
+
 Worth showing, in this order:
 
 1. The stage screen with a preset up and scenes along the bottom
@@ -521,8 +528,9 @@ the native Bluetooth MIDI module in them. On 11 October Justin took it back:
 phone? I just feel like it's not ready to have public." So it is switched on
 for his account alone, by an update, and the code stays in the binary (taking
 it out is a new build, and the iPhone's Bluetooth permission text has to stay
-with the module or the build is refused). 2.3.1(a) says "Don't include any
-hidden, dormant, or undocumented features in your app", so the notes below
+with the module or the build is refused). 2.3.1(a) said, and 2.5.19 says
+since 16 October 2026, "Don't include any hidden, dormant, or undocumented
+features in your app", so the notes below
 say in one paragraph that the code is there, whom it is for, and that in
 that build nobody else is shown it or asked for Bluetooth. The same guideline also wants new features "accessible for review", and this
 one is described rather than reachable. That was the one place Apple could
@@ -530,6 +538,26 @@ have pushed back, and with 1.87.11 it did not: the build was approved with the
 paragraph below as it stands. A later review could still ask. If one does, the
 choice is Justin's: show it to the review account too, with a video of it
 working, or a build without the module.
+
+**Apple's guidelines of 16 October 2026, read on 24 October** (the page says
+"Last Updated: October 16, 2026"). The sentence quoted above left 2.3.1 for
+a guideline of its own, word for word: 2.5.19, which Apple's post of the
+same day says "clarifies long-standing policy" and aims at "bait-and-switch"
+apps that add features after approval. The rule is the same, so the answer
+is too: the next notes keep the Bluetooth paragraph, saying the code is
+there and whose it is, and this file names 2.5.19 for it from now on. The
+two things the app keeps for the developer's account alone are both said in
+the next notes: Bluetooth (beta) and the Developer pages (below, no longer
+left out). Nothing is ever opened
+to customers by an update (CLAUDE.md's Bluetooth rule is this guideline),
+and the fractalremote:// links, Justin's alone by update until now, open to
+everybody in the next build, which is the version whose notes say so.
+The same update added 2.3.14 on creative assets (the new product page
+headers and search result pictures): the app uses none, and any made later
+carry no Fractal logo or artwork, no price and no claim that cannot be
+checked. 1.2, 3.1.1(a) and section 5 changed in ways that do not touch the
+app. 2.5.11, Siri and Shortcuts, did not change; the Siri paragraph below
+was checked against it.
 
 **For the next version's notes: Dark by default** (18 October 2026). "Can
 we make the default dark mode on the app?" Settings → Play screen still has
@@ -816,7 +844,7 @@ in a new store version whose review notes describe it, the way this
 section's notes did on 10 October (they are in this file's history), with
 the video and the setup guide. Turning
 it on for everybody over the air instead, after Apple has reviewed a build
-that hides it, is the hidden feature 2.3.1(a) forbids, and a change to what
+that hides it, is the hidden feature 2.5.19 forbids, and a change to what
 the app does that Apple's licence (3.3.1(C)) and Google's rule on features
 activated remotely both keep for reviewed versions. **And while a version is in review,** nothing is merged that changes what its
 notes describe (the purchase page, Bluetooth, Delete account): from its second
@@ -826,14 +854,18 @@ launch, the reviewer's copy runs whatever is on main. Apple has finished with
 updates from main the same way, so keep the same care until Play Console shows
 1.87.11 out in production.
 
-**Left out on purpose: the Developer pages.** Justin's own account also has
-Settings → Developer (accounts, sales, messages, account help with its
-Confirm button, What's live). No other account is shown it, the review
-account included, and the server checks which account is asking. They were
-already there when Apple approved 1.86.83 with nothing said about them, and
-nobody but Justin can reach them. If Apple asks, they are the developer's
-own support tools. Google's App access note does name them, in one line,
-because Google asks for an app to be what you see is what you get.
+**The Developer pages: left out of 1.87.11's notes, in the next ones.**
+Justin's own account also has Settings → Developer (accounts, sales,
+messages, account help with its Confirm button, What's live). No other
+account is shown it, the review account included, and the server checks
+which account is asking. They were already there when Apple approved
+1.86.83 with nothing said about them, and nobody but Justin can reach them,
+so 1.87.11's notes left them out. Since 16 October 2026 2.5.19 says an
+app's functionality "should be clear to end users and App Review", so the
+next notes say them in the one line Google's App access note already has:
+"Settings also has Developer pages (accounts, sales, messages) that open
+only for the developer's own account; the server checks which account is
+asking." If Apple asks, they are the developer's own support tools.
 
 **Four things every time that block is pasted** (done for 1.87.11; the
 brackets here are still empty, so the next version needs them again):
