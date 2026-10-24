@@ -73,7 +73,8 @@
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA"
       ]
     },
     "plugins": [
@@ -82,7 +83,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Fractal Remote opens your photos only when you choose a screenshot to add to a bug report, and sends only the ones you pick.",
-          "cameraPermission": false,
+          "cameraPermission": "Fractal Remote never uses the camera. Screenshots for a bug report come only from photos you choose.",
           "microphonePermission": false
         }
       ],

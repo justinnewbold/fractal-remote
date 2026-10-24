@@ -480,12 +480,47 @@ export function run(test) {
       assert.deepEqual(await shots.pickShots(0), { shots: [], why: 'full' })
       assert.equal(bench.pickerAsked, undefined, 'the picker opened with no room left')
     })
-    /* No camera and no microphone come with it, and the photo library's words never say this phone. */
-    const plugin = JSON.parse(read('mobile/app.json')).expo.plugins.find((p) => Array.isArray(p) && p[0] === 'expo-image-picker')?.[1]
+    /*
+     * No camera and no microphone come with it, and the photo library's words never say this phone.
+     *
+     * THE CAMERA'S SENTENCE STAYS IN, ON THE IPHONE, saying the camera is not
+     * used. cameraPermission false deletes NSCameraUsageDescription, but the
+     * picker's iPhone code still calls AVCaptureDevice.requestAccess and
+     * authorizationStatus (ImagePickerPermissionRequesters.swift), and
+     * Apple's upload check refuses a binary that references an API with no
+     * purpose string for it (ITMS-90683: "If you're using external libraries
+     * or SDKs, they may reference APIs that require a purpose string").
+     * The app never opens the camera, so the sentence is never shown. On
+     * Android the camera stays blocked (test/bluetooth.mjs). The microphone is
+     * only looked up by name in Info.plist, never asked for, so it stays off.
+     */
+    const app = JSON.parse(read('mobile/app.json')).expo
+    const plugin = app.plugins.find((p) => Array.isArray(p) && p[0] === 'expo-image-picker')?.[1]
     assert.ok(plugin, 'the picker’s plugin is not in app.json')
-    assert.equal(plugin.cameraPermission, false)
+    assert.equal(typeof plugin.cameraPermission, 'string', 'the camera’s purpose string is deleted, and the picker’s code still asks for the camera')
+    assert.match(plugin.cameraPermission, /never uses the camera/)
+    assert.ok(app.android.blockedPermissions.includes('android.permission.CAMERA'), 'Android asks for the camera')
     assert.equal(plugin.microphonePermission, false)
-    assert.doesNotMatch(plugin.photosPermission, /this (phone|iphone|device)/i)
+    for (const words of [plugin.photosPermission, plugin.cameraPermission]) assert.doesNotMatch(words, /this (phone|iphone|device)/i)
+
+    /*
+     * AND THE PICKER DOES NOT CRASH ON IOS 27.1. expo-image-picker 57.0.20
+     * asks canLoadObject(ofClass: PHLivePhoto.self) of every picture picked,
+     * which raises NSInvalidArgumentException on iOS 27.1 and closes the app
+     * (fixed upstream in 58.0.5, expo/expo#50435, for SDK 58 only). The same
+     * fix is carried here by patch-package, applied by every install.
+     */
+    const pkg = JSON.parse(read('mobile/package.json'))
+    assert.equal(pkg.scripts?.postinstall, 'patch-package', 'nothing applies mobile/patches after an install')
+    assert.ok(pkg.devDependencies?.['patch-package'], 'patch-package is not installed')
+    /* By the version the lock file installs, since CI has no reason to install mobile/node_modules for this suite. */
+    const version = JSON.parse(read('mobile/package-lock.json')).packages['node_modules/expo-image-picker']?.version
+    assert.ok(version, 'the lock file has no expo-image-picker')
+    assert.ok(Number(version.split('.')[0]) < 58, 'expo-image-picker 58 carries the fix itself: drop the patch and this check')
+    const patch = read(`mobile/patches/expo-image-picker+${version}.patch`)
+    assert.match(patch, /^-\s+if itemProvider\.canLoadObject\(ofClass: PHLivePhoto\.self\)/m, 'the patch no longer takes out the live photo check')
+    assert.match(patch, /^\+\s+&& itemProvider\.hasItemConformingToTypeIdentifier\(UTType\.livePhoto\.identifier\)/m)
+    assert.equal(JSON.parse(read('mobile/package-lock.json')).packages['node_modules/patch-package']?.version, pkg.devDependencies['patch-package'])
 
     /* Both ends stop at three, and say how many are in. */
     assert.match(flat('mobile/src/components/Shots.js'), /disabled=\{disabled \|\| pasting \|\| picking \|\| full\}/)

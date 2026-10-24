@@ -317,7 +317,12 @@ Photos are declared only for the screenshots somebody adds to a report: the
 app reads nothing from the photo library itself (the phone's own picker hands
 it only the pictures picked, and Paste takes a copied one), which the privacy
 page says too. The build carries NSPhotoLibraryUsageDescription for the
-picker; the camera and microphone are switched off in its plugin.
+picker, and a camera sentence that says the camera is never used: the
+picker's own code asks about the camera, and Apple's upload check refuses a
+binary with no purpose string for an API its code reaches (ITMS-90683), so
+switching the sentence off would have cost the build. The app never opens
+the camera, so nobody is ever shown it. On Android the camera is blocked,
+and the microphone is off on both.
 
 **22 October 2026: two rows to add in App Store Connect → App Privacy**, both
 "used for App Functionality", linked to the user, not used for tracking:
