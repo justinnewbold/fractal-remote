@@ -1,19 +1,20 @@
 diff --git a/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift b/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift
-index 730da85..b23331d 100644
+index 730da85..53abcca 100644
 --- a/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift
 +++ b/mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift
-@@ -31,6 +31,10 @@ import CoreAudioKit
+@@ -31,6 +31,11 @@ import CoreAudioKit
   *                          GarageBand uses. An app cannot find or pair an
   *                          adapter any other way on iOS; once it is connected
   *                          there, it turns up in CoreMIDI like any other port.
-+ *   pairsOnIOS27()       — true: this build opens Apple's screen on iOS 27
-+ *                          without crashing (see pair). A build without it
-+ *                          crashes there, so the JavaScript keeps the screen
-+ *                          shut on iOS 27 when the answer is missing.
++ *   pairsOnIOS27()       — iPhone only: true, this build opens Apple's
++ *                          screen on iOS 27 without crashing (see pair). A
++ *                          build without it crashes there, so the JavaScript
++ *                          keeps the screen shut on iOS 27 when the answer is
++ *                          missing.
   *   scan(seconds)        — nothing to scan for (Apple's screen does that); it
   *                          only says whether any port is listed.
   *   devices()            — every two-way MIDI port: an id made of its two
-@@ -120,6 +124,12 @@ public class FractalBleMidiModule: Module {
+@@ -120,6 +125,12 @@ public class FractalBleMidiModule: Module {
        }
      }
  
@@ -26,7 +27,7 @@ index 730da85..b23331d 100644
      /* UIKit, so the main queue. */
      AsyncFunction("pair") { (promise: Promise) in
        self.pair(promise)
-@@ -224,6 +234,26 @@ public class FractalBleMidiModule: Module {
+@@ -224,6 +235,26 @@ public class FractalBleMidiModule: Module {
      /* Made now so the adapter's arrival is heard while the screen is up. */
      ensure()
      let central = CABTMIDICentralViewController()
@@ -43,8 +44,8 @@ index 730da85..b23331d 100644
 +     * (developer.apple.com/forums/thread/850584, FB25301268): hand it a table
 +     * first, so loadView never runs, then run viewDidLoad once by hand,
 +     * which is what starts the search. A table alone opened the screen and
-+     * never found anything. Before Done goes on, since the screen clears
-+     * its bar buttons as it loads.
++     * never found anything. Done goes on after it, as it always has after
++     * the screen's setup; nothing here depends on that order.
 +     */
 +    if #available(iOS 27, *) {
 +      central.tableView = UITableView(frame: .zero, style: .grouped)

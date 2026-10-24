@@ -4854,10 +4854,22 @@ export function run(test) {
     assert.match(page, /tone="live" disabled=\{!canStart \|\| b\.looking\} onPress=\{start\}/, 'Connect can be pressed with no unit picked')
     /* And the unit cannot be changed while it is on: one mis-tap would send another unit's messages to the one on the adapter. */
     assert.match(page, /on=\{u\.key === b\.unit\} disabled=\{b\.on\}/, 'the unit can be changed while connected')
-    assert.match(page, /\{b\.on \? <Hint>To change the unit, tap Stop first\.<\/Hint> : null\}/)
+    /*
+     * CHANGED ON PURPOSE, 24 October 2026: "It would be cool if, like, a
+     * five-year-old could connect it." The units used to stay on the page
+     * while it was on, greyed, with "To change the unit, tap Stop first."
+     * under them. Now step 1 is only drawn while it is off, inside the off
+     * half of the one ternary that draws Stop in its on half; the status
+     * line names the unit while it is on. disabled={b.on} stays, so a tap in
+     * the moment it turns on still goes nowhere.
+     */
+    const off = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('{/* Not under a trouble line'))
+    assert.ok(off.includes('<Press label="Stop using Bluetooth"'), 'Stop is not in the same ternary as the units')
+    assert.ok(off.indexOf('<Press label="Stop using Bluetooth"') < off.indexOf('{BLE_UNITS.map('), 'the units are drawn while it is on')
+    assert.ok(!page.includes('To change the unit, tap Stop first.'), 'a hint for units that are no longer drawn while it is on')
     /* What stopped the search shows with the switch off too; and the wrong unit answering says what to do. */
     const status = page.slice(page.indexOf('function status('), page.indexOf('const TONES'))
-    assert.ok(status.indexOf("b.trouble === 'bluetooth-off'") < status.indexOf("if (!b.on) return { line: 'Off'"), 'the switch being off hides why the search failed')
+    assert.ok(status.indexOf("b.trouble === 'bluetooth-off'") < status.indexOf("if (!b.on) return { line: 'Not connected'"), 'the switch being off hides why the search failed')
     assert.match(status, /if \(b\.answeredAs\) \{ return \{ line: `An \$\{b\.answeredAs\} answered, not the \$\{name\}\./)
   })
 
@@ -4885,7 +4897,7 @@ export function run(test) {
      * name. Then: "We need a CME Widi host. And then for the AM4 I use these
      * as well. Maybe we could add these with the Amazon links on how to buy
      * them?" So the parts he uses are named — in the gear file, which the
-     * page's What you need draws — and changed on purpose here. Everything
+     * page's What to buy draws — and changed on purpose here. Everything
      * that finds, chooses, connects or talks to the adapter still names no
      * maker, and the page itself has no maker's name typed into it: every
      * one comes from the gear file.
@@ -4941,23 +4953,92 @@ export function run(test) {
     assert.doesNotMatch(PAIR_SCREEN_IOS27, /this phone/i)
     /* Asked before Apple's screen, the way authorization is: an older build has no such function. */
     const lib = read('mobile/src/lib/bluetooth.js')
+    const shutFn = lib.slice(lib.indexOf('export function pairScreenShut()'), lib.indexOf('export async function findAdapters'))
+    assert.match(shutFn, /fixed = ble\(\)\?\.pairsOnIOS27\?\.\(\) === true/, 'the build’s own answer is not asked for')
+    assert.match(shutFn, /return pairScreenCrashes\(\{ os: Platform\.OS, version: Platform\.Version, fixed \}\)/)
     const ios = lib.slice(lib.indexOf("if (Platform.OS === 'ios') {", lib.indexOf('export async function findAdapters')))
-    const guard = ios.indexOf('pairScreenCrashes({ os: Platform.OS, version: Platform.Version, fixed })')
+    const guard = ios.indexOf('if (pairScreenShut()) {')
     assert.ok(guard > 0 && guard < ios.indexOf('await mod.pair()'), 'Apple’s screen is opened before anything asks whether it crashes')
-    assert.match(ios, /fixed = mod\.pairsOnIOS27\?\.\(\) === true/, 'the build’s own answer is not asked for')
-    assert.match(ios.slice(guard, ios.indexOf('await mod.pair()')), /noteBluetooth\(\{ said: PAIR_SCREEN_IOS27 \}\)[\s\S]*return pick/, 'the page does not say why the screen stays shut')
+    assert.match(ios.slice(guard, ios.indexOf('await mod.pair()')), /if \(pick\) chooseAdapter\(pick\)\s*else noteBluetooth\(\{ said: PAIR_SCREEN_IOS27 \}\)\s*return pick/, 'the page does not say why the screen stays shut, or says it over an adapter it chose')
+    /* And no hint on the page sends anybody to the screen while it is shut, nor the red "nothing connected" line under the note that says why. */
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    assert.match(page, /const shut = pairScreenShut\(\)/)
+    assert.match(page, /: shut \? 'On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app\.[^']*' : ios \? 'Apple’s Bluetooth screen opens\./)
+    assert.match(page, /\{shut \? 'If this stays here, tap Stop, check the adapter is plugged in and lit, then tap Connect\.' : ios \?/)
+    assert.match(page, /\{!b\.on && missed && !b\.adapter && !b\.trouble && !b\.said \? \(/, 'the line sending him to Apple’s screen is drawn over the note saying it stays shut')
+    assert.match(page, /\{shut && b\.said \? null : \( <Hint>/, 'the hint under Connect repeats the note under it on iOS 27')
 
-    /* The native half waits for a build: Apple's workaround, device side, before Done goes on, and the answer the JavaScript asks for. */
-    const patch = read('docs/pending/ble-pair-ios27.patch')
-    const added = patch.split('\n').filter((l) => l.startsWith('+')).map((l) => l.slice(1)).join('\n')
-    assert.match(added, /if #available\(iOS 27, \*\) \{\s*central\.tableView = UITableView\(frame: \.zero, style: \.grouped\)\s*central\.viewDidLoad\(\)\s*\}/, 'the patch does not hand Apple’s screen a table and start its search, as Apple’s workaround does')
-    assert.match(added, /Function\("pairsOnIOS27"\) \{ \(\) -> Bool in\s*true\s*\}/, 'the patched build does not tell the JavaScript it has the fix')
-    assert.match(patch, /central\.viewDidLoad\(\)\s*\+?\s*\}\s*\n\s*let sheet = UINavigationController\(rootViewController: central\)/, 'the workaround is not between making the screen and putting it in its sheet')
-    assert.match(read('docs/pending/README.md'), /^\| `ble-pair-ios27\.patch` \|.*\| \*\*iPhone only\*\*/m, 'the README does not say the fix moves only the iPhone')
+    /*
+     * The native half waits for a build: Apple's workaround, device side, and
+     * the answer the JavaScript asks for. Read from the patch while it waits,
+     * and from the module once it is applied and the patch is deleted in the
+     * same change (docs/pending/README.md), so this holds the Swift itself
+     * from build day on.
+     */
+    const waiting = existsSync(new URL('../docs/pending/ble-pair-ios27.patch', import.meta.url))
+    const patch = waiting ? read('docs/pending/ble-pair-ios27.patch') : ''
+    const added = waiting
+      ? patch.split('\n').filter((l) => l.startsWith('+')).map((l) => l.slice(1)).join('\n')
+      : read('mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift')
+    assert.match(added, /if #available\(iOS 27, \*\) \{\s*central\.tableView = UITableView\(frame: \.zero, style: \.grouped\)\s*central\.viewDidLoad\(\)\s*\}/, 'Apple’s screen is not handed a table and its search started, as Apple’s workaround does')
+    assert.match(added, /Function\("pairsOnIOS27"\) \{ \(\) -> Bool in\s*true\s*\}/, 'the build does not tell the JavaScript it has the fix')
+    assert.match(waiting ? patch : added, /central\.viewDidLoad\(\)\s*\+?\s*\}\s*\n\s*let sheet = UINavigationController\(rootViewController: central\)/, 'the workaround is not between making the screen and putting it in its sheet')
+    if (waiting) assert.match(read('docs/pending/README.md'), /^\| `ble-pair-ios27\.patch` \|.*\| \*\*iPhone only\*\*/m, 'the README does not say the fix moves only the iPhone')
     /* And duo.yml builds the next build: every waiting patch applied, so the device build compiles this one on Xcode 27.1. */
     const duo = read('.github/workflows/duo.yml')
     const applied = duo.indexOf('name: The waiting patches, applied')
     assert.ok(applied > 0 && applied < duo.indexOf('name: Install'), 'duo.yml builds main without the patches the next build carries')
+  })
+
+  test('on iOS 27, Connect leaves Apple’s screen shut in a build without the fix, and opens it in one with it', async () => {
+    const { PAIR_SCREEN_IOS27 } = await import('../mobile/src/lib/bleAdapters.js')
+    const press = async ({ os = 'ios', version, fixed, devices = [] }) => {
+      const { mod, asked } = iphoneModule('allowedAlways')
+      mod.devices = () => devices
+      if (fixed !== undefined) mod.pairsOnIOS27 = typeof fixed === 'function' ? fixed : () => fixed
+      const bench = await bluetoothOnABench({ os, version, mod })
+      try {
+        const shut = bench.ble.pairScreenShut()
+        const pick = await bench.ble.findAdapters()
+        const { said, adapter } = bench.ble.useBluetooth()
+        return { shut, pick, said, adapter, asked: [...asked] }
+      } finally {
+        bench.done()
+      }
+    }
+    /* 1.88.0 (28) on iOS 27.0.1, which has no pairsOnIOS27: the screen that crashed is never opened, and the note says why. */
+    for (const fixed of [undefined, false, 1, () => { throw new Error('no') }]) {
+      const got = await press({ version: '27.0.1', fixed })
+      assert.equal(got.shut, true)
+      assert.deepEqual(got.asked, [], `Apple’s screen opened on iOS 27 in a build without the fix (${typeof fixed === 'function' ? 'a module that throws' : fixed})`)
+      assert.equal(got.said, PAIR_SCREEN_IOS27, 'nothing says why Connect did nothing')
+      assert.equal(got.pick ?? null, null)
+    }
+    /* An adapter iOS already has connected is used, as after Apple's screen, and no warning stays up over it. */
+    const one = await press({ version: '27.0.1', devices: [{ id: 'a:b', name: 'WIDI Uhost Bluetooth' }] })
+    assert.deepEqual(one.asked, [])
+    assert.equal(one.pick?.id, 'a:b', 'the one adapter already connected is not chosen')
+    assert.equal(one.said, null, 'the warning stays up over an adapter it chose')
+    /* Two to pick from: the list asks, and the note says why the screen did not open. */
+    const two = await press({ version: '27.1', devices: [{ id: 'a', name: 'One' }, { id: 'b', name: 'Two' }] })
+    assert.deepEqual(two.asked, [])
+    assert.equal(two.pick ?? null, null)
+    assert.equal(two.said, PAIR_SCREEN_IOS27)
+    /* The next build, with Apple's fix, says so, and the screen opens; iOS 26, where it never crashed, opens it as before. */
+    for (const [version, fixed] of [['27.0.1', true], ['26.6.2', undefined], ['18.5', false]]) {
+      const got = await press({ version, fixed })
+      assert.equal(got.shut, false)
+      assert.deepEqual(got.asked, ['pair'], `Apple’s screen did not open on iOS ${version}${fixed ? ' with the fix' : ''}`)
+      assert.equal(got.said, null)
+    }
+    /* Android has no such screen, whatever its version. */
+    const { mod } = iphoneModule(undefined)
+    const android = await bluetoothOnABench({ os: 'android', version: 36, mod })
+    try {
+      assert.equal(android.ble.pairScreenShut(), false)
+    } finally {
+      android.done()
+    }
   })
 
   test('setting it up is two steps and one button, and the phone picks the adapter when only one could be meant', async () => {
@@ -4996,7 +5077,7 @@ export function run(test) {
 
     /* The page: step 1 the unit, step 2 Connect; Stop once it is on; the list only for a real choice. */
     const page = flat('mobile/src/screens/Bluetooth.js')
-    assert.ok(page.indexOf('1 · Which unit is the adapter plugged into?') < page.indexOf('2 · Connect'), 'the steps are out of order')
+    assert.ok(page.indexOf('1 · Pick your unit') < page.indexOf('2 · Connect'), 'the steps are out of order')
     assert.match(page, /const showList = !b\.on && !b\.adapter && b\.devices\.length > 0/, 'the list shows when there is nothing to choose')
     assert.match(page, /if \(!wanted \|\| !b\.adapter \|\| !b\.unit \|\| b\.on\) return setWanted\(false\) if \(mayDrive\(purchase\)\) setBluetooth\(true\)/, 'choosing the adapter does not turn Bluetooth on')
     assert.match(page, /if \(b\.adapter\) setBluetooth\(true\) else find\(\)/, 'Connect with an adapter from last time goes looking again')
@@ -5410,18 +5491,26 @@ export function run(test) {
      * NEVER WITHOUT ITS LINE. It was drawn whenever the trouble was
      * 'permission', while the line saying what to change was drawn only
      * with Bluetooth off — so with Bluetooth on it stood under Stop, on its
-     * own. Now it is drawn in exactly two places, each straight under the
-     * line that says it: the status line at the top of a step that is on,
-     * and the line under Connect when it is off. Only for 'permission'.
+     * own. Then it was drawn in two places, the status line of a step that
+     * was on and a line of its own under Connect when it was off.
+     *
+     * CHANGED ON PURPOSE, 24 October 2026, when Connect went to the top
+     * ("a five-year-old could connect it"): the status line is drawn first
+     * on the page, on or off, and is the only place the trouble is said, so
+     * the button is drawn once, straight under it. Only for 'permission'.
      */
     const uses = page.match(/\{b\.trouble === 'permission' \? <OpenSettings \/> : null\}/g) || []
-    assert.equal(uses.length, 2, 'Open Settings is drawn somewhere other than under its line')
-    assert.match(page, /\{said\.line\} <\/Text> \{\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/\} \{b\.trouble === 'permission' \? <OpenSettings \/> : null\}/, 'while on, the button is not under the status line that says what to allow')
-    assert.match(page, /\{!b\.on && b\.trouble \? \( <View style=\{\{ gap: space\.sm \}\}> <Text style=\{\{ color: color\.fault, fontSize: font\.body, lineHeight: 22 \}\}>\{said\.line\}<\/Text> \{b\.trouble === 'permission' \? <OpenSettings \/> : null\} <\/View> \) : null\}/, 'while off, the button is not under the line that says what to allow')
+    assert.equal(uses.length, 1, 'Open Settings is drawn somewhere other than under its line')
+    assert.match(page, /\{said\.line\} <\/Text> \{b\.trouble === 'permission' \? <OpenSettings \/> : null\}/, 'the button is not under the status line that says what to allow')
+    assert.ok(!/\{!b\.on && b\.trouble \?/.test(page), 'the trouble is said twice while it is off: once at the top and again under Connect')
+    /* The status line comes before anything else a person can press, on or off: nothing to scroll past to read it. */
+    const body = page.slice(page.indexOf('return ( <View style={{ gap: space.xl }}>'))
+    assert.ok(body.indexOf('{said.line}') > 0 && body.indexOf('{said.line}') < body.indexOf('<Press'), 'something is drawn above the line that says where it stands')
+    assert.ok(!/\{b\.on \? \([^]*\{said\.line\}[^]*\) : \(/.test(body.slice(0, body.indexOf('Pick your unit'))), 'the status line is only drawn while it is on')
     /* And the status line it sits under is the allow line whenever the trouble is 'permission', on or off. */
     const status = page.slice(page.indexOf('function status('), page.indexOf('const TONES'))
-    assert.ok(status.indexOf("b.trouble === 'permission'") < status.indexOf("if (!b.on) return { line: 'Off'"), 'with Bluetooth on, the line above the button says something else')
-    assert.match(page, /\{!b\.on && missed && !b\.adapter && !b\.trouble \? \(/, 'the vague iPhone line shows under the plain one')
+    assert.ok(status.indexOf("b.trouble === 'permission'") < status.indexOf("if (!b.on) return { line: 'Not connected'"), 'with Bluetooth on, the line above the button says something else')
+    assert.match(page, /\{!b\.on && missed && !b\.adapter && !b\.trouble && !b\.said \? \(/, 'the vague iPhone line shows under the plain one')
 
     /*
      * THE WAITING SCREEN TOO, which shows the same line with Bluetooth on and
@@ -5605,7 +5694,11 @@ export function run(test) {
     assert.match(gear.FM3_WARNING, /Yamaha MD-BT01/, 'the warning leaves the Yamaha looking like the way round it')
     assert.ok(BLE_UNITS.some((u) => u.key === 'fm3'), 'the FM3 can no longer be picked, so an owner with the adapter is shut out')
     const page = readFileSync(new URL('../mobile/src/screens/Bluetooth.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
-    assert.match(page, /const warning = warningFor\(unit\) if \(warning\) \{ return \( <View style=\{\{ gap: space\.md \}\}> <Note tone="fault">\{warning\}<\/Note> <\/View> \) \}/, 'the FM3 is shown its parts and steps')
+    /* In both rows that would show parts or steps, How to plug it in and What to buy, the warning comes before either. */
+    for (const fn of ['function PlugIn(', 'function Buy(']) {
+      assert.ok(page.includes(fn), `${fn} is gone`)
+      assert.match(page.slice(page.indexOf(fn)), /^function \w+\(\{ unit \}\) \{ if \(!unit\) return <Hint>[^<]+<\/Hint> const warning = warningFor\(unit\) if \(warning\) return <Note tone="fault">\{warning\}<\/Note>/, `${fn} shows the FM3 its parts or steps`)
+    }
     assert.match(gear.PARTS.adapters.does, /Type A/)
     for (const p of Object.values(gear.PARTS)) assert.ok(p.name && p.does, 'a part with no name or no line saying what it is for')
 
@@ -5687,40 +5780,90 @@ export function run(test) {
     assert.ok(state().some((f) => f.source === '../shared/bluetooth-gear.mjs' && f.target === '../mobile/src/lib/bluetooth-gear.js'))
   })
 
-  test('the page says it is a beta first, and What you need sits between the unit and Connect', () => {
+  /*
+   * CONNECT AT THE TOP. "Will you move the connect button up closer to the
+   * top? There's a lot of scrolling to figure out what's going on there ...
+   * I know it needs all the information about where to get the plugs and how
+   * to use them, but it's very messy and confusing right now. It would be
+   * cool if, like, a five-year-old could connect it." (24 October 2026.)
+   *
+   * Changed on purpose from "the page says it is a beta first, and What you
+   * need sits between the unit and Connect": the beta note and a paragraph
+   * opened the page, and What you need, open for a first setup, put Connect
+   * under a shopping list. Now: where it stands, the unit, Connect; then the
+   * reading, in rows that open when tapped; then the beta, never folded.
+   */
+  test('the page opens on where it stands, the unit and Connect, with the reading folded under it and the beta always shown', () => {
     const page = flat('mobile/src/screens/Bluetooth.js')
     const drawn = page.slice(page.indexOf('return ( <View style={{ gap: space.xl }}>'))
-    /* The beta, before anything else the page draws. */
-    assert.match(drawn, /^return \( <View style=\{\{ gap: space\.xl \}\}> \{\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/\} <Note tone="warn">\{BETA_NOTE\}<\/Note>/, 'the page does not open on the beta note')
-    /* The phone's own copy of it: an iPhone never draws the note that names Android. */
+    const at = (what) => {
+      const i = drawn.indexOf(what)
+      assert.ok(i >= 0, `the page no longer draws ${what}`)
+      return i
+    }
+    /* In this order, and nothing a person reads once in front of Connect. */
+    const order = [
+      '{said.line}',
+      '<Heading>1 · Pick your unit</Heading>',
+      '<Heading>2 · Connect</Heading>',
+      "label={b.looking ? 'Looking…'",
+      '<Fold title="How to plug it in"',
+      '<Fold title="What to buy"',
+      '<Fold title="What it can and can’t do"',
+      '<Press label="Full setup guide"',
+      '<Note tone="warn">{BETA_NOTE}</Note>'
+    ]
+    const places = order.map(at)
+    for (let i = 1; i < places.length; i++) assert.ok(places[i - 1] < places[i], `${order[i - 1]} is no longer before ${order[i]}`)
+    for (const reading of ['partsFor(', 'hookupFor(', '{FIRST_TIME}', '{POWER_LINE}', '{GEAR_IN_SHORT}', 'DIFFERENT.map(']) {
+      const i = drawn.indexOf(reading)
+      assert.ok(i < 0 || i > at('<Heading>2 · Connect</Heading>'), `${reading} is drawn above Connect`)
+    }
+    assert.ok(!drawn.includes('What you need'), 'the old What you need heading is back over Connect')
+    assert.ok(!/Show the parts and how they plug in/.test(page), 'the old fold button is back')
+
+    /* The beta: the phone's own copy, drawn whatever is folded, and outside every Fold. */
     assert.match(page, /const BETA_NOTE = betaNote\(Platform\.OS\)/, 'the page draws one beta note on both phones, and Android’s names another phone on an iPhone')
     assert.ok(!/\bBETA_NOTE,|BETA_NOTE_ANDROID/.test(page), 'the page imports a beta note that is not its phone’s own')
     assert.ok(!/For trying out\./.test(page), 'the page still calls a public beta something for trying out')
-    /* After the unit, before Connect: read while setting up, and the two steps still read as two. */
-    const unitAt = drawn.indexOf('1 · Which unit is the adapter plugged into?')
-    const needAt = drawn.indexOf('<Heading>What you need</Heading>')
-    const connectAt = drawn.indexOf('2 · Connect')
-    assert.ok(unitAt >= 0 && unitAt < needAt && needAt < connectAt, 'What you need is not between the unit and Connect')
-    /* For the unit picked, or the short version before one is; open for the first setting up, folded once an adapter has been used. */
-    assert.match(page, /\{gear && b\.unit \? <Gear unit=\{b\.unit\} \/> : null\} \{gear && !b\.unit \? <Hint>\{GEAR_IN_SHORT\}<\/Hint> : null\}/)
-    assert.match(page, /const \[gear, setGear\] = useState\(!b\.adapter\)/)
-    assert.match(page, /\{gear \? null : <Press label="Show the parts and how they plug in" height=\{44\} onPress=\{\(\) => setGear\(true\)\} \/>\}/)
-    /* The full guide, folded or not. */
+    assert.equal((drawn.match(/\{BETA_NOTE\}/g) || []).length, 1)
+    const lastFold = drawn.lastIndexOf('</Fold>')
+    assert.ok(at('{BETA_NOTE}') > lastFold, 'the beta note is inside a row that has to be opened')
+    assert.match(drawn, /<\/View> \{\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/\} <Note tone="warn">\{BETA_NOTE\}<\/Note>/, 'the beta note is drawn only on some condition')
+
+    /* The rows: How to plug it in open for the first setting up, folded once an adapter has been used; the other two wait to be tapped. */
+    assert.match(page, /const \[plug, setPlug\] = useState\(!b\.adapter\) const \[buy, setBuy\] = useState\(false\) const \[about, setAbout\] = useState\(false\)/)
+    assert.match(page, /<Fold title="How to plug it in" open=\{plug\} onToggle=\{\(\) => setPlug\(!plug\)\}> <PlugIn unit=\{b\.unit\} \/> <\/Fold>/)
+    assert.match(page, /<Fold title="What to buy" open=\{buy\} onToggle=\{\(\) => setBuy\(!buy\)\}> <Buy unit=\{b\.unit\} \/> <\/Fold>/)
+    /* A row is a Press like every other button, so it is in the tap log and has the haptic; and it says what a tap does. */
+    const fold = page.slice(page.indexOf('function Fold('), page.indexOf('function Row('))
+    assert.match(fold, /<Press label=\{title\} sub=\{open \? 'Tap to hide' : 'Tap to show'\} height=\{52\} onPress=\{onToggle\} \/> \{open \? <View/)
+    assert.ok(!/Pressable/.test(page), 'a button on the page that is not a Press, so missing from the tap log')
+    /* The full guide, whatever is open. */
     assert.match(page, /<Press label="Full setup guide" height=\{44\} onPress=\{\(\) => openLink\(GUIDE_URL\)\} \/>/)
     assert.match(page, /const openLink = \(url\) => Linking\.openURL\(url\)\.catch\(\(\) => \{\}\)/)
-    /* Each part: its name, what it is for, and View on Amazon, which opens that part's own address. */
-    const gearFn = page.slice(page.indexOf('function Gear('), page.indexOf('function Row('))
-    assert.match(gearFn, /partsFor\(unit\)\.map\(\(p\) => \( <View key=\{p\.key\}/)
-    assert.match(gearFn, /\{p\.name\}<\/Text> <Hint>\{p\.does\}<\/Hint> <Press label="View on Amazon" height=\{44\} accessibilityLabel=\{`View the \$\{p\.name\} on Amazon`\} onPress=\{\(\) => openLink\(p\.amazon\)\} \/>/)
-    assert.match(gearFn, /<Hint>\{POWER_LINE\}<\/Hint>/, 'the charger is left off the list')
+
+    /* What to buy: each part, its name, what it is for, and View on Amazon, which opens that part's own address; the short version before a unit is picked. */
+    const buy = page.slice(page.indexOf('function Buy('), page.indexOf('function Fold('))
+    assert.match(buy, /if \(!unit\) return <Hint>\{GEAR_IN_SHORT\}<\/Hint>/)
+    assert.match(buy, /partsFor\(unit\)\.map\(\(p\) => \( <View key=\{p\.key\}/)
+    assert.match(buy, /\{p\.name\}<\/Text> <Hint>\{p\.does\}<\/Hint> <Press label="View on Amazon" height=\{44\} accessibilityLabel=\{`View the \$\{p\.name\} on Amazon`\} onPress=\{\(\) => openLink\(p\.amazon\)\} \/>/)
+    assert.match(buy, /<Hint>\{POWER_LINE\}<\/Hint>/, 'the charger is left off the list')
     /*
-     * The Uhost's first-time firmware update, said once, before the steps.
-     * CME and the Amazon listing both ask for it, and a Uhost that has never
-     * had it can mangle the long messages the unit's names come back in.
+     * How to plug it in: the Uhost's first-time firmware update, said once,
+     * before the steps. CME and the Amazon listing both ask for it, and a
+     * Uhost that has never had it can mangle the long messages the unit's
+     * names come back in.
      */
-    assert.match(gearFn, /<Hint>\{FIRST_TIME\}<\/Hint> <Heading>How it plugs in<\/Heading>/, 'the first-time update of the Uhost is not said before the steps')
-    assert.match(gearFn, /const steps = hookupFor\(unit\) \|\| \[\]/)
-    assert.match(gearFn, /\{untried \? <Note tone="warn">\{untried\}<\/Note> : null\}/, 'an untried unit is not told so')
+    const plug = page.slice(page.indexOf('function PlugIn('), page.indexOf('function Buy('))
+    assert.match(plug, /if \(!unit\) return <Hint>Pick your unit above to see how it plugs in\.<\/Hint>/)
+    assert.ok(plug.indexOf('<Hint>{FIRST_TIME}</Hint>') >= 0 && plug.indexOf('<Hint>{FIRST_TIME}</Hint>') < plug.indexOf('steps.map('), 'the first-time update of the Uhost is not said before the steps')
+    assert.match(plug, /const steps = hookupFor\(unit\) \|\| \[\]/)
+    assert.match(plug, /\{untried \? <Note tone="warn">\{untried\}<\/Note> : null\}/, 'an untried unit is not told so')
+    /* What it can and can't do: the paragraph that used to open the page, and the list of what is different from USB. */
+    const about = drawn.slice(at('<Fold title="What it can and can’t do"'), at('<Press label="Full setup guide"'))
+    assert.ok(about.includes('No editing or saving, and the computer isn’t used.'))
+    assert.ok(about.includes('<Heading>What’s different from USB</Heading> {DIFFERENT.map('))
     /* The usual reason a connected adapter hears nothing, with these parts: the plugs swapped. */
     assert.match(page, /\{`\$\{PLUGS_CHECK\} The adapter has to carry MIDI both ways\./)
 

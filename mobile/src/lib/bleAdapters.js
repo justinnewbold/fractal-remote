@@ -53,4 +53,4 @@ export function pairScreenCrashes({ os, version, fixed } = {}) {
 
 /* What the Bluetooth page says instead (the developer's own page). */
 export const PAIR_SCREEN_IOS27 =
-  'Apple’s Bluetooth screen crashes on iOS 27, so it stays closed until the next build of the app, which has Apple’s fix. An adapter that is already connected is listed below.'
+  'Apple’s Bluetooth screen crashes on iOS 27, so it stays closed until the next build of the app, which has Apple’s fix. Until then, Connect can only use an adapter that is already connected to the iPhone.'

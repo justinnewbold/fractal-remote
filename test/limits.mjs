@@ -4199,8 +4199,8 @@ export function run(test) {
      *     into MIDI OUT, the cable in the Uhost's left socket and 5 volts in
      *     its right one, the unit started before the Uhost has power, and
      *     the Axe-Fx III's OUT rather than its THRU.
-     *   - THE APP'S OWN WORDS. The two step headings, What you need between
-     *     them and its three buttons, the two Connect hints, the Screen Time
+     *   - THE APP'S OWN WORDS. The two step headings, the three rows under
+     *     them and View on Amazon, the two Connect hints, the Screen Time
      *     line and the "What's different from USB" list are read out of the
      *     app itself, so the app changing them without the guide fails here
      *     rather than leaving the guide describing another app.
@@ -4222,7 +4222,7 @@ export function run(test) {
       .replace(/\s+/g, ' ')
 
     assert.match(html, /<title>Bluetooth \(beta\) setup/, 'the guide has lost its title')
-    assert.match(words, /last updated 12 October 2026/i, 'the guide does not say when it was last checked')
+    assert.match(words, /last updated 24 October 2026/i, 'the guide does not say when it was last checked')
     /* Where the app's Full setup guide goes, and nowhere a search engine sends a customer. */
     const { GUIDE_URL } = await import('../shared/bluetooth-gear.mjs')
     assert.equal(GUIDE_URL, 'https://fractal.newbold.cloud/bluetooth-guide.html', 'the app’s Full setup guide opens somewhere other than the guide')
@@ -4307,10 +4307,11 @@ export function run(test) {
     /* Connecting, in the app's own words. */
     const app = read('mobile/src/screens/Bluetooth.js')
     for (const said of [
-      '1 · Which unit is the adapter plugged into?',
-      'What you need',
+      '1 · Pick your unit',
+      'How to plug it in',
+      'What to buy',
       'View on Amazon',
-      'Show the parts and how they plug in',
+      'What it can and can’t do',
       'Full setup guide',
       '2 · Connect',
       'wait until it says Connected, then tap Done',
@@ -4323,8 +4324,10 @@ export function run(test) {
     assert.match(words, /Nearby devices/, 'the guide does not say what Android 12 and later asks for')
     assert.match(words, /On Android 11 and older it asks for Location instead[^.]*make sure Location is switched on/, 'the guide does not say Android 11 and older need Location on')
     assert.match(words, /Settings → Bluetooth \(beta\)/, 'the guide does not say where Bluetooth is in the app')
-    assert.match(words, /The page has two steps, with What you need between them\./, 'the guide does not say What you need sits between the two steps, as it does in the app')
-    assert.match(app, /<Heading>1 · [\s\S]*<Heading>What you need<\/Heading>[\s\S]*<Heading>2 · Connect<\/Heading>/, 'What you need no longer sits between the two steps; read the guide against the app again')
+    /* Changed on purpose, 24 October 2026, with the page: Connect at the top, and the reading in rows under it ("a five-year-old could connect it"). */
+    assert.match(words, /The top of the page says whether it is connected, and the two steps are right under that\./, 'the guide does not say the steps are at the top, as they are in the app')
+    assert.match(words, /Under Connect are three rows you tap to open: How to plug it in \(open the first time\), What to buy/, 'the guide does not say the rows sit under Connect, as they do in the app')
+    assert.match(app, /<Heading>1 · Pick your unit<\/Heading>[\s\S]*<Heading>2 · Connect<\/Heading>[\s\S]*<Fold title="How to plug it in"[\s\S]*<Fold title="What to buy"[\s\S]*<Fold title="What it can and can’t do"/, 'the rows are no longer under the two steps; read the guide against the app again')
     /* Screen Time: the same place to look as the app's own line for it. */
     const restricted = read('mobile/src/lib/bluetooth.js').match(/export const RESTRICTED_WORDS =\s*'([^']+)'/)?.[1] ?? ''
     assert.ok(restricted.includes('Settings → Screen Time → Content & Privacy Restrictions'), 'the app’s Screen Time line no longer says where to look; read the guide against it again')
