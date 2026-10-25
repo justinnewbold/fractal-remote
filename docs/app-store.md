@@ -316,7 +316,9 @@ reviewer. Never an App Preview, never on the website, never posted.
 ## App Privacy (the nutrition label)
 
 Answer **Yes** to collecting data, then declare exactly these. Everything is
-**"used for App Functionality"**, and **nothing is used for tracking** — say No
+**"used for App Functionality"**; Purchase History and User ID are **also
+used for Analytics**, because RevenueCat charts the purchases on its own
+dashboard, by account. And **nothing is used for tracking** — say No
 to the tracking question, because it is true and it keeps you out of App
 Tracking Transparency entirely.
 
@@ -326,9 +328,9 @@ Tracking Transparency entirely.
 | User Content → **Other User Content** | Yes | Yes | Setlists, so they follow you between devices |
 | User Content → **Photos or Videos** | Yes | Yes | Screenshots somebody chooses to add to a bug report (up to three, pasted or picked on a phone, picked on the website), sent only when they press Send. Added 22 October 2026: **not on the live label yet** |
 | User Content → **Customer Support** | Yes | Yes | What somebody writes in a bug report or suggestion: the Feedback form, and the note beside Send logs to developer. It was true before the note came, and was never on the label; add it with Photos or Videos. **Not on the live label yet** |
-| Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you |
+| Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you, and the number RevenueCat files purchases under. App Functionality and **Analytics** (RevenueCat's own guidance: say how the id is used, as for Purchase History). Analytics added 25 October 2026: **not on the live label yet** |
 | Diagnostics → **Other Diagnostic Data** | Yes | Yes | The debug log, and only when somebody presses Send on a bug report |
-| Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices |
+| Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices. App Functionality and **Analytics**: RevenueCat's App Privacy page says "All RevenueCat users must select these two options", because its dashboard charts the purchases. Analytics added 25 October 2026: **not on the live label yet** |
 | Diagnostics → **Crash Data** | Yes | No | After a launch that crashed, the phone's update check sends Expo the error message the app stopped on, so a broken update can be found and taken back. The privacy page says so. Added 11 October 2026, and on the live label by 24 October 2026 (apps.apple.com shows Crash Data under Not Linked) |
 
 Do **not** declare location, contacts, audio, search history, browsing
@@ -350,8 +352,12 @@ on 24 October 2026, which shows Purchase History, Email Address, Other User
 Content, User ID, Other Diagnostic Data and Crash Data). **22 October 2026:
 two rows to add in App Store Connect → App Privacy**, both
 "used for App Functionality", linked to the user, not used for tracking:
-Photos or Videos, and Customer Support. And one to edit: Email Address's use
-now includes replying from the account's own address. None needs a build.
+Photos or Videos, and Customer Support. **25 October 2026: two to edit**:
+Purchase History and User ID each get Analytics ticked beside App
+Functionality (RevenueCat requires it for Purchase History, above). Email
+Address needs no change: replying to a support message from the account's
+own address is App Functionality, which Apple's definition of it names
+("perform customer support"). None needs a build.
 Justin makes these; nothing here says they are done until he has.
 
 **Why the log is declared even though it is opt-in:** Apple asks what the app
@@ -782,6 +788,14 @@ every time a block is pasted (under the 1.87.11 block) apply to this one
 too, and so does the AM4 tuner paragraph's wait: until Justin has seen it on
 his own AM4, What's New leaves that line out.
 
+**The listing goes in with 1.88.3 too** (25 October 2026): a new version
+page starts with 1.87.11's text, so on the 1.88.3 page the Description is
+replaced with the one under *Description* in *The listing* (not the 1.89.0
+one), the Keywords are checked against *Keywords* (no "bluetooth,midi"),
+and the Subtitle under App Information is set to the one in *The listing*.
+The old Description still promised the tuner, tap tempo, channels and knobs
+on a VP4.
+
 ```
 This app is a remote control for Fractal Audio guitar units, through a computer the unit is plugged into by USB.
 
@@ -797,9 +811,7 @@ Every screen works in the demo, and nothing in it reaches real hardware. The in-
 
 New since 1.87.11:
 
-Siri. Nine App Shortcuts, each phrase with the app's name, such as "Scene 3 in Fractal Remote". Settings, then Siri, lists them all. Try them with the demo's Play screen open: elsewhere the app says to open Play, but Tuner off works from any screen. The links fractalremote://next, /previous, /scene/1 to /scene/8 and /tuner/off do the same from a shortcut. The app receives only the command, never the audio.
-
-Startup card. Step 1 above; it shows once.
+Siri. Nine App Shortcuts, each phrase with the app's name, such as "Scene 3 in Fractal Remote". Settings, then Siri, lists them all. Try them with the demo's Play screen open. Elsewhere the app says to open Play, and a closed app is only opened; Tuner off works from anywhere. The links fractalremote://next, /previous, /scene/1 to /scene/8 and /tuner/off do the same. The app receives only the command, never the audio.
 
 Colors. Settings, then Colors, has six looks for the tiles.
 
@@ -813,17 +825,17 @@ VP4. The app changes a VP4's presets, and its scenes once a number is set on the
 
 Apple Watch. Hold a pedal on the watch to choose its channel. The watch app is now named Fractal Remote.
 
-Screenshots. Feedback and Log (Settings, Troubleshooting) can add up to three screenshots, picked in the system photo picker or pasted. Only those are sent; the camera is never used.
+Screenshots. Feedback and Log (Settings, Troubleshooting) can add up to three screenshots, picked in the photo picker or pasted. Only those are sent; the camera is never used.
 
-Bluetooth MIDI code, switched on only for the developer. This build contains Bluetooth MIDI code for a feature that lets the phone reach the guitar unit through a Bluetooth MIDI adapter instead of a computer. While it is tested, it is switched on only for the developer's own account. Customers and the review account don't see it in this build, and the app doesn't ask them for Bluetooth permission.
+Bluetooth. This build contains Bluetooth MIDI code for a feature that lets the phone reach the guitar unit through a Bluetooth MIDI adapter instead of a computer. While it is tested, it is switched on only for the developer's own account. Customers and the review account don't see it in this build, and the app doesn't ask them for Bluetooth permission. If it is offered to customers, that will be in a later version, sent for review with notes that describe it.
 
-Settings also has Developer pages (accounts, sales, messages) that open only for the developer's own account; the server checks which account is asking.
+Settings also has Developer pages (accounts, sales, messages, giving an account the full version) that open only for the developer's own account; the server checks which account is asking.
 
 Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and everything stored under it at once. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page. Please try it on a new account, not the demo account.
 
 Hardware (Guideline 2.1): a video filmed on an iPhone with a real FM3 on screen, from the first pairing through the whole workflow, is video 1 below.
 
-Apple Watch (it comes with the iPhone app): keep the demo's Play screen open on the iPhone, open Fractal Remote on the watch, and swipe up or down between Scenes, Pedals, Presets and Tuner.
+Apple Watch: keep the demo's Play screen open on the iPhone, open Fractal Remote on the watch, and swipe up or down between Scenes, Pedals, Presets and Tuner.
 
 Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].
 
@@ -1029,9 +1041,12 @@ which account is asking. They were already there when Apple approved
 so 1.87.11's notes left them out. Since 16 October 2026 2.5.19 says an
 app's functionality "should be clear to end users and App Review", so the
 next notes say them in the one line Google's App access note already has:
-"Settings also has Developer pages (accounts, sales, messages) that open
-only for the developer's own account; the server checks which account is
-asking." If Apple asks, they are the developer's own support tools.
+"Settings also has Developer pages (accounts, sales, messages, giving an
+account the full version) that open only for the developer's own account;
+the server checks which account is asking." (The fourth was added on 25
+October 2026: the account help can give an account the full version by
+hand, and 2.5.19 wants what a page can do said, not only that it is
+there.) If Apple asks, they are the developer's own support tools.
 
 **Four things every time that block is pasted** (done for 1.87.11; the
 brackets here are still empty, so the next version needs them again):
@@ -1213,7 +1228,7 @@ Delete account: Settings (the gear, top right) → the account card at the top �
 
 This build contains Bluetooth MIDI code for a feature (reaching the guitar unit through a Bluetooth MIDI adapter instead of a computer) that is switched on only for the developer's own account while it is tested. No other account sees it, this one included. That code is why the app declares Nearby devices, and Location on Android 11 and older, where Android needs it to find a Bluetooth device; it never reads where the phone is. They are asked for only after Connect is tapped on the Bluetooth page, which this account cannot open. If it is offered to everyone, that will be in a later version, sent for review with a description of it.
 
-Settings also has Developer pages (accounts, sales, messages) that open only for the developer's own account; the server checks which account is asking.
+Settings also has Developer pages (accounts, sales, messages, giving an account the full version) that open only for the developer's own account; the server checks which account is asking.
 ```
 
 If the box will not take all of it, drop the last paragraph first. If it is
@@ -1697,9 +1712,9 @@ step 7 spends builds, and it waits for his yes, as every build does.
 
 1. **Justin: App Store Connect → App Privacy**, the rows owed since 22
    October (*App Privacy*, above): add Photos or Videos and Customer Support,
-   and edit Email Address's use. They are owed for 1.88.3 too, so they may
-   be done by then. Bluetooth adds nothing to the label: nothing it touches
-   leaves the phone.
+   and tick Analytics on Purchase History and User ID (Email Address needs
+   no change). They are owed for 1.88.3 too, so they may be done by then.
+   Bluetooth adds nothing to the label: nothing it touches leaves the phone.
 2. **Justin: Macs and Apple Vision Pro.** App Store Connect → the app →
    Pricing and Availability. Unless it was switched off, the App Store also
    offers the iPad app on Macs with Apple silicon and on Apple Vision Pro,
