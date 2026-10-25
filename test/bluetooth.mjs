@@ -4563,8 +4563,9 @@ export function run(test) {
     )
     /*
      * NOBODY IS NOT A NO. The effect above hands over whatever the session
-     * says, and no session is also what his own looks like when it ran out
-     * with no signal to renew it, so that off is held in memory only. The
+     * says, and no session is not his saying no (one that ran out with no
+     * signal to renew it answers with his id now), so that off is held in
+     * memory only. The
      * sign-outs somebody asked for say so, and write the off down: Sign out
      * (which Delete account in Settings goes through), the paywall's back,
      * Try the Demo and Delete account, and the way to the sign-in form.
@@ -4578,11 +4579,18 @@ export function run(test) {
     assert.match(flat('mobile/src/screens/Settings.js'), /await deleteAccount\(\) setDeleting\(false\) Alert\.alert\([^)]*\) onSignOut\?\.\(\)/)
     assert.equal((app.match(/allowBluetooth\(null, \{ signedOut: true \}\)/g) || []).length, 5, 'a sign-out somebody asked for is missing its flag, or one was added that is not a sign-out')
     assert.equal((app.match(/allowBluetooth\(/g) || []).length, 8, 'App.js tells lib/bluetooth whose phone it is from somewhere else too')
-    /* haveSession is the session on the phone: supabase-js's getSession reads it from storage, where getUser asks the server. */
+    /*
+     * haveSession is the session on the phone: supabase-js's getSession reads it from storage, where getUser asks the server.
+     * And one that ran out with no signal to renew it is still his (keptSession, run in test/kept-session.mjs), off the
+     * same storage, so his Bluetooth is a yes at the gig rather than a nobody.
+     */
     const link = code('mobile/src/lib/link.js').replace(/\s+/g, ' ')
-    assert.match(link, /export const haveSession = \(\) => restoreSession\(\)/)
+    assert.match(link, /export const haveSession = \(\) => keptSession\(\)/)
     const relay = code('mobile/src/lib/relay.js').replace(/\s+/g, ' ')
-    assert.match(relay, /export async function restoreSession\(\) \{ try \{ const \{ data \} = await supabase\(\)\.auth\.getSession\(\) userId = data\?\.session\?\.user\?\.id \|\| null return userId \} catch \{ return null \} \}/, 'haveSession no longer reads the session kept on the phone')
+    assert.match(relay, /export async function restoreSession\(\) \{ try \{ const \{ data \} = await supabase\(\)\.auth\.getSession\(\) userId = data\?\.session\?\.user\?\.id \|\| null return userId \} catch \{ return null \} \}/, 'the relay no longer reads the session kept on the phone')
+    const kept = relay.slice(relay.indexOf('export async function keptSession('), relay.indexOf('const sessionKey = '))
+    assert.match(kept, /^export async function keptSession\(\) \{ try \{ const asked = supabase\(\) \.auth\.getSession\(\)/, 'haveSession no longer reads the session kept on the phone')
+    assert.ok(!/getUser|currentAccount|rpc\(|fetch\(/.test(kept), 'haveSession asks the account server whose phone this is, which answers nobody with no signal')
   })
 
   test('on a bench: a customer left on Bluetooth is put back on the computer at launch, his phone starts on it once his id is in, and nobody known is not a no', async () => {
@@ -4710,10 +4718,12 @@ export function run(test) {
     }
 
     /*
-     * 3b. His sign-in ran out at a gig with no signal to renew it: the phone
-     * has no session, which says nobody, and nobody is not a no. Off for now,
-     * in memory only; the disk still says on, so the next launch that knows
-     * it is his is on Bluetooth again, and so is his sign-in coming back.
+     * 3b. His sign-in is gone without his asking (the account service turned
+     * it away; one that only ran out with no signal answers with his id, see
+     * test/kept-session.mjs): the phone has no session, which says nobody,
+     * and nobody is not a no. Off for now, in memory only; the disk still
+     * says on, so the next launch that knows it is his is on Bluetooth again,
+     * and so is his signing back in.
      */
     {
       const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk: leftOn() })

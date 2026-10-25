@@ -713,6 +713,19 @@ export default function App() {
   // signed in once is a remote, and it should say "Connecting…" from its first
   // frame rather than showing a sign-in form for the second it takes to find
   // out otherwise.
+  /*
+   * AND ONE THAT RAN OUT WITH NO SIGNAL TO RENEW IT IS STILL LEFT OVER.
+   * "A customer at a gig with no phone signal can be locked out of the whole
+   * app, Bluetooth included." It was: the renewal got no answer, the session
+   * read as none, and this drew the sign-in screen in front of somebody who
+   * had paid, on Bluetooth with no computer, with no internet to sign in
+   * over. haveSession now says whose sign-in is still on the phone when the
+   * only thing wrong is that the account service could not be reached
+   * (relay.js keptSession), and the purchase it last knew comes off the
+   * phone as well (purchases.js, remembered). One the account service turned
+   * away, a sign-out somebody asked for and a deleted account are not on the
+   * phone any more, and still open on the sign-in screen.
+   */
   useEffect(() => {
     let alive = true
     restoreDemo()
@@ -760,18 +773,20 @@ export default function App() {
    * currentAccount() asks the server: with no signal it answers nobody, and
    * his own Bluetooth would be switched off at the gig. haveSession() reads
    * the same session that let this phone in, and says yes for as long as the
-   * phone is still let in at all. (When that sign-in has run out and cannot
-   * be renewed with no signal, the app opens on the sign-in screen anyway,
-   * over the computer or not, as it always has.)
+   * phone is still let in at all — a sign-in that has run out with no signal
+   * to renew it included, which now lets the phone in (see the launch,
+   * above).
    *
    * Signed out is nobody, at once, without asking anything: a sign-out still
    * finishing in the background cannot answer for the account it is
    * removing.
    *
-   * AND NOBODY IS NOT A NO. Here it only means no session on the phone,
-   * which is also what his own sign-in looks like when it ran out at a gig
-   * with no signal to renew it: Bluetooth goes off for now, and the phone's
-   * storage keeps it on for the next launch that knows it is his. The
+   * AND NOBODY IS NOT A NO. Here it only means no session on the phone —
+   * since keptSession, a sign-in that ran out at a gig with no signal answers
+   * with its id, so what is left is a sign-in the account service turned
+   * away, or a phone that could not read its own — and neither is his
+   * saying no: Bluetooth goes off for now, and the phone's storage keeps it
+   * on for the next launch that knows it is his. The
    * sign-outs somebody asked for — Sign out and Delete account in Settings,
    * the paywall's back, Try the Demo and Delete account, and the way to the
    * sign-in form (toSignIn) — say so themselves, with `signedOut`, and those

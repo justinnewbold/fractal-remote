@@ -352,14 +352,19 @@ export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth
  * ACCOUNT'S id, or a sign-out somebody asked for (Sign out, Delete account,
  * the paywall's way back and its demo, heading for the sign-in screen: App.js
  * says so with `signedOut`). Anything else is NOT KNOWN — no session on the
- * phone, which is also what a sign-in that ran out with no signal to renew it
- * looks like, or an id that is not an account's — and not known is not a no:
+ * phone, or an id that is not an account's — and not known is not a no:
  *
  *   - yes: on, if it was on last time (the pick-up holds it until now);
  *   - no: off, and the off written down, unit and adapter kept;
  *   - not known: off for now, in memory only. The phone's storage still says
- *     on, so his phone that lost its sign-in at a gig with no signal is back
- *     on Bluetooth at the next launch that knows it is his.
+ *     on, so his phone that lost its sign-in without him asking is back on
+ *     Bluetooth at the next launch that knows it is his.
+ *
+ * A sign-in that ran out at a gig with no signal to renew it is not one of
+ * those any more: haveSession answers with its id (relay.js keptSession),
+ * so his is a yes there, as it should be, and nothing here treats it apart.
+ * No session now means none on the phone at all: one the account service
+ * turned away, or a phone that could not read its own.
  *
  * Whichever of the pick-up and the answer lands first, Bluetooth is on only
  * once the answer is yes.

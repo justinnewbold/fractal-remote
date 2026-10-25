@@ -20,7 +20,7 @@
  * the host word for word are a generated copy (see relay-rules.js).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { logDebug } from './debugLog'
 
 import { DEFAULT_PROJECT } from './project'
@@ -226,6 +226,11 @@ export async function signUp({ email, password }) {
  * Returns the user id when one is still good, null otherwise. Never throws and
  * never prompts: an expired session is a normal thing to find, and the answer
  * is to show the sign-in form, not an error.
+ *
+ * The relay's own question, and everything that talks to the account service
+ * asks this one: a sign-in that could not be renewed is no good to them. The
+ * door asks keptSession, below, which tells "could not be renewed" apart from
+ * "gone".
  */
 export async function restoreSession() {
   try {
@@ -236,6 +241,111 @@ export async function restoreSession() {
     return null
   }
 }
+
+/**
+ * WHO THIS PHONE IS SIGNED IN AS, FOR THE DOOR: restoreSession's answer, and
+ * the one yes it could not give.
+ *
+ * "A customer at a gig with no phone signal can be locked out of the whole
+ * app, Bluetooth included." The sign-in kept on the phone is two tokens: one
+ * that says who you are for a while (an hour, by the account service's
+ * default), and one that buys the next while. Past the first, getSession asks
+ * the account service for a new one, and with no signal it gets no answer.
+ * supabase-js keeps the sign-in on the phone untouched when that happens and
+ * says there is no session; restoreSession took that for nobody, App.js drew
+ * the sign-in screen, and a player with an AM4 on Bluetooth, the full version
+ * bought and no computer in the building, was left at a form that needs the
+ * internet he did not have. Justin's own phone fell into the same hole;
+ * only his Bluetooth setting had a way around it.
+ *
+ * So the two kinds of no are told apart, by what supabase-js said and by
+ * what it kept:
+ *
+ *   - THE RENEWAL GOT NO ANSWER (no signal, the twelve seconds of notForever
+ *     run out, the account service down: an AuthRetryableFetchError) and the
+ *     sign-in is still on the phone: that account, as it was. supabase-js
+ *     tries the renewal again by itself while the app is open — its ticker
+ *     runs every thirty seconds on a phone, and asks again at most once a
+ *     minute after a failure — so the next hour arrives with the signal, and
+ *     nothing here has to ask for it.
+ *   - THE ACCOUNT SERVICE ANSWERED AND SAID NO (the sign-in ended somewhere
+ *     else, the account deleted, a renewal token used twice): supabase-js has
+ *     already taken it off the phone, and it is nobody, the sign-in screen,
+ *     exactly as before.
+ *   - Nothing on the phone, or signed out here (signOut makes sure): nobody,
+ *     as before.
+ *
+ * AND THE DOOR DOES NOT WAIT HALF A MINUTE TO FIND OUT. With no signal,
+ * supabase-js does not give up on a renewal at once: it tries eight times,
+ * further apart each time, for twenty-five seconds (measured, 25.4 s, in the
+ * copy the phone ships and in the root's), and getSession waits for all of
+ * it. That was twenty-five seconds of spinner before the sign-in screen, and
+ * would have been twenty-five before the app; "twenty seconds of a frozen
+ * phone is indistinguishable from a crash" (notForever). So the door waits
+ * KEPT_WAIT_MS for supabase-js's answer, longer than a renewal takes on any
+ * working signal, and goes by that answer when it comes in time; past it, a
+ * sign-in on the phone lets the phone in as that account while supabase-js
+ * carries on trying. The one thing given up: a renewal that the account service
+ * turns away AFTER that wait (a bad signal and an account deleted elsewhere,
+ * both at once) has already let the phone in, and the sign-in screen comes
+ * at the next launch rather than this one, as it does for a sign-in turned
+ * away while the app is open. Nothing that needs the account works on it
+ * meanwhile.
+ *
+ * FOR THE DOOR AND NOTHING ELSE. `userId` is set exactly as restoreSession
+ * sets it, from supabase-js's own answer, and never from a sign-in that could
+ * not be renewed or an answer the door did not wait for, so remoteConnect
+ * asks again for itself and stays "Sign in first." until the renewal goes
+ * through, and the Developer pages, the purchase and the account's own
+ * questions fail as they always have with no signal. What a phone let in
+ * this way can do is what needs no internet: Bluetooth (beta), and the
+ * computer again once the signal is back.
+ *
+ * Read off the phone's storage at the key supabase-js was built with
+ * (storageKey), in the shape supabase-js writes it. A shape it no longer
+ * writes (a later supabase-js keeping the user somewhere else) finds nobody,
+ * which was the answer before this: it can only fail closed.
+ */
+export const KEPT_WAIT_MS = 3000
+
+/* What within() hands back when supabase-js has not answered yet. */
+const NOT_YET = Symbol('not answered yet')
+
+export async function keptSession() {
+  try {
+    const asked = supabase()
+      .auth.getSession()
+      .then(({ data, error }) => ({ id: data?.session?.user?.id || null, error }))
+    /* Still trying after the door has gone on without it: its outcome is supabase-js's to keep, and nobody else's to hear. */
+    asked.catch(() => {})
+    let answer = await within(asked, KEPT_WAIT_MS, NOT_YET)
+    if (answer === NOT_YET) {
+      const kept = await keptOnPhone()
+      if (kept) return kept
+      /* Nothing on the phone to go in on: wait for the answer after all. */
+      answer = await asked
+    }
+    userId = answer.id
+    if (answer.id || !isAuthRetryableFetchError(answer.error)) return answer.id
+    return await keptOnPhone()
+  } catch {
+    return null
+  }
+}
+
+/* The account whose sign-in is on the phone, renewable or not, read without asking anybody: null when there is none, or it is not one. */
+async function keptOnPhone() {
+  try {
+    const kept = JSON.parse((await AsyncStorage.getItem(sessionKey())) || 'null')
+    const id = kept?.refresh_token && kept?.user?.id
+    return typeof id === 'string' && id ? id : null
+  } catch {
+    return null
+  }
+}
+
+/* Where supabase-js keeps the sign-in on this phone: the key it was built with. */
+const sessionKey = () => supabase().auth.storageKey
 
 /** Who is signed in, or null. Email included because that is what a person recognises. */
 export async function currentAccount() {
@@ -308,6 +418,19 @@ export async function sessionAccount() {
  *
  * Scope 'local' on purpose: signing out on a phone must not sign out the Mac
  * that is hosting, which would drop the link for everyone mid-set.
+ *
+ * AND NOTHING LEFT ON THE PHONE, WHATEVER supabase-js DECIDED. Its signOut
+ * renews a sign-in that has run out before it signs out of it, and when the
+ * renewal gets no answer it gives up and hands back an error, with the
+ * sign-in still on the phone. Before keptSession that was a sign-out
+ * undone at the next launch with a signal, which renewed it; with
+ * keptSession it would be undone at the next launch without one as well.
+ * Somebody who tapped Sign out is signed out of this phone, so what
+ * supabase-js left is taken off here, as its own sign-out would have taken
+ * it. With no signal the account service never hears of it — that sign-in
+ * stays good on the server with no phone holding it, as one on a lost phone
+ * does — and the computer's sign-in is its own. Not waited for past a
+ * second, on a disk that does not answer.
  */
 export async function signOut() {
   await remoteDisconnect()
@@ -317,6 +440,17 @@ export async function signOut() {
     userId = null
     /* The pick was this account's: the next to sign in reads its own (readPick). */
     forgetPick()
+    await within(dropKeptSession(), 1000)
+  }
+}
+
+/* What supabase-js keeps of a sign-in on this phone, gone: the sign-in, and the user it keeps beside it when told to. */
+async function dropKeptSession() {
+  try {
+    await AsyncStorage.removeItem(sessionKey())
+    await AsyncStorage.removeItem(`${sessionKey()}-user`)
+  } catch {
+    /* A disk that refuses this refused supabase-js's own removal too: there is nothing more to try from here. */
   }
 }
 

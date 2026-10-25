@@ -3045,6 +3045,7 @@ export function run(test) {
       'service.mjs': `export const made = []
         export const asked = []
         export const said = { answer: () => ({ data: {}, error: { message: 'the bench was not told what to say' } }) }
+        export const isAuthRetryableFetchError = () => false
         export const createClient = (url, key, options) => {
           made.push({ url, key, options })
           return { auth: { verifyOtp: async (params) => { asked.push(params); return said.answer(params) } } }

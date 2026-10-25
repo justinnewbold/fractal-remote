@@ -1080,7 +1080,13 @@ export function run(test) {
      */
     const relay = read('mobile/src/lib/relay.js')
     const keys = [...relay.matchAll(/AsyncStorage\.(?:get|set)Item\(([^),]+)/g)].map((m) => m[1].trim())
-    assert.deepEqual([...new Set(keys)], ['HOST_KEY'], 'the phone started keeping device state locally')
+    /*
+     * sessionKey() is the account session's own key, supabase-js's: READ by
+     * the door when the renewal got no answer (keptSession), and cleared on
+     * Sign out, and never written by the relay. The library keeps it.
+     */
+    assert.deepEqual([...new Set(keys)], ['sessionKey(', 'HOST_KEY'], 'the phone started keeping device state locally')
+    assert.ok(!/AsyncStorage\.setItem\(sessionKey/.test(relay), 'the relay writes the account session itself, which is supabase-js’s to keep')
   })
 
   test('the phone and the computer file a setlist under the same unit', async () => {
@@ -15221,6 +15227,65 @@ export function run(test) {
       assert.equal(bench.p.mayConnect(), before, 'a failed check changed whether the app may drive a rig')
     } finally {
       bench.done()
+    }
+  })
+
+  test('a purchase the phone knew is still known at a gig with no signal, the sign-in run out, and the price never shows', async () => {
+    /*
+     * The other half of the door. A sign-in that ran out with no signal to
+     * renew it lets the phone in now (relay.js keptSession, run in
+     * test/kept-session.mjs), and a customer let in must not then be stood in
+     * front of the price for a purchase made months ago. With no signal the
+     * account server says nobody (currentAccount, the bench's `session` null),
+     * so nothing links the store to the account; what decides is what the
+     * phone wrote down last time (fractal.unlocked), read before anything is
+     * asked, and the store, which either cannot be asked at all or answers
+     * from the copy its SDK keeps on the phone.
+     */
+    const { shouldAskToPay } = await import(new URL('../mobile/src/lib/unlock-rule.js', import.meta.url).href)
+    const asked = (s) => shouldAskToPay({ inApp: true, demo: false, ...s })
+    for (const os of ['ios', 'android']) {
+      /* The SDK with nothing it will hand back and no signal: every question throws. */
+      const rc = pretendRevenueCat({ owns: { 'acct-gig': 'APP_STORE' } })
+      rc.me = 'acct-gig'
+      rc.offline = true
+      const bench = await benchWith(rc, { os, session: null, start: false })
+      try {
+        bench.disk.set('fractal.unlocked', 'yes')
+        await bench.p.startPurchases()
+        await benchFlush()
+        const s = bench.p.purchaseState()
+        assert.equal(s.checking, false, `${os}: the check never finished, so the bench proved nothing`)
+        assert.equal(s.unlocked, true, `${os}: a paid customer with no signal was locked out`)
+        assert.equal(asked(s), false, `${os}: the price was put in front of somebody who paid, at a gig with no signal`)
+        assert.equal(bench.p.mayConnect(), true)
+        assert.equal(bench.disk.get('fractal.unlocked'), 'yes', `${os}: no signal wrote a no down for somebody who paid`)
+      } finally {
+        bench.done()
+      }
+
+      /*
+       * The SDK answering from what it keeps, offerings and all: the one case
+       * where the price COULD be shown, because there is something to sell
+       * and a store that answers. The purchase it last knew is on the id it
+       * was left on, and nothing moves it.
+       */
+      const rc2 = pretendRevenueCat({ owns: { 'acct-gig': 'APP_STORE' } })
+      rc2.me = 'acct-gig'
+      const bench2 = await benchWith(rc2, { os, session: null, start: false })
+      try {
+        bench2.disk.set('fractal.unlocked', 'yes')
+        await bench2.p.startPurchases()
+        await benchFlush()
+        const s = bench2.p.purchaseState()
+        assert.equal(s.available, true, `${os}: the bench put no shelf in front of this, so it proved nothing`)
+        assert.equal(s.unlocked, true, `${os}: the store’s own copy of a purchase was not believed`)
+        assert.equal(asked(s), false, `${os}: the price was put in front of somebody who paid`)
+        assert.equal(s.onlyHere, false, `${os}: a customer whose sign-in ran out was told the purchase is on this phone alone`)
+        assert.ok(!rc2.calls.some((c) => /^log(In|Out)/.test(c)), `${os}: with nobody the account server would vouch for, the store was moved to another id`)
+      } finally {
+        bench2.done()
+      }
     }
   })
 
