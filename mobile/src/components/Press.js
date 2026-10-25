@@ -1,11 +1,16 @@
+import { useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
+import { STEP_LINE_EDGE, STEP_LINE_LEAST, STEP_WORD_LEAST, fitLine } from '../lib/line-fit'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
 
 /* The height of the line under a button (`under`), fixed so a name arriving never moves anything. */
 export const UNDER_LINE = 14
+
+/* The pictures beside a label (Picture, below), square. */
+const PICTURE = 20
 
 /**
  * Every button in the app.
@@ -71,6 +76,21 @@ export default function Press({
    * drift apart.
    */
   flip = false,
+  /*
+   * Fit the label and the line under it to the button rather than cut them.
+   * "The previous/next buttons and the preset names are not showing up
+   * correctly": Play's Previous read "Previ..." over "OLIVIA RODRI..." on a
+   * third of an iPhone, the word cut by the chevron beside it and the name
+   * by the button's own side padding. So with `fit` each is measured, and
+   * one too wide for its room is drawn smaller, just as much as it needs,
+   * down to a floor (shared/line-fit.mjs), and only past the floor cut as
+   * before. The line under reaches into the side padding, to 4 from the
+   * edge. And a word that does not fit even at the floor beside its
+   * picture is drawn without the picture: on the narrowest phones the
+   * chevron goes before the word does, because the word is what says
+   * which way the button goes.
+   */
+  fit = false,
   onPress,
   onLongPress,
   tone = 'plain',
@@ -101,6 +121,28 @@ export default function Press({
   const background = on ? accent : color.panel
   const ink = on ? color.onSignal : disabled ? color.silkFaint : color.silk
 
+  /* The button's own width, and how wide the label and the line under it are at their usual sizes, from the unseen copy below. */
+  const [box, setBox] = useState(0)
+  const [wide, setWide] = useState({ label: 0, under: 0 })
+  const measured = (which) => (e) => {
+    const w = e.nativeEvent.layout.width
+    setWide((was) => (was[which] === w ? was : { ...was, [which]: w }))
+  }
+  /* Inside the padding and the one-point border at each side. */
+  const inner = fit && box > 0 ? box - 2 * space.md - 2 : 0
+  const pictures = (icon ? PICTURE + space.sm : 0) + (after ? PICTURE + space.sm : 0)
+  let word = fit ? fitLine({ natural: wide.label, room: inner - pictures, size: labelSize, least: STEP_WORD_LEAST }) : { size: labelSize, fits: true }
+  let bare = false
+  if (fit && !word.fits && pictures > 0) {
+    const alone = fitLine({ natural: wide.label, room: inner, size: labelSize, least: STEP_WORD_LEAST })
+    if (alone.fits) {
+      word = alone
+      bare = true
+    }
+  }
+  const reach = space.md - STEP_LINE_EDGE
+  const line = fit ? fitLine({ natural: wide.under, room: inner + 2 * reach, size: font.micro, least: STEP_LINE_LEAST }) : { size: font.micro, fits: true }
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -124,6 +166,7 @@ export default function Press({
           : undefined
       }
       delayLongPress={450}
+      onLayout={fit ? (e) => setBox((was) => (was === e.nativeEvent.layout.width ? was : e.nativeEvent.layout.width)) : undefined}
       style={({ pressed }) => [
         {
           minHeight: height,
@@ -142,8 +185,9 @@ export default function Press({
         style
       ]}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        {icon ? <Picture source={icon} tint={ink} flip={flip} /> : null}
+      {/* As tall as a picture even when the pictures give way, so a fitted Previous sits level with Next. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: fit ? PICTURE : undefined }}>
+        {icon && !bare ? <Picture source={icon} tint={ink} flip={flip} /> : null}
         <View style={{ alignItems: 'center', flexShrink: 1 }}>
           {/*
             A word ABOVE the label, for the one button whose name does not say
@@ -168,7 +212,7 @@ export default function Press({
             numberOfLines={1}
             style={{
               color: ink,
-              fontSize: labelSize,
+              fontSize: word.size,
               fontWeight: labelSize > font.body ? '700' : '600',
               textAlign: 'center'
             }}
@@ -194,15 +238,16 @@ export default function Press({
             </Text>
           ) : null}
         </View>
-        {after ? <Picture source={after} tint={ink} /> : null}
+        {after && !bare ? <Picture source={after} tint={ink} /> : null}
       </View>
       {under !== undefined ? (
         <Text
           numberOfLines={1}
           style={{
             alignSelf: 'stretch',
+            marginHorizontal: fit ? -reach : 0,
             color: on ? color.onSignal : color.silkDim,
-            fontSize: font.micro,
+            fontSize: line.size,
             lineHeight: UNDER_LINE,
             marginTop: 2,
             textAlign: 'center'
@@ -210,6 +255,24 @@ export default function Press({
         >
           {under || '\u00a0'}
         </Text>
+      ) : null}
+      {/*
+        The unseen copy `fit` measures: the label and the line at their usual
+        sizes, each as wide as it is when nothing cuts it. Laid out in a wide
+        box of no height, so it never shows, never takes a touch, and is
+        never read out.
+      */}
+      {fit ? (
+        <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={MEASURE}>
+          <Text numberOfLines={1} onLayout={measured('label')} style={{ fontSize: labelSize, fontWeight: labelSize > font.body ? '700' : '600' }}>
+            {label}
+          </Text>
+          {under !== undefined ? (
+            <Text numberOfLines={1} onLayout={measured('under')} style={{ fontSize: font.micro }}>
+              {under || '\u00a0'}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
       {badge ? (
         <View pointerEvents="none" style={{ position: 'absolute', top: space.sm, right: space.sm }}>
@@ -237,3 +300,6 @@ function Picture({ source, tint, flip = false }) {
     />
   )
 }
+
+/* Where `fit` measures: wide enough that nothing in it wraps, and no height, so it is never seen. */
+const MEASURE = { position: 'absolute', left: 0, top: 0, width: 2000, height: 0, overflow: 'hidden', opacity: 0, alignItems: 'flex-start' }

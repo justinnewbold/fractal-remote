@@ -1767,6 +1767,8 @@ function PlayFoot({
           flip
           /* What Previous will load, on a line as tall as Next's, so the two words sit level. */
           under={behind.shown}
+          /* The word and the name drawn smaller rather than cut: "Previ..." over "OLIVIA RODRI..." on a third of an iPhone (Press `fit`). */
+          fit
           accessibilityLabel={behind.said}
           height={foot}
           disabled={landing(-1) === null && !(noSlotSteps && !order)}
@@ -1789,6 +1791,7 @@ function PlayFoot({
           label="Next"
           after={chevronIcon}
           under={ahead.shown}
+          fit
           accessibilityLabel={ahead.said}
           height={foot}
           disabled={landing(1) === null && !(noSlotSteps && !order)}
