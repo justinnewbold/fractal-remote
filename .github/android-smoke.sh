@@ -161,9 +161,16 @@ judge() {
 # $asked, which every look holds the emulator to.
 turn() {
   asked="$1"
-  adb shell settings put system accelerometer_rotation 0
-  adb shell cmd window user-rotation lock "$1" > /dev/null 2>&1 || adb shell settings put system user_rotation "$1"
-  sleep 4
+  # Asked again until it reads back: on a freshly booted emulator the first
+  # lock is sometimes dropped (run 40238862298 read "free" after it).
+  local i
+  for i in 1 2 3 4 5; do
+    adb shell settings put system accelerometer_rotation 0
+    adb shell cmd window user-rotation lock "$1" > /dev/null 2>&1 || adb shell settings put system user_rotation "$1"
+    sleep 3
+    [ "$(adb shell cmd window user-rotation 2>/dev/null | tr -d '\r')" = "lock $1" ] && break
+  done
+  sleep 1
   echo "rotation now: $(adb shell cmd window user-rotation 2>/dev/null | tr -d '\r') (asked for $1)"
 }
 
