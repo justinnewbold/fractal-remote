@@ -593,6 +593,21 @@ export function chooseAdapter(dev) {
  */
 export const adapterName = (a) => (a && typeof a.name === 'string' && a.name && a.name !== a.id ? a.name : null)
 
+/**
+ * WHAT A BLUETOOTH REPORT'S LOG SAYS ABOUT IT, in its head (lib/logHead, by
+ * lib/bleReport bluetoothHead): the unit picked on the page, the unit that
+ * answered instead, where the link stands and what is in its way, and the
+ * adapter, by its name or '' for one with none, never its id. Null for no
+ * adapter chosen. Read when the report is sent, and at no other moment.
+ */
+export const bluetoothFacts = () => ({
+  unit: saved.unit ? unitName(saved.unit) : null,
+  answeredAs: now.answeredAs || null,
+  phase: now.phase,
+  trouble: now.trouble,
+  adapter: saved.adapter ? adapterName(saved.adapter) || '' : null
+})
+
 /** Forget the adapter. bleLink hears it and lets go. */
 export function forgetAdapter() {
   if (!saved.adapter) return

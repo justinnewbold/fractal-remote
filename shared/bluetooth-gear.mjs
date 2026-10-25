@@ -109,6 +109,16 @@ export const TESTED = ['am4']
  * not function correctly." Short and calm, and with the way back: the cable
  * to the computer is untouched by any of this.
  *
+ * IN HIS WORDS, SINCE 25 OCTOBER 2026. Bluetooth (beta) is to reach every
+ * customer with the full version, marked beta with "Bluetooth is in beta, and
+ * some features might not work as expected", and "super easy for all users to
+ * submit bugs and feedback". So the note opens with his sentence word for
+ * word, says where it has been tried, sends a player who meets a problem to
+ * the button straight under the note (REPORT_BUTTON, which sends one in a
+ * tap), and ends on the way back: the cable to the computer still does
+ * everything. It said "Bluetooth is new (beta), and may not work correctly
+ * with every unit or adapter" until then.
+ *
  * FROM AN IPHONE, AND FROM AN ANDROID PHONE. Until 25 October 2026 every
  * hardware test was an iPhone (the one Android build that carried this, on 8
  * October, stopped on Expo's side a minute in), and Android's note said "not
@@ -135,10 +145,19 @@ export const TESTED = ['am4']
  * the platform is passed in, and anything that is not Android gets the
  * iPhone's copy: a phone this has never heard of never shows Android's name.
  */
-export const BETA_NOTE_IPHONE =
-  'Bluetooth is new (beta), and may not work correctly with every unit or adapter. So far it has been tried on the AM4, from an iPhone. If something doesn’t work, the cable to the computer still does.'
-export const BETA_NOTE_ANDROID =
-  'Bluetooth is new (beta), and may not work correctly with every unit or adapter. So far it has been tried on the AM4, from an iPhone and an Android phone. If something doesn’t work, the cable to the computer still does.'
+/*
+ * THE BUTTON THE NOTE POINTS AT, named once, so the note and the button can
+ * never call it two different things. On the Bluetooth page under the note,
+ * and wherever else a Bluetooth problem is met (the note under Play's pill,
+ * a fault on Play while over Bluetooth, the waiting screen), it opens the
+ * one-tap report (mobile/src/screens/BluetoothReport.js), which goes to
+ * Justin and nobody else: help with the app is his own channels only.
+ */
+export const REPORT_BUTTON = 'Report a Bluetooth problem'
+const BETA_OPENS = 'Bluetooth is in beta, and some features might not work as expected.'
+const BETA_ENDS = `If something doesn’t work, tap ${REPORT_BUTTON}, just below. The cable to the computer still does everything.`
+export const BETA_NOTE_IPHONE = `${BETA_OPENS} So far it has been tried on the AM4, from an iPhone. ${BETA_ENDS}`
+export const BETA_NOTE_ANDROID = `${BETA_OPENS} So far it has been tried on the AM4, from an iPhone and an Android phone. ${BETA_ENDS}`
 
 /** The beta note for the phone it is shown on, from Platform.OS. */
 export const betaNote = (os) => (os === 'android' ? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE)
@@ -398,9 +417,15 @@ export function hookupFor(unit, noun = 'phone') {
  * warning instead. It said "It should work the same way.", which is a promise
  * about a unit nobody has run, and Apple's 2.3.1(a) keeps an app from
  * claiming what it has not shown. Now it asks to hear how it went, through
- * the app's own Feedback form: help with the app is Justin's channels only.
+ * the app's own report: help with the app is Justin's channels only.
+ *
+ * THE BUTTON ON THIS PAGE, NOT A PATH THROUGH SETTINGS. It said "Settings →
+ * Troubleshooting → Feedback" until 25 October 2026, three screens away from
+ * the page it is read on, and a typed form at the end of them. The page has
+ * REPORT_BUTTON at its foot now, under the beta note, which sends in one tap,
+ * "It works on my unit" among its answers.
  */
 export const untriedLine = (unit) =>
   triedOn(unit) || !UNITS[unit] || warningFor(unit)
     ? null
-    : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: Settings → Troubleshooting → Feedback.`
+    : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: tap ${REPORT_BUTTON}, at the bottom of this page.`

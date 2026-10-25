@@ -21,6 +21,7 @@ import Volume from './Volume'
 import { fire } from '../lib/tapped'
 import { useSaveToSlot } from './SaveToSlot'
 import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS } from '../lib/save-wait'
+import { deviceNoun } from '../lib/device-word'
 
 const face = Platform.select(mono)
 
@@ -48,7 +49,7 @@ const face = Platform.select(mono)
  * The words come from shared/link-word.mjs rather than from here, so the two
  * apps cannot drift into saying different things about the same link.
  */
-export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, saveHere: saveWanted = true }) {
+export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, saveHere: saveWanted = true }) {
   const unit = useRig(ofDeviceName)
   const unitState = useRig(ofUnitState)
   const blocks = useRig(ofAllBlocks)
@@ -548,7 +549,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
       */}
       <Volume blocks={blocks} open={volume} onClose={() => setVolume(false)} onError={setFailed} />
       {failed ? <Reported said={failed} onClear={() => setFailed(null)} /> : null}
-      {saying && bluetooth ? <Which link={link} onClose={() => setSaying(false)} /> : null}
+      {saying && bluetooth ? <Which link={link} onClose={() => setSaying(false)} onReport={onReport} /> : null}
       {saveTo.said && saveHere ? <Saved said={saveTo.said} onClear={saveTo.dismiss} /> : null}
       {/*
         A save from Play runs late the same as one from Edit, and Play has no
@@ -598,7 +599,7 @@ const ofAllBlocks = (s) => s.allBlocks
  * adapter and nothing to switch to, so this note, and the switch back to the
  * computer, stay one tap from the bar.
  */
-function Which({ link, onClose }) {
+function Which({ link, onClose, onReport = null }) {
   const adapter = link?.macName || 'the adapter'
   const said =
     link?.link === 'connected'
@@ -606,6 +607,17 @@ function Which({ link, onClose }) {
       : link?.link === 'joining'
         ? `Finding ${adapter}…`
         : 'Not connected to the Bluetooth adapter.'
+  /* The two buttons side by side, wrapping on a narrow screen, each its own element to a screen reader. */
+  const button = ({ pressed }) => ({
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: color.rule,
+    backgroundColor: pressed ? color.panel : color.chassis
+  })
   return (
     <Pressable
       /* Not one element to a screen reader, or VoiceOver reads the note as
@@ -627,36 +639,52 @@ function Which({ link, onClose }) {
       }}
     >
       <Text style={{ color: color.silk, fontSize: font.body }}>{said}</Text>
-      {/*
-        TURN OFF BLUETOOTH, from the pill that says it is on. "Make it so you
-        can click the connected button at the top of the screen and have a
-        button that pop up that says turn off Bluetooth." The same switch as
-        the page's Stop and the waiting screen's Use the computer instead,
-        in every state of the link: the phone goes looking for the computer
-        the moment it is off (App.js).
-      */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Turn off Bluetooth"
-        accessibilityHint="The phone goes back to using the computer"
-        onPress={() => {
-          tick()
-          fire('press Turn off Bluetooth', () => setBluetooth(false))
-          onClose()
-        }}
-        style={({ pressed }) => ({
-          alignSelf: 'flex-start',
-          minHeight: 44,
-          justifyContent: 'center',
-          paddingHorizontal: space.lg,
-          borderRadius: radius.md,
-          borderWidth: 1,
-          borderColor: color.rule,
-          backgroundColor: pressed ? color.panel : color.chassis
-        })}
-      >
-        <Text style={{ color: color.silk, fontSize: font.body }}>Turn off Bluetooth</Text>
-      </Pressable>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+        {/*
+          TURN OFF BLUETOOTH, from the pill that says it is on. "Make it so you
+          can click the connected button at the top of the screen and have a
+          button that pop up that says turn off Bluetooth." The same switch as
+          the page's Stop and the waiting screen's Use the computer instead,
+          in every state of the link: the device goes looking for the computer
+          the moment it is off (App.js). Its hint names the device in hand
+          (lib/device-word deviceNoun), an iPad's "The iPad goes back".
+        */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Turn off Bluetooth"
+          accessibilityHint={`The ${deviceNoun()} goes back to using the computer`}
+          onPress={() => {
+            tick()
+            fire('press Turn off Bluetooth', () => setBluetooth(false))
+            onClose()
+          }}
+          style={button}
+        >
+          <Text style={{ color: color.silk, fontSize: font.body }}>Turn off Bluetooth</Text>
+        </Pressable>
+        {/*
+          REPORT A PROBLEM, beside it, in every state of the link: the
+          one-tap Bluetooth report, with what this note says going with it,
+          and back to the screen it was opened over (App's reportBluetooth,
+          which hands it only to an account the Bluetooth page is drawn for).
+          Its own element to VoiceOver, as Turn off Bluetooth is.
+        */}
+        {onReport ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Report a problem"
+            accessibilityHint="Opens Report a Bluetooth problem, which sends in one tap"
+            onPress={() => {
+              tick()
+              fire('press Report a problem', () => onReport(said))
+              onClose()
+            }}
+            style={button}
+          >
+            <Text style={{ color: color.silk, fontSize: font.body }}>Report a problem</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </Pressable>
   )
 

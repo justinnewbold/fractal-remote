@@ -38,6 +38,7 @@ import {
   ONE_AT_A_TIME,
   PLUGS_CHECK,
   POWER_LINE,
+  REPORT_BUTTON,
   SELLERS_LINE,
   betaNote,
   hookupFor,
@@ -106,6 +107,17 @@ import Press from '../components/Press'
  * account may pick (offeredUnits): the AM4 alone for a customer, all four for
  * his account. And everybody, before any pick and whatever is picked, is
  * told it is not for an FM3, whose owners would otherwise never see why.
+ *
+ * AND ONE TAP TO SAY SO. "Super easy for all users to submit bugs and
+ * feedback" (25 October 2026, when Bluetooth (beta) was decided for every
+ * customer with the full version): a big Report a Bluetooth problem straight
+ * under the beta note, on every visit, and a small Report this beside each
+ * line that says something is wrong, which sends that line with the report.
+ * Not beside the line that says Bluetooth is not allowed, which has Open
+ * Settings, the fix, under it, and not beside "Unlock the app", which is not
+ * a problem with Bluetooth. Both open Report a Bluetooth problem
+ * (screens/BluetoothReport, `onReport`, App's through Settings), which comes
+ * back here.
  *
  * The beta note is the iPhone's or Android's own (betaNote, from
  * shared/bluetooth-gear.mjs): only Android's names an Android phone, because
@@ -219,10 +231,18 @@ function status(b, unitState) {
 /* Blue for the unit answering over Bluetooth, as the bar is; green stays the unit answering through a computer. */
 const TONES = { ok: () => color.ble, fault: () => color.fault, dim: () => color.silkDim }
 
-export default function BluetoothPage({ purchase, admin = false }) {
+export default function BluetoothPage({ purchase, admin = false, onReport = null }) {
   const b = useBluetooth()
   const unitState = useRig((s) => s.unit)
   const said = status(b, unitState)
+  /*
+   * REPORT THIS, beside what is wrong: a fault line, except the one with
+   * Open Settings under it and the one about unlocking. When the adapter is
+   * connected and the unit says nothing, it goes under the hint that says
+   * why, rather than between the line and its hint.
+   */
+  const quiet = b.on && b.phase === 'connected' && !b.answeredAs && (unitState === 'missing' || unitState === 'silent')
+  const reportable = said.tone === 'fault' && b.trouble !== 'permission' && b.phase !== 'locked' && !!onReport
   const steps = checkSteps(b.unit)
   const am4 = b.unit === 'am4'
   const connected = b.on && b.phase === 'connected'
@@ -368,6 +388,7 @@ export default function BluetoothPage({ purchase, admin = false }) {
             {said.line}
           </Text>
           {b.trouble === 'permission' ? <OpenSettings /> : null}
+          {reportable && !quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
         </View>
 
         {b.on ? (
@@ -383,6 +404,7 @@ export default function BluetoothPage({ purchase, admin = false }) {
                 {`${am4Only ? `${AM4_ONLY} ` : ''}${PLUGS_CHECK} The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.`}
               </Hint>
             ) : null}
+            {reportable && quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
             {b.phase === 'connecting' ? (
               <Hint>
                 {shut
@@ -473,7 +495,9 @@ export default function BluetoothPage({ purchase, admin = false }) {
             {`No adapter was connected. Check Bluetooth is on, and allowed for Fractal Remote in the ${deviceNoun()}’s Settings. Then tap Connect again, and in Apple’s screen tap your adapter and wait for Connected before Done.`}
           </Text>
         ) : null}
+        {!b.on && missed && !b.adapter && !b.trouble && !b.said && onReport ? <ReportThis onPress={() => onReport('No adapter was connected.')} /> : null}
         {b.said ? <Note tone="warn">{b.said}</Note> : null}
+        {b.said && onReport ? <ReportThis onPress={() => onReport(b.said)} /> : null}
 
         {showList ? (
           <View style={{ gap: space.sm }}>
@@ -528,6 +552,11 @@ export default function BluetoothPage({ purchase, admin = false }) {
 
       {/* The beta, on every visit and never folded: what it is, where it has been tried, and the way back. */}
       <Note tone="warn">{BETA_NOTE}</Note>
+      {/*
+        AND THE BUTTON IT POINTS AT, straight under it on every visit, never
+        folded: the one-tap report, "It works on my unit" among its answers.
+      */}
+      {onReport ? <Press label={REPORT_BUTTON} sub="Or tell us it works" onPress={() => onReport(null)} /> : null}
 
       {/* For finding out what a real unit does: Justin's account only, and out of the way until asked for. */}
       {admin && b.unit ? (
@@ -633,6 +662,14 @@ export default function BluetoothPage({ purchase, admin = false }) {
       ) : null}
     </View>
   )
+}
+
+/*
+ * Report this, under a line that says something is wrong: small, so it never
+ * reads as the page's main button, and 44 high, the least a thumb wants.
+ */
+function ReportThis({ onPress }) {
+  return <Press label="Report this" height={44} style={{ alignSelf: 'flex-start', paddingHorizontal: space.lg }} onPress={onPress} />
 }
 
 /* An address outside the app: the browser opens it, and a phone that cannot is left where it was. */

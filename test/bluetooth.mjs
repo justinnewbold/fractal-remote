@@ -4561,7 +4561,7 @@ export function run(test) {
     assert.match(one, /\{mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/, 'the row is not behind the unlock, the developer’s account and the build check')
     assert.match(one, /title="Bluetooth \(beta\)"[\s\S]{0,300}onPress=\{\(\) => setPage\('bluetooth'\)\}/, 'the row opens nothing')
     /* The page itself, through the same gate. It is told whether this is Justin's account (from the server) only for its Testing tools (Apple's 2.2), never to let anybody in. */
-    assert.match(one, /\{page === 'bluetooth' && mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <> \{head\('Bluetooth \(beta\)', 'back'\)\} <BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} \/>/)
+    assert.match(one, /\{page === 'bluetooth' && mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <> \{head\('Bluetooth \(beta\)', 'back'\)\} <BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} \/>/)
     /*
      * The account's answer comes from lib/bluetooth, which App.js tells from
      * the session kept on the phone, redrawn when it changes, so the row
@@ -5083,7 +5083,8 @@ export function run(test) {
     }
     walk(fileURLToPath(new URL('../mobile/src/', import.meta.url)))
     assert.deepEqual(readers.sort(), ['src/lib/bluetooth.js', 'src/lib/siri.js', 'src/lib/storeVersion.js'], 'something else reads the built-in version')
-    assert.match(flat('mobile/src/lib/logHead.js'), /import \{ bluetoothAdmin, builtInVersion, openForCustomersHere \} from '\.\/bluetooth'/)
+    /* bluetoothAllowed and bluetoothFacts since 25 October 2026: a Bluetooth report's head says how Bluetooth stood. */
+    assert.match(flat('mobile/src/lib/logHead.js'), /import \{ bluetoothAdmin, bluetoothAllowed, bluetoothFacts, builtInVersion, openForCustomersHere \} from '\.\/bluetooth'/)
     assert.match(flat('mobile/src/screens/Paywall.js'), /import \{ bluetoothSupported, openForCustomersHere \} from '\.\.\/lib\/bluetooth'/)
   })
 
@@ -6046,13 +6047,14 @@ export function run(test) {
      */
     assert.match(page, /\{admin && b\.unit \? \( <Press label=\{tools \? 'Hide testing tools' : 'Testing tools'\}/, 'the Testing tools button shows to every customer again')
     assert.match(page, /\{admin && b\.unit && tools \? \( <View style=\{\{ gap: space\.md \}\}> <Heading>Check<\/Heading>/, 'the testing tools are on the page unasked, or for every customer')
-    assert.match(page, /export default function BluetoothPage\(\{ purchase, admin = false \}\)/, 'the page shows the testing tools unless told not to')
+    /* And, since 25 October 2026, the one-tap report it is handed (onReport), null unless Settings is given one. */
+    assert.match(page, /export default function BluetoothPage\(\{ purchase, admin = false, onReport = null \}\)/, 'the page shows the testing tools unless told not to')
     /* No second way in: the button and the panel are each drawn once, both behind admin. */
     assert.equal(page.split("'Testing tools'").length - 1, 1, 'the Testing tools button is drawn in more than one place')
     assert.equal(page.split('<Heading>Check</Heading>').length - 1, 1, 'the check is drawn in more than one place')
     /* Settings works admin out as it does for his Developer pages. */
     const settingsFlat = flat('mobile/src/screens/Settings.js')
-    assert.match(settingsFlat, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} \/>/, 'Settings does not tell the Bluetooth page whose account this is')
+    assert.match(settingsFlat, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} \/>/, 'Settings does not tell the Bluetooth page whose account this is')
     /*
      * Nothing a customer needs is only in there. Every command goes Auto by
      * default, and Auto learns what works in ordinary use, not only in the
@@ -6127,7 +6129,8 @@ export function run(test) {
      * link, the pill opens this note: one adapter, nothing to switch to.
      */
     assert.match(bar, /onPress=\{\(\) => \{ tick\(\) if \(bluetooth\) \{ setSaying\(\(open\) => !open\) return \}/, 'the pill does not open the note over Bluetooth')
-    assert.match(bar, /\{saying && bluetooth \? <Which link=\{link\} onClose=\{\(\) => setSaying\(false\)\} \/> : null\}/)
+    /* With Report a problem beside Turn off Bluetooth since 25 October 2026 (onReport, App's, through the page's gate). */
+    assert.match(bar, /\{saying && bluetooth \? <Which link=\{link\} onClose=\{\(\) => setSaying\(false\)\} onReport=\{onReport\} \/> : null\}/)
     assert.match(bar, /useEffect\(\(\) => \{ if \(!bluetooth\) setSaying\(false\) \}, \[bluetooth\]\)/, 'the note is left open, to come back by itself when Bluetooth next comes on')
     const ble = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
     assert.ok(ble.length > 0 && ble.includes('Connected over Bluetooth, through'), 'the Bluetooth note is not where this looks')
@@ -6730,7 +6733,12 @@ export function run(test) {
        * should work the same way.", a promise about a unit nobody has run:
        * changed on purpose on 25 October 2026.
        */
-      assert.equal(gear.untriedLine(key), key === 'am4' ? null : `Not tried on the ${name} yet. If you try it, tell us how it went: Settings → Troubleshooting → Feedback.`)
+      /*
+       * And, changed on purpose the same day, it points at the button at the
+       * foot of the page it is read on (REPORT_BUTTON, one tap, "It works on
+       * my unit" among its answers), not three screens away at a typed form.
+       */
+      assert.equal(gear.untriedLine(key), key === 'am4' ? null : `Not tried on the ${name} yet. If you try it, tell us how it went: tap Report a Bluetooth problem, at the bottom of this page.`)
     }
     assert.deepEqual(gear.TESTED, ['am4'])
     assert.equal(gear.hookupFor('vp4'), null, 'steps for a unit the page does not offer')
@@ -6765,10 +6773,23 @@ export function run(test) {
      * function correctly." New, may not work with every unit or adapter,
      * tried so far on what TESTED says, and the cable still works.
      */
+    /*
+     * IN HIS WORDS, and changed on purpose on 25 October 2026, when Bluetooth
+     * (beta) was decided for every customer with the full version: "marked
+     * beta with 'Bluetooth is in beta, and some features might not work as
+     * expected'", and "super easy for all users to submit bugs and
+     * feedback". It opened "Bluetooth is new (beta), and may not work
+     * correctly with every unit or adapter". His sentence first, word for
+     * word; then where it was tried; then the button straight under the
+     * note, by the name the button has; then the way back.
+     */
     for (const note of [gear.BETA_NOTE_IPHONE, gear.BETA_NOTE_ANDROID]) {
-      assert.match(note, /^Bluetooth is new \(beta\), and may not work correctly with every unit or adapter\./)
-      assert.match(note, /If something doesn’t work, the cable to the computer still does\./)
+      assert.ok(note.startsWith('Bluetooth is in beta, and some features might not work as expected. '), note)
+      assert.ok(note.includes(`If something doesn’t work, tap ${gear.REPORT_BUTTON}, just below.`), 'the beta note does not point at the report button by its name')
+      assert.ok(note.endsWith('The cable to the computer still does everything.'), 'the beta note does not end on the way back')
+      assert.ok(!/this phone|Settings →|Feedback/.test(note), 'the beta note names the device in hand, or sends a player round Settings')
     }
+    assert.equal(gear.REPORT_BUTTON, 'Report a Bluetooth problem')
     /* The card that led to the page is gone with the card: the row on Settings says (beta) in its title. */
     assert.equal(gear.BETA_CARD, undefined, 'the old Phone & computer card’s words are back')
     /*
@@ -6962,5 +6983,338 @@ export function run(test) {
       assert.ok(html.includes(`href="${p.amazon}"`), `the guide does not link the ${p.name} where the app does`)
       if (p.maker) assert.ok(html.includes(`href="${p.maker}"`), `the guide does not link CME’s page for the ${p.name} where the gear file does`)
     }
+  })
+  /* ---------------------------------------------------------------- */
+  /* Report a Bluetooth problem, in one tap                            */
+  /* ---------------------------------------------------------------- */
+
+  /*
+   * "Super easy for all users to submit bugs and feedback." (Justin, 25
+   * October 2026, deciding that Bluetooth (beta) goes to every customer with
+   * the full version, on all four units, marked beta.) The Feedback form is
+   * every customer's and waits for something to be typed, so Bluetooth's own
+   * places open a report of their own: a row of answers, and a tap sends it
+   * with the log (lib/bleReport, screens/BluetoothReport), through the
+   * one-tap send the log screen uses (lib/reports sendLogs). These hold what
+   * it sends, where it is reached from, and that nobody else is shown it.
+   */
+  test('a Bluetooth report is one tap: an answer as the first line, the fault it came from under it, and nothing to type', async () => {
+    const r = await import(pathToFileURL(fileURLToPath(new URL('../mobile/src/lib/bleReport.js', import.meta.url))).href)
+    const rules = await import('../shared/report-rules.mjs')
+    /* The answers, in the order a player meets the problems, and "it works" last. */
+    assert.deepEqual(r.REASONS.map((x) => x.key), ['connect', 'answer', 'button', 'tuner', 'names', 'other', 'works'])
+    assert.equal(r.REASONS.at(-1).label, 'It works on my unit')
+    for (const { label } of r.REASONS) {
+      assert.ok(label.length <= 28, `“${label}” is too long for one line of a button on a 320-point screen`)
+      assert.ok(!/this phone|colour|grey|favourite/i.test(label), label)
+    }
+    /* The first line names it and the answer, which is what the email's subject is made of. */
+    assert.equal(r.reportNote('connect'), 'Bluetooth (beta): It won’t connect')
+    assert.equal(r.reportNote('works', '  '), 'Bluetooth (beta): It works on my unit', 'an empty fault line is sent as one')
+    assert.equal(
+      r.reportNote('answer', 'Adapter connected, but the AM4 isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.'),
+      'Bluetooth (beta): The unit doesn’t answer\nThe app said: Adapter connected, but the AM4 isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.'
+    )
+    /* An answer the screen does not know is Something else, never nothing: a report must carry a message. */
+    assert.equal(r.reportNote('nonsense'), 'Bluetooth (beta): Something else')
+    for (const { key } of r.REASONS) {
+      const message = rules.logsMessage(r.reportNote(key, 'Finding WIDI Uhost…'))
+      assert.notEqual(message, rules.LOGS_ONLY_MESSAGE, `${key} is sent as "logs only, no message written"`)
+      const row = rules.buildReport({ kind: 'bug', message, context: {}, lines: [], format: () => '' })
+      assert.ok(row.message.startsWith('Bluetooth (beta): '), `${key}: the report does not say it is about Bluetooth`)
+      assert.equal(row.kind, 'bug')
+      assert.notEqual(row.log, null, `${key}: the report goes without its log`)
+    }
+  })
+
+  test('a Bluetooth report’s log head says the unit picked, the one that answered, where the link stood and the adapter by its name, never its address', async () => {
+    const r = await import(pathToFileURL(fileURLToPath(new URL('../mobile/src/lib/bleReport.js', import.meta.url))).href)
+    const { headLines } = await import('../shared/report-rules.mjs')
+    assert.deepEqual(r.bluetoothHead({ unit: 'AM4', phase: 'connected', adapter: 'WIDI Uhost Bluetooth' }), {
+      'bluetooth unit': 'AM4',
+      'bluetooth link': 'connected',
+      'answered as': undefined,
+      adapter: 'WIDI Uhost Bluetooth'
+    })
+    /* No unit answering in its place is said by saying nothing (headLines leaves an empty line out). */
+    assert.ok(!/answered as/.test(headLines(r.bluetoothHead({ unit: 'AM4', phase: 'connected', adapter: 'WIDI' }))))
+    assert.match(headLines(r.bluetoothHead({ unit: 'FM3', answeredAs: 'AM4', phase: 'connected', adapter: 'WIDI' })), /^answered as: AM4$/m)
+    /* What is in the way, in words, beside where it stands. */
+    assert.equal(r.bluetoothHead({ phase: 'off', trouble: 'permission' })['bluetooth link'], 'off · Bluetooth is not allowed for the app')
+    assert.equal(r.bluetoothHead({ phase: 'no-adapter' })['bluetooth link'], 'on, no adapter chosen')
+    assert.equal(r.bluetoothHead({})['bluetooth unit'], 'none picked')
+    assert.equal(r.bluetoothHead({ adapter: null }).adapter, 'none chosen')
+    assert.equal(r.bluetoothHead({ adapter: '' }).adapter, 'one with no name')
+
+    /*
+     * And from lib/bluetooth itself, on a bench: the facts it hands the head.
+     * An adapter whose only name is its Bluetooth address (what Android falls
+     * back to) is "one with no name" in the head, and the address is nowhere.
+     */
+    const ADDRESS = 'AA:BB:CC:DD:EE:FF'
+    const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod })
+    try {
+      const { ADMINS } = await import('../shared/admin.mjs')
+      bench.ble.allowBluetooth(ADMINS[0])
+      assert.deepEqual(bench.ble.bluetoothFacts(), { unit: null, answeredAs: null, phase: 'off', trouble: null, adapter: null })
+      bench.ble.setBluetoothUnit('fm3')
+      bench.ble.chooseAdapter({ id: ADDRESS, name: ADDRESS })
+      bench.ble.noteBluetooth({ answeredAs: 'AM4', trouble: 'bluetooth-off' })
+      const facts = bench.ble.bluetoothFacts()
+      assert.deepEqual(facts, { unit: 'FM3', answeredAs: 'AM4', phase: 'off', trouble: 'bluetooth-off', adapter: '' })
+      const head = headLines(r.bluetoothHead(facts))
+      assert.ok(!head.includes(ADDRESS), 'the head names the adapter by its Bluetooth address')
+      assert.match(head, /^adapter: one with no name$/m)
+      assert.match(head, /^bluetooth unit: FM3$/m)
+      /* An adapter with a name of its own is named by it. */
+      bench.ble.chooseAdapter({ id: '1:2', name: 'WIDI Uhost Bluetooth' })
+      assert.equal(bench.ble.bluetoothFacts().adapter, 'WIDI Uhost Bluetooth')
+    } finally {
+      bench.done()
+    }
+  })
+
+  /*
+   * THE HEAD, RUN. lib/logHead.js copied beside stand-ins for the link, the
+   * switch and lib/bluetooth, so what a report's log starts with is read off
+   * the function itself: the Bluetooth lines over Bluetooth on every report,
+   * with Bluetooth off only on a Bluetooth report from an account it is open
+   * to, and never on anybody else's.
+   */
+  test('the log head carries how Bluetooth stood over Bluetooth, on a Bluetooth report, and on nothing a customer without it sends', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ble-head-'))
+    try {
+      const real = (f) => pathToFileURL(fileURLToPath(new URL(f, import.meta.url))).href
+      let head = src('mobile/src/lib/logHead.js')
+      const swaps = [
+        ["from 'react-native'", "from './rn.js'"],
+        ["from './version'", "from './state.js'"],
+        ["from './link'", "from './state.js'"],
+        ["from './bleSwitch'", "from './state.js'"],
+        ["from './bluetooth'", "from './state.js'"],
+        ["from './bleReport'", `from '${real('../mobile/src/lib/bleReport.js')}'`],
+        ["from './demo'", "from './state.js'"],
+        ["from './report-rules'", `from '${real('../shared/report-rules.mjs')}'`]
+      ]
+      for (const [from, to] of swaps) {
+        assert.ok(head.includes(from), `lib/logHead no longer imports ${from}: the bench needs telling`)
+        head = head.replace(from, to)
+      }
+      writeFileSync(join(dir, 'package.json'), '{ "type": "module" }')
+      writeFileSync(join(dir, 'rn.js'), "export const Platform = { OS: 'ios', Version: '18.1' }\n")
+      writeFileSync(
+        join(dir, 'state.js'),
+        [
+          'export const s = { on: false, allowed: false, demo: false, link: { link: "connected", macName: "MacBook Pro", hostVersion: "1.88.8" } }',
+          "export const APP_VERSION = '1.88.8'",
+          'export const linkState = () => s.link',
+          'export const bluetoothOn = () => s.on',
+          'export const isDemo = () => s.demo',
+          'export const bluetoothAllowed = () => s.allowed',
+          'export const bluetoothAdmin = () => false',
+          'export const openForCustomersHere = () => false',
+          "export const builtInVersion = () => '1.88.3'",
+          "export const bluetoothFacts = () => ({ unit: 'AM4', answeredAs: null, phase: s.on ? 'connected' : 'off', trouble: null, adapter: 'WIDI Uhost Bluetooth' })"
+        ].join('\n')
+      )
+      writeFileSync(join(dir, 'logHead.js'), head)
+      const { s } = await import(pathToFileURL(join(dir, 'state.js')).href)
+      const { logHeader } = await import(pathToFileURL(join(dir, 'logHead.js')).href)
+      const BLE_KEYS = ['bluetooth unit', 'bluetooth link', 'adapter']
+      const has = (h) => BLE_KEYS.filter((k) => k in h)
+
+      /* A customer through the computer: nothing about Bluetooth, on the Feedback form or the log screen, whoever they are. */
+      assert.deepEqual(has(logHeader({ deviceName: 'FM3' })), [])
+      s.allowed = true
+      assert.deepEqual(has(logHeader({ deviceName: 'FM3' })), [], 'a report that is not about Bluetooth says how Bluetooth stood with it off')
+      /* A Bluetooth report with it off, from an account it is open to: it says. From one it is not open to: it does not. */
+      assert.deepEqual(has(logHeader({ deviceName: 'FM3', bluetooth: true })), BLE_KEYS)
+      assert.equal(logHeader({ bluetooth: true })['bluetooth link'], 'off')
+      s.allowed = false
+      assert.deepEqual(has(logHeader({ deviceName: 'FM3', bluetooth: true })), [], 'a Bluetooth report from an account it is not open to names it')
+      /* Over Bluetooth: on every report and every Copy Logs, beside the link line. */
+      s.on = true
+      s.link = { link: 'connected', macName: 'WIDI Uhost Bluetooth' }
+      const over = logHeader({ deviceName: 'AM4' })
+      assert.deepEqual(has(over), BLE_KEYS)
+      assert.equal(over.link, 'Bluetooth (beta), connected, through WIDI Uhost Bluetooth')
+      assert.equal(over['bluetooth unit'], 'AM4')
+      assert.equal(over['bluetooth link'], 'connected')
+      assert.ok(!('computer' in over), 'over Bluetooth the head names a computer')
+      /* Never in the demo, which is reaching nothing. */
+      s.demo = true
+      assert.deepEqual(has(logHeader({ deviceName: 'AM4' })), [])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+
+    /* The Bluetooth report asks for it; the Feedback form and the log screen do not, so a customer's head is what it was. */
+    assert.match(flat('mobile/src/screens/BluetoothReport.js'), /head: headLines\(logHeader\(\{ deviceName, preset, bluetooth: true \}\)\)/)
+    assert.match(flat('mobile/src/screens/Report.js'), /headLines\(logHeader\(\{ deviceName, preset \}\)\)/)
+    assert.match(flat('mobile/src/screens/Log.js'), /headLines\(logHeader\(\{ deviceName, preset \}\)\)/)
+    /*
+     * IN THE LOG, NEVER IN THE DETAILS. lib/reports context goes with every
+     * report, a suggestion too, and the privacy page and the form's small
+     * print list exactly what is in it. Nothing about Bluetooth goes in it.
+     */
+    const ctx = code('mobile/src/lib/reports.js')
+    const body = ctx.slice(ctx.indexOf('export function context('), ctx.indexOf('export function logPreview('))
+    assert.ok(body.length > 100, 'lib/reports context moved; this check reads it')
+    assert.ok(!/bluetooth|adapter|bleUnit|answeredAs|topic/i.test(body), 'a report’s details carry Bluetooth facts the privacy page does not list')
+    const { contextFrom } = await import('../shared/report-rules.mjs')
+    assert.deepEqual(Object.keys(contextFrom({ version: '1', adapter: 'WIDI', bleUnit: 'AM4', unit: 'AM4' })), ['version', 'unit'], 'the report’s details take keys the privacy page does not list')
+  })
+
+  test('Report a Bluetooth problem sends through the log screen’s one tap, one at a time, and leaves the Feedback form as it was', () => {
+    const page = flat('mobile/src/screens/BluetoothReport.js')
+    /* The one-tap send, with the answer and the fault it came from as the message, and the runs before. */
+    assert.match(page, /import \{ SENT_WORDS, sendLogs \} from '\.\.\/lib\/reports'/)
+    assert.match(page, /await sendLogs\(\{ deviceName, note: reportNote\(key, said\), head: headLines\(logHeader\(\{ deviceName, preset, bluetooth: true \}\)\), before: runsBefore\(before\) \}\)/)
+    assert.ok(!/sendReport|TextInput/.test(page), 'the one-tap report has a form in it')
+    /* Every answer drawn, each a button that sends that answer; grayed while one is on its way, and never two at once. */
+    assert.match(page, /\{REASONS\.map\(\(r\) => \( <Press key=\{r\.key\} label=\{sending === r\.key \? 'Sending…' : r\.label\}[^>]*disabled=\{!!sending\} onPress=\{\(\) => send\(r\.key\)\} \/> \)\)\}/)
+    assert.match(page, /const send = async \(key\) => \{ if \(inFlight\.current\) return inFlight\.current = true/)
+    /* Said so it is seen: Sent, or why not, in the bright note under the answers. */
+    assert.match(page, /setAnswer\(\{ ok: true, words: SENT_WORDS \}\)/)
+    assert.match(page, /<Note tone=\{answer\.ok \? 'hint' : 'fault'\} strong size=\{font\.body\}>/)
+    /* Its title is the button's name, and Done and Write it out are what App hands it. */
+    assert.match(page, /\{REPORT_BUTTON\} <\/Text>/)
+    assert.match(page, /<Press label="Done" height=\{40\} onPress=\{onBack\} \/>/)
+    assert.match(page, /\{onWriteMore \? <Press label="Write it out, or add a screenshot"[^>]*onPress=\{onWriteMore\} \/> : null\}/)
+    /* The small print says what goes, the adapter by name and never its address, and names the device in hand. */
+    assert.match(page, /the adapter by its name, never its Bluetooth address/)
+    assert.match(page, /Your version, your \$\{deviceNoun\(\)\}’s OS/)
+    /* Help is Justin's own channel: no address anywhere else, and nobody sent to Fractal. */
+    assert.ok(!/https?:|Fractal Audio|forum/i.test(code('mobile/src/screens/BluetoothReport.js')), 'the Bluetooth report sends a player somewhere else for help')
+    assert.ok(!/this phone/i.test(src('mobile/src/screens/BluetoothReport.js').replace(/\/\*[\s\S]*?\*\//g, '')), 'the Bluetooth report says “this phone”')
+
+    /*
+     * THE FEEDBACK FORM IS EVERY CUSTOMER'S, AND IS NOT TOUCHED. No topic, no
+     * Bluetooth, the same title, kinds and small print, and App draws it as
+     * it always did whenever the report screen is not the Bluetooth one.
+     */
+    const form = flat('mobile/src/screens/Report.js')
+    assert.match(form, /export default function Report\(\{ onBack, start = 'bug' \}\)/)
+    assert.ok(!/bluetooth|bleReport|topic/i.test(code('mobile/src/screens/Report.js')), 'the Feedback form has learned about Bluetooth')
+    assert.match(form, /> Feedback <\/Text>/)
+    assert.match(form, /label=\{k === 'bug' \? 'Something is broken' : 'Suggest feature'\}/)
+    assert.match(form, /Your version, your \{deviceNoun\(\)\}&rsquo;s OS and which unit you&rsquo;re on are sent too/)
+    const app = flat('mobile/App.js')
+    assert.match(app, /\) : screen === 'report' \? \( \/\*[^]*?\*\/ reportAbout === 'bluetooth' && bluetoothOffered \? \( <BluetoothReport said=\{reportSaid\} onBack=\{\(\) => setScreen\(reportFrom\)\} onWriteMore=\{\(\) => setReportAbout\(null\)\} \/> \) : \( <Report onBack=\{\(\) => setScreen\(reportFrom\)\} \/> \)/)
+    /* One screen, so Done, the swipe and Android's back go to the one reportFrom. */
+    assert.match(app, /report: reportFrom,/)
+  })
+
+  test('every way to Report a Bluetooth problem goes through the Bluetooth page’s own gate, and comes back where it was opened', () => {
+    const app = flat('mobile/App.js')
+    /* One handler, null unless the page itself would be drawn: no button for anybody the page is not drawn for. */
+    assert.match(app, /const reportBluetooth = bluetoothOffered \? \(from, said = null\) => openReport\(from, 'bluetooth', said\) : null/)
+    assert.match(app, /const openReport = \(from, about = null, said = null\) => \{ \/\*[^]*?\*\/ if \(from !== 'report'\) setReportFrom\(from\) setReportAbout\(about\) setReportSaid\(typeof said === 'string' && said\.trim\(\) \? said\.trim\(\) : null\) setScreen\('report'\) \}/)
+    /* Each place, and where Done comes back to. */
+    assert.match(app, /onReport=\{reportBluetooth \? \(said\) => reportBluetooth\(screen, said\) : null\}/, 'the note under the pill does not come back to the screen it was opened over')
+    assert.equal((app.match(/onReport=\{reportBluetooth \? \(said\) => reportBluetooth\('stage', said\) : null\}/g) || []).length, 2, 'Play’s fault card and the waiting screen do not both come back to Play')
+    assert.match(app, /onReportBluetooth=\{reportBluetooth \? \(said\) => reportBluetooth\('settings', said\) : null\}/)
+    /* The Feedback form from Settings is the Feedback form, as it was. */
+    assert.match(app, /onOpenReport=\{\(\) => openReport\('settings'\)\}/)
+    assert.equal((app.match(/openReport\(/g) || []).length, 2, 'something else opens a report')
+
+    /* Settings hands the page what App gave it, null when App gave nothing. */
+    const settings = flat('mobile/src/screens/Settings.js')
+    assert.match(settings, /onReportBluetooth = null,/)
+    assert.match(settings, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} \/>/)
+
+    /* The waiting screen: over Bluetooth only, in the fifteen-second block where a stuck player sits, with the line it is stuck on. */
+    const waking = app.slice(app.indexOf('function Waking('))
+    assert.match(waking, /^function Waking\(\{ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, onReport, onSetlists \}\)/)
+    assert.match(waking, /\{bluetooth && onReport \? <Press label=\{REPORT_BUTTON\} onPress=\{\(\) => onReport\(said\)\} \/> : null\}/)
+    assert.ok(waking.indexOf('onReport(said)') > waking.indexOf("{long && link.link !== 'connected' ? ("), 'the waiting screen’s report is drawn before the advice')
+  })
+
+  test('the Bluetooth page has Report a Bluetooth problem under the beta note, and Report this beside what is wrong, never under the permission line', () => {
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    const drawn = page.slice(page.indexOf('return ( <View style={{ gap: space.xl }}>'), page.indexOf('const openLink ='))
+    /* The big one, straight under the beta note, on every visit, never folded, by the name the note gives it. */
+    assert.match(drawn, /<Note tone="warn">\{BETA_NOTE\}<\/Note> \{\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/\} \{onReport \? <Press label=\{REPORT_BUTTON\} sub="Or tell us it works" onPress=\{\(\) => onReport\(null\)\} \/> : null\}/)
+    assert.ok(drawn.indexOf('label={REPORT_BUTTON}') > drawn.lastIndexOf('</Fold>'), 'the report button is inside a row that has to be opened')
+    /* Report this: beside each fault line, the plugs hint, No adapter and the search's own note; never beside the permission line or Unlock. */
+    assert.match(page, /const reportable = said\.tone === 'fault' && b\.trouble !== 'permission' && b\.phase !== 'locked' && !!onReport/)
+    assert.match(page, /\{said\.line\} <\/Text> \{b\.trouble === 'permission' \? <OpenSettings \/> : null\} \{reportable && !quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/)
+    assert.match(page, /<\/Hint> \) : null\} \{reportable && quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/, 'Report this is not under the plugs hint')
+    assert.match(page, /\{!b\.on && missed && !b\.adapter && !b\.trouble && !b\.said && onReport \? <ReportThis onPress=\{\(\) => onReport\('No adapter was connected\.'\)\} \/> : null\}/)
+    assert.match(page, /\{b\.said && onReport \? <ReportThis onPress=\{\(\) => onReport\(b\.said\)\} \/> : null\}/)
+    assert.equal((drawn.match(/<ReportThis /g) || []).length, 4, 'Report this is drawn somewhere else, or twice for one line')
+    /* "quiet" is the hint's own condition, so Report this is under the hint and not between it and its line. */
+    assert.match(page, /const quiet = b\.on && b\.phase === 'connected' && !b\.answeredAs && \(unitState === 'missing' \|\| unitState === 'silent'\)/)
+    assert.match(page, /function ReportThis\(\{ onPress \}\) \{ return <Press label="Report this" height=\{44\}/)
+
+    /*
+     * THE BETA NOTE POINTS AT THAT BUTTON, by its name, as does the line under
+     * an untried unit's steps; and the Android note is still the iPhone's with
+     * one clause, so the iPhone's names no other phone.
+     */
+    const gear = src('mobile/src/lib/bluetooth-gear.js')
+    assert.match(gear, /export const REPORT_BUTTON = 'Report a Bluetooth problem'/)
+    assert.match(page, /import \{[^}]*\bREPORT_BUTTON\b[^}]*\} from '\.\.\/lib\/bluetooth-gear'/)
+  })
+
+  test('the beta note opens in his words, points at the report button, and the cable still does everything', async () => {
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    assert.equal(
+      gear.BETA_NOTE_IPHONE,
+      'Bluetooth is in beta, and some features might not work as expected. So far it has been tried on the AM4, from an iPhone. If something doesn’t work, tap Report a Bluetooth problem, just below. The cable to the computer still does everything.'
+    )
+    assert.equal(gear.BETA_NOTE_ANDROID.replace(' and an Android phone', ''), gear.BETA_NOTE_IPHONE)
+    assert.ok(!/android|google|play store|\bapk\b/i.test(gear.BETA_NOTE_IPHONE))
+    for (const unit of ['fm3', 'fm9', 'axefx3']) {
+      const line = gear.untriedLine(unit)
+      if (line) assert.ok(line.includes(`tap ${gear.REPORT_BUTTON}, at the bottom of this page`), `${unit}: the untried line does not point at the button`)
+      if (line) assert.ok(!/Settings →|Feedback/.test(line), `${unit}: the untried line still sends a player round Settings`)
+    }
+    assert.equal(gear.untriedLine('am4'), null)
+  })
+
+  test('the note under Play’s pill has Report a problem beside Turn off Bluetooth, each its own button, and says the device in hand', () => {
+    const bar = flat('mobile/src/components/TopBar.js')
+    assert.match(bar, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, saveHere: saveWanted = true \}\)/)
+    const ble = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
+    assert.match(ble, /function Which\(\{ link, onClose, onReport = null \}\)/)
+    /* Two buttons, each its own element to VoiceOver inside a note that is not one. */
+    assert.match(ble, /accessible=\{false\} onPress=\{onClose\}/)
+    assert.match(ble, /accessibilityRole="button" accessibilityLabel="Turn off Bluetooth" accessibilityHint=\{`The \$\{deviceNoun\(\)\} goes back to using the computer`\}/)
+    assert.match(ble, /\{onReport \? \( <Pressable accessibilityRole="button" accessibilityLabel="Report a problem"/)
+    assert.match(ble, /onPress=\{\(\) => \{ tick\(\) fire\('press Report a problem', \(\) => onReport\(said\)\) onClose\(\) \}\}/)
+    assert.match(ble, />Report a problem<\/Text>/)
+    assert.ok(!/The phone goes back/.test(bar), 'the hint says “the phone” on an iPad')
+    assert.match(bar, /import \{ deviceNoun \} from '\.\.\/lib\/device-word'/)
+  })
+
+  test('Play’s fault card has Report this only over Bluetooth, in a conditional of its own, never on a dropped tap', () => {
+    const stage = flat('mobile/src/screens/Stage.js')
+    assert.match(stage, /export default function Stage\(\{ onOpenPresets, onOpenSetlists, onOpenEdit, onOpenFix, \/\*[^*]*\*\/ onReport = null,/)
+    assert.match(stage, /import \{ overBluetooth \} from '\.\.\/lib\/bleSwitch'/)
+    const card = stage.slice(stage.indexOf('<Toast open={!!error}'), stage.indexOf('</Toast>', stage.indexOf('<Toast open={!!error}')))
+    /* The note keeps its own shape (a test reads it), What to try its own conditional, and Report this a third. */
+    assert.match(card, /\{error \? \( <Note tone="fault" onDismiss=\{clearError\}> \{error\} <\/Note> \) : null\}/)
+    assert.match(card, /\{error && onOpenFix && fixFor\(error\) \? \( <Press label=\{fixById\(fixFor\(error\)\)\.title\} sub="What to try"/)
+    assert.match(card, /\{error && onReport && overBluetooth\(caps\) \? \( <Press label="Report this" sub="Bluetooth \(beta\)" height=\{44\} onPress=\{\(\) => onReport\(error\)\} \/> \) : null\}/)
+    assert.ok(card.indexOf('What to try') < card.indexOf('label="Report this"'), 'Report this is above What to try')
+    /* Drawn only there: not on the advice card, and not with the dropped tap's note, which is not a fault. */
+    assert.equal((stage.match(/label="Report this"/g) || []).length, 1)
+    const dropped = stage.slice(stage.indexOf('{down || droppedNote ? ('), stage.indexOf('<Toast open={!!error}'))
+    assert.ok(dropped.length > 100 && !/onReport/.test(dropped), 'a dropped tap’s note offers a report')
+    /* Over Bluetooth is the unit's own word (caps.via), the same as Settings and Edit read it. */
+    assert.match(src('mobile/src/lib/bleSwitch.js'), /export const overBluetooth = \(caps\) => caps\?\.via === 'bluetooth'/)
+  })
+
+  test('Settings has Report a problem or idea under Help, and Troubleshooting → Feedback stays where the help sentence says it is', async () => {
+    const settings = flat('mobile/src/screens/Settings.js')
+    const front = settings.slice(settings.indexOf("{page === null ? ("), settings.indexOf("{page === 'account' ? ("))
+    const help = front.slice(front.indexOf('<Group title="Help">'), front.indexOf('<Group title="About">'))
+    assert.match(help, /\{onOpenReport \? \( <SetupRow title="Report a problem or idea" status="Something broken, or something you want" onPress=\{onOpenReport\} \/> \) : null\}/)
+    /* Troubleshooting still holds Feedback, the path the fixed help sentence names. */
+    const trouble = settings.slice(settings.indexOf("{page === 'trouble' ? ("))
+    assert.match(trouble, /<SetupRow title="Feedback" status="Something broken, or something you want" onPress=\{onOpenReport\} \/>/)
+    const { SUPPORT_LINE } = await import('../shared/affiliation.mjs')
+    assert.match(SUPPORT_LINE, /Settings → Troubleshooting → Feedback/)
   })
 }

@@ -144,6 +144,8 @@ export default function Settings({
   onOpenLog,
   onOpenFixes,
   onOpenReport,
+  /* Report a Bluetooth problem, from the Bluetooth page: App's own, through the page's gate, or null. */
+  onReportBluetooth = null,
   onSignIn,
   /* Making an account, for a phone whose purchase is on no account yet. */
   onMakeAccount,
@@ -655,6 +657,18 @@ export default function Settings({
                 status="What to try, the log, and telling us"
                 onPress={() => setPage('trouble')}
               />
+            ) : null}
+            {/*
+              THE FEEDBACK FORM, ONE TAP FROM SETTINGS. "Super easy for all
+              users to submit bugs and feedback" (25 October 2026). It was
+              Settings → Troubleshooting → Feedback, the last row of a page
+              about fixes. That stays where it is, word for word, because the
+              fixed help sentence (shared/affiliation.mjs), the website's
+              support and Pi pages and the store text all name that path; this
+              is another way in to the same form, not a move.
+            */}
+            {onOpenReport ? (
+              <SetupRow title="Report a problem or idea" status="Something broken, or something you want" onPress={onOpenReport} />
             ) : null}
             {/* What each model on the unit really is — something to look up
                 while playing, so it sits with the help rather than first. */}
@@ -1302,7 +1316,7 @@ export default function Settings({
       {page === 'bluetooth' && mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported() ? (
         <>
           {head('Bluetooth (beta)', 'back')}
-          <BluetoothPage purchase={purchase} admin={isAdmin(account?.id)} />
+          <BluetoothPage purchase={purchase} admin={isAdmin(account?.id)} onReport={onReportBluetooth} />
         </>
       ) : null}
 

@@ -39,6 +39,7 @@ import Fixes from './src/screens/Fixes'
 import Gear from './src/screens/Gear'
 import Log from './src/screens/Log'
 import Report from './src/screens/Report'
+import BluetoothReport from './src/screens/BluetoothReport'
 import Presets from './src/screens/Presets'
 import Setlists from './src/screens/Setlists'
 import Stage from './src/screens/Stage'
@@ -63,7 +64,7 @@ import {
   useBluetoothTrouble
 } from './src/lib/bluetooth'
 import { useBluetoothOffered } from './src/lib/useBluetoothOffered'
-import { BLUETOOTH_WAYS_SHORT, BLUETOOTH_WAYS_SHORT_AM4 } from './src/lib/bluetooth-gear'
+import { BLUETOOTH_WAYS_SHORT, BLUETOOTH_WAYS_SHORT_AM4, REPORT_BUTTON } from './src/lib/bluetooth-gear'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
@@ -203,6 +204,23 @@ export default function App() {
      opens the form today (the log sends its own report now, see Log.js), but
      a second way in should not have to remember to add this back. */
   const [reportFrom, setReportFrom] = useState('settings')
+  /*
+   * AND WHICH REPORT. Null is the Feedback form, as it always was;
+   * 'bluetooth' is Report a Bluetooth problem (screens/BluetoothReport), the
+   * one-tap report Bluetooth's own places open, with the words that were on
+   * screen when it was opened (`reportSaid`, a fault line), which go with it.
+   * One screen, 'report', so the way back is the one reportFrom it always
+   * was, for Done, the swipe and Android's back alike.
+   */
+  const [reportAbout, setReportAbout] = useState(null)
+  const [reportSaid, setReportSaid] = useState(null)
+  const openReport = (from, about = null, said = null) => {
+    /* Never back to itself: a report opened from over a report goes back where that one would have. */
+    if (from !== 'report') setReportFrom(from)
+    setReportAbout(about)
+    setReportSaid(typeof said === 'string' && said.trim() ? said.trim() : null)
+    setScreen('report')
+  }
   const [link, setLink] = useState(linkState())
 
   /*
@@ -348,6 +366,15 @@ export default function App() {
    * gets the way in or nothing (`onBluetooth`).
    */
   const bluetoothOffered = useBluetoothOffered()
+  /*
+   * REPORT A BLUETOOTH PROBLEM, from wherever one is met: the Bluetooth page,
+   * the note under Play's pill, a fault on Play while over Bluetooth, and the
+   * waiting screen while it looks for the adapter. Through the same gate as
+   * the page (`bluetoothOffered`), so a button that opens it is handed to
+   * nobody the page is not drawn for; null otherwise, and the button is not
+   * drawn. `from` is where Done comes back to.
+   */
+  const reportBluetooth = bluetoothOffered ? (from, said = null) => openReport(from, 'bluetooth', said) : null
   /*
    * ASKED FOR, as opposed to imposed.
    *
@@ -1207,6 +1234,8 @@ export default function App() {
             <TopBar
               link={shownLink}
               onOpenSettings={() => openSettings()}
+              /* The note under the pill, over Bluetooth: back to the screen it was opened over. */
+              onReport={reportBluetooth ? (said) => reportBluetooth(screen, said) : null}
               onUnlock={() => setBuying(true)}
               onOpenUnit={() => (unitGoes === 'demo' ? setPickUnit(true) : unitGoes === 'which' ? setPickLive(true) : openSettings('link'))}
               unitGoes={unitGoes}
@@ -1278,6 +1307,7 @@ export default function App() {
                 onSwitch={() => openSettings('link')}
                 onTroubleshoot={openConnectFix}
                 onBluetooth={bluetoothOffered ? () => openSettings('bluetooth') : null}
+                onReport={reportBluetooth ? (said) => reportBluetooth('stage', said) : null}
                 onSetlists={() => setScreen('setlists')}
               />
             ) : screen === 'presets' ? (
@@ -1304,7 +1334,17 @@ export default function App() {
                  The form is still reached from Setup. */
               <Log onBack={() => setScreen('settings')} />
             ) : screen === 'report' ? (
-              <Report onBack={() => setScreen(reportFrom)} />
+              /*
+               * Report a Bluetooth problem when a Bluetooth place opened it,
+               * through the page's own gate again in case that changed since;
+               * the Feedback form otherwise, exactly as it was. "Write it out"
+               * on the first opens the second, with the same way back.
+               */
+              reportAbout === 'bluetooth' && bluetoothOffered ? (
+                <BluetoothReport said={reportSaid} onBack={() => setScreen(reportFrom)} onWriteMore={() => setReportAbout(null)} />
+              ) : (
+                <Report onBack={() => setScreen(reportFrom)} />
+              )
             ) : screen === 'fixes' ? (
               /* Works with the computer off, which is exactly when it is
                  wanted. The version it can check is the one the computer last
@@ -1376,10 +1416,9 @@ export default function App() {
                 onOpenLog={() => setScreen('log')}
                 /* Works signed out and with the Mac off, which is when most of
                    what people want to complain about happens. */
-                onOpenReport={() => {
-                  setReportFrom('settings')
-                  setScreen('report')
-                }}
+                onOpenReport={() => openReport('settings')}
+                /* The Bluetooth page's own report, back to the page (Settings keeps its page, settingsAt). */
+                onReportBluetooth={reportBluetooth ? (said) => reportBluetooth('settings', said) : null}
                 /* Same, and more so: a guide to what to try is the one screen
                    that has to work when nothing else does. */
                 onOpenFixes={() => {
@@ -1447,6 +1486,8 @@ export default function App() {
                 onAccount={toMakeAccount}
                 /* The colours' one-time line, pressed: Settings, open on Colors. */
                 onOpenColours={() => openSettings('colours')}
+                /* A fault on Play while over Bluetooth: Report this, under What to try, and back here. */
+                onReport={reportBluetooth ? (said) => reportBluetooth('stage', said) : null}
                 /*
                  * THE COMPUTER GONE FOR FIFTEEN SECONDS WITH A RIG ON SCREEN:
                  * the waiting screen's advice and its two buttons, floated
@@ -1603,7 +1644,7 @@ function useLookedLong(looking, again) {
  * over a spinner tells somebody standing in front of a silent rig nothing they
  * can act on — and what they can act on is usually the Mac.
  */
-function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, onSetlists }) {
+function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, onReport, onSetlists }) {
   /*
    * OVER BLUETOOTH (BETA) THERE IS NO COMPUTER TO FIND. What is being looked
    * for is the adapter on the unit — the link names it, so the line below
@@ -1791,6 +1832,13 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
               its status is; the computer's troubleshooting is about a
               computer that is not in use. */}
           {bluetooth && onBluetooth ? <Press label="Bluetooth (beta)" onPress={onBluetooth} /> : null}
+          {/*
+            REPORT A BLUETOOTH PROBLEM, where a stuck player actually sits:
+            fifteen seconds of Finding the adapter, over Bluetooth only. The
+            line it was stuck on goes with it. Handed only through the page's
+            own gate (App's reportBluetooth).
+          */}
+          {bluetooth && onReport ? <Press label={REPORT_BUTTON} onPress={() => onReport(said)} /> : null}
           {/*
             AND THE OTHER WAY IN, FOR SOMEBODY WITH NO COMPUTER. Until now the
             only Bluetooth buttons here showed once Bluetooth was already on,

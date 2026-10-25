@@ -206,6 +206,16 @@ export function set(patch) {
   /* Stamped where every fault passes. The same words raised again are news
      again, and get their full time on screen. */
   if (patch.error) patch = { ...patch, faultAt: Date.now() }
+  /*
+   * AND WRITTEN INTO THE LOG, where every fault passes, as the browser does
+   * (src/App.jsx, its `error` effect). Nothing on the phone wrote an 'error'
+   * line, so a report's "Last error" (shared/report-rules lastErrorFrom, in
+   * lib/reports context) was nearly always empty, and the log a Bluetooth
+   * report carries said what was asked but not what the screen then said.
+   * The words alone, as the screen shows them: a fault is the app's own
+   * sentence, never a preset's contents.
+   */
+  if (patch.error) logDebug('error', patch.error)
   /* And a dropped tap where it is said, so the same words again are said again. */
   if (patch.dropped) patch = { ...patch, droppedAt: Date.now() }
   state = { ...state, ...patch }
