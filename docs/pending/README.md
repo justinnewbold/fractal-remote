@@ -133,13 +133,14 @@ splash screen 1.2.0, Material Components 1.13.0 (MaterialDatePicker), and
 expo-image-picker's crop screen. The app already draws edge to edge
 correctly (target 36 forces it, and App.js keeps clear of all four edges),
 and nothing clears the notice today: React Native 0.88 still makes most of
-those calls, and the splash library has no newer version. Material is the one the
-app can take out. It is in the Android app only because Expo's developer
-error screen, @expo/log-box 57.0.4, asks for it (its android/build.gradle).
-This leaves log-box out of Android's autolinking (`expo.autolinking.android.exclude`
-in mobile/package.json, which expo-modules-autolinking 57.0.16 reads for
-Android alone), and Material goes with it, from Play's list and from the
-download. The notice stays, for the other five.
+those calls, and the splash library has no newer version. Material is the
+one the app can take out. It is in the Android app only because Expo's
+developer error screen, @expo/log-box 57.0.4, asks for it (its
+android/build.gradle). This leaves log-box out of Android's autolinking
+(`expo.autolinking.android.exclude` in mobile/package.json, which
+expo-modules-autolinking 57.0.16 reads for Android alone), and Material goes
+with it, from Play's list and from the download. The notice stays, for the
+other five.
 
 What a store build loses: nothing. log-box's one Android class,
 ExpoLogBoxPackage, gives React Native nothing unless the build is a debug
