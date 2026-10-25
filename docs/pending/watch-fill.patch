@@ -1,0 +1,525 @@
+diff --git a/mobile/targets/watch/Model.swift b/mobile/targets/watch/Model.swift
+index 62a4d11..ca41efa 100644
+--- a/mobile/targets/watch/Model.swift
++++ b/mobile/targets/watch/Model.swift
+@@ -164,6 +164,74 @@ func jsonText(_ s: String) -> String {
+     return out
+ }
+ 
++/*
++ * HOW TALL A TILE IS WHEN THERE ARE FEW. Justin, 25 October 2026, with a
++ * photo of an AM4 on his watch: "On the VP4 and the AM4, can we make the
++ * watch buttons bigger somehow to maximize the watch space? It's already
++ * pretty small and we're only using about half the space.. on the FM3 and
++ * other devices, it seems like it's good." An AM4's four scenes, two across
++ * at the eight scenes' height, filled the top half of the page.
++ *
++ * So when there are four or fewer (`fewTiles`), the rows share the page
++ * between them, stretched by the page itself to whatever is left under the
++ * heading (Pages.swift). More than that (an FM3's eight scenes, six pedals)
++ * and a tile is the height it always had, as he asked, on a page that
++ * scrolls.
++ *
++ * `fillHeight` is what one tile comes to when they share it: the room, less
++ * the gaps between rows, divided by the rows, and never less than the height
++ * a tile always had (`least`). The page uses it for the size of the type,
++ * which has to be chosen before the tile is drawn; the tile's own height is
++ * the page's to give.
++ */
++func fillHeight(count: Int, columns: Int, room: Double, least: Double, spacing: Double = 4) -> Double {
++    guard fewTiles(count), columns > 0, room > 0 else { return least }
++    let rows = (count + columns - 1) / columns
++    let each = ((room - spacing * Double(rows - 1)) / Double(rows)).rounded(.down)
++    return max(least, each)
++}
++
++/** Whether a page's tiles are few enough to share it: one to four, an AM4's or a VP4's. */
++func fewTiles(_ count: Int) -> Bool { count > 0 && count <= 4 }
++
++/** The tiles' places, row by row, `columns` to a row; a short last row is filled out with nil, so its tiles keep their width. */
++func tileRows(_ count: Int, columns: Int) -> [[Int?]] {
++    guard count > 0, columns > 0 else { return [] }
++    return stride(from: 0, to: count, by: columns).map { start in
++        (start..<(start + columns)).map { $0 < count ? $0 : nil }
++    }
++}
++
++/** Scenes two across, as they always were; one alone across the whole page rather than half of it beside an empty half. */
++func sceneColumns(_ count: Int) -> Int { count <= 1 ? 1 : 2 }
++
++/** Pedals two across when there are four or fewer (an AM4's, a VP4's), like the scenes, and one alone across the whole page; three across otherwise, as they always were. */
++func pedalColumns(_ count: Int) -> Int { count <= 1 ? 1 : count <= 4 ? 2 : 3 }
++
++/*
++ * THE BIGGEST SIZE AT WHICH A NAME'S LONGEST WORD FITS ITS TILE'S WIDTH, so
++ * that a grown name never breaks a word in two ("Overdriv" over "e", or "Big
++ * Distorti" over "on"): a name's words wrap between them, never inside one.
++ * `perChar` is a letter's width as a share of the size, a little over what
++ * the watch's own semibold face averages, so the estimate errs small; the
++ * page's minimumScaleFactor takes up whatever is left.
++ */
++func wordFitSize(_ name: String, width: Double, perChar: Double = 0.62) -> Double {
++    let longest = name.split(separator: " ").map(\.count).max() ?? 0
++    guard longest > 0, width > 0, perChar > 0 else { return .infinity }
++    return (width / (Double(longest) * perChar)).rounded(.down)
++}
++
++/** A shared page's scene name: grown with its tile, no bigger than lets its longest word fit, and never under 11, below which the page's own shrinking takes over. */
++func sceneNameSize(_ name: String, tall: Double, wide: Double) -> Double {
++    max(11, min(grownSize(tall, share: 0.28, least: 14, most: 24), wordFitSize(name, width: wide)))
++}
++
++/** A size that grows with its tile, from `least` (the size it always had) to `most`. */
++func grownSize(_ tall: Double, share: Double, least: Double, most: Double) -> Double {
++    max(least, min(most, (tall * share).rounded(.down)))
++}
++
+ /** Where the tuner's needle sits, -1 (50 cents flat) to 1 (50 sharp). */
+ func needleOffset(cents: Int) -> Double {
+     Double(max(-50, min(50, cents))) / 50
+@@ -182,6 +250,27 @@ func rgb(hex: String) -> (r: Double, g: Double, b: Double)? {
+  * phone in reach: each request is answered here, the way the phone would.
+  */
+ extension WatchState {
++    /*
++     * CI's picture of an AM4's four scenes and four pedals (screens.sh:
++     * -am4Demo YES), the shape that filled half the page. Two names of two
++     * words, which take two lines, and one long word, which stays whole on
++     * one; and the amp saying its boost, as an AM4's phone sends it, so the
++     * word is seen in a tile of the new size. For looking at a pull request
++     * only.
++     */
++    var am4Demo: WatchState {
++        var next = self
++        next.scenes = ["Clean", "Overdrive", "Lead Bright", "Lead Cranked"]
++        next.scene = 2
++        next.pedals = [
++            WatchPedal(id: 46, short: "CMP", name: "Compressor", on: false, fill: "#b8a03a", ink: "#000000", channel: "A", channels: ["A", "B", "C", "D"]),
++            WatchPedal(id: 50, short: "DRV", name: "Drive", on: true, fill: "#e8402a", ink: "#000000", channel: "A", channels: ["A", "B", "C", "D"]),
++            WatchPedal(id: 58, short: "AMP", name: "Amp", on: false, fill: "#8a8f99", ink: "#ffffff", channel: "C", channels: ["A", "B", "C", "D"], word: "Boost off"),
++            WatchPedal(id: 70, short: "DLY", name: "Delay", on: true, fill: "#2f6ff0", ink: "#ffffff", channel: "A", channels: ["A", "B", "C", "D"])
++        ]
++        return next
++    }
++
+     /*
+      * CI's picture of an AM4's amp saying its boost (screens.sh: -boostDemo
+      * YES): the sample with its AMP pedal dark and "Boost off" under its
+diff --git a/mobile/targets/watch/Pages.swift b/mobile/targets/watch/Pages.swift
+index fd6548b..e25777c 100644
+--- a/mobile/targets/watch/Pages.swift
++++ b/mobile/targets/watch/Pages.swift
+@@ -14,12 +14,30 @@ extension Color {
+ /** The app's own green: lit, in tune. */
+ private let signal = Color(red: 0.36, green: 0.85, blue: 0.47)
+ 
++/*
++ * A PAGE OF FEW TILES TAKES HALF THE WATCH'S BOTTOM MARGIN. The first try left
++ * an eighth of the screen empty under an AM4's scenes: the margin watchOS
++ * keeps clear at the bottom, for the screen's rounded corners. Half of it is
++ * still clear of them with the tiles' own rounded corners, and the tiles
++ * stretch into it; not where the pedals' line is the lowest thing on the
++ * page (PedalsPage, fewPedals).
++ */
++private let bottomShare: CGFloat = 0.5
++/** A page's heading ("SCENES", "PEDALS") and the gap under it, near enough, for the size of the type. */
++private let headingRoom: Double = 20
++/** The line under the pedals and the gap over it, near enough, for the size of the type. */
++private let footRoom: Double = 22
++
+ // MARK: - Scenes
+ 
+ /*
+  * Eight buttons, two to a row, the one that is on lit. A tap lights the new
+  * one at once and the phone's answer confirms it; if the phone says otherwise
+  * within two seconds, its answer wins.
++ *
++ * Four or fewer (an AM4's, a VP4's) share the whole page, and their names
++ * grow with them, on two lines where one is too long (Model.swift,
++ * fillHeight). Eight are the size they always were.
+  */
+ struct ScenesPage: View {
+     let state: WatchState
+@@ -28,37 +46,90 @@ struct ScenesPage: View {
+ 
+     private var lit: Int { pending ?? state.scene }
+ 
++    /*
++     * The page is a Group, not a GeometryReader, so that with five or more it
++     * is the very ScrollView it always was, which is what the page turn and
++     * the Digital Crown work through. Only a page of few is measured.
++     */
+     var body: some View {
+-        ScrollView {
+-            VStack(alignment: .leading, spacing: 4) {
+-                Text("SCENES").font(.caption2).foregroundStyle(.secondary)
+-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
+-                    ForEach(Array(state.scenes.enumerated()), id: \.offset) { index, name in
+-                        Button {
+-                            tap()
+-                            pending = index
+-                            link.send(.scene(index))
+-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { if pending == index { pending = nil } }
+-                        } label: {
+-                            Text(name)
+-                                .font(.system(size: 14, weight: .semibold))
+-                                .lineLimit(1)
+-                                .minimumScaleFactor(0.7)
+-                                .frame(maxWidth: .infinity, minHeight: 36)
+-                                .foregroundStyle(index == lit ? Color.black : Color.white)
+-                                .background(index == lit ? signal : Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
++        Group {
++            if fewTiles(state.scenes.count) {
++                GeometryReader { geo in
++                    fewScenes(geo)
++                }
++            } else {
++                ScrollView {
++                    VStack(alignment: .leading, spacing: 4) {
++                        Text("SCENES").font(.caption2).foregroundStyle(.secondary)
++                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
++                            ForEach(Array(state.scenes.enumerated()), id: \.offset) { index, _ in
++                                sceneButton(index, tall: 36, fill: false)
++                            }
++                        }
++                        if state.scenes.isEmpty {
++                            Text("This preset has no scenes.").font(.footnote).foregroundStyle(.secondary)
+                         }
+-                        .buttonStyle(.plain)
+-                        .accessibilityAddTraits(index == lit ? .isSelected : [])
+                     }
+                 }
+-                if state.scenes.isEmpty {
+-                    Text("This preset has no scenes.").font(.footnote).foregroundStyle(.secondary)
+-                }
+             }
+         }
+         .onChange(of: state.scene) { _, _ in pending = nil }
+     }
++
++    /** Four or fewer: the rows stretch to the page, and the type is sized for what they come to. */
++    private func fewScenes(_ geo: GeometryProxy) -> some View {
++        let columns = sceneColumns(state.scenes.count)
++        let extra = geo.safeAreaInsets.bottom * bottomShare
++        let tall = fillHeight(count: state.scenes.count, columns: columns, room: Double(geo.size.height + extra) - headingRoom, least: 36)
++        /* A tile's width, less the gaps between tiles and the name's own padding: what its longest word has to fit. */
++        let wide = (Double(geo.size.width) - 4 * Double(columns - 1)) / Double(columns) - 8
++        return VStack(alignment: .leading, spacing: 4) {
++            Text("SCENES").font(.caption2).foregroundStyle(.secondary)
++            VStack(spacing: 4) {
++                ForEach(Array(tileRows(state.scenes.count, columns: columns).enumerated()), id: \.offset) { _, row in
++                    HStack(spacing: 4) {
++                        ForEach(Array(row.enumerated()), id: \.offset) { _, index in
++                            if let index {
++                                sceneButton(index, tall: tall, fill: true, wide: wide)
++                            } else {
++                                Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
++                            }
++                        }
++                    }
++                }
++            }
++        }
++        .padding(.bottom, -extra)
++    }
++
++    /*
++     * One scene's button: 36 points and one line, as it always was, or
++     * (`fill`) as tall as its row. A name of two words or more may take two
++     * lines there; one word stays on one line, since a second line would
++     * only break it in the middle ("Overdriv", "e"). And its type is never
++     * bigger than lets its longest word fit the tile's width (`wide`,
++     * Model.swift wordFitSize), so no word is broken on two lines either.
++     */
++    private func sceneButton(_ index: Int, tall: Double, fill: Bool, wide: Double = 0) -> some View {
++        Button {
++            tap()
++            pending = index
++            link.send(.scene(index))
++            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { if pending == index { pending = nil } }
++        } label: {
++            Text(state.scenes[index])
++                .font(.system(size: fill ? sceneNameSize(state.scenes[index], tall: tall, wide: wide) : 14, weight: .semibold))
++                .lineLimit(fill && state.scenes[index].contains(" ") ? 2 : 1)
++                .multilineTextAlignment(.center)
++                .minimumScaleFactor(0.7)
++                .padding(.horizontal, fill ? 4 : 0)
++                .frame(maxWidth: .infinity, minHeight: 36, maxHeight: fill ? CGFloat.infinity : nil)
++                .foregroundStyle(index == lit ? Color.black : Color.white)
++                .background(index == lit ? signal : Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
++        }
++        .buttonStyle(.plain)
++        .accessibilityAddTraits(index == lit ? .isSelected : [])
++    }
+ }
+ 
+ // MARK: - Pedals
+@@ -92,6 +163,11 @@ struct ScenesPage: View {
+  * own, and the phone's Play tile has no word for the new channel until its
+  * boost is read, so the wrist does not keep the old channel's word beside the
+  * new letter. Picked again, the channel it is on keeps its word, as on Play.
++ *
++ * FOUR OR FEWER ARE TWO ACROSS AND SHARE THE PAGE, as the scenes do, their
++ * letters growing with them (Model.swift, fillHeight and pedalColumns): an
++ * AM4's four filled half a row of three. Five or more are three across at
++ * the size they always were.
+  */
+ struct PedalsPage: View {
+     let state: WatchState
+@@ -110,32 +186,53 @@ struct PedalsPage: View {
+     /** A hold has just opened them; the tap that letting go can make is not a switch. */
+     @State private var held = false
+ 
++    /** One pedal's tile, as the phone last said it or as the wrist has just switched it. */
++    private func tile(_ pedal: WatchPedal, tall: Double, fill: Bool) -> some View {
++        PedalTile(
++            pedal: pedal,
++            on: pending[pedal.id] ?? pedal.on,
++            channel: pendingChannel[pedal.id] ?? pedal.channel,
++            word: wordNow(pedal),
++            tall: tall,
++            fill: fill,
++            press: { press(pedal) },
++            hold: { hold(pedal) },
++            open: { show(pedal.id) }
++        )
++    }
++
+     /** This picture's copy of a pedal whose channels can be picked. */
+     private func offered(_ id: Int) -> WatchPedal? {
+         state.pedals.first { $0.id == id && $0.canPickChannel }
+     }
+ 
++    /** Whether the line under the pedals is shown, which takes its room from theirs. */
++    private var footed: Bool {
++        state.pedals.isEmpty || state.pedals.contains(where: { $0.canPickChannel })
++    }
++
+     var body: some View {
+-        ScrollView {
+-            VStack(alignment: .leading, spacing: 4) {
+-                Text("PEDALS").font(.caption2).foregroundStyle(.secondary)
+-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 3), spacing: 4) {
+-                    ForEach(state.pedals) { pedal in
+-                        PedalTile(
+-                            pedal: pedal,
+-                            on: pending[pedal.id] ?? pedal.on,
+-                            channel: pendingChannel[pedal.id] ?? pedal.channel,
+-                            word: wordNow(pedal),
+-                            press: { press(pedal) },
+-                            hold: { hold(pedal) },
+-                            open: { show(pedal.id) }
+-                        )
+-                    }
++        /* A Group, as the scenes are, so that five or more are the ScrollView they always were. */
++        Group {
++            if fewTiles(state.pedals.count) {
++                GeometryReader { geo in
++                    fewPedals(geo)
+                 }
+-                if state.pedals.isEmpty {
+-                    Text("No pedals to show yet.").font(.footnote).foregroundStyle(.secondary)
+-                } else if state.pedals.contains(where: { $0.canPickChannel }) {
+-                    Text("Hold a pedal for its channels.").font(.footnote).foregroundStyle(.secondary)
++            } else {
++                ScrollView {
++                    VStack(alignment: .leading, spacing: 4) {
++                        Text("PEDALS").font(.caption2).foregroundStyle(.secondary)
++                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 3), spacing: 4) {
++                            ForEach(state.pedals) { pedal in
++                                tile(pedal, tall: 40, fill: false)
++                            }
++                        }
++                        if state.pedals.isEmpty {
++                            Text("No pedals to show yet.").font(.footnote).foregroundStyle(.secondary)
++                        } else if footed {
++                            Text("Hold a pedal for its channels.").font(.footnote).foregroundStyle(.secondary)
++                        }
++                    }
+                 }
+             }
+         }
+@@ -164,6 +261,44 @@ struct PedalsPage: View {
+         }
+     }
+ 
++    /*
++     * Four or fewer, as the scenes: the rows stretch to the page, the line
++     * under them keeps its own height, and the type is sized for what the
++     * rows come to. With that line under them the page keeps all of the
++     * bottom margin: the line is the lowest thing on it, and text has no
++     * rounded corner to keep it clear of the screen's.
++     */
++    private func fewPedals(_ geo: GeometryProxy) -> some View {
++        let columns = pedalColumns(state.pedals.count)
++        let extra = footed ? 0 : geo.safeAreaInsets.bottom * bottomShare
++        let tall = fillHeight(
++            count: state.pedals.count,
++            columns: columns,
++            room: Double(geo.size.height + extra) - headingRoom - (footed ? footRoom : 0),
++            least: 40
++        )
++        return VStack(alignment: .leading, spacing: 4) {
++            Text("PEDALS").font(.caption2).foregroundStyle(.secondary)
++            VStack(spacing: 4) {
++                ForEach(Array(tileRows(state.pedals.count, columns: columns).enumerated()), id: \.offset) { _, row in
++                    HStack(spacing: 4) {
++                        ForEach(Array(row.enumerated()), id: \.offset) { _, index in
++                            if let index {
++                                tile(state.pedals[index], tall: tall, fill: true)
++                            } else {
++                                Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
++                            }
++                        }
++                    }
++                }
++            }
++            if footed {
++                Text("Hold a pedal for its channels.").font(.footnote).foregroundStyle(.secondary)
++            }
++        }
++        .padding(.bottom, -extra)
++    }
++
+     /**
+      * Its word, or none while the wrist is ahead of the phone: a tap on its
+      * way, or another channel picked, whose boost the old word is not.
+@@ -239,6 +374,10 @@ private struct PedalTile: View {
+     let channel: String?
+     /** An AM4 amp's boost in Play's words, under the name; nil for none, and while a tap or another channel picked waits for the phone. */
+     let word: String?
++    /** The height its type is sized for: 40, as it always was, or what four or fewer come to when they share the page. */
++    let tall: Double
++    /** As tall as its row, when four or fewer share the page; 40 points otherwise. */
++    let fill: Bool
+     let press: () -> Void
+     let hold: () -> Void
+     let open: () -> Void
+@@ -262,25 +401,29 @@ private struct PedalTile: View {
+         Button(action: press) {
+             VStack(spacing: 1) {
+                 Text(pedal.short)
+-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
++                    .font(.system(size: grownSize(tall, share: 0.3, least: 13, most: 24), weight: .bold, design: .monospaced))
+                     .lineLimit(1)
+                     .minimumScaleFactor(0.6)
+                 if let word {
+                     Text(word)
+-                        .font(.system(size: 10, weight: .semibold))
++                        .font(.system(size: grownSize(tall, share: 0.17, least: 10, most: 15), weight: .semibold))
+                         .lineLimit(1)
+                         .minimumScaleFactor(0.7)
+                         .padding(.horizontal, 3)
+                 }
+             }
+-            .frame(maxWidth: .infinity, minHeight: 40)
++            .frame(maxWidth: .infinity, minHeight: 40, maxHeight: fill ? CGFloat.infinity : nil)
++            /* The whole tile takes the tap and the hold, off as well as on: a plain button answers only where
++               something is drawn, and an off pedal draws only its letters and its outline, which on a tile
++               that fills a quarter of the page left most of it dead. */
++            .contentShape(RoundedRectangle(cornerRadius: 8))
+             .foregroundStyle(ink)
+             .background(on ? hue : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+             .overlay(RoundedRectangle(cornerRadius: 8).stroke(hue, lineWidth: on ? 0 : 2))
+             .overlay(alignment: .topTrailing) {
+                 if let letter {
+                     Text(letter)
+-                        .font(.system(size: 9, weight: .bold))
++                        .font(.system(size: grownSize(tall, share: 0.14, least: 9, most: 13), weight: .bold))
+                         .foregroundStyle(ink)
+                         .padding(.top, 3)
+                         .padding(.trailing, 5)
+diff --git a/mobile/targets/watch/PhoneLink.swift b/mobile/targets/watch/PhoneLink.swift
+index e431c51..2d40776 100644
+--- a/mobile/targets/watch/PhoneLink.swift
++++ b/mobile/targets/watch/PhoneLink.swift
+@@ -61,6 +61,7 @@ final class PhoneLink: NSObject, ObservableObject {
+             var sample = WatchState.sample
+             if Launch.flag("tunerDemo") { sample = sample.answering(.tuner(on: true)) }
+             if Launch.flag("boostDemo") { sample = sample.boostDemo }
++            if Launch.flag("am4Demo") { sample = sample.am4Demo }
+             state = sample
+             reachable = true
+             return
+diff --git a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
+index 14b1148..1b1532e 100644
+--- a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
++++ b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
+@@ -165,4 +165,59 @@ final class WatchModelTests: XCTestCase {
+         XCTAssertEqual(boosted.pedals.first { $0.id == 58 }?.on, false)
+         XCTAssertEqual(boosted.pedals.filter { $0.wordLine != nil }.count, 1, "a pedal other than the amp was given a word")
+     }
++
++    /* "We're only using about half the space": an AM4's four share the page, an FM3's eight stay as they were. */
++    func testFewTilesShareThePage() {
++        /* Four scenes, two rows of two, in a page with 180 points under the heading: (180 - 4) / 2. */
++        XCTAssertEqual(fillHeight(count: 4, columns: 2, room: 180, least: 36), 88)
++        XCTAssertEqual(fillHeight(count: 3, columns: 2, room: 180, least: 36), 88, "three still take two rows")
++        /* Eight scenes, six pedals: the height they always had, however much room is left. */
++        XCTAssertEqual(fillHeight(count: 8, columns: 2, room: 180, least: 36), 36)
++        XCTAssertEqual(fillHeight(count: 6, columns: 3, room: 180, least: 40), 40)
++        /* One or two: one row, the whole room. */
++        XCTAssertEqual(fillHeight(count: 2, columns: 2, room: 180, least: 36), 180)
++        /* A page too small to share, and nothing to draw: the old height. */
++        XCTAssertEqual(fillHeight(count: 4, columns: 2, room: 60, least: 36), 36)
++        XCTAssertEqual(fillHeight(count: 0, columns: 2, room: 180, least: 36), 36)
++        XCTAssertEqual(fillHeight(count: 4, columns: 2, room: -5, least: 36), 36)
++        /* Which pages share: one to four tiles; none and five or more scroll as they always did. */
++        XCTAssertTrue(fewTiles(4))
++        XCTAssertTrue(fewTiles(1))
++        XCTAssertFalse(fewTiles(0))
++        XCTAssertFalse(fewTiles(5))
++        XCTAssertFalse(fewTiles(8))
++        /* The rows: a short last row keeps its tiles' width with an empty place. */
++        XCTAssertEqual(tileRows(4, columns: 2), [[0, 1], [2, 3]])
++        XCTAssertEqual(tileRows(3, columns: 2), [[0, 1], [2, nil]])
++        XCTAssertEqual(tileRows(1, columns: 2), [[0, nil]])
++        XCTAssertEqual(tileRows(0, columns: 2), [])
++        /* Pedals: two across for an AM4's or a VP4's four, three across from five. */
++        XCTAssertEqual(pedalColumns(4), 2)
++        XCTAssertEqual(pedalColumns(2), 2)
++        XCTAssertEqual(pedalColumns(1), 1, "one pedal alone takes half the page beside an empty half")
++        XCTAssertEqual(sceneColumns(8), 2)
++        XCTAssertEqual(sceneColumns(4), 2)
++        XCTAssertEqual(sceneColumns(1), 1)
++        XCTAssertEqual(pedalColumns(5), 3)
++        XCTAssertEqual(pedalColumns(6), 3)
++        /* Type grows with the tile, from the size it always had. */
++        XCTAssertEqual(grownSize(36, share: 0.28, least: 14, most: 24), 14, "an FM3's scene name is the size it was")
++        XCTAssertEqual(grownSize(40, share: 0.3, least: 13, most: 24), 13, "and so is its pedal")
++        XCTAssertEqual(grownSize(60, share: 0.3, least: 13, most: 24), 18)
++        XCTAssertEqual(grownSize(200, share: 0.3, least: 13, most: 24), 24)
++        /* A name's longest word fits its tile: never broken on two lines. */
++        XCTAssertEqual(wordFitSize("Overdrive", width: 85), 15, "85 / (9 letters x 0.62)")
++        XCTAssertEqual(wordFitSize("Big Distortion", width: 85), 13, "the longest word, not the whole name")
++        XCTAssertEqual(wordFitSize("", width: 85), .infinity)
++        XCTAssertEqual(sceneNameSize("Lead", tall: 85, wide: 85), 23, "a short name grows with its tile")
++        XCTAssertEqual(sceneNameSize("Overdrive", tall: 85, wide: 85), 15, "a long word is held to the tile's width")
++        XCTAssertEqual(sceneNameSize("Supercalifragilistic", tall: 85, wide: 85), 11, "and never under 11, where the page's shrinking takes over")
++        /* CI's AM4 picture is the shape that filled half the page. */
++        let am4 = WatchState.sample.am4Demo
++        XCTAssertEqual(am4.scenes.count, 4)
++        XCTAssertEqual(am4.pedals.count, 4)
++        XCTAssertTrue(am4.pedals.allSatisfy { $0.canPickChannel })
++        XCTAssertEqual(am4.answering(.scene(3)).scene, 3)
++        XCTAssertEqual(am4.answering(.scene(4)).scene, am4.scene, "an AM4 has no fifth scene")
++    }
+ }
+diff --git a/mobile/watch-ci/screens.sh b/mobile/watch-ci/screens.sh
+index 1681afd..b14cec7 100755
+--- a/mobile/watch-ci/screens.sh
++++ b/mobile/watch-ci/screens.sh
+@@ -45,6 +45,13 @@ xcrun simctl io "$UDID" screenshot "screens/channels.png"
+ # looking at a pull request only, like the channels.
+ shoot -page 1 -boostDemo YES
+ xcrun simctl io "$UDID" screenshot "screens/boost.png"
++# An AM4's four scenes and four pedals, sharing the page between them rather
++# than filling half of it (Model.swift, fillHeight). For looking at a pull
++# request only, like the channels.
++shoot -page 0 -am4Demo YES
++xcrun simctl io "$UDID" screenshot "screens/am4-scenes.png"
++shoot -page 1 -am4Demo YES
++xcrun simctl io "$UDID" screenshot "screens/am4-pedals.png"
+ # And with no phone: what it says when the iPhone app is not open.
+ xcrun simctl launch --terminate-running-process "$UDID" "$ID" -demo NO
+ sleep 5
