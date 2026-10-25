@@ -58,3 +58,29 @@ export function fitLine({ natural, room, size, least } = {}) {
   if (scaled >= floor) return { size: scaled, fits: true }
   return { size: floor, fits: false }
 }
+
+/**
+ * Previous or Next on the phone: the size of its word, whether its chevron
+ * gives way, and the size of the line under it, from the button's own
+ * measures (`pad` its side padding, `border` its border, `gap` the space
+ * beside a picture, `picture` a picture's width, `pictures` how many sit
+ * beside the word) and the two texts' widths at their usual sizes (`word` at
+ * `size`, `under` at `underSize`).
+ *
+ * The word fits beside its chevron if it can; if it cannot, the chevron
+ * gives way and the word takes the whole button, fitted again, because the
+ * word is what says which way the button goes. The line under runs to `edge`
+ * inside the border. A button not measured yet is drawn as before.
+ */
+export function fitStep({ box, pad, border, gap, picture, pictures = 0, word, size, under, underSize, edge = STEP_LINE_EDGE } = {}) {
+  const inner = box > 0 ? box - 2 * pad - 2 * border : 0
+  const beside = inner - pictures * (picture + gap)
+  let label = inner > 0 && pictures > 0 && beside <= 0 ? { size, fits: false } : fitLine({ natural: word, room: beside, size, least: STEP_WORD_LEAST })
+  let bare = false
+  if (!label.fits && pictures > 0) {
+    label = fitLine({ natural: word, room: inner, size, least: STEP_WORD_LEAST })
+    bare = true
+  }
+  const line = fitLine({ natural: under, room: inner > 0 ? inner + 2 * (pad - edge) : 0, size: underSize, least: STEP_LINE_LEAST })
+  return { label, bare, line }
+}

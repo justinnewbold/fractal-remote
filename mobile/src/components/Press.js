@@ -1,16 +1,33 @@
 import { useState } from 'react'
-import { Image, Pressable, Text, View } from 'react-native'
+import { Image, PixelRatio, Pressable, Text, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { STEP_LINE_EDGE, STEP_LINE_LEAST, STEP_WORD_LEAST, fitLine } from '../lib/line-fit'
+import { STEP_LINE_EDGE, STEP_WORD_LEAST, fitStep } from '../lib/line-fit'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
 
 /* The height of the line under a button (`under`), fixed so a name arriving never moves anything. */
 export const UNDER_LINE = 14
 
-/* The pictures beside a label (Picture, below), square. */
+/* The pictures beside a label (Picture, below), square, and every button's border. */
 const PICTURE = 20
+const BORDER = 1
+
+/*
+ * What `fit` has measured, kept for the whole app by what was measured (the
+ * text, its size and the system text size): a name seen once is fitted from
+ * the first frame it is drawn in, rather than drawn at the last name's size
+ * until its own measure comes back, which is a frame later. The labels
+ * (Previous, Next) and their heights on their own, never let go; the names
+ * let go of the oldest past NAMES_KEPT, more than any unit holds. And the
+ * last width of each fitted button, by its label, so Play's Previous is
+ * fitted on the frame it opens with.
+ */
+const LABELS = new Map()
+const TALL = new Map()
+const NAMES = new Map()
+const NAMES_KEPT = 2000
+const BOXES = new Map()
 
 /**
  * Every button in the app.
@@ -122,26 +139,47 @@ export default function Press({
   const ink = on ? color.onSignal : disabled ? color.silkFaint : color.silk
 
   /* The button's own width, and how wide the label and the line under it are at their usual sizes, from the unseen copy below. */
-  const [box, setBox] = useState(0)
-  const [wide, setWide] = useState({ label: 0, under: 0 })
-  const measured = (which) => (e) => {
-    const w = e.nativeEvent.layout.width
-    setWide((was) => (was[which] === w ? was : { ...was, [which]: w }))
+  const [box, setBox] = useState(() => (fit ? BOXES.get(label) || 0 : 0))
+  const [, remeasured] = useState(0)
+  const scale = fit ? PixelRatio.getFontScale() : 1
+  const labelKey = `${labelSize}|${scale}|${label}`
+  const shownUnder = under || '\u00a0'
+  const underKey = `${font.micro}|${scale}|${shownUnder}`
+  const measuredLabel = (e) => {
+    const { width, height } = e.nativeEvent.layout
+    if (LABELS.get(labelKey) === width && TALL.get(labelKey) === height) return
+    LABELS.set(labelKey, width)
+    TALL.set(labelKey, height)
+    remeasured((n) => n + 1)
   }
-  /* Inside the padding and the one-point border at each side. */
-  const inner = fit && box > 0 ? box - 2 * space.md - 2 : 0
-  const pictures = (icon ? PICTURE + space.sm : 0) + (after ? PICTURE + space.sm : 0)
-  let word = fit ? fitLine({ natural: wide.label, room: inner - pictures, size: labelSize, least: STEP_WORD_LEAST }) : { size: labelSize, fits: true }
-  let bare = false
-  if (fit && !word.fits && pictures > 0) {
-    const alone = fitLine({ natural: wide.label, room: inner, size: labelSize, least: STEP_WORD_LEAST })
-    if (alone.fits) {
-      word = alone
-      bare = true
-    }
+  const measuredUnder = (e) => {
+    const { width } = e.nativeEvent.layout
+    if (NAMES.get(underKey) === width) return
+    if (NAMES.size >= NAMES_KEPT) NAMES.delete(NAMES.keys().next().value)
+    NAMES.set(underKey, width)
+    remeasured((n) => n + 1)
   }
-  const reach = space.md - STEP_LINE_EDGE
-  const line = fit ? fitLine({ natural: wide.under, room: inner + 2 * reach, size: font.micro, least: STEP_LINE_LEAST }) : { size: font.micro, fits: true }
+  const step = fit
+    ? fitStep({
+        box,
+        pad: space.md,
+        border: BORDER,
+        gap: space.sm,
+        picture: PICTURE,
+        pictures: (icon ? 1 : 0) + (after ? 1 : 0),
+        word: LABELS.get(labelKey) || 0,
+        size: labelSize,
+        under: NAMES.get(underKey) || 0,
+        underSize: font.micro
+      })
+    : null
+  const word = step ? step.label : { size: labelSize, fits: true }
+  const bare = step ? step.bare : false
+  const line = step ? step.line : { size: font.micro, fits: true }
+  /* A new name is drawn once it is measured, never first at the last one's size: its line keeps its height, so nothing moves. */
+  const lineWaits = fit && under !== undefined && !NAMES.has(underKey)
+  /* The row is as tall as the label at its usual size, so a fitted word sits level with an unfitted one beside it at any text size. */
+  const rowTall = fit ? Math.max(PICTURE, TALL.get(labelKey) || 0) : undefined
 
   return (
     <Pressable
@@ -166,7 +204,15 @@ export default function Press({
           : undefined
       }
       delayLongPress={450}
-      onLayout={fit ? (e) => setBox((was) => (was === e.nativeEvent.layout.width ? was : e.nativeEvent.layout.width)) : undefined}
+      onLayout={
+        fit
+          ? (e) => {
+              const w = e.nativeEvent.layout.width
+              BOXES.set(label, w)
+              setBox((was) => (was === w ? was : w))
+            }
+          : undefined
+      }
       style={({ pressed }) => [
         {
           minHeight: height,
@@ -177,7 +223,7 @@ export default function Press({
           paddingHorizontal: space.md,
           paddingVertical: under !== undefined ? space.xs : space.sm,
           borderRadius: radius.md,
-          borderWidth: 1,
+          borderWidth: BORDER,
           borderColor: on ? accent : color.rule,
           backgroundColor: background,
           opacity: disabled ? 0.45 : pressed ? 0.7 : 1
@@ -186,7 +232,7 @@ export default function Press({
       ]}
     >
       {/* As tall as a picture even when the pictures give way, so a fitted Previous sits level with Next. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: fit ? PICTURE : undefined }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: rowTall }}>
         {icon && !bare ? <Picture source={icon} tint={ink} flip={flip} /> : null}
         <View style={{ alignItems: 'center', flexShrink: 1 }}>
           {/*
@@ -210,6 +256,9 @@ export default function Press({
           ) : null}
           <Text
             numberOfLines={1}
+            /* A last guard where a system text size grows text faster than its size (Android 14's large scales): never below the floor. */
+            adjustsFontSizeToFit={fit || undefined}
+            minimumFontScale={fit ? Math.min(1, STEP_WORD_LEAST / word.size) : undefined}
             style={{
               color: ink,
               fontSize: word.size,
@@ -245,7 +294,8 @@ export default function Press({
           numberOfLines={1}
           style={{
             alignSelf: 'stretch',
-            marginHorizontal: fit ? -reach : 0,
+            marginHorizontal: fit ? -(space.md - STEP_LINE_EDGE) : 0,
+            opacity: lineWaits ? 0 : 1,
             color: on ? color.onSignal : color.silkDim,
             fontSize: line.size,
             lineHeight: UNDER_LINE,
@@ -264,12 +314,12 @@ export default function Press({
       */}
       {fit ? (
         <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={MEASURE}>
-          <Text numberOfLines={1} onLayout={measured('label')} style={{ fontSize: labelSize, fontWeight: labelSize > font.body ? '700' : '600' }}>
+          <Text numberOfLines={1} onLayout={measuredLabel} style={{ fontSize: labelSize, fontWeight: labelSize > font.body ? '700' : '600' }}>
             {label}
           </Text>
           {under !== undefined ? (
-            <Text numberOfLines={1} onLayout={measured('under')} style={{ fontSize: font.micro }}>
-              {under || '\u00a0'}
+            <Text numberOfLines={1} onLayout={measuredUnder} style={{ fontSize: font.micro }}>
+              {shownUnder}
             </Text>
           ) : null}
         </View>

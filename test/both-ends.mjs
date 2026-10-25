@@ -2809,21 +2809,31 @@ export function run(test) {
    * from an iPhone reading "Previ..." over "OLIVIA RODRI..."). The word and
    * the name are drawn smaller rather than cut, by one rule at both ends.
    */
-  test('Previous, Next and the names under them are drawn smaller rather than cut, by one rule at both ends', async () => {
-    const { fitLine, LINE_ROOM, STEP_LINE_LEAST, STEP_WORD_LEAST, STEP_LINE_EDGE } = await import('../shared/line-fit.mjs')
+  test('Previous, Next and the names under them are drawn smaller rather than cut: the names by one rule at both ends, the words on the phone', async () => {
+    const { fitLine, fitStep, LINE_ROOM, STEP_LINE_LEAST, STEP_WORD_LEAST, STEP_LINE_EDGE } = await import('../shared/line-fit.mjs')
     /* The rule: as it was when it fits or is not measured yet; just as much smaller as it needs, by half points; cut only past the floor. */
     assert.deepEqual(fitLine({ natural: 60, room: 100, size: 15, least: 11 }), { size: 15, fits: true })
     assert.deepEqual(fitLine({ natural: 0, room: 100, size: 15, least: 11 }), { size: 15, fits: true }, 'a word not measured yet is changed on a guess')
     assert.deepEqual(fitLine({ natural: 60, room: 0, size: 15, least: 11 }), { size: 15, fits: true }, 'a button not measured yet changes its word on a guess')
-    const shrunk = fitLine({ natural: 80, room: 70, size: 15, least: 11 })
-    assert.ok(shrunk.fits && shrunk.size < 15 && shrunk.size >= 11 && shrunk.size * 2 === Math.round(shrunk.size * 2), `a word a little too wide is ${JSON.stringify(shrunk)}`)
-    assert.ok((80 * shrunk.size) / 15 <= 70 * LINE_ROOM, 'the smaller word is still too wide for its room')
+    assert.deepEqual(fitLine({ natural: 80, room: 70, size: 15, least: 11 }), { size: 12.5, fits: true }, 'a word a little too wide is not drawn just as much smaller as it needs')
+    assert.ok((80 * 13) / 15 > 70 * LINE_ROOM, 'half a point bigger would still have fitted, so the word is drawn smaller than it needs')
     assert.deepEqual(fitLine({ natural: 300, room: 70, size: 11, least: 9 }), { size: 9, fits: false }, 'a name too long even at the floor is drawn below the floor, or not cut')
     assert.equal(STEP_WORD_LEAST, 11)
     assert.equal(STEP_LINE_LEAST, 9)
     assert.equal(STEP_LINE_EDGE, 4)
 
-    /* The phone: Previous and Next ask for it, and Press measures both lines and draws them at the fitted sizes. */
+    /* Previous on the phone, in numbers: a 393-point phone's third of the row is 115, the word has 61 beside its chevron and the line 105. */
+    const phone = (box, word, under = 95) => fitStep({ box, pad: 12, border: 1, gap: 8, picture: 20, pictures: 1, word, size: 15, under, underSize: 11 })
+    assert.deepEqual(phone(115, 70), { label: { size: 12.5, fits: true }, bare: false, line: { size: 11, fits: true } }, 'Previous on a 393-point phone is not fitted beside its chevron, or its name is changed')
+    assert.deepEqual(phone(115, 70, 110).line, { size: 10, fits: true }, 'a long name under Previous is not drawn smaller to fit the 105 points it has')
+    /* Too narrow beside the chevron: the chevron gives way and the word takes the button, even if it is then cut at the floor. */
+    assert.deepEqual(phone(80, 70).label, { size: 11, fits: true })
+    assert.equal(phone(80, 70).bare, true, 'the chevron stays and the word is cut, where without it the word fits')
+    assert.deepEqual(phone(60, 70), { label: { size: 11, fits: false }, bare: true, line: phone(60, 70).line }, 'a word that fits nowhere keeps its chevron and is cut harder than it need be')
+    assert.equal(phone(30, 70).bare, true, 'a button with no room beside its chevron at all keeps the chevron')
+    assert.deepEqual(phone(0, 70), { label: { size: 15, fits: true }, bare: false, line: { size: 11, fits: true } }, 'a button not measured yet is changed on a guess')
+
+    /* The phone's button hands the rule its own measures, so the room it works out is the room it has. */
     const stage = read('mobile/src/screens/Stage.js')
     const press = read('mobile/src/components/Press.js')
     const foot = stage.slice(stage.indexOf('function PlayFoot('), stage.indexOf('caption="Setlists"'))
@@ -2831,20 +2841,34 @@ export function run(test) {
     assert.match(foot.slice(foot.indexOf('label="Previous"')), /\n\s*fit\n/, 'Previous is still cut rather than fitted')
     assert.match(next, /\n\s*fit\n/, 'Next is still cut rather than fitted')
     assert.match(press, /from '\.\.\/lib\/line-fit'/, 'the phone fits its words by a rule of its own')
+    assert.match(press, /pad: space\.md,\s*border: BORDER,\s*gap: space\.sm,\s*picture: PICTURE,/, 'the phone measures the room with numbers that are not its own')
+    assert.match(press, /paddingHorizontal: space\.md,/, 'the button’s side padding is not the one the room is worked out from')
+    assert.match(press, /borderWidth: BORDER,/, 'the button’s border is not the one the room is worked out from')
+    assert.match(press, /flexDirection: 'row', alignItems: 'center', gap: space\.sm,/, 'the gap beside a picture is not the one the room is worked out from')
+    assert.equal(Number(press.match(/const PICTURE = (\d+)/)?.[1]), Number(press.match(/style=\{\{ width: (\d+), height: \1,/)?.[1]), 'a picture is drawn at a size the room is not worked out from')
     assert.match(press, /fontSize: word\.size,/, 'the label is not drawn at its fitted size')
     assert.match(press, /fontSize: line\.size,/, 'the line under is not drawn at its fitted size')
-    assert.match(press, /marginHorizontal: fit \? -reach : 0,/, 'the line under does not reach into the side padding')
-    assert.match(press, /const reach = space\.md - STEP_LINE_EDGE/, 'the line under does not stop 4 from the edge')
+    assert.match(press, /marginHorizontal: fit \? -\(space\.md - STEP_LINE_EDGE\) : 0,/, 'the line under does not reach into the side padding, to 4 from the edge')
+    assert.match(press, /const MEASURE = \{ position: 'absolute', left: 0, top: 0, width: 2000, height: 0, overflow: 'hidden', opacity: 0, alignItems: 'flex-start' \}/, 'the unseen copy can be seen, or is stretched or wrapped so it measures the wrong width')
     assert.match(press, /accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style=\{MEASURE\}/, 'the unseen copy that is measured can be read out by a screen reader')
-    assert.match(press, /const MEASURE = \{ position: 'absolute'[^}]*height: 0, overflow: 'hidden', opacity: 0/, 'the copy that is measured can be seen')
-    /* The word goes without its chevron before it is cut, and the row keeps its height so the two words stay level. */
+    /* The chevron gives way, the rows stay level at any text size, and a new name is never drawn first at the last one's size. */
     assert.match(press, /\{icon && !bare \? <Picture/, 'Previous is cut on a narrow phone rather than drawn without its chevron')
-    assert.match(press, /minHeight: fit \? PICTURE : undefined/, 'a Previous without its chevron sits lower than Next')
+    assert.match(press, /const rowTall = fit \? Math\.max\(PICTURE, TALL\.get\(labelKey\) \|\| 0\) : undefined/, 'a fitted Previous sits lower than Next at a larger text size')
+    assert.match(press, /minHeight: rowTall/)
+    assert.match(press, /const lineWaits = fit && under !== undefined && !NAMES\.has\(underKey\)/, 'a new name is drawn at the last one’s size until it is measured')
+    assert.match(press, /opacity: lineWaits \? 0 : 1,/)
+    assert.match(press, /const underKey = `\$\{font\.micro\}\|\$\{scale\}\|\$\{shownUnder\}`/, 'a name measured at one text size is used at another')
 
-    /* The browser: both lines measured and drawn by the same rule and floor. */
+    /* The browser: both names measured in the line's own width and face, again when it resizes and when the fonts arrive, to the same floor. */
     const gig = read('src/components/Gig.jsx')
     const fit = read('src/lib/lineFit.js')
     assert.match(fit, /import \{ STEP_LINE_LEAST, fitLine \} from '\.\.\/\.\.\/shared\/line-fit\.mjs'/, 'the browser fits its names by a rule of its own')
+    assert.match(fit, /const room = el\.clientWidth\n/, 'the browser measures a room that is not the line’s own')
+    assert.match(fit, /least: STEP_LINE_LEAST \}\)/, 'the browser fits its names to another floor')
+    assert.match(fit, /new ResizeObserver\(schedule\)/)
+    assert.match(fit, /sized\?\.observe\(el\)/, 'a name is not fitted again when its button changes width')
+    assert.match(fit, /document\.fonts\?\.ready\?\.then\(fresh\)/)
+    assert.match(fit, /addEventListener\?\.\('loadingdone', fresh\)/, 'a name measured in the fallback face is never measured again in the real one')
     assert.match(gig, /const behindSize = useStepLineSize\(behindLine, behind\.shown\)/)
     assert.match(gig, /const aheadSize = useStepLineSize\(aheadLine, ahead\.shown\)/)
     assert.match(gig, /ref=\{behindLine\} style=\{behindSize \? \{ fontSize: behindSize \} : undefined\}/, 'the name under Previous is not drawn at its fitted size')
