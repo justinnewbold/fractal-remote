@@ -46,6 +46,16 @@ never on green alone: its phones' fingerprint says Unchanged, and its merge
 puts a public APK that opens Bluetooth on the Releases page (CLAUDE.md says
 why).
 
+**That pair, 1.89.0, is started with the Send box unticked**, the one build
+where it is: platform `all`, profile `production`, and "Send it to
+TestFlight, and to Google Play production" left off. Ticked, Android would
+go straight to Google's review before its store page, release notes and App
+access note are in. The iPhone then goes to TestFlight with a second run
+(platform `ios`, "Skip building; send the last build that succeeded"),
+which spends no slot, and Android is uploaded by hand in Play Console.
+docs/app-store.md, *Submission day for 1.89.0*, has the steps; the row says
+how each phone was sent.
+
 **And on the day a build goes live in a store, move its number in
 `public/store-versions.json`** (`ios` for the App Store, `android` for Google
 Play), in its own pull request, that day and not before: live means

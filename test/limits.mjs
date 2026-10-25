@@ -4619,8 +4619,16 @@ export function run(test) {
      * Bluetooth only to disclose it: the 1.87.11 notes for Apple and the App
      * access note for Google. A description, a What's New or a summary that
      * offers it fails here, whichever heading it sits under.
+     *
+     * EXCEPT THE 1.89.0 SECTION, the version that opens it to customers
+     * (25 October 2026: "I have tried it from an android phone and it works
+     * great"). Its blocks offer Bluetooth (beta) on purpose, are pasted only
+     * on the day 1.89.0 is sent, and are held by their own test below. Every
+     * other block keeps this rule as it was.
      */
-    const blocks = store.split('```').filter((_, i) => i % 2 === 1)
+    const opening = store.slice(store.indexOf('## 1.89.0: Bluetooth (beta) for customers'), store.indexOf('## Kept for the record: the 1.87.1 texts (not for pasting)'))
+    assert.ok(opening.length > 1000 && store.indexOf('## 1.89.0: Bluetooth (beta) for customers') > at, 'the 1.89.0 section is missing, or sits above the 1.87.11 one')
+    const blocks = store.replace(opening, '').split('```').filter((_, i) => i % 2 === 1)
     assert.ok(blocks.length >= 8, 'the blocks to paste could not be read')
     const offering = blocks.filter((b) => /bluetooth/i.test(b) && !/switched on only for the developer's own account/.test(b))
     assert.deepEqual(offering, [], 'a block to paste offers Bluetooth (beta), and customers cannot open it')
@@ -4709,7 +4717,8 @@ export function run(test) {
      * bracket as long as a Drive link and each Tested on bracket 30 long.
      */
     const store = read('docs/app-store.md')
-    const at = store.indexOf('### Notes for App Review, the next version')
+    /* Headed "1.88.3 (the next version)" since 25 October 2026, when 1.89.0's notes were written after it: two "next" blocks would be one too many. */
+    const at = store.indexOf('### Notes for App Review, 1.88.3 (the next version)')
     assert.ok(at > 0, 'the next version has no Notes for App Review yet')
     const open = store.indexOf('```', at)
     const pasted = store.slice(open + 3, store.indexOf('```', open + 3))
@@ -4766,6 +4775,282 @@ export function run(test) {
     /* And the deletion paragraph as Apple approved it, with where an unpaid account deletes. */
     assert.match(pasted, /Deleting an account \(Guideline 5\.1\.1\(v\), video 3 below\):[^\n]*purchase page[^\n]{0,80}Delete account is at the foot of that page\. Please try it on a new account, not the demo account\./)
     assert.doesNotMatch(pasted, /\b(official|approved by|endorsed|certified|sponsored)\b/i, 'the notes call the app something Fractal Audio has not made it')
+  })
+
+  test('the 1.89.0 texts open Bluetooth (beta) to customers for the AM4 alone, fit every store box, and keep the vendor rules', async () => {
+    /*
+     * 1.89.0 is the store version that opens Bluetooth (beta) to customers,
+     * on both phones. Justin, 25 October 2026: "I have tried it from an
+     * android phone and it works great", and "make it clear that there's
+     * multiple ways to connect the device, but also make it clear that the
+     * computer is the preferred method and that Bluetooth will have more lag
+     * and not have as many features." Its texts sit in a section of their
+     * own, pasted only on the day it is sent, and are held here to the app
+     * as it is: the AM4 alone (CUSTOMER_UNITS), the labels the Bluetooth page
+     * and Settings draw, Apple's 4000 bytes and Play's 500 characters,
+     * Fractal Audio's sentence second in the Description, no other platform
+     * in Apple's texts (2.3.10), and the order of the day, Android never
+     * sent to Google's review before its store page is in.
+     */
+    const store = read('docs/app-store.md')
+    const { fenced } = await import('../scripts/store-text.mjs')
+    const { AFFILIATION } = await import('../shared/affiliation.mjs')
+    const { BLUETOOTH_WAYS } = await import('../shared/bluetooth-gear.mjs')
+    const { CUSTOMER_UNITS, unitOffered } = await import('../mobile/src/lib/ble-rule.js')
+    const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
+    const from = store.indexOf('## 1.89.0: Bluetooth (beta) for customers')
+    const to = store.indexOf('## Kept for the record: the 1.87.1 texts (not for pasting)')
+    assert.ok(from > store.indexOf('### By hand in Play Console for 1.87.11') && to > from, 'the 1.89.0 section is missing, or out of place')
+    const section = store.slice(from, to)
+    const flat = (s) => s.replace(/\s+/g, ' ')
+    const block = (heading) => fenced(section, heading).trim()
+    const notes = block('### Notes for App Review, 1.89.0')
+    const whatsNew = block("### What's New in This Version, 1.89.0")
+    const description = block('### Description, from 1.89.0 (App Store and Google Play)')
+    const keywords = block('### Keywords, from 1.89.0')
+    const play = block('### Google Play release notes, 1.89.0')
+    const access = block('### Google Play App access, 1.89.0')
+    const accessShort = block('paste the short one instead')
+    const paragraph = (text, start) => text.split('\n\n').find((p) => p.startsWith(start)) || ''
+
+    /* APPLE'S BOX, measured the way the 1.87.11 and 1.88.3 blocks are, with a fourth video: Bluetooth's. */
+    const drive = 'https://drive.google.com/file/d/' + 'x'.repeat(33) + '/view?usp=drive_link'
+    const brackets = notes.match(/\[[^\]\n]*\]/g) || []
+    assert.equal(brackets.filter((b) => /video link/.test(b)).length, 4, 'the 1.89.0 notes do not hold a place for four video links')
+    const bytes = Buffer.byteLength(brackets.reduce((t, b) => t.replace(b, /video link/.test(b) ? drive : 'x'.repeat(30)), notes), 'utf8')
+    assert.ok(bytes <= 3950, `the 1.89.0 notes are ${bytes} bytes with the links and brackets filled; Apple's Notes box takes 4000`)
+    assert.match(notes, /\nVideos:\n1\. FM3 hardware: \[FM3 video link\]\n2\. Presets: \[presets video link\]\n3\. Deleting an account: \[account deletion video link\]\n4\. Bluetooth with an AM4: \[Bluetooth video link\]$/, 'the four videos are not listed at the end of the 1.89.0 notes')
+    assert.match(notes, /\n\nNew since 1\.88\.3:\n\n/, 'the 1.89.0 notes do not say what they are new since')
+    const steps = [...notes.matchAll(/^(\d)\. (.+)$/gm)].map((m) => m[2]).slice(0, 5)
+    assert.match(steps[0], /^Tap "OK" on the card that says the app is independent$/, 'the 1.89.0 demo steps do not start on the startup card')
+    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ']) {
+      assert.ok(steps.some((t) => t.includes(label)), `the 1.89.0 notes do not say to tap "${label}"`)
+      assert.ok(read('shared/onboarding.mjs').includes(label), `the 1.89.0 notes say to tap "${label}", which the walkthrough no longer says`)
+    }
+
+    /* EVERY LINE THAT SAID "ONLY THROUGH A COMPUTER" IS TRUE OF 1.89.0: the opening, the Hardware line and the Services line. */
+    const opening = notes.split('\n\n')[0]
+    assert.match(opening, /through a computer the unit is plugged into by USB, or, new in this version and marked beta, on an AM4 only, through a Bluetooth MIDI adapter/, 'the 1.89.0 notes still open by saying the app works only through a computer')
+    assert.match(paragraph(notes, 'Hardware (Guideline 2.1)'), /video 1 below[^\n]*the computer way[^\n]*\. Video 4 shows Bluetooth with a real AM4\.$/, 'the Hardware line does not point at the Bluetooth video')
+    assert.match(paragraph(notes, 'Services the app uses'), /Bluetooth goes from the phone straight to the adapter, through no server\.$/, 'the Services line leaves Bluetooth out')
+    assert.doesNotMatch(notes, /switched on only for the developer|don't see it in this build/, 'the 1.89.0 notes keep the 1.88.3 disclosure, which is not true of a copy that opens Bluetooth')
+
+    /* THE BLUETOOTH PARAGRAPH: where it is, what to tap first, when the permission is asked, and the video, by the labels the app draws. */
+    const bt = paragraph(notes, 'Bluetooth (beta), part of the full version, for the AM4 only.')
+    assert.ok(bt.length > 400, 'the 1.89.0 notes do not describe Bluetooth (beta)')
+    for (const [said, why] of [
+      [/It is not in the no-account demo\./, 'that the demo with no account has no Bluetooth'],
+      [/Signed in with the demo account: tap the gear at the top right for Settings, then Bluetooth \(beta\) under My rig\./, 'where the row is'],
+      [/tap AM4 under "1 · Pick your unit" first \(Connect stays dimmed until a unit is picked\), then tap Connect\./, 'to pick AM4 before Connect, which stays dimmed until a unit is picked'],
+      [/Only then does the app ask for Bluetooth permission/, 'that nothing is asked before Connect'],
+      [/With no adapter it finds none, and the page says no adapter was connected\./, 'what an empty Apple screen means'],
+      [/Video 4 below shows it working: filmed on an iPhone signed in with the demo account/, 'where the video is, and whose account it was filmed on'],
+      [/with no editing or saving/, 'that there is no editing or saving'],
+      [/the app earns nothing from them/, 'that the Amazon buttons earn nothing']
+    ]) assert.match(bt, said, `the 1.89.0 Bluetooth paragraph does not say ${why}`)
+    const page = read('mobile/src/screens/Bluetooth.js')
+    assert.ok(page.includes('<Heading>1 · Pick your unit</Heading>'), 'the notes name step 1 by a heading the Bluetooth page no longer draws')
+    assert.match(page, /const canStart = !!b\.unit && paid/, 'Connect no longer waits for a unit, and the notes say it does')
+    assert.match(page, /disabled=\{!canStart \|\| b\.looking\}/, 'Connect is not the button that waits for a unit')
+    assert.ok(page.includes(": 'Connect'}") && page.includes('No adapter was connected.'), 'the notes name a Connect button or a no-adapter line the page no longer has')
+    assert.match(read('mobile/src/components/Press.js'), /opacity: disabled \? 0\.45/, 'a button that waits no longer looks dimmed, and the notes say Connect does')
+    const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
+    assert.ok(settings.indexOf('<SetupRow title="Bluetooth (beta)"') > settings.indexOf('<Group title="My rig">'), 'the texts send people to Settings → My rig → Bluetooth (beta), which is not there')
+
+    /* 2.5.19: what the developer's own account sees and the review account does not, every piece of it, the units still being tried among them. */
+    const extra = BLE_UNITS.filter((u) => !CUSTOMER_UNITS.includes(u.key))
+    assert.ok(extra.length > 0 && extra.every((u) => unitOffered(u.key, true) && !unitOffered(u.key, false)), 'the developer’s account is no longer offered units a customer is not, and the notes say it is')
+    for (const [where, text] of [['Apple notes', paragraph(notes, "Only on the developer's own account:")], ['App access note', paragraph(access, "Only on the developer's own account:")]]) {
+      assert.match(text, /Developer pages \(accounts, sales, messages\)/, `the ${where} leave out the Developer pages`)
+      assert.match(text, /testing tools/, `the ${where} leave out the Bluetooth page's testing tools`)
+      for (const u of extra) assert.ok(text.includes(u.name), `the ${where} leave out the ${u.name}, which the developer's account is offered and the review account is not`)
+      assert.match(text, /No other account (is shown|sees) them, (the demo account|this one) included/, `the ${where} do not say the review account is shown none of it`)
+    }
+
+    /* THE UNITS: every Bluetooth text offers what CUSTOMER_UNITS offers, and names another unit only to say it is not for it. */
+    const NAMES = Object.fromEntries(BLE_UNITS.map((u) => [u.key, u.name]))
+    const offered = CUSTOMER_UNITS.map((k) => NAMES[k])
+    const btHead = 'BLUETOOTH (BETA), FOR THE AM4\n'
+    const btDescription = description.slice(description.indexOf(btHead), description.indexOf('\n\n', description.indexOf(btHead)))
+    const lines = (text) => text.split('\n').filter((l) => /bluetooth/i.test(l)).join('\n')
+    for (const [where, text] of [
+      ['notes', bt],
+      ['What’s New', lines(whatsNew)],
+      ['Description', btDescription],
+      ['Play release notes', lines(play)],
+      ['App access note', paragraph(access, 'Bluetooth (beta)')],
+      ['short App access note', paragraph(accessShort, 'Bluetooth (beta)')]
+    ]) {
+      assert.ok(text.length > 80, `the 1.89.0 ${where} say nothing of Bluetooth (beta)`)
+      for (const name of offered) assert.ok(new RegExp(`\\b${name}\\b`).test(text), `the 1.89.0 ${where} do not name the ${name}, the unit customers are offered`)
+      for (const sentence of text.split(/(?<=[.:;])\s+/)) {
+        for (const u of extra) {
+          if (sentence.includes(u.name)) assert.match(sentence, /^Not for an FM3\b/, `the 1.89.0 ${where} offer the ${u.name} over Bluetooth, and customers are offered ${offered.join(', ')} alone: "${sentence}"`)
+        }
+      }
+    }
+
+    /* WHAT'S NEW: Bluetooth first, in his terms, and nothing that waits. Only this block may name Bluetooth; 1.87.11's and 1.88.3's are held above to naming none. */
+    assert.ok([...whatsNew].length <= 4000, `What's New for 1.89.0 is ${[...whatsNew].length} characters; Apple takes 4000`)
+    const newLine = whatsNew.split('\n')[0]
+    assert.match(newLine, /^• New, in beta: Bluetooth for the AM4\./, 'What’s New does not open on Bluetooth (beta) for the AM4')
+    assert.match(newLine, /There are now two ways to connect, and the computer is still the best one: Bluetooth has more lag and fewer features, with no editing or saving\./, 'What’s New does not say the two ways, the computer first, in Justin’s terms')
+    assert.match(newLine, /part of the full version, and the adapter parts are sold separately, by other companies/, 'What’s New does not say it comes with the full version and needs parts bought elsewhere')
+    assert.doesNotMatch(whatsNew, /tuner on the AM4 itself now stays up/, 'What’s New carries the AM4 tuner line before Justin has seen it')
+
+    /* GOOGLE PLAY'S RELEASE NOTES, within 500, with the same three things. */
+    assert.ok([...play].length <= 500, `Google's release notes for 1.89.0 are ${[...play].length} characters; Play takes 500`)
+    assert.match(play, /^• New, in beta: Bluetooth for the AM4\. With the full version/, 'the Play notes do not open on Bluetooth (beta) for the AM4')
+    assert.match(play, /The computer is still the best way: Bluetooth has more lag and fewer features, with no editing or saving\./, 'the Play notes do not say the computer is the best way')
+    assert.doesNotMatch(play, /Siri/, 'Google is told about Siri, which Android does not have')
+
+    /* THE DESCRIPTION: today's, REQUIRES A COMPUTER still first and Fractal Audio's sentence still second, with three paragraphs made true and one section added. */
+    const paragraphs = description.split('\n\n')
+    assert.match(paragraphs[0], /^REQUIRES A COMPUTER\./, 'the 1.89.0 Description no longer opens on the computer')
+    assert.match(paragraphs[0], /so the computer has to stay on and connected while you play\. An AM4 can also use Bluetooth \(beta\), with more lag: see below\.$/, 'the first paragraph does not say an AM4 has the second way')
+    assert.equal(paragraphs[1], AFFILIATION, 'the 1.89.0 Description’s second paragraph is not the shared disclaimer')
+    assert.equal(description.split(AFFILIATION).length, 2, 'the 1.89.0 Description says the disclaimer twice')
+    assert.ok([...description].length <= 4000, `the 1.89.0 Description is ${[...description].length} characters; both stores take 4000`)
+    const today = fenced(store, '### Description').trim().split('\n\n')
+    assert.deepEqual(today.filter((p) => !paragraphs.includes(p)).map((p) => p.split(/[.\n]/)[0]), ['REQUIRES A COMPUTER', 'TRY THE DEMO, FOR AS LONG AS YOU LIKE', 'HOW IT WORKS'], 'the 1.89.0 Description changes more of today’s than the computer sentence, the demo paragraph and HOW IT WORKS')
+    assert.equal(paragraphs.length, today.length + 1, 'the 1.89.0 Description is not today’s with one section added')
+    assert.equal(paragraphs.indexOf(btDescription), paragraphs.findIndex((p) => p.startsWith('HOW IT WORKS\n')) + 2, 'the Bluetooth section is not straight after HOW IT WORKS')
+    assert.match(paragraph(description, 'TRY THE DEMO'), /Controlling your real unit needs the computer described at the top \(or Bluetooth \(beta\), on an AM4\)\.$/, 'the demo paragraph still says only the computer controls a real unit')
+    assert.match(paragraph(description, 'HOW IT WORKS'), /^HOW IT WORKS\nA phone needs something between it and your Fractal unit, and the best one is the desktop app\./, 'HOW IT WORKS still says the desktop app is the only way')
+    assert.ok(btDescription.includes(BLUETOOTH_WAYS), 'the Bluetooth section does not say the two ways in the app’s own words')
+    for (const [said, why] of [
+      [/For now it is for an AM4 only/, 'the AM4 only'],
+      [/No editing or saving/, 'no editing or saving'],
+      [/It is part of the full version, and a beta/, 'that it comes with the full version, and is a beta'],
+      [/sold separately, by other companies/, 'that the parts are sold separately, by other companies'],
+      [/gets nothing from the app's links to them/, 'that the app earns nothing from the links'],
+      [/What to buy and how to plug it in: Settings → My rig → Bluetooth \(beta\)\.$/, 'where to find what to buy']
+    ]) assert.match(btDescription, said, `the Bluetooth section does not say ${why}`)
+
+    /* KEYWORDS: today's, with bluetooth and midi on the end, and no other company's names. */
+    assert.equal(keywords, `${fenced(store, '### Keywords (100, commas, no spaces after them)').trim()},bluetooth,midi`, 'the 1.89.0 keywords are not today’s with bluetooth,midi')
+    assert.ok(keywords.length <= 100 && !/,\s|\bcme\b|widi/i.test(keywords), `the 1.89.0 keywords are ${keywords.length} characters, or name CME's products`)
+
+    /* GOOGLE'S APP ACCESS NOTE: where the row is, and the device it needs, held to the native module's own check. */
+    const btAccess = paragraph(access, 'Bluetooth (beta)')
+    assert.match(access, /^This account has the full version\./)
+    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ']) {
+      assert.ok(access.includes(label) && accessShort.includes(label), `Google's reviewer is not told to tap "${label}"`)
+    }
+    for (const [said, why] of [
+      [/Settings \(the gear, top right\) → My rig → Bluetooth \(beta\)\./, 'where the row is'],
+      [/The row is there only on a device that has both MIDI and Bluetooth LE, so an emulator, or a device without MIDI, does not show it\./, 'that an emulator shows no row'],
+      [/tap AM4 under "1 · Pick your unit" first \(Connect stays dimmed until a unit is picked\), then Connect\./, 'to pick AM4 before Connect'],
+      [/Only then does Android ask for Nearby devices \(Location on Android 11 and older/, 'when Nearby devices and Location are asked for'],
+      [/the app never reads where the phone is\./, 'that the app never reads where the phone is'],
+      [/it looks for ten seconds and says No adapter found\./, 'what happens with no adapter'],
+      [/\[Bluetooth video link\]$/, 'the video']
+    ]) assert.match(btAccess, said, `Google's App access note does not say ${why}`)
+    assert.match(read('mobile/modules/fractal-ble-midi/android/src/main/java/cloud/newbold/fractalremote/blemidi/FractalBleMidiModule.kt'), /hasSystemFeature\(PackageManager\.FEATURE_MIDI\) &&\s+packages\.hasSystemFeature\(PackageManager\.FEATURE_BLUETOOTH_LE\)/, 'the row no longer needs MIDI and Bluetooth LE, and Google’s note says it does')
+    assert.ok(read('mobile/src/lib/bluetooth.js').includes('No adapter found.') && page.includes('looks for the adapter for ten seconds'), 'Google’s note says what an Android phone shows with no adapter, and the app says something else')
+    assert.doesNotMatch(access, /which this account cannot open|No other account sees it, this one included\. That code/, 'the App access note keeps the 1.87.11 note’s Bluetooth paragraph, which is not true of 1.89.0')
+    for (const [said, why] of [
+      [/only on devices with MIDI and Bluetooth LE/, 'the device it needs'],
+      [/Tap AM4, then Connect: only then is Nearby devices asked for \(Location on Android 11 and older\), never to read location\./, 'what to tap, and when the permission is asked'],
+      [/\[Bluetooth video link\]/, 'the video'],
+      [/Developer pages, testing tools, three more units: developer's account only\./, 'what only the developer’s account sees']
+    ]) assert.match(accessShort, said, `the short App access note does not say ${why}`)
+
+    /* NO OTHER PLATFORM IN APPLE'S TEXTS (2.3.10), and the Description, which both stores share, names neither. */
+    for (const [where, text] of [['notes', notes], ['What’s New', whatsNew], ['Description', description], ['keywords', keywords]]) {
+      assert.doesNotMatch(text, /android|google play|play store/i, `the 1.89.0 ${where} name another platform, which Apple's 2.3.10 turns down`)
+    }
+
+    /* FRACTAL AUDIO'S RULES, in every 1.89.0 block: nothing official, no Inc., no "the Fractal app", no help from anyone but Justin, no app called free. */
+    const disclaimer = /not affiliated with, endorsed by, or\s+supported by/gi
+    for (const [where, text] of [['notes', notes], ['What’s New', whatsNew], ['Description', description], ['keywords', keywords], ['Play release notes', play], ['App access note', access], ['short App access note', accessShort]]) {
+      assert.doesNotMatch(text.replace(disclaimer, ''), /\b(official|certified|approved|endorsed|authori[sz]ed|sponsored)\b/i, `the 1.89.0 ${where} call the app something Fractal Audio has not made it`)
+      assert.doesNotMatch(text, /Fractal Audio Systems,? Inc\b|sponsored by/i, `the 1.89.0 ${where} say Inc. or sponsored`)
+      assert.doesNotMatch(text, /\bfractal\s+(?:(?:desktop|computer|mac|windows|linux|pc|phone|watch)\s+)?app/i, `the 1.89.0 ${where} say "the Fractal app"`)
+      assert.doesNotMatch(text, /fractalaudio\.com|contact Fractal|Fractal('s| Audio's)? support/i, `the 1.89.0 ${where} send somebody to Fractal Audio for help with the app`)
+    }
+    for (const [where, text] of [['What’s New', whatsNew], ['Description', description], ['Play release notes', play]]) {
+      assert.ok(!/\bfree\b[^.\n]{0,40}\bapp\b|\bapp\b[^.\n]{0,20}\bis free\b/i.test(text), `the 1.89.0 ${where} call an app free`)
+    }
+
+    /* VIDEO 4, for Justin: the review account, the plugs first, a private link only, and no Fractal logo but the unit's own. */
+    const video = flat(section.slice(section.indexOf('### Video 4: Bluetooth with an AM4'), section.indexOf('### Submission day for 1.89.0')))
+    for (const [said, why] of [
+      [/sign in with the review account \(the one in App Review Information\), not yours/, 'to film it on the review account'],
+      [/Not a screen recording\./, 'that it is filmed, not recorded'],
+      [/The AM4 itself is the one exception, and only in a private review video like this one/, 'that the unit is the only Fractal logo in it'],
+      [/\*\*Anyone with the link\*\*/, 'how the link is shared'],
+      [/\*\*Never make it public\*\*/, 'that it is never made public']
+    ]) assert.match(video, said, `the video 4 steps do not say ${why}`)
+    assert.ok(video.indexOf('**The plugs first.**') > 0 && video.indexOf('**The plugs first.**') < video.indexOf('then **Connect**'), 'the video does not show the plugs before Connect')
+
+    /* THE DAY, IN ORDER, and Android never sent to Google's review by mobile.yml: its boxes named as the workflow has them. */
+    const day = flat(section.slice(section.indexOf('### Submission day for 1.89.0, step by step'), section.indexOf('### If Bluetooth has to be switched off')))
+    const workflow = read('.github/workflows/mobile.yml')
+    for (const box of ['Which platform to build', 'Which eas.json build profile', 'Send it to TestFlight, and to Google Play production (everyone), when it finishes', 'Skip building; send the last build that succeeded', 'Publish a JS update instead of building']) {
+      assert.ok(workflow.includes(`description: '${box}`), `the steps name a box mobile.yml does not have: ${box}`)
+      assert.ok(day.includes(box), `the steps leave out the ${box} box`)
+    }
+    assert.match(day, /run 1, the build pair\.\*\*[^]*?Which platform to build: \*\*all\*\*[^]*?Which eas\.json build profile: \*\*production\*\*[^]*?when it finishes: \*\*unticked\*\*/, 'run 1 does not leave the Send box unticked')
+    assert.match(day, /run 2, the iPhone to TestFlight\*\*[^]*?Which platform to build: \*\*ios\*\*[^]*?Skip building; send the last build that succeeded: \*\*ticked\*\*/, 'run 2 does not send the iPhone alone, with Skip building')
+    assert.match(day, /\*\*Never with all or android\*\* for 1\.89\.0/, 'the steps do not warn that Skip building sends Android to Google’s review too')
+    /* What the steps say of mobile.yml is what it does: the ticked box submits as it builds, Skip building submits the newest build, and eas.json still sends Android to production. */
+    assert.match(workflow, /\$\{\{ inputs\.submit && '--auto-submit' \|\| '' \}\}/, 'the Send box no longer submits as it builds, and the steps say it does')
+    assert.match(workflow, /if: \$\{\{ inputs\.submit_only \}\}[\s\S]{0,200}eas submit \\\s+--platform "\$\{\{ inputs\.platform \}\}"[\s\S]{0,120}--latest/, 'Skip building no longer sends the newest build of the platform picked')
+    assert.equal(JSON.parse(read('mobile/eas.json')).submit.production.android.track, 'production', 'eas.json no longer sends Android to production, and the steps are written around it')
+    assert.match(read('docs/expo-builds.md'), /\*\*That pair, 1\.89\.0, is started with the Send box unticked\*\*/, 'the build ledger does not say the 1.89.0 pair is started with Send unticked')
+    const at = (s) => {
+      const i = day.indexOf(s)
+      assert.ok(i >= 0, `the submission steps no longer say ${s}`)
+      return i
+    }
+    const order = [
+      at('**Justin: App Store Connect → App Privacy**'),
+      at('**Justin: Macs and Apple Vision Pro.**'),
+      at('Managed publishing → on.**'),
+      at('mobile.yml, run 1, the build pair.'),
+      at('"Bluetooth (beta) for customers"'),
+      at('mobile.yml, run 2, the iPhone to TestFlight'),
+      at('**The guideline pass**'),
+      at('**GitHub: the website, merged before anything is sent**'),
+      at('**Manually release this version**'),
+      at('**Create new release**'),
+      at('**Send changes for review**'),
+      at('**Publish only once Apple has approved'),
+      at("public/store-versions.json: that store's number to 1.89.0"),
+      at("**The setup emails' Bluetooth paragraph**")
+    ]
+    assert.deepEqual([...order].sort((a, b) => a - b), order, 'the submission steps are out of order')
+    assert.match(day, /iPhone and iPad Apps on Apple Silicon Mac/, 'the steps do not say where the Mac setting is')
+    const beforeSending = day.slice(at('**GitHub: the website, merged before anything is sent**'), at('**Justin: App Store Connect.**'))
+    assert.match(beforeSending, /\*\*bluetooth-guide\.html\*\*[^]*\*\*privacy\.html\*\*[^]*\*\*Not yet\*\* \/bluetooth \(bluetooth\.html\) and support\.html/, 'the guide and the privacy page do not change before submitting, or /bluetooth and support do')
+    const liveDay = day.slice(at("**E. Each store's live day**"))
+    for (const [said, why] of [
+      [/\/bluetooth \(bluetooth\.html\) becomes the real page/, '/bluetooth'],
+      [/support\.html: "The phone doesn't talk to the unit directly" becomes the two ways/, 'the support page'],
+      [/the noindex comes off/, 'the guide listed'],
+      [/supabase\/README\.md, \*Bluetooth \(beta\) in the emails, from 1\.89\.0\*/, 'the setup emails']
+    ]) assert.match(liveDay, said, `the live day does not change ${why}`)
+    assert.ok(read('supabase/README.md').includes('### Bluetooth (beta) in the emails, from 1.89.0'), 'the steps send Justin to an email section supabase/README.md does not have')
+
+    /* IF JUSTIN SKIPS 1.88.3, AND IF IT HAS TO BE SWITCHED OFF: written down, with what costs a build. */
+    assert.match(flat(section), /\*\*If Justin skips 1\.88\.3 instead\*\*/, 'the section does not say what changes if 1.88.3 is skipped')
+    const off = flat(section.slice(section.indexOf('### If Bluetooth has to be switched off, or Apple says no to it'), section.indexOf("### Later: Google's question about location")))
+    for (const [said, why] of [
+      [/\*\*A fresh install's first launch runs the copy built into it\*\*/, 'why no update can close it on a first launch'],
+      [/\*\*Apple says no to Bluetooth itself\.\*\*/, 'what happens if Apple refuses it'],
+      [/\*\*Halt rollout\*\*/, 'the Android halt'],
+      [/an emergency step only/, 'that closing it by update is an emergency step'],
+      [/\| Apple says no to Bluetooth, and still no after a reply \| One iPhone build/, 'what a refusal costs']
+    ]) assert.match(off, said, `the switch-off plan does not say ${why}`)
+    assert.match(read('mobile/app.json'), /"fallbackToCacheTimeout": 0/, 'a first launch waits for the update now, and the switch-off plan says it does not')
+
+    /* AND GOOGLE'S LOCATION QUESTION, for later, held to the manifest it describes. */
+    const location = section.slice(section.indexOf("### Later: Google's question about location (from 27 January 2027)"))
+    assert.match(fenced(location, '### Later').trim(), /^Fractal Remote asks for precise location only on Android 11 and older, and only when the user taps Connect on its Bluetooth \(beta\) page/, 'the location answer is missing')
+    const manifest = read('mobile/modules/fractal-ble-midi/android/src/main/AndroidManifest.xml')
+    assert.match(manifest, /ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/, 'precise location is no longer kept to Android 11 and older, and the answer says it is')
+    assert.match(manifest, /BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/, 'Bluetooth scanning no longer says it is never for location, and the answer says it is')
   })
 
   test('the licences of what we ship travel with it', () => {
