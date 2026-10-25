@@ -7,10 +7,13 @@ import { BLE_UNITS, CHECK_STEPS, createBleWire, settleMethods } from './bleWire'
 import { createJoiner } from './fractal-sysex.mjs'
 import { blockCatalog } from './blockCatalog'
 import { setSwitch } from './bleSwitch'
-import { isAdapter, pickAdapter, pairScreenCrashes, PAIR_SCREEN_IOS27 } from './bleAdapters'
+import { isAdapter, pickAdapter, pairScreenCrashes, pairScreenShutWords } from './bleAdapters'
 import { logDebug } from './debugLog'
 import { isAdmin } from './admin'
 import { accountId } from './owner-unlock'
+import { installedStoreVersion } from './storeVersion'
+import { bluetoothOpen, unitOffered } from './ble-rule'
+import { deviceNoun } from './device-word'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -25,9 +28,11 @@ import { accountId } from './owner-unlock'
  *     the store builds made before the module went into one, or in any build
  *     the module failed to load in, the answer is null, and every function
  *     here then does nothing. That is what keeps Bluetooth invisible to
- *     anybody whose app cannot do it. And for now it is Justin's account
- *     alone that sees it at all, wherever it can work (allowBluetooth, below;
- *     the row and the page are gated in Settings.js);
+ *     anybody whose app cannot do it. And who sees it at all, wherever it
+ *     can work, is Justin's account on every copy, and everybody else only
+ *     on a copy whose BUILT-IN store version opens it (allowBluetooth,
+ *     below, and the rule in ble-rule.js; the row and the page are gated in
+ *     Settings.js);
  *   - the wire: the bytes coming in are put back into whole messages here
  *     (createJoiner) and handed to the wire from bleWire.js, which does all
  *     the thinking about what they mean.
@@ -225,8 +230,13 @@ export const ALLOW_WORDS =
     : OLD_ANDROID
       ? 'Allow Location for Fractal Remote in Android’s settings, and turn Location on'
       : 'Allow Nearby devices for Fractal Remote in Android’s settings'
-export const RESTRICTED_WORDS =
-  'Bluetooth is blocked for Fractal Remote on this iPhone, by Screen Time or by whoever manages the phone, so Fractal Remote can’t turn it on. Look in the iPhone’s Settings → Screen Time → Content & Privacy Restrictions for Bluetooth Sharing, or ask whoever manages the phone'
+/*
+ * THE DEVICE IN HAND, NOT "THIS iPHONE". An iPad with Bluetooth MIDI opens
+ * the page too, now that it is not one man's iPhone, so the words name the
+ * device (lib/device-word deviceNoun: phone or iPad here, set by
+ * lib/thisDevice before this file loads), the same as the rest of the app.
+ */
+export const RESTRICTED_WORDS = `Bluetooth is blocked for Fractal Remote on this ${deviceNoun()}, by Screen Time or by whoever manages it, so Fractal Remote can’t turn it on. Look in the ${deviceNoun()}’s Settings → Screen Time → Content & Privacy Restrictions for Bluetooth Sharing, or ask whoever manages the ${deviceNoun()}`
 
 /** The adapters the module can see now. Empty on any trouble. */
 export function adapterDevices() {
@@ -296,18 +306,40 @@ export const useBluetoothOn = () => useSyncExternalStore(subscribeBluetooth, rea
 export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth, readTrouble, readTrouble)
 
 /*
- * WHO MAY USE IT: JUSTIN'S ACCOUNT, AND NOBODY ELSE, FOR NOW.
+ * WHO MAY USE IT: JUSTIN'S ACCOUNT ON EVERY COPY, AND EVERYBODY ELSE ONLY ON
+ * A COPY BUILT TO OPEN IT.
  *
  * "Is there any way to just get the Bluetooth on the developers mode for my
  * own phone? I just feel like it's not ready to have public." (11 October
  * 2026.) The day before, it had gone out as a public beta for everybody who
- * had unlocked the app. Now the Settings row and the page are drawn only for
- * the account that opens his Developer pages (isAdmin, lib/admin.js), and
- * this is the switch's half: for anybody else Bluetooth goes off and STAYS
- * off. setBluetooth will not turn it on, and the pick-up from last time will
- * not either, so a customer who turned it on during that one day is put back
- * on the computer at their next launch, with the unit and the adapter they
- * chose still kept for the day it comes back.
+ * had unlocked the app. From then the Settings row and the page were drawn
+ * only for the account that opens his Developer pages (isAdmin, lib/
+ * admin.js). Then, 25 October: it has worked from an iPhone and from an
+ * Android phone, and it is to reach customers in the next store version.
+ *
+ * So the answer is the rule in ble-rule.js (bluetoothOpen): his account,
+ * yes, everywhere; anybody else, yes only when the version BUILT INTO THIS
+ * COPY (lib/storeVersion installedStoreVersion, read once, below) is at or
+ * above the store version that opens it, which is null on both phones until
+ * the build pull request sets it. Every copy that exists today says no to a
+ * customer. And this is the switch's half: for anybody it says no to,
+ * Bluetooth goes off and STAYS off. setBluetooth will not turn it on, and
+ * the pick-up from last time will not either, so a customer who turned it
+ * on during that one public day is put back on the computer at their next
+ * launch, with the unit and the adapter they chose still kept for the day
+ * it opens.
+ *
+ * AND A CUSTOMER GETS THE AM4 ONLY (ble-rule.js CUSTOMER_UNITS), the one
+ * unit it has run: the page offers them the AM4 alone (offeredUnits), and
+ * Connect and the pick-up refuse any other. A unit kept from before that
+ * they are not offered (an FM3 chosen on that public day) is CLEARED, on
+ * disk too, but only where Bluetooth is open to the account signed in: on a
+ * copy that opens it to customers, where the page would otherwise show an
+ * FM3's warning under chips with no FM3 among them. On a copy that keeps it
+ * closed it is kept as it was, because nothing can use it there anyway, and
+ * clearing it would buy nothing. His account keeps all four, and on a copy
+ * that opens it, a tester's account signing in on his phone clears his FM3
+ * pick the same way: he picks it again.
  *
  * Asked by App.js, with the id of THE SESSION KEPT ON THE PHONE (haveSession),
  * never currentAccount(): that one asks the account server over the
@@ -320,14 +352,19 @@ export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth
  * ACCOUNT'S id, or a sign-out somebody asked for (Sign out, Delete account,
  * the paywall's way back and its demo, heading for the sign-in screen: App.js
  * says so with `signedOut`). Anything else is NOT KNOWN — no session on the
- * phone, which is also what a sign-in that ran out with no signal to renew it
- * looks like, or an id that is not an account's — and not known is not a no:
+ * phone, or an id that is not an account's — and not known is not a no:
  *
  *   - yes: on, if it was on last time (the pick-up holds it until now);
  *   - no: off, and the off written down, unit and adapter kept;
  *   - not known: off for now, in memory only. The phone's storage still says
- *     on, so his phone that lost its sign-in at a gig with no signal is back
- *     on Bluetooth at the next launch that knows it is his.
+ *     on, so his phone that lost its sign-in without him asking is back on
+ *     Bluetooth at the next launch that knows it is his.
+ *
+ * A sign-in that ran out at a gig with no signal to renew it is not one of
+ * those any more: haveSession answers with its id (relay.js keptSession),
+ * so his is a yes there, as it should be, and nothing here treats it apart.
+ * No session now means none on the phone at all: one the account service
+ * turned away, or a phone that could not read its own.
  *
  * Whichever of the pick-up and the answer lands first, Bluetooth is on only
  * once the answer is yes.
@@ -340,13 +377,32 @@ export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth
  *
  * NOT TO BE OPENED TO CUSTOMERS BY AN UPDATE. Switching it on for everybody
  * is a new store version whose review notes say so, never an over-the-air
- * update (CLAUDE.md says why: Apple's 2.3.1(a) and its licence 3.3.1(C), and
- * Google's rule on features activated remotely).
+ * update (CLAUDE.md says why: Apple's 2.5.19, 2.3.1(a) and its licence
+ * 3.3.1(C), and Google's rule on features activated remotely). Which is why
+ * the copy decides it, by a number no update can change, and never the
+ * account or anything an update sends.
  */
 let allowed = null
 const readAllowed = () => allowed
+/* Whether the account signed in here is his, so every unit is offered: false for anybody else, and for nobody known. */
+let allUnits = false
 
-const OFF_FOR_OTHERS = 'Bluetooth (beta) is open only to the developer’s account for now, so it is off'
+/*
+ * THE VERSION BUILT INTO THIS COPY, read once (lib/storeVersion: the app
+ * config inside the binary, which an update never touches). Never
+ * APP_VERSION or expoConfig, which are the update's number. Null when the
+ * copy cannot say, and the rule takes null as closed.
+ */
+let installed
+export const builtInVersion = () => {
+  if (installed === undefined) installed = installedStoreVersion()
+  return installed
+}
+
+/** Whether this copy opens Bluetooth (beta) to customers, whoever is signed in: the log's head, and the purchase page. */
+export const openForCustomersHere = () => bluetoothOpen({ platform: Platform.OS, installed: builtInVersion(), admin: false })
+
+const OFF_FOR_OTHERS = 'Bluetooth (beta) is not open to this account in this version of the app, so it is off'
 
 /* On or off for now, in memory only: the switch, the page, the redraw. Nothing written to the phone's storage. */
 function holdOn(on) {
@@ -363,12 +419,16 @@ function holdOn(on) {
  */
 export function allowBluetooth(id, { signedOut = false } = {}) {
   const was = allowed
-  allowed = accountId(id) ? isAdmin(id) : null
+  const wasAll = allUnits
+  allowed = accountId(id) ? bluetoothOpen({ platform: Platform.OS, installed: builtInVersion(), admin: isAdmin(id) }) : null
+  allUnits = allowed !== null && isAdmin(id)
+  /* A unit kept from before that this account is not offered: let go below, only where Bluetooth is open to it (see AND A CUSTOMER GETS THE AM4 ONLY). */
+  const drop = allowed === true && !!saved.unit && !unitOffered(saved.unit, allUnits)
   if (allowed === true) {
-    /* On last time and his: on now, as the pick-up would have, and nothing to write — the disk already says on. */
+    /* On last time, and open to this account: on now, as the pick-up would have, and nothing to write — the disk already says on. */
     if (pendingOn) {
       pendingOn = false
-      if (!saved.on && saved.unit && bluetoothSupported()) {
+      if (!saved.on && saved.unit && !drop && bluetoothSupported()) {
         logDebug('ble', `Bluetooth (beta) is on, for the ${unitName(saved.unit)}`)
         holdOn(true)
       }
@@ -384,15 +444,41 @@ export function allowBluetooth(id, { signedOut = false } = {}) {
     pendingOn = true
     holdOn(false)
   }
-  if (allowed !== was) announce()
+  if (drop) letGoOfUnit()
+  if (allowed !== was || allUnits !== wasAll) announce()
   return allowed === true
+}
+
+/* The unit kept is one this account is not offered: Bluetooth off if it was on with it, and the unit forgotten, on disk too. */
+function letGoOfUnit() {
+  if (saved.on) setBluetooth(false)
+  logDebug('ble', `the ${unitName(saved.unit)} is not offered over Bluetooth (beta) to this account: the unit is cleared`)
+  saved = { ...saved, unit: null }
+  keep()
+  announce()
 }
 
 /** Whether the account signed in here may use Bluetooth (beta): true only once App.js has said yes. */
 export const bluetoothAllowed = () => allowed === true
 
+/** The units the page offers this account, in the page's order: the AM4 alone for a customer, all four for his. */
+export const offeredUnits = () => BLE_UNITS.filter((u) => unitOffered(u.key, allUnits))
+
+/** Whether that is the AM4 alone, a customer's: for the words outside the page that say so (the waiting screen's way in). */
+export const offeredAm4Only = () => offeredUnits().length < BLE_UNITS.length
+
 /** The same, redrawn when it changes: for the Settings row and the page, which appear and go with signing in. */
 export const useBluetoothAllowed = () => useSyncExternalStore(subscribeBluetooth, readAllowed, readAllowed) === true
+
+/**
+ * Whether the account signed in here is his (isAdmin of the sign-in kept on
+ * the phone): every unit, and the full version as mayDrive reads it
+ * (unlock-rule mayDriveBluetooth). False for anybody else, and for nobody known.
+ */
+export const bluetoothAdmin = () => allUnits
+const readAdmin = () => allUnits
+/** The same, redrawn when it changes: for the gate over the row, the page and Connect. */
+export const useBluetoothAdmin = () => useSyncExternalStore(subscribeBluetooth, readAdmin, readAdmin) === true
 
 /**
  * Pick the settings up from last time.
@@ -414,21 +500,23 @@ export const useBluetoothAllowed = () => useSyncExternalStore(subscribeBluetooth
 export async function restoreBluetooth() {
   const before = JSON.stringify(saved)
   let refused = false
+  let dropped = null
   try {
     const raw = await AsyncStorage.getItem(KEY)
     const was = settle(raw ? JSON.parse(raw) : null)
+    /* A unit this account is not offered, with Bluetooth already open to it: let go of, and the disk told (see allowBluetooth). */
+    dropped = allowed === true && was.unit && !unitOffered(was.unit, allUnits) ? was.unit : null
     refused = was.on && allowed === false
     pendingOn = was.on && !!was.unit && allowed === null
-    saved = { ...was, on: was.on && !!was.unit && allowed === true && bluetoothSupported() }
+    saved = { ...was, unit: dropped ? null : was.unit, on: was.on && !!was.unit && !dropped && allowed === true && bluetoothSupported() }
   } catch {
     pendingOn = false
     saved = { ...SAVED }
   }
   setSwitch({ on: saved.on })
-  if (refused) {
-    logDebug('ble', OFF_FOR_OTHERS)
-    keep()
-  }
+  if (refused) logDebug('ble', OFF_FOR_OTHERS)
+  if (dropped) logDebug('ble', `the ${unitName(dropped)} is not offered over Bluetooth (beta) to this account: the unit is cleared`)
+  if (refused || dropped) keep()
   if (pendingOn) logDebug('ble', 'Bluetooth (beta) was on last time: off until this phone knows whose account it is')
   /* Nothing on disk is the ordinary case, and it changes nothing: no screen is redrawn for it. */
   if (JSON.stringify(saved) === before) return saved.on
@@ -445,13 +533,14 @@ export const unitName = (key) => BLE_UNITS.find((u) => u.key === key)?.name || '
  * Turn Bluetooth (beta) on or off.
  *
  * Not on without a unit: see SAVED. Not on for an account it is not open to,
- * nor before App.js has said whose phone this is: see allowBluetooth. Off is
- * always allowed. The switch moves at once, so from this moment nothing goes
- * to the computer while it is on; App.js sees the change and restarts the
- * link, which is what connects (bleLink.js).
+ * nor before App.js has said whose phone this is, nor with a unit this
+ * account is not offered: see allowBluetooth. Off is always allowed. The
+ * switch moves at once, so from this moment nothing goes to the computer
+ * while it is on; App.js sees the change and restarts the link, which is
+ * what connects (bleLink.js).
  */
 export function setBluetooth(on) {
-  const want = on === true && allowed === true && !!saved.unit && bluetoothSupported()
+  const want = on === true && allowed === true && !!saved.unit && unitOffered(saved.unit, allUnits) && bluetoothSupported()
   /* Off asked for in so many words: an on held for an answer goes too, and the disk is told. */
   if (on !== true && pendingOn) {
     pendingOn = false
@@ -470,9 +559,9 @@ export function setBluetooth(on) {
   return want
 }
 
-/** Which unit is on the other end. Changing it while connected asks the new one everything (bleLink). */
+/** Which unit is on the other end, from those this account is offered. Changing it while connected asks the new one everything (bleLink). */
 export function setBluetoothUnit(key) {
-  if (!UNIT_KEYS.includes(key) || key === saved.unit) return saved.unit
+  if (!UNIT_KEYS.includes(key) || !unitOffered(key, allUnits) || key === saved.unit) return saved.unit
   saved = { ...saved, unit: key }
   logDebug('ble', `the unit is an ${unitName(key)}`)
   keep()
@@ -485,7 +574,7 @@ export function chooseAdapter(dev) {
   if (!dev || typeof dev.id !== 'string' || !dev.id) return
   if (saved.adapter?.id === dev.id) return
   saved = { ...saved, adapter: { id: dev.id, name: typeof dev.name === 'string' ? dev.name : '' } }
-  logDebug('ble', `adapter chosen: ${dev.name || dev.id}`)
+  logDebug('ble', `adapter chosen: ${adapterName(dev) || 'an adapter with no name'}`)
   keep()
   /*
    * A note from the search is about the search (it did not start, Apple's
@@ -495,6 +584,14 @@ export function chooseAdapter(dev) {
   if (now.said) noteBluetooth({ said: null })
   else announce()
 }
+
+/*
+ * THE ADAPTER BY ITS NAME, NEVER ITS ADDRESS, in anything the log keeps. On
+ * Android the module falls back to the adapter's Bluetooth address when it
+ * has no name (FractalBleMidiModule.kt), and a log goes out with every
+ * report. Null when all there is is the address, or nothing.
+ */
+export const adapterName = (a) => (a && typeof a.name === 'string' && a.name && a.name !== a.id ? a.name : null)
 
 /** Forget the adapter. bleLink hears it and lets go. */
 export function forgetAdapter() {
@@ -628,7 +725,7 @@ export async function findAdapters() {
       showList(list)
       const pick = pickAdapter(list, fresh)
       if (pick) chooseAdapter(pick)
-      else noteBluetooth({ said: PAIR_SCREEN_IOS27 })
+      else noteBluetooth({ said: pairScreenShutWords(deviceNoun()) })
       return pick
     }
     const before = new Set(adapterDevices().map((d) => d.id))
@@ -684,11 +781,70 @@ export async function findAdapters() {
     if (!saved.adapter && !now.devices.length) {
       noteBluetooth({
         said: OLD_ANDROID
-          ? 'No adapter found. On this phone, Location has to be on for it to find one: turn it on, then tap Connect again.'
-          : 'No adapter found. Check it is plugged in, lit and close to the phone, then tap Connect again.'
+          ? `No adapter found. On this ${deviceNoun()}, Location has to be on for it to find one: turn it on, then tap Connect again.`
+          : `No adapter found. Check it is plugged in, lit and close to the ${deviceNoun()}, then tap Connect again.`
       })
     }
   }, SCAN_SECONDS * 1000 + 500)
+}
+
+/**
+ * iPhone: the adapter chosen is not connected to it now. bleLink does not
+ * ask an offline port (tryConnect), because on an iPhone only Apple's own
+ * Bluetooth screen can connect one again, so the loop can only wait for iOS
+ * to bring it back by itself, which nothing shows it doing.
+ */
+export function adapterAway() {
+  if (Platform.OS !== 'ios' || !saved.adapter) return false
+  return !adapterDevices().some((d) => d.id === saved.adapter.id && !d.offline)
+}
+
+/**
+ * Whether a tap on Look again (lookForAdapterAgain) opens Apple's screen
+ * now: an iPhone whose adapter has gone, with that screen not kept shut. The
+ * button says so under itself when it does (APPLE_SCREEN_OPENS), so the one
+ * question decides both what the tap does and what the button says.
+ */
+export const opensApplesScreen = () => adapterAway() && !pairScreenShut()
+
+/*
+ * WHAT A BUTTON THAT OPENS APPLE'S SCREEN SAYS UNDER ITSELF: Reconnect on the
+ * page, and Look for the adapter again on the waiting screen and on Phone &
+ * computer. "Look for the adapter again" opened Apple's screen with nothing
+ * to say it would, or that the adapter is tapped there and Connected waited
+ * for before Done: tapped early, Done leaves it unconnected, and the waiting
+ * screen's note said only to check Bluetooth was on. The page's own words,
+ * once, so the three buttons say the same thing. iPhone only, so Apple's name
+ * is never on another phone.
+ */
+export const APPLE_SCREEN_OPENS = 'Opens Apple’s Bluetooth screen: tap your adapter, wait for Connected, then Done.'
+
+/**
+ * LOOK AGAIN, BY HAND: the Bluetooth page's Reconnect and the waiting
+ * screen's "Look for the adapter again".
+ *
+ * An iPhone drops a Bluetooth link nobody is using after a few minutes
+ * (Apple's QA1831), a phone locked in a pocket between songs is exactly
+ * that, and getting it back was Stop, Connect and Apple's screen, three taps
+ * mid-set. So while the adapter is away on an iPhone, this opens Apple's
+ * screen straight away (findAdapters, which chooses what comes back), and
+ * only then hands over to the link's own poke. Anywhere else, or with
+ * Apple's screen kept shut (pairScreenShut), it is the poke alone, as
+ * before.
+ *
+ * `poke` is link.js's probeNow, passed in: bleLink imports this file, so it
+ * cannot be imported back. Never for a watch tap or anything else that is
+ * not a hand on this screen: Apple's screen is a screen.
+ */
+export async function lookForAdapterAgain(poke) {
+  if (opensApplesScreen()) {
+    try {
+      await findAdapters()
+    } catch {
+      // The page says what went wrong (findAdapters notes it); the poke still goes.
+    }
+  }
+  poke?.()
 }
 
 /* ------------------------------------------------------------------ */

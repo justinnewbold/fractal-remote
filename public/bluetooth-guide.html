@@ -39,9 +39,10 @@
       two steps at the top, the three rows that open under them), then what
       to try.
 
-      TRIED AND NOT TRIED. One AM4, from an iPhone, is all it has been tried
-      on. The page may say which units can be PICKED, never that any other
-      one WORKS: "It works with the AM4, FM3, FM9 and Axe-Fx III" once stood
+      TRIED AND NOT TRIED. One AM4, from an iPhone and (since 25 October
+      2026, "I have tried it from an android phone and it works great") from
+      an Android phone, is all it has been tried on. The page may say which
+      units can be PICKED, never that any other one WORKS: "It works with the AM4, FM3, FM9 and Axe-Fx III" once stood
       under What it is, three paragraphs below the note saying three of
       those had never been tried, with every test green. test/limits.mjs now
       refuses that shape of sentence.
@@ -54,6 +55,12 @@
       shared/bluetooth-gear.mjs. The "What's different from USB" list is
       the app's own list (mobile/src/screens/Bluetooth.js, DIFFERENT), word
       for word, and the same test holds the two together.
+
+      NO RECIPE FOR THE FM3. It said what FM3 owners fit (a resistor on one pin
+      of a home-made adapter, for "someone who solders"); that went from here
+      and from the app on 25 October 2026. A soldering job is nothing this app
+      can stand behind or send a stranger to: the page says what happened,
+      what owners report, and to keep the parts off an FM3.
 
       NO PRICES, as on the phone: they change, and a price on this page is
       wrong the day they do. And NO LINKS TO BUY the other adapters at the
@@ -126,7 +133,7 @@
   <body>
     <main>
       <h1>Bluetooth (beta) setup</h1>
-      <p class="when">Fractal Remote · last updated 24 October 2026</p>
+      <p class="when">Fractal Remote · last updated 25 October 2026</p>
 
       <p class="dim">
         Bluetooth (beta) isn’t in the app for customers. It is still being tested, and may be
@@ -141,10 +148,10 @@
           Bluetooth MIDI adapter plugged into the unit.
         </p>
         <p>
-          So far it has been tried on one AM4, from an iPhone, with the three parts below. It was
-          tried once on an FM3 with the same parts plugged straight in: the cable got very hot and
-          didn’t connect, so <strong>don’t do that</strong> (see <a href="#fm3">FM3</a> below). It
-          has not been tried yet on an FM9 or Axe-Fx III, or from an Android phone.
+          So far it has been tried on one AM4, from an iPhone and from an Android phone, with the
+          three parts below. It was tried once on an FM3 with the same parts: the
+          cable got very hot and didn’t connect, so <strong>don’t do that</strong> (see
+          <a href="#fm3">FM3</a> below). It has not been tried yet on an FM9 or Axe-Fx III.
         </p>
         <p>
           The usual way, with your unit on a USB cable to a computer running the desktop app, is
@@ -245,9 +252,9 @@
         </div>
       </div>
 
-      <h3 id="fm3">FM3 <span class="tag no">Don’t plug straight in</span></h3>
+      <h3 id="fm3">FM3 <span class="tag no">Don’t use these parts</span></h3>
       <p class="lead">
-        <strong>Don’t plug the C2MIDI Pro’s white plug straight into an FM3’s MIDI OUT/THRU.</strong>
+        <strong>Don’t plug the C2MIDI Pro’s white plug into an FM3’s MIDI OUT/THRU.</strong>
         When we tried it, the cable got very hot and the connection didn’t work. If anything on an
         FM3’s MIDI jack gets hot, unplug it straight away.
       </p>
@@ -260,11 +267,8 @@
         Powering the adapter from USB doesn’t stop it, because the jack is still feeding it.
       </p>
       <p>
-        <strong>What FM3 owners use.</strong> A short MIDI adapter with a 220-ohm resistor on
-        pin 4, plugged between the FM3’s MIDI OUT/THRU and the adapter, with the FM3 switched off
-        while it goes in. We know of none sold ready-made: someone who solders can make one from a
-        few dollars of parts. Never open the FM3 itself. Fractal Remote hasn’t been tried this way
-        yet, so if you do, please tell us how it went.
+        So keep these parts, and any adapter that takes its power from the MIDI OUT jack, off an
+        FM3.
       </p>
 
       <h3>FM9 and Axe-Fx III <span class="tag no">Not tried yet</span></h3>
@@ -344,6 +348,11 @@
         <li>Feel the C2MIDI Pro after a minute. It should be cool. If it is more than slightly warm,
           unplug it at once.</li>
       </ol>
+
+      <p class="lead">
+        <strong>One at a time.</strong> While you use Bluetooth, quit the Fractal Remote app on the
+        computer, or unplug the unit’s USB cable, so the unit isn’t driven from two places at once.
+      </p>
 
       <p class="lead">
         <strong>About power banks.</strong> All of this draws very little power, and some power
@@ -516,8 +525,7 @@
           two leads, one for each 3.5 mm jack. Power it from USB-C. It has a Type A/B switch: on the
           AM4 start on A, and try B if nothing gets through.</li>
         <li><strong>CME WIDI Jack, with the 5-pin cables</strong>, for the FM9 and Axe-Fx III. On an
-          FM3 it is reported hot even on USB power, unless a 220-ohm adapter is fitted (see
-          <a href="#fm3">FM3</a>).</li>
+          FM3 it is reported hot even on USB power (see <a href="#fm3">FM3</a>).</li>
         <li><strong>CME WIDI Master</strong>, for the FM9 and Axe-Fx III. It comes in two parts:
           the main plug goes in MIDI OUT and the small second plug on its short lead goes in MIDI
           IN. Both have to be in. It takes its power from the unit’s MIDI OUT, so it may not run on
@@ -533,8 +541,7 @@
 
       <h2>Tell us how it went</h2>
       <p>
-        It is a beta, so every report helps, and most of all one from an FM9 or Axe-Fx III, an FM3
-        with a 220-ohm adapter, or Android. In the app: <strong>Settings → Troubleshooting → Feedback</strong>. Or email
+        It is a beta, so every report helps. In the app: <strong>Settings → Troubleshooting → Feedback</strong>. Or email
         <a href="mailto:justinnewbold@gmail.com">justinnewbold@gmail.com</a>, saying which unit,
         which adapter, and which phone. More help is on the <a href="/support">support page</a>.
       </p>

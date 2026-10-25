@@ -4,9 +4,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import Constants from 'expo-constants'
 
 import { logDebug } from './debugLog'
-import { mayDrive } from './unlock-rule'
+import { mayDrive, mayDriveBluetooth } from './unlock-rule'
 import { isOwner } from './owner-unlock'
-import { currentAccount, restoreSession } from './relay'
+import { currentAccount, signedInOnPhone } from './relay'
 import { isDemo, setDemo } from './demo'
 import { claimRelay } from './relayPass'
 import { deviceNoun } from './device-word'
@@ -203,8 +203,11 @@ const notStuck = () => (state.held === NOT_ACROSS || state.held === NOT_ACROSS_S
 
 /* Which of the two is true now, by the phone's own sign-in, never the
    account server: no signal must not make a signed-in customer look like
-   nobody. */
-const stuckLine = async () => ((await restoreSession().catch(() => null)) ? NOT_ACROSS : NOT_ACROSS_SIGNED_OUT)
+   nobody. Asked the door's way (relay.js signedInOnPhone), so a customer let
+   in at a gig on a sign-in that ran out, with a purchase still on its way
+   to their account, is told it hasn't reached the account yet rather than
+   to sign in. */
+const stuckLine = async () => ((await signedInOnPhone().catch(() => null)) ? NOT_ACROSS : NOT_ACROSS_SIGNED_OUT)
 
 /* The account the phone's own gate is held open for while its purchase is
    on the way there (linkTo), so the store's "not yet" cannot lock it — or
@@ -380,9 +383,10 @@ const nameless = async (api) => {
 }
 
 /* See `onlyHere` above. Read from the phone's own sign-in, never the account
-   server: no signal must not make a signed-in customer look like nobody. */
+   server: no signal must not make a signed-in customer look like nobody
+   (signedInOnPhone, the door's question). */
 const aloneHere = async (api, info) =>
-  entitled(info) && (await nameless(api)) && !(await restoreSession().catch(() => null))
+  entitled(info) && (await nameless(api)) && !(await signedInOnPhone().catch(() => null))
 
 /**
  * Start up, once, as early as the app can manage it.
@@ -708,7 +712,7 @@ const link = async () => {
  */
 export const linkNewAccount = async (id) => {
   if (!id || !(state.onlyHere || state.madeHere || state.stuck)) return false
-  if (await restoreSession().catch(() => null)) return false
+  if (await signedInOnPhone().catch(() => null)) return false
   const api = await load()
   if (!api) return false
   const info = await linkTo(api, id, { made: true })
@@ -1087,7 +1091,15 @@ export const buyUnlock = async () => {
   if (state.held) return { ok: false, cancelled: false, held: true, message: state.held }
   const api = await load()
   if (!api) return { ok: false, cancelled: false, message: 'This build cannot take payments.' }
-  const who = await restoreSession().catch(() => null)
+  /*
+   * Who is signed in here, the door's way (relay.js signedInOnPhone): a
+   * customer let in on a sign-in that ran out, with the account service out
+   * of reach and the store answering, is somebody. Read as nobody, the guard
+   * below took the store off their account before selling, and the sale
+   * landed on the phone's nameless id instead of the account they were
+   * signed in to: the 8 October shape again, for a computer or the website.
+   */
+  const who = await signedInOnPhone().catch(() => null)
   try {
     const now = await ownedNow(api, who)
     if (!now) return { ok: false, cancelled: false, message: 'Couldn’t check your purchase just now. Try again in a moment.' }
@@ -1217,8 +1229,10 @@ export const restorePurchase = async () => {
     let info = await api.restorePurchases()
     let yes = entitled(info)
     /* And, signed in, the server's catch-up that a sign-in runs (a grant, or
-       the waiting list), before anybody is told there is nothing. */
-    const who = await restoreSession().catch(() => null)
+       the waiting list), before anybody is told there is nothing. Signed in
+       the door's way (signedInOnPhone); the relay pass asks for a working
+       sign-in itself, and with none says no, as it always has offline. */
+    const who = await signedInOnPhone().catch(() => null)
     if (!yes && who && (await claimRelay())) {
       const again = await freshInfo(api)
       if (entitled(again)) {
@@ -1300,6 +1314,14 @@ export const unlockedFrom = async () => {
 export const mayConnect = () => mayDrive(state)
 
 /**
+ * Whether Bluetooth (beta) may drive one: paid, for anybody but his account
+ * (`admin`, lib/bluetooth bluetoothAdmin), whose answer is mayConnect's. Not
+ * mayConnect for everybody: with no signal the store cannot be reached, and
+ * Bluetooth needs none (unlock-rule mayDriveBluetooth says why).
+ */
+export const mayConnectBluetooth = (admin = false) => mayDriveBluetooth(state, admin)
+
+/**
  * WHETHER TO SHOW THE WAY IN — which is NOT the same question as whether
  * money can change hands this second, and treating them as one was a bad
  * mistake.
@@ -1330,6 +1352,9 @@ const subscribe = (fn) => {
   watchers.add(fn)
   return () => watchers.delete(fn)
 }
+
+/** The same watch, for code that is not a screen: lib/bleLink, stopped at the unlock, starts when the purchase lets it. */
+export const subscribePurchase = subscribe
 
 /** The same, for a screen that should repaint when it changes. */
 export const usePurchase = () => useSyncExternalStore(subscribe, purchaseState, purchaseState)

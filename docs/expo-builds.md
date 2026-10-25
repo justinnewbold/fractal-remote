@@ -12,6 +12,40 @@ only the iPhone's fingerprint moved and Justin asked for "the iPhone
 build". When Android's fingerprint has not moved, an Android build would be
 the same as the one already in the store, and Android keeps taking updates.
 
+**The build that opens Bluetooth (beta) to customers says so in its row**,
+in these words in What it was for: "Bluetooth (beta) for customers". Write
+them in that row alone, the build whose review notes describe it, and only
+for a build that opens it on every phone the row built. It is one build
+pair, one row built on both phones, and the threshold is set on both
+phones together: the test refuses an opening marked on one phone alone, a
+split row (one phone's build marked, the other's of the same version not),
+and a threshold set on one phone only. If a one-phone opening is ever
+wanted, the rule in test/ledger.mjs is changed first, on purpose, and says
+why. test/bluetooth.mjs
+reads every row against the rule in mobile/src/lib/ble-rule.js: until a row
+says it, every build here has to stay closed to a customer on both phones;
+once one does, `BLUETOOTH_FROM_STORE` has to be set for each phone that row
+built and has to open on that row's version, so no later update can set it
+back and take Bluetooth away from the copies that were reviewed with it.
+The opening build's row is written in the first pull request after the
+build is started, before any other merge. A ledger-test failure that names
+the threshold and this app's version in the meantime means one of two
+things: if a build was started from that threshold, the row is missing, and
+the fix is the row, never moving the threshold; only if no build was ever
+made from it is the threshold set back to null, or moved with the version.
+The pull request that writes the row also sets `OPENED_AT` in
+test/ledger.mjs to that build (its version, and the threshold on each
+phone), and the test fails until it does. From then on the row, the
+threshold and the pin each hold the others, so a later change cannot take
+the row out and set the threshold back together without undoing all
+three.
+
+The pull request that sets the threshold, the build pull request, is merged
+only after Justin's yes to the build and right before the pair is started,
+never on green alone: its phones' fingerprint says Unchanged, and its merge
+puts a public APK that opens Bluetooth on the Releases page (CLAUDE.md says
+why).
+
 **And on the day a build goes live in a store, move its number in
 `public/store-versions.json`** (`ios` for the App Store, `android` for Google
 Play), in its own pull request, that day and not before: live means

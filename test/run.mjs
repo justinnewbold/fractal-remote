@@ -6451,6 +6451,10 @@ console.log('\nno computer signed in with this account yet')
 const { run: noComputer } = await import('./no-computer.mjs')
 noComputer(test)
 
+console.log('\na sign-in that ran out with no signal: still in, at a gig')
+const { run: keptSession } = await import('./kept-session.mjs')
+keptSession(test)
+
 console.log('\nwhat the app keeps away from a VP4')
 const { run: vp4Safety } = await import('./vp4-safety.mjs')
 vp4Safety(test)

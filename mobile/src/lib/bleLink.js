@@ -3,6 +3,8 @@ import { AppState, Platform } from 'react-native'
 import { bluetoothOn, setSwitch } from './bleSwitch'
 import {
   adapterDevices,
+  adapterName,
+  bluetoothAdmin,
   bluetoothSettings,
   bluetoothSupported,
   closeWire,
@@ -15,7 +17,7 @@ import {
   unitName
 } from './bluetooth'
 import { getState, handleEvent, refreshAll, reset as resetRig, stopWatching, watchUnit } from './rig'
-import { mayConnect } from './purchases'
+import { mayConnectBluetooth, subscribePurchase } from './purchases'
 import { logDebug } from './debugLog'
 
 /**
@@ -76,6 +78,8 @@ let touched = false
 let unitTunerOwed = false
 /* A wire being let go of once the AM4's own tuner has been closed in its turn (see letGoOfWireInTurn). */
 let letting = null
+/* Stopped at the unlock while wanted: the purchase watched, to start the link the moment it lets this account in (see waitForPurchase). */
+let unlockWait = null
 
 const say = (line, detail) => logDebug('ble', line, detail)
 
@@ -105,15 +109,20 @@ export function startBluetoothLink(set) {
   }
   /*
    * THE UNLOCK, as the paywall applies it: somebody who may not drive a real
-   * unit is not connected to one. mayConnect says yes when the store cannot
-   * be reached, the same as everywhere else in the app.
+   * unit is not connected to one. Over Bluetooth that is the purchase itself
+   * (the one remembered on the phone included), and never "the store cannot
+   * be reached", which the computer's link takes as a yes: Bluetooth works
+   * with no signal, and a free account in airplane mode would have a rig for
+   * good (unlock-rule mayDriveBluetooth). His account keeps mayConnect's answer.
    */
-  if (!mayConnect()) {
+  if (!mayConnectBluetooth(bluetoothAdmin())) {
     tell?.({ link: 'off' })
     noteBluetooth({ phase: 'locked' })
     say('not connecting over Bluetooth: the app is not unlocked on this phone')
+    waitForPurchase()
     return
   }
+  stopWaitingForPurchase()
   running = true
   held = false
   delay = 0
@@ -128,6 +137,33 @@ export function startBluetoothLink(set) {
   begin()
 }
 
+/*
+ * WAITING ON THE PURCHASE, while the link is wanted and stopped at the
+ * unlock. Nothing else starts it again: App.js restarts the link on a
+ * change of who is signed in, of the demo or of Bluetooth, never of the
+ * purchase, so a purchase that lands after the link was asked (the one
+ * remembered on the phone read late at a launch with no signal, a Restore,
+ * a Buy with Bluetooth on) left a paying customer's link 'off' until
+ * somebody tapped Connect. So the purchase is watched, once, and the link
+ * starts when it lets this account in; it stops being watched when the
+ * link starts or is no longer wanted.
+ */
+function waitForPurchase() {
+  if (unlockWait) return
+  unlockWait = subscribePurchase(() => {
+    if (!wanted || running || !mayConnectBluetooth(bluetoothAdmin())) return
+    stopWaitingForPurchase()
+    say('the app is unlocked on this phone now: connecting over Bluetooth')
+    startBluetoothLink(tell)
+  })
+}
+
+function stopWaitingForPurchase() {
+  const off = unlockWait
+  unlockWait = null
+  off?.()
+}
+
 /** Where the loop stands, said to the link and to the page; then, if there is an adapter to try, try it. */
 function begin() {
   clearTimer()
@@ -138,7 +174,8 @@ function begin() {
     noteBluetooth({ phase: 'no-unit' })
     return
   }
-  const name = s.adapter?.name || 'the Bluetooth adapter'
+  /* By its name, never its Bluetooth address: the link keeps this as macName, and the log's head prints it (lib/bluetooth adapterName). */
+  const name = adapterName(s.adapter) || 'the Bluetooth adapter'
   /*
    * With no adapter picked nothing is being looked for, so the link is 'off'
    * as it is for no unit: 'joining' put "Finding the Bluetooth adapter" on
@@ -211,7 +248,7 @@ async function connected(e) {
   wire = made
   unhear = made.subscribe(handleEvent)
   setSwitch({ on: bluetoothOn(), wire: made })
-  const name = e?.name || s.adapter?.name || 'the Bluetooth adapter'
+  const name = adapterName(e) || adapterName(s.adapter) || 'the Bluetooth adapter'
   noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null })
   tell?.({ link: 'connected', macName: name, hostVersion: null })
   say(`connected to ${name}; asking the ${unitName(s.unit)} what it is`)
@@ -478,6 +515,7 @@ export function holdBluetooth() {
 /** Stop everything: link.js's stopLink, before it resets the link and the rig. */
 export function stopBluetoothLink() {
   wanted = false
+  stopWaitingForPurchase()
   if (!running) return
   running = false
   attempt++

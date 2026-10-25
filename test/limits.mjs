@@ -4222,7 +4222,7 @@ export function run(test) {
       .replace(/\s+/g, ' ')
 
     assert.match(html, /<title>Bluetooth \(beta\) setup/, 'the guide has lost its title')
-    assert.match(words, /last updated 24 October 2026/i, 'the guide does not say when it was last checked')
+    assert.match(words, /last updated 25 October 2026/i, 'the guide does not say when it was last checked')
     /* Where the app's Full setup guide goes, and nowhere a search engine sends a customer. */
     const { GUIDE_URL } = await import('../shared/bluetooth-gear.mjs')
     assert.equal(GUIDE_URL, 'https://fractal.newbold.cloud/bluetooth-guide.html', 'the app’s Full setup guide opens somewhere other than the guide')
@@ -4243,18 +4243,36 @@ export function run(test) {
 
     /* The disclaimer, in the words the app uses for it. */
     assert.match(words, /Bluetooth is new \(beta\), and it may not work correctly with every unit or adapter\./, 'the guide does not say it is a beta that may not work')
-    assert.match(words, /So far it has been tried on one AM4, from an iPhone/, 'the guide does not say an AM4 from an iPhone is what it was tried on')
-    assert.match(words, /not been tried yet on an FM9 or Axe-Fx III, or from an Android phone/, 'the guide does not say the FM9, Axe-Fx III and Android are untried')
+    /*
+     * From an iPhone and, since 25 October 2026, from an Android phone ("I
+     * have tried it from an android phone and it works great"). This held
+     * Android to "not been tried yet"; changed on purpose, with the app's
+     * Android beta note.
+     */
+    assert.match(words, /So far it has been tried on one AM4, from an iPhone and from an Android phone/, 'the guide does not say an AM4, from an iPhone and an Android phone, is what it was tried on')
+    assert.match(words, /It has not been tried yet on an FM9 or Axe-Fx III\./, 'the guide does not say the FM9 and Axe-Fx III are untried')
+    assert.ok(!/not been tried[^.]*Android/.test(words), 'the guide still says no Android phone has run it')
     /*
      * "The CME C2MIDI Pro got extremely hot on the FM3 and the connection
      * didn't work." The FM3's MIDI OUT has no current limit and the cable
-     * feeds from it, so the guide says not to plug it straight in, why, and
-     * what owners fit — and lists nothing to buy for it.
+     * feeds from it, so the guide says not to plug it in, and why — and lists
+     * nothing to buy for it. Never "straight in": that word was there while a
+     * way round it was offered, and with none any more it read as if there
+     * still were one.
      */
-    assert.match(words, /tried once on an FM3 with the same parts plugged straight in: the cable got very hot and didn’t connect, so don’t do that/, 'the guide does not warn FM3 owners off what overheated')
-    assert.match(words, /FM3 Don’t plug straight in/, 'the FM3 is not marked as one not to plug straight in')
-    assert.match(words, /Don’t plug the C2MIDI Pro’s white plug straight into an FM3’s MIDI OUT\/THRU\./)
-    assert.match(words, /220-ohm resistor on pin 4/, 'the guide does not say what FM3 owners fit')
+    assert.match(words, /tried once on an FM3 with the same parts: the cable got very hot and didn’t connect, so don’t do that/, 'the guide does not warn FM3 owners off what overheated')
+    assert.match(words, /FM3 Don’t use these parts/, 'the FM3 is not marked as one not to use these parts on')
+    assert.match(words, /Don’t plug the C2MIDI Pro’s white plug into an FM3’s MIDI OUT\/THRU\./)
+    assert.ok(!/parts plugged straight in|plug straight in|straight into an FM3/i.test(words), 'the guide says not to plug it straight in, as if there were another way')
+    /*
+     * NO HOME-MADE WAY ROUND IT. This held the guide to what FM3 owners fit
+     * (a 220-ohm resistor on pin 4, for "someone who solders"); changed on
+     * purpose on 25 October 2026, here and in the app's warning. What
+     * happened, what owners report, and to keep the parts off an FM3.
+     */
+    assert.ok(!/220-ohm|resistor|solder/i.test(words), 'the guide gives a home-made way round the FM3 again')
+    assert.match(words, /FM3 owners have reported since 2021/, 'the guide says the FM3’s fault as fact rather than what owners report')
+    assert.match(words, /So keep these parts, and any adapter that takes its power from the MIDI OUT jack, off an FM3\./, 'the guide does not say to keep the parts off an FM3')
     assert.match(words, /Powering the adapter from USB doesn’t stop it/)
     const fm3 = html.slice(html.indexOf('id="fm3"'), html.indexOf('<h3>FM9 and Axe-Fx III'))
     assert.ok(fm3.length > 200 && !/amazon\.|cme-pro\.com/.test(fm3), 'the FM3 section gives somewhere to buy what overheated')
@@ -4315,7 +4333,8 @@ export function run(test) {
       'Full setup guide',
       '2 · Connect',
       'wait until it says Connected, then tap Done',
-      'The phone looks for the adapter for ten seconds, then connects to it.'
+      /* The app names the device in hand there now (`The ${deviceNoun()} looks…`), the guide "The phone": the rest of the sentence is held. */
+      'looks for the adapter for ten seconds, then connects to it.'
     ]) {
       assert.ok(app.includes(said), `the Bluetooth page no longer says "${said}"; read the guide against it again`)
       assert.ok(words.includes(said), `the guide does not say "${said}" as the app does`)
@@ -4329,7 +4348,7 @@ export function run(test) {
     assert.match(words, /Under Connect are three rows you tap to open: How to plug it in \(open the first time\), What to buy/, 'the guide does not say the rows sit under Connect, as they do in the app')
     assert.match(app, /<Heading>1 · Pick your unit<\/Heading>[\s\S]*<Heading>2 · Connect<\/Heading>[\s\S]*<Fold title="How to plug it in"[\s\S]*<Fold title="What to buy"[\s\S]*<Fold title="What it can and can’t do"/, 'the rows are no longer under the two steps; read the guide against the app again')
     /* Screen Time: the same place to look as the app's own line for it. */
-    const restricted = read('mobile/src/lib/bluetooth.js').match(/export const RESTRICTED_WORDS =\s*'([^']+)'/)?.[1] ?? ''
+    const restricted = read('mobile/src/lib/bluetooth.js').match(/export const RESTRICTED_WORDS =\s*`([^`]+)`/)?.[1] ?? ''
     assert.ok(restricted.includes('Settings → Screen Time → Content & Privacy Restrictions'), 'the app’s Screen Time line no longer says where to look; read the guide against it again')
     assert.match(words, /blocked by Screen Time[^.]*Settings → Screen Time → Content & Privacy Restrictions, allow Bluetooth Sharing/, 'the guide does not say what to do when Screen Time blocks Bluetooth')
     const settings = read('mobile/src/screens/Settings.js')
@@ -4342,6 +4361,10 @@ export function run(test) {
     const lines = [...different.matchAll(/^\s*'([^']+)',?$/gm)].map((m) => m[1])
     assert.ok(lines.length >= 5, 'the Bluetooth page’s list of what is different could not be read')
     for (const line of lines) assert.ok(words.includes(line), `the guide leaves out "${line}", which the app says`)
+
+    /* One thing driving the unit at a time: the app's own line under the steps (ONE_AT_A_TIME), word for word. */
+    const { ONE_AT_A_TIME } = await import('../shared/bluetooth-gear.mjs')
+    assert.ok(words.includes(ONE_AT_A_TIME), 'the guide does not say what the app says about the computer app and the USB cable while Bluetooth is used')
 
     /* When it doesn't work. */
     assert.match(words, /Only one phone or computer at a time\./, 'the guide does not say the adapter takes one phone or computer at a time')
@@ -4522,8 +4545,21 @@ export function run(test) {
 
     /* Held to the app: the row and the page wait for the developer-only check, so the disclosure is what the build does. */
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
-    assert.match(settings, /\{mayDrive\(purchase\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/, 'the notes say Bluetooth is the developer’s only, and the Settings row is not behind that')
-    assert.match(read('mobile/src/lib/bluetooth.js'), /allowed = accountId\(id\) \? isAdmin\(id\) : null/, 'the notes say Bluetooth is the developer’s only, and lib/bluetooth decides it some other way')
+    assert.match(settings, /\{mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/, 'the notes say Bluetooth is the developer’s only, and the Settings row is not behind that')
+    /*
+     * And lib/bluetooth's answer, by the store copy: his account on every
+     * copy, a customer's only on a copy whose built-in version opens it
+     * (lib/ble-rule.js). This pinned `allowed = accountId(id) ? isAdmin(id) :
+     * null`; changed on purpose on 25 October 2026. What the notes promise
+     * holds as long as a 1.87.11 copy stays closed to a customer, which is
+     * what is asked here, of the rule itself, on both phones.
+     */
+    assert.match(read('mobile/src/lib/bluetooth.js'), /allowed = accountId\(id\) \? bluetoothOpen\(\{ platform: Platform\.OS, installed: builtInVersion\(\), admin: isAdmin\(id\) \}\) : null/, 'the notes say Bluetooth is the developer’s only, and lib/bluetooth decides it some other way')
+    const { bluetoothOpen } = await import('../mobile/src/lib/ble-rule.js')
+    for (const platform of ['ios', 'android']) {
+      assert.equal(bluetoothOpen({ platform, installed: '1.87.11', admin: false }), false, `a customer on the ${platform} 1.87.11 copy is shown Bluetooth, and its approved notes say they are not`)
+      assert.equal(bluetoothOpen({ platform, installed: '1.87.11', admin: true }), true, `the developer’s own account is shut out of Bluetooth on the ${platform} 1.87.11 copy`)
+    }
 
     /* Around the block: the rule that it never reaches customers by an update, and no step left over for a Bluetooth review. */
     assert.match(section, /\*\*Never switched on for customers by an update\.\*\*/, 'the 1.87.11 section does not say Bluetooth is never opened to customers by an update')

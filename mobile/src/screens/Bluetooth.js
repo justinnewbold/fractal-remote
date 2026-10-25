@@ -7,35 +7,48 @@ import { APP_VERSION } from '../lib/version'
 import { BLE_UNITS, WAYS } from '../lib/bleWire'
 import {
   ALLOW_WORDS,
+  APPLE_SCREEN_OPENS,
   RESTRICTED_WORDS,
+  adapterAway,
   adapterDevices,
   checkSteps,
   chooseAdapter,
   findAdapters,
   forgetAdapter,
+  lookForAdapterAgain,
   methodsFor,
+  offeredUnits,
   pairScreenShut,
   runCheck,
   setBluetooth,
   setBluetoothUnit,
   setMethods,
   unitName,
-  useBluetooth
+  useBluetooth,
+  useBluetoothAdmin
 } from '../lib/bluetooth'
 import {
+  AM4_ONLY,
+  BLUETOOTH_WAYS,
   FIRST_TIME,
   GEAR_IN_SHORT,
+  GEAR_IN_SHORT_AM4,
   GUIDE_URL,
+  NOT_FOR_FM3,
+  ONE_AT_A_TIME,
   PLUGS_CHECK,
   POWER_LINE,
+  SELLERS_LINE,
   betaNote,
   hookupFor,
   partsFor,
   untriedLine,
   warningFor
 } from '../lib/bluetooth-gear'
+import { deviceNoun } from '../lib/device-word'
+import { probeNow } from '../lib/link'
 import { useRig } from '../lib/rig'
-import { mayDrive } from '../lib/unlock-rule'
+import { mayDriveBluetooth } from '../lib/unlock-rule'
 import Note from '../components/Note'
 import Press from '../components/Press'
 
@@ -75,17 +88,34 @@ import Press from '../components/Press'
  * A BETA, and it says so: in the head (Bluetooth (beta)), and in the note
  * under the rows, always drawn and never folded. "Let's just say that
  * Bluetooth is beta though in the app and give like a disclaimer saying that
- * Bluetooth might not function correctly." It was a public beta for one day; since 11
- * October 2026 it is Justin's account's alone ("I just feel like it's not
- * ready to have public"), and Settings draws this page for nobody else
- * (useBluetoothAllowed, lib/bluetooth.js). It has been tried on one AM4.
+ * Bluetooth might not function correctly." It was a public beta for one day;
+ * since 11 October 2026 it is Justin's account's on every copy, and a
+ * customer's only on a copy whose built-in store version opens it (lib/
+ * ble-rule.js, which no copy today does): Settings draws this page for
+ * nobody else (useBluetoothAllowed, lib/bluetooth.js). It has run one AM4,
+ * from an iPhone and from an Android phone.
+ *
+ * TWO WAYS TO CONNECT, AND THE COMPUTER IS THE BEST. "Make it clear that
+ * there's multiple ways to connect the device, but also make it clear that
+ * the computer is the preferred method and that Bluetooth will have more lag
+ * and not have as many features." (25 October 2026.) Said first, in one
+ * line over the steps (BLUETOOTH_WAYS, the same words as the Settings row,
+ * the waiting screen and the purchase page), before anybody taps Connect.
+ *
+ * THE AM4 ONLY, FOR A CUSTOMER. Step 1 offers what lib/bluetooth says this
+ * account may pick (offeredUnits): the AM4 alone for a customer, all four for
+ * his account. And everybody, before any pick and whatever is picked, is
+ * told it is not for an FM3, whose owners would otherwise never see why.
  *
  * The beta note is the iPhone's or Android's own (betaNote, from
- * shared/bluetooth-gear.mjs): only Android's says it has not been tried from
- * an Android phone, because Apple's 2.3.10 keeps other phones' names out of
- * an iPhone app, and this is the page the review notes will send Apple's
- * reviewer to on the day Bluetooth goes to customers. (The 1.87.11 notes
- * Apple approved say only the developer's account sees it.)
+ * shared/bluetooth-gear.mjs): only Android's names an Android phone, because
+ * Apple's 2.3.10 keeps other phones' names out of an iPhone app, and this is
+ * the page the review notes will send Apple's reviewer to on the day
+ * Bluetooth goes to customers. (The 1.87.11 notes Apple approved say only
+ * the developer's account sees it.)
+ *
+ * THE DEVICE IN HAND, BY ITS NAME (lib/device-word deviceNoun): an iPad or a
+ * tablet reads "this iPad", "the tablet's settings", never "this phone".
  *
  * The check, for finding out what a real unit does, is folded away under
  * Testing tools, last.
@@ -113,7 +143,7 @@ import Press from '../components/Press'
 
 const face = Platform.select(mono)
 const ios = Platform.OS === 'ios'
-/* The iPhone's copy names no other phone; Android's says it has not been tried on one. */
+/* The iPhone's copy names the iPhone it was tried from; Android's names an Android phone as well. */
 const BETA_NOTE = betaNote(Platform.OS)
 
 /* What a player loses by leaving the cable at home, in the order it is noticed. */
@@ -150,7 +180,7 @@ const signal = (rssi) => (!Number.isFinite(rssi) ? '' : rssi > -60 ? 'strong sig
 function status(b, unitState) {
   const name = unitName(b.unit)
   /* Whatever the switch says: finding the adapter before turning this on is the usual order, and a search that could not start has to say why. */
-  if (b.trouble === 'bluetooth-off') return { line: 'Turn on Bluetooth in the phone’s settings', tone: 'fault' }
+  if (b.trouble === 'bluetooth-off') return { line: `Turn on Bluetooth in the ${deviceNoun()}’s settings`, tone: 'fault' }
   if (b.trouble === 'permission') return { line: ALLOW_WORDS, tone: 'fault' }
   if (b.trouble === 'restricted') return { line: RESTRICTED_WORDS, tone: 'fault' }
   if (!b.on) return { line: 'Not connected', tone: 'dim' }
@@ -159,10 +189,18 @@ function status(b, unitState) {
   if (!b.adapter || b.phase === 'no-adapter') return { line: 'No adapter yet. Tap Stop, then Connect.', tone: 'dim' }
   if (b.phase === 'held') return { line: 'Disconnected', tone: 'dim' }
   if (b.phase === 'connected') {
-    /* The wrong unit picked: the phone has stopped sending to it, and this is the way out. */
+    /*
+     * The wrong unit picked: the phone has stopped sending to it, and this is
+     * the way out. Only sent to a unit this account can pick in step 1 (it is
+     * always the AM4: bleWire's onForeign names nothing else); never to one a
+     * customer is not offered.
+     */
     if (b.answeredAs) {
+      const pickable = offeredUnits().some((u) => u.name === b.answeredAs)
       return {
-        line: `An ${b.answeredAs} answered, not the ${name}. Tap Stop, pick ${b.answeredAs} in step 1, then tap Connect.`,
+        line: pickable
+          ? `An ${b.answeredAs} answered, not the ${name}. Tap Stop, pick ${b.answeredAs} in step 1, then tap Connect.`
+          : `An ${b.answeredAs} answered, not the ${name}. ${AM4_ONLY} Tap Stop, and use the computer for the ${b.answeredAs}.`,
         tone: 'fault'
       }
     }
@@ -189,6 +227,9 @@ export default function BluetoothPage({ purchase, admin = false }) {
   const am4 = b.unit === 'am4'
   const connected = b.on && b.phase === 'connected'
   const ways = b.unit ? methodsFor(b.unit) : null
+  /* The units step 1 offers this account (lib/bluetooth offeredUnits), and whether that is the AM4 alone: a customer's page. */
+  const units = offeredUnits()
+  const am4Only = units.length < BLE_UNITS.length
 
   /* The check's results, newest last, kept while the page is open. */
   const [results, setResults] = useState([])
@@ -237,13 +278,16 @@ export default function BluetoothPage({ purchase, admin = false }) {
   const [wanted, setWanted] = useState(false)
   /* Apple's screen closed with no adapter connected in it. */
   const [missed, setMissed] = useState(false)
+  /* The full version as Bluetooth reads it: the purchase itself for a customer, never "the store cannot be reached" (unlock-rule mayDriveBluetooth). */
+  const his = useBluetoothAdmin()
+  const paid = mayDriveBluetooth(purchase, his)
   useEffect(() => {
     if (!wanted || !b.adapter || !b.unit || b.on) return
     setWanted(false)
-    if (mayDrive(purchase)) setBluetooth(true)
-  }, [wanted, b.adapter?.id, b.unit, b.on, purchase])
+    if (paid) setBluetooth(true)
+  }, [wanted, b.adapter?.id, b.unit, b.on, paid])
 
-  const canStart = !!b.unit && mayDrive(purchase)
+  const canStart = !!b.unit && paid
   /* Apple's screen kept shut (iOS 27, before the build with Apple's fix): no hint sends anybody to it. */
   const shut = pairScreenShut()
   const find = async () => {
@@ -280,6 +324,21 @@ export default function BluetoothPage({ purchase, admin = false }) {
     chooseAdapter(d)
     setWanted(true)
   }
+  /*
+   * RECONNECT, ON AN IPHONE WHOSE ADAPTER HAS GONE. An iPhone lets a
+   * Bluetooth link nobody is using go after a few minutes (a phone locked
+   * between songs), and the link cannot bring it back by itself: only
+   * Apple's screen can (lib/bluetooth adapterAway). So while it is on and
+   * away, one button opens that screen straight away (lookForAdapterAgain),
+   * where it was Stop, Connect and the screen. Not while Apple's screen is
+   * kept shut. The hint over it says to check the adapter first (a power
+   * bank that switched itself off leaves Apple's screen empty on every
+   * tap), and the line under it what to do in Apple's screen
+   * (APPLE_SCREEN_OPENS), the same words as the other two buttons that open
+   * it.
+   */
+  const away = b.on && b.phase === 'connecting' && ios && !shut && adapterAway()
+  const reconnect = () => lookForAdapterAgain(probeNow)
 
   /* The list is only for a real choice: no adapter chosen yet, and some to choose from. */
   const showList = !b.on && !b.adapter && b.devices.length > 0
@@ -313,39 +372,58 @@ export default function BluetoothPage({ purchase, admin = false }) {
 
         {b.on ? (
           <View style={{ gap: space.sm }}>
-            {/* The usual reasons a connected adapter hears nothing back: the two plugs swapped, or an adapter that only carries one way. */}
+            {/*
+              The usual reasons a connected adapter hears nothing back: the
+              two plugs swapped, or an adapter that only carries one way. And
+              for a customer, first, that it is the AM4 alone: an FM9 owner
+              who picked the AM4 anyway hears that, not only the plugs.
+            */}
             {b.phase === 'connected' && !b.answeredAs && (unitState === 'missing' || unitState === 'silent') ? (
               <Hint>
-                {`${PLUGS_CHECK} The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.`}
+                {`${am4Only ? `${AM4_ONLY} ` : ''}${PLUGS_CHECK} The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.`}
               </Hint>
             ) : null}
             {b.phase === 'connecting' ? (
               <Hint>
                 {shut
                   ? 'If this stays here, tap Stop, check the adapter is plugged in and lit, then tap Connect.'
-                  : ios
-                    ? 'If this stays here, tap Stop, then Connect, and connect the adapter again in Apple’s screen.'
-                    : 'If this stays here, check the phone’s Bluetooth is on, and that the adapter is plugged in and lit.'}
+                  : away
+                    ? `The adapter isn’t connected to this ${deviceNoun()} now. Check it is plugged in and lit, then tap Reconnect.`
+                    : ios
+                      ? 'If this stays here, tap Stop, then Connect, and connect the adapter again in Apple’s screen.'
+                      : `If this stays here, check the ${deviceNoun()}’s Bluetooth is on, and that the adapter is plugged in and lit.`}
               </Hint>
             ) : null}
+            {away ? <Press label="Reconnect" tone="live" sub={APPLE_SCREEN_OPENS} onPress={reconnect} /> : null}
             {/* The unit chips are not drawn while it is on, and Connecting… or Disconnected names no unit: which one was picked, and how to change it. */}
             {b.unit ? <Hint>{`Unit: ${unitName(b.unit)}. To change it, tap Stop first.`}</Hint> : null}
             <Press label="Stop using Bluetooth" onPress={() => setBluetooth(false)} />
-            <Hint>While Bluetooth is on, the phone does not use the computer at all. Stop goes back to the computer.</Hint>
+            <Hint>{`While Bluetooth is on, the ${deviceNoun()} does not use the computer at all. Stop goes back to the computer.`}</Hint>
           </View>
         ) : (
           <View style={{ gap: space.lg }}>
+            {/*
+              THE TWO WAYS, BEFORE ANYTHING IS TAPPED: the computer is the
+              best, and this one is slower and does less (BLUETOOTH_WAYS,
+              shared/bluetooth-gear.mjs, the one sentence every way onto this
+              page says).
+            */}
+            <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>{BLUETOOTH_WAYS}</Text>
             {/*
               STEP 1. Only drawn while it is off: a tap here while connected
               would send the new unit's messages straight away to whatever is
               on the adapter, and the AM4 has frozen on messages it did not
               expect. While it is on, a line over Stop names the unit, and
               says Stop comes first.
+
+              The units this account is offered (`units`): the AM4 alone for a
+              customer. Under them, to everybody and whatever is picked, that
+              it is not for an FM3.
             */}
             <View style={{ gap: space.sm }}>
               <Heading>1 · Pick your unit</Heading>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-                {BLE_UNITS.map((u) => (
+                {units.map((u) => (
                   <Press
                     key={u.key}
                     label={u.name}
@@ -358,6 +436,7 @@ export default function BluetoothPage({ purchase, admin = false }) {
                   />
                 ))}
               </View>
+              <Hint>{am4Only ? `${AM4_ONLY} ${NOT_FOR_FM3}` : NOT_FOR_FM3}</Hint>
             </View>
 
             {/* STEP 2. One button. */}
@@ -377,10 +456,10 @@ export default function BluetoothPage({ purchase, admin = false }) {
                     : b.adapter
                       ? 'Uses the adapter from last time.'
                       : shut
-                        ? 'On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app. Connect uses an adapter that is already connected to the iPhone.'
+                        ? `On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app. Connect uses an adapter that is already connected to this ${deviceNoun()}.`
                         : ios
-                          ? 'Apple’s Bluetooth screen opens. Tap your adapter, wait until it says Connected, then tap Done. The phone does the rest.'
-                          : 'The phone looks for the adapter for ten seconds, then connects to it. If Android asks to pair with it, accept.'}
+                          ? `Apple’s Bluetooth screen opens. Tap your adapter, wait until it says Connected, then tap Done. The ${deviceNoun()} does the rest.`
+                          : `The ${deviceNoun()} looks for the adapter for ten seconds, then connects to it. If Android asks to pair with it, accept.`}
                 </Hint>
               )}
               {b.adapter ? <Press label="Use a different adapter" height={44} disabled={!canStart || b.looking} onPress={another} /> : null}
@@ -391,8 +470,7 @@ export default function BluetoothPage({ purchase, admin = false }) {
         {/* Not under a trouble line or a note, which already say what is wrong: on iOS 27 the note says Apple's screen stayed shut, and this line would send him to it. */}
         {!b.on && missed && !b.adapter && !b.trouble && !b.said ? (
           <Text style={{ color: color.fault, fontSize: font.body, lineHeight: 22 }}>
-            No adapter was connected. Check Bluetooth is on, and allowed for Fractal Remote in the iPhone’s Settings. Then
-            tap Connect again, and in Apple’s screen tap your adapter and wait for Connected before Done.
+            {`No adapter was connected. Check Bluetooth is on, and allowed for Fractal Remote in the ${deviceNoun()}’s Settings. Then tap Connect again, and in Apple’s screen tap your adapter and wait for Connected before Done.`}
           </Text>
         ) : null}
         {b.said ? <Note tone="warn">{b.said}</Note> : null}
@@ -402,7 +480,7 @@ export default function BluetoothPage({ purchase, admin = false }) {
             {/* Said by how many there are: one row under "More than one is here" read as a mistake. */}
             <Hint>{b.looking ? 'Found so far. Tap yours:' : b.devices.length > 1 ? 'More than one is here. Tap yours:' : 'Tap your adapter:'}</Hint>
             {b.devices.map((d) => {
-              const detail = ios ? (d.offline ? 'not connected to this phone' : d.fresh ? 'just connected' : '') : signal(d.rssi)
+              const detail = ios ? (d.offline ? `not connected to this ${deviceNoun()}` : d.fresh ? 'just connected' : '') : signal(d.rssi)
               return (
                 <Press
                   key={d.id}
@@ -431,13 +509,11 @@ export default function BluetoothPage({ purchase, admin = false }) {
           <PlugIn unit={b.unit} />
         </Fold>
         <Fold title="What to buy" open={buy} onToggle={() => setBuy(!buy)}>
-          <Buy unit={b.unit} />
+          <Buy unit={b.unit} am4Only={am4Only} />
         </Fold>
         <Fold title="What it can and can’t do" open={about} onToggle={() => setAbout(!about)}>
           <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
-            The phone talks straight to your unit through a Bluetooth MIDI adapter plugged into its MIDI In and MIDI Out.
-            Presets, scenes, names, effects on and off, channels, tempo and the tuner. No editing or saving, and the
-            computer isn’t used.
+            {`The ${deviceNoun()} talks straight to your unit through a Bluetooth MIDI adapter plugged into its MIDI In and MIDI Out. Presets, scenes, names, effects on and off, channels, tempo and the tuner. No editing or saving, and the computer isn’t used.`}
           </Text>
           <Heading>What’s different from USB</Heading>
           {DIFFERENT.map((line) => (
@@ -574,16 +650,17 @@ function OpenSettings() {
 
 /*
  * How it plugs together, for one unit: the Uhost's first-time update, then
- * the steps, in the gear file's own words. A unit nobody has tried it on yet
- * says so under the steps rather than being promised to work. The FM3 gets
- * its warning instead: what happened when the parts went straight in, and
- * what owners do.
+ * the steps, in the gear file's own words, and then that the computer app
+ * is quit or the unit's USB unplugged while it is used (ONE_AT_A_TIME). A
+ * unit nobody has tried it on yet says so under the steps rather than being
+ * promised to work. The FM3 gets its warning instead: what happened when the
+ * parts went straight in, and what owners report.
  */
 function PlugIn({ unit }) {
   if (!unit) return <Hint>Pick your unit above to see how it plugs in.</Hint>
   const warning = warningFor(unit)
   if (warning) return <Note tone="fault">{warning}</Note>
-  const steps = hookupFor(unit) || []
+  const steps = hookupFor(unit, deviceNoun()) || []
   const untried = untriedLine(unit)
   return (
     <View style={{ gap: space.sm }}>
@@ -595,23 +672,27 @@ function PlugIn({ unit }) {
           <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
         </View>
       ))}
+      <Hint>{ONE_AT_A_TIME}</Hint>
       {untried ? <Note tone="warn">{untried}</Note> : null}
     </View>
   )
 }
 
 /*
- * The parts for one unit, each with what it is for and where to buy it, and
- * the charger that is not on the list. Before a unit is picked, the whole of
- * it in a few words. For the FM3, nothing to buy, and a pointer to the
- * warning in How to plug it in rather than the same red box twice.
+ * The parts for one unit, each with what it is for and where to buy it, the
+ * charger that is not on the list, and who makes them (not this app, which
+ * gets nothing from the links). Before a unit is picked, the whole of it in a
+ * few words: for a customer, offered the AM4 alone (`am4Only`), the AM4's
+ * own list, with nothing in it about other units. For the FM3, nothing to
+ * buy, and a pointer to the warning in How to plug it in rather than the
+ * same red box twice.
  */
-function Buy({ unit }) {
-  if (!unit) return <Hint>{GEAR_IN_SHORT}</Hint>
-  if (warningFor(unit)) return <Hint>Not for the FM3 as it is. How to plug it in, above, says why and what FM3 owners do.</Hint>
+function Buy({ unit, am4Only = false }) {
+  if (!unit) return <Hint>{am4Only ? GEAR_IN_SHORT_AM4 : GEAR_IN_SHORT}</Hint>
+  if (warningFor(unit)) return <Hint>Not for the FM3. How to plug it in, above, says why.</Hint>
   return (
     <View style={{ gap: space.md }}>
-      {partsFor(unit).map((p) => (
+      {partsFor(unit, deviceNoun()).map((p) => (
         <View key={p.key} style={{ gap: space.xs }}>
           <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '700' }}>{p.name}</Text>
           <Hint>{p.does}</Hint>
@@ -624,6 +705,7 @@ function Buy({ unit }) {
         </View>
       ))}
       <Hint>{POWER_LINE}</Hint>
+      <Hint>{SELLERS_LINE}</Hint>
     </View>
   )
 }

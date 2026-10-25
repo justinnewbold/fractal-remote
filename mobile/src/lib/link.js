@@ -44,7 +44,7 @@ import {
   refreshUnits,
   keepDriven,
   forgetMissingPick,
-  restoreSession,
+  keptSession,
   subscribeHostSeen,
   subscribeSwitching,
   subscribeMixed,
@@ -1136,5 +1136,9 @@ export async function stopLink() {
   await remoteDisconnect()
 }
 
-/** Whether a session was left over from last time, without joining anything. */
-export const haveSession = () => restoreSession()
+/**
+ * Whether a session was left over from last time, without joining anything:
+ * the door's question (App.js), so a sign-in that has run out with no signal
+ * to renew it still counts. See relay.js keptSession.
+ */
+export const haveSession = () => keptSession()

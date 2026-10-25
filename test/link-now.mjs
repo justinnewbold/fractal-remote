@@ -120,6 +120,8 @@ const SERVICE = `
     const res = said && typeof said === 'object' && 'status' in said ? said : { status: 200, body: JSON.stringify(said ?? { ok: true }) }
     clock.setTimeout(() => bench.handlers['broadcast:res']?.({ payload: { id: payload.id, encoding: 'utf8', ...res } }), bench.lag)
   }
+  /* supabase-js's own test of a renewal that got no answer (relay.js keptSession): the bench's sign-in never runs out. */
+  export const isAuthRetryableFetchError = (err) => err?.name === 'AuthRetryableFetchError'
   export const createClient = () => {
     const client = {
       auth: {
@@ -417,6 +419,7 @@ async function linkOnABench() {
       export const subscribeMixed = (fn) => (mixedWatchers.add(fn), () => mixedWatchers.delete(fn))
       bench.mixed = () => [...mixedWatchers].forEach((fn) => fn())
       export const restoreSession = async () => 'u1'
+      export const keptSession = async () => 'u1'
       /* A computer older than 7 September refuses the level-readings route (refuseMeters); one that never answers holds it (holdMeters). */
       export async function remoteRequest(path, options = {}) {
         bench.requests.push({ at: clock.now(), path, method: options.method || 'GET', body: options.body ?? null })
@@ -537,6 +540,8 @@ const STACK_SERVICE = `
       }, typeof c.lag === 'function' ? c.lag(payload) : c.lag)
     }
   }
+  /* supabase-js's own test of a renewal that got no answer (relay.js keptSession): the bench's sign-in never runs out. */
+  export const isAuthRetryableFetchError = (err) => err?.name === 'AuthRetryableFetchError'
   export const createClient = () => ({
     auth: {
       getSession: async () => ({ data: { session: bench.uid ? { user: { id: bench.uid }, access_token: 't' } : null } }),
@@ -751,6 +756,7 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       }
       export const remoteDisconnect = async () => channelUp(false)
       export const restoreSession = async () => 'u1'
+      export const keptSession = async () => 'u1'
       export const currentAccount = async () => ({ id: 'u1', email: 'player@example.com' })
       export const loadRemoteConfig = () => ({})
       export const saveRemoteConfig = () => {}

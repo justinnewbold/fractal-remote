@@ -17,6 +17,7 @@ import {
   currentAccount,
   deleteAccount,
   hostConflict,
+  keptAccount,
   remoteChosenHost,
   remoteHosts,
   remoteMissingPick,
@@ -52,9 +53,9 @@ import {
 import { REPLAY } from '../lib/onboarding'
 import { sync, useStored } from '../lib/store'
 import { isPairAccount } from '../lib/pairing'
-import { mayDrive } from '../lib/unlock-rule'
+import { mayDrive, mayDriveBluetooth } from '../lib/unlock-rule'
 import { useComputerElsewhere } from '../lib/useComputerElsewhere'
-import NoComputerWords from '../components/NoComputer'
+import NoComputerWords, { NoComputerOtherWay } from '../components/NoComputer'
 import SendLinkButton from '../components/SendLinkButton'
 import { quitEditor } from '../lib/editors'
 import { isAdmin } from '../lib/admin'
@@ -63,7 +64,8 @@ import { useSiriLinksOpen } from '../lib/siri'
 import { siriRow } from '../lib/siri-help'
 import { siriPresent } from '../lib/siriPipe'
 import SiriHelp from '../components/SiriHelp'
-import { bluetoothSupported, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
+import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
+import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage from './Bluetooth'
 import AccessTool from '../components/AccessTool'
@@ -173,6 +175,30 @@ export default function Settings({
    * signed in.
    */
   const [asked, setAsked] = useState(false)
+  /*
+   * AND WHOSE SIGN-IN THIS PHONE STILL HOLDS, when the account service has
+   * not vouched for one: no signal at a gig, a sign-in past its hour that
+   * could not be renewed, or the first seconds before the service answers.
+   *
+   * The door lets a customer in on that sign-in (relay.js keptSession), and
+   * this page used to call them "Not signed in" beside "Full version", and
+   * offer "Sign in with an email and password": a form that cannot work with
+   * no signal, which they could only leave by Try the Demo or by closing the
+   * app — and which, on Justin's phone, wrote his Bluetooth off on the way.
+   * So it says the email, and that what needs the internet comes back with
+   * it. Kept APART from `account`, which stays the account service's answer:
+   * Delete account and the password sheet still need it, because both ask
+   * the account service, and neither can be done offline.
+   *
+   * Read at once, off the phone, so the email is up while the service is
+   * asked (up to twenty-five seconds of supabase-js's retries with no
+   * signal), and read again when the service says nobody, because a sign-in
+   * it turned away has been taken off the phone by then.
+   */
+  const [kept, setKept] = useState(null)
+  const keptHere = account ? null : kept
+  const keptEmail = keptHere?.email && !isPairAccount(keptHere.email) ? keptHere.email : null
+  const [leaving, setLeaving] = useState(false)
   const [hosts, setHosts] = useState(remoteHosts())
   const [chosen, setChosen] = useState(remoteChosenHost())
   const [units, setUnits] = useState(remoteUnits())
@@ -213,8 +239,20 @@ export default function Settings({
 
   useEffect(() => {
     let alive = true
+    /* The second read is the one that counts, if the first is somehow the later. */
+    let reread = false
+    keptAccount()
+      .then((k) => alive && !reread && setKept(k))
+      .catch(() => {})
     currentAccount()
-      .then((a) => alive && setAccount(a))
+      .then(async (a) => {
+        if (!alive) return
+        setAccount(a)
+        if (a) return
+        reread = true
+        const k = await keptAccount().catch(() => null)
+        if (alive) setKept(k)
+      })
       .catch(() => {})
       .finally(() => alive && setAsked(true))
     return () => {
@@ -268,14 +306,23 @@ export default function Settings({
   /* Bluetooth (beta): whether the phone is talking to the unit itself. */
   const bluetooth = useBluetoothOn()
   /*
-   * And whether it is open to the account signed in here at all: Justin's,
-   * and nobody else's, for now (lib/bluetooth.js, allowBluetooth). Decided in
-   * App.js from the session kept on the phone rather than from `account`
-   * above: that one asks the account server, and Bluetooth is for playing
-   * where there may be no signal. A row that vanished offline would take the
-   * page, and its Stop button, with it while Bluetooth was still on.
+   * And whether it is open to the account signed in here at all: Justin's on
+   * every copy, and anybody else's only on a copy whose built-in store
+   * version opens it, which no copy today does (lib/bluetooth.js
+   * allowBluetooth, and lib/ble-rule.js). Decided in App.js from the session
+   * kept on the phone rather than from `account` above: that one asks the
+   * account server, and Bluetooth is for playing where there may be no
+   * signal. A row that vanished offline would take the page, and its Stop
+   * button, with it while Bluetooth was still on.
    */
   const bluetoothAllowed = useBluetoothAllowed()
+  /*
+   * AND THE FULL VERSION, AS BLUETOOTH READS IT (unlock-rule mayDriveBluetooth):
+   * the purchase itself for a customer, the one remembered on the phone
+   * included, never "the store cannot be reached", which mayDrive takes as a
+   * yes and which no signal always is; mayDrive's answer for his account.
+   */
+  const bluetoothAdmin = useBluetoothAdmin()
   /*
    * SETTINGS → SIRI, where the links are open (lib/siri useSiriLinksOpen):
    * on an iPhone or iPad whose copy has the Siri phrases, on Android from
@@ -490,8 +537,9 @@ export default function Settings({
           */}
           <AccountCard
             asked={asked}
-            email={signedInAs}
-            paired={isPairAccount(account?.email)}
+            email={signedInAs || keptEmail}
+            offline={Boolean(keptEmail)}
+            paired={isPairAccount((account || kept)?.email)}
             unlocked={purchase.unlocked}
             demo={demo}
             onPress={() => {
@@ -528,24 +576,36 @@ export default function Settings({
               phone and computer menu to its own menu under the settings menu.
               Still saying Bluetooth (beta)." The phone straight to the unit,
               through a Bluetooth MIDI adapter on its MIDI In and Out, with no
-              computer. Behind the unlock, and only in a build that carries
+              computer. Behind the purchase (mayDriveBluetooth, above: with no
+              signal, "the store cannot be reached" lets a free account drive
+              the computer's link, which needs the internet anyway, but would
+              give it Bluetooth for good), and only in a build that carries
               the Bluetooth code on a phone that can do it: anybody else never
               sees it. The page it opens carries the beta note, the
               iPhone's or Android's own (betaNote), always shown under
               Connect and the rows that open.
 
-              AND ONLY ON JUSTIN'S ACCOUNT. "Is there any way to just get the
+              AND ONLY WHERE IT IS OPEN. "Is there any way to just get the
               Bluetooth on the developers mode for my own phone? I just feel
               like it's not ready to have public." So the row also waits for
               bluetoothAllowed, and is asked that before the build check, so a
               customer's phone is never even asked whether it can do
-              Bluetooth. It is opened to customers only in a new store version
-              whose review notes say so, never by an update (CLAUDE.md).
+              Bluetooth. Yes on his account; for anybody else, only on a copy
+              whose built-in store version opens it (lib/ble-rule.js): a new
+              store version whose review notes say so, never an update
+              (CLAUDE.md).
+
+              Off, the row says what it is for and what it costs against the
+              computer, in the one line it has (BLUETOOTH_ROW_OFF, beside the
+              Bluetooth page's own sentence in the gear file): "make it clear
+              that the computer is the preferred method". Not the cost alone,
+              which read as a row with nothing going for it, in the row's
+              green.
             */}
-            {mayDrive(purchase) && bluetoothAllowed && bluetoothSupported() ? (
+            {mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported() ? (
               <SetupRow
                 title="Bluetooth (beta)"
-                status={bluetooth ? 'On · the phone talks to the unit itself' : 'Off · play without a computer'}
+                status={bluetooth ? `On · the ${deviceNoun()} talks to the unit itself` : BLUETOOTH_ROW_OFF}
                 onPress={() => setPage('bluetooth')}
               />
             ) : null}
@@ -665,26 +725,7 @@ export default function Settings({
               Phone & computer, which nobody would think to open to change a
               password. */}
           <View style={{ gap: space.md }}>
-            {isPairAccount(account?.email) || !account?.email ? (
-              <>
-                <Text style={{ color: color.silkDim, fontSize: font.small }}>
-                  {!asked
-                    ? 'Checking…'
-                    : isPairAccount(account?.email)
-                      ? `Paired with your computer, no account. What you save stays on this ${deviceNoun()}.`
-                      : 'Not signed in on this device.'}
-                </Text>
-                {/* Paid on this phone with no account yet: until there is one,
-                    the computer and the website see nothing bought. */}
-                {asked && !account?.email && purchase.onlyHere && onMakeAccount ? (
-                  <>
-                    <Note>{ONLY_HERE}</Note>
-                    <Press label="Make an account" tone="signal" onPress={onMakeAccount} />
-                  </>
-                ) : null}
-                {asked && onSignIn ? <Press label="Sign in with an email and password" onPress={onSignIn} /> : null}
-              </>
-            ) : (
+            {signedInAs ? (
               <TipCard
                 icon={mailIcon}
                 label="SIGNED IN"
@@ -695,6 +736,33 @@ export default function Settings({
                   setAccountMenu(true)
                 }}
               />
+            ) : keptEmail ? (
+              /* Signed in by the sign-in kept on the phone, which the account
+                 service has not vouched for: no password sheet to open, since
+                 it needs the service, and no Sign in, which needs it too. */
+              <TipCard icon={mailIcon} label="SIGNED IN" body={`${keptEmail}\n${asked ? KEPT_OFFLINE : 'Checking…'}`} />
+            ) : (
+              <>
+                <Text style={{ color: color.silkDim, fontSize: font.small }}>
+                  {!asked
+                    ? 'Checking…'
+                    : isPairAccount((account || kept)?.email)
+                      ? `Paired with your computer, no account. What you save stays on this ${deviceNoun()}.`
+                      : 'Not signed in on this device.'}
+                </Text>
+                {/* Paid on this phone with no account yet: until there is one,
+                    the computer and the website see nothing bought. */}
+                {asked && !account?.email && !keptHere && purchase.onlyHere && onMakeAccount ? (
+                  <>
+                    <Note>{ONLY_HERE}</Note>
+                    <Press label="Make an account" tone="signal" onPress={onMakeAccount} />
+                  </>
+                ) : null}
+                {/* Not while a sign-in is kept on the phone (a phone paired by
+                    code, with no signal): the form needs the internet the
+                    phone does not have, and is no way back from itself. */}
+                {asked && onSignIn && !keptHere ? <Press label="Sign in with an email and password" onPress={onSignIn} /> : null}
+              </>
             )}
 
             {/* Paid on this phone, sent to this account and not arrived yet:
@@ -707,7 +775,21 @@ export default function Settings({
             {note ? <Note>{note}</Note> : null}
             {error ? <Note tone="fault">{error}</Note> : null}
 
-            <Press label={`Sign out on this ${deviceNoun()}`} onPress={onSignOut} />
+            {/* Busy while it goes: with no signal it can take a couple of
+                seconds (relay.js signOut), and a button that does nothing for
+                that long gets tapped again, or the app closed. */}
+            <Press
+              label={leaving ? 'Signing out…' : `Sign out on this ${deviceNoun()}`}
+              disabled={leaving}
+              onPress={async () => {
+                setLeaving(true)
+                try {
+                  await onSignOut?.()
+                } finally {
+                  setLeaving(false)
+                }
+              }}
+            />
             <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>
               The computer stays signed in — signing out here must not drop the link mid-set.
             </Text>
@@ -918,9 +1000,10 @@ export default function Settings({
           {head(PAIR_TITLE, 'back')}
           {/* Said first, because everything under it is about a computer
               this phone is not using while it is on. */}
+          {/* And the two ways, with the computer the best one: the Bluetooth page's own sentence (BLUETOOTH_WAYS). */}
           {bluetooth && !demo ? (
             <Note tone="warn">
-              Bluetooth (beta) is on. This phone talks to the unit directly, not through the computer.
+              {`Bluetooth (beta) is on. This ${deviceNoun()} talks to the unit directly, not through the computer. ${BLUETOOTH_WAYS}`}
             </Note>
           ) : null}
 
@@ -1073,6 +1156,10 @@ export default function Settings({
             {/* And the download link to their inbox, under those words and
                 only with them: to the account's own address, which they name. */}
             {noneSaid ? <SendLinkButton email={noComputer.email} /> : null}
+            {/* And, where this copy offers Bluetooth (beta), the other way
+                for an AM4, after the words and their button, never between
+                them (components/NoComputer.js NoComputerOtherWay). */}
+            {noneSaid ? <NoComputerOtherWay /> : null}
             {/* Which account this is — his words: "make sure you're connected
                 to your computer using and then show the user's email
                 address". A computer signed in as somebody else is the
@@ -1148,7 +1235,17 @@ export default function Settings({
               again, which on a live link is a button that does nothing you
               can see. Said as what it does, too.
             */}
-            {link !== 'connected' ? <Press label={throughAdapter ? 'Look for the adapter again' : 'Look for the computer again'} onPress={onReconnect} /> : null}
+            {/* Over Bluetooth, on an iPhone whose adapter has gone, Apple's
+                screen first (lib/bluetooth lookForAdapterAgain), and said
+                under the button whenever the tap will open it
+                (APPLE_SCREEN_OPENS), as on the waiting screen. */}
+            {link !== 'connected' ? (
+              <Press
+                label={throughAdapter ? 'Look for the adapter again' : 'Look for the computer again'}
+                sub={throughAdapter && opensApplesScreen() ? APPLE_SCREEN_OPENS : undefined}
+                onPress={throughAdapter ? () => lookForAdapterAgain(onReconnect) : onReconnect}
+              />
+            ) : null}
           </View>
 
           {/*
@@ -1202,7 +1299,7 @@ export default function Settings({
           included. Its Testing tools are Justin's alone (admin), as the
           Developer pages are: Apple's 2.2 keeps test benches out of what
           customers see. */}
-      {page === 'bluetooth' && mayDrive(purchase) && bluetoothAllowed && bluetoothSupported() ? (
+      {page === 'bluetooth' && mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported() ? (
         <>
           {head('Bluetooth (beta)', 'back')}
           <BluetoothPage purchase={purchase} admin={isAdmin(account?.id)} />
@@ -1940,8 +2037,27 @@ function Group({ title, children }) {
  * the full version. Tapping it opens the Account page — signing in and out,
  * the password, unlocking or restoring a purchase.
  */
-function AccountCard({ asked, email, paired, unlocked, demo, onPress }) {
-  const who = !asked ? 'Checking…' : email || (paired ? 'Paired, no account' : 'Not signed in')
+/*
+ * The account line for a sign-in the phone holds and the account service
+ * has not vouched for, said in place of the password and account options it
+ * cannot offer: no signal at a gig, most often. See `kept` in Settings.
+ *
+ * NOT "NO INTERNET". It said that for a day, but the account service says
+ * nobody with a signal too: in an outage, and for the minute after the
+ * signal comes back while supabase-js holds on to its failed renewal. A
+ * customer on working wifi was told they had no internet. What is true in
+ * every one of those is that the account cannot be reached.
+ */
+const KEPT_OFFLINE = 'Can’t reach your account now. Password and account options come back when it can.'
+
+/*
+ * `email` is the account service's, or the one kept on the phone while it
+ * has not vouched for it (`offline`), which is up at once rather than after
+ * "Checking…": with no signal the service takes up to twenty-five seconds to
+ * say nothing.
+ */
+function AccountCard({ asked, email, offline, paired, unlocked, demo, onPress }) {
+  const who = email || (!asked ? 'Checking…' : paired ? 'Paired, no account' : 'Not signed in')
   const what = demo ? 'Demo' : unlocked ? 'Full version' : 'Not unlocked yet'
   return (
     <Pressable
@@ -1970,10 +2086,11 @@ function AccountCard({ asked, email, paired, unlocked, demo, onPress }) {
           {`${what} · v${APP_VERSION}`}
         </Text>
         {/* Said on the card, so Delete account is found from the first page
-            of Settings rather than guessed at (Apple 5.1.1(v)). */}
+            of Settings rather than guessed at (Apple 5.1.1(v)). Not for a
+            sign-in only the phone vouches for: none of that works offline. */}
         {email ? (
-          <Text numberOfLines={1} style={{ color: color.silkDim, fontSize: font.micro }}>
-            Password, sign out, delete account
+          <Text numberOfLines={offline && asked ? 2 : 1} style={{ color: color.silkDim, fontSize: font.micro }}>
+            {offline ? (asked ? KEPT_OFFLINE : 'Checking…') : 'Password, sign out, delete account'}
           </Text>
         ) : null}
       </View>

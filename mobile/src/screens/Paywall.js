@@ -8,9 +8,11 @@ import Sheet from '../components/Sheet'
 import { buyUnlock, restorePurchase, usePurchase } from '../lib/purchases'
 import { UNITS } from '../lib/demoUnits'
 import { ALREADY_UNLOCKED } from '../lib/onboarding'
-import { currentAccount, deleteAccount, restoreSession } from '../lib/relay'
+import { currentAccount, deleteAccount, signedInOnPhone } from '../lib/relay'
 import { isPairAccount } from '../lib/pairing'
 import { VP4_SO_FAR } from '../lib/vp4-safety'
+import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
+import { BLUETOOTH_PAYWALL } from '../lib/bluetooth-gear'
 
 /*
  * The units named on the offer, read off the list the app actually carries.
@@ -52,9 +54,10 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
    * nobody's account here, so this phone cannot know they paid, and Buy
    * would charge them again. Signing in costs nothing and unlocks it. So for
    * them the sign-in comes ABOVE Buy, with a line saying why. Read from the
-   * phone's own sign-in, not the account server, and asked only on a page
-   * opened from the demo or the walkthrough: the imposed one is always
-   * signed in.
+   * phone's own sign-in, not the account server, the door's way (relay.js
+   * signedInOnPhone: a sign-in that ran out with no signal to renew it is
+   * still somebody), and asked only on a page opened from the demo or the
+   * walkthrough: the imposed one is always signed in.
    *
    * The line names no other place to pay (Apple 3.1.3, Google Play's
    * payments policy) and calls nothing free: "Sign in instead. It's free."
@@ -75,7 +78,7 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
   useEffect(() => {
     if (!asked) return undefined
     let alive = true
-    restoreSession().then((id) => alive && setNobody(!id))
+    signedInOnPhone().then((id) => alive && setNobody(!id))
     return () => {
       alive = false
     }
@@ -175,6 +178,25 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
           {VP4_SO_FAR}
         </Text>
       </View>
+
+      {/*
+        AND BLUETOOTH (BETA), which the full version unlocks too, said where
+        it is sold: the two ways to connect, the computer the best one, and
+        the AM4 alone, with every part it needs bought separately (the
+        adapter, its cable, the two plug adapters and a charger:
+        BLUETOOTH_PAYWALL, shared/bluetooth-gear.mjs). Only on a copy that
+        opens it to customers (lib/ble-rule.js, by the version built into
+        the copy) and on a device that can do it: a line on any other copy
+        would sell what it cannot open, which Apple's 2.3.1(a) forbids. No
+        copy today draws it. Under the panel, not in it: the panel is the
+        browser's unlock page word for word (test/both-ends.mjs), and the
+        browser has no Bluetooth to offer.
+      */}
+      {openForCustomersHere() && bluetoothSupported() ? (
+        <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>
+          {BLUETOOTH_PAYWALL}
+        </Text>
+      ) : null}
 
       {said ? <Note tone={said.tone}>{said.text}</Note> : null}
 

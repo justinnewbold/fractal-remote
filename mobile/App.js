@@ -49,7 +49,21 @@ import { clearLinkFault, useRig } from './src/lib/rig'
 import { keepLog } from './src/lib/logKeep'
 import { installCrashCapture } from './src/lib/debugLog'
 import { restoreDemo, setDemo, useDemo } from './src/lib/demo'
-import { ALLOW_WORDS, RESTRICTED_WORDS, allowBluetooth, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble } from './src/lib/bluetooth'
+import {
+  ALLOW_WORDS,
+  APPLE_SCREEN_OPENS,
+  RESTRICTED_WORDS,
+  allowBluetooth,
+  lookForAdapterAgain,
+  offeredAm4Only,
+  opensApplesScreen,
+  restoreBluetooth,
+  setBluetooth,
+  useBluetoothOn,
+  useBluetoothTrouble
+} from './src/lib/bluetooth'
+import { useBluetoothOffered } from './src/lib/useBluetoothOffered'
+import { BLUETOOTH_WAYS_SHORT, BLUETOOTH_WAYS_SHORT_AM4 } from './src/lib/bluetooth-gear'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
@@ -321,6 +335,19 @@ export default function App() {
    * further down, which is the only thing that raises the paywall.
    */
   const purchase = usePurchase()
+  /*
+   * THE WAY TO THE BLUETOOTH PAGE FROM THE WAITING SCREEN, through the same
+   * gate as the Settings row and the page itself (lib/useBluetoothOffered,
+   * the row's gate as one hook): the full version as Bluetooth reads it
+   * (unlock-rule mayDriveBluetooth: the purchase itself for a customer),
+   * Bluetooth open to this account on this copy (lib/bluetooth
+   * useBluetoothAllowed: his on every copy, a customer's only on a copy
+   * whose built-in store version opens it), and a build and a device that
+   * can do it. Without all three the page draws nothing, so a button to it
+   * would open an empty Settings page. Named once, so the waiting screen
+   * gets the way in or nothing (`onBluetooth`).
+   */
+  const bluetoothOffered = useBluetoothOffered()
   /*
    * ASKED FOR, as opposed to imposed.
    *
@@ -686,6 +713,19 @@ export default function App() {
   // signed in once is a remote, and it should say "Connecting…" from its first
   // frame rather than showing a sign-in form for the second it takes to find
   // out otherwise.
+  /*
+   * AND ONE THAT RAN OUT WITH NO SIGNAL TO RENEW IT IS STILL LEFT OVER.
+   * "A customer at a gig with no phone signal can be locked out of the whole
+   * app, Bluetooth included." It was: the renewal got no answer, the session
+   * read as none, and this drew the sign-in screen in front of somebody who
+   * had paid, on Bluetooth with no computer, with no internet to sign in
+   * over. haveSession now says whose sign-in is still on the phone when the
+   * only thing wrong is that the account service could not be reached
+   * (relay.js keptSession), and the purchase it last knew comes off the
+   * phone as well (purchases.js, remembered). One the account service turned
+   * away, a sign-out somebody asked for and a deleted account are not on the
+   * phone any more, and still open on the sign-in screen.
+   */
   useEffect(() => {
     let alive = true
     restoreDemo()
@@ -713,34 +753,40 @@ export default function App() {
   }, [])
 
   /*
-   * AND BLUETOOTH (BETA) ONLY ON JUSTIN'S ACCOUNT, at every change of who is
+   * AND BLUETOOTH (BETA) ONLY WHERE IT IS OPEN, at every change of who is
    * signed in.
    *
    * "Is there any way to just get the Bluetooth on the developers mode for my
    * own phone? I just feel like it's not ready to have public." Settings
-   * draws the row and the page only for his account (useBluetoothAllowed);
-   * this is the switch's half. Signed out, signed into another account, or a
-   * customer who turned it on during the day it was public: back to the
-   * computer, and allowBluetooth keeps it from being turned on again
-   * (lib/bluetooth).
+   * draws the row and the page only where it is open (useBluetoothAllowed):
+   * his account on every copy, and a customer's only on a copy whose
+   * built-in store version opens it (lib/ble-rule.js), which no copy today
+   * does; this is the switch's half. Signed out, signed into an account it is
+   * not open to, or a customer who turned it on during the day it was
+   * public: back to the computer, and allowBluetooth keeps it from being
+   * turned on again (lib/bluetooth). The copy decides it, never this
+   * effect: an update can change what runs here, and not the number built
+   * into the copy.
    *
    * THE SESSION KEPT ON THE PHONE, not the account server. Bluetooth is for
    * playing with no computer, often somewhere with no signal either, and
    * currentAccount() asks the server: with no signal it answers nobody, and
    * his own Bluetooth would be switched off at the gig. haveSession() reads
    * the same session that let this phone in, and says yes for as long as the
-   * phone is still let in at all. (When that sign-in has run out and cannot
-   * be renewed with no signal, the app opens on the sign-in screen anyway,
-   * over the computer or not, as it always has.)
+   * phone is still let in at all — a sign-in that has run out with no signal
+   * to renew it included, which now lets the phone in (see the launch,
+   * above).
    *
    * Signed out is nobody, at once, without asking anything: a sign-out still
    * finishing in the background cannot answer for the account it is
    * removing.
    *
-   * AND NOBODY IS NOT A NO. Here it only means no session on the phone,
-   * which is also what his own sign-in looks like when it ran out at a gig
-   * with no signal to renew it: Bluetooth goes off for now, and the phone's
-   * storage keeps it on for the next launch that knows it is his. The
+   * AND NOBODY IS NOT A NO. Here it only means no session on the phone —
+   * since keptSession, a sign-in that ran out at a gig with no signal answers
+   * with its id, so what is left is a sign-in the account service turned
+   * away, or a phone that could not read its own — and neither is his
+   * saying no: Bluetooth goes off for now, and the phone's storage keeps it
+   * on for the next launch that knows it is his. The
    * sign-outs somebody asked for — Sign out and Delete account in Settings,
    * the paywall's back, Try the Demo and Delete account, and the way to the
    * sign-in form (toSignIn) — say so themselves, with `signedOut`, and those
@@ -1231,7 +1277,7 @@ export default function App() {
                 onRetry={probeNow}
                 onSwitch={() => openSettings('link')}
                 onTroubleshoot={openConnectFix}
-                onBluetooth={() => openSettings('bluetooth')}
+                onBluetooth={bluetoothOffered ? () => openSettings('bluetooth') : null}
                 onSetlists={() => setScreen('setlists')}
               />
             ) : screen === 'presets' ? (
@@ -1677,12 +1723,12 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           {bluetooth ? (
             <Note tone={trouble ? 'fault' : 'warn'}>
               {trouble === 'bluetooth-off'
-                ? 'Bluetooth is off on this phone. Turn it on in the phone’s settings.'
+                ? `Bluetooth is off on this ${deviceNoun()}. Turn it on in the ${deviceNoun()}’s settings.`
                 : trouble === 'permission'
                   ? `${ALLOW_WORDS}.`
                   : trouble === 'restricted'
                     ? `${RESTRICTED_WORDS}.`
-                    : 'Check the phone’s Bluetooth is on, that the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it.'}
+                    : `Check the ${deviceNoun()}’s Bluetooth is on, that the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it.`}
             </Note>
           ) : elsewhere ? (
             <Note tone="fault">
@@ -1707,6 +1753,13 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
             2026). To the account's own address, the one the words name.
           */}
           {noneSaid ? <SendLinkButton email={noComputer.email} /> : null}
+          {/* Not the no-computer note's Bluetooth (beta) line here
+              (components/NoComputer.js NoComputerOtherWay), which Phone &
+              computer draws: this screen has its own way to Bluetooth, the
+              button below for somebody with no computer, after the
+              computer's own, with what it costs under it. Both together were
+              the same pitch twice, the note sending them the long way round
+              to the page the button opens in one tap. */}
           {elsewhere && onSwitch ? <Press label={`Switch account on this ${deviceNoun()}`} onPress={onSwitch} /> : null}
           {/*
             The way to what the line above asks for, right under it, as on the
@@ -1717,8 +1770,20 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           {bluetooth && trouble === 'permission' ? (
             <Press label="Open Settings" onPress={() => Linking.openSettings().catch(() => {})} />
           ) : null}
+          {/* Over Bluetooth, on an iPhone whose adapter has gone, Apple's
+              screen first (lib/bluetooth lookForAdapterAgain): the link
+              cannot bring it back by itself, and Stop, Connect and the
+              screen was three taps mid-set. And said under the button
+              whenever the tap will open it (opensApplesScreen,
+              APPLE_SCREEN_OPENS), with what to do there: a screen that
+              pops up unannounced, Done tapped before Connected, and
+              nothing connects. */}
           {bluetooth ? (
-            <Press label="Look for the adapter again" onPress={() => onRetry?.()} />
+            <Press
+              label="Look for the adapter again"
+              sub={opensApplesScreen() ? APPLE_SCREEN_OPENS : undefined}
+              onPress={() => lookForAdapterAgain(onRetry)}
+            />
           ) : (
             <Press label="Look for the computer again" onPress={() => onRetry?.()} />
           )}
@@ -1726,6 +1791,35 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
               its status is; the computer's troubleshooting is about a
               computer that is not in use. */}
           {bluetooth && onBluetooth ? <Press label="Bluetooth (beta)" onPress={onBluetooth} /> : null}
+          {/*
+            AND THE OTHER WAY IN, FOR SOMEBODY WITH NO COMPUTER. Until now the
+            only Bluetooth buttons here showed once Bluetooth was already on,
+            so a player who bought the app to use an adapter sat on "Finding
+            your computer" with nothing to say Bluetooth exists, and the gear
+            was the only way to it. After the computer's own button, never
+            before it: the computer is the best way, and the line under this
+            one says what Bluetooth costs (BLUETOOTH_WAYS_SHORT), and, to a
+            customer, that it is for an AM4 only (BLUETOOTH_WAYS_SHORT_AM4,
+            by lib/bluetooth offeredAm4Only): an FM9 owner with no computer
+            reads that here, not after the page has turned them away. Only
+            where App hands it a way in (`onBluetooth`: the row's own gate),
+            only while it is off, and never under the account warning: a
+            computer on this wifi on another account is right there, and
+            the fix is the account, not "No computer?".
+
+            SHORT ENOUGH FOR ONE LINE. A button's label is one line at 15
+            points, and "No computer? Connect by Bluetooth (beta)" was about
+            296 points, cut on a 360-point Android phone and a 375-point
+            iPhone. This one is about 254 at its widest; the line under it
+            carries the cost.
+          */}
+          {!bluetooth && onBluetooth && !elsewhere ? (
+            <Press
+              label="No computer? Use Bluetooth (beta)"
+              sub={offeredAm4Only() ? BLUETOOTH_WAYS_SHORT_AM4 : BLUETOOTH_WAYS_SHORT}
+              onPress={onBluetooth}
+            />
+          ) : null}
           {/* "Open the troubleshooting if it doesn't connect" — the browser's
               connecting screen has the same button. */}
           {onTroubleshoot && !bluetooth ? <Press label="Troubleshooting" onPress={onTroubleshoot} /> : null}
