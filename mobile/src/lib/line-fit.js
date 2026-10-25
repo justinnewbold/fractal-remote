@@ -30,6 +30,13 @@ export const LINE_ROOM = 0.97
 /** The smallest the words Previous and Next are drawn at, from the body size (15). */
 export const STEP_WORD_LEAST = 11
 
+/**
+ * The smallest the words are drawn at BESIDE their chevrons: below this, the
+ * chevron gives way and the word gets the whole button, which is bigger and
+ * easier to read from a stand (a 375-point phone: 12.5 beside, 15 without).
+ */
+export const STEP_WORD_KEEP = 13
+
 /** The smallest the name under Previous or Next is drawn at, from the micro size (11). */
 export const STEP_LINE_LEAST = 9
 
@@ -67,19 +74,23 @@ export function fitLine({ natural, room, size, least } = {}) {
  * beside the word) and the two texts' widths at their usual sizes (`word` at
  * `size`, `under` at `underSize`).
  *
- * The word fits beside its chevron if it can; if it cannot, the chevron
- * gives way and the word takes the whole button, fitted again, because the
- * word is what says which way the button goes. The line under runs to `edge`
- * inside the border. A button not measured yet is drawn as before.
+ * The word fits beside its chevron if it can at STEP_WORD_KEEP or more; if
+ * it cannot, the chevron gives way and the word takes the whole button,
+ * fitted again, whenever that draws it bigger, because the word is what says
+ * which way the button goes. The line under runs to `edge` inside the
+ * border. A button not measured yet is drawn as before.
  */
 export function fitStep({ box, pad, border, gap, picture, pictures = 0, word, size, under, underSize, edge = STEP_LINE_EDGE } = {}) {
   const inner = box > 0 ? box - 2 * pad - 2 * border : 0
   const beside = inner - pictures * (picture + gap)
   let label = inner > 0 && pictures > 0 && beside <= 0 ? { size, fits: false } : fitLine({ natural: word, room: beside, size, least: STEP_WORD_LEAST })
   let bare = false
-  if (!label.fits && pictures > 0) {
-    label = fitLine({ natural: word, room: inner, size, least: STEP_WORD_LEAST })
-    bare = true
+  if (pictures > 0 && (!label.fits || label.size < STEP_WORD_KEEP)) {
+    const alone = fitLine({ natural: word, room: inner, size, least: STEP_WORD_LEAST })
+    if (!label.fits || alone.size > label.size) {
+      label = alone
+      bare = true
+    }
   }
   const line = fitLine({ natural: under, room: inner > 0 ? inner + 2 * (pad - edge) : 0, size: underSize, least: STEP_LINE_LEAST })
   return { label, bare, line }

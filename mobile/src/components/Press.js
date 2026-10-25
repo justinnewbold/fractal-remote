@@ -102,12 +102,20 @@ export default function Press({
    * one too wide for its room is drawn smaller, just as much as it needs,
    * down to a floor (shared/line-fit.mjs), and only past the floor cut as
    * before. The line under reaches into the side padding, to 4 from the
-   * edge. And a word that does not fit even at the floor beside its
-   * picture is drawn without the picture: on the narrowest phones the
-   * chevron goes before the word does, because the word is what says
-   * which way the button goes.
+   * edge. And a word that would be drawn small beside its picture (under 13)
+   * is drawn without the picture whenever that draws it bigger: the
+   * chevron goes before the word shrinks, because the word is what says
+   * which way the button goes (shared/line-fit.mjs fitStep).
    */
   fit = false,
+  /*
+   * The labels of the buttons drawn beside this one at the same width
+   * (Previous's is ['Next'], Next's ['Previous']): with `fit`, every word in
+   * the row is drawn at the smallest size any of them needs, so "Previous"
+   * at 11 never sits beside "Next" at 15 (the scene names' rule, one size
+   * for the row: two sizes read as two kinds of button).
+   */
+  fitWith,
   onPress,
   onLongPress,
   tone = 'plain',
@@ -152,6 +160,12 @@ export default function Press({
     TALL.set(labelKey, height)
     remeasured((n) => n + 1)
   }
+  const measuredBeside = (key) => (e) => {
+    const { width } = e.nativeEvent.layout
+    if (LABELS.get(key) === width) return
+    LABELS.set(key, width)
+    remeasured((n) => n + 1)
+  }
   const measuredUnder = (e) => {
     const { width } = e.nativeEvent.layout
     if (NAMES.get(underKey) === width) return
@@ -173,7 +187,13 @@ export default function Press({
         underSize: font.micro
       })
     : null
-  const word = step ? step.label : { size: labelSize, fits: true }
+  /* Each word beside it fitted the same way, from its own unseen copy below, and the row drawn at the smallest. */
+  const besideKeys = fit && Array.isArray(fitWith) ? fitWith.map((t) => `${labelSize}|${scale}|${t}`) : []
+  const besideSizes = besideKeys
+    .filter((k) => LABELS.has(k))
+    .map((k) => fitStep({ box, pad: space.md, border: BORDER, gap: space.sm, picture: PICTURE, pictures: (icon ? 1 : 0) + (after ? 1 : 0), word: LABELS.get(k), size: labelSize }).label.size)
+  const own = step ? step.label : { size: labelSize, fits: true }
+  const word = besideSizes.length ? { ...own, size: Math.min(own.size, ...besideSizes) } : own
   const bare = step ? step.bare : false
   const line = step ? step.line : { size: font.micro, fits: true }
   /* A new name is drawn once it is measured, never first at the last one's size: its line keeps its height, so nothing moves. */
@@ -317,6 +337,11 @@ export default function Press({
           <Text numberOfLines={1} onLayout={measuredLabel} style={{ fontSize: labelSize, fontWeight: labelSize > font.body ? '700' : '600' }}>
             {label}
           </Text>
+          {(fitWith || []).map((t, i) => (
+            <Text key={t} numberOfLines={1} onLayout={measuredBeside(besideKeys[i])} style={{ fontSize: labelSize, fontWeight: labelSize > font.body ? '700' : '600' }}>
+              {t}
+            </Text>
+          ))}
           {under !== undefined ? (
             <Text numberOfLines={1} onLayout={measuredUnder} style={{ fontSize: font.micro }}>
               {shownUnder}

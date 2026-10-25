@@ -2810,7 +2810,7 @@ export function run(test) {
    * the name are drawn smaller rather than cut, by one rule at both ends.
    */
   test('Previous, Next and the names under them are drawn smaller rather than cut: the names by one rule at both ends, the words on the phone', async () => {
-    const { fitLine, fitStep, LINE_ROOM, STEP_LINE_LEAST, STEP_WORD_LEAST, STEP_LINE_EDGE } = await import('../shared/line-fit.mjs')
+    const { fitLine, fitStep, LINE_ROOM, STEP_LINE_LEAST, STEP_WORD_LEAST, STEP_WORD_KEEP, STEP_LINE_EDGE } = await import('../shared/line-fit.mjs')
     /* The rule: as it was when it fits or is not measured yet; just as much smaller as it needs, by half points; cut only past the floor. */
     assert.deepEqual(fitLine({ natural: 60, room: 100, size: 15, least: 11 }), { size: 15, fits: true })
     assert.deepEqual(fitLine({ natural: 0, room: 100, size: 15, least: 11 }), { size: 15, fits: true }, 'a word not measured yet is changed on a guess')
@@ -2821,10 +2821,16 @@ export function run(test) {
     assert.equal(STEP_WORD_LEAST, 11)
     assert.equal(STEP_LINE_LEAST, 9)
     assert.equal(STEP_LINE_EDGE, 4)
+    assert.equal(STEP_WORD_KEEP, 13)
 
     /* Previous on the phone, in numbers: a 393-point phone's third of the row is 115, the word has 61 beside its chevron and the line 105. */
     const phone = (box, word, under = 95) => fitStep({ box, pad: 12, border: 1, gap: 8, picture: 20, pictures: 1, word, size: 15, under, underSize: 11 })
-    assert.deepEqual(phone(115, 70), { label: { size: 12.5, fits: true }, bare: false, line: { size: 11, fits: true } }, 'Previous on a 393-point phone is not fitted beside its chevron, or its name is changed')
+    /* Room beside the chevron: it stays. A little short: the word comes down, to 13 at the least, and keeps its chevron. */
+    assert.deepEqual(phone(130, 70).label, { size: 15, fits: true })
+    assert.equal(phone(130, 70).bare, false)
+    assert.deepEqual(phone(120, 70), { label: { size: 13.5, fits: true }, bare: false, line: { size: 11, fits: true } }, 'Previous a little too wide is not drawn just smaller beside its chevron')
+    /* Any smaller beside it, and the chevron gives way so the word is drawn bigger (12.5 beside, 15 alone, on a 393-point phone). */
+    assert.deepEqual(phone(115, 70), { label: { size: 15, fits: true }, bare: true, line: { size: 11, fits: true } }, 'Previous is drawn small beside its chevron where without it the word is drawn whole')
     assert.deepEqual(phone(115, 70, 110).line, { size: 10, fits: true }, 'a long name under Previous is not drawn smaller to fit the 105 points it has')
     /* Too narrow beside the chevron: the chevron gives way and the word takes the button, even if it is then cut at the floor. */
     assert.deepEqual(phone(80, 70).label, { size: 11, fits: true })
@@ -2840,6 +2846,11 @@ export function run(test) {
     const next = stage.slice(stage.indexOf('label="Next"'), stage.indexOf('onPress={() => step(1)}'))
     assert.match(foot.slice(foot.indexOf('label="Previous"')), /\n\s*fit\n/, 'Previous is still cut rather than fitted')
     assert.match(next, /\n\s*fit\n/, 'Next is still cut rather than fitted')
+    /* And at one size: each names the other, and the row is drawn at the smallest any of them needs. */
+    assert.match(foot.slice(foot.indexOf('label="Previous"')), /fitWith=\{STEP_BESIDE_PREVIOUS\}/, 'Previous can be drawn smaller than Next beside it')
+    assert.match(next, /fitWith=\{STEP_BESIDE_NEXT\}/, 'Next can be drawn bigger than Previous beside it')
+    assert.match(stage, /const STEP_BESIDE_PREVIOUS = \['Next'\]\nconst STEP_BESIDE_NEXT = \['Previous'\]/)
+    assert.match(press, /const word = besideSizes\.length \? \{ \.\.\.own, size: Math\.min\(own\.size, \.\.\.besideSizes\) \} : own/, 'the words in the row are not drawn at the smallest size any of them needs')
     assert.match(press, /from '\.\.\/lib\/line-fit'/, 'the phone fits its words by a rule of its own')
     assert.match(press, /pad: space\.md,\s*border: BORDER,\s*gap: space\.sm,\s*picture: PICTURE,/, 'the phone measures the room with numbers that are not its own')
     assert.match(press, /paddingHorizontal: space\.md,/, 'the button’s side padding is not the one the room is worked out from')
