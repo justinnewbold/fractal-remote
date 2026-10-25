@@ -44,6 +44,7 @@ import Looper from './Looper'
 import { blockColor } from '../lib/blockColors'
 import { blockIcon } from '../lib/blockIcons'
 import { sceneColor } from '../lib/sceneColors'
+import { useSceneNameSizes } from '../lib/sceneNameFit'
 import { useLooks } from '../lib/useLooks'
 import { offMode } from '../lib/looks'
 import { presetTag } from '../lib/colourPage'
@@ -768,6 +769,12 @@ export default function Gig({
   const blocksRef = useRef(null)
   const [fitVars, setFitVars] = useState(null)
   /*
+   * Each scene's name as big as its tile has room for (lib/sceneNameFit,
+   * shared/name-fit): "the text is bigger on screens that allow it, and if
+   * there's more scenes like on an FM3, the text can shrink."
+   */
+  const nameSizes = useSceneNameSizes(scenesRef, names, sceneCount)
+  /*
    * WHERE NOT CONNECTED FLOATS: over the scenes, wherever they are in the
    * window (lib/downBand says why — at 42% of the window it sat on Tap on an
    * iPad and under everything on a big screen). Measured while the band is
@@ -1142,7 +1149,15 @@ export default function Gig({
                  scene, the edge-against-fill says whether it is the live one.
                  In this preset's own colour where it has one ("Just this
                  preset"), then yours for every preset, then the look's. */
-              style={{ '--scene-fill': sceneColor(i, preset?.number).fill, '--scene-ink': sceneColor(i, preset?.number).ink }}
+              style={{
+                '--scene-fill': sceneColor(i, preset?.number).fill,
+                '--scene-ink': sceneColor(i, preset?.number).ink,
+                ...(nameSizes[i] ? { '--name-size': `${nameSizes[i]}px` } : null)
+              }}
+              /* Its name is fitted (lib/sceneNameFit), which the styles let win over the compact Play's smaller sizes. */
+              data-fit={nameSizes[i] ? 'yes' : undefined}
+              /* Which scene this tile is, for the name's fit to find it by (lib/sceneNameFit). */
+              data-scene={i}
               /* A colour somebody picked, which Fractal Remote draws at full
                  strength like every other look (styles.css, data-picked). */
               data-picked={sceneColor(i, preset?.number).picked ? 'yes' : undefined}

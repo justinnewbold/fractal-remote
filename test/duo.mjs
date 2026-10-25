@@ -1345,7 +1345,8 @@ export function run(test) {
     assert.match(tile, /const wholeAt = full \? `\$\{full\}\|\$\{StyleSheet\.flatten\(style\)\?\.width\}` : null/, 'a whole name measured at one width is shown at another')
     assert.match(tile, /\{full \? \(\s*<Text[\s\S]{0,400}onTextLayout=\{\(e\) => \{\s*const fits = laidWhole\(full, e\.nativeEvent\.lines\)/, 'the whole name is not measured, or is measured when there is none')
     assert.match(tile, /opacity: 0,\s*fontSize: font\.small,\s*fontWeight: '700',\s*letterSpacing: 0\.5,\s*textAlign: 'center'/, 'the twin is not laid out in the face the name is drawn in')
-    assert.match(tile, /numberOfLines=\{wrap \? 2 : 1\}/)
+    /* A pedal is never fitted (scene names are, lib/name-fit), so for it this is still wrap ? 2 : 1. */
+    assert.match(tile, /numberOfLines=\{drawnAt \? 2 : wrap \? 2 : 1\}/)
   })
   test('a pedal drawn again, at the next preset or back on Play, shows its whole name from its first frame where it was laid out whole before', async () => {
     /*

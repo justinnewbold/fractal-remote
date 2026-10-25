@@ -18450,8 +18450,9 @@ export function run(test) {
      */
     const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
     const tile = bare(read('mobile/src/components/Tile.js'))
-    assert.match(tile, /numberOfLines=\{wrap \? 2 : 1\}/, 'a tile’s name cannot take a second line')
-    assert.match(tile, /fontSize: wrap \? font\.small : font\.body/, 'a two-line name is drawn at the size that only fits one')
+    /* A fitted scene name (lib/name-fit, 25 October 2026) takes two lines too, at the size its tile has room for, never under the small size. */
+    assert.match(tile, /numberOfLines=\{drawnAt \? 2 : wrap \? 2 : 1\}/, 'a tile’s name cannot take a second line')
+    assert.match(tile, /fontSize: drawnAt \|\| \(wrap \? font\.small : font\.body\)/, 'a two-line name is drawn at the size that only fits one')
 
     const stage = bare(read('mobile/src/screens/Stage.js'))
     const scene = stage.slice(stage.indexOf('caption={String(i + 1)}'), stage.indexOf('/>', stage.indexOf('caption={String(i + 1)}')))

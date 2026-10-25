@@ -10,6 +10,7 @@ import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
 import { cornerFit, mustSayFit } from '../lib/tile-corners'
 import { laidWhole } from '../lib/tileGrid'
+import { NAME_REF, NAME_TRACK, fitName } from '../lib/name-fit'
 
 /**
  * A coloured tile, for the two things on this screen that have an identity.
@@ -63,6 +64,18 @@ const BORDER = 2
  * frame and then the name, at the moment the player looks at them.
  */
 const WHOLE = new Map()
+/*
+ * A fitted name's measure (lib/name-fit), by the name and the phone's text
+ * size: each word's width, a space's and a line's height, at NAME_REF. Kept
+ * for the same reason as WHOLE: a scene tile drawn again for a name it has
+ * measured before is drawn at its size at once, never small for a frame
+ * first.
+ */
+const MEASURED = new Map()
+/* The rule under a scene's name and its gap (the bar, below): what a fitted name leaves room for. */
+const BAR = 5 + 3
+/* Which words a name is, as the twin lays them out one to a line. */
+const wordsOf = (name) => String(name || '').trim().split(/\s+/).filter(Boolean)
 
 export default function Tile({
   label: given,
@@ -169,6 +182,24 @@ export default function Tile({
    */
   wrap: wraps = false,
   /*
+   * THE NAME AS BIG AS THE TILE HAS ROOM FOR (lib/name-fit), for a scene's.
+   * "The scene names are kind of small on the AM4. Can we make those auto
+   * adjust to the screen size so the text is bigger on screens that allow
+   * it?" Its words are measured once, unseen, then the biggest size that
+   * keeps the whole name on two lines, no word cut, inside the tile's room
+   * under its number, is the size drawn: an AM4's four big tiles get big
+   * names, an FM3's eight keep the size they had, which is the floor. Until
+   * the measure is in, the name is drawn as a wrapped name always was.
+   *
+   * One size for the whole grid: the tile says what fits it (`onFit`, the
+   * size or null) and draws at most `fitCap`, the smallest that fits every
+   * scene on the screen (lib/name-fit `together`), so "Jumped" is not drawn
+   * twice the size of "Crunch Bright" beside it.
+   */
+  fit = false,
+  fitCap,
+  onFit,
+  /*
    * A WHOLE NAME TO SHOW IN PLACE OF `label`, where it fits: a pedal's
    * "Compressor" for CMP on a Play wide enough to spell it out
    * (lib/playShape `names`). Two lines, a size down, as a wrapped name
@@ -206,6 +237,36 @@ export default function Tile({
   const named = !!full && wholeFits === true
   const label = named ? full : given
   const wrap = wraps || named
+  /*
+   * THE FITTED NAME. Measured by the name and the phone's text size, then
+   * sized from the room: the tile's width less its border and padding, and
+   * its height less those, the number above the name (measured as it is
+   * drawn) and the rule under it.
+   */
+  const measureKey = fit && label ? `${label}|${PixelRatio.getFontScale()}` : null
+  const [measured, setMeasured] = useState(null)
+  const measure = measureKey ? (measured?.key === measureKey ? measured : MEASURED.get(measureKey)) || null : null
+  const [captionTall, setCaptionTall] = useState(0)
+  const tileWide = StyleSheet.flatten(style)?.width
+  const fitted =
+    measure && typeof tileWide === 'number' && (!caption || captionTall > 0)
+      ? fitName({
+          words: measure.words,
+          space: measure.space,
+          line: measure.line,
+          ref: NAME_REF,
+          width: tileWide - 2 * BORDER - 2 * space.sm,
+          height: height - 2 * BORDER - 2 * space.sm - (caption ? captionTall + 1 : 0) - (bar ? BAR : 0),
+          min: font.small
+        })
+      : null
+  /* Said up to the grid, which hands every tile the one size they share. */
+  const fitsAt = fitted?.fits ? fitted.size : null
+  useEffect(() => {
+    if (fit) onFit?.(fitsAt)
+  }, [fit, fitsAt])
+  /* Drawn fitted only where the name fits, at the grid's size; otherwise exactly as it was. */
+  const drawnAt = fitsAt ? Math.min(fitsAt, fitCap > 0 ? fitCap : fitsAt) : null
   /*
    * THE COLOUR AS IT IS AUTHORED — EXCEPT IN THE ONE LOOK THAT WAS LIFTED.
    *
@@ -577,6 +638,43 @@ export default function Tile({
           </Text>
         </View>
       ) : null}
+      {measureKey && !measure ? (
+        <Text
+          /* The fitted name's measure, unseen and untouchable: each word on a
+             line of its own, then "n n" and "nn", whose difference is one
+             space, at NAME_REF and the tracking a fitted name is drawn with,
+             in a box too wide for any word to wrap. */
+          pointerEvents="none"
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          onTextLayout={(e) => {
+            const lines = e.nativeEvent.lines || []
+            const words = wordsOf(label)
+            if (lines.length !== words.length + 2) return
+            const got = {
+              key: measureKey,
+              words: words.map((_, i) => lines[i].width),
+              space: Math.max(0, lines[words.length].width - lines[words.length + 1].width),
+              line: lines[0].height
+            }
+            if (!got.words.every((w) => w > 0) || !(got.line > 0)) return
+            MEASURED.set(measureKey, got)
+            setMeasured(got)
+          }}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            width: 4000,
+            opacity: 0,
+            fontSize: NAME_REF,
+            fontWeight: '700',
+            letterSpacing: NAME_REF * NAME_TRACK
+          }}
+        >
+          {[...wordsOf(label), 'n n', 'nn'].join('\n')}
+        </Text>
+      ) : null}
       {full ? (
         <Text
           /* The whole name's twin, unseen and untouchable, at the width the
@@ -626,18 +724,20 @@ export default function Tile({
         {caption ? (
           <Text
             numberOfLines={1}
+            onLayout={fit ? (e) => setCaptionTall(e.nativeEvent.layout.height) : undefined}
             style={{ color: quiet || grey ? foreground : on ? lit : quietWords, fontSize: font.micro, marginBottom: 1 }}
           >
             {caption}
           </Text>
         ) : null}
         <Text
-          numberOfLines={wrap ? 2 : 1}
+          numberOfLines={drawnAt ? 2 : wrap ? 2 : 1}
           style={{
             color: foreground,
-            fontSize: wrap ? font.small : font.body,
+            fontSize: drawnAt || (wrap ? font.small : font.body),
+            ...(drawnAt ? { lineHeight: Math.round((measure.line * drawnAt) / NAME_REF) } : null),
             fontWeight: '700',
-            letterSpacing: 0.5,
+            letterSpacing: drawnAt ? Math.round(drawnAt * NAME_TRACK * 10) / 10 : 0.5,
             textAlign: 'center'
           }}
         >
