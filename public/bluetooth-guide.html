@@ -204,8 +204,8 @@
       <p class="dim">
         On the AM4, the phone reads a preset’s scene names once, a few seconds after you stop
         pressing things, and remembers them; Refresh names reads them again. On an FM9 or
-        Axe-Fx III, the extra blocks (Amp 2, Cab 2, Drive 3 and so on) don’t show as pedals
-        over Bluetooth yet.
+        Axe-Fx III, a few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match, and on
+        the Axe-Fx III IR Player and Dynamic Distortion) don’t show on Play yet.
       </p>
 
       <h2 id="need">What you need</h2>
@@ -284,10 +284,17 @@
         <li>A USB phone charger or power bank, and a USB-C cable for the Uhost</li>
       </ul>
       <p class="dim">
-        Nobody has tried Fractal Remote over Bluetooth on these two yet. If you do, please tell us
-        how it went (see the end of this page). Feel the cable in the first minute: it should stay
+        Nobody has tried Fractal Remote over Bluetooth on these two yet. It is built from what is
+        known about them, so some of it may not work as expected. If you try it, please tell us how
+        it went (see the end of this page). Feel the cable in the first minute: it should stay
         cool.
       </p>
+      <ul>
+        <li><strong>FM9:</strong> use firmware 7.00 or later. Older firmware may not list its
+          effects, or may lose its settings if MIDI arrives while it starts.</li>
+        <li><strong>Axe-Fx III:</strong> use firmware 25.00 or later. Older firmware may lose its
+          settings if MIDI arrives while it starts.</li>
+      </ul>
 
       <h3>Before the first time: update the Uhost</h3>
       <p>
@@ -369,7 +376,12 @@
         <li><strong>Axe-Fx III:</strong> there is no MIDI Thru setting. Just keep the white plug in
           OUT, not THRU.</li>
         <li>Nothing else needs changing on the AM4.</li>
-        <li><strong>FM3, FM9 and Axe-Fx III, if presets don’t change from the phone:</strong> in
+        <li><strong>FM9 and Axe-Fx III:</strong> in Setup → MIDI/Remote, also set
+          <strong>Program Change</strong> on, the <strong>MIDI channel</strong> to 1 or Omni,
+          <strong>PC Mapping</strong> off, and <strong>Send Realtime Sysex</strong> on. On these
+          two the phone changes presets with Program Change, the way Fractal’s manuals give, and
+          the tuner’s readings reach the phone only with Send Realtime Sysex on.</li>
+        <li><strong>FM3, if presets don’t change from the phone:</strong> in
           Setup → MIDI/Remote, set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping
           off.</li>
         <li>Leave the C2MIDI Pro’s button alone. A short press switches it to another of its own

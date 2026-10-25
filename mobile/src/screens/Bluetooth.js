@@ -41,12 +41,19 @@ import {
   POWER_LINE,
   REPORT_BUTTON,
   SELLERS_LINE,
+  UNTRIED_SUB,
   betaNote,
+  firmwareLineFor,
   heatLineFor,
   hookupFor,
   midiSettingsFor,
+  missingBlocksLine,
+  notAnsweringLine,
   partsFor,
   powerStepOf,
+  untried,
+  untriedAboutLine,
+  untriedConnectedLine,
   untriedLine,
   warningFor,
   wrongUnitLine
@@ -228,12 +235,8 @@ function status(b, unitState) {
       }
     }
     if (unitState === 'present') return { line: `Connected · ${name} answering`, tone: 'ok' }
-    if (unitState === 'missing' || unitState === 'silent') {
-      return {
-        line: `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.`,
-        tone: 'fault'
-      }
-    }
+    /* The usual reasons, by unit (shared/bluetooth-gear notAnsweringLine): the Axe-Fx III has no MIDI Thru setting, only a THRU jack the white plug must stay out of. */
+    if (unitState === 'missing' || unitState === 'silent') return { line: notAnsweringLine(b.unit), tone: 'fault' }
     return { line: `Connected · asking the ${name}…`, tone: 'dim' }
   }
   return { line: `Connecting to ${b.adapter?.name || 'the adapter'}…`, tone: 'dim' }
@@ -261,6 +264,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   /* The units step 1 offers this account (lib/bluetooth offeredUnits), and whether that is the AM4 alone: a customer's page. */
   const units = offeredUnits()
   const am4Only = units.length < BLE_UNITS.length
+  /* A unit nobody has tried it on yet (the FM9, the Axe-Fx III) says so under "Connected" (shared/bluetooth-gear untriedConnectedLine). */
+  const untriedHere = said.tone === 'ok' && !b.answeredAs ? untriedConnectedLine(b.unit) : null
 
   /* The check's results, newest last, kept while the page is open. */
   const [results, setResults] = useState([])
@@ -283,7 +288,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     step === 'all' ? 'The check' : [...steps.reads, ...steps.writes].find((s) => s.step === step)?.label || step
 
   const copyAll = async () => {
-    const lines = [`Fractal Remote ${APP_VERSION} · Bluetooth (beta) check · ${unitName(b.unit)} · ${Platform.OS}`]
+    const lines = [`Fractal Remote ${APP_VERSION} · Bluetooth (beta) check · ${unitName(b.unit)}${untried(b.unit) ? ' (not tried yet)' : ''} · ${Platform.OS}`]
     for (const r of results) {
       lines.push('', `${labelOf(r.step)} (${unitName(r.unit)})${r.ok ? '' : ` — failed: ${r.error}`}`)
       if (r.way) lines.push(`  remembered: ${WAY_NAMES[r.way] || r.way}`)
@@ -378,6 +383,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   const [plug, setPlug] = useState(!b.adapter)
   const [buy, setBuy] = useState(false)
   const [about, setAbout] = useState(false)
+  /* Feel the cable, on the units nobody here has: drawn near the top while How to plug it in is folded, and in its place among the steps when it is open, so it is on the page once. */
+  const heatUp = plug ? null : heatLineFor(b.unit)
 
   return (
     <View style={{ gap: space.xl }}>
@@ -400,6 +407,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
           </Text>
           {b.trouble === 'permission' ? <OpenSettings /> : null}
           {reportable && !quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
+          {untriedHere ? <Hint>{untriedHere}</Hint> : null}
         </View>
 
         {/*
@@ -413,6 +421,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
           adapter has been used here.
         */}
         {b.unit === 'fm3' || b.answeredAs === 'FM3' ? <Note tone="fault">{FM3_NEVER}</Note> : null}
+        {heatUp ? <Note tone="warn">{heatUp}</Note> : null}
 
         {b.on ? (
           <View style={{ gap: space.sm }}>
@@ -468,14 +477,16 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
             <View style={{ gap: space.sm }}>
               <Heading>1 · Pick your unit</Heading>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+                {/* "Not tried yet" under the FM9 and the Axe-Fx III (shared/bluetooth-gear untried), before anybody picks one. */}
                 {units.map((u) => (
                   <Press
                     key={u.key}
                     label={u.name}
+                    sub={untried(u.key) ? UNTRIED_SUB : undefined}
                     tone="signal"
                     on={u.key === b.unit}
                     disabled={b.on}
-                    height={44}
+                    height={units.some((x) => untried(x.key)) ? 52 : 44}
                     style={{ paddingHorizontal: space.md }}
                     onPress={() => setBluetoothUnit(u.key)}
                   />
@@ -559,6 +570,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
           <Buy unit={b.unit} am4Only={am4Only} />
         </Fold>
         <Fold title="What it can and can’t do" open={about} onToggle={() => setAbout(!about)}>
+          {untriedAboutLine(b.unit) ? <Note tone="warn">{untriedAboutLine(b.unit)}</Note> : null}
           <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
             {`The ${deviceNoun()} talks straight to your unit through a Bluetooth MIDI adapter plugged into its MIDI In and MIDI Out. Presets, scenes, names, effects on and off, channels, tempo and the tuner. No editing or saving, and the computer isn’t used.`}
           </Text>
@@ -569,6 +581,13 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
             </View>
           ))}
+          {/* The unit's own: blocks Play does not draw yet on an FM9 or Axe-Fx III (shared/bluetooth-gear missingBlocksLine). */}
+          {missingBlocksLine(b.unit) ? (
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22 }}>•</Text>
+              <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{missingBlocksLine(b.unit)}</Text>
+            </View>
+          ) : null}
         </Fold>
         <Press label="Full setup guide" height={44} onPress={() => openLink(GUIDE_URL)} />
       </View>
@@ -736,10 +755,13 @@ function PlugIn({ unit }) {
   const heat = heatLineFor(unit)
   const heatAfter = heat ? powerStepOf(unit) : -1
   const midi = midiSettingsFor(unit, deviceNoun())
+  const firmware = firmwareLineFor(unit)
   return (
     <View style={{ gap: space.sm }}>
       {/* Once, before any of the plugging in: the Uhost's firmware, which the steps take for granted. */}
       <Hint>{FIRST_TIME}</Hint>
+      {/* And the unit's: the FM9 and Axe-Fx III firmware Fractal's notes say the phone needs (shared/bluetooth-gear firmwareLineFor). */}
+      {firmware ? <Hint>{firmware}</Hint> : null}
       {steps.map((line, i) => (
         <Fragment key={line}>
           <View style={{ flexDirection: 'row', gap: space.sm }}>

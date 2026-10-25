@@ -5,7 +5,7 @@ import { requireOptionalNativeModule } from 'expo'
 
 import { BLE_UNITS, CHECK_STEPS, WAYS, createBleWire, settleMethods } from './bleWire'
 import { createJoiner } from './fractal-sysex.mjs'
-import { blockCatalog } from './blockCatalog'
+import { catalogFor } from './gen3Catalog'
 import { setSwitch } from './bleSwitch'
 import { isAdapter, pickAdapter, pairScreenCrashes, pairScreenShutWords } from './bleAdapters'
 import { logDebug } from './debugLog'
@@ -14,6 +14,7 @@ import { accountId } from './owner-unlock'
 import { installedStoreVersion } from './storeVersion'
 import { bluetoothOpen, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
+import { unitForReport } from './bluetooth-gear'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -289,6 +290,7 @@ export function subscribeBluetooth(fn) {
 const read = () => snapshot
 const readOn = () => snapshot.on
 const readTrouble = () => snapshot.trouble
+const readUnit = () => snapshot.unit ?? null
 
 /** The settings and what is happening now, redrawn whenever either changes. For the Bluetooth page. */
 export const useBluetooth = () => useSyncExternalStore(subscribeBluetooth, read, read)
@@ -301,6 +303,9 @@ export const useBluetooth = () => useSyncExternalStore(subscribeBluetooth, read,
  * that has not changed redraws nothing.
  */
 export const useBluetoothOn = () => useSyncExternalStore(subscribeBluetooth, readOn, readOn)
+
+/** The unit picked on the Bluetooth page ('fm9'), or null: for Play's pill note, its fault card and the tuner, which say "not tried yet" for an FM9 or Axe-Fx III. A word, so it redraws only when it changes. */
+export const useBluetoothUnit = () => useSyncExternalStore(subscribeBluetooth, readUnit, readUnit)
 
 /** What stands between the phone and the adapter, or null: for the waiting screen. A word, so it redraws only when it changes. */
 export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth, readTrouble, readTrouble)
@@ -601,7 +606,8 @@ export const adapterName = (a) => (a && typeof a.name === 'string' && a.name && 
  * adapter chosen. Read when the report is sent, and at no other moment.
  */
 export const bluetoothFacts = () => ({
-  unit: saved.unit ? unitName(saved.unit) : null,
+  /* "FM9 (not tried yet)" for a unit nobody has tried it on (shared/bluetooth-gear unitForReport), so the report says so where it is read first. */
+  unit: saved.unit ? unitForReport(saved.unit) || unitName(saved.unit) : null,
   answeredAs: now.answeredAs || null,
   phase: now.phase,
   trouble: now.trouble,
@@ -909,7 +915,8 @@ export function openWire() {
       }
     },
     unit,
-    catalog: blockCatalog,
+    /* The unit's own blocks (lib/gen3Catalog): an FM9's second amp, an Axe-Fx III's fourth drive. The FM3's list for the FM3 and the AM4, which names its own. */
+    catalog: catalogFor(unit),
     methods: methodsFor(unit),
     log: (line) => logDebug('ble', line),
     remember: (m) => rememberMethods(unit, m),

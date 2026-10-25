@@ -8,7 +8,8 @@ import { color, font, mono, radius, space, TAP } from '../lib/theme'
 import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import Note from './Note'
 import Press from './Press'
-import { useBluetoothOn } from '../lib/bluetooth'
+import { useBluetoothOn, useBluetoothUnit } from '../lib/bluetooth'
+import { tunerQuietLine } from '../lib/bluetooth-gear'
 import { useRig } from '../lib/rig'
 import { NOT_CONNECTED } from '../lib/relay-rules'
 import { deviceNoun } from '../lib/device-word'
@@ -48,6 +49,8 @@ export default function Tuner({ reading, on, onClose, down = false }) {
   const [stalled, setStalled] = useState(false)
   /* Over Bluetooth there is no computer to blame: the unit itself is quiet. */
   const bluetooth = useBluetoothOn()
+  /* On an FM9 or Axe-Fx III over Bluetooth, the readings come only with the unit's Send Realtime Sysex on: the quiet note says where (shared/bluetooth-gear tunerQuietLine). */
+  const quietLine = tunerQuietLine(useBluetoothUnit())
   /*
    * Whether the AM4's own tuner screen came up with this one. The phone opens
    * it with the number set under the AM4's Tuner setting, the one a MIDI
@@ -223,7 +226,9 @@ export default function Tuner({ reading, on, onClose, down = false }) {
               {down ? NOT_CONNECTED : reading?.note ? `${cents > 0 ? '+' : ''}${cents} cents` : 'Play a string'}
             </Text>
 
-            {stalled && bluetooth ? (
+            {stalled && bluetooth && quietLine ? (
+              <Note tone="warn">{quietLine}</Note>
+            ) : stalled && bluetooth ? (
               <Note tone="warn">
                 The tuner is on, but the unit isn’t sending readings over Bluetooth. Use the unit’s own
                 display for now.

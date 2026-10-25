@@ -4325,7 +4325,9 @@ export function run(test) {
     assert.match(words, /Never use anything that puts out more than 5 volts/, 'the guide does not warn against more than 5 volts')
     assert.equal((words.match(/let it finish starting up/g) || []).length, 2, 'the hook-up does not start the unit before the Uhost, for both kinds of unit')
     assert.match(words, /MIDI Thru: Off/, 'the guide does not say to turn MIDI Thru off')
-    assert.match(words, /FM3, FM9 and Axe-Fx III, if presets don’t change from the phone: in Setup → MIDI\/Remote, set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping off\./, 'the guide does not say what to set on a 5-pin unit when presets don’t change')
+    assert.match(words, /FM3, if presets don’t change from the phone: in Setup → MIDI\/Remote, set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping off\./, 'the guide does not say what to set on an FM3 when presets don’t change')
+    /* The FM9 and Axe-Fx III change presets by Program Change alone since 25 October 2026, so for them it is for everybody, with Send Realtime Sysex for the tuner. */
+    assert.match(words, /FM9 and Axe-Fx III: in Setup → MIDI\/Remote, also set Program Change on, the MIDI channel to 1 or Omni, PC Mapping off, and Send Realtime Sysex on\./, 'the guide does not say what to set on an FM9 or Axe-Fx III')
     assert.ok(!/Testing tools|found: /i.test(words), 'the guide sends customers to the Testing tools, which are a test bench')
 
     /* Connecting, in the app's own words. */

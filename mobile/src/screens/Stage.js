@@ -78,6 +78,8 @@ import ColoursNotice from '../components/ColoursNotice'
 import Toast, { useStillNews } from '../components/Toast'
 import { droppedLeft, faultLeft } from '../lib/fault-rule'
 import { overBluetooth } from '../lib/bleSwitch'
+import { useBluetoothUnit } from '../lib/bluetooth'
+import { faultSubFor } from '../lib/bluetooth-gear'
 import { NOT_CONNECTED, missingPickCard, unitElsewhereCard } from '../lib/relay-rules'
 import { chooseHost, keepThisOne, watchUnits } from '../lib/link'
 import ComputerCard from '../components/ComputerCard'
@@ -200,6 +202,8 @@ export default function Stage({
   const scene = useRig(ofScene)
   const sceneNames = useRig(ofSceneNames)
   const caps = useRig(ofCaps)
+  /* The unit picked for Bluetooth (beta): a fault card's Report this says "not tried on the FM9 yet" on a unit nobody has tried it on. */
+  const bleUnit = useBluetoothUnit()
   const chain = useRig(ofChain)
   /*
    * Whose tiles these are. A preset picked here goes up by name on the tap
@@ -1668,7 +1672,7 @@ export default function Stage({
           Feedback form already takes.
         */}
         {error && onReport && overBluetooth(caps) ? (
-          <Press label="Report this" sub="Bluetooth (beta)" height={44} onPress={() => onReport(error)} />
+          <Press label="Report this" sub={faultSubFor(bleUnit)} height={44} onPress={() => onReport(error)} />
         ) : null}
       </Toast>
 

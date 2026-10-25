@@ -143,19 +143,50 @@ const FM3_STATUS = [
   [118, 0x41]
 ]
 
+/*
+ * AS FRACTAL'S DOCUMENTS SAY, NOT AS THE PHONE ASSUMES. Where the pretend
+ * unit does something the phone relies on, it does what Fractal wrote down,
+ * and says where (the copies are in the build-out's scratchpad notes,
+ * fractal-docs.md, never in the repo):
+ *
+ *   - Program Change, bank in CC#0: the III's manual, "MIDI Bank Select
+ *     (CC#0) Value, Midi Program Change = Axe-Fx III Preset Number", "0, 0 =
+ *     0" to "7, 127 = 1023"; the FM9's and FM3's say the same. `bankIn:
+ *     'cc32'` is a unit that reads CC0 and CC32 as one 14-bit bank, the
+ *     codec's 'standard' guess, which no Fractal document has, and a bank
+ *     past its last preset loads nothing.
+ *   - Program Change Off ignores it (`pc: false`): "Determines whether the
+ *     Axe-Fx III will process or ignore incoming MIDI Program Change
+ *     messages".
+ *   - The 0x27 preset switch is FM3-Edit's, seen on an FM3 only; Fractal
+ *     publishes no SysEx preset switch ("There is no published way to switch
+ *     presets by SysEx"). So only the pretend FM3 takes it by default.
+ *   - The tuner switch, 0x11 dd: "Turns the Tuner on or off". With Send
+ *     Realtime Sysex on (`pushes: true`) it sends readings while the tuner is
+ *     on, "F0 00 01 74 10 11 nn ss cc F7 ... Note that no checksum is sent",
+ *     and a tempo beat, "F0 00 01 74 10 10 F7", on each down beat
+ *     (Rev 1.4, "Push data"). `push` is the reading it sends.
+ *   - `ack: true` answers the tap and the tuner switch with 64 <fn> 00, as
+ *     developers on Fractal's forum report a III doing (tysonlt, 7 Feb 2019:
+ *     "0x00 0x01 0x74 0x10 0x64 0x11 0x00 0x60" after Tuner on/off). Fractal
+ *     never documented 0x64.
+ */
 function fakeGen3(sx, o) {
-  const { say, model } = o
+  const { say, model, clock } = o
   const opt = {
     sceneEcho: true,
     publishedScene: true,
     publishedChannel: true,
     publishedTempo: false,
-    sysexPreset: true,
+    sysexPreset: model === 0x11,
     pc: true,
     numbered: 'yes',
     thru: false,
     silent: false,
     pushes: false,
+    push: [7, 0, 63],
+    ack: false,
+    refuseTuner: null,
     bankIn: 'cc0',
     looper: false,
     /* Answers the published scene, channel and tempo SETs with a refusal ("does not know that message"), rather than ignoring them. */
@@ -194,9 +225,22 @@ function fakeGen3(sx, o) {
     if ((b[0] & 0xf0) === 0xb0 && b[1] === 0x20) state.cc32 = b[2]
     if ((b[0] & 0xf0) === 0xc0) {
       const bank = opt.bankIn === 'cc0' ? state.cc0 : (state.cc0 << 7) | state.cc32
-      state.preset = bank * 128 + b[1]
+      /* MIDI PC Offset: "Adds a specified value to all incoming MIDI Program Change requests before they are processed." */
+      const n = bank * 128 + b[1] + (opt.pcOffset || 0)
+      /* A bank past the last preset (1023 on a III Mark II, 511 on the rest): nothing loads. */
+      if (n <= (model === 0x10 ? 1023 : 511)) state.preset = n
     }
   }
+  /* Send Realtime Sysex on: the beat every half second, and while the tuner is on a reading every 100 ms, as the document shapes them (no checksum). */
+  let beat = 0
+  function pushTick() {
+    if (opt.pushes && !opt.silent) {
+      if (state.pushing) say([0xf0, 0x00, 0x01, 0x74, model, 0x11, ...opt.push, 0xf7], 1)
+      if (beat++ % 5 === 0) say([0xf0, 0x00, 0x01, 0x74, model, 0x10, 0xf7], 1)
+    }
+    clock.setTimeout(pushTick, 100)
+  }
+  if (clock && opt.pushes) clock.setTimeout(pushTick, 100)
   function hear(b) {
     if (opt.thru) say([...b], 1)
     if (opt.silent) return
@@ -220,6 +264,8 @@ function fakeGen3(sx, o) {
       case 0x0e:
         return reply(0x0e, [p[0], ...nameBytes(state.sceneNames[p[0]] || '')])
       case 0x13:
+        /* An FM9 before firmware 3.00: "3rd Party MIDI Command "Status Dump" is now enabled" (3.00 release notes). */
+        if (opt.noStatus) return
         return reply(0x13, state.blocks.flatMap((bl) => [...sx.encode14(bl.eid), (bl.bypassed ? 1 : 0) | (bl.channel << 1) | (4 << 4)]))
       case 0x14:
         if (p[0] === 0x7f && p[1] === 0x7f) return reply(0x14, sx.encode14(state.bpm))
@@ -240,10 +286,13 @@ function fakeGen3(sx, o) {
         return
       }
       case 0x10:
+        if (opt.ack) reply(0x64, [0x10, 0x00])
         return
       case 0x11:
+        if (opt.refuseTuner !== null) return reply(0x64, [0x11, opt.refuseTuner])
         state.tuner = p[0] === 1
         state.pushing = p[0] === 1 && opt.pushes
+        if (opt.ack) reply(0x64, [0x11, 0x00])
         return
       case 0x12:
         state.page = p[0] === 0x1e
@@ -623,7 +672,7 @@ async function onTheLine(kind, options = {}) {
     }
     return at
   }
-  const unit = kind === 'am4' ? fakeAm4(sx, { say, clock, ...options }) : fakeGen3(sx, { say, model: sx.MODELS[kind], ...options })
+  const unit = kind === 'am4' ? fakeAm4(sx, { say, clock, ...options }) : fakeGen3(sx, { say, clock, model: sx.MODELS[kind], ...options })
   /*
    * A wire on the line, and `reconnect()` for the next one after the adapter
    * dropped and came back, as bleLink makes it: the unit's answers go to the
@@ -634,7 +683,7 @@ async function onTheLine(kind, options = {}) {
   const makeWire = () => {
     wire = createBleWire({
       unit: kind,
-      catalog,
+      catalog: options.catalog ?? catalog,
       clock,
       methods: options.methods,
       log: (l) => logs.push(l),
@@ -892,16 +941,24 @@ export function run(test) {
     assert.equal(hex(sx.buildSetBypass(0x10, 46, true)), 'F0 00 01 74 10 0A 2E 00 01 30 F7')
   })
 
-  test('Program Change puts the bank where each unit reads it: CC0 on the FM3 and FM9, CC32 on the III', async () => {
+  /*
+   * CC0 ON EVERY GEN 3 UNIT, the Axe-Fx III too: its manual's table is "MIDI
+   * Bank Select (CC#0) Value, Midi Program Change = Axe-Fx III Preset
+   * Number", "1, 0 = 128" to "7, 127 = 1023", and CC#32 is in none of
+   * Fractal's documents. The III's bank went in CC32 until 25 October 2026.
+   */
+  test('Program Change puts the bank in CC0 on every Gen 3 unit, as Fractal’s manuals say, the Axe-Fx III’s included', async () => {
     const sx = await import(SX)
-    const pc = (n, bankIn, channel) => hex(sx.buildProgramChange(n, { bankIn, channel }).flat())
-    assert.equal(pc(412, 'cc0'), 'B0 00 03 B0 20 00 C0 1C')
-    assert.equal(pc(412, 'cc32'), 'B0 00 00 B0 20 03 C0 1C')
-    assert.equal(pc(475, 'cc0'), 'B0 00 03 B0 20 00 C0 5B')
-    assert.equal(pc(475, 'cc32'), 'B0 00 00 B0 20 03 C0 5B')
+    const pc = (n, opts) => hex(sx.buildProgramChange(n, opts).flat())
+    assert.equal(pc(412), 'B0 00 03 B0 20 00 C0 1C')
+    assert.equal(pc(475), 'B0 00 03 B0 20 00 C0 5B')
+    assert.equal(pc(128), 'B0 00 01 B0 20 00 C0 00', 'the III manual: "1, 0 = 128"')
+    assert.equal(pc(1023), 'B0 00 07 B0 20 00 C0 7F', 'the III manual: "7, 127 = 1023"')
+    /* An old caller still asking for CC32 is not heard: there is no such way any more. */
+    assert.equal(pc(475, { bankIn: 'cc32' }), 'B0 00 03 B0 20 00 C0 5B')
     /* Three separate messages: the phone's MIDI layer sends one at a time. */
     assert.equal(sx.buildProgramChange(475).length, 3)
-    assert.equal(pc(475, 'cc0', 16), 'BF 00 03 BF 20 00 CF 5B', 'the MIDI number moves the status byte')
+    assert.equal(pc(475, { channel: 16 }), 'BF 00 03 BF 20 00 CF 5B', 'the MIDI number moves the status byte')
     assert.throws(() => sx.buildProgramChange(5, { channel: 17 }), /MIDI number 17/)
   })
 
@@ -1797,14 +1854,25 @@ export function run(test) {
     assert.equal(t.remembered.at(-1).learned.preset, 'pc')
   })
 
-  test('the Axe-Fx III’s Program Change carries its bank in CC32, on the MIDI number chosen', async () => {
-    const t = await onTheLine('axefx3', { sysexPreset: false, bankIn: 'cc32' })
+  test('the Axe-Fx III’s Program Change carries its bank in CC0, as its manual says, on the MIDI number chosen', async () => {
+    const t = await onTheLine('axefx3', { bankIn: 'cc0' })
     await t.post('/preset/select', { number: 475 })
-    assert.deepEqual(t.frames().filter((f) => f[0] !== 0xf0).map(hex), ['B0 00 00', 'B0 20 03', 'C0 5B'])
+    assert.deepEqual(t.frames().filter((f) => f[0] !== 0xf0).map(hex), ['B0 00 03', 'B0 20 00', 'C0 5B'])
     assert.equal(t.unit.state.preset, 475)
-    const ch = await onTheLine('axefx3', { methods: { preset: 'pc', pcChannel: 3 }, bankIn: 'cc32' })
+    const ch = await onTheLine('axefx3', { methods: { preset: 'pc', pcChannel: 3 } })
     await ch.post('/preset/select', { number: 5 })
     assert.deepEqual(ch.frames().map(hex), ['B2 00 00', 'B2 20 00', 'C2 05'], 'forced Program Change sent anything else')
+    /*
+     * A III that read CC0 and CC32 as one fourteen-bit bank (the codec's
+     * 'standard' guess; no Fractal document says it) asked for 300 hears bank
+     * 2 << 7, a preset that does not exist: nothing loads, and the phone says
+     * so. The CC32 guess failed the other way, on a III that reads its
+     * manual: 300 landed on 44, a different song.
+     */
+    const odd = await onTheLine('axefx3', { bankIn: 'cc32' })
+    await assert.rejects(odd.post('/preset/select', { number: 300 }), (e) => e.status === 502 && /^The unit stayed on preset 12\./.test(e.message), 'a preset that did not land was taken as landed')
+    assert.equal(odd.unit.state.preset, 12, 'the III moved to another preset')
+    assert.notEqual(odd.unit.state.preset, 44)
   })
 
   test('the echoes of the phone’s own writes have rig’s exact shapes, and a channel change has none', async () => {
@@ -1986,7 +2054,9 @@ export function run(test) {
     /* And a tuner with no readings blames no computer when there is none. */
     const tuner = flat('mobile/src/components/Tuner.js')
     assert.match(tuner, /const bluetooth = useBluetoothOn\(\)/)
-    assert.match(tuner, /\{stalled && bluetooth \? \( <Note tone="warn"> The tuner is on, but the unit isn’t sending readings over Bluetooth\./)
+    /* On an FM9 or Axe-Fx III, the setting that sends the readings, by name (shared/bluetooth-gear tunerQuietLine); on the rest, as it was. */
+    assert.match(tuner, /const quietLine = tunerQuietLine\(useBluetoothUnit\(\)\)/)
+    assert.match(tuner, /\{stalled && bluetooth && quietLine \? \( <Note tone="warn">\{quietLine\}<\/Note> \) : stalled && bluetooth \? \( <Note tone="warn"> The tuner is on, but the unit isn’t sending readings over Bluetooth\./)
   })
 
   test('requests go one at a time: the second frame waits for the first answer, or the first timeout', async () => {
@@ -4946,7 +5016,9 @@ export function run(test) {
     const imports = (t) => [...t.matchAll(/^import[\s\S]*?from\s+'([^']+)'/gm)].map((m) => m[1])
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./chain-outline.js', './fractal-sysex.mjs'])
+    /* The gear file's words (presetMissLine) are plain data with no imports of their own. */
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./bluetooth-gear.js', './chain-outline.js', './fractal-sysex.mjs'])
+    assert.deepEqual(imports(read('bluetooth-gear.js')), [], 'the gear file imports something')
   })
 
   /* ---------------------------------------------------------------- */
@@ -6576,7 +6648,8 @@ export function run(test) {
      * copy holds what offeredUnits answers.
      */
     assert.match(page, /const units = offeredUnits\(\) const am4Only = units\.length < BLE_UNITS\.length/)
-    assert.match(page, /\{units\.map\(\(u\) => \( <Press key=\{u\.key\} label=\{u\.name\} tone="signal" on=\{u\.key === b\.unit\}/)
+    /* "Not tried yet" under the units nobody has tried it on (shared/bluetooth-gear untried: the FM9 and the Axe-Fx III), since 25 October 2026. */
+    assert.match(page, /\{units\.map\(\(u\) => \( <Press key=\{u\.key\} label=\{u\.name\} sub=\{untried\(u\.key\) \? UNTRIED_SUB : undefined\} tone="signal" on=\{u\.key === b\.unit\}/)
     /* Connect cannot be pressed before a unit is picked, nor by somebody who has not unlocked the app. */
     assert.match(page, /const canStart = !!b\.unit && paid/)
     assert.match(page, /tone="live" disabled=\{!canStart \|\| b\.looking\} onPress=\{start\}/, 'Connect can be pressed with no unit picked')
@@ -6618,7 +6691,7 @@ export function run(test) {
     assert.ok(!/in step 1, then tap Connect/.test(status), 'another line sends somebody to step 1 for a unit')
   })
 
-  test('the Bluetooth page says plainly what is different from USB, and names an adapter maker only in what to buy', () => {
+  test('the Bluetooth page says plainly what is different from USB, and names an adapter maker only in what to buy', async () => {
     const page = src('mobile/src/screens/Bluetooth.js')
     for (const line of [
       'No editing or saving over Bluetooth.',
@@ -6660,7 +6733,11 @@ export function run(test) {
     }
     assert.match(code('shared/bluetooth-gear.mjs'), /name: 'CME WIDI Uhost'/, 'the part he uses is not named where it is bought')
     /* The status line, in his words. */
-    assert.match(page, /Adapter connected, but the \$\{name\} isn’t answering\. Check both MIDI plugs, and that MIDI Thru is off\./)
+    /* By unit since 25 October 2026 (shared/bluetooth-gear notAnsweringLine): the Axe-Fx III has no MIDI Thru setting, only a THRU jack to keep the white plug out of. */
+    assert.match(page, /if \(unitState === 'missing' \|\| unitState === 'silent'\) return \{ line: notAnsweringLine\(b\.unit\), tone: 'fault' \}/)
+    const gearWords = await import('../shared/bluetooth-gear.mjs')
+    assert.equal(gearWords.notAnsweringLine('fm9'), 'Adapter connected, but the FM9 isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.')
+    assert.equal(gearWords.notAnsweringLine('axefx3'), 'Adapter connected, but the Axe-Fx III isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.')
     assert.match(page, /if \(b\.trouble === 'permission'\) return \{ line: ALLOW_WORDS, tone: 'fault' \}/)
     /* For the device in hand, changed on purpose on 25 October 2026 from "the phone’s settings". */
     assert.match(page, /`Turn on Bluetooth in the \$\{deviceNoun\(\)\}’s settings`/)
@@ -6963,7 +7040,7 @@ export function run(test) {
   test('over Bluetooth, CONNECTED opens a note with Turn off Bluetooth, which does what Stop does', async () => {
     /* "Make it so you can click the connected button at the top of the screen and have a button that pop up that says turn off Bluetooth." */
     const bar = flat('mobile/src/components/TopBar.js')
-    assert.match(bar, /import \{ setBluetooth, useBluetoothOn \} from '\.\.\/lib\/bluetooth'/, 'the bar cannot turn Bluetooth off')
+    assert.match(bar, /import \{ setBluetooth, useBluetoothOn, useBluetoothUnit \} from '\.\.\/lib\/bluetooth'/, 'the bar cannot turn Bluetooth off')
     /*
      * The word CONNECTED is the pill since 24 October 2026 (Axiom's "Live ●
      * AM4" over "on Raspberry Pi"), and over Bluetooth, in every state of the
@@ -7130,7 +7207,7 @@ export function run(test) {
       ["from './bleWire'", `from '${real('bleWire.js')}'`],
       ["from './fractal-sysex.mjs'", `from '${real('fractal-sysex.mjs')}'`],
       ["from './bleAdapters'", `from '${real('bleAdapters.js')}'`],
-      ["from './blockCatalog'", "from './blockCatalog.js'"],
+      ["from './gen3Catalog'", `from '${real('gen3Catalog.js')}'`],
       ["from './bleSwitch'", "from './bleSwitch.js'"],
       ["from './debugLog'", "from './debugLog.js'"],
       /* The real check of whose phone this is: admin.js and owner-unlock.js, which import nothing that needs a phone. */
@@ -7139,7 +7216,8 @@ export function run(test) {
       /* The version built into the copy, stood in; the rule, real or as the build will set it; the device's own word, real. */
       ["from './storeVersion'", "from './storeVersion.js'"],
       ["from './ble-rule'", from === undefined ? `from '${real('ble-rule.js')}'` : "from './ble-rule.js'"],
-      ["from './device-word'", `from '${real('device-word.js')}'`]
+      ["from './device-word'", `from '${real('device-word.js')}'`],
+      ["from './bluetooth-gear'", `from '${real('bluetooth-gear.js')}'`]
     ]
     let lib = src('mobile/src/lib/bluetooth.js')
     for (const [from, to] of swaps) {
@@ -7156,7 +7234,6 @@ export function run(test) {
         `export const disk = new Map(Object.entries(${JSON.stringify(disk)}))\n` +
         'export default { getItem: async (k) => (disk.has(k) ? disk.get(k) : null), setItem: async (k, v) => { disk.set(k, String(v)) } }\n',
       'expo.js': 'export const native = { module: null }\nexport const requireOptionalNativeModule = () => native.module\n',
-      'blockCatalog.js': 'export const blockCatalog = {}\n',
       'debugLog.js': 'export const lines = []\nexport const logDebug = (...parts) => { lines.push(parts.join(" ")) }\n',
       'bleSwitch.js': src('mobile/src/lib/bleSwitch.js'),
       'storeVersion.js': `export const installedStoreVersion = () => ${JSON.stringify(installed)}\n`
@@ -7562,11 +7639,12 @@ export function run(test) {
         /* No MIDI Thru setting on the III; its THRU jack only repeats the phone, so the white plug stays out of it. */
         assert.ok(!/MIDI Thru to Off/.test(all), 'the Axe-Fx III is told to change a setting it does not have')
         assert.match(all, /into its MIDI OUT\. Not THRU/)
+        assert.equal(steps.at(-1), 'On the Axe-Fx III, open Setup → MIDI/Remote and set Program Change to On, the MIDI channel to 1 (or Omni), PC Mapping to Off, and Send Realtime Sysex to On.')
       } else if (key === 'am4') {
         assert.match(all, /On the AM4, open Setup → MIDI\/Remote and set MIDI Thru to Off\./, 'AM4: MIDI Thru is not turned off')
       } else {
-        /* The FM9's MIDI Thru, its own step, as the AM4's is: not folded into the Program Change settings, which are for some owners only. */
-        assert.ok(steps.includes(`On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off.`), `${name}: MIDI Thru is not turned off`)
+        /* The FM9's MIDI Thru, first in the one step that sends the player into its menus, with what Program Change alone and the published tuner need. */
+        assert.equal(steps.at(-1), 'On the FM9, open Setup → MIDI/Remote and set MIDI Thru to Off, Program Change to On, the MIDI channel to 1 (or Omni), PC Mapping to Off, and Send Realtime Sysex to On.')
       }
       /*
        * THE MIDI CHANNEL, on the units whose presets can go by Program Change
@@ -7579,8 +7657,17 @@ export function run(test) {
        * on purpose on 25 October 2026 (it was the last step, for every
        * owner). Not the AM4, whose presets never go that way.
        */
-      assert.ok(!/Program Change|PC Mapping/.test(all), `${name}: every owner is told to set up Program Change`)
-      if (key === 'am4') assert.equal(gear.midiSettingsFor(key), null, 'the AM4 is told to set up Program Change')
+      /*
+       * EXCEPT ON THE FM9 AND AXE-FX III, since the build-out of 25 October
+       * 2026: their presets go by Program Change alone (Fractal publishes no
+       * SysEx preset switch; bleWire trialPreset), so the settings that needs
+       * are one of the steps, and the line for some owners is not drawn.
+       */
+      if (gear.PC_FIRST.includes(key)) {
+        assert.match(all, /Program Change to On, the MIDI channel to 1 \(or Omni\), PC Mapping to Off, and Send Realtime Sysex to On\./, `${name}: the settings Program Change needs are not a step`)
+        assert.equal(gear.midiSettingsFor(key, 'iPad'), null, `${name}: the settings are said twice`)
+      } else assert.ok(!/Program Change|PC Mapping/.test(all), `${name}: every owner is told to set up Program Change`)
+      if (key === 'am4' || gear.PC_FIRST.includes(key)) assert.equal(gear.midiSettingsFor(key), null, `${name}: the Program Change line for some owners is drawn`)
       else {
         assert.equal(
           gear.midiSettingsFor(key, 'iPad'),
@@ -7619,7 +7706,12 @@ export function run(test) {
     assert.equal(gear.HEAT_CHECK, 'In the first minute, feel the C2MIDI Pro. It should stay cool. If it gets more than slightly warm, unplug it at once.')
     /* The guide says the same about the channel, and about the heat, so the app and the guide do not disagree. */
     const guide = readFileSync(new URL('../public/bluetooth-guide.html', import.meta.url), 'utf8').replace(/\s+/g, ' ')
-    assert.match(guide, /FM3, FM9 and Axe-Fx III, if presets don’t change from the phone:<\/strong> in Setup → MIDI\/Remote, set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping off/)
+    /* The FM9 and Axe-Fx III have these among their steps since 25 October 2026 (PC_FIRST), with Send Realtime Sysex for the tuner; the FM3 keeps the line for some owners. */
+    assert.match(guide, /FM3, if presets don’t change from the phone:<\/strong> in Setup → MIDI\/Remote, set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping off/)
+    assert.match(guide, /FM9 and Axe-Fx III:<\/strong> in Setup → MIDI\/Remote, also set <strong>Program Change<\/strong> on, the <strong>MIDI channel<\/strong> to 1 or Omni, <strong>PC Mapping<\/strong> off, and <strong>Send Realtime Sysex<\/strong> on\./)
+    assert.ok(!/extra blocks \(Amp 2, Cab 2/.test(guide), 'the guide still says the second blocks do not show')
+    assert.match(guide, /FM9:<\/strong> use firmware 7\.00 or later\./)
+    assert.match(guide, /Axe-Fx III:<\/strong> use firmware 25\.00 or later\./)
     assert.match(guide, /Feel the C2MIDI Pro after a minute\. It should be cool\. If it is more than slightly warm, unplug it at once\./)
     assert.match(gear.GEAR_IN_SHORT, /CME WIDI Uhost, a CME C2MIDI Pro, and a phone charger or power bank/)
     assert.match(gear.GEAR_IN_SHORT, /For an AM4, also two Type-A MIDI to 3\.5 mm adapters\./)
@@ -8013,10 +8105,11 @@ export function run(test) {
       'the heat line is not drawn straight after the step it follows'
     )
     assert.equal((plug.match(/<Note tone="warn">\{heat\}<\/Note>/g) || []).length, 1, 'the heat line is drawn twice')
-    /* On the FM9, that is after step 4 (the power) and before step 5 (the unit's MIDI Thru setting); on the Axe-Fx III, the power is the last step. */
+    /* On the FM9 and the Axe-Fx III, that is after step 4 (the power) and before step 5 (the unit's own settings). */
     assert.equal(gear.powerStepOf('fm9'), 3)
     assert.match(gear.hookupFor('fm9')[4], /^On the FM9, open Setup → MIDI\/Remote/)
-    assert.equal(gear.powerStepOf('axefx3'), gear.hookupFor('axefx3').length - 1)
+    assert.equal(gear.powerStepOf('axefx3'), 3)
+    assert.match(gear.hookupFor('axefx3')[4], /^On the Axe-Fx III, open Setup → MIDI\/Remote/)
     /* The Program Change settings, for some owners only: under the steps, with their condition, never numbered among them. */
     assert.match(plug, /const midi = midiSettingsFor\(unit, deviceNoun\(\)\)/)
     assert.ok(plug.indexOf('{midi ? <Hint>{midi}</Hint> : null}') > plug.indexOf('</Fragment>'), 'the Program Change settings are among the steps')
@@ -8319,7 +8412,7 @@ export function run(test) {
     /* Each button, as it is drawn, and as the list names it. */
     for (const [file, drawn, named] of [
       ['mobile/src/screens/Bluetooth.js', '<Press label="Report this"', 'Report this beside a fault there'],
-      ['mobile/src/screens/Stage.js', '<Press label="Report this" sub="Bluetooth (beta)"', "and on Play's fault card"],
+      ['mobile/src/screens/Stage.js', '<Press label="Report this" sub={faultSubFor(bleUnit)}', "and on Play's fault card"],
       ['mobile/src/components/TopBar.js', '>Report a problem</Text>', "Report a problem under Play's pill"],
       ['mobile/App.js', '<Press label={REPORT_BUTTON} onPress={() => onReport(said)} />', `${REPORT_BUTTON} on the waiting screen`]
     ]) {
@@ -8500,7 +8593,8 @@ export function run(test) {
     /* The note keeps its own shape (a test reads it), What to try its own conditional, and Report this a third. */
     assert.match(card, /\{error \? \( <Note tone="fault" onDismiss=\{clearError\}> \{error\} <\/Note> \) : null\}/)
     assert.match(card, /\{error && onOpenFix && fixFor\(error\) \? \( <Press label=\{fixById\(fixFor\(error\)\)\.title\} sub="What to try"/)
-    assert.match(card, /\{error && onReport && overBluetooth\(caps\) \? \( <Press label="Report this" sub="Bluetooth \(beta\)" height=\{44\} onPress=\{\(\) => onReport\(error\)\} \/> \) : null\}/)
+    /* Its small line says "not tried on the FM9 yet" on a unit nobody has tried (shared/bluetooth-gear faultSubFor), and "Bluetooth (beta)" on the rest. */
+    assert.match(card, /\{error && onReport && overBluetooth\(caps\) \? \( <Press label="Report this" sub=\{faultSubFor\(bleUnit\)\} height=\{44\} onPress=\{\(\) => onReport\(error\)\} \/> \) : null\}/)
     assert.ok(card.indexOf('What to try') < card.indexOf('label="Report this"'), 'Report this is above What to try')
     /* Drawn only there: not on the advice card, and not with the dropped tap's note, which is not a fault. */
     assert.equal((stage.match(/label="Report this"/g) || []).length, 1)
@@ -8520,5 +8614,440 @@ export function run(test) {
     assert.match(trouble, /<SetupRow title="Feedback" status="Something broken, or something you want" onPress=\{onOpenReport\} \/>/)
     const { SUPPORT_LINE } = await import('../shared/affiliation.mjs')
     assert.match(SUPPORT_LINE, /Settings → Troubleshooting → Feedback/)
+  })
+
+  /* ---------------------------------------------------------------- */
+  /* The FM9 and Axe-Fx III, built out from what Fractal publishes      */
+  /* ---------------------------------------------------------------- */
+
+  /*
+   * WHAT THE PHONE SENDS AN FM9 OR AN AXE-FX III, AND WHERE IT IS WRITTEN
+   * DOWN. Nobody has run Bluetooth on either, so the rule is the byte rule:
+   * nothing goes that Fractal does not document, or that the computer app has
+   * not been seen to do on that unit. The pretend units (fakeGen3) behave as
+   * Fractal's documents say, and cite them; these tests hold the wire to it.
+   */
+  const SHORT_OK = (f) => f.length === 3 && (f[0] & 0xf0) === 0xb0 ? f[1] === 0x00 || f[1] === 0x20 : f.length === 2 && (f[0] & 0xf0) === 0xc0
+  /* Fractal's third-party MIDI document, Rev 1.4: bypass, channel, scene, preset name, scene name, tap, tuner on/off, status dump, tempo. (0x0F, the looper, is published too, and never sent: the phone has no looper over Bluetooth.) */
+  const PUBLISHED = [0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x10, 0x11, 0x13, 0x14]
+
+  test('a preset on an FM9 or an Axe-Fx III goes by Program Change alone, bank in CC0, checked once and remembered', async () => {
+    for (const [unit, model] of [['fm9', 0x12], ['axefx3', 0x10]]) {
+      /* Even a pretend unit that would take FM3-Edit's 0x27 frame is never sent it in Auto. */
+      const t = await onTheLine(unit, { sysexPreset: true })
+      assert.deepEqual(await t.post('/preset/select', { number: 475 % (unit === 'fm9' ? 512 : 1024) }), { ok: true })
+      assert.ok(!t.frames().some((f) => f[0] === 0xf0 && f[5] === 0x01), `${unit}: an fn 0x01 frame went`)
+      assert.deepEqual(t.frames().filter((f) => f[0] !== 0xf0).map(hex), ['B0 00 03', 'B0 20 00', 'C0 5B'], unit)
+      assert.equal(t.unit.state.preset, 475)
+      assert.ok(sameFrame(t.frames()[0], t.sx.buildGetPreset(model)) && sameFrame(t.frames().at(-1), t.sx.buildGetPreset(model)), `${unit}: not asked before and after`)
+      assert.equal(t.remembered.at(-1).learned.preset, 'pc')
+      /* And from then on it goes straight, with nothing asked. */
+      t.sent.length = 0
+      await t.post('/preset/select', { number: 13 })
+      assert.deepEqual(t.frames().map(hex), ['B0 00 00', 'B0 20 00', 'C0 0D'])
+      assert.equal(t.unit.state.preset, 13)
+    }
+  })
+
+  test('a preset that does not land by Program Change says which setting on the unit to look at, and where it went', async () => {
+    /* Program Change Off on the unit ("Determines whether the Axe-Fx III will process or ignore incoming MIDI Program Change messages"): it stays. */
+    const off = await onTheLine('fm9', { pc: false })
+    await assert.rejects(off.post('/preset/select', { number: 200 }), (e) => {
+      assert.equal(e.status, 502)
+      assert.equal(e.message, 'The unit stayed on preset 12. On the FM9, open Setup → MIDI/Remote and check that Program Change is On, the MIDI channel is 1 (or Omni), PC Mapping is Off, and MIDI PC Offset is 0.')
+      return true
+    })
+    /* The preset asked, Program Change, where it landed: nothing else. */
+    assert.deepEqual(off.frames().map((f) => (f[0] === 0xf0 ? `fn ${f[5].toString(16)}` : hex(f))), ['fn d', 'B0 00 01', 'B0 20 00', 'C0 48', 'fn d'])
+    assert.deepEqual(off.wire.methods().learned, {}, 'a way was learned from a preset that did not land')
+    /* A MIDI PC Offset ("Adds a specified value to all incoming MIDI Program Change requests"): it went somewhere else, and says where. */
+    const offset = await onTheLine('axefx3', { pcOffset: 1 })
+    await assert.rejects(offset.post('/preset/select', { number: 40 }), (e) => /^The unit went to preset 41, not 40\. On the Axe-Fx III, open Setup → MIDI\/Remote/.test(e.message))
+    /* On the channel the testing tools set: the words say that channel. */
+    const ch = await onTheLine('fm9', { pc: false, methods: { pcChannel: 3 } })
+    await assert.rejects(ch.post('/preset/select', { number: 20 }), (e) => /the MIDI channel is 3 \(or Omni\)/.test(e.message))
+  })
+
+  test('FM3-Edit’s preset frame goes to an FM9 or Axe-Fx III only when forced in the testing tools, and a stored way learned on an FM3 build is not used', async () => {
+    for (const [unit, model] of [['fm9', 0x12], ['axefx3', 0x10]]) {
+      const forced = await onTheLine(unit, { sysexPreset: true, methods: { preset: 'sysex' } })
+      await forced.post('/preset/select', { number: 30 })
+      assert.ok(forced.frames().some((f) => sameFrame(f, forced.sx.buildSwitchPreset(model, 30))), `${unit}: the forced 0x27 frame did not go`)
+      /* What an older copy of the app may have learned and kept on the phone. */
+      const kept = await onTheLine(unit, { methods: { learned: { preset: 'sysex', tuner: 'poll' } } })
+      await kept.post('/preset/select', { number: 30 })
+      assert.ok(!kept.frames().some((f) => f[0] === 0xf0 && f[5] === 0x01), `${unit}: a stored 0x27 way was used`)
+      assert.equal(kept.unit.state.preset, 30)
+      assert.notEqual(kept.wire.methods().learned.preset, 'sysex')
+      /* And the check, through the same trial. */
+      const check = await onTheLine(unit, { sysexPreset: true })
+      const r = await drive(check.clock, check.wire.check('write-preset'))
+      assert.equal(r.ok, true, r.error)
+      assert.equal(r.way, 'pc')
+      assert.ok(!check.frames().some((f) => f[0] === 0xf0 && f[5] === 0x01), `${unit}: the preset check sent an fn 0x01 frame`)
+      assert.equal(check.unit.state.preset, 12, `${unit}: the check did not put the preset back`)
+    }
+    /* The FM3 keeps FM3-Edit's frame first (see the 0x27 test above). */
+    const fm3 = await onTheLine('fm3')
+    await fm3.post('/preset/select', { number: 30 })
+    assert.ok(fm3.frames().some((f) => sameFrame(f, fm3.sx.buildSwitchPreset(0x11, 30))))
+  })
+
+  test('an Axe-Fx III offers 512 presets, and a Mark II’s 600 still goes, by its manual’s bank 4', async () => {
+    const t = await onTheLine('axefx3')
+    const d = await t.get('/device/detect')
+    assert.equal(d.capabilities.presets.count, 512)
+    t.sent.length = 0
+    await t.post('/preset/select', { number: 600 })
+    assert.deepEqual(t.frames().filter((f) => f[0] !== 0xf0).map(hex), ['B0 00 04', 'B0 20 00', 'C0 58'])
+    assert.equal(t.unit.state.preset, 600)
+  })
+
+  test('the grid is 14 by 6 on the FM9 and Axe-Fx III, and 12 by 4 on the FM3, as Fractal and the computer app say', async () => {
+    for (const [unit, grid] of [['fm3', { rows: 4, cols: 12 }], ['fm9', { rows: 6, cols: 14 }], ['axefx3', { rows: 6, cols: 14 }]]) {
+      const t = await onTheLine(unit)
+      assert.deepEqual((await t.get('/device/detect')).capabilities.grid, grid, unit)
+    }
+  })
+
+  test('the tuner on an FM9 or Axe-Fx III is Fractal’s switch alone, and its readings are the ones the unit sends', async () => {
+    for (const [unit, model] of [['fm9', 0x12], ['axefx3', 0x10]]) {
+      const t = await onTheLine(unit, { pushes: true })
+      await t.post('/tuner', { on: true })
+      assert.deepEqual(t.frames().map(hex), [hex(t.sx.frame(model, 0x11, [1]))], `${unit}: the tuner on sent something else`)
+      assert.equal(hex(t.frames()[0]).slice(0, 20), `F0 00 01 74 ${hex([model])} 11 01`)
+      await advance(t.clock, 1000)
+      const readings = t.events.filter((e) => e.type === 'tuner')
+      assert.ok(readings.length >= 5, `${unit}: the unit's readings did not reach the needle`)
+      assert.deepEqual(readings.at(-1), { type: 'tuner', note: 'E', octave: undefined, cents: 0 })
+      assert.equal(t.unit.state.tuner, true)
+      t.sent.length = 0
+      await t.post('/tuner', { on: false })
+      assert.deepEqual(t.frames().map(hex), [hex(t.sx.frame(model, 0x11, [0]))], `${unit}: the tuner off sent something else`)
+      assert.equal(t.unit.state.tuner, false)
+      assert.ok(!t.frames().some((f) => f[5] === 0x12 || f[5] === 0x01))
+
+      /* Send Realtime Sysex Off: no readings, and still nothing but the switch, however long it stays open. */
+      const quiet = await onTheLine(unit)
+      await quiet.post('/tuner', { on: true })
+      await advance(quiet.clock, 5000)
+      assert.ok(!quiet.frames().some((f) => f[5] === 0x12 || f[5] === 0x01), `${unit}: the page or the frequency question went`)
+      assert.ok(quiet.logs.some((l) => /no tuner data from the .* in 1\.2 s: Send Realtime Sysex may be off on it/.test(l)), `${unit}: the log does not say why`)
+      /* Poll picked in the testing tools still asks the FM3-Edit way: how it would be tried. */
+      const poll = await onTheLine(unit, { methods: { tuner: 'poll' } })
+      await poll.post('/tuner', { on: true })
+      assert.ok(poll.frames().some((f) => sameFrame(f, poll.sx.buildTunerPage(model, true))), `${unit}: forced Poll did not open the page`)
+    }
+    /* The FM3 asks, as it always has. */
+    const fm3 = await onTheLine('fm3')
+    await fm3.post('/tuner', { on: true })
+    assert.ok(sameFrame(fm3.frames()[0], fm3.sx.buildTunerPage(0x11, true)))
+  })
+
+  test('the Axe-Fx III’s tuner: a close owed from the connection before is the switch off alone, and a refusal puts the tuner down with the reason', async () => {
+    const t = await onTheLine('axefx3')
+    t.wire.oweGen3Tuner({ push: true, page: false })
+    await t.post('/tuner', { on: false })
+    assert.deepEqual(gen3TunerHeard(t, 0x10), ['tuner off'])
+    assert.equal(t.frames().length, 1)
+    /* "the unit does not know that message": the phone's tuner goes down, nothing is left marked open, and nothing else is sent. */
+    const no = await onTheLine('axefx3', { refuseTuner: 0x04 })
+    await assert.rejects(no.post('/tuner', { on: true }), (e) => e.status === 502 && /does not know that message/.test(e.message))
+    assert.equal(no.wire.gen3TunerLeftOn(), false, 'a refused tuner is still marked open')
+    await advance(no.clock, 3000)
+    assert.deepEqual(gen3TunerHeard(no, 0x10), ['tuner on'])
+  })
+
+  test('64 11 00 after the tuner switch, and 64 10 00 after a tap, are written down and never taken as refusals', async () => {
+    const t = await onTheLine('axefx3', { ack: true, pushes: true })
+    assert.deepEqual(await t.post('/tuner', { on: true }), { ok: true })
+    assert.equal(t.wire.gen3TunerLeftOn(), true, 'the tuner was put down')
+    assert.ok(t.logs.some((l) => /answered the tuner with 64 11 00, whose meaning Fractal has not published: not taken as a refusal/.test(l)))
+    await t.post('/tuner', { on: false })
+    assert.deepEqual(await t.post('/tempo/tap', {}), { ok: true })
+    assert.ok(t.logs.some((l) => /64 10 00/.test(l)))
+    /* Another code is still a refusal. */
+    assert.match((await import(SX)).rejectedWords(0x00), /damaged/)
+  })
+
+  test('a pushed tuner reading is Fractal’s cents, one a step from 63, held to the needle, with the note byte and the string in the log', async () => {
+    const t = await onTheLine('axefx3', { pushes: true })
+    await t.post('/tuner', { on: true })
+    await advance(t.clock, 300)
+    const cents = async (fine) => {
+      t.unit.opt.push = [7, 0, fine]
+      await advance(t.clock, 250)
+      return t.events.filter((e) => e.type === 'tuner').at(-1).cents
+    }
+    assert.equal(await cents(64), 1)
+    assert.equal(await cents(62), -1)
+    assert.equal(await cents(113), 50)
+    assert.equal(await cents(13), -50)
+    assert.equal(await cents(127), 50, 'past +50 is held to the needle')
+    t.unit.opt.push = [0, 5, 63]
+    await advance(t.clock, 250)
+    assert.ok(t.logs.some((l) => /tuner data from the unit: note byte 7, string 0, cents byte 63/.test(l)))
+    assert.ok(t.logs.some((l) => /tuner data from the unit: note byte 0, string 5/.test(l)), 'a new note is not written down with its byte and string')
+  })
+
+  test('an FM9 or Axe-Fx III that stops answering is left in peace: nothing for 30 s, then one question at each check, and the watch back the moment it answers', async () => {
+    const { QUIET_MS } = await import(WIRE)
+    for (const unit of ['fm9', 'axefx3', 'fm3']) {
+      const t = await onTheLine(unit)
+      t.wire.startPolls()
+      await advance(t.clock, 2500)
+      assert.ok(t.sent.length > 0, `${unit}: the watch is not asking`)
+      /* Switched off, the adapter still on its charger. */
+      t.unit.opt.silent = true
+      await advance(t.clock, 8000)
+      assert.ok(t.logs.some((l) => /has not answered 3 questions in a row: it may be switched off or starting up/.test(l)), `${unit}: the quiet is not logged`)
+      const sentAt = t.sent.length
+      /* The rig's own check, inside the 30 s: answered "not connected", with nothing sent. */
+      for (let i = 0; i < 2; i++) {
+        await advance(t.clock, 10000)
+        assert.equal((await t.get('/device/detect')).connected, false)
+      }
+      assert.equal(t.sent.length, sentAt, `${unit}: something was sent to a unit that may be starting up`)
+      /* Past the 30 s: one question at each check. */
+      await advance(t.clock, QUIET_MS)
+      assert.equal(t.sent.length, sentAt, `${unit}: the watch asked while quiet`)
+      assert.equal((await t.get('/device/detect')).connected, false)
+      assert.equal(t.sent.length, sentAt + 1, `${unit}: the check did not ask once`)
+      /* Back on: the next check finds it, and the watch is asking again within a second. */
+      t.unit.opt.silent = false
+      assert.equal((await t.get('/device/detect')).connected, true)
+      assert.ok(t.logs.some((l) => /answers again: the watch starts again/.test(l)))
+      const back = t.sent.length
+      await advance(t.clock, 1100)
+      assert.ok(t.sent.slice(back).some((s) => sameFrame(s.bytes, t.sx.buildGetScene(t.sx.MODELS[unit]))), `${unit}: the watch did not start again`)
+      t.wire.stopPolls()
+    }
+  })
+
+  test('a long front-panel burst with timing clock inside it, arriving during a read, upsets nothing and is answered with nothing', async () => {
+    /* Its answer comes 200 ms after the question, so the burst, sent first, is on the line ahead of it, as one 5-pin line carries them. */
+    const t = await onTheLine('axefx3', { delay: 200 })
+    /* 600 bytes of fn 0x75, with 0xF8 sprinkled through it as current firmware sends clock out of MIDI OUT ("Default is MIDI only"). */
+    const body = Array.from({ length: 590 }, (_v, i) => (i * 13) & 0x7f)
+    for (let i = 50; i < body.length; i += 97) body.splice(i, 0, 0xf8)
+    const burst = [0xf0, 0x00, 0x01, 0x74, 0x10, 0x75, ...body, 0x00, 0xf7]
+    t.say(burst, 1)
+    const p = await t.get('/preset')
+    assert.deepEqual(p, { number: 12, name: 'SONG 12' })
+    await advance(t.clock, 500)
+    assert.deepEqual(t.frames().map(hex), [hex(t.sx.buildGetPreset(0x10))], 'something was sent in reply to the burst')
+  })
+
+  /* Every route, every check, the tuner and an owed close: what Auto sends an FM9 or Axe-Fx III. */
+  async function sweepGen3(unit, methods) {
+    const t = await onTheLine(unit, { pushes: true, publishedTempo: true, methods })
+    const tryIt = async (p) => {
+      try {
+        await drive(t.clock, p)
+      } catch {
+        // Only the bytes are under test here.
+      }
+    }
+    const req = (path, method = 'GET', body) => t.wire.request(path, { method, body: body === undefined ? undefined : JSON.stringify(body) })
+    for (const path of ['/device/detect', '/preset', '/scene', '/tempo', '/preset/blocks', '/preset/scene-state', '/presets/13', '/presets/12/summary', '/presets/12/scenes']) await tryIt(req(path))
+    await tryIt(req('/preset/select', 'POST', { number: 200 }))
+    await tryIt(req('/preset/select', 'POST', { number: 12 }))
+    await tryIt(req('/scene', 'POST', { index: 3 }))
+    await tryIt(req('/tempo', 'POST', { bpm: 133 }))
+    await tryIt(req('/tempo/tap', 'POST', {}))
+    await tryIt(req('/preset/blocks/58/bypass', 'POST', { bypassed: true }))
+    await tryIt(req('/preset/blocks/58/channel', 'POST', { channel: 'C' }))
+    await tryIt(req('/tuner', 'POST', { on: true }))
+    await advance(t.clock, 2000)
+    await tryIt(req('/tuner', 'POST', { on: false }))
+    /* What the connection before may have left: the page only if Poll was picked there. */
+    t.wire.oweGen3Tuner({ push: true, page: !!methods })
+    await tryIt(req('/tuner', 'POST', { on: false }))
+    t.wire.startPolls()
+    await advance(t.clock, 5000)
+    t.wire.stopPolls()
+    const { CHECK_STEPS } = await import(WIRE)
+    await tryIt(t.wire.check('all'))
+    for (const s of CHECK_STEPS.gen3.writes) await tryIt(t.wire.check(s.step))
+    const odd = new Set()
+    for (const f of t.frames()) {
+      if (f[0] === 0xf0) {
+        if (!PUBLISHED.includes(f[5])) odd.add(f[5] === 0x01 ? `01/${t.sx.decode14(f[6], f[7]).toString(16)}` : f[5].toString(16))
+      } else if (!SHORT_OK(f)) odd.add(hex(f))
+    }
+    return { t, odd: [...odd].sort() }
+  }
+
+  test('THE BYTE RULE: in Auto, an FM9 or Axe-Fx III is sent only Fractal’s published messages, Bank Select and Program Change', async () => {
+    for (const unit of ['fm9', 'axefx3']) {
+      const { t, odd } = await sweepGen3(unit)
+      assert.deepEqual(odd, [], `${unit}: sent something Fractal has not published`)
+      assert.ok(t.frames().length > 60, `${unit}: the sweep sent too little to mean anything`)
+      for (const fn of [0x0c, 0x0d, 0x0e, 0x11, 0x13, 0x14]) assert.ok(t.frames().some((f) => f[0] === 0xf0 && f[5] === fn), `${unit}: the sweep never sent fn ${fn.toString(16)}`)
+      assert.ok(t.frames().some((f) => (f[0] & 0xf0) === 0xc0), `${unit}: the sweep never sent Program Change`)
+    }
+    /* With every way forced in the testing tools (his account only), the exceptions are FM3-Edit's, exactly. */
+    for (const unit of ['fm9', 'axefx3']) {
+      const { odd } = await sweepGen3(unit, { scene: 'edit', channel: 'edit', tempo: 'edit', preset: 'sysex', tuner: 'poll' })
+      assert.deepEqual(odd, ['01/16', '01/19', '01/24', '01/27', '01/9', '12'], `${unit}: the forced ways sent something else`)
+    }
+  })
+
+  test('the FM9 and Axe-Fx III name their own blocks: a second amp, cab and reverb, and the III’s third delay, switched by the published bypass', async () => {
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    const dump = [58, 59, 62, 63, 120, 67, 72]
+    for (const [unit, model, delay3] of [['fm9', 0x12, false], ['axefx3', 0x10, true]]) {
+      /* The wire as openWire makes it, with the unit's own list (lib/gen3Catalog catalogFor). */
+      const t = await onTheLine(unit, { catalog: catalogFor(unit) })
+      t.unit.state.blocks = dump.map((eid) => ({ eid, bypassed: false, channel: 0 }))
+      const blocks = await t.get('/preset/blocks')
+      const names = Object.fromEntries(blocks.map((b) => [b.effectId, b.name]))
+      assert.deepEqual(names, { 58: 'Amp 1', 59: 'Amp 2', 62: 'Cab 1', 63: 'Cab 2', 120: 'Drive 3', 67: 'Reverb 2', ...(delay3 ? { 72: 'Delay 3' } : {}) }, unit)
+      const sx = t.sx
+      /* On the stage, a lone " 1" is dropped: Amp, and Amp 2 (tileGrid pedalName). */
+      const { pedalName } = await import('../mobile/src/lib/tileGrid.js')
+      assert.equal(pedalName({ slug: 'amp', name: names[58] }), 'Amp')
+      assert.equal(pedalName({ slug: 'amp', name: names[59] }), 'Amp 2')
+      t.sent.length = 0
+      await t.post('/preset/blocks/59/bypass', { bypassed: true })
+      assert.deepEqual(t.frames().map(hex), [hex(sx.frame(model, 0x0a, [0x3b, 0x00, 0x01]))])
+      assert.equal(hex(t.frames()[0]).slice(0, 26), `F0 00 01 74 ${hex([model])} 0A 3B 00 01`)
+      assert.equal(t.unit.state.blocks.find((b) => b.eid === 59).bypassed, true)
+    }
+    /* The FM3's list is the FM3's, exactly as it was. */
+    assert.deepEqual(catalogFor('fm3'), catalog)
+    assert.deepEqual(catalogFor('am4'), catalog)
+    /* And openWire hands the wire the unit's own. */
+    assert.match(src('mobile/src/lib/bluetooth.js'), /catalog: catalogFor\(unit\),/)
+  })
+
+  test('each Gen 3 unit’s block list is Fractal’s effect-ID enum, counted by its Blocks Guide, and the computer app’s ids exactly', async () => {
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    /*
+     * Fractal's enum (third-party MIDI document, Appendix 1): each family's
+     * first id, every instance after it the next number. Counts from the
+     * Blocks Guide's "Product BLOCKS Comparison" (June 2023), FM9 then III,
+     * for the families Play draws.
+     */
+    const FAMILIES = {
+      input: [37, 4, 5], output: [42, 3, 4], comp: [46, 2, 4], geq: [50, 4, 4], peq: [54, 4, 4], amp: [58, 2, 2], cab: [62, 2, 2],
+      reverb: [66, 2, 2], delay: [70, 2, 4], multitap: [74, 2, 2], chorus: [78, 2, 2], flanger: [82, 2, 2], rotary: [86, 2, 2], phaser: [90, 2, 2],
+      wah: [94, 2, 2], formant: [98, 2, 2], volume: [102, 4, 4], tremolo: [106, 2, 2], pitch: [110, 1, 2], filter: [114, 4, 4], drive: [118, 3, 4],
+      enhancer: [122, 2, 2], mixer: [126, 4, 4], synth: [130, 1, 2], megatap: [138, 2, 2], gate: [146, 4, 4], ringmod: [150, 1, 1],
+      multicomp: [154, 2, 2], tentap: [158, 2, 2], resonator: [162, 2, 2], looper: [166, 1, 1], plex: [178, 1, 2], send: [182, 2, 2],
+      return: [186, 2, 2], multiplexer: [191, 2, 2]
+    }
+    for (const [unit, col] of [['fm9', 1], ['axefx3', 2]]) {
+      const list = catalogFor(unit)
+      for (const [slug, row] of Object.entries(FAMILIES)) {
+        const pages = list.filter((b) => b.slug === slug).map((b) => b.page).sort((a, b) => a - b)
+        assert.deepEqual(pages, Array.from({ length: row[col] }, (_v, i) => row[0] + i), `${unit} ${slug}`)
+      }
+      assert.equal(list.length, Object.values(FAMILIES).reduce((n, row) => n + row[col], 0), `${unit}: a block outside the families`)
+      /* Every page once, and a family of more than one named with its number, the way the computer app names them. */
+      assert.equal(new Set(list.map((b) => b.page)).size, list.length)
+      for (const b of list) {
+        const many = FAMILIES[b.slug][col] > 1
+        assert.ok(many ? / \d$/.test(b.name) : !/ \d$/.test(b.name), `${unit}: ${b.page} is called ${b.name}`)
+        assert.ok(Number.isInteger(b.paramCount) && Number.isInteger(b.typeCount), `${unit}: ${b.page} has no counts`)
+      }
+    }
+    /* ForgeFX's /blocks for the two units, at the pin (drivers/gen3.ts), written in here: the same ids. */
+    const FORGEFX_EXTRA = {
+      fm9: [39, 40, 44, 52, 53, 56, 57, 59, 63, 67, 104, 105, 120, 139, 148, 149, 155, 159],
+      axefx3: [39, 40, 41, 44, 45, 48, 49, 52, 53, 56, 57, 59, 63, 67, 72, 73, 104, 105, 111, 120, 121, 131, 139, 148, 149, 155, 159, 179]
+    }
+    const fm3 = new Set(catalog.map((b) => b.page))
+    for (const [unit, extra] of Object.entries(FORGEFX_EXTRA)) {
+      assert.deepEqual(catalogFor(unit).map((b) => b.page).filter((p) => !fm3.has(p)).sort((a, b) => a - b), extra, unit)
+    }
+    /* The blocks nobody names yet stay off: Crossover, Vocoder, Tone Match, RTA, Scene MIDI, IR Player. */
+    for (const unit of ['fm9', 'axefx3']) {
+      for (const id of [134, 142, 143, 170, 174, 190, 195, 196]) assert.ok(!catalogFor(unit).some((b) => b.page === id), `${unit}: ${id} is drawn`)
+    }
+  })
+
+  test('scene names are read the same way on an FM9 and an Axe-Fx III as on an FM3', async () => {
+    for (const unit of ['fm9', 'axefx3']) {
+      const t = await onTheLine(unit)
+      await t.get('/preset')
+      assert.deepEqual(await t.get('/presets/12/summary'), { number: 12, name: 'SONG 12', scenes: ['CLEAN', 'CRUNCH', 'LEAD', '', '', '', '', 'AMBIENT'] })
+      assert.ok(t.frames().filter((f) => f[5] === 0x0e).length === 8, unit)
+      await assert.rejects(t.get('/presets/13/summary'), (e) => e.status === 501)
+    }
+  })
+
+  test('on an Axe-Fx III an echo is a white plug in THRU, not a MIDI Thru setting it does not have', async () => {
+    /* The III's manual: "Messages received at the MIDI IN port are passed automatically to the MIDI THRU port". A pretend III whose white plug is in THRU hears the phone. */
+    const t = await onTheLine('axefx3', { thru: true })
+    for (let i = 0; i < 4; i++) await t.get('/scene')
+    assert.ok(t.logs.some((l) => l === 'the unit is echoing what it receives: the white plug may be in the Axe-Fx III’s MIDI THRU, not OUT'))
+    const r = await drive(t.clock, t.wire.check('echo'))
+    assert.match(r.rows.at(-1).meaning, /white plug may be in the Axe-Fx III’s MIDI THRU\. Move it to MIDI OUT\./)
+    const nine = await onTheLine('fm9', { thru: true })
+    for (let i = 0; i < 4; i++) await nine.get('/scene')
+    assert.ok(nine.logs.some((l) => l === 'the unit is echoing what it receives: MIDI Thru is on'))
+  })
+
+  test('an FM9 that lists no blocks is told its firmware floor in the check', async () => {
+    /* FM9 release notes 3.00: "3rd Party MIDI Command "Status Dump" is now enabled": before it, no answer. */
+    const t = await onTheLine('fm9', { noStatus: true })
+    const r = await drive(t.clock, t.wire.check('blocks'))
+    assert.equal(r.rows[0].meaning, 'no answer: an FM9 lists its effects only from firmware 3.00 on')
+    const three = await onTheLine('axefx3', { noStatus: true })
+    assert.equal((await drive(three.clock, three.wire.check('blocks'))).rows[0].meaning, 'no answer')
+  })
+
+  test('“not tried yet” is said wherever an FM9 or Axe-Fx III owner looks, sends them to the report, and never to an AM4 or FM3 owner', async () => {
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    const lines = (unit) => [
+      gear.untriedConnectedLine(unit),
+      gear.untriedAboutLine(unit),
+      gear.untriedShortLine(unit),
+      gear.untriedLine(unit)
+    ]
+    for (const [unit, name] of [['fm9', 'FM9'], ['axefx3', 'Axe-Fx III']]) {
+      assert.equal(gear.untried(unit), true)
+      for (const line of lines(unit)) {
+        assert.ok(line && line.includes(name), `${unit}: ${line}`)
+        assert.ok(!/this phone|official/i.test(line), line)
+      }
+      assert.equal(gear.untriedConnectedLine(unit), `Not tried on the ${name} yet. Tell us how it goes: tap ${gear.REPORT_BUTTON}, below.`)
+      assert.equal(gear.untriedAboutLine(unit), `Built from what is known about the ${name}, but not yet tried on a real one. Some of it may not work as expected.`)
+      assert.equal(gear.faultSubFor(unit), `Bluetooth (beta), not tried on the ${name} yet`)
+      assert.equal(gear.unitForReport(unit), `${name} (not tried yet)`)
+      assert.ok(gear.missingBlocksLine(unit).startsWith('A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match'))
+      assert.match(gear.tunerQuietLine(unit), new RegExp(`set Send Realtime Sysex to On \\(Setup → MIDI/Remote on the ${name}\\)`))
+      assert.ok(gear.firmwareLineFor(unit).startsWith(`Use ${name} firmware`))
+    }
+    assert.match(gear.missingBlocksLine('axefx3'), /IR Player, Dynamic Distortion\)/)
+    for (const unit of ['am4', 'fm3', 'vp4', null]) {
+      assert.equal(gear.untried(unit), false, String(unit))
+      for (const line of lines(unit)) assert.equal(line, null, `${unit}: ${line}`)
+      assert.equal(gear.faultSubFor(unit), 'Bluetooth (beta)')
+      assert.equal(gear.missingBlocksLine(unit), null)
+      assert.equal(gear.tunerQuietLine(unit), null)
+      assert.equal(gear.firmwareLineFor(unit), null)
+    }
+    assert.equal(gear.unitForReport('am4'), 'AM4')
+    assert.equal(gear.UNTRIED_SUB, 'Not tried yet')
+    /* Where each is drawn. */
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    assert.match(page, /const untriedHere = said\.tone === 'ok' && !b\.answeredAs \? untriedConnectedLine\(b\.unit\) : null/)
+    assert.match(page, /\{untriedHere \? <Hint>\{untriedHere\}<\/Hint> : null\}/)
+    assert.match(page, /<Fold title="What it can and can’t do" open=\{about\} onToggle=\{\(\) => setAbout\(!about\)\}> \{untriedAboutLine\(b\.unit\) \? <Note tone="warn">\{untriedAboutLine\(b\.unit\)\}<\/Note> : null\}/)
+    assert.ok(page.indexOf('{missingBlocksLine(b.unit) ? (') > page.indexOf('{DIFFERENT.map('), 'the blocks line is not with what is different')
+    assert.match(page, /Bluetooth \(beta\) check · \$\{unitName\(b\.unit\)\}\$\{untried\(b\.unit\) \? ' \(not tried yet\)' : ''\}/)
+    assert.match(page, /const firmware = firmwareLineFor\(unit\)/)
+    assert.ok(page.indexOf('{firmware ? <Hint>{firmware}</Hint> : null}') > page.indexOf('<Hint>{FIRST_TIME}</Hint>'))
+    /* The heat line, never folded away on these two: near the top while How to plug it in is shut, among the steps when it is open. */
+    assert.match(page, /const heatUp = plug \? null : heatLineFor\(b\.unit\)/)
+    assert.ok(page.indexOf('{heatUp ? <Note tone="warn">{heatUp}</Note> : null}') < page.indexOf('<Fold title="How to plug it in"'))
+    assert.match(flat('mobile/src/components/TopBar.js'), /\? `Connected over Bluetooth, through \$\{adapter\}\.\$\{untried \? ` \$\{untried\}` : ''\}`/)
+    assert.match(flat('mobile/src/lib/bluetooth.js'), /unit: saved\.unit \? unitForReport\(saved\.unit\) \|\| unitName\(saved\.unit\) : null,/)
+    /* The AM4's own surfaces, and the beta note, are as they were: this work opens nothing to customers. */
+    const rule = src('mobile/src/lib/ble-rule.js')
+    assert.match(rule, /CUSTOMER_UNITS = Object\.freeze\(\['am4'\]\)|CUSTOMER_UNITS = \['am4'\]/)
+    assert.deepEqual(gear.TESTED, ['am4'])
   })
 }
