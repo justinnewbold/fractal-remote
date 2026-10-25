@@ -20,13 +20,32 @@ those must still pass the other.
 
 | Patch | What it does | Moves |
 |---|---|---|
+| `watch-fill.patch` | On the Apple Watch, **four or fewer scenes or pedals fill the page** (an AM4's, a VP4's) instead of its top half: the rows stretch to the page under the heading, into half of the bottom margin the screen's rounded corners keep, pedals two across instead of three, a lone scene or pedal across the whole width, and the names and letters grow with their buttons. A scene name of two words or more may take two lines; its type is never bigger than lets its longest word fit, so no word is broken. The whole of a pedal's button takes the tap and the hold, off as well as on (an off pedal used to answer only on its letters and outline). Eight scenes and five or more pedals (an FM3's) are drawn as before, on the same scrolling page. The rules are `fewTiles`, `fillHeight`, `tileRows`, `sceneColumns`, `pedalColumns`, `grownSize`, `wordFitSize` and `sceneNameSize` in mobile/targets/watch/Model.swift, with the watch's own tests, and CI takes two pictures of an AM4-shaped demo (`-am4Demo YES`: am4-scenes.png, am4-pedals.png). | **Watch only** (tried on 25 October 2026: `npm run fingerprint` moves the watch line alone, so every update keeps reaching every phone, before and after the build) |
 
-Nothing is waiting. ble-pair-ios27 was applied on 24 October 2026 for the
-iPhone build after 1.88.0 (1.88.3), and its file deleted in the same change.
-The four before it (watch-name, r8, watch-channels and photo-picker) were
-applied on 23 October 2026 for the build pair after 1.87.52 (1.88.0). What
-each one carried, and what goes with it that was not in it, is in its
-section below.
+ble-pair-ios27 was applied on 24 October 2026 for the iPhone build after
+1.88.0 (1.88.3), and its file deleted in the same change. The four before it
+(watch-name, r8, watch-channels and photo-picker) were applied on 23 October
+2026 for the build pair after 1.87.52 (1.88.0). What each one carried, and
+what goes with it that was not in it, is in its section below.
+
+**watch-fill.patch, and why it waits.** Justin, 25 October 2026, with a
+photo of the watch on an AM4: "On the VP4 and the AM4, can we make the watch
+buttons bigger somehow to maximize the watch space? It's already pretty
+small and we're only using about half the space.. on the FM3 and other
+devices, it seems like it's good." The watch app is built into the iPhone
+app, so it reaches a wrist only with the next iPhone build; it rides the
+build that opens Bluetooth to customers, and costs nothing of its own. It
+was compiled, its tests run and its pictures taken on GitHub's Mac before
+it was parked here (watch.yml, dispatched on the branch, four rounds, the
+last on 25 October 2026 after an independent review whose findings it
+carries: the whole tile tappable, a lone tile full width, no word broken,
+the FM3's page untouched). A watch that has not had the build keeps the old
+page, which works as it always did.
+
+Nothing goes with it outside the patch: it adds no feature (the same
+buttons, bigger), so the Notes for App Review need no line for it. What's
+New may say "On the Apple Watch, an AM4's or VP4's scenes and pedals fill
+the screen."
 
 **ble-pair-ios27.patch, and why it waited** (applied for 1.88.3). Justin, 24 October 2026, with a
 TestFlight crash report from 1.88.0 (28) on iOS 27.0.1: "iPhone App crashed
