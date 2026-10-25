@@ -1611,12 +1611,22 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       tuner.way = 'push'
       tuner.pushSent = true
       const r = await fire(buildTuner(model, true), 'the tuner', { deadline })
-      if (!pollTunerByAuto && rejected(r)) throw refusedBy(r.rejected)
+      /*
+       * Refused, but 11 01 HAS gone, and Fractal has not published 0x64 or
+       * its codes: so the unit may be on its tuner (and Tuner Mute) all the
+       * same. The off stays owed (tunerSent), and the next Close sends the
+       * published 11 00.
+       */
+      if (!pollTunerByAuto && rejected(r)) {
+        const err = refusedBy(r.rejected)
+        err.tunerSent = true
+        throw err
+      }
       const seen = pushes
       tunerLater(run, WAIT.push, () => {
         if (pushes !== seen) return
         if (!pollTunerByAuto && ways.tuner !== 'poll') {
-          say(`no tuner data from the ${spec.name} in 1.2 s: Send Realtime Sysex may be off on it (Setup → MIDI/Remote). Nothing else is sent; its own display shows the tuner`)
+          say(`no tuner data from the ${spec.name} in 1.2 s: Send Realtime Sysex may be off on it (Setup → MIDI/Remote). Nothing else is sent`)
           return
         }
         say('no tuner data from the unit in 1.2 s; asking for the frequency instead')
@@ -1671,7 +1681,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     } catch (err) {
       tuner.on = false
       tuner.run++
-      tuner.pushSent = was.pushSent
+      /* A switch that went and was refused still owes its off (gen3TunerOn). */
+      tuner.pushSent = err?.tunerSent ? true : was.pushSent
       tuner.pageOpen = was.pageOpen
       throw err
     }
@@ -2681,7 +2692,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         return `answered for that preset: ${v.name || '(no name)'}`
       })
     },
-    echo: (row) => echoRow(row, () => sceneNow()),
+    /*
+     * The echo test's question goes as a probe: a white plug in an Axe-Fx
+     * III's THRU hears only the phone's own frames, never an answer, so a
+     * question held until the unit answers would never go. It is the same
+     * published 0x0C 7F scene question detect sends as its probe.
+     */
+    echo: (row) => echoRow(row, () => ask(buildGetScene(model), (f) => parseScene(f, model), WAIT.scene, 'the scene, for the echo test', { probe: true })),
     'write-scene': async (row) => {
       const from = await row('Scene', () => sceneNow(), (v) => said(v, (s) => `scene ${s + 1}`))
       if (!Number.isInteger(from)) throw failure('The unit did not say which scene it is on.', 504)

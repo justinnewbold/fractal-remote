@@ -264,7 +264,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   /* The units step 1 offers this account (lib/bluetooth offeredUnits), and whether that is the AM4 alone: a customer's page. */
   const units = offeredUnits()
   const am4Only = units.length < BLE_UNITS.length
-  /* A unit nobody has tried it on yet (the FM9, the Axe-Fx III) says so under "Connected" (shared/bluetooth-gear untriedConnectedLine). */
+  /* A unit nobody has tried it on yet (the FM9, the Axe-Fx III) says so under "Connected" (shared/bluetooth-gear untriedConnectedLine), left out while How to plug it in is open, because untriedLine already says it at the foot of the steps. */
   const untriedHere = said.tone === 'ok' && !b.answeredAs ? untriedConnectedLine(b.unit) : null
 
   /* The check's results, newest last, kept while the page is open. */
@@ -407,7 +407,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
           </Text>
           {b.trouble === 'permission' ? <OpenSettings /> : null}
           {reportable && !quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
-          {untriedHere ? <Hint>{untriedHere}</Hint> : null}
+          {untriedHere && !plug ? <Hint>{untriedHere}</Hint> : null}
         </View>
 
         {/*
@@ -742,9 +742,11 @@ function OpenSettings() {
  * On the units nobody here has, the cable is felt in the first minute
  * (HEAT_CHECK), so that line comes straight after the power step
  * (powerStepOf), before a step that sends the player into the unit's menus,
- * as the guide has it. And the Program Change settings, which only an owner
- * whose presets don't change needs, come under the steps with that
- * condition first, never as a step for everybody (midiSettingsFor).
+ * as the guide has it. And the Program Change settings: on the FM3, which
+ * only an owner whose presets don't change needs, they come under the steps
+ * with that condition first (midiSettingsFor); on the FM9 and Axe-Fx III,
+ * whose presets go by Program Change alone, they are one of the steps
+ * (unitSettingsStep, PC_FIRST).
  */
 function PlugIn({ unit }) {
   if (!unit) return <Hint>Pick your unit above to see how it plugs in.</Hint>

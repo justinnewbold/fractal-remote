@@ -350,8 +350,8 @@ export const heatLineFor = (unit) => (unit === 'fm9' || unit === 'axefx3' ? HEAT
 export const PC_FIRST = ['fm9', 'axefx3']
 
 /*
- * THE MIDI CHANNEL, ONLY IF PRESETS DON'T CHANGE. A preset goes first by the
- * unit's own SysEx switch, and by Program Change on channel 1 (bleWire's
+ * THE MIDI CHANNEL, ONLY IF PRESETS DON'T CHANGE. On the FM3, a preset goes
+ * first by the unit's own SysEx switch, and by Program Change on channel 1 (bleWire's
  * pcChannel) only when that does not land (trialPreset), so most owners
  * never need this, and moving the MIDI channel or turning PC Mapping off
  * changes how their own foot controller works on the unit. So it is said
@@ -504,7 +504,7 @@ export function hookupFor(unit, noun = 'phone') {
  */
 function unitSettingsStep(unit) {
   const name = UNITS[unit]
-  const rest = 'Program Change to On, the MIDI channel to 1 (or Omni), PC Mapping to Off, and Send Realtime Sysex to On.'
+  const rest = 'Program Change to On, the MIDI channel to 1 (or Omni), PC Mapping to Off, MIDI PC Offset to 0, and Send Realtime Sysex to On.'
   if (unit === 'axefx3') return `On the ${name}, open Setup → MIDI/Remote and set ${rest}`
   if (unit === 'fm9') return `On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off, ${rest}`
   return `On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off.`
@@ -598,7 +598,7 @@ export function missingBlocksLine(unit) {
  */
 export const tunerQuietLine = (unit) =>
   PC_FIRST.includes(unit)
-    ? `The tuner is on, but the ${UNITS[unit]} isn’t sending readings. To see them here, set Send Realtime Sysex to On (Setup → MIDI/Remote on the ${UNITS[unit]}). Until then, use the ${UNITS[unit]}’s own display.`
+    ? `No readings from the ${UNITS[unit]} yet. Play a string; if nothing shows, check that Send Realtime Sysex is On (Setup → MIDI/Remote on the ${UNITS[unit]}). Until then, use the ${UNITS[unit]}’s own display.`
     : null
 
 /*

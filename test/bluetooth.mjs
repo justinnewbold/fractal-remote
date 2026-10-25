@@ -166,10 +166,13 @@ const FM3_STATUS = [
  *     on, "F0 00 01 74 10 11 nn ss cc F7 ... Note that no checksum is sent",
  *     and a tempo beat, "F0 00 01 74 10 10 F7", on each down beat
  *     (Rev 1.4, "Push data"). `push` is the reading it sends.
- *   - `ack: true` answers the tap and the tuner switch with 64 <fn> 00, as
- *     developers on Fractal's forum report a III doing (tysonlt, 7 Feb 2019:
- *     "0x00 0x01 0x74 0x10 0x64 0x11 0x00 0x60" after Tuner on/off). Fractal
- *     never documented 0x64.
+ *   - `ack: true` answers the tap and the tuner switch with 64 <fn> 00.
+ *     The 64 11 00 after the tuner switch is reported (tysonlt, 7 Feb 2019:
+ *     "0x00 0x01 0x74 0x10 0x64 0x11 0x00 0x60" after Tuner on/off). For
+ *     the tap, simonp54 and JackEddyCO report a 64 reply without its code,
+ *     so the tap's 00 is ASSUMED, from tysonlt's "if the byte after the
+ *     command is 0, then it's probably a success message". Fractal never
+ *     documented 0x64.
  */
 function fakeGen3(sx, o) {
   const { say, model, clock } = o
@@ -184,12 +187,13 @@ function fakeGen3(sx, o) {
     thru: false,
     silent: false,
     pushes: false,
+    /* Byte 7 was picked to read E under the FROM_A belief (bleWire.js): Fractal does not say which note 0 is. */
     push: [7, 0, 63],
     ack: false,
     refuseTuner: null,
     bankIn: 'cc0',
     looper: false,
-    /* Answers the published scene, channel and tempo SETs with a refusal ("does not know that message"), rather than ignoring them. */
+    /* Answers the published scene, channel and tempo SETs with a refusal ("does not know that message", or the code given), rather than ignoring them. */
     refusePublished: false,
     ...o
   }
@@ -218,6 +222,7 @@ function fakeGen3(sx, o) {
     return b
   }
   const reply = (fn, payload) => say(sx.frame(model, fn, payload))
+  const refusalCode = () => (opt.refusePublished === true ? 0x04 : opt.refusePublished)
   const find = (eid) => state.blocks.find((b) => b.eid === eid)
   function short(b) {
     if (!opt.pc) return
@@ -229,6 +234,8 @@ function fakeGen3(sx, o) {
       const n = bank * 128 + b[1] + (opt.pcOffset || 0)
       /* A bank past the last preset (1023 on a III Mark II, 511 on the rest): nothing loads. */
       if (n <= (model === 0x10 ? 1023 : 511)) state.preset = n
+      /* Switched off, or the adapter dropped, the moment the Program Change was taken: nothing answers after it. */
+      if (opt.silentAfterPc) opt.silent = true
     }
   }
   /* Send Realtime Sysex on: the beat every half second, and while the tuner is on a reading every 100 ms, as the document shapes them (no checksum). */
@@ -251,7 +258,7 @@ function fakeGen3(sx, o) {
     switch (fn) {
       case 0x0c:
         if (p[0] === 0x7f) return reply(0x0c, [state.scene])
-        if (opt.refusePublished) return reply(0x64, [0x0c, 0x04])
+        if (opt.refusePublished !== false) return reply(0x64, [0x0c, refusalCode()])
         if (opt.publishedScene) state.scene = p[0]
         if (opt.sceneEcho) reply(0x0c, [state.scene])
         return
@@ -269,7 +276,7 @@ function fakeGen3(sx, o) {
         return reply(0x13, state.blocks.flatMap((bl) => [...sx.encode14(bl.eid), (bl.bypassed ? 1 : 0) | (bl.channel << 1) | (4 << 4)]))
       case 0x14:
         if (p[0] === 0x7f && p[1] === 0x7f) return reply(0x14, sx.encode14(state.bpm))
-        if (opt.refusePublished) return reply(0x64, [0x14, 0x04])
+        if (opt.refusePublished !== false) return reply(0x64, [0x14, refusalCode()])
         if (opt.publishedTempo) state.bpm = sx.decode14(p[0], p[1])
         return
       case 0x0a: {
@@ -281,7 +288,7 @@ function fakeGen3(sx, o) {
       case 0x0b: {
         const bl = find(sx.decode14(p[0], p[1]))
         if (!bl) return reply(0x64, [0x0b, 0x07])
-        if (opt.refusePublished) return reply(0x64, [0x0b, 0x04])
+        if (opt.refusePublished !== false) return reply(0x64, [0x0b, refusalCode()])
         if (opt.publishedChannel) bl.channel = p[2]
         return
       }
@@ -7639,12 +7646,12 @@ export function run(test) {
         /* No MIDI Thru setting on the III; its THRU jack only repeats the phone, so the white plug stays out of it. */
         assert.ok(!/MIDI Thru to Off/.test(all), 'the Axe-Fx III is told to change a setting it does not have')
         assert.match(all, /into its MIDI OUT\. Not THRU/)
-        assert.equal(steps.at(-1), 'On the Axe-Fx III, open Setup → MIDI/Remote and set Program Change to On, the MIDI channel to 1 (or Omni), PC Mapping to Off, and Send Realtime Sysex to On.')
+        assert.equal(steps.at(-1), 'On the Axe-Fx III, open Setup → MIDI/Remote and set Program Change to On, the MIDI channel to 1 (or Omni), PC Mapping to Off, MIDI PC Offset to 0, and Send Realtime Sysex to On.')
       } else if (key === 'am4') {
         assert.match(all, /On the AM4, open Setup → MIDI\/Remote and set MIDI Thru to Off\./, 'AM4: MIDI Thru is not turned off')
       } else {
         /* The FM9's MIDI Thru, first in the one step that sends the player into its menus, with what Program Change alone and the published tuner need. */
-        assert.equal(steps.at(-1), 'On the FM9, open Setup → MIDI/Remote and set MIDI Thru to Off, Program Change to On, the MIDI channel to 1 (or Omni), PC Mapping to Off, and Send Realtime Sysex to On.')
+        assert.equal(steps.at(-1), 'On the FM9, open Setup → MIDI/Remote and set MIDI Thru to Off, Program Change to On, the MIDI channel to 1 (or Omni), PC Mapping to Off, MIDI PC Offset to 0, and Send Realtime Sysex to On.')
       }
       /*
        * THE MIDI CHANNEL, on the units whose presets can go by Program Change
@@ -7664,7 +7671,7 @@ export function run(test) {
        * are one of the steps, and the line for some owners is not drawn.
        */
       if (gear.PC_FIRST.includes(key)) {
-        assert.match(all, /Program Change to On, the MIDI channel to 1 \(or Omni\), PC Mapping to Off, and Send Realtime Sysex to On\./, `${name}: the settings Program Change needs are not a step`)
+        assert.match(all, /Program Change to On, the MIDI channel to 1 \(or Omni\), PC Mapping to Off, MIDI PC Offset to 0, and Send Realtime Sysex to On\./, `${name}: the settings Program Change needs are not a step`)
         assert.equal(gear.midiSettingsFor(key, 'iPad'), null, `${name}: the settings are said twice`)
       } else assert.ok(!/Program Change|PC Mapping/.test(all), `${name}: every owner is told to set up Program Change`)
       if (key === 'am4' || gear.PC_FIRST.includes(key)) assert.equal(gear.midiSettingsFor(key), null, `${name}: the Program Change line for some owners is drawn`)
@@ -7708,7 +7715,7 @@ export function run(test) {
     const guide = readFileSync(new URL('../public/bluetooth-guide.html', import.meta.url), 'utf8').replace(/\s+/g, ' ')
     /* The FM9 and Axe-Fx III have these among their steps since 25 October 2026 (PC_FIRST), with Send Realtime Sysex for the tuner; the FM3 keeps the line for some owners. */
     assert.match(guide, /FM3, if presets don’t change from the phone:<\/strong> in Setup → MIDI\/Remote, set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping off/)
-    assert.match(guide, /FM9 and Axe-Fx III:<\/strong> in Setup → MIDI\/Remote, also set <strong>Program Change<\/strong> on, the <strong>MIDI channel<\/strong> to 1 or Omni, <strong>PC Mapping<\/strong> off, and <strong>Send Realtime Sysex<\/strong> on\./)
+    assert.match(guide, /FM9 and Axe-Fx III:<\/strong> in Setup → MIDI\/Remote, also set <strong>Program Change<\/strong> on, the <strong>MIDI channel<\/strong> to 1 or Omni, <strong>PC Mapping<\/strong> off, <strong>MIDI PC Offset<\/strong> to 0, and <strong>Send Realtime Sysex<\/strong> on\./)
     assert.ok(!/extra blocks \(Amp 2, Cab 2/.test(guide), 'the guide still says the second blocks do not show')
     assert.match(guide, /FM9:<\/strong> use firmware 7\.00 or later\./)
     assert.match(guide, /Axe-Fx III:<\/strong> use firmware 25\.00 or later\./)
@@ -8668,6 +8675,16 @@ export function run(test) {
     await assert.rejects(ch.post('/preset/select', { number: 20 }), (e) => /the MIDI channel is 3 \(or Omni\)/.test(e.message))
   })
 
+  test('a unit that stops answering after the Program Change on an FM9 or Axe-Fx III is not told a setting is wrong, and nothing is learned', async () => {
+    for (const unit of ['fm9', 'axefx3']) {
+      const t = await onTheLine(unit, { silentAfterPc: true })
+      const r = await t.post('/preset/select', { number: 200 })
+      assert.deepEqual(r, { ok: true }, `${unit}: an unanswered landing was taken as a wrong setting`)
+      assert.deepEqual(t.wire.methods().learned, {}, `${unit}: a way was learned from an unanswered landing`)
+      assert.equal(t.unit.state.preset, 200)
+    }
+  })
+
   test('FM3-Edit’s preset frame goes to an FM9 or Axe-Fx III only when forced in the testing tools, and a stored way learned on an FM3 build is not used', async () => {
     for (const [unit, model] of [['fm9', 0x12], ['axefx3', 0x10]]) {
       const forced = await onTheLine(unit, { sysexPreset: true, methods: { preset: 'sysex' } })
@@ -8679,6 +8696,10 @@ export function run(test) {
       assert.ok(!kept.frames().some((f) => f[0] === 0xf0 && f[5] === 0x01), `${unit}: a stored 0x27 way was used`)
       assert.equal(kept.unit.state.preset, 30)
       assert.notEqual(kept.wire.methods().learned.preset, 'sysex')
+      /* And the stored Poll tuner: Fractal's switch alone, never FM3-Edit's page or frequency question. */
+      await kept.post('/tuner', { on: true })
+      await advance(kept.clock, 3000)
+      assert.ok(!kept.frames().some((f) => f[0] === 0xf0 && (f[5] === 0x12 || f[5] === 0x01)), `${unit}: a stored poll tuner was used`)
       /* And the check, through the same trial. */
       const check = await onTheLine(unit, { sysexPreset: true })
       const r = await drive(check.clock, check.wire.check('write-preset'))
@@ -8691,6 +8712,20 @@ export function run(test) {
     const fm3 = await onTheLine('fm3')
     await fm3.post('/preset/select', { number: 30 })
     assert.ok(fm3.frames().some((f) => sameFrame(f, fm3.sx.buildSwitchPreset(0x11, 30))))
+  })
+
+  test('with SysEx or Poll picked in the testing tools, the preset and tuner checks on an FM9 or Axe-Fx III try that way', async () => {
+    for (const [unit, model] of [['fm9', 0x12], ['axefx3', 0x10]]) {
+      const p = await onTheLine(unit, { sysexPreset: true, methods: { preset: 'sysex' } })
+      const r = await drive(p.clock, p.wire.check('write-preset'))
+      assert.equal(r.ok, true, r.error)
+      assert.ok(p.frames().some((f) => sameFrame(f, p.sx.buildSwitchPreset(model, 13))), `${unit}: the forced preset check did not send the 0x27 frame`)
+      const tn = await onTheLine(unit, { methods: { tuner: 'poll' } })
+      const tr = await drive(tn.clock, tn.wire.check('write-tuner'))
+      assert.equal(tr.ok, true, tr.error)
+      assert.ok(tn.frames().some((f) => sameFrame(f, tn.sx.buildTunerPage(model, true))), `${unit}: the forced tuner check did not open the tuner page`)
+      assert.ok(tn.frames().some((f) => sameFrame(f, tn.sx.buildTunerPoll(model))), `${unit}: the forced tuner check did not poll`)
+    }
   })
 
   test('an Axe-Fx III offers 512 presets, and a Mark II’s 600 still goes, by its manual’s bank 4', async () => {
@@ -8719,7 +8754,9 @@ export function run(test) {
       await advance(t.clock, 1000)
       const readings = t.events.filter((e) => e.type === 'tuner')
       assert.ok(readings.length >= 5, `${unit}: the unit's readings did not reach the needle`)
-      assert.deepEqual(readings.at(-1), { type: 'tuner', note: 'E', octave: undefined, cents: 0 })
+      const { note, ...rest } = readings.at(-1)
+      assert.deepEqual(rest, { type: 'tuner', octave: undefined, cents: 0 })
+      assert.equal(note, 'E', 'BELIEVED, not documented: Rev 1.4 says only "nn = note (0 – 11)"; byte 7 is E only if 0 is A (FROM_A in bleWire.js). Change this when a real unit’s log shows an open low E')
       assert.equal(t.unit.state.tuner, true)
       t.sent.length = 0
       await t.post('/tuner', { on: false })
@@ -8733,6 +8770,7 @@ export function run(test) {
       await advance(quiet.clock, 5000)
       assert.ok(!quiet.frames().some((f) => f[5] === 0x12 || f[5] === 0x01), `${unit}: the page or the frequency question went`)
       assert.ok(quiet.logs.some((l) => /no tuner data from the .* in 1\.2 s: Send Realtime Sysex may be off on it/.test(l)), `${unit}: the log does not say why`)
+      assert.ok(!quiet.logs.some((l) => /its own display shows the tuner/.test(l)), `${unit}: the log says as a fact what nobody knows`)
       /* Poll picked in the testing tools still asks the FM3-Edit way: how it would be tried. */
       const poll = await onTheLine(unit, { methods: { tuner: 'poll' } })
       await poll.post('/tuner', { on: true })
@@ -8744,18 +8782,30 @@ export function run(test) {
     assert.ok(sameFrame(fm3.frames()[0], fm3.sx.buildTunerPage(0x11, true)))
   })
 
-  test('the Axe-Fx III’s tuner: a close owed from the connection before is the switch off alone, and a refusal puts the tuner down with the reason', async () => {
+  test('the Axe-Fx III’s tuner: a close owed from the connection before is the switch off alone, and a refusal puts the tuner down with the reason, the off still owed', async () => {
     const t = await onTheLine('axefx3')
     t.wire.oweGen3Tuner({ push: true, page: false })
     await t.post('/tuner', { on: false })
     assert.deepEqual(gen3TunerHeard(t, 0x10), ['tuner off'])
     assert.equal(t.frames().length, 1)
-    /* "the unit does not know that message": the phone's tuner goes down, nothing is left marked open, and nothing else is sent. */
-    const no = await onTheLine('axefx3', { refuseTuner: 0x04 })
-    await assert.rejects(no.post('/tuner', { on: true }), (e) => e.status === 502 && /does not know that message/.test(e.message))
-    assert.equal(no.wire.gen3TunerLeftOn(), false, 'a refused tuner is still marked open')
-    await advance(no.clock, 3000)
-    assert.deepEqual(gen3TunerHeard(no, 0x10), ['tuner on'])
+    /*
+     * "the unit does not know that message": the phone's tuner goes down and
+     * nothing else is sent. But 11 01 went, and Fractal has not published
+     * 0x64 or its codes, so the unit may be on its tuner (and muted) all the
+     * same: the published off, 11 00, is still owed, by the next Close and
+     * by the link's close on a new connection.
+     */
+    for (const [unit, model] of [['fm9', 0x12], ['axefx3', 0x10]]) {
+      const no = await onTheLine(unit, { refuseTuner: 0x04 })
+      await assert.rejects(no.post('/tuner', { on: true }), (e) => e.status === 502 && /does not know that message/.test(e.message))
+      await advance(no.clock, 3000)
+      assert.deepEqual(gen3TunerHeard(no, model), ['tuner on'], `${unit}: something else went after the refusal`)
+      assert.equal(no.wire.gen3TunerLeftOn(), true, `${unit}: a refused switch that went is not owed its off`)
+      no.sent.length = 0
+      await no.post('/tuner', { on: false }).catch(() => {})
+      assert.deepEqual(no.frames().map(hex), [hex(no.sx.frame(model, 0x11, [0]))], `${unit}: the Close after a refused switch did not send 11 00`)
+      assert.equal(no.wire.gen3TunerLeftOn(), false, `${unit}: the off went and is still owed`)
+    }
   })
 
   test('64 11 00 after the tuner switch, and 64 10 00 after a tap, are written down and never taken as refusals', async () => {
@@ -8768,6 +8818,25 @@ export function run(test) {
     assert.ok(t.logs.some((l) => /64 10 00/.test(l)))
     /* Another code is still a refusal. */
     assert.match((await import(SX)).rejectedWords(0x00), /damaged/)
+  })
+
+  test('a 64 <fn> 00 after a scene, channel or tempo write is still a refusal (damaged): only the tap and the tuner switch are let through', async () => {
+    for (const unit of ['axefx3', 'fm3']) {
+      const t = await onTheLine(unit, { refusePublished: 0x00 })
+      if (unit === 'fm3') {
+        /* The FM3 goes on to FM3-Edit's way after a refusal of the published one, and learns it: only a refusal gets it there. */
+        await t.post('/scene', { index: 2 })
+        await t.post('/preset/blocks/58/channel', { channel: 'C' })
+        assert.equal(t.wire.methods().learned.scene, 'edit', 'fm3: a 64 0C 00 was taken as the scene going')
+        assert.equal(t.wire.methods().learned.channel, 'edit', 'fm3: a 64 0B 00 was taken as the channel going')
+      } else {
+        for (const [path, body] of [['/scene', { index: 2 }], ['/preset/blocks/58/channel', { channel: 'C' }], ['/tempo', { bpm: 133 }]]) {
+          await assert.rejects(t.post(path, body), (e) => /damaged/.test(e.message), `${unit} ${path}: a 64 <fn> 00 was not a refusal`)
+        }
+        assert.equal(t.unit.state.scene, 0)
+      }
+      assert.ok(!t.logs.some((l) => /not taken as a refusal/.test(l)), `${unit}: a 64 <fn> 00 on a write was let through`)
+    }
   })
 
   test('a pushed tuner reading is Fractal’s cents, one a step from 63, held to the needle, with the note byte and the string in the log', async () => {
@@ -8822,6 +8891,19 @@ export function run(test) {
       assert.ok(t.sent.slice(back).some((s) => sameFrame(s.bytes, t.sx.buildGetScene(t.sx.MODELS[unit]))), `${unit}: the watch did not start again`)
       t.wire.stopPolls()
     }
+    /* A footswitch Program Change from the unit, while the wire is quiet, ends the quiet as any frame from it does. */
+    const t = await onTheLine('fm9')
+    t.wire.startPolls()
+    await advance(t.clock, 2500)
+    t.unit.opt.silent = true
+    await advance(t.clock, 8000)
+    assert.ok(t.logs.some((l) => /has not answered 3 questions in a row/.test(l)), 'the quiet is not logged')
+    t.wire.heardShort([0xc0, 5])
+    assert.ok(t.logs.some((l) => /answers again: the watch starts again/.test(l)), 'a Program Change from the unit did not end the quiet')
+    const back = t.sent.length
+    await advance(t.clock, 1100)
+    assert.ok(t.sent.slice(back).some((s) => sameFrame(s.bytes, t.sx.buildGetScene(0x12))), 'the watch did not start again after a Program Change from the unit')
+    t.wire.stopPolls()
   })
 
   test('a long front-panel burst with timing clock inside it, arriving during a read, upsets nothing and is answered with nothing', async () => {
@@ -8978,11 +9060,17 @@ export function run(test) {
   })
 
   test('on an Axe-Fx III an echo is a white plug in THRU, not a MIDI Thru setting it does not have', async () => {
-    /* The III's manual: "Messages received at the MIDI IN port are passed automatically to the MIDI THRU port". A pretend III whose white plug is in THRU hears the phone. */
-    const t = await onTheLine('axefx3', { thru: true })
-    for (let i = 0; i < 4; i++) await t.get('/scene')
+    /*
+     * The III's manual: "Messages received at the MIDI IN port are passed
+     * automatically to the MIDI THRU port", and its answers leave by OUT. So
+     * a pretend III whose white plug is in THRU echoes the phone and never
+     * answers (silent), as a real one would: only probes go to it.
+     */
+    const t = await onTheLine('axefx3', { thru: true, silent: true })
+    for (let i = 0; i < 4; i++) await t.get('/device/detect')
     assert.ok(t.logs.some((l) => l === 'the unit is echoing what it receives: the white plug may be in the Axe-Fx III’s MIDI THRU, not OUT'))
     const r = await drive(t.clock, t.wire.check('echo'))
+    assert.equal(r.rows.at(-1).out, hex(t.sx.buildGetScene(0x10)), 'the echo test sent nothing to a III that has not answered')
     assert.match(r.rows.at(-1).meaning, /white plug may be in the Axe-Fx III’s MIDI THRU\. Move it to MIDI OUT\./)
     const nine = await onTheLine('fm9', { thru: true })
     for (let i = 0; i < 4; i++) await nine.get('/scene')
@@ -9017,7 +9105,7 @@ export function run(test) {
       assert.equal(gear.faultSubFor(unit), `Bluetooth (beta), not tried on the ${name} yet`)
       assert.equal(gear.unitForReport(unit), `${name} (not tried yet)`)
       assert.ok(gear.missingBlocksLine(unit).startsWith('A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match'))
-      assert.match(gear.tunerQuietLine(unit), new RegExp(`set Send Realtime Sysex to On \\(Setup → MIDI/Remote on the ${name}\\)`))
+      assert.equal(gear.tunerQuietLine(unit), `No readings from the ${name} yet. Play a string; if nothing shows, check that Send Realtime Sysex is On (Setup → MIDI/Remote on the ${name}). Until then, use the ${name}’s own display.`)
       assert.ok(gear.firmwareLineFor(unit).startsWith(`Use ${name} firmware`))
     }
     assert.match(gear.missingBlocksLine('axefx3'), /IR Player, Dynamic Distortion\)/)
@@ -9034,7 +9122,9 @@ export function run(test) {
     /* Where each is drawn. */
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.match(page, /const untriedHere = said\.tone === 'ok' && !b\.answeredAs \? untriedConnectedLine\(b\.unit\) : null/)
-    assert.match(page, /\{untriedHere \? <Hint>\{untriedHere\}<\/Hint> : null\}/)
+    /* Not under Connected while How to plug it in is open: untriedLine says it at the foot of the steps, and the beta note above the button. */
+    assert.match(page, /\{untriedHere && !plug \? <Hint>\{untriedHere\}<\/Hint> : null\}/)
+    assert.ok(!/never as a step for everybody \(midiSettingsFor\)/.test(page), 'PlugIn still says the Program Change settings are never a step')
     assert.match(page, /<Fold title="What it can and can’t do" open=\{about\} onToggle=\{\(\) => setAbout\(!about\)\}> \{untriedAboutLine\(b\.unit\) \? <Note tone="warn">\{untriedAboutLine\(b\.unit\)\}<\/Note> : null\}/)
     assert.ok(page.indexOf('{missingBlocksLine(b.unit) ? (') > page.indexOf('{DIFFERENT.map('), 'the blocks line is not with what is different')
     assert.match(page, /Bluetooth \(beta\) check · \$\{unitName\(b\.unit\)\}\$\{untried\(b\.unit\) \? ' \(not tried yet\)' : ''\}/)

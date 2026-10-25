@@ -211,7 +211,8 @@ check). In Auto:
   Vocoder, Tone Match, IR Player and Dynamic Distortion are not drawn yet,
   and the page says so.
 - The setup steps set MIDI Thru off (FM9), Program Change on, the MIDI
-  channel to 1 or Omni, PC Mapping off and Send Realtime Sysex on, and name
+  channel to 1 or Omni, PC Mapping off, MIDI PC Offset 0 and Send Realtime
+  Sysex on, and name
   the firmware: FM9 7.00, Axe-Fx III 25.00.
 
 FM3-Edit's ways (scene, channel, tempo, the 0x27 preset, the polled tuner)
