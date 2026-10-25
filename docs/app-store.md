@@ -169,7 +169,8 @@ it suits:** nothing in it waits for 1.87.11 any more.
 on Bluetooth (beta) after REQUIRES A COMPUTER, the demo paragraph's last
 sentence and HOW IT WORKS's first made true of an AM4 on Bluetooth, and a
 BLUETOOTH (BETA), FOR THE AM4 section after HOW IT WORKS. Until 1.89.0 is
-sent to Apple, and released on Google Play, this one stays on both stores: a
+sent to Apple, and rolled out to everybody on Google Play, this one stays on
+both stores: a
 listing that offered Bluetooth before the copy in a customer's hand had it
 would be wrong the other way.
 
@@ -235,7 +236,10 @@ Controlling real hardware is a single purchase. It unlocks the full app on every
 Both of these change any time, with no build: Play Console → Fractal Remote →
 **Grow users → Store presence → Store listings** → the default listing. Paste
 them, press **Save**, then **Publishing overview → Send changes for review**.
-Google usually passes a text change within a day.
+Google usually passes a text change within a day. While Managed publishing
+is on (only around 1.89.0: *Submission day for 1.89.0*, steps 3 to 16), a
+change Google has passed also waits under Changes ready to publish until
+**Publish changes** is pressed.
 
 - **Full description (4000):** the Description above, exactly. It mentions
   no Bluetooth, so it does not wait for 1.87.11. *By hand in Play Console for
@@ -1136,7 +1140,8 @@ below.
 
 None of this needs a build. It is all typed into Play Console, and each part
 ends with **Save**, then **Publishing overview → Send changes for review**.
-Google usually passes it within a day. Do the first two first, at the next
+Google usually passes it within a day (and while Managed publishing is on,
+around 1.89.0 only, it then waits for **Publish changes**). Do the first two first, at the next
 sitting: Google can hold back any update over them, 1.87.11 included, and
 whether Google had finished reviewing 1.87.11 was not known on 12 October
 2026.
@@ -1204,7 +1209,7 @@ No hardware? The app has a full demo that needs no account and no gear:
   4. Tap "Start free demo"
   5. Choose any unit, then tap "Play with ..."
 
-Delete account: Settings (the gear, top right) → the account card at the top → Delete account → "Delete my account". Please try it on a new account, not this one.
+Delete account: Settings (the gear, top right) → the account card at the top → Delete account → "Delete my account". A new account, without the full version, opens on the purchase page instead, and Delete account is at the foot of that page. Please try it on a new account, not this one.
 
 This build contains Bluetooth MIDI code for a feature (reaching the guitar unit through a Bluetooth MIDI adapter instead of a computer) that is switched on only for the developer's own account while it is tested. No other account sees it, this one included. That code is why the app declares Nearby devices, and Location on Android 11 and older, where Android needs it to find a Bluetooth device; it never reads where the phone is. They are asked for only after Connect is tapped on the Bluetooth page, which this account cannot open. If it is offered to everyone, that will be in a later version, sent for review with a description of it.
 
@@ -1317,8 +1322,9 @@ for everybody with the full version. It opens by the version built into
 the copy (`BLUETOOTH_FROM_STORE` in mobile/src/lib/ble-rule.js, set in the
 build pull request), never by an update (CLAUDE.md, *It is switched on for
 customers*). Every block here but the last (Google's location question, for
-2027) is pasted on the day 1.89.0 is sent, and none of it before: until
-then every copy in a customer's hand was reviewed with notes that say
+2027) is pasted on the day 1.89.0 is sent (Google Play's Description later
+still, on the day its rollout reaches everybody), and none of it before:
+until then every copy in a customer's hand was reviewed with notes that say
 customers are not shown it.
 
 **Written on the plan that 1.88.3 goes to Apple first.** TestFlight 1.88.3
@@ -1343,7 +1349,9 @@ next thing Apple sees), five things change:
   holds it to 3950.
 - What's New is 1.88.3's list with this one's lines on top.
 - The version page in App Store Connect is 1.89.0. If a 1.88.3 page was
-  made, its number is changed to 1.89.0 and build 30 picked in place of 29.
+  made, its number is changed to 1.89.0 and build 30 picked in place of 29,
+  and step 5's Apple part is only that nothing is in review or waiting at
+  Pending Developer Release.
 - Apple's iOS 27 fix for its Bluetooth screen, the reason build 29 exists,
   reaches App Store customers with 1.89.0 instead (build 30 carries it).
 - Nothing changes on Google Play: Android goes from 1.88.0 to 1.89.0
@@ -1357,7 +1365,8 @@ line is the app as it is on 25 October 2026:
   full version (a purchase or a grant, never "the store cannot be
   reached": `mayDriveBluetooth`), and only on a phone or tablet that can do
   Bluetooth MIDI. On Android that is a device with both MIDI and Bluetooth
-  LE (FractalBleMidiModule.kt `supported()`), so an emulator never shows it.
+  LE (FractalBleMidiModule.kt `supported()`), so a device or emulator
+  without them never shows it.
 - **Which unit:** the AM4 alone (`CUSTOMER_UNITS`). The FM3, FM9 and Axe-Fx
   III stay on the developer's account, with the testing tools, and the
   page tells everybody "Not for an FM3" under step 1.
@@ -1400,7 +1409,8 @@ version), so it is found signed in; and with no adapter Apple's screen finds
 nothing and the page says so, which is not a fault. The developer-only
 paragraph is 2.5.19's ("functionality should be clear to end users and App
 Review"): everything his account sees and the review account does not, the
-Developer pages, the testing tools and the three units still being tried.
+Developer pages (Access, which grants the full version, among them), the
+testing tools and the three units not yet offered to customers.
 
 test/limits.mjs holds it to 3950 bytes with the brackets filled the way the
 1.87.11 block's are (3933 measured that way, about 3870 with the real
@@ -1420,13 +1430,13 @@ Without that hardware, use the demo. It needs no account:
 4. Tap "Start free demo"
 5. Choose any unit, then tap "Play with ..."
 
-Every screen works in the demo, and nothing in it reaches real hardware. The in-app purchase: in the demo, tap Unlock at the top of the Play screen; Restore a purchase is under the price. For the signed-in screens, use the demo account in App Review Information. It has the full version.
+Every screen but Bluetooth (beta) works in the demo, and nothing in it reaches real hardware. The in-app purchase: in the demo, tap Unlock at the top of the Play screen; Restore a purchase is under the price. For the signed-in screens, use the demo account in App Review Information. It has the full version.
 
 New since 1.88.3:
 
-Bluetooth (beta), part of the full version, for the AM4 only. With a Bluetooth MIDI adapter in the AM4's MIDI In and MIDI Out (tried with a CME WIDI Uhost and a CME C2MIDI Pro cable), the app controls the AM4 with no computer: presets, scenes, effects on and off, channels, tempo and the tuner, with no editing or saving. It is not in the no-account demo. Signed in with the demo account: tap the gear at the top right for Settings, then Bluetooth (beta) under My rig. On that page, tap AM4 under "1 · Pick your unit" first (Connect stays dimmed until a unit is picked), then tap Connect. Only then does the app ask for Bluetooth permission, and Apple's Bluetooth MIDI screen opens to choose the adapter. With no adapter it finds none, and the page says no adapter was connected. Video 4 below shows it working: filmed on an iPhone signed in with the demo account, from Connect to presets and scenes changing on a real AM4. It is marked beta: the AM4 is the only unit model it has been tried on. Its View on Amazon buttons open amazon.com pages for the parts, which other companies make and sell; the app earns nothing from them.
+Bluetooth (beta), part of the full version, for the AM4 only. With a Bluetooth MIDI adapter in the AM4's MIDI In and MIDI Out (tried with a CME WIDI Uhost and a CME C2MIDI Pro cable), the app controls the AM4 with no computer: presets, scenes, effects on and off, channels, tempo and the tuner, with no editing or saving. It is not in the no-account demo. Signed in with the demo account: tap the gear at the top right for Settings, then Bluetooth (beta) under My rig. On that page, tap AM4 under "1 · Pick your unit" first (Connect stays dimmed until a unit is picked), then tap Connect. Only then does the app ask for Bluetooth permission, and Apple's Bluetooth MIDI screen opens to choose the adapter. With no adapter it finds none, and the page says no adapter was connected. Video 4 below shows it working: filmed on an iPhone signed in with the demo account, from Connect to presets and scenes changing on a real AM4. It is marked beta: the AM4 is the only unit it has run on. Its View on Amazon buttons open amazon.com pages for the parts, which other companies make and sell; the app earns nothing from them.
 
-Only on the developer's own account: Settings has Developer pages (accounts, sales, messages), and the Bluetooth page has testing tools and offers three more units still being tried (FM3, FM9, Axe-Fx III). No other account is shown them, the demo account included; for the Developer pages, the server checks which account is asking.
+Only on the developer's own account: Settings has Developer pages (access, sales, accounts, messages and the like), and the Bluetooth page has testing tools and offers three more units (FM3, FM9, Axe-Fx III). No other account is shown them, the demo account included; for the Developer pages, the server checks which account is asking.
 
 Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and everything stored under it at once. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page. Please try it on a new account, not the demo account.
 
@@ -1455,8 +1465,10 @@ stands for 1.89.0):
   build was tried on.
 - **The demo account, on TestFlight build 30.** Signed in with the account
   in App Review Information, it opens with the full version, a Bluetooth
-  (beta) row under My rig, and on that page AM4 as the only unit to pick and
-  no Testing tools; Settings has no Developer section. If the row is not
+  (beta) row under My rig, and on that page AM4 as the only unit to pick;
+  tap AM4, then check there is no Testing tools button under the beta note
+  at the foot of the page (it is drawn only once a unit is picked, even on
+  his own account). Settings has no Developer section. If the row is not
   there, stop: the notes would send Apple to something it cannot find. (Its
   log's head says "store copy: 1.89.0 · Bluetooth for customers: open".)
 - **The four video links** replace the brackets under Videos, the fourth
@@ -1502,11 +1514,17 @@ plain words, with who makes them and that the app earns nothing from the
 links. 3903 characters of both stores' 4000.
 
 On the App Store it goes in with 1.89.0 (Apple changes it only with a
-version). On Google Play it is pasted in the same sitting as the 1.89.0
-release, not before (*Submission day*, below), and once it is live, the
-risk named under *By hand in Play Console for 1.87.11*, permissions the
-listing gives no reason for, is closed: the listing now promotes what
-Nearby devices is declared for.
+version, and anybody reading it can get 1.89.0 that day, by downloading it
+or updating by hand, even while the phased release holds back the copies
+that update by themselves). On Google Play it is pasted on the day the
+1.89.0 rollout reaches everybody (*Submission day*, step 17), not with the
+release and not before: until then most Android customers, new ones
+included, are given 1.88.0, which has no Bluetooth row, and Google's own
+staged-rollout page says "If your app update requires changes to the store
+listing, we recommend updating your store listing after your release rolls
+out to 100% of users." Once it is live, the risk named under *By hand in
+Play Console for 1.87.11*, permissions the listing gives no reason for, is
+closed: the listing now promotes what Nearby devices is declared for.
 
 ```
 REQUIRES A COMPUTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play. An AM4 can also use Bluetooth (beta), with more lag: see below.
@@ -1575,10 +1593,11 @@ other information", in the same sitting as the release, in place of the
 1.87.11 note: on 1.89.0 every sentence of that note's Bluetooth paragraph
 stops being true. The same review account, with the full version. Three
 things Google's reviewer would otherwise miss: the row is there only on a
-device with both MIDI and Bluetooth LE, so an emulator, which a review may
-well run on, shows none; Connect stays dimmed until AM4 is picked; and
-with no adapter, it looks for ten seconds and says "No adapter found",
-which is not a fault. The video is the same video 4 Apple gets (filmed on
+device with both MIDI and Bluetooth LE, so a device or emulator without
+them, which a review may well run on, shows none; Connect stays dimmed
+until AM4 is picked; and with no adapter, it looks for ten seconds and says
+"No adapter found", which is not a fault. And where a new account deletes
+itself: it opens on the purchase page, not Settings, as Apple's notes say. The video is the same video 4 Apple gets (filmed on
 an iPhone: nothing in Google's rules asks for an Android one, and Justin
 takes Android by update, not by installing the APK).
 
@@ -1592,11 +1611,11 @@ No hardware? The app has a full demo that needs no account and no gear:
   4. Tap "Start free demo"
   5. Choose any unit, then tap "Play with ..."
 
-Delete account: Settings (the gear, top right) → the account card at the top → Delete account → "Delete my account". Please try it on a new account, not this one.
+Delete account: Settings (the gear, top right) → the account card at the top → Delete account → "Delete my account". A new account, without the full version, opens on the purchase page instead, and Delete account is at the foot of that page. Please try it on a new account, not this one.
 
-Bluetooth (beta), new in this version and part of the full version: the phone controls an AM4 with no computer, through a Bluetooth MIDI adapter plugged into the AM4's MIDI In and MIDI Out. Signed in with this account: Settings (the gear, top right) → My rig → Bluetooth (beta). The row is there only on a device that has both MIDI and Bluetooth LE, so an emulator, or a device without MIDI, does not show it. On the page, tap AM4 under "1 · Pick your unit" first (Connect stays dimmed until a unit is picked), then Connect. Only then does Android ask for Nearby devices (Location on Android 11 and older, where Android needs it to find a Bluetooth device); the app never reads where the phone is. With no adapter, it looks for ten seconds and says No adapter found. A video of it working on a real AM4: [Bluetooth video link]
+Bluetooth (beta), new in this version and part of the full version: the phone controls an AM4 with no computer, through a Bluetooth MIDI adapter plugged into the AM4's MIDI In and MIDI Out. Signed in with this account: Settings (the gear, top right) → My rig → Bluetooth (beta). The row is there only on a device that has both MIDI and Bluetooth LE, so a device or emulator without them does not show it. On the page, tap AM4 under "1 · Pick your unit" first (Connect stays dimmed until a unit is picked), then Connect. Only then does Android ask for Nearby devices (Location on Android 11 and older, where Android needs it to find a Bluetooth device); the app never reads where the phone is. With no adapter, it looks for ten seconds and says No adapter found. A video of it working on a real AM4: [Bluetooth video link]
 
-Only on the developer's own account: Settings has Developer pages (accounts, sales, messages), and the Bluetooth page has testing tools and offers three more units still being tried (FM3, FM9, Axe-Fx III). No other account sees them, this one included; for the Developer pages, the server checks which account is asking.
+Only on the developer's own account: Settings has Developer pages (access, sales, accounts, messages and the like), and the Bluetooth page has testing tools and offers three more units (FM3, FM9, Axe-Fx III). No other account sees them, this one included; for the Developer pages, the server checks which account is asking.
 ```
 
 If the box will not take all of it, drop the last paragraph first. If it is
@@ -1693,15 +1712,25 @@ step 7 spends builds, and it waits for his yes, as every build does.
      nothing in the notes or the listing says a Mac was tried.
 3. **Justin: Play Console → Publishing overview → Managed publishing →
    on.** From then on nothing Google approves goes live until he presses
-   Publish. It has to be on before the Android build reaches Google. (If
-   1.88.0 is still in review when it goes on, 1.88.0 waits for his Publish
-   too.)
+   Publish. It has to be on before the Android build reaches Google, and it
+   also catches a run 1 started with the Send box ticked by mistake:
+   Android would still reach Google's review too early, but no customer
+   would get it. (If 1.88.0 is still in review when it goes on, 1.88.0
+   waits for his Publish too.) **So when Google approves 1.88.0, go to
+   Publishing overview and press Publish changes straight away**, and if
+   1.88.0 already shows under Changes ready to publish when Managed
+   publishing goes on, press it now, before step 4. Step 4 needs 1.88.0 on
+   your Android phone from Play, and step 5 means 1.88.0 is live, not only
+   approved.
 4. **Justin's logs**, from his iPhone on 1.88.3 and his Android phone on
    1.88.0, with "store copy: 1.88.3" and "store copy: 1.88.0" at the top
    (CLAUDE.md: the threshold is set only once these are seen).
 5. **Both stores have finished with the version they have:** Apple with
-   1.88.3 (one version in review at a time), Google with 1.88.0 (no new
-   Android release while one is in review).
+   1.88.3 released (Ready for Distribution: one version in review at a
+   time, and an approved one left at Pending Developer Release keeps the +
+   in step 13 from making 1.89.0), Google with 1.88.0 live in Production,
+   not waiting under Changes ready to publish (no new Android release while
+   one is in review).
 
 **B. The build, after Justin's yes**
 
@@ -1709,7 +1738,20 @@ step 7 spends builds, and it waits for his yes, as every build does.
    version 1.89.0, `BLUETOOTH_FROM_STORE` set to '1.89.0' on both phones,
    docs/pending/watch-fill.patch applied. Its phones' fingerprint says
    Unchanged, so it waits for the yes like a build and is never merged on
-   green alone.
+   green alone. **And CLAUDE.md's build rule, before the build is started:**
+   it still says to run every build with platform `all` and the Send box
+   ticked, and a session that reads only CLAUDE.md would send Android to
+   Google's review with nothing in. With Justin's okay (it is his
+   instructions file), this goes at the end of its paragraph that starts "So
+   once he says yes to a build": *Except 1.89.0, the build pair that opens
+   Bluetooth (beta) to customers: run it with platform `all`, profile
+   `production` and the Send box UNTICKED. Once expo.dev shows the iOS build
+   finished, send the iPhone with a second run: platform `ios`, Skip
+   building ticked (the Submit only box; never `all` or `android`, which
+   would send Android to Google's review just the same). Android is uploaded
+   by hand in Play Console after Managed publishing is on and its release
+   notes and App access note are in. docs/app-store.md, Submission day for
+   1.89.0, steps 3, 7, 9 and 14.*
 7. **GitHub: mobile.yml, run 1, the build pair.** Actions → mobile → Run
    workflow, from main:
    - Which platform to build: **all**
@@ -1722,9 +1764,9 @@ step 7 spends builds, and it waits for his yes, as every build does.
    One iPhone and one Android build slot, and nothing is sent anywhere:
    both builds wait on Expo's servers. **This is the one build whose Send
    box stays unticked.** Ticked, it sends Android straight to Google's
-   review, before its store page, release notes and App access note are
-   in, and with Managed publishing off, from there to every Android
-   customer the moment it is approved. mobile/eas.json is not changed for
+   review, before its release notes and App access note are in, and, were
+   Managed publishing off, from there to every Android customer the moment
+   it is approved. mobile/eas.json is not changed for
    it: Android goes by hand (step 14), which is the one way the release
    notes go in before the review.
 8. **GitHub: the ledger row**, in the first pull request after the build is
@@ -1745,15 +1787,24 @@ step 7 spends builds, and it waits for his yes, as every build does.
 **C. Justin, on TestFlight build 30**
 
 10. Signed in with the review account: the Bluetooth (beta) row under My
-    rig, AM4 the only unit on its page, no Testing tools, and the log's head
-    says "store copy: 1.89.0 · Bluetooth for customers: open". Then video 4
-    (above).
+    rig, AM4 the only unit on its page; tap AM4, then check there is no
+    Testing tools button under the beta note at the foot of the page (it is
+    drawn only once a unit is picked, so the check means nothing before);
+    and the log's head says "store copy: 1.89.0 · Bluetooth for customers:
+    open". Then video 4 (above).
 
 **D. Submission day**
 
 11. **The guideline pass** (CLAUDE.md, *Before anything goes to Apple*),
     against the guidelines as they are that day, and what it found said to
-    Justin in plain words before he sends anything.
+    Justin in plain words before he sends anything. On 25 October 2026 they
+    say "Last Updated: October 16, 2026", the update that added 2.5.19
+    (hidden or dormant features), which the developer-only paragraph of the
+    notes answers. And App Store Connect → Business (and the banner at the
+    top of developer.apple.com/account): if an agreement is waiting to be
+    accepted, such as the licence agreement update Apple posted on 13
+    October 2026, Justin accepts it first, or Add for Review and Submit in
+    step 13 can be refused.
 12. **GitHub: the website, merged before anything is sent**, in words that
     are true both before and after approval:
     - **bluetooth-guide.html**, the page the app's Full setup guide button
@@ -1767,9 +1818,16 @@ step 7 spends builds, and it waits for his yes, as every build does.
       earlier versions show it only on the developer's own account; an
       iPhone or iPad asks only to use Bluetooth; Nearby devices, and
       Location on Android 11 and older, as it says now.
-    - **Not yet** /bluetooth (bluetooth.html) and support.html, which say
-      the app has no Bluetooth: until the live day that is true of every
-      copy a customer can get.
+    - **support.html**, the App Store's Support URL, which a reviewer
+      checking the listing's links reads: one sentence after "The phone
+      doesn't talk to the unit directly, which is why there is a computer
+      in the middle.", saying "From version 1.89.0, an AM4 can also
+      connect with no computer, by Bluetooth (beta); the computer is still
+      the best way." The rest of its rewrite waits for the live day (step
+      18).
+    - **Not yet** /bluetooth (bluetooth.html), which says the app has no
+      Bluetooth: until the live day that is true of every copy a customer
+      can get.
 13. **Justin: App Store Connect.**
     1. The + beside iOS App → 1.89.0 (or, if 1.88.3 was skipped, the page
        made for it, renamed 1.89.0).
@@ -1779,7 +1837,16 @@ step 7 spends builds, and it waits for his yes, as every build does.
     4. App Review Information → Notes: the 1.89.0 block, with the Tested on
        brackets and the four video links filled in. The review account's
        email and password as before.
-    5. Version Release: **Manually release this version**.
+    5. Version Release: **Manually release this version**, so it waits at
+       Pending Developer Release for step 15. And Phased Release for
+       Automatic Updates: **Release update over 7-day period using phased
+       release**, the iPhone's twin of Android's 20% (step 14). Once
+       released, iPhones that update by themselves get it a share at a time
+       (1% the first day, then 2, 5, 10, 20 and 50%, and everybody on the
+       seventh); anybody can still download it new or update by hand from
+       the first day, so the listing is never ahead of what a customer can
+       get. While it runs it can be paused (the plan below). After a few
+       quiet days, **Release to All Users** ends it early.
     6. Add for Review, then Submit.
 14. **Justin: Play Console, in one sitting**, Managed publishing on since
     step 3:
@@ -1788,49 +1855,88 @@ step 7 spends builds, and it waits for his yes, as every build does.
        have sent, signed the same way.
     2. Test and release → Production → **Create new release** → upload the
        .aab. The release name fills itself in (1.89.0, version code 13).
-       Release notes: the 1.89.0 block above. Rollout: see below. **Save**,
-       not send.
-    3. Grow users → Store presence → Store listings → the default listing →
-       Full description: the 1.89.0 Description. The short description
-       stays. **Save**.
-    4. App content → App access → the review account's instruction → Any
+       Release notes: the 1.89.0 block above. Rollout: **20%** (see below).
+       **Save**, not send.
+    3. App content → App access → the review account's instruction → Any
        other information: the 1.89.0 note. **Save**.
-    5. Data safety: no change for Bluetooth. Check its privacy policy link
+    4. Data safety: no change for Bluetooth. Check its privacy policy link
        still answers.
-    6. Publishing overview → Changes not yet sent for review: the release,
-       the listing and App access, all three → **Send changes for review**.
+    5. The store listing: **no change today.** The Full description and the
+       short description stay as they are until the rollout reaches
+       everybody (step 17).
+    6. Publishing overview → Changes not yet sent for review: the release
+       and App access, both → **Send changes for review**. If anything else
+       is listed there, it would go out with them: stop and ask.
 
-    **Rollout:** to everybody at once, or to a share of Android customers
-    first. My pick: 20% first, and the rest after three quiet days. Then if
-    something goes wrong early, Halt rollout stops it with no build (the
-    plan below). With a staged rollout, Android's live day is the day it
-    reaches everybody.
+    **Rollout, a choice, and the listing follows it:**
+    - **20% first, then everybody after three quiet days.** My pick. If
+      something goes wrong early, four in five Android customers never got
+      it, and Halt rollout stops it with no build (the plan below): the twin
+      of the iPhone's phased release (step 13.5). The listing changes only
+      once the rollout reaches everybody (step 17), as Google's own
+      staged-rollout page advises: "If your app update requires changes to
+      the store listing, we recommend updating your store listing after
+      your release rolls out to 100% of users." Google picks the 20% at
+      random, new installs included, so a listing that offered Bluetooth on
+      the first day would sell it to people who are given 1.88.0, which has
+      no Bluetooth row. For those few days the listing says less than the
+      app does, which is the safe way round.
+    - **Everybody at once.** The listing goes in this same sitting (step
+      17's Full description moved here, and sent with the release), so app
+      and listing always match. Halt rollout still works on a release that
+      is fully out (Google, answer/16285429: new installs, and anyone not
+      yet on 1.89.0, are given 1.88.0 instead; copies already on 1.89.0 keep
+      it), but by then most customers who update by themselves have it.
+
+    Either way, Android's live day is the day it reaches everybody.
 
 **E. Each store's live day**
 
-15. **Apple approves** (Pending Developer Release): release it the same
-    hour the website pull request below is merged. **Google approves**
-    (Changes ready to publish): **Publish only once Apple has approved
-    1.89.0 too**, so that if Apple says no to Bluetooth, no Android
-    customer has it yet (the plan below). Apple's release does not wait for
-    Google's.
-16. **GitHub, the same hour, a pull request for each store as it goes
-    live:**
+15. **Both stores approve, then both go out in the same hour.** Apple
+    approves: it waits at Pending Developer Release (step 13.5); do not
+    release it yet. Google approves: it waits under Changes ready to
+    publish (Managed publishing, step 3). **Release only once both have
+    approved**, then, in the same hour: App Store Connect → the 1.89.0
+    version → **Release This Version** (the 7-day phased release starts),
+    Play Console → Publishing overview → **Publish changes** (the 20%
+    starts), and the iPhone's pull request in step 18 merged. Why together:
+    if either store says no to Bluetooth, no customer on either phone has
+    it yet, so "both wait" stays a choice that costs nothing extra (the plan
+    below). What it costs: iPhone customers wait for however long Google's
+    review takes, usually a few days.
+16. **Justin: Play Console → Publishing overview → Managed publishing →
+    off**, right after that Publish. Raising the rollout from 20% to
+    everybody does not need it on (Google lets a rise to 100% through
+    either way). Left on, every later Android release and listing change
+    would pass Google's review and then sit under Changes ready to publish,
+    reaching nobody, the next build pair included.
+17. **Justin: Android's 100% day**, after three quiet days at 20% (if
+    everybody at once was picked, both of these were done in step 14, and
+    the 100% day is step 15's):
+    1. Test and release → Production → the 1.89.0 release → raise the
+       rollout to **100%**.
+    2. Grow users → Store presence → Store listings → the default listing
+       → Full description: the 1.89.0 Description. The short description
+       stays. **Save**, then Publishing overview → **Send changes for
+       review**. With Managed publishing off, it goes live as soon as
+       Google passes it, usually within a day.
+18. **GitHub, a pull request for each store as it goes live**, the iPhone
+    the hour it is released (step 15), Android on its 100% day (step 17):
     - /bluetooth (bluetooth.html) becomes the real page, naming only the
       store or stores that are live, and links the guide.
     - support.html: "The phone doesn't talk to the unit directly" becomes
       the two ways, the computer first, with help through Justin's own
       channels and nobody else's.
-    - bluetooth-guide.html: the noindex comes off.
+    - bluetooth-guide.html: the noindex comes off (with the first of them).
     - public/store-versions.json: that store's number to 1.89.0 (ios once
       it is Ready for Distribution, android once it has rolled out to
       everybody), that day and not before.
     - CLAUDE.md's lines on which copies show Bluetooth to customers.
-17. **The setup emails' Bluetooth paragraph**, only once 1.89.0 is live in
-    both stores: supabase/README.md, *Bluetooth (beta) in the emails, from
-    1.89.0*. Emails off, the function redeployed, Justin reads the sample,
-    emails on.
-18. **The promotional text:** Actions → store-text → Run workflow, **Write
+19. **The setup emails' Bluetooth paragraph**, only once 1.89.0 is live in
+    both stores (Android at 100%): supabase/README.md, *Bluetooth (beta) in
+    the emails, from 1.89.0*. Emails off, the function redeployed, Justin
+    reads the sample, emails on.
+20. **The promotional text:** Actions → store-text → Run workflow, **Write
     it** ticked, once 1.89.0 is released (a version in review keeps its own
     copy of the paragraph, and that copy can be empty). The paragraph
     itself does not change: it still opens on REQUIRES A COMPUTER.
@@ -1857,25 +1963,52 @@ all of it:
 - **Apple wants different words in the listing** (What's New, the
   Description, the keywords). Change them in App Store Connect. No build.
 - **Apple wants different words in the app**, for instance no "(beta)" under
-  2.2 (Apple accepted Edit (Beta) in 1.87.11, so this is unlikely). Words
-  are an update, and the reply to Apple says it is in. No build.
+  2.2 (Apple accepted Edit (Beta) in 1.87.11, so this is unlikely). The
+  words go out as an update, with no build, but the reviewer sees them only
+  after a restart: the first launch after the update is out still runs the
+  words the device already had, whether build 30 is a fresh install (then
+  the words built into it: *Two facts*, above) or the copy already on their
+  device, and the update comes in from a later launch. So the reply to Apple
+  says how to see the change, for example: "The new words come as an app
+  update. Open the app and wait about ten seconds. When 'A new version is
+  ready' appears, tap Restart now, or close the app fully and open it again.
+  The change shows from then on." A build only if Apple wants the change in
+  the build itself.
 - **Apple says no to Bluetooth itself.** First, if it reads like a
   misunderstanding (the reviewer could not find the row, or thought the
   empty Apple screen was a fault), reply with the steps and video 4, or ask
-  the App Review Board. No build. If Apple still says no, Android has not
-  been published (step 15 waits for Apple), so the choice is:
-  - **Both phones wait for Bluetooth.** Android's 1.89.0 is never published
-    (Publishing overview → remove it from review, or leave it unpublished),
-    and one new iPhone build, 1.89.1 or later, goes to Apple with the
-    threshold back to null and the 1.88.3 notes' disclosure paragraph. One
-    iPhone slot (and an Android one, if the store numbers are to match).
-    Setting the threshold back is allowed here, and only here, because no
-    copy that opens it ever reached a customer; it is the three deliberate
-    edits docs/expo-builds.md describes (the row's marker, `OPENED_AT`, the
-    threshold), with the reason written in. On the website, only the guide
-    and the privacy page said "from 1.89.0", and they go back to what they
-    said before. My pick: it keeps the two phones the same, and every page
-    true.
+  the App Review Board. No build. If Apple still says no, no customer on
+  either phone has Bluetooth yet (step 15 releases the two only once both
+  have approved), so the choice is:
+  - **Both phones wait for Bluetooth.** Android's 1.89.0 is taken back out
+    of Play's queue, the day Apple's no is final, in this order:
+    1. Publishing overview: move the 1.89.0 release and the App access
+       change back to "Changes not yet sent for review", whether they are
+       still in review or already under Changes ready to publish (Google's
+       help, answer/9859654, says approved changes can be moved back there).
+    2. Test and release → Production: discard the 1.89.0 draft release, or
+       replace it with the closed Android build.
+    3. App content → App access: paste the 1.87.11 note (*By hand in Play
+       Console for 1.87.11*) back in. With 20% first the store listing was
+       never changed; if everybody at once was picked and the 1.89.0
+       Description went in, paste the Description at the top of this file
+       back in too. Do this before anything else is sent for review or
+       published.
+
+    **Never leave approved changes waiting under Changes ready to
+    publish:** Publish puts out everything listed there, and changes saved
+    for later come back with the next send, so the next Publish for anything
+    else would put Bluetooth out on Android after Apple refused it. Then one
+    new iPhone build, 1.89.1 or later, goes to Apple with the threshold back
+    to null and the 1.88.3 notes' disclosure paragraph. One iPhone slot, and
+    an Android one unless the 1.89.0 release was discarded (replacing it
+    needs the closed Android build). Setting the threshold back is allowed
+    here, and only here, because no copy that opens it ever reached a
+    customer; it is the three deliberate edits docs/expo-builds.md describes
+    (the row's marker, `OPENED_AT`, the threshold), with the reason written
+    in. On the website, only the guide, the privacy page and support.html
+    said "from 1.89.0", and they go back to what they said before. My pick:
+    it keeps the two phones the same, and every page true.
   - **Android goes ahead without the iPhone.** Android's 1.89.0 is
     published with Bluetooth; one iPhone build with the threshold null on
     iOS alone. One iPhone slot, and the two phones disagree: the setup
@@ -1884,11 +2017,32 @@ all of it:
     first, on purpose, saying why.
 
 **While Google is reviewing it:** the same, in Play Console. Words in the
-listing, the release notes or App access change there, with no build. If
+listing, the release notes or App access change there, with no build; words
+in the app go as an update, with the same restart line in the reply. If
 Google says no to Bluetooth itself, the Android release is not published,
-Apple's approved 1.89.0 waits unreleased (Manually release), and the same
-choice is made the other way round: both wait (one Android build, and an
-iPhone one), or the iPhone goes ahead alone.
+and Apple's approved 1.89.0 waits unreleased at Pending Developer Release
+(step 15 holds it until both have approved), so the same choice is made the
+other way round:
+
+- **Both wait.** App Store Connect → the 1.89.0 version → cancel the pending
+  release, so the version reads **Developer Rejected**. App Store Connect
+  takes no other build or version for review while 1.89.0 sits at Pending
+  Developer Release, so this comes first. Then one Android build and one
+  iPhone build, the threshold back to null on both (the same three
+  deliberate edits), with the 1.88.3 notes' disclosure paragraph for Apple
+  and the 1.87.11 App access note for Google, and Android's 1.89.0 taken out
+  of Play's queue as above. One slot each.
+- **The iPhone goes ahead alone.** Apple's 1.89.0 is released with
+  Bluetooth, and Android's 1.89.0 is never published. One Android build
+  follows with the threshold null on Android alone: the ledger test, which
+  refuses an opening on one phone alone, and `OPENED_AT`'s android value are
+  changed first, on purpose, saying why, and the setup emails, the guide,
+  /bluetooth and support.html say "iPhone only". One Android slot.
+
+If the iPhone had been released before Google decided (not what step 15
+says), only the second would be left: "both wait" would then be the
+emergency threshold update, which this plan keeps for a unit at risk, not
+for a refusal.
 
 **After it is out, if something goes wrong** (a unit or a cable harmed, the
 way the FM3's cable ran hot, or a crash on connect):
@@ -1897,12 +2051,22 @@ way the FM3's cable ran hot, or a crash on connect):
    update (words are an update), the same on the guide and /bluetooth, and
    the promotional text through store-text (Write it) if it is serious.
    Help stays Justin's own channels.
-2. **Android, if the rollout is still at 20%:** Play Console → Production →
-   **Halt rollout**. No build. Customers who have 1.89.0 keep it; nobody new
-   gets it.
-3. **Apple, if 1.89.0 is approved but not yet released:** do not release
-   it. No build. Once released, Apple has no halt short of taking the whole
-   app off sale.
+2. **Android:** Play Console → Production → **Halt rollout**. No build, at
+   any share. At 20%, customers who have 1.89.0 keep it and nobody new gets
+   it, and the listing, never changed, stays as it is. Google can halt a
+   release that is fully out too (answer/16285429): new installs, and
+   anyone not yet on 1.89.0, are given 1.88.0 instead, and copies already
+   on 1.89.0 keep it; then the Description at the top of this file goes
+   back into the listing the same day.
+3. **Apple:** if 1.89.0 is approved but not yet released, do not release
+   it. No build. While the 7-day phased release is running (step 13.5), App
+   Store Connect → the 1.89.0 version → Phased Release for Automatic
+   Updates → **Pause Phased Release** stops automatic updates to 1.89.0. It
+   costs no build. Pauses can add up to 30 days in all, and resuming carries
+   on from the day it stopped. A pause does not stop new downloads or
+   people who update by hand, and once the rollout reaches everybody (or
+   Release to All Users is clicked) the only halt left is taking the app
+   off sale, which ends the phased release for that version for good.
 4. **Bluetooth closed on the 1.89.0 copies, an emergency step only,** with
    Justin's say-so and only when a unit is at risk: an update that moves the
    threshold above 1.89.0 closes it on every 1.89.0 copy from the launch
@@ -1916,10 +2080,12 @@ way the FM3's cable ran hot, or a crash on connect):
 | What happens | What it costs |
 |---|---|
 | Apple or Google asks a question, or wants other words in the store | Nothing: answer, or change it in the console |
-| Other words in the app | An update, no build |
-| Apple says no to Bluetooth, and still no after a reply | One iPhone build (and Android stays unpublished) |
+| Other words in the app | An update, no build, as long as the reply tells the reviewer to restart once. A build only if Apple wants the change in the build itself |
+| Apple says no to Bluetooth, and still no after a reply | One iPhone build (and Android's 1.89.0 taken back out of Play's queue) |
+| Google says no to Bluetooth, and still no after a reply | One Android build (and, for both to wait, an iPhone one, once the pending release is cancelled) |
 | Trouble after release: a warning | An update and the website, no build |
-| Trouble after release: Android halted | Nothing: Halt rollout, while it is still rolling out |
+| Trouble after release: Android halted | Nothing: Halt rollout, at 20% or after it is out (halted before 100%, the listing keeps the old Description) |
+| Trouble after release: iPhone paused | Nothing: Pause Phased Release, while it is still phasing (automatic updates only) |
 | Trouble after release: Bluetooth closed for customers | An emergency update, then a build pair to say so |
 
 ### Later: Google's question about location (from 27 January 2027)
@@ -1931,13 +2097,24 @@ policy (answer/16909972, read on 25 October 2026) says that from 27 January
 a developer console declaration process", and that precise location goes
 only to apps that cannot make do with the approximate one. The app asks for
 precise location on Android 11 and older alone, only when Connect is tapped
-on the Bluetooth page, because those versions of Android give an app no
-Bluetooth LE scan results without it. When Play Console asks, this is the
-answer:
+on the Bluetooth page, because Android 10 and 11 give an app no Bluetooth
+LE scan results without it. On Android 7 to 9 approximate location would
+do, but the one permission line in the manifest (ACCESS_FINE_LOCATION up to
+Android 11) and the one request in FractalBleMidiModule.kt cover every
+version below 12, so the answer says so rather than claim otherwise. When
+Play Console asks, this is the answer:
 
 ```
-Fractal Remote asks for precise location only on Android 11 and older, and only when the user taps Connect on its Bluetooth (beta) page, because Android 10 and 11 return no Bluetooth LE scan results to an app targeting Android 10 or newer without ACCESS_FINE_LOCATION; approximate location is not enough. It uses it only to find the user's own Bluetooth MIDI adapter, and never reads, stores or sends where the device is. On Android 12 and newer it uses BLUETOOTH_SCAN with neverForLocation and asks for no location at all.
+Fractal Remote asks for precise location only on Android 11 and older, and only when the user taps Connect on its Bluetooth (beta) page, because Android 10 and 11 return no Bluetooth LE scan results to an app targeting Android 10 or newer without ACCESS_FINE_LOCATION; approximate location is not enough there. On Android 9 and older, where approximate location would be enough, the same single permission declaration applies. It uses it only to find the user's own Bluetooth MIDI adapter, and never reads, stores or sends where the device is. On Android 12 and newer it uses BLUETOOTH_SCAN with neverForLocation and asks for no location at all.
 ```
+
+**Before it is sent, one question to settle:** Google may push back on
+Android 7 to 9, where precise location is more than the scan needs. If an
+Android build comes before January for another reason, it can ask for
+approximate location below Android 10 instead (ACCESS_COARSE_LOCATION up
+to Android 9, ACCESS_FINE_LOCATION only for 10 and 11, and the module's
+request to match), and the Android 9 sentence comes out of the answer.
+Otherwise the answer goes as it is, saying it plainly.
 
 If Google refuses it, the way out is an Android build that drops Location
 and hides Bluetooth (beta) on Android 11 and older: Android's fingerprint

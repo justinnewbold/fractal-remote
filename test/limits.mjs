@@ -4861,7 +4861,7 @@ export function run(test) {
     const extra = BLE_UNITS.filter((u) => !CUSTOMER_UNITS.includes(u.key))
     assert.ok(extra.length > 0 && extra.every((u) => unitOffered(u.key, true) && !unitOffered(u.key, false)), 'the developer’s account is no longer offered units a customer is not, and the notes say it is')
     for (const [where, text] of [['Apple notes', paragraph(notes, "Only on the developer's own account:")], ['App access note', paragraph(access, "Only on the developer's own account:")]]) {
-      assert.match(text, /Developer pages \(accounts, sales, messages\)/, `the ${where} leave out the Developer pages`)
+      assert.match(text, /Developer pages \(access, sales, accounts, messages and the like\)/, `the ${where} leave out the Developer pages, or Access, the one that grants the full version`)
       assert.match(text, /testing tools/, `the ${where} leave out the Bluetooth page's testing tools`)
       for (const u of extra) assert.ok(text.includes(u.name), `the ${where} leave out the ${u.name}, which the developer's account is offered and the review account is not`)
       assert.match(text, /No other account (is shown|sees) them, (the demo account|this one) included/, `the ${where} do not say the review account is shown none of it`)
@@ -4939,7 +4939,7 @@ export function run(test) {
     }
     for (const [said, why] of [
       [/Settings \(the gear, top right\) → My rig → Bluetooth \(beta\)\./, 'where the row is'],
-      [/The row is there only on a device that has both MIDI and Bluetooth LE, so an emulator, or a device without MIDI, does not show it\./, 'that an emulator shows no row'],
+      [/The row is there only on a device that has both MIDI and Bluetooth LE, so a device or emulator without them does not show it\./, 'that a device or emulator without MIDI and Bluetooth LE shows no row'],
       [/tap AM4 under "1 · Pick your unit" first \(Connect stays dimmed until a unit is picked\), then Connect\./, 'to pick AM4 before Connect'],
       [/Only then does Android ask for Nearby devices \(Location on Android 11 and older/, 'when Nearby devices and Location are asked for'],
       [/the app never reads where the phone is\./, 'that the app never reads where the phone is'],
@@ -4949,6 +4949,9 @@ export function run(test) {
     assert.match(read('mobile/modules/fractal-ble-midi/android/src/main/java/cloud/newbold/fractalremote/blemidi/FractalBleMidiModule.kt'), /hasSystemFeature\(PackageManager\.FEATURE_MIDI\) &&\s+packages\.hasSystemFeature\(PackageManager\.FEATURE_BLUETOOTH_LE\)/, 'the row no longer needs MIDI and Bluetooth LE, and Google’s note says it does')
     assert.ok(read('mobile/src/lib/bluetooth.js').includes('No adapter found.') && page.includes('looks for the adapter for ten seconds'), 'Google’s note says what an Android phone shows with no adapter, and the app says something else')
     assert.doesNotMatch(access, /which this account cannot open|No other account sees it, this one included\. That code/, 'the App access note keeps the 1.87.11 note’s Bluetooth paragraph, which is not true of 1.89.0')
+    /* And where a NEW account deletes itself, as Apple's notes say: it opens on the purchase page, not Settings, so the Settings path alone sends Google's reviewer nowhere. */
+    assert.match(paragraph(access, 'Delete account:'), /^Delete account: Settings \(the gear, top right\) → the account card at the top → Delete account → "Delete my account"\. A new account, without the full version, opens on the purchase page instead, and Delete account is at the foot of that page\. Please try it on a new account, not this one\.$/, 'Google’s reviewer is sent to a new account to delete, and not told it opens on the purchase page')
+    assert.match(read('mobile/src/screens/Paywall.js'), /label="Delete account"/, 'the purchase page has no Delete account, and Google’s note says it does')
     for (const [said, why] of [
       [/only on devices with MIDI and Bluetooth LE/, 'the device it needs'],
       [/Tap AM4, then Connect: only then is Nearby devices asked for \(Location on Android 11 and older\), never to read location\./, 'what to tap, and when the permission is asked'],
@@ -5016,14 +5019,35 @@ export function run(test) {
       at('**Manually release this version**'),
       at('**Create new release**'),
       at('**Send changes for review**'),
-      at('**Publish only once Apple has approved'),
+      at('**Release only once both have approved**'),
+      at('Managed publishing → off**'),
+      at("**Justin: Android's 100% day**"),
+      at('raise the rollout to **100%**'),
+      at('Full description: the 1.89.0 Description'),
       at("public/store-versions.json: that store's number to 1.89.0"),
       at("**The setup emails' Bluetooth paragraph**")
     ]
     assert.deepEqual([...order].sort((a, b) => a - b), order, 'the submission steps are out of order')
+    /*
+     * MANAGED PUBLISHING, ON AND OFF. On before the build, with 1.88.0 published by hand if it is waiting (step 4 needs it on his phone from
+     * Play); off right after 1.89.0's Publish, or every later Android release passes review and reaches nobody.
+     */
+    assert.match(day, /\*\*So when Google approves 1\.88\.0, go to Publishing overview and press Publish changes straight away\*\*/, 'Managed publishing goes on with nothing telling Justin to publish 1.88.0')
+    assert.match(day, /Google with 1\.88\.0 live in Production, not waiting under Changes ready to publish/, 'step 5 reads as done with 1.88.0 only approved')
+    assert.match(day, /Apple with 1\.88\.3 released \(Ready for Distribution/, 'step 5 reads as done with 1.88.3 only approved, which keeps the + from making 1.89.0')
+    /* THE LISTING FOLLOWS THE ROLLOUT: Play's sitting sends the release and App access only, and the Description goes in on the 100% day, as Google's staged-rollout page advises. */
+    const playSitting = day.slice(at('**Justin: Play Console, in one sitting**'), at("**E. Each store's live day**"))
+    assert.match(playSitting, /The store listing: \*\*no change today\.\*\*/, 'the Play sitting changes the listing while 4 in 5 Android customers are given 1.88.0')
+    assert.match(playSitting, /the release and App access, both → \*\*Send changes for review\*\*/, 'the Play sitting sends something besides the release and App access')
+    assert.ok(!playSitting.includes('Full description: the 1.89.0 Description'), 'the Play sitting still pastes the 1.89.0 Description')
+    assert.match(playSitting, /"If your app update requires changes to the store listing, we recommend updating your store listing after your release rolls out to 100% of users\."/, 'the rollout choice does not cite Google’s own advice')
+    /* THE IPHONE'S BRAKE: held for the release together, and phased over 7 days so a pause is there. */
+    assert.match(day, /Phased Release for Automatic Updates: \*\*Release update over 7-day period using phased release\*\*/, 'the iPhone has no phased release, so nothing slows 1.89.0 reaching it')
     assert.match(day, /iPhone and iPad Apps on Apple Silicon Mac/, 'the steps do not say where the Mac setting is')
     const beforeSending = day.slice(at('**GitHub: the website, merged before anything is sent**'), at('**Justin: App Store Connect.**'))
-    assert.match(beforeSending, /\*\*bluetooth-guide\.html\*\*[^]*\*\*privacy\.html\*\*[^]*\*\*Not yet\*\* \/bluetooth \(bluetooth\.html\) and support\.html/, 'the guide and the privacy page do not change before submitting, or /bluetooth and support do')
+    /* The Support URL a reviewer reads gets one sentence true before and after approval; /bluetooth waits for the live day. */
+    assert.match(beforeSending, /\*\*bluetooth-guide\.html\*\*[^]*\*\*privacy\.html\*\*[^]*\*\*support\.html\*\*, the App Store's Support URL[^]*"From version 1\.89\.0, an AM4 can also connect with no computer, by Bluetooth \(beta\); the computer is still the best way\."[^]*\*\*Not yet\*\* \/bluetooth \(bluetooth\.html\), which says/, 'the guide, the privacy page and the support page do not change before submitting, or /bluetooth does')
+    assert.ok(read('public/support.html').includes('The phone doesn’t talk to the unit directly, which'), 'the steps add a sentence after one support.html no longer has')
     const liveDay = day.slice(at("**E. Each store's live day**"))
     for (const [said, why] of [
       [/\/bluetooth \(bluetooth\.html\) becomes the real page/, '/bluetooth'],
@@ -5040,6 +5064,12 @@ export function run(test) {
       [/\*\*A fresh install's first launch runs the copy built into it\*\*/, 'why no update can close it on a first launch'],
       [/\*\*Apple says no to Bluetooth itself\.\*\*/, 'what happens if Apple refuses it'],
       [/\*\*Halt rollout\*\*/, 'the Android halt'],
+      [/\*\*Pause Phased Release\*\* stops automatic updates to 1\.89\.0/, 'the iPhone pause'],
+      [/tap Restart now, or close the app fully and open it again/, 'how a reviewer sees words sent as an update, since a first launch runs the built-in ones'],
+      [/\*\*Never leave approved changes waiting under Changes ready to publish:\*\*/, 'that an approved release left waiting goes out with the next Publish'],
+      [/\*\*Developer Rejected\*\*/, 'how the version page is freed while 1.89.0 waits at Pending Developer Release'],
+      [/\| Google says no to Bluetooth, and still no after a reply \| One Android build/, 'what Google refusing it costs'],
+      [/\| Trouble after release: iPhone paused \| Nothing: Pause Phased Release/, 'the iPhone pause in the table'],
       [/an emergency step only/, 'that closing it by update is an emergency step'],
       [/\| Apple says no to Bluetooth, and still no after a reply \| One iPhone build/, 'what a refusal costs']
     ]) assert.match(off, said, `the switch-off plan does not say ${why}`)
@@ -5048,6 +5078,9 @@ export function run(test) {
     /* AND GOOGLE'S LOCATION QUESTION, for later, held to the manifest it describes. */
     const location = section.slice(section.indexOf("### Later: Google's question about location (from 27 January 2027)"))
     assert.match(fenced(location, '### Later').trim(), /^Fractal Remote asks for precise location only on Android 11 and older, and only when the user taps Connect on its Bluetooth \(beta\) page/, 'the location answer is missing')
+    /* Android 7 to 9 get precise location from the same one request, where approximate would do: the answer says so, never "not enough" of every version. */
+    assert.match(fenced(location, '### Later').trim(), /approximate location is not enough there\. On Android 9 and older, where approximate location would be enough/, 'the location answer says approximate is not enough on Android 9 and older too')
+    assert.match(read('mobile/modules/fractal-ble-midi/android/src/main/java/cloud/newbold/fractalremote/blemidi/FractalBleMidiModule.kt'), /arrayOf\(Manifest\.permission\.ACCESS_FINE_LOCATION\)/, 'below Android 12 the module no longer asks for precise location, and the answer says it does')
     const manifest = read('mobile/modules/fractal-ble-midi/android/src/main/AndroidManifest.xml')
     assert.match(manifest, /ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/, 'precise location is no longer kept to Android 11 and older, and the answer says it is')
     assert.match(manifest, /BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/, 'Bluetooth scanning no longer says it is never for location, and the answer says it is')
