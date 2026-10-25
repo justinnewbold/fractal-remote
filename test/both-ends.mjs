@@ -2804,6 +2804,54 @@ export function run(test) {
   })
 
   /*
+   * "The previous/next buttons and the preset names are not showing up
+   * correctly on the previous and next buttons" (Justin, 25 October 2026,
+   * from an iPhone reading "Previ..." over "OLIVIA RODRI..."). The word and
+   * the name are drawn smaller rather than cut, by one rule at both ends.
+   */
+  test('Previous, Next and the names under them are drawn smaller rather than cut, by one rule at both ends', async () => {
+    const { fitLine, LINE_ROOM, STEP_LINE_LEAST, STEP_WORD_LEAST, STEP_LINE_EDGE } = await import('../shared/line-fit.mjs')
+    /* The rule: as it was when it fits or is not measured yet; just as much smaller as it needs, by half points; cut only past the floor. */
+    assert.deepEqual(fitLine({ natural: 60, room: 100, size: 15, least: 11 }), { size: 15, fits: true })
+    assert.deepEqual(fitLine({ natural: 0, room: 100, size: 15, least: 11 }), { size: 15, fits: true }, 'a word not measured yet is changed on a guess')
+    assert.deepEqual(fitLine({ natural: 60, room: 0, size: 15, least: 11 }), { size: 15, fits: true }, 'a button not measured yet changes its word on a guess')
+    const shrunk = fitLine({ natural: 80, room: 70, size: 15, least: 11 })
+    assert.ok(shrunk.fits && shrunk.size < 15 && shrunk.size >= 11 && shrunk.size * 2 === Math.round(shrunk.size * 2), `a word a little too wide is ${JSON.stringify(shrunk)}`)
+    assert.ok((80 * shrunk.size) / 15 <= 70 * LINE_ROOM, 'the smaller word is still too wide for its room')
+    assert.deepEqual(fitLine({ natural: 300, room: 70, size: 11, least: 9 }), { size: 9, fits: false }, 'a name too long even at the floor is drawn below the floor, or not cut')
+    assert.equal(STEP_WORD_LEAST, 11)
+    assert.equal(STEP_LINE_LEAST, 9)
+    assert.equal(STEP_LINE_EDGE, 4)
+
+    /* The phone: Previous and Next ask for it, and Press measures both lines and draws them at the fitted sizes. */
+    const stage = read('mobile/src/screens/Stage.js')
+    const press = read('mobile/src/components/Press.js')
+    const foot = stage.slice(stage.indexOf('function PlayFoot('), stage.indexOf('caption="Setlists"'))
+    const next = stage.slice(stage.indexOf('label="Next"'), stage.indexOf('onPress={() => step(1)}'))
+    assert.match(foot.slice(foot.indexOf('label="Previous"')), /\n\s*fit\n/, 'Previous is still cut rather than fitted')
+    assert.match(next, /\n\s*fit\n/, 'Next is still cut rather than fitted')
+    assert.match(press, /from '\.\.\/lib\/line-fit'/, 'the phone fits its words by a rule of its own')
+    assert.match(press, /fontSize: word\.size,/, 'the label is not drawn at its fitted size')
+    assert.match(press, /fontSize: line\.size,/, 'the line under is not drawn at its fitted size')
+    assert.match(press, /marginHorizontal: fit \? -reach : 0,/, 'the line under does not reach into the side padding')
+    assert.match(press, /const reach = space\.md - STEP_LINE_EDGE/, 'the line under does not stop 4 from the edge')
+    assert.match(press, /accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style=\{MEASURE\}/, 'the unseen copy that is measured can be read out by a screen reader')
+    assert.match(press, /const MEASURE = \{ position: 'absolute'[^}]*height: 0, overflow: 'hidden', opacity: 0/, 'the copy that is measured can be seen')
+    /* The word goes without its chevron before it is cut, and the row keeps its height so the two words stay level. */
+    assert.match(press, /\{icon && !bare \? <Picture/, 'Previous is cut on a narrow phone rather than drawn without its chevron')
+    assert.match(press, /minHeight: fit \? PICTURE : undefined/, 'a Previous without its chevron sits lower than Next')
+
+    /* The browser: both lines measured and drawn by the same rule and floor. */
+    const gig = read('src/components/Gig.jsx')
+    const fit = read('src/lib/lineFit.js')
+    assert.match(fit, /import \{ STEP_LINE_LEAST, fitLine \} from '\.\.\/\.\.\/shared\/line-fit\.mjs'/, 'the browser fits its names by a rule of its own')
+    assert.match(gig, /const behindSize = useStepLineSize\(behindLine, behind\.shown\)/)
+    assert.match(gig, /const aheadSize = useStepLineSize\(aheadLine, ahead\.shown\)/)
+    assert.match(gig, /ref=\{behindLine\} style=\{behindSize \? \{ fontSize: behindSize \} : undefined\}/, 'the name under Previous is not drawn at its fitted size')
+    assert.match(gig, /ref=\{aheadLine\} style=\{aheadSize \? \{ fontSize: aheadSize \} : undefined\}/, 'the name under Next is not drawn at its fitted size')
+  })
+
+  /*
    * "Where it says chain above the pedals, also put hold to switch channels.
    * So users know that they can just hold the things to switch between
    * channels, A B C and D."

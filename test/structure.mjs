@@ -3784,11 +3784,11 @@ export function run(test) {
     assert.match(previous, /‹ Previous/)
     assert.match(next, /Next ›/)
     for (const b of [previous, next]) assert.match(b, /className="gig-nav-step"/, 'a step button has no room kept for the line')
-    assert.match(previous, /<span className="gig-nav-ahead" aria-hidden="true">\s*\{behind\.shown\}\s*<\/span>/, 'Previous has no line under it, so it and Next do not sit level')
+    assert.match(previous, /<span className="gig-nav-ahead" aria-hidden="true"[^>]*>\s*\{behind\.shown\}\s*<\/span>/, 'Previous has no line under it, so it and Next do not sit level')
     assert.match(previous, /aria-label=\{behind\.said\}/, 'a screen reader is not told where Previous goes')
     assert.match(previous, /disabled=\{working \|\| \(landing\(-1\) === null && !\(noSlotSteps && !order\)\)\}/)
     assert.match(previous, /onClick=\{\(\) => step\(-1\)\}/)
-    assert.match(next, /<span className="gig-nav-ahead" aria-hidden="true">\s*\{ahead\.shown\}\s*<\/span>/, 'Next has no line under it, or it is drawn only once there are words')
+    assert.match(next, /<span className="gig-nav-ahead" aria-hidden="true"[^>]*>\s*\{ahead\.shown\}\s*<\/span>/, 'Next has no line under it, or it is drawn only once there are words')
     assert.match(next, /aria-label=\{ahead\.said\}/, 'a screen reader is not told where Next goes')
     /* Greyed by where it lands, except on a real VP4 with no setlist, whose press stays live to say why (the nav test above). */
     assert.match(next, /disabled=\{working \|\| \(landing\(1\) === null && !\(noSlotSteps && !order\)\)\}/)
@@ -3808,7 +3808,10 @@ export function run(test) {
     assert.match(step, /padding: var\(--s-2\) var\(--s-4\);/)
     /* The line counts for nothing when the columns are shared out, then fills its button: a long name cannot widen Next. */
     assert.match(line, /\n\s*width: 0;/, 'a long name widens Next and squeezes the Setlists button')
-    assert.match(line, /\n\s*min-width: 100%;/, 'the line under Next is no wider than nothing, so the name is never shown')
+    assert.match(line, /\n\s*min-width: calc\(100% \+ 2 \* var\(--ahead-reach, 0px\)\);/, 'the line under Next is no wider than nothing, so the name is never shown, or it does not reach into the padding')
+    assert.match(line, /\n\s*margin-inline: calc\(-1 \* var\(--ahead-reach, 0px\)\);/, 'the line under Next does not reach into the side padding')
+    /* To 4px from each edge, at both sizes: the padding less the reach. */
+    assert.match(step, /--ahead-reach: calc\(var\(--s-4\) - var\(--s-1\)\);/, 'the line under Next does not stop 4px from the edge')
     /* And the buttons keep their own smallest width, so they sit where they always did (min-width: 0 moved all three 3px at 320 wide). */
     assert.ok(!/min-width/.test(step), 'the step buttons can shrink past their own words, which moves every button in the row')
     for (const rule of [/display: block;/, /\n\s*height: var\(--s-4\);/, /line-height: var\(--s-4\);/, /white-space: nowrap;/, /overflow: hidden;/, /text-overflow: ellipsis;/]) {
@@ -3819,6 +3822,7 @@ export function run(test) {
     const compactStep = block('.gig[data-compact] .gig-nav button.gig-nav-step')
     assert.match(compact, /padding: var\(--s-2\);/)
     assert.match(compactStep, /padding: var\(--s-1\) var\(--s-2\);/)
+    assert.match(compactStep, /--ahead-reach: calc\(var\(--s-2\) - var\(--s-1\)\);/, 'at the compact size the line under Next does not stop 4px from the edge')
     const floor = Number(compact.match(/min-height: (\d+)px/)[1])
     const labelLine = Math.ceil(token('f-3') * 1.25)
     const before = 2 * token('s-2') + labelLine + 2
