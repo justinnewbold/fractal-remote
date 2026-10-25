@@ -73,6 +73,8 @@ export const FILES = [
   { source: '../shared/tile-corners.mjs', target: '../mobile/src/lib/tile-corners.js' },
   /* How big a scene's name is drawn in its tile, so the same name in the same room is the same size at both ends. */
   { source: '../shared/name-fit.mjs', target: '../mobile/src/lib/name-fit.js' },
+  /* How small Previous, Next and the names under them may be drawn before they are cut, so both ends fit the same words the same way. */
+  { source: '../shared/line-fit.mjs', target: '../mobile/src/lib/line-fit.js' },
   /* "Swipe left to remove a song": the words, and where a swipe lands. */
   { source: '../shared/swipe-hint.mjs', target: '../mobile/src/lib/swipe-hint.js' },
   /* More than one row: the joins between them, and the writes that add or take away a parallel path. */

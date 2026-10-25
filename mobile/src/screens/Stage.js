@@ -1767,6 +1767,9 @@ function PlayFoot({
           flip
           /* What Previous will load, on a line as tall as Next's, so the two words sit level. */
           under={behind.shown}
+          /* The word and the name drawn smaller rather than cut: "Previ..." over "OLIVIA RODRI..." on a third of an iPhone (Press `fit`), at one size with Next's. */
+          fit
+          fitWith={STEP_BESIDE_PREVIOUS}
           accessibilityLabel={behind.said}
           height={foot}
           disabled={landing(-1) === null && !(noSlotSteps && !order)}
@@ -1789,6 +1792,8 @@ function PlayFoot({
           label="Next"
           after={chevronIcon}
           under={ahead.shown}
+          fit
+          fitWith={STEP_BESIDE_NEXT}
           accessibilityLabel={ahead.said}
           height={foot}
           disabled={landing(1) === null && !(noSlotSteps && !order)}
@@ -1867,6 +1872,9 @@ function PlayFoot({
 
 /* The spread layout's one row of buttons, in two halves with the gap between them in the middle. */
 const FOOT_ONE_ROW = { flexDirection: 'row', gap: space.sm }
+/* Previous and Next drawn at one size (Press `fitWith`): each names the other. */
+const STEP_BESIDE_PREVIOUS = ['Next']
+const STEP_BESIDE_NEXT = ['Previous']
 const FOOT_HALF = { flex: 1, flexDirection: 'row', gap: space.sm }
 
 /**

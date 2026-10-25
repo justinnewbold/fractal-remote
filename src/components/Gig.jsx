@@ -45,6 +45,7 @@ import { blockColor } from '../lib/blockColors'
 import { blockIcon } from '../lib/blockIcons'
 import { sceneColor } from '../lib/sceneColors'
 import { useSceneNameSizes } from '../lib/sceneNameFit'
+import { useStepLineSize } from '../lib/lineFit'
 import { useLooks } from '../lib/useLooks'
 import { offMode } from '../lib/looks'
 import { presetTag } from '../lib/colourPage'
@@ -684,6 +685,12 @@ export default function Gig({
    * (lib/setlists previousWords), asked about `lastAt` and nothing else.
    */
   const behind = previousWords({ order, current: preset?.number, previous: lastAt, nameOf: (n) => slotNames.get(n) })
+
+  /* Each name drawn smaller rather than cut where its button is too narrow for it (lib/lineFit, shared/line-fit.mjs). */
+  const behindLine = useRef(null)
+  const aheadLine = useRef(null)
+  const behindSize = useStepLineSize(behindLine, behind.shown)
+  const aheadSize = useStepLineSize(aheadLine, ahead.shown)
 
   /*
    * NOR LATE. A link that was away while the preset loaded held its reads,
@@ -1348,7 +1355,7 @@ export default function Gig({
         <button className="gig-nav-step" onClick={() => step(-1)} disabled={working || (landing(-1) === null && !(noSlotSteps && !order))} aria-label={behind.said}>
           ‹ Previous
           {/* What Previous will load, as tall as Next's line so the two words sit level. Always drawn, blank until a name is known. */}
-          <span className="gig-nav-ahead" aria-hidden="true">
+          <span className="gig-nav-ahead" aria-hidden="true" ref={behindLine} style={behindSize ? { fontSize: behindSize } : undefined}>
             {behind.shown}
           </span>
         </button>
@@ -1370,7 +1377,7 @@ export default function Gig({
         <button className="gig-nav-step" onClick={() => step(1)} disabled={working || (landing(1) === null && !(noSlotSteps && !order))} aria-label={ahead.said}>
           Next ›
           {/* What Next will load. Always drawn, blank until a name is known, so nothing moves when one arrives. */}
-          <span className="gig-nav-ahead" aria-hidden="true">
+          <span className="gig-nav-ahead" aria-hidden="true" ref={aheadLine} style={aheadSize ? { fontSize: aheadSize } : undefined}>
             {ahead.shown}
           </span>
         </button>
