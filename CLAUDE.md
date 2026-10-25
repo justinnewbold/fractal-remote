@@ -123,6 +123,15 @@ So once he says yes to a build, run mobile.yml with platform `all`
 (production, submit), so iOS goes to TestFlight and Android to Google Play's
 production track in the same run. The yes still has to come first.
 
+Except 1.89.0, the build pair that opens Bluetooth (beta) to customers: run
+it with platform `all`, profile `production` and the Send box UNTICKED. Once
+expo.dev shows the iOS build finished, send the iPhone with a second run:
+platform `ios`, Skip building ticked (the Submit only box; never `all` or
+`android`, which would send Android to Google's review just the same).
+Android is uploaded by hand in Play Console after Managed publishing is on
+and its release notes and App access note are in. docs/app-store.md,
+"Submission day for 1.89.0", steps 3, 7, 9 and 14, says it in order.
+
 > "I don't do any close testing anymore. Android. It's all production now"
 
 That is from 10 October 2026, and it replaces the Play closed-testing track

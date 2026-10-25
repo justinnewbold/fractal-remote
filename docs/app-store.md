@@ -1738,20 +1738,10 @@ step 7 spends builds, and it waits for his yes, as every build does.
    version 1.89.0, `BLUETOOTH_FROM_STORE` set to '1.89.0' on both phones,
    docs/pending/watch-fill.patch applied. Its phones' fingerprint says
    Unchanged, so it waits for the yes like a build and is never merged on
-   green alone. **And CLAUDE.md's build rule, before the build is started:**
-   it still says to run every build with platform `all` and the Send box
-   ticked, and a session that reads only CLAUDE.md would send Android to
-   Google's review with nothing in. With Justin's okay (it is his
-   instructions file), this goes at the end of its paragraph that starts "So
-   once he says yes to a build": *Except 1.89.0, the build pair that opens
-   Bluetooth (beta) to customers: run it with platform `all`, profile
-   `production` and the Send box UNTICKED. Once expo.dev shows the iOS build
-   finished, send the iPhone with a second run: platform `ios`, Skip
-   building ticked (the Submit only box; never `all` or `android`, which
-   would send Android to Google's review just the same). Android is uploaded
-   by hand in Play Console after Managed publishing is on and its release
-   notes and App access note are in. docs/app-store.md, Submission day for
-   1.89.0, steps 3, 7, 9 and 14.*
+   green alone. CLAUDE.md's build rule already says 1.89.0 is built with
+   the Send box unticked and the iPhone sent by a second run (25 October
+   2026), so a session that reads only CLAUDE.md does not send Android to
+   Google's review with nothing in.
 7. **GitHub: mobile.yml, run 1, the build pair.** Actions → mobile → Run
    workflow, from main:
    - Which platform to build: **all**
