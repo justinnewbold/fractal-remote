@@ -37,17 +37,23 @@
 #      that is not there, or a clean list means nothing.
 #   4. What Play's edge-to-edge notice will list for this build, and
 #      Material Components gone when Expo's error screen is.
-#   5. The app on a phone emulator held sideways: it stays upright, past the
-#      "An independent app" card and into the demo, a minute left running
-#      and the log read for the crashes R8 causes and for anything missing
-#      by name. Then the check is tried on itself: the app is crashed on
-#      purpose and an R8 failure and a missing picture written to the log,
-#      and all three must be seen.
+#   5. The app on a phone emulator held sideways, the hold read back before
+#      every look: it stays upright, past the "An independent app" card and
+#      into the demo, a minute left running and the log read for the crashes
+#      R8 causes and for any missing resource a library reports (a picture
+#      React Native cannot find is drawn as nothing without a word, so step 3
+#      is the one that counts for pictures). Then the check is tried on
+#      itself: the app is crashed on purpose and an R8 failure and a missing
+#      resource under a library's stack written to the log, and all three
+#      must be seen.
 #   6. The same app on an Android 15 tablet, held sideways and then turned
 #      upright and back: with the tablet change in, it fills the screen every
 #      way up. Android 15 is the last Android that keeps the upright lock on a
 #      tablet; Android 16 ignores it on a screen whose short side is 600
-#      points or more, which is why this is not run on 16.
+#      points or more, which is why this is not run on 16. The emulator is
+#      told to show an upright app as a strip, as a real Android 12 to 15
+#      tablet does; left alone, its image turns the whole screen for the app,
+#      and every look would pass.
 #
 # What a minute cannot reach (buying, restoring, an over-the-air update
 # arriving, Bluetooth, sound) is read rather than run: see the r8.patch notes
@@ -421,9 +427,9 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       # Held sideways, past the startup card and into the demo, left a minute,
-      # and the log read for what R8 breaks and for anything missing by name.
-      # A phone stays upright whatever the tablet change does. Then the check
-      # is tried on itself (see android-smoke.sh).
+      # and the log read for what R8 breaks and for any missing resource a
+      # library reports. A phone stays upright whatever the tablet change does.
+      # Then the check is tried on itself (see android-smoke.sh).
       - name: Start it on a phone held sideways
         id: phone
         uses: reactivecircus/android-emulator-runner@v2
@@ -439,9 +445,11 @@ jobs:
       # Android 15, the last Android that keeps the upright lock on a tablet,
       # so this is where the tablet change shows. The Pixel Tablet is sideways
       # by nature (its natural way up is landscape), so sideways here is the
-      # way it starts, and upright is the quarter turn. With tablet-turns in,
-      # the app must fill the screen both ways; without it, the pictures show
-      # the upright strip a 1.88.0 tablet shows.
+      # way it starts, and upright is the quarter turn. The script first tells
+      # it to show an upright app as a strip, as a real Android 12 to 15 tablet
+      # does (this image would turn its whole screen instead). With
+      # tablet-turns in, the app must fill the screen both ways; without it,
+      # the pictures show the upright strip a 1.88.0 tablet shows.
       - name: And on an Android 15 tablet, sideways and upright
         uses: reactivecircus/android-emulator-runner@v2
         with:

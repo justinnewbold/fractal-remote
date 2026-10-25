@@ -66,7 +66,13 @@ deleting its file and its row. What goes with all three that is not in them:
   request) on, an update made on main is made for 1.89.0's fingerprint.
   Android phones on Google Play's 1.88.0 (version code 12) keep the last
   update made before that merge until they install 1.89.0 from Google Play,
-  and so do iPhones on TestFlight's 1.88.3 (build 29), except with
+  and that is longer than the build. All of them wait through Google's
+  review and then Apple's (docs/app-store.md, *Submission day for 1.89.0*,
+  step 15). Four in five then wait three quiet days or more at 20% (steps
+  14 and 17). If the rollout is halted (*After it is out*, item 2), they get
+  no fix by update until another build reaches them, where without these
+  patches a halted 1.88.0 still takes updates. iPhones on TestFlight's
+  1.88.3 (build 29) wait too, until build 30 is on TestFlight, except with
   logbox-android.patch alone, which moves Android only. Everything merged
   before that day still reaches them. iPhones on the App Store's 1.87.11
   lose nothing: they are held on update 1.87.60 until 1.89.0 anyway.
@@ -74,31 +80,41 @@ deleting its file and its row. What goes with all three that is not in them:
   applied**, because it is no longer so: CLAUDE.md, the paragraph "And say
   so BEFORE a change that would need a build instead of an update" (and the
   same words under "Merge it yourself" and "THAT PULL REQUEST NEEDS JUSTIN'S
-  YES"); docs/expo-builds.md, the paragraph on the build pull request ("its
-  phones' fingerprint says Unchanged"); docs/app-store.md, *Submission day
-  for 1.89.0*, step 6; and the watch-fill row above ("every update keeps
-  reaching every phone, before and after the build"). The build pull request
-  waits for Justin's yes either way; with these in, its fingerprint says it
-  is a build too.
-- **Google Play's What's New** gets one line for the three: "On Android
-  tablets and foldables, the app now turns sideways." Nothing goes in
+  YES"), and its "It is switched on for customers", whose copies on the
+  current runtime (TestFlight 1.88.3 and Play 1.88.0) no update after that
+  merge reaches; docs/expo-builds.md, the paragraph on the build pull
+  request ("its phones' fingerprint says Unchanged"); docs/app-store.md,
+  *Submission day for 1.89.0*, step 6, and the *After it is out* table's
+  "Android halted | Nothing" row (halted, 1.88.0 no longer takes updates);
+  mobile/src/lib/ble-rule.js, the comment's paragraphs WHY THE STORE
+  VERSION ("moves the watch's line alone, so the phones' fingerprints stay
+  where they are") and AND THAT PULL REQUEST WAITS FOR JUSTIN'S YES ("Its
+  phones' fingerprint says Unchanged"); and the watch-fill row above
+  ("every update keeps reaching every phone, before and after the build").
+  The build pull request waits for Justin's yes either way; with these in,
+  its fingerprint says it is a build too.
+- **Google Play's release notes** (docs/app-store.md, *Google Play release
+  notes, 1.89.0*, at 438 of Play's 500 characters) get one bullet for the
+  three, last: "• Android tablets and foldables now turn sideways." That
+  makes 489, and the count over the block changes with it. Nothing goes in
   Apple's notes, because the iPhone app comes out the same.
 
-**tablet-turns.patch, and why it waits.** Play's "Remove resizing and
+**tablet-turns.patch, and why it waits.** Play's "Remove resizability and
 orientation restrictions in your app to support large screen devices" quotes
 one line of 1.88.0's manifest: MainActivity locked upright
 (`android:screenOrientation="1"`), which app.json's "orientation": "portrait"
-puts there. On an Android tablet, foldable or Chromebook older than Android
-16, the app held sideways is an upright strip with black bars at its sides.
-Android 16 and newer already ignore the lock on a big screen, and iPads
-already turn every way. The patch takes the lock out of the Android manifest
-and holds the app upright from MainActivity when the screen is a phone's: a
-short side under 600 points, the app's own TABLET_SIDE (shared/device-word.mjs),
-so the device the app calls a tablet is the device that turns. It is
-measured on the whole screen, never the window, so a tablet with the app
-beside another one is still a tablet, and asked again at every fold and
-unfold. The plugin's comment says why the screen and not the window, and why
-the lock leaves the manifest rather than being lifted once the app starts.
+puts there. On an Android tablet, foldable or Chromebook on Android 12 to 15,
+the app held sideways is an upright strip with black bars at its sides; a
+tablet on 7 to 11 turns its whole screen upright instead. Android 16 and newer
+already ignore the lock on a big screen, and iPads already turn every way. The
+patch takes the lock out of the Android manifest and holds the app upright
+from MainActivity when the screen is a phone's: a short side under 600 points,
+the app's own TABLET_SIDE (shared/device-word.mjs), so the device the app
+calls a tablet is the device that turns. It is measured on the whole screen,
+never the window, so a tablet with the app beside another one is still a
+tablet, and asked again at every fold and unfold. The plugin's comment says
+why the screen and not the window, and why the lock leaves the manifest rather
+than being lifted once the app starts.
 
 Sideways, Play shapes itself by its own width, as it already does on an iPad
 and an Android 16 tablet (mobile/src/lib/playShape.js: whole names and fixed
@@ -122,25 +138,29 @@ upright on an iPhone, all four ways on an iPad) are the same as main's, and
 both platforms bundle. What only a run shows is android-minified's, on this
 patch's pull request: a phone emulator held sideways keeps the app upright,
 and an Android 15 tablet shows it filling the screen sideways, upright, and
-sideways again.
+sideways again. Each look reads the hold back first, and the tablet is told
+first to show an upright app as a strip, as a real Android 12 to 15 tablet
+does: its emulator image would otherwise turn the whole screen for the app,
+and a turned screen the app fills passes whatever the patch does.
 
 **logbox-android.patch, and why it waits.** Play's "Your app uses deprecated
-APIs or parameters for edge-to-edge" reads every line of the app's code,
-code that never runs included. In 1.88.0 it finds six places, none of them
-the app's own: React Native's WindowUtil (enableEdgeToEdge, and its old
+APIs or parameters for edge-to-edge" reads, by other apps' reports, every line
+of the app's code, code that never runs included. Read the same way, 1.88.0's
+code has six such places, none of them the app's own (a forecast: Play
+Console's own list for 1.88.0 has not been seen here, and is what to check
+this against): React Native's WindowUtil (enableEdgeToEdge, and its old
 statusBarHide and statusBarShow), React Native's StatusBarModule, AndroidX's
 splash screen 1.2.0, Material Components 1.13.0 (MaterialDatePicker), and
-expo-image-picker's crop screen. The app already draws edge to edge
-correctly (target 36 forces it, and App.js keeps clear of all four edges),
-and nothing clears the notice today: React Native 0.88 still makes most of
-those calls, and the splash library has no newer version. Material is the
-one the app can take out. It is in the Android app only because Expo's
-developer error screen, @expo/log-box 57.0.4, asks for it (its
-android/build.gradle). This leaves log-box out of Android's autolinking
-(`expo.autolinking.android.exclude` in mobile/package.json, which
-expo-modules-autolinking 57.0.16 reads for Android alone), and Material goes
-with it, from Play's list and from the download. The notice stays, for the
-other five.
+expo-image-picker's crop screen. The app already draws edge to edge correctly
+(target 36 forces it, and App.js keeps clear of all four edges), and nothing
+clears the notice today: React Native 0.88 still makes most of those calls,
+and the splash library has no newer version. Material is the one the app can
+take out. It is in the Android app only because Expo's developer error screen,
+@expo/log-box 57.0.4, asks for it (its android/build.gradle). This leaves
+log-box out of Android's autolinking (`expo.autolinking.android.exclude` in
+mobile/package.json, which expo-modules-autolinking 57.0.16 reads for Android
+alone), and Material goes with it, from Play's list and from the download. The
+notice stays, for the other five.
 
 What a store build loses: nothing. log-box's one Android class,
 ExpoLogBoxPackage, gives React Native nothing unless the build is a debug
@@ -152,41 +172,43 @@ iPhone keeps log-box, so its fingerprint stays where it is.
 
 What was checked for free, 25 October 2026: Android's autolinking finds 24
 modules with the patch and 25 on main, log-box the only one gone, and the
-iPhone's still 28, log-box among them. expo-doctor passes (20 of 20), and
-both platforms bundle. Nothing else among the app's Android libraries asks
-for Material: not their build files and code under mobile/node_modules, nor
-the published dependency lists of the image cropper
+iPhone's still 28, log-box among them. expo-doctor passes (20 of 20), and both
+platforms bundle. Nothing else among the app's Android libraries asks for
+Material: not their build files and code under mobile/node_modules, nor the
+published dependency lists of the image cropper
 (com.vanniktech:android-image-cropper 4.7.0), RevenueCat (purchases 10.21.1
 and purchases-hybrid-common 19.0.0) and React Native's own Android library;
-the app's theme is AppCompat's. android-minified, on its pull request,
-builds it, fails if a Material class is left in the built app, and lists
-what Play's edge-to-edge notice will find, to read beside 1.88.0's six
-above. Its test is in test/mobile.mjs: package.json takes no comment, so
+the app's theme is AppCompat's. android-minified, on its pull request, builds
+it, fails if a Material class is left in the built app, and lists what Play's
+edge-to-edge notice will find, to read beside the six above and Play Console's
+own list. Its test is in test/mobile.mjs: package.json takes no comment, so
 the reason lives there and here.
 
-**shrink-resources.patch, and why it waits.** 1.88.0 already has R8 fully
-on: about 83% on each of Play's three measures (Play's line is 25%), and its
-code 9.0 MB, under Play's 10 MB line. Since September 2026 Play's R8 card
-asks for two things more: optimized resource shrinking, which this turns on,
-and an Android Gradle plugin of 9.0 or newer, which only Expo SDK 58 brings
-(its React Native, 0.88, uses 9.2.1), a bigger upgrade for a build pair of
-its own. `enableShrinkResourcesInReleaseBuilds` in mobile/app.json turns
-resource shrinking on, and mobile/plugins/withR8Optimize.js writes
+**shrink-resources.patch, and why it waits.** 1.88.0 already has R8 fully on:
+about 83% on each of Play's three measures (Play's line is 25%), and its code
+9.0 MB, under Play's 10 MB line. Since September 2026 Play's R8 card has asked
+other apps for two things more (quoted from another app's console,
+github.com/Selftend/selftend/issues/2335, 11 September 2026; if Justin's card
+says something different, this patch's reason changes): optimized resource
+shrinking, which this turns on, and an Android Gradle plugin of 9.0 or newer,
+which only Expo SDK 58 brings (its React Native, 0.88, uses 9.2.1), a bigger
+upgrade for a build pair of its own. `enableShrinkResourcesInReleaseBuilds` in
+mobile/app.json turns resource shrinking on, and
+mobile/plugins/withR8Optimize.js writes
 `android.r8.optimizedResourceShrinking=true` into gradle.properties, which
 makes it R8's own: pictures and layouts that only unused library code asked
-for go. The gain is small (all the pictures together are 0.58 MB of a
-download of about 14 MB), and it takes one line off Play's card.
+for go. The gain is small (all the pictures together are 0.58 MB of a download
+of about 14 MB), and it takes one line off Play's card.
 
 What it must not drop is anything looked up by name, which no shrinker can
 see. The app's own pictures and sounds are found by name (by React Native,
-expo-asset, expo-audio, and expo-updates, which copies every one of them at
-the first launch), and Expo's bundling writes a keep list naming every one
-(res/raw/keep.xml: 61 names in 1.88.0's bundle, 59 pictures and 2 sounds).
-Three files Google Play's billing library carries for Google's own services
-to read are named by nothing in the app, so the plugin writes a keep file of
-the app's own for them. Everything else the app needs by name is named in
-its manifest or theme (the launcher icon, the splash picture, the runtime
-version), which counts as used.
+expo-asset, expo-audio and expo-updates), and Expo's bundling writes a keep
+list naming every one (res/raw/keep.xml: 61 names in 1.88.0's bundle, 59
+pictures and 2 sounds). Three files Google Play's billing library carries for
+Google's own services to read are named by nothing in the app, so the plugin
+writes a keep file of the app's own for them. Everything else the app needs by
+name is named in its manifest or theme (the launcher icon, the splash picture,
+the runtime version), which counts as used.
 
 What was checked for free, 25 October 2026: its test runs the plugin against
 stand-ins, and `expo prebuild` in a copy wrote the line into gradle.properties
@@ -199,8 +221,10 @@ nowhere went, even though the code looked up a name made at runtime that
 began the same way. android-minified, on its pull request, builds the real
 app and fails if any name in either keep list is missing from it (tried on
 itself with a name planted to be missing), and reads each emulator's minute
-for anything missing by name, with the demo's Play in the pictures. Drop
-this patch if that run shows a picture gone.
+for crashes and for any missing resource a library reports, with the demo's
+Play in the pictures (a picture React Native cannot find is drawn as
+nothing without a word, so the keep-list check is the one that counts).
+Drop this patch if that run shows a picture gone.
 
 **ble-pair-ios27.patch, and why it waited** (applied for 1.88.3). Justin, 24 October 2026, with a
 TestFlight crash report from 1.88.0 (28) on iOS 27.0.1: "iPhone App crashed

@@ -8,7 +8,8 @@ import chevronIcon from '../../assets/icons/chevron.png'
 import ampIcon from '../../assets/icons/amp.png'
 import laptopIcon from '../../assets/icons/laptop.png'
 import phoneIcon from '../../assets/icons/phone.png'
-import bluetoothIcon from '../../assets/icons/bluetooth.png'
+/* The adapter's picture is a plain aerial, never the Bluetooth symbol (TopBar.js, BluetoothMark, says why). */
+import wirelessIcon from '../../assets/icons/wireless.png'
 
 /*
  * THE CARDS FROM HIS "HERE'S THE APP" MOCKUP, for any screen that wants them.
@@ -89,7 +90,7 @@ export function TipCard({ icon, label, body, warn, onWarn, hint, onPress, right,
   )
 }
 
-const CHAIN_ICONS = { unit: ampIcon, computer: laptopIcon, adapter: bluetoothIcon, phone: phoneIcon }
+const CHAIN_ICONS = { unit: ampIcon, computer: laptopIcon, adapter: wirelessIcon, phone: phoneIcon }
 const LAMP = { good: 'good', busy: 'idle', bad: 'fault', dim: 'idle' }
 
 /**

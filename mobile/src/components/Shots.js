@@ -104,9 +104,14 @@ export default function Shots({ shots = [], onChange, disabled = false, say }) {
               <Image
                 source={{ uri: shot.uri }}
                 accessibilityLabel={`Screenshot ${i + 1}`}
-                /* Opened at the thumbnail's size on Android, not as the whole screenshot of up to 1600
-                   across: thumbSize always gives it a size, so it never waits for one it will not get. */
+                /* Opened at about the thumbnail's size on Android, not as the whole screenshot of up to 1600
+                   across: thumbSize always gives it a size, so it never waits for one it will not get. Android
+                   shrinks a JPEG only in eighths, rounded down, and this box has the picture's own shape, so
+                   asked for the box alone it could come out up to a quarter smaller than it is drawn, and soft.
+                   Asking for half as much again keeps it at or above the drawn size on every screen from 2x to
+                   4x, still a fraction of the whole (a 3:4 photo at 3x opens at 300x400, not 1200x1600). */
                 resizeMethod="resize"
+                resizeMultiplier={1.5}
                 /* The whole picture, in its own shape (shared/report-rules thumbSize), as the browser shows it. */
                 resizeMode="contain"
                 style={{

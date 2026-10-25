@@ -284,15 +284,16 @@ publishing abilities on Play, not be taken down.
 
 - **Code optimization, February 2027.** In since 1.88.0
   (docs/pending/r8.patch, applied for that build pair): R8 is fully on in
-  that build, and its own score sheet says 82.9% obfuscated, 82.6%
-  optimized and 83.0% shrunk, where Play asks for 25%. The code is 9.0 MB,
-  under the 10 MB from which the February rule counts at all. Play's R8
-  card can still show, for two lines of its own: "optimized resource
-  shrinking", which docs/pending/shrink-resources.patch turns on for the
-  next build, and an Android Gradle plugin of 9.0 or newer, which only
-  comes with Expo SDK 58 (its React Native 0.88 uses 9.2.1), a bigger move
-  for a build pair of its own. JavaScript is not what Play scores, so no
-  update can change any of it; only a store build can.
+  that build, and its own score sheet says 82.9% obfuscated, 82.6% optimized
+  and 83.0% shrunk, where Play asks for 25%. The code is 9.0 MB, under the
+  10 MB from which the February rule counts at all. Play's R8 card can still
+  show, for two lines seen on another app's card (Justin's own is what to
+  check): "optimized resource shrinking", which
+  docs/pending/shrink-resources.patch turns on for the next build, and an
+  Android Gradle plugin of 9.0 or newer, which only comes with Expo SDK 58
+  (its React Native 0.88 uses 9.2.1), a bigger move for a build pair of its
+  own. JavaScript is not what Play scores, so no update can change any of
+  it; only a store build can.
 - **Staying signed in on a new Android phone, April 2027** ("Zero-Tap
   Sign-In"). An app with accounts has to put the player back in their
   account by itself when they move to a new phone, through Android's
@@ -316,15 +317,20 @@ publishing abilities on Play, not be taken down.
 - **What android-minified's sideways tablet picture showed.** Less than it
   was taken for. The emulator runs Android 16, which ignores the lock
   anyway (its log says so: "Ignoring manifest-declared fixed orientation
-  … since target sdk 36"). Its quarter turn turned the Pixel Tablet
-  upright, since that tablet is sideways to begin with, and it was back
-  before the picture was taken. And the picture is the "An independent app"
-  card stretched across the screen, because the run never tapped OK. So it
-  had never shown Play or Settings sideways on Android. Since 25 October
-  2026 it holds an Android 15 tablet sideways, upright and back (with
-  tablet-turns.patch in, the app must fill the screen each time), holds a
-  phone sideways (the app must stay upright), and taps past the startup
-  card into the demo's Play. It runs on anything in docs/pending.
+  … since target sdk 36"). Its quarter turn did turn the Pixel Tablet
+  upright, since that tablet is sideways to begin with, but the app was
+  started with monkey, which puts the screen back at its natural way up
+  with auto-rotate on the moment it finishes, so it was back before the
+  picture was taken. And the picture is the "An independent app" card
+  stretched across the screen, because the run never tapped OK. So it had
+  never shown Play or Settings sideways on Android. Since 25 October 2026
+  it holds an Android 15 tablet sideways, upright and back (with
+  tablet-turns.patch in, the app must fill the screen each time), told
+  first to show an upright app as a strip the way a real Android 12 to 15
+  tablet does, which its emulator image would not; holds a phone sideways
+  (the app must stay upright); reads the hold back before every look; and
+  starts the app the way the launcher does and taps past the startup card
+  into the demo's Play. It runs on anything in docs/pending.
 - **Mostly not fixable from here, and nothing due:** Play's "deprecated
   APIs for edge-to-edge" names code inside React Native and Google's own
   libraries (React Native's window code, the splash screen library,
@@ -342,8 +348,9 @@ publishing abilities on Play, not be taken down.
   own pictures, which were made smaller anyway by update on 25 October
   2026, so the suggestion will most likely stay. The rule that binds, from
   February 2027, is picture memory while the app is in the background, over
-  200 MB; every picture built into this app comes to under 5 MB when
-  opened.
+  200 MB; the pictures on the app's own screens come to about 4.5 MB when
+  opened, all of them together, and even a library picture the app never
+  shows (media3's album picture, about 17 MB) leaves it far under that.
 
 ## Waiting on something
 

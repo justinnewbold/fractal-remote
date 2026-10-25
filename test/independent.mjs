@@ -1085,29 +1085,47 @@ export function run(test) {
   })
 
   /*
-   * NOR ANY OTHER COMPANY'S LOGO, since 25 October 2026. The laptop in the
-   * walkthrough had Apple's logo on its screen, and the Connect screen showed
-   * Apple's logo, Microsoft's Windows logo and Linux's penguin under "Mac,
-   * Windows, Linux". Apple's rules for its trademarks say "You may not use the
-   * Apple Logo" without its written license, Microsoft's say the same of
-   * theirs, and the app goes to Apple's review with every store version. The
-   * laptop's screen shows the app's own tile now, and the three computers are
-   * plain drawings (mobile/src/screens/Connect.js says why).
+   * NOR ANY OTHER COMPANY'S LOGO IN THE APP'S OWN DRAWINGS, since 25 October
+   * 2026. The laptop in the walkthrough had Apple's logo on its screen, and
+   * the Connect screen showed Apple's logo, Microsoft's Windows logo and
+   * Linux's penguin under "Mac, Windows, Linux". Apple's rules for its
+   * trademarks say "You may not use the Apple Logo" without its written
+   * license, Microsoft's say the same of theirs, and the app goes to Apple's
+   * review with every store version. The laptop's screen shows the app's own
+   * tile now, and the three computers are plain drawings
+   * (mobile/src/screens/Connect.js says why). The gear cards' photographs and
+   * illustrations are another matter: they show the makers' badges on
+   * purpose, for identification, under the trademark note in
+   * docs/gear-illustrations.md, and this test does not look at them.
+   *
+   * And the Bluetooth symbol, the Runic B, which was the top bar's lamp and
+   * the adapter's picture while the app is on Bluetooth. The Bluetooth
+   * group's brand guide: "Only Members of Bluetooth SIG, Inc. ... are
+   * licensed to use the Bluetooth word mark, figure mark, and combination
+   * mark", and of the Runic B on its own, "Use of the Runic B standing alone
+   * may not be used in any other circumstance." The app's maker is not a
+   * member, and from the store version that opens Bluetooth to customers
+   * every customer and Apple's reviewer would see it. It is a plain aerial
+   * now (icons/wireless.png, TopBar.js says why); the word Bluetooth, said
+   * in words, stays.
    *
    * Pixels cannot be read for a logo here, so what is held is what can drift
-   * back: the three old files, anything asking for them, and the drawings
-   * that took their place.
+   * back: the old files, anything asking for them, and the drawings that
+   * took their place.
    */
-  test('no other company’s logo either: the laptop shows the app, and the computers are plain drawings', () => {
-    for (const f of ['mobile/assets/icons/apple.png', 'mobile/assets/icons/windows.png', 'mobile/assets/icons/linux.png']) {
+  test('no other company’s logo in the app’s own drawings either (gear photographs aside): the laptop shows the app, the computers are plain drawings, and Bluetooth is an aerial', () => {
+    for (const f of ['mobile/assets/icons/apple.png', 'mobile/assets/icons/windows.png', 'mobile/assets/icons/linux.png', 'mobile/assets/icons/bluetooth.png']) {
       assert.ok(!existsSync(join(root, f)), `${f} is back`)
     }
     for (const f of shippedFiles()) {
       const text = readFileSync(f, 'utf8')
-      for (const name of ['icons/apple', 'icons/windows', 'icons/linux', 'appleIcon', 'windowsIcon', 'linuxIcon']) {
+      for (const name of ['icons/apple', 'icons/windows', 'icons/linux', 'icons/bluetooth', 'appleIcon', 'windowsIcon', 'linuxIcon', 'bluetoothIcon']) {
         assert.ok(!text.includes(name), `${rel(f)} still asks for ${name}`)
       }
     }
+    /* Over Bluetooth, the top bar's lamp and the adapter's card are the aerial. */
+    assert.match(read('mobile/src/components/TopBar.js'), /import wirelessIcon from '\.\.\/\.\.\/assets\/icons\/wireless\.png'/, 'the top bar’s Bluetooth lamp is not the plain aerial')
+    assert.match(read('mobile/src/components/Walk.js'), /adapter: wirelessIcon,/, 'the Bluetooth adapter’s card is not the plain aerial')
     /* Mac, Windows, Linux: a laptop, a screen on a stand, a command prompt, in that order, at both ends. */
     const phone = read('mobile/src/screens/Connect.js')
     assert.match(phone, /import desktopIcon from '\.\.\/\.\.\/assets\/icons\/desktop\.png'/)

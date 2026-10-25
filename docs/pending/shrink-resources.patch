@@ -11,19 +11,22 @@ index 307f041..3cf172a 100644
            },
            "ios": {
 diff --git a/mobile/plugins/withR8Optimize.js b/mobile/plugins/withR8Optimize.js
-index 54b61f9..301ee94 100644
+index 54b61f9..50ef6da 100644
 --- a/mobile/plugins/withR8Optimize.js
 +++ b/mobile/plugins/withR8Optimize.js
-@@ -16,14 +16,56 @@
+@@ -16,14 +16,59 @@
   * It refuses rather than guesses: a template that names neither file has
   * changed shape, and a build that quietly kept -dontoptimize would fail Play's
   * check months later, after a build slot was spent on it.
 + *
 + * AND R8's RESOURCE SHRINKING. 1.88.0 scores about 83% on all three, and
-+ * since September 2026 Play's R8 card asks for two things more: optimized
-+ * resource shrinking, and an Android Gradle plugin of 9.0 or newer, which
-+ * only Expo SDK 58 brings. Justin: "R8 and the image fix are quick wins at
-+ * build time." expo-build-properties' enableShrinkResourcesInReleaseBuilds
++ * since September 2026 Play's R8 card has asked other apps for two things
++ * more (github.com/Selftend/selftend/issues/2335, quoting its own console;
++ * if Justin's card says something different, this part's reason changes):
++ * optimized resource shrinking, and an Android Gradle plugin of 9.0 or
++ * newer, which only Expo SDK 58 brings. Justin: "R8 and the image fix are
++ * quick wins at build time." expo-build-properties'
++ * enableShrinkResourcesInReleaseBuilds
 + * (app.json) turns resource shrinking on, and android.r8.optimizedResourceShrinking
 + * makes it R8's own, which reads pictures and layouts as part of the code
 + * and drops the ones only unused code asked for. On the Android Gradle
@@ -73,7 +76,7 @@ index 54b61f9..301ee94 100644
      const gradle = c.modResults.contents
      if (gradle.includes(OPTIMIZE)) return c
      if (!gradle.includes(PLAIN)) {
-@@ -32,4 +74,22 @@ module.exports = function withR8Optimize(config) {
+@@ -32,4 +77,22 @@ module.exports = function withR8Optimize(config) {
      c.modResults.contents = gradle.replace(PLAIN, OPTIMIZE)
      return c
    })
@@ -97,7 +100,7 @@ index 54b61f9..301ee94 100644
 +  ])
  }
 diff --git a/test/mobile.mjs b/test/mobile.mjs
-index ec11568..a941a2d 100644
+index ec11568..4183df6 100644
 --- a/test/mobile.mjs
 +++ b/test/mobile.mjs
 @@ -682,6 +682,88 @@ export function run(test) {
@@ -106,9 +109,9 @@ index ec11568..a941a2d 100644
  
 +  test('R8 shrinks the Android app’s pictures and layouts too, and keeps every one that is looked up by name', async () => {
 +    /*
-+     * Since September 2026 Play's R8 card asks for optimized resource
-+     * shrinking as well as R8 itself (Justin: "R8 and the image fix are
-+     * quick wins at build time"). expo-build-properties'
++     * Since September 2026 Play's R8 card has asked other apps for
++     * optimized resource shrinking as well as R8 itself (Justin: "R8 and
++     * the image fix are quick wins at build time"). expo-build-properties'
 +     * enableShrinkResourcesInReleaseBuilds turns it on, and needs R8 on to
 +     * run at all; mobile/plugins/withR8Optimize.js makes it R8's own
 +     * (android.r8.optimizedResourceShrinking) and writes a keep file for the

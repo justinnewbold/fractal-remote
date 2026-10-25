@@ -901,9 +901,12 @@ const Footnote = ({ question, links }) => (
  * sharpest, against an iPhone's 3), and the browser draws the same files
  * (src/components/PhoneWalkthrough.jsx). So the phone is 142×225: 56 points
  * tall at 4x is 224, and it was 360×570, decoded at more than six times the
- * pixels it was shown with. The laptop is 396×240, from the browser's
- * computer card, which draws it 132×80 on a screen of up to 3x; 92 points
- * at 4x here is 368. test/independent.mjs holds both to at least that.
+ * pixels it was shown with. The laptop is 396×240 because the browser's
+ * computer card draws it 132×80 on a screen of up to 3x (92 points at 4x
+ * here is 368). There was never a bigger picture than the old 360×218, so it
+ * was stretched to that size when the logo came off: it meets the size the
+ * test asks for, but it is no sharper than it was. test/independent.mjs
+ * holds both to at least that.
  */
 const PIECES = { unit: unitPlain, computer: pieceComputer, phone: piecePhone }
 

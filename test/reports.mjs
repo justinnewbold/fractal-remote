@@ -1312,6 +1312,22 @@ export function run(test) {
        review asked for pictures opened at the size they are shown). thumbSize always gives the box a
        size, which a resized picture needs before it opens at all. */
     assert.match(phone, /source=\{\{ uri: shot\.uri \}\} accessibilityLabel=\{`Screenshot \$\{i \+ 1\}`\} \/\*[^*]*\*\/ resizeMethod="resize"/, 'a thumbnail opens the whole screenshot on Android again')
+    /* Half as much again as the box: Android shrinks a JPEG in eighths, rounded down, and a box in the
+       picture's own shape alone would open up to a quarter smaller than it is drawn. With 1.5, every
+       shape thumbSize gives, on every screen from 2x to 4x, opens at or above the size it is drawn. */
+    assert.match(phone, /resizeMethod="resize" resizeMultiplier=\{1\.5\} \/\*/, 'a thumbnail opens smaller than it is drawn on Android, and goes soft')
+    const { thumbSize } = await import('../shared/report-rules.mjs')
+    const eighths = (r) => Math.min(8, Math.max(1, Math.floor(2 / 3 + 8 * r)))
+    for (const [w, h] of [[1200, 1600], [1600, 1200], [1600, 900], [1600, 1000], [1600, 1067], [720, 1600], [1200, 1200]]) {
+      const box = thumbSize(w, h, 64)
+      for (const density of [2, 2.625, 2.75, 3, 3.5, 4]) {
+        const [bw, bh] = [Math.round(box.width * density), Math.round(box.height * density)]
+        const r = Math.max(Math.round(bw * 1.5) / w, Math.round(bh * 1.5) / h)
+        const n = r >= 1 ? 8 : eighths(r)
+        const scale = Math.min(bw / Math.ceil((w * n) / 8), bh / Math.ceil((h * n) / 8))
+        assert.ok(scale <= 1.001, `a ${w}×${h} screenshot at ${density}x is drawn ${scale.toFixed(2)} times the size it was opened at`)
+      }
+    }
   })
 
   test('the privacy page says where every copy of a report goes, and for how long', async () => {

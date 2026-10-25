@@ -6909,21 +6909,25 @@ export function run(test) {
     assert.ok(wake > 0 && wake < link.indexOf('await refreshAll()', wake), 'the rig asks its questions before the link is woken')
   })
 
-  test('over Bluetooth the bar is blue and its lamp is the Bluetooth mark', async () => {
+  test('over Bluetooth the bar is blue and its lamp is a wireless mark', async () => {
     /*
      * "Can we change the connected thing to be blue when it's on a Bluetooth
      * connection instead of green? And instead of a green dot next to the unit
      * name have a Bluetooth icon when it's connected via Bluetooth."
+     * The picture is a plain aerial drawn for the app, not the Bluetooth
+     * symbol, which the Bluetooth group lets only its members use
+     * (test/independent.mjs holds that one away).
      */
     const bar = flat('mobile/src/components/TopBar.js')
     assert.match(bar, /const bluetooth = useBluetoothOn\(\) && !demo/, 'the demo would wear the Bluetooth look')
     /* In the pill since 24 October 2026, beside the state word, as the lamp is. */
     /* And none in the demo, where it is always grey and says nothing. */
-    assert.match(bar, /\{demo \? null : bluetooth \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} size=\{8\} \/>\}/, 'the lamp is not the Bluetooth mark over Bluetooth')
+    assert.match(bar, /\{demo \? null : bluetooth \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} size=\{8\} \/>\}/, 'the lamp is not the wireless mark over Bluetooth')
     assert.match(bar, /pill\.mark === 'ok' \? \(bluetooth \? color\.ble : color\.ok\)/, 'Live is not blue over Bluetooth')
     /* The mark is lit the way the lamp is: blue answering, red not, dim not yet asked. */
     assert.match(bar, /const tint = state === 'good' \? color\.ble : state === 'fault' \? color\.fault : color\.silkFaint/, 'the mark stays blue over a unit that stopped answering')
-    assert.match(bar, /source=\{bluetoothIcon\}/)
+    assert.match(bar, /source=\{wirelessIcon\}/)
+    assert.match(bar, /import wirelessIcon from '\.\.\/\.\.\/assets\/icons\/wireless\.png'/)
     /* No computer to be missing over Bluetooth, the pill's second line says Bluetooth, and so does a screen reader. */
     const { pillWords } = await import('../shared/pill-words.mjs')
     assert.equal(pillWords({ tone: 'dim', bluetooth: true }).status, 'Not connected', 'the bar says No computer over Bluetooth')
@@ -6950,10 +6954,10 @@ export function run(test) {
       }
     }
     /* And the picture is there, the same size and kind as the bar's others. */
-    const png = readFileSync(new URL('../mobile/assets/icons/bluetooth.png', import.meta.url))
+    const png = readFileSync(new URL('../mobile/assets/icons/wireless.png', import.meta.url))
     assert.equal(png.toString('ascii', 1, 4), 'PNG')
-    assert.equal(png.readUInt32BE(16), 96, 'the Bluetooth mark is not 96 wide like the other icons')
-    assert.equal(png.readUInt32BE(20), 96, 'the Bluetooth mark is not 96 high like the other icons')
+    assert.equal(png.readUInt32BE(16), 96, 'the wireless mark is not 96 wide like the other icons')
+    assert.equal(png.readUInt32BE(20), 96, 'the wireless mark is not 96 high like the other icons')
   })
 
   test('over Bluetooth, CONNECTED opens a note with Turn off Bluetooth, which does what Stop does', async () => {

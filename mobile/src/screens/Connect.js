@@ -14,8 +14,10 @@ import sendIcon from '../../assets/icons/send.png'
  * may not use the Apple Logo" without Apple's written license, with
  * Microsoft's saying the same of theirs, in an app that goes to Apple's
  * review with every store version. The names are said in words, in the line
- * above them, which is how this app names anybody else's product
- * (test/independent.mjs holds the three old files away).
+ * above them, which is how this app names a computer maker's product (the
+ * gear cards' photographs, which show their makers' badges, are the one
+ * exception, docs/gear-illustrations.md). test/independent.mjs holds the
+ * three old files away.
  */
 import desktopIcon from '../../assets/icons/desktop.png'
 import terminalIcon from '../../assets/icons/terminal.png'

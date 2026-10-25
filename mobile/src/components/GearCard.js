@@ -226,9 +226,13 @@ export default function GearCard({ entry, entries = [], onGo, onBack }) {
               itself for a picture already on the phone, never for one from
               the website. The box always has a size to open it at (the
               card's width, 200 tall), and since the box is wider than the
-              photograph is drawn, what is opened is never smaller than what
-              is shown, so it is never softer. iPhones size it their own way
-              and ignore this.
+              photograph is drawn, what is opened is about the size shown or
+              bigger. Android shrinks a JPEG only in eighths, rounded down,
+              so the narrow card on the sharpest screens can open a few
+              percent under what it draws, which cannot be seen. Asking for
+              more (resizeMultiplier, as Shots.js does) would take this box
+              past the photograph's own size on most phones and save nothing.
+              iPhones size it their own way and ignore this.
             */}
             <Image
               source={{ uri: photo.src }}

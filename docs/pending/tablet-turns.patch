@@ -14,21 +14,22 @@ index 307f041..2b4724f 100644
        "eas": {
 diff --git a/mobile/plugins/withTabletTurns.js b/mobile/plugins/withTabletTurns.js
 new file mode 100644
-index 0000000..5ca7279
+index 0000000..9ff7a55
 --- /dev/null
 +++ b/mobile/plugins/withTabletTurns.js
-@@ -0,0 +1,134 @@
+@@ -0,0 +1,135 @@
 +/**
 + * ANDROID TABLETS TURN SIDEWAYS, AND ANDROID PHONES STAY UPRIGHT.
 + *
-+ * Google Play, October 2026, on 1.88.0: "Remove resizing and orientation
++ * Google Play, October 2026, on 1.88.0: "Remove resizability and orientation
 + * restrictions in your app to support large screen devices." Justin: "The
 + * large-screen change is the one most worth doing for reach, since a lot of
 + * guitarists keep a tablet on a music stand." What Play reads is one line in
 + * the Android manifest, MainActivity held upright
 + * (android:screenOrientation="portrait"), which app.json's "orientation":
-+ * "portrait" writes there. An Android tablet older than Android 16, held
-+ * sideways, shows the app as an upright strip with black bars at its sides.
++ * "portrait" writes there. An Android tablet on 12 to 15, held sideways,
++ * shows the app as an upright strip with black bars at its sides; one on 7
++ * to 11 turns its whole screen upright instead, so it has to be turned too.
 + * Android 16 and newer already ignore the lock on a screen 600 dp or more
 + * across (developer.android.com/about/versions/16/behavior-changes-16), and
 + * an iPad has always turned every way.
@@ -153,16 +154,16 @@ index 0000000..5ca7279
 +  })
 +}
 diff --git a/test/duo.mjs b/test/duo.mjs
-index 694eddf..a1d3680 100644
+index 694eddf..bb45df5 100644
 --- a/test/duo.mjs
 +++ b/test/duo.mjs
-@@ -260,6 +260,102 @@ export function run(test) {
+@@ -260,6 +260,111 @@ export function run(test) {
      assert.equal(JSON.parse(read('mobile/app.json')).expo.orientation, 'portrait')
    })
  
 +  test('on Android a tablet turns sideways and a phone stays upright, by the whole screen’s short side, and the iPhone keeps its lock', async () => {
 +    /*
-+     * Google Play on 1.88.0: "Remove resizing and orientation restrictions
++     * Google Play on 1.88.0: "Remove resizability and orientation restrictions
 +     * in your app to support large screen devices." Justin: "The large-screen
 +     * change is the one most worth doing for reach, since a lot of guitarists
 +     * keep a tablet on a music stand." mobile/plugins/withTabletTurns.js takes
@@ -249,6 +250,15 @@ index 694eddf..a1d3680 100644
 +    assert.match(rule, /val density = resources\.displayMetrics\.density/)
 +    assert.match(rule, /windowManager\.maximumWindowMetrics\.bounds/, 'from Android 11 the rule does not read the whole screen')
 +    assert.match(rule, /windowManager\.defaultDisplay\.getRealMetrics\(real\)/, 'before Android 11 the rule does not read the whole screen')
++    /*
++     * getMaximumWindowMetrics is Android 11's (API 30) and the app runs from
++     * Android 7 (minSdk 24), so the call stays inside its version check and
++     * returns from it. Outside it, every Android 7 to 10 phone would stop at
++     * launch, and neither emulator in android-minified (both Android 15)
++     * would show it, nor would the build: Kotlin does not check API levels.
++     */
++    assert.match(rule, /if \(android\.os\.Build\.VERSION\.SDK_INT >= android\.os\.Build\.VERSION_CODES\.R\) \{\s*val screen = windowManager\.maximumWindowMetrics\.bounds\s*return minOf\(screen\.width\(\), screen\.height\(\)\) \/ density\s*\}\s*val real = android\.util\.DisplayMetrics\(\)\s*windowManager\.defaultDisplay\.getRealMetrics\(real\)/, 'Android 11’s maximumWindowMetrics is not inside its version check, so an Android 7 to 10 phone would stop at launch')
++    assert.equal(rule.split('maximumWindowMetrics').length - 1, 1, 'maximumWindowMetrics is read somewhere besides inside its version check')
 +    assert.doesNotMatch(rule, /currentWindowMetrics|screenWidthDp|screenHeightDp|smallestScreenWidthDp|displayMetrics\.(widthPixels|heightPixels)/, 'the rule reads the window, so a tablet beside another app would be turned upright')
 +    const turns = (width, height) => Math.min(width, height) >= Number(side[1])
 +    for (const [name, width, height] of [['a Pixel 6', 411, 914], ['a Pixel Fold shut', 411, 797], ['a Pixel Fold open', 841, 701], ['an 8-inch tablet', 600, 960], ['a Pixel Tablet', 1280, 800]]) {
