@@ -251,6 +251,26 @@ icon now (mobile/assets/watch-icon.png); keep it light.
   holding a build under review). Fixes go out as before; a big new phone
   feature waits until any review in progress is over.
 
+**The next App Store version is the Bluetooth one.** "Wait till the
+Bluetooth version" (25 October 2026, when asked whether to send 1.88.3 to
+the App Store with Bluetooth still hidden). So 1.88.3 stays on TestFlight,
+and the iPhones that have the App Store's 1.87.11 stay on update 1.87.60,
+with nothing merged since reaching them, until 1.89.0 is approved. Its
+notes and What's New are the first Apple sees since 1.87.11, so they carry
+everything new since then (the 1.88.3 block's paragraphs included), and
+the listing changes held for 1.88.3 (Description, Keywords, Subtitle, the
+privacy label rows) go in with it.
+
+And Bluetooth (beta) is for every unit, not the AM4 alone: "I also dont
+want to only turn Bluetooth on only for the AM4 I want it built out for all
+users. The only unit that might be more difficult to manage figure out is
+the FM3 but luckily I have one of those ... I just want to submit with notes
+for users that Bluetooth is in beta and some features might not work as
+expected. And make it super easy for all users to submit bugs and
+feedback." (25 October 2026.) The AM4-only rules below are being rewritten
+for that, pass by pass; until each pass lands, `CUSTOMER_UNITS` stays as it
+is, and nothing opens to customers before 1.89.0 either way.
+
 **Bluetooth (beta) is the developer's only on every copy out today, since 11
 October 2026, and opens to customers in the next store version (1.89.0).**
 
@@ -320,9 +340,9 @@ wants every new one described in the Notes for Review, its licence (3.3.1(C))
 keeps a change to what an app does for a version it has reviewed, and Google
 forbids features activated remotely after review. An update is exactly that:
 every merge to main reaches every copy on the current runtime (TestFlight
-1.88.3, Play 1.88.0, and the App Store's 1.88.3 once approved; the 1.87.x
-copies are frozen on update 1.87.60), whose review notes say customers are
-not shown it.
+1.88.3 and Play 1.88.0; the App Store's 1.87.11, like every 1.87.x copy, is
+frozen on update 1.87.60), whose review notes say customers are not shown
+it.
 
 So it opens by a fact about the copy itself, which no update can change: the
 version BUILT INTO it (`installedStoreVersion()` in

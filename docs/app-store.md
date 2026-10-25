@@ -775,6 +775,12 @@ startup card and Colors lines were cut to make the room.
 
 ### Notes for App Review, 1.88.3 (the next version)
 
+**Not sent: 1.88.3 is not going to the App Store** (25 October 2026, "Wait
+till the Bluetooth version"). It stays on TestFlight, and the next App Store
+version is 1.89.0, whose notes and What's New carry this block's paragraphs
+too, because Apple's reviewer last saw 1.87.11. The block is kept as it was
+checked against the app, to be folded into 1.89.0's.
+
 **Written on 24 October 2026 for the next build pair, to paste when it goes
 to Apple.** It is the block for 1.88.3 (build 29), which keeps Bluetooth
 the developer's; 1.89.0's, which opens it to customers, is in its own
@@ -1329,6 +1335,16 @@ has a release live. Once 1.87.11 is processed, App bundle explorer → 1.87.11
 
 ## 1.89.0: Bluetooth (beta) for customers
 
+**Two things changed on 25 October 2026, and this section is being
+rewritten for them.** 1.89.0 is the first App Store version since 1.87.11
+("Wait till the Bluetooth version"), so its Apple notes and What's New say
+what is new since 1.87.11, not since 1.88.3, and the listing changes held
+for 1.88.3 go in with it. And Bluetooth (beta) opens on every unit, not the
+AM4 alone ("I want it built out for all users"), marked beta, with "some
+features might not work as expected" and an easy way to report a problem.
+Where the blocks below still say AM4 only, or New since 1.88.3, they are
+the earlier plan.
+
 **The store version after 1.88.3, on both phones** (written on 25 October
 2026). "I have tried it from an android phone and it works great." "I'm
 fine with doing new builds for Apple and android." "Make it clear that
@@ -1716,8 +1732,9 @@ step 7 spends builds, and it waits for his yes, as every build does.
 1. **Justin: App Store Connect → App Privacy**, the rows owed since 22
    October (*App Privacy*, above): add Photos or Videos and Customer Support,
    add Device ID (not linked), and tick Analytics on Purchase History and
-   User ID (Email Address needs no change). They are owed for 1.88.3 too, so they may be done by then.
-   Bluetooth adds nothing to the label: nothing it touches leaves the phone.
+   User ID (Email Address needs no change). Any day: Publish takes effect
+   at once and needs no version. Bluetooth adds nothing to the label:
+   nothing it touches leaves the phone.
 2. **Justin: Macs and Apple Vision Pro.** App Store Connect → the app →
    Pricing and Availability. Unless it was switched off, the App Store also
    offers the iPad app on Macs with Apple silicon and on Apple Vision Pro,
