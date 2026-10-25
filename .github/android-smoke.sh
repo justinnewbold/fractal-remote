@@ -353,7 +353,13 @@ shot card
 # Each look at which way up the app is, said in the summary and judged.
 look() {
   local name="$1"
-  held_as_asked "$name"
+  # On the phone the hold is NOT read back: an app that asks to be upright
+  # moves the phone's rotation lock itself (run 40237542736: "lock 1" before
+  # the launch, Settings drawn 2400x1080, then "lock 0" with the app up), so
+  # the read-back fails exactly when the app does its job. That the phone was
+  # sideways when the app opened is proved by Settings, above; the picture
+  # proves the app stayed upright. The tablet's hold is still read back.
+  [ "$where" = phone ] || held_as_asked "$name"
   shot "$name"
   if [ "$where" = phone ]; then
     if [ "$h" -gt "$w" ]; then
