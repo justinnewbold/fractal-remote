@@ -21,6 +21,11 @@
  *   - nothing on the phone is nobody, and so is a sign-out somebody asked
  *     for, even one made with no signal, which supabase-js on its own leaves
  *     behind on the phone;
+ *   - that sign-out is over in seconds of real time, whatever supabase-js is
+ *     still waiting on, and a sign-in made straight after it is not undone
+ *     by supabase-js's sign-out finishing late;
+ *   - Settings is told whose sign-in the phone still holds (keptAccount),
+ *     with the email, when the account service says nobody;
  *   - the relay itself is exactly as before: nothing that talks to the
  *     account service or the computer is let through on a sign-in that could
  *     not be renewed;
@@ -79,10 +84,15 @@ const keptSignIn = ({ id = CUSTOMER, ago = 600, refresh = 'refresh-1' } = {}) =>
  *   'timeout'  — notForever's own twelve-second cap, said the way it says it;
  *   'down'     — a 502 page from in front of the account service;
  *   'captive'  — the question is taken and never answered (wifi with nothing
- *                behind it, before notForever's cap): it never settles;
+ *                behind it, before notForever's cap): it never settles, until
+ *                `net.release()` fails every one still held as no signal
+ *                would, by then with the signal back (whatever mode is set);
  *   'refused'  — the account service answers, and turns the renewal away with
  *                `net.code`;
  *   'ok'       — it answers, and renews.
+ *
+ * A password sign-in (the token grant that is not a renewal) is counted in
+ * `net.passwords`, and answered as a new sign-in for the same customer.
  *
  * Every request is written down, by method and path. And every one that gets
  * no answer costs ten seconds of the bench's clock (net.tick, see benchClock):
@@ -91,18 +101,26 @@ const keptSignIn = ({ id = CUSTOMER, ago = 600, refresh = 'refresh-1' } = {}) =>
  * runner waits well under a second for them.
  */
 const NET = `
-  export const net = { mode: 'offline', code: 'refresh_token_not_found', asked: [], renewals: 0, tick: () => {} }
+  export const net = { mode: 'offline', code: 'refresh_token_not_found', asked: [], renewals: 0, passwords: 0, held: [], tick: () => {} }
+  net.release = () => {
+    for (const fail of net.held.splice(0)) fail(new TypeError('Network request failed'))
+  }
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url')
   const jwt = (sub, exp) => b64({ alg: 'HS256', typ: 'JWT' }) + '.' + b64({ sub, exp, role: 'authenticated' }) + '.bench'
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'x-supabase-api-version': '2024-01-01' } })
   export async function notForever(url, options = {}) {
     const at = new URL(String(url))
     net.asked.push((options.method || 'GET') + ' ' + at.pathname)
-    if (net.mode === 'captive') return new Promise(() => {})
+    if (net.mode === 'captive') return new Promise((_, fail) => net.held.push(fail))
     if (['offline', 'timeout', 'down'].includes(net.mode)) net.tick()
     if (net.mode === 'offline') throw new TypeError('Network request failed')
     if (net.mode === 'timeout') throw new Error('The account service timed out.')
     if (net.mode === 'down') return new Response('<html>502 Bad Gateway</html>', { status: 502, statusText: 'Bad Gateway' })
+    if (at.pathname === '/auth/v1/token' && at.searchParams.get('grant_type') === 'password') {
+      net.passwords += 1
+      const exp = Math.floor(Date.now() / 1000) + 3600
+      return json(200, { access_token: jwt('${CUSTOMER}', exp), refresh_token: 'password-' + net.passwords, token_type: 'bearer', expires_in: 3600, expires_at: exp, user: { id: '${CUSTOMER}', email: 'player@example.com', aud: 'authenticated' } })
+    }
     if (at.pathname === '/auth/v1/token') {
       if (net.mode === 'refused') return json(400, { code: net.code, message: 'Invalid Refresh Token: ' + net.code })
       net.renewals += 1
@@ -260,6 +278,28 @@ async function launchGate({ haveSession, demo = false }) {
   return run(stand)
 }
 
+/* What timed() hands back when the stopwatch ran out first. */
+const LATE = Symbol('still waiting')
+
+/* How long `p` took by the runner's own clock, raced against a stopwatch of the test's, so a wait for ever fails here rather than hanging the run. */
+async function timed(p, limit) {
+  const began = realNow()
+  let stop
+  const late = new Promise((go) => (stop = setTimeout(() => go(LATE), limit)))
+  const value = await Promise.race([p, late]).finally(() => clearTimeout(stop))
+  return { value, took: realNow() - began }
+}
+
+/* Whether `ok()` came true within `limit` ms of the runner's clock, looked at every few milliseconds. */
+async function until(ok, limit) {
+  const began = realNow()
+  while (!ok()) {
+    if (realNow() - began > limit) return false
+    await new Promise((go) => setTimeout(go, 10))
+  }
+  return true
+}
+
 export function run(test) {
   test('a sign-in that ran out with no signal lets the phone in, as that account, and renews itself when the signal is back', async () => {
     const bench = await relayOnABench({ disk: { [KEY]: keptSignIn() }, mode: 'offline' })
@@ -381,14 +421,47 @@ export function run(test) {
       }
     }
 
-    /* And what is on the phone under that key, but is not a sign-in supabase-js would write, is nobody too: it can only fail closed. */
-    for (const odd of ['not json', JSON.stringify({ access_token: 'a', refresh_token: 'r', expires_at: nowSec() - 600 }), JSON.stringify({ ...JSON.parse(keptSignIn()), user: { id: 7 } })]) {
+    /*
+     * And what is on the phone under that key, but is not a sign-in
+     * supabase-js would keep, is nobody too: it can only fail closed. Held
+     * to supabase-js's own test (_isValidSession: an access token, a renewal
+     * token, and when the first runs out) and an account id beside them.
+     */
+    const good = JSON.parse(keptSignIn())
+    const odds = [
+      'not json',
+      JSON.stringify({ access_token: 'a', refresh_token: 'r', expires_at: nowSec() - 600 }),
+      JSON.stringify({ ...good, user: { id: 7 } }),
+      JSON.stringify({ ...good, refresh_token: undefined }),
+      JSON.stringify({ ...good, expires_at: undefined }),
+      JSON.stringify({ ...good, access_token: undefined }),
+      JSON.stringify({ ...good, user: undefined })
+    ]
+    for (const odd of odds) {
       const bench = await relayOnABench({ disk: { [KEY]: odd }, mode: 'offline' })
       try {
-        assert.equal(await bench.relay.keptSession(), null, `something that is not a sign-in let the phone in: ${odd.slice(0, 40)}`)
+        assert.equal(await bench.relay.keptSession(), null, `something that is not a sign-in let the phone in: ${odd.slice(0, 60)}`)
       } finally {
         await bench.done()
       }
+    }
+    /*
+     * The same shapes read straight off the phone, after supabase-js's
+     * start-up has had its look (which throws some of them away on its
+     * own): the door's reading past its wait, and Settings', refuse them
+     * too, and take a sign-in supabase-js would keep.
+     */
+    const bench = await relayOnABench({ mode: 'offline' })
+    try {
+      assert.equal(await bench.relay.keptSession(), null)
+      for (const odd of odds) {
+        bench.disk.set(KEY, odd)
+        assert.equal(await bench.relay.keptAccount(), null, `read off the phone, something that is not a sign-in counted as one: ${odd.slice(0, 60)}`)
+      }
+      bench.disk.set(KEY, keptSignIn())
+      assert.deepEqual(await bench.relay.keptAccount(), { id: CUSTOMER, email: 'player@example.com' }, 'a sign-in supabase-js would keep was refused')
+    } finally {
+      await bench.done()
     }
   })
 
@@ -444,6 +517,163 @@ export function run(test) {
         await next.done()
       }
     }
+  })
+
+  test('Sign out with no signal is over in seconds of real time, and a sign-in straight after it is not undone by supabase-js finishing late', async () => {
+    /*
+     * The bench's clock jumps ten seconds for every request that gets no
+     * answer, so supabase-js's own twenty-five seconds of retries go by in
+     * milliseconds in the tests above, and a sign-out that waited for all
+     * of them looked instant there. On the phone it was 25.4 seconds with
+     * airplane mode on, about thirty-seven with no bars, at any time
+     * offline, with the Sign out button showing nothing and the sign-in
+     * still on the phone until the end: closed in the middle, the next
+     * launch with no signal opened as the account somebody had asked to
+     * leave. Here the clock does not jump: the network takes the question
+     * and holds it ('captive'), as no bars does until notForever's twelve
+     * seconds are up, and the runner's own clock says how long it took.
+     */
+    const SIGN_OUT_WAIT_MS = Number(read('mobile/src/lib/relay.js').match(/export const SIGN_OUT_WAIT_MS = (\d+)/)?.[1])
+    assert.ok(SIGN_OUT_WAIT_MS > 0 && SIGN_OUT_WAIT_MS <= 3000, 'Sign out waits on supabase-js for longer than a tap can, or for no time at all; say why in signOut')
+
+    /*
+     * A minute into a gig with no signal: the launch let the customer in,
+     * supabase-js's wait after that failed renewal has passed, and its
+     * sign-out starts a renewal of its own, which the network holds.
+     */
+    {
+      const bench = await relayOnABench({ disk: { [KEY]: keptSignIn() }, mode: 'offline' })
+      try {
+        assert.equal(await bench.relay.keptSession(), CUSTOMER)
+        bench.pass(61_000)
+        bench.net.mode = 'captive'
+        const { value, took } = await timed(bench.relay.signOut(), SIGN_OUT_WAIT_MS + 5000)
+        assert.notEqual(value, LATE, 'Sign out waited for supabase-js’s renewal, which with no signal is twenty-five seconds and more')
+        assert.ok(took < SIGN_OUT_WAIT_MS + 1500, `Sign out took ${took} ms of real time with no signal`)
+        assert.ok(bench.net.held.length > 0, 'supabase-js’s sign-out asked nothing of the network, so this proved nothing')
+        assert.equal(bench.kept(), null, 'Sign out with no signal left the sign-in on the phone')
+        assert.equal(bench.disk.has(`${KEY}-user`), false)
+        assert.equal(await bench.relay.keptAccount(), null)
+        assert.equal(await bench.relay.keptSession(), null, 'signed out, and still let in')
+
+        /* The renewal supabase-js still had going, answered once the signal is back: thrown away by supabase-js, not written back to the phone. */
+        bench.net.mode = 'ok'
+        bench.net.release()
+        assert.ok(await until(() => bench.net.renewals > 0, 5000), 'supabase-js never finished the renewal it had going, so this proved nothing')
+        await new Promise((go) => setTimeout(go, 200))
+        assert.equal(bench.kept(), null, 'a renewal that finished after Sign out put the sign-in back on the phone')
+        assert.equal(await bench.relay.keptSession(), null)
+      } finally {
+        await bench.done()
+      }
+    }
+
+    /*
+     * Straight from launch, with supabase-js's start-up still held: its
+     * sign-out waits behind the start-up, and the door went in past its own
+     * wait. Sign out is still over in seconds. And a sign-in made as soon as
+     * the signal is back waits for supabase-js's sign-out to finish, because
+     * supabase-js's sign-in does not wait for its start-up: gone ahead, the
+     * sign-out would have found the new sign-in when it went on, signed it
+     * out on the account service and taken it off the phone.
+     */
+    {
+      const bench = await relayOnABench({ disk: { [KEY]: keptSignIn() }, mode: 'captive' })
+      try {
+        assert.equal(await bench.relay.keptSession(), CUSTOMER)
+        const { value, took } = await timed(bench.relay.signOut(), SIGN_OUT_WAIT_MS + 5000)
+        assert.notEqual(value, LATE, 'Sign out waited for supabase-js’s start-up, which a network that never answers never finishes')
+        assert.ok(took < SIGN_OUT_WAIT_MS + 1500, `Sign out took ${took} ms of real time with supabase-js still starting up`)
+        assert.equal(bench.kept(), null)
+        assert.equal(await bench.relay.keptAccount(), null)
+
+        bench.net.mode = 'ok'
+        const signingIn = bench.relay.signIn({ email: 'player@example.com', password: 'a password' })
+        await new Promise((go) => setTimeout(go, 300))
+        assert.equal(bench.net.passwords, 0, 'a sign-in went ahead of the sign-out still finishing, which takes it off the phone when it goes on')
+        bench.net.release()
+        const { value: id } = await timed(signingIn, 10_000)
+        assert.equal(id, CUSTOMER, 'the sign-in after a sign-out with no signal never finished')
+        assert.equal(bench.net.passwords, 1)
+        assert.deepEqual(bench.kept(), { id: CUSTOMER, refresh: 'password-1' })
+        await new Promise((go) => setTimeout(go, 500))
+        assert.deepEqual(bench.kept(), { id: CUSTOMER, refresh: 'password-1' }, 'the sign-out still finishing took the new sign-in off the phone')
+        assert.ok(!bench.net.asked.includes('POST /auth/v1/logout'), 'the sign-out still finishing signed the new sign-in out on the account service')
+        assert.equal(await bench.relay.keptSession(), CUSTOMER)
+      } finally {
+        await bench.done()
+      }
+    }
+
+    /* And every way to a new sign-in waits for it: the password, a new account, and the code from its email. */
+    const relay = read('mobile/src/lib/relay.js').replace(/\s+/g, ' ')
+    for (const call of ['signInWithPassword', 'signUp', 'verifyOtp']) {
+      assert.match(relay, new RegExp(`await afterSignOut\\(\\)(?: const \\{ data, error \\} =)? await supabase\\(\\)\\.auth\\.${call}\\(`), `${call} does not wait for a sign-out still finishing`)
+    }
+  })
+
+  test('Settings is told whose sign-in the phone still holds, with no signal, rather than "Not signed in"', async () => {
+    /*
+     * The door lets a customer in with no signal; Settings asked the account
+     * service who was signed in (currentAccount), which with no signal says
+     * nobody, and so it said "Not signed in" beside "Full version", and
+     * offered a sign-in form that cannot work offline. keptAccount reads the
+     * sign-in off the phone, with the email, past its hour and inside it.
+     */
+    for (const ago of [600, -1800]) {
+      const bench = await relayOnABench({ disk: { [KEY]: keptSignIn({ ago }) }, mode: 'offline' })
+      try {
+        assert.deepEqual(await bench.relay.keptAccount(), { id: CUSTOMER, email: 'player@example.com' }, `${ago > 0 ? 'past its hour' : 'inside its hour'}: Settings is not told whose sign-in the phone holds`)
+        assert.equal(await bench.relay.currentAccount(), null, 'the account service answered with no signal, so this proved nothing')
+        assert.deepEqual(await bench.relay.keptAccount(), { id: CUSTOMER, email: 'player@example.com' }, 'asking the account service took the sign-in off the phone')
+        assert.equal(await bench.relay.keptSession(), CUSTOMER)
+      } finally {
+        await bench.done()
+      }
+    }
+
+    /* Signed out with no signal, and turned away by the account service: nobody, for Settings too. */
+    {
+      const bench = await relayOnABench({ disk: { [KEY]: keptSignIn() }, mode: 'offline' })
+      try {
+        await bench.relay.signOut()
+        assert.equal(await bench.relay.keptAccount(), null, 'Settings still names the account signed out of')
+      } finally {
+        await bench.done()
+      }
+    }
+    {
+      const bench = await relayOnABench({ disk: { [KEY]: keptSignIn() }, mode: 'refused' })
+      try {
+        assert.equal(await bench.relay.keptSession(), null)
+        assert.equal(await bench.relay.keptAccount(), null, 'Settings still names a sign-in the account service turned away')
+      } finally {
+        await bench.done()
+      }
+    }
+
+    /*
+     * And Settings waits on both before it says nobody: "Not signed in", the
+     * card's and the Account page's, and the Sign in button, come only when
+     * the account service has said nobody AND nothing is kept on the phone.
+     * What needs the account service (Delete account, the password sheet)
+     * still goes by its answer alone.
+     */
+    const settings = read('mobile/src/screens/Settings.js')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/\s+/g, ' ')
+    assert.match(settings, /import \{[^}]*\bkeptAccount\b[^}]*\} from '\.\.\/lib\/relay'/, 'Settings does not ask the phone whose sign-in it holds')
+    assert.match(settings, /keptAccount\(\) \.then\(\(k\) => alive && !reread && setKept\(k\)\)/, 'Settings does not read the kept sign-in while the account service is asked')
+    assert.match(settings, /currentAccount\(\) \.then\(async \(a\) => \{ if \(!alive\) return setAccount\(a\) if \(a\) return reread = true const k = await keptAccount\(\)\.catch\(\(\) => null\) if \(alive\) setKept\(k\) \}\) \.catch\(\(\) => \{\}\) \.finally\(\(\) => alive && setAsked\(true\)\)/, 'Settings says nobody before it has read the phone again after the account service said nobody')
+    assert.match(settings, /const keptHere = account \? null : kept const keptEmail = keptHere\?\.email && !isPairAccount\(keptHere\.email\) \? keptHere\.email : null/)
+    assert.match(settings, /<AccountCard asked=\{asked\} email=\{signedInAs \|\| keptEmail\} offline=\{Boolean\(keptEmail\)\}/, 'the card says "Not signed in" over a sign-in kept on the phone')
+    const account = settings.slice(settings.indexOf("{page === 'account' ? ("), settings.indexOf("{page === 'developer'"))
+    assert.match(account, /\{signedInAs \? \( <TipCard [^>]*onPress=[\s\S]*?\/> \) : keptEmail \? \( <TipCard icon=\{mailIcon\} label="SIGNED IN" body=\{`\$\{keptEmail\}\\n\$\{asked \? KEPT_OFFLINE : 'Checking…'\}`\} \/> \) : \( <> <Text[^>]*> \{!asked \? 'Checking…' : isPairAccount\(\(account \|\| kept\)\?\.email\)/, 'the Account page says "Not signed in on this device." over a sign-in kept on the phone')
+    assert.match(account, /\{asked && onSignIn && !keptHere \? <Press label="Sign in with an email and password" onPress=\{onSignIn\} \/> : null\}/, 'the Account page offers a sign-in form, which needs the internet, over a sign-in kept on the phone')
+    assert.match(account, /\{asked && !account\?\.email && !keptHere && purchase\.onlyHere && onMakeAccount \?/, 'the Account page offers to make an account to somebody signed in')
+    assert.match(account, /\{signedInAs \? \( <Press label="Delete account"/, 'Delete account is offered on a sign-in the account service has not vouched for')
+    assert.match(settings, /const signedInAs = account\?\.email && !isPairAccount\(account\.email\) \? account\.email : null/, 'the account service’s answer is mixed with the phone’s')
+    assert.match(settings, /const KEPT_OFFLINE = 'No internet right now\. Password and account options come back when it does\.'/)
   })
 
   test('the launch opens on the app or on the sign-in screen by that answer, and tells Bluetooth whose phone it is first', async () => {

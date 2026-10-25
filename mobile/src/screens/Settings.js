@@ -17,6 +17,7 @@ import {
   currentAccount,
   deleteAccount,
   hostConflict,
+  keptAccount,
   remoteChosenHost,
   remoteHosts,
   remoteMissingPick,
@@ -174,6 +175,30 @@ export default function Settings({
    * signed in.
    */
   const [asked, setAsked] = useState(false)
+  /*
+   * AND WHOSE SIGN-IN THIS PHONE STILL HOLDS, when the account service has
+   * not vouched for one: no signal at a gig, a sign-in past its hour that
+   * could not be renewed, or the first seconds before the service answers.
+   *
+   * The door lets a customer in on that sign-in (relay.js keptSession), and
+   * this page used to call them "Not signed in" beside "Full version", and
+   * offer "Sign in with an email and password": a form that cannot work with
+   * no signal, which they could only leave by Try the Demo or by closing the
+   * app — and which, on Justin's phone, wrote his Bluetooth off on the way.
+   * So it says the email, and that what needs the internet comes back with
+   * it. Kept APART from `account`, which stays the account service's answer:
+   * Delete account and the password sheet still need it, because both ask
+   * the account service, and neither can be done offline.
+   *
+   * Read at once, off the phone, so the email is up while the service is
+   * asked (up to twenty-five seconds of supabase-js's retries with no
+   * signal), and read again when the service says nobody, because a sign-in
+   * it turned away has been taken off the phone by then.
+   */
+  const [kept, setKept] = useState(null)
+  const keptHere = account ? null : kept
+  const keptEmail = keptHere?.email && !isPairAccount(keptHere.email) ? keptHere.email : null
+  const [leaving, setLeaving] = useState(false)
   const [hosts, setHosts] = useState(remoteHosts())
   const [chosen, setChosen] = useState(remoteChosenHost())
   const [units, setUnits] = useState(remoteUnits())
@@ -214,8 +239,20 @@ export default function Settings({
 
   useEffect(() => {
     let alive = true
+    /* The second read is the one that counts, if the first is somehow the later. */
+    let reread = false
+    keptAccount()
+      .then((k) => alive && !reread && setKept(k))
+      .catch(() => {})
     currentAccount()
-      .then((a) => alive && setAccount(a))
+      .then(async (a) => {
+        if (!alive) return
+        setAccount(a)
+        if (a) return
+        reread = true
+        const k = await keptAccount().catch(() => null)
+        if (alive) setKept(k)
+      })
       .catch(() => {})
       .finally(() => alive && setAsked(true))
     return () => {
@@ -493,8 +530,9 @@ export default function Settings({
           */}
           <AccountCard
             asked={asked}
-            email={signedInAs}
-            paired={isPairAccount(account?.email)}
+            email={signedInAs || keptEmail}
+            offline={Boolean(keptEmail)}
+            paired={isPairAccount((account || kept)?.email)}
             unlocked={purchase.unlocked}
             demo={demo}
             onPress={() => {
@@ -677,26 +715,7 @@ export default function Settings({
               Phone & computer, which nobody would think to open to change a
               password. */}
           <View style={{ gap: space.md }}>
-            {isPairAccount(account?.email) || !account?.email ? (
-              <>
-                <Text style={{ color: color.silkDim, fontSize: font.small }}>
-                  {!asked
-                    ? 'Checking…'
-                    : isPairAccount(account?.email)
-                      ? `Paired with your computer, no account. What you save stays on this ${deviceNoun()}.`
-                      : 'Not signed in on this device.'}
-                </Text>
-                {/* Paid on this phone with no account yet: until there is one,
-                    the computer and the website see nothing bought. */}
-                {asked && !account?.email && purchase.onlyHere && onMakeAccount ? (
-                  <>
-                    <Note>{ONLY_HERE}</Note>
-                    <Press label="Make an account" tone="signal" onPress={onMakeAccount} />
-                  </>
-                ) : null}
-                {asked && onSignIn ? <Press label="Sign in with an email and password" onPress={onSignIn} /> : null}
-              </>
-            ) : (
+            {signedInAs ? (
               <TipCard
                 icon={mailIcon}
                 label="SIGNED IN"
@@ -707,6 +726,33 @@ export default function Settings({
                   setAccountMenu(true)
                 }}
               />
+            ) : keptEmail ? (
+              /* Signed in by the sign-in kept on the phone, which the account
+                 service has not vouched for: no password sheet to open, since
+                 it needs the service, and no Sign in, which needs it too. */
+              <TipCard icon={mailIcon} label="SIGNED IN" body={`${keptEmail}\n${asked ? KEPT_OFFLINE : 'Checking…'}`} />
+            ) : (
+              <>
+                <Text style={{ color: color.silkDim, fontSize: font.small }}>
+                  {!asked
+                    ? 'Checking…'
+                    : isPairAccount((account || kept)?.email)
+                      ? `Paired with your computer, no account. What you save stays on this ${deviceNoun()}.`
+                      : 'Not signed in on this device.'}
+                </Text>
+                {/* Paid on this phone with no account yet: until there is one,
+                    the computer and the website see nothing bought. */}
+                {asked && !account?.email && !keptHere && purchase.onlyHere && onMakeAccount ? (
+                  <>
+                    <Note>{ONLY_HERE}</Note>
+                    <Press label="Make an account" tone="signal" onPress={onMakeAccount} />
+                  </>
+                ) : null}
+                {/* Not while a sign-in is kept on the phone (a phone paired by
+                    code, with no signal): the form needs the internet the
+                    phone does not have, and is no way back from itself. */}
+                {asked && onSignIn && !keptHere ? <Press label="Sign in with an email and password" onPress={onSignIn} /> : null}
+              </>
             )}
 
             {/* Paid on this phone, sent to this account and not arrived yet:
@@ -719,7 +765,21 @@ export default function Settings({
             {note ? <Note>{note}</Note> : null}
             {error ? <Note tone="fault">{error}</Note> : null}
 
-            <Press label={`Sign out on this ${deviceNoun()}`} onPress={onSignOut} />
+            {/* Busy while it goes: with no signal it can take a couple of
+                seconds (relay.js signOut), and a button that does nothing for
+                that long gets tapped again, or the app closed. */}
+            <Press
+              label={leaving ? 'Signing out…' : `Sign out on this ${deviceNoun()}`}
+              disabled={leaving}
+              onPress={async () => {
+                setLeaving(true)
+                try {
+                  await onSignOut?.()
+                } finally {
+                  setLeaving(false)
+                }
+              }}
+            />
             <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>
               The computer stays signed in — signing out here must not drop the link mid-set.
             </Text>
@@ -1963,8 +2023,21 @@ function Group({ title, children }) {
  * the full version. Tapping it opens the Account page — signing in and out,
  * the password, unlocking or restoring a purchase.
  */
-function AccountCard({ asked, email, paired, unlocked, demo, onPress }) {
-  const who = !asked ? 'Checking…' : email || (paired ? 'Paired, no account' : 'Not signed in')
+/*
+ * The account line for a sign-in the phone holds and the account service
+ * has not vouched for, said in place of the password and account options it
+ * cannot offer: no signal at a gig, most often. See `kept` in Settings.
+ */
+const KEPT_OFFLINE = 'No internet right now. Password and account options come back when it does.'
+
+/*
+ * `email` is the account service's, or the one kept on the phone while it
+ * has not vouched for it (`offline`), which is up at once rather than after
+ * "Checking…": with no signal the service takes up to twenty-five seconds to
+ * say nothing.
+ */
+function AccountCard({ asked, email, offline, paired, unlocked, demo, onPress }) {
+  const who = email || (!asked ? 'Checking…' : paired ? 'Paired, no account' : 'Not signed in')
   const what = demo ? 'Demo' : unlocked ? 'Full version' : 'Not unlocked yet'
   return (
     <Pressable
@@ -1993,10 +2066,11 @@ function AccountCard({ asked, email, paired, unlocked, demo, onPress }) {
           {`${what} · v${APP_VERSION}`}
         </Text>
         {/* Said on the card, so Delete account is found from the first page
-            of Settings rather than guessed at (Apple 5.1.1(v)). */}
+            of Settings rather than guessed at (Apple 5.1.1(v)). Not for a
+            sign-in only the phone vouches for: none of that works offline. */}
         {email ? (
-          <Text numberOfLines={1} style={{ color: color.silkDim, fontSize: font.micro }}>
-            Password, sign out, delete account
+          <Text numberOfLines={offline && asked ? 2 : 1} style={{ color: color.silkDim, fontSize: font.micro }}>
+            {offline ? (asked ? KEPT_OFFLINE : 'Checking…') : 'Password, sign out, delete account'}
           </Text>
         ) : null}
       </View>

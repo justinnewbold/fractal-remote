@@ -4720,13 +4720,14 @@ export function run(test) {
     /* An account card at the top now, the version on it, opening an Account page of its own. */
     const phone = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
     const top = phone.slice(phone.indexOf("{head('Settings')}"), phone.indexOf('<Group title="My rig">'))
-    assert.match(top, /<AccountCard asked=\{asked\} email=\{signedInAs\}/, 'the phone’s Settings does not open on who is signed in')
+    assert.match(top, /<AccountCard asked=\{asked\} email=\{signedInAs \|\| keptEmail\}/, 'the phone’s Settings does not open on who is signed in')
     assert.match(top, /setPage\('account'\)/, 'the phone’s account card does not open the account')
     assert.match(phone, /`\$\{what\} · v\$\{APP_VERSION\}`/, 'the version left the top of the phone’s Settings')
-    assert.match(phone, /email \|\| \(paired \? 'Paired, no account' : 'Not signed in'\)/, 'the phone does not say who is signed in, or that nobody is')
+    assert.match(phone, /email \|\| \(!asked \? 'Checking…' : paired \? 'Paired, no account' : 'Not signed in'\)/, 'the phone does not say who is signed in, or that nobody is')
     const account = phone.slice(phone.indexOf("{page === 'account' ? ("), phone.indexOf("{page === 'developer'"))
     assert.match(account, /onPress=\{onSignIn\}/, 'the phone’s Account page has no way to sign in')
-    assert.match(account, /label=\{`Sign out on this \$\{deviceNoun\(\)\}`\}/)
+    /* Busy while it goes, since 25 October 2026: with no signal it can take a couple of seconds (relay.js signOut). */
+    assert.match(account, /label=\{leaving \? 'Signing out…' : `Sign out on this \$\{deviceNoun\(\)\}`\} disabled=\{leaving\}/)
     assert.match(account, /label="Change password"/, 'the password moved somewhere nobody will find it')
     assert.match(account, /title="Unlock the full version"/, 'unlocking or restoring a purchase is not with the account')
 
@@ -14948,10 +14949,16 @@ export function run(test) {
       'storage.js': 'export const disk = new Map()\nexport default { getItem: async (k) => (disk.has(k) ? disk.get(k) : null), setItem: async (k, v) => { disk.set(k, String(v)) }, removeItem: async (k) => { disk.delete(k) } }\n',
       'constants.js': "export default { expoConfig: { extra: { revenuecat: { ios: 'appl_bench', android: 'goog_bench' } } } }\n",
       'debugLog.js': 'export const lines = []\nexport const logDebug = (line) => { lines.push(String(line)) }\n',
-      /* The sign-in kept on the phone, which the test moves by hand. */
+      /*
+       * The sign-in kept on the phone, which the test moves by hand: `session`
+       * one supabase-js vouches for, `kept` one still on the phone that could
+       * not be renewed (no signal, the account service out of reach), which
+       * the door lets in (relay.js keptSession) and signedInOnPhone counts.
+       */
       'relay.js':
-        `export const who = { session: ${JSON.stringify(session)} }\n` +
+        `export const who = { session: ${JSON.stringify(session)}, kept: null }\n` +
         'export const restoreSession = async () => who.session\n' +
+        'export const signedInOnPhone = async () => who.session || who.kept\n' +
         "export const currentAccount = async () => (who.session ? { id: who.session, email: 'player@example.com' } : null)\n",
       'demo.js': 'export const demo = { on: false }\nexport const isDemo = () => demo.on\nexport const setDemo = (on) => { demo.on = Boolean(on) }\n',
       /* The server's catch-up: `grant` runs before it answers, the way the
@@ -15285,6 +15292,96 @@ export function run(test) {
         assert.ok(!rc2.calls.some((c) => /^log(In|Out)/.test(c)), `${os}: with nobody the account server would vouch for, the store was moved to another id`)
       } finally {
         bench2.done()
+      }
+    }
+  })
+
+  test('a customer let in on a sign-in that ran out is somebody to Buy: the sale goes on their account, and the store is not moved off it', async () => {
+    /*
+     * The account service out of reach while RevenueCat answers — the day
+     * the account service's project ran out of disk, its requests hung, and
+     * notForever turns a hang into a retryable error — and a customer's
+     * sign-in past its hour, on an account that has not paid. The door lets
+     * them in as that account (relay.js keptSession), the store is reachable
+     * and has a price, and the paywall goes up. restoreSession says nobody
+     * there (the renewal failed), and Buy took that for "nobody signed in,
+     * the SDK on somebody's account": it logged the store out first, the
+     * sale landed on the phone's nameless id, the sign-in screen was told
+     * "you've paid alone", and the account they were signed in to still had
+     * nothing, on a computer or the website, until the phone's next launch
+     * with the account service back. The 8 October shape. Asked the door's
+     * way (signedInOnPhone, the bench's `kept`), they are somebody.
+     */
+    for (const os of ['ios', 'android']) {
+      const rc = pretendRevenueCat({ owns: {} })
+      rc.me = 'acct-unpaid'
+      const bench = await benchWith(rc, { os, session: null, start: false })
+      try {
+        bench.who.kept = 'acct-unpaid'
+        await bench.p.startPurchases()
+        await benchFlush()
+        const s = bench.p.purchaseState()
+        assert.equal(s.checking, false, `${os}: the check never finished, so the bench proved nothing`)
+        assert.equal(s.unlocked, false, `${os}: the bench’s account had paid already, so this proved nothing`)
+        assert.equal(s.available, true, `${os}: the bench put no shelf up, so Buy was never in reach`)
+        const out = await bench.p.buyUnlock()
+        assert.equal(out.ok, true, `${os}: the sale did not go through`)
+        assert.ok(!rc.calls.includes('logOut'), `${os}: Buy took the store off the account the customer is signed in to, before selling`)
+        assert.equal(rc.bought(), 1)
+        assert.equal(rc.me, 'acct-unpaid', `${os}: the store is not on the customer’s account after the sale`)
+        assert.equal(rc.has.get('acct-unpaid'), 'APP_STORE', `${os}: the sale did not land on the account the customer is signed in to`)
+        assert.equal(bench.p.purchaseState().boughtAlone, false, `${os}: a signed-in customer was sent to make an account for what they just bought`)
+        assert.equal(bench.p.purchaseState().onlyHere, false, `${os}: a signed-in customer was told the purchase is on this phone alone`)
+        assert.equal(bench.p.purchaseState().unlocked, true)
+      } finally {
+        bench.done()
+      }
+
+      /* And with nobody on the phone at all, the guard is as it was: off a last account nobody here is signed in to, then sold to the phone. */
+      const rcNobody = pretendRevenueCat({ owns: {} })
+      rcNobody.me = 'acct-left'
+      const benchNobody = await benchWith(rcNobody, { os, session: null })
+      try {
+        const out = await benchNobody.p.buyUnlock()
+        assert.equal(out.ok, true)
+        assert.ok(rcNobody.calls.includes('logOut'), `${os}: with nobody signed in, the sale went to an account nobody here is signed in to`)
+        assert.equal(rcNobody.has.has('acct-left'), false)
+        assert.equal(benchNobody.p.purchaseState().boughtAlone, true)
+        assert.equal(benchNobody.p.purchaseState().onlyHere, true)
+      } finally {
+        benchNobody.done()
+      }
+    }
+  })
+
+  test('a purchase still on its way says it hasn’t reached the account yet, to a customer let in on a sign-in that ran out', async () => {
+    /*
+     * Paid on this phone, sent to the account, not arrived yet (stuck), and
+     * then a launch at a gig with no signal, the sign-in past its hour. The
+     * door lets them in signed in; the line chosen by restoreSession said
+     * "Sign in or make an account and it goes with it" to somebody signed
+     * in. By the door's question (stuckLine, signedInOnPhone) it is the line
+     * about the account: it hasn't got there yet.
+     */
+    for (const [kept, line] of [
+      ['acct-gig', 'NOT_ACROSS'],
+      [null, 'NOT_ACROSS_SIGNED_OUT']
+    ]) {
+      const rc = pretendRevenueCat({ owns: {} })
+      rc.me = 'acct-gig'
+      const bench = await benchWith(rc, { session: null, start: false })
+      try {
+        bench.disk.set('fractal.stuck', JSON.stringify({ account: 'acct-gig', from: rc.NAMELESS }))
+        bench.disk.set('fractal.unlocked', 'yes')
+        bench.who.kept = kept
+        await bench.p.startPurchases()
+        await benchFlush()
+        const s = bench.p.purchaseState()
+        assert.equal(s.stuck, true, 'the bench’s purchase is not on its way, so this proved nothing')
+        assert.equal(s.held, bench.p[line], kept ? 'a customer signed in at a gig was told to sign in' : 'with nobody on the phone, the line is not the one for nobody')
+        assert.equal(s.unlocked, true, 'a purchase on its way locked the phone that paid')
+      } finally {
+        bench.done()
       }
     }
   })
@@ -16608,7 +16705,13 @@ export function run(test) {
     assert.ok(!/Restore/.test(over), 'the line over Buy sends somebody with nobody signed in to Restore')
     assert.ok(free > 0 && free < buy, 'the way to sign in for free is not above Buy')
     assert.match(pay, /\{onSignIn && !freeFirst \? \(/, 'the sign-in button is drawn twice when it is above Buy')
-    assert.match(pay, /restoreSession\(\)\.then\(\(id\) => alive && setNobody\(!id\)\)/, 'who is signed in is asked of the server, which says nobody with no signal')
+    /*
+     * Asked the door's way since 25 October 2026 (relay.js signedInOnPhone):
+     * the phone's own sign-in, and one that ran out with no signal to renew
+     * it still counts, as it counts at the door.
+     */
+    assert.match(pay, /signedInOnPhone\(\)\.then\(\(id\) => alive && setNobody\(!id\)\)/, 'who is signed in is asked of the server, which says nobody with no signal')
+    assert.match(read('mobile/src/screens/Paywall.js'), /import \{ currentAccount, deleteAccount, signedInOnPhone \} from '\.\.\/lib\/relay'/)
     /* A held payment keeps Buy off, and is said. */
     assert.match(pay, /disabled=\{busy \|\| !available \|\| Boolean\(held\)\}/, 'Buy is live behind a payment still waiting')
     assert.match(pay, /\{held && !said \? <Note tone="warn">\{held\}<\/Note> : null\}/)
@@ -16646,7 +16749,8 @@ export function run(test) {
     assert.match(only, /<Note onDismiss=\{\(\) => setGone\(true\)\}>\{ONLY_HERE\}<\/Note>/, 'the line cannot be put away')
     assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} onWant=\{says\.only\} \/>/)
     const settings = withoutComments(read('mobile/src/screens/Settings.js')).replace(/\s+/g, ' ')
-    assert.match(settings, /asked && !account\?\.email && purchase\.onlyHere && onMakeAccount \? \( <> <Note>\{ONLY_HERE\}<\/Note> <Press label="Make an account"/)
+    /* Not to somebody signed in by the sign-in kept on the phone, with no signal (keptHere, since 25 October 2026): they have an account. */
+    assert.match(settings, /asked && !account\?\.email && !keptHere && purchase\.onlyHere && onMakeAccount \? \( <> <Note>\{ONLY_HERE\}<\/Note> <Press label="Make an account"/)
     assert.match(settings, /\{deleteCosts\(from\)\}/, 'the delete sheet promises a store purchase to everybody again')
   })
 

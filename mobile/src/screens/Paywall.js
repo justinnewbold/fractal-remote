@@ -8,7 +8,7 @@ import Sheet from '../components/Sheet'
 import { buyUnlock, restorePurchase, usePurchase } from '../lib/purchases'
 import { UNITS } from '../lib/demoUnits'
 import { ALREADY_UNLOCKED } from '../lib/onboarding'
-import { currentAccount, deleteAccount, restoreSession } from '../lib/relay'
+import { currentAccount, deleteAccount, signedInOnPhone } from '../lib/relay'
 import { isPairAccount } from '../lib/pairing'
 import { VP4_SO_FAR } from '../lib/vp4-safety'
 import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
@@ -54,9 +54,10 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
    * nobody's account here, so this phone cannot know they paid, and Buy
    * would charge them again. Signing in costs nothing and unlocks it. So for
    * them the sign-in comes ABOVE Buy, with a line saying why. Read from the
-   * phone's own sign-in, not the account server, and asked only on a page
-   * opened from the demo or the walkthrough: the imposed one is always
-   * signed in.
+   * phone's own sign-in, not the account server, the door's way (relay.js
+   * signedInOnPhone: a sign-in that ran out with no signal to renew it is
+   * still somebody), and asked only on a page opened from the demo or the
+   * walkthrough: the imposed one is always signed in.
    *
    * The line names no other place to pay (Apple 3.1.3, Google Play's
    * payments policy) and calls nothing free: "Sign in instead. It's free."
@@ -77,7 +78,7 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
   useEffect(() => {
     if (!asked) return undefined
     let alive = true
-    restoreSession().then((id) => alive && setNobody(!id))
+    signedInOnPhone().then((id) => alive && setNobody(!id))
     return () => {
       alive = false
     }

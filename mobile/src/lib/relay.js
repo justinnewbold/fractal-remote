@@ -62,6 +62,8 @@ let client = null
 let channel = null // the joined channel, and null the moment it stops being joined
 let session = null // what we built: the channel object and the client it belongs to
 let userId = null
+/* supabase-js's own sign-out, while it is still finishing after signOut has gone on without it; null otherwise (see signOut). */
+let signingOut = null
 /*
  * A rejoin is under way. Between disconnect tearing the old session down and
  * the new one being registered there is no session at all, and a request caught
@@ -179,6 +181,7 @@ function supabase() {
 export const supabaseClient = () => supabase()
 
 export async function signIn({ email, password }) {
+  await afterSignOut()
   const { data, error } = await supabase().auth.signInWithPassword({ email, password })
   /* `noMatch` says it was the details, not the line: on a phone that paid
      before any account existed, the likeliest reason is that there is no
@@ -197,6 +200,7 @@ export async function signIn({ email, password }) {
 
 /** Create the account, when there isn't one yet. Same project, same policies. */
 export async function signUp({ email, password }) {
+  await afterSignOut()
   const { data, error } = await supabase().auth.signUp({ email, password })
   if (error) throw new Error(explainAuth(error.message))
   /*
@@ -230,7 +234,8 @@ export async function signUp({ email, password }) {
  * The relay's own question, and everything that talks to the account service
  * asks this one: a sign-in that could not be renewed is no good to them. The
  * door asks keptSession, below, which tells "could not be renewed" apart from
- * "gone".
+ * "gone", and what only asks whether anybody is signed in here asks
+ * signedInOnPhone, which tells them apart the same way.
  */
 export async function restoreSession() {
   try {
@@ -287,19 +292,44 @@ export async function restoreSession() {
  * sign-in on the phone lets the phone in as that account while supabase-js
  * carries on trying. The one thing given up: a renewal that the account service
  * turns away AFTER that wait (a bad signal and an account deleted elsewhere,
- * both at once) has already let the phone in, and the sign-in screen comes
- * at the next launch rather than this one, as it does for a sign-in turned
- * away while the app is open. Nothing that needs the account works on it
- * meanwhile.
+ * both at once) has already let the phone in. App.js asks again the moment
+ * the door is open (its demo-and-sign-in check, haveSession once more, up to
+ * KEPT_WAIT_MS again), so a refusal that lands inside that second ask still
+ * reaches the sign-in screen on this launch, a few seconds after the app
+ * opened; only one later than that waits for the next launch, as a sign-in
+ * turned away while the app is open always has. Nothing that needs the
+ * account works on it meanwhile.
  *
- * FOR THE DOOR AND NOTHING ELSE. `userId` is set exactly as restoreSession
- * sets it, from supabase-js's own answer, and never from a sign-in that could
- * not be renewed or an answer the door did not wait for, so remoteConnect
- * asks again for itself and stays "Sign in first." until the renewal goes
- * through, and the Developer pages, the purchase and the account's own
+ * FOR THE DOOR, AND FOR WHAT ASKS THE DOOR'S QUESTION. `userId` is set
+ * exactly as restoreSession sets it, from supabase-js's own answer, and never
+ * from a sign-in that could not be renewed or an answer the door did not wait
+ * for. So the relay's join asks again for itself, and fails with its own
+ * "Sign in first." (a line in the debug log, never on screen) until the
+ * renewal goes through: the link's loop goes on trying, and once the signal
+ * is back and supabase-js's minute after a failed renewal has passed, the
+ * next try renews the sign-in and the computer comes back by itself, with
+ * no relaunch. The Developer pages, the relay pass and the account's own
  * questions fail as they always have with no signal. What a phone let in
- * this way can do is what needs no internet: Bluetooth (beta), and the
- * computer again once the signal is back.
+ * this way can do is what needs no internet: Bluetooth (beta), the
+ * purchase it already knew, and the computer again once the signal is back.
+ * The few places that only ask WHETHER somebody is signed in on the phone —
+ * the purchase's (signedInOnPhone), and Settings' account line (keptAccount)
+ * — ask it the door's way too, so a customer let in at a gig is not called
+ * nobody inside the app that just let them in.
+ *
+ * ONE KIND OF SIGN-IN THIS LETS BACK IN THAT NOBODY MEANT TO KEEP: one
+ * signed out of with no signal under an earlier version. supabase-js's own
+ * sign-out gives up on a sign-in that has run out when its renewal gets no
+ * answer, and leaves it on the phone; signOut, below, takes it off since
+ * this version, but nothing earlier did. Those phones showed the sign-in
+ * screen there and then, and their next launch with a signal already signed
+ * the account back in; with this, their next launch without one does too.
+ * It needs an offline sign-out, on a sign-in past its hour, before this
+ * update arrived, and no sign-in since, so it is left as it is: a
+ * sign-in screen opened on purpose (toSignIn) keeps whatever is on the
+ * phone, so a phone paired by code is not cost its pairing for a form
+ * somebody may back out of, and a launch that cannot tell this sign-in from
+ * one kept on purpose cannot take it off either.
  *
  * Read off the phone's storage at the key supabase-js was built with
  * (storageKey), in the shape supabase-js writes it. A shape it no longer
@@ -333,15 +363,60 @@ export async function keptSession() {
   }
 }
 
-/* The account whose sign-in is on the phone, renewable or not, read without asking anybody: null when there is none, or it is not one. */
-async function keptOnPhone() {
+/*
+ * The account whose sign-in is on the phone, renewable or not, read without
+ * asking anybody: { id, email }, or null when there is none, or it is not
+ * one. Held to what supabase-js itself keeps (its _isValidSession: an access
+ * token, a renewal token, and when the first runs out), and an account id
+ * beside them: anything less supabase-js throws away at its next look,
+ * without asking the account service, and nothing it is about to throw away
+ * lets the phone in.
+ *
+ * Read by the door past its wait (keptSession), by the purchase
+ * (signedInOnPhone), and by Settings, whose account line asks the account
+ * service first (currentAccount) and, when that says nobody, says whose
+ * sign-in the phone still holds rather than "Not signed in".
+ */
+export async function keptAccount() {
   try {
     const kept = JSON.parse((await AsyncStorage.getItem(sessionKey())) || 'null')
-    const id = kept?.refresh_token && kept?.user?.id
-    return typeof id === 'string' && id ? id : null
+    if (!kept || typeof kept !== 'object') return null
+    if (!('access_token' in kept) || !('expires_at' in kept) || !kept.refresh_token) return null
+    const id = kept.user?.id
+    if (typeof id !== 'string' || !id) return null
+    return { id, email: typeof kept.user.email === 'string' ? kept.user.email : '' }
   } catch {
     return null
   }
+}
+
+const keptOnPhone = async () => (await keptAccount())?.id || null
+
+/**
+ * WHETHER ANYBODY IS SIGNED IN ON THIS PHONE, asked the door's way, for the
+ * purchase: the id, or null.
+ *
+ * "Read from the phone's own sign-in, never the account server: no signal
+ * must not make a signed-in customer look like nobody" is what purchases.js
+ * and the Paywall have always meant by restoreSession, and since keptSession
+ * it is not what restoreSession says. A customer let in on a sign-in that
+ * ran out with no signal to renew it is signed in, by the door; restoreSession
+ * says nobody. Read as nobody, Buy took the store off the account before
+ * selling (the guard for a sign-out whose logOut failed), the sale landed on
+ * the phone's nameless id, and the account they were signed in to still did
+ * not have it: the 8 October shape, on a computer or the website signed in
+ * to it, until the phone's next launch with the account service back.
+ *
+ * So: supabase-js's own answer, as before, and when it says nobody, the
+ * sign-in still on the phone. One the account service turned away is not on
+ * the phone any more (supabase-js takes it off), so it is nobody here too.
+ * Not keptSession itself: nothing here needs its wait, which is the door's,
+ * and the relay's `userId` is set only by restoreSession's own answer, as
+ * always. Where a token that works is needed (the relay pass), that is
+ * asked for by itself, and fails with no signal as it always has.
+ */
+export async function signedInOnPhone() {
+  return (await restoreSession()) || (await keptOnPhone())
 }
 
 /* Where supabase-js keeps the sign-in on this phone: the key it was built with. */
@@ -431,11 +506,49 @@ export async function sessionAccount() {
  * stays good on the server with no phone holding it, as one on a lost phone
  * does — and the computer's sign-in is its own. Not waited for past a
  * second, on a disk that does not answer.
+ *
+ * AND supabase-js DOES NOT DECIDE HOW LONG IT TAKES. Its signOut waits for
+ * its own start-up, then renews a sign-in past its hour before signing out
+ * of it, or waits on the renewal its ticker already has going; with no
+ * signal that renewal is eight tries over twenty-five seconds (thirty-seven
+ * with no bars rather than airplane mode, at notForever's twelve a try), and
+ * the ticker starts another about every minute and a half, so it was any
+ * time offline, not only just after launch. Measured on the phone's auth-js, 2.115.0: 25.4
+ * seconds, an AuthRetryableFetchError, and the sign-in still on the phone.
+ * All that time the Sign out button showed nothing and the app stayed signed
+ * in, and somebody who gave up and closed it left the sign-in behind, for the
+ * next launch with no signal to open as the account they had asked to
+ * leave. So it is waited for SIGN_OUT_WAIT_MS, which a sign-out with a
+ * signal fits inside (the account service hears of it as before), and the
+ * phone is signed out here whether it has finished or not:
+ *
+ *   - a renewal still running when the sign-in is taken off is thrown away
+ *     by supabase-js itself: it started from a sign-in on the phone and
+ *     finds none afterwards (its commit guard), so it saves nothing and
+ *     answers AuthRefreshDiscardedError, and supabase-js's signOut, hearing
+ *     that, removes nothing more;
+ *   - but a NEW sign-in is something it would remove. supabase-js's sign-in
+ *     does not wait for its start-up the way its sign-out does, so a sign-out
+ *     still waiting on start-up could find the new sign-in there when it
+ *     goes on, sign it out on the account service and take it off the phone.
+ *     signIn, signUp and confirmWithCode wait for it first (afterSignOut).
+ *     That wait is bounded by supabase-js's own retries and notForever's
+ *     cap, and it is only ever there after a sign-out made with no signal.
  */
+export const SIGN_OUT_WAIT_MS = 2000
+
 export async function signOut() {
   await remoteDisconnect()
+  /* Never rejects: whatever supabase-js answers, or throws, this phone is signed out below. */
+  const going = Promise.resolve()
+    .then(() => supabase().auth.signOut({ scope: 'local' }))
+    .catch(() => {})
+  signingOut = going
+  going.then(() => {
+    if (signingOut === going) signingOut = null
+  })
   try {
-    await supabase().auth.signOut({ scope: 'local' })
+    await within(going, SIGN_OUT_WAIT_MS)
   } finally {
     userId = null
     /* The pick was this account's: the next to sign in reads its own (readPick). */
@@ -443,6 +556,9 @@ export async function signOut() {
     await within(dropKeptSession(), 1000)
   }
 }
+
+/* What a new sign-in waits for first: a sign-out still finishing in supabase-js, which would take it off the phone (see signOut). */
+const afterSignOut = () => signingOut || Promise.resolve()
 
 /* What supabase-js keeps of a sign-in on this phone, gone: the sign-in, and the user it keeps beside it when told to. */
 async function dropKeptSession() {
@@ -512,6 +628,7 @@ export async function resendConfirmation(email) {
 export async function confirmWithCode({ email, code }) {
   const token = cleanCode(code)
   if (!token) throw new Error(CODE_NOT_DIGITS)
+  await afterSignOut()
   const { data, error } = await supabase().auth.verifyOtp({ email, token, type: 'email' })
   if (error) throw new Error(codeRefused(error) ? CODE_DIDNT_WORK : explainAuth(error.message))
   userId = data?.session?.user?.id || null
