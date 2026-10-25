@@ -63,8 +63,8 @@ import { useSiriLinksOpen } from '../lib/siri'
 import { siriRow } from '../lib/siri-help'
 import { siriPresent } from '../lib/siriPipe'
 import SiriHelp from '../components/SiriHelp'
-import { bluetoothSupported, lookForAdapterAgain, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
-import { BLUETOOTH_WAYS, BLUETOOTH_WAYS_SHORT } from '../lib/bluetooth-gear'
+import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
+import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage from './Bluetooth'
 import AccessTool from '../components/AccessTool'
@@ -547,15 +547,17 @@ export default function Settings({
               store version whose review notes say so, never an update
               (CLAUDE.md).
 
-              Off, the row says what it costs against the computer, in the
-              one line it has (BLUETOOTH_WAYS_SHORT, the Bluetooth page's own
-              sentence cut to fit): "make it clear that the computer is the
-              preferred method".
+              Off, the row says what it is for and what it costs against the
+              computer, in the one line it has (BLUETOOTH_ROW_OFF, beside the
+              Bluetooth page's own sentence in the gear file): "make it clear
+              that the computer is the preferred method". Not the cost alone,
+              which read as a row with nothing going for it, in the row's
+              green.
             */}
             {mayDrive(purchase) && bluetoothAllowed && bluetoothSupported() ? (
               <SetupRow
                 title="Bluetooth (beta)"
-                status={bluetooth ? `On · the ${deviceNoun()} talks to the unit itself` : `Off · ${BLUETOOTH_WAYS_SHORT.toLowerCase()}`}
+                status={bluetooth ? `On · the ${deviceNoun()} talks to the unit itself` : BLUETOOTH_ROW_OFF}
                 onPress={() => setPage('bluetooth')}
               />
             ) : null}
@@ -1159,10 +1161,14 @@ export default function Settings({
               again, which on a live link is a button that does nothing you
               can see. Said as what it does, too.
             */}
-            {/* Over Bluetooth, on an iPhone whose adapter has gone, Apple's screen first (lib/bluetooth lookForAdapterAgain), as on the waiting screen. */}
+            {/* Over Bluetooth, on an iPhone whose adapter has gone, Apple's
+                screen first (lib/bluetooth lookForAdapterAgain), and said
+                under the button whenever the tap will open it
+                (APPLE_SCREEN_OPENS), as on the waiting screen. */}
             {link !== 'connected' ? (
               <Press
                 label={throughAdapter ? 'Look for the adapter again' : 'Look for the computer again'}
+                sub={throughAdapter && opensApplesScreen() ? APPLE_SCREEN_OPENS : undefined}
                 onPress={throughAdapter ? () => lookForAdapterAgain(onReconnect) : onReconnect}
               />
             ) : null}

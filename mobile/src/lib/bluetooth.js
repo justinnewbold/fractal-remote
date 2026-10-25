@@ -330,10 +330,16 @@ export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth
  * it opens.
  *
  * AND A CUSTOMER GETS THE AM4 ONLY (ble-rule.js CUSTOMER_UNITS), the one
- * unit it has run: the page offers them the AM4 alone (offeredUnits), Connect
- * and the pick-up refuse any other, and a unit kept from before that they
- * are not offered (an FM3 chosen on that public day) is let go once a real
- * account's answer says so. His account keeps all four.
+ * unit it has run: the page offers them the AM4 alone (offeredUnits), and
+ * Connect and the pick-up refuse any other. A unit kept from before that
+ * they are not offered (an FM3 chosen on that public day) is CLEARED, on
+ * disk too, but only where Bluetooth is open to the account signed in: on a
+ * copy that opens it to customers, where the page would otherwise show an
+ * FM3's warning under chips with no FM3 among them. On a copy that keeps it
+ * closed it is kept as it was, because nothing can use it there anyway, and
+ * clearing it would buy nothing. His account keeps all four, and on a copy
+ * that opens it, a tester's account signing in on his phone clears his FM3
+ * pick the same way: he picks it again.
  *
  * Asked by App.js, with the id of THE SESSION KEPT ON THE PHONE (haveSession),
  * never currentAccount(): that one asks the account server over the
@@ -411,8 +417,8 @@ export function allowBluetooth(id, { signedOut = false } = {}) {
   const wasAll = allUnits
   allowed = accountId(id) ? bluetoothOpen({ platform: Platform.OS, installed: builtInVersion(), admin: isAdmin(id) }) : null
   allUnits = allowed !== null && isAdmin(id)
-  /* A unit kept from before that this account is not offered: let go below, on a real account's answer only, never on nobody known. */
-  const drop = allowed !== null && !!saved.unit && !unitOffered(saved.unit, allUnits)
+  /* A unit kept from before that this account is not offered: let go below, only where Bluetooth is open to it (see AND A CUSTOMER GETS THE AM4 ONLY). */
+  const drop = allowed === true && !!saved.unit && !unitOffered(saved.unit, allUnits)
   if (allowed === true) {
     /* On last time, and open to this account: on now, as the pick-up would have, and nothing to write — the disk already says on. */
     if (pendingOn) {
@@ -453,6 +459,9 @@ export const bluetoothAllowed = () => allowed === true
 /** The units the page offers this account, in the page's order: the AM4 alone for a customer, all four for his. */
 export const offeredUnits = () => BLE_UNITS.filter((u) => unitOffered(u.key, allUnits))
 
+/** Whether that is the AM4 alone, a customer's: for the words outside the page that say so (the waiting screen's way in). */
+export const offeredAm4Only = () => offeredUnits().length < BLE_UNITS.length
+
 /** The same, redrawn when it changes: for the Settings row and the page, which appear and go with signing in. */
 export const useBluetoothAllowed = () => useSyncExternalStore(subscribeBluetooth, readAllowed, readAllowed) === true
 
@@ -480,8 +489,8 @@ export async function restoreBluetooth() {
   try {
     const raw = await AsyncStorage.getItem(KEY)
     const was = settle(raw ? JSON.parse(raw) : null)
-    /* A unit this account is not offered, with a real answer already in: let go of, and the disk told (see allowBluetooth). */
-    dropped = allowed !== null && was.unit && !unitOffered(was.unit, allUnits) ? was.unit : null
+    /* A unit this account is not offered, with Bluetooth already open to it: let go of, and the disk told (see allowBluetooth). */
+    dropped = allowed === true && was.unit && !unitOffered(was.unit, allUnits) ? was.unit : null
     refused = was.on && allowed === false
     pendingOn = was.on && !!was.unit && allowed === null
     saved = { ...was, unit: dropped ? null : was.unit, on: was.on && !!was.unit && !dropped && allowed === true && bluetoothSupported() }
@@ -776,6 +785,26 @@ export function adapterAway() {
 }
 
 /**
+ * Whether a tap on Look again (lookForAdapterAgain) opens Apple's screen
+ * now: an iPhone whose adapter has gone, with that screen not kept shut. The
+ * button says so under itself when it does (APPLE_SCREEN_OPENS), so the one
+ * question decides both what the tap does and what the button says.
+ */
+export const opensApplesScreen = () => adapterAway() && !pairScreenShut()
+
+/*
+ * WHAT A BUTTON THAT OPENS APPLE'S SCREEN SAYS UNDER ITSELF: Reconnect on the
+ * page, and Look for the adapter again on the waiting screen and on Phone &
+ * computer. "Look for the adapter again" opened Apple's screen with nothing
+ * to say it would, or that the adapter is tapped there and Connected waited
+ * for before Done: tapped early, Done leaves it unconnected, and the waiting
+ * screen's note said only to check Bluetooth was on. The page's own words,
+ * once, so the three buttons say the same thing. iPhone only, so Apple's name
+ * is never on another phone.
+ */
+export const APPLE_SCREEN_OPENS = 'Opens Apple’s Bluetooth screen: tap your adapter, wait for Connected, then Done.'
+
+/**
  * LOOK AGAIN, BY HAND: the Bluetooth page's Reconnect and the waiting
  * screen's "Look for the adapter again".
  *
@@ -793,7 +822,7 @@ export function adapterAway() {
  * not a hand on this screen: Apple's screen is a screen.
  */
 export async function lookForAdapterAgain(poke) {
-  if (adapterAway() && !pairScreenShut()) {
+  if (opensApplesScreen()) {
     try {
       await findAdapters()
     } catch {

@@ -156,23 +156,42 @@ export const betaNote = (os) => (os === 'android' ? BETA_NOTE_ANDROID : BETA_NOT
  * Bluetooth page above Connect, the Settings row, the waiting screen's way
  * in, the Phone & computer page while it is on, and the purchase page.
  *
- * ONLY WHAT IS TRUE OF IT. Slower: the preset list is read a name at a time
- * over a 5-pin MIDI cable (bleWire NAME_GAP_MS), an AM4's scene names take
- * seconds the first time a preset is seen, and a footswitch change shows at
- * the next poll, up to two seconds later (POLL_MS). Fewer features: no
+ * ONLY WHAT IS TRUE OF IT. More lag: the preset list is read a name at a
+ * time over a 5-pin MIDI cable (bleWire NAME_GAP_MS), an AM4's scene names
+ * take seconds the first time a preset is seen, and a footswitch change shows
+ * at the next poll, up to two seconds later (POLL_MS). Fewer features: no
  * editing or saving, no looper, volume button, unit metronome click or
  * Footswitches page (the page's DIFFERENT list). Everything the app does, it
- * does through the computer. "Slower" rather than "more lag": what the code
- * shows to be slow is everything the app has to read back, and how long one
- * tap takes each way has never been measured, so the words claim no more
- * than that.
+ * does through the computer.
  *
- * One sentence, and its one-line form for a row or a button's second line,
- * written together here so the two can never say different things.
+ * "MORE LAG" IS HIS WORD, AND KEPT. For a day this said "slower", because how
+ * long one tap takes each way has never been timed. But he has played it, and
+ * what the code shows is lag too: a footswitch change reaches the screen up
+ * to two seconds after it is pressed, and names arrive a few at a time. And
+ * "slower" reads as the preset list taking its time, not as a delay on what
+ * he plays, which is the thing he asked to have said.
+ *
+ * One sentence, its one-line form for a button's second line (with the AM4
+ * in it, for a customer, who can pick nothing else), and the Settings row's
+ * own, which has one short line to say both halves in: written together here
+ * so they can never say different things.
  */
 export const BLUETOOTH_WAYS =
-  'There are two ways to connect. The computer is the best one, and does everything. Bluetooth (beta) needs no computer, but it is slower and has fewer features.'
-export const BLUETOOTH_WAYS_SHORT = 'Slower than the computer, fewer features'
+  'There are two ways to connect. The computer is the best one, and does everything. Bluetooth (beta) needs no computer, but it has more lag and fewer features.'
+export const BLUETOOTH_WAYS_SHORT = 'More lag than the computer, fewer features'
+/*
+ * The same line for a customer, with the one unit they can pick in front of
+ * it: an FM9 owner with no computer reads it on the waiting screen's way in,
+ * before the page turns them away.
+ */
+export const BLUETOOTH_WAYS_SHORT_AM4 = `AM4 only for now · ${BLUETOOTH_WAYS_SHORT.toLowerCase()}`
+/*
+ * THE SETTINGS ROW, OFF: what it is for and what it costs, in the one line a
+ * row has (Settings.js SetupRow, cut at one line on a 320-point screen). It
+ * said only the cost for a day, "slower than the computer, fewer features",
+ * which read as a row that had nothing going for it, in the row's green.
+ */
+export const BLUETOOTH_ROW_OFF = 'Off · no computer needed, more lag'
 
 /*
  * THE AM4 ONLY, FOR A CUSTOMER (lib/ble-rule.js CUSTOMER_UNITS). Said beside
@@ -190,8 +209,14 @@ export const AM4_ONLY = 'For now, Bluetooth (beta) is for an AM4 only.'
  */
 export const NOT_FOR_FM3 = 'Not for an FM3: when we tried Bluetooth on one, the adapter’s cable got very hot.'
 
-/* The purchase page's line, on a copy that opens Bluetooth to customers: the two ways, then what it needs. */
-export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} For now it is for an AM4 only, with a Bluetooth MIDI adapter sold separately.`
+/*
+ * The purchase page's line, on a copy that opens Bluetooth to customers: the
+ * two ways, then what it needs. Every part, by what it is and with no
+ * prices: the one screen where somebody pays on what it says, and the list
+ * on the Bluetooth page is four parts and a charger (partsFor('am4') and
+ * POWER_LINE), not "an adapter". It said one adapter for a day.
+ */
+export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} For now it is for an AM4 only, and needs parts sold separately: a Bluetooth MIDI adapter, its MIDI cable and two small plug adapters, plus a USB charger or power bank (the Bluetooth page lists them).`
 
 
 /** The parts, by the name printed on the box, each with what it is for in a line. */
@@ -262,8 +287,13 @@ export function partsFor(unit, noun = 'phone') {
  * has said it since the parts went on it ("Fractal Remote gets nothing from
  * them", and not connected with CME, LOOTOOLS or any seller), and the app's
  * View on Amazon buttons said nothing. Customers press those buttons now.
+ *
+ * Without the word "connected", which the guide can keep: on this page it is
+ * the Bluetooth link ("Connected · AM4 answering", "Not connected"), and
+ * "isn't connected with them" under a CME adapter read as the app failing to
+ * reach it.
  */
-export const SELLERS_LINE = 'CME and LOOTOOLS make these parts. Fractal Remote isn’t connected with them or with Amazon, and gets nothing from these links.'
+export const SELLERS_LINE = 'CME and LOOTOOLS make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.'
 
 /*
  * ONE THING TALKING TO THE UNIT. With Bluetooth on, the phone never looks
@@ -308,6 +338,14 @@ export const PLUGS_CHECK =
  */
 export const GEAR_IN_SHORT =
   'A CME WIDI Uhost, a CME C2MIDI Pro, and a phone charger or power bank with a USB-C cable for the Uhost. For an AM4, also two Type-A MIDI to 3.5 mm adapters. Pick your unit above for where to buy them and how they plug in.'
+
+/*
+ * The same for a customer, whose step 1 offers the AM4 alone: one list, with
+ * the adapters in it, and no "For an AM4, also" or "Pick your unit", which
+ * say there are other units and other lists.
+ */
+export const GEAR_IN_SHORT_AM4 =
+  'A CME WIDI Uhost, a CME C2MIDI Pro, two Type-A MIDI to 3.5 mm adapters, and a phone charger or power bank with a USB-C cable. Tap AM4 above for where to buy them and how they plug in.'
 
 /**
  * How it plugs together, for one unit, in at most five short steps, the

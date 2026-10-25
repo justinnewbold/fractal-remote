@@ -21,6 +21,10 @@ says it, every build here has to stay closed to a customer on both phones;
 once one does, `BLUETOOTH_FROM_STORE` has to be set for each phone that row
 built and has to open on that row's version, so no later update can set it
 back and take Bluetooth away from the copies that were reviewed with it.
+The opening build's row is written in the first pull request after the
+build is started, before any other merge, and a ledger-test failure that
+names the threshold and this app's version in the meantime means that row is
+missing: the fix is the row, never moving the threshold.
 
 **And on the day a build goes live in a store, move its number in
 `public/store-versions.json`** (`ios` for the App Store, `android` for Google

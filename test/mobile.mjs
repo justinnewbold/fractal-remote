@@ -4586,10 +4586,14 @@ export function run(test) {
     /* Changed on purpose with the gate above (1.87.17): Waking is handed
        App's fifteen-second clock (`long`), and a way to Setlists
        (`onSetlists`), whose only other door is on the play screen this
-       stands in front of. Look again is still probeNow and nothing else: it
-       asks at once and leaves the advice up. And the way to the Bluetooth
-       page only through the Settings row's own gate (bluetoothOffered),
-       changed on purpose on 25 October 2026 with the No computer? button. */
+       stands in front of. Look again is handed probeNow: it asks at once
+       and leaves the advice up. Over Bluetooth, on an iPhone whose adapter
+       has gone, the waiting screen's Look again opens Apple's screen first
+       and then pokes (lib/bluetooth lookForAdapterAgain(onRetry), changed on
+       purpose on 25 October 2026); for the computer it is the poke alone.
+       And the way to the Bluetooth page only through the Settings row's own
+       gate (bluetoothOffered), changed on purpose the same day with the No
+       computer? button. */
     assert.match(
       flat,
       /\{settling && screen === 'stage' \? \( <Waking link=\{link\} long=\{lookedLong\} onRetry=\{probeNow\} onSwitch=\{\(\) => openSettings\('link'\)\} onTroubleshoot=\{openConnectFix\} onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\} onSetlists=\{\(\) => setScreen\('setlists'\)\} \/>/,
@@ -11549,7 +11553,7 @@ export function run(test) {
      */
     assert.match(
       flat,
-      /\{link !== 'connected' \? \( <Press label=\{throughAdapter \? 'Look for the adapter again' : 'Look for the computer again'\} onPress=\{throughAdapter \? \(\) => lookForAdapterAgain\(onReconnect\) : onReconnect\} \/> \) : null\}/,
+      /\{link !== 'connected' \? \( <Press label=\{throughAdapter \? 'Look for the adapter again' : 'Look for the computer again'\} sub=\{throughAdapter && opensApplesScreen\(\) \? APPLE_SCREEN_OPENS : undefined\} onPress=\{throughAdapter \? \(\) => lookForAdapterAgain\(onReconnect\) : onReconnect\} \/> \) : null\}/,
       'the reconnect button is shown on a live link'
     )
   })

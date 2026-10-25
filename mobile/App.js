@@ -49,8 +49,22 @@ import { clearLinkFault, useRig } from './src/lib/rig'
 import { keepLog } from './src/lib/logKeep'
 import { installCrashCapture } from './src/lib/debugLog'
 import { restoreDemo, setDemo, useDemo } from './src/lib/demo'
-import { ALLOW_WORDS, RESTRICTED_WORDS, allowBluetooth, bluetoothSupported, lookForAdapterAgain, restoreBluetooth, setBluetooth, useBluetoothAllowed, useBluetoothOn, useBluetoothTrouble } from './src/lib/bluetooth'
-import { BLUETOOTH_WAYS_SHORT } from './src/lib/bluetooth-gear'
+import {
+  ALLOW_WORDS,
+  APPLE_SCREEN_OPENS,
+  RESTRICTED_WORDS,
+  allowBluetooth,
+  bluetoothSupported,
+  lookForAdapterAgain,
+  offeredAm4Only,
+  opensApplesScreen,
+  restoreBluetooth,
+  setBluetooth,
+  useBluetoothAllowed,
+  useBluetoothOn,
+  useBluetoothTrouble
+} from './src/lib/bluetooth'
+import { BLUETOOTH_WAYS_SHORT, BLUETOOTH_WAYS_SHORT_AM4 } from './src/lib/bluetooth-gear'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
@@ -1737,9 +1751,17 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           {/* Over Bluetooth, on an iPhone whose adapter has gone, Apple's
               screen first (lib/bluetooth lookForAdapterAgain): the link
               cannot bring it back by itself, and Stop, Connect and the
-              screen was three taps mid-set. */}
+              screen was three taps mid-set. And said under the button
+              whenever the tap will open it (opensApplesScreen,
+              APPLE_SCREEN_OPENS), with what to do there: a screen that
+              pops up unannounced, Done tapped before Connected, and
+              nothing connects. */}
           {bluetooth ? (
-            <Press label="Look for the adapter again" onPress={() => lookForAdapterAgain(onRetry)} />
+            <Press
+              label="Look for the adapter again"
+              sub={opensApplesScreen() ? APPLE_SCREEN_OPENS : undefined}
+              onPress={() => lookForAdapterAgain(onRetry)}
+            />
           ) : (
             <Press label="Look for the computer again" onPress={() => onRetry?.()} />
           )}
@@ -1754,12 +1776,25 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
             your computer" with nothing to say Bluetooth exists, and the gear
             was the only way to it. After the computer's own button, never
             before it: the computer is the best way, and the line under this
-            one says what Bluetooth costs (BLUETOOTH_WAYS_SHORT). Only where
-            App hands it a way in (`onBluetooth`: the row's own gate), and
-            only while it is off.
+            one says what Bluetooth costs (BLUETOOTH_WAYS_SHORT), and, to a
+            customer, that it is for an AM4 only (BLUETOOTH_WAYS_SHORT_AM4,
+            by lib/bluetooth offeredAm4Only): an FM9 owner with no computer
+            reads that here, not after the page has turned them away. Only
+            where App hands it a way in (`onBluetooth`: the row's own gate),
+            and only while it is off.
+
+            SHORT ENOUGH FOR ONE LINE. A button's label is one line at 15
+            points, and "No computer? Connect by Bluetooth (beta)" was about
+            296 points, cut on a 360-point Android phone and a 375-point
+            iPhone. This one is about 254 at its widest; the line under it
+            carries the cost.
           */}
           {!bluetooth && onBluetooth ? (
-            <Press label="No computer? Connect by Bluetooth (beta)" sub={BLUETOOTH_WAYS_SHORT} onPress={onBluetooth} />
+            <Press
+              label="No computer? Use Bluetooth (beta)"
+              sub={offeredAm4Only() ? BLUETOOTH_WAYS_SHORT_AM4 : BLUETOOTH_WAYS_SHORT}
+              onPress={onBluetooth}
+            />
           ) : null}
           {/* "Open the troubleshooting if it doesn't connect" — the browser's
               connecting screen has the same button. */}

@@ -32,10 +32,27 @@ import { isOlder } from './versions.js'
  * request that moves the version to 1.89.0, the last merge before the build
  * pair. A number set earlier is a copy that opens too early: apk.yml makes a
  * public APK at every version, and anything at or above the number opens.
- * test/bluetooth.mjs holds it to docs/expo-builds.md: null while no build
- * there is marked as the opening ("Bluetooth (beta) for customers"), and,
- * once one is, set and opening on that row's version, so no later update
- * can take it back from the copies that were reviewed with it.
+ * test/bluetooth.mjs holds it to docs/expo-builds.md: null, or this app's
+ * own version in the build pull request, until the opening row is written
+ * ("Bluetooth (beta) for customers" in What it was for), and, once it is,
+ * set and opening on that row's version, so no later update can take it
+ * back from the copies that were reviewed with it.
+ *
+ * THE OPENING ROW GOES IN BEFORE, OR WITH, THE FIRST MERGE AFTER THE BUILD
+ * IS STARTED. Every pull request moves the version, so the next one after
+ * the build pull request is 1.89.1, and the ledger test then finds a
+ * threshold of 1.89.0 that is neither null nor this app's version. The fix
+ * is that row, never this number: once a build exists, the threshold is
+ * never moved to match the next version. Moved to 1.89.1, or set back to
+ * null, it would close Bluetooth by update on every 1.89.0 copy whose review
+ * notes say it is there, the reviewer's own among them.
+ *
+ * AND ONLY ONCE THE STORE COPY IS SEEN TO BE READ RIGHT. Everything here
+ * leans on installedStoreVersion reading the number built into the copy,
+ * not the running update's. So the threshold is set only after Justin's
+ * logs from iPhone 1.88.3 and Android 1.88.0, running an update with a
+ * higher number, show "store copy: 1.88.3" and "store copy: 1.88.0" (the
+ * log's head, lib/logHead.js), not the update's 1.88.x.
  *
  * Nothing here knows about a phone: it imports the version rule and nothing
  * else, and everything about the copy in hand is passed in, so a test can

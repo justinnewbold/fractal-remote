@@ -7,6 +7,7 @@ import { APP_VERSION } from '../lib/version'
 import { BLE_UNITS, WAYS } from '../lib/bleWire'
 import {
   ALLOW_WORDS,
+  APPLE_SCREEN_OPENS,
   RESTRICTED_WORDS,
   adapterAway,
   adapterDevices,
@@ -30,6 +31,7 @@ import {
   BLUETOOTH_WAYS,
   FIRST_TIME,
   GEAR_IN_SHORT,
+  GEAR_IN_SHORT_AM4,
   GUIDE_URL,
   NOT_FOR_FM3,
   ONE_AT_A_TIME,
@@ -325,7 +327,11 @@ export default function BluetoothPage({ purchase, admin = false }) {
    * Apple's screen can (lib/bluetooth adapterAway). So while it is on and
    * away, one button opens that screen straight away (lookForAdapterAgain),
    * where it was Stop, Connect and the screen. Not while Apple's screen is
-   * kept shut.
+   * kept shut. The hint over it says to check the adapter first (a power
+   * bank that switched itself off leaves Apple's screen empty on every
+   * tap), and the line under it what to do in Apple's screen
+   * (APPLE_SCREEN_OPENS), the same words as the other two buttons that open
+   * it.
    */
   const away = b.on && b.phase === 'connecting' && ios && !shut && adapterAway()
   const reconnect = () => lookForAdapterAgain(probeNow)
@@ -378,13 +384,13 @@ export default function BluetoothPage({ purchase, admin = false }) {
                 {shut
                   ? 'If this stays here, tap Stop, check the adapter is plugged in and lit, then tap Connect.'
                   : away
-                    ? `The adapter isn’t connected to this ${deviceNoun()} now. Tap Reconnect, then in Apple’s screen tap your adapter and wait for Connected before Done.`
+                    ? `The adapter isn’t connected to this ${deviceNoun()} now. Check it is plugged in and lit, then tap Reconnect.`
                     : ios
                       ? 'If this stays here, tap Stop, then Connect, and connect the adapter again in Apple’s screen.'
                       : `If this stays here, check the ${deviceNoun()}’s Bluetooth is on, and that the adapter is plugged in and lit.`}
               </Hint>
             ) : null}
-            {away ? <Press label="Reconnect" tone="live" onPress={reconnect} /> : null}
+            {away ? <Press label="Reconnect" tone="live" sub={APPLE_SCREEN_OPENS} onPress={reconnect} /> : null}
             {/* The unit chips are not drawn while it is on, and Connecting… or Disconnected names no unit: which one was picked, and how to change it. */}
             {b.unit ? <Hint>{`Unit: ${unitName(b.unit)}. To change it, tap Stop first.`}</Hint> : null}
             <Press label="Stop using Bluetooth" onPress={() => setBluetooth(false)} />
@@ -499,7 +505,7 @@ export default function BluetoothPage({ purchase, admin = false }) {
           <PlugIn unit={b.unit} />
         </Fold>
         <Fold title="What to buy" open={buy} onToggle={() => setBuy(!buy)}>
-          <Buy unit={b.unit} />
+          <Buy unit={b.unit} am4Only={am4Only} />
         </Fold>
         <Fold title="What it can and can’t do" open={about} onToggle={() => setAbout(!about)}>
           <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
@@ -672,11 +678,13 @@ function PlugIn({ unit }) {
  * The parts for one unit, each with what it is for and where to buy it, the
  * charger that is not on the list, and who makes them (not this app, which
  * gets nothing from the links). Before a unit is picked, the whole of it in a
- * few words. For the FM3, nothing to buy, and a pointer to the warning in How
- * to plug it in rather than the same red box twice.
+ * few words: for a customer, offered the AM4 alone (`am4Only`), the AM4's
+ * own list, with nothing in it about other units. For the FM3, nothing to
+ * buy, and a pointer to the warning in How to plug it in rather than the
+ * same red box twice.
  */
-function Buy({ unit }) {
-  if (!unit) return <Hint>{GEAR_IN_SHORT}</Hint>
+function Buy({ unit, am4Only = false }) {
+  if (!unit) return <Hint>{am4Only ? GEAR_IN_SHORT_AM4 : GEAR_IN_SHORT}</Hint>
   if (warningFor(unit)) return <Hint>Not for the FM3. How to plug it in, above, says why.</Hint>
   return (
     <View style={{ gap: space.md }}>
