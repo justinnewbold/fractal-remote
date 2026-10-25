@@ -1308,6 +1308,10 @@ export function run(test) {
     assert.match(list, /align-items: flex-start;/, 'a short tile beside a tall one stretches its Remove button')
     const phone = flat('mobile/src/components/Shots.js')
     assert.match(phone, /resizeMode="contain" style=\{\{ \.\.\.thumbSize\(shot\.width, shot\.height, 64\),/)
+    /* And opened at the thumbnail's size on Android, not as the whole screenshot (Google Play's 1.88.0
+       review asked for pictures opened at the size they are shown). thumbSize always gives the box a
+       size, which a resized picture needs before it opens at all. */
+    assert.match(phone, /source=\{\{ uri: shot\.uri \}\} accessibilityLabel=\{`Screenshot \$\{i \+ 1\}`\} \/\*[^*]*\*\/ resizeMethod="resize"/, 'a thumbnail opens the whole screenshot on Android again')
   })
 
   test('the privacy page says where every copy of a report goes, and for how long', async () => {

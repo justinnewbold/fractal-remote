@@ -104,6 +104,9 @@ export default function Shots({ shots = [], onChange, disabled = false, say }) {
               <Image
                 source={{ uri: shot.uri }}
                 accessibilityLabel={`Screenshot ${i + 1}`}
+                /* Opened at the thumbnail's size on Android, not as the whole screenshot of up to 1600
+                   across: thumbSize always gives it a size, so it never waits for one it will not get. */
+                resizeMethod="resize"
                 /* The whole picture, in its own shape (shared/report-rules thumbSize), as the browser shows it. */
                 resizeMode="contain"
                 style={{

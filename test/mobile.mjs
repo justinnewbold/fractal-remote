@@ -12979,6 +12979,27 @@ export function run(test) {
     assert.ok(amps.entries.every((e) => e.slug === 'amp'), 'a catalog row does not know which block it came from')
   })
 
+  test('the amp and cab photograph opens at the size of its box on Android, and the box always has one', () => {
+    /*
+     * Google Play's 1.88.0 review asked for pictures opened at the size they
+     * are shown. The gear photographs come from the website at 1200×900, and
+     * React Native only opens a picture at the size of its box by itself when
+     * the picture is already on the phone (ReactImageView.kt, shouldResize),
+     * so each card opened all of it, about 4 MB. resizeMethod="resize" asks
+     * for the box's size instead. It waits for the box to be laid out before
+     * it opens anything, so a box with no size would be a blank: this one is
+     * the card's width and 200 tall, and wider than the photograph is drawn,
+     * so what is opened is never smaller than what is shown.
+     */
+    const card = read('mobile/src/components/GearCard.js')
+    const at = card.indexOf('source={{ uri: photo.src }}')
+    assert.ok(at > 0, 'the gear photograph moved; this check follows it')
+    const image = card.slice(card.lastIndexOf('<Image', at), card.indexOf('/>', at))
+    assert.match(image, /resizeMethod="resize"/, 'the gear photograph opens at its full 1200×900 on Android again')
+    assert.match(image, /resizeMode="contain"/, 'the gear photograph is cropped or stretched, and a smaller copy would show it')
+    assert.match(image, /style=\{\{\s+width: '100%',\s+height: 200,/, 'the gear photograph’s box has no fixed size, and a resized picture waits for one')
+  })
+
   test('the phone has light, dark and auto, and every screen follows', async () => {
     /*
      * "I'm not seeing where the light/dark/auto theme buttons are anymore.

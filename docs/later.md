@@ -276,14 +276,21 @@ scenes. Still on the list, not started:
 ## Google Play's 2027 rules
 
 Looked into on 16 October 2026, after Play Console's Android vitals warned
-"DEX code optimization is below our threshold … Fix by Feb 2027". Google
-says an app that misses these may lose visibility and some publishing
-abilities on Play, not be taken down.
+"DEX code optimization is below our threshold … Fix by Feb 2027", and again
+on 25 October 2026 against the 1.88.0 file Google Play has (Expo build
+360c7e98, version code 12), when Play Console listed four suggestions for
+it. Google says an app that misses these may lose visibility and some
+publishing abilities on Play, not be taken down.
 
-- **Code optimization, February 2027.** Done and waiting for a build:
-  docs/pending/r8.patch, proven for free by the android-minified workflow.
-  JavaScript is not what Play scores, so no update can fix it; only a store
-  build can.
+- **Code optimization, February 2027.** In since 1.88.0: R8 is fully on in
+  that build, and its own score sheet says 82.9% obfuscated, 82.6%
+  optimized and 83.0% shrunk, where Play asks for 25%. The code is 9.0 MB,
+  under the 10 MB from which the February rule counts at all. Play's R8
+  card can still show, for two lines of its own: "optimized resource
+  shrinking", which docs/pending/shrink-resources.patch turns on for the
+  next build, and an Android Gradle plugin of 9.0 or newer, which only
+  comes with Expo SDK 58 (its React Native 0.88 uses 9.2.1), a bigger move
+  for a build pair of its own.
 - **Staying signed in on a new Android phone, April 2027** ("Zero-Tap
   Sign-In"). An app with accounts has to put the player back in their
   account by itself when they move to a new phone, through Android's
@@ -294,12 +301,44 @@ abilities on Play, not be taken down.
   using Google's Block Store closed on 30 September 2026. Games are exempt;
   this app is not a game. Its own build, after the R8 one, before April.
   developer.android.com/identity/sign-in/restore-credentials-implementation
+- **Tablets turning sideways, nothing due.** Play's "Remove resizability
+  and orientation restrictions" is one line of the app's own:
+  `"orientation": "portrait"` in mobile/app.json, which locks the whole
+  Android app upright. Android 16 and newer already ignore it on a big
+  screen; a tablet, foldable or Chromebook on 12 to 15 held sideways shows
+  the app as an upright strip with black bars. The fix is parked for
+  1.89.0 in docs/pending/tablet-turns.patch: the lock comes off on Android,
+  and a screen whose short side is under 600 points (a phone) is held
+  upright by the app itself, so only bigger screens turn. iPhones stay
+  upright and iPads already turn. It is a build, and it moves both phones.
+- **What android-minified's sideways tablet picture showed.** Less than it
+  was taken for. The emulator runs Android 16, which ignores the lock
+  anyway (its log says so: "Ignoring manifest-declared fixed orientation
+  … since target sdk 36"). Its quarter turn turned the Pixel Tablet
+  upright, since that tablet is sideways to begin with, and it was back
+  before the picture was taken. And the picture is the "An independent app"
+  card stretched across the screen, because the run never taps OK. It has
+  never shown Play or Settings sideways on Android; that needs an Android 15
+  tablet, a phone that must stay upright, and the tap into the demo.
 - **Not fixable from here, and nothing due:** Play's "deprecated APIs for
-  edge-to-edge" names code inside React Native and Google's own libraries,
-  which their updates fix; and "Remove resizability and orientation
-  restrictions" is the portrait lock, which Android 16 already ignores on
-  tablets. That one is a suggestion, and the sideways tablet picture from
-  android-minified shows what it looks like today.
+  edge-to-edge" names code inside React Native and Google's own libraries
+  (React Native's window code, the splash screen library, Material, the
+  photo picker's crop screen), which their updates fix; the screen itself
+  is already drawn edge to edge. React Native 0.88 still makes the same
+  calls. One of them can go: Material is in the app only for Expo's
+  developer error screen, which does nothing in a store build, and
+  docs/pending/logbox-android.patch leaves it out of Android for 1.89.0.
+  That shortens Play's list without emptying it.
+- **Bitmap image optimization, nothing due.** Play's scan looks for code
+  that downloads a picture and decodes it by hand, and every place it can
+  find is library code: Expo's update library (a restart screen picture
+  this app never asks for), React Native's own picture loader, the photo
+  picker's and the audio library's. It is not about the size of the app's
+  own pictures, which were made smaller anyway by update on 25 October
+  2026, so the suggestion will most likely stay. The rule that binds, from
+  February 2027, is picture memory while the app is in the background, over
+  200 MB; every picture built into this app comes to under 5 MB when
+  opened.
 
 ## Waiting on something
 

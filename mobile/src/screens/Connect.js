@@ -6,9 +6,19 @@ import { CONNECT, P6 } from '../lib/onboarding'
 import laptopIcon from '../../assets/icons/laptop.png'
 import mailIcon from '../../assets/icons/mail.png'
 import sendIcon from '../../assets/icons/send.png'
-import appleIcon from '../../assets/icons/apple.png'
-import windowsIcon from '../../assets/icons/windows.png'
-import linuxIcon from '../../assets/icons/linux.png'
+/*
+ * The three computers under "Free • Mac, Windows, Linux" are plain drawings
+ * in the icon set's own hand: a laptop, a screen on a stand and a command
+ * prompt. They were Apple's logo, Microsoft's Windows logo and Linux's
+ * penguin, from the mockup, and Apple's rules for its trademarks say "You
+ * may not use the Apple Logo" without Apple's written license, with
+ * Microsoft's saying the same of theirs, in an app that goes to Apple's
+ * review with every store version. The names are said in words, in the line
+ * above them, which is how this app names anybody else's product
+ * (test/independent.mjs holds the three old files away).
+ */
+import desktopIcon from '../../assets/icons/desktop.png'
+import terminalIcon from '../../assets/icons/terminal.png'
 import CopyAddress from '../components/CopyAddress'
 import Note from '../components/Note'
 import Press from '../components/Press'
@@ -203,15 +213,15 @@ export default function Connect({ onBack }) {
           bottom work to take them straight to the download page on
           fractal.newbold.cloud/downloads." The same page for all three: it
           lists every computer's download, and opened on the computer itself
-          it puts that one first, so a Mac icon and a Windows icon have
-          nowhere different to go. Opened in the phone's own browser, from
+          it puts that one first, so the Mac's picture and the Windows one
+          have nowhere different to go. Opened in the phone's own browser, from
           where it can be shared or sent on.
         */}
         <View style={{ flexDirection: 'row', gap: space.lg }}>
           {[
-            [appleIcon, 'Mac'],
-            [windowsIcon, 'Windows'],
-            [linuxIcon, 'Linux']
+            [laptopIcon, 'Mac'],
+            [desktopIcon, 'Windows'],
+            [terminalIcon, 'Linux']
           ].map(([src, name]) => (
             <Pressable
               key={name}
