@@ -105,9 +105,9 @@ export default function Fixes({ onBack, open = null, hostVersion = null }) {
                   the computer, the cable and the computer app, and an AM4
                   owner who has no computer, or never got one going, reads
                   them as the only way there is. So, where this copy offers
-                  Bluetooth (beta) and it is not already on, the same line the
-                  waiting screen and Phone & computer draw under the
-                  no-computer words (shared/no-computer.mjs
+                  Bluetooth (beta) and it is not already on, the same line
+                  Phone & computer draws under the no-computer words (the
+                  waiting screen has its own button instead; shared/no-computer.mjs
                   NO_COMPUTER_BLUETOOTH): the second way, the computer still
                   the best, what Bluetooth costs, and where it is. It is also
                   where Play's card about the computer sends them: that card

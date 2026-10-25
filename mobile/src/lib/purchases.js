@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import Constants from 'expo-constants'
 
 import { logDebug } from './debugLog'
-import { mayDrive } from './unlock-rule'
+import { mayDrive, mayDriveBluetooth } from './unlock-rule'
 import { isOwner } from './owner-unlock'
 import { currentAccount, signedInOnPhone } from './relay'
 import { isDemo, setDemo } from './demo'
@@ -1312,6 +1312,14 @@ export const unlockedFrom = async () => {
  * unavailable for any reason at all. See the rule at the top.
  */
 export const mayConnect = () => mayDrive(state)
+
+/**
+ * Whether Bluetooth (beta) may drive one: paid, for anybody but his account
+ * (`admin`, lib/bluetooth bluetoothAdmin), whose answer is mayConnect's. Not
+ * mayConnect for everybody: with no signal the store cannot be reached, and
+ * Bluetooth needs none (unlock-rule mayDriveBluetooth says why).
+ */
+export const mayConnectBluetooth = (admin = false) => mayDriveBluetooth(state, admin)
 
 /**
  * WHETHER TO SHOW THE WAY IN — which is NOT the same question as whether

@@ -285,6 +285,8 @@ async function sendButtonOnABench() {
  *   bench.purchase   what usePurchase() answers
  *   bench.allowed    what useBluetoothAllowed() answers: Justin's account
  *                    alone today, every customer false
+ *   bench.admin      what useBluetoothAdmin() answers: whether the account
+ *                    is his, whose full version is mayDrive's
  *   bench.supported  what bluetoothSupported() answers; `bench.asked` counts
  *                    every time it is asked
  *   bench.on         whether Bluetooth (beta) is on (lib/bleSwitch)
@@ -301,7 +303,7 @@ async function sendButtonOnABench() {
 async function otherWayOnABench() {
   const { transformSync } = await import('esbuild')
   const dir = mkdtempSync(join(tmpdir(), 'no-computer-ble-'))
-  const bench = { purchase: { unlocked: true, available: true }, allowed: false, supported: true, asked: 0, on: false }
+  const bench = { purchase: { unlocked: true, available: true }, allowed: false, admin: false, supported: true, asked: 0, on: false }
   globalThis.__otherWayBench = bench
   const files = {
     'package.json': '{ "type": "module" }',
@@ -311,6 +313,7 @@ async function otherWayOnABench() {
     'bluetooth.mjs': `
       const b = globalThis.__otherWayBench
       export const useBluetoothAllowed = () => b.allowed
+      export const useBluetoothAdmin = () => b.admin
       export function bluetoothSupported() { b.asked++; return b.supported }
     `,
     'purchases.mjs': 'const b = globalThis.__otherWayBench\nexport const usePurchase = () => ({ ...b.purchase })\n',
@@ -1122,13 +1125,14 @@ export function run(test) {
   test('the other way is said only where the Bluetooth (beta) row is drawn: the row’s own gate, in its order', () => {
     /* The row, and its page, behind the full version, then who may have it, then whether the phone can do it. */
     const settings = flat('mobile/src/screens/Settings.js')
-    assert.match(settings, /\{mayDrive\(purchase\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/, 'the Bluetooth (beta) row is behind a different gate now; lib/useBluetoothOffered.js must be the same one')
+    assert.match(settings, /\{mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/, 'the Bluetooth (beta) row is behind a different gate now; lib/useBluetoothOffered.js must be the same one')
     assert.match(settings, /const bluetoothAllowed = useBluetoothAllowed\(\)/)
+    assert.match(settings, /const bluetoothAdmin = useBluetoothAdmin\(\)/)
     assert.match(settings, /const purchase = usePurchase\(\)/)
     /* The hook, the same three, in the same order, and nothing else deciding. */
     const hook = read('mobile/src/lib/useBluetoothOffered.js').replace(/\/\*[\s\S]*?\*\//g, ' ')
     assert.deepEqual([...hook.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1]), ['./bluetooth', './purchases', './unlock-rule'], 'the hook asks something besides the row’s three')
-    assert.match(hook, /const purchase = usePurchase\(\)\s+const allowed = useBluetoothAllowed\(\)\s+return mayDrive\(purchase\) && allowed && bluetoothSupported\(\)/, 'the hook is not the row’s gate, or asks the phone whether it can do Bluetooth before who may have it')
+    assert.match(hook, /const purchase = usePurchase\(\)\s+const allowed = useBluetoothAllowed\(\)\s+const admin = useBluetoothAdmin\(\)\s+return mayDriveBluetooth\(purchase, admin\) && allowed && bluetoothSupported\(\)/, 'the hook is not the row’s gate, or asks the phone whether it can do Bluetooth before who may have it')
     assert.ok(!/isAdmin|Platform|APP_VERSION|expoConfig|storeVersion/.test(hook), 'the hook decides who may have Bluetooth (beta) for itself: that is useBluetoothAllowed’s alone')
 
     /*
@@ -1139,14 +1143,11 @@ export function run(test) {
     const drawn = flat('mobile/src/components/NoComputer.js').replace(/\/\*[\s\S]*?\*\//g, ' ')
     assert.match(drawn, /export default function NoComputerWords\(\{ email \}\) \{ return \( <> <Text style=\{\{ fontWeight: '700' \}\}>\{NO_COMPUTER_TITLE\}<\/Text> \{'\\n'\} \{noComputerBody\(email\)\} <\/> \) \}/, 'the no-computer words are not what they were, or say the other way inside them')
     assert.match(drawn, /export function NoComputerOtherWay\(\) \{ const offered = useBluetoothOffered\(\) return offered \? <Note tone="hint">\{NO_COMPUTER_BLUETOOTH\}<\/Note> : null \}/, 'the other way is not its own note behind the hook')
-    /* After the words AND their download button, on the waiting screen and Phone & computer, behind the same no. */
+    /* After the words AND their download button, on Phone & computer, behind the same no. */
     const app = flat('mobile/App.js').replace(/\/\*[\s\S]*?\*\//g, ' ')
     const waking = app.slice(app.indexOf('function Waking('))
     const settingsCode = settings.replace(/\/\*[\s\S]*?\*\//g, ' ')
-    for (const [where, text, next] of [
-      ['the waiting screen', waking, '<Press label="Look for the computer again"'],
-      ['Phone & computer', settingsCode, 'Make sure you’re connected to your computer using']
-    ]) {
+    for (const [where, text, next] of [['Phone & computer', settingsCode, 'Make sure you’re connected to your computer using']]) {
       const button = text.indexOf('{noneSaid ? <SendLinkButton email={noComputer.email} /> : null}')
       const other = text.indexOf('{noneSaid ? <NoComputerOtherWay /> : null}')
       assert.ok(button > 0 && other > button, `${where} draws the other way before the download link button, or not behind the same no`)
@@ -1165,7 +1166,15 @@ export function run(test) {
     }
     look('mobile/src')
     for (const m of app.matchAll(/<NoComputerOtherWay /g)) drawnAt.push(`mobile/App.js@${m.index}`)
-    assert.deepEqual(drawnAt.map((u) => u.split('@')[0]).sort(), ['mobile/App.js', 'mobile/src/screens/Settings.js'], `the other way is drawn somewhere else as well, or somewhere is missing it: ${drawnAt.join(', ')}`)
+    assert.deepEqual(drawnAt.map((u) => u.split('@')[0]).sort(), ['mobile/src/screens/Settings.js'], `the other way is drawn somewhere else as well, or somewhere is missing it: ${drawnAt.join(', ')}`)
+    /*
+     * NOT ON THE WAITING SCREEN, which has its own way to Bluetooth (beta):
+     * "No computer? Use Bluetooth (beta)", after the computer's button. The
+     * note beside it was the same pitch twice, sending them the long way
+     * round to the page the button opens in one tap.
+     */
+    assert.ok(!/<NoComputerOtherWay|NO_COMPUTER_BLUETOOTH|useBluetoothOffered/.test(waking), 'the waiting screen draws the no-computer note’s Bluetooth line beside its own Bluetooth button')
+    assert.ok(waking.includes('label="No computer? Use Bluetooth (beta)"'), 'the waiting screen lost its own way to Bluetooth (beta), so the note has to come back')
     /* And Fixes, under It will not connect at all, where Play's card sends them. */
     const fixes = flat('mobile/src/screens/Fixes.js')
     assert.match(fixes, /const bluetoothOffered = useBluetoothOffered\(\)/)
@@ -1216,9 +1225,22 @@ export function run(test) {
     const asked = b.bench.asked
     assert.equal(b.otherWay(), null, 'a copy without the full version is sent to a row it does not have')
     assert.equal(b.bench.asked, asked, 'the phone was asked whether it can do Bluetooth before the full version was')
-    /* A store that cannot take money is no paywall (unlock-rule mayDrive), and the row shows: so does the line. */
+    /*
+     * A store that cannot be reached is no paywall (unlock-rule mayDrive),
+     * but it is not the full version for Bluetooth (mayDriveBluetooth): with no
+     * signal it is always so, and a free account in airplane mode would have
+     * a rig for good. So a customer who never paid is not sent to it; one
+     * who paid (the purchase remembered on the phone) is; and his account
+     * keeps mayDrive's answer.
+     */
     b.bench.purchase = { unlocked: false, available: false }
-    assert.deepEqual(other(), line, 'where the row shows with purchasing impossible, the other way is not said')
+    assert.equal(b.otherWay(), null, 'an account that never paid, with the store out of reach, is sent to Bluetooth (beta)')
+    b.bench.purchase = { unlocked: true, available: false }
+    assert.deepEqual(other(), line, 'somebody who paid, with the store out of reach, is not sent to Bluetooth (beta)')
+    b.bench.purchase = { unlocked: false, available: false }
+    b.bench.admin = true
+    assert.deepEqual(other(), line, 'his account, with the store out of reach, is not sent to Bluetooth (beta)')
+    b.bench.admin = false
     /* With no email, the words name nobody, and the other way is the same. */
     b.bench.purchase = { unlocked: true, available: true }
     assert.equal(b.words(''), `${words.NO_COMPUTER_TITLE}\n${words.noComputerBody('')}`)

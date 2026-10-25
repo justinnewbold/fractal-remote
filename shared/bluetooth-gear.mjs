@@ -167,13 +167,18 @@ export const betaNote = (os) => (os === 'android' ? BETA_NOTE_ANDROID : BETA_NOT
  * "slower" reads as the preset list taking its time, not as a delay on what
  * he plays, which is the thing he asked to have said.
  *
+ * NOT "AND DOES EVERYTHING". It said that for a day, and on the purchase
+ * page it came straight after VP4_SO_FAR, the list of what a VP4 cannot do
+ * from the app yet: two sentences that disagree, where somebody pays. The
+ * computer is the best way; what Bluetooth lacks is said after it.
+ *
  * One sentence, its one-line form for a button's second line (with the AM4
  * in it, for a customer, who can pick nothing else), and the Settings row's
  * own, which has one short line to say both halves in: written together here
  * so they can never say different things.
  */
 export const BLUETOOTH_WAYS =
-  'There are two ways to connect. The computer is the best one, and does everything. Bluetooth (beta) needs no computer, but it has more lag and fewer features.'
+  'There are two ways to connect. The computer is the best one. Bluetooth (beta) needs no computer, but it has more lag and fewer features.'
 export const BLUETOOTH_WAYS_SHORT = 'More lag than the computer, fewer features'
 /*
  * The same line for a customer, with the one unit they can pick in front of
@@ -207,12 +212,19 @@ export const NOT_FOR_FM3 = 'Not for an FM3: when we tried Bluetooth on one, the 
 
 /*
  * The purchase page's line, on a copy that opens Bluetooth to customers: the
- * two ways, then what it needs. Every part, by what it is and with no
- * prices: the one screen where somebody pays on what it says, and the list
- * on the Bluetooth page is four parts and a charger (partsFor('am4') and
- * POWER_LINE), not "an adapter". It said one adapter for a day.
+ * two ways, then what it needs. Every part, by the name on its box (PARTS,
+ * below, for the AM4: partsFor('am4')) and what it is, plus POWER_LINE's
+ * charger, with no prices: the one screen where somebody pays on what it
+ * says, and the list is four parts and a charger, not "an adapter". It said
+ * one adapter for a day.
+ *
+ * NAMED HERE, NOT SENT ELSEWHERE. It said "(the Bluetooth page lists them)"
+ * for a day, but nobody who has not paid can open that page: the Settings
+ * row, the waiting screen's button and the Fixes line all wait for the
+ * purchase. So the names are in the line itself, where somebody deciding
+ * whether to pay can read them, and look them up.
  */
-export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} For now it is for an AM4 only, and needs parts sold separately: a Bluetooth MIDI adapter, its MIDI cable and two small plug adapters, plus a USB charger or power bank (the Bluetooth page lists them).`
+export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} For now it is for an AM4 only, and needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter), a CME C2MIDI Pro (its MIDI cable) and two Type-A MIDI to 3.5 mm adapters, plus a USB charger or power bank.`
 
 
 /** The parts, by the name printed on the box, each with what it is for in a line. */
@@ -257,7 +269,7 @@ const UNITS = { am4: 'AM4', fm3: 'FM3', fm9: 'FM9', axefx3: 'Axe-Fx III' }
  * file).
  */
 export const FM3_WARNING =
-  'Don’t plug the C2MIDI Pro straight into an FM3. When we tried it, the cable got very hot and didn’t connect. FM3 owners report the same with adapters that take power from its MIDI OUT, the Yamaha MD-BT01 and CME’s other adapters too, even on USB power. The full setup guide has more.'
+  'Don’t plug the C2MIDI Pro into an FM3. When we tried it, the cable got very hot and didn’t connect. FM3 owners report the same with adapters that take power from its MIDI OUT, the Yamaha MD-BT01 and CME’s other adapters too, even on USB power. The full setup guide has more.'
 
 /** The units the parts list must not be bought for as it is. */
 export const NOT_STRAIGHT_IN = ['fm3']

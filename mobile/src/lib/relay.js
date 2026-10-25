@@ -410,13 +410,22 @@ const keptOnPhone = async () => (await keptAccount())?.id || null
  * So: supabase-js's own answer, as before, and when it says nobody, the
  * sign-in still on the phone. One the account service turned away is not on
  * the phone any more (supabase-js takes it off), so it is nobody here too.
- * Not keptSession itself: nothing here needs its wait, which is the door's,
- * and the relay's `userId` is set only by restoreSession's own answer, as
- * always. Where a token that works is needed (the relay pass), that is
- * asked for by itself, and fails with no signal as it always has.
+ * Not keptSession itself, and the relay's `userId` is set only by
+ * restoreSession's own answer, as always. Where a token that works is needed
+ * (the relay pass), that is asked for by itself, and fails with no signal as
+ * it always has.
+ *
+ * AND NOT HALF A MINUTE OF A BUSY BUY BUTTON. restoreSession waits out
+ * supabase-js's whole round of renewal retries, twenty-five seconds in
+ * airplane mode and thirty-seven with no bars, so a customer let in at a gig
+ * who tapped Buy or Restore with the account service out of reach (and the
+ * store answering) sat on a busy button for that long. So it is waited for
+ * KEPT_WAIT_MS, the door's own wait, and past it the sign-in still on the
+ * phone answers, as at the door. The order is kept: supabase-js's answer
+ * first, when it comes in time.
  */
 export async function signedInOnPhone() {
-  return (await restoreSession()) || (await keptOnPhone())
+  return (await within(restoreSession(), KEPT_WAIT_MS, null)) || (await keptOnPhone())
 }
 
 /* Where supabase-js keeps the sign-in on this phone: the key it was built with. */

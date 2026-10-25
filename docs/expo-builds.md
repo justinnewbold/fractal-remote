@@ -22,9 +22,21 @@ once one does, `BLUETOOTH_FROM_STORE` has to be set for each phone that row
 built and has to open on that row's version, so no later update can set it
 back and take Bluetooth away from the copies that were reviewed with it.
 The opening build's row is written in the first pull request after the
-build is started, before any other merge, and a ledger-test failure that
-names the threshold and this app's version in the meantime means that row is
-missing: the fix is the row, never moving the threshold.
+build is started, before any other merge. A ledger-test failure that names
+the threshold and this app's version in the meantime means one of two
+things: if a build was started from that threshold, the row is missing, and
+the fix is the row, never moving the threshold; only if no build was ever
+made from it is the threshold set back to null, or moved with the version.
+The pull request that writes the row also pins it in test/bluetooth.mjs (a
+1.89.0 row marked as the opening, and the threshold '1.89.0' on both
+phones), so a later change cannot take the row out and set the threshold
+back together.
+
+The pull request that sets the threshold, the build pull request, is merged
+only after Justin's yes to the build and right before the pair is started,
+never on green alone: its phones' fingerprint says Unchanged, and its merge
+puts a public APK that opens Bluetooth on the Releases page (CLAUDE.md says
+why).
 
 **And on the day a build goes live in a store, move its number in
 `public/store-versions.json`** (`ios` for the App Store, `android` for Google

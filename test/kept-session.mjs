@@ -673,7 +673,70 @@ export function run(test) {
     assert.match(account, /\{asked && !account\?\.email && !keptHere && purchase\.onlyHere && onMakeAccount \?/, 'the Account page offers to make an account to somebody signed in')
     assert.match(account, /\{signedInAs \? \( <Press label="Delete account"/, 'Delete account is offered on a sign-in the account service has not vouched for')
     assert.match(settings, /const signedInAs = account\?\.email && !isPairAccount\(account\.email\) \? account\.email : null/, 'the account service’s answer is mixed with the phone’s')
-    assert.match(settings, /const KEPT_OFFLINE = 'No internet right now\. Password and account options come back when it does\.'/)
+    assert.match(settings, /const KEPT_OFFLINE = 'Can’t reach your account now\. Password and account options come back when it can\.'/)
+    /* Never "no internet": the account service says nobody with a signal too, in an outage or just after the signal is back. */
+    assert.ok(!/No internet/i.test(settings.match(/const KEPT_OFFLINE = '([^']*)'/)?.[1] ?? 'No internet'), 'a customer on working wifi is told they have no internet')
+  })
+
+  test('the purchase asks whether anybody is signed in the door’s way: a customer let in at a gig is somebody to Buy, and quickly', async () => {
+    /*
+     * signedInOnPhone decides whose account a sale lands on: Buy, Restore,
+     * the link to a new account, the stuck line and the paywall's "Sign in
+     * instead" all ask it. Every purchase bench in test/mobile.mjs stands in
+     * for it, so this runs the real one, on the real supabase-js. Read as
+     * restoreSession alone, a customer let in on a sign-in that ran out was
+     * nobody to Buy, the store was taken off the account before selling, and
+     * the sale landed on the phone's nameless id: the 8 October shape.
+     */
+    for (const ago of [600, -1800]) {
+      const bench = await relayOnABench({ disk: { [KEY]: keptSignIn({ ago }) }, mode: 'offline' })
+      try {
+        assert.equal(await bench.relay.signedInOnPhone(), CUSTOMER, `${ago > 0 ? 'past its hour' : 'inside its hour'}, with no signal: a customer the door lets in is nobody to Buy`)
+        if (ago > 0) {
+          assert.equal(await bench.relay.restoreSession(), null, 'the account service vouched for the sign-in with no signal, so this proved nothing')
+          assert.equal(bench.relay.remoteUserId(), null, 'asking for the purchase let the relay join on a sign-in it could not renew')
+        }
+      } finally {
+        await bench.done()
+      }
+    }
+    /* Turned away by the account service, signed out with no signal, and nothing on the phone: nobody, so the sale is never put on an account that is not there. */
+    {
+      const bench = await relayOnABench({ disk: { [KEY]: keptSignIn() }, mode: 'refused' })
+      try {
+        assert.equal(await bench.relay.signedInOnPhone(), null, 'a sign-in the account service turned away is somebody to Buy')
+      } finally {
+        await bench.done()
+      }
+    }
+    {
+      const bench = await relayOnABench({ disk: { [KEY]: keptSignIn() }, mode: 'offline' })
+      try {
+        assert.equal(await bench.relay.keptSession(), CUSTOMER)
+        await bench.relay.signOut()
+        assert.equal(await bench.relay.signedInOnPhone(), null, 'the account signed out of is still somebody to Buy')
+      } finally {
+        await bench.done()
+      }
+    }
+    {
+      const bench = await relayOnABench({ mode: 'offline' })
+      try {
+        assert.equal(await bench.relay.signedInOnPhone(), null, 'a phone nobody ever signed in on is somebody to Buy')
+      } finally {
+        await bench.done()
+      }
+    }
+    /* And a question the account service never answers keeps Buy busy for the door's wait, not supabase-js's half a minute: the sign-in on the phone answers past it. */
+    const captive = await relayOnABench({ disk: { [KEY]: keptSignIn() }, mode: 'captive' })
+    try {
+      const { value, took } = await timed(captive.relay.signedInOnPhone(), captive.relay.KEPT_WAIT_MS + 5000)
+      assert.equal(value, CUSTOMER, 'a network that never answers keeps Buy waiting, or makes a customer nobody')
+      assert.ok(took >= captive.relay.KEPT_WAIT_MS - 50 && took < captive.relay.KEPT_WAIT_MS + 1500, `the purchase took ${took} ms to go on with the sign-in on the phone`)
+      assert.equal(captive.relay.remoteUserId(), null, 'the purchase gave the relay an answer supabase-js never gave')
+    } finally {
+      await captive.done()
+    }
   })
 
   test('the launch opens on the app or on the sign-in screen by that answer, and tells Bluetooth whose phone it is first', async () => {

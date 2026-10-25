@@ -20,6 +20,9 @@
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 
+/* THE BUILD LEDGER, a build at a time: docs/expo-builds.md's rows, read the one way test/bluetooth.mjs reads them too. */
+import { ledgerBuilds, withoutOpening } from './ledger.mjs'
+
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 
 /* Comments quote the traps by name, so every check below reads the code with
@@ -948,25 +951,6 @@ export function run(test) {
   }
 
   /*
-   * THE BUILD LEDGER, a build at a time: docs/expo-builds.md's rows, one
-   * entry for each phone a row built, and whether the row is the one that
-   * opened Bluetooth (beta) to customers ("Bluetooth (beta) for customers" in
-   * What it was for, the words the ledger's rows use for it).
-   */
-  const OPENING = /Bluetooth \(beta\) for customers/
-  const ledgerBuilds = (text) => {
-    const out = []
-    for (const line of String(text).split('\n')) {
-      const cells = line.split('|').map((c) => c.trim())
-      if (cells.length < 7 || !/^\d+\.\d+\.\d+$/.test(cells[2])) continue
-      for (const [platform, cell] of [['ios', cells[3]], ['android', cells[4]]]) {
-        if (/^\d/.test(cell)) out.push({ version: cells[2], platform, opening: OPENING.test(cells[5]) })
-      }
-    }
-    return out
-  }
-
-  /*
    * WHEN THE EMAILS MAY OFFER BLUETOOTH (BETA), as one rule, so it can be
    * tried on the days it is there for as well as on today:
    *
@@ -1069,7 +1053,8 @@ export function run(test) {
 
   test('the switch’s rule, on the days it is there for: never on for a 1.89.0 that did not open Bluetooth (beta), one store alone, or a version the rule does not open', async () => {
     const { isOlder } = await import('../shared/versions.mjs')
-    const ledger = read('docs/expo-builds.md')
+    /* The ledger as it was before any build opened Bluetooth, so these mean the same thing the day the real opening row is written. */
+    const ledger = withoutOpening(read('docs/expo-builds.md'))
     const row = (version, ios, android, why) => `| 1 Nov | ${version} | ${ios} | ${android} | ${why} |`
     const opened = ledgerBuilds(`${ledger}\n${row('1.89.0', '1', '1', 'Bluetooth (beta) for customers: the AM4, from both phones')}\n`)
     const plain = ledgerBuilds(`${ledger}\n${row('1.89.0', '1', '1', 'The build pair after 1.88.3')}\n`)

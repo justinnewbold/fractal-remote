@@ -471,6 +471,16 @@ export const offeredAm4Only = () => offeredUnits().length < BLE_UNITS.length
 export const useBluetoothAllowed = () => useSyncExternalStore(subscribeBluetooth, readAllowed, readAllowed) === true
 
 /**
+ * Whether the account signed in here is his (isAdmin of the sign-in kept on
+ * the phone): every unit, and the full version as mayDrive reads it
+ * (unlock-rule mayDriveBluetooth). False for anybody else, and for nobody known.
+ */
+export const bluetoothAdmin = () => allUnits
+const readAdmin = () => allUnits
+/** The same, redrawn when it changes: for the gate over the row, the page and Connect. */
+export const useBluetoothAdmin = () => useSyncExternalStore(subscribeBluetooth, readAdmin, readAdmin) === true
+
+/**
  * Pick the settings up from last time.
  *
  * ON ONLY WHERE IT CAN WORK. A phone that had it on and is now running a

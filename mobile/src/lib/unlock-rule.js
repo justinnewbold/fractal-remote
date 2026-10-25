@@ -31,6 +31,27 @@ export const mayDrive = ({ unlocked = false, available = false } = {}) =>
   Boolean(unlocked) || !available
 
 /**
+ * May this person use Bluetooth (beta)? Stricter than mayDrive, on purpose.
+ *
+ * mayDrive's `!available` lets in somebody who never paid whenever the store
+ * cannot be reached, and over the computer that gives nothing away: with no
+ * signal there is no relay, so nothing is driven anyway. Bluetooth needs no
+ * signal at all, and a sign-in that ran out with none still opens the app
+ * (relay.js keptSession), so with mayDrive's yes any free account in
+ * airplane mode would have a rig over Bluetooth on every launch, for good.
+ *
+ * So for anybody but Justin's account it is `unlocked` alone. That already
+ * counts the purchase the phone remembers (purchases.js startPurchases reads
+ * it off the phone before the store is asked anything, and an owner's
+ * account the same), so somebody who has paid keeps Bluetooth at a gig with
+ * no signal. His account (`admin`, lib/bluetooth bluetoothAdmin: the sign-in
+ * kept on the phone, never the account server) keeps mayDrive's answer, as
+ * it always has had.
+ */
+export const mayDriveBluetooth = ({ unlocked = false, available = false } = {}, admin = false) =>
+  admin === true ? mayDrive({ unlocked, available }) : Boolean(unlocked)
+
+/**
  * Should the app interrupt this person and ask them to pay?
  *
  * Every false below is a reason not to charge, and three of the four are

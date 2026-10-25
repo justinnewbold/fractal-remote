@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 import { APP_VERSION } from './version'
 import { linkState } from './link'
 import { bluetoothOn } from './bleSwitch'
-import { builtInVersion, openForCustomersHere } from './bluetooth'
+import { bluetoothAdmin, builtInVersion, openForCustomersHere } from './bluetooth'
 import { isDemo } from './demo'
 import { beforeBlocks } from './report-rules'
 
@@ -20,6 +20,9 @@ import { beforeBlocks } from './report-rules'
 
 /** When a kept run last reached the disk, as a clock time. */
 export const ended = (at) => (at ? new Date(at).toLocaleTimeString() : 'at an unknown time')
+
+/* What a customer is shown on this copy, after the store copy's number: said on a copy that opens it, or on his account (see THE NUMBER FOR EVERYBODY, below). */
+const forCustomers = () => (openForCustomersHere() ? ' · Bluetooth for customers: open' : bluetoothAdmin() ? ' · Bluetooth for customers: closed' : '')
 
 /** The head, as `key: value` pairs; a pair with nothing in it is left out when it is written. */
 export function logHeader({ deviceName, preset } = {}) {
@@ -39,8 +42,17 @@ export function logHeader({ deviceName, preset } = {}) {
      * read would say the number is read right on a real phone, long before
      * a customer's Bluetooth depends on it. "not readable" is the rule's
      * closed.
+     *
+     * THE NUMBER FOR EVERYBODY, THE SWITCH ONLY WHERE IT IS NO SECRET. A
+     * customer's Copy Logs and every report carry this head, pasted into an
+     * email, a forum or a reply to Apple, and "Bluetooth for customers:
+     * closed" there names a feature their copy's review notes say they are
+     * not shown, and reads as one waiting to be switched on. So the half
+     * about Bluetooth is said on a copy that opens it, where it is in the
+     * notes, and on his own account; anybody else's head says the number
+     * alone, which is all the proof the threshold waits for.
      */
-    'store copy': `${builtInVersion() || 'not readable'} · Bluetooth for customers: ${openForCustomersHere() ? 'open' : 'closed'}`,
+    'store copy': `${builtInVersion() || 'not readable'}${forCustomers()}`,
     platform: `${Platform.OS} ${Platform.Version}`,
     unit: deviceName || 'not detected',
     preset: Number.isInteger(preset?.number) ? `${preset.number} ${preset.name || ''}`.trim() : 'none',

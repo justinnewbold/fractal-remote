@@ -15,7 +15,7 @@ import { useNoComputer } from './src/lib/useNoComputer'
 import { isPairAccount } from './src/lib/pairing'
 import Note from './src/components/Note'
 import Press from './src/components/Press'
-import NoComputerWords, { NoComputerOtherWay } from './src/components/NoComputer'
+import NoComputerWords from './src/components/NoComputer'
 import SendLinkButton from './src/components/SendLinkButton'
 import TopBar from './src/components/TopBar'
 import WrongAccount from './src/components/WrongAccount'
@@ -54,22 +54,21 @@ import {
   APPLE_SCREEN_OPENS,
   RESTRICTED_WORDS,
   allowBluetooth,
-  bluetoothSupported,
   lookForAdapterAgain,
   offeredAm4Only,
   opensApplesScreen,
   restoreBluetooth,
   setBluetooth,
-  useBluetoothAllowed,
   useBluetoothOn,
   useBluetoothTrouble
 } from './src/lib/bluetooth'
+import { useBluetoothOffered } from './src/lib/useBluetoothOffered'
 import { BLUETOOTH_WAYS_SHORT, BLUETOOTH_WAYS_SHORT_AM4 } from './src/lib/bluetooth-gear'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
 import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
-import { mayDrive, shouldAskToPay } from './src/lib/unlock-rule'
+import { shouldAskToPay } from './src/lib/unlock-rule'
 import { deviceNoun } from './src/lib/device-word'
 import { allowSiriLinks, siriElsewhere, startSiri } from './src/lib/siri'
 import { playElsewhereOf } from './src/lib/siri-rule'
@@ -338,16 +337,17 @@ export default function App() {
   const purchase = usePurchase()
   /*
    * THE WAY TO THE BLUETOOTH PAGE FROM THE WAITING SCREEN, through the same
-   * gate as the Settings row and the page itself: the full version
-   * (mayDrive), Bluetooth open to this account on this copy (lib/bluetooth
+   * gate as the Settings row and the page itself (lib/useBluetoothOffered,
+   * the row's gate as one hook): the full version as Bluetooth reads it
+   * (unlock-rule mayDriveBluetooth: the purchase itself for a customer),
+   * Bluetooth open to this account on this copy (lib/bluetooth
    * useBluetoothAllowed: his on every copy, a customer's only on a copy
    * whose built-in store version opens it), and a build and a device that
    * can do it. Without all three the page draws nothing, so a button to it
    * would open an empty Settings page. Named once, so the waiting screen
    * gets the way in or nothing (`onBluetooth`).
    */
-  const bluetoothAllowed = useBluetoothAllowed()
-  const bluetoothOffered = mayDrive(purchase) && bluetoothAllowed && bluetoothSupported()
+  const bluetoothOffered = useBluetoothOffered()
   /*
    * ASKED FOR, as opposed to imposed.
    *
@@ -1753,11 +1753,13 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
             2026). To the account's own address, the one the words name.
           */}
           {noneSaid ? <SendLinkButton email={noComputer.email} /> : null}
-          {/* And, where this copy offers Bluetooth (beta), the other way for
-              an AM4, after the computer's words and their button so the
-              button is not read as the link for the Bluetooth parts
-              (components/NoComputer.js NoComputerOtherWay). */}
-          {noneSaid ? <NoComputerOtherWay /> : null}
+          {/* Not the no-computer note's Bluetooth (beta) line here
+              (components/NoComputer.js NoComputerOtherWay), which Phone &
+              computer draws: this screen has its own way to Bluetooth, the
+              button below for somebody with no computer, after the
+              computer's own, with what it costs under it. Both together were
+              the same pitch twice, the note sending them the long way round
+              to the page the button opens in one tap. */}
           {elsewhere && onSwitch ? <Press label={`Switch account on this ${deviceNoun()}`} onPress={onSwitch} /> : null}
           {/*
             The way to what the line above asks for, right under it, as on the
@@ -1801,7 +1803,9 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
             by lib/bluetooth offeredAm4Only): an FM9 owner with no computer
             reads that here, not after the page has turned them away. Only
             where App hands it a way in (`onBluetooth`: the row's own gate),
-            and only while it is off.
+            only while it is off, and never under the account warning: a
+            computer on this wifi on another account is right there, and
+            the fix is the account, not "No computer?".
 
             SHORT ENOUGH FOR ONE LINE. A button's label is one line at 15
             points, and "No computer? Connect by Bluetooth (beta)" was about
@@ -1809,7 +1813,7 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
             iPhone. This one is about 254 at its widest; the line under it
             carries the cost.
           */}
-          {!bluetooth && onBluetooth ? (
+          {!bluetooth && onBluetooth && !elsewhere ? (
             <Press
               label="No computer? Use Bluetooth (beta)"
               sub={offeredAm4Only() ? BLUETOOTH_WAYS_SHORT_AM4 : BLUETOOTH_WAYS_SHORT}

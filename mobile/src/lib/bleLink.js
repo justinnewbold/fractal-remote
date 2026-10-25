@@ -4,6 +4,7 @@ import { bluetoothOn, setSwitch } from './bleSwitch'
 import {
   adapterDevices,
   adapterName,
+  bluetoothAdmin,
   bluetoothSettings,
   bluetoothSupported,
   closeWire,
@@ -16,7 +17,7 @@ import {
   unitName
 } from './bluetooth'
 import { getState, handleEvent, refreshAll, reset as resetRig, stopWatching, watchUnit } from './rig'
-import { mayConnect } from './purchases'
+import { mayConnectBluetooth } from './purchases'
 import { logDebug } from './debugLog'
 
 /**
@@ -106,10 +107,13 @@ export function startBluetoothLink(set) {
   }
   /*
    * THE UNLOCK, as the paywall applies it: somebody who may not drive a real
-   * unit is not connected to one. mayConnect says yes when the store cannot
-   * be reached, the same as everywhere else in the app.
+   * unit is not connected to one. Over Bluetooth that is the purchase itself
+   * (the one remembered on the phone included), and never "the store cannot
+   * be reached", which the computer's link takes as a yes: Bluetooth works
+   * with no signal, and a free account in airplane mode would have a rig for
+   * good (unlock-rule mayDriveBluetooth). His account keeps mayConnect's answer.
    */
-  if (!mayConnect()) {
+  if (!mayConnectBluetooth(bluetoothAdmin())) {
     tell?.({ link: 'off' })
     noteBluetooth({ phase: 'locked' })
     say('not connecting over Bluetooth: the app is not unlocked on this phone')

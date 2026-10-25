@@ -34,11 +34,17 @@ export default function NoComputerWords({ email }) {
  * (beta).
  *
  * A NOTE OF ITS OWN, drawn after the computer's words AND after the "Send me
- * the download link" button under them, on the waiting screen and Settings →
- * Phone & computer. It was once the last lines of the words themselves, so
- * the last thing read before that button was "Bluetooth (beta) says what to
- * buy", and the button, which emails the computer app, read as the link for
- * the Bluetooth parts.
+ * the download link" button under them, on Settings → Phone & computer. It
+ * was once the last lines of the words themselves, so the last thing read
+ * before that button was "Bluetooth (beta) says what to buy", and the
+ * button, which emails the computer app, read as the link for the Bluetooth
+ * parts.
+ *
+ * NOT ON THE WAITING SCREEN, which has its own way there: "No computer? Use
+ * Bluetooth (beta)", after the computer's button, with what it costs under
+ * it (App.js Waking). The two together said the same thing twice, in two
+ * wordings, the note sending somebody the long way round through Settings to
+ * the page the button two rows down opens in one tap.
  *
  * NEVER ON PLAY'S FLOATING CARD (Stage's 'advice' Toast). That card does not
  * scroll and keeps one height so NOT CONNECTED under it stays put; with these

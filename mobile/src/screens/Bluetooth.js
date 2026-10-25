@@ -24,7 +24,8 @@ import {
   setBluetoothUnit,
   setMethods,
   unitName,
-  useBluetooth
+  useBluetooth,
+  useBluetoothAdmin
 } from '../lib/bluetooth'
 import {
   AM4_ONLY,
@@ -47,7 +48,7 @@ import {
 import { deviceNoun } from '../lib/device-word'
 import { probeNow } from '../lib/link'
 import { useRig } from '../lib/rig'
-import { mayDrive } from '../lib/unlock-rule'
+import { mayDriveBluetooth } from '../lib/unlock-rule'
 import Note from '../components/Note'
 import Press from '../components/Press'
 
@@ -142,7 +143,7 @@ import Press from '../components/Press'
 
 const face = Platform.select(mono)
 const ios = Platform.OS === 'ios'
-/* The iPhone's copy names no other phone; Android's says it has not been tried on one. */
+/* The iPhone's copy names the iPhone it was tried from; Android's names an Android phone as well. */
 const BETA_NOTE = betaNote(Platform.OS)
 
 /* What a player loses by leaving the cable at home, in the order it is noticed. */
@@ -277,13 +278,16 @@ export default function BluetoothPage({ purchase, admin = false }) {
   const [wanted, setWanted] = useState(false)
   /* Apple's screen closed with no adapter connected in it. */
   const [missed, setMissed] = useState(false)
+  /* The full version as Bluetooth reads it: the purchase itself for a customer, never "the store cannot be reached" (unlock-rule mayDriveBluetooth). */
+  const his = useBluetoothAdmin()
+  const paid = mayDriveBluetooth(purchase, his)
   useEffect(() => {
     if (!wanted || !b.adapter || !b.unit || b.on) return
     setWanted(false)
-    if (mayDrive(purchase)) setBluetooth(true)
-  }, [wanted, b.adapter?.id, b.unit, b.on, purchase])
+    if (paid) setBluetooth(true)
+  }, [wanted, b.adapter?.id, b.unit, b.on, paid])
 
-  const canStart = !!b.unit && mayDrive(purchase)
+  const canStart = !!b.unit && paid
   /* Apple's screen kept shut (iOS 27, before the build with Apple's fix): no hint sends anybody to it. */
   const shut = pairScreenShut()
   const find = async () => {
@@ -452,7 +456,7 @@ export default function BluetoothPage({ purchase, admin = false }) {
                     : b.adapter
                       ? 'Uses the adapter from last time.'
                       : shut
-                        ? 'On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app. Connect uses an adapter that is already connected to the iPhone.'
+                        ? `On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app. Connect uses an adapter that is already connected to this ${deviceNoun()}.`
                         : ios
                           ? `Apple’s Bluetooth screen opens. Tap your adapter, wait until it says Connected, then tap Done. The ${deviceNoun()} does the rest.`
                           : `The ${deviceNoun()} looks for the adapter for ten seconds, then connects to it. If Android asks to pair with it, accept.`}

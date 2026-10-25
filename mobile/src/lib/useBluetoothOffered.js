@@ -1,6 +1,6 @@
-import { bluetoothSupported, useBluetoothAllowed } from './bluetooth'
+import { bluetoothSupported, useBluetoothAdmin, useBluetoothAllowed } from './bluetooth'
 import { usePurchase } from './purchases'
-import { mayDrive } from './unlock-rule'
+import { mayDriveBluetooth } from './unlock-rule'
 
 /**
  * Whether this copy of the app offers Bluetooth (beta) to the account signed
@@ -18,20 +18,25 @@ import { mayDrive } from './unlock-rule'
  * activated remotely forbid, said out loud.
  *
  * THE ROW'S OWN GATE, word for word and in its order (Settings.js, the
- * `mayDrive(purchase) && bluetoothAllowed && bluetoothSupported()` over the
- * row, held to this by test/no-computer.mjs): the full version, then who may
- * have it, then whether the phone can do it. Asked in that order so a phone
- * it is not open to is never even asked whether it can do Bluetooth, as the
- * row is not.
+ * `mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed &&
+ * bluetoothSupported()` over the row, held to this by test/no-computer.mjs):
+ * the full version, then who may have it, then whether the phone can do it.
+ * Asked in that order so a phone it is not open to is never even asked
+ * whether it can do Bluetooth, as the row is not. The full version is the
+ * purchase itself for a customer, never "the store cannot be reached"
+ * (unlock-rule mayDriveBluetooth says why), and mayDrive's answer for his
+ * account, as it always was. App.js's way in from the waiting screen asks
+ * this hook too.
  *
- * WHO MAY HAVE IT is useBluetoothAllowed(), and nothing here decides it. Today
- * that is Justin's account alone (lib/bluetooth.js allowBluetooth), so on
- * every customer's copy this is false and the words are exactly what they
- * were. The rule that opens it in the new store version goes in behind that
- * same hook, so nothing here changes the day it does.
+ * WHO MAY HAVE IT is useBluetoothAllowed(), and nothing here decides it: his
+ * account on every copy, and a customer's only on a copy whose built-in store
+ * version opens it (lib/ble-rule.js bluetoothOpen, BLUETOOTH_FROM_STORE). No
+ * copy out today opens it to a customer, so on every customer's copy this is
+ * false and the words are exactly what they were.
  */
 export function useBluetoothOffered() {
   const purchase = usePurchase()
   const allowed = useBluetoothAllowed()
-  return mayDrive(purchase) && allowed && bluetoothSupported()
+  const admin = useBluetoothAdmin()
+  return mayDriveBluetooth(purchase, admin) && allowed && bluetoothSupported()
 }

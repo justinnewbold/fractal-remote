@@ -7641,8 +7641,8 @@ export function run(test) {
     assert.match(settingsSrc, /head\('Bluetooth \(beta\)', 'back'\)/)
     /* The gate the disclosure describes: the developer's account, read from the session on the phone, on the row and on the page. */
     const oneLine = settingsSrc.replace(/\s+/g, ' ')
-    assert.match(oneLine, /\{mayDrive\(purchase\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/)
-    assert.match(oneLine, /\{page === 'bluetooth' && mayDrive\(purchase\) && bluetoothAllowed && bluetoothSupported\(\) \? \(/)
+    assert.match(oneLine, /\{mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/)
+    assert.match(oneLine, /\{page === 'bluetooth' && mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \(/)
     assert.equal(existsSync(new URL('../shared/bluetooth-testers.mjs', import.meta.url)), false, 'the Bluetooth tester list is back, and the notes say only the developer’s account has it')
     assert.ok(!/BLUETOOTH_TESTERS|bluetooth-testers/.test(store), 'the store notes still send somebody to a Bluetooth list that no longer exists')
     /* No video of Bluetooth: the build the notes are for does not let the reviewer open it. The Hardware paragraph's FM3 video stays. */
@@ -8815,7 +8815,7 @@ export function run(test) {
      * person whose signal is bad is exactly the person reading this.
      */
     assert.match(shown, /\{mayDrive\(purchase\) \?/, 'the instructions are shown to somebody who has not paid')
-    assert.match(settings, /import \{ mayDrive \} from '\.\.\/lib\/unlock-rule'/, 'the gate is not the tested rule')
+    assert.match(settings, /import \{ mayDrive, mayDriveBluetooth \} from '\.\.\/lib\/unlock-rule'/, 'the gate is not the tested rule')
 
     /*
      * AND IT SENDS THEM TO THE BROWSER, because this app cannot do it.

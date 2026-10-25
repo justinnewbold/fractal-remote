@@ -4255,12 +4255,15 @@ export function run(test) {
     /*
      * "The CME C2MIDI Pro got extremely hot on the FM3 and the connection
      * didn't work." The FM3's MIDI OUT has no current limit and the cable
-     * feeds from it, so the guide says not to plug it straight in, why, and
-     * what owners fit — and lists nothing to buy for it.
+     * feeds from it, so the guide says not to plug it in, and why — and lists
+     * nothing to buy for it. Never "straight in": that word was there while a
+     * way round it was offered, and with none any more it read as if there
+     * still were one.
      */
-    assert.match(words, /tried once on an FM3 with the same parts plugged straight in: the cable got very hot and didn’t connect, so don’t do that/, 'the guide does not warn FM3 owners off what overheated')
-    assert.match(words, /FM3 Don’t plug straight in/, 'the FM3 is not marked as one not to plug straight in')
-    assert.match(words, /Don’t plug the C2MIDI Pro’s white plug straight into an FM3’s MIDI OUT\/THRU\./)
+    assert.match(words, /tried once on an FM3 with the same parts: the cable got very hot and didn’t connect, so don’t do that/, 'the guide does not warn FM3 owners off what overheated')
+    assert.match(words, /FM3 Don’t use these parts/, 'the FM3 is not marked as one not to use these parts on')
+    assert.match(words, /Don’t plug the C2MIDI Pro’s white plug into an FM3’s MIDI OUT\/THRU\./)
+    assert.ok(!/parts plugged straight in|plug straight in|straight into an FM3/i.test(words), 'the guide says not to plug it straight in, as if there were another way')
     /*
      * NO HOME-MADE WAY ROUND IT. This held the guide to what FM3 owners fit
      * (a 220-ohm resistor on pin 4, for "someone who solders"); changed on
@@ -4542,7 +4545,7 @@ export function run(test) {
 
     /* Held to the app: the row and the page wait for the developer-only check, so the disclosure is what the build does. */
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
-    assert.match(settings, /\{mayDrive\(purchase\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/, 'the notes say Bluetooth is the developer’s only, and the Settings row is not behind that')
+    assert.match(settings, /\{mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/, 'the notes say Bluetooth is the developer’s only, and the Settings row is not behind that')
     /*
      * And lib/bluetooth's answer, by the store copy: his account on every
      * copy, a customer's only on a copy whose built-in version opens it

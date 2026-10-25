@@ -53,7 +53,7 @@ import {
 import { REPLAY } from '../lib/onboarding'
 import { sync, useStored } from '../lib/store'
 import { isPairAccount } from '../lib/pairing'
-import { mayDrive } from '../lib/unlock-rule'
+import { mayDrive, mayDriveBluetooth } from '../lib/unlock-rule'
 import { useComputerElsewhere } from '../lib/useComputerElsewhere'
 import NoComputerWords, { NoComputerOtherWay } from '../components/NoComputer'
 import SendLinkButton from '../components/SendLinkButton'
@@ -64,7 +64,7 @@ import { useSiriLinksOpen } from '../lib/siri'
 import { siriRow } from '../lib/siri-help'
 import { siriPresent } from '../lib/siriPipe'
 import SiriHelp from '../components/SiriHelp'
-import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
+import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
 import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage from './Bluetooth'
@@ -316,6 +316,13 @@ export default function Settings({
    * button, with it while Bluetooth was still on.
    */
   const bluetoothAllowed = useBluetoothAllowed()
+  /*
+   * AND THE FULL VERSION, AS BLUETOOTH READS IT (unlock-rule mayDriveBluetooth):
+   * the purchase itself for a customer, the one remembered on the phone
+   * included, never "the store cannot be reached", which mayDrive takes as a
+   * yes and which no signal always is; mayDrive's answer for his account.
+   */
+  const bluetoothAdmin = useBluetoothAdmin()
   /*
    * SETTINGS → SIRI, where the links are open (lib/siri useSiriLinksOpen):
    * on an iPhone or iPad whose copy has the Siri phrases, on Android from
@@ -569,7 +576,10 @@ export default function Settings({
               phone and computer menu to its own menu under the settings menu.
               Still saying Bluetooth (beta)." The phone straight to the unit,
               through a Bluetooth MIDI adapter on its MIDI In and Out, with no
-              computer. Behind the unlock, and only in a build that carries
+              computer. Behind the purchase (mayDriveBluetooth, above: with no
+              signal, "the store cannot be reached" lets a free account drive
+              the computer's link, which needs the internet anyway, but would
+              give it Bluetooth for good), and only in a build that carries
               the Bluetooth code on a phone that can do it: anybody else never
               sees it. The page it opens carries the beta note, the
               iPhone's or Android's own (betaNote), always shown under
@@ -592,7 +602,7 @@ export default function Settings({
               which read as a row with nothing going for it, in the row's
               green.
             */}
-            {mayDrive(purchase) && bluetoothAllowed && bluetoothSupported() ? (
+            {mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported() ? (
               <SetupRow
                 title="Bluetooth (beta)"
                 status={bluetooth ? `On · the ${deviceNoun()} talks to the unit itself` : BLUETOOTH_ROW_OFF}
@@ -1289,7 +1299,7 @@ export default function Settings({
           included. Its Testing tools are Justin's alone (admin), as the
           Developer pages are: Apple's 2.2 keeps test benches out of what
           customers see. */}
-      {page === 'bluetooth' && mayDrive(purchase) && bluetoothAllowed && bluetoothSupported() ? (
+      {page === 'bluetooth' && mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported() ? (
         <>
           {head('Bluetooth (beta)', 'back')}
           <BluetoothPage purchase={purchase} admin={isAdmin(account?.id)} />
@@ -2031,8 +2041,14 @@ function Group({ title, children }) {
  * The account line for a sign-in the phone holds and the account service
  * has not vouched for, said in place of the password and account options it
  * cannot offer: no signal at a gig, most often. See `kept` in Settings.
+ *
+ * NOT "NO INTERNET". It said that for a day, but the account service says
+ * nobody with a signal too: in an outage, and for the minute after the
+ * signal comes back while supabase-js holds on to its failed renewal. A
+ * customer on working wifi was told they had no internet. What is true in
+ * every one of those is that the account cannot be reached.
  */
-const KEPT_OFFLINE = 'No internet right now. Password and account options come back when it does.'
+const KEPT_OFFLINE = 'Can’t reach your account now. Password and account options come back when it can.'
 
 /*
  * `email` is the account service's, or the one kept on the phone while it

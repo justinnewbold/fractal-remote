@@ -18,7 +18,10 @@ import { isOlder } from './versions.js'
  * 2.5.19 and 2.3.1(a) and Google's rule on features "designed to be
  * activated remotely" forbid, and the fingerprint cannot be leaned on to
  * keep them apart: the version number is left out of it (mobile/
- * fingerprint.config.js), and nothing native is waiting for the next build.
+ * fingerprint.config.js), and the one native piece waiting for the next
+ * build (docs/pending/watch-fill.patch) moves the watch's line alone, so the
+ * phones' fingerprints stay where they are and every update keeps reaching
+ * every copy, the new build's and the old ones alike.
  *
  * So it opens by a fact about the copy itself: the version BUILT INTO it
  * (lib/storeVersion installedStoreVersion, read off the app config inside
@@ -32,6 +35,19 @@ import { isOlder } from './versions.js'
  * request that moves the version to 1.89.0, the last merge before the build
  * pair. A number set earlier is a copy that opens too early: apk.yml makes a
  * public APK at every version, and anything at or above the number opens.
+ * test/bluetooth.mjs asks the threshold the ledger's own question
+ * (test/ledger.mjs thresholdProblems), so the build pull request goes green
+ * with nothing in the tests rewritten.
+ *
+ * AND THAT PULL REQUEST WAITS FOR JUSTIN'S YES, GREEN OR NOT. Its phones'
+ * fingerprint says Unchanged (the version is left out of it, and the watch
+ * patch moves only the watch), so by the merge rule alone it would be
+ * merged the moment it is green. It must not be: the merge itself puts out
+ * apk-v1.89.0 on the Releases page, a public APK that opens Bluetooth, and
+ * the website pages that say so, before Apple or Google has seen it. So:
+ * say what the build is for, wait for the yes, apply the pending patches in
+ * that same pull request, and merge it only right before the build pair is
+ * started (CLAUDE.md, "It is switched on for customers").
  * test/bluetooth.mjs holds it to docs/expo-builds.md: null, or this app's
  * own version in the build pull request, until the opening row is written
  * ("Bluetooth (beta) for customers" in What it was for), and, once it is,
@@ -41,11 +57,19 @@ import { isOlder } from './versions.js'
  * THE OPENING ROW GOES IN BEFORE, OR WITH, THE FIRST MERGE AFTER THE BUILD
  * IS STARTED. Every pull request moves the version, so the next one after
  * the build pull request is 1.89.1, and the ledger test then finds a
- * threshold of 1.89.0 that is neither null nor this app's version. The fix
- * is that row, never this number: once a build exists, the threshold is
- * never moved to match the next version. Moved to 1.89.1, or set back to
- * null, it would close Bluetooth by update on every 1.89.0 copy whose review
- * notes say it is there, the reviewer's own among them.
+ * threshold of 1.89.0 that is neither null nor this app's version. If a
+ * build was started from it, the fix is that row, never this number: once a
+ * build exists, the threshold is never moved to match the next version.
+ * Moved to 1.89.1, or set back to null, it would close Bluetooth by update
+ * on every 1.89.0 copy whose review notes say it is there, the reviewer's
+ * own among them. Only if no build was ever made from it (the yes never
+ * came) is it set back to null, or moved with the version.
+ *
+ * AND THE ROW, ONCE WRITTEN, IS PINNED. The ledger test trusts the ledger,
+ * so a later change that took the row out and set this back to null
+ * together would pass it. The pull request that writes the row also adds a
+ * literal to test/bluetooth.mjs: the ledger holds a 1.89.0 row marked as
+ * the opening, and the threshold is '1.89.0' on both phones.
  *
  * AND ONLY ONCE THE STORE COPY IS SEEN TO BE READ RIGHT. Everything here
  * leans on installedStoreVersion reading the number built into the copy,
@@ -89,6 +113,14 @@ export function bluetoothOpen({ platform = null, installed = null, admin = false
  * muted, after a reconnect: task 161). So the three stay on his account,
  * where they have always been offered, and each opens to customers only in
  * a later store version whose notes say so.
+ *
+ * WHICH THIS LIST CANNOT DO AS IT IS. It is a plain list: 'fm9' added here
+ * in the next build's pull request would reach every 1.89.0 copy too, by
+ * update, whose review notes say the AM4 alone, which is the very switch
+ * by update the threshold above exists to prevent. So before a second unit
+ * opens, it is keyed the way Bluetooth itself is: a store version for that
+ * unit, compared against the copy's built-in version, and the list grows
+ * only that way, never by adding a name here.
  */
 export const CUSTOMER_UNITS = Object.freeze(['am4'])
 
