@@ -9038,6 +9038,20 @@ export function run(test) {
       assert.match(src, /setPreview\(null\)/, `${where} keeps a preview across a change of kind`)
     }
 
+    /*
+     * THE PHONE'S SWITCH SAYS IT IS ONE (Justin, 25 October 2026, on Android:
+     * "it just highlights the button and doesn't say anything else", after
+     * twelve taps on "Send the log of what the app just did" before Send). The
+     * browser's is a tick box, which reads as one already. The phone's says
+     * on or off in its own words, as the metronome's does, and the line under
+     * it says what that means for Send, both ways round.
+     */
+    const phoneForm = read('mobile/src/screens/Report.js')
+    assert.doesNotMatch(phoneForm, /label="Send the log of what the app just did"/, 'the phone’s log switch reads as a button that sends again')
+    assert.match(phoneForm, /label=\{withLog \? 'Include the log: on' : 'Include the log: off'\}/, 'the phone’s log switch does not say whether it is on')
+    assert.match(phoneForm, /'The log of what the app just did goes with your report when you tap Send\.'/, 'nothing under the switch says what “on” sends')
+    assert.match(phoneForm, /'Only what you wrote goes when you tap Send\.'/, 'nothing under the switch says what “off” sends')
+
     /* Setup reaches the form on the phone. The log screen sends by itself
        now (the next test), so it no longer opens the form at all. */
     assert.match(read('mobile/App.js'), /screen === 'report'/, 'the phone cannot open the report screen')

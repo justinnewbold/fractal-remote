@@ -206,12 +206,30 @@ export default function Report({ onBack, start = 'bug', prefill = '', bluetooth 
                   backgroundColor: color.panel
                 }}
               >
-                <Press
-                  label="Send the log of what the app just did"
-                  on={withLog}
-                  disabled={busy}
-                  onPress={() => setWithLog(!withLog)}
-                />
+                {/*
+                  A SWITCH THAT SAYS IT IS ONE. "The button that says 'send
+                  what the app just did' when you click it, it just highlights
+                  the button and doesn't say anything else. I don't even know if
+                  you got the report or not" (Justin, 25 October 2026, on
+                  Android, after tapping it twelve times before Send). It read
+                  as a button that sends, and all a tap did was light it or
+                  dim it. So it says on or off, as the metronome's does, and
+                  the line under it says what that means for Send.
+                */}
+                <View style={{ gap: space.xs }}>
+                  <Press
+                    label={withLog ? 'Include the log: on' : 'Include the log: off'}
+                    tone="live"
+                    on={withLog}
+                    disabled={busy}
+                    onPress={() => setWithLog(!withLog)}
+                  />
+                  <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
+                    {withLog
+                      ? 'The log of what the app just did goes with your report when you tap Send.'
+                      : 'Only what you wrote goes when you tap Send.'}
+                  </Text>
+                </View>
                 <Press
                   label={preview === null ? 'See what that is' : 'Hide it'}
                   height={44}
