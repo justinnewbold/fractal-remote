@@ -3847,7 +3847,7 @@ export function run(test) {
 
     /* No analytics, said plainly — and true, which is checked rather than
        claimed. A tracking SDK arriving later fails this. */
-    assert.match(policy, /[Nn]o analytics and no tracking/, 'the policy does not say there is no tracking')
+    assert.match(policy, /[Nn]o advertising, no analytics kit, and no tracking of any kind/, 'the policy does not say there is no tracking')
     for (const sdk of ['@sentry', 'mixpanel', 'amplitude', 'posthog', 'segment', 'react-ga']) {
       for (const manifest of ['package.json', 'mobile/package.json']) {
         assert.ok(
@@ -4089,6 +4089,12 @@ export function run(test) {
     }
     const kept = words.slice(words.indexOf('How long it is kept'), words.indexOf('Deleting your data'))
     assert.match(kept, /The dates kept for the help setting up the computer, and when a computer app first signed in — until you delete the account\./, 'how long the setup emails’ dates are kept is not said')
+    /* And what the two partners keep that the page says they are sent (5.1.1(i) asks for retention, not only collection). */
+    assert.match(kept, /The purchase record, and the record of the app's checks , at RevenueCat — those under your account until you delete it, which deletes them there too\. Checks made while no account is signed in on a phone \(before signing in, after signing out, or after deleting the account\) are kept under that phone's made-up number/, 'how long RevenueCat keeps the purchase record and the launch checks is not said, or not for the checks under no account')
+    assert.match(kept, /The update check's install number, and a crash's error message , at Expo — only for as long as is reasonably needed to provide the updates/, 'how long Expo keeps the install number and a crash message is not said')
+    /* Every count the builder sees is said, Expo's included, and named as what the label calls Analytics. */
+    assert.match(words, /these counts are what the App Store's privacy label means by Analytics/, 'the policy does not say which of its counts the label calls Analytics')
+    assert.match(words, /Expo's own dashboard shows him how many installs took each update, how many launches crashed, and how many different installs that was/, 'the policy leaves out what Expo counts from the update check')
     for (const t of ['computer_seen', 'unlock_seen', 'setup_reminders']) {
       assert.match(sql, new RegExp(`create table if not exists public\\.${t} \\(\\s*account_id uuid primary key references auth\\.users \\(id\\) on delete cascade`), `${t} is not deleted with the account, and the policy says it is`)
     }
@@ -4683,10 +4689,10 @@ export function run(test) {
     )
     assert.ok(!/first launch|BLUETOOTH \(BETA\)|card under Settings/.test(access), 'the Play note still describes the first-launch Bluetooth card of 1.87.1, which 1.87.11 does not have')
     assert.match(access, /Delete account: Settings \(the gear, top right\) → the account card at the top → Delete account → "Delete my account"\./, 'the Play reviewer is not told where Delete account is')
-    assert.match(access, /Developer pages \(accounts, sales, messages\) that open only for the developer's own account; the server checks which account is asking\./, 'the Play note does not say the Developer pages are there, and whose they are')
+    assert.match(access, /Developer pages \(accounts, sales, messages, giving an account the full version\) that open only for the developer's own account; the server checks which account is asking\./, 'the Play note does not say the Developer pages are there, and whose they are')
     /* And the short version, for a box that will not take the long one, says the same in fewer words. */
     const short = fencedBlock(playHand, 'use this short version instead')
-    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ']) {
+    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ', 'Open Play']) {
       assert.ok(short.includes(label), `the short Play note does not name "${label}"`)
     }
     assert.match(short, /switched on only for the developer's own account while it is tested; this account never sees it\./)
@@ -4733,7 +4739,7 @@ export function run(test) {
     const steps = [...pasted.matchAll(/^(\d)\. (.+)$/gm)].map((m) => m[2]).slice(0, 5)
     assert.match(steps[0], /^Tap "OK" on the card that says the app is independent$/, 'the demo steps do not start on the startup card')
     assert.match(read('mobile/src/components/IndependentNotice.js'), /<Press label="OK"/, 'the startup card has no OK button, and the notes say to tap it')
-    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ']) {
+    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ', 'Open Play']) {
       assert.ok(steps.some((t) => t.includes(label)), `the next notes do not say to tap "${label}"`)
       assert.ok(read('shared/onboarding.mjs').includes(label), `the next notes say to tap "${label}", which the walkthrough no longer says`)
     }
@@ -4741,7 +4747,6 @@ export function run(test) {
     /* Every new thing, one paragraph each, and each held to the app it describes. */
     for (const [line, what] of [
       [/^Siri\. Nine App Shortcuts, each phrase with the app's name/m, 'Siri'],
-      [/^Startup card\./m, 'the startup card'],
       [/^Colors\. Settings, then Colors, has six looks/m, 'Settings → Colors'],
       [/^Bigger screens\. On iPad and an opened iPhone Duo/m, 'the wider Play'],
       [/^Top bar\. Play's top bar says which unit, on which computer; tap it to change unit\./m, 'the top bar'],
@@ -4771,9 +4776,14 @@ export function run(test) {
 
     /* The 2.5.19 pair, said whole: the Bluetooth code and the Developer pages. */
     assert.match(pasted, /This build contains Bluetooth MIDI code for a feature that lets the phone reach the guitar unit through a Bluetooth MIDI adapter instead of a computer\. While it is tested, it is switched on only for the developer's own account\. Customers and the review account don't see it in this build, and the app doesn't ask them for Bluetooth permission\./)
-    assert.match(pasted, /Settings also has Developer pages \(accounts, sales, messages\) that open only for the developer's own account; the server checks which account is asking\./)
+    assert.match(pasted, /Settings also has Developer pages \(accounts, sales, messages, giving an account the full version\) that open only for the developer's own account; the server checks which account is asking\./)
+    /* And that opening it to customers is a later version with its own notes (2.3.1(a)), never an update to this one. */
+    assert.match(pasted, /If it is offered to customers, that will be in a later version, sent for review with notes that describe it\./, 'the notes do not say Bluetooth reaches customers only in a later, reviewed version')
     /* And the deletion paragraph as Apple approved it, with where an unpaid account deletes. */
     assert.match(pasted, /Deleting an account \(Guideline 5\.1\.1\(v\), video 3 below\):[^\n]*purchase page[^\n]{0,80}Delete account is at the foot of that page\. Please try it on a new account, not the demo account\./)
+    /* And where that new account is made, by the label the sign-in screen draws: the reviewer may not have met it. */
+    assert.match(pasted, /not the demo account\. Create account is on the sign-in screen; the code it emails confirms it\./, 'the notes ask for a new account and do not say where to make one')
+    assert.match(read('mobile/src/screens/SignIn.js'), /'Create account'/, 'the notes name a Create account button the sign-in screen no longer draws')
     assert.doesNotMatch(pasted, /\b(official|approved by|endorsed|certified|sponsored)\b/i, 'the notes call the app something Fractal Audio has not made it')
   })
 
@@ -4823,7 +4833,7 @@ export function run(test) {
     assert.match(notes, /\n\nNew since 1\.88\.3:\n\n/, 'the 1.89.0 notes do not say what they are new since')
     const steps = [...notes.matchAll(/^(\d)\. (.+)$/gm)].map((m) => m[2]).slice(0, 5)
     assert.match(steps[0], /^Tap "OK" on the card that says the app is independent$/, 'the 1.89.0 demo steps do not start on the startup card')
-    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ']) {
+    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ', 'Open Play']) {
       assert.ok(steps.some((t) => t.includes(label)), `the 1.89.0 notes do not say to tap "${label}"`)
       assert.ok(read('shared/onboarding.mjs').includes(label), `the 1.89.0 notes say to tap "${label}", which the walkthrough no longer says`)
     }
@@ -4934,7 +4944,7 @@ export function run(test) {
     /* GOOGLE'S APP ACCESS NOTE: where the row is, and the device it needs, held to the native module's own check. */
     const btAccess = paragraph(access, 'Bluetooth (beta)')
     assert.match(access, /^This account has the full version\./)
-    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ']) {
+    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ', 'Open Play']) {
       assert.ok(access.includes(label) && accessShort.includes(label), `Google's reviewer is not told to tap "${label}"`)
     }
     for (const [said, why] of [

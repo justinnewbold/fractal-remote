@@ -316,7 +316,9 @@ reviewer. Never an App Preview, never on the website, never posted.
 ## App Privacy (the nutrition label)
 
 Answer **Yes** to collecting data, then declare exactly these. Everything is
-**"used for App Functionality"**, and **nothing is used for tracking** — say No
+**"used for App Functionality"**; Purchase History and User ID are **also
+used for Analytics**, because RevenueCat charts the purchases on its own
+dashboard, by account. And **nothing is used for tracking** — say No
 to the tracking question, because it is true and it keeps you out of App
 Tracking Transparency entirely.
 
@@ -326,9 +328,10 @@ Tracking Transparency entirely.
 | User Content → **Other User Content** | Yes | Yes | Setlists, so they follow you between devices |
 | User Content → **Photos or Videos** | Yes | Yes | Screenshots somebody chooses to add to a bug report (up to three, pasted or picked on a phone, picked on the website), sent only when they press Send. Added 22 October 2026: **not on the live label yet** |
 | User Content → **Customer Support** | Yes | Yes | What somebody writes in a bug report or suggestion: the Feedback form, and the note beside Send logs to developer. It was true before the note came, and was never on the label; add it with Photos or Videos. **Not on the live label yet** |
-| Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you |
+| Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you, and the number RevenueCat files purchases under. App Functionality and **Analytics** (RevenueCat's own guidance: say how the id is used, as for Purchase History). Analytics added 25 October 2026: **not on the live label yet** |
 | Diagnostics → **Other Diagnostic Data** | Yes | Yes | The debug log, and only when somebody presses Send on a bug report |
-| Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices |
+| Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices. App Functionality and **Analytics**: RevenueCat's App Privacy page says "All RevenueCat users must select these two options", because its dashboard charts the purchases. Analytics added 25 October 2026: **not on the live label yet** |
+| Identifiers → **Device ID** | Yes | No | The random number Expo's update check carries for that install, made up the first time the app runs, so Expo can tell one install from another. The app itself never reads it. App Functionality and **Analytics**: Expo's dashboard counts the installs that took each update and the ones that crashed, by this number, which is measuring audience size in Apple's words. Play's Data safety declares it too (*Device or other IDs*, below), and the privacy page describes it and its counts. Added 25 October 2026: **not on the live label yet** |
 | Diagnostics → **Crash Data** | Yes | No | After a launch that crashed, the phone's update check sends Expo the error message the app stopped on, so a broken update can be found and taken back. The privacy page says so. Added 11 October 2026, and on the live label by 24 October 2026 (apps.apple.com shows Crash Data under Not Linked) |
 
 Do **not** declare location, contacts, audio, search history, browsing
@@ -350,8 +353,14 @@ on 24 October 2026, which shows Purchase History, Email Address, Other User
 Content, User ID, Other Diagnostic Data and Crash Data). **22 October 2026:
 two rows to add in App Store Connect → App Privacy**, both
 "used for App Functionality", linked to the user, not used for tracking:
-Photos or Videos, and Customer Support. And one to edit: Email Address's use
-now includes replying from the account's own address. None needs a build.
+Photos or Videos, and Customer Support. **25 October 2026: one more to add
+and two to edit**: Identifiers → Device ID (App Functionality and Analytics,
+not linked to the user, not used for tracking), and Purchase History and User ID each get
+Analytics ticked beside App Functionality (RevenueCat requires it for
+Purchase History, above). Email
+Address needs no change: replying to a support message from the account's
+own address is App Functionality, which Apple's definition of it names
+("perform customer support"). None needs a build.
 Justin makes these; nothing here says they are done until he has.
 
 **Why the log is declared even though it is opt-in:** Apple asks what the app
@@ -766,6 +775,12 @@ startup card and Colors lines were cut to make the room.
 
 ### Notes for App Review, 1.88.3 (the next version)
 
+**Not sent: 1.88.3 is not going to the App Store** (25 October 2026, "Wait
+till the Bluetooth version"). It stays on TestFlight, and the next App Store
+version is 1.89.0, whose notes and What's New carry this block's paragraphs
+too, because Apple's reviewer last saw 1.87.11. The block is kept as it was
+checked against the app, to be folded into 1.89.0's.
+
 **Written on 24 October 2026 for the next build pair, to paste when it goes
 to Apple.** It is the block for 1.88.3 (build 29), which keeps Bluetooth
 the developer's; 1.89.0's, which opens it to customers, is in its own
@@ -782,6 +797,14 @@ every time a block is pasted (under the 1.87.11 block) apply to this one
 too, and so does the AM4 tuner paragraph's wait: until Justin has seen it on
 his own AM4, What's New leaves that line out.
 
+**The listing goes in with 1.88.3 too** (25 October 2026): a new version
+page starts with 1.87.11's text, so on the 1.88.3 page the Description is
+replaced with the one under *Description* in *The listing* (not the 1.89.0
+one), the Keywords are checked against *Keywords* (no "bluetooth,midi"),
+and the Subtitle under App Information is set to the one in *The listing*.
+The old Description still promised the tuner, tap tempo, channels and knobs
+on a VP4.
+
 ```
 This app is a remote control for Fractal Audio guitar units, through a computer the unit is plugged into by USB.
 
@@ -791,15 +814,13 @@ Without that hardware, use the demo. It needs no account:
 2. Tap "Get started"
 3. Tap "Got it"
 4. Tap "Start free demo"
-5. Choose any unit, then tap "Play with ..."
+5. Choose any unit, tap "Play with ...", then "Open Play"
 
 Every screen works in the demo, and nothing in it reaches real hardware. The in-app purchase: in the demo, tap Unlock at the top of the Play screen; Restore a purchase is under the price. For the signed-in screens, use the demo account in App Review Information. It has the full version.
 
 New since 1.87.11:
 
-Siri. Nine App Shortcuts, each phrase with the app's name, such as "Scene 3 in Fractal Remote". Settings, then Siri, lists them all. Try them with the demo's Play screen open: elsewhere the app says to open Play, but Tuner off works from any screen. The links fractalremote://next, /previous, /scene/1 to /scene/8 and /tuner/off do the same from a shortcut. The app receives only the command, never the audio.
-
-Startup card. Step 1 above; it shows once.
+Siri. Nine App Shortcuts, each phrase with the app's name, like "Scene 3 in Fractal Remote". Settings, then Siri, lists them. Try them on the demo's Play screen. Elsewhere the app says to open Play (a closed app is only opened); Tuner off works anywhere. The links fractalremote://next, /previous, /scene/1 to /scene/8 and /tuner/off do the same. The app gets only the command, never the audio.
 
 Colors. Settings, then Colors, has six looks for the tiles.
 
@@ -813,17 +834,17 @@ VP4. The app changes a VP4's presets, and its scenes once a number is set on the
 
 Apple Watch. Hold a pedal on the watch to choose its channel. The watch app is now named Fractal Remote.
 
-Screenshots. Feedback and Log (Settings, Troubleshooting) can add up to three screenshots, picked in the system photo picker or pasted. Only those are sent; the camera is never used.
+Screenshots. Feedback and Log (Settings, Troubleshooting) can add up to three screenshots, picked or pasted. Only those are sent; the camera is never used.
 
-Bluetooth MIDI code, switched on only for the developer. This build contains Bluetooth MIDI code for a feature that lets the phone reach the guitar unit through a Bluetooth MIDI adapter instead of a computer. While it is tested, it is switched on only for the developer's own account. Customers and the review account don't see it in this build, and the app doesn't ask them for Bluetooth permission.
+Bluetooth. This build contains Bluetooth MIDI code for a feature that lets the phone reach the guitar unit through a Bluetooth MIDI adapter instead of a computer. While it is tested, it is switched on only for the developer's own account. Customers and the review account don't see it in this build, and the app doesn't ask them for Bluetooth permission. If it is offered to customers, that will be in a later version, sent for review with notes that describe it.
 
-Settings also has Developer pages (accounts, sales, messages) that open only for the developer's own account; the server checks which account is asking.
+Settings also has Developer pages (accounts, sales, messages, giving an account the full version) that open only for the developer's own account; the server checks which account is asking.
 
-Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and everything stored under it at once. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page. Please try it on a new account, not the demo account.
+Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and all its data at once. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page. Please try it on a new account, not the demo account. Create account is on the sign-in screen; the code it emails confirms it.
 
-Hardware (Guideline 2.1): a video filmed on an iPhone with a real FM3 on screen, from the first pairing through the whole workflow, is video 1 below.
+Hardware (Guideline 2.1): video 1 below, filmed on an iPhone, shows a real FM3 from the first pairing through the whole workflow.
 
-Apple Watch (it comes with the iPhone app): keep the demo's Play screen open on the iPhone, open Fractal Remote on the watch, and swipe up or down between Scenes, Pedals, Presets and Tuner.
+Apple Watch: with the demo's Play screen open on the iPhone, open Fractal Remote on the watch and swipe up or down between Scenes, Pedals, Presets and Tuner.
 
 Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].
 
@@ -1029,9 +1050,12 @@ which account is asking. They were already there when Apple approved
 so 1.87.11's notes left them out. Since 16 October 2026 2.5.19 says an
 app's functionality "should be clear to end users and App Review", so the
 next notes say them in the one line Google's App access note already has:
-"Settings also has Developer pages (accounts, sales, messages) that open
-only for the developer's own account; the server checks which account is
-asking." If Apple asks, they are the developer's own support tools.
+"Settings also has Developer pages (accounts, sales, messages, giving an
+account the full version) that open only for the developer's own account;
+the server checks which account is asking." (The fourth was added on 25
+October 2026: the account help can give an account the full version by
+hand, and 2.5.19 wants what a page can do said, not only that it is
+there.) If Apple asks, they are the developer's own support tools.
 
 **Four things every time that block is pasted** (done for 1.87.11; the
 brackets here are still empty, so the next version needs them again):
@@ -1043,13 +1067,16 @@ brackets here are still empty, so the next version needs them again):
 - **The demo account has the full version.** The signed-in screens are
   behind the unlock, so the account Apple signs in with has to have it, or
   the reviewer stops at the purchase page. If that account opens on the
-  purchase page instead of Settings, it does not have it yet.
+  purchase page, it does not have it yet.
 - **The demo account is not Justin's own.** His is the only account that
   shows Bluetooth (beta) and the Developer pages, and those pages show
   customers' email addresses. Sign in once on a phone with the account in
-  App Review Information: it should open on Settings, with no Bluetooth
-  (beta) row and no Developer section. The same account goes in Google's
-  App access.
+  App Review Information: it opens on Play (saying no computer is signed in
+  yet), not on the purchase page; tap the gear, and there is no Bluetooth
+  (beta) row under My rig and no Developer section. On Justin's own phone,
+  signing out leaves his Bluetooth (beta) off afterwards: it comes back by
+  Settings → My rig → Bluetooth (beta) → Connect once he is signed in again.
+  The same account goes in Google's App access.
 - **The three video links replace the brackets under Videos,** at the very
   end: the FM3 video (the Hardware paragraph calls it video 1), the presets
   video, and the one of deleting an account (video 3). Each is a Google
@@ -1161,9 +1188,11 @@ Diagnostics. Add these four, each **collected** and **not shared**:
 - **Personal info → User IDs.** Optional (only for somebody signed in). For
   App functionality and Account management. The account's number goes to
   RevenueCat and with every bug report.
-- **Device or other IDs.** Required. For App functionality. The number
-  RevenueCat makes up for a phone that is not signed in, sent every time the
-  app opens, and the number Expo's update check carries for that install.
+- **Device or other IDs.** Required. For App functionality and Analytics.
+  The number RevenueCat makes up for a phone that is not signed in, sent
+  every time the app opens, and the number Expo's update check carries for
+  that install; Expo's and RevenueCat's dashboards count installs and opens
+  by them (25 October 2026: Analytics added for those counts).
 - **App activity → App interactions.** Optional (only inside a bug report,
   when Send is pressed). For Analytics. The debug log records the buttons
   pressed.
@@ -1207,20 +1236,20 @@ No hardware? The app has a full demo that needs no account and no gear:
   2. Tap "Get started"
   3. Tap "Got it"
   4. Tap "Start free demo"
-  5. Choose any unit, then tap "Play with ..."
+  5. Choose any unit, tap "Play with ...", then "Open Play"
 
 Delete account: Settings (the gear, top right) → the account card at the top → Delete account → "Delete my account". A new account, without the full version, opens on the purchase page instead, and Delete account is at the foot of that page. Please try it on a new account, not this one.
 
 This build contains Bluetooth MIDI code for a feature (reaching the guitar unit through a Bluetooth MIDI adapter instead of a computer) that is switched on only for the developer's own account while it is tested. No other account sees it, this one included. That code is why the app declares Nearby devices, and Location on Android 11 and older, where Android needs it to find a Bluetooth device; it never reads where the phone is. They are asked for only after Connect is tapped on the Bluetooth page, which this account cannot open. If it is offered to everyone, that will be in a later version, sent for review with a description of it.
 
-Settings also has Developer pages (accounts, sales, messages) that open only for the developer's own account; the server checks which account is asking.
+Settings also has Developer pages (accounts, sales, messages, giving an account the full version) that open only for the developer's own account; the server checks which account is asking.
 ```
 
 If the box will not take all of it, drop the last paragraph first. If it is
 still too long, use this short version instead:
 
 ```
-This account has the full version. No hardware? Demo, no account needed: OK on the independent-app card → Get started → Got it → Start free demo → any unit → Play with ...
+This account has the full version. No hardware? Demo, no account needed: OK on the independent-app card → Get started → Got it → Start free demo → any unit → Play with ... → Open Play
 
 This build has Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested; this account never sees it. It is why Nearby devices (Location on Android 11 and older) is declared. They are asked for only after Connect on the Bluetooth page, which this account can't open.
 ```
@@ -1310,6 +1339,16 @@ has a release live. Once 1.87.11 is processed, App bundle explorer → 1.87.11
 ---
 
 ## 1.89.0: Bluetooth (beta) for customers
+
+**Two things changed on 25 October 2026, and this section is being
+rewritten for them.** 1.89.0 is the first App Store version since 1.87.11
+("Wait till the Bluetooth version"), so its Apple notes and What's New say
+what is new since 1.87.11, not since 1.88.3, and the listing changes held
+for 1.88.3 go in with it. And Bluetooth (beta) opens on every unit, not the
+AM4 alone ("I want it built out for all users"), marked beta, with "some
+features might not work as expected" and an easy way to report a problem.
+Where the blocks below still say AM4 only, or New since 1.88.3, they are
+the earlier plan.
 
 **The store version after 1.88.3, on both phones** (written on 25 October
 2026). "I have tried it from an android phone and it works great." "I'm
@@ -1428,7 +1467,7 @@ Without that hardware, use the demo. It needs no account:
 2. Tap "Get started"
 3. Tap "Got it"
 4. Tap "Start free demo"
-5. Choose any unit, then tap "Play with ..."
+5. Choose any unit, tap "Play with ...", then "Open Play"
 
 Every screen but Bluetooth (beta) works in the demo, and nothing in it reaches real hardware. The in-app purchase: in the demo, tap Unlock at the top of the Play screen; Restore a purchase is under the price. For the signed-in screens, use the demo account in App Review Information. It has the full version.
 
@@ -1438,11 +1477,11 @@ Bluetooth (beta), part of the full version, for the AM4 only. With a Bluetooth M
 
 Only on the developer's own account: Settings has Developer pages (access, sales, accounts, messages and the like), and the Bluetooth page has testing tools and offers three more units (FM3, FM9, Axe-Fx III). No other account is shown them, the demo account included; for the Developer pages, the server checks which account is asking.
 
-Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and everything stored under it at once. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page. Please try it on a new account, not the demo account.
+Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and all its data at once. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page. Please try it on a new account, not the demo account. Create account is on the sign-in screen.
 
-Hardware (Guideline 2.1): video 1 below, filmed on an iPhone with a real FM3 on screen, shows the computer way from the first pairing through the whole workflow. Video 4 shows Bluetooth with a real AM4.
+Hardware (Guideline 2.1): video 1 below, filmed on an iPhone with a real FM3, shows the computer way from the first pairing through the whole workflow. Video 4 shows Bluetooth with a real AM4.
 
-Apple Watch (it comes with the iPhone app): keep the demo's Play screen open on the iPhone, open Fractal Remote on the watch, and swipe up or down between Scenes, Pedals, Presets and Tuner.
+Apple Watch: with the demo's Play screen open on the iPhone, open Fractal Remote on the watch and swipe up or down between Scenes, Pedals, Presets and Tuner.
 
 Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].
 
@@ -1609,7 +1648,7 @@ No hardware? The app has a full demo that needs no account and no gear:
   2. Tap "Get started"
   3. Tap "Got it"
   4. Tap "Start free demo"
-  5. Choose any unit, then tap "Play with ..."
+  5. Choose any unit, tap "Play with ...", then "Open Play"
 
 Delete account: Settings (the gear, top right) → the account card at the top → Delete account → "Delete my account". A new account, without the full version, opens on the purchase page instead, and Delete account is at the foot of that page. Please try it on a new account, not this one.
 
@@ -1619,10 +1658,10 @@ Only on the developer's own account: Settings has Developer pages (access, sales
 ```
 
 If the box will not take all of it, drop the last paragraph first. If it is
-still too long, paste the short one instead (485 characters as written):
+still too long, paste the short one instead (497 characters as written):
 
 ```
-This account has the full version. Demo, no account: OK on the independent-app card → Get started → Got it → Start free demo → any unit → Play with ...
+This account has the full version. Demo, no account: OK on the independent-app card → Get started → Got it → Start free demo → any unit → Play with ... → Open Play
 
 Bluetooth (beta), new: Settings → My rig → Bluetooth (beta), only on devices with MIDI and Bluetooth LE. Tap AM4, then Connect: only then is Nearby devices asked for (Location on Android 11 and older), never to read location. Video: [Bluetooth video link]. Developer pages, testing tools, three more units: developer's account only.
 ```
@@ -1697,9 +1736,10 @@ step 7 spends builds, and it waits for his yes, as every build does.
 
 1. **Justin: App Store Connect → App Privacy**, the rows owed since 22
    October (*App Privacy*, above): add Photos or Videos and Customer Support,
-   and edit Email Address's use. They are owed for 1.88.3 too, so they may
-   be done by then. Bluetooth adds nothing to the label: nothing it touches
-   leaves the phone.
+   add Device ID (App Functionality and Analytics, not linked), and tick Analytics on Purchase History and
+   User ID (Email Address needs no change). Any day: Publish takes effect
+   at once and needs no version. Bluetooth adds nothing to the label:
+   nothing it touches leaves the phone.
 2. **Justin: Macs and Apple Vision Pro.** App Store Connect → the app →
    Pricing and Availability. Unless it was switched off, the App Store also
    offers the iPad app on Macs with Apple silicon and on Apple Vision Pro,
