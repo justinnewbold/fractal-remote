@@ -39,9 +39,10 @@ import copyIcon from '../../mobile/assets/icons/copy.png'
 import checkIcon from '../../mobile/assets/icons/check.png'
 import mailIcon from '../../mobile/assets/icons/mail.png'
 import sendIcon from '../../mobile/assets/icons/send.png'
-import appleIcon from '../../mobile/assets/icons/apple.png'
-import windowsIcon from '../../mobile/assets/icons/windows.png'
-import linuxIcon from '../../mobile/assets/icons/linux.png'
+/* A laptop, a screen on a stand and a command prompt, never a maker's logo:
+   the phone's same files, and mobile/src/screens/Connect.js says why. */
+import desktopIcon from '../../mobile/assets/icons/desktop.png'
+import terminalIcon from '../../mobile/assets/icons/terminal.png'
 import { inDesktopApp, onAPhoneOrTablet } from '../lib/desktop'
 import { deviceNoun } from '../../shared/device-word.mjs'
 
@@ -532,9 +533,9 @@ function ConnectComputer() {
       <div className="cc-foot">
         <span>{CONNECT.foot}</span>
         <span className="cc-os">
-          <Pic src={appleIcon} />
-          <Pic src={windowsIcon} />
-          <Pic src={linuxIcon} />
+          <Pic src={laptopIcon} />
+          <Pic src={desktopIcon} />
+          <Pic src={terminalIcon} />
         </span>
       </div>
     </div>

@@ -3653,17 +3653,32 @@ export function run(test) {
     const dir = new URL('docs/pending/', root)
     const readme = readFileSync(new URL('README.md', dir), 'utf8')
     const patches = readdirSync(dir).filter((f) => f.endsWith('.patch'))
+    /*
+     * web.yml runs the whole suite a second time with every waiting patch
+     * already in (PENDING_APPLIED), so that the tests a patch brings are run
+     * against main as it is now, not only the day it is applied. Then none of
+     * them can apply again, and the question is the other way round: is each
+     * one in the tree.
+     */
+    const applied = Boolean(process.env.PENDING_APPLIED)
     for (const name of patches) {
       try {
-        execFileSync('git', ['apply', '--check', join('docs/pending', name)], { cwd: fileURLToPath(root), stdio: 'pipe' })
+        execFileSync('git', ['apply', ...(applied ? ['--reverse'] : []), '--check', join('docs/pending', name)], { cwd: fileURLToPath(root), stdio: 'pipe' })
       } catch (err) {
-        assert.fail(`docs/pending/${name} no longer applies to the tree: ${String(err.stderr || err.message).trim()}`)
+        assert.fail(applied
+          ? `docs/pending/${name} is not in the tree, though the suite was told every waiting patch is: ${String(err.stderr || err.message).trim()}`
+          : `docs/pending/${name} no longer applies to the tree: ${String(err.stderr || err.message).trim()}`)
       }
       assert.ok(readme.includes(`| \`${name}\` |`), `docs/pending/${name} is not in the README's table, so nobody can see what it moves`)
     }
     for (const [, name] of readme.matchAll(/^\| `([^`]+\.patch)` \|/gm)) {
       assert.ok(patches.includes(name), `the README lists ${name}, and it is not there`)
     }
+    /* And that second run is there, after the first, with the patches applied in the README's order. */
+    const web = readFileSync(new URL('.github/workflows/web.yml', root), 'utf8')
+    const again = web.indexOf('- name: The tests again, with every patch waiting for a build in')
+    assert.ok(again > web.indexOf('run: npm test'), 'web.yml no longer runs the suite a second time with the waiting patches in')
+    assert.match(web.slice(again), /grep -oE '\^\\\| `\[\^`\]\+\\\.patch`' docs\/pending\/README\.md[\s\S]*?git apply "docs\/pending\/\$P"[\s\S]*?PENDING_APPLIED=1 npm test/, 'web.yml’s second run does not apply the README’s patches before it runs the suite')
     /*
      * A patch the table says moves the watch only must touch nothing that
      * moves the phones' fingerprint, which is why it can be built without
@@ -3702,6 +3717,8 @@ export function run(test) {
     const listed = readdirSync(join(root, 'docs/pending')).filter((f) => f.endsWith('.patch'))
     assert.deepEqual([...order].sort(), [...listed].sort(), 'the README’s table and the patches in docs/pending are not the same list')
     if (order.length < 2) return
+    /* With every waiting patch already in (web.yml's second run, PENDING_APPLIED), none applies again: web.yml applied them in this order, and the test above holds each one in the tree. */
+    if (process.env.PENDING_APPLIED) return
     const copy = mkdtempSync(join(tmpdir(), 'pending-'))
     try {
       for (const name of order) {
@@ -9021,6 +9038,20 @@ export function run(test) {
       assert.match(src, /setPreview\(null\)/, `${where} keeps a preview across a change of kind`)
     }
 
+    /*
+     * THE PHONE'S SWITCH SAYS IT IS ONE (Justin, 25 October 2026, on Android:
+     * "it just highlights the button and doesn't say anything else", after
+     * twelve taps on "Send the log of what the app just did" before Send). The
+     * browser's is a tick box, which reads as one already. The phone's says
+     * on or off in its own words, as the metronome's does, and the line under
+     * it says what that means for Send, both ways round.
+     */
+    const phoneForm = read('mobile/src/screens/Report.js')
+    assert.doesNotMatch(phoneForm, /label="Send the log of what the app just did"/, 'the phone’s log switch reads as a button that sends again')
+    assert.match(phoneForm, /label=\{withLog \? 'Include the log: on' : 'Include the log: off'\}/, 'the phone’s log switch does not say whether it is on')
+    assert.match(phoneForm, /'The log of what the app just did goes with your report when you tap Send\.'/, 'nothing under the switch says what “on” sends')
+    assert.match(phoneForm, /'Only what you wrote goes when you tap Send\.'/, 'nothing under the switch says what “off” sends')
+
     /* Setup reaches the form on the phone. The log screen sends by itself
        now (the next test), so it no longer opens the form at all. */
     assert.match(read('mobile/App.js'), /screen === 'report'/, 'the phone cannot open the report screen')
@@ -12977,6 +13008,29 @@ export function run(test) {
     const amps = groupsFor({}).find((g) => g.key === 'amp')
     assert.ok(amps.entries.length > 0, 'the amp list is empty')
     assert.ok(amps.entries.every((e) => e.slug === 'amp'), 'a catalog row does not know which block it came from')
+  })
+
+  test('the amp and cab photograph opens at the size of its box on Android, and the box always has one', () => {
+    /*
+     * Google Play's 1.88.0 review asked for pictures opened at the size they
+     * are shown. The gear photographs come from the website at 1200×900, and
+     * React Native only opens a picture at the size of its box by itself when
+     * the picture is already on the phone (ReactImageView.kt, shouldResize),
+     * so each card opened all of it, about 4 MB. resizeMethod="resize" asks
+     * for the box's size instead. It waits for the box to be laid out before
+     * it opens anything, so a box with no size would be a blank: this one is
+     * the card's width and 200 tall, and wider than the photograph is drawn,
+     * so what is opened is about the size shown or bigger (Android shrinks a
+     * JPEG in eighths, rounded down, so the narrow card on the sharpest
+     * screens can come out a few percent under, which cannot be seen).
+     */
+    const card = read('mobile/src/components/GearCard.js')
+    const at = card.indexOf('source={{ uri: photo.src }}')
+    assert.ok(at > 0, 'the gear photograph moved; this check follows it')
+    const image = card.slice(card.lastIndexOf('<Image', at), card.indexOf('/>', at))
+    assert.match(image, /resizeMethod="resize"/, 'the gear photograph opens at its full 1200×900 on Android again')
+    assert.match(image, /resizeMode="contain"/, 'the gear photograph is cropped or stretched, and a smaller copy would show it')
+    assert.match(image, /style=\{\{\s+width: '100%',\s+height: 200,/, 'the gear photograph’s box has no fixed size, and a resized picture waits for one')
   })
 
   test('the phone has light, dark and auto, and every screen follows', async () => {

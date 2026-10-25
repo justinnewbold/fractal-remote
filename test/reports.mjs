@@ -383,6 +383,44 @@ export function run(test) {
   })
 
   /*
+   * AND THE BROWSER THE SAME (review of 25 October 2026). The privacy page is
+   * the phone's and the website's, and App.jsx writes every fault on screen
+   * into the log (`logDebug('error', error)`), so the website's details found
+   * it too and sent it with a suggestion and with a bug report whose log was
+   * turned off. The browser's sendReport, run.
+   */
+  test('the browser sends the last fault on screen only with the log: never with a suggestion, or a bug report with the log turned off', async () => {
+    await browser({ user: USER }, async ({ reports, log, bench }) => {
+      log.logDebug('error', 'The unit refused that preset.')
+      const details = () => reports.context({ device: { model: 'FM3' } })
+      assert.equal(details().lastError, 'The unit refused that preset.', 'the details do not find the fault (src/lib/reports context)')
+
+      await reports.sendReport({ kind: 'idea', message: 'A bigger tuner', context: details() })
+      await reports.sendReport({ kind: 'bug', message: 'It froze', context: details(), withLog: false })
+      await reports.sendReport({ kind: 'bug', message: 'It froze', context: details() })
+      await reports.sendLogs({ context: details(), note: '' })
+      const [idea, bare, bug, logs] = bench.inserts.map((i) => i.row)
+
+      assert.equal(idea.log, null)
+      assert.ok(!('lastError' in idea.context), 'a suggestion carries the last fault on screen')
+      assert.equal(bare.log, null)
+      assert.ok(!('lastError' in bare.context), 'a bug report with the log turned off carries the last fault on screen')
+      assert.ok(bug.log)
+      assert.equal(bug.context.lastError, 'The unit refused that preset.', 'a bug report with its log lost the last fault')
+      assert.ok(logs.log)
+      assert.equal(logs.context.lastError, 'The unit refused that preset.', 'Send logs to developer lost the last fault')
+      for (const row of [idea, bare]) {
+        assert.deepEqual(Object.keys(row.context).sort(), Object.keys(bug.context).filter((k) => k !== 'lastError').sort())
+        assert.equal(row.context.unit, 'FM3')
+        assert.equal(row.context.version, '1.87.48')
+      }
+      const handed = details()
+      await reports.sendReport({ kind: 'idea', message: 'A bigger tuner', context: handed })
+      assert.equal(handed.lastError, 'The unit refused that preset.')
+    })
+  })
+
+  /*
    * REPORT A BLUETOOTH PROBLEM HAS NOTHING TO TYPE AND NO COPY LOGS, so a
    * report from it that did not go says neither "What you wrote is still
    * here" nor "use Copy Logs instead" (review of 25 October 2026): its note
@@ -1308,6 +1346,26 @@ export function run(test) {
     assert.match(list, /align-items: flex-start;/, 'a short tile beside a tall one stretches its Remove button')
     const phone = flat('mobile/src/components/Shots.js')
     assert.match(phone, /resizeMode="contain" style=\{\{ \.\.\.thumbSize\(shot\.width, shot\.height, 64\),/)
+    /* And opened at the thumbnail's size on Android, not as the whole screenshot (Google Play's 1.88.0
+       review asked for pictures opened at the size they are shown). thumbSize always gives the box a
+       size, which a resized picture needs before it opens at all. */
+    assert.match(phone, /source=\{\{ uri: shot\.uri \}\} accessibilityLabel=\{`Screenshot \$\{i \+ 1\}`\} \/\*[^*]*\*\/ resizeMethod="resize"/, 'a thumbnail opens the whole screenshot on Android again')
+    /* Half as much again as the box: Android shrinks a JPEG in eighths, rounded down, and a box in the
+       picture's own shape alone would open up to a quarter smaller than it is drawn. With 1.5, every
+       shape thumbSize gives, on every screen from 2x to 4x, opens at or above the size it is drawn. */
+    assert.match(phone, /resizeMethod="resize" resizeMultiplier=\{1\.5\} \/\*/, 'a thumbnail opens smaller than it is drawn on Android, and goes soft')
+    const { thumbSize } = await import('../shared/report-rules.mjs')
+    const eighths = (r) => Math.min(8, Math.max(1, Math.floor(2 / 3 + 8 * r)))
+    for (const [w, h] of [[1200, 1600], [1600, 1200], [1600, 900], [1600, 1000], [1600, 1067], [720, 1600], [1200, 1200]]) {
+      const box = thumbSize(w, h, 64)
+      for (const density of [2, 2.625, 2.75, 3, 3.5, 4]) {
+        const [bw, bh] = [Math.round(box.width * density), Math.round(box.height * density)]
+        const r = Math.max(Math.round(bw * 1.5) / w, Math.round(bh * 1.5) / h)
+        const n = r >= 1 ? 8 : eighths(r)
+        const scale = Math.min(bw / Math.ceil((w * n) / 8), bh / Math.ceil((h * n) / 8))
+        assert.ok(scale <= 1.001, `a ${w}×${h} screenshot at ${density}x is drawn ${scale.toFixed(2)} times the size it was opened at`)
+      }
+    }
   })
 
   test('the privacy page says where every copy of a report goes, and for how long', async () => {

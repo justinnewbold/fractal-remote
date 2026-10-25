@@ -1,39 +1,63 @@
-# THE ANDROID APP WITH R8 ON, BUILT AND STARTED FOR FREE BEFORE IT COSTS A BUILD.
+# THE NEXT ANDROID BUILD, MADE AND STARTED FOR FREE BEFORE IT COSTS A BUILD.
 #
-# Google Play, October 2026: "DEX code optimization is below our threshold.
-# Improve your percentages in the following categories: Obfuscation (3%).
-# … Fix by Feb 2027." From February 2027 every upload needs 25% or more in
-# each of obfuscation, optimization and shrinking
-# (support.google.com/googleplay/android-developer/answer/17492799). The fix
-# is R8, switched on by docs/pending/r8.patch, and it changes the built app,
-# so it reaches phones only in a store build, which is asked for, never
-# started from here.
+# Native work that is finished but waiting for a build lives in docs/pending,
+# as patches against main. This applies every one of them in the README's
+# order, the way the build day does (duo.yml does the same for the iPhone),
+# builds the Android app the way EAS would, and starts it on Android
+# emulators on GitHub's computers, which costs nothing. With nothing waiting
+# it builds main as it is.
 #
-# R8 can break an app quietly: it renames and removes Java and Kotlin code,
-# and anything a library looks up by name goes with it. The known one is
-# expo-updates: its database class is made by name, and Expo found R8 dropping
-# its constructor, so the app died at its first database read with
-# NoSuchMethodException (fixed in expo-updates 58, #47729; the patch carries
-# the same keep rule). In this app's build it does not happen: on 16 October
-# 2026 a build without the rule came out byte for byte the same as one with
-# it. The rule stays as insurance for a later Android build tool. So this
-# builds the app the way EAS would, with the patch in, and starts it on an
-# Android emulator on GitHub's computers, which costs nothing:
+# It began as the proof for R8 (docs/pending/r8.patch, applied for 1.88.0 on
+# 23 October 2026). Google Play, October 2026: "DEX code optimization is below
+# our threshold. Improve your percentages in the following categories:
+# Obfuscation (3%). … Fix by Feb 2027." From February 2027 every upload needs
+# 25% or more in each of obfuscation, optimization and shrinking
+# (support.google.com/googleplay/android-developer/answer/17492799). R8 can
+# break an app quietly: it renames and removes Java and Kotlin code, and
+# anything a library looks up by name goes with it. The known one is
+# expo-updates, whose database class is made by name (Expo found R8 dropping
+# its constructor; fixed in expo-updates 58, #47729, and main carries the same
+# keep rule). On 16 October 2026 a build without the rule came out byte for
+# byte the same as one with it; the rule stays as insurance for a later
+# Android build tool.
 #
-#   1. The scores Play will read, out of the bundle's own r8.json, and the
+# Then Google Play's four suggestions on 1.88.0 left three patches here for
+# the 1.89.0 build pair (docs/pending/README.md says what each one is for):
+# Android tablets turn sideways (tablet-turns), Expo's developer error screen
+# out of Android (logbox-android), and R8 shrinking pictures and layouts too
+# (shrink-resources). So, in order:
+#
+#   1. What each waiting patch promised, read off the generated Android
+#      project before an hour goes into building it, R8 included.
+#   2. The scores Play will read, out of the bundle's own r8.json, and the
 #      DEX size against Play's 10 MB line.
-#   2. The app launched on a phone emulator, a minute left running, and the
-#      log read for the crashes R8 causes. Then the check is tried on itself:
-#      the app is crashed on purpose and an R8 failure written to the log,
-#      and both must be seen, or the clean minute means nothing.
-#   3. The same app on a tablet emulator, sideways: Android 16 ignores the
-#      portrait lock on a screen 600 points wide or more (Play's "Remove
-#      resizability and orientation restrictions"), so this is what an
-#      Android tablet shows.
+#   3. Every picture, sound and file the app or Google finds by name, still
+#      in the built app: the names in the keep files, read against the APK's
+#      own table of what it holds. The check is tried on itself with a name
+#      that is not there, or a clean list means nothing.
+#   4. What Play's edge-to-edge notice will list for this build, and
+#      Material Components gone when Expo's error screen is.
+#   5. The app on a phone emulator held sideways, the hold read back before
+#      every look: it stays upright, past the "An independent app" card and
+#      into the demo, a minute left running and the log read for the crashes
+#      R8 causes and for any missing resource a library reports (a picture
+#      React Native cannot find is drawn as nothing without a word, so step 3
+#      is the one that counts for pictures). Then the check is tried on
+#      itself: the app is crashed on purpose and an R8 failure and a missing
+#      resource under a library's stack written to the log, and all three
+#      must be seen.
+#   6. The same app on an Android 15 tablet, held sideways and then turned
+#      upright and back: with the tablet change in, it fills the screen every
+#      way up. Android 15 is the last Android that keeps the upright lock on a
+#      tablet; Android 16 ignores it on a screen whose short side is 600
+#      points or more, which is why this is not run on 16. The emulator is
+#      told to show an upright app as a strip, as a real Android 12 to 15
+#      tablet does; left alone, its image turns the whole screen for the app,
+#      and every look would pass.
 #
 # What a minute cannot reach (buying, restoring, an over-the-air update
-# arriving, Bluetooth, sound) is read rather than run: see the r8.patch
-# notes in docs/pending/README.md.
+# arriving, Bluetooth, sound) is read rather than run: see the r8.patch notes
+# in docs/pending/README.md.
 #
 # Nothing here signs for the Play Store or goes near the Releases page.
 name: android-minified
@@ -41,7 +65,7 @@ name: android-minified
 on:
   pull_request:
     paths:
-      - 'docs/pending/r8.patch'
+      - 'docs/pending/**'
       - '.github/workflows/android-minified.yml'
       - '.github/android-smoke.sh'
   workflow_dispatch:
@@ -52,8 +76,8 @@ permissions:
 jobs:
   r8:
     runs-on: ubuntu-latest
-    # The build alone is apk.yml's 40 minutes; the emulators add about ten.
-    timeout-minutes: 80
+    # The build alone is apk.yml's 40 minutes; the emulators add about fifteen.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -68,16 +92,32 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # The patch, unless main already carries it (after the build that takes it).
-      - name: Put R8 in
+      # The next build is main with every patch waiting in docs/pending in it,
+      # in the README's order, the way the build day applies them. A patch
+      # already in the tree (the build pull request, before its file is
+      # deleted) is said and passed over, never applied twice.
+      - name: The waiting patches, applied
         run: |
           set -euo pipefail
-          if grep -q '"expo-build-properties"' mobile/app.json; then
-            echo "main already has it"
-          else
-            git apply docs/pending/r8.patch
+          waiting="$(grep -oE '^\| `[^`]+\.patch`' docs/pending/README.md | tr -d '|` ' || true)"
+          if [ -z "$waiting" ]; then
+            echo "::notice::Nothing waits in docs/pending, so this builds main as it is."
           fi
-          grep -n 'enableMinifyInReleaseBuilds' mobile/app.json
+          for P in $waiting; do
+            if git apply --check "docs/pending/$P" 2>/dev/null; then
+              echo "::notice::Applying docs/pending/$P, which waits for the next build"
+              git apply "docs/pending/$P"
+            elif git apply --reverse --check "docs/pending/$P" 2>/dev/null; then
+              echo "::notice::docs/pending/$P is already in the tree"
+            else
+              echo "::error::docs/pending/$P neither applies nor is already in the tree."
+              git apply --check "docs/pending/$P"
+            fi
+          done
+          git status --short
+          # R8 has been on main since 1.88.0; this is the R8 check, so it must still be.
+          grep -n '"enableMinifyInReleaseBuilds": true' mobile/app.json \
+            || { echo "::error::mobile/app.json no longer turns R8 on."; exit 1; }
 
       - name: Install the app's own dependencies
         working-directory: mobile
@@ -87,17 +127,66 @@ jobs:
         working-directory: mobile
         run: npx expo prebuild --platform android --no-install
 
-      # What the patch promises, read off the generated project before an
-      # hour goes into building it.
-      - name: The project says what the patch promised
-        working-directory: mobile/android
+      # What R8 and each waiting patch promise, read off the generated project
+      # before an hour goes into building it. Which changes are in is said to
+      # the steps after this one (TURNS, SHRINK, LOGBOX_OUT), so a check that
+      # depends on a patch is a pass or a fail only when the patch is in.
+      - name: The project says what the patches promised
+        working-directory: mobile
         run: |
           set -euo pipefail
-          grep -q '^android.enableMinifyInReleaseBuilds=true' gradle.properties
-          grep -q 'getDefaultProguardFile("proguard-android-optimize.txt")' app/build.gradle
-          grep -q 'androidx.room.RoomDatabase { <init>(); }' app/proguard-rules.pro
-          grep -q 'keepnames class \* extends expo.modules.kotlin.exception.CodedException' app/proguard-rules.pro
-          echo "minify on, the optimize file, the database rule, the error-name rule: all there"
+          grep -q '^android.enableMinifyInReleaseBuilds=true' android/gradle.properties
+          grep -q 'getDefaultProguardFile("proguard-android-optimize.txt")' android/app/build.gradle
+          grep -q 'androidx.room.RoomDatabase { <init>(); }' android/app/proguard-rules.pro
+          grep -q 'keepnames class \* extends expo.modules.kotlin.exception.CodedException' android/app/proguard-rules.pro
+          echo "R8: minify on, the optimize file, the database rule, the error-name rule: all there"
+
+          main_activity="$(grep -E '<activity [^>]*android:name="\.MainActivity"' android/app/src/main/AndroidManifest.xml)"
+          echo "MainActivity in the manifest: $main_activity"
+          kt=android/app/src/main/java/cloud/newbold/fractalremote/MainActivity.kt
+          if grep -q '"./plugins/withTabletTurns"' app.json; then
+            if grep -q 'android:screenOrientation' <<< "$main_activity"; then
+              echo "::error::tablet-turns is in, and MainActivity is still locked upright in the manifest, which is what Play reads."
+              exit 1
+            fi
+            for change in screenSize smallestScreenSize; do
+              grep -q "android:configChanges=\"[^\"]*\b$change\b" <<< "$main_activity" \
+                || { echo "::error::MainActivity no longer takes $change itself, so a fold would make it again."; exit 1; }
+            done
+            on_create="$(sed -n '/override fun onCreate/,/super\.onCreate(/p' "$kt")"
+            grep -q 'holdPhonesUpright()' <<< "$on_create" \
+              || { echo "::error::MainActivity does not ask the phone-or-tablet rule before it is made."; exit 1; }
+            grep -q 'override fun onConfigurationChanged' "$kt"
+            echo "tablet-turns: no lock in the manifest, the rule in MainActivity at launch and at every fold"
+            echo "TURNS=yes" >> "$GITHUB_ENV"
+          else
+            echo "tablet-turns is not in: MainActivity keeps app.json's lock"
+            echo "TURNS=no" >> "$GITHUB_ENV"
+          fi
+
+          if node -e 'process.exit(require("./app.json").expo.plugins.some((p) => Array.isArray(p) && p[0] === "expo-build-properties" && p[1]?.android?.enableShrinkResourcesInReleaseBuilds === true) ? 0 : 1)'; then
+            grep -q '^android.enableShrinkResourcesInReleaseBuilds=true' android/gradle.properties
+            grep -q '^android.r8.optimizedResourceShrinking=true' android/gradle.properties
+            test -s android/app/src/main/res/raw/keep_cloud_newbold_fractalremote.xml
+            echo "shrink-resources: resource shrinking on, R8's own, and the app's keep file written"
+            echo "SHRINK=yes" >> "$GITHUB_ENV"
+          else
+            echo "shrink-resources is not in: pictures and layouts are not shrunk"
+            echo "SHRINK=no" >> "$GITHUB_ENV"
+          fi
+
+          if node -e 'process.exit((require("./package.json").expo?.autolinking?.android?.exclude || []).includes("@expo/log-box") ? 0 : 1)'; then
+            linked="$(npx expo-modules-autolinking resolve --platform android --json)"
+            if grep -q '"@expo/log-box"' <<< "$linked"; then
+              echo "::error::logbox-android is in, and Android's autolinking still finds @expo/log-box."
+              exit 1
+            fi
+            echo "logbox-android: Expo's error screen is left out of Android's autolinking"
+            echo "LOGBOX_OUT=yes" >> "$GITHUB_ENV"
+          else
+            echo "logbox-android is not in: Expo's error screen, and Material with it, stay linked"
+            echo "LOGBOX_OUT=no" >> "$GITHUB_ENV"
+          fi
 
       # An updates configuration that reads, so expo-updates opens its
       # database at launch the way a phone's copy does. The value is any
@@ -212,6 +301,110 @@ jobs:
             echo "::warning::No deobfuscation map inside the bundle; Play's crash reports would be unreadable without an upload by hand."
           fi
 
+      # What no shrinker can see: the app's own pictures and sounds, which
+      # React Native, expo-asset, expo-audio and expo-updates find by name,
+      # listed in the keep.xml Expo's bundling writes; and the billing
+      # library's three files that Google's own services read, listed in the
+      # app's keep file (mobile/plugins/withR8Optimize.js). Each name is read
+      # against the APK's own table of what it holds. Without resource
+      # shrinking it cannot fail; with it, a missing name is a picture the
+      # app would show as nothing.
+      - name: Nothing the app or Google finds by name was shrunk away
+        working-directory: mobile/android
+        run: |
+          set -euo pipefail
+          aapt2="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/aapt2"
+          mapfile -t keeps < <(find app/build/generated app/src/main/res -path '*/raw/*' -name '*.xml' -print0 | xargs -0 grep -l 'tools:keep' || true)
+          printf 'keep file: %s\n' "${keeps[@]}"
+          python3 - "$aapt2" app/build/outputs/apk/release/app-release.apk "${keeps[@]}" <<'PY'
+          import fnmatch, os, re, subprocess, sys
+          aapt2, apk, *keeps = sys.argv[1:]
+          table = subprocess.run([aapt2, 'dump', 'resources', apk], capture_output=True, text=True, check=True).stdout
+          have = set(re.findall(r'^\s+resource 0x[0-9a-f]+ (\S+)', table, re.M))
+          print('resources in the APK: %d; APK %.1f MB' % (len(have), os.path.getsize(apk) / 1e6))
+          wanted = []
+          for keep in keeps:
+              for listed in re.findall(r'tools:keep="([^"]*)"', open(keep, encoding='utf-8').read()):
+                  wanted += [(keep, n.strip().lstrip('@')) for n in listed.split(',') if n.strip()]
+          missing = lambda name: not any(fnmatch.fnmatchcase(h, name) for h in have)
+          bundle = [n for k, n in wanted if '/generated/' in k]
+          if not any(n.startswith('drawable/assets_') for n in bundle):
+              raise SystemExit("::error::No keep.xml from Expo's bundling naming the app's pictures was found, so this check would be blind.")
+          planted = 'drawable/assets_planted_by_android_minified'
+          if not missing(planted):
+              raise SystemExit('::error::The check is blind: a name planted to be missing was found in the APK.')
+          print('the check sees a missing name when there is one (%s)' % planted)
+          gone = [(k, n) for k, n in wanted if missing(n)]
+          print('names kept by name: %d, from %d keep files; missing: %d' % (len(wanted), len(keeps), len(gone)))
+          for k, n in gone:
+              print('::error::%s is listed in %s and is not in the APK, so whatever looks it up by name finds nothing.' % (n, k))
+          if gone:
+              raise SystemExit(1)
+          PY
+          echo "- every name in the keep files is in the APK (shrinking pictures and layouts: ${SHRINK:-no})" >> "$GITHUB_STEP_SUMMARY"
+
+      # Play's "uses deprecated APIs or parameters for edge-to-edge" reads the
+      # whole DEX, code that never runs included. This lists what it will
+      # find in this build, by each class's own name (through mapping.txt),
+      # to read beside 1.88.0's list in docs/pending/README.md. A list, not a
+      # pass or a fail: most of it is React Native's and Google's. The one
+      # part the app can take out is Material Components, which only Expo's
+      # error screen asks for, and that is checked.
+      - name: What Play's edge-to-edge notice will find in this build
+        working-directory: mobile/android/app/build/outputs
+        run: |
+          set -euo pipefail
+          material="$(grep -c '^com\.google\.android\.material\.' mapping/release/mapping.txt || true)"
+          echo "Material Components classes in the build: $material"
+          if [ "${LOGBOX_OUT:-no}" = yes ] && [ "$material" != 0 ]; then
+            echo "::error::logbox-android is in, and $material Material Components classes are still in the build: something else asks for Material."
+            exit 1
+          fi
+          dexdump="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/dexdump"
+          python3 - apk/release/app-release.apk "$dexdump" mapping/release/mapping.txt <<'PY' | tee edge-to-edge.txt
+          import collections, os, re, subprocess, sys, tempfile, zipfile
+          apk, dexdump, mapping = sys.argv[1:]
+          back = {}
+          for line in open(mapping, encoding='utf-8', errors='replace'):
+              m = re.match(r'^(\S+) -> (\S+):$', line)
+              if m:
+                  back[m.group(2)] = m.group(1)
+          CALLS = ['Landroid/view/Window;.setStatusBarColor', 'Landroid/view/Window;.getStatusBarColor',
+                   'Landroid/view/Window;.setNavigationBarColor', 'Landroid/view/Window;.getNavigationBarColor',
+                   'Landroid/view/Window;.setNavigationBarDividerColor', 'Landroid/view/Window;.setDecorFitsSystemWindows',
+                   'Landroid/view/WindowManager$LayoutParams;.layoutInDisplayCutoutMode']
+          places = collections.defaultdict(set)
+          with tempfile.TemporaryDirectory() as tmp, zipfile.ZipFile(apk) as z:
+              for name in sorted(n for n in z.namelist() if re.match(r'classes\d*\.dex$', n)):
+                  path = z.extract(name, tmp)
+                  cls = None
+                  run = subprocess.Popen([dexdump, '-d', path], stdout=subprocess.PIPE, text=True, errors='replace')
+                  for line in run.stdout:
+                      m = re.match(r"\s+Class descriptor\s+: 'L([^;]+);'", line)
+                      if m:
+                          cls = m.group(1).replace('/', '.')
+                          continue
+                      if 'invoke-' in line or 'iput' in line:
+                          for call in CALLS:
+                              if call in line and ('iput' in line or 'layoutInDisplayCutoutMode' not in call):
+                                  places[call.split(';.')[1]].add(back.get(cls, cls))
+                  run.wait()
+          print('Deprecated edge-to-edge calls in the built code, by the class that makes them:')
+          for call in sorted(places):
+              print('  %s (%d):' % (call, len(places[call])))
+              for c in sorted(places[call]):
+                  print('    ' + c)
+          if not places:
+              print('  none')
+          PY
+          {
+            echo "### What Play's edge-to-edge notice will find"
+            echo "Material Components classes: $material (Expo's error screen left out: ${LOGBOX_OUT:-no})"
+            echo '```'
+            head -c 6000 edge-to-edge.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Keep what the build said
         if: always()
         uses: actions/upload-artifact@v4
@@ -219,8 +412,11 @@ jobs:
           name: r8-build
           path: |
             mobile/android/app/build/outputs/r8.json
+            mobile/android/app/build/outputs/edge-to-edge.txt
             mobile/android/app/build/outputs/mapping/release/mapping.txt
             mobile/android/app/build/outputs/apk/release/app-release.apk
+            mobile/android/app/src/main/AndroidManifest.xml
+            mobile/android/app/src/main/java/cloud/newbold/fractalremote/MainActivity.kt
           retention-days: 7
           if-no-files-found: ignore
 
@@ -230,10 +426,11 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # Started, left a minute, and the log read for what R8 breaks. The app
-      # still running at the end counts as much as the log does. Then the
-      # check is tried on itself (see android-smoke.sh).
-      - name: Start it on a phone
+      # Held sideways, past the startup card and into the demo, left a minute,
+      # and the log read for what R8 breaks and for any missing resource a
+      # library reports. A phone stays upright whatever the tablet change does.
+      # Then the check is tried on itself (see android-smoke.sh).
+      - name: Start it on a phone held sideways
         id: phone
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -245,14 +442,18 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash .github/android-smoke.sh phone
 
-      # Sideways on a tablet, where Android 16 ignores the portrait lock. A
-      # picture to look at, not a pass or a fail: whether it reads well
-      # sideways is a question for the screens, not for R8.
-      - name: And sideways on a tablet
-        continue-on-error: true
+      # Android 15, the last Android that keeps the upright lock on a tablet,
+      # so this is where the tablet change shows. The Pixel Tablet is sideways
+      # by nature (its natural way up is landscape), so sideways here is the
+      # way it starts, and upright is the quarter turn. The script first tells
+      # it to show an upright app as a strip, as a real Android 12 to 15 tablet
+      # does (this image would turn its whole screen instead). With
+      # tablet-turns in, the app must fill the screen both ways; without it,
+      # the pictures show the upright strip a 1.88.0 tablet shows.
+      - name: And on an Android 15 tablet, sideways and upright
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 36
+          api-level: 35
           arch: x86_64
           target: google_apis
           profile: pixel_tablet

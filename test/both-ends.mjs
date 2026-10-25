@@ -2240,8 +2240,8 @@ export function run(test) {
     assert.ok(cards.every((c) => !c.warn), 'the Bluetooth chain tells somebody to update a computer')
     assert.doesNotMatch(flat, /didn’t say which version/, 'the computer-version note is back on Phone & computer')
     const walk = read('mobile/src/components/Walk.js').replace(/\s+/g, ' ')
-    assert.match(walk, /import bluetoothIcon from '\.\.\/\.\.\/assets\/icons\/bluetooth\.png'/)
-    assert.match(walk, /const CHAIN_ICONS = \{ unit: ampIcon, computer: laptopIcon, adapter: bluetoothIcon, phone: phoneIcon \}/)
+    assert.match(walk, /import wirelessIcon from '\.\.\/\.\.\/assets\/icons\/wireless\.png'/)
+    assert.match(walk, /const CHAIN_ICONS = \{ unit: ampIcon, computer: laptopIcon, adapter: wirelessIcon, phone: phoneIcon \}/)
   })
 
   /*

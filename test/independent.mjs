@@ -1084,6 +1084,116 @@ export function run(test) {
     assert.match(web, /const PIECES = \{ unit: unitShot, computer: pieceComputer, phone: piecePhone \}/)
   })
 
+  /*
+   * NOR ANY OTHER COMPANY'S LOGO IN THE APP'S OWN DRAWINGS, since 25 October
+   * 2026. The laptop in the walkthrough had Apple's logo on its screen, and
+   * the Connect screen showed Apple's logo, Microsoft's Windows logo and
+   * Linux's penguin under "Mac, Windows, Linux". Apple's rules for its
+   * trademarks say "You may not use the Apple Logo" without its written
+   * license, Microsoft's say the same of theirs, and the app goes to Apple's
+   * review with every store version. The laptop's screen shows the app's own
+   * tile now, and the three computers are plain drawings
+   * (mobile/src/screens/Connect.js says why). The gear cards' photographs and
+   * illustrations are another matter: they show the makers' badges on
+   * purpose, for identification, under the trademark note in
+   * docs/gear-illustrations.md, and this test does not look at them.
+   *
+   * And the Bluetooth symbol, the Runic B, which was the top bar's lamp and
+   * the adapter's picture while the app is on Bluetooth. The Bluetooth
+   * group's brand guide: "Only Members of Bluetooth SIG, Inc. ... are
+   * licensed to use the Bluetooth word mark, figure mark, and combination
+   * mark", and of the Runic B on its own, "Use of the Runic B standing alone
+   * may not be used in any other circumstance." The app's maker is not a
+   * member, and from the store version that opens Bluetooth to customers
+   * every customer and Apple's reviewer would see it. It is a plain aerial
+   * now (icons/wireless.png, TopBar.js says why); the word Bluetooth, said
+   * in words, stays.
+   *
+   * Pixels cannot be read for a logo here, so what is held is what can drift
+   * back: the old files, anything asking for them, and the drawings that
+   * took their place.
+   */
+  test('no other company’s logo in the app’s own drawings either (gear photographs aside): the laptop shows the app, the computers are plain drawings, and Bluetooth is an aerial', () => {
+    for (const f of ['mobile/assets/icons/apple.png', 'mobile/assets/icons/windows.png', 'mobile/assets/icons/linux.png', 'mobile/assets/icons/bluetooth.png']) {
+      assert.ok(!existsSync(join(root, f)), `${f} is back`)
+    }
+    for (const f of shippedFiles()) {
+      const text = readFileSync(f, 'utf8')
+      for (const name of ['icons/apple', 'icons/windows', 'icons/linux', 'icons/bluetooth', 'appleIcon', 'windowsIcon', 'linuxIcon', 'bluetoothIcon']) {
+        assert.ok(!text.includes(name), `${rel(f)} still asks for ${name}`)
+      }
+    }
+    /* Over Bluetooth, the top bar's lamp and the adapter's card are the aerial. */
+    assert.match(read('mobile/src/components/TopBar.js'), /import wirelessIcon from '\.\.\/\.\.\/assets\/icons\/wireless\.png'/, 'the top bar’s Bluetooth lamp is not the plain aerial')
+    assert.match(read('mobile/src/components/Walk.js'), /adapter: wirelessIcon,/, 'the Bluetooth adapter’s card is not the plain aerial')
+    /* Mac, Windows, Linux: a laptop, a screen on a stand, a command prompt, in that order, at both ends. */
+    const phone = read('mobile/src/screens/Connect.js')
+    assert.match(phone, /import desktopIcon from '\.\.\/\.\.\/assets\/icons\/desktop\.png'/)
+    assert.match(phone, /import terminalIcon from '\.\.\/\.\.\/assets\/icons\/terminal\.png'/)
+    assert.match(phone, /\[laptopIcon, 'Mac'\],\s+\[desktopIcon, 'Windows'\],\s+\[terminalIcon, 'Linux'\]/, 'the phone’s three computers are not the plain drawings')
+    const web = read('src/components/ConnectScreen.jsx')
+    assert.match(web, /import desktopIcon from '\.\.\/\.\.\/mobile\/assets\/icons\/desktop\.png'/)
+    assert.match(web, /import terminalIcon from '\.\.\/\.\.\/mobile\/assets\/icons\/terminal\.png'/)
+    assert.match(web, /<span className="cc-os">\s+<Pic src=\{laptopIcon\} \/>\s+<Pic src=\{desktopIcon\} \/>\s+<Pic src=\{terminalIcon\} \/>/, 'the browser’s three computers are not the plain drawings')
+    /* The names are said in words, where the pictures cannot say them. */
+    assert.match(read('shared/onboarding.mjs'), /foot: 'Free • Mac, Windows, Linux'/, 'the line above the three pictures no longer names the computers')
+    /* And the laptop is still the walkthrough's, under its own name, at both ends. */
+    assert.ok(read('mobile/src/screens/Onboarding.js').includes("import pieceComputer from '../../assets/piece-computer.png'"))
+    assert.ok(read('src/components/PhoneWalkthrough.jsx').includes("import pieceComputer from '../../mobile/assets/piece-computer.png'"))
+  })
+
+  /*
+   * THE WALKTHROUGH'S PICTURES ARE AS BIG AS THEY ARE EVER DRAWN, AND NO
+   * BIGGER. Google Play's 1.88.0 review: "Improve your app's performance with
+   * bitmap image optimization." The phone's picture was 360×570 for a box
+   * 56 points tall, decoded at six times the pixels it was shown with; it is
+   * 142×225 now. The rule each one is held to: the box it is drawn in,
+   * fitted the way `contain` fits it, at the sharpest screen that box meets.
+   * The phone app draws them at up to 4 pixels a point (an Android phone at
+   * its sharpest; an iPhone is 3), and the browser at up to 3 (a phone's
+   * browser; a laptop's is 2). The boxes are read from the code, so a bigger
+   * box with the same picture fails here rather than going soft on a phone.
+   */
+  test('the walkthrough’s pictures are as big as their biggest box, at the sharpest screen, and no bigger', () => {
+    const size = (f) => {
+      const png = readFileSync(join(root, f))
+      assert.equal(png.toString('ascii', 1, 4), 'PNG', `${f} is not a PNG`)
+      return [png.readUInt32BE(16), png.readUInt32BE(20)]
+    }
+    const box = (src, re, what) => {
+      const m = src.match(re)
+      assert.ok(m, `${what}: the box it is drawn in moved; this check follows it`)
+      return [Number(m[1]), Number(m[2])]
+    }
+    const phone = read('mobile/src/screens/Onboarding.js')
+    const css = read('src/styles.css')
+    const web = read('src/components/PhoneWalkthrough.jsx')
+    const art = box(phone, /const Art = \(\{ kind \}\) => \(\s+<Image[\s\S]*?style=\{\{ width: (\d+), height: (\d+) \}\}/, 'the phone’s three pieces')
+    const pwArt = box(css, /\n\.pw-art \{[^}]*?width: (\d+)px;\s+height: (\d+)px;/, 'the browser’s three pieces')
+    const pwShot = box(css, /\n\.pw-unit-shot \{[^}]*?width: (\d+)px;\s+height: (\d+)px;/, 'the browser’s choice cards')
+    assert.match(web, /<img className="pw-art" src=\{PIECES\[box\.key\] \|\| PIECES\.unit\} alt="" \/>/)
+    assert.match(web, /<img className="pw-unit-shot" src=\{pieceComputer\} alt="" \/>/, 'the computer’s card no longer shows the laptop; this check follows it')
+    const PHONE_DENSITY = 4
+    const BROWSER_DENSITY = 3
+    /* The pixels a box needs: the picture fitted inside it, times the screen's pixels a point. */
+    const needs = ([w, h], [bw, bh], density) => {
+      const k = Math.min(bw / w, bh / h)
+      return [Math.round(w * k * density), Math.round(h * k * density)]
+    }
+    for (const [file, boxes] of [
+      ['mobile/assets/piece-phone.png', [[art, PHONE_DENSITY], [pwArt, BROWSER_DENSITY]]],
+      ['mobile/assets/piece-computer.png', [[art, PHONE_DENSITY], [pwArt, BROWSER_DENSITY], [pwShot, BROWSER_DENSITY]]]
+    ]) {
+      const got = size(file)
+      const most = boxes.map(([b, d]) => needs(got, b, d)).reduce((a, b) => [Math.max(a[0], b[0]), Math.max(a[1], b[1])])
+      assert.ok(got[0] >= most[0] && got[1] >= most[1], `${file} is ${got.join('×')}, and its biggest box needs ${most.join('×')}: it goes soft there`)
+      assert.ok(got[0] <= most[0] * 1.25 && got[1] <= most[1] * 1.25, `${file} is ${got.join('×')}, far more than the ${most.join('×')} it is ever drawn at`)
+    }
+    /* The plain box is drawn across the first screen, as wide as the device; it was re-saved, never shrunk. */
+    const unit = size('mobile/assets/unit-plain.png')
+    assert.ok(unit[0] >= 960 && unit[1] >= 520, `the plain box is ${unit.join('×')}, smaller than the 960×520 it was drawn at`)
+  })
+
   test('Fractal Audio’s own models show their words alone, and a picture that does not arrive is never a broken frame', async () => {
     /* None of the 35 is in either list, on the website, or in the record of where pictures came from. */
     for (const f of ['src/data/gear-photos.json', 'mobile/src/data/gear-photos.json']) {

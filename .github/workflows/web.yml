@@ -31,6 +31,32 @@ jobs:
         run: npm test
       - name: The app builds
         run: npm run build
+      # "Still applies" (test/mobile.mjs) proves a waiting patch's hunks fit.
+      # It does not prove that the test the patch brings still agrees with
+      # main, which may have changed what that test reads since (tablet-turns
+      # holds its 600 to TABLET_SIDE in shared/device-word.mjs), and that would
+      # show only on the build day, once the patches are in. So the suite runs
+      # a second time with every waiting patch in, in the README's order, the
+      # way the build day runs it. Last, so the app built above is main's.
+      - name: The tests again, with every patch waiting for a build in
+        run: |
+          set -euo pipefail
+          waiting="$(grep -oE '^\| `[^`]+\.patch`' docs/pending/README.md | tr -d '|` ' || true)"
+          if [ -z "$waiting" ]; then
+            echo "Nothing waits in docs/pending, so there is nothing to run again."
+            exit 0
+          fi
+          for P in $waiting; do
+            if git apply --reverse --check "docs/pending/$P" 2>/dev/null; then
+              echo "docs/pending/$P is already in the tree"
+            else
+              echo "Applying docs/pending/$P"
+              git apply "docs/pending/$P"
+            fi
+          done
+          npm run sync:rules
+          PENDING_APPLIED=1 npm test
+          git checkout -- . && git clean -fdq -e node_modules
 
   version:
     if: github.event_name == 'pull_request'

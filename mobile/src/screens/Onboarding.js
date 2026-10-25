@@ -888,6 +888,25 @@ const Footnote = ({ question, links }) => (
  * EXCEPT THE UNIT, since 18 October 2026: his rack front carried the FRACTAL
  * AUDIO logo, and it is the plain box the app drew itself now (see the
  * import), for Fractal Audio's letter.
+ *
+ * AND THE LAPTOP'S SCREEN, since 25 October 2026. It showed Apple's logo,
+ * and Apple's rules for its trademarks say "You may not use the Apple Logo"
+ * without Apple's written license, in an app that goes to Apple's review
+ * with every store version. The logo is painted out, and the screen shows
+ * the app's own tile instead, the same one the phone beside it shows, so the
+ * row reads as this app on the computer and on the phone.
+ *
+ * HOW BIG EACH FILE IS, and why. A picture is drawn here at 92×56 points at
+ * most, on a screen of up to 4 pixels a point (an Android phone at its
+ * sharpest, against an iPhone's 3), and the browser draws the same files
+ * (src/components/PhoneWalkthrough.jsx). So the phone is 142×225: 56 points
+ * tall at 4x is 224, and it was 360×570, decoded at more than six times the
+ * pixels it was shown with. The laptop is 396×240 because the browser's
+ * computer card draws it 132×80 on a screen of up to 3x (92 points at 4x
+ * here is 368). There was never a bigger picture than the old 360×218, so it
+ * was stretched to that size when the logo came off: it meets the size the
+ * test asks for, but it is no sharper than it was. test/independent.mjs
+ * holds both to at least that.
  */
 const PIECES = { unit: unitPlain, computer: pieceComputer, phone: piecePhone }
 

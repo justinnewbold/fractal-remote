@@ -219,10 +219,26 @@ export default function GearCard({ entry, entries = [], onGo, onBack }) {
         */}
         {photo ? (
           <View style={{ gap: space.xs }}>
+            {/*
+              resizeMethod="resize": Android opens the photograph at about
+              the size of this box rather than at its own 1200×900, about
+              4 MB whatever the screen. React Native only does that by
+              itself for a picture already on the phone, never for one from
+              the website. The box always has a size to open it at (the
+              card's width, 200 tall), and since the box is wider than the
+              photograph is drawn, what is opened is about the size shown or
+              bigger. Android shrinks a JPEG only in eighths, rounded down,
+              so the narrow card on the sharpest screens can open a few
+              percent under what it draws, which cannot be seen. Asking for
+              more (resizeMultiplier, as Shots.js does) would take this box
+              past the photograph's own size on most phones and save nothing.
+              iPhones size it their own way and ignore this.
+            */}
             <Image
               source={{ uri: photo.src }}
               accessibilityLabel={photo.alt}
               resizeMode="contain"
+              resizeMethod="resize"
               onError={() => setFailed(photo.src)}
               style={{
                 width: '100%',

@@ -1,0 +1,52 @@
+diff --git a/mobile/package.json b/mobile/package.json
+index 2f5e7f3..ae14d84 100644
+--- a/mobile/package.json
++++ b/mobile/package.json
+@@ -39,5 +39,14 @@
+   "devDependencies": {
+     "@babel/core": "^7.25.2",
+     "patch-package": "8.0.1"
++  },
++  "expo": {
++    "autolinking": {
++      "android": {
++        "exclude": [
++          "@expo/log-box"
++        ]
++      }
++    }
+   }
+ }
+diff --git a/test/mobile.mjs b/test/mobile.mjs
+index ec11568..d4b8dc2 100644
+--- a/test/mobile.mjs
++++ b/test/mobile.mjs
+@@ -658,6 +658,28 @@ export function run(test) {
+     assert.match(read('.github/workflows/mobile.yml'), /It's all production now\./, 'mobile.yml no longer says why Android goes straight to production')
+   })
+ 
++  test('Expo’s developer error screen is left out of the Android app, and nothing else goes with it', () => {
++    /*
++     * Google Play on 1.88.0: "Your app uses deprecated APIs or parameters for
++     * edge-to-edge". Among the places it names are Material Components'
++     * (com.google.android.material), which is in the Android app only because
++     * @expo/log-box asks for it (its android/build.gradle). log-box is Expo's
++     * error screen for a developer's build, and it does nothing in a store
++     * build: ExpoLogBoxPackage gives React Native nothing unless the build is a
++     * debug one AND was made with EXPO_UNSTABLE_LOG_BOX switched on. So it is
++     * left out of Android's autolinking, and Material goes with it.
++     * mobile/package.json is plain JSON and takes no comment, so the reason
++     * lives here and in docs/pending/README.md; android-minified checks the
++     * built app has no Material in it.
++     */
++    const pkg = JSON.parse(read('mobile/package.json'))
++    assert.deepEqual(pkg.expo?.autolinking?.android?.exclude, ['@expo/log-box'], 'log-box is linked into the Android app again, and Material Components with it')
++    /* Android's alone, so the iPhone's fingerprint stays where it is; and nothing else is left out. */
++    assert.deepEqual(Object.keys(pkg.expo), ['autolinking'], 'mobile/package.json says something else to Expo')
++    assert.deepEqual(Object.keys(pkg.expo.autolinking), ['android'], 'log-box is left out of the iPhone app too, or something besides Android is set')
++    assert.deepEqual(Object.keys(pkg.expo.autolinking.android), ['exclude'])
++  })
++
+   test('the iPhone build fills the iPhone Duo: Xcode 27.1 by its full name, and the scene life cycle on', () => {
+     /*
+      * Only an app built with the iOS 27.1 SDK fills the Duo's inside screen;

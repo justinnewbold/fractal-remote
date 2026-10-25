@@ -1,0 +1,271 @@
+diff --git a/mobile/app.json b/mobile/app.json
+index 307f041..2b4724f 100644
+--- a/mobile/app.json
++++ b/mobile/app.json
+@@ -110,7 +110,8 @@
+           }
+         }
+       ],
+-      "./plugins/withR8Optimize"
++      "./plugins/withR8Optimize",
++      "./plugins/withTabletTurns"
+     ],
+     "extra": {
+       "eas": {
+diff --git a/mobile/plugins/withTabletTurns.js b/mobile/plugins/withTabletTurns.js
+new file mode 100644
+index 0000000..9ff7a55
+--- /dev/null
++++ b/mobile/plugins/withTabletTurns.js
+@@ -0,0 +1,135 @@
++/**
++ * ANDROID TABLETS TURN SIDEWAYS, AND ANDROID PHONES STAY UPRIGHT.
++ *
++ * Google Play, October 2026, on 1.88.0: "Remove resizability and orientation
++ * restrictions in your app to support large screen devices." Justin: "The
++ * large-screen change is the one most worth doing for reach, since a lot of
++ * guitarists keep a tablet on a music stand." What Play reads is one line in
++ * the Android manifest, MainActivity held upright
++ * (android:screenOrientation="portrait"), which app.json's "orientation":
++ * "portrait" writes there. An Android tablet on 12 to 15, held sideways,
++ * shows the app as an upright strip with black bars at its sides; one on 7
++ * to 11 turns its whole screen upright instead, so it has to be turned too.
++ * Android 16 and newer already ignore the lock on a screen 600 dp or more
++ * across (developer.android.com/about/versions/16/behavior-changes-16), and
++ * an iPad has always turned every way.
++ *
++ * So, on Android only, this takes the lock out of the manifest and holds the
++ * app upright from MainActivity instead, when the screen is a phone's. It is
++ * Google's own recipe
++ * (developer.android.com/develop/adaptive-apps/cookbook/orientation-restriction).
++ * A phone is a screen whose short side is under 600 dp: the line Android
++ * draws for a large screen, and the app's own TABLET_SIDE
++ * (shared/device-word.mjs), by which the app calls itself a tablet
++ * (mobile/src/lib/thisDevice.js). So the device the app calls a tablet is the
++ * device that turns. app.json keeps "portrait", so an iPhone stays upright as
++ * it always has and an iPad keeps the four ways it has (test/duo.mjs).
++ *
++ * THE SCREEN, NOT THE WINDOW. Google's recipe reads the window
++ * (Configuration.screenWidthDp). This reads the whole screen the app is on:
++ * the biggest the window could be (WindowManager.getMaximumWindowMetrics),
++ * and before Android 11 the display's real size, which is what React
++ * Native's Dimensions.get('screen') reads too (DisplayMetricsHolder), so
++ * JavaScript and this agree. A tablet with the app beside another one, or a
++ * Chromebook with its window made narrow, has a window as narrow as a
++ * phone's, and the app must not be turned upright for that. Android ignores
++ * the request in split screen, though not in every free-standing window,
++ * such as a Chromebook's. On a foldable it is the screen that changes: shut, the
++ * app is on the outside screen, a phone's, and is held upright; open, it is on
++ * the inside screen, and turns. So the rule is asked again at every
++ * configuration change, which is how a fold and an unfold arrive (MainActivity
++ * is not made again for them: its configChanges include screenSize and
++ * smallestScreenSize), as well as at every launch.
++ *
++ * WHY THE MANIFEST LOSES ITS LOCK, rather than keeping it and lifting it on a
++ * tablet once the app starts. Kept, the manifest would still say what Play's
++ * notice quotes, "screenOrientation=PORTRAIT", and an Android 12 to 15 tablet
++ * could open as an upright strip and then jump to the full screen. Taken
++ * out, there is one thing a phone can see: held sideways with auto-rotate on,
++ * it may show the splash screen sideways for a blink before turning upright,
++ * because Android draws the splash before any of the app's own code runs. A
++ * phone held upright, or with auto-rotate off, sees nothing different. That
++ * blink is the smaller of the two, and it is only at launch.
++ *
++ * It refuses rather than guesses, like withR8Optimize: a MainActivity that is
++ * not Kotlin, has no super.onCreate, or already handles configuration changes
++ * has changed shape, and a guess would build a phone that turns or a tablet
++ * that does not, which only a store build would show.
++ *
++ * Nothing here touches the iPhone app: there is no iOS part. The plugin file
++ * is hashed for both phones all the same, so it moves both fingerprints.
++ */
++const { withAndroidManifest, withMainActivity } = require('expo/config-plugins')
++
++/** The app's TABLET_SIDE, in dp, written into the Kotlin (test/duo.mjs holds the two together). */
++const TABLET_SIDE = 600
++
++const BEGIN = '// withTabletTurns: begin (mobile/plugins/withTabletTurns.js says why)'
++const END = '// withTabletTurns: end'
++
++const RULE = `
++  ${BEGIN}
++  /*
++   * Upright on a phone, every way up on a tablet. A screen whose short side
++   * is under ${TABLET_SIDE} dp is a phone's (TABLET_SIDE in shared/device-word.mjs).
++   * The whole screen, never the window, so a tablet beside another app is
++   * still a tablet. Asked at launch and at every configuration change, which
++   * is how a fold and an unfold arrive.
++   */
++  private fun holdPhonesUpright() {
++    val wanted = if (screenShortSideDp() >= ${TABLET_SIDE}f) {
++      android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
++    } else {
++      android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
++    }
++    if (requestedOrientation != wanted) requestedOrientation = wanted
++  }
++
++  @Suppress("DEPRECATION")
++  private fun screenShortSideDp(): Float {
++    val density = resources.displayMetrics.density
++    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
++      val screen = windowManager.maximumWindowMetrics.bounds
++      return minOf(screen.width(), screen.height()) / density
++    }
++    val real = android.util.DisplayMetrics()
++    windowManager.defaultDisplay.getRealMetrics(real)
++    return minOf(real.widthPixels, real.heightPixels) / density
++  }
++
++  override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
++    super.onConfigurationChanged(newConfig)
++    holdPhonesUpright()
++  }
++  ${END}
++`
++
++module.exports = function withTabletTurns(config) {
++  config = withAndroidManifest(config, (c) => {
++    const activities = c.modResults.manifest?.application?.[0]?.activity ?? []
++    const main = activities.find((a) => /(^|\.)MainActivity$/.test(a?.$?.['android:name'] ?? ''))
++    if (!main) throw new Error('withTabletTurns: the manifest has no MainActivity; read the new template before building.')
++    delete main.$['android:screenOrientation']
++    return c
++  })
++  return withMainActivity(config, (c) => {
++    const src = c.modResults.contents
++    if (src.includes(BEGIN)) return c
++    if (c.modResults.language !== 'kt') {
++      throw new Error('withTabletTurns: MainActivity is not Kotlin any more; read the new template before building.')
++    }
++    const calls = src.split('super.onCreate(').length - 1
++    if (calls !== 1) {
++      throw new Error(`withTabletTurns: MainActivity calls super.onCreate ${calls} times, not once; read the new template before building.`)
++    }
++    if (/\bonConfigurationChanged\b/.test(src)) {
++      throw new Error('withTabletTurns: MainActivity already handles configuration changes; fold this rule into it by hand.')
++    }
++    const called = src.replace(/^([ \t]*)super\.onCreate\(/m, (line, indent) => `${indent}holdPhonesUpright()\n${line}`)
++    if (called === src) throw new Error('withTabletTurns: super.onCreate is not on a line of its own.')
++    const end = called.lastIndexOf('}')
++    if (end < 0) throw new Error('withTabletTurns: MainActivity has no closing brace.')
++    c.modResults.contents = `${called.slice(0, end).replace(/\s*$/, '\n')}${RULE}}\n`
++    return c
++  })
++}
+diff --git a/test/duo.mjs b/test/duo.mjs
+index 694eddf..bb45df5 100644
+--- a/test/duo.mjs
++++ b/test/duo.mjs
+@@ -260,6 +260,111 @@ export function run(test) {
+     assert.equal(JSON.parse(read('mobile/app.json')).expo.orientation, 'portrait')
+   })
+ 
++  test('on Android a tablet turns sideways and a phone stays upright, by the whole screen’s short side, and the iPhone keeps its lock', async () => {
++    /*
++     * Google Play on 1.88.0: "Remove resizability and orientation restrictions
++     * in your app to support large screen devices." Justin: "The large-screen
++     * change is the one most worth doing for reach, since a lot of guitarists
++     * keep a tablet on a music stand." mobile/plugins/withTabletTurns.js takes
++     * the upright lock out of the Android manifest and holds the app upright
++     * from MainActivity when the screen is a phone's. Nothing here compiles
++     * Kotlin, so the plugin is RUN, against stand-ins for Expo's config
++     * plugins and the template's MainActivity, and the Kotlin it writes is
++     * READ. android-minified builds it, and turns it on a phone and a tablet.
++     */
++    const file = 'mobile/plugins/withTabletTurns.js'
++    const app = JSON.parse(read('mobile/app.json')).expo
++    assert.equal(app.plugins.filter((p) => p === './plugins/withTabletTurns').length, 1, 'the plugin is not in app.json, or is there twice')
++    /* The iPhone keeps its lock, and an iPad its four ways: the plugin is Android's alone. */
++    assert.equal(app.orientation, 'portrait')
++
++    const mods = []
++    const stand = {
++      withAndroidManifest: (config, action) => (mods.push(['manifest', action]), config),
++      withMainActivity: (config, action) => (mods.push(['activity', action]), config)
++    }
++    const plugin = { exports: {} }
++    const ask = (name) => {
++      assert.equal(name, 'expo/config-plugins', `the plugin asks for ${name}`)
++      return new Proxy(stand, {
++        get: (all, key) => {
++          assert.ok(key in all, `the plugin uses ${String(key)}, which is neither Android's manifest nor MainActivity`)
++          return all[key]
++        }
++      })
++    }
++    new Function('require', 'module', 'exports', read(file))(ask, plugin, plugin.exports)
++    const config = {}
++    assert.equal(plugin.exports(config), config)
++    assert.deepEqual(mods.map(([kind]) => kind).sort(), ['activity', 'manifest'], 'the plugin changes something besides the manifest and MainActivity')
++    const run = (kind, modResults) => mods.find(([k]) => k === kind)[1]({ modResults }).modResults
++
++    /* The manifest: MainActivity loses its lock, keeps everything else, and no other activity is touched. */
++    const activity = (name) => ({ $: { 'android:name': name, 'android:configChanges': 'orientation|screenSize|smallestScreenSize', 'android:screenOrientation': 'portrait' } })
++    const [main, other] = run('manifest', { manifest: { application: [{ activity: [activity('.MainActivity'), activity('com.example.Other')] }] } }).manifest.application[0].activity
++    assert.equal(main.$['android:screenOrientation'], undefined, 'MainActivity is still locked upright in the manifest, which is what Play reads')
++    assert.equal(main.$['android:configChanges'], 'orientation|screenSize|smallestScreenSize', 'MainActivity lost its configChanges, so a fold would make it again')
++    assert.equal(other.$['android:screenOrientation'], 'portrait', 'an activity that is not the app’s own was changed')
++    assert.throws(() => run('manifest', { manifest: { application: [{ activity: [activity('com.example.Other')] }] } }), /no MainActivity/)
++
++    /* MainActivity: the SDK 57 template's, as expo-splash-screen leaves it. */
++    const TEMPLATE = [
++      'package cloud.newbold.fractalremote',
++      'import expo.modules.splashscreen.SplashScreenManager',
++      '',
++      'import android.os.Bundle',
++      'import com.facebook.react.ReactActivity',
++      '',
++      'class MainActivity : ReactActivity() {',
++      '  override fun onCreate(savedInstanceState: Bundle?) {',
++      '    // setTheme(R.style.AppTheme);',
++      '    // @generated begin expo-splashscreen - expo prebuild (DO NOT MODIFY) sync-f3ff59a738c56c9a6119210cb55f0b613eb8b6af',
++      '    SplashScreenManager.registerOnActivity(this)',
++      '    // @generated end expo-splashscreen',
++      '    super.onCreate(null)',
++      '  }',
++      '',
++      '  override fun getMainComponentName(): String = "main"',
++      '}',
++      ''
++    ].join('\n')
++    const kt = (contents, language = 'kt') => run('activity', { contents, language, path: 'MainActivity.kt' }).contents
++    const made = kt(TEMPLATE)
++    assert.equal(kt(made), made, 'a second prebuild writes the rule in again')
++    for (const line of TEMPLATE.split('\n').filter(Boolean)) assert.ok(made.includes(line), `the template's "${line.trim()}" is gone`)
++    const onCreate = made.slice(made.indexOf('override fun onCreate'), made.indexOf('super.onCreate(null)'))
++    assert.match(onCreate, /\n {4}holdPhonesUpright\(\)\n/, 'the rule is not asked before the activity is made')
++    assert.match(made, /override fun onConfigurationChanged\(newConfig: android\.content\.res\.Configuration\) \{\n\s*super\.onConfigurationChanged\(newConfig\)\n\s*holdPhonesUpright\(\)\n\s*\}/, 'a fold or an unfold does not ask the rule again')
++    assert.match(made, /\/\/ withTabletTurns: end\n\}\n$/, 'the rule is not inside MainActivity')
++    assert.throws(() => kt(TEMPLATE, 'java'), /not Kotlin/)
++    assert.throws(() => kt(TEMPLATE.replace('    super.onCreate(null)\n', '')), /super\.onCreate 0 times/)
++    assert.throws(() => kt(TEMPLATE.replace(/\}\n$/, '  override fun onConfigurationChanged(c: Configuration) { super.onConfigurationChanged(c) }\n}\n')), /already handles configuration changes/)
++
++    /* The rule: the app's own tablet line, read off the whole screen and never the window. */
++    const rule = made.slice(made.indexOf('// withTabletTurns: begin'), made.indexOf('// withTabletTurns: end')).replace(/\/\*[\s\S]*?\*\//g, ' ')
++    const { TABLET_SIDE, appDevice } = await import('../shared/device-word.mjs')
++    const side = rule.match(/screenShortSideDp\(\) >= (\d+(?:\.\d+)?)f\) \{\s*android\.content\.pm\.ActivityInfo\.SCREEN_ORIENTATION_UNSPECIFIED\s*\} else \{\s*android\.content\.pm\.ActivityInfo\.SCREEN_ORIENTATION_PORTRAIT\s*\}/)
++    assert.ok(side, 'a screen at or over the line is not let turn, or one under it is not held upright')
++    assert.equal(Number(side[1]), TABLET_SIDE, 'Android turns at a different size from the one at which the app calls itself a tablet')
++    assert.match(rule, /val density = resources\.displayMetrics\.density/)
++    assert.match(rule, /windowManager\.maximumWindowMetrics\.bounds/, 'from Android 11 the rule does not read the whole screen')
++    assert.match(rule, /windowManager\.defaultDisplay\.getRealMetrics\(real\)/, 'before Android 11 the rule does not read the whole screen')
++    /*
++     * getMaximumWindowMetrics is Android 11's (API 30) and the app runs from
++     * Android 7 (minSdk 24), so the call stays inside its version check and
++     * returns from it. Outside it, every Android 7 to 10 phone would stop at
++     * launch, and neither emulator in android-minified (both Android 15)
++     * would show it, nor would the build: Kotlin does not check API levels.
++     */
++    assert.match(rule, /if \(android\.os\.Build\.VERSION\.SDK_INT >= android\.os\.Build\.VERSION_CODES\.R\) \{\s*val screen = windowManager\.maximumWindowMetrics\.bounds\s*return minOf\(screen\.width\(\), screen\.height\(\)\) \/ density\s*\}\s*val real = android\.util\.DisplayMetrics\(\)\s*windowManager\.defaultDisplay\.getRealMetrics\(real\)/, 'Android 11’s maximumWindowMetrics is not inside its version check, so an Android 7 to 10 phone would stop at launch')
++    assert.equal(rule.split('maximumWindowMetrics').length - 1, 1, 'maximumWindowMetrics is read somewhere besides inside its version check')
++    assert.doesNotMatch(rule, /currentWindowMetrics|screenWidthDp|screenHeightDp|smallestScreenWidthDp|displayMetrics\.(widthPixels|heightPixels)/, 'the rule reads the window, so a tablet beside another app would be turned upright')
++    const turns = (width, height) => Math.min(width, height) >= Number(side[1])
++    for (const [name, width, height] of [['a Pixel 6', 411, 914], ['a Pixel Fold shut', 411, 797], ['a Pixel Fold open', 841, 701], ['an 8-inch tablet', 600, 960], ['a Pixel Tablet', 1280, 800]]) {
++      assert.equal(turns(width, height), appDevice({ os: 'android', width, height }) === 'tablet', `${name} is called one thing and turns like the other`)
++    }
++  })
++
+   test('a sheet’s foot clears the phone’s own bottom edge, and is never shorter than the 32 it always had', () => {
+     /*
+      * It was a fixed 32 points, whatever the bottom edge. Android draws a

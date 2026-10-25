@@ -109,7 +109,15 @@ export async function sendReport({ kind, message, contact, context: ctx = {}, wi
     kind,
     message,
     contact,
-    context: ctx,
+    /*
+     * WHAT LAST WENT WRONG GOES WITH THE LOG AND NEVER WITHOUT IT, as on the
+     * phone (mobile/src/lib/reports.js). `lastError` is read off the log
+     * (context, above), and App.jsx writes every fault on screen into it, so a
+     * report that carries no log (a suggestion, or a bug report with the log
+     * turned off) carries none of the log's words either: the privacy page and
+     * the form's small print say so.
+     */
+    context: withLog && carriesLog(kind) ? ctx : apartFromLog(ctx),
     /*
      * Read at send, never before. "Only when they press send" is the rule, and
      * this is where it is kept: nothing is gathered while somebody types, and
@@ -176,6 +184,13 @@ export async function sendReport({ kind, message, contact, context: ctx = {}, wi
     throw err
   }
   return { sent: true, shotsLost: pictures.lost }
+}
+
+/** A report's details without what was read off the log (`lastError`), for a report that carries no log. */
+function apartFromLog(ctx) {
+  const out = { ...(ctx || {}) }
+  delete out.lastError
+  return out
 }
 
 /**
