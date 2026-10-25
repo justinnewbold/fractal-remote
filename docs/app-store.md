@@ -331,7 +331,7 @@ Tracking Transparency entirely.
 | Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you, and the number RevenueCat files purchases under. App Functionality and **Analytics** (RevenueCat's own guidance: say how the id is used, as for Purchase History). Analytics added 25 October 2026: **not on the live label yet** |
 | Diagnostics → **Other Diagnostic Data** | Yes | Yes | The debug log, and only when somebody presses Send on a bug report |
 | Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices. App Functionality and **Analytics**: RevenueCat's App Privacy page says "All RevenueCat users must select these two options", because its dashboard charts the purchases. Analytics added 25 October 2026: **not on the live label yet** |
-| Identifiers → **Device ID** | Yes | No | The random number Expo's update check carries for that install, made up the first time the app runs, so Expo can tell one install from another. The app itself never reads it. App Functionality only. Play's Data safety already declares it (*Device or other IDs*, below), and the privacy page describes it. Added 25 October 2026: **not on the live label yet** |
+| Identifiers → **Device ID** | Yes | No | The random number Expo's update check carries for that install, made up the first time the app runs, so Expo can tell one install from another. The app itself never reads it. App Functionality and **Analytics**: Expo's dashboard counts the installs that took each update and the ones that crashed, by this number, which is measuring audience size in Apple's words. Play's Data safety declares it too (*Device or other IDs*, below), and the privacy page describes it and its counts. Added 25 October 2026: **not on the live label yet** |
 | Diagnostics → **Crash Data** | Yes | No | After a launch that crashed, the phone's update check sends Expo the error message the app stopped on, so a broken update can be found and taken back. The privacy page says so. Added 11 October 2026, and on the live label by 24 October 2026 (apps.apple.com shows Crash Data under Not Linked) |
 
 Do **not** declare location, contacts, audio, search history, browsing
@@ -354,8 +354,8 @@ Content, User ID, Other Diagnostic Data and Crash Data). **22 October 2026:
 two rows to add in App Store Connect → App Privacy**, both
 "used for App Functionality", linked to the user, not used for tracking:
 Photos or Videos, and Customer Support. **25 October 2026: one more to add
-and two to edit**: Identifiers → Device ID (App Functionality, not linked to
-the user, not used for tracking), and Purchase History and User ID each get
+and two to edit**: Identifiers → Device ID (App Functionality and Analytics,
+not linked to the user, not used for tracking), and Purchase History and User ID each get
 Analytics ticked beside App Functionality (RevenueCat requires it for
 Purchase History, above). Email
 Address needs no change: replying to a support message from the account's
@@ -840,11 +840,11 @@ Bluetooth. This build contains Bluetooth MIDI code for a feature that lets the p
 
 Settings also has Developer pages (accounts, sales, messages, giving an account the full version) that open only for the developer's own account; the server checks which account is asking.
 
-Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and everything stored under it at once. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page. Please try it on a new account, not the demo account. Create account is on the sign-in screen; the code it emails confirms it.
+Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and all its data at once. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page. Please try it on a new account, not the demo account. Create account is on the sign-in screen; the code it emails confirms it.
 
 Hardware (Guideline 2.1): video 1 below, filmed on an iPhone, shows a real FM3 from the first pairing through the whole workflow.
 
-Apple Watch: with the demo's Play screen open on the iPhone, open Fractal Remote on the watch and swipe between Scenes, Pedals, Presets and Tuner.
+Apple Watch: with the demo's Play screen open on the iPhone, open Fractal Remote on the watch and swipe up or down between Scenes, Pedals, Presets and Tuner.
 
 Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].
 
@@ -1067,13 +1067,16 @@ brackets here are still empty, so the next version needs them again):
 - **The demo account has the full version.** The signed-in screens are
   behind the unlock, so the account Apple signs in with has to have it, or
   the reviewer stops at the purchase page. If that account opens on the
-  purchase page instead of Settings, it does not have it yet.
+  purchase page, it does not have it yet.
 - **The demo account is not Justin's own.** His is the only account that
   shows Bluetooth (beta) and the Developer pages, and those pages show
   customers' email addresses. Sign in once on a phone with the account in
-  App Review Information: it should open on Settings, with no Bluetooth
-  (beta) row and no Developer section. The same account goes in Google's
-  App access.
+  App Review Information: it opens on Play (saying no computer is signed in
+  yet), not on the purchase page; tap the gear, and there is no Bluetooth
+  (beta) row under My rig and no Developer section. On Justin's own phone,
+  signing out leaves his Bluetooth (beta) off afterwards: it comes back by
+  Settings → My rig → Bluetooth (beta) → Connect once he is signed in again.
+  The same account goes in Google's App access.
 - **The three video links replace the brackets under Videos,** at the very
   end: the FM3 video (the Hardware paragraph calls it video 1), the presets
   video, and the one of deleting an account (video 3). Each is a Google
@@ -1185,9 +1188,11 @@ Diagnostics. Add these four, each **collected** and **not shared**:
 - **Personal info → User IDs.** Optional (only for somebody signed in). For
   App functionality and Account management. The account's number goes to
   RevenueCat and with every bug report.
-- **Device or other IDs.** Required. For App functionality. The number
-  RevenueCat makes up for a phone that is not signed in, sent every time the
-  app opens, and the number Expo's update check carries for that install.
+- **Device or other IDs.** Required. For App functionality and Analytics.
+  The number RevenueCat makes up for a phone that is not signed in, sent
+  every time the app opens, and the number Expo's update check carries for
+  that install; Expo's and RevenueCat's dashboards count installs and opens
+  by them (25 October 2026: Analytics added for those counts).
 - **App activity → App interactions.** Optional (only inside a bug report,
   when Send is pressed). For Analytics. The debug log records the buttons
   pressed.
@@ -1476,7 +1481,7 @@ Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top
 
 Hardware (Guideline 2.1): video 1 below, filmed on an iPhone with a real FM3, shows the computer way from the first pairing through the whole workflow. Video 4 shows Bluetooth with a real AM4.
 
-Apple Watch: with the demo's Play screen open on the iPhone, open Fractal Remote on the watch and swipe between Scenes, Pedals, Presets and Tuner.
+Apple Watch: with the demo's Play screen open on the iPhone, open Fractal Remote on the watch and swipe up or down between Scenes, Pedals, Presets and Tuner.
 
 Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].
 
@@ -1653,7 +1658,7 @@ Only on the developer's own account: Settings has Developer pages (access, sales
 ```
 
 If the box will not take all of it, drop the last paragraph first. If it is
-still too long, paste the short one instead (485 characters as written):
+still too long, paste the short one instead (497 characters as written):
 
 ```
 This account has the full version. Demo, no account: OK on the independent-app card → Get started → Got it → Start free demo → any unit → Play with ... → Open Play
@@ -1731,7 +1736,7 @@ step 7 spends builds, and it waits for his yes, as every build does.
 
 1. **Justin: App Store Connect → App Privacy**, the rows owed since 22
    October (*App Privacy*, above): add Photos or Videos and Customer Support,
-   add Device ID (not linked), and tick Analytics on Purchase History and
+   add Device ID (App Functionality and Analytics, not linked), and tick Analytics on Purchase History and
    User ID (Email Address needs no change). Any day: Publish takes effect
    at once and needs no version. Bluetooth adds nothing to the label:
    nothing it touches leaves the phone.

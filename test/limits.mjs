@@ -3847,7 +3847,7 @@ export function run(test) {
 
     /* No analytics, said plainly — and true, which is checked rather than
        claimed. A tracking SDK arriving later fails this. */
-    assert.match(policy, /[Nn]o analytics service and no tracking/, 'the policy does not say there is no tracking')
+    assert.match(policy, /[Nn]o advertising, no analytics kit, and no tracking of any kind/, 'the policy does not say there is no tracking')
     for (const sdk of ['@sentry', 'mixpanel', 'amplitude', 'posthog', 'segment', 'react-ga']) {
       for (const manifest of ['package.json', 'mobile/package.json']) {
         assert.ok(
@@ -4090,8 +4090,11 @@ export function run(test) {
     const kept = words.slice(words.indexOf('How long it is kept'), words.indexOf('Deleting your data'))
     assert.match(kept, /The dates kept for the help setting up the computer, and when a computer app first signed in — until you delete the account\./, 'how long the setup emails’ dates are kept is not said')
     /* And what the two partners keep that the page says they are sent (5.1.1(i) asks for retention, not only collection). */
-    assert.match(kept, /The purchase record, and the record of the app's checks , at RevenueCat — until you delete the account, which deletes them there too\./, 'how long RevenueCat keeps the purchase record and the launch checks is not said')
-    assert.match(kept, /The update check's install number, and a crash's error message , at Expo — as Expo's own privacy policy says\./, 'how long Expo keeps the install number and a crash message is not said')
+    assert.match(kept, /The purchase record, and the record of the app's checks , at RevenueCat — those under your account until you delete it, which deletes them there too\. Checks made while no account is signed in on a phone \(before signing in, after signing out, or after deleting the account\) are kept under that phone's made-up number/, 'how long RevenueCat keeps the purchase record and the launch checks is not said, or not for the checks under no account')
+    assert.match(kept, /The update check's install number, and a crash's error message , at Expo — only for as long as is reasonably needed to provide the updates/, 'how long Expo keeps the install number and a crash message is not said')
+    /* Every count the builder sees is said, Expo's included, and named as what the label calls Analytics. */
+    assert.match(words, /these counts are what the App Store's privacy label means by Analytics/, 'the policy does not say which of its counts the label calls Analytics')
+    assert.match(words, /Expo's own dashboard shows him how many installs took each update, how many launches crashed, and how many different installs that was/, 'the policy leaves out what Expo counts from the update check')
     for (const t of ['computer_seen', 'unlock_seen', 'setup_reminders']) {
       assert.match(sql, new RegExp(`create table if not exists public\\.${t} \\(\\s*account_id uuid primary key references auth\\.users \\(id\\) on delete cascade`), `${t} is not deleted with the account, and the policy says it is`)
     }

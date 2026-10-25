@@ -213,17 +213,21 @@
 
       <h2>What is never collected</h2>
       <ul>
-        <li><strong>No analytics service and no tracking of any kind.</strong> There is no
-          analytics kit in this app, no advertising identifier, and no third-party tracking code.
-          Nothing tells anybody which screens you open, what you press or how long you play: the
-          debug log described above stays on your phone or computer unless you send it with a
-          report. What is counted names nobody. The builder's own pages, described below, count
-          how many accounts were used lately, on which kinds of device and app versions, from the
-          sign-in and check-in times and the app version RevenueCat last saw, which are kept
-          anyway, and they add up the sales. RevenueCat's own dashboard shows the builder the
-          purchase records described above as sales totals and charts, and how many phones and
-          accounts opened the app in the last 28 days, from the check the app makes each time it
-          opens.</li>
+        <li><strong>No advertising, no analytics kit, and no tracking of any kind.</strong> There
+          is no analytics kit in this app, no advertising identifier, and no third-party tracking
+          code. Nothing tells anybody which screens you open, what you press or how long you play:
+          the debug log described above stays on your phone or computer unless you send it with a
+          report. What is counted names nobody, and these counts are what the App Store's privacy
+          label means by Analytics. The builder's own pages, described below, count how many
+          accounts there are and how many were made lately, and how many were used lately, on
+          which kinds of device and app versions, from the sign-in and check-in times and the time,
+          app version and phone system RevenueCat last saw, which are kept anyway; and they add up
+          the sales. RevenueCat's own dashboard shows the builder the purchase records described
+          above as sales totals and charts, and how many phones and accounts opened the app, and how
+          many were new, in the last 28 days, from the check the app makes each time it opens. And
+          Expo's own dashboard shows him how many installs took each update, how many launches
+          crashed, and how many different installs that was, counted from the update check's
+          install number described below.</li>
         <li><strong>No location.</strong> The app never reads where you are from the phone, and
           does not ask for Location, with one exception that is Android's rule rather than ours.
           <strong>Bluetooth (beta)</strong> lets the phone talk to your unit through a Bluetooth
@@ -342,11 +346,13 @@
           was sent, or an hour after if its report never arrived. Until the report itself is deleted,
           the only other copy is in that report&rsquo;s email.</li>
         <li><strong>The purchase record, and the record of the app's checks</strong>, at RevenueCat
-          — until you delete the account, which deletes them there too. For a phone that is never
-          signed in, they are kept under the number made up for it, as RevenueCat's own privacy
-          policy says.</li>
+          — those under your account until you delete it, which deletes them there too. Checks
+          made while no account is signed in on a phone (before signing in, after signing out, or
+          after deleting the account) are kept under that phone's made-up number, which names
+          nobody, for as long as the app uses RevenueCat.</li>
         <li><strong>The update check's install number, and a crash's error message</strong>, at
-          Expo — as Expo's own privacy policy says.</li>
+          Expo — only for as long as is reasonably needed to provide the updates, under Expo's own
+          privacy policy.</li>
       </ul>
 
       <h2>Deleting your data</h2>

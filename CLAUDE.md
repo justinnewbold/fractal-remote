@@ -258,8 +258,11 @@ and the iPhones that have the App Store's 1.87.11 stay on update 1.87.60,
 with nothing merged since reaching them, until 1.89.0 is approved. Its
 notes and What's New are the first Apple sees since 1.87.11, so they carry
 everything new since then (the 1.88.3 block's paragraphs included), and
-the listing changes held for 1.88.3 (Description, Keywords, Subtitle, the
-privacy label rows) go in with it.
+the listing changes held for 1.88.3 (Description, Keywords, Subtitle) go
+in with it. The privacy label rows do not wait: the copies on the App Store
+already send what they describe (screenshots and words in a report, the
+update check's install number), and Apple wants the label to say what the
+live version collects, so they are published any day.
 
 And Bluetooth (beta) is for every unit, not the AM4 alone: "I also dont
 want to only turn Bluetooth on only for the AM4 I want it built out for all
