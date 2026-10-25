@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { requireOptionalNativeModule } from 'expo'
 
-import { BLE_UNITS, CHECK_STEPS, createBleWire, settleMethods } from './bleWire'
+import { BLE_UNITS, CHECK_STEPS, WAYS, createBleWire, settleMethods } from './bleWire'
 import { createJoiner } from './fractal-sysex.mjs'
 import { blockCatalog } from './blockCatalog'
 import { setSwitch } from './bleSwitch'
@@ -72,7 +72,7 @@ const NOW = {
   looking: false,
   /* The name the adapter gave when it connected. */
   connectedTo: null,
-  /* The unit that answered instead of the one picked (an AM4 on an FM3's connection), or null. */
+  /* The unit that answered instead of the one picked, by its bare name (an FM9 on an FM3's connection: 'FM9'), or null. */
   answeredAs: null
 }
 
@@ -605,8 +605,17 @@ export const bluetoothFacts = () => ({
   answeredAs: now.answeredAs || null,
   phase: now.phase,
   trouble: now.trouble,
-  adapter: saved.adapter ? adapterName(saved.adapter) || '' : null
+  adapter: saved.adapter ? adapterName(saved.adapter) || '' : null,
+  /* How each command goes to the unit picked: what auto found (methodsFor(unit).learned), any way forced in the testing tools, and the Program Change channel. */
+  ways: saved.unit ? waysFor(saved.unit) : null
 })
+
+/* The ways, for the log's head: only what has been found or forced, so a unit nothing has been learned on says so (bleReport waysLine). */
+function waysFor(unit) {
+  const m = methodsFor(unit)
+  const forced = Object.fromEntries(Object.keys(WAYS).filter((k) => m[k] !== 'auto').map((k) => [k, m[k]]))
+  return { learned: { ...m.learned }, forced, pcChannel: m.pcChannel }
+}
 
 /** Forget the adapter. bleLink hears it and lets go. */
 export function forgetAdapter() {
@@ -896,7 +905,7 @@ export function openWire() {
     methods: methodsFor(unit),
     log: (line) => logDebug('ble', line),
     remember: (m) => rememberMethods(unit, m),
-    /* The wrong unit was picked: the wire has stopped sending, and the page says which one answered. */
+    /* The wrong unit was picked: the page says which one answered (bleWire heardAnother, and heardAnAm4, which also stops the wire). */
     onForeign: (name) => noteBluetooth({ answeredAs: name })
   })
   const mine = wire

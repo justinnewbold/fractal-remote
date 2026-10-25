@@ -293,6 +293,50 @@ export const FM3_WARNING =
 /** The units the parts list must not be bought for as it is. */
 export const NOT_STRAIGHT_IN = ['fm3']
 
+/*
+ * THE FM3 LINE THAT IS NEVER FOLDED AWAY. FM3_WARNING is inside How to plug
+ * it in, which starts folded for anybody who has used an adapter here
+ * before, and NOT_FOR_FM3 is under step 1, which is not drawn while
+ * Bluetooth is on. The likeliest cable to end up on an FM3 is an AM4
+ * owner's C2MIDI Pro. So whenever the FM3 is the unit picked, on or off,
+ * this is drawn near the top of the page, where nothing folds it (critic,
+ * 25 October 2026). Said as the guide and docs/bluetooth-midi.md say it:
+ * what happened here, and what owners report, never a fact about the unit.
+ */
+export const FM3_NEVER =
+  'Never plug the C2MIDI Pro, or any adapter that takes its power from MIDI OUT, into an FM3. When we tried it, the cable got very hot, and FM3 owners report the same.'
+
+/*
+ * FEEL THE CABLE, ON THE UNITS NOBODY HERE HAS. The FM9 and Axe-Fx III have
+ * the 5-pin jacks the C2MIDI Pro was made for, and owners report CME's
+ * adapters running cool on them; but the cable that ran hot on the FM3 is
+ * the same one, and nobody has tried it with the app on either. The guide
+ * has said it since it listed them ("Feel the cable in the first minute: it
+ * should stay cool"); the app said nothing, and an FM9 or Axe-Fx III
+ * owner's first physical risk is this. Said under their steps.
+ */
+export const HEAT_CHECK =
+  'In the first minute, feel the C2MIDI Pro. It should stay cool. If it gets more than slightly warm, unplug it at once.'
+
+/** The heat line for a unit's steps, or null: the FM9 and Axe-Fx III, the units it is offered on untried. */
+export const heatLineFor = (unit) => (unit === 'fm9' || unit === 'axefx3' ? HEAT_CHECK : null)
+
+/*
+ * THE MIDI CHANNEL. Over Bluetooth a preset can go by Program Change, on
+ * channel 1 (bleWire's pcChannel), the way FM3-Edit's own switch is not
+ * published: so the unit has to listen for it there. The guide says it
+ * ("set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping
+ * off"); the steps did not. Every Gen 3 unit's, the FM3's included for the
+ * day it has steps again; the AM4's presets never go by Program Change.
+ */
+export const midiSettingsFor = (unit) => {
+  const name = UNITS[unit]
+  if (!name || unit === 'am4') return null
+  /* The Axe-Fx III has no MIDI Thru setting: its THRU is a jack of its own, which the white plug stays out of. */
+  const thru = unit === 'axefx3' ? '' : 'MIDI Thru to Off, '
+  return `On the ${name}, open Setup → MIDI/Remote and set ${thru}Program Change to On, the MIDI channel to 1 (or Omni), and PC Mapping to Off.`
+}
+
 /** The warning to show for a unit instead of its parts and steps, or null. */
 export const warningFor = (unit) => (unit === 'fm3' ? FM3_WARNING : null)
 
@@ -400,7 +444,8 @@ export function hookupFor(unit, noun = 'phone') {
       'C2MIDI Pro: the black plug (TO MIDI IN) into the Axe-Fx III’s MIDI IN.',
       `The white plug (TO MIDI OUT) into its MIDI OUT. Not THRU: the ${noun} would only hear itself there.`,
       usb,
-      power
+      power,
+      midiSettingsFor(unit)
     ]
   }
   return [
@@ -408,7 +453,7 @@ export function hookupFor(unit, noun = 'phone') {
     `The white plug (TO MIDI OUT) into its MIDI OUT/THRU jack.`,
     usb,
     power,
-    `On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off.`
+    midiSettingsFor(unit)
   ]
 }
 
@@ -429,3 +474,34 @@ export const untriedLine = (unit) =>
   triedOn(unit) || !UNITS[unit] || warningFor(unit)
     ? null
     : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: tap ${REPORT_BUTTON}, at the bottom of this page.`
+
+/**
+ * A unit's name said with its article: "an AM4", "an FM9", "an Axe-Fx III",
+ * "a VP4". By how the name is said aloud: A, F and the other letters that
+ * start with a vowel sound take "an".
+ */
+export const withArticle = (name) => `${/^[AEFHILMNORSX]/.test(String(name)) ? 'an' : 'a'} ${name}`
+
+/**
+ * WHICH UNIT REALLY ANSWERED, when it is not the one picked. Until 25 October
+ * 2026 only an AM4 on another unit's connection was named, and every other
+ * wrong pairing (an FM9 picked as an FM3, an FM3 on the AM4's) read
+ * "isn't answering", which sends a player to the plugs. Now any unit the
+ * wire knows (bleWire MODEL_NAMES) is named, with its article chosen here
+ * from its bare name, and told the way out:
+ *
+ *   - a unit this account can pick: Stop, pick it in step 1, Connect;
+ *   - the VP4, which has no Bluetooth: the computer is its way;
+ *   - any other (a customer's page offers fewer units): the computer, after
+ *     the line that says which units Bluetooth is for, when there is one.
+ *
+ * `answered` and `picked` are bare names as the page shows them; `pickable`
+ * whether step 1 offers the one that answered; `forWhich` the line saying
+ * which units it is for (AM4_ONLY on a customer's page), or ''.
+ */
+export function wrongUnitLine({ answered, picked, pickable = false, forWhich = '' }) {
+  const head = `${withArticle(answered).replace(/^a/, 'A')} answered, not the ${picked}.`
+  if (answered === 'VP4') return `${head} The VP4 isn’t a Bluetooth unit: tap Stop, and use the computer for it.`
+  if (pickable) return `${head} Tap Stop, pick ${answered} in step 1, then tap Connect.`
+  return `${head} ${forWhich ? `${forWhich} ` : ''}Tap Stop, and use the computer for the ${answered}.`
+}

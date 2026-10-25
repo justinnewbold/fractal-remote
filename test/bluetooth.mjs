@@ -1670,14 +1670,78 @@ export function run(test) {
     assert.deepEqual(t.events, [{ type: 'tempo', bpm: 120 }])
   })
 
-  test('an FM9 tries the published tempo, checks it, and falls back to FM3-Edit’s write', async () => {
-    const t = await onTheLine('fm9', { publishedTempo: false })
-    await t.post('/tempo', { bpm: 133 })
-    const fns = t.frames().map((f) => hex(f))
-    const get = t.sx.buildGetTempo(0x12)
-    assert.deepEqual(fns, [get, t.sx.buildSetTempo(0x12, 133), get, t.sx.buildSetTempoEdit(0x12, 133), get].map(hex))
-    assert.equal(t.unit.state.bpm, 133)
-    assert.equal(t.remembered.at(-1).learned.tempo, 'edit')
+  /*
+   * FM3-EDIT'S MESSAGES STAY ON THE FM3 IN AUTO. Nobody has caught what
+   * FM9-Edit or Axe-Edit III send, and the computer app sends FM3-Edit's
+   * scene and channel to an FM3 alone (forgefx devices.ts
+   * sceneChannelWriteMode). So on an FM9 or Axe-Fx III, Auto sends the
+   * published scene, channel and tempo only, checks them, and says so when
+   * one does not land; FM3-Edit's goes only when forced in the testing tools.
+   * Changed on purpose on 25 October 2026: this test held an FM9 to falling
+   * back to FM3-Edit's tempo write by itself.
+   */
+  test('an FM9 or Axe-Fx III tries only the published scene, channel and tempo in Auto, and says when one does not land', async () => {
+    for (const [unit, model] of [['fm9', 0x12], ['axefx3', 0x10]]) {
+      const isEdit = (f) => f[5] === 0x01 && [0x24, 0x16, 0x09].includes(f[6])
+      /* The tempo: the published SET, read back, and the truth when it did not take. */
+      const tempo = await onTheLine(unit, { publishedTempo: false })
+      await assert.rejects(tempo.post('/tempo', { bpm: 133 }), (e) => e.status === 502 && /The tempo stayed at 120\./.test(e.message), unit)
+      const get = tempo.sx.buildGetTempo(model)
+      assert.deepEqual(tempo.frames().map(hex), [get, tempo.sx.buildSetTempo(model, 133), get].map(hex), `${unit}: more than the published tempo went`)
+      assert.ok(!tempo.frames().some(isEdit), `${unit} was sent FM3-Edit’s tempo by Auto`)
+      assert.deepEqual(tempo.wire.methods().learned, {}, `${unit}: Auto learned a way from a write that did not land`)
+      /* The scene, the same. */
+      const scene = await onTheLine(unit, { publishedScene: false, sceneEcho: false })
+      await assert.rejects(scene.post('/scene', { index: 2 }), (e) => e.status === 502 && /stayed on scene 1/.test(e.message), unit)
+      assert.ok(!scene.frames().some(isEdit), `${unit} was sent FM3-Edit’s scene by Auto`)
+      assert.equal(scene.unit.state.scene, 0)
+      /* The channel, the same. */
+      const channel = await onTheLine(unit, { publishedChannel: false })
+      await assert.rejects(channel.post('/preset/blocks/58/channel', { channel: 'C' }), (e) => e.status === 502 && /stayed on A/.test(e.message), unit)
+      assert.ok(!channel.frames().some(isEdit), `${unit} was sent FM3-Edit’s channel by Auto`)
+      /* A published way that works is learned and used, as ever. */
+      const works = await onTheLine(unit, { publishedTempo: true })
+      assert.deepEqual(await works.post('/tempo', { bpm: 133 }), { ok: true })
+      assert.equal(works.unit.state.bpm, 133)
+      assert.equal(works.wire.methods().learned.tempo, 'published')
+      /* FM3-Edit's way learned on an older copy of the app is not used by Auto: the published goes, and is checked. */
+      const old = await onTheLine(unit, { publishedTempo: false, publishedScene: false, sceneEcho: false, methods: { learned: { tempo: 'edit', scene: 'edit', channel: 'edit' } } })
+      await assert.rejects(old.post('/tempo', { bpm: 140 }))
+      await assert.rejects(old.post('/scene', { index: 3 }))
+      assert.ok(!old.frames().some(isEdit), `${unit}: a way learned before sent FM3-Edit’s message by Auto`)
+      /* Forced in the testing tools (his account only), it goes, as chosen. */
+      const forced = await onTheLine(unit, { publishedTempo: false, publishedScene: false, sceneEcho: false, publishedChannel: false, methods: { tempo: 'edit', scene: 'edit', channel: 'edit' } })
+      assert.deepEqual(await forced.post('/tempo', { bpm: 133 }), { ok: true })
+      assert.ok(sameFrame(forced.frames()[0], forced.sx.buildSetTempoEdit(model, 133)), `${unit}: the forced tempo did not go FM3-Edit’s way`)
+      await forced.post('/scene', { index: 2 })
+      assert.equal(forced.unit.state.scene, 2, `${unit}: the forced scene did not go`)
+      await forced.post('/preset/blocks/58/channel', { channel: 'C' })
+      assert.equal(forced.unit.state.blocks.find((b) => b.eid === 58).channel, 2, `${unit}: the forced channel did not go`)
+    }
+    /* The FM3 keeps both: FM3-Edit's scene is still found and learned by Auto there. */
+    const fm3 = await onTheLine('fm3', { sceneEcho: false, publishedScene: false })
+    await fm3.post('/scene', { index: 2 })
+    assert.equal(fm3.unit.state.scene, 2)
+    assert.equal(fm3.wire.methods().learned.scene, 'edit')
+  })
+
+  test('the testing tools on an FM9 or Axe-Fx III: a write check in Auto tries only the published way, and a forced FM3-Edit’s is tried and never remembered', async () => {
+    for (const [unit, model] of [['fm9', 0x12], ['axefx3', 0x10]]) {
+      const auto = await onTheLine(unit, { publishedScene: false, sceneEcho: false })
+      const r = await drive(auto.clock, auto.wire.check('write-scene'))
+      assert.equal(r.ok, false, `${unit}: a scene check whose published change did not land passed`)
+      assert.ok(!auto.frames().some((f) => sameFrame(f, auto.sx.buildSetSceneEdit(model, 1))), `${unit}: the check sent FM3-Edit’s scene in Auto`)
+      const forced = await onTheLine(unit, { publishedScene: false, sceneEcho: false, methods: { scene: 'edit' } })
+      const f = await drive(forced.clock, forced.wire.check('write-scene'))
+      assert.equal(f.ok, true, f.error)
+      assert.ok(forced.frames().some((x) => sameFrame(x, forced.sx.buildSetSceneEdit(model, 1))), `${unit}: the forced check did not try FM3-Edit’s scene`)
+      assert.equal(f.way, null, `${unit}: the panel says FM3-Edit’s way was remembered for Auto`)
+      assert.equal(forced.wire.methods().learned.scene, undefined, `${unit}: FM3-Edit’s way was learned for Auto`)
+      assert.equal(forced.unit.state.scene, 0, `${unit}: the check did not put the scene back`)
+    }
+    /* The testing tools say so, on the FM9 and Axe-Fx III (anything but the FM3 there: the AM4 has no choices). */
+    const page = readFileSync(new URL('../mobile/src/screens/Bluetooth.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+    assert.match(page, /\{b\.unit !== 'fm3' \? \( <Hint>\{`On the \$\{unitName\(b\.unit\)\}, Auto sends only the published scene, channel and tempo\. FM3-Edit’s way goes only when you pick it here\.`\}<\/Hint> \) : null\}/)
   })
 
   test('a preset switch goes as the 0x27 frame, checked once, and remembered', async () => {
@@ -1743,17 +1807,20 @@ export function run(test) {
    * not — the first scene of a setlist song, a tempo it is already at. A way
    * learned from that is kept on the phone and sent unchecked from then on,
    * so every later write would fail without a word, and putting it right
-   * would cost another pair of builds. Each pretend FM9 here ignores the way
-   * tried first.
+   * would cost another pair of builds. Each pretend unit here (an FM9's
+   * tempo, an FM3's for the rest, where Auto may go on to FM3-Edit's way)
+   * ignores the way tried first, bar the FM9's published tempo, which is
+   * all Auto sends it.
    */
   test('a first write to what the unit already has teaches nothing, and the next real change still finds the way that works', async () => {
-    const tempo = await onTheLine('fm9', { publishedTempo: false })
+    /* An FM9's tempo goes the published way alone (see the test above): the one it was already at teaches nothing, the next one teaches that. */
+    const tempo = await onTheLine('fm9', { publishedTempo: true })
     await tempo.post('/tempo', { bpm: 120 })
     assert.deepEqual(tempo.wire.methods().learned, {}, 'the tempo it was already at taught a way')
     assert.equal(tempo.remembered.length, 0, 'a way was kept on the phone')
     await tempo.post('/tempo', { bpm: 130 })
-    assert.equal(tempo.unit.state.bpm, 130, 'the next tempo went the way that does nothing')
-    assert.equal(tempo.wire.methods().learned.tempo, 'edit')
+    assert.equal(tempo.unit.state.bpm, 130, 'the next tempo did not go')
+    assert.equal(tempo.wire.methods().learned.tempo, 'published')
 
     const preset = await onTheLine('fm9', { sysexPreset: false })
     await preset.post('/preset/select', { number: 12 })
@@ -1762,7 +1829,8 @@ export function run(test) {
     assert.equal(preset.unit.state.preset, 13, 'the next preset never tried Program Change')
     assert.equal(preset.wire.methods().learned.preset, 'pc')
 
-    const channel = await onTheLine('fm9', { publishedChannel: false })
+    /* FM3-Edit's channel and scene are found by Auto on an FM3 alone. */
+    const channel = await onTheLine('fm3', { publishedChannel: false })
     await channel.post('/preset/blocks/58/channel', { channel: 'A' })
     assert.deepEqual(channel.wire.methods().learned, {}, 'the channel the amp was already on taught a way')
     await channel.post('/preset/blocks/58/channel', { channel: 'B' })
@@ -1770,7 +1838,7 @@ export function run(test) {
     assert.equal(channel.wire.methods().learned.channel, 'edit')
 
     /* With MIDI Thru on, the unit's own copy of the change reads as its answer. */
-    const scene = await onTheLine('fm9', { publishedScene: false, sceneEcho: false, thru: true })
+    const scene = await onTheLine('fm3', { publishedScene: false, sceneEcho: false, thru: true })
     await scene.post('/scene', { index: 0 })
     assert.deepEqual(scene.wire.methods().learned, {}, 'the scene it was already on taught a way')
     await scene.post('/scene', { index: 2 })
@@ -2131,6 +2199,58 @@ export function run(test) {
     const am4 = await onTheLine('am4')
     assert.equal((await am4.get('/device/detect')).connected, true)
     assert.deepEqual(am4.foreign, [])
+  })
+
+  /*
+   * ANY OTHER UNIT ON THE OTHER END. Until 25 October 2026 only an AM4 on
+   * another unit's connection was named; an FM9 answering an FM3's
+   * connection was only in the log, and the page said "isn't answering",
+   * which sends a player to the plugs. Now any unit the wire knows is named
+   * to the page, by its bare name (the page says the article), once, and
+   * only before the unit picked has answered. Nothing more is sent for it:
+   * a gen-3 connection sends nothing but its probe until the unit picked
+   * answers.
+   */
+  test('any other unit answering a connection before the one picked is named to the page, once, by its bare name', async () => {
+    const PAIRS = [
+      ['fm3', 0x12, 'FM9', 'the FM3'],
+      ['fm3', 0x10, 'Axe-Fx III', 'the FM3'],
+      ['fm3', 0x14, 'VP4', 'the FM3'],
+      ['fm9', 0x11, 'FM3', 'the FM9'],
+      ['axefx3', 0x12, 'FM9', 'the Axe-Fx III'],
+      ['am4', 0x11, 'FM3', 'the AM4'],
+      ['am4', 0x12, 'FM9', 'the AM4'],
+      ['am4', 0x10, 'Axe-Fx III', 'the AM4'],
+      ['am4', 0x14, 'VP4', 'the AM4']
+    ]
+    const { MODEL_NAMES } = await import(WIRE)
+    for (const [picked, byte, name, not] of PAIRS) {
+      const t = await onTheLine(picked, picked === 'am4' ? {} : { silent: true })
+      const refusal = t.sx.frame(byte, 0x64, [0x0c, 0x02])
+      t.wire.heard(refusal)
+      t.wire.heard(refusal)
+      assert.deepEqual(t.foreign, [name], `${picked} hearing ${name}: the page was told ${JSON.stringify(t.foreign)}`)
+      assert.ok(t.logs.some((l) => l === `${MODEL_NAMES[byte]} answered, not ${not}`), `${picked} hearing ${name}: not in the log`)
+      if (picked !== 'am4') {
+        /* Nothing goes to it but the probe: a write is refused unsent, as for any unit that has not answered. */
+        const before = t.sent.length
+        await assert.rejects(t.post('/scene', { index: 2 }), (e) => e.status === 504)
+        assert.equal(t.sent.length, before, `${picked}: a write went to the ${name}`)
+      }
+    }
+    /* The unit picked has answered: a stray message from another is the log's, not the page's. */
+    const answered = await onTheLine('fm3')
+    answered.wire.heard(answered.sx.frame(0x12, 0x64, [0x0c, 0x02]))
+    assert.deepEqual(answered.foreign, [], 'a connection that works was said to have the wrong unit on it')
+    /* A model byte nobody knows, and the broadcast one, name nothing. */
+    const odd = await onTheLine('fm3', { silent: true })
+    odd.wire.heard(odd.sx.frame(0x77, 0x64, [0x0c, 0x02]))
+    odd.wire.heard(odd.sx.frame(0x7f, 0x64, [0x0c, 0x02]))
+    assert.deepEqual(odd.foreign, [])
+    /* The AM4 on another unit's connection is named the same way, and still stops it (the test above). */
+    const am4 = await onTheLine('fm9', { silent: true })
+    am4.wire.heard(am4.sx.frame(0x15, 0x64, [0x0c, 0x02]))
+    assert.deepEqual(am4.foreign, ['AM4'])
   })
 
   test('a unit that has never answered is sent nothing but the probe: an AM4 picked as an FM3 that stays silent', async () => {
@@ -3600,6 +3720,393 @@ export function run(test) {
     } finally {
       b.done()
     }
+  })
+
+  /*
+   * A GEN 3 TUNER CLOSED WHILE THE ADAPTER WAS AWAY. The Close found no
+   * connection to go on, the phone's tuner went down anyway, and the next
+   * connection started with nothing marked open, so it sent nothing and every
+   * Close on it found nothing to close: the unit stayed on its tuner, muted,
+   * under a Play that said it was closed. Now the wire let go of says what
+   * the unit was left on, and the next connection closes that, and only that.
+   */
+  const gen3OnABench = async (methods) => {
+    const t = await onTheLine('fm3', { methods })
+    const b = await linkOnABench(t)
+    b.bench.settings = { ...b.bench.settings, unit: 'fm3' }
+    b.link.startBluetoothLink(() => {})
+    await advance(t.clock, 2000)
+    assert.ok(b.bench.current, 'the link did not connect')
+    return { t, b }
+  }
+  const GEN3_WAYS = [
+    /* The published tuner, sending readings: only its on went, so only its off is owed. */
+    ['published', { tuner: 'push' }, 200, ['tuner on'], ['tuner off']],
+    /* The published tuner, silent, so the phone opened the page to ask as well: both are owed. */
+    ['published, then asked', { tuner: 'push' }, 1500, ['tuner on', 'page open'], ['tuner off', 'page closed']],
+    ['asked-for', undefined, 200, ['page open'], ['page closed']]
+  ]
+
+  test('the link: a Gen 3 tuner closed while the adapter was away is closed on the unit when it comes back, on every way', async () => {
+    for (const [way, methods, open, opened, closed] of GEN3_WAYS) {
+      const { t, b } = await gen3OnABench(methods)
+      try {
+        b.rig.tunerOn = true
+        assert.deepEqual(await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' })), { ok: true })
+        await advance(t.clock, open)
+        assert.deepEqual(gen3TunerHeard(t), opened, `${way}: the test opened the tuner wrong`)
+        /* The adapter goes, and Close is pressed while it is away: refused, and the phone's tuner goes down. */
+        let back = b.away()
+        b.drop()
+        b.rig.tunerOn = false
+        await advance(t.clock, 2000)
+        assert.deepEqual(gen3TunerHeard(t), opened, `${way}: something of the tuner was sent while the adapter was away`)
+        /* Back: the new connection closes what the unit was left on. */
+        back()
+        await advance(t.clock, 5000)
+        assert.deepEqual(gen3TunerHeard(t), [...opened, ...closed], `${way}: the owed close was not sent`)
+        assert.equal(t.unit.state.tuner, false, `${way}: the unit was left on its tuner, muted, under a Play that said closed`)
+        assert.equal(t.unit.state.page, false, `${way}: the unit was left on its tuner page`)
+        assert.ok(b.said.includes('the phone’s tuner is closed but the FM3 may still be on its tuner from before; closing it now'), way)
+        /* Sent, it is settled: the connection after sends nothing of the tuner. */
+        back = b.away()
+        b.drop()
+        back()
+        await advance(t.clock, 5000)
+        assert.deepEqual(gen3TunerHeard(t), [...opened, ...closed], `${way}: a close already sent was owed again`)
+        /* And the tuner opens and closes as ever on it. */
+        b.rig.tunerOn = true
+        await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+        await advance(t.clock, open)
+        b.rig.tunerOn = false
+        await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":false}' }))
+        assert.deepEqual(gen3TunerHeard(t), [...opened, ...closed, ...opened, ...closed], `${way}: the tuner after the owed close`)
+        assert.equal(t.unit.state.tuner || t.unit.state.page, false, way)
+      } finally {
+        b.done()
+      }
+    }
+  })
+
+  test('the link: a Gen 3 owed close outlasts a connection whose close did not go, and is settled by a reopen the phone then closes', async () => {
+    /* The owed close not taken by the adapter once: the connection after sends it again. */
+    for (const [way, methods, open, opened, closed] of GEN3_WAYS) {
+      const { t, b } = await gen3OnABench(methods)
+      try {
+        b.rig.tunerOn = true
+        await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+        await advance(t.clock, open)
+        let back = b.away()
+        b.drop()
+        b.rig.tunerOn = false
+        const first = closed[0] === 'tuner off' ? t.sx.buildTuner(0x11, false) : t.sx.buildTunerPage(0x11, false)
+        let refused = 0
+        t.line.refuses = (m) => sameFrame(m, first) && refused++ === 0
+        back()
+        await advance(t.clock, 5000)
+        assert.equal(refused, 1, `${way}: the owed close was not tried`)
+        assert.deepEqual(gen3TunerHeard(t), opened, `${way}: the test’s adapter took the owed close`)
+        assert.equal(t.unit.state.tuner || t.unit.state.page, true)
+        back = b.away()
+        b.drop()
+        back()
+        await advance(t.clock, 5000)
+        assert.deepEqual(gen3TunerHeard(t), [...opened, ...closed], `${way}: an owed close the adapter did not take was forgotten`)
+        assert.equal(t.unit.state.tuner || t.unit.state.page, false, `${way}: the unit was left on its tuner`)
+      } finally {
+        b.done()
+      }
+    }
+    /* Back with the phone's tuner still open: reopened, and the phone's own Close closes it. Nothing is owed after. */
+    for (const [way, methods, open, opened, closed] of GEN3_WAYS) {
+      const { t, b } = await gen3OnABench(methods)
+      try {
+        b.rig.tunerOn = true
+        await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+        await advance(t.clock, open)
+        let back = b.away()
+        b.drop()
+        back()
+        await advance(t.clock, 3000)
+        assert.ok(b.said.includes('the tuner was open when the adapter went; opening it again'), way)
+        b.rig.tunerOn = false
+        await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":false}' }))
+        const heard = gen3TunerHeard(t)
+        assert.equal(t.unit.state.tuner || t.unit.state.page, false, `${way}: the Close after the reopen left the unit on its tuner`)
+        back = b.away()
+        b.drop()
+        back()
+        await advance(t.clock, 5000)
+        assert.deepEqual(gen3TunerHeard(t), heard, `${way}: a tuner the reopen’s Close had closed was closed again`)
+      } finally {
+        b.done()
+      }
+    }
+    /*
+     * Gone again just after the reopen's on went, before it was answered:
+     * that connection owes its on, and the page the one before left open is
+     * still owed with it. Both are closed by the connection after.
+     */
+    {
+      const [, methods, open, opened] = GEN3_WAYS[1]
+      const { t, b } = await gen3OnABench(methods)
+      try {
+        b.rig.tunerOn = true
+        await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+        await advance(t.clock, open)
+        assert.deepEqual(gen3TunerHeard(t), opened)
+        let back = b.away()
+        b.drop()
+        back()
+        for (let ms = 0; ms < 3000 && gen3TunerHeard(t).length === opened.length; ms++) await advance(t.clock, 1)
+        assert.deepEqual(gen3TunerHeard(t), [...opened, 'tuner on'], 'the test did not catch the reopen’s on')
+        back = b.away()
+        b.drop()
+        b.rig.tunerOn = false
+        back()
+        await advance(t.clock, 5000)
+        assert.deepEqual(gen3TunerHeard(t), [...opened, 'tuner on', 'tuner off', 'page closed'], 'what the connection before the reopen left open was forgotten')
+        assert.equal(t.unit.state.tuner || t.unit.state.page, false, 'the unit was left on its tuner page')
+      } finally {
+        b.done()
+      }
+    }
+  })
+
+  test('the link: another unit picked forgets a Gen 3 owed close', async () => {
+    const { t, b } = await gen3OnABench({ tuner: 'push' })
+    try {
+      b.rig.tunerOn = true
+      await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+      await advance(t.clock, 200)
+      const back = b.away()
+      b.drop()
+      b.rig.tunerOn = false
+      b.settings({ unit: 'am4' })
+      b.settings({ unit: 'fm3' })
+      assert.equal(b.bench.resets, 2, 'the unit change did not clear the rig')
+      back()
+      await advance(t.clock, 5000)
+      assert.ok(b.bench.current, 'the link did not connect again')
+      assert.deepEqual(gen3TunerHeard(t), ['tuner on'], 'an owed close outlived a change of unit')
+    } finally {
+      b.done()
+    }
+    /*
+     * Another unit picked while Bluetooth is off, where the link hears no
+     * change: an AM4 connected after is sent nothing of the FM3's owed close.
+     */
+    const { t: f, b: k } = await gen3OnABench({ tuner: 'push' })
+    try {
+      k.rig.tunerOn = true
+      await drive(f.clock, k.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+      await advance(f.clock, 200)
+      f.line.gone = true
+      await k.link.stopBluetoothLink()
+      k.rig.tunerOn = false
+      await k.settings({ unit: 'am4' })
+      const a = await onTheLine('am4', { unitTunerCc: 20 })
+      k.bench.clock = a.clock
+      k.bench.open = () => a.reconnect()
+      k.link.startBluetoothLink(() => {})
+      await advance(a.clock, 5000)
+      assert.equal(k.bench.current?.unit, 'am4', 'the link did not connect to the AM4')
+      assert.deepEqual(tunerFrames(a), [], 'the AM4 was sent the FM3’s owed close')
+      assert.ok(!k.said.some((l) => l.includes('may still be on its tuner from before')), 'the AM4 was told of the FM3’s tuner')
+    } finally {
+      k.done()
+    }
+  })
+
+  /*
+   * WHAT A GEN 3 WIRE SAYS IT LEFT THE UNIT ON, as it closes. A page close
+   * moves the unit's screen, so it is owed only for a page whose open
+   * really went: one still waiting its turn when the adapter went is not. The
+   * published off is a level, so it is owed whenever the on may have gone.
+   * An AM4's wire owes none of this.
+   */
+  test('a Gen 3 wire let go of says what its tuner left the unit on, and no more', async () => {
+    const owedAfter = async (methods, press) => {
+      const t = await onTheLine('fm3', { methods })
+      await press(t)
+      t.line.gone = true
+      t.wire.close()
+      return t.wire.gen3TunerOwed()
+    }
+    const behindARead = async (t) => {
+      t.unit.opt.silent = true
+      t.wire.request('/scene').catch(() => {})
+      await advance(t.clock, 10)
+      pressTuner(t, true).catch(() => {})
+      await advance(t.clock, 10)
+    }
+    assert.equal(await owedAfter(undefined, async () => {}), null, 'never opened')
+    assert.deepEqual(await owedAfter(undefined, (t) => t.post('/tuner', { on: true })), { push: false, page: true })
+    assert.deepEqual(await owedAfter({ tuner: 'push' }, (t) => t.post('/tuner', { on: true })), { push: true, page: false })
+    assert.equal(
+      await owedAfter(undefined, async (t) => {
+        await t.post('/tuner', { on: true })
+        await t.post('/tuner', { on: false })
+      }),
+      null,
+      'closed on the phone'
+    )
+    assert.equal(await owedAfter(undefined, behindARead), null, 'a page open still waiting its turn was owed a close')
+    assert.deepEqual(await owedAfter({ tuner: 'push' }, behindARead), { push: true, page: false })
+    const am4 = await onTheLine('am4', { unitTunerCc: 20 })
+    await am4.post('/tuner', { on: true })
+    am4.line.gone = true
+    am4.wire.close()
+    assert.equal(am4.wire.gen3TunerOwed(), null)
+  })
+
+  /*
+   * SETTLED ONLY BY WHAT REALLY WENT (task 161's redesign). The first try
+   * settled the owed close on any answer: a reopen that went another way
+   * than the connection before (pushes arriving this time, so no page asked)
+   * settled it, and its Close left the page the one before had opened. Now
+   * the owed close is handed to the next wire for that unit, and kept in it
+   * part by part until each part's own message goes.
+   */
+  test('the link: a Gen 3 owed close is put down part by part, as each of its messages goes', async () => {
+    const [, methods, open, opened] = GEN3_WAYS[1]
+    const { t, b } = await gen3OnABench(methods)
+    try {
+      b.rig.tunerOn = true
+      await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+      await advance(t.clock, open)
+      assert.deepEqual(gen3TunerHeard(t), opened)
+      let back = b.away()
+      b.drop()
+      b.rig.tunerOn = false
+      /* The adapter takes the off, and not the page close, once. */
+      let refused = 0
+      t.line.refuses = (m) => sameFrame(m, t.sx.buildTunerPage(0x11, false)) && refused++ === 0
+      back()
+      await advance(t.clock, 5000)
+      assert.equal(refused, 1, 'the page close was not tried')
+      assert.deepEqual(gen3TunerHeard(t), [...opened, 'tuner off'])
+      assert.equal(t.unit.state.tuner, false)
+      assert.equal(t.unit.state.page, true, 'the test’s adapter took the page close')
+      /* The connection after: the page close alone. The off that went is not sent again for nothing. */
+      back = b.away()
+      b.drop()
+      back()
+      await advance(t.clock, 5000)
+      assert.deepEqual(gen3TunerHeard(t), [...opened, 'tuner off', 'page closed'], 'the off that went was owed again, or the page close was forgotten')
+      assert.equal(t.unit.state.page, false, 'the unit was left on its tuner page')
+    } finally {
+      b.done()
+    }
+  })
+
+  test('the link: a reopen that goes another way than the connection before still closes what that one left', async () => {
+    const [, methods, open, opened] = GEN3_WAYS[1]
+    const { t, b } = await gen3OnABench(methods)
+    try {
+      b.rig.tunerOn = true
+      await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+      await advance(t.clock, open)
+      assert.deepEqual(gen3TunerHeard(t), opened, 'the first connection did not open the published tuner and the page')
+      const back = b.away()
+      b.drop()
+      back()
+      /* Back with the phone's tuner open: reopened, and this time the unit sends its readings, so no page is asked for. */
+      for (let ms = 0; ms < 3000 && gen3TunerHeard(t).length === opened.length; ms++) await advance(t.clock, 1)
+      assert.deepEqual(gen3TunerHeard(t), [...opened, 'tuner on'], 'the reopen’s on did not go')
+      /* Readings every 100 ms, as a unit sending them does, from the moment the on went. */
+      for (let ms = 0; ms < 2000; ms += 100) {
+        b.bench.current.heard(t.sx.frame(0x11, 0x11, [0, 1, 63]))
+        await advance(t.clock, 100)
+      }
+      assert.deepEqual(gen3TunerHeard(t), [...opened, 'tuner on'], 'the page was asked for although the unit was sending')
+      /* The phone's Close: the off for this connection's tuner, and the page the one before left open. */
+      b.rig.tunerOn = false
+      await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":false}' }))
+      assert.deepEqual(gen3TunerHeard(t), [...opened, 'tuner on', 'tuner off', 'page closed'], 'the page the connection before opened was left open')
+      assert.equal(t.unit.state.tuner || t.unit.state.page, false, 'the unit was left on its tuner')
+    } finally {
+      b.done()
+    }
+  })
+
+  test('the link: a Tuner pressed as a Gen 3 connection comes back is never shut by the owed close', async () => {
+    const [, methods, open, opened, closed] = GEN3_WAYS[1]
+    /* Pressed before the rig has read everything: the link reopens rather than closes, and the unit is on its tuner. */
+    {
+      const { t, b } = await gen3OnABench(methods)
+      try {
+        b.rig.tunerOn = true
+        await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+        await advance(t.clock, open)
+        const back = b.away()
+        b.drop()
+        b.rig.tunerOn = false
+        let release = null
+        b.bench.refreshAll = () => new Promise((resolve) => (release = resolve))
+        back()
+        await advance(t.clock, 1500)
+        assert.ok(release, 'the link never read the rig on connecting')
+        b.rig.tunerOn = true
+        const pressed = b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' })
+        release()
+        await drive(t.clock, pressed)
+        await advance(t.clock, 3000)
+        const after = gen3TunerHeard(t).slice(opened.length)
+        assert.ok(!after.includes('tuner off') && !after.includes('page closed'), `a tuner pressed again was shut: ${after.join(', ')}`)
+        assert.equal(t.unit.state.tuner, true, 'the unit is not on its tuner under a Play that shows it open')
+        /* And its own Close closes everything, the connection before's included. */
+        b.rig.tunerOn = false
+        await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":false}' }))
+        assert.equal(t.unit.state.tuner || t.unit.state.page, false, 'the Close left the unit on its tuner')
+      } finally {
+        b.done()
+      }
+    }
+    /* Pressed the moment the owed close is asked for: the close goes first, the open after it, and the unit ends on its tuner. */
+    {
+      const { t, b } = await gen3OnABench(methods)
+      try {
+        b.rig.tunerOn = true
+        await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+        await advance(t.clock, open)
+        const back = b.away()
+        b.drop()
+        b.rig.tunerOn = false
+        back()
+        for (let ms = 0; ms < 5000 && gen3TunerHeard(t).length === opened.length; ms++) await advance(t.clock, 1)
+        assert.equal(gen3TunerHeard(t)[opened.length], closed[0], 'the owed close was not the first thing sent')
+        b.rig.tunerOn = true
+        await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+        await advance(t.clock, 3000)
+        assert.deepEqual(gen3TunerHeard(t).slice(opened.length, opened.length + closed.length), closed, 'the owed close was cut short')
+        assert.equal(t.unit.state.tuner, true, 'the owed close shut the tuner pressed after it')
+      } finally {
+        b.done()
+      }
+    }
+  })
+
+  test('a Gen 3 wire handed what the connection before left keeps it until it is closed, and hands it back if it goes first; an AM4’s is handed nothing', async () => {
+    const t = await onTheLine('fm3')
+    assert.equal(t.wire.gen3TunerOwes(), false)
+    t.wire.oweGen3Tuner({ push: false, page: true })
+    assert.equal(t.wire.gen3TunerOwes(), true)
+    /* Its own open does not touch it, and leaves the page alone on the published way. */
+    t.line.gone = true
+    t.wire.close()
+    assert.deepEqual(t.wire.gen3TunerOwed(), { push: false, page: true }, 'what it was handed was lost with the wire')
+    const u = await onTheLine('fm3')
+    u.wire.oweGen3Tuner({ push: true, page: false })
+    assert.deepEqual(await u.post('/tuner', { on: false }), { ok: true })
+    assert.deepEqual(gen3TunerHeard(u), ['tuner off'], 'more, or less, than what was owed was closed')
+    assert.equal(u.wire.gen3TunerOwes(), false)
+    u.line.gone = true
+    u.wire.close()
+    assert.equal(u.wire.gen3TunerOwed(), null, 'a close that went is owed again')
+    const am4 = await onTheLine('am4', { unitTunerCc: 20 })
+    am4.wire.oweGen3Tuner({ push: true, page: true })
+    assert.equal(am4.wire.gen3TunerOwes(), false, 'an AM4 took a Gen 3 unit’s owed close')
   })
 
   test('letting go of the AM4 with its own tuner open closes it, and never into a stored preset coming back', async () => {
@@ -5679,9 +6186,14 @@ export function run(test) {
     assert.match(step1, /<Hint>\{am4Only \? `\$\{AM4_ONLY\} \$\{NOT_FOR_FM3\}` : NOT_FOR_FM3\}<\/Hint>/)
     /* Connected, the unit silent: the AM4-only line first, for a customer, then the plugs. */
     assert.match(page, /\{`\$\{am4Only \? `\$\{AM4_ONLY\} ` : ''\}\$\{PLUGS_CHECK\} The adapter has to carry MIDI both ways\./, 'a customer whose unit does not answer is not told it is the AM4 only')
-    /* Nothing tells anybody to pick a unit by name in step 1 but the line guarded by what this account is offered. */
-    assert.equal((page.match(/pick \$\{b\.answeredAs\} in step 1/g) || []).length, 1)
+    /*
+     * Nothing tells anybody to pick a unit by name in step 1 but the wrong
+     * unit's line, which is handed whether this account is offered it
+     * (wrongUnitLine's `pickable`, run in its own test).
+     */
+    assert.ok(!/in step 1, then tap Connect/.test(page), 'the page words a pick in step 1 of its own, outside wrongUnitLine')
     assert.ok(!/pick (the )?(FM3|FM9|Axe-Fx III)/.test(page), 'the page sends somebody to pick a unit a customer cannot pick')
+    assert.match(page, /pickable: units\.some\(\(u\) => u\.name === b\.answeredAs\)/)
   })
 
   test('over Bluetooth nothing is marked unsaved, so no Save button appears that cannot work', () => {
@@ -5776,9 +6288,14 @@ export function run(test) {
     /* What stopped the search shows with the switch off too; and the wrong unit answering says what to do. */
     const status = page.slice(page.indexOf('function status('), page.indexOf('const TONES'))
     assert.ok(status.indexOf("b.trouble === 'bluetooth-off'") < status.indexOf("if (!b.on) return { line: 'Not connected'"), 'the switch being off hides why the search failed')
-    /* Sent to pick the unit that answered only when this account can pick it: never a customer to a unit they are not offered. */
-    assert.match(status, /if \(b\.answeredAs\) \{ const pickable = offeredUnits\(\)\.some\(\(u\) => u\.name === b\.answeredAs\) return \{ line: pickable \? `An \$\{b\.answeredAs\} answered, not the \$\{name\}\. Tap Stop, pick \$\{b\.answeredAs\} in step 1, then tap Connect\.` : `An \$\{b\.answeredAs\} answered, not the \$\{name\}\. \$\{AM4_ONLY\} Tap Stop, and use the computer for the \$\{b\.answeredAs\}\.`/)
-    assert.equal((status.match(/in step 1, then tap Connect/g) || []).length, 1, 'another line sends somebody to step 1 for a unit')
+    /*
+     * Sent to pick the unit that answered only when this account can pick
+     * it: never a customer to a unit they are not offered. The words are
+     * shared/bluetooth-gear wrongUnitLine's, run for every pairing in its
+     * own test; the page hands it what step 1 offers this account.
+     */
+    assert.match(status, /if \(b\.answeredAs\) \{ const units = offeredUnits\(\) return \{ line: wrongUnitLine\(\{ answered: b\.answeredAs, picked: name, pickable: units\.some\(\(u\) => u\.name === b\.answeredAs\), forWhich: units\.length < BLE_UNITS\.length \? AM4_ONLY : '' \}\), tone: 'fault' \}/)
+    assert.ok(!/in step 1, then tap Connect/.test(status), 'another line sends somebody to step 1 for a unit')
   })
 
   test('the Bluetooth page says plainly what is different from USB, and names an adapter maker only in what to buy', () => {
@@ -6721,9 +7238,24 @@ export function run(test) {
         /* No MIDI Thru setting on the III; its THRU jack only repeats the phone, so the white plug stays out of it. */
         assert.ok(!/MIDI Thru to Off/.test(all), 'the Axe-Fx III is told to change a setting it does not have')
         assert.match(all, /into its MIDI OUT\. Not THRU/)
+      } else if (key === 'am4') {
+        assert.match(all, /On the AM4, open Setup → MIDI\/Remote and set MIDI Thru to Off\./, 'AM4: MIDI Thru is not turned off')
       } else {
-        assert.match(all, new RegExp(`On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off\\.`), `${name}: MIDI Thru is not turned off`)
+        assert.match(all, new RegExp(`On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off, `), `${name}: MIDI Thru is not turned off`)
       }
+      /*
+       * THE MIDI CHANNEL, on the units whose presets can go by Program Change
+       * on channel 1 (bleWire pcChannel), in the guide's words: Program
+       * Change on, channel 1 or Omni, PC Mapping off. Its own step, the last,
+       * after the power. Not the AM4, whose presets never go that way.
+       */
+      if (key === 'am4') assert.ok(!/Program Change|PC Mapping/.test(all), 'the AM4 is told to set up Program Change')
+      else {
+        assert.equal(steps.at(-1), gear.midiSettingsFor(key))
+        assert.match(steps.at(-1), new RegExp(`^On the ${name}, open Setup → MIDI/Remote and set (MIDI Thru to Off, )?Program Change to On, the MIDI channel to 1 \\(or Omni\\), and PC Mapping to Off\\.$`))
+      }
+      /* Feel the cable in the first minute, on the units nobody here has (the guide has always said so); not the AM4, where it was tried. */
+      assert.equal(gear.heatLineFor(key), key === 'am4' ? null : gear.HEAT_CHECK, `${name}: the heat line`)
       if (key === 'am4') assert.match(all, /Push one 3\.5 mm adapter into the AM4’s MIDI IN, and the other into its MIDI OUT\./)
       else assert.ok(!/3\.5 mm/.test(all), `${name} is told to use the AM4’s adapters`)
       if (key === 'fm9') assert.match(all, /MIDI OUT\/THRU jack/)
@@ -6742,6 +7274,15 @@ export function run(test) {
     }
     assert.deepEqual(gear.TESTED, ['am4'])
     assert.equal(gear.hookupFor('vp4'), null, 'steps for a unit the page does not offer')
+    /* The FM3 has no steps (its warning instead), but its MIDI settings are written for the day it has, with MIDI Thru in them; none for a unit the page does not know. */
+    assert.match(gear.midiSettingsFor('fm3'), /^On the FM3, open Setup → MIDI\/Remote and set MIDI Thru to Off, Program Change to On/)
+    assert.equal(gear.midiSettingsFor('vp4'), null)
+    assert.equal(gear.heatLineFor('fm3'), null, 'the FM3 is told to feel a cable it is told never to plug in')
+    assert.equal(gear.HEAT_CHECK, 'In the first minute, feel the C2MIDI Pro. It should stay cool. If it gets more than slightly warm, unplug it at once.')
+    /* The guide says the same about the channel, and about the heat, so the app and the guide do not disagree. */
+    const guide = readFileSync(new URL('../public/bluetooth-guide.html', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+    assert.match(guide, /set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping off/)
+    assert.match(guide, /Feel the C2MIDI Pro after a minute\. It should be cool\. If it is more than slightly warm, unplug it at once\./)
     assert.match(gear.GEAR_IN_SHORT, /CME WIDI Uhost, a CME C2MIDI Pro, and a phone charger or power bank/)
     assert.match(gear.GEAR_IN_SHORT, /For an AM4, also two Type-A MIDI to 3\.5 mm adapters\./)
     /*
@@ -7038,6 +7579,148 @@ export function run(test) {
     }
   })
 
+  /*
+   * THE WORDS FOR EVERY WRONG PAIRING (shared/bluetooth-gear wrongUnitLine),
+   * with the article chosen from the bare name: "An an FM9" was what the
+   * page would have said, given the wire's own words, and "An VP4".
+   */
+  test('the page names the unit that really answered, with the right article, and the way out, for every wrong pairing', async () => {
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    const { MODEL_NAMES, modelName, BLE_UNITS } = await import(WIRE)
+    /* The article said here is the wire's own, for every unit it knows. */
+    for (const [byte, said] of Object.entries(MODEL_NAMES)) assert.equal(gear.withArticle(modelName(Number(byte))), said)
+    assert.equal(modelName(0x77), null)
+    const capital = (s) => s[0].toUpperCase() + s.slice(1)
+    const answering = Object.keys(MODEL_NAMES).map((b) => modelName(Number(b)))
+    for (const picked of BLE_UNITS.map((u) => u.name)) {
+      for (const answered of answering.filter((a) => a !== picked)) {
+        /* His page: every Bluetooth unit is in step 1. A customer's: the AM4 alone, with the line that says so. */
+        const his = gear.wrongUnitLine({ answered, picked, pickable: BLE_UNITS.some((u) => u.name === answered) })
+        const theirs = gear.wrongUnitLine({ answered, picked, pickable: answered === 'AM4', forWhich: gear.AM4_ONLY })
+        for (const line of [his, theirs]) {
+          assert.ok(line.startsWith(`${capital(gear.withArticle(answered))} answered, not the ${picked}. `), line)
+          assert.ok(!/\b(an?|An?) (an?|An?)\b/.test(line), `two articles: ${line}`)
+          assert.ok(!/this phone/i.test(line), line)
+        }
+        if (answered === 'VP4') {
+          assert.equal(his, `A VP4 answered, not the ${picked}. The VP4 isn’t a Bluetooth unit: tap Stop, and use the computer for it.`)
+          assert.equal(theirs, his, 'a customer is told something else about a VP4')
+          continue
+        }
+        assert.equal(his, `${capital(gear.withArticle(answered))} answered, not the ${picked}. Tap Stop, pick ${answered} in step 1, then tap Connect.`)
+        if (answered === 'AM4') assert.equal(theirs, his)
+        else {
+          assert.equal(theirs, `${capital(gear.withArticle(answered))} answered, not the ${picked}. For now, Bluetooth (beta) is for an AM4 only. Tap Stop, and use the computer for the ${answered}.`)
+          assert.ok(!/in step 1/.test(theirs), 'a customer is sent to pick a unit they are not offered')
+        }
+      }
+    }
+    /* The one in the plan, word for word. */
+    assert.equal(gear.wrongUnitLine({ answered: 'FM9', picked: 'FM3', pickable: true }), 'An FM9 answered, not the FM3. Tap Stop, pick FM9 in step 1, then tap Connect.')
+    assert.equal(gear.wrongUnitLine({ answered: 'Axe-Fx III', picked: 'AM4', pickable: true }), 'An Axe-Fx III answered, not the AM4. Tap Stop, pick Axe-Fx III in step 1, then tap Connect.')
+    /* The comment that said only an AM4 is ever named is gone with it. */
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    assert.ok(!/names nothing else/.test(page), 'the page still says only an AM4 is ever named')
+    assert.ok(!/`An \$\{b\.answeredAs\}/.test(page), 'the page writes the article itself again')
+  })
+
+  /*
+   * THE FM3, ALWAYS IN SIGHT WHEN IT IS PICKED, and the heat line for the
+   * units nobody here has (critic, 25 October 2026). How to plug it in,
+   * which holds the FM3's full warning, starts folded once an adapter has
+   * been used here, and step 1's line is not drawn while Bluetooth is on.
+   */
+  test('the FM3 picked shows a warning nothing folds away, and the FM9 and Axe-Fx III steps end with feeling the cable', async () => {
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    assert.equal(gear.FM3_NEVER, 'Never plug the C2MIDI Pro, or any adapter that takes its power from MIDI OUT, into an FM3. When we tried it, the cable got very hot, and FM3 owners report the same.')
+    /* Said as what happened here and what owners report, with no way round it and nothing said as a fact about the unit. */
+    assert.ok(!/straight|220|resistor|solder|nothing to limit/i.test(gear.FM3_NEVER))
+    /* The guide and the notes say the same thing. */
+    const guide = readFileSync(new URL('../public/bluetooth-guide.html', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+    assert.match(guide, /keep these parts, and any adapter that takes its power from the MIDI OUT jack, off an FM3/)
+    const notes = readFileSync(new URL('../docs/bluetooth-midi.md', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+    assert.match(notes, /Every adapter that feeds from MIDI Out runs hot on an FM3/)
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    const at = page.indexOf('{b.unit === \'fm3\' ? <Note tone="fault">{FM3_NEVER}</Note> : null}')
+    assert.ok(at > 0, 'the FM3 line is not drawn whenever the FM3 is picked')
+    /* In the first block, after the line that says where it stands and before the on/off halves: drawn on and off alike, and in no fold. */
+    assert.ok(at > page.indexOf('{said.line}') && at < page.indexOf('{b.on ? ( <View'), 'the FM3 line is inside one half of the page')
+    assert.ok(at < page.indexOf('<Fold title="How to plug it in"'), 'the FM3 line is inside a fold')
+    assert.equal((page.match(/\{FM3_NEVER\}/g) || []).length, 1)
+    /* The heat line, under the steps of the units it is for, before the one-at-a-time line. */
+    const plug = page.slice(page.indexOf('function PlugIn('), page.indexOf('function Buy('))
+    assert.match(plug, /const heat = heatLineFor\(unit\)/)
+    assert.ok(plug.indexOf('{heat ? <Note tone="warn">{heat}</Note> : null}') > plug.indexOf('steps.map('), 'the heat line is not under the steps')
+    assert.ok(plug.indexOf('{heat ? <Note tone="warn">{heat}</Note> : null}') < plug.indexOf('<Hint>{ONE_AT_A_TIME}</Hint>'))
+  })
+
+  test('the Gen 3 testing tools switch the first effect off and back, and leave it as it was', async () => {
+    const { CHECK_STEPS } = await import(WIRE)
+    assert.deepEqual(
+      CHECK_STEPS.gen3.writes.find((s) => s.step === 'write-bypass'),
+      { step: 'write-bypass', label: 'Effect: off and back', does: 'Switches the first effect off, or on, then puts it back as it was.' }
+    )
+    for (const unit of ['fm3', 'fm9', 'axefx3']) {
+      const t = await onTheLine(unit)
+      const model = t.sx.MODELS[unit]
+      const before = t.unit.state.blocks.map((b) => ({ ...b }))
+      const r = await drive(t.clock, t.wire.check('write-bypass'))
+      assert.equal(r.ok, true, `${unit}: ${r.error}`)
+      /* Compressor 1, the first effect before the amp and the cab: off in this preset, so on, then off again. Never the input or output. */
+      const bypasses = t.frames().filter((f) => f[5] === 0x0a).map(hex)
+      assert.deepEqual(bypasses, [t.sx.buildSetBypass(model, 46, false), t.sx.buildSetBypass(model, 46, true)].map(hex), `${unit}: the switches sent`)
+      assert.deepEqual(t.unit.state.blocks, before, `${unit}: the block was not put back as it was`)
+      assert.ok(r.rows.some((row) => /it worked/.test(row.meaning)), `${unit}: the check did not read whether it changed`)
+      assert.deepEqual(t.events.at(-1), { type: 'changed', scope: 'grid' })
+    }
+    /* A preset with nothing but the input and output: nothing is switched. */
+    const bare = await onTheLine('fm3')
+    bare.unit.state.blocks.splice(0, bare.unit.state.blocks.length, { eid: 37, bypassed: false, channel: 0 }, { eid: 42, bypassed: false, channel: 0 })
+    const r = await drive(bare.clock, bare.wire.check('write-bypass'))
+    assert.equal(r.ok, false)
+    assert.match(r.error, /no effect to switch/)
+    assert.ok(!bare.frames().some((f) => f[5] === 0x0a), 'the input or output was switched')
+    /* The AM4's own check is as it was. */
+    assert.ok(CHECK_STEPS.am4.writes.some((s) => s.step === 'write-bypass'))
+  })
+
+  /*
+   * THE WAYS FOUND, IN THE LOG'S HEAD: how each command goes to the unit
+   * picked, so a report from an FM9 says whether its scenes went the
+   * published way. Within the head's byte budget, and absent with Bluetooth
+   * off on anything but a Bluetooth report from an account it is open to
+   * (the head test above holds that for every Bluetooth line).
+   */
+  test('the log head says the ways found for the unit picked, in the testing tools’ own names, within its byte budget', async () => {
+    const r = await import(pathToFileURL(fileURLToPath(new URL('../mobile/src/lib/bleReport.js', import.meta.url))).href)
+    const { headLines, HEAD_BYTES } = await import('../shared/report-rules.mjs')
+    assert.equal(r.waysLine(null), undefined, 'a ways line with no unit picked')
+    assert.equal(r.waysLine({ learned: {}, forced: {}, pcChannel: 1 }), 'none found yet')
+    assert.equal(
+      r.waysLine({ learned: { scene: 'published', preset: 'sysex', tuner: 'push', tempo: 'edit' }, forced: { channel: 'edit' }, pcChannel: 1 }),
+      'scene Published, channel FM3-Edit’s (chosen), tempo FM3-Edit’s, preset SysEx, tuner Push'
+    )
+    assert.equal(r.waysLine({ learned: { preset: 'pc' }, forced: { scene: 'published' }, pcChannel: 3 }), 'scene Published (chosen), preset Program Change, Program Change on channel 3')
+    assert.equal(r.bluetoothHead({ unit: 'FM9', ways: { learned: { scene: 'published' }, forced: {} } })['bluetooth ways'], 'scene Published')
+    /* Every way at once, forced, on the longest names a head can have: still whole, under the budget. */
+    const everything = { learned: {}, forced: { scene: 'published', channel: 'edit', tempo: 'edit', preset: 'pc', tuner: 'push' }, pcChannel: 16 }
+    const head = headLines({
+      app: 'Fractal Remote (phone) v1.88.8',
+      'store copy': '1.88.3 · Bluetooth for customers: closed',
+      platform: 'android 35',
+      unit: 'Axe-Fx III',
+      preset: `1023 ${'X'.repeat(32)}`,
+      link: `Bluetooth (beta), connected, through ${'W'.repeat(64)}`,
+      ...r.bluetoothHead({ unit: 'Axe-Fx III', answeredAs: 'FM9', phase: 'connected', trouble: 'restricted', adapter: 'W'.repeat(64), ways: everything })
+    })
+    assert.ok(Buffer.byteLength(head) < HEAD_BYTES / 2, `the head is ${Buffer.byteLength(head)} bytes`)
+    assert.match(head, /^bluetooth ways: scene Published \(chosen\), channel FM3-Edit’s \(chosen\), tempo FM3-Edit’s \(chosen\), preset Program Change \(chosen\), tuner Push \(chosen\), Program Change on channel 16$/m)
+    /* lib/bluetooth hands the head what the unit picked has learned, and nothing for no unit. */
+    const lib = flat('mobile/src/lib/bluetooth.js')
+    assert.match(lib, /ways: saved\.unit \? waysFor\(saved\.unit\) : null/)
+    assert.match(lib, /return \{ learned: \{ \.\.\.m\.learned \}, forced, pcChannel: m\.pcChannel \}/)
+  })
+
   test('a Bluetooth report’s log head says the unit picked, the one that answered, where the link stood and the adapter by its name, never its address', async () => {
     const r = await import(pathToFileURL(fileURLToPath(new URL('../mobile/src/lib/bleReport.js', import.meta.url))).href)
     const { headLines } = await import('../shared/report-rules.mjs')
@@ -7045,7 +7728,8 @@ export function run(test) {
       'bluetooth unit': 'AM4',
       'bluetooth link': 'connected',
       'answered as': undefined,
-      adapter: 'WIDI Uhost Bluetooth'
+      adapter: 'WIDI Uhost Bluetooth',
+      'bluetooth ways': undefined
     })
     /* No unit answering in its place is said by saying nothing (headLines leaves an empty line out). */
     assert.ok(!/answered as/.test(headLines(r.bluetoothHead({ unit: 'AM4', phase: 'connected', adapter: 'WIDI' }))))
@@ -7067,12 +7751,12 @@ export function run(test) {
     try {
       const { ADMINS } = await import('../shared/admin.mjs')
       bench.ble.allowBluetooth(ADMINS[0])
-      assert.deepEqual(bench.ble.bluetoothFacts(), { unit: null, answeredAs: null, phase: 'off', trouble: null, adapter: null })
+      assert.deepEqual(bench.ble.bluetoothFacts(), { unit: null, answeredAs: null, phase: 'off', trouble: null, adapter: null, ways: null })
       bench.ble.setBluetoothUnit('fm3')
       bench.ble.chooseAdapter({ id: ADDRESS, name: ADDRESS })
       bench.ble.noteBluetooth({ answeredAs: 'AM4', trouble: 'bluetooth-off' })
       const facts = bench.ble.bluetoothFacts()
-      assert.deepEqual(facts, { unit: 'FM3', answeredAs: 'AM4', phase: 'off', trouble: 'bluetooth-off', adapter: '' })
+      assert.deepEqual(facts, { unit: 'FM3', answeredAs: 'AM4', phase: 'off', trouble: 'bluetooth-off', adapter: '', ways: { learned: {}, forced: {}, pcChannel: 1 } })
       const head = headLines(r.bluetoothHead(facts))
       assert.ok(!head.includes(ADDRESS), 'the head names the adapter by its Bluetooth address')
       assert.match(head, /^adapter: one with no name$/m)
@@ -7125,13 +7809,13 @@ export function run(test) {
           'export const bluetoothAdmin = () => false',
           'export const openForCustomersHere = () => false',
           "export const builtInVersion = () => '1.88.3'",
-          "export const bluetoothFacts = () => ({ unit: 'AM4', answeredAs: null, phase: s.on ? 'connected' : 'off', trouble: null, adapter: 'WIDI Uhost Bluetooth' })"
+          "export const bluetoothFacts = () => ({ unit: 'AM4', answeredAs: null, phase: s.on ? 'connected' : 'off', trouble: null, adapter: 'WIDI Uhost Bluetooth', ways: { learned: { tempo: 'published' }, forced: {}, pcChannel: 1 } })"
         ].join('\n')
       )
       writeFileSync(join(dir, 'logHead.js'), head)
       const { s } = await import(pathToFileURL(join(dir, 'state.js')).href)
       const { logHeader } = await import(pathToFileURL(join(dir, 'logHead.js')).href)
-      const BLE_KEYS = ['bluetooth unit', 'bluetooth link', 'adapter']
+      const BLE_KEYS = ['bluetooth unit', 'bluetooth link', 'adapter', 'bluetooth ways']
       const has = (h) => BLE_KEYS.filter((k) => k in h)
 
       /* A customer through the computer: nothing about Bluetooth, on the Feedback form or the log screen, whoever they are. */
@@ -7153,6 +7837,7 @@ export function run(test) {
       assert.equal(over.link, 'Bluetooth (beta), connected, through WIDI Uhost Bluetooth')
       assert.equal(over['bluetooth unit'], 'AM4')
       assert.equal(over['bluetooth link'], 'connected')
+      assert.equal(over['bluetooth ways'], 'tempo Published', 'over Bluetooth the head does not say the ways found')
       assert.ok(!('computer' in over), 'over Bluetooth the head names a computer')
       /* Never in the demo, which is reaching nothing. */
       s.demo = true
