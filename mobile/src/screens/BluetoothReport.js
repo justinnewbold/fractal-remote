@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Platform, ScrollView, Text, View } from 'react-native'
 
-import { color, font, space } from '../lib/theme'
+import { color, font, mono, radius, space } from '../lib/theme'
 import { REASONS, reportNote } from '../lib/bleReport'
 import { REPORT_BUTTON } from '../lib/bluetooth-gear'
 import { logHeader, runsBefore } from '../lib/logHead'
 import { pastRuns } from '../lib/logKeep'
 import { headLines } from '../lib/report-rules'
-import { SENT_WORDS, sendLogs } from '../lib/reports'
+import { SENT_WORDS, logPreview, sendLogs } from '../lib/reports'
 import { useRig } from '../lib/rig'
 import { deviceNoun } from '../lib/device-word'
 import Note from '../components/Note'
 import Press from '../components/Press'
 
+const face = Platform.select(mono)
 const ofDeviceName = (s) => s.deviceName
 const ofPreset = (s) => s.preset
 
@@ -37,7 +38,14 @@ const ofPreset = (s) => s.preset
  * places (the Bluetooth page, the note under Play's pill, a fault on Play
  * while over Bluetooth, the waiting screen while it looks for the adapter),
  * which are drawn for an account Bluetooth is open to and nobody else. To
- * write more or add a screenshot, the last button opens the form itself.
+ * write more or add a screenshot, the last button opens the form itself,
+ * started with what this screen says goes with it and with the same
+ * Bluetooth lines in its log's head (App.js `writingOut`): there the log can
+ * be read first and turned off, as on any bug report.
+ *
+ * WHAT GOES CAN BE READ FIRST. See what is sent shows the log this report
+ * would carry, by the function that sends it (lib/reports logPreview, with
+ * the same head and runs before), as the form's See what that is does.
  *
  * HELP IS JUSTIN'S OWN CHANNEL. It goes to him, as every report does, and to
  * nobody else: nothing here sends a player anywhere else for help with the app.
@@ -70,18 +78,22 @@ export default function BluetoothReport({ onBack, said = null, onWriteMore }) {
   const [sending, setSending] = useState(null)
   const [answer, setAnswer] = useState(null)
   const inFlight = useRef(false)
+  /* What the log carries besides its lines: the head, which here says how Bluetooth stood, and the runs before. */
+  const extra = () => ({ head: headLines(logHeader({ deviceName, preset, bluetooth: true })), before: runsBefore(before) })
+  const [preview, setPreview] = useState(null)
   const send = async (key) => {
     if (inFlight.current) return
     inFlight.current = true
     setSending(key)
     setAnswer(null)
     try {
-      await sendLogs({
-        deviceName,
-        note: reportNote(key, said),
-        head: headLines(logHeader({ deviceName, preset, bluetooth: true })),
-        before: runsBefore(before)
-      })
+      /*
+       * The note is the app's, made from the answer tapped, so it is not
+       * `typed`: a report that did not go says to try again, never "What you
+       * wrote is still here" on a screen with nothing to type. And this
+       * screen has no Copy Logs, so it is not offered (`copyLogs`).
+       */
+      await sendLogs({ deviceName, note: reportNote(key, said), typed: false, copyLogs: false, ...extra() })
       setAnswer({ ok: true, words: SENT_WORDS })
       AccessibilityInfo.announceForAccessibility?.(SENT_WORDS)
     } catch (err) {
@@ -132,8 +144,19 @@ export default function BluetoothReport({ onBack, said = null, onWriteMore }) {
 
       {onWriteMore ? <Press label="Write it out, or add a screenshot" height={44} disabled={!!sending} onPress={onWriteMore} /> : null}
 
+      {/* The log it would send, read first: the form's own preview, with this report's head. */}
+      <Press label={preview === null ? 'See what is sent' : 'Hide it'} height={44} disabled={!!sending} onPress={() => setPreview(preview === null ? logPreview('bug', extra()) : null)} />
+      {preview !== null ? (
+        /* Its own scroller, capped, as the form's is: the log is long by design. */
+        <ScrollView nestedScrollEnabled style={{ maxHeight: 220, backgroundColor: color.chassis, borderRadius: radius.sm }} contentContainerStyle={{ padding: space.sm }}>
+          <Text selectable style={{ color: color.silkDim, fontSize: font.micro, fontFamily: face, lineHeight: 16 }}>
+            {preview || '(nothing has been logged yet this session)'}
+          </Text>
+        </ScrollView>
+      ) : null}
+
       <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>
-        {`Your version, your ${deviceNoun()}’s OS and which unit you’re on are sent too, and the log of what the app just did, which says how Bluetooth was set up: the unit you picked, and the adapter by its name, never its Bluetooth address. When the app is connected to a computer, the computer’s own log goes as well. Nothing you’ve built goes with it. If you’re signed in, the report is linked to your account, so deleting the account deletes it too.`}
+        {`Your version, your ${deviceNoun()}’s OS and which unit you’re on are sent too, and the log of what the app just did, which says how Bluetooth was set up: the unit you picked, and the adapter by its name, never its Bluetooth address. You can read it first, above. When the app is connected to a computer, the computer’s own log goes as well. To send a report without the log, write it out and turn the log off there. Nothing you’ve built goes with it. If you’re signed in, the report is linked to your account, so deleting the account deletes it too.`}
       </Text>
     </ScrollView>
   )

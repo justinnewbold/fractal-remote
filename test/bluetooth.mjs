@@ -7017,6 +7017,17 @@ export function run(test) {
     )
     /* An answer the screen does not know is Something else, never nothing: a report must carry a message. */
     assert.equal(r.reportNote('nonsense'), 'Bluetooth (beta): Something else')
+    /*
+     * WRITE IT OUT STARTS WITH WHAT THE SCREEN SAID GOES WITH IT: the same
+     * first line, so the email's subject says Bluetooth, the fault line under
+     * it, and a blank line for what they write.
+     */
+    assert.equal(r.writeOutNote('No adapter was connected.'), 'Bluetooth (beta)\nThe app said: No adapter was connected.\n\n')
+    assert.equal(r.writeOutNote(null), 'Bluetooth (beta)\n\n')
+    assert.equal(r.writeOutNote('   '), 'Bluetooth (beta)\n\n', 'an empty fault line is written in as one')
+    const written = rules.buildReport({ kind: 'bug', message: `${r.writeOutNote('Finding WIDI Uhost…')}It drops after a minute`, context: {}, lines: [], format: () => '' })
+    assert.equal(written.message.split('\n')[0], 'Bluetooth (beta)', 'a written-out report’s subject does not say Bluetooth')
+    assert.match(written.message, /^The app said: Finding WIDI Uhost…$/m)
     for (const { key } of r.REASONS) {
       const message = rules.logsMessage(r.reportNote(key, 'Finding WIDI Uhost…'))
       assert.notEqual(message, rules.LOGS_ONLY_MESSAGE, `${key} is sent as "logs only, no message written"`)
@@ -7127,6 +7138,8 @@ export function run(test) {
       assert.deepEqual(has(logHeader({ deviceName: 'FM3' })), [])
       s.allowed = true
       assert.deepEqual(has(logHeader({ deviceName: 'FM3' })), [], 'a report that is not about Bluetooth says how Bluetooth stood with it off')
+      /* The Feedback form's own default (bluetooth = false) is the same head. */
+      assert.deepEqual(has(logHeader({ deviceName: 'FM3', bluetooth: false })), [], 'the Feedback form’s default head says how Bluetooth stood')
       /* A Bluetooth report with it off, from an account it is open to: it says. From one it is not open to: it does not. */
       assert.deepEqual(has(logHeader({ deviceName: 'FM3', bluetooth: true })), BLE_KEYS)
       assert.equal(logHeader({ bluetooth: true })['bluetooth link'], 'off')
@@ -7150,7 +7163,9 @@ export function run(test) {
 
     /* The Bluetooth report asks for it; the Feedback form and the log screen do not, so a customer's head is what it was. */
     assert.match(flat('mobile/src/screens/BluetoothReport.js'), /head: headLines\(logHeader\(\{ deviceName, preset, bluetooth: true \}\)\)/)
-    assert.match(flat('mobile/src/screens/Report.js'), /headLines\(logHeader\(\{ deviceName, preset \}\)\)/)
+    /* The form passes its own `bluetooth`, false unless Write it out on the Bluetooth report opened it (App.js writingOut). */
+    assert.match(flat('mobile/src/screens/Report.js'), /headLines\(logHeader\(\{ deviceName, preset, bluetooth \}\)\)/)
+    assert.match(flat('mobile/src/screens/Report.js'), /export default function Report\(\{ onBack, start = 'bug', prefill = '', bluetooth = false \}\)/)
     assert.match(flat('mobile/src/screens/Log.js'), /headLines\(logHeader\(\{ deviceName, preset \}\)\)/)
     /*
      * IN THE LOG, NEVER IN THE DETAILS. lib/reports context goes with every
@@ -7168,8 +7183,18 @@ export function run(test) {
   test('Report a Bluetooth problem sends through the log screen’s one tap, one at a time, and leaves the Feedback form as it was', () => {
     const page = flat('mobile/src/screens/BluetoothReport.js')
     /* The one-tap send, with the answer and the fault it came from as the message, and the runs before. */
-    assert.match(page, /import \{ SENT_WORDS, sendLogs \} from '\.\.\/lib\/reports'/)
-    assert.match(page, /await sendLogs\(\{ deviceName, note: reportNote\(key, said\), head: headLines\(logHeader\(\{ deviceName, preset, bluetooth: true \}\)\), before: runsBefore\(before\) \}\)/)
+    assert.match(page, /import \{ SENT_WORDS, logPreview, sendLogs \} from '\.\.\/lib\/reports'/)
+    assert.match(page, /const extra = \(\) => \(\{ head: headLines\(logHeader\(\{ deviceName, preset, bluetooth: true \}\)\), before: runsBefore\(before\) \}\)/)
+    /*
+     * The note is the app's, not typed, and the screen has no Copy Logs, so a
+     * report that did not go says neither "What you wrote is still here" nor
+     * "use Copy Logs" (test/reports.mjs runs the words).
+     */
+    assert.match(page, /await sendLogs\(\{ deviceName, note: reportNote\(key, said\), typed: false, copyLogs: false, \.\.\.extra\(\) \}\)/)
+    /* What goes can be read first, by the function that sends it, with this report's head. */
+    assert.match(page, /<Press label=\{preview === null \? 'See what is sent' : 'Hide it'\} height=\{44\} disabled=\{!!sending\} onPress=\{\(\) => setPreview\(preview === null \? logPreview\('bug', extra\(\)\) : null\)\} \/>/)
+    assert.match(page, /You can read it first, above\./)
+    assert.match(page, /To send a report without the log, write it out and turn the log off there\./)
     assert.ok(!/sendReport|TextInput/.test(page), 'the one-tap report has a form in it')
     /* Every answer drawn, each a button that sends that answer; grayed while one is on its way, and never two at once. */
     assert.match(page, /\{REASONS\.map\(\(r\) => \( <Press key=\{r\.key\} label=\{sending === r\.key \? 'Sending…' : r\.label\}[^>]*disabled=\{!!sending\} onPress=\{\(\) => send\(r\.key\)\} \/> \)\)\}/)
@@ -7189,18 +7214,36 @@ export function run(test) {
     assert.ok(!/this phone/i.test(src('mobile/src/screens/BluetoothReport.js').replace(/\/\*[\s\S]*?\*\//g, '')), 'the Bluetooth report says “this phone”')
 
     /*
-     * THE FEEDBACK FORM IS EVERY CUSTOMER'S, AND IS NOT TOUCHED. No topic, no
-     * Bluetooth, the same title, kinds and small print, and App draws it as
-     * it always did whenever the report screen is not the Bluetooth one.
+     * THE FEEDBACK FORM IS EVERY CUSTOMER'S, AND ITS DEFAULTS ARE THE FORM AS
+     * IT WAS. Two props, used only by Write it out on the Bluetooth report:
+     * `prefill`, where the box starts ('' by default, an empty box), and
+     * `bluetooth`, handed to the log's head and nothing else (false by
+     * default, the head it always had). The same title, kinds and small
+     * print, and App draws it as it always did whenever the report screen
+     * is not the Bluetooth one or its Write it out.
      */
     const form = flat('mobile/src/screens/Report.js')
-    assert.match(form, /export default function Report\(\{ onBack, start = 'bug' \}\)/)
-    assert.ok(!/bluetooth|bleReport|topic/i.test(code('mobile/src/screens/Report.js')), 'the Feedback form has learned about Bluetooth')
+    assert.match(form, /export default function Report\(\{ onBack, start = 'bug', prefill = '', bluetooth = false \}\)/)
+    assert.match(form, /const \[message, setMessage\] = useState\(\(\) => String\(prefill \|\| ''\)\.slice\(0, MAX_MESSAGE\)\)/)
+    const formCode = code('mobile/src/screens/Report.js').replace(/\s+/g, ' ')
+    assert.equal((formCode.match(/bluetooth/gi) || []).length, 2, 'the Feedback form does more with Bluetooth than hand it to the log’s head')
+    assert.equal((formCode.match(/prefill/g) || []).length, 2, 'the Feedback form does more with its prefill than start the box with it')
+    assert.ok(!/bleReport|topic/i.test(formCode), 'the Feedback form has learned about the Bluetooth report')
     assert.match(form, /> Feedback <\/Text>/)
     assert.match(form, /label=\{k === 'bug' \? 'Something is broken' : 'Suggest feature'\}/)
     assert.match(form, /Your version, your \{deviceNoun\(\)\}&rsquo;s OS and which unit you&rsquo;re on are sent too/)
     const app = flat('mobile/App.js')
-    assert.match(app, /\) : screen === 'report' \? \( \/\*[^]*?\*\/ reportAbout === 'bluetooth' && bluetoothOffered \? \( <BluetoothReport said=\{reportSaid\} onBack=\{\(\) => setScreen\(reportFrom\)\} onWriteMore=\{\(\) => setReportAbout\(null\)\} \/> \) : \( <Report onBack=\{\(\) => setScreen\(reportFrom\)\} \/> \)/)
+    assert.match(app, /\) : screen === 'report' \? \( \/\*[^]*?\*\/ reportAbout === 'bluetooth' && bluetoothOffered \? \( <BluetoothReport said=\{reportSaid\} onBack=\{\(\) => setScreen\(reportFrom\)\} onWriteMore=\{\(\) => setReportAbout\('written'\)\} \/> \) : \( <Report onBack=\{\(\) => setScreen\(reportFrom\)\} prefill=\{writingOut \? writeOutNote\(reportSaid\) : ''\} bluetooth=\{writingOut\} \/> \)/)
+    /*
+     * WRITE IT OUT KEEPS WHAT THE SCREEN SAID GOES WITH IT: the form starts
+     * with the report's first line and the fault line, and its log's head
+     * says how Bluetooth stood. Only through the page's gate, so everybody
+     * else's form is the defaults.
+     */
+    assert.match(app, /const writingOut = reportAbout === 'written' && bluetoothOffered/)
+    assert.match(app, /import \{ writeOutNote \} from '\.\/src\/lib\/bleReport'/)
+    assert.equal((app.match(/writeOutNote\(/g) || []).length, 1)
+    assert.equal((app.match(/<Report /g) || []).length, 1, 'the Feedback form is drawn somewhere else too')
     /* One screen, so Done, the swipe and Android's back go to the one reportFrom. */
     assert.match(app, /report: reportFrom,/)
   })
@@ -7211,7 +7254,16 @@ export function run(test) {
     assert.match(app, /const reportBluetooth = bluetoothOffered \? \(from, said = null\) => openReport\(from, 'bluetooth', said\) : null/)
     assert.match(app, /const openReport = \(from, about = null, said = null\) => \{ \/\*[^]*?\*\/ if \(from !== 'report'\) setReportFrom\(from\) setReportAbout\(about\) setReportSaid\(typeof said === 'string' && said\.trim\(\) \? said\.trim\(\) : null\) setScreen\('report'\) \}/)
     /* Each place, and where Done comes back to. */
-    assert.match(app, /onReport=\{reportBluetooth \? \(said\) => reportBluetooth\(screen, said\) : null\}/, 'the note under the pill does not come back to the screen it was opened over')
+    assert.match(app, /onReport=\{reportBluetooth && !typingReport \? \(said\) => reportBluetooth\(screen, said\) : null\}/, 'the note under the pill does not come back to the screen it was opened over')
+    /*
+     * NEVER OVER THE FORM. The pill's note is drawn over every screen, the
+     * Feedback form and the log screen too, where its Report a problem would
+     * swap the Bluetooth report in and lose what was typed, the email and
+     * the screenshots. Over the Bluetooth report itself it is still offered:
+     * nothing is typed there, and it only changes the line that goes.
+     */
+    assert.match(app, /const typingReport = \(screen === 'report' && reportAbout !== 'bluetooth'\) \|\| screen === 'log'/)
+    assert.equal((app.match(/typingReport/g) || []).length, 3, 'typingReport is used somewhere else, or not by the pill')
     assert.equal((app.match(/onReport=\{reportBluetooth \? \(said\) => reportBluetooth\('stage', said\) : null\}/g) || []).length, 2, 'Play’s fault card and the waiting screen do not both come back to Play')
     assert.match(app, /onReportBluetooth=\{reportBluetooth \? \(said\) => reportBluetooth\('settings', said\) : null\}/)
     /* The Feedback form from Settings is the Feedback form, as it was. */

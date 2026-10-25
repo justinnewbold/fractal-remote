@@ -1848,6 +1848,29 @@ step 7 spends builds, and it waits for his yes, as every build does.
       earlier versions show it only on the developer's own account; an
       iPhone or iPad asks only to use Bluetooth; Nearby devices, and
       Location on Android 11 and older, as it says now.
+      And **Report a Bluetooth problem**, on the Bluetooth (beta) page
+      (and Report this beside a fault there, on Play's fault card, under
+      Play's pill and on the waiting screen), which today's page does not
+      cover: one tap on an answer sends a bug report at once, with the
+      answer tapped, the line that was on screen, this session's log and
+      the runs before it, and, when the app is connected to a computer,
+      the computer's own record. The log can be read first (See what is
+      sent, on that screen), and a report goes without it only by "Write
+      it out, or add a screenshot", which is the Feedback form with its
+      log switch. On those reports the log's head also says the unit
+      picked, the unit that answered instead, whether Bluetooth is off,
+      not allowed or blocked on the device (Screen Time, or whoever
+      manages it), and the adapter by its name, never its address, even
+      when the report is sent with Bluetooth off.
+      And the table's "App version, your unit, your OS, screen size" row,
+      which leaves out the computer app's version and the link, and, on a
+      report that carries the log, the last fault the screen showed
+      (`lastError`). The phone sends that last fault only with the log
+      since 25 October 2026; the website still sends it with a suggestion
+      and a log-less bug report too (src/lib/reports.js context), so this
+      pull request, which makes a computer release anyway, is the one to
+      make the website do as the phone does (mobile/src/lib/reports.js
+      sendReport, apartFromLog).
     - **support.html**, the App Store's Support URL, which a reviewer
       checking the listing's links reads: one sentence after "The phone
       doesn't talk to the unit directly, which is why there is a computer

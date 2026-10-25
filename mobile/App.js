@@ -65,6 +65,7 @@ import {
 } from './src/lib/bluetooth'
 import { useBluetoothOffered } from './src/lib/useBluetoothOffered'
 import { BLUETOOTH_WAYS_SHORT, BLUETOOTH_WAYS_SHORT_AM4, REPORT_BUTTON } from './src/lib/bluetooth-gear'
+import { writeOutNote } from './src/lib/bleReport'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
@@ -210,7 +211,9 @@ export default function App() {
    * one-tap report Bluetooth's own places open, with the words that were on
    * screen when it was opened (`reportSaid`, a fault line), which go with it.
    * One screen, 'report', so the way back is the one reportFrom it always
-   * was, for Done, the swipe and Android's back alike.
+   * was, for Done, the swipe and Android's back alike. 'written' is the
+   * Feedback form opened by that report's "Write it out, or add a
+   * screenshot" (`writingOut`, below).
    */
   const [reportAbout, setReportAbout] = useState(null)
   const [reportSaid, setReportSaid] = useState(null)
@@ -375,6 +378,24 @@ export default function App() {
    * drawn. `from` is where Done comes back to.
    */
   const reportBluetooth = bluetoothOffered ? (from, said = null) => openReport(from, 'bluetooth', said) : null
+  /*
+   * "WRITE IT OUT, OR ADD A SCREENSHOT", from Report a Bluetooth problem: the
+   * Feedback form, started with what that screen said goes with it (lib/
+   * bleReport writeOutNote: the same first line, so the email's subject says
+   * Bluetooth, and the fault line), and with the Bluetooth lines in its log's
+   * head. Through the page's gate again, so no customer's form is ever
+   * started this way; everybody else's is the form as it always was.
+   */
+  const writingOut = reportAbout === 'written' && bluetoothOffered
+  /*
+   * A REPORT ON SCREEN THAT SOMETHING IS BEING TYPED INTO: the Feedback form,
+   * either way it was opened, and the log screen with its note box. The note
+   * under Play's pill is drawn over every screen, these too, and its Report a
+   * problem would put the Bluetooth report in their place, and what was
+   * typed, the email and the screenshots (kept only by that screen) would go.
+   * So it is not offered there.
+   */
+  const typingReport = (screen === 'report' && reportAbout !== 'bluetooth') || screen === 'log'
   /*
    * ASKED FOR, as opposed to imposed.
    *
@@ -1234,8 +1255,8 @@ export default function App() {
             <TopBar
               link={shownLink}
               onOpenSettings={() => openSettings()}
-              /* The note under the pill, over Bluetooth: back to the screen it was opened over. */
-              onReport={reportBluetooth ? (said) => reportBluetooth(screen, said) : null}
+              /* The note under the pill, over Bluetooth: back to the screen it was opened over; never over the form (typingReport). */
+              onReport={reportBluetooth && !typingReport ? (said) => reportBluetooth(screen, said) : null}
               onUnlock={() => setBuying(true)}
               onOpenUnit={() => (unitGoes === 'demo' ? setPickUnit(true) : unitGoes === 'which' ? setPickLive(true) : openSettings('link'))}
               unitGoes={unitGoes}
@@ -1338,12 +1359,13 @@ export default function App() {
                * Report a Bluetooth problem when a Bluetooth place opened it,
                * through the page's own gate again in case that changed since;
                * the Feedback form otherwise, exactly as it was. "Write it out"
-               * on the first opens the second, with the same way back.
+               * on the first opens the second, with the same way back,
+               * started with what the first said goes with it (writingOut).
                */
               reportAbout === 'bluetooth' && bluetoothOffered ? (
-                <BluetoothReport said={reportSaid} onBack={() => setScreen(reportFrom)} onWriteMore={() => setReportAbout(null)} />
+                <BluetoothReport said={reportSaid} onBack={() => setScreen(reportFrom)} onWriteMore={() => setReportAbout('written')} />
               ) : (
-                <Report onBack={() => setScreen(reportFrom)} />
+                <Report onBack={() => setScreen(reportFrom)} prefill={writingOut ? writeOutNote(reportSaid) : ''} bluetooth={writingOut} />
               )
             ) : screen === 'fixes' ? (
               /* Works with the computer off, which is exactly when it is

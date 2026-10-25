@@ -9266,9 +9266,16 @@ export function run(test) {
     for (const words of [r.notSentWords({ message: 'x' }), r.notSentWords({ message: 'x' }, { wrote: false })]) {
       assert.doesNotMatch(words, /: x|policy|row/, 'the database’s own words reach the screen')
     }
-    for (const where of ['src/lib/reports.js', 'mobile/src/lib/reports.js']) {
-      assert.match(read(where).replace(/\s+/g, ' '), /const err = notSent\(error, \{ wrote: row\.message !== LOGS_ONLY_MESSAGE \}\) logDebug\('app', 'report not sent', err\.reason\) throw err/, `${where} words a failed send by itself, or loses the reason`)
-    }
+    assert.match(read('src/lib/reports.js').replace(/\s+/g, ' '), /const err = notSent\(error, \{ wrote: row\.message !== LOGS_ONLY_MESSAGE \}\) logDebug\('app', 'report not sent', err\.reason\) throw err/, 'the browser words a failed send by itself, or loses the reason')
+    /*
+     * The phone's, through notSentHere (25 October 2026), which is notSent
+     * told also whether the note was typed (Report a Bluetooth problem's is
+     * the app's own) and whether the screen has Copy Logs to offer;
+     * test/reports.mjs runs it.
+     */
+    const phoneSend = read('mobile/src/lib/reports.js').replace(/\s+/g, ' ')
+    assert.match(phoneSend, /const err = notSentHere\(error, \{ wrote: typeof typed === 'boolean' \? typed : row\.message !== LOGS_ONLY_MESSAGE, copyLogs \}\) logDebug\('app', 'report not sent', err\.reason\) throw err/, 'the phone words a failed send by itself, or loses the reason')
+    assert.match(phoneSend, /function notSentHere\(error, \{ wrote, copyLogs \}\) \{ const err = notSent\(error, \{ wrote \}\)/, 'the phone’s words are not the shared ones')
   })
 
   test('the computer is asked once, never for longer than its deadline, and a refusal is one line', async () => {

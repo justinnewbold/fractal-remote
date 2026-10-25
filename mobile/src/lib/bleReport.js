@@ -56,6 +56,18 @@ export function reportNote(key, said = null) {
   return lines.join('\n')
 }
 
+/**
+ * What the Feedback form starts with when "Write it out, or add a screenshot"
+ * opens it from Report a Bluetooth problem (App.js `writingOut`): the same
+ * first line, so the email's subject still says what it is about, and the
+ * line that screen said goes with it, then a blank line for what they write.
+ * They can change any of it; it is only where the box starts.
+ */
+export function writeOutNote(said = null) {
+  const words = typeof said === 'string' ? said.trim() : ''
+  return words ? `${REPORT_HEAD}\nThe app said: ${words}\n\n` : `${REPORT_HEAD}\n\n`
+}
+
 /* Where the link to the adapter stands, as lib/bluetooth's phase says it, in words for the head. */
 const PHASES = {
   off: 'off',

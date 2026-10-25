@@ -39,12 +39,20 @@ const ofPreset = (s) => s.preset
  * Nothing is gathered while somebody types. The log is read when Send is
  * pressed and at no other moment, so a report half-written and abandoned
  * leaves no copy of anything anywhere.
+ *
+ * EVERY CUSTOMER'S FORM IS THE DEFAULTS. `prefill` and `bluetooth` are handed
+ * only by "Write it out, or add a screenshot" on Report a Bluetooth problem
+ * (App.js `writingOut`, behind the Bluetooth page's own gate): the box
+ * starts with what that screen said goes with it, and the log's head says
+ * how Bluetooth stood (lib/logHead, `bluetooth`), which it does only for an
+ * account Bluetooth is open to. Left out, as everywhere else, the box starts
+ * empty and the head is what it always was.
  */
-export default function Report({ onBack, start = 'bug' }) {
+export default function Report({ onBack, start = 'bug', prefill = '', bluetooth = false }) {
   const deviceName = useRig(ofDeviceName)
   const preset = useRig(ofPreset)
   const [kind, setKind] = useState(KINDS.includes(start) ? start : 'bug')
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(() => String(prefill || '').slice(0, MAX_MESSAGE))
   const [contact, setContact] = useState('')
   const [withLog, setWithLog] = useState(true)
   const [preview, setPreview] = useState(null)
@@ -65,7 +73,7 @@ export default function Report({ onBack, start = 'bug' }) {
 
   const bug = carriesLog(kind)
   /* What the log carries besides its lines: the same head and runs before as the log screen's send. */
-  const extra = () => ({ head: headLines(logHeader({ deviceName, preset })), before: runsBefore(before) })
+  const extra = () => ({ head: headLines(logHeader({ deviceName, preset, bluetooth })), before: runsBefore(before) })
 
   const send = async () => {
     setBusy(true)
