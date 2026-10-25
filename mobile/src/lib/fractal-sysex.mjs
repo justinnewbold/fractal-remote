@@ -306,20 +306,24 @@ export function buildSwitchPreset(model, number) {
  * The published way to switch preset: Bank Select, then Program Change.
  * Three separate messages, because the phone's MIDI layer sends one at a time.
  *
- * WHERE THE BANK GOES differs by unit, and getting it wrong lands on another
- * preset rather than failing: the FM3 on firmware 12.00 ignores CC32 (a switch
- * to 438 landed on 54), so the FM3 and FM9 take it in CC0; the Axe-Fx III
- * takes it in CC32.
+ * THE BANK GOES IN CC0, ON EVERY GEN 3 UNIT, with CC32 sent as 0. It is what
+ * all three of Fractal's manuals say: "the industry-standard "Controller 0 +
+ * PC" method", and the Axe-Fx III's table is "MIDI Bank Select (CC#0) Value,
+ * Midi Program Change = Axe-Fx III Preset Number", from "0, 0 = 0" to "7, 127
+ * = 1023". CC32 is in none of Fractal's documents. And getting it wrong lands
+ * on another preset rather than failing: the FM3 on firmware 12.00 ignores
+ * CC32 (a switch to 438 landed on 54). The III's bank went in CC32 until 25
+ * October 2026, a guess that would have put any preset above 127 on a
+ * different song on a III that reads its manual's way.
  */
-export function buildProgramChange(number, { channel = 1, bankIn = 'cc0' } = {}) {
+export function buildProgramChange(number, { channel = 1 } = {}) {
   if (!Number.isInteger(number) || number < 0 || number > 16383) throw new Error(`preset ${number} is out of range`)
   if (!Number.isInteger(channel) || channel < 1 || channel > 16) throw new Error(`MIDI number ${channel} is not 1..16`)
   const ch = channel - 1
   const bank = number >> 7
-  const [cc0, cc32] = bankIn === 'cc32' ? [(bank >> 7) & 0x7f, bank & 0x7f] : [bank & 0x7f, 0]
   return [
-    [0xb0 | ch, 0x00, cc0],
-    [0xb0 | ch, 0x20, cc32],
+    [0xb0 | ch, 0x00, bank & 0x7f],
+    [0xb0 | ch, 0x20, 0],
     [0xc0 | ch, number & 0x7f]
   ]
 }
@@ -422,10 +426,14 @@ export function parseTunerPoll(f, model) {
 }
 
 /**
- * The tuner data a unit sends by itself when Global "Send Realtime Sysex" is
- * on: three bytes. Their meaning is not in any spec on file, so they come back
- * as they are and the wire decides what to make of them. Accepted with or
- * without a checksum, because nothing on file says whether a push carries one.
+ * The tuner data a unit sends by itself when "Send Realtime Sysex" is on
+ * (Setup → MIDI/Remote): three bytes, as they are, and the wire decides what
+ * to make of them. Fractal's third-party MIDI document (Rev 1.4) gives the
+ * shape, "F0 00 01 74 10 11 nn ss cc F7 where: nn = note (0 – 11) ss = string
+ * (0 – 5, 0 = low E) cc = cents (offset binary, 63 = 0, 62 = -1, 64 = +1,
+ * etc.) Note that no checksum is sent". It does not say which note 0 is.
+ * Accepted with a checksum too, as it always was: a unit that adds one loses
+ * nothing by it.
  */
 export function parseTunerPush(f, model) {
   if (!isFrom(f, model, FN.TUNER) || (f.length !== 10 && f.length !== 11)) return null

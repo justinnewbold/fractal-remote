@@ -100,6 +100,7 @@ import {
   toHex
 } from './fractal-sysex.mjs'
 import { outlineChain } from './chain-outline.js'
+import { presetMissLine } from './bluetooth-gear.js'
 
 /* ------------------------------------------------------------------ */
 /* The units, and how long each question is given                      */
@@ -114,14 +115,15 @@ export const BLE_UNITS = [
 ]
 
 /*
- * `bankIn` is where Program Change's bank goes (see buildProgramChange): the
- * FM3 on 12.00 ignores CC32, the III wants it. `maxPreset` is the last slot
- * the unit holds; a III Mark II has 1024.
+ * `maxPreset` is the last slot the unit holds; a III Mark II has 1024. Every
+ * Gen 3 unit takes Program Change's bank in CC0 (see buildProgramChange): the
+ * III's own manual says so, in its table of "MIDI Bank Select (CC#0) Value,
+ * Midi Program Change = Axe-Fx III Preset Number".
  */
 const SPEC = {
-  fm3: { name: 'FM3', short: 'FM3', bankIn: 'cc0', maxPreset: 511 },
-  fm9: { name: 'FM9', short: 'FM9', bankIn: 'cc0', maxPreset: 511 },
-  axefx3: { name: 'Axe-Fx III', short: 'Axe-Fx III', bankIn: 'cc32', maxPreset: 1023 },
+  fm3: { name: 'FM3', short: 'FM3', maxPreset: 511 },
+  fm9: { name: 'FM9', short: 'FM9', maxPreset: 511 },
+  axefx3: { name: 'Axe-Fx III', short: 'Axe-Fx III', maxPreset: 1023 },
   am4: { name: 'AM4', short: 'AM4', maxPreset: AM4.LOCATIONS - 1 }
 }
 
@@ -189,6 +191,21 @@ export const STRUCTURE_FRESH_MS = 400
  */
 export const POLL_MS = { scene: 1000, preset: 2000, tempo: 4000, am4: 2000 }
 export const TUNER_MS = 150
+/*
+ * A GEN 3 UNIT THAT STOPS ANSWERING IS LEFT IN PEACE. The adapter runs on its
+ * own charger, so it stays connected while the unit is switched off and on,
+ * and the watch went on asking three times every four seconds. Fractal's
+ * release notes: on Axe-Fx III firmware before 25.00 and FM9 before 7.00,
+ * "global settings not recalled if MIDI data is present on the MIDI In jack
+ * during bootup", and III 1.09 "Fixed crash if flooding unit with MIDI data
+ * during boot". So after QUIET_AFTER watch questions in a row go unanswered,
+ * the wire goes quiet: the watch asks nothing, and the rig's own check
+ * (detect) is answered "not connected" with nothing sent for QUIET_MS, then
+ * asks once each time it comes round, about every ten seconds. Anything the
+ * unit says ends it.
+ */
+export const QUIET_AFTER = 3
+export const QUIET_MS = 30000
 /*
  * How often the AM4's own tuner is opened again while the phone's tuner is
  * open, so it stays up until Close (keepUnitTuner). The same three seconds
@@ -416,6 +433,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   let foreignTold = false
   /* A tuner close refused unsent because the unit had not answered yet: it goes the moment it does (see heardFromIt). */
   let closeWhenHeard = false
+  /* Watch questions unanswered in a row, and when the wire went quiet (QUIET_AFTER), or null. Gen 3 only. */
+  let misses = 0
+  let quietSince = null
 
   /*
    * A QUESTION THAT WENT UNANSWERED MAY STILL BE ANSWERED, late, and that
@@ -688,10 +708,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       echoes++
       if (echoes >= 3 && !thruTold) {
         thruTold = true
-        say('the unit is echoing what it receives: MIDI Thru is on')
+        /* The Axe-Fx III has no MIDI Thru setting: what echoes there is a white plug in its THRU jack, which repeats what comes in. */
+        say(unit === 'axefx3' ? 'the unit is echoing what it receives: the white plug may be in the Axe-Fx III’s MIDI THRU, not OUT' : 'the unit is echoing what it receives: MIDI Thru is on')
       }
       return
     }
+    heardAgain()
     /*
      * An answer in several frames (an AM4's stored preset): each one that is
      * part of it is kept, and the wait starts again from it, up to the most
@@ -722,6 +744,19 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (no && no.fn === job.opts.fn) {
         job.back = f
         heardFromIt()
+        /*
+         * 64 10 00 AFTER A TAP, 64 11 00 AFTER THE TUNER SWITCH: what
+         * developers on Fractal's forum report a III sending back, and 0x64
+         * itself is in none of Fractal's documents ("if the byte after the
+         * command is 0, then it's probably a success message"). So on those
+         * two, a 00 is written down as what it is and taken as no refusal:
+         * never an error, and never the tuner put down. Anywhere else a 00
+         * still reads as the codec reads it (a damaged message).
+         */
+        if ((no.fn === FN.TAP || no.fn === FN.TUNER) && no.code === 0x00) {
+          say(`the unit answered ${job.opts.what || 'it'} with ${toHex([0x64, no.fn, 0x00])}, whose meaning Fractal has not published: not taken as a refusal`)
+          return end(job, null)
+        }
         say(`the unit refused ${job.opts.what || 'it'}: ${rejectedWords(no.code)}`)
         return end(job, { rejected: no.code })
       }
@@ -808,6 +843,24 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
   }
 
+  /* A watch question the unit did not answer; the third in a row puts the wire quiet (QUIET_AFTER). */
+  function missedPoll() {
+    if (am4) return
+    misses++
+    if (misses >= QUIET_AFTER && quietSince === null) {
+      quietSince = time.now()
+      say(`the ${spec.name} has not answered ${misses} questions in a row: it may be switched off or starting up, so nothing is sent for ${QUIET_MS / 1000} s, then one question at each check until it answers`)
+    }
+  }
+  /* Anything the unit said: the line is not quiet any more. */
+  function heardAgain() {
+    misses = 0
+    if (quietSince === null) return
+    quietSince = null
+    say(`the ${spec.name} answers again: the watch starts again`)
+  }
+  const quiet = () => quietSince !== null
+
   function tellForeign(name) {
     if (foreignTold) return
     foreignTold = true
@@ -839,6 +892,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   function heardShort(msg) {
     if (closed || !Array.isArray(msg) || !msg.length) return
     if (isEcho(msg, time.now())) return
+    if ((msg[0] & 0xf0) >= 0x80 && (msg[0] & 0xf0) < 0xf0) heardAgain()
     if ((msg[0] & 0xf0) === 0xc0) {
       say(`the unit sent Program Change ${msg[1]}: its preset changed`)
       sceneCache = null
@@ -913,18 +967,36 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const editByAuto = unit === 'fm3'
   const EDIT_KEYS = ['scene', 'channel', 'tempo']
+  /*
+   * AND THE SAME FOR THE PRESET AND THE TUNER. Fractal publishes no SysEx
+   * preset switch for any of its units ("Controller 0 + PC" is the way its
+   * manuals give), and the codec calls FM3-Edit's 0x27 frame "FM3-confirmed,
+   * III/FM9 … hardware-unverified". The tuner page (0x12) and the frequency
+   * question (0x01 sub 0x19) are FM3-Edit's too, "LIVE-VALIDATED on FM3
+   * hardware" only; Fractal's own way is the tuner switch (0x11), whose
+   * readings the unit sends with Send Realtime Sysex on. So on an FM9 or an
+   * Axe-Fx III, Auto sends a preset by Program Change alone and the tuner by
+   * its switch alone, and learns neither of FM3-Edit's. Each still goes when
+   * it is picked in the testing tools (his account only), which is how it
+   * would be tried on a real one. The FM3 keeps both, as it always has.
+   */
+  const sysexPresetByAuto = unit === 'fm3'
+  const pollTunerByAuto = unit === 'fm3'
+  /* Whether a way is FM3-Edit's, on a unit whose Auto never sends FM3-Edit's. */
+  const notForAuto = (key, w) =>
+    (w === 'edit' && !editByAuto && EDIT_KEYS.includes(key)) || (key === 'preset' && w === 'sysex' && !sysexPresetByAuto) || (key === 'tuner' && w === 'poll' && !pollTunerByAuto)
   /* Whether a trial may go on to FM3-Edit's way when the published one did not land. */
   const mayTryEdit = (key) => editByAuto || ways[key] === 'edit'
   /* What auto has learned for `key`, and may use: never FM3-Edit's on an FM9 or an Axe-Fx III. */
   const learnedWay = (key) => {
     const w = ways.learned[key] || null
-    return w === 'edit' && !editByAuto && EDIT_KEYS.includes(key) ? null : w
+    return notForAuto(key, w) ? null : w
   }
   /* A way a check found, as the panel says it was remembered: only what learn() kept. */
   const remembered = (key, way) => (way && ways.learned[key] === way ? way : null)
 
   function learn(key, way) {
-    if (way === 'edit' && !editByAuto && EDIT_KEYS.includes(key)) return
+    if (notForAuto(key, way)) return
     if (ways.learned[key] === way) return
     ways.learned[key] = way
     say(`${key}: ${way === 'edit' ? 'FM3-Edit’s way' : way} works on this ${spec.name}; remembered`)
@@ -970,7 +1042,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * the original III holds 512 and nothing here can tell the two apart, so
      * the list stays at what both agree on until the computer app says more.
      */
-    return { ...common, slotModel: 'grid', grid: { rows: 4, cols: 12 }, sceneCount: 8, presets: { count: 512, addressing: 'numeric', canScanNames: false } }
+    /*
+     * THE GRID: 12×4 on the FM3, 14×6 on the FM9 and Axe-Fx III, in Fractal's
+     * words ("The FM9 has a 14x6 grid for effects blocks versus 12x4 on the
+     * FM3"), and as the computer app gives it (6 rows of 14). Only Edit reads
+     * it, and Edit is off over Bluetooth, so this is for the day it is not.
+     */
+    const grid = unit === 'fm3' ? { rows: 4, cols: 12 } : { rows: 6, cols: 14 }
+    return { ...common, slotModel: 'grid', grid, sceneCount: 8, presets: { count: 512, addressing: 'numeric', canScanNames: false } }
   }
 
   const detectAnswer = (connected) => ({
@@ -1019,6 +1098,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   async function gen3Detect() {
+    /* Quiet (QUIET_AFTER): nothing goes for QUIET_MS, then this probe alone, once each time the rig's check asks. */
+    if (quiet() && time.now() - quietSince < QUIET_MS) return detectAnswer(false)
     const got = await ask(buildGetScene(model), (f) => parseScene(f, model), WAIT.detect, 'the scene, to see whether the unit answers', { probe: true })
     const answered = Number.isInteger(got) || rejected(got)
     if (Number.isInteger(got)) last.scene = got
@@ -1299,7 +1380,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* ---- preset ---- */
 
   const sendPc = (n) =>
-    ex(buildProgramChange(n, { channel: ways.pcChannel, bankIn: spec.bankIn }), {
+    ex(buildProgramChange(n, { channel: ways.pcChannel }), {
       messages: true,
       ms: WAIT.watch,
       what: `preset ${n} by Program Change`,
@@ -1314,7 +1395,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return got && !rejected(got) ? got.number : null
   }
 
-  /* As trialScene: choosing the preset that is already loaded teaches nothing. */
+  /*
+   * As trialScene: choosing the preset that is already loaded teaches nothing.
+   *
+   * ON AN FM9 OR AN AXE-FX III, PROGRAM CHANGE ALONE (sysexPresetByAuto), and
+   * one that did not land says which setting on the unit to look at
+   * (presetMissLine): Program Change Off or another MIDI channel leave it
+   * where it was, and PC Mapping or a MIDI PC Offset send it somewhere else,
+   * which is said as where it went.
+   */
   async function trialPreset(n, before) {
     let from = before
     if (from === undefined) {
@@ -1322,6 +1411,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       from = got && !rejected(got) ? got.number : null
     }
     let moved = movedFrom(from, n)
+    if (!sysexPresetByAuto && ways.preset !== 'sysex') {
+      await sendPc(n)
+      const at = await landedOn()
+      if (at === n) return moved ? 'pc' : null
+      if (at === null) return null
+      const where = at === from ? `The unit stayed on preset ${at}.` : `The unit went to preset ${at}, not ${n}.`
+      throw failure(`${where} ${presetMissLine(unit, ways.pcChannel)}`, 502)
+    }
     const s = await sendSysexPreset(n)
     if (!rejected(s)) {
       const at = await landedOn()
@@ -1441,20 +1538,27 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   /*
-   * WHAT A PUSHED TUNER READING IS BELIEVED TO MEAN, not confirmed: the spec
-   * text is not on file. Note 0..11 counting from A, the string, and the
-   * fine tuning 0..127 with 63 in tune. The raw bytes go to the log the first
-   * time, so the check panel shows what the unit really sent.
+   * WHAT A PUSHED TUNER READING MEANS, in Fractal's third-party MIDI document
+   * (Rev 1.4): "nn = note (0 – 11) ss = string (0 – 5, 0 = low E) cc = cents
+   * (offset binary, 63 = 0, 62 = -1, 64 = +1, etc.)". So the cents are the
+   * byte less 63, one cent a step, held to the needle's ±50. It was scaled
+   * by 50/63 until 25 October 2026, which read +50 cents as +40.
+   *
+   * WHICH NOTE 0 IS, the document does not say. Counting from A is believed,
+   * not known, so each new note goes to the log with its byte and its string
+   * (the string is Fractal's own count, 0 the low E): the first report from a
+   * real unit shows whether an open low E reads E.
    */
   const FROM_A = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
-  let pushTold = false
+  let pushTold = null
   function tunerPushed(p) {
-    if (!pushTold) {
-      pushTold = true
-      say(`tuner data from the unit: ${toHex([p.note, p.string, p.fine])}`)
+    const which = `${p.note}/${p.string}`
+    if (which !== pushTold) {
+      pushTold = which
+      say(`tuner data from the unit: note byte ${p.note}, string ${p.string}, cents byte ${p.fine} (${toHex([p.note, p.string, p.fine])})`)
     }
     if (p.note > 11) return reading(silentTuner())
-    reading({ type: 'tuner', note: FROM_A[p.note], octave: undefined, cents: Math.round(((p.fine - 63) * 50) / 63) })
+    reading({ type: 'tuner', note: FROM_A[p.note], octave: undefined, cents: Math.max(-50, Math.min(50, p.fine - 63)) })
   }
 
   function tunerLater(run, ms, fn) {
@@ -1489,16 +1593,42 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (tuner.on && tuner.run === run) gen3TunerTick(run)
   }
 
+  /*
+   * THE PUBLISHED TUNER FIRST, ON AN FM9 OR AN AXE-FX III (pollTunerByAuto):
+   * Fractal's switch, 0x11 01, and the readings the unit sends with Send
+   * Realtime Sysex on. With none in 1.2 s the log says why, and nothing else
+   * goes: the page and the frequency question are FM3-Edit's, and go to these
+   * two only when Poll is picked in the testing tools. A refusal of the
+   * switch (any reason but the 00 developers report after it, whose meaning
+   * Fractal has not published: see heard) puts the phone's tuner down, with
+   * the unit's reason. The FM3 asks, as it always has, and falls back to
+   * asking from the switch.
+   */
   async function gen3TunerOn(deadline) {
     const run = tuner.run
-    const way = wayFor('tuner') || 'poll'
+    const way = wayFor('tuner') || (pollTunerByAuto ? 'poll' : 'push')
     if (way === 'push') {
       tuner.way = 'push'
       tuner.pushSent = true
-      await fire(buildTuner(model, true), 'the tuner', { deadline })
+      const r = await fire(buildTuner(model, true), 'the tuner', { deadline })
+      /*
+       * Refused, but 11 01 HAS gone, and Fractal has not published 0x64 or
+       * its codes: so the unit may be on its tuner (and Tuner Mute) all the
+       * same. The off stays owed (tunerSent), and the next Close sends the
+       * published 11 00.
+       */
+      if (!pollTunerByAuto && rejected(r)) {
+        const err = refusedBy(r.rejected)
+        err.tunerSent = true
+        throw err
+      }
       const seen = pushes
       tunerLater(run, WAIT.push, () => {
         if (pushes !== seen) return
+        if (!pollTunerByAuto && ways.tuner !== 'poll') {
+          say(`no tuner data from the ${spec.name} in 1.2 s: Send Realtime Sysex may be off on it (Setup → MIDI/Remote). Nothing else is sent`)
+          return
+        }
         say('no tuner data from the unit in 1.2 s; asking for the frequency instead')
         startAsking(run).catch(() => {})
       })
@@ -1551,7 +1681,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     } catch (err) {
       tuner.on = false
       tuner.run++
-      tuner.pushSent = was.pushSent
+      /* A switch that went and was refused still owes its off (gen3TunerOn). */
+      tuner.pushSent = err?.tunerSent ? true : was.pushSent
       tuner.pageOpen = was.pageOpen
       throw err
     }
@@ -2436,6 +2567,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   async function gen3Poll(n) {
     const s = await sceneNow('poll')
     if (s === SKIPPED) return
+    /* Unanswered: the next question waits for the next tick, and three in a row put the wire quiet. */
+    if (s === null) return missedPoll()
     if (Number.isInteger(s)) noteScene(s, true)
     if (n % (POLL_MS.preset / POLL_MS.scene) === 0) {
       const p = await presetNow('poll')
@@ -2479,7 +2612,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (!polls.on || closed) return
     const n = polls.tick++
     try {
-      if (!tuner.on && !checking && answered) await (am4 ? am4Poll() : gen3Poll(n))
+      if (!tuner.on && !checking && answered && !quiet()) await (am4 ? am4Poll() : gen3Poll(n))
     } catch {
       // A missed poll is the next poll's job.
     }
@@ -2538,9 +2671,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       }
     },
     tempo: (row) => row('Tempo', () => tempoNow(), (v) => said(v, (b) => `${b} BPM`)),
+    /* An FM9 lists its effects from firmware 3.00 ("3rd Party MIDI Command "Status Dump" is now enabled", Fractal's FM9 release notes). */
     blocks: (row) =>
       row('Blocks', () => statusNow(), (v) =>
-        said(v, (list) => list.map((b) => `${nameOf(b.effectId)} · ${CH[b.channel] || b.channel} · ${b.bypassed ? 'off' : 'on'}`).join(', ') || 'none')
+        v === null && unit === 'fm9'
+          ? 'no answer: an FM9 lists its effects only from firmware 3.00 on'
+          : said(v, (list) => list.map((b) => `${nameOf(b.effectId)} · ${CH[b.channel] || b.channel} · ${b.bypassed ? 'off' : 'on'}`).join(', ') || 'none')
       ),
     'stored-name': async (row) => {
       const now = await row('Preset number and name', () => presetNow(), (v) => said(v, (p) => `preset ${p.number}`))
@@ -2556,7 +2692,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         return `answered for that preset: ${v.name || '(no name)'}`
       })
     },
-    echo: (row) => echoRow(row, () => sceneNow()),
+    /*
+     * The echo test's question goes as a probe: a white plug in an Axe-Fx
+     * III's THRU hears only the phone's own frames, never an answer, so a
+     * question held until the unit answers would never go. It is the same
+     * published 0x0C 7F scene question detect sends as its probe.
+     */
+    echo: (row) => echoRow(row, () => ask(buildGetScene(model), (f) => parseScene(f, model), WAIT.scene, 'the scene, for the echo test', { probe: true })),
     'write-scene': async (row) => {
       const from = await row('Scene', () => sceneNow(), (v) => said(v, (s) => `scene ${s + 1}`))
       if (!Number.isInteger(from)) throw failure('The unit did not say which scene it is on.', 504)
@@ -2644,6 +2786,26 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     },
     'write-tuner': async (row) => {
       const before = { polled: tuner.polled, pushes }
+      /*
+       * ON AN FM9 OR AN AXE-FX III, THE PUBLISHED SWITCH ALONE (see
+       * pollTunerByAuto): on, three seconds counting the readings the unit
+       * sends, and off. The page and the frequency question go only with Poll
+       * picked here.
+       */
+      if (!pollTunerByAuto && ways.tuner !== 'poll') {
+        const on = await row('Tuner on', () => fire(buildTuner(model, true), 'the tuner'), sentWords)
+        try {
+          if (rejected(on)) throw refusedBy(on.rejected)
+          await pause(3000)
+        } finally {
+          await row('Tuner off', () => fire(buildTuner(model, false), 'the tuner off'), () => `${pushes - before.pushes} readings sent by the unit`)
+        }
+        const pushed = pushes - before.pushes
+        const way = pushed ? 'push' : null
+        if (way) learn('tuner', way)
+        if (!pushed) say(`no tuner data from the ${spec.name} in 3 s: Send Realtime Sysex may be off on it (Setup → MIDI/Remote)`)
+        return { way, polled: 0, pushed }
+      }
       await row('Tuner on', () => fire(buildTunerPage(model, true), 'the tuner page'), () => 'tuner page open')
       await row('Tuner data, asked for', () => fire(buildTuner(model, true), 'the tuner'), sentWords)
       let polled = 0
@@ -2681,7 +2843,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       await askIt()
       await pause(ECHO_MS)
       return echoes - before
-    }, (n) => (n > 0 ? 'the unit sent the phone’s own message back: MIDI Thru is on. Turn it off on the unit.' : 'no echo'))
+    }, (n) =>
+      n > 0
+        ? unit === 'axefx3'
+          ? 'the phone’s own message came back: the white plug may be in the Axe-Fx III’s MIDI THRU. Move it to MIDI OUT.'
+          : 'the unit sent the phone’s own message back: MIDI Thru is on. Turn it off on the unit.'
+        : 'no echo'
+    )
   }
 
   /* The AM4, step by step: reads from the list, and four writes that each put things back. */

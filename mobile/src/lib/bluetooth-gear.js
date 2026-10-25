@@ -337,8 +337,25 @@ export const HEAT_CHECK =
 export const heatLineFor = (unit) => (unit === 'fm9' || unit === 'axefx3' ? HEAT_CHECK : null)
 
 /*
- * THE MIDI CHANNEL, ONLY IF PRESETS DON'T CHANGE. A preset goes first by the
- * unit's own SysEx switch, and by Program Change on channel 1 (bleWire's
+ * PROGRAM CHANGE FIRST, ON THE FM9 AND AXE-FX III. Fractal publishes no SysEx
+ * preset switch for any of its units: the III's manual names "Controller 0 +
+ * PC" as the way presets are picked over MIDI, and the FM9's and FM3's say
+ * the same. The 0x27 frame the phone sends an FM3 first is FM3-Edit's, seen
+ * working on an FM3 and nowhere else, so on these two the phone sends only
+ * the documented way (bleWire trialPreset), and the settings that way needs
+ * are one of the steps, not a line for some owners: Program Change On, the
+ * MIDI channel the phone sends on (1, or Omni), PC Mapping Off (with it on,
+ * the III's manual says, "MIDI BANK SELECT messages are ignored"). And Send
+ * Realtime Sysex On, which is how the tuner's readings reach the phone: the
+ * published tuner switch (0x11) turns it on and off, and the readings come
+ * only with that setting on ("this data ONLY streams over the MIDI Out
+ * jack", Fractal's third-party MIDI document, Rev 1.4).
+ */
+export const PC_FIRST = ['fm9', 'axefx3']
+
+/*
+ * THE MIDI CHANNEL, ONLY IF PRESETS DON'T CHANGE. On the FM3, a preset goes
+ * first by the unit's own SysEx switch, and by Program Change on channel 1 (bleWire's
  * pcChannel) only when that does not land (trialPreset), so most owners
  * never need this, and moving the MIDI channel or turning PC Mapping off
  * changes how their own foot controller works on the unit. So it is said
@@ -348,11 +365,15 @@ export const heatLineFor = (unit) => (unit === 'fm9' || unit === 'axefx3' ? HEAT
  * October 2026 it was the last step, for every owner, and took the place of
  * the FM9's plain MIDI Thru step. Every Gen 3 unit's, the FM3's included for
  * the day it has steps again; the AM4's presets never go by Program Change.
+ * Not the FM9's or the Axe-Fx III's since the build-out of 25 October 2026:
+ * their presets go by Program Change alone, so the settings are one of their
+ * steps (PC_FIRST, above).
  * The device in hand named by `noun`.
  */
 export const midiSettingsFor = (unit, noun = 'phone') => {
   const name = UNITS[unit]
-  if (!name || unit === 'am4') return null
+  /* The FM9 and Axe-Fx III have these in their steps (UNIT_SETTINGS): their presets go by Program Change alone. */
+  if (!name || unit === 'am4' || PC_FIRST.includes(unit)) return null
   return `If presets don’t change from this ${noun}: on the ${name}, open Setup → MIDI/Remote and set Program Change to On, the MIDI channel to 1 (or Omni), and PC Mapping to Off.`
 }
 
@@ -463,7 +484,8 @@ export function hookupFor(unit, noun = 'phone') {
       'C2MIDI Pro: the black plug (TO MIDI IN) into the Axe-Fx III’s MIDI IN.',
       `The white plug (TO MIDI OUT) into its MIDI OUT. Not THRU: the ${noun} would only hear itself there.`,
       usb,
-      power
+      power,
+      unitSettingsStep(unit)
     ]
   }
   return [
@@ -471,8 +493,25 @@ export function hookupFor(unit, noun = 'phone') {
     `The white plug (TO MIDI OUT) into its MIDI OUT/THRU jack.`,
     usb,
     power,
-    `On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off.`
+    unitSettingsStep(unit)
   ]
+}
+
+/*
+ * THE UNIT'S OWN SETTINGS, ONE STEP. The FM9 and the Axe-Fx III take
+ * presets by Program Change alone and send tuner readings only with Send
+ * Realtime Sysex on (PC_FIRST, above), so those go in the one step that
+ * sends the player into the unit's menus, after MIDI Thru on the FM9. The
+ * III has no MIDI Thru setting: its THRU jack is hardware, and the plug
+ * stays out of it (the step before). Any other unit with steps here (none
+ * today) keeps the plain MIDI Thru step.
+ */
+function unitSettingsStep(unit) {
+  const name = UNITS[unit]
+  const rest = 'Program Change to On, the MIDI channel to 1 (or Omni), PC Mapping to Off, MIDI PC Offset to 0, and Send Realtime Sysex to On.'
+  if (unit === 'axefx3') return `On the ${name}, open Setup → MIDI/Remote and set ${rest}`
+  if (unit === 'fm9') return `On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off, ${rest}`
+  return `On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off.`
 }
 
 /* The power step, the same words for every unit: the Uhost's power goes in last, with the unit already on. */
@@ -499,6 +538,114 @@ export const untriedLine = (unit) =>
   triedOn(unit) || !UNITS[unit] || warningFor(unit)
     ? null
     : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: tap ${REPORT_BUTTON}, further down this page.`
+
+/*
+ * "NOT TRIED YET", WHEREVER AN FM9 OR AXE-FX III OWNER LOOKS. "On any units
+ * that haven't been tried we still want to build everything out from what
+ * we know, but yes, we can say this hasn't been tried on a real device yet
+ * ... just mention that they haven't been tried and to report problems if
+ * they find them." (Justin, 25 October 2026.) untriedLine says it inside How
+ * to plug it in, which folds closed once an adapter has been used; these say
+ * it everywhere else an owner of one of them is: on its button in step 1,
+ * under "Connected", in What it can and can't do, under the Bluetooth pill
+ * on Play, on a fault card on Play, and in the head of a report's log. The
+ * units are the ones with steps, no warning, and no try on record: the FM9
+ * and the Axe-Fx III (the FM3 has its heat warning in place of steps). Each
+ * line that sends the player somewhere sends them to REPORT_BUTTON, in its
+ * own words. Never "official", never "this phone": the device in hand is
+ * not named in any of them.
+ */
+export const untried = (unit) => !!UNITS[unit] && !triedOn(unit) && !warningFor(unit)
+
+/** Under a unit's name on its button in step 1. */
+export const UNTRIED_SUB = 'Not tried yet'
+
+/** Under "Connected · FM9 answering". */
+export const untriedConnectedLine = (unit) =>
+  untried(unit) ? `Not tried on the ${UNITS[unit]} yet. Tell us how it goes: tap ${REPORT_BUTTON}, below.` : null
+
+/** The first line of What it can and can't do. */
+export const untriedAboutLine = (unit) =>
+  untried(unit) ? `Built from what is known about the ${UNITS[unit]}, but not yet tried on a real one. Some of it may not work as expected.` : null
+
+/** Added to the note under the Bluetooth pill on Play (it starts "Connected over Bluetooth, through …"). */
+export const untriedShortLine = (unit) => (untried(unit) ? `Not tried on the ${UNITS[unit]} yet.` : null)
+
+/** The small line on a fault card's Report this, on Play. */
+export const faultSubFor = (unit) => (untried(unit) ? `Bluetooth (beta), not tried on the ${UNITS[unit]} yet` : 'Bluetooth (beta)')
+
+/** The unit's name as a report's log head says it: "FM9 (not tried yet)". */
+export const unitForReport = (unit) => (UNITS[unit] ? `${UNITS[unit]}${untried(unit) ? ' (not tried yet)' : ''}` : null)
+
+/*
+ * THE BLOCKS PLAY DOES NOT DRAW YET, on the units that have them. Fractal's
+ * Blocks Guide (June 2023) gives the FM9 and Axe-Fx III blocks the FM3 has
+ * none of: Crossover, Vocoder and Tone Match on both, and IR Player and
+ * Dynamic Distortion on the III alone. None has a family on Play (no color,
+ * no picture, no place in the signal order), and the computer app does not
+ * draw them either, so they come together on both paths in one later change.
+ * Until then the page says so, rather than leave an owner looking for a
+ * block that is in the preset.
+ */
+export function missingBlocksLine(unit) {
+  if (unit === 'fm9') return 'A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match) aren’t shown on Play yet.'
+  if (unit === 'axefx3') return 'A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match, IR Player, Dynamic Distortion) aren’t shown on Play yet.'
+  return null
+}
+
+/*
+ * THE TUNER WITH NO READINGS, on the FM9 and Axe-Fx III. The phone turns
+ * their tuner on with Fractal's published switch (0x11), and the readings
+ * come only with Send Realtime Sysex on (Setup → MIDI/Remote). Whether that
+ * setting starts on, Fractal does not say. The phone never falls back to
+ * asking for the frequency, which Fractal has not published for these two.
+ */
+export const tunerQuietLine = (unit) =>
+  PC_FIRST.includes(unit)
+    ? `No readings from the ${UNITS[unit]} yet. Play a string; if nothing shows, check that Send Realtime Sysex is On (Setup → MIDI/Remote on the ${UNITS[unit]}). Until then, use the ${UNITS[unit]}’s own display.`
+    : null
+
+/*
+ * THE ADAPTER IS CONNECTED AND THE UNIT SAYS NOTHING. On the AM4, FM3 and FM9
+ * the usual reasons are the plugs and MIDI Thru. The Axe-Fx III has no MIDI
+ * Thru setting; its THRU jack is hardware and only repeats what comes in, so
+ * a white plug there hears the phone and never the unit (its manual: "Messages
+ * received at the MIDI IN port are passed automatically to the MIDI THRU
+ * port").
+ */
+export function notAnsweringLine(unit) {
+  const name = UNITS[unit] || 'unit'
+  if (unit === 'axefx3') return `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.`
+  return `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.`
+}
+
+/*
+ * A PRESET THAT DID NOT LAND BY PROGRAM CHANGE, on the FM9 and Axe-Fx III,
+ * where that is the only way it goes (PC_FIRST). The settings that stop it
+ * or move it, in Fractal's words for them: Program Change Off ignores it, a
+ * different MIDI channel never hears it, PC Mapping sends it to the mapped
+ * preset, and MIDI PC Offset "adds a specified value to all incoming MIDI
+ * Program Change requests". `channel` is the one the phone sends on.
+ */
+export function presetMissLine(unit, channel = 1) {
+  const name = UNITS[unit] || 'unit'
+  return `On the ${name}, open Setup → MIDI/Remote and check that Program Change is On, the MIDI channel is ${channel} (or Omni), PC Mapping is Off, and MIDI PC Offset is 0.`
+}
+
+/*
+ * THE FIRMWARE, from Fractal's own release notes. The FM9 answers the
+ * status dump, which is how the phone lists a preset's effects, from 3.00
+ * ("3rd Party MIDI Command "Status Dump" is now enabled"). And until FM9
+ * 7.00 and Axe-Fx III 25.00, MIDI arriving at the MIDI In jack while the
+ * unit started could stop its global settings loading ("Fixed global
+ * settings not recalled if MIDI data is present on the MIDI In jack during
+ * bootup"), which a phone still asking through a powered adapter would do.
+ */
+export function firmwareLineFor(unit) {
+  if (unit === 'fm9') return 'Use FM9 firmware 7.00 or later. Older firmware may not list its effects, or may lose its settings if MIDI arrives while it starts.'
+  if (unit === 'axefx3') return 'Use Axe-Fx III firmware 25.00 or later. Older firmware may lose its settings if MIDI arrives while it starts.'
+  return null
+}
 
 /**
  * A unit's name said with its article: "an AM4", "an FM9", "an Axe-Fx III",

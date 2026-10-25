@@ -14,7 +14,8 @@ import { shouldOffer, usePurchase } from '../lib/purchases'
 import setupIcon from '../../assets/icons/setup.png'
 import volumeIcon from '../../assets/icons/volume.png'
 import wirelessIcon from '../../assets/icons/wireless.png'
-import { setBluetooth, useBluetoothOn } from '../lib/bluetooth'
+import { setBluetooth, useBluetoothOn, useBluetoothUnit } from '../lib/bluetooth'
+import { untriedShortLine } from '../lib/bluetooth-gear'
 import { idOf } from '../lib/device'
 import Lamp from './Lamp'
 import Volume from './Volume'
@@ -610,9 +611,11 @@ const ofAllBlocks = (s) => s.allBlocks
  */
 function Which({ link, onClose, onReport = null }) {
   const adapter = link?.macName || 'the adapter'
+  /* On a unit nobody has tried it on yet (the FM9, the Axe-Fx III), the note says so, and a report from here carries it. */
+  const untried = untriedShortLine(useBluetoothUnit())
   const said =
     link?.link === 'connected'
-      ? `Connected over Bluetooth, through ${adapter}.`
+      ? `Connected over Bluetooth, through ${adapter}.${untried ? ` ${untried}` : ''}`
       : link?.link === 'joining'
         ? `Finding ${adapter}…`
         : 'Not connected to the Bluetooth adapter.'

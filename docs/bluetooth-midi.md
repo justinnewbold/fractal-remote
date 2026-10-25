@@ -179,6 +179,50 @@ pages 1–8 (https://forum.fractalaudio.com/threads/midi-output-voltage-widi-mas
 and "Does FM3 use all 5 pins of MIDI"
 (https://forum.fractalaudio.com/threads/does-fm3-use-all-5-pins-of-midi.185278/).
 
+## The FM9 and Axe-Fx III: published messages only (25 October 2026)
+
+Nobody has run Bluetooth on an FM9 or an Axe-Fx III, so the phone sends
+these two only what Fractal documents, Bank Select and Program Change, or
+what the computer app has been seen to do on that unit (bleWire's byte
+rule, held by a test in test/bluetooth.mjs that sweeps every route and
+check). In Auto:
+
+- **Presets go by Program Change alone**, bank in CC#0 (the III's manual:
+  "Controller 0 + PC", "MIDI Bank Select (CC#0) Value, Midi Program Change =
+  Axe-Fx III Preset Number"). FM3-Edit's 0x27 frame, which the FM3 takes
+  first, is not sent. The III's bank went in CC#32 until this day, which
+  would have put any preset above 127 on another song on a III that reads
+  its manual's way.
+- **The tuner is the published switch (0x11)**, with the readings the unit
+  sends when Send Realtime Sysex is on. The page (0x12) and the frequency
+  question (0x01 sub 0x19), FM3-Edit's, are not sent. The cents are the
+  document's: the byte less 63, one cent a step.
+- A `64 10 00` or `64 11 00` after a tap or the tuner switch is written down
+  and not taken as a refusal: developers report a III sending them, and
+  Fractal never documented 0x64.
+- After three watch questions in a row go unanswered (a unit switched off or
+  starting up, with the adapter still on its charger), nothing is sent for
+  30 seconds, then one question at each check: III firmware before 25.00 and
+  FM9 before 7.00 could lose their global settings to MIDI arriving at boot.
+  The FM3 shares this; the AM4 does not.
+- Each unit names its own blocks (mobile/src/lib/gen3Catalog.js): the second
+  amp and cab, the third and fourth drives, and the rest, by Fractal's
+  effect-ID enum and Blocks Guide, id for id the computer app's. Crossover,
+  Vocoder, Tone Match, IR Player and Dynamic Distortion are not drawn yet,
+  and the page says so.
+- The setup steps set MIDI Thru off (FM9), Program Change on, the MIDI
+  channel to 1 or Omni, PC Mapping off, MIDI PC Offset 0 and Send Realtime
+  Sysex on, and name
+  the firmware: FM9 7.00, Axe-Fx III 25.00.
+
+FM3-Edit's ways (scene, channel, tempo, the 0x27 preset, the polled tuner)
+still go when they are picked in the testing tools, his account only, which
+is how they would be tried on a real unit. The Axe-Fx III stays at 512
+presets, as the computer app does: nothing Fractal publishes tells an
+original III from a Mark II over MIDI. And `TESTED` stays `['am4']`:
+"not tried yet" is said on every Bluetooth surface an FM9 or Axe-Fx III
+owner reaches, each pointing at Report a Bluetooth problem.
+
 ## Dongles
 
 - **CME WIDI Master** (Justin's).
