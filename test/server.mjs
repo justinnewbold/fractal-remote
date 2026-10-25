@@ -924,6 +924,122 @@ export function run(test) {
   })
 
   /*
+   * BLUETOOTH (BETA) IN THE SETUP EMAILS, OFF UNTIL 1.89.0 IS IN BOTH STORES.
+   *
+   * Once Bluetooth (beta) opens to customers (store version 1.89.0, the AM4
+   * only), an AM4 owner may never sign a computer in, and both emails would
+   * tell them "your phone has nothing to connect to". So the function carries
+   * a wording that offers both ways, behind one switch, BLUETOOTH_IN_EMAILS.
+   * The email cannot tell which store copy a buyer has, so the switch is held
+   * to public/store-versions.json — moved on the day a version goes live in a
+   * store, and not before — and cannot be on while either store is older.
+   */
+  const setupWords = async () => {
+    const mod = await import(`${SETUP_URL}?words=bluetooth`).catch(async () => {
+      globalThis.Deno = { serve: () => {}, env: { get: () => undefined } }
+      return import(`${SETUP_URL}?words=bluetooth-2`)
+    })
+    delete globalThis.Deno
+    return mod
+  }
+
+  test('the setup emails say nothing of Bluetooth while the switch is off, and it is off until the stores have 1.89.0', async () => {
+    const { setupEmail, BLUETOOTH_IN_EMAILS, BLUETOOTH_FROM } = await setupWords()
+    const fn = code(read('supabase/functions/setup-reminder/index.ts'))
+    /* One switch, a plain true or false, and one version, said the way the stores say it. */
+    assert.equal((fn.match(/\bBLUETOOTH_IN_EMAILS\s*=/g) || []).length, 1, 'the switch is set in more than one place')
+    assert.match(fn, /^export const BLUETOOTH_IN_EMAILS = (true|false)$/m, 'the switch is not a plain true or false')
+    assert.match(BLUETOOTH_FROM, /^\d+\.\d+\.\d+$/)
+    assert.equal(BLUETOOTH_FROM, '1.89.0', 'the version Bluetooth (beta) opens in moved; the email says it, so it moves on purpose')
+    /* On only once BOTH stores are at that version: every buyer gets these, on whichever store copy they hold. */
+    const { isOlder } = await import('../shared/versions.mjs')
+    const stores = JSON.parse(read('public/store-versions.json'))
+    for (const store of ['ios', 'android']) {
+      if (BLUETOOTH_IN_EMAILS) assert.equal(isOlder(stores[store], BLUETOOTH_FROM), false, `the setup emails offer Bluetooth (beta) while the ${store} store has ${stores[store]}, older than ${BLUETOOTH_FROM}`)
+    }
+    if (stores.ios && stores.android && (isOlder(stores.ios, BLUETOOTH_FROM) || isOlder(stores.android, BLUETOOTH_FROM))) {
+      assert.equal(BLUETOOTH_IN_EMAILS, false, 'the setup emails offer Bluetooth (beta) before it is in both stores')
+    }
+
+    /* The emails as they go are the switch's: asked with nothing, the switch decides. */
+    for (const kind of ['first', 'reminder']) {
+      assert.deepEqual(setupEmail(kind, 'fan@example.com'), setupEmail(kind, 'fan@example.com', { bluetooth: BLUETOOTH_IN_EMAILS }), `the ${kind} email is not the switch’s wording`)
+    }
+    /* Off: not a word of it, and the openings exactly what they were. */
+    const first = setupEmail('first', 'fan@example.com', { bluetooth: false })
+    const reminder = setupEmail('reminder', 'fan@example.com', { bluetooth: false })
+    for (const [which, e] of [['first', first], ['reminder', reminder]]) {
+      assert.ok(!/bluetooth|\bAM4\b|1\.89|My rig|adapter|second way/i.test(e.subject + e.text + e.html), `the ${which} email mentions Bluetooth (beta) with the switch off`)
+    }
+    assert.match(first.text, /\nThanks for getting Fractal Remote! Your phone controls your Fractal through a free app on the computer your unit is plugged into, and no computer has signed in with your account yet\. Setting it up takes about five minutes:\n/, 'the first email’s opening changed with the switch off')
+    assert.match(reminder.text, /\nJust checking in\. No computer has signed in to Fractal Remote with fan@example\.com yet, so your phone has nothing to connect to\. The computer app is free, and it’s the same three steps:\n/, 'the reminder’s opening changed with the switch off')
+
+    /* And a real hourly run sends the switch's words, and nothing else. */
+    const run = await setupReminder({
+      sending: true,
+      due: [
+        { account_id: CUSTOMER, email: 'fan@example.com', kind: 'first' },
+        { account_id: STRANGER, email: 'other@example.com', kind: 'reminder' }
+      ]
+    })
+    assert.equal(run.sent.length, 2)
+    assert.deepEqual(
+      run.sent.map((p) => [p.subject, p.text, p.html]),
+      [setupEmail('first', 'fan@example.com'), setupEmail('reminder', 'other@example.com')].map((e) => [e.subject, e.text, e.html]),
+      'an email went out in words other than the switch’s'
+    )
+    if (!BLUETOOTH_IN_EMAILS) assert.ok(run.sent.every((p) => !/bluetooth/i.test(p.text + p.html)), 'a real email mentioned Bluetooth (beta) with the switch off')
+  })
+
+  test('with the switch on, both emails offer both ways: the computer first and best, then Bluetooth (beta) for an AM4 from 1.89.0, and help still a reply to Justin', async () => {
+    const { setupEmail, BLUETOOTH_FROM } = await setupWords()
+    const second =
+      `Have an AM4? From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth (beta), through a Bluetooth MIDI adapter plugged into the AM4’s MIDI In and MIDI Out. ` +
+      'The computer is still the best way, and the one for every Fractal unit: Bluetooth is slower and does less, with no editing or saving. ' +
+      'To try it, update the app, then open Settings → My rig → Bluetooth (beta), which says what to buy and how to plug it in.'
+    const first = setupEmail('first', 'fan@example.com', { bluetooth: true })
+    const reminder = setupEmail('reminder', 'fan@example.com', { bluetooth: true })
+    for (const [which, e, help] of [
+      ['first', first, 'If you get stuck anywhere, just reply to this email.'],
+      ['reminder', reminder, 'If something got in the way, reply and tell me what you see']
+    ]) {
+      assert.ok(e.text.includes(`\n\n${second}\n\n`), `the ${which} email does not say the second way as its own paragraph`)
+      assert.ok(e.html.includes(`<p style="margin:0 0 16px">${second}</p>`), `the ${which} email’s HTML does not say the second way`)
+      /* After every word about the computer, and before the help. */
+      const at = e.text.indexOf(second)
+      assert.ok(at > e.text.indexOf('3. Open Fractal Remote on your phone.') && at > e.text.indexOf('Used the computer app before?'), `the ${which} email offers Bluetooth before the computer`)
+      assert.ok(at < e.text.indexOf(help), `the ${which} email’s help is not after the second way`)
+      /* The computer's steps and the button to the download are all still there. */
+      assert.match(e.text, /1\. On the computer your Fractal is plugged into, go to fractal\.newbold\.cloud\/downloads and install the Fractal Remote computer app\./)
+      assert.ok(e.html.includes('href="https://fractal.newbold.cloud/downloads"'), `the ${which} email lost the download link`)
+      /* Plain, and the same rules as the computer's words: "free" once, nothing for a developer, nothing official. */
+      assert.equal((e.text.match(/\bfree\b/gi) || []).length, 1, `the ${which} email says free more than once`)
+      assert.ok(!/\bMac\b|yesterday|\bOTA\b|\brelay\b|official|endorsed|approved/i.test(e.text + e.subject), `the ${which} email says something it should not`)
+      /* Help is Justin's: the paragraph sends nobody anywhere else. */
+      assert.ok(!/@|https?:|www\./.test(second), 'the second way sends people somewhere other than this email’s reply')
+    }
+    /* Subjects as they were: the computer is still what the email is about. */
+    assert.equal(first.subject, 'One more step: the Fractal Remote computer app')
+    assert.equal(reminder.subject, 'Still need a hand with the Fractal Remote computer app?')
+    /* The computer the best way rather than the only one, and nobody told their phone has nothing to connect to. */
+    assert.match(first.text, /The best way for your phone to control your Fractal is through a free app on the computer your unit is plugged into, and no computer has signed in with your account yet\. Setting it up takes about five minutes:/)
+    assert.match(reminder.text, /No computer has signed in to Fractal Remote with fan@example\.com yet\. The computer app is free, and it’s the same three steps:/)
+    assert.ok(!/nothing to connect to/.test(first.text + reminder.text), 'with Bluetooth in the emails, an AM4 owner is told their phone has nothing to connect to')
+    /* What it costs is only what the app's Bluetooth page says, and the row it names is there. */
+    const page = read('mobile/src/screens/Bluetooth.js')
+    assert.ok(page.includes("'No editing or saving over Bluetooth.'") && page.includes("'Slower to load the preset list.'"), 'the Bluetooth page no longer says what the email says Bluetooth costs')
+    const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
+    assert.ok(settings.indexOf('<SetupRow title="Bluetooth (beta)"') > settings.indexOf('<Group title="My rig">'), 'the email sends them to Settings → My rig → Bluetooth (beta), which is not there')
+    /* The way it goes on is written down: switched on, and redeployed, the day both stores have it. */
+    const readme = read('supabase/README.md').replace(/\s+/g, ' ')
+    const section = readme.slice(readme.indexOf('### Bluetooth (beta) in the emails, from 1.89.0'))
+    assert.ok(section.length > 100, 'supabase/README.md does not say how the Bluetooth (beta) wording goes on')
+    assert.match(section, /`BLUETOOTH_IN_EMAILS = false`/)
+    assert.match(section, /the day 1\.89\.0 is live on the App Store and on Google Play, both/)
+    assert.match(section, /`supabase functions deploy setup-reminder --no-verify-jwt`/, 'the README does not say to redeploy the function once the switch is on')
+  })
+
+  /*
    * THE BUTTONS THE EMAILS NAME ARE THE COMPUTER APP'S OWN. These emails are
    * for the people who stopped at signing in, and the computer app's first
    * screen offers a free way in that needs no sign-in at all, so the email

@@ -11,6 +11,8 @@ import { isDemo } from '../lib/demo'
 import { deviceNoun } from '../lib/device-word'
 import { vp4Capabilities, vp4Here } from '../lib/device'
 import { vp4ComputerLacks } from '../lib/vp4-safety'
+import { NO_COMPUTER_BLUETOOTH } from '../lib/no-computer'
+import { useBluetoothOffered } from '../lib/useBluetoothOffered'
 
 /**
  * What to try when it isn't working.
@@ -33,6 +35,8 @@ export default function Fixes({ onBack, open = null, hostVersion = null }) {
   const [shown, setShown] = useState(open)
   /* A VP4 on a computer that cannot change its scenes and presets is behind, as its taps and the red line say (lib/vp4-safety vp4ComputerLacks). */
   const sync = versionsInSync({ app: APP_VERSION, host: hostVersion, lacks: vp4ComputerLacks(vp4Here(), vp4Capabilities()) })
+  /* Where this copy offers Bluetooth (beta): the other way in, under "It will not connect at all" (below). */
+  const bluetoothOffered = useBluetoothOffered()
 
   return (
     <ScrollView
@@ -94,6 +98,26 @@ export default function Fixes({ onBack, open = null, hostVersion = null }) {
                     </Text>
                   </View>
                 ))}
+
+                {/*
+                  AND THE OTHER WAY IN, under the computer's steps: for an AM4,
+                  Bluetooth (beta), with no computer. Every step above is about
+                  the computer, the cable and the computer app, and an AM4
+                  owner who has no computer, or never got one going, reads
+                  them as the only way there is. So, where this copy offers
+                  Bluetooth (beta) and it is not already on, the same line the
+                  no-computer note says (shared/no-computer.mjs
+                  NO_COMPUTER_BLUETOOTH): the second way, the computer still
+                  the best, what Bluetooth costs, and where it is. Everywhere
+                  else (every customer's copy today: lib/useBluetoothOffered.js)
+                  nothing is drawn and this fix is word for word what it was.
+                  The steps are the browser's too (shared/troubleshooting.mjs),
+                  and a browser has no Bluetooth, so the line is here and not
+                  in them.
+                */}
+                {fix.id === 'connect' && bluetoothOffered && !bluetoothOn() ? (
+                  <Note tone="hint">{NO_COMPUTER_BLUETOOTH}</Note>
+                ) : null}
 
                 {/*
                   The version check itself, rather than a step telling somebody

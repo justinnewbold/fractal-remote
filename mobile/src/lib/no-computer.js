@@ -62,6 +62,39 @@ export const NO_COMPUTER_GO = 'On that computer, go to'
 /** Everything after the first line, as the phone shows it: the address as plain text. */
 export const noComputerBody = (email) => `${noComputerSteps(email)} ${NO_COMPUTER_GO} ${NO_COMPUTER_ADDRESS}.`
 
+/**
+ * AND THE OTHER WAY, FOR AN AM4: BLUETOOTH (BETA), with no computer at all.
+ *
+ * WHY. Once Bluetooth (beta) opens to customers (store version 1.89.0, the
+ * AM4 only), an AM4 owner may never sign a computer in, and everything above
+ * would tell them the computer is the only way there is. Justin, on how it is
+ * to be put wherever Bluetooth is offered: "make it clear that there's
+ * multiple ways to connect the device, but also make it clear that the
+ * computer is the preferred method and that Bluetooth will have more lag and
+ * not have as many features."
+ *
+ * So, in that order: a second way, for an AM4; the computer still the best
+ * way; and what Bluetooth costs, said only as far as the Bluetooth page's own
+ * "What it can and can't do" says it (mobile/src/screens/Bluetooth.js): no
+ * editing or saving, slower to load the preset list, footswitch changes a
+ * moment late, no looper, volume button, unit click or Footswitches page.
+ * "Slower and does less" is all of that in three words, and "no editing or
+ * saving" is the part a player would miss first. Then where it is: the row
+ * under Settings → My rig, whose page says what to buy and how it plugs in.
+ *
+ * "AN ADAPTER", because the AM4 has no Bluetooth of its own: without it, the
+ * line reads as if the unit did. And it names no phone (CLAUDE.md: never
+ * "this phone"), so it reads the same on an iPad or a tablet.
+ *
+ * ONLY WHERE BLUETOOTH (BETA) IS OPEN ON THE COPY IT IS SHOWN ON, which is
+ * the phone's to say (mobile/src/lib/useBluetoothOffered.js, the same gate as
+ * the Settings row the line names). Everywhere else — every customer's copy
+ * today, and the browser, which has no Bluetooth — nothing here is drawn and
+ * the words above are exactly what they were.
+ */
+export const NO_COMPUTER_BLUETOOTH =
+  'Have an AM4? The app can also connect to it with no computer, by Bluetooth (beta) through an adapter. The computer is still the best way: Bluetooth is slower and does less, with no editing or saving. Settings → My rig → Bluetooth (beta) says what to buy.'
+
 /** How long after one question before another may be asked. */
 export const ASK_EVERY_MS = 60 * 1000
 

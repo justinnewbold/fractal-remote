@@ -75,6 +75,36 @@ const DOWNLOADS = 'fractal.newbold.cloud/downloads'
  */
 const I_HAVE_ONE = 'I already have an account'
 const SETTINGS_DOOR = { row: 'Phone & computer', button: 'Sign in to set up the phone remote' }
+/*
+ * BLUETOOTH (BETA) IN THESE EMAILS: OFF, AND ONE SWITCH TURNS IT ON.
+ *
+ * Once Bluetooth (beta) opens to customers, in store version 1.89.0 and for
+ * the AM4 only, a buyer with an AM4 has a second way that needs no computer,
+ * and "your phone has nothing to connect to" stops being true for them. So
+ * with this on, both emails offer both ways: the computer app first, the best
+ * way and the one for every unit, and then, for an AM4, Bluetooth (beta),
+ * with what it costs ("make it clear that there's multiple ways to connect
+ * the device, but also make it clear that the computer is the preferred
+ * method and that Bluetooth will have more lag and not have as many
+ * features") and where in the app it is.
+ *
+ * OFF UNTIL 1.89.0 IS IN BOTH STORES. The email goes to every buyer, on
+ * whatever store copy they have, and this function cannot tell which. Sent
+ * before 1.89.0 is out it would point people at a Settings row their app does
+ * not have, and tell customers about a feature the store versions they hold
+ * were reviewed without. So it is switched on in a pull request (the one that
+ * moves public/store-versions.json will do), and this function redeployed, on
+ * the day 1.89.0 is live on the App Store AND on Google Play (supabase/
+ * README.md, "Bluetooth (beta) in the emails, from 1.89.0", says how), and
+ * not before: test/server.mjs fails on `true` while public/store-versions.json
+ * says either store is older than BLUETOOTH_FROM.
+ *
+ * A constant, not a secret: the words it turns on are reviewed in the same
+ * change that turns them on, and the test above can see it.
+ */
+export const BLUETOOTH_IN_EMAILS = false
+/** The first store version that offers Bluetooth (beta) to customers, as the email says it. */
+export const BLUETOOTH_FROM = '1.89.0'
 /** A run's most. The backlog on the first day is about a dozen. */
 const AT_MOST = 25
 /* Resend takes a couple of requests a second; one at a time with a gap stays under it. */
@@ -139,9 +169,13 @@ type Kind = 'first' | 'reminder'
  * address, which is the account's own and is only ever escaped into it.
  * Never "yesterday you bought": on the day these are switched on, the
  * customers waiting longest get the first one, some of them weeks after.
+ *
+ * `bluetooth` is BLUETOOTH_IN_EMAILS unless a test asks for the other
+ * wording: the emails that go are only ever the switch's (send, below).
  */
-export function setupEmail(kind: Kind, email: string): { subject: string; text: string; html: string } {
+export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN_EMAILS }: { bluetooth?: boolean } = {}): { subject: string; text: string; html: string } {
   const who = String(email || '').trim()
+  const both = bluetooth === true
   const steps = [
     `On the computer your Fractal is plugged into, go to ${DOWNLOADS} and install the Fractal Remote computer app.`,
     `Open it, choose “${I_HAVE_ONE}”, and sign in with ${who}, the same email you use on your phone.`,
@@ -151,15 +185,34 @@ export function setupEmail(kind: Kind, email: string): { subject: string; text: 
   const opened = `Used the computer app before? Click the gear at the top, choose ${SETTINGS_DOOR.row}, then “${SETTINGS_DOOR.button}”, and sign in with ${who}.`
   const first = kind === 'first'
   const subject = first ? 'One more step: the Fractal Remote computer app' : 'Still need a hand with the Fractal Remote computer app?'
+  /*
+   * With Bluetooth (beta) in the emails, the computer is the best way rather
+   * than the only one, and a phone with no computer is no longer one with
+   * "nothing to connect to": an AM4 on Bluetooth has the unit itself.
+   */
   const opening = first
     ? [
         'Thanks for getting Fractal Remote!',
-        'Your phone controls your Fractal through a free app on the computer your unit is plugged into, and no computer has signed in with your account yet. Setting it up takes about five minutes:'
+        both
+          ? 'The best way for your phone to control your Fractal is through a free app on the computer your unit is plugged into, and no computer has signed in with your account yet. Setting it up takes about five minutes:'
+          : 'Your phone controls your Fractal through a free app on the computer your unit is plugged into, and no computer has signed in with your account yet. Setting it up takes about five minutes:'
       ]
     : [
         'Just checking in.',
-        `No computer has signed in to Fractal Remote with ${who} yet, so your phone has nothing to connect to. The computer app is free, and it’s the same three steps:`
+        both
+          ? `No computer has signed in to Fractal Remote with ${who} yet. The computer app is free, and it’s the same three steps:`
+          : `No computer has signed in to Fractal Remote with ${who} yet, so your phone has nothing to connect to. The computer app is free, and it’s the same three steps:`
       ]
+  /*
+   * THE OTHER WAY, for an AM4, after the computer's steps and never before
+   * them: what it is, that the computer is still the best way, what Bluetooth
+   * costs (only what the app's own Bluetooth page says: no editing or saving,
+   * slower, and less on screen), and where in the app it is. "Update the
+   * app" because the email cannot tell which store copy they hold, and only
+   * BLUETOOTH_FROM and later have the row. Help stays the reply to this
+   * email, below, which comes to Justin.
+   */
+  const secondWay = `Have an AM4? From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth (beta), through a Bluetooth MIDI adapter plugged into the AM4’s MIDI In and MIDI Out. The computer is still the best way, and the one for every Fractal unit: Bluetooth is slower and does less, with no editing or saving. To try it, update the app, then open Settings → My rig → Bluetooth (beta), which says what to buy and how to plug it in.`
   const help = first
     ? 'If you get stuck anywhere, just reply to this email. It comes straight to me.'
     : 'If something got in the way, reply and tell me what you see, and I’ll help you get it going.'
@@ -176,6 +229,7 @@ export function setupEmail(kind: Kind, email: string): { subject: string; text: 
     '',
     opened,
     '',
+    ...(both ? [secondWay, ''] : []),
     help,
     '',
     'Justin',
@@ -194,7 +248,7 @@ export function setupEmail(kind: Kind, email: string): { subject: string; text: 
       <p style="margin:0 0 20px">
         <a href="https://${DOWNLOADS}" style="background:#7c5cff;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block;font-weight:600">Get the computer app</a>
       </p>
-      ${p(opened)}
+      ${p(opened)}${both ? `\n      ${p(secondWay)}` : ''}
       ${p(help)}
       ${p('Justin', 'margin:0')}
       ${p('Fractal Remote', 'margin:0 0 24px;color:#5f6670')}
