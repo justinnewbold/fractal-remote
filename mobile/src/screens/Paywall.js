@@ -11,6 +11,8 @@ import { ALREADY_UNLOCKED } from '../lib/onboarding'
 import { currentAccount, deleteAccount, restoreSession } from '../lib/relay'
 import { isPairAccount } from '../lib/pairing'
 import { VP4_SO_FAR } from '../lib/vp4-safety'
+import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
+import { BLUETOOTH_PAYWALL } from '../lib/bluetooth-gear'
 
 /*
  * The units named on the offer, read off the list the app actually carries.
@@ -175,6 +177,24 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
           {VP4_SO_FAR}
         </Text>
       </View>
+
+      {/*
+        AND BLUETOOTH (BETA), which the full version unlocks too, said where
+        it is sold: the two ways to connect, the computer the best one, and
+        the AM4 alone with an adapter bought separately (BLUETOOTH_PAYWALL,
+        shared/bluetooth-gear.mjs). Only on a copy that opens it to
+        customers (lib/ble-rule.js, by the version built into the copy) and
+        on a device that can do it: a line on any other copy would sell
+        what it cannot open, which Apple's 2.3.1(a) forbids. No copy today
+        draws it. Under the panel, not in it: the panel is the browser's
+        unlock page word for word (test/both-ends.mjs), and the browser has
+        no Bluetooth to offer.
+      */}
+      {openForCustomersHere() && bluetoothSupported() ? (
+        <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>
+          {BLUETOOTH_PAYWALL}
+        </Text>
+      ) : null}
 
       {said ? <Note tone={said.tone}>{said.text}</Note> : null}
 

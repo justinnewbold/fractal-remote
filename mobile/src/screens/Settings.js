@@ -63,7 +63,8 @@ import { useSiriLinksOpen } from '../lib/siri'
 import { siriRow } from '../lib/siri-help'
 import { siriPresent } from '../lib/siriPipe'
 import SiriHelp from '../components/SiriHelp'
-import { bluetoothSupported, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
+import { bluetoothSupported, lookForAdapterAgain, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
+import { BLUETOOTH_WAYS, BLUETOOTH_WAYS_SHORT } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage from './Bluetooth'
 import AccessTool from '../components/AccessTool'
@@ -268,12 +269,14 @@ export default function Settings({
   /* Bluetooth (beta): whether the phone is talking to the unit itself. */
   const bluetooth = useBluetoothOn()
   /*
-   * And whether it is open to the account signed in here at all: Justin's,
-   * and nobody else's, for now (lib/bluetooth.js, allowBluetooth). Decided in
-   * App.js from the session kept on the phone rather than from `account`
-   * above: that one asks the account server, and Bluetooth is for playing
-   * where there may be no signal. A row that vanished offline would take the
-   * page, and its Stop button, with it while Bluetooth was still on.
+   * And whether it is open to the account signed in here at all: Justin's on
+   * every copy, and anybody else's only on a copy whose built-in store
+   * version opens it, which no copy today does (lib/bluetooth.js
+   * allowBluetooth, and lib/ble-rule.js). Decided in App.js from the session
+   * kept on the phone rather than from `account` above: that one asks the
+   * account server, and Bluetooth is for playing where there may be no
+   * signal. A row that vanished offline would take the page, and its Stop
+   * button, with it while Bluetooth was still on.
    */
   const bluetoothAllowed = useBluetoothAllowed()
   /*
@@ -534,18 +537,25 @@ export default function Settings({
               iPhone's or Android's own (betaNote), always shown under
               Connect and the rows that open.
 
-              AND ONLY ON JUSTIN'S ACCOUNT. "Is there any way to just get the
+              AND ONLY WHERE IT IS OPEN. "Is there any way to just get the
               Bluetooth on the developers mode for my own phone? I just feel
               like it's not ready to have public." So the row also waits for
               bluetoothAllowed, and is asked that before the build check, so a
               customer's phone is never even asked whether it can do
-              Bluetooth. It is opened to customers only in a new store version
-              whose review notes say so, never by an update (CLAUDE.md).
+              Bluetooth. Yes on his account; for anybody else, only on a copy
+              whose built-in store version opens it (lib/ble-rule.js): a new
+              store version whose review notes say so, never an update
+              (CLAUDE.md).
+
+              Off, the row says what it costs against the computer, in the
+              one line it has (BLUETOOTH_WAYS_SHORT, the Bluetooth page's own
+              sentence cut to fit): "make it clear that the computer is the
+              preferred method".
             */}
             {mayDrive(purchase) && bluetoothAllowed && bluetoothSupported() ? (
               <SetupRow
                 title="Bluetooth (beta)"
-                status={bluetooth ? 'On · the phone talks to the unit itself' : 'Off · play without a computer'}
+                status={bluetooth ? `On · the ${deviceNoun()} talks to the unit itself` : `Off · ${BLUETOOTH_WAYS_SHORT.toLowerCase()}`}
                 onPress={() => setPage('bluetooth')}
               />
             ) : null}
@@ -918,9 +928,10 @@ export default function Settings({
           {head(PAIR_TITLE, 'back')}
           {/* Said first, because everything under it is about a computer
               this phone is not using while it is on. */}
+          {/* And the two ways, with the computer the best one: the Bluetooth page's own sentence (BLUETOOTH_WAYS). */}
           {bluetooth && !demo ? (
             <Note tone="warn">
-              Bluetooth (beta) is on. This phone talks to the unit directly, not through the computer.
+              {`Bluetooth (beta) is on. This ${deviceNoun()} talks to the unit directly, not through the computer. ${BLUETOOTH_WAYS}`}
             </Note>
           ) : null}
 
@@ -1148,7 +1159,13 @@ export default function Settings({
               again, which on a live link is a button that does nothing you
               can see. Said as what it does, too.
             */}
-            {link !== 'connected' ? <Press label={throughAdapter ? 'Look for the adapter again' : 'Look for the computer again'} onPress={onReconnect} /> : null}
+            {/* Over Bluetooth, on an iPhone whose adapter has gone, Apple's screen first (lib/bluetooth lookForAdapterAgain), as on the waiting screen. */}
+            {link !== 'connected' ? (
+              <Press
+                label={throughAdapter ? 'Look for the adapter again' : 'Look for the computer again'}
+                onPress={throughAdapter ? () => lookForAdapterAgain(onReconnect) : onReconnect}
+              />
+            ) : null}
           </View>
 
           {/*

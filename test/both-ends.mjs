@@ -1061,7 +1061,7 @@ export function run(test) {
       'Apple Watch':
         'iPhone only — the watch app comes with the iPhone app and works through it; a browser has no watch, and there is no Android watch app',
       'Bluetooth (beta)':
-        'phone only — a browser cannot reach a Bluetooth MIDI adapter; the phone does it through its own native module, and since 11 October 2026 only on Justin’s account (useBluetoothAllowed, mobile/src/lib/bluetooth.js)',
+        'phone only — a browser cannot reach a Bluetooth MIDI adapter; the phone does it through its own native module, and only where it is open: Justin’s account on every copy since 11 October 2026, and a customer’s only on a store copy built to open it (useBluetoothAllowed, mobile/src/lib/bluetooth.js, and the rule in mobile/src/lib/ble-rule.js)',
       /* SIRI_TITLE: "Siri" on an iPhone or iPad, "Links for Tasker" on Android (mobile/src/lib/siri-help.js). */
       SIRI_TITLE:
         'phone only — Siri and the fractalremote:// links are the phone app’s: the phrases are in the iPhone app, the links open the installed app, and a browser has neither. Shown only where the links are open (useSiriLinksOpen, mobile/src/lib/siri.js)',

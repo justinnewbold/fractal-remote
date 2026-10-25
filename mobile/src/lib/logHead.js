@@ -3,6 +3,7 @@ import { Platform } from 'react-native'
 import { APP_VERSION } from './version'
 import { linkState } from './link'
 import { bluetoothOn } from './bleSwitch'
+import { builtInVersion, openForCustomersHere } from './bluetooth'
 import { isDemo } from './demo'
 import { beforeBlocks } from './report-rules'
 
@@ -28,6 +29,18 @@ export function logHeader({ deviceName, preset } = {}) {
   const throughAdapter = bluetoothOn() && !isDemo()
   return {
     app: `Fractal Remote (phone) v${APP_VERSION}`,
+    /*
+     * THE STORE COPY UNDER THE UPDATE, and what it means for Bluetooth (beta).
+     * `app` above is the update's number, which moves with every merge; this
+     * is the version built into the copy the store installed (lib/storeVersion,
+     * read once by lib/bluetooth), which no update changes, and which alone
+     * decides whether a customer is shown Bluetooth (lib/ble-rule.js). His
+     * own account sees it on every copy, so without this line nothing he can
+     * read would say the number is read right on a real phone, long before
+     * a customer's Bluetooth depends on it. "not readable" is the rule's
+     * closed.
+     */
+    'store copy': `${builtInVersion() || 'not readable'} · Bluetooth for customers: ${openForCustomersHere() ? 'open' : 'closed'}`,
     platform: `${Platform.OS} ${Platform.Version}`,
     unit: deviceName || 'not detected',
     preset: Number.isInteger(preset?.number) ? `${preset.number} ${preset.name || ''}`.trim() : 'none',

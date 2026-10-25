@@ -12,6 +12,16 @@ only the iPhone's fingerprint moved and Justin asked for "the iPhone
 build". When Android's fingerprint has not moved, an Android build would be
 the same as the one already in the store, and Android keeps taking updates.
 
+**The build that opens Bluetooth (beta) to customers says so in its row**,
+in these words in What it was for: "Bluetooth (beta) for customers". Write
+them in that row alone, the build whose review notes describe it, and only
+for a build that opens it on every phone the row built. test/bluetooth.mjs
+reads every row against the rule in mobile/src/lib/ble-rule.js: until a row
+says it, every build here has to stay closed to a customer on both phones;
+once one does, `BLUETOOTH_FROM_STORE` has to be set for each phone that row
+built and has to open on that row's version, so no later update can set it
+back and take Bluetooth away from the copies that were reviewed with it.
+
 **And on the day a build goes live in a store, move its number in
 `public/store-versions.json`** (`ios` for the App Store, `android` for Google
 Play), in its own pull request, that day and not before: live means

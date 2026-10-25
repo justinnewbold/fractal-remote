@@ -49,12 +49,13 @@ import { clearLinkFault, useRig } from './src/lib/rig'
 import { keepLog } from './src/lib/logKeep'
 import { installCrashCapture } from './src/lib/debugLog'
 import { restoreDemo, setDemo, useDemo } from './src/lib/demo'
-import { ALLOW_WORDS, RESTRICTED_WORDS, allowBluetooth, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble } from './src/lib/bluetooth'
+import { ALLOW_WORDS, RESTRICTED_WORDS, allowBluetooth, bluetoothSupported, lookForAdapterAgain, restoreBluetooth, setBluetooth, useBluetoothAllowed, useBluetoothOn, useBluetoothTrouble } from './src/lib/bluetooth'
+import { BLUETOOTH_WAYS_SHORT } from './src/lib/bluetooth-gear'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
 import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
-import { shouldAskToPay } from './src/lib/unlock-rule'
+import { mayDrive, shouldAskToPay } from './src/lib/unlock-rule'
 import { deviceNoun } from './src/lib/device-word'
 import { allowSiriLinks, siriElsewhere, startSiri } from './src/lib/siri'
 import { playElsewhereOf } from './src/lib/siri-rule'
@@ -321,6 +322,18 @@ export default function App() {
    * further down, which is the only thing that raises the paywall.
    */
   const purchase = usePurchase()
+  /*
+   * THE WAY TO THE BLUETOOTH PAGE FROM THE WAITING SCREEN, through the same
+   * gate as the Settings row and the page itself: the full version
+   * (mayDrive), Bluetooth open to this account on this copy (lib/bluetooth
+   * useBluetoothAllowed: his on every copy, a customer's only on a copy
+   * whose built-in store version opens it), and a build and a device that
+   * can do it. Without all three the page draws nothing, so a button to it
+   * would open an empty Settings page. Named once, so the waiting screen
+   * gets the way in or nothing (`onBluetooth`).
+   */
+  const bluetoothAllowed = useBluetoothAllowed()
+  const bluetoothOffered = mayDrive(purchase) && bluetoothAllowed && bluetoothSupported()
   /*
    * ASKED FOR, as opposed to imposed.
    *
@@ -713,16 +726,20 @@ export default function App() {
   }, [])
 
   /*
-   * AND BLUETOOTH (BETA) ONLY ON JUSTIN'S ACCOUNT, at every change of who is
+   * AND BLUETOOTH (BETA) ONLY WHERE IT IS OPEN, at every change of who is
    * signed in.
    *
    * "Is there any way to just get the Bluetooth on the developers mode for my
    * own phone? I just feel like it's not ready to have public." Settings
-   * draws the row and the page only for his account (useBluetoothAllowed);
-   * this is the switch's half. Signed out, signed into another account, or a
-   * customer who turned it on during the day it was public: back to the
-   * computer, and allowBluetooth keeps it from being turned on again
-   * (lib/bluetooth).
+   * draws the row and the page only where it is open (useBluetoothAllowed):
+   * his account on every copy, and a customer's only on a copy whose
+   * built-in store version opens it (lib/ble-rule.js), which no copy today
+   * does; this is the switch's half. Signed out, signed into an account it is
+   * not open to, or a customer who turned it on during the day it was
+   * public: back to the computer, and allowBluetooth keeps it from being
+   * turned on again (lib/bluetooth). The copy decides it, never this
+   * effect: an update can change what runs here, and not the number built
+   * into the copy.
    *
    * THE SESSION KEPT ON THE PHONE, not the account server. Bluetooth is for
    * playing with no computer, often somewhere with no signal either, and
@@ -1231,7 +1248,7 @@ export default function App() {
                 onRetry={probeNow}
                 onSwitch={() => openSettings('link')}
                 onTroubleshoot={openConnectFix}
-                onBluetooth={() => openSettings('bluetooth')}
+                onBluetooth={bluetoothOffered ? () => openSettings('bluetooth') : null}
                 onSetlists={() => setScreen('setlists')}
               />
             ) : screen === 'presets' ? (
@@ -1677,12 +1694,12 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           {bluetooth ? (
             <Note tone={trouble ? 'fault' : 'warn'}>
               {trouble === 'bluetooth-off'
-                ? 'Bluetooth is off on this phone. Turn it on in the phone’s settings.'
+                ? `Bluetooth is off on this ${deviceNoun()}. Turn it on in the ${deviceNoun()}’s settings.`
                 : trouble === 'permission'
                   ? `${ALLOW_WORDS}.`
                   : trouble === 'restricted'
                     ? `${RESTRICTED_WORDS}.`
-                    : 'Check the phone’s Bluetooth is on, that the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it.'}
+                    : `Check the ${deviceNoun()}’s Bluetooth is on, that the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it.`}
             </Note>
           ) : elsewhere ? (
             <Note tone="fault">
@@ -1717,8 +1734,12 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           {bluetooth && trouble === 'permission' ? (
             <Press label="Open Settings" onPress={() => Linking.openSettings().catch(() => {})} />
           ) : null}
+          {/* Over Bluetooth, on an iPhone whose adapter has gone, Apple's
+              screen first (lib/bluetooth lookForAdapterAgain): the link
+              cannot bring it back by itself, and Stop, Connect and the
+              screen was three taps mid-set. */}
           {bluetooth ? (
-            <Press label="Look for the adapter again" onPress={() => onRetry?.()} />
+            <Press label="Look for the adapter again" onPress={() => lookForAdapterAgain(onRetry)} />
           ) : (
             <Press label="Look for the computer again" onPress={() => onRetry?.()} />
           )}
@@ -1726,6 +1747,20 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
               its status is; the computer's troubleshooting is about a
               computer that is not in use. */}
           {bluetooth && onBluetooth ? <Press label="Bluetooth (beta)" onPress={onBluetooth} /> : null}
+          {/*
+            AND THE OTHER WAY IN, FOR SOMEBODY WITH NO COMPUTER. Until now the
+            only Bluetooth buttons here showed once Bluetooth was already on,
+            so a player who bought the app to use an adapter sat on "Finding
+            your computer" with nothing to say Bluetooth exists, and the gear
+            was the only way to it. After the computer's own button, never
+            before it: the computer is the best way, and the line under this
+            one says what Bluetooth costs (BLUETOOTH_WAYS_SHORT). Only where
+            App hands it a way in (`onBluetooth`: the row's own gate), and
+            only while it is off.
+          */}
+          {!bluetooth && onBluetooth ? (
+            <Press label="No computer? Connect by Bluetooth (beta)" sub={BLUETOOTH_WAYS_SHORT} onPress={onBluetooth} />
+          ) : null}
           {/* "Open the troubleshooting if it doesn't connect" — the browser's
               connecting screen has the same button. */}
           {onTroubleshoot && !bluetooth ? <Press label="Troubleshooting" onPress={onTroubleshoot} /> : null}

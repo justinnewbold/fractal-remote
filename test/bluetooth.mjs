@@ -742,6 +742,7 @@ async function linkOnABench(t) {
     'bleSwitch.js': 'export const bluetoothOn = () => true\nexport const setSwitch = () => {}\n',
     'bluetooth.js': `import { bench } from './bench.js'
       export const adapterDevices = () => []
+      export const adapterName = (a) => (a && typeof a.name === 'string' && a.name && a.name !== a.id ? a.name : null)
       export const bluetoothSettings = () => bench.settings
       export const bluetoothSupported = () => true
       export function closeWire() { const was = bench.current; bench.current = null; was?.close() }
@@ -4383,11 +4384,17 @@ export function run(test) {
     /* The waiting screen, over Bluetooth, is about the adapter. */
     const waking = app.slice(app.indexOf('function Waking('))
     assert.match(waking, /const bluetooth = useBluetoothOn\(\) const trouble = useBluetoothTrouble\(\)/)
-    assert.match(waking, /Check the phone’s Bluetooth is on, that the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it\./)
+    /*
+     * Said for the device in hand (lib/device-word deviceNoun), not "the
+     * phone": changed on purpose on 25 October 2026, when Bluetooth was to
+     * reach customers, and with them iPads and Android tablets.
+     */
+    assert.match(waking, /`Check the \$\{deviceNoun\(\)\}’s Bluetooth is on, that the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it\.`/)
     /* What the phone knows is in the way is said instead of the plugs. */
-    assert.match(waking, /trouble === 'bluetooth-off' \? 'Bluetooth is off on this phone\. Turn it on in the phone’s settings\.'/)
+    assert.match(waking, /trouble === 'bluetooth-off' \? `Bluetooth is off on this \$\{deviceNoun\(\)\}\. Turn it on in the \$\{deviceNoun\(\)\}’s settings\.`/)
     assert.match(waking, /trouble === 'permission' \? `\$\{ALLOW_WORDS\}\.`/, 'the waiting screen words the permission its own way')
-    assert.match(waking, /<Press label="Look for the adapter again" onPress=\{\(\) => onRetry\?\.\(\)\} \/>/)
+    /* On an iPhone whose adapter has gone, Look again opens Apple's screen first (lib/bluetooth lookForAdapterAgain), then the link's own poke. */
+    assert.match(waking, /<Press label="Look for the adapter again" onPress=\{\(\) => lookForAdapterAgain\(onRetry\)\} \/>/)
     /*
      * And the way back to the computer is there from the first second, not
      * four taps away behind the gear: "How do I get out of Bluetooth mode so
@@ -4396,13 +4403,14 @@ export function run(test) {
      */
     assert.match(waking, /\{bluetooth \? \( <View style=\{\{ alignSelf: 'stretch' \}\}> <Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/, 'the Bluetooth waiting screen has no way back to the computer')
     assert.ok(waking.indexOf('Use the computer instead') < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way back to the computer waits fifteen seconds')
-    assert.match(app, /import \{ ALLOW_WORDS, RESTRICTED_WORDS, allowBluetooth, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble \} from '\.\/src\/lib\/bluetooth'/)
+    assert.match(app, /import \{ ALLOW_WORDS, RESTRICTED_WORDS, allowBluetooth, bluetoothSupported, lookForAdapterAgain, restoreBluetooth, setBluetooth, useBluetoothAllowed, useBluetoothOn, useBluetoothTrouble \} from '\.\/src\/lib\/bluetooth'/)
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth \(beta\)" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
-    assert.match(app, /onBluetooth=\{\(\) => openSettings\('bluetooth'\)\}/)
+    /* Handed only through the Settings row's own gate: test 'every way onto the Bluetooth page' holds it. */
+    assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
     assert.match(waking, /\{email && link\.link !== 'connected' && !bluetooth && !noneSaid \? \(/, 'the waiting screen names the computer’s account over Bluetooth')
   })
 
-  test('Settings offers Bluetooth (beta) only on Justin’s account, unlocked, on a phone and build that can do it', () => {
+  test('Settings offers Bluetooth (beta) only where it is open (his account on every copy, a customer’s only on a copy built to open it), unlocked, on a device and build that can do it', () => {
     /*
      * The unlock and the build check, and since 11 October 2026 the account
      * as well: "Is there any way to just get the Bluetooth on the developers
@@ -4414,6 +4422,12 @@ export function run(test) {
      * Bluetooth. Its own row on Settings still: "Move the Bluetooth card
      * from the phone and computer menu to its own menu under the settings
      * menu. Still saying Bluetooth (beta)."
+     *
+     * And since 25 October 2026 bluetoothAllowed is yes for a customer too,
+     * on a copy whose built-in store version opens it (lib/ble-rule.js, which
+     * no copy today does): the expressions here did not change, only what
+     * lib/bluetooth answers. Retitled on purpose; the next test holds the
+     * answer.
      */
     const settings = src('mobile/src/screens/Settings.js')
     const one = settings.replace(/\s+/g, ' ')
@@ -4428,7 +4442,7 @@ export function run(test) {
      * server: with no signal at a gig it answers nobody, and the row, the
      * page and its Stop button would vanish with Bluetooth still on.
      */
-    assert.match(one, /import \{ bluetoothSupported, useBluetoothAllowed, useBluetoothOn \} from '\.\.\/lib\/bluetooth'/)
+    assert.match(one, /import \{ bluetoothSupported, lookForAdapterAgain, useBluetoothAllowed, useBluetoothOn \} from '\.\.\/lib\/bluetooth'/)
     assert.match(one, /const bluetoothAllowed = useBluetoothAllowed\(\)/)
     assert.ok(!/bluetoothAllowed = [^\n;]*account/.test(code('mobile/src/screens/Settings.js')), 'the row asks the account server whose phone this is')
     /* Every way onto the row and the page goes through that gate: no other mention of either. */
@@ -4445,12 +4459,20 @@ export function run(test) {
     /* After the link page and before the metronome: outside every slice the other tests take. */
     const at = settings.indexOf("{page === 'bluetooth'")
     assert.ok(at > settings.indexOf("{page === 'link' ? (") && at < settings.indexOf("{page === 'metronome' ? ("), 'the page moved into a slice another test reads')
-    assert.match(one, /Bluetooth \(beta\) is on\. This phone talks to the unit directly, not through the computer\./, 'Phone & computer does not say Bluetooth is on')
+    /*
+     * Said for the device in hand, and with the two ways to connect, the
+     * computer the best one (BLUETOOTH_WAYS): changed on purpose on 25
+     * October 2026 from "This phone talks to the unit directly".
+     */
+    assert.match(one, /\{`Bluetooth \(beta\) is on\. This \$\{deviceNoun\(\)\} talks to the unit directly, not through the computer\. \$\{BLUETOOTH_WAYS\}`\}/, 'Phone & computer does not say Bluetooth is on, or that the computer is the best way')
+    /* The row's own line: on, the device in hand; off, what it costs against the computer, in the gear file's words cut to one line. */
+    assert.match(one, /status=\{bluetooth \? `On · the \$\{deviceNoun\(\)\} talks to the unit itself` : `Off · \$\{BLUETOOTH_WAYS_SHORT\.toLowerCase\(\)\}`\}/, 'the Settings row does not say Bluetooth is slower than the computer, with fewer features')
+    assert.match(one, /import \{ BLUETOOTH_WAYS, BLUETOOTH_WAYS_SHORT \} from '\.\.\/lib\/bluetooth-gear'/)
     /* The looper row stays away: the looper is left off the chain over Bluetooth. */
     assert.match(one, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) && !onRealVp4 \? \( <SetupRow title="Stop the looper"/)
   })
 
-  test('Bluetooth (beta) is Justin’s account’s alone, asked of the session on the phone, at launch and at every change of who is signed in', async () => {
+  test('Bluetooth (beta) is Justin’s account’s on every copy and a customer’s only by the store copy, asked of the session on the phone, at launch and at every change of who is signed in', async () => {
     /*
      * "Is there any way to just get the Bluetooth on the developers mode for
      * my own phone? I just feel like it's not ready to have public." (11
@@ -4470,15 +4492,26 @@ export function run(test) {
     const { state } = await import('../scripts/sync-relay-rules.mjs')
     assert.ok(!state().some((f) => /bluetooth-testers/.test(f.source + f.target)), 'the sync makes the phone a copy of a tester list again')
 
-    /* One rule, in lib/bluetooth: his account, by id, through the Developer pages' own check. */
+    /*
+     * One rule, in lib/bluetooth: his account, by id, through the Developer
+     * pages' own check, and for anybody else the store copy (ble-rule.js
+     * bluetoothOpen, by the version built into it). This pinned
+     * `allowed = accountId(id) ? isAdmin(id) : null`; changed on purpose on
+     * 25 October 2026, when Bluetooth was to reach customers in the next
+     * store version and only there. Nobody known is still not a no.
+     */
     const lib = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
     assert.match(lib, /import \{ isAdmin \} from '\.\/admin'/)
     assert.match(lib, /import \{ accountId \} from '\.\/owner-unlock'/)
+    assert.match(lib, /import \{ installedStoreVersion \} from '\.\/storeVersion'/)
+    assert.match(lib, /import \{ bluetoothOpen, unitOffered \} from '\.\/ble-rule'/)
     assert.match(
       lib,
-      /export function allowBluetooth\(id, \{ signedOut = false \} = \{\}\) \{ const was = allowed allowed = accountId\(id\) \? isAdmin\(id\) : null/,
-      'whose phone this is is decided some other way than his account’s id, or nobody known is taken for a no'
+      /export function allowBluetooth\(id, \{ signedOut = false \} = \{\}\) \{ const was = allowed const wasAll = allUnits allowed = accountId\(id\) \? bluetoothOpen\(\{ platform: Platform\.OS, installed: builtInVersion\(\), admin: isAdmin\(id\) \}\) : null/,
+      'whose phone this is is decided some other way than his account’s id and the store copy, or nobody known is taken for a no'
     )
+    /* The rule is never handed a threshold by the app: only the tests try one. */
+    assert.ok(!/bluetoothOpen\(\{[^}]*\bfrom\b/.test(lib), 'lib/bluetooth hands the rule a threshold of its own')
     assert.ok(!/relay|currentAccount|getUser/.test(lib), 'lib/bluetooth asks the account server whose phone this is, which answers nobody with no signal')
 
     /* Nothing in the app, or shared with it, asks a list of testers, and only App.js tells lib/bluetooth whose phone it is. */
@@ -4587,7 +4620,7 @@ export function run(test) {
         assert.equal(disk.unit, 'am4', 'the unit the customer chose is forgotten')
         assert.deepEqual(disk.adapter, { id: '1:2', name: 'WIDI Uhost Bluetooth' }, 'the adapter the customer chose is forgotten')
         assert.equal(disk.pcChannel, 3)
-        assert.ok(bench.log.some((l) => /open only to the developer’s account for now, so it is off/.test(l)), 'the log does not say why Bluetooth went off')
+        assert.ok(bench.log.some((l) => /not open to this account in this version of the app, so it is off/.test(l)), 'the log does not say why Bluetooth went off')
         assert.equal(bench.ble.setBluetooth(true), false, 'Connect turns Bluetooth on for a customer')
         assert.equal(bench.sw.bluetoothOn(), false)
         assert.deepEqual(asked, [], 'a customer’s phone was asked something about Bluetooth')
@@ -4722,17 +4755,26 @@ export function run(test) {
       }
     }
 
-    /* 3d. Anything else written while the on is held (a unit chosen, say) writes the held on with it, never an off. */
+    /*
+     * 3d. Anything else written while the on is held (an adapter chosen, say)
+     * writes the held on with it, never an off. This chose the FM3 as its
+     * write; changed on purpose on 25 October 2026, because the FM3 is his
+     * account's alone now and nobody known is not his: it is refused until
+     * his id is in, and taken once it is.
+     */
     {
       const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk: leftOn() })
       try {
         assert.equal(await bench.ble.restoreBluetooth(), false)
-        assert.equal(bench.ble.setBluetoothUnit('fm3'), 'fm3')
+        assert.equal(bench.ble.setBluetoothUnit('fm3'), 'am4', 'the FM3 was taken before anybody said this is his phone')
+        bench.ble.chooseAdapter({ id: '3:4', name: 'WIDI Jack' })
         await settle()
-        assert.equal(kept(bench).on, true, 'choosing a unit while the on was held wrote his Bluetooth off for good')
-        assert.equal(kept(bench).unit, 'fm3')
+        assert.equal(kept(bench).on, true, 'choosing an adapter while the on was held wrote his Bluetooth off for good')
+        assert.deepEqual(kept(bench).adapter, { id: '3:4', name: 'WIDI Jack' })
         assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
         assert.equal(bench.sw.bluetoothOn(), true)
+        assert.equal(bench.ble.setBluetooth(false), false)
+        assert.equal(bench.ble.setBluetoothUnit('fm3'), 'fm3', 'his account cannot pick the FM3')
       } finally {
         bench.done()
       }
@@ -4801,6 +4843,526 @@ export function run(test) {
     }
   })
 
+  /*
+   * BLUETOOTH (BETA) FOR CUSTOMERS, BY THE STORE COPY, AND NEVER BY AN UPDATE.
+   *
+   * "I have tried it from an android phone and it works great." (25 October
+   * 2026.) It is to reach paying customers in the next store version, on
+   * both phones, and only there: every merge to main is an over-the-air
+   * update to every copy on the current runtime (TestFlight 1.88.3, Google
+   * Play 1.88.0, the App Store's 1.88.3 once approved), whose review notes
+   * say customers do not see it, and switching it on for them by an update
+   * is what Apple's 2.5.19 and 2.3.1(a) and Google's rule on features
+   * "activated remotely" forbid. So it is decided by the version BUILT INTO
+   * the copy (lib/storeVersion installedStoreVersion), which no update
+   * touches, against BLUETOOTH_FROM_STORE in lib/ble-rule.js, null on both
+   * phones until the build pull request.
+   */
+  test('the rule: a customer is let in only by the version built into the copy, at or above a threshold null until the build, and never on a version it cannot read', async () => {
+    const rule = await import('../mobile/src/lib/ble-rule.js')
+    const { bluetoothOpen, BLUETOOTH_FROM_STORE, CUSTOMER_UNITS, unitOffered } = rule
+    /* Null on both phones, and frozen, so nothing at run time can set it. */
+    assert.deepEqual({ ...BLUETOOTH_FROM_STORE }, { ios: null, android: null }, 'Bluetooth is opened to customers before the build pull request')
+    assert.ok(Object.isFrozen(BLUETOOTH_FROM_STORE), 'the threshold can be changed while the app runs')
+    const FROM = { ios: '1.89.0', android: '1.89.0' }
+    for (const platform of ['ios', 'android']) {
+      /* Every copy there is, every copy before the build, and anything the copy cannot say: closed, whatever the threshold. */
+      for (const installed of [null, undefined, '', '1.89', '1.89.0.1', 'v1.89.0', 'nonsense', '1.87.0', '1.87.1', '1.87.11', '1.88.0', '1.88.3', '1.88.4', '1.88.99']) {
+        assert.equal(bluetoothOpen({ platform, installed, admin: false, from: FROM }), false, `a customer on a ${platform} copy that says ${JSON.stringify(installed)} is let in`)
+        assert.equal(bluetoothOpen({ platform, installed, admin: false }), false)
+      }
+      /* The copy the build makes, and every store version after it: open, but only once the threshold is set. */
+      for (const installed of ['1.89.0', '1.89.1', '1.90.0', '2.0.0']) {
+        assert.equal(bluetoothOpen({ platform, installed, admin: false, from: FROM }), true, `a customer on the ${platform} ${installed} copy is shut out with the threshold set`)
+        assert.equal(bluetoothOpen({ platform, installed, admin: false }), false, `a customer on the ${platform} ${installed} copy is let in with no threshold`)
+      }
+      /* His account, on every copy, readable or not. */
+      for (const installed of [null, '1.87.1', '1.88.3', '1.89.0']) assert.equal(bluetoothOpen({ platform, installed, admin: true }), true)
+    }
+    /* A threshold on one phone opens that phone only, and nothing that is not one of the two phones opens at all. */
+    assert.equal(bluetoothOpen({ platform: 'android', installed: '1.89.0', from: { ios: '1.89.0', android: null } }), false)
+    assert.equal(bluetoothOpen({ platform: 'ios', installed: '1.89.0', from: { ios: null, android: '1.89.0' } }), false)
+    for (const platform of ['web', 'windows', null, undefined, '__proto__', 'constructor']) {
+      assert.equal(bluetoothOpen({ platform, installed: '1.89.0', admin: false, from: FROM }), false, `${String(platform)} is let in`)
+    }
+    assert.equal(bluetoothOpen(), false)
+    /* The AM4 alone for a customer; all four for his account. */
+    assert.deepEqual([...CUSTOMER_UNITS], ['am4'])
+    assert.ok(Object.isFrozen(CUSTOMER_UNITS))
+    for (const unit of ['fm3', 'fm9', 'axefx3']) {
+      assert.equal(unitOffered(unit, false), false, `a customer is offered the ${unit}`)
+      assert.equal(unitOffered(unit, true), true, `his account is not offered the ${unit}`)
+    }
+    assert.equal(unitOffered('am4', false), true)
+
+    /*
+     * PURE, AND READ THE ONE SAFE WAY. It imports the version rule and
+     * nothing else, as siri-rule.js does, so a test can call it; and it asks
+     * `isOlder(…) === false`, never `!isOlder(…)`, because isOlder says null
+     * for a version it cannot read and `!null` would open it.
+     */
+    const ruleCode = code('mobile/src/lib/ble-rule.js')
+    assert.deepEqual([...ruleCode.matchAll(/^import[\s\S]*?from\s+'([^']+)'/gm)].map((m) => m[1]), ['./versions.js'], 'ble-rule.js imports something that needs a phone')
+    assert.match(ruleCode, /isOlder\(installed, at\) === false/)
+    assert.ok(!/!\s*isOlder\(/.test(ruleCode), 'the rule opens on a version it cannot read')
+
+    /*
+     * THE VERSION COMES FROM THE COPY, READ ONCE. lib/bluetooth asks
+     * installedStoreVersion (the app config inside the binary) once, and
+     * nothing in it or in the rule reads the update's number: APP_VERSION,
+     * expoConfig and expo-updates all move with every merge.
+     */
+    const lib = code('mobile/src/lib/bluetooth.js')
+    assert.equal((lib.match(/installedStoreVersion\(/g) || []).length, 1, 'lib/bluetooth asks for the built-in version more than once, or not at all')
+    assert.match(lib.replace(/\s+/g, ' '), /let installed export const builtInVersion = \(\) => \{ if \(installed === undefined\) installed = installedStoreVersion\(\) return installed \}/)
+    for (const [f, text] of [['lib/bluetooth.js', lib], ['lib/ble-rule.js', ruleCode]]) {
+      assert.ok(!/APP_VERSION|expoConfig|nativeAppVersion|expo-updates|expo-constants|Constants\./.test(text), `${f} reads the update’s version, which an update changes`)
+    }
+    /* And nothing else in the app reads it for Bluetooth: the log's head and the purchase page ask lib/bluetooth. */
+    const readers = []
+    const walk = (dir) => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry)
+        if (statSync(full).isDirectory()) walk(full)
+        else if (/\.(jsx?|mjs)$/.test(entry) && /installedStoreVersion\(/.test(readFileSync(full, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' '))) readers.push(full.replaceAll('\\', '/').split('/mobile/').pop())
+      }
+    }
+    walk(fileURLToPath(new URL('../mobile/src/', import.meta.url)))
+    assert.deepEqual(readers.sort(), ['src/lib/bluetooth.js', 'src/lib/siri.js', 'src/lib/storeVersion.js'], 'something else reads the built-in version')
+    assert.match(flat('mobile/src/lib/logHead.js'), /import \{ builtInVersion, openForCustomersHere \} from '\.\/bluetooth'/)
+    assert.match(flat('mobile/src/screens/Paywall.js'), /import \{ bluetoothSupported, openForCustomersHere \} from '\.\.\/lib\/bluetooth'/)
+  })
+
+  /* Every build in docs/expo-builds.md, once for each phone it built: a cell that starts with a number is a build on that phone. */
+  const OPENING = /Bluetooth \(beta\) for customers/
+  const ledgerBuilds = (text) => {
+    const out = []
+    for (const line of String(text).split('\n')) {
+      const cells = line.split('|').map((c) => c.trim())
+      if (cells.length < 7 || !/^\d+\.\d+\.\d+$/.test(cells[2])) continue
+      const opening = OPENING.test(cells[5])
+      for (const [platform, cell] of [['ios', cells[3]], ['android', cells[4]]]) {
+        if (/^\d/.test(cell)) out.push({ date: cells[1], version: cells[2], platform, opening })
+      }
+    }
+    return out
+  }
+
+  test('the build ledger holds the threshold: every build closed to a customer until a row marks the opening, and once one does, set and open on it for good', async () => {
+    /*
+     * Designed so that it does not break the day the 1.89.0 row is written,
+     * and so that no later update can quietly set the threshold back:
+     *
+     *   - every build older than the first one marked as the opening (every
+     *     build, while none is) is closed to a customer;
+     *   - a build marked as the opening ("Bluetooth (beta) for customers" in
+     *     its row, docs/expo-builds.md's header says so) has the threshold
+     *     set for each phone it built, and opens on its version: null, or a
+     *     higher number, would take Bluetooth away from the copies reviewed
+     *     with it, which only a store version whose notes say so may do;
+     *   - with no build marked, the threshold is null, or exactly this app's
+     *     own version: the build pull request, whose build is the opening.
+     *     A number set any earlier would open every APK apk.yml makes from
+     *     then on, and would be wrong by the next version anyway;
+     *   - never above this app's version, which a build from here would not
+     *     reach.
+     */
+    const { bluetoothOpen, BLUETOOTH_FROM_STORE } = await import('../mobile/src/lib/ble-rule.js')
+    const { isOlder } = await import('../shared/versions.mjs')
+    const problems = (builds, from, appVersion) => {
+      const out = []
+      for (const platform of ['ios', 'android']) {
+        const at = from[platform] ?? null
+        const open = (v) => bluetoothOpen({ platform, installed: v, admin: false, from })
+        const mine = builds.filter((b) => b.platform === platform)
+        const first = mine.filter((b) => b.opening).sort((a, b) => (isOlder(a.version, b.version) ? -1 : 1))[0] || null
+        for (const b of mine) {
+          const before = !first || isOlder(b.version, first.version) === true
+          if (before && open(b.version)) out.push(`${platform} ${b.version} (${b.date}) is open to a customer, and no build before it is marked as the opening`)
+          if (at && isOlder(b.version, at) === true && open(b.version)) out.push(`${platform} ${b.version} is older than the threshold ${at} and open`)
+        }
+        if (first && !at) out.push(`${platform}: ${first.version} is marked as the opening, and the threshold is null`)
+        if (first && at && !open(first.version)) out.push(`${platform}: ${first.version} is marked as the opening, and the threshold ${at} does not open on it`)
+        if (!first && at && at !== appVersion) out.push(`${platform}: the threshold is ${at} with no build marked as the opening, and it is not this app’s version ${appVersion}`)
+        if (at && isOlder(appVersion, at) !== false) out.push(`${platform}: the threshold ${at} is above this app’s version ${appVersion}, so a build from here would not open it`)
+      }
+      return out
+    }
+
+    const ledger = src('docs/expo-builds.md')
+    const app = JSON.parse(src('mobile/app.json')).expo.version
+    const builds = ledgerBuilds(ledger)
+    assert.ok(builds.length >= 15, `only ${builds.length} builds were read from the ledger; this read is probably broken`)
+    assert.ok(builds.some((b) => b.version === '1.88.3' && b.platform === 'ios') && builds.some((b) => b.version === '1.88.0' && b.platform === 'android'), 'the ledger’s newest builds were not read')
+    assert.ok(!builds.some((b) => b.version === '1.88.3' && b.platform === 'android'), 'a phone the row did not build is read as built')
+    /* The marker is said where it is written, in the ledger's own header, and in the rule. */
+    assert.match(ledger, /The build that opens Bluetooth \(beta\) to customers says so in its row\*\*,\s+in these words in What it was for: "Bluetooth \(beta\) for customers"/, 'the ledger does not say how the opening build is marked')
+    assert.match(src('mobile/src/lib/ble-rule.js'), /"Bluetooth \(beta\) for customers"/)
+
+    /* THE REAL ONE: the ledger and the threshold as they are. */
+    assert.deepEqual(problems(builds, BLUETOOTH_FROM_STORE, app), [])
+
+    /* And the check itself, on the ledgers it is there for. */
+    const row = (version, ios, android, why) => `| 1 Nov | ${version} | ${ios} | ${android} | ${why} |`
+    const opened = `${ledger}\n${row('1.89.0', '1', '1', 'Bluetooth (beta) for customers: the AM4, from both phones')}\n`
+    assert.deepEqual(problems(builds, { ios: null, android: null }, app), [], 'today, closed everywhere, is wrong')
+    assert.deepEqual(problems(builds, { ios: '1.89.0', android: '1.89.0' }, '1.89.0'), [], 'the build pull request, threshold and version moved together, is refused')
+    assert.ok(problems(builds, { ios: '1.88.3', android: null }, app).some((p) => /ios 1\.88\.3 .* is open to a customer/.test(p)), '1.88.3 typed by mistake would open build 29 by update, and passes')
+    assert.ok(problems(builds, { ios: '1.88.0', android: '1.88.0' }, app).length >= 2, 'a threshold under the copies in the stores passes')
+    assert.ok(problems(builds, { ios: '1.89.0', android: '1.89.0' }, app).some((p) => /above this app’s version/.test(p)), 'a threshold no build from here reaches passes')
+    assert.ok(problems(builds, { ios: '1.88.4', android: null }, '1.88.5').some((p) => /not this app’s version/.test(p)), 'a threshold set early, and left behind by the next version, passes')
+    const after = ledgerBuilds(opened)
+    assert.equal(after.filter((b) => b.opening).length, 2, 'the opening row is not read as the opening on both phones')
+    assert.deepEqual(problems(after, { ios: '1.89.0', android: '1.89.0' }, '1.89.1'), [], 'the day the opening build is written down, the ledger check breaks')
+    assert.ok(problems(after, { ios: null, android: null }, '1.89.1').length === 2, 'an update setting the threshold back to null, after the opening build, passes')
+    assert.ok(problems(after, { ios: '1.90.0', android: '1.90.0' }, '1.90.0').length >= 2, 'a threshold raised past the opening build passes')
+    assert.ok(problems(after, { ios: '1.89.0', android: null }, '1.89.1').some((p) => /^android: 1\.89\.0 is marked/.test(p)), 'an opening row that built Android, with Android left closed, passes')
+  })
+
+  test('on a bench, by the store copy: a customer is closed on every copy there is, and on the copy the build will make they get it, with the AM4 alone', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const JUSTIN = ADMINS[0]
+    const CUSTOMER = '0b6c7a51-8f1e-4c2a-9d3b-5e7f9a1c2d4e'
+    const settle = () => new Promise((r) => setTimeout(r, 0))
+    const kept = (bench) => JSON.parse(bench.disk.get('fractal.bluetooth'))
+    const left = (unit, on) => ({ 'fractal.bluetooth': JSON.stringify({ on, unit, adapter: { id: '1:2', name: 'WIDI Uhost Bluetooth' }, pcChannel: 1 }) })
+    /* A module that writes down everything it is asked, as the bench test above has. */
+    const recording = () => {
+      const asked = []
+      const mod = new Proxy({}, { get: (_, key) => (...args) => (asked.push(String(key)), key === 'supported' ? true : key === 'addListener' ? { remove() {} } : undefined) })
+      return { mod, asked }
+    }
+    /* As the build pull request will set it. */
+    const BUILD = { ios: '1.89.0', android: '1.89.0' }
+
+    /* 1. The rule as it is, on every copy there is (and on the copy the build will make, before the threshold is set): closed, and the module asked nothing. */
+    for (const os of ['ios', 'android']) {
+      for (const installed of ['1.87.1', '1.87.11', '1.88.0', '1.88.3', '1.88.4', '1.89.0', null]) {
+        const { mod, asked } = recording()
+        const bench = await bluetoothOnABench({ os, mod, installed, disk: left('am4', true) })
+        try {
+          assert.equal(await bench.ble.restoreBluetooth(), false)
+          assert.equal(bench.ble.allowBluetooth(CUSTOMER), false, `a customer on the ${os} ${installed} copy is let in`)
+          assert.equal(bench.ble.useBluetoothAllowed(), false, `the Settings row shows for a customer on the ${os} ${installed} copy`)
+          assert.equal(bench.ble.setBluetooth(true), false)
+          assert.equal(bench.ble.openForCustomersHere(), false)
+          assert.deepEqual(asked, [], `a customer’s ${os} ${installed} copy was asked something about Bluetooth`)
+          /* His, on the same copy: open, as it has been since 11 October. */
+          assert.equal(bench.ble.allowBluetooth(JUSTIN), true, `his account is shut out on the ${os} ${installed} copy`)
+        } finally {
+          bench.done()
+        }
+      }
+    }
+
+    /* 2. With the threshold set, the copies before it, and a copy that cannot say: still closed, still asked nothing. */
+    for (const os of ['ios', 'android']) {
+      for (const installed of ['1.88.0', '1.88.3', '1.88.4', null]) {
+        const { mod, asked } = recording()
+        const bench = await bluetoothOnABench({ os, mod, installed, from: BUILD, disk: left('am4', true) })
+        try {
+          assert.equal(await bench.ble.restoreBluetooth(), false)
+          assert.equal(bench.ble.allowBluetooth(CUSTOMER), false, `with the threshold set, a customer on the ${os} ${installed} copy is let in`)
+          assert.equal(bench.ble.setBluetooth(true), false)
+          assert.deepEqual(asked, [])
+        } finally {
+          bench.done()
+        }
+      }
+    }
+
+    /* 3. The copy at the threshold: open to a customer, the AM4 alone, Connect turns it on, and the next launch starts on it once their id is in. */
+    for (const os of ['ios', 'android']) {
+      const { mod, asked } = recording()
+      const bench = await bluetoothOnABench({ os, mod, installed: '1.89.0', from: BUILD })
+      let after
+      try {
+        assert.equal(bench.ble.openForCustomersHere(), true, `the ${os} 1.89.0 copy does not open Bluetooth to customers`)
+        assert.equal(bench.ble.allowBluetooth(CUSTOMER), true, `a customer on the ${os} 1.89.0 copy is shut out`)
+        assert.equal(bench.ble.useBluetoothAllowed(), true, 'the Settings row does not show for a customer on the copy that opens it')
+        assert.deepEqual(bench.ble.offeredUnits().map((u) => u.key), ['am4'], 'a customer is offered a unit other than the AM4')
+        for (const unit of ['fm3', 'fm9', 'axefx3']) assert.equal(bench.ble.setBluetoothUnit(unit), null, `a customer can pick the ${unit}`)
+        assert.equal(bench.ble.setBluetooth(true), false, 'Bluetooth turns on with no unit')
+        assert.equal(bench.ble.setBluetoothUnit('am4'), 'am4')
+        bench.ble.chooseAdapter({ id: '1:2', name: 'WIDI Uhost Bluetooth' })
+        assert.equal(bench.ble.setBluetooth(true), true, 'Connect does not turn Bluetooth on for a customer on the copy that opens it')
+        assert.equal(bench.sw.bluetoothOn(), true)
+        assert.ok(asked.includes('supported'), 'the copy that opens it never asks whether the phone can do it')
+        await settle()
+        after = Object.fromEntries(bench.disk)
+      } finally {
+        bench.done()
+      }
+      const next = await bluetoothOnABench({ os, mod: recording().mod, installed: '1.89.0', from: BUILD, disk: after })
+      try {
+        assert.equal(await next.ble.restoreBluetooth(), false, 'the pick-up turns it on before anybody has said whose phone this is')
+        assert.equal(next.ble.allowBluetooth(CUSTOMER), true)
+        assert.equal(next.sw.bluetoothOn(), true, `a customer left on Bluetooth on the ${os} copy that opens it starts on the computer`)
+        /* His account on the same phone: all four units, and still on. */
+        assert.equal(next.ble.allowBluetooth(JUSTIN), true)
+        assert.deepEqual(next.ble.offeredUnits().map((u) => u.key), ['am4', 'fm3', 'fm9', 'axefx3'], 'his account is not offered every unit')
+        assert.equal(next.sw.bluetoothOn(), true)
+        /* Signing out on purpose is off, written down, as on every copy. */
+        assert.equal(next.ble.allowBluetooth(null, { signedOut: true }), false)
+        await settle()
+        assert.equal(kept(next).on, false)
+      } finally {
+        next.done()
+      }
+    }
+
+    /* 4. An FM3 kept from the one public day: let go of and written down, whichever lands first, and never turned on with it. */
+    for (const first of ['restore', 'account']) {
+      const bench = await bluetoothOnABench({ mod: recording().mod, installed: '1.89.0', from: BUILD, disk: left('fm3', true) })
+      try {
+        if (first === 'account') assert.equal(bench.ble.allowBluetooth(CUSTOMER), true)
+        assert.equal(await bench.ble.restoreBluetooth(), false)
+        if (first === 'restore') assert.equal(bench.ble.allowBluetooth(CUSTOMER), true)
+        assert.equal(bench.sw.bluetoothOn(), false, `a customer’s FM3 came on over Bluetooth (${first} first)`)
+        await settle()
+        assert.equal(kept(bench).unit, null, `a customer’s FM3 is kept (${first} first)`)
+        assert.equal(kept(bench).on, false)
+        assert.ok(bench.log.some((l) => /the FM3 is not offered over Bluetooth \(beta\) to this account/.test(l)), 'the log does not say why the unit was cleared')
+      } finally {
+        bench.done()
+      }
+    }
+    /* His FM3, on the same copy: kept, and on. */
+    {
+      const bench = await bluetoothOnABench({ mod: recording().mod, installed: '1.89.0', from: BUILD, disk: left('fm3', true) })
+      try {
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        assert.equal(await bench.ble.restoreBluetooth(), true, 'his FM3 does not come back on')
+        await settle()
+        assert.equal(kept(bench).unit, 'fm3')
+        /* And another account signing in on his phone: off, and his FM3 let go of. */
+        assert.equal(bench.ble.allowBluetooth(CUSTOMER), true)
+        assert.equal(bench.sw.bluetoothOn(), false, 'a customer signed in on his phone drives his FM3 over Bluetooth')
+        await settle()
+        assert.equal(kept(bench).unit, null)
+      } finally {
+        bench.done()
+      }
+    }
+    /* And on a copy that stays closed, a customer's FM3 is let go of too: nothing keeps a unit they are not offered. */
+    {
+      const bench = await bluetoothOnABench({ mod: recording().mod, installed: '1.88.3', disk: left('fm3', false) })
+      try {
+        await bench.ble.restoreBluetooth()
+        assert.equal(bench.ble.allowBluetooth(CUSTOMER), false)
+        await settle()
+        assert.equal(kept(bench).unit, null)
+        assert.deepEqual(kept(bench).adapter, { id: '1:2', name: 'WIDI Uhost Bluetooth' }, 'the adapter went with the unit')
+      } finally {
+        bench.done()
+      }
+    }
+    /* 5. Nobody known is not a no, on the copy that opens it as everywhere: held, nothing written. */
+    {
+      const bench = await bluetoothOnABench({ mod: recording().mod, installed: '1.89.0', from: BUILD, disk: left('am4', true) })
+      try {
+        assert.equal(await bench.ble.restoreBluetooth(), false)
+        assert.equal(bench.ble.allowBluetooth(null), false)
+        await settle()
+        assert.equal(kept(bench).on, true, 'nobody known wrote a customer’s on off')
+        assert.equal(kept(bench).unit, 'am4')
+      } finally {
+        bench.done()
+      }
+    }
+  })
+
+  test('every way onto the Bluetooth page goes through the one gate: the Settings row, the page, and both waiting-screen buttons', () => {
+    /*
+     * The gate is three things, the same everywhere: the full version
+     * (mayDrive), Bluetooth open to this account on this copy
+     * (bluetoothAllowed, lib/bluetooth), and a build and device that can do
+     * it (bluetoothSupported). Without all three the page draws nothing, so
+     * a way onto it without them opens an empty Settings page.
+     */
+    const GATE = 'mayDrive(purchase) && bluetoothAllowed && bluetoothSupported()'
+    const settings = flat('mobile/src/screens/Settings.js')
+    assert.equal((settings.match(/setPage\('bluetooth'\)/g) || []).length, 1, 'something else on Settings opens the Bluetooth page')
+    assert.ok(settings.includes(`{${GATE} ? ( <SetupRow title="Bluetooth (beta)"`), 'the row is not behind the gate')
+    assert.ok(settings.includes(`{page === 'bluetooth' && ${GATE} ? (`), 'the page is not behind the gate')
+    /* App.js: one way to the page, handed to the waiting screen only through the same three. */
+    const app = flat('mobile/App.js')
+    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 1, 'App.js opens the Bluetooth page from somewhere else too')
+    assert.ok(app.includes(`const bluetoothAllowed = useBluetoothAllowed() const bluetoothOffered = ${GATE}`), 'the waiting screen’s way in is not the Settings row’s gate')
+    assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
+    /* The waiting screen: every button that opens the page waits for that way in. */
+    const waking = app.slice(app.indexOf('function Waking('))
+    const uses = [...waking.matchAll(/onPress=\{onBluetooth\}/g)].length
+    assert.equal(uses, 2, 'the waiting screen opens the Bluetooth page from more or fewer than its two buttons')
+    assert.equal((waking.match(/&& onBluetooth \? (?:\( )?<Press/g) || []).length, 2, 'a waiting-screen button opens the Bluetooth page without the gate')
+    /*
+     * THE NEW WAY IN: "No computer? Connect by Bluetooth (beta)", while it is
+     * off, with what it costs against the computer under it, and after the
+     * computer's own button, never before it.
+     */
+    assert.match(waking, /\{!bluetooth && onBluetooth \? \( <Press label="No computer\? Connect by Bluetooth \(beta\)" sub=\{BLUETOOTH_WAYS_SHORT\} onPress=\{onBluetooth\} \/> \) : null\}/, 'the waiting screen offers no way to Bluetooth with no computer')
+    const advice = waking.slice(waking.indexOf("{long && link.link !== 'connected' ? ("))
+    const noComputer = advice.indexOf('No computer? Connect by Bluetooth (beta)')
+    const computer = advice.indexOf('label="Look for the computer again"')
+    assert.ok(computer > 0 && noComputer > computer, 'Bluetooth is offered before the computer, which is the best way')
+    assert.ok(noComputer > 0 && noComputer < advice.indexOf('label="Troubleshooting"'), 'the way to Bluetooth is not with the waiting screen’s advice')
+    /* Nothing anywhere else in the app opens the page. */
+    const files = []
+    const walk = (dir) => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry)
+        if (statSync(full).isDirectory()) walk(full)
+        else if (/\.(jsx?|mjs)$/.test(entry)) files.push(full)
+      }
+    }
+    walk(fileURLToPath(new URL('../mobile/src/', import.meta.url)))
+    for (const f of files) {
+      const name = f.replaceAll('\\', '/').split('/mobile/').pop()
+      if (name === 'src/screens/Settings.js') continue
+      assert.ok(!/(setPage|openSettings|onOpenSettings)\(\s*'bluetooth'\s*\)/.test(readFileSync(f, 'utf8')), `${name} opens the Bluetooth page without the gate`)
+    }
+  })
+
+  test('two ways to connect, the computer the best one: said wherever Bluetooth is offered, from the one sentence in the gear file', async () => {
+    /*
+     * "Make it clear that there's multiple ways to connect the device, but
+     * also make it clear that the computer is the preferred method and that
+     * Bluetooth will have more lag and not have as many features." (25
+     * October 2026.) In words a guitarist reads in two seconds, and only what
+     * is true: slower (the preset list, a first preset's scene names, a
+     * footswitch change shown at the next poll) and fewer features (the
+     * page's own list of what is not there over Bluetooth).
+     */
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    assert.equal(gear.BLUETOOTH_WAYS, 'There are two ways to connect. The computer is the best one, and does everything. Bluetooth (beta) needs no computer, but it is slower and has fewer features.')
+    assert.equal(gear.BLUETOOTH_WAYS_SHORT, 'Slower than the computer, fewer features')
+    assert.ok(gear.BLUETOOTH_WAYS.split(/\s+/).length <= 30, 'the sentence takes longer than two seconds to read')
+    /* The short one goes after "Off · " in lower case: nothing in it that has to keep a capital. */
+    assert.equal(gear.BLUETOOTH_WAYS_SHORT.slice(1), gear.BLUETOOTH_WAYS_SHORT.slice(1).toLowerCase())
+    /* What it says it lacks, the page's list says too. */
+    const different = src('mobile/src/screens/Bluetooth.js').match(/const DIFFERENT = \[([\s\S]*?)\n\]/)?.[1] ?? ''
+    assert.match(different, /No editing or saving over Bluetooth\./)
+    assert.match(different, /Slower to load the preset list\./)
+    /* The purchase page's line: the two ways, then the AM4 alone and the adapter bought separately. */
+    assert.equal(gear.BLUETOOTH_PAYWALL, `${gear.BLUETOOTH_WAYS} For now it is for an AM4 only, with a Bluetooth MIDI adapter sold separately.`)
+
+    /* Wherever it is offered, from the gear file and never typed again. */
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    const offHalf = page.slice(page.indexOf(') : ( <View style={{ gap: space.lg }}>'))
+    assert.ok(offHalf.indexOf('{BLUETOOTH_WAYS}') > 0 && offHalf.indexOf('{BLUETOOTH_WAYS}') < offHalf.indexOf('<Heading>1 · Pick your unit</Heading>'), 'the page does not say the two ways before step 1 and Connect')
+    assert.match(flat('mobile/src/screens/Settings.js'), /`Off · \$\{BLUETOOTH_WAYS_SHORT\.toLowerCase\(\)\}`/, 'the Settings row does not say it')
+    assert.match(flat('mobile/src/screens/Settings.js'), /not through the computer\. \$\{BLUETOOTH_WAYS\}`/, 'Phone & computer does not say it while Bluetooth is on')
+    assert.match(flat('mobile/App.js'), /sub=\{BLUETOOTH_WAYS_SHORT\}/, 'the waiting screen’s way in does not say it')
+    const paywall = flat('mobile/src/screens/Paywall.js')
+    assert.match(paywall, /\{openForCustomersHere\(\) && bluetoothSupported\(\) \? \( <Text[^>]*> \{BLUETOOTH_PAYWALL\} <\/Text> \) : null\}/, 'the purchase page offers Bluetooth on a copy that cannot open it, or not at all')
+    for (const f of ['mobile/src/screens/Bluetooth.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/screens/Paywall.js']) {
+      assert.ok(!/two ways to connect|Slower than the computer/i.test(code(f)), `${f} types the words out again instead of taking them from the gear file`)
+    }
+  })
+
+  test('the log’s head says which store copy this is and whether a customer would see Bluetooth on it, and names the adapter, never its address', async () => {
+    /*
+     * His own account sees Bluetooth on every copy, so without this nothing
+     * he can read shows the built-in version being read right on a real
+     * phone, long before a customer's Bluetooth depends on it. Not optional:
+     * his next log from each phone says it.
+     */
+    const head = flat('mobile/src/lib/logHead.js')
+    assert.match(head, /'store copy': `\$\{builtInVersion\(\) \|\| 'not readable'\} · Bluetooth for customers: \$\{openForCustomersHere\(\) \? 'open' : 'closed'\}`/, 'the log’s head does not say the store copy and what it means for Bluetooth')
+    assert.ok(head.indexOf("'store copy'") > head.indexOf('app: `Fractal Remote (phone)'), 'the store copy is not beside the update’s version')
+    /* On a bench: the built-in version as the copy says it, and closed for customers on every copy today. */
+    for (const [installed, says] of [['1.88.3', '1.88.3'], [null, null]]) {
+      const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, installed })
+      try {
+        assert.equal(bench.ble.builtInVersion(), says)
+        assert.equal(bench.ble.openForCustomersHere(), false)
+      } finally {
+        bench.done()
+      }
+    }
+    const open = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, installed: '1.89.0', from: { ios: '1.89.0', android: '1.89.0' } })
+    try {
+      assert.equal(open.ble.openForCustomersHere(), true)
+      /* The adapter by name, never by the address Android falls back to; nothing at all when that is all there is. */
+      assert.equal(open.ble.adapterName({ id: 'AA:BB:CC:DD:EE:FF', name: 'WIDI Uhost Bluetooth' }), 'WIDI Uhost Bluetooth')
+      assert.equal(open.ble.adapterName({ id: 'AA:BB:CC:DD:EE:FF', name: 'AA:BB:CC:DD:EE:FF' }), null)
+      assert.equal(open.ble.adapterName({ id: 'AA:BB:CC:DD:EE:FF', name: '' }), null)
+      assert.equal(open.ble.adapterName(null), null)
+      open.ble.chooseAdapter({ id: 'AA:BB:CC:DD:EE:FF', name: 'AA:BB:CC:DD:EE:FF' })
+      assert.ok(open.log.some((l) => l.includes('adapter chosen: an adapter with no name')), 'the log does not say an adapter with no name was chosen')
+      assert.ok(!open.log.some((l) => l.includes('AA:BB:CC:DD:EE:FF')), 'the log names the adapter by its Bluetooth address')
+    } finally {
+      open.done()
+    }
+    const link = flat('mobile/src/lib/bleLink.js')
+    assert.match(link, /const name = adapterName\(s\.adapter\) \|\| 'the Bluetooth adapter'/, 'the link names the adapter by whatever the module gave, its address included')
+    assert.match(link, /const name = adapterName\(e\) \|\| adapterName\(s\.adapter\) \|\| 'the Bluetooth adapter'/)
+    assert.ok(!/dev\.name \|\| dev\.id/.test(code('mobile/src/lib/bluetooth.js')), 'lib/bluetooth logs the adapter’s address when it has no name')
+  })
+
+  test('Reconnect: on an iPhone whose adapter has gone, the page and Look again open Apple’s screen straight away, and nowhere else', async () => {
+    /*
+     * An iPhone lets an unused Bluetooth link go after a few minutes
+     * (Apple's QA1831): a phone locked between songs. bleLink does not ask
+     * an offline port, and only Apple's screen can connect it again, so it
+     * was Stop, Connect and the screen. Now one tap: Reconnect on the page,
+     * and the waiting screen's and Phone & computer's Look again.
+     */
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const JUSTIN = ADMINS[0]
+    const disk = { 'fractal.bluetooth': JSON.stringify({ on: true, unit: 'am4', adapter: { id: 'p1', name: 'WIDI Uhost Bluetooth' } }) }
+    const iphone = (list, extra = {}) => {
+      const asked = []
+      const mod = { supported: () => true, devices: () => list, authorization: () => 'allowedAlways', pair: async () => void asked.push('pair'), addListener: () => ({ remove() {} }), ...extra }
+      return { mod, asked }
+    }
+    const ADAPTER = { id: 'p1', name: 'WIDI Uhost Bluetooth', driver: 'Apple' }
+    const cases = [
+      ['not in the list', { list: [] }, true],
+      ['listed offline', { list: [{ ...ADAPTER, offline: true }] }, true],
+      ['connected', { list: [ADAPTER] }, false],
+      ['on Android', { list: [], os: 'android' }, false],
+      ['on iOS 27, before the build with Apple’s fix', { list: [], version: 27 }, false],
+      ['on iOS 27, with Apple’s fix', { list: [], version: 27, extra: { pairsOnIOS27: () => true } }, true]
+    ]
+    for (const [what, { list, os = 'ios', version = 18, extra = {} }, opens] of cases) {
+      const { mod, asked } = iphone(list, extra)
+      const bench = await bluetoothOnABench({ os, version, mod, disk })
+      try {
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        assert.equal(await bench.ble.restoreBluetooth(), true)
+        let poked = 0
+        await bench.ble.lookForAdapterAgain(() => poked++)
+        assert.deepEqual(asked, opens ? ['pair'] : [], `the adapter ${what}: Apple’s screen ${opens ? 'did not open' : 'opened'}`)
+        assert.equal(poked, 1, `the adapter ${what}: the link was not asked to look again`)
+      } finally {
+        bench.done()
+      }
+    }
+    /* The page: Reconnect while it is on and away, over Stop, and never while Apple's screen is kept shut. */
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    assert.match(page, /const reconnect = \(\) => lookForAdapterAgain\(probeNow\)/)
+    assert.match(page, /\{away \? <Press label="Reconnect" tone="live" onPress=\{reconnect\} \/> : null\}/)
+    const onHalf = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf(') : ( <View style={{ gap: space.lg }}>'))
+    assert.ok(onHalf.indexOf('label="Reconnect"') > 0 && onHalf.indexOf('label="Reconnect"') < onHalf.indexOf('label="Stop using Bluetooth"'), 'Reconnect is not over Stop while it is on')
+    assert.match(page, /: away \? `The adapter isn’t connected to this \$\{deviceNoun\(\)\} now\. Tap Reconnect, then in Apple’s screen tap your adapter and wait for Connected before Done\.`/)
+    /* Never for a watch tap or anything that is not a hand on a screen: link.js's own poke is untouched. */
+    assert.match(flat('mobile/src/lib/link.js'), /export function probeNow\(\) \{ \/\*[^*]*\*\/ if \(bluetoothOn\(\) && !isDemo\(\)\) return pokeBluetooth\(\)/)
+    assert.ok(!/findAdapters|lookForAdapterAgain/.test(code('mobile/src/lib/link.js') + code('mobile/src/lib/bleLink.js')), 'the link opens Apple’s screen by itself')
+  })
+
+  test('a customer is told the AM4 only, and an FM3 owner that it is not for an FM3, before and whatever is picked', () => {
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    /* Under the units, on every visit while it is off. */
+    const step1 = page.slice(page.indexOf('<Heading>1 · Pick your unit</Heading>'), page.indexOf('<Heading>2 · Connect</Heading>'))
+    assert.match(step1, /<Hint>\{am4Only \? `\$\{AM4_ONLY\} \$\{NOT_FOR_FM3\}` : NOT_FOR_FM3\}<\/Hint>/)
+    /* Connected, the unit silent: the AM4-only line first, for a customer, then the plugs. */
+    assert.match(page, /\{`\$\{am4Only \? `\$\{AM4_ONLY\} ` : ''\}\$\{PLUGS_CHECK\} The adapter has to carry MIDI both ways\./, 'a customer whose unit does not answer is not told it is the AM4 only')
+    /* Nothing tells anybody to pick a unit by name in step 1 but the line guarded by what this account is offered. */
+    assert.equal((page.match(/pick \$\{b\.answeredAs\} in step 1/g) || []).length, 1)
+    assert.ok(!/pick (the )?(FM3|FM9|Axe-Fx III)/.test(page), 'the page sends somebody to pick a unit a customer cannot pick')
+  })
+
   test('over Bluetooth nothing is marked unsaved, so no Save button appears that cannot work', () => {
     const rig = flat('mobile/src/lib/rig.js')
     assert.match(
@@ -4839,16 +5401,29 @@ export function run(test) {
      * pick-up holds the on (pendingOn) and the yes switches it on, so his
      * phone left on Bluetooth still starts on Bluetooth.
      */
-    assert.match(ble, /const want = on === true && allowed === true && !!saved\.unit && bluetoothSupported\(\)/)
-    assert.match(ble, /saved = \{ \.\.\.was, on: was\.on && !!was\.unit && allowed === true && bluetoothSupported\(\) \}/, 'a build without the module, or an account not yet known to be his, comes back with Bluetooth on')
+    /*
+     * And not on with a unit this account is not offered (lib/ble-rule.js
+     * unitOffered: the AM4 alone for a customer), at the switch and at
+     * launch, where a unit kept from before that it is not offered is let go
+     * of. Changed on purpose on 25 October 2026 with the AM4-only rule.
+     */
+    assert.match(ble, /const want = on === true && allowed === true && !!saved\.unit && unitOffered\(saved\.unit, allUnits\) && bluetoothSupported\(\)/)
+    assert.match(ble, /saved = \{ \.\.\.was, unit: dropped \? null : was\.unit, on: was\.on && !!was\.unit && !dropped && allowed === true && bluetoothSupported\(\) \}/, 'a build without the module, or an account not yet known to be his, comes back with Bluetooth on')
     assert.match(ble, /pendingOn = was\.on && !!was\.unit && allowed === null/, 'the pick-up does not hold an on for the answer')
   })
 
-  test('the page offers the AM4, FM3, FM9 and Axe-Fx III, in that order, with none of them chosen', async () => {
+  test('the page offers the units this account may pick (all four in that order for his, the AM4 alone for a customer), with none of them chosen', async () => {
     const { BLE_UNITS } = await import(WIRE)
     assert.deepEqual(BLE_UNITS.map((u) => u.name), ['AM4', 'FM3', 'FM9', 'Axe-Fx III'])
     const page = flat('mobile/src/screens/Bluetooth.js')
-    assert.match(page, /\{BLE_UNITS\.map\(\(u\) => \( <Press key=\{u\.key\} label=\{u\.name\} tone="signal" on=\{u\.key === b\.unit\}/)
+    /*
+     * The chips are what lib/bluetooth offers this account (offeredUnits),
+     * not the whole of BLE_UNITS: changed on purpose on 25 October 2026,
+     * when a customer was to get the AM4 alone. The bench test of the store
+     * copy holds what offeredUnits answers.
+     */
+    assert.match(page, /const units = offeredUnits\(\) const am4Only = units\.length < BLE_UNITS\.length/)
+    assert.match(page, /\{units\.map\(\(u\) => \( <Press key=\{u\.key\} label=\{u\.name\} tone="signal" on=\{u\.key === b\.unit\}/)
     /* Connect cannot be pressed before a unit is picked, nor by somebody who has not unlocked the app. */
     assert.match(page, /const canStart = !!b\.unit && mayDrive\(purchase\)/)
     assert.match(page, /tone="live" disabled=\{!canStart \|\| b\.looking\} onPress=\{start\}/, 'Connect can be pressed with no unit picked')
@@ -4872,14 +5447,17 @@ export function run(test) {
     assert.ok(cut > 0, 'the on/off ternary could not be split; this read is probably broken')
     const [onPart, offPart] = [ternary.slice(0, cut), ternary.slice(cut)]
     assert.ok(onPart.includes('<Press label="Stop using Bluetooth"'), 'Stop is not in the on half')
-    assert.ok(!onPart.includes('BLE_UNITS.map('), 'the units are drawn while it is on')
-    assert.ok(offPart.includes('BLE_UNITS.map('), 'the units are not drawn while it is off')
-    assert.equal((page.match(/BLE_UNITS\.map\(/g) || []).length, 1, 'the unit chips are drawn in more than one place')
+    assert.ok(!onPart.includes('units.map('), 'the units are drawn while it is on')
+    assert.ok(offPart.includes('units.map('), 'the units are not drawn while it is off')
+    assert.equal((page.match(/units\.map\(/g) || []).length, 1, 'the unit chips are drawn in more than one place')
+    assert.ok(!/BLE_UNITS\.map\(/.test(page), 'the page draws every unit there is, not the ones this account is offered')
     assert.ok(!page.includes('To change the unit, tap Stop first.'), 'a hint for units that are no longer drawn while it is on')
     /* What stopped the search shows with the switch off too; and the wrong unit answering says what to do. */
     const status = page.slice(page.indexOf('function status('), page.indexOf('const TONES'))
     assert.ok(status.indexOf("b.trouble === 'bluetooth-off'") < status.indexOf("if (!b.on) return { line: 'Not connected'"), 'the switch being off hides why the search failed')
-    assert.match(status, /if \(b\.answeredAs\) \{ return \{ line: `An \$\{b\.answeredAs\} answered, not the \$\{name\}\./)
+    /* Sent to pick the unit that answered only when this account can pick it: never a customer to a unit they are not offered. */
+    assert.match(status, /if \(b\.answeredAs\) \{ const pickable = offeredUnits\(\)\.some\(\(u\) => u\.name === b\.answeredAs\) return \{ line: pickable \? `An \$\{b\.answeredAs\} answered, not the \$\{name\}\. Tap Stop, pick \$\{b\.answeredAs\} in step 1, then tap Connect\.` : `An \$\{b\.answeredAs\} answered, not the \$\{name\}\. \$\{AM4_ONLY\} Tap Stop, and use the computer for the \$\{b\.answeredAs\}\.`/)
+    assert.equal((status.match(/in step 1, then tap Connect/g) || []).length, 1, 'another line sends somebody to step 1 for a unit')
   })
 
   test('the Bluetooth page says plainly what is different from USB, and names an adapter maker only in what to buy', () => {
@@ -4926,7 +5504,8 @@ export function run(test) {
     /* The status line, in his words. */
     assert.match(page, /Adapter connected, but the \$\{name\} isn’t answering\. Check both MIDI plugs, and that MIDI Thru is off\./)
     assert.match(page, /if \(b\.trouble === 'permission'\) return \{ line: ALLOW_WORDS, tone: 'fault' \}/)
-    assert.match(page, /'Turn on Bluetooth in the phone’s settings'/)
+    /* For the device in hand, changed on purpose on 25 October 2026 from "the phone’s settings". */
+    assert.match(page, /`Turn on Bluetooth in the \$\{deviceNoun\(\)\}’s settings`/)
     /*
      * Android 11 and older asks for Location, not Nearby devices, and finds
      * nothing while Location is off; the words follow the phone, and an
@@ -4938,7 +5517,7 @@ export function run(test) {
     assert.match(lib, /if \(!saved\.adapter && !now\.devices\.length\) \{/, 'an Android search that finds nothing ends in silence')
     assert.match(lib, /Location has to be on for it to find one/)
     /* The iPhone's "nothing connected" says where Bluetooth is allowed, and a one-way adapter is named as the likely cause. */
-    assert.match(page, /No adapter was connected\. Check Bluetooth is on, and allowed for Fractal Remote in the iPhone’s Settings\./)
+    assert.match(page, /No adapter was connected\. Check Bluetooth is on, and allowed for Fractal Remote in the \$\{deviceNoun\(\)\}’s Settings\./)
     assert.match(page, /The adapter has to carry MIDI both ways\./)
   })
 
@@ -4972,8 +5551,10 @@ export function run(test) {
     /* And no hint on the page sends anybody to the screen while it is shut, nor the red "nothing connected" line under the note that says why. */
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.match(page, /const shut = pairScreenShut\(\)/)
-    assert.match(page, /: shut \? 'On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app\.[^']*' : ios \? 'Apple’s Bluetooth screen opens\./)
-    assert.match(page, /\{shut \? 'If this stays here, tap Stop, check the adapter is plugged in and lit, then tap Connect\.' : ios \?/)
+    assert.match(page, /: shut \? 'On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app\.[^']*' : ios \? `Apple’s Bluetooth screen opens\./)
+    assert.match(page, /\{shut \? 'If this stays here, tap Stop, check the adapter is plugged in and lit, then tap Connect\.' : away \?/)
+    /* Reconnect, which opens Apple's screen, is never offered while it is shut. */
+    assert.match(page, /const away = b\.on && b\.phase === 'connecting' && ios && !shut && adapterAway\(\)/)
     assert.match(page, /\{!b\.on && missed && !b\.adapter && !b\.trouble && !b\.said \? \(/, 'the line sending him to Apple’s screen is drawn over the note saying it stays shut')
     assert.match(page, /\{shut && b\.said \? null : \( <Hint>/, 'the hint under Connect repeats the note under it on iOS 27')
 
@@ -5351,8 +5932,17 @@ export function run(test) {
    * with React, React Native, the phone's storage and the native module
    * swapped for pretend ones, on whichever phone the test says. Each bench is
    * a fresh copy, so nothing one test switches on is still on in the next.
+   *
+   * AND ON WHICHEVER STORE COPY. `installed` is the version built into the
+   * copy, as lib/storeVersion would read it off the binary (test/siri.mjs
+   * stands it in the same way): 1.88.4 by default, newer than every store
+   * build there is, which a customer is closed on today like any other copy.
+   * `from` is the rule's threshold: left out, the real ble-rule.js decides;
+   * given, a copy of it with BLUETOOTH_FROM_STORE set to that, as the build
+   * pull request will set it, so the opening can be tried before any copy
+   * has it.
    */
-  async function bluetoothOnABench({ os = 'ios', version = 18, mod = null, disk = {} } = {}) {
+  async function bluetoothOnABench({ os = 'ios', version = 18, mod = null, disk = {}, installed = '1.88.4', from = undefined } = {}) {
     const dir = mkdtempSync(join(tmpdir(), 'ble-lib-'))
     const real = (f) => new URL(`../mobile/src/lib/${f}`, import.meta.url).href
     const swaps = [
@@ -5368,7 +5958,11 @@ export function run(test) {
       ["from './debugLog'", "from './debugLog.js'"],
       /* The real check of whose phone this is: admin.js and owner-unlock.js, which import nothing that needs a phone. */
       ["from './admin'", `from '${real('admin.js')}'`],
-      ["from './owner-unlock'", `from '${real('owner-unlock.js')}'`]
+      ["from './owner-unlock'", `from '${real('owner-unlock.js')}'`],
+      /* The version built into the copy, stood in; the rule, real or as the build will set it; the device's own word, real. */
+      ["from './storeVersion'", "from './storeVersion.js'"],
+      ["from './ble-rule'", from === undefined ? `from '${real('ble-rule.js')}'` : "from './ble-rule.js'"],
+      ["from './device-word'", `from '${real('device-word.js')}'`]
     ]
     let lib = src('mobile/src/lib/bluetooth.js')
     for (const [from, to] of swaps) {
@@ -5387,7 +5981,14 @@ export function run(test) {
       'expo.js': 'export const native = { module: null }\nexport const requireOptionalNativeModule = () => native.module\n',
       'blockCatalog.js': 'export const blockCatalog = {}\n',
       'debugLog.js': 'export const lines = []\nexport const logDebug = (...parts) => { lines.push(parts.join(" ")) }\n',
-      'bleSwitch.js': src('mobile/src/lib/bleSwitch.js')
+      'bleSwitch.js': src('mobile/src/lib/bleSwitch.js'),
+      'storeVersion.js': `export const installedStoreVersion = () => ${JSON.stringify(installed)}\n`
+    }
+    if (from !== undefined) {
+      const rule = src('mobile/src/lib/ble-rule.js')
+      const set = rule.replace(/export const BLUETOOTH_FROM_STORE = Object\.freeze\(\{[^}]*\}\)/, `export const BLUETOOTH_FROM_STORE = Object.freeze(${JSON.stringify(from)})`)
+      assert.notEqual(set, rule, 'ble-rule.js no longer says BLUETOOTH_FROM_STORE the way the bench sets it')
+      files['ble-rule.js'] = set.replace("from './versions.js'", `from '${real('versions.js')}'`)
     }
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
     const at = (f) => pathToFileURL(join(dir, f)).href
@@ -5718,7 +6319,15 @@ export function run(test) {
     /*
      * "The CME C2MIDI Pro got extremely hot on the FM3 and the connection
      * didn't work." Nothing to buy for an FM3 and no steps: a warning that
-     * says what happened, why, and what owners fit. It stays one you can pick.
+     * says what happened, and what owners report. It stays one his account
+     * can pick.
+     *
+     * NO RECIPE, AND OWNERS' REPORTS RATHER THAN A FACT ABOUT THE UNIT:
+     * changed on purpose on 25 October 2026. This held the warning to "what
+     * owners fit" (a 220-ohm resistor on pin 4 of a home-made adapter), and
+     * to the FM3's MIDI OUT "with nothing to limit it", said as fact. A
+     * soldering job is nothing the app can stand behind, and the app has
+     * measured nothing on an FM3 but a hot cable.
      */
     assert.deepEqual(gear.partsFor('fm3'), [], 'the FM3 is given a shopping list for what overheated on it')
     assert.equal(gear.hookupFor('fm3'), null, 'the FM3 is told to plug it straight in')
@@ -5726,7 +6335,9 @@ export function run(test) {
     assert.equal(gear.warningFor('fm3'), gear.FM3_WARNING)
     for (const unit of ['am4', 'fm9', 'axefx3']) assert.equal(gear.warningFor(unit), null)
     assert.match(gear.FM3_WARNING, /^Don’t plug the C2MIDI Pro straight into an FM3\. When we tried it, the cable got very hot and didn’t connect\./)
-    assert.match(gear.FM3_WARNING, /220-ohm resistor on pin 4/)
+    assert.ok(!/220|resistor|pin 4|solder/i.test(gear.FM3_WARNING), 'the FM3 warning gives a home-made way round it again')
+    assert.match(gear.FM3_WARNING, /FM3 owners report the same with adapters that take power from its MIDI OUT/, 'the FM3 warning does not say what owners report')
+    assert.ok(!/nothing to limit it/.test(gear.FM3_WARNING), 'the FM3 warning states a fault in the unit as fact')
     assert.match(gear.FM3_WARNING, /Yamaha MD-BT01/, 'the warning leaves the Yamaha looking like the way round it')
     assert.ok(BLE_UNITS.some((u) => u.key === 'fm3'), 'the FM3 can no longer be picked, so an owner with the adapter is shut out')
     const page = readFileSync(new URL('../mobile/src/screens/Bluetooth.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
@@ -5736,10 +6347,21 @@ export function run(test) {
      * than drawing the same red box a second time (both rows can be open).
      */
     assert.match(page.slice(page.indexOf('function PlugIn(')), /^function PlugIn\(\{ unit \}\) \{ if \(!unit\) return <Hint>[^<]+<\/Hint> const warning = warningFor\(unit\) if \(warning\) return <Note tone="fault">\{warning\}<\/Note>/, 'How to plug it in shows the FM3 its steps')
-    assert.match(page.slice(page.indexOf('function Buy(')), /^function Buy\(\{ unit \}\) \{ if \(!unit\) return <Hint>\{GEAR_IN_SHORT\}<\/Hint> if \(warningFor\(unit\)\) return <Hint>Not for the FM3 as it is\. How to plug it in, above, says why and what FM3 owners do\.<\/Hint>/, 'What to buy shows the FM3 a list to buy, or the warning twice')
+    assert.match(page.slice(page.indexOf('function Buy(')), /^function Buy\(\{ unit \}\) \{ if \(!unit\) return <Hint>\{GEAR_IN_SHORT\}<\/Hint> if \(warningFor\(unit\)\) return <Hint>Not for the FM3\. How to plug it in, above, says why\.<\/Hint>/, 'What to buy shows the FM3 a list to buy, or the warning twice')
     assert.equal((page.match(/<Note tone="fault">\{warning\}<\/Note>/g) || []).length, 1, 'the FM3 warning is drawn in two places')
     assert.match(gear.PARTS.adapters.does, /Type A/)
     for (const p of Object.values(gear.PARTS)) assert.ok(p.name && p.does, 'a part with no name or no line saying what it is for')
+    /* The device in hand, passed in, for every part: an iPad's owner reads "Your iPad", and nobody is handed a function to draw. */
+    for (const unit of ['am4', 'fm9', 'axefx3']) {
+      for (const p of gear.partsFor(unit, 'iPad')) assert.equal(typeof p.does, 'string', `${p.key}: the page is handed something it cannot draw`)
+    }
+    assert.equal(gear.partsFor('am4', 'iPad')[0].does, 'The Bluetooth adapter. Your iPad connects to it.')
+    assert.equal(gear.partsFor('am4')[0].does, 'The Bluetooth adapter. Your phone connects to it.')
+    assert.match(gear.hookupFor('axefx3', 'tablet').join(' '), /Not THRU: the tablet would only hear itself there\./)
+    /* Who makes the parts, and that the app is not them and gets nothing from the links: the guide has said it all along. */
+    assert.equal(gear.SELLERS_LINE, 'CME and LOOTOOLS make these parts. Fractal Remote isn’t connected with them or with Amazon, and gets nothing from these links.')
+    /* One thing driving the unit at a time, until the two together have been tried. */
+    assert.match(gear.ONE_AT_A_TIME, /^While you use Bluetooth, quit the Fractal Remote app on the computer, or unplug the unit’s USB cable/)
 
     /* The hookup, for every unit the page offers bar the FM3, in at most five short steps. */
     for (const { key, name } of BLE_UNITS.filter((u) => u.key !== 'fm3')) {
@@ -5764,14 +6386,31 @@ export function run(test) {
       if (key === 'am4') assert.match(all, /Push one 3\.5 mm adapter into the AM4’s MIDI IN, and the other into its MIDI OUT\./)
       else assert.ok(!/3\.5 mm/.test(all), `${name} is told to use the AM4’s adapters`)
       if (key === 'fm9') assert.match(all, /MIDI OUT\/THRU jack/)
-      /* Tried on the AM4 only; the rest say so rather than promise. */
-      assert.equal(gear.untriedLine(key), key === 'am4' ? null : `Not tried on the ${name} yet. It should work the same way.`)
+      /*
+       * Tried on the AM4 only; the rest say so rather than promise, and ask
+       * to hear how it went through the app's own Feedback. It said "It
+       * should work the same way.", a promise about a unit nobody has run:
+       * changed on purpose on 25 October 2026.
+       */
+      assert.equal(gear.untriedLine(key), key === 'am4' ? null : `Not tried on the ${name} yet. If you try it, tell us how it went: Settings → Troubleshooting → Feedback.`)
     }
     assert.deepEqual(gear.TESTED, ['am4'])
     assert.equal(gear.hookupFor('vp4'), null, 'steps for a unit the page does not offer')
     assert.match(gear.GEAR_IN_SHORT, /CME WIDI Uhost, a CME C2MIDI Pro, and a phone charger or power bank/)
     assert.match(gear.GEAR_IN_SHORT, /For an AM4, also two Type-A MIDI to 3\.5 mm adapters\./)
-    assert.match(gear.GEAR_IN_SHORT, /Not for an FM3 as it is: the cable gets hot there\./, 'the short list leaves an FM3 owner to buy what overheats')
+    /*
+     * NOT FOR AN FM3, TO EVERYBODY, WHATEVER IS PICKED. This held the short
+     * list to "Not for an FM3 as it is", which was drawn only before a unit
+     * was picked; with the FM3 not offered to a customer, an FM3 owner would
+     * never see its warning, and would read an AM4's list. So it is its own
+     * line now, under the units in step 1 on every visit (changed on purpose
+     * on 25 October 2026), and the short list does not say it a second time.
+     */
+    assert.equal(gear.NOT_FOR_FM3, 'Not for an FM3: when we tried Bluetooth on one, the adapter’s cable got very hot.')
+    assert.ok(!/FM3/.test(gear.GEAR_IN_SHORT), 'the short list says the FM3 line a second time, right under step 1')
+    const step1 = page.slice(page.indexOf('<Heading>1 · Pick your unit</Heading>'), page.indexOf('<Heading>2 · Connect</Heading>'))
+    assert.match(step1, /<\/View> <Hint>\{am4Only \? `\$\{AM4_ONLY\} \$\{NOT_FOR_FM3\}` : NOT_FOR_FM3\}<\/Hint> <\/View>/, 'the FM3 line is not under the units, for everybody, whatever is picked')
+    assert.equal(gear.AM4_ONLY, 'For now, Bluetooth (beta) is for an AM4 only.')
 
     /*
      * THE BETA, IN PLAIN WORDS. "Let's just say that Bluetooth is beta though
@@ -5799,10 +6438,17 @@ export function run(test) {
      * Android clause is held to Android's copy, and the iPhone's names no
      * other phone at all.
      */
-    assert.match(gear.BETA_NOTE_ANDROID, /from an iPhone, and not yet from an Android phone/, 'the beta note lets Android customers think it has been tried on their phone')
+    /*
+     * AND FROM AN ANDROID PHONE, since 25 October 2026: "I have tried it
+     * from an android phone and it works great." This held Android's note
+     * to "and not yet from an Android phone"; changed on purpose. The
+     * iPhone's still names no other phone.
+     */
+    assert.match(gear.BETA_NOTE_ANDROID, /tried on the AM4, from an iPhone and an Android phone\./, 'the Android beta note does not say it has been tried from an Android phone')
+    assert.ok(!/not yet from an Android phone/.test(gear.BETA_NOTE_ANDROID), 'the Android beta note still says no Android phone has run it')
     assert.match(gear.BETA_NOTE_IPHONE, /So far it has been tried on the AM4, from an iPhone\. If something/, 'the iPhone’s beta note does not say where it has been tried')
     assert.ok(!/android|google|play store|\bapk\b/i.test(gear.BETA_NOTE_IPHONE), 'the iPhone’s beta note names another phone, which Apple’s 2.3.10 rejects')
-    assert.equal(gear.BETA_NOTE_ANDROID.replace(', and not yet from an Android phone', ''), gear.BETA_NOTE_IPHONE, 'the two beta notes say different things besides the Android clause')
+    assert.equal(gear.BETA_NOTE_ANDROID.replace(' and an Android phone', ''), gear.BETA_NOTE_IPHONE, 'the two beta notes say different things besides the Android clause')
     /* Picked by the phone's own platform; anything not Android gets the iPhone's, so no new platform ever shows Android's name. */
     assert.equal(gear.betaNote('android'), gear.BETA_NOTE_ANDROID)
     assert.equal(gear.betaNote('ios'), gear.BETA_NOTE_IPHONE)
@@ -5899,9 +6545,10 @@ export function run(test) {
     /* What to buy: each part, its name, what it is for, and View on Amazon, which opens that part's own address; the short version before a unit is picked. */
     const buy = page.slice(page.indexOf('function Buy('), page.indexOf('function Fold('))
     assert.match(buy, /if \(!unit\) return <Hint>\{GEAR_IN_SHORT\}<\/Hint>/)
-    assert.match(buy, /partsFor\(unit\)\.map\(\(p\) => \( <View key=\{p\.key\}/)
+    assert.match(buy, /partsFor\(unit, deviceNoun\(\)\)\.map\(\(p\) => \( <View key=\{p\.key\}/)
     assert.match(buy, /\{p\.name\}<\/Text> <Hint>\{p\.does\}<\/Hint> <Press label="View on Amazon" height=\{44\} accessibilityLabel=\{`View the \$\{p\.name\} on Amazon`\} onPress=\{\(\) => openLink\(p\.amazon\)\} \/>/)
     assert.match(buy, /<Hint>\{POWER_LINE\}<\/Hint>/, 'the charger is left off the list')
+    assert.match(buy, /<Hint>\{POWER_LINE\}<\/Hint> <Hint>\{SELLERS_LINE\}<\/Hint>/, 'the parts are offered with no word that the app is not their maker, and gets nothing from the links')
     /*
      * How to plug it in: the Uhost's first-time firmware update, said once,
      * before the steps. CME and the Amazon listing both ask for it, and a
@@ -5911,7 +6558,9 @@ export function run(test) {
     const plug = page.slice(page.indexOf('function PlugIn('), page.indexOf('function Buy('))
     assert.match(plug, /if \(!unit\) return <Hint>Pick your unit above to see how it plugs in\.<\/Hint>/)
     assert.ok(plug.indexOf('<Hint>{FIRST_TIME}</Hint>') >= 0 && plug.indexOf('<Hint>{FIRST_TIME}</Hint>') < plug.indexOf('steps.map('), 'the first-time update of the Uhost is not said before the steps')
-    assert.match(plug, /const steps = hookupFor\(unit\) \|\| \[\]/)
+    assert.match(plug, /const steps = hookupFor\(unit, deviceNoun\(\)\) \|\| \[\]/)
+    /* After the steps, before an untried unit's note: quit the computer app, or unplug the USB, while Bluetooth is used. */
+    assert.ok(plug.indexOf('<Hint>{ONE_AT_A_TIME}</Hint>') > plug.indexOf('steps.map(') && plug.indexOf('<Hint>{ONE_AT_A_TIME}</Hint>') < plug.indexOf('{untried ?'), 'the steps do not say to keep the computer off the unit while Bluetooth drives it')
     assert.match(plug, /\{untried \? <Note tone="warn">\{untried\}<\/Note> : null\}/, 'an untried unit is not told so')
     /* What it can and can't do: the paragraph that used to open the page, and the list of what is different from USB. */
     /* To that row's own close, so a list moved out after it, always drawn, is not counted as in it. */
@@ -5919,8 +6568,8 @@ export function run(test) {
     const about = drawn.slice(aboutAt, drawn.indexOf('</Fold>', aboutAt))
     assert.ok(about.includes('No editing or saving, and the computer isn’t used.'))
     assert.ok(about.includes('<Heading>What’s different from USB</Heading> {DIFFERENT.map('))
-    /* The usual reason a connected adapter hears nothing, with these parts: the plugs swapped. */
-    assert.match(page, /\{`\$\{PLUGS_CHECK\} The adapter has to carry MIDI both ways\./)
+    /* The usual reason a connected adapter hears nothing, with these parts: the plugs swapped; for a customer, the AM4-only line first. */
+    assert.match(page, /\{`\$\{am4Only \? `\$\{AM4_ONLY\} ` : ''\}\$\{PLUGS_CHECK\} The adapter has to carry MIDI both ways\./)
 
     /* ONE PLACE FOR THE ADDRESSES: no web address typed into the page, and no shop's anywhere in the app but the gear file. */
     assert.ok(!/https?:\/\//.test(code('mobile/src/screens/Bluetooth.js')), 'an address is typed into the page instead of coming from the gear file')

@@ -3,6 +3,7 @@ import { AppState, Platform } from 'react-native'
 import { bluetoothOn, setSwitch } from './bleSwitch'
 import {
   adapterDevices,
+  adapterName,
   bluetoothSettings,
   bluetoothSupported,
   closeWire,
@@ -138,7 +139,8 @@ function begin() {
     noteBluetooth({ phase: 'no-unit' })
     return
   }
-  const name = s.adapter?.name || 'the Bluetooth adapter'
+  /* By its name, never its Bluetooth address: the link keeps this as macName, and the log's head prints it (lib/bluetooth adapterName). */
+  const name = adapterName(s.adapter) || 'the Bluetooth adapter'
   /*
    * With no adapter picked nothing is being looked for, so the link is 'off'
    * as it is for no unit: 'joining' put "Finding the Bluetooth adapter" on
@@ -211,7 +213,7 @@ async function connected(e) {
   wire = made
   unhear = made.subscribe(handleEvent)
   setSwitch({ on: bluetoothOn(), wire: made })
-  const name = e?.name || s.adapter?.name || 'the Bluetooth adapter'
+  const name = adapterName(e) || adapterName(s.adapter) || 'the Bluetooth adapter'
   noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null })
   tell?.({ link: 'connected', macName: name, hostVersion: null })
   say(`connected to ${name}; asking the ${unitName(s.unit)} what it is`)

@@ -3407,7 +3407,7 @@ export function run(test) {
     const NAMES = /android|google|play store|play console|\bapk\b/i
     const KNOWN = [
       ['src/lib/bluetooth.js', /in Android’s settings/, 'ALLOW_WORDS: the iPhone line is picked first, on Platform.OS'],
-      ['src/lib/bluetooth-gear.js', /, and not yet from an Android phone\./, 'BETA_NOTE_ANDROID: betaNote picks it only for Android'],
+      ['src/lib/bluetooth-gear.js', /from an iPhone and an Android phone\./, 'BETA_NOTE_ANDROID: betaNote picks it only for Android'],
       ['src/screens/Bluetooth.js', /If Android asks to pair with it, accept\./, 'the Connect hint, behind ios ? … :'],
       ['src/screens/Settings.js', /^Google account$/, 'Delete account: Apple ID on an iPhone'],
       ['src/lib/purchases.js', /^Google account$/, 'storeAccount, in Restore’s and Buy’s words: Apple ID on an iPhone'],
@@ -3448,7 +3448,7 @@ export function run(test) {
     /* And each reason on the list, checked rather than trusted. */
     const flat = (f) => withoutComments(read(f)).replace(/\s+/g, ' ')
     assert.match(flat('mobile/src/lib/bluetooth.js'), /export const ALLOW_WORDS = Platform\.OS === 'ios' \? 'Bluetooth isn’t allowed[^']*' : OLD_ANDROID/)
-    assert.match(flat('mobile/src/screens/Bluetooth.js'), /: ios \? 'Apple’s Bluetooth screen opens\.[^']*' : 'The phone looks for the adapter for ten seconds, then connects to it\. If Android asks/)
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /: ios \? `Apple’s Bluetooth screen opens\.[^`]*` : `The \$\{deviceNoun\(\)\} looks for the adapter for ten seconds, then connects to it\. If Android asks/)
     assert.match(flat('mobile/src/screens/Settings.js'), /const mine = Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'/)
     assert.match(flat('mobile/src/lib/purchases.js'), /const storeAccount = \(\) => \(Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'\)/)
     assert.match(flat('mobile/src/lib/cloudSetlists.js'), /export const deviceName = \(\) => \(Platform\.OS === 'ios' \? 'iPhone' : 'Android'\)/)
@@ -4587,10 +4587,12 @@ export function run(test) {
        App's fifteen-second clock (`long`), and a way to Setlists
        (`onSetlists`), whose only other door is on the play screen this
        stands in front of. Look again is still probeNow and nothing else: it
-       asks at once and leaves the advice up. */
+       asks at once and leaves the advice up. And the way to the Bluetooth
+       page only through the Settings row's own gate (bluetoothOffered),
+       changed on purpose on 25 October 2026 with the No computer? button. */
     assert.match(
       flat,
-      /\{settling && screen === 'stage' \? \( <Waking link=\{link\} long=\{lookedLong\} onRetry=\{probeNow\} onSwitch=\{\(\) => openSettings\('link'\)\} onTroubleshoot=\{openConnectFix\} onBluetooth=\{\(\) => openSettings\('bluetooth'\)\} onSetlists=\{\(\) => setScreen\('setlists'\)\} \/>/,
+      /\{settling && screen === 'stage' \? \( <Waking link=\{link\} long=\{lookedLong\} onRetry=\{probeNow\} onSwitch=\{\(\) => openSettings\('link'\)\} onTroubleshoot=\{openConnectFix\} onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\} onSetlists=\{\(\) => setScreen\('setlists'\)\} \/>/,
       'nothing is shown while the app waits'
     )
 
@@ -11540,9 +11542,14 @@ export function run(test) {
      */
     const flat = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
     assert.doesNotMatch(flat, /label="Try now"/, 'the button still says Try now, which says nothing about what it tries')
+    /*
+     * Over Bluetooth, on an iPhone whose adapter has gone, it opens Apple's
+     * screen first (lib/bluetooth lookForAdapterAgain), as the waiting
+     * screen's does: changed on purpose on 25 October 2026.
+     */
     assert.match(
       flat,
-      /\{link !== 'connected' \? <Press label=\{throughAdapter \? 'Look for the adapter again' : 'Look for the computer again'\} onPress=\{onReconnect\} \/> : null\}/,
+      /\{link !== 'connected' \? \( <Press label=\{throughAdapter \? 'Look for the adapter again' : 'Look for the computer again'\} onPress=\{throughAdapter \? \(\) => lookForAdapterAgain\(onReconnect\) : onReconnect\} \/> \) : null\}/,
       'the reconnect button is shown on a live link'
     )
   })
