@@ -8326,8 +8326,8 @@ export function run(test) {
       assert.ok(flat(file).includes(drawn), `${file} no longer draws ${drawn}; this check needs telling`)
       assert.ok(bullet.includes(named), `the privacy list does not name the button in ${file} as it is drawn ("${named}")`)
     }
-    /* And the last fault: the phone sends it only with the log, and the list says the website is still to follow. */
-    assert.ok(bullet.includes('The phone sends that last fault only with the log'), 'the list no longer says how the phone sends the last fault')
+    /* And the last fault, on the website as on the phone, only with the log. */
+    assert.ok(bullet.includes('The phone and the website both send that last fault only with the log'), 'the list still says the website sends the last fault without the log')
   })
 
   test('Report a Bluetooth problem sends through the log screen’s one tap, one at a time, and leaves the Feedback form as it was', () => {

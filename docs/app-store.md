@@ -1870,12 +1870,10 @@ step 7 spends builds, and it waits for his yes, as every build does.
       And the table's "App version, your unit, your OS, screen size" row,
       which leaves out the computer app's version and the link, and, on a
       report that carries the log, the last fault the screen showed
-      (`lastError`). The phone sends that last fault only with the log
-      since 25 October 2026; the website still sends it with a suggestion
-      and a log-less bug report too (src/lib/reports.js context), so this
-      pull request, which makes a computer release anyway, is the one to
-      make the website do as the phone does (mobile/src/lib/reports.js
-      sendReport, apartFromLog).
+      (`lastError`). The phone and the website both send that last fault
+      only with the log since 25 October 2026 (mobile/src/lib/reports.js
+      and src/lib/reports.js sendReport, apartFromLog): never with a
+      suggestion, or with a bug report whose log is turned off.
     - **support.html**, the App Store's Support URL, which a reviewer
       checking the listing's links reads: one sentence after "The phone
       doesn't talk to the unit directly, which is why there is a computer

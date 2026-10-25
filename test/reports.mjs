@@ -383,6 +383,44 @@ export function run(test) {
   })
 
   /*
+   * AND THE BROWSER THE SAME (review of 25 October 2026). The privacy page is
+   * the phone's and the website's, and App.jsx writes every fault on screen
+   * into the log (`logDebug('error', error)`), so the website's details found
+   * it too and sent it with a suggestion and with a bug report whose log was
+   * turned off. The browser's sendReport, run.
+   */
+  test('the browser sends the last fault on screen only with the log: never with a suggestion, or a bug report with the log turned off', async () => {
+    await browser({ user: USER }, async ({ reports, log, bench }) => {
+      log.logDebug('error', 'The unit refused that preset.')
+      const details = () => reports.context({ device: { model: 'FM3' } })
+      assert.equal(details().lastError, 'The unit refused that preset.', 'the details do not find the fault (src/lib/reports context)')
+
+      await reports.sendReport({ kind: 'idea', message: 'A bigger tuner', context: details() })
+      await reports.sendReport({ kind: 'bug', message: 'It froze', context: details(), withLog: false })
+      await reports.sendReport({ kind: 'bug', message: 'It froze', context: details() })
+      await reports.sendLogs({ context: details(), note: '' })
+      const [idea, bare, bug, logs] = bench.inserts.map((i) => i.row)
+
+      assert.equal(idea.log, null)
+      assert.ok(!('lastError' in idea.context), 'a suggestion carries the last fault on screen')
+      assert.equal(bare.log, null)
+      assert.ok(!('lastError' in bare.context), 'a bug report with the log turned off carries the last fault on screen')
+      assert.ok(bug.log)
+      assert.equal(bug.context.lastError, 'The unit refused that preset.', 'a bug report with its log lost the last fault')
+      assert.ok(logs.log)
+      assert.equal(logs.context.lastError, 'The unit refused that preset.', 'Send logs to developer lost the last fault')
+      for (const row of [idea, bare]) {
+        assert.deepEqual(Object.keys(row.context).sort(), Object.keys(bug.context).filter((k) => k !== 'lastError').sort())
+        assert.equal(row.context.unit, 'FM3')
+        assert.equal(row.context.version, '1.87.48')
+      }
+      const handed = details()
+      await reports.sendReport({ kind: 'idea', message: 'A bigger tuner', context: handed })
+      assert.equal(handed.lastError, 'The unit refused that preset.')
+    })
+  })
+
+  /*
    * REPORT A BLUETOOTH PROBLEM HAS NOTHING TO TYPE AND NO COPY LOGS, so a
    * report from it that did not go says neither "What you wrote is still
    * here" nor "use Copy Logs instead" (review of 25 October 2026): its note
