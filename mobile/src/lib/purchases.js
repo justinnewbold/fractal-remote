@@ -1353,6 +1353,9 @@ const subscribe = (fn) => {
   return () => watchers.delete(fn)
 }
 
+/** The same watch, for code that is not a screen: lib/bleLink, stopped at the unlock, starts when the purchase lets it. */
+export const subscribePurchase = subscribe
+
 /** The same, for a screen that should repaint when it changes. */
 export const usePurchase = () => useSyncExternalStore(subscribe, purchaseState, purchaseState)
 

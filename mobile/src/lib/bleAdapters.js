@@ -51,6 +51,10 @@ export function pairScreenCrashes({ os, version, fixed } = {}) {
   return major >= 27 && fixed !== true
 }
 
-/* What the Bluetooth page says instead (the developer's own page). */
-export const PAIR_SCREEN_IOS27 =
-  'Apple’s Bluetooth screen crashes on iOS 27, so it stays closed until the next build of the app, which has Apple’s fix. Until then, Connect can only use an adapter that is already connected to the iPhone.'
+/*
+ * What the Bluetooth page says instead, naming the device in hand (`noun`,
+ * lib/device-word deviceNoun, asked when it is said): an iPad on iOS 27 has
+ * the same screen, and was told its adapter had to be on "the iPhone".
+ */
+export const pairScreenShutWords = (noun) =>
+  `Apple’s Bluetooth screen crashes on iOS 27, so it stays closed until the next build of the app, which has Apple’s fix. Until then, Connect can only use an adapter that is already connected to this ${noun}.`

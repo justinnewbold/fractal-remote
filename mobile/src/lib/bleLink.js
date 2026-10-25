@@ -17,7 +17,7 @@ import {
   unitName
 } from './bluetooth'
 import { getState, handleEvent, refreshAll, reset as resetRig, stopWatching, watchUnit } from './rig'
-import { mayConnectBluetooth } from './purchases'
+import { mayConnectBluetooth, subscribePurchase } from './purchases'
 import { logDebug } from './debugLog'
 
 /**
@@ -78,6 +78,8 @@ let touched = false
 let unitTunerOwed = false
 /* A wire being let go of once the AM4's own tuner has been closed in its turn (see letGoOfWireInTurn). */
 let letting = null
+/* Stopped at the unlock while wanted: the purchase watched, to start the link the moment it lets this account in (see waitForPurchase). */
+let unlockWait = null
 
 const say = (line, detail) => logDebug('ble', line, detail)
 
@@ -117,8 +119,10 @@ export function startBluetoothLink(set) {
     tell?.({ link: 'off' })
     noteBluetooth({ phase: 'locked' })
     say('not connecting over Bluetooth: the app is not unlocked on this phone')
+    waitForPurchase()
     return
   }
+  stopWaitingForPurchase()
   running = true
   held = false
   delay = 0
@@ -131,6 +135,33 @@ export function startBluetoothLink(set) {
     AppState.addEventListener('change', screen)
   ]
   begin()
+}
+
+/*
+ * WAITING ON THE PURCHASE, while the link is wanted and stopped at the
+ * unlock. Nothing else starts it again: App.js restarts the link on a
+ * change of who is signed in, of the demo or of Bluetooth, never of the
+ * purchase, so a purchase that lands after the link was asked (the one
+ * remembered on the phone read late at a launch with no signal, a Restore,
+ * a Buy with Bluetooth on) left a paying customer's link 'off' until
+ * somebody tapped Connect. So the purchase is watched, once, and the link
+ * starts when it lets this account in; it stops being watched when the
+ * link starts or is no longer wanted.
+ */
+function waitForPurchase() {
+  if (unlockWait) return
+  unlockWait = subscribePurchase(() => {
+    if (!wanted || running || !mayConnectBluetooth(bluetoothAdmin())) return
+    stopWaitingForPurchase()
+    say('the app is unlocked on this phone now: connecting over Bluetooth')
+    startBluetoothLink(tell)
+  })
+}
+
+function stopWaitingForPurchase() {
+  const off = unlockWait
+  unlockWait = null
+  off?.()
 }
 
 /** Where the loop stands, said to the link and to the page; then, if there is an adapter to try, try it. */
@@ -484,6 +515,7 @@ export function holdBluetooth() {
 /** Stop everything: link.js's stopLink, before it resets the link and the rig. */
 export function stopBluetoothLink() {
   wanted = false
+  stopWaitingForPurchase()
   if (!running) return
   running = false
   attempt++

@@ -18,7 +18,7 @@
  * more tried than read.
  */
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 
 /* THE BUILD LEDGER, a build at a time: docs/expo-builds.md's rows, read the one way test/bluetooth.mjs reads them too. */
 import { ledgerBuilds, withoutOpening } from './ledger.mjs'
@@ -959,15 +959,14 @@ export function run(test) {
    *   stores      public/store-versions.json, moved the day a version is live
    *   builds      docs/expo-builds.md, read by ledgerBuilds
    *   thresholds  the version rule's BLUETOOTH_FROM_STORE ({ ios, android },
-   *               mobile/src/lib/ble-rule.js), or null where that file is not
-   *               in this tree yet
+   *               mobile/src/lib/ble-rule.js)
    *
    * On needs every one of: both stores at `from` or later; a build at `from`
-   * marked as the opening, for each phone; and, once the version rule is
-   * here, its threshold set on both phones. And once both thresholds are set,
-   * `from` is them, switch on or off: the email says one version to iPhone
-   * and Android buyers alike, so the pull request that sets the thresholds
-   * moves BLUETOOTH_FROM with them if it has to.
+   * marked as the opening, for each phone; and the version rule's threshold
+   * set on both phones. And once both thresholds are set, `from` is them,
+   * switch on or off: the email says one version to iPhone and Android
+   * buyers alike, so the pull request that sets the thresholds moves
+   * BLUETOOTH_FROM with them if it has to.
    *
    * It reads only what the files say. A file moved wrong, or early, it
    * cannot see, which is why supabase/README.md has the day looked at by eye.
@@ -976,12 +975,12 @@ export function run(test) {
     const out = []
     const phones = ['ios', 'android']
     const store = { ios: 'the App Store', android: 'Google Play' }
-    const set = Boolean(thresholds) && phones.every((p) => typeof thresholds[p] === 'string' && thresholds[p] !== '')
+    const set = phones.every((p) => typeof thresholds[p] === 'string' && thresholds[p] !== '')
     if (set) {
       for (const p of phones) if (thresholds[p] !== from) out.push(`${p}: the version rule opens Bluetooth (beta) from ${thresholds[p]}, and the emails say ${from}`)
     }
     if (!on) return out
-    if (thresholds && !set) out.push(`the emails offer Bluetooth (beta), and the version rule has not opened it to customers on both phones (ios ${thresholds.ios}, android ${thresholds.android})`)
+    if (!set) out.push(`the emails offer Bluetooth (beta), and the version rule has not opened it to customers on both phones (ios ${thresholds.ios}, android ${thresholds.android})`)
     for (const p of phones) {
       if (isOlder(stores?.[p], from) !== false) out.push(`${p}: the emails offer Bluetooth (beta) from ${from}, and public/store-versions.json says ${store[p]} has ${stores?.[p]}`)
       if (!builds.some((b) => b.platform === p && b.version === from && b.opening)) out.push(`${p}: the emails offer Bluetooth (beta) from ${from}, and docs/expo-builds.md has no ${p} build of ${from} marked "Bluetooth (beta) for customers"`)
@@ -989,12 +988,11 @@ export function run(test) {
     return out
   }
 
-  /* The state as it is in this tree. The version rule is read where it is here (track 1 of the Bluetooth release brings it), and then always. */
+  /* The state as it is in this tree, the version rule's threshold included (ledger.mjs, imported above, reads ble-rule.js too). */
   const switchToday = async () => {
     const { BLUETOOTH_IN_EMAILS, BLUETOOTH_FROM } = await setupWords()
-    const rule = new URL('../mobile/src/lib/ble-rule.js', import.meta.url)
-    const thresholds = existsSync(rule) ? (await import(rule.href)).BLUETOOTH_FROM_STORE : null
-    if (thresholds !== null) assert.ok(thresholds && typeof thresholds === 'object' && 'ios' in thresholds && 'android' in thresholds, 'the version rule’s thresholds are not { ios, android }; this check needs telling')
+    const thresholds = (await import('../mobile/src/lib/ble-rule.js')).BLUETOOTH_FROM_STORE
+    assert.ok(thresholds && typeof thresholds === 'object' && 'ios' in thresholds && 'android' in thresholds, 'the version rule’s thresholds are not { ios, android }; this check needs telling')
     return {
       on: BLUETOOTH_IN_EMAILS,
       from: BLUETOOTH_FROM,
@@ -1018,7 +1016,7 @@ export function run(test) {
     assert.ok(today.builds.length >= 15, `only ${today.builds.length} builds were read from docs/expo-builds.md; the read is probably broken`)
     assert.deepEqual(emailSwitchProblems(today, isOlder), [])
     /* A cross-check only, until the version rule's thresholds say which version opens it: then they decide, above. */
-    const decided = Boolean(today.thresholds?.ios && today.thresholds?.android)
+    const decided = Boolean(today.thresholds.ios && today.thresholds.android)
     if (!decided) assert.equal(BLUETOOTH_FROM, '1.89.0', 'the version Bluetooth (beta) is planned to open in moved; the email says it, so it moves on purpose')
 
     /* The emails as they go are the switch's: asked with nothing, the switch decides. */
@@ -1067,11 +1065,9 @@ export function run(test) {
 
     /* The day it is for: live in both stores, the opening build on both phones, the rule open on both. */
     assert.deepEqual(problems({}), [], 'the day 1.89.0 opens Bluetooth (beta) and is live in both stores, the switch is refused')
-    assert.deepEqual(problems({ thresholds: null }), [], 'before the version rule is in this tree, the stores and the ledger are not enough')
     assert.deepEqual(problems({ stores: { ios: '1.89.2', android: '1.89.1' } }), [], 'a store already past the opening version is read as not having it')
-    /* Off, today: nothing to say, with or without the rule. */
+    /* Off, today: nothing to say. */
     assert.deepEqual(problems({ on: false, stores: { ios: '1.87.11', android: '1.87.11' }, builds: ledgerBuilds(ledger), thresholds: { ios: null, android: null } }), [])
-    assert.deepEqual(problems({ on: false, stores: { ios: '1.87.11', android: '1.87.11' }, builds: ledgerBuilds(ledger), thresholds: null }), [])
 
     /* The finding: 1.89.0 in both stores, without Bluetooth opened. */
     says({ builds: plain }, /docs\/expo-builds\.md has no ios build of 1\.89\.0 marked/, 'a 1.89.0 that did not open Bluetooth (beta) lets the switch on')

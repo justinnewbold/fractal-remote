@@ -423,6 +423,17 @@ const keptOnPhone = async () => (await keptAccount())?.id || null
  * KEPT_WAIT_MS, the door's own wait, and past it the sign-in still on the
  * phone answers, as at the door. The order is kept: supabase-js's answer
  * first, when it comes in time.
+ *
+ * The one thing given up is the door's own (keptSession): a renewal the
+ * account service turns away AFTER that wait, a slow signal and a sign-in
+ * ended elsewhere (or the account deleted) both on the same tap. Buy then
+ * sells onto that account's id, not the phone's nameless one, and a moment
+ * later the phone is on the sign-in screen; the account made or signed in
+ * to next does not get the purchase by itself, Restore brings it across, and
+ * a second Buy answers "bought already" rather than charging again. Restore,
+ * the held-purchase line and the paywall's sign-in-first line are wrong in
+ * the same few seconds, and harmlessly. Left as it is: narrower than the
+ * half-minute of busy button it buys back.
  */
 export async function signedInOnPhone() {
   return (await within(restoreSession(), KEPT_WAIT_MS, null)) || (await keptOnPhone())

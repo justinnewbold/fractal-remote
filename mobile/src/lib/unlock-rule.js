@@ -47,6 +47,13 @@ export const mayDrive = ({ unlocked = false, available = false } = {}) =>
  * no signal. His account (`admin`, lib/bluetooth bluetoothAdmin: the sign-in
  * kept on the phone, never the account server) keeps mayDrive's answer, as
  * it always has had.
+ *
+ * That read is first in the queue on the phone's storage today (App.js
+ * starts the purchases before the sign-in check the Bluetooth link waits
+ * for), but nothing here leans on the order: a purchase that lands after the
+ * link was asked, from a slow read, a Restore or a Buy, starts the link as
+ * it lands (lib/bleLink waitForPurchase), where it used to sit on "not
+ * unlocked" until somebody tapped Connect.
  */
 export const mayDriveBluetooth = ({ unlocked = false, available = false } = {}, admin = false) =>
   admin === true ? mayDrive({ unlocked, available }) : Boolean(unlocked)

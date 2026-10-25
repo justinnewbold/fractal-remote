@@ -7,7 +7,7 @@ import { BLE_UNITS, CHECK_STEPS, createBleWire, settleMethods } from './bleWire'
 import { createJoiner } from './fractal-sysex.mjs'
 import { blockCatalog } from './blockCatalog'
 import { setSwitch } from './bleSwitch'
-import { isAdapter, pickAdapter, pairScreenCrashes, PAIR_SCREEN_IOS27 } from './bleAdapters'
+import { isAdapter, pickAdapter, pairScreenCrashes, pairScreenShutWords } from './bleAdapters'
 import { logDebug } from './debugLog'
 import { isAdmin } from './admin'
 import { accountId } from './owner-unlock'
@@ -725,7 +725,7 @@ export async function findAdapters() {
       showList(list)
       const pick = pickAdapter(list, fresh)
       if (pick) chooseAdapter(pick)
-      else noteBluetooth({ said: PAIR_SCREEN_IOS27 })
+      else noteBluetooth({ said: pairScreenShutWords(deviceNoun()) })
       return pick
     }
     const before = new Set(adapterDevices().map((d) => d.id))

@@ -33,8 +33,11 @@ import { isOlder } from './versions.js'
  *
  * NULL ON BOTH PHONES UNTIL THE BUILD. Set to '1.89.0' only in the pull
  * request that moves the version to 1.89.0, the last merge before the build
- * pair. A number set earlier is a copy that opens too early: apk.yml makes a
- * public APK at every version, and anything at or above the number opens.
+ * pair, and on both phones together: the pair builds both, and one left null
+ * would be reviewed with notes that say Bluetooth is there on a copy that
+ * keeps it closed (the ledger's rule refuses one phone alone). A number set
+ * earlier is a copy that opens too early: apk.yml makes a public APK at
+ * every version, and anything at or above the number opens.
  * test/bluetooth.mjs asks the threshold the ledger's own question
  * (test/ledger.mjs thresholdProblems), so the build pull request goes green
  * with nothing in the tests rewritten.
@@ -67,9 +70,12 @@ import { isOlder } from './versions.js'
  *
  * AND THE ROW, ONCE WRITTEN, IS PINNED. The ledger test trusts the ledger,
  * so a later change that took the row out and set this back to null
- * together would pass it. The pull request that writes the row also adds a
- * literal to test/bluetooth.mjs: the ledger holds a 1.89.0 row marked as
- * the opening, and the threshold is '1.89.0' on both phones.
+ * together would pass it. The pull request that writes the row also sets
+ * OPENED_AT in test/ledger.mjs to that build ({ version: '1.89.0', ios:
+ * '1.89.0', android: '1.89.0' }), and a test fails until it does: from then
+ * on the ledger has to keep that row on both phones, this has to stay
+ * exactly what the pin says, and a store live at that version or later has
+ * to keep its phone open.
  *
  * AND ONLY ONCE THE STORE COPY IS SEEN TO BE READ RIGHT. Everything here
  * leans on installedStoreVersion reading the number built into the copy,

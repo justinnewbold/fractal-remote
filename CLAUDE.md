@@ -137,9 +137,11 @@ that Android builds used to go to. The track a build is sent to is
 > changes."
 
 `npm run fingerprint` is the test: "Unchanged" is an update, anything else
-is a build. One change says Unchanged and is still a build: the 1.89.0 pull
-request that sets `BLUETOOTH_FROM_STORE` (see "It is switched on for
-customers", below). Run it before pushing, and if a change would move it — a new
+is a build. One change is a build whatever the phones' lines say: the 1.89.0
+pull request that sets `BLUETOOTH_FROM_STORE`, whose phones' fingerprint
+says Unchanged (only the watch line moves, from
+docs/pending/watch-fill.patch; see "It is switched on for customers",
+below). Run it before pushing, and if a change would move it — a new
 package, a plugin, an Expo package version — stop and tell him before
 making it, in plain words, with what it costs (an iOS slot) and what it
 buys. Android APKs from apk.yml are free; iOS slots are not.
@@ -190,8 +192,9 @@ and the fingerprint said Unchanged. Anything that would need an Expo build
 still stops for him first (see above): the merge rule does not cover a
 build, and a change that moves the fingerprint is not "green" for this
 purpose. Nor is the pull request that sets `BLUETOOTH_FROM_STORE`, whose
-fingerprint says Unchanged: it is a build pull request, and waits for his
-yes like one (see "It is switched on for customers", below).
+phones' fingerprint says Unchanged (only the watch line moves, from
+docs/pending/watch-fill.patch): it is a build pull request, and waits for
+his yes like one (see "It is switched on for customers", below).
 
 **Before anything goes to Apple, check it against the guidelines as they
 are that day.**
@@ -322,10 +325,12 @@ the rest:
 
 - `BLUETOOTH_FROM_STORE` stays null on both phones until the build pull
   request that moves the version to 1.89.0, the last merge before the build
-  pair. apk.yml makes a public APK at every version, and a number set early
-  opens on it. The tests ask the threshold the ledger test's own question
-  (test/ledger.mjs), so that pull request goes green with no assertion
-  rewritten.
+  pair, which sets both phones together: a test refuses one phone alone,
+  since the pair builds both and the other would be reviewed with notes
+  that say Bluetooth is there on a copy that keeps it closed. apk.yml makes
+  a public APK at every version, and a number set early opens on it. The
+  tests ask the threshold the ledger test's own question (test/ledger.mjs),
+  so that pull request goes green with no assertion rewritten.
 - THAT PULL REQUEST NEEDS JUSTIN'S YES, GREEN OR NOT. Its phones'
   fingerprint says Unchanged (the version is left out of it, and
   docs/pending/watch-fill.patch moves only the watch), so the merge rule
@@ -341,9 +346,12 @@ the rest:
   customers", written in the first pull request after the build is started.
   From then on the threshold is never moved or set back to null by an
   update, which would take Bluetooth away from the copies reviewed with it;
-  a test fails if it is, and the pull request that writes the row pins it
-  in test/bluetooth.mjs, so the row cannot be taken out with the threshold.
-  Only if no build was ever started from the threshold is it set back.
+  a test fails if it is. The pull request that writes the row also sets
+  `OPENED_AT` in test/ledger.mjs to that build (its version, and the
+  threshold on each phone), and cannot go green without it: then the row,
+  the threshold and the pin hold each other, and taking Bluetooth back out
+  takes three deliberate edits, never one slip. Only if no build was ever
+  started from the threshold is it set back.
 - A second unit (FM9, Axe-Fx III, FM3) opens to customers only keyed the way
   Bluetooth is, by a store version for that unit against the copy's built-in
   one. `CUSTOMER_UNITS` is a plain list, and a name added to it reaches every
