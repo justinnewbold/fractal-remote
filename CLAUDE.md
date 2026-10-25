@@ -234,7 +234,8 @@ icon now (mobile/assets/watch-icon.png); keep it light.
   holding a build under review). Fixes go out as before; a big new phone
   feature waits until any review in progress is over.
 
-**Bluetooth (beta) is the developer's only, since 11 October 2026.**
+**Bluetooth (beta) is the developer's only on every copy out today, since 11
+October 2026, and opens to customers in the next store version (1.89.0).**
 
 > "Is there any way to just get the Bluetooth on the developers mode for my
 > own phone? I just feel like it's not ready to have public."
@@ -246,20 +247,27 @@ Bluetooth permission text (a module that asks for Bluetooth without it gets
 the build refused), and an update hides it from everybody but him:
 
 - The Settings row and the page wait for `useBluetoothAllowed()` in
-  mobile/src/lib/bluetooth.js: `isAdmin` of the account in the sign-in kept
-  on the phone (`haveSession()`), never `currentAccount()`, which asks the
-  server and would take his own Bluetooth away at a gig with no signal.
+  mobile/src/lib/bluetooth.js, which asks `bluetoothOpen()` in
+  mobile/src/lib/ble-rule.js: his account (`isAdmin` of the sign-in kept on
+  the phone, `haveSession()`, never `currentAccount()`, which asks the server
+  and would take his own Bluetooth away at a gig with no signal) on every
+  copy, and anybody else only on a copy whose BUILT-IN store version is at or
+  above `BLUETOOTH_FROM_STORE` (see the next rule). Customers are offered the
+  AM4 only (`CUSTOMER_UNITS`); the FM3, FM9 and Axe-Fx III stay his until
+  each has really run.
 - App.js asks it at launch, before the link starts, and at every change of
   who is signed in. Anybody else found on Bluetooth goes back to the
   computer (`setBluetooth(false)`, unit and adapter kept), and
   `setBluetooth(true)` refuses them.
-- No session on the phone is not a no. It is also what his own sign-in looks
-  like when it ran out at a gig with no signal, so Bluetooth goes off for
-  now in memory and stays on on the phone's storage, and the next launch that
-  knows it is his starts on Bluetooth. Only another real account's id, or a
-  sign-out somebody asked for (`allowBluetooth(null, { signedOut: true })`
-  from Sign out, Delete account, the paywall and `toSignIn`), writes the off
-  down.
+- A sign-in that ran out at a gig with no signal still answers with its
+  account (mobile/src/lib/relay.js `keptSession`, since 25 October 2026, for
+  every customer: before, the launch waited 25 seconds and opened on the
+  sign-in screen), so his Bluetooth stays on. No session at all is still not
+  a no: Bluetooth goes off for now in memory and stays on on the phone's
+  storage, and the next launch that knows it is his starts on Bluetooth.
+  Only another real account's id, or a sign-out somebody asked for
+  (`allowBluetooth(null, { signedOut: true })` from Sign out, Delete account,
+  the paywall and `toSignIn`), writes the off down.
 - Nothing touches the phone's Bluetooth before Connect is tapped on the
   Bluetooth page, so nobody who is not shown that page is asked for the
   permission.
@@ -284,15 +292,47 @@ the build refused), and an update hides it from everybody but him:
 **It is switched on for customers only in a new store version whose review
 notes say so, never by an over-the-air update.** Apple's guideline 2.5.19
 (part of 2.3.1(a) until 16 October 2026) bans hidden features, 2.3.1(a)
-wants every new one described in the Notes for Review, its licence (3.3.1(C)) keeps a change to what an app does for a
-version it has reviewed, and Google forbids features activated remotely
-after review. An update is exactly that: opening the gate on main would
-reach every 1.87.1 and 1.87.11 phone (the two builds share one fingerprint),
-with the notes Apple approved for 1.87.11 saying customers are not shown it. So the day it is ready, the opening rides a build whose
-fingerprint moved (then no update made for it can reach the older
-binaries), with the review notes, What's New, the descriptions,
-support.html and /bluetooth saying so, and the build is asked for like any
-other.
+wants every new one described in the Notes for Review, its licence (3.3.1(C))
+keeps a change to what an app does for a version it has reviewed, and Google
+forbids features activated remotely after review. An update is exactly that:
+every merge to main reaches every copy on the current runtime (TestFlight
+1.88.3, Play 1.88.0, and the App Store's 1.88.3 once approved; the 1.87.x
+copies are frozen on update 1.87.60), whose review notes say customers are
+not shown it.
+
+So it opens by a fact about the copy itself, which no update can change: the
+version BUILT INTO it (`installedStoreVersion()` in
+mobile/src/lib/storeVersion.js), at or above `BLUETOOTH_FROM_STORE` in
+mobile/src/lib/ble-rule.js. Moving the fingerprint is NOT the lock: the
+version number is left out of it, and the watch's own hash is not what
+updates are matched on. The rule's own comment and test/bluetooth.mjs hold
+the rest:
+
+- `BLUETOOTH_FROM_STORE` stays null on both phones until the build pull
+  request that moves the version to 1.89.0, the last merge before the build
+  pair. apk.yml makes a public APK at every version, and a number set early
+  opens on it.
+- It is set only after Justin's logs from iPhone 1.88.3 and Android 1.88.0
+  show "store copy: 1.88.3" and "store copy: 1.88.0" in their head
+  (lib/logHead.js), proving the built-in number is read, not the update's.
+- The build's row in docs/expo-builds.md says "Bluetooth (beta) for
+  customers". From then on the threshold is never moved or set back to null
+  by an update, which would take Bluetooth away from the copies reviewed
+  with it; a test fails if it is.
+- The review notes, What's New, the descriptions, the setup guide the app
+  opens (bluetooth-guide.html), the privacy page, support.html and /bluetooth
+  all say so, and the build is asked for like any other. The setup emails'
+  Bluetooth paragraph (supabase/functions/setup-reminder) is switched on, and
+  the function redeployed, only on the day 1.89.0 is live (supabase/README.md
+  says how, with Justin reading the sample first).
+
+How it is presented, in his words: "make it clear that there's multiple ways
+to connect the device, but also make it clear that the computer is the
+preferred method and that Bluetooth will have more lag and not have as many
+features." One shared sentence in shared/bluetooth-gear.mjs says it on the
+Bluetooth page, the Settings row, the waiting screen's "No computer? Use
+Bluetooth (beta)", the purchase page and the no-computer words, each shown
+only where this copy offers Bluetooth.
 
 **Fractal Audio wrote on 18 October 2026, and the app does what it asked,
 except the name.** Their letter on Approved Vendor status asked for a clear
@@ -453,8 +493,8 @@ the remote says "phone or tablet". A shared sentence that names it must be
 read when it is shown (a getter or a function), because the website changes
 role after its files load.
 
-Left as they are on purpose: the Bluetooth (beta) words (his alone, from an
-iPhone), the Apple Watch words (a watch pairs only with an iPhone, and an
+Left as they are on purpose: the Bluetooth (beta) note's "from an iPhone"
+(where it was tried, not the device in hand), the Apple Watch words (a watch pairs only with an iPhone, and an
 iPad is not offered one), the feature names "Phone remote" and the computer's
 "Phone & computer" page, the paywall's "Phone Remote", log lines, and the VP4
 sentences in shared/vp4-safety.mjs, which are the computer's own word for

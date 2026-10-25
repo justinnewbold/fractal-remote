@@ -317,6 +317,7 @@ async function otherWayOnABench() {
     'bleSwitch.mjs': 'const b = globalThis.__otherWayBench\nexport const bluetoothOn = () => b.on\n',
     'version.mjs': "export const APP_VERSION = '1.88.4'\n",
     'demo.mjs': 'export const isDemo = () => false\n',
+    'device-word.mjs': "export const deviceNoun = () => 'phone'\n",
     'device.mjs': 'export const vp4Capabilities = () => null\nexport const vp4Here = () => null\n',
     'vp4-safety.mjs': 'export const vp4ComputerLacks = () => null\n',
     'Note.mjs': "export default function Note({ children, ...props }) { return { drawn: 'Note', tone: props.tone, children } }\n",
@@ -360,7 +361,8 @@ async function otherWayOnABench() {
     ["from '../lib/device'", "from './device.mjs'"],
     ["from '../lib/vp4-safety'", "from './vp4-safety.mjs'"],
     ["from '../lib/no-computer'", `from '${repoUrl('mobile/src/lib/no-computer.js')}'`],
-    ["from '../lib/useBluetoothOffered'", "from './useBluetoothOffered.mjs'"]
+    ["from '../lib/useBluetoothOffered'", "from './useBluetoothOffered.mjs'"],
+    ["from '../lib/device-word'", "from './device-word.mjs'"]
   ])
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
   const at = (f) => pathToFileURL(join(dir, f)).href
