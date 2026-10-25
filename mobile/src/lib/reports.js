@@ -103,13 +103,41 @@ export function logPreview(kind, { head = '', before = [] } = {}) {
  * SHOT_WAIT_MS together: one that fails or is late is left out, the report
  * goes without it, and the answer says how many (`shotsLost`). Never waits
  * past SEND_WAIT_MS for the row either.
+ *
+ * `typed` is whether the message is something a person wrote, which decides
+ * whether the words for a report that did not go may say "What you wrote is
+ * still here"; left out, it is anything but the log screen's own sentence
+ * (LOGS_ONLY_MESSAGE). `copyLogs` is whether the screen it was sent from has
+ * Copy Logs to offer instead (the log screen's does; see notSentHere).
  */
-export async function sendReport({ kind, message, contact, context: ctx = {}, withLog = true, computer = '', head = '', before = [], shots = [] }) {
+export async function sendReport({
+  kind,
+  message,
+  contact,
+  context: ctx = {},
+  withLog = true,
+  computer = '',
+  head = '',
+  before = [],
+  shots = [],
+  typed,
+  copyLogs = false
+}) {
   const row = buildReport({
     kind,
     message,
     contact,
-    context: ctx,
+    /*
+     * WHAT LAST WENT WRONG GOES WITH THE LOG AND NEVER WITHOUT IT. `lastError`
+     * is the newest fault the screen showed, read off the log (context, above),
+     * and every fault is a line in the log now (lib/rig.js set()). The privacy
+     * page and the form's small print say a suggestion carries the version,
+     * the unit, the OS and the screen size and never the log, and that a bug
+     * report can be sent without it, so a report that carries no log carries
+     * none of the log's words either: not a suggestion, and not a bug report
+     * with the log turned off.
+     */
+    context: withLog && carriesLog(kind) ? ctx : apartFromLog(ctx),
     /* Read at send and at no other moment. Nothing is gathered while somebody
        types, so a report abandoned half-written leaves no copy anywhere. */
     lines: withLog ? getDebugLog() : [],
@@ -154,11 +182,34 @@ export async function sendReport({ kind, message, contact, context: ctx = {}, wi
   /* Nothing was written for a log sent in one tap, so nothing is "still here".
      The database's own words go into the log, never onto the screen. */
   if (error) {
-    const err = notSent(error, { wrote: row.message !== LOGS_ONLY_MESSAGE })
+    const err = notSentHere(error, { wrote: typeof typed === 'boolean' ? typed : row.message !== LOGS_ONLY_MESSAGE, copyLogs })
     logDebug('app', 'report not sent', err.reason)
     throw err
   }
   return { sent: true, shotsLost: pictures.lost }
+}
+
+/** A report's details without what was read off the log (`lastError`), for a report that carries no log. */
+function apartFromLog(ctx) {
+  const out = { ...(ctx || {}) }
+  delete out.lastError
+  return out
+}
+
+/*
+ * THE WORDS FOR A REPORT THAT DID NOT GO, FOR THE SCREEN IT WAS SENT FROM.
+ * shared/report-rules notSentWords is the browser's and the phone's, and for
+ * a report with nothing written it ends its last case with "or use Copy Logs
+ * instead", which is the log screen's own button. Report a Bluetooth problem
+ * (screens/BluetoothReport) has none, so from there the sentence stops at
+ * "Try again in a moment." Done here, on the phone, so the shared words (and
+ * the computer app that carries them) stay as they are.
+ */
+const COPY_LOGS_TAIL = /, or use Copy Logs instead\.$/
+function notSentHere(error, { wrote, copyLogs }) {
+  const err = notSent(error, { wrote })
+  if (!copyLogs) err.message = err.message.replace(COPY_LOGS_TAIL, '.')
+  return err
 }
 
 /**
@@ -201,7 +252,15 @@ export function sendLogs(options) {
   return sendingLogs
 }
 
-async function sendLogsNow({ deviceName, note = '', shots = [], head = '', before = [] } = {}) {
+/*
+ * `typed` is whether the note is something a person wrote (it is, from the
+ * log screen's box, whenever there is one); Report a Bluetooth problem sends
+ * a note the app made from the answer tapped, and says false, so a report
+ * that did not go never says "What you wrote is still here" on a screen with
+ * nothing to type. `copyLogs` is true on the log screen, which has Copy Logs
+ * beside the button, and false from anywhere that has not.
+ */
+async function sendLogsNow({ deviceName, note = '', typed = !!String(note ?? '').trim(), copyLogs = true, shots = [], head = '', before = [] } = {}) {
   const computer = await computerPart()
   let sent
   try {
@@ -214,7 +273,9 @@ async function sendLogsNow({ deviceName, note = '', shots = [], head = '', befor
       computer,
       head,
       before,
-      shots
+      shots,
+      typed,
+      copyLogs
     })
   } catch (err) {
     /* A refusal's own words are on the line sendReport wrote just before; anything else's are here. */

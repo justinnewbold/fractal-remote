@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Linking, Platform, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
@@ -31,6 +31,7 @@ import {
   AM4_ONLY,
   BLUETOOTH_WAYS,
   FIRST_TIME,
+  FM3_NEVER,
   GEAR_IN_SHORT,
   GEAR_IN_SHORT_AM4,
   GUIDE_URL,
@@ -38,12 +39,17 @@ import {
   ONE_AT_A_TIME,
   PLUGS_CHECK,
   POWER_LINE,
+  REPORT_BUTTON,
   SELLERS_LINE,
   betaNote,
+  heatLineFor,
   hookupFor,
+  midiSettingsFor,
   partsFor,
+  powerStepOf,
   untriedLine,
-  warningFor
+  warningFor,
+  wrongUnitLine
 } from '../lib/bluetooth-gear'
 import { deviceNoun } from '../lib/device-word'
 import { probeNow } from '../lib/link'
@@ -106,6 +112,17 @@ import Press from '../components/Press'
  * account may pick (offeredUnits): the AM4 alone for a customer, all four for
  * his account. And everybody, before any pick and whatever is picked, is
  * told it is not for an FM3, whose owners would otherwise never see why.
+ *
+ * AND ONE TAP TO SAY SO. "Super easy for all users to submit bugs and
+ * feedback" (25 October 2026, when Bluetooth (beta) was decided for every
+ * customer with the full version): a big Report a Bluetooth problem straight
+ * under the beta note, on every visit, and a small Report this beside each
+ * line that says something is wrong, which sends that line with the report.
+ * Not beside the line that says Bluetooth is not allowed, which has Open
+ * Settings, the fix, under it, and not beside "Unlock the app", which is not
+ * a problem with Bluetooth. Both open Report a Bluetooth problem
+ * (screens/BluetoothReport, `onReport`, App's through Settings), which comes
+ * back here.
  *
  * The beta note is the iPhone's or Android's own (betaNote, from
  * shared/bluetooth-gear.mjs): only Android's names an Android phone, because
@@ -190,17 +207,23 @@ function status(b, unitState) {
   if (b.phase === 'held') return { line: 'Disconnected', tone: 'dim' }
   if (b.phase === 'connected') {
     /*
-     * The wrong unit picked: the phone has stopped sending to it, and this is
-     * the way out. Only sent to a unit this account can pick in step 1 (it is
-     * always the AM4: bleWire's onForeign names nothing else); never to one a
-     * customer is not offered.
+     * The wrong unit on the adapter: which one really answered, by name, and
+     * the way out (shared/bluetooth-gear wrongUnitLine). Any unit the wire
+     * knows: an AM4 on another unit's connection (which also stops the wire
+     * sending), an FM9 picked as an FM3, an FM3 on the AM4's, a VP4 on
+     * anybody's. Sent to step 1 only for a unit this account can pick there,
+     * never to one a customer is not offered; a VP4 is told it is not a
+     * Bluetooth unit.
      */
     if (b.answeredAs) {
-      const pickable = offeredUnits().some((u) => u.name === b.answeredAs)
+      const units = offeredUnits()
       return {
-        line: pickable
-          ? `An ${b.answeredAs} answered, not the ${name}. Tap Stop, pick ${b.answeredAs} in step 1, then tap Connect.`
-          : `An ${b.answeredAs} answered, not the ${name}. ${AM4_ONLY} Tap Stop, and use the computer for the ${b.answeredAs}.`,
+        line: wrongUnitLine({
+          answered: b.answeredAs,
+          picked: name,
+          pickable: units.some((u) => u.name === b.answeredAs),
+          forWhich: units.length < BLE_UNITS.length ? AM4_ONLY : ''
+        }),
         tone: 'fault'
       }
     }
@@ -219,10 +242,18 @@ function status(b, unitState) {
 /* Blue for the unit answering over Bluetooth, as the bar is; green stays the unit answering through a computer. */
 const TONES = { ok: () => color.ble, fault: () => color.fault, dim: () => color.silkDim }
 
-export default function BluetoothPage({ purchase, admin = false }) {
+export default function BluetoothPage({ purchase, admin = false, onReport = null }) {
   const b = useBluetooth()
   const unitState = useRig((s) => s.unit)
   const said = status(b, unitState)
+  /*
+   * REPORT THIS, beside what is wrong: a fault line, except the one with
+   * Open Settings under it and the one about unlocking. When the adapter is
+   * connected and the unit says nothing, it goes under the hint that says
+   * why, rather than between the line and its hint.
+   */
+  const quiet = b.on && b.phase === 'connected' && !b.answeredAs && (unitState === 'missing' || unitState === 'silent')
+  const reportable = said.tone === 'fault' && b.trouble !== 'permission' && b.phase !== 'locked' && !!onReport
   const steps = checkSteps(b.unit)
   const am4 = b.unit === 'am4'
   const connected = b.on && b.phase === 'connected'
@@ -368,7 +399,20 @@ export default function BluetoothPage({ purchase, admin = false }) {
             {said.line}
           </Text>
           {b.trouble === 'permission' ? <OpenSettings /> : null}
+          {reportable && !quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
         </View>
+
+        {/*
+          THE FM3, WHENEVER IT IS THE UNIT PICKED OR THE UNIT THAT ANSWERED, on
+          or off, and never folded: the cable that ran hot on it, and every
+          adapter fed from its MIDI OUT, kept off it (FM3_NEVER). An FM3 that
+          answered a connection made for another unit is the one moment the
+          app knows an adapter is plugged into an FM3, and it is put straight
+          under "An FM3 answered, not the …", which says nothing of heat. How
+          to plug it in, which holds the full warning, starts folded once an
+          adapter has been used here.
+        */}
+        {b.unit === 'fm3' || b.answeredAs === 'FM3' ? <Note tone="fault">{FM3_NEVER}</Note> : null}
 
         {b.on ? (
           <View style={{ gap: space.sm }}>
@@ -383,6 +427,7 @@ export default function BluetoothPage({ purchase, admin = false }) {
                 {`${am4Only ? `${AM4_ONLY} ` : ''}${PLUGS_CHECK} The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.`}
               </Hint>
             ) : null}
+            {reportable && quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
             {b.phase === 'connecting' ? (
               <Hint>
                 {shut
@@ -473,7 +518,9 @@ export default function BluetoothPage({ purchase, admin = false }) {
             {`No adapter was connected. Check Bluetooth is on, and allowed for Fractal Remote in the ${deviceNoun()}’s Settings. Then tap Connect again, and in Apple’s screen tap your adapter and wait for Connected before Done.`}
           </Text>
         ) : null}
+        {!b.on && missed && !b.adapter && !b.trouble && !b.said && onReport ? <ReportThis onPress={() => onReport('No adapter was connected.')} /> : null}
         {b.said ? <Note tone="warn">{b.said}</Note> : null}
+        {b.said && onReport ? <ReportThis onPress={() => onReport(b.said)} /> : null}
 
         {showList ? (
           <View style={{ gap: space.sm }}>
@@ -528,6 +575,11 @@ export default function BluetoothPage({ purchase, admin = false }) {
 
       {/* The beta, on every visit and never folded: what it is, where it has been tried, and the way back. */}
       <Note tone="warn">{BETA_NOTE}</Note>
+      {/*
+        AND THE BUTTON IT POINTS AT, straight under it on every visit, never
+        folded: the one-tap report, "It works on my unit" among its answers.
+      */}
+      {onReport ? <Press label={REPORT_BUTTON} sub="Or tell us it works" onPress={() => onReport(null)} /> : null}
 
       {/* For finding out what a real unit does: Justin's account only, and out of the way until asked for. */}
       {admin && b.unit ? (
@@ -577,6 +629,10 @@ export default function BluetoothPage({ purchase, admin = false }) {
             <View style={{ gap: space.md }}>
               <Heading>How each command is sent</Heading>
               <Hint>Auto tries the first way, checks, and remembers what worked. The others force one.</Hint>
+              {/* bleWire editByAuto: FM3-Edit's scene, channel and tempo go to an FM9 or Axe-Fx III only when forced here. */}
+              {b.unit !== 'fm3' ? (
+                <Hint>{`On the ${unitName(b.unit)}, Auto sends only the published scene, channel and tempo. FM3-Edit’s way goes only when you pick it here.`}</Hint>
+              ) : null}
               {HOW.map((h) => (
                 <View key={h.key} style={{ gap: space.xs }}>
                   <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '700' }}>
@@ -635,6 +691,14 @@ export default function BluetoothPage({ purchase, admin = false }) {
   )
 }
 
+/*
+ * Report this, under a line that says something is wrong: small, so it never
+ * reads as the page's main button, and 44 high, the least a thumb wants.
+ */
+function ReportThis({ onPress }) {
+  return <Press label="Report this" height={44} style={{ alignSelf: 'flex-start', paddingHorizontal: space.lg }} onPress={onPress} />
+}
+
 /* An address outside the app: the browser opens it, and a phone that cannot is left where it was. */
 const openLink = (url) => Linking.openURL(url).catch(() => {})
 
@@ -655,6 +719,13 @@ function OpenSettings() {
  * unit nobody has tried it on yet says so under the steps rather than being
  * promised to work. The FM3 gets its warning instead: what happened when the
  * parts went straight in, and what owners report.
+ *
+ * On the units nobody here has, the cable is felt in the first minute
+ * (HEAT_CHECK), so that line comes straight after the power step
+ * (powerStepOf), before a step that sends the player into the unit's menus,
+ * as the guide has it. And the Program Change settings, which only an owner
+ * whose presets don't change needs, come under the steps with that
+ * condition first, never as a step for everybody (midiSettingsFor).
  */
 function PlugIn({ unit }) {
   if (!unit) return <Hint>Pick your unit above to see how it plugs in.</Hint>
@@ -662,16 +733,23 @@ function PlugIn({ unit }) {
   if (warning) return <Note tone="fault">{warning}</Note>
   const steps = hookupFor(unit, deviceNoun()) || []
   const untried = untriedLine(unit)
+  const heat = heatLineFor(unit)
+  const heatAfter = heat ? powerStepOf(unit) : -1
+  const midi = midiSettingsFor(unit, deviceNoun())
   return (
     <View style={{ gap: space.sm }}>
       {/* Once, before any of the plugging in: the Uhost's firmware, which the steps take for granted. */}
       <Hint>{FIRST_TIME}</Hint>
       {steps.map((line, i) => (
-        <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
-          <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22, minWidth: 18 }}>{`${i + 1}.`}</Text>
-          <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
-        </View>
+        <Fragment key={line}>
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22, minWidth: 18 }}>{`${i + 1}.`}</Text>
+            <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
+          </View>
+          {i === heatAfter ? <Note tone="warn">{heat}</Note> : null}
+        </Fragment>
       ))}
+      {midi ? <Hint>{midi}</Hint> : null}
       <Hint>{ONE_AT_A_TIME}</Hint>
       {untried ? <Note tone="warn">{untried}</Note> : null}
     </View>

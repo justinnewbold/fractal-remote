@@ -340,6 +340,93 @@ const LOG = [
 ].join('\n')
 
 export function run(test) {
+  /*
+   * WHAT LAST WENT WRONG GOES WITH THE LOG AND NEVER WITHOUT IT (review of
+   * 25 October 2026). Every fault the screen shows is a line in the log now
+   * (lib/rig.js set()), so a report's details found it every time, and they
+   * go with a suggestion too, and with a bug report whose log was turned
+   * off: both of which the privacy page and the form's small print say
+   * carry no log. The phone's sendReport, run.
+   */
+  test('the phone sends the last fault on screen only with the log: never with a suggestion, or a bug report with the log turned off', async () => {
+    await phone({ user: USER }, async ({ reports, log, bench }) => {
+      /* A fault, as lib/rig.js set() writes every one. */
+      log.logDebug('error', 'The unit refused that preset.')
+      const details = () => reports.context({ deviceName: 'FM3' })
+      assert.equal(details().lastError, 'The unit refused that preset.', 'the details do not find the fault (lib/reports context)')
+
+      await reports.sendReport({ kind: 'idea', message: 'A bigger tuner', context: details() })
+      await reports.sendReport({ kind: 'bug', message: 'It froze', context: details(), withLog: false })
+      await reports.sendReport({ kind: 'bug', message: 'It froze', context: details() })
+      await reports.sendLogs({ deviceName: 'FM3' })
+      const [idea, bare, bug, logs] = bench.inserts.map((i) => i.row)
+
+      assert.equal(idea.log, null)
+      assert.ok(!('lastError' in idea.context), 'a suggestion carries the last fault on screen')
+      assert.equal(bare.log, null)
+      assert.ok(!('lastError' in bare.context), 'a bug report with the log turned off carries the last fault on screen')
+      assert.ok(bug.log)
+      assert.equal(bug.context.lastError, 'The unit refused that preset.', 'a bug report with its log lost the last fault')
+      assert.ok(logs.log)
+      assert.equal(logs.context.lastError, 'The unit refused that preset.', 'Send logs to developer lost the last fault')
+      /* Everything else in the details goes as it did. */
+      for (const row of [idea, bare]) {
+        assert.deepEqual(Object.keys(row.context).sort(), Object.keys(bug.context).filter((k) => k !== 'lastError').sort())
+        assert.equal(row.context.unit, 'FM3')
+        assert.equal(row.context.version, '1.87.48')
+      }
+      /* And what the caller handed in is not changed by it. */
+      const handed = details()
+      await reports.sendReport({ kind: 'idea', message: 'A bigger tuner', context: handed })
+      assert.equal(handed.lastError, 'The unit refused that preset.')
+    })
+  })
+
+  /*
+   * REPORT A BLUETOOTH PROBLEM HAS NOTHING TO TYPE AND NO COPY LOGS, so a
+   * report from it that did not go says neither "What you wrote is still
+   * here" nor "use Copy Logs instead" (review of 25 October 2026): its note
+   * is the app's (typed: false) and the screen has no Copy Logs (copyLogs:
+   * false). The log screen's own send and the Feedback form say what they
+   * said before.
+   */
+  test('a Bluetooth report that did not go never says what you wrote is still here, or to use Copy Logs', async () => {
+    const { reportNote } = await import('../mobile/src/lib/bleReport.js')
+    const fromBluetooth = { deviceName: 'AM4', note: reportNote('connect', 'No adapter was connected.'), typed: false, copyLogs: false }
+    const refusals = [
+      { message: 'TypeError: Network request failed' },
+      { message: 'new row violates row-level security policy for table "feedback"' },
+      { message: 'duplicate key' }
+    ]
+    for (const insertError of refusals) {
+      await phone({ user: USER, insertError }, async ({ reports, bench }) => {
+        await assert.rejects(reports.sendLogs(fromBluetooth), (err) => {
+          assert.doesNotMatch(err.message, /What you wrote|Copy Logs/, `${insertError.message}: ${err.message}`)
+          assert.match(err.message, /Try again in a moment\.$/)
+          assert.equal(err.reason, insertError.message, 'the database’s reason is lost')
+          return true
+        })
+        /* It was the Bluetooth report that tried, with its own first line. */
+        assert.equal(bench.inserts[0].row.message, 'Bluetooth (beta): It won’t connect\nThe app said: No adapter was connected.')
+        /* The log screen's one tap with nothing written still offers Copy Logs on a refusal, and a typed note is still kept. */
+        await assert.rejects(reports.sendLogs({ deviceName: 'AM4', note: '' }), (err) => !/What you wrote/.test(err.message))
+        await assert.rejects(reports.sendLogs({ deviceName: 'AM4', note: 'It froze' }), /What you wrote is still here/)
+      })
+    }
+    await phone({ user: USER, insertError: { message: 'new row violates row-level security policy' } }, async ({ reports }) => {
+      await assert.rejects(reports.sendLogs({ deviceName: 'AM4', note: '' }), /^Error: That didn't send\. Try again in a moment, or use Copy Logs instead\.$/)
+      /* The form, which has words typed, as before. */
+      await assert.rejects(reports.sendReport({ kind: 'bug', message: 'It froze', context: {} }), /What you wrote is still here/)
+    })
+    /* And the app's own deadline: wait, rather than send a second one, and nothing about what was written. */
+    await phone({ user: USER, insertHold: new Promise(() => {}) }, async ({ reports }) => {
+      await assert.rejects(reports.sendLogs(fromBluetooth), (err) => {
+        assert.equal(err.message, "The internet didn't answer in time. It may still arrive, so wait a minute before sending it again.")
+        return true
+      })
+    })
+  })
+
   test('an empty note still sends the one tap, and a typed note is the message, at both ends', async () => {
     const r = await import('../shared/report-rules.mjs')
     assert.equal(r.logsMessage(''), r.LOGS_ONLY_MESSAGE, 'an empty note left the message empty, which the table refuses')

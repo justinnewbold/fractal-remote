@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { requireOptionalNativeModule } from 'expo'
 
-import { BLE_UNITS, CHECK_STEPS, createBleWire, settleMethods } from './bleWire'
+import { BLE_UNITS, CHECK_STEPS, WAYS, createBleWire, settleMethods } from './bleWire'
 import { createJoiner } from './fractal-sysex.mjs'
 import { blockCatalog } from './blockCatalog'
 import { setSwitch } from './bleSwitch'
@@ -72,7 +72,7 @@ const NOW = {
   looking: false,
   /* The name the adapter gave when it connected. */
   connectedTo: null,
-  /* The unit that answered instead of the one picked (an AM4 on an FM3's connection), or null. */
+  /* The unit that answered instead of the one picked, by its bare name (an FM9 on an FM3's connection: 'FM9'), or null. */
   answeredAs: null
 }
 
@@ -593,6 +593,38 @@ export function chooseAdapter(dev) {
  */
 export const adapterName = (a) => (a && typeof a.name === 'string' && a.name && a.name !== a.id ? a.name : null)
 
+/**
+ * WHAT A BLUETOOTH REPORT'S LOG SAYS ABOUT IT, in its head (lib/logHead, by
+ * lib/bleReport bluetoothHead): the unit picked on the page, the unit that
+ * answered instead, where the link stands and what is in its way, and the
+ * adapter, by its name or '' for one with none, never its id. Null for no
+ * adapter chosen. Read when the report is sent, and at no other moment.
+ */
+export const bluetoothFacts = () => ({
+  unit: saved.unit ? unitName(saved.unit) : null,
+  answeredAs: now.answeredAs || null,
+  phase: now.phase,
+  trouble: now.trouble,
+  adapter: saved.adapter ? adapterName(saved.adapter) || '' : null,
+  /*
+   * How each command goes to the unit picked: what auto found
+   * (methodsFor(unit).learned), any way forced in the testing tools, and the
+   * Program Change channel. Not for an AM4, which has one way for everything
+   * and never learns one (its routes go to am4* handlers, and the page hides
+   * How each command is sent for it): its head said "none found yet" on
+   * every report, which reads as something the app failed to find, and the
+   * Program Change channel moved for a Gen 3 unit, which an AM4 never sends.
+   */
+  ways: saved.unit && saved.unit !== 'am4' ? waysFor(saved.unit) : null
+})
+
+/* The ways, for the log's head: only what has been found or forced, so a unit nothing has been learned on says so (bleReport waysLine). */
+function waysFor(unit) {
+  const m = methodsFor(unit)
+  const forced = Object.fromEntries(Object.keys(WAYS).filter((k) => m[k] !== 'auto').map((k) => [k, m[k]]))
+  return { learned: { ...m.learned }, forced, pcChannel: m.pcChannel }
+}
+
 /** Forget the adapter. bleLink hears it and lets go. */
 export function forgetAdapter() {
   if (!saved.adapter) return
@@ -881,8 +913,8 @@ export function openWire() {
     methods: methodsFor(unit),
     log: (line) => logDebug('ble', line),
     remember: (m) => rememberMethods(unit, m),
-    /* The wrong unit was picked: the wire has stopped sending, and the page says which one answered. */
-    onForeign: (name) => noteBluetooth({ answeredAs: name })
+    /* The wrong unit was picked: the page says which one answered (bleWire heardAnother, and heardAnAm4, which also stops the wire), and null takes it off when the one picked answers after all (heardFromIt). */
+    onForeign: (name) => noteBluetooth({ answeredAs: name || null })
   })
   const mine = wire
   joiner = createJoiner({

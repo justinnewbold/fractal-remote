@@ -125,7 +125,15 @@ const SPEC = {
   am4: { name: 'AM4', short: 'AM4', maxPreset: AM4.LOCATIONS - 1 }
 }
 
-const MODEL_NAMES = { 0x10: 'an Axe-Fx III', 0x11: 'an FM3', 0x12: 'an FM9', 0x14: 'a VP4', 0x15: 'an AM4' }
+/*
+ * Every unit a Fractal message can come from, by its model byte, said with
+ * its article for the log. The page is told the bare name (`modelName`), and
+ * says the article itself (shared/bluetooth-gear withArticle, held to these
+ * by a test), so "An an FM9" can never be written.
+ */
+export const MODEL_NAMES = { 0x10: 'an Axe-Fx III', 0x11: 'an FM3', 0x12: 'an FM9', 0x14: 'a VP4', 0x15: 'an AM4' }
+/** A model byte's bare name ("FM9", "VP4"), or null for one this file does not know. */
+export const modelName = (byte) => (MODEL_NAMES[byte] ? MODEL_NAMES[byte].replace(/^an? /, '') : null)
 
 /*
  * How long each question waits, in milliseconds. ForgeFX's own numbers where
@@ -246,6 +254,12 @@ export const CHECK_STEPS = {
       { step: 'write-scene', label: 'Scene: go to 2 and back', does: 'Changes to scene 2, then back to the scene you were on.' },
       { step: 'write-channel', label: 'Channel: Amp to B and back', does: 'Puts the amp on B, then back where it was.' },
       { step: 'write-tempo', label: 'Tempo: up 1 and back', does: 'Raises the tempo by one, then puts it back.' },
+      {
+        step: 'write-bypass',
+        label: 'Effect: off and back',
+        does: 'Switches the first effect off, or on, then puts it back as it was.',
+        warn: 'If the preset has only an amp and a cab, it switches the amp, so the sound changes for a moment until it is back on.'
+      },
       { step: 'write-preset', label: 'Preset: next and back', does: 'Loads the next preset, then the one you were on.' },
       { step: 'write-tuner', label: 'Tuner: 3 seconds', does: 'Opens the tuner for three seconds and counts the readings.' }
     ]
@@ -333,7 +347,7 @@ export function am4Sender(send, log = () => {}, learned = () => null) {
  * @param {{now, setTimeout, clearTimeout}} [o.clock]
  * @param {(line:string) => void} [o.log]
  * @param {(methods:object) => void} [o.remember]  called when auto learns a way, to keep it on the phone
- * @param {(name:string) => void} [o.onForeign]  called once when an AM4 answers a connection made for another unit, so the page can say so
+ * @param {(name:string|null) => void} [o.onForeign]  called once, with its bare name, when another unit answers a connection before the one picked has, so the page can say which; and with null when the one picked answers after it (heardFromIt)
  */
 export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign } = {}) {
   const spec = SPEC[unit]
@@ -398,6 +412,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   let answered = false
   /* An AM4 answered a connection made for another unit: nothing more is sent. See heardAnAm4. */
   let wrongUnit = false
+  /* The page has been told which other unit answered (onForeign): once a connection. */
+  let foreignTold = false
+  /* A tuner close refused unsent because the unit had not answered yet: it goes the moment it does (see heardFromIt). */
+  let closeWhenHeard = false
 
   /*
    * A QUESTION THAT WENT UNANSWERED MAY STILL BE ANSWERED, late, and that
@@ -447,7 +465,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * gen-3 units have no freezes on record.
    */
   const unheard = () =>
-    failure(`The ${spec.name} has not answered yet, so nothing is sent to it. Check the unit picked on the Bluetooth (beta) page, and the adapter's plugs.`, 504)
+    failure(`The ${spec.name} has not answered yet, so nothing is sent to it. Check the unit picked on the Bluetooth (beta) page, and the adapter's plugs.`, 504, { unheard: true })
 
   /*
    * A TAP'S DEADLINE, ON ITS WAY FROM request() TO THE FIRST MESSAGE IT SENDS.
@@ -652,8 +670,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (closed || !isFractal(f)) return
     const now = time.now()
     if (f[4] !== model) {
-      if (f[4] !== 0x7f) foreign = { model: f[4], at: now }
+      if (f[4] === 0x7f) return
+      foreign = { model: f[4], at: now }
       if (!am4 && f[4] === MODELS.am4) heardAnAm4()
+      else heardAnother(f[4])
       return
     }
     const job = current
@@ -681,7 +701,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const got = job.opts.collect(f)
       if (got !== undefined) {
         job.back = f
-        answered = true
+        heardFromIt()
         if (got !== null) return end(job, got)
         time.clearTimeout(job.timer)
         const left = (job.opts.cap ?? Infinity) - (now - job.started)
@@ -693,7 +713,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const got = job.opts.match(f)
       if (got !== null && got !== undefined) {
         job.back = f
-        answered = true
+        heardFromIt()
         return end(job, got)
       }
     }
@@ -701,7 +721,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const no = parseRejected(f, model)
       if (no && no.fn === job.opts.fn) {
         job.back = f
-        answered = true
+        heardFromIt()
         say(`the unit refused ${job.opts.what || 'it'}: ${rejectedWords(no.code)}`)
         return end(job, { rejected: no.code })
       }
@@ -723,10 +743,78 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     stopPolls()
     say(`an AM4 answered, not the ${spec.name}: nothing more is sent on this connection`)
     while (waiting.length) waiting.shift().reject(wrongUnitError())
+    tellForeign('AM4')
+  }
+
+  /*
+   * ANY OTHER UNIT ON THE OTHER END, before the one picked has answered: an
+   * FM9 on a connection made for an FM3, an FM3 on the AM4's, a VP4 on
+   * anybody's. Until now only an AM4 was named, and every other wrong
+   * pairing read on the page as "isn't answering", which sends a player to
+   * the plugs. Nothing more needs stopping for it: a gen-3 connection sends
+   * nothing but its probe until the unit picked answers (`unheard`), and a
+   * gen-3 unit refuses a message for another model. So this is the page's
+   * words only, said once, and only before the unit picked has answered: a
+   * stray message from a second unit on a connection that works is the
+   * log's, not the page's. A model byte nobody knows is the log's too.
+   */
+  function heardAnother(byte) {
+    /* Once: a wrong unit refuses every message it is sent, a poll's included, and the log keeps 400 lines (debugLog). */
+    if (answered || foreignTold) return
+    const name = modelName(byte)
+    if (!name) return
+    say(`${MODEL_NAMES[byte]} answered, not ${am4 ? 'the AM4' : `the ${spec.name}`}`)
+    tellForeign(name)
+  }
+
+  /*
+   * THE UNIT PICKED ANSWERS FOR THE FIRST TIME ON THIS CONNECTION. The line
+   * opens for everything (`unheard`), and two things wait for this moment:
+   *
+   *   - another unit named to the page before it (heardAnother): the
+   *     player moved the cable onto the right unit without tapping Stop,
+   *     say, and it works now, so "An FM9 answered, not the FM3" is taken
+   *     off the page (onForeign(null)). Not after an AM4 on another unit's
+   *     connection, which stops the wire (heardAnAm4): that line stays true.
+   *   - a tuner close refused unsent because the unit had not answered yet
+   *     (closeWhenHeard): the link's close of what the connection before
+   *     left on a Gen 3 unit's tuner, asked once as the connection comes up,
+   *     with the unit silent through the wake and the rig's read. Nothing
+   *     asks again, so the unit stayed on its tuner, muted, under a Play that
+   *     said closed (task 161). It goes now, in its turn, and a Tuner pressed
+   *     after it goes after it. Only a close: an open refused the same way
+   *     is not sent late, because the phone's tuner went down with its
+   *     refusal (rig writeTuner, and the link's reopen in bleLink connected()
+   *     puts it down through that), and a late one would mute the unit under
+   *     a Play that says closed.
+   */
+  function heardFromIt() {
+    if (answered) return
+    answered = true
+    if (foreignTold && !wrongUnit) {
+      say(`the ${spec.name} answers after all: the other unit is no longer named on the page`)
+      try {
+        if (onForeign) onForeign(null)
+      } catch {
+        // Telling the page is a courtesy; the wire goes on as it was.
+      }
+    }
+    if (closeWhenHeard) {
+      closeWhenHeard = false
+      if (!am4 && !tuner.on && (owedFromBefore() || tuner.pushSent || tuner.pageOpen)) {
+        say(`the ${spec.name} answers now: sending the tuner close that was held until it did`)
+        gen3TunerInTurn(false).catch((err) => say(`the tuner close after the first answer did not go: ${err?.message || err}`))
+      }
+    }
+  }
+
+  function tellForeign(name) {
+    if (foreignTold) return
+    foreignTold = true
     try {
-      if (onForeign) onForeign('AM4')
+      if (onForeign) onForeign(name)
     } catch {
-      // Telling the page is a courtesy; the wire has already stopped.
+      // Telling the page is a courtesy; the wire goes on as it was.
     }
   }
 
@@ -807,7 +895,36 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       // Not remembered is asked again next time: slower, never wrong.
     }
   }
+  /*
+   * FM3-EDIT'S MESSAGES BY THEMSELVES, ON THE FM3 ONLY. Scene, channel and
+   * tempo each have two ways: Fractal's published message, and the one
+   * FM3-Edit sends, captured from an FM3 and never published. The computer
+   * app sends FM3-Edit's scene and channel to an FM3 alone ("other Gen3
+   * units stay on spec frames until capture-confirmed", forgefx
+   * devices.ts sceneChannelWriteMode, drivers/gen3.ts setScene and
+   * setChannel). Nobody has caught what FM9-Edit or Axe-Edit III send, so on
+   * an FM9 or an Axe-Fx III, Auto uses the published message only, for all
+   * three, and learns nothing else: a published message that does not land
+   * says so. FM3-Edit's way still goes when it is chosen by hand in the
+   * testing tools (his account only), which is how it would be tried. The
+   * FM3 keeps both, as it always has. (The computer app does send its
+   * FM3-Edit-style tempo to every Gen 3 unit; the phone, which has driven
+   * none of the other two, holds back from that too until one has.)
+   */
+  const editByAuto = unit === 'fm3'
+  const EDIT_KEYS = ['scene', 'channel', 'tempo']
+  /* Whether a trial may go on to FM3-Edit's way when the published one did not land. */
+  const mayTryEdit = (key) => editByAuto || ways[key] === 'edit'
+  /* What auto has learned for `key`, and may use: never FM3-Edit's on an FM9 or an Axe-Fx III. */
+  const learnedWay = (key) => {
+    const w = ways.learned[key] || null
+    return w === 'edit' && !editByAuto && EDIT_KEYS.includes(key) ? null : w
+  }
+  /* A way a check found, as the panel says it was remembered: only what learn() kept. */
+  const remembered = (key, way) => (way && ways.learned[key] === way ? way : null)
+
   function learn(key, way) {
+    if (way === 'edit' && !editByAuto && EDIT_KEYS.includes(key)) return
     if (ways.learned[key] === way) return
     ways.learned[key] = way
     say(`${key}: ${way === 'edit' ? 'FM3-Edit’s way' : way} works on this ${spec.name}; remembered`)
@@ -820,7 +937,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     keep()
   }
   /* The way to use now: the one the player chose, or the one auto found, or null to find out. */
-  const wayFor = (key) => (ways[key] !== 'auto' ? ways[key] : ways.learned[key] || null)
+  const wayFor = (key) => (ways[key] !== 'auto' ? ways[key] : learnedWay(key))
 
   /* ---------------- the answers both families give ---------------- */
 
@@ -845,6 +962,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (am4) {
       return { ...common, slotModel: 'linear', sceneCount: AM4.SCENES, presets: { count: AM4.LOCATIONS, addressing: 'bankLetter', canScanNames: false } }
     }
+    /*
+     * 512 PRESETS ON EVERY GEN 3 UNIT, the Axe-Fx III too, as the computer
+     * app offers them ("512 numbered slots on every gen-3 unit", forgefx
+     * drivers/gen3.ts presetLocations). An Axe-Fx III Mark II holds 1024, and
+     * the wire lets a number up to 1023 through to one (SPEC maxPreset), but
+     * the original III holds 512 and nothing here can tell the two apart, so
+     * the list stays at what both agree on until the computer app says more.
+     */
     return { ...common, slotModel: 'grid', grid: { rows: 4, cols: 12 }, sceneCount: 8, presets: { count: 512, addressing: 'numeric', canScanNames: false } }
   }
 
@@ -902,6 +1027,16 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   async function gen3Preset() {
+    /*
+     * A TUNER CLOSE HELD FOR THE UNIT'S FIRST ANSWER (closeWhenHeard) is
+     * sent by nothing but an answer, and before one only the probe goes:
+     * this read, the rig's timed check (unit-watch probeUnit) and its
+     * refreshPreset, was held unsent, so a unit that missed both probes as
+     * the connection came up stayed on its tuner, muted, until a pull-down.
+     * The probe first, then: answered, the close goes in its turn
+     * (heardFromIt) and this reads as it always did.
+     */
+    if (!answered && closeWhenHeard) await gen3Detect()
     const got = await presetNow()
     if (!got || rejected(got)) return { number: -1, name: '' }
     notePreset(got, false)
@@ -1031,8 +1166,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const now = await sceneNow()
       if (now === i) return moved ? 'published' : null
       if (now === null) return null
+      if (!mayTryEdit('scene')) throw failure(`The unit stayed on scene ${now + 1}.`, 502)
       moved = true
-    }
+    } else if (!mayTryEdit('scene')) throw refusedBy(r.rejected)
     const e = await sendEditScene(i)
     if (rejected(e)) throw refusedBy(e.rejected)
     const now = await sceneNow()
@@ -1079,8 +1215,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const now = await channelNow(eid)
       if (now === c) return moved ? 'published' : null
       if (now === null) return null
+      if (!mayTryEdit('channel')) throw failure(`The block stayed on ${CH[now] || now}.`, 502)
       moved = true
-    }
+    } else if (!mayTryEdit('channel')) throw refusedBy(p.rejected)
     const e = await fire(buildSetChannelEdit(model, eid, c), `block ${eid} to ${CH[c]} (FM3-Edit’s way)`)
     if (rejected(e)) throw refusedBy(e.rejected)
     const now = await channelNow(eid)
@@ -1127,8 +1264,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const now = await tempoNow()
       if (now === bpm) return moved ? 'published' : null
       if (!Number.isInteger(now)) return null
+      if (!mayTryEdit('tempo')) throw failure(`The tempo stayed at ${now}.`, 502)
       moved = true
-    }
+    } else if (!mayTryEdit('tempo')) throw refusedBy(p.rejected)
     const e = await fire(buildSetTempoEdit(model, bpm), `tempo ${bpm} (FM3-Edit’s way)`)
     if (rejected(e)) throw refusedBy(e.rejected)
     const now = await tempoNow()
@@ -1139,7 +1277,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   async function changeTempo(bpm) {
     /* The published tempo SET does not take on an FM3; FM3-Edit's way is the FM3's default. */
-    const way = ways.tempo !== 'auto' ? ways.tempo : unit === 'fm3' ? 'edit' : ways.learned.tempo || null
+    const way = ways.tempo !== 'auto' ? ways.tempo : unit === 'fm3' ? 'edit' : learnedWay('tempo')
     if (way) {
       const r = await fire(way === 'published' ? buildSetTempo(model, bpm) : buildSetTempoEdit(model, bpm), `tempo ${bpm}`)
       if (!rejected(r)) return
@@ -1256,6 +1394,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * AM4's raw answers already put in the log on this connection.
    * `unitKeepAt` when the 127 is next sent again (keepUnitTuner), and
    * `unitKeepNote` why the last time it was not, said once.
+   *
+   * `before` is a Gen 3 unit's only: what the connection BEFORE this one
+   * left its tuner on and never closed, {push, page}, handed over by the
+   * link as this one starts (oweGen3Tuner). This connection never opened
+   * those, so its own opens leave them alone, and the next close closes
+   * them with its own (gen3TunerOff).
    */
   const tuner = {
     on: false,
@@ -1264,6 +1408,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     timer: null,
     pushSent: false,
     pageOpen: false,
+    before: { push: false, page: false },
     lastNote: null,
     polled: 0,
     unitCc: null,
@@ -1362,12 +1507,29 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     await startAsking(run, deadline)
   }
 
+  /*
+   * What the unit was left on, closed, each part put down as its own message
+   * goes: a page close the adapter would not take leaves the page owed, and
+   * the off that went before it is not sent again for nothing. With them,
+   * what the connection before left open (`tuner.before`): the off goes for a
+   * published tuner either opened, and the page close, which moves the
+   * unit's screen, only for a page one of them really opened.
+   */
   async function gen3TunerOff() {
-    if (tuner.pushSent) await fire(buildTuner(model, false), 'the tuner off')
-    if (tuner.pageOpen) await fire(buildTunerPage(model, false), 'the tuner page closed')
-    tuner.pushSent = false
-    tuner.pageOpen = false
+    if (tuner.pushSent || tuner.before.push) {
+      await fire(buildTuner(model, false), 'the tuner off')
+      tuner.pushSent = false
+      tuner.before.push = false
+    }
+    if (tuner.pageOpen || tuner.before.page) {
+      await fire(buildTunerPage(model, false), 'the tuner page closed')
+      tuner.pageOpen = false
+      tuner.before.page = false
+    }
   }
+
+  /* Anything on the unit's tuner from before this connection, not yet closed (see oweGen3Tuner). */
+  const owedFromBefore = () => tuner.before.push || tuner.before.page
 
   /*
    * THE OPEN IS A TAP, AND ITS TURN CAN COME LATE (gen3TunerInTurn), long
@@ -1398,16 +1560,24 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /*
    * A CLOSE WHOSE MESSAGE DID NOT GO IS STILL OWED. The phone's tuner is
-   * down by then, so the next Close (the player's again, the watch's retry)
-   * goes by what the unit was left on, not by that.
+   * down by then, so the next Close (the player's again, the watch's retry,
+   * the link's on a new connection) goes by what the unit was left on, not
+   * by that, and that includes what the connection before left on it.
    */
   async function gen3TunerClose() {
-    if (!tuner.on && !tuner.pushSent && !tuner.pageOpen) return { ok: true }
+    if (!tuner.on && !tuner.pushSent && !tuner.pageOpen && !owedFromBefore()) return { ok: true }
     tuner.on = false
     tuner.run++
     if (tuner.timer !== null) time.clearTimeout(tuner.timer)
     tuner.timer = null
-    await gen3TunerOff()
+    try {
+      await gen3TunerOff()
+    } catch (err) {
+      /* Refused unsent because the unit has not answered yet: sent the moment it does (heardFromIt). */
+      if (err?.unheard) closeWhenHeard = true
+      throw err
+    }
+    closeWhenHeard = false
     return { ok: true }
   }
 
@@ -2395,7 +2565,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (way) learn('scene', way)
       await row(`Back to scene ${from + 1}`, () => (way ? sceneBy(way, from) : trialScene(from)), sentWords)
       last.scene = from
-      return { way }
+      return { way: remembered('scene', way) }
     },
     'write-channel': async (row) => {
       const list = await row('Blocks', () => statusNow(), (v) => said(v, (l) => `${l.length} blocks`))
@@ -2406,7 +2576,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const way = await row(`${nameOf(amp.effectId)} to ${CH[to]}`, () => trialChannel(amp.effectId, to, amp.channel), (w) => wayWords(w))
       if (way) learn('channel', way)
       await row(`${nameOf(amp.effectId)} back to ${CH[amp.channel]}`, () => (way ? changeChannelBy(way, amp.effectId, amp.channel) : trialChannel(amp.effectId, amp.channel)), sentWords)
-      return { way }
+      return { way: remembered('channel', way) }
     },
     'write-tempo': async (row) => {
       const from = await row('Tempo', () => tempoNow(), (v) => said(v, (b) => `${b} BPM`))
@@ -2416,7 +2586,42 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (way) learn('tempo', way)
       await row(`Tempo back to ${from}`, () => (way ? tempoBy(way, from) : trialTempo(from)), sentWords)
       last.bpm = from
-      return { way }
+      return { way: remembered('tempo', way) }
+    },
+    /*
+     * EFFECTS ON AND OFF, the one way they go (gen3WriteBypass), checked as
+     * the AM4's is: the block read, switched, read again, and put back as it
+     * was. The first effect the catalog names, before the amp and the cab
+     * (an amp switched off is a silent rig for the moment it takes), and
+     * never the input, output or looper, which Play does not show. With
+     * nothing but the amp and the cab, the amp, by name, whichever the unit
+     * lists first: the step's `warn` says so before it is tapped.
+     */
+    'write-bypass': async (row) => {
+      const list = await row('Blocks', () => statusNow(), (v) => said(v, (l) => `${l.length} blocks`))
+      if (!Array.isArray(list)) throw failure('The unit did not list its blocks.', 504)
+      const slugOf = (b) => blocks.find((c) => c?.page === b.effectId)?.slug
+      const known = list.filter((b) => slugOf(b) && !OFF_STAGE.includes(slugOf(b)))
+      const block = known.find((b) => !['amp', 'cab'].includes(slugOf(b))) || known.find((b) => slugOf(b) === 'amp') || known[0]
+      if (!block) throw failure('There is no effect to switch in this preset.', 409)
+      const eid = block.effectId
+      const name = nameOf(eid)
+      const was = block.bypassed === true
+      const set = (off) => fire(buildSetBypass(model, eid, off), `${name} ${off ? 'off' : 'on'}`).then((r) => {
+        if (rejected(r)) throw refusedBy(r.rejected)
+        return r
+      })
+      await row(`${name} ${was ? 'on' : 'off'}`, () => set(!was), sentWords)
+      await row(`${name} now`, () => statusNow(), (v) =>
+        said(v, (l) => {
+          const now = l.find((b) => b.effectId === eid)
+          if (!now) return 'not in the list any more'
+          return now.bypassed !== was ? `${now.bypassed ? 'off' : 'on'}: it worked` : 'it did not change'
+        })
+      )
+      await row(`${name} back ${was ? 'off' : 'on'}`, () => set(was), sentWords)
+      emit({ type: 'changed', scope: 'grid' })
+      return {}
     },
     'write-preset': async (row) => {
       const now = await row('Preset', () => presetNow(), (v) => said(v, (p) => `preset ${p.number}, ${p.name || '(no name)'}`))
@@ -2616,6 +2821,25 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /* Set as the wire closes: a 0 the AM4's own tuner may still be owed (see close()). */
   let unitOwed = false
+  /* Set as a Gen 3 wire closes: what its tuner left the unit on, {push, page}, or null (see close()). */
+  let gen3Owed = null
+
+  /*
+   * WHAT THE CONNECTION BEFORE LEFT A GEN 3 UNIT'S TUNER ON, handed over by
+   * the link the moment this one is made (bleLink connected), before
+   * anything is asked: {push, page}. Kept in this wire from then on, so it is
+   * closed by this connection's next close, whoever asks for it, and if this
+   * wire goes first its close() hands it back with whatever it left open
+   * itself. Nothing here sends it: the link asks for the close when the
+   * phone's tuner is down, and a tuner the phone opens again keeps it for
+   * that tuner's own Close. Ignored on an AM4, whose owed 0 is its own.
+   */
+  function oweGen3Tuner(owed) {
+    if (am4 || closed || !owed) return
+    if (owed.push === true) tuner.before.push = true
+    if (owed.page === true) tuner.before.page = true
+    if (owedFromBefore()) say(`the ${spec.name} may still be on its tuner from the connection before: it is closed by the next close`)
+  }
 
   /**
    * Stop everything and answer anything waiting with "not connected": the
@@ -2656,6 +2880,25 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      */
     unitOwed = am4 && ((tuner.unitOpen && zero !== 'sent') || tuner.unitClosing)
     if (unitOwed) say('the AM4 may still be on its own tuner: it is closed from the next connection')
+    /*
+     * A GEN 3 UNIT LEFT ON ITS TUNER, taken before anything waiting is
+     * answered (an open answered "not connected" puts back what it marked).
+     * Closed on the phone while the adapter is away, it would stay on its
+     * tuner, muted: the next connection starts with nothing marked open, and
+     * its Close would find nothing to close. So this is handed to the link,
+     * which hands it to the next connection to the same unit. The published
+     * off is a level, so it is owed whenever the on may have gone; the page
+     * close moves the unit's screen, so it is owed only for a page whose open
+     * went, not one still waiting its turn. With it, whatever the connection
+     * before left and this one never closed.
+     */
+    if (!am4) {
+      const pageWent = tuner.pageOpen && !waiting.some((j) => !j.opts.messages && sameBytes(j.out, buildTunerPage(model, true)))
+      const push = tuner.pushSent || tuner.before.push
+      const page = pageWent || tuner.before.page
+      gen3Owed = push || page ? { push, page } : null
+      if (gen3Owed) say(`the ${spec.name} may still be on its tuner: it is closed from the next connection`)
+    }
     tuner.unitOpen = false
     tuner.on = false
     tuner.run++
@@ -2691,6 +2934,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     unitTunerOwed: () => unitOwed,
     /** While open: whether the AM4 may be on its own tuner from this connection, its 0 not yet sent (see bleLink). */
     unitTunerOpen: () => am4 && !closed && (tuner.unitOpen || tuner.unitClosing),
+    /** Gen 3: what the connection before left the unit's tuner on, {push, page}, handed over as this one starts (see bleLink). */
+    oweGen3Tuner,
+    /** Gen 3, while open: whether something the connection before left on the unit's tuner is still to be closed. */
+    gen3TunerOwes: () => !am4 && !closed && owedFromBefore(),
+    /** Gen 3, while open: whether the unit may be on its tuner from this connection or the one before, not yet closed (see bleLink letGoOfWireInTurn). */
+    gen3TunerLeftOn: () => !am4 && !closed && (tuner.on || tuner.pushSent || tuner.pageOpen || owedFromBefore()),
+    /** Once closed: what a Gen 3 unit's tuner was left on, {push, page}, for the next connection to close; null when nothing. */
+    gen3TunerOwed: () => gen3Owed,
     startPolls,
     stopPolls,
     screenOff,

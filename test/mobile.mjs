@@ -277,7 +277,8 @@ async function rigOnTheBench(over = {}) {
     'demoWire.js': "export const demoRequest = () => { throw new Error('no demo on the bench') }\n",
     /* Bluetooth (beta) off, as it is unless somebody turns it on: every request goes to the pretend computer. */
     'bleSwitch.js': "export const bluetoothWire = () => null\nexport const bluetoothOn = () => false\nexport const overBluetooth = (caps) => caps?.via === 'bluetooth'\n",
-    'debugLog.js': 'export const logDebug = () => {}\n',
+    /* Every line the store writes, kept, so a test can read the log a report would carry. */
+    'debugLog.js': "export const lines = []\nexport const logDebug = (source, message, detail) => { lines.push({ at: 0, source: String(source || 'app'), message: String(message ?? ''), detail }) }\n",
     'lineage.js': 'export const withLineage = (x) => x\n',
     /* `presetNames` is what this phone's list already calls a slot (the computer's copy, taken in). */
     'presetNames.js':
@@ -402,7 +403,8 @@ async function rigOnTheBench(over = {}) {
     relay.wire.length = 0
     relay.handed.length = 0
     const asked = (line) => relay.wire.filter((l) => (line instanceof RegExp ? line.test(l) : l === line)).length
-    return { rig, clock, unit, wire: relay.wire, asked, nameOf, relay, heard, gate, device: deviceLayer }
+    const log = (await import(at('debugLog.js'))).lines
+    return { rig, clock, unit, wire: relay.wire, asked, nameOf, relay, heard, gate, device: deviceLayer, log }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -4602,7 +4604,8 @@ export function run(test) {
        computer? button. */
     assert.match(
       flat,
-      /\{settling && screen === 'stage' \? \( <Waking link=\{link\} long=\{lookedLong\} onRetry=\{probeNow\} onSwitch=\{\(\) => openSettings\('link'\)\} onTroubleshoot=\{openConnectFix\} onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\} onSetlists=\{\(\) => setScreen\('setlists'\)\} \/>/,
+      /* And, changed on purpose on 25 October 2026, Report a Bluetooth problem, through the page's own gate (reportBluetooth). */
+      /\{settling && screen === 'stage' \? \( <Waking link=\{link\} long=\{lookedLong\} onRetry=\{probeNow\} onSwitch=\{\(\) => openSettings\('link'\)\} onTroubleshoot=\{openConnectFix\} onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\} onReport=\{reportBluetooth \? \(said\) => reportBluetooth\('stage', said\) : null\} onSetlists=\{\(\) => setScreen\('setlists'\)\} \/>/,
       'nothing is shown while the app waits'
     )
 
@@ -8758,6 +8761,12 @@ export function run(test) {
       'Metronome',
       '# Help',
       'Troubleshooting',
+      /*
+       * "Super easy for all users to submit bugs and feedback" (25 October
+       * 2026): the Feedback form one tap from Settings, under Troubleshooting,
+       * which keeps its own Feedback row too.
+       */
+      'Report a problem or idea',
       'Amp & pedal names',
       'REPLAY',
       'Apple Watch',
@@ -9257,9 +9266,16 @@ export function run(test) {
     for (const words of [r.notSentWords({ message: 'x' }), r.notSentWords({ message: 'x' }, { wrote: false })]) {
       assert.doesNotMatch(words, /: x|policy|row/, 'the database’s own words reach the screen')
     }
-    for (const where of ['src/lib/reports.js', 'mobile/src/lib/reports.js']) {
-      assert.match(read(where).replace(/\s+/g, ' '), /const err = notSent\(error, \{ wrote: row\.message !== LOGS_ONLY_MESSAGE \}\) logDebug\('app', 'report not sent', err\.reason\) throw err/, `${where} words a failed send by itself, or loses the reason`)
-    }
+    assert.match(read('src/lib/reports.js').replace(/\s+/g, ' '), /const err = notSent\(error, \{ wrote: row\.message !== LOGS_ONLY_MESSAGE \}\) logDebug\('app', 'report not sent', err\.reason\) throw err/, 'the browser words a failed send by itself, or loses the reason')
+    /*
+     * The phone's, through notSentHere (25 October 2026), which is notSent
+     * told also whether the note was typed (Report a Bluetooth problem's is
+     * the app's own) and whether the screen has Copy Logs to offer;
+     * test/reports.mjs runs it.
+     */
+    const phoneSend = read('mobile/src/lib/reports.js').replace(/\s+/g, ' ')
+    assert.match(phoneSend, /const err = notSentHere\(error, \{ wrote: typeof typed === 'boolean' \? typed : row\.message !== LOGS_ONLY_MESSAGE, copyLogs \}\) logDebug\('app', 'report not sent', err\.reason\) throw err/, 'the phone words a failed send by itself, or loses the reason')
+    assert.match(phoneSend, /function notSentHere\(error, \{ wrote, copyLogs \}\) \{ const err = notSent\(error, \{ wrote \}\)/, 'the phone’s words are not the shared ones')
   })
 
   test('the computer is asked once, never for longer than its deadline, and a refusal is one line', async () => {
@@ -18788,21 +18804,31 @@ export function run(test) {
   })
 
   test('a tap dropped at its deadline puts back the card about the link that its press cleared', async () => {
-    const { rig, unit } = await rigOnTheBench()
+    const { rig, unit, log } = await rigOnTheBench()
     const LOST = 'The connection dropped before your computer answered.'
+    log.length = 0
     unit.hold = () => {
       throw Object.assign(new Error(LOST), { aboutLink: true, linkDown: true })
     }
     assert.equal(await rig.writeScene(4), false)
     assert.equal(rig.getState().errorLink, true)
-    /* The link not down yet by the rule's hold, and the next tap dropped by the relay at its deadline. */
+    /* The link not down yet by the rule's hold, and the next taps dropped by the relay at their deadline. */
     unit.hold = () => {
       throw Object.assign(new Error('Not sent — not connected'), { notSent: true })
     }
-    assert.equal(await rig.writeScene(2), false)
-    assert.equal(rig.getState().error, LOST, 'a dropped tap left nothing saying the tap before it may have landed')
+    for (const scene of [2, 6, 7]) {
+      assert.equal(await rig.writeScene(scene), false)
+      assert.equal(rig.getState().error, LOST, 'a dropped tap left nothing saying the tap before it may have landed')
+    }
     assert.equal(rig.getState().errorLink, true)
     assert.equal(rig.getState().dropped, 'Not sent — not connected')
+    assert.ok(!('kept' in rig.getState()), 'the mark on a card put back reached the screen’s state')
+    /* The card put back is the one fault, written once: not again for every dropped tap it was put back over. */
+    assert.deepEqual(
+      log.filter((l) => l.source === 'error').map((l) => l.message),
+      [LOST],
+      'the card about the link put back over a dropped tap was written into the log again, as a new fault'
+    )
     /* A card about something else is answered by the press, as it always was, and stays gone. */
     rig.clearError()
     unit.hold = () => {
@@ -20807,5 +20833,37 @@ export function run(test) {
     assert.deepEqual(early, [], 'the boost was read while the next preset was loading, before its own chain read')
     assert.equal(rig.getState().preset.number, 14)
     assert.equal(rig.boostNow(), 'off', 'the next preset’s own chain read did not read the boost')
+  })
+
+  /*
+   * EVERY FAULT THE SCREEN SHOWS IS A LINE IN THE LOG, on the phone as in the
+   * browser (src/App.jsx, its `error` effect). Nothing on the phone wrote an
+   * 'error' line before 25 October 2026, so a report's "Last error" (lib/
+   * reports context, shared/report-rules lastErrorFrom) was nearly always
+   * empty, and the log a Bluetooth report carries said what was asked and
+   * not what the screen then said. Written in set(), where every fault
+   * passes, once per fault raised.
+   */
+  test('a fault on the phone is written into the log as an error line, once, and a report’s Last error finds it', async () => {
+    const { lastErrorFrom } = await import('../shared/report-rules.mjs')
+    const { rig, unit, log } = await rigOnTheBench()
+    log.length = 0
+    /* A tap the unit refuses: the screen's fault, through faultFrom, as every fault goes. */
+    unit.refuseSelect = true
+    assert.equal(await rig.loadPreset(40), false)
+    assert.equal(rig.getState().error, 'The unit refused that preset.')
+    const errors = log.filter((l) => l.source === 'error')
+    assert.deepEqual(errors.map((l) => l.message), ['The unit refused that preset.'], 'the fault is not in the log once, as an error line')
+    assert.equal(lastErrorFrom(log), 'The unit refused that preset.', 'a report’s Last error does not find the fault')
+    /* The same words raised again are news again, on screen and in the log; clearing one writes nothing. */
+    rig.set({ error: 'The unit refused that preset.' })
+    rig.clearError()
+    assert.equal(log.filter((l) => l.source === 'error').length, 2)
+    /* A tap dropped while the link is down is not a fault, and is not written as one. */
+    rig.set({ dropped: 'Not sent — not connected' })
+    assert.equal(log.filter((l) => l.source === 'error').length, 2, 'a dropped tap is written into the log as a fault')
+    /* Read as code, where it is: set(), beside the fault's stamp. */
+    const set = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
+    assert.match(set, /if \(patch\.error\) patch = \{ \.\.\.patch, faultAt: Date\.now\(\) \} [^]*?if \(patch\.error && !kept\) logDebug\('error', patch\.error\)/)
   })
 }

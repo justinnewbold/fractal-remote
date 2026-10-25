@@ -109,6 +109,16 @@ export const TESTED = ['am4']
  * not function correctly." Short and calm, and with the way back: the cable
  * to the computer is untouched by any of this.
  *
+ * IN HIS WORDS, SINCE 25 OCTOBER 2026. Bluetooth (beta) is to reach every
+ * customer with the full version, marked beta with "Bluetooth is in beta, and
+ * some features might not work as expected", and "super easy for all users to
+ * submit bugs and feedback". So the note opens with his sentence word for
+ * word, says where it has been tried, sends a player who meets a problem to
+ * the button straight under the note (REPORT_BUTTON, which sends one in a
+ * tap), and ends on the way back: the cable to the computer still does
+ * everything. It said "Bluetooth is new (beta), and may not work correctly
+ * with every unit or adapter" until then.
+ *
  * FROM AN IPHONE, AND FROM AN ANDROID PHONE. Until 25 October 2026 every
  * hardware test was an iPhone (the one Android build that carried this, on 8
  * October, stopped on Expo's side a minute in), and Android's note said "not
@@ -135,10 +145,19 @@ export const TESTED = ['am4']
  * the platform is passed in, and anything that is not Android gets the
  * iPhone's copy: a phone this has never heard of never shows Android's name.
  */
-export const BETA_NOTE_IPHONE =
-  'Bluetooth is new (beta), and may not work correctly with every unit or adapter. So far it has been tried on the AM4, from an iPhone. If something doesn’t work, the cable to the computer still does.'
-export const BETA_NOTE_ANDROID =
-  'Bluetooth is new (beta), and may not work correctly with every unit or adapter. So far it has been tried on the AM4, from an iPhone and an Android phone. If something doesn’t work, the cable to the computer still does.'
+/*
+ * THE BUTTON THE NOTE POINTS AT, named once, so the note and the button can
+ * never call it two different things. On the Bluetooth page under the note,
+ * and wherever else a Bluetooth problem is met (the note under Play's pill,
+ * a fault on Play while over Bluetooth, the waiting screen), it opens the
+ * one-tap report (mobile/src/screens/BluetoothReport.js), which goes to
+ * Justin and nobody else: help with the app is his own channels only.
+ */
+export const REPORT_BUTTON = 'Report a Bluetooth problem'
+const BETA_OPENS = 'Bluetooth is in beta, and some features might not work as expected.'
+const BETA_ENDS = `If something doesn’t work, tap ${REPORT_BUTTON}, just below. The cable to the computer still does everything.`
+export const BETA_NOTE_IPHONE = `${BETA_OPENS} So far it has been tried on the AM4, from an iPhone. ${BETA_ENDS}`
+export const BETA_NOTE_ANDROID = `${BETA_OPENS} So far it has been tried on the AM4, from an iPhone and an Android phone. ${BETA_ENDS}`
 
 /** The beta note for the phone it is shown on, from Platform.OS. */
 export const betaNote = (os) => (os === 'android' ? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE)
@@ -274,6 +293,65 @@ export const FM3_WARNING =
 /** The units the parts list must not be bought for as it is. */
 export const NOT_STRAIGHT_IN = ['fm3']
 
+/*
+ * THE FM3 LINE THAT IS NEVER FOLDED AWAY. FM3_WARNING is inside How to plug
+ * it in, which starts folded for anybody who has used an adapter here
+ * before, and NOT_FOR_FM3 is under step 1, which is not drawn while
+ * Bluetooth is on. The likeliest cable to end up on an FM3 is an AM4
+ * owner's C2MIDI Pro. So whenever the FM3 is the unit picked, on or off,
+ * this is drawn near the top of the page, where nothing folds it (critic,
+ * 25 October 2026). Said as the guide and docs/bluetooth-midi.md say it:
+ * what happened here, and what owners report, never a fact about the unit.
+ *
+ * WITH "EVEN ON USB POWER", as FM3_WARNING and the guide have it ("Powering
+ * the adapter from USB doesn't stop it, because the jack is still feeding
+ * it"). This is the only FM3 line drawn with the fold closed, and without it
+ * the owner of a WIDI Jack or WIDI Master on a USB charger read it as not
+ * about their adapter. "Can take" power, so an adapter that runs on USB
+ * power alone, and never from the jack (the U2MIDI Pro the FM3 plan tries),
+ * is not in it.
+ */
+export const FM3_NEVER =
+  'Never plug the C2MIDI Pro, or any adapter that can take power from MIDI OUT (even one on USB power), into an FM3. When we tried it, the cable got very hot, and FM3 owners report the same.'
+
+/*
+ * FEEL THE CABLE, ON THE UNITS NOBODY HERE HAS. The FM9 and Axe-Fx III have
+ * the 5-pin jacks the C2MIDI Pro was made for, and owners report CME's
+ * adapters running cool on them; but the cable that ran hot on the FM3 is
+ * the same one, and nobody has tried it with the app on either. The guide
+ * has said it since it listed them ("Feel the cable in the first minute: it
+ * should stay cool"); the app said nothing, and an FM9 or Axe-Fx III
+ * owner's first physical risk is this. Said straight after the power step
+ * (powerStepOf), as the guide says it after the power and the lights, and
+ * before any step that sends the player into the unit's menus: a minute
+ * goes in those.
+ */
+export const HEAT_CHECK =
+  'In the first minute, feel the C2MIDI Pro. It should stay cool. If it gets more than slightly warm, unplug it at once.'
+
+/** The heat line for a unit's steps, or null: the FM9 and Axe-Fx III, the units it is offered on untried. */
+export const heatLineFor = (unit) => (unit === 'fm9' || unit === 'axefx3' ? HEAT_CHECK : null)
+
+/*
+ * THE MIDI CHANNEL, ONLY IF PRESETS DON'T CHANGE. A preset goes first by the
+ * unit's own SysEx switch, and by Program Change on channel 1 (bleWire's
+ * pcChannel) only when that does not land (trialPreset), so most owners
+ * never need this, and moving the MIDI channel or turning PC Mapping off
+ * changes how their own foot controller works on the unit. So it is said
+ * as the guide says it, with its condition first ("if presets don't change
+ * from the phone: ... set Program Change on, the MIDI channel to 1 or Omni,
+ * and PC Mapping off"), under the steps and not one of them: until 25
+ * October 2026 it was the last step, for every owner, and took the place of
+ * the FM9's plain MIDI Thru step. Every Gen 3 unit's, the FM3's included for
+ * the day it has steps again; the AM4's presets never go by Program Change.
+ * The device in hand named by `noun`.
+ */
+export const midiSettingsFor = (unit, noun = 'phone') => {
+  const name = UNITS[unit]
+  if (!name || unit === 'am4') return null
+  return `If presets don’t change from this ${noun}: on the ${name}, open Setup → MIDI/Remote and set Program Change to On, the MIDI channel to 1 (or Omni), and PC Mapping to Off.`
+}
+
 /** The warning to show for a unit instead of its parts and steps, or null. */
 export const warningFor = (unit) => (unit === 'fm3' ? FM3_WARNING : null)
 
@@ -366,7 +444,7 @@ export function hookupFor(unit, noun = 'phone') {
   const name = UNITS[unit]
   if (!name || NOT_STRAIGHT_IN.includes(unit)) return null
   const usb = 'Plug the C2MIDI Pro’s USB-C plug into the Uhost’s left socket, marked USB Host/Device.'
-  const power = `With the ${name} already on, plug a phone charger or power bank into the Uhost’s right socket, marked USB Power (5 volts, nothing stronger). The Uhost needs this power to work.`
+  const power = powerStep(name)
   if (unit === 'am4') {
     return [
       'Push one 3.5 mm adapter into the AM4’s MIDI IN, and the other into its MIDI OUT.',
@@ -393,14 +471,58 @@ export function hookupFor(unit, noun = 'phone') {
   ]
 }
 
+/* The power step, the same words for every unit: the Uhost's power goes in last, with the unit already on. */
+const powerStep = (name) =>
+  `With the ${name} already on, plug a phone charger or power bank into the Uhost’s right socket, marked USB Power (5 volts, nothing stronger). The Uhost needs this power to work.`
+
+/** Where the power goes in among a unit's steps (hookupFor), counting from 0: the heat line is drawn straight after it. -1 for a unit with no steps. */
+export const powerStepOf = (unit) => (hookupFor(unit) || []).indexOf(powerStep(UNITS[unit]))
+
 /*
  * Said under the steps for a unit nobody has tried it on yet. The FM3 has its
  * warning instead. It said "It should work the same way.", which is a promise
  * about a unit nobody has run, and Apple's 2.3.1(a) keeps an app from
  * claiming what it has not shown. Now it asks to hear how it went, through
- * the app's own Feedback form: help with the app is Justin's channels only.
+ * the app's own report: help with the app is Justin's channels only.
+ *
+ * THE BUTTON ON THIS PAGE, NOT A PATH THROUGH SETTINGS. It said "Settings →
+ * Troubleshooting → Feedback" until 25 October 2026, three screens away from
+ * the page it is read on, and a typed form at the end of them. The page has
+ * REPORT_BUTTON further down, under the beta note, which sends in one tap,
+ * "It works on my unit" among its answers.
  */
 export const untriedLine = (unit) =>
   triedOn(unit) || !UNITS[unit] || warningFor(unit)
     ? null
-    : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: Settings → Troubleshooting → Feedback.`
+    : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: tap ${REPORT_BUTTON}, further down this page.`
+
+/**
+ * A unit's name said with its article: "an AM4", "an FM9", "an Axe-Fx III",
+ * "a VP4". By how the name is said aloud: A, F and the other letters that
+ * start with a vowel sound take "an".
+ */
+export const withArticle = (name) => `${/^[AEFHILMNORSX]/.test(String(name)) ? 'an' : 'a'} ${name}`
+
+/**
+ * WHICH UNIT REALLY ANSWERED, when it is not the one picked. Until 25 October
+ * 2026 only an AM4 on another unit's connection was named, and every other
+ * wrong pairing (an FM9 picked as an FM3, an FM3 on the AM4's) read
+ * "isn't answering", which sends a player to the plugs. Now any unit the
+ * wire knows (bleWire MODEL_NAMES) is named, with its article chosen here
+ * from its bare name, and told the way out:
+ *
+ *   - a unit this account can pick: Stop, pick it in step 1, Connect;
+ *   - the VP4, which has no Bluetooth: the computer is its way;
+ *   - any other (a customer's page offers fewer units): the computer, after
+ *     the line that says which units Bluetooth is for, when there is one.
+ *
+ * `answered` and `picked` are bare names as the page shows them; `pickable`
+ * whether step 1 offers the one that answered; `forWhich` the line saying
+ * which units it is for (AM4_ONLY on a customer's page), or ''.
+ */
+export function wrongUnitLine({ answered, picked, pickable = false, forWhich = '' }) {
+  const head = `${withArticle(answered).replace(/^a/, 'A')} answered, not the ${picked}.`
+  if (answered === 'VP4') return `${head} The VP4 isn’t a Bluetooth unit: tap Stop, and use the computer for it.`
+  if (pickable) return `${head} Tap Stop, pick ${answered} in step 1, then tap Connect.`
+  return `${head} ${forWhich ? `${forWhich} ` : ''}Tap Stop, and use the computer for the ${answered}.`
+}

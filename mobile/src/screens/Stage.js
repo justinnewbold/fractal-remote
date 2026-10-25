@@ -77,6 +77,7 @@ import OnlyOnThisPhone from '../components/OnlyOnThisPhone'
 import ColoursNotice from '../components/ColoursNotice'
 import Toast, { useStillNews } from '../components/Toast'
 import { droppedLeft, faultLeft } from '../lib/fault-rule'
+import { overBluetooth } from '../lib/bleSwitch'
 import { NOT_CONNECTED, missingPickCard, unitElsewhereCard } from '../lib/relay-rules'
 import { chooseHost, keepThisOne, watchUnits } from '../lib/link'
 import ComputerCard from '../components/ComputerCard'
@@ -152,6 +153,8 @@ export default function Stage({
   onOpenSetlists,
   onOpenEdit,
   onOpenFix,
+  /* Report a Bluetooth problem, with the fault's words: App's own, through the Bluetooth page's gate, or null. */
+  onReport = null,
   onUnlock,
   onAccount,
   /* Settings → Colors, which the colours' one-time line opens when pressed (components/ColoursNotice). */
@@ -1654,6 +1657,18 @@ export default function Stage({
             height={44}
             onPress={() => onOpenFix(fixFor(error))}
           />
+        ) : null}
+        {/*
+          REPORT THIS, over Bluetooth (beta) only, with the fault's own words
+          going with it. Its own conditional, for the same reason What to
+          try has one. One compact button: the card is up for seconds
+          (lib/fault-rule) and floats over the tiles. Never on the dropped
+          tap's note under NOT CONNECTED, which is not a fault (`dropped`,
+          drawn above), and never through a computer, whose faults the
+          Feedback form already takes.
+        */}
+        {error && onReport && overBluetooth(caps) ? (
+          <Press label="Report this" sub="Bluetooth (beta)" height={44} onPress={() => onReport(error)} />
         ) : null}
       </Toast>
 
