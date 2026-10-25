@@ -1,0 +1,191 @@
+diff --git a/mobile/app.json b/mobile/app.json
+index 307f041..3cf172a 100644
+--- a/mobile/app.json
++++ b/mobile/app.json
+@@ -103,6 +103,7 @@
+         {
+           "android": {
+             "enableMinifyInReleaseBuilds": true,
++            "enableShrinkResourcesInReleaseBuilds": true,
+             "extraProguardRules": "-keep class * extends androidx.room.RoomDatabase { <init>(); }\n-keep interface expo.modules.kotlin.records.Record\n-keep @interface expo.modules.kotlin.records.Field { *; }\n-keepnames class * extends expo.modules.kotlin.exception.CodedException"
+           },
+           "ios": {
+diff --git a/mobile/plugins/withR8Optimize.js b/mobile/plugins/withR8Optimize.js
+index 54b61f9..301ee94 100644
+--- a/mobile/plugins/withR8Optimize.js
++++ b/mobile/plugins/withR8Optimize.js
+@@ -16,14 +16,56 @@
+  * It refuses rather than guesses: a template that names neither file has
+  * changed shape, and a build that quietly kept -dontoptimize would fail Play's
+  * check months later, after a build slot was spent on it.
++ *
++ * AND R8's RESOURCE SHRINKING. 1.88.0 scores about 83% on all three, and
++ * since September 2026 Play's R8 card asks for two things more: optimized
++ * resource shrinking, and an Android Gradle plugin of 9.0 or newer, which
++ * only Expo SDK 58 brings. Justin: "R8 and the image fix are quick wins at
++ * build time." expo-build-properties' enableShrinkResourcesInReleaseBuilds
++ * (app.json) turns resource shrinking on, and android.r8.optimizedResourceShrinking
++ * makes it R8's own, which reads pictures and layouts as part of the code
++ * and drops the ones only unused code asked for. On the Android Gradle
++ * plugin this React Native brings, 8.12, it has to be switched on by hand;
++ * from 9.0 it is the default (developer.android.com/build/shrink-code). Nothing in
++ * expo-build-properties writes that line, so this does, and it acts only
++ * while resource shrinking is on.
++ *
++ * What it must not drop is anything looked up by name, which no shrinker can
++ * see in the code:
++ *
++ *   - The app's own pictures and sounds (drawable/assets_*, raw/assets_*),
++ *     which React Native, expo-asset, expo-audio and expo-updates find by
++ *     name. Expo's bundling writes res/raw/keep.xml naming every one of them
++ *     (@expo/cli, persistMetroAssets), so they stay.
++ *   - Three files Google Play's billing library brings for Google's own
++ *     services to read, which nothing in the app's code names. A keep file of
++ *     this app's own (KEEP below) holds them, so Google finds what it found in
++ *     1.88.0.
++ *
++ * Everything else the app needs by name is named in its manifest or its
++ * theme (the launcher icon, the splash picture, the runtime version), which
++ * counts as used. android-minified builds the app and fails if any name in
++ * either keep file is missing from it.
+  */
+-const { withAppBuildGradle } = require('expo/config-plugins')
++const fs = require('fs')
++const path = require('path')
++const { withAppBuildGradle, withDangerousMod, withGradleProperties } = require('expo/config-plugins')
+ 
+ const PLAIN = 'getDefaultProguardFile("proguard-android.txt")'
+ const OPTIMIZE = 'getDefaultProguardFile("proguard-android-optimize.txt")'
+ 
++const SHRINK = 'android.r8.optimizedResourceShrinking'
++
++/* Keep files are read from every module at once, so this one carries the app's own package name. */
++const KEEP_FILE = 'keep_cloud_newbold_fractalremote.xml'
++const KEEP = [
++  '@raw/com_android_billingclient_heterodyne_info',
++  '@raw/com_android_billingclient_registration_info',
++  '@xml/com_android_billingclient_phenotype'
++]
++
+ module.exports = function withR8Optimize(config) {
+-  return withAppBuildGradle(config, (c) => {
++  config = withAppBuildGradle(config, (c) => {
+     const gradle = c.modResults.contents
+     if (gradle.includes(OPTIMIZE)) return c
+     if (!gradle.includes(PLAIN)) {
+@@ -32,4 +74,22 @@ module.exports = function withR8Optimize(config) {
+     c.modResults.contents = gradle.replace(PLAIN, OPTIMIZE)
+     return c
+   })
++  config = withGradleProperties(config, (c) => {
++    const props = c.modResults.filter((p) => !(p.type === 'property' && p.key === SHRINK))
++    props.push({ type: 'property', key: SHRINK, value: 'true' })
++    c.modResults = props
++    return c
++  })
++  return withDangerousMod(config, [
++    'android',
++    async (c) => {
++      const raw = path.join(c.modRequest.platformProjectRoot, 'app', 'src', 'main', 'res', 'raw')
++      await fs.promises.mkdir(raw, { recursive: true })
++      await fs.promises.writeFile(
++        path.join(raw, KEEP_FILE),
++        `<?xml version="1.0" encoding="utf-8"?>\n<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="${KEEP.join(',')}" />\n`
++      )
++      return c
++    }
++  ])
+ }
+diff --git a/test/mobile.mjs b/test/mobile.mjs
+index ec11568..a941a2d 100644
+--- a/test/mobile.mjs
++++ b/test/mobile.mjs
+@@ -682,6 +682,88 @@ export function run(test) {
+     assert.doesNotMatch(duo, /pull_request:/, 'duo.yml runs on every pull request, on a preview runner that may never start')
+   })
+ 
++  test('R8 shrinks the Android app’s pictures and layouts too, and keeps every one that is looked up by name', async () => {
++    /*
++     * Since September 2026 Play's R8 card asks for optimized resource
++     * shrinking as well as R8 itself (Justin: "R8 and the image fix are
++     * quick wins at build time"). expo-build-properties'
++     * enableShrinkResourcesInReleaseBuilds turns it on, and needs R8 on to
++     * run at all; mobile/plugins/withR8Optimize.js makes it R8's own
++     * (android.r8.optimizedResourceShrinking) and writes a keep file for the
++     * three files Google Play's billing library carries for Google's own
++     * services, which nothing in the app's code names. Tried on AGP 8.12
++     * with that billing library, 25 October 2026: without the keep file all
++     * three were gone from the APK, and with it all three were there. Nothing
++     * here runs Gradle, so the plugin is RUN against stand-ins for Expo's
++     * config plugins; android-minified builds the app and fails if any name
++     * in a keep file is missing from it.
++     */
++    const app = JSON.parse(read('mobile/app.json')).expo
++    const props = app.plugins.find((p) => Array.isArray(p) && p[0] === 'expo-build-properties')?.[1]?.android
++    assert.equal(props?.enableShrinkResourcesInReleaseBuilds, true, 'resource shrinking is off')
++    assert.equal(props?.enableMinifyInReleaseBuilds, true, 'resource shrinking is on with R8 off, which expo-build-properties refuses')
++    assert.equal(app.plugins.filter((p) => p === './plugins/withR8Optimize').length, 1)
++
++    const mods = new Map()
++    const stand = {
++      withAppBuildGradle: (config, action) => (mods.set('gradle', action), config),
++      withGradleProperties: (config, action) => (mods.set('properties', action), config),
++      withDangerousMod: (config, [platform, action]) => {
++        assert.equal(platform, 'android', 'the plugin writes into the iPhone project')
++        return mods.set('files', action), config
++      }
++    }
++    const { createRequire } = await import('node:module')
++    const node = createRequire(import.meta.url)
++    const ask = (name) => {
++      if (name === 'fs' || name === 'path') return node(name)
++      assert.equal(name, 'expo/config-plugins', `the plugin asks for ${name}`)
++      return new Proxy(stand, {
++        get: (all, key) => {
++          assert.ok(key in all, `the plugin uses ${String(key)}`)
++          return all[key]
++        }
++      })
++    }
++    const plugin = { exports: {} }
++    new Function('require', 'module', 'exports', read('mobile/plugins/withR8Optimize.js'))(ask, plugin, plugin.exports)
++    const config = {}
++    assert.equal(plugin.exports(config), config)
++    assert.deepEqual([...mods.keys()].sort(), ['files', 'gradle', 'properties'])
++
++    /* R8's optimize file, as before: swapped in, left alone when there, refused when the template changed shape. */
++    const gradle = (contents) => mods.get('gradle')({ modResults: { contents } }).modResults.contents
++    assert.equal(gradle('proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"'), 'proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"')
++    assert.equal(gradle('getDefaultProguardFile("proguard-android-optimize.txt")'), 'getDefaultProguardFile("proguard-android-optimize.txt")')
++    assert.throws(() => gradle('proguardFiles "proguard-rules.pro"'), /names neither/)
++
++    /* The gradle.properties line: there once, true, whatever was there before and however often prebuild runs. */
++    const properties = (list) => mods.get('properties')({ modResults: list }).modResults
++    const template = [{ type: 'comment', value: 'Use this property to enable or disable the Hermes JS engine.' }, { type: 'property', key: 'hermesEnabled', value: 'true' }, { type: 'empty' }]
++    for (const before of [template, [...template, { type: 'property', key: 'android.r8.optimizedResourceShrinking', value: 'false' }]]) {
++      const after = properties(properties(before.map((p) => ({ ...p }))))
++      assert.deepEqual(after.filter((p) => p.key === 'android.r8.optimizedResourceShrinking'), [{ type: 'property', key: 'android.r8.optimizedResourceShrinking', value: 'true' }])
++      assert.deepEqual(after.filter((p) => p.key !== 'android.r8.optimizedResourceShrinking'), template, 'the plugin changed another line of gradle.properties')
++    }
++
++    /* The keep file: under the app's own name, holding the billing library's three. */
++    const root = mkdtempSync(join(tmpdir(), 'r8-keep-'))
++    try {
++      await mods.get('files')({ modRequest: { platformProjectRoot: root } })
++      const raw = join(root, 'app/src/main/res/raw')
++      assert.deepEqual(readdirSync(raw), ['keep_cloud_newbold_fractalremote.xml'], 'the keep file is missing, or named so that another module’s could take its place')
++      const keep = readFileSync(join(raw, 'keep_cloud_newbold_fractalremote.xml'), 'utf8')
++      assert.match(keep, /^<\?xml version="1\.0" encoding="utf-8"\?>\n<resources xmlns:tools="http:\/\/schemas\.android\.com\/tools" tools:keep="[^"]+" \/>\n$/)
++      assert.deepEqual(keep.match(/tools:keep="([^"]+)"/)[1].split(','), [
++        '@raw/com_android_billingclient_heterodyne_info',
++        '@raw/com_android_billingclient_registration_info',
++        '@xml/com_android_billingclient_phenotype'
++      ])
++    } finally {
++      rmSync(root, { recursive: true, force: true })
++    }
++  })
++
+   test('the phone and the browser share every rule they must agree on, character for character', async () => {
+     /*
+      * The web app imports these directly; the phone gets a generated copy,

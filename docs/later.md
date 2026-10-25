@@ -282,7 +282,8 @@ on 25 October 2026 against the 1.88.0 file Google Play has (Expo build
 it. Google says an app that misses these may lose visibility and some
 publishing abilities on Play, not be taken down.
 
-- **Code optimization, February 2027.** In since 1.88.0: R8 is fully on in
+- **Code optimization, February 2027.** In since 1.88.0
+  (docs/pending/r8.patch, applied for that build pair): R8 is fully on in
   that build, and its own score sheet says 82.9% obfuscated, 82.6%
   optimized and 83.0% shrunk, where Play asks for 25%. The code is 9.0 MB,
   under the 10 MB from which the February rule counts at all. Play's R8
@@ -290,7 +291,8 @@ publishing abilities on Play, not be taken down.
   shrinking", which docs/pending/shrink-resources.patch turns on for the
   next build, and an Android Gradle plugin of 9.0 or newer, which only
   comes with Expo SDK 58 (its React Native 0.88 uses 9.2.1), a bigger move
-  for a build pair of its own.
+  for a build pair of its own. JavaScript is not what Play scores, so no
+  update can change any of it; only a store build can.
 - **Staying signed in on a new Android phone, April 2027** ("Zero-Tap
   Sign-In"). An app with accounts has to put the player back in their
   account by itself when they move to a new phone, through Android's
@@ -317,18 +319,21 @@ publishing abilities on Play, not be taken down.
   … since target sdk 36"). Its quarter turn turned the Pixel Tablet
   upright, since that tablet is sideways to begin with, and it was back
   before the picture was taken. And the picture is the "An independent app"
-  card stretched across the screen, because the run never taps OK. It has
-  never shown Play or Settings sideways on Android; that needs an Android 15
-  tablet, a phone that must stay upright, and the tap into the demo.
-- **Not fixable from here, and nothing due:** Play's "deprecated APIs for
-  edge-to-edge" names code inside React Native and Google's own libraries
-  (React Native's window code, the splash screen library, Material, the
-  photo picker's crop screen), which their updates fix; the screen itself
-  is already drawn edge to edge. React Native 0.88 still makes the same
-  calls. One of them can go: Material is in the app only for Expo's
-  developer error screen, which does nothing in a store build, and
-  docs/pending/logbox-android.patch leaves it out of Android for 1.89.0.
-  That shortens Play's list without emptying it.
+  card stretched across the screen, because the run never tapped OK. So it
+  had never shown Play or Settings sideways on Android. Since 25 October
+  2026 it holds an Android 15 tablet sideways, upright and back (with
+  tablet-turns.patch in, the app must fill the screen each time), holds a
+  phone sideways (the app must stay upright), and taps past the startup
+  card into the demo's Play. It runs on anything in docs/pending.
+- **Mostly not fixable from here, and nothing due:** Play's "deprecated
+  APIs for edge-to-edge" names code inside React Native and Google's own
+  libraries (React Native's window code, the splash screen library,
+  Material, the photo picker's crop screen), which their updates fix; the
+  screen itself is already drawn edge to edge. React Native 0.88 still
+  makes the same calls. One of them can go: Material is in the app only
+  for Expo's developer error screen, which does nothing in a store build,
+  and docs/pending/logbox-android.patch leaves it out of Android for
+  1.89.0. That shortens Play's list without emptying it.
 - **Bitmap image optimization, nothing due.** Play's scan looks for code
   that downloads a picture and decodes it by hand, and every place it can
   find is library code: Expo's update library (a restart screen picture
