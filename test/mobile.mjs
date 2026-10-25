@@ -18804,21 +18804,31 @@ export function run(test) {
   })
 
   test('a tap dropped at its deadline puts back the card about the link that its press cleared', async () => {
-    const { rig, unit } = await rigOnTheBench()
+    const { rig, unit, log } = await rigOnTheBench()
     const LOST = 'The connection dropped before your computer answered.'
+    log.length = 0
     unit.hold = () => {
       throw Object.assign(new Error(LOST), { aboutLink: true, linkDown: true })
     }
     assert.equal(await rig.writeScene(4), false)
     assert.equal(rig.getState().errorLink, true)
-    /* The link not down yet by the rule's hold, and the next tap dropped by the relay at its deadline. */
+    /* The link not down yet by the rule's hold, and the next taps dropped by the relay at their deadline. */
     unit.hold = () => {
       throw Object.assign(new Error('Not sent — not connected'), { notSent: true })
     }
-    assert.equal(await rig.writeScene(2), false)
-    assert.equal(rig.getState().error, LOST, 'a dropped tap left nothing saying the tap before it may have landed')
+    for (const scene of [2, 6, 7]) {
+      assert.equal(await rig.writeScene(scene), false)
+      assert.equal(rig.getState().error, LOST, 'a dropped tap left nothing saying the tap before it may have landed')
+    }
     assert.equal(rig.getState().errorLink, true)
     assert.equal(rig.getState().dropped, 'Not sent — not connected')
+    assert.ok(!('kept' in rig.getState()), 'the mark on a card put back reached the screen’s state')
+    /* The card put back is the one fault, written once: not again for every dropped tap it was put back over. */
+    assert.deepEqual(
+      log.filter((l) => l.source === 'error').map((l) => l.message),
+      [LOST],
+      'the card about the link put back over a dropped tap was written into the log again, as a new fault'
+    )
     /* A card about something else is answered by the press, as it always was, and stays gone. */
     rig.clearError()
     unit.hold = () => {
@@ -20854,6 +20864,6 @@ export function run(test) {
     assert.equal(log.filter((l) => l.source === 'error').length, 2, 'a dropped tap is written into the log as a fault')
     /* Read as code, where it is: set(), beside the fault's stamp. */
     const set = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
-    assert.match(set, /if \(patch\.error\) patch = \{ \.\.\.patch, faultAt: Date\.now\(\) \} [^]*?if \(patch\.error\) logDebug\('error', patch\.error\)/)
+    assert.match(set, /if \(patch\.error\) patch = \{ \.\.\.patch, faultAt: Date\.now\(\) \} [^]*?if \(patch\.error && !kept\) logDebug\('error', patch\.error\)/)
   })
 }

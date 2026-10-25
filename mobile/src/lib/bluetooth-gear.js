@@ -492,13 +492,13 @@ export const powerStepOf = (unit) => (hookupFor(unit) || []).indexOf(powerStep(U
  * THE BUTTON ON THIS PAGE, NOT A PATH THROUGH SETTINGS. It said "Settings →
  * Troubleshooting → Feedback" until 25 October 2026, three screens away from
  * the page it is read on, and a typed form at the end of them. The page has
- * REPORT_BUTTON at its foot now, under the beta note, which sends in one tap,
+ * REPORT_BUTTON further down, under the beta note, which sends in one tap,
  * "It works on my unit" among its answers.
  */
 export const untriedLine = (unit) =>
   triedOn(unit) || !UNITS[unit] || warningFor(unit)
     ? null
-    : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: tap ${REPORT_BUTTON}, at the bottom of this page.`
+    : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: tap ${REPORT_BUTTON}, further down this page.`
 
 /**
  * A unit's name said with its article: "an AM4", "an FM9", "an Axe-Fx III",

@@ -213,9 +213,14 @@ export function set(patch) {
    * lib/reports context) was nearly always empty, and the log a Bluetooth
    * report carries said what was asked but not what the screen then said.
    * The words alone, as the screen shows them: a fault is the app's own
-   * sentence, never a preset's contents.
+   * sentence, never a preset's contents. Not the card about the link put
+   * back over a dropped tap (keptOver): that is the fault already written,
+   * and a few dropped taps on a weak link wrote it again each time, as if it
+   * had happened again.
    */
-  if (patch.error) logDebug('error', patch.error)
+  const kept = patch.kept === true
+  if ('kept' in patch) patch = (({ kept: _, ...rest }) => rest)(patch)
+  if (patch.error && !kept) logDebug('error', patch.error)
   /* And a dropped tap where it is said, so the same words again are said again. */
   if (patch.dropped) patch = { ...patch, droppedAt: Date.now() }
   state = { ...state, ...patch }
@@ -531,7 +536,8 @@ function refusedNow(what) {
  * press, and goes as it always went.
  */
 const linkCard = () => (state.error && state.errorLink ? { error: state.error, errorLink: true } : null)
-const keptOver = (err, card) => (err?.notSent && card ? card : null)
+/* Marked `kept`, so set() does not write it into the log again: it is the fault already written, put back, not a new one. */
+const keptOver = (err, card) => (err?.notSent && card ? { ...card, kept: true } : null)
 
 /*
  * A SETLIST SONG'S SCENE AND TEMPO, AND WHETHER THEY WOULD NOW LAND LATE.

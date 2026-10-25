@@ -254,7 +254,12 @@ export const CHECK_STEPS = {
       { step: 'write-scene', label: 'Scene: go to 2 and back', does: 'Changes to scene 2, then back to the scene you were on.' },
       { step: 'write-channel', label: 'Channel: Amp to B and back', does: 'Puts the amp on B, then back where it was.' },
       { step: 'write-tempo', label: 'Tempo: up 1 and back', does: 'Raises the tempo by one, then puts it back.' },
-      { step: 'write-bypass', label: 'Effect: off and back', does: 'Switches the first effect off, or on, then puts it back as it was.' },
+      {
+        step: 'write-bypass',
+        label: 'Effect: off and back',
+        does: 'Switches the first effect off, or on, then puts it back as it was.',
+        warn: 'If the preset has only an amp and a cab, it switches the amp, so the sound changes for a moment until it is back on.'
+      },
       { step: 'write-preset', label: 'Preset: next and back', does: 'Loads the next preset, then the one you were on.' },
       { step: 'write-tuner', label: 'Tuner: 3 seconds', does: 'Opens the tuner for three seconds and counts the readings.' }
     ]
@@ -779,8 +784,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    *     said closed (task 161). It goes now, in its turn, and a Tuner pressed
    *     after it goes after it. Only a close: an open refused the same way
    *     is not sent late, because the phone's tuner went down with its
-   *     refusal (rig writeTuner), and a late one would mute the unit under a
-   *     Play that says closed.
+   *     refusal (rig writeTuner, and the link's reopen in bleLink connected()
+   *     puts it down through that), and a late one would mute the unit under
+   *     a Play that says closed.
    */
   function heardFromIt() {
     if (answered) return
@@ -1021,6 +1027,16 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   async function gen3Preset() {
+    /*
+     * A TUNER CLOSE HELD FOR THE UNIT'S FIRST ANSWER (closeWhenHeard) is
+     * sent by nothing but an answer, and before one only the probe goes:
+     * this read, the rig's timed check (unit-watch probeUnit) and its
+     * refreshPreset, was held unsent, so a unit that missed both probes as
+     * the connection came up stayed on its tuner, muted, until a pull-down.
+     * The probe first, then: answered, the close goes in its turn
+     * (heardFromIt) and this reads as it always did.
+     */
+    if (!answered && closeWhenHeard) await gen3Detect()
     const got = await presetNow()
     if (!got || rejected(got)) return { number: -1, name: '' }
     notePreset(got, false)
@@ -2577,14 +2593,16 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * the AM4's is: the block read, switched, read again, and put back as it
      * was. The first effect the catalog names, before the amp and the cab
      * (an amp switched off is a silent rig for the moment it takes), and
-     * never the input, output or looper, which Play does not show.
+     * never the input, output or looper, which Play does not show. With
+     * nothing but the amp and the cab, the amp, by name, whichever the unit
+     * lists first: the step's `warn` says so before it is tapped.
      */
     'write-bypass': async (row) => {
       const list = await row('Blocks', () => statusNow(), (v) => said(v, (l) => `${l.length} blocks`))
       if (!Array.isArray(list)) throw failure('The unit did not list its blocks.', 504)
       const slugOf = (b) => blocks.find((c) => c?.page === b.effectId)?.slug
       const known = list.filter((b) => slugOf(b) && !OFF_STAGE.includes(slugOf(b)))
-      const block = known.find((b) => !['amp', 'cab'].includes(slugOf(b))) || known[0]
+      const block = known.find((b) => !['amp', 'cab'].includes(slugOf(b))) || known.find((b) => slugOf(b) === 'amp') || known[0]
       if (!block) throw failure('There is no effect to switch in this preset.', 409)
       const eid = block.effectId
       const name = nameOf(eid)
@@ -2920,6 +2938,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     oweGen3Tuner,
     /** Gen 3, while open: whether something the connection before left on the unit's tuner is still to be closed. */
     gen3TunerOwes: () => !am4 && !closed && owedFromBefore(),
+    /** Gen 3, while open: whether the unit may be on its tuner from this connection or the one before, not yet closed (see bleLink letGoOfWireInTurn). */
+    gen3TunerLeftOn: () => !am4 && !closed && (tuner.on || tuner.pushSent || tuner.pageOpen || owedFromBefore()),
     /** Once closed: what a Gen 3 unit's tuner was left on, {push, page}, for the next connection to close; null when nothing. */
     gen3TunerOwed: () => gen3Owed,
     startPolls,

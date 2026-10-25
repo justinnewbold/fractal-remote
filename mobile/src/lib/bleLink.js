@@ -16,7 +16,7 @@ import {
   subscribeBluetooth,
   unitName
 } from './bluetooth'
-import { getState, handleEvent, refreshAll, reset as resetRig, stopWatching, watchUnit } from './rig'
+import { getState, handleEvent, refreshAll, reset as resetRig, stopWatching, watchUnit, writeTuner } from './rig'
 import { mayConnectBluetooth, subscribePurchase } from './purchases'
 import { logDebug } from './debugLog'
 
@@ -304,7 +304,20 @@ async function connected(e) {
    */
   if (getState().tunerOn) {
     say('the tuner was open when the adapter went; opening it again')
-    made.request('/tuner', { method: 'POST', body: '{"on":true}' }).then(settledUnitTuner(made), () => {})
+    made.request('/tuner', { method: 'POST', body: '{"on":true}' }).then(settledUnitTuner(made), () => {
+      /*
+       * NOT OPENED AGAIN (a Gen 3 unit silent through the wake and the read,
+       * so nothing is sent to it, say): the wire's tuner is closed, so no
+       * reading would ever come, and Play's tuner stayed up over a needle
+       * that never moved. It goes down, as a press refused the same way puts
+       * it down (rig writeTuner), and its close goes through this wire: held
+       * for the unit's first answer (closeWhenHeard) when the unit may still
+       * be on its tuner from before.
+       */
+      if (wire !== made || !getState().tunerOn) return
+      say('the tuner could not be opened again; the phone’s goes down')
+      writeTuner(false)
+    })
   } else if (unitTunerOwed && made.unit === 'am4') {
     /*
      * CLOSED WHILE THE ADAPTER WAS AWAY. The phone's tuner went off with no
@@ -398,18 +411,28 @@ function letGoOfWireInTurn(then) {
   const made = wire
   /* Asked again while one is closing: once it has gone, whatever wire is there by then. */
   if (letting) return letting.then(() => letGoOfWireInTurn(then))
-  if (!made?.unitTunerOpen?.()) {
+  /*
+   * AND AN FM3, FM9 OR AXE-FX III ON ITS TUNER the same way, with the adapter
+   * still there: the wire's close() sends a Gen 3 unit nothing, only notes
+   * what was left on for a later Bluetooth connection, so turning Bluetooth
+   * off (or Disconnect, or another unit picked) left the unit on its tuner,
+   * muted, under a Play that said closed, and another unit picked forgot
+   * even that (settingsMoved). Closed in its turn first, as a press does; a
+   * close that cannot go is handed back by close() as before.
+   */
+  const am4 = !!made?.unitTunerOpen?.()
+  if (!am4 && !made?.gen3TunerLeftOn?.()) {
     letGoOfWire()
     return then(!!made)
   }
-  say('letting go with the AM4 on its own tuner: closing it first')
+  say(am4 ? 'letting go with the AM4 on its own tuner: closing it first' : `letting go with the ${unitName(made.unit)} on its tuner: closing it first`)
   unhear?.()
   unhear = null
   made.stopPolls()
   setSwitch({ on: bluetoothOn(), wire: null })
   let timer = null
   const closed = made.request('/tuner', { method: 'POST', body: '{"on":false}' }).then(
-    (r) => say(`the AM4’s own tuner before letting go: ${r?.unitTuner || 'unknown'}`),
+    (r) => say(am4 ? `the AM4’s own tuner before letting go: ${r?.unitTuner || 'unknown'}` : `the ${unitName(made.unit)}’s tuner closed before letting go`),
     () => {}
   )
   const capped = new Promise((resolve) => (timer = setTimeout(resolve, LET_GO_MS)))

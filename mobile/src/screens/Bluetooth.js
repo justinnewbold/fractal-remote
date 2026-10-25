@@ -403,12 +403,16 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
         </View>
 
         {/*
-          THE FM3, WHENEVER IT IS THE UNIT PICKED, on or off, and never folded:
-          the cable that ran hot on it, and every adapter fed from its MIDI
-          OUT, kept off it (FM3_NEVER). How to plug it in, which holds the full
-          warning, starts folded once an adapter has been used here.
+          THE FM3, WHENEVER IT IS THE UNIT PICKED OR THE UNIT THAT ANSWERED, on
+          or off, and never folded: the cable that ran hot on it, and every
+          adapter fed from its MIDI OUT, kept off it (FM3_NEVER). An FM3 that
+          answered a connection made for another unit is the one moment the
+          app knows an adapter is plugged into an FM3, and it is put straight
+          under "An FM3 answered, not the …", which says nothing of heat. How
+          to plug it in, which holds the full warning, starts folded once an
+          adapter has been used here.
         */}
-        {b.unit === 'fm3' ? <Note tone="fault">{FM3_NEVER}</Note> : null}
+        {b.unit === 'fm3' || b.answeredAs === 'FM3' ? <Note tone="fault">{FM3_NEVER}</Note> : null}
 
         {b.on ? (
           <View style={{ gap: space.sm }}>
