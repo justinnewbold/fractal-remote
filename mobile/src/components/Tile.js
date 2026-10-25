@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { Image, PixelRatio, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 
 import { color, font, isDark, radius, space, TAP } from '../lib/theme'
@@ -260,13 +260,21 @@ export default function Tile({
           min: font.small
         })
       : null
-  /* Said up to the grid, which hands every tile the one size they share. */
+  /*
+   * Said up to the grid, which hands every tile the one size they share: the
+   * size it fits at, 0 for a name that fits at no size, nothing until it is
+   * measured, and always with the name it is about, so an answer for the
+   * last preset's name is never taken for this one's. Before the screen is
+   * drawn (a layout effect): a name measured before is then drawn at the
+   * grid's size in its first frame, not at its own for one frame first.
+   */
   const fitsAt = fitted?.fits ? fitted.size : null
-  useEffect(() => {
-    if (fit) onFit?.(fitsAt)
-  }, [fit, fitsAt])
-  /* Drawn fitted only where the name fits, at the grid's size; otherwise exactly as it was. */
-  const drawnAt = fitsAt ? Math.min(fitsAt, fitCap > 0 ? fitCap : fitsAt) : null
+  const told = fitted ? fitsAt || 0 : null
+  useLayoutEffect(() => {
+    if (fit) onFit?.(told, label)
+  }, [fit, told, label])
+  /* Drawn fitted only where the name fits and the grid has its one size; otherwise exactly as it was. */
+  const drawnAt = fitsAt && fitCap > 0 ? Math.min(fitsAt, fitCap) : null
   /*
    * THE COLOUR AS IT IS AUTHORED — EXCEPT IN THE ONE LOOK THAT WAS LIFTED.
    *
@@ -655,7 +663,8 @@ export default function Tile({
               key: measureKey,
               words: words.map((_, i) => lines[i].width),
               space: Math.max(0, lines[words.length].width - lines[words.length + 1].width),
-              line: lines[0].height
+              /* A middle line's height, "n n": Android adds the face's padding to the first line and the last, and a line here is a line between two. */
+              line: lines[words.length].height
             }
             if (!got.words.every((w) => w > 0) || !(got.line > 0)) return
             MEASURED.set(measureKey, got)
@@ -735,7 +744,9 @@ export default function Tile({
           style={{
             color: foreground,
             fontSize: drawnAt || (wrap ? font.small : font.body),
-            ...(drawnAt ? { lineHeight: Math.round((measure.line * drawnAt) / NAME_REF) } : null),
+            /* The measured line already has the phone's text size in it, and both phones scale a line height by it
+               again, so it is taken back out; rounded down, so a line is never taller than the room it was fitted to. */
+            ...(drawnAt ? { lineHeight: Math.floor((measure.line * drawnAt) / NAME_REF / PixelRatio.getFontScale()) } : null),
             fontWeight: '700',
             letterSpacing: drawnAt ? Math.round(drawnAt * NAME_TRACK * 10) / 10 : 0.5,
             textAlign: 'center'

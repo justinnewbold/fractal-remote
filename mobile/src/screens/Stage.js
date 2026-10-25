@@ -581,14 +581,25 @@ export default function Stage({
    * Kept by scene, and read only for the scenes this unit has.
    */
   const [sceneFits, setSceneFits] = useState({})
-  const noteSceneFit = useCallback((i, size) => {
-    setSceneFits((was) => (was[i] === size ? was : { ...was, [i]: size }))
+  const noteSceneFit = useCallback((i, size, name) => {
+    setSceneFits((was) => (was[i]?.name === name && was[i]?.size === size ? was : { ...was, [i]: { name, size } }))
   }, [])
+  /*
+   * Only once every named scene has said, for the name it has now: until
+   * then, and while any one fits at no size, every scene is drawn as it
+   * always was, so the grid is never two sizes at once.
+   */
   const sceneNameSize = useMemo(() => {
     const sizes = []
-    for (let i = 0; i < (scenes.hasScenes ? scenes.count : 0); i++) if (sceneFits[i] > 0) sizes.push({ size: sceneFits[i], fits: true })
+    for (let i = 0; i < (scenes.hasScenes ? scenes.count : 0); i++) {
+      const name = sceneNames[i]
+      if (!name) continue
+      const told = sceneFits[i]
+      if (told?.name !== name || told.size == null) return null
+      sizes.push(told.size > 0 ? { size: told.size, fits: true } : { size: 0, fits: false })
+    }
     return together(sizes)
-  }, [sceneFits, scenes.hasScenes, scenes.count])
+  }, [sceneFits, sceneNames, scenes.hasScenes, scenes.count])
   /** Which block's channel picker is open, by effect id. */
   const [picking, setPicking] = useState(null)
   /* Closed, not only hidden: kept, the sheet came back over the new song's
@@ -1243,7 +1254,7 @@ export default function Stage({
                        an FM3, the text can shrink" (lib/name-fit). */
                     fit
                     fitCap={sceneNameSize}
-                    onFit={(size) => noteSceneFit(i, size)}
+                    onFit={(size, name) => noteSceneFit(i, size, name)}
                     style={{ width: tileWidth(row, sceneCols) }}
                   />
                 )

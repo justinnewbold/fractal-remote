@@ -17,7 +17,10 @@
  * ONE SIZE FOR THE WHOLE GRID (`together`). Each name fitted on its own came
  * out "JUMPED" at 26 beside "CRUNCH BRIGHT" at 15, which reads as two kinds
  * of button. So every fitted name on a screen takes the smallest of their
- * sizes: as big as the longest name allows, the same for all of them.
+ * sizes: as big as the longest name allows, the same for all of them. And
+ * when one name fits at no size, none is fitted and the whole grid is drawn
+ * as it always was: a fitted grid with that one name left at the old size
+ * beside it was two kinds of button again (the review, 25 October 2026).
  *
  * Text is measured once, at one size (`ref`), and scaled: a word twice the
  * size is twice as wide, letter spacing included where it is a share of the
@@ -82,10 +85,13 @@ export function fitName({ words, space, line, ref = NAME_REF, width, height, min
 
 /**
  * The one size for every fitted name in a grid: the smallest of the sizes
- * that fit, or null when none did. A name that did not fit at the floor is
- * left out, and drawn as it always was.
+ * that fit, or null, which is "draw them all as they always were", when none
+ * was measured or when any one name fits at no size. An entry with nothing
+ * in it (a scene with no name) is left out.
  */
 export function together(fitted) {
-  const sizes = (fitted || []).filter((f) => f && f.fits && f.size > 0).map((f) => f.size)
+  const all = (fitted || []).filter(Boolean)
+  if (all.some((f) => !f.fits)) return null
+  const sizes = all.filter((f) => f.size > 0).map((f) => f.size)
   return sizes.length ? Math.min(...sizes) : null
 }

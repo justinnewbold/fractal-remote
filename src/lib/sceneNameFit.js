@@ -13,9 +13,10 @@ import { NAME_MAX, NAME_REF, fitName, together } from '../../shared/name-fit.mjs
  * the fit that sized the tiles still holds.
  *
  * One size for the grid (`together`): every name that fits takes the
- * smallest size that fits them all. A name that does not fit even at the
- * floor gets no size, and the styles draw it as they always did (the compact
- * Play's smaller sizes and its one-line clamp included).
+ * smallest size that fits them all. When one name does not fit even at the
+ * floor, none is given a size, and the styles draw the whole grid as they
+ * always did (the compact Play's smaller sizes and its one-line clamp
+ * included), so the grid is never two sizes at once.
  */
 
 /* The browser's own letter spacing for a scene name (styles.css, .gig-scene-name), a share of the size. */
@@ -32,6 +33,14 @@ const LINE = 1.15
 export const NAME_FLOOR = 12
 
 let canvas = null
+/*
+ * Widths already measured, kept only once the face itself has loaded: a
+ * width taken in the fallback face while the page's font was still on its
+ * way was kept for good, so the measure again when the fonts arrived changed
+ * nothing and a name stayed the wrong size (too big, and cut, where the
+ * fallback is narrower) until the page was reloaded. Emptied whenever fonts
+ * finish loading, too (useSceneNameSizes).
+ */
 const WIDTHS = new Map()
 
 /* One run of text's width at NAME_REF, letter spacing included: a space after every letter, the way CSS draws it. */
@@ -43,7 +52,7 @@ function widthOf(text, family) {
   if (!ctx) return 0
   ctx.font = `700 ${NAME_REF}px ${family}`
   const w = ctx.measureText(text).width + [...text].length * TRACK * NAME_REF
-  WIDTHS.set(key, w)
+  if (document.fonts?.check?.(ctx.font) !== false) WIDTHS.set(key, w)
   return w
 }
 
@@ -112,11 +121,19 @@ export function useSceneNameSizes(gridRef, names, count) {
     const sized = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null
     sized?.observe(grid)
     let alive = true
-    document.fonts?.ready?.then(() => alive && schedule())
+    /* Once the fonts are in, every width again, in the face itself. */
+    const fresh = () => {
+      if (!alive) return
+      WIDTHS.clear()
+      schedule()
+    }
+    document.fonts?.ready?.then(fresh)
+    document.fonts?.addEventListener?.('loadingdone', fresh)
     return () => {
       alive = false
       cancelAnimationFrame(raf)
       sized?.disconnect()
+      document.fonts?.removeEventListener?.('loadingdone', fresh)
     }
   }, [gridRef, key, count])
   return sizes

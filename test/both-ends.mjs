@@ -3354,10 +3354,12 @@ export function run(test) {
     assert.equal(small.size, 13)
     /* A word too long for any size is not fitted: drawn as it was before. */
     assert.deepEqual(fitName({ ...measure('Supercalifragilistic'), width: 60, height: 40, min: 13 }), { size: 13, lines: 2, fits: false })
-    /* One size for the grid: the smallest of those that fit, and a name that does not fit is left out of it. */
+    /* One size for the grid: the smallest of those that fit; a scene with no name is left out; and one name that fits at no size draws the whole grid as before, never two sizes at once. */
     const { together } = await import('../shared/name-fit.mjs')
-    assert.equal(together([{ size: 26, fits: true }, { size: 15, fits: true }, { size: 13, fits: false }, null]), 15)
+    assert.equal(together([{ size: 26, fits: true }, { size: 15, fits: true }, null]), 15)
+    assert.equal(together([{ size: 26, fits: true }, { size: 15, fits: true }, { size: 13, fits: false }]), null)
     assert.equal(together([{ size: 13, fits: false }]), null)
+    assert.equal(together([]), null)
     /* No measure, or no room yet: drawn as before. */
     assert.equal(fitName({ words: [], space: 5, line: 24, width: 100, height: 50, min: 13 }), null)
     assert.equal(fitName({ ...measure('Clean'), width: 0, height: 50, min: 13 }), null)
@@ -3378,10 +3380,17 @@ export function run(test) {
     assert.match(tile, /\[\.\.\.wordsOf\(label\), 'n n', 'nn'\]\.join\('\\n'\)/, 'the phone does not measure each word and a space')
     assert.match(tile, /min: font\.small \}\) : null/, 'the phone’s fitted name can be drawn smaller than it was')
     assert.match(tile, /fontSize: drawnAt \|\| \(wrap \? font\.small : font\.body\)/)
-    /* Drawn fitted only where it fits, at no more than the grid's one size; said up to the grid, which takes the smallest. */
-    assert.match(tile, /const drawnAt = fitsAt \? Math\.min\(fitsAt, fitCap > 0 \? fitCap : fitsAt\) : null/)
-    assert.match(stage, /fitCap=\{sceneNameSize\} onFit=\{\(size\) => noteSceneFit\(i, size\)\}/)
+    /* Drawn fitted only where it fits and the grid has its one size; said up to the grid, with the name it is about, before the screen is drawn. */
+    assert.match(tile, /const drawnAt = fitsAt && fitCap > 0 \? Math\.min\(fitsAt, fitCap\) : null/)
+    assert.match(tile, /useLayoutEffect\(\(\) => \{ if \(fit\) onFit\?\.\(told, label\) \}, \[fit, told, label\]\)/)
+    assert.match(stage, /fitCap=\{sceneNameSize\} onFit=\{\(size, name\) => noteSceneFit\(i, size, name\)\}/)
+    /* The grid waits for every named scene, for its name now, and goes back to the old drawing when one fits at no size. */
+    assert.match(stage, /if \(told\?\.name !== name \|\| told\.size == null\) return null/)
     assert.match(stage, /return together\(sizes\)/)
+    /* The text size is in the measure already, and the phones scale a line height by it again: taken out once, rounded down. */
+    assert.match(tile, /lineHeight: Math\.floor\(\(measure\.line \* drawnAt\) \/ NAME_REF \/ PixelRatio\.getFontScale\(\)\)/)
+    /* A line is measured on a middle line, never the first, which Android pads. */
+    assert.match(tile, /line: lines\[words\.length\]\.height/)
     /* The two copies are one file (the sync test holds the generated copy to the source). */
     const { FILES } = await import('../scripts/sync-relay-rules.mjs')
     assert.ok(FILES.some((f) => f.source === '../shared/name-fit.mjs' && f.target === '../mobile/src/lib/name-fit.js'))
@@ -3396,6 +3405,10 @@ export function run(test) {
     assert.match(read('src/styles.css'), /\.gig \.gig-scenes button\.gig-scene\.named\[data-fit='yes'\] \.gig-scene-name \{\s*font-size: var\(--name-size\);/, 'the compact Play’s smaller sizes win over a fitted name')
     const web = flatOf('src/lib/sceneNameFit.js')
     assert.match(web, /export const NAME_FLOOR = 12/)
+    /* A width taken in the fallback face is never kept, and the fonts arriving measure every name again. */
+    assert.match(web, /if \(document\.fonts\?\.check\?\.\(ctx\.font\) !== false\) WIDTHS\.set\(key, w\)/)
+    assert.match(web, /WIDTHS\.clear\(\) schedule\(\)/)
+    assert.match(web, /document\.fonts\?\.addEventListener\?\.\('loadingdone', fresh\)/)
     assert.match(web, /min: NAME_FLOOR, max: NAME_MAX/)
     assert.match(web, /const one = together\(each\) const next = each\.map\(\(f\) => \(one && f\?\.fits \? one : null\)\)/, 'the browser sizes each name on its own')
     /* Sized from the room the tile is given, so a name never grows the tile Play's fit has sized. */
