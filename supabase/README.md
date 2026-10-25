@@ -389,32 +389,52 @@ Once Bluetooth (beta) opens to customers (store version 1.89.0, the AM4
 only), a buyer with an AM4 may never sign a computer in, and both emails
 would tell them the computer is the only way ("your phone has nothing to
 connect to"). So the function carries a second wording that offers both
-ways: the computer app first, as the best way and the one for every unit,
-and then a paragraph for an AM4 owner — Bluetooth (beta) from version
-1.89.0, slower and with no editing or saving, found under Settings → My rig
-→ Bluetooth (beta), which says what to buy. Help stays the reply to the
-email, which comes to Justin.
+ways: the computer app first, as the best way and the only one for every
+unit but the AM4, and then a paragraph for an AM4 owner — Bluetooth (beta)
+from version 1.89.0, with more lag and no editing or saving, found under
+Settings → My rig → Bluetooth (beta), which says what to buy. Help stays
+the reply to the email, which comes to Justin.
 
 It is **off**: `BLUETOOTH_IN_EMAILS = false` at the top of
 `functions/setup-reminder/index.ts`. The email cannot tell which store copy
-somebody has, so on before 1.89.0 is out it would send people to a row
-their app does not have, about a feature the copies they hold were reviewed
-without.
+somebody has, so on too early it would send people to a row their app does
+not have, about a feature the copies they hold were reviewed without.
 
 **Switch it on the day 1.89.0 is live on the App Store and on Google Play,
-both**, and not before:
+both, and only if 1.89.0 is the build that opens Bluetooth (beta) to
+customers**: its row in docs/expo-builds.md says "Bluetooth (beta) for
+customers", for both phones. Not before, and not for a 1.89.0 that reached
+the stores without it (a review that went wrong, or the version moved when
+the build was made). If the build that opens it has another number,
+`BLUETOOTH_FROM` moves to that number first, since the email says it, and
+every 1.89.0 here means that one.
 
 1. Move `public/store-versions.json` to 1.89.0 for both stores, as that day
    does anyway (docs/expo-builds.md).
 2. In that same pull request, or one after it, set
-   `BLUETOOTH_IN_EMAILS = true`. `test/server.mjs` fails on `true` while
-   `store-versions.json` says either store is older than `BLUETOOTH_FROM`, so
-   it cannot go on early by accident. Merge it once it is green.
-3. **Redeploy the function**: `supabase functions deploy setup-reminder
-   --no-verify-jwt`. Merging changes nothing on the server: no workflow
-   deploys these functions, and until this step the old words keep going out.
-4. On the phone, Developer → Paid but no computer yet → Send me a sample of
-   both emails, and read the new paragraph as a buyer would.
+   `BLUETOOTH_IN_EMAILS = true`, and merge it once it is green.
+   `test/server.mjs` fails on `true` while `store-versions.json` says either
+   store is older than `BLUETOOTH_FROM`, while docs/expo-builds.md has no
+   row at that version saying "Bluetooth (beta) for customers" for both
+   phones, and, once the version rule (mobile/src/lib/ble-rule.js) is here,
+   while its threshold for either phone is not set to `BLUETOOTH_FROM`. It
+   only reads those files, so it catches the switch turned on before they
+   were moved, not a file moved wrong: check them by eye against App Store
+   Connect and the Play Console before merging.
+3. **On the phone, before the redeploy**: Developer → Paid but no computer
+   yet → Turn the setup emails off (if they are on). Merging changes nothing
+   on the server, so up to here the old words are what goes out; from the
+   redeploy on, the next hourly run would send the new paragraph to real
+   customers before Justin had read it as an email. While they are off, the
+   hourly run still looks and keeps its record, and nobody due in the
+   meantime is lost: they get theirs in the first hour after step 6.
+4. **Redeploy the function**: `supabase functions deploy setup-reminder
+   --no-verify-jwt`. No workflow deploys these functions.
+5. Developer → Paid but no computer yet → Send me a sample of both emails,
+   and read the new paragraph as a buyer would. The sample works with the
+   emails off: it is sent before the switch is ever read.
+6. Only then, Turn the setup emails on again. It asks a second time, and
+   asks whether the sample has been read.
 
 If only one store has 1.89.0 that day (Google's review is slower, or the
 Android copy waits), leave it off until the other has it too: the emails go

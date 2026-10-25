@@ -106,9 +106,13 @@ export default function Fixes({ onBack, open = null, hostVersion = null }) {
                   owner who has no computer, or never got one going, reads
                   them as the only way there is. So, where this copy offers
                   Bluetooth (beta) and it is not already on, the same line the
-                  no-computer note says (shared/no-computer.mjs
+                  waiting screen and Phone & computer draw under the
+                  no-computer words (shared/no-computer.mjs
                   NO_COMPUTER_BLUETOOTH): the second way, the computer still
-                  the best, what Bluetooth costs, and where it is. Everywhere
+                  the best, what Bluetooth costs, and where it is. It is also
+                  where Play's card about the computer sends them: that card
+                  leaves the line out to keep its height, and its
+                  Troubleshooting opens this fix. Everywhere
                   else (every customer's copy today: lib/useBluetoothOffered.js)
                   nothing is drawn and this fix is word for word what it was.
                   The steps are the browser's too (shared/troubleshooting.mjs),

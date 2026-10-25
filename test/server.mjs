@@ -18,7 +18,7 @@
  * more tried than read.
  */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 
@@ -924,15 +924,19 @@ export function run(test) {
   })
 
   /*
-   * BLUETOOTH (BETA) IN THE SETUP EMAILS, OFF UNTIL 1.89.0 IS IN BOTH STORES.
+   * BLUETOOTH (BETA) IN THE SETUP EMAILS, OFF UNTIL THE STORE VERSION THAT
+   * OPENS IT IS IN BOTH STORES.
    *
    * Once Bluetooth (beta) opens to customers (store version 1.89.0, the AM4
    * only), an AM4 owner may never sign a computer in, and both emails would
    * tell them "your phone has nothing to connect to". So the function carries
    * a wording that offers both ways, behind one switch, BLUETOOTH_IN_EMAILS.
-   * The email cannot tell which store copy a buyer has, so the switch is held
-   * to public/store-versions.json — moved on the day a version goes live in a
-   * store, and not before — and cannot be on while either store is older.
+   * The email cannot tell which store copy a buyer has, so the switch may go
+   * on only once the version it names is live in both stores AND is the
+   * build that opened Bluetooth (beta) to customers. A 1.89.0 in the stores
+   * is not enough by itself: one that went out without it (a review gone
+   * wrong, the version moved at build time) does not draw the row the email
+   * sends people to.
    */
   const setupWords = async () => {
     const mod = await import(`${SETUP_URL}?words=bluetooth`).catch(async () => {
@@ -943,23 +947,95 @@ export function run(test) {
     return mod
   }
 
-  test('the setup emails say nothing of Bluetooth while the switch is off, and it is off until the stores have 1.89.0', async () => {
+  /*
+   * THE BUILD LEDGER, a build at a time: docs/expo-builds.md's rows, one
+   * entry for each phone a row built, and whether the row is the one that
+   * opened Bluetooth (beta) to customers ("Bluetooth (beta) for customers" in
+   * What it was for, the words the ledger's rows use for it).
+   */
+  const OPENING = /Bluetooth \(beta\) for customers/
+  const ledgerBuilds = (text) => {
+    const out = []
+    for (const line of String(text).split('\n')) {
+      const cells = line.split('|').map((c) => c.trim())
+      if (cells.length < 7 || !/^\d+\.\d+\.\d+$/.test(cells[2])) continue
+      for (const [platform, cell] of [['ios', cells[3]], ['android', cells[4]]]) {
+        if (/^\d/.test(cell)) out.push({ version: cells[2], platform, opening: OPENING.test(cells[5]) })
+      }
+    }
+    return out
+  }
+
+  /*
+   * WHEN THE EMAILS MAY OFFER BLUETOOTH (BETA), as one rule, so it can be
+   * tried on the days it is there for as well as on today:
+   *
+   *   on          BLUETOOTH_IN_EMAILS
+   *   from        BLUETOOTH_FROM, the version the email names
+   *   stores      public/store-versions.json, moved the day a version is live
+   *   builds      docs/expo-builds.md, read by ledgerBuilds
+   *   thresholds  the version rule's BLUETOOTH_FROM_STORE ({ ios, android },
+   *               mobile/src/lib/ble-rule.js), or null where that file is not
+   *               in this tree yet
+   *
+   * On needs every one of: both stores at `from` or later; a build at `from`
+   * marked as the opening, for each phone; and, once the version rule is
+   * here, its threshold set on both phones. And once both thresholds are set,
+   * `from` is them, switch on or off: the email says one version to iPhone
+   * and Android buyers alike, so the pull request that sets the thresholds
+   * moves BLUETOOTH_FROM with them if it has to.
+   *
+   * It reads only what the files say. A file moved wrong, or early, it
+   * cannot see, which is why supabase/README.md has the day looked at by eye.
+   */
+  const emailSwitchProblems = ({ on, from, stores, builds, thresholds }, isOlder) => {
+    const out = []
+    const phones = ['ios', 'android']
+    const store = { ios: 'the App Store', android: 'Google Play' }
+    const set = Boolean(thresholds) && phones.every((p) => typeof thresholds[p] === 'string' && thresholds[p] !== '')
+    if (set) {
+      for (const p of phones) if (thresholds[p] !== from) out.push(`${p}: the version rule opens Bluetooth (beta) from ${thresholds[p]}, and the emails say ${from}`)
+    }
+    if (!on) return out
+    if (thresholds && !set) out.push(`the emails offer Bluetooth (beta), and the version rule has not opened it to customers on both phones (ios ${thresholds.ios}, android ${thresholds.android})`)
+    for (const p of phones) {
+      if (isOlder(stores?.[p], from) !== false) out.push(`${p}: the emails offer Bluetooth (beta) from ${from}, and public/store-versions.json says ${store[p]} has ${stores?.[p]}`)
+      if (!builds.some((b) => b.platform === p && b.version === from && b.opening)) out.push(`${p}: the emails offer Bluetooth (beta) from ${from}, and docs/expo-builds.md has no ${p} build of ${from} marked "Bluetooth (beta) for customers"`)
+    }
+    return out
+  }
+
+  /* The state as it is in this tree. The version rule is read where it is here (track 1 of the Bluetooth release brings it), and then always. */
+  const switchToday = async () => {
+    const { BLUETOOTH_IN_EMAILS, BLUETOOTH_FROM } = await setupWords()
+    const rule = new URL('../mobile/src/lib/ble-rule.js', import.meta.url)
+    const thresholds = existsSync(rule) ? (await import(rule.href)).BLUETOOTH_FROM_STORE : null
+    if (thresholds !== null) assert.ok(thresholds && typeof thresholds === 'object' && 'ios' in thresholds && 'android' in thresholds, 'the version rule’s thresholds are not { ios, android }; this check needs telling')
+    return {
+      on: BLUETOOTH_IN_EMAILS,
+      from: BLUETOOTH_FROM,
+      stores: JSON.parse(read('public/store-versions.json')),
+      builds: ledgerBuilds(read('docs/expo-builds.md')),
+      thresholds
+    }
+  }
+
+  test('the setup emails say nothing of Bluetooth while the switch is off, and it goes on only once the version that opens it is live in both stores', async () => {
     const { setupEmail, BLUETOOTH_IN_EMAILS, BLUETOOTH_FROM } = await setupWords()
     const fn = code(read('supabase/functions/setup-reminder/index.ts'))
     /* One switch, a plain true or false, and one version, said the way the stores say it. */
     assert.equal((fn.match(/\bBLUETOOTH_IN_EMAILS\s*=/g) || []).length, 1, 'the switch is set in more than one place')
     assert.match(fn, /^export const BLUETOOTH_IN_EMAILS = (true|false)$/m, 'the switch is not a plain true or false')
     assert.match(BLUETOOTH_FROM, /^\d+\.\d+\.\d+$/)
-    assert.equal(BLUETOOTH_FROM, '1.89.0', 'the version Bluetooth (beta) opens in moved; the email says it, so it moves on purpose')
-    /* On only once BOTH stores are at that version: every buyer gets these, on whichever store copy they hold. */
+
+    /* The rule, on the files as they are. */
     const { isOlder } = await import('../shared/versions.mjs')
-    const stores = JSON.parse(read('public/store-versions.json'))
-    for (const store of ['ios', 'android']) {
-      if (BLUETOOTH_IN_EMAILS) assert.equal(isOlder(stores[store], BLUETOOTH_FROM), false, `the setup emails offer Bluetooth (beta) while the ${store} store has ${stores[store]}, older than ${BLUETOOTH_FROM}`)
-    }
-    if (stores.ios && stores.android && (isOlder(stores.ios, BLUETOOTH_FROM) || isOlder(stores.android, BLUETOOTH_FROM))) {
-      assert.equal(BLUETOOTH_IN_EMAILS, false, 'the setup emails offer Bluetooth (beta) before it is in both stores')
-    }
+    const today = await switchToday()
+    assert.ok(today.builds.length >= 15, `only ${today.builds.length} builds were read from docs/expo-builds.md; the read is probably broken`)
+    assert.deepEqual(emailSwitchProblems(today, isOlder), [])
+    /* A cross-check only, until the version rule's thresholds say which version opens it: then they decide, above. */
+    const decided = Boolean(today.thresholds?.ios && today.thresholds?.android)
+    if (!decided) assert.equal(BLUETOOTH_FROM, '1.89.0', 'the version Bluetooth (beta) is planned to open in moved; the email says it, so it moves on purpose')
 
     /* The emails as they go are the switch's: asked with nothing, the switch decides. */
     for (const kind of ['first', 'reminder']) {
@@ -991,11 +1067,48 @@ export function run(test) {
     if (!BLUETOOTH_IN_EMAILS) assert.ok(run.sent.every((p) => !/bluetooth/i.test(p.text + p.html)), 'a real email mentioned Bluetooth (beta) with the switch off')
   })
 
+  test('the switch’s rule, on the days it is there for: never on for a 1.89.0 that did not open Bluetooth (beta), one store alone, or a version the rule does not open', async () => {
+    const { isOlder } = await import('../shared/versions.mjs')
+    const ledger = read('docs/expo-builds.md')
+    const row = (version, ios, android, why) => `| 1 Nov | ${version} | ${ios} | ${android} | ${why} |`
+    const opened = ledgerBuilds(`${ledger}\n${row('1.89.0', '1', '1', 'Bluetooth (beta) for customers: the AM4, from both phones')}\n`)
+    const plain = ledgerBuilds(`${ledger}\n${row('1.89.0', '1', '1', 'The build pair after 1.88.3')}\n`)
+    const iosOnly = ledgerBuilds(`${ledger}\n${row('1.89.0', '1', '—', 'Bluetooth (beta) for customers, iPhone only')}\n`)
+    const live = { ios: '1.89.0', android: '1.89.0' }
+    const both = { ios: '1.89.0', android: '1.89.0' }
+    const day = { on: true, from: '1.89.0', stores: live, builds: opened, thresholds: both }
+    const problems = (change) => emailSwitchProblems({ ...day, ...change }, isOlder)
+    const says = (change, pattern, why) => assert.ok(problems(change).some((p) => pattern.test(p)), `${why}: ${JSON.stringify(problems(change))}`)
+
+    /* The day it is for: live in both stores, the opening build on both phones, the rule open on both. */
+    assert.deepEqual(problems({}), [], 'the day 1.89.0 opens Bluetooth (beta) and is live in both stores, the switch is refused')
+    assert.deepEqual(problems({ thresholds: null }), [], 'before the version rule is in this tree, the stores and the ledger are not enough')
+    assert.deepEqual(problems({ stores: { ios: '1.89.2', android: '1.89.1' } }), [], 'a store already past the opening version is read as not having it')
+    /* Off, today: nothing to say, with or without the rule. */
+    assert.deepEqual(problems({ on: false, stores: { ios: '1.87.11', android: '1.87.11' }, builds: ledgerBuilds(ledger), thresholds: { ios: null, android: null } }), [])
+    assert.deepEqual(problems({ on: false, stores: { ios: '1.87.11', android: '1.87.11' }, builds: ledgerBuilds(ledger), thresholds: null }), [])
+
+    /* The finding: 1.89.0 in both stores, without Bluetooth opened. */
+    says({ builds: plain }, /docs\/expo-builds\.md has no ios build of 1\.89\.0 marked/, 'a 1.89.0 that did not open Bluetooth (beta) lets the switch on')
+    says({ builds: plain, thresholds: { ios: null, android: null } }, /has not opened it to customers on both phones/, 'the version rule closed lets the switch on')
+    /* One store alone, or one phone's build alone. */
+    says({ stores: { ios: '1.89.0', android: '1.88.0' } }, /^android: .*Google Play has 1\.88\.0/, 'the switch goes on with Google Play still on 1.88.0')
+    says({ stores: { ios: '1.89.0' } }, /^android: .*Google Play has undefined/, 'a store that says nothing reads as having it')
+    says({ builds: iosOnly }, /^android: .*no android build of 1\.89\.0/, 'an opening build on one phone lets both phones’ buyers be told')
+    says({ thresholds: { ios: '1.89.0', android: null } }, /has not opened it to customers on both phones/, 'the rule open on one phone lets both phones’ buyers be told')
+    /* The rule opening on another version than the email says, switch on or off. */
+    says({ thresholds: { ios: '1.90.0', android: '1.90.0' } }, /^ios: the version rule opens Bluetooth \(beta\) from 1\.90\.0, and the emails say 1\.89\.0/, 'the email names a version the rule does not open')
+    says({ on: false, thresholds: { ios: '1.89.0', android: '1.89.1' } }, /^android: the version rule opens Bluetooth \(beta\) from 1\.89\.1/, 'the build pull request leaves the email’s version behind the rule’s')
+    /* The ledger read itself: the opening row is read on both phones, and a phone a row did not build is not. */
+    assert.equal(opened.filter((b) => b.opening && b.version === '1.89.0').length, 2)
+    assert.deepEqual(iosOnly.filter((b) => b.version === '1.89.0').map((b) => b.platform), ['ios'])
+  })
+
   test('with the switch on, both emails offer both ways: the computer first and best, then Bluetooth (beta) for an AM4 from 1.89.0, and help still a reply to Justin', async () => {
     const { setupEmail, BLUETOOTH_FROM } = await setupWords()
     const second =
       `Have an AM4? From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth (beta), through a Bluetooth MIDI adapter plugged into the AM4’s MIDI In and MIDI Out. ` +
-      'The computer is still the best way, and the one for every Fractal unit: Bluetooth is slower and does less, with no editing or saving. ' +
+      'The computer is still the best way, and the only way for the FM3, FM9, Axe-Fx III and VP4: Bluetooth has more lag and does less, with no editing or saving. ' +
       'To try it, update the app, then open Settings → My rig → Bluetooth (beta), which says what to buy and how to plug it in.'
     const first = setupEmail('first', 'fan@example.com', { bluetooth: true })
     const reminder = setupEmail('reminder', 'fan@example.com', { bluetooth: true })
@@ -1018,6 +1131,13 @@ export function run(test) {
       /* Help is Justin's: the paragraph sends nobody anywhere else. */
       assert.ok(!/@|https?:|www\./.test(second), 'the second way sends people somewhere other than this email’s reply')
     }
+    /* Never a promise for every Fractal unit: the computer is the way for the units the app works with, named, and those are SUPPORTED UNITS less the AM4. */
+    assert.ok(!/every (Fractal )?unit/i.test(second), 'the email promises the computer for every Fractal unit, Axe-Fx II and AX8 among them')
+    const supported = read('docs/app-store.md').match(/\nSUPPORTED UNITS\n([^\n]+)\n/)?.[1] || ''
+    assert.equal(supported, 'FM3, FM9, Axe-Fx III and AM4, and the VP4 in part.', 'SUPPORTED UNITS changed; the email names the units the computer is the only way for, from that list')
+    const units = (list) => list.split(/,\s*(?:and\s+)?(?:the\s+)?|\s+and\s+(?:the\s+)?/).map((u) => u.replace(/^the /, '').replace(/ in part\.?$|\.$/, '').trim()).filter(Boolean).sort()
+    const named = second.match(/the only way for the ([^:]+):/)?.[1] || ''
+    assert.deepEqual(units(named), units(supported).filter((u) => u !== 'AM4'), `the email names ${named} as the computer’s alone; SUPPORTED UNITS less the AM4 is ${units(supported).filter((u) => u !== 'AM4').join(', ')}`)
     /* Subjects as they were: the computer is still what the email is about. */
     assert.equal(first.subject, 'One more step: the Fractal Remote computer app')
     assert.equal(reminder.subject, 'Still need a hand with the Fractal Remote computer app?')
@@ -1025,18 +1145,46 @@ export function run(test) {
     assert.match(first.text, /The best way for your phone to control your Fractal is through a free app on the computer your unit is plugged into, and no computer has signed in with your account yet\. Setting it up takes about five minutes:/)
     assert.match(reminder.text, /No computer has signed in to Fractal Remote with fan@example\.com yet\. The computer app is free, and it’s the same three steps:/)
     assert.ok(!/nothing to connect to/.test(first.text + reminder.text), 'with Bluetooth in the emails, an AM4 owner is told their phone has nothing to connect to')
-    /* What it costs is only what the app's Bluetooth page says, and the row it names is there. */
+    /* What it costs is only what the app's Bluetooth page says (more lag: the preset list slow to load and footswitch changes a moment late), and the row it names is there. */
     const page = read('mobile/src/screens/Bluetooth.js')
-    assert.ok(page.includes("'No editing or saving over Bluetooth.'") && page.includes("'Slower to load the preset list.'"), 'the Bluetooth page no longer says what the email says Bluetooth costs')
+    for (const line of ["'No editing or saving over Bluetooth.'", "'Slower to load the preset list.'", "'Footswitch changes may take a moment to show.'"]) {
+      assert.ok(page.includes(line), `the Bluetooth page no longer says ${line}, which the email’s “more lag and does less, with no editing or saving” stands on`)
+    }
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
     assert.ok(settings.indexOf('<SetupRow title="Bluetooth (beta)"') > settings.indexOf('<Group title="My rig">'), 'the email sends them to Settings → My rig → Bluetooth (beta), which is not there')
-    /* The way it goes on is written down: switched on, and redeployed, the day both stores have it. */
+  })
+
+  test('the way it goes on is written down: only for the build that opens it, in both stores, and Justin reads the sample before a customer gets one', () => {
     const readme = read('supabase/README.md').replace(/\s+/g, ' ')
-    const section = readme.slice(readme.indexOf('### Bluetooth (beta) in the emails, from 1.89.0'))
-    assert.ok(section.length > 100, 'supabase/README.md does not say how the Bluetooth (beta) wording goes on')
+    const from = readme.indexOf('### Bluetooth (beta) in the emails, from 1.89.0')
+    assert.ok(from > 0, 'supabase/README.md does not say how the Bluetooth (beta) wording goes on')
+    const section = readme.slice(from, readme.indexOf('## ', from + 4))
     assert.match(section, /`BLUETOOTH_IN_EMAILS = false`/)
-    assert.match(section, /the day 1\.89\.0 is live on the App Store and on Google Play, both/)
-    assert.match(section, /`supabase functions deploy setup-reminder --no-verify-jwt`/, 'the README does not say to redeploy the function once the switch is on')
+    assert.match(section, /the day 1\.89\.0 is live on the App Store and on Google Play, both, and only if 1\.89\.0 is the build that opens Bluetooth \(beta\) to customers\*\*: its row in docs\/expo-builds\.md says "Bluetooth \(beta\) for customers", for both phones/, 'the README switches it on for any 1.89.0 in the stores')
+    /* The test is a guard against the plain mistake, and never said to be more. */
+    assert.ok(!/cannot go on early by accident/.test(section), 'the README says the test alone keeps the switch from going on early')
+    assert.match(section, /It only reads those files, so it catches the switch turned on before they were moved, not a file moved wrong/)
+    /* In this order: off, redeploy, the sample read, and only then on again. */
+    const at = (s) => {
+      const i = section.indexOf(s)
+      assert.ok(i > 0, `the README’s steps no longer say ${s}`)
+      return i
+    }
+    const steps = [
+      at('set `BLUETOOTH_IN_EMAILS = true`'),
+      at('Turn the setup emails off'),
+      at('`supabase functions deploy setup-reminder --no-verify-jwt`'),
+      at('Send me a sample of both emails'),
+      at('Turn the setup emails on again')
+    ]
+    assert.deepEqual([...steps].sort((a, b) => a - b), steps, 'the README redeploys before the setup emails are off, or turns them on before the sample is read')
+    assert.ok(section.includes('Idempotency-Key'), 'the README lost the note on the day’s one possible missed email')
+    /* The buttons it names are the Developer page's own, and the sample needs no switch. */
+    const tool = read('mobile/src/components/StuckTool.js')
+    for (const label of ['Turn the setup emails off', 'Turn the setup emails on', 'Send me a sample of both emails']) assert.ok(tool.includes(`'${label}'`), `the Developer page has no “${label}”`)
+    assert.match(read('shared/admin.mjs'), /Have you read the sample and left out the accounts that should never get one\?/, 'turning the emails on no longer asks whether the sample was read')
+    const fn = code(read('supabase/functions/setup-reminder/index.ts'))
+    assert.ok(fn.indexOf("input?.action !== 'sample'") > 0 && fn.indexOf("input?.action !== 'sample'") < fn.indexOf("rpc('setup_reminder_sending'"), 'the sample reads the switch, so it cannot be read with the emails off')
   })
 
   /*

@@ -1681,7 +1681,12 @@ export default function Stage({
         {/* The download link to their inbox, under the words that say no
             computer was ever set up, and only then. A label at 44 like the
             two below, so the card is one height whatever it says and NOT
-            CONNECTED under it stays put (components/SendLinkButton.js). */}
+            CONNECTED under it stays put (components/SendLinkButton.js).
+            And never the Bluetooth (beta) line the waiting screen and Phone
+            & computer draw under that button (NoComputerOtherWay): this card
+            does not scroll, the line roughly doubled it, and on a 320-point
+            phone NOT CONNECTED went off the bottom. Troubleshooting, below,
+            opens the fix that says it. */}
         {noComputer ? <SendLinkButton email={noComputer.email} height={44} /> : null}
         <Press label="Look for the computer again" height={44} onPress={() => onLookAgain?.()} />
         {onOpenFix ? <Press label="Troubleshooting" height={44} onPress={() => onOpenFix('connect')} /> : null}

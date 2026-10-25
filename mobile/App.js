@@ -15,7 +15,7 @@ import { useNoComputer } from './src/lib/useNoComputer'
 import { isPairAccount } from './src/lib/pairing'
 import Note from './src/components/Note'
 import Press from './src/components/Press'
-import NoComputerWords from './src/components/NoComputer'
+import NoComputerWords, { NoComputerOtherWay } from './src/components/NoComputer'
 import SendLinkButton from './src/components/SendLinkButton'
 import TopBar from './src/components/TopBar'
 import WrongAccount from './src/components/WrongAccount'
@@ -1753,6 +1753,11 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
             2026). To the account's own address, the one the words name.
           */}
           {noneSaid ? <SendLinkButton email={noComputer.email} /> : null}
+          {/* And, where this copy offers Bluetooth (beta), the other way for
+              an AM4, after the computer's words and their button so the
+              button is not read as the link for the Bluetooth parts
+              (components/NoComputer.js NoComputerOtherWay). */}
+          {noneSaid ? <NoComputerOtherWay /> : null}
           {elsewhere && onSwitch ? <Press label={`Switch account on this ${deviceNoun()}`} onPress={onSwitch} /> : null}
           {/*
             The way to what the line above asks for, right under it, as on the

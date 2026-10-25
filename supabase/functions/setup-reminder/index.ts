@@ -82,28 +82,45 @@ const SETTINGS_DOOR = { row: 'Phone & computer', button: 'Sign in to set up the 
  * the AM4 only, a buyer with an AM4 has a second way that needs no computer,
  * and "your phone has nothing to connect to" stops being true for them. So
  * with this on, both emails offer both ways: the computer app first, the best
- * way and the one for every unit, and then, for an AM4, Bluetooth (beta),
- * with what it costs ("make it clear that there's multiple ways to connect
- * the device, but also make it clear that the computer is the preferred
- * method and that Bluetooth will have more lag and not have as many
- * features") and where in the app it is.
+ * way and the only one for every unit but the AM4, and then, for an AM4,
+ * Bluetooth (beta), with what it costs ("make it clear that there's multiple
+ * ways to connect the device, but also make it clear that the computer is
+ * the preferred method and that Bluetooth will have more lag and not have as
+ * many features") and where in the app it is.
  *
- * OFF UNTIL 1.89.0 IS IN BOTH STORES. The email goes to every buyer, on
- * whatever store copy they have, and this function cannot tell which. Sent
- * before 1.89.0 is out it would point people at a Settings row their app does
- * not have, and tell customers about a feature the store versions they hold
- * were reviewed without. So it is switched on in a pull request (the one that
- * moves public/store-versions.json will do), and this function redeployed, on
- * the day 1.89.0 is live on the App Store AND on Google Play (supabase/
- * README.md, "Bluetooth (beta) in the emails, from 1.89.0", says how), and
- * not before: test/server.mjs fails on `true` while public/store-versions.json
- * says either store is older than BLUETOOTH_FROM.
+ * OFF UNTIL THE STORE VERSION THAT OPENS IT IS IN BOTH STORES. The email goes
+ * to every buyer, on whatever store copy they have, and this function cannot
+ * tell which. Sent too early it would point people at a Settings row their
+ * app does not have, and tell customers about a feature the store versions
+ * they hold were reviewed without. Two things have to be true, both of them,
+ * on the day it goes on:
+ *
+ *   - BLUETOOTH_FROM is live on the App Store AND on Google Play
+ *     (public/store-versions.json says so for both, moved that day);
+ *   - and it is the build that opens Bluetooth (beta) to customers: its row
+ *     in docs/expo-builds.md says "Bluetooth (beta) for customers", for both
+ *     phones. A 1.89.0 that reached the stores without it (a review that
+ *     went wrong, the version moved at build time) is not that build, and
+ *     its copies do not draw the row this email names.
+ *
+ * test/server.mjs checks both against those two files, and against the
+ * version rule's thresholds once mobile/src/lib/ble-rule.js is here, and
+ * fails on `true` without them. It reads only what the files say, so it
+ * catches a switch turned on with the files not yet moved, never a file
+ * moved wrong: the day itself is looked at by eye (supabase/README.md,
+ * "Bluetooth (beta) in the emails, from 1.89.0", says how). Then the
+ * setup emails are turned off, this function is redeployed, Justin reads
+ * the sample, and only then are they turned on again.
  *
  * A constant, not a secret: the words it turns on are reviewed in the same
  * change that turns them on, and the test above can see it.
  */
 export const BLUETOOTH_IN_EMAILS = false
-/** The first store version that offers Bluetooth (beta) to customers, as the email says it. */
+/**
+ * The first store version that offers Bluetooth (beta) to customers, as the
+ * email says it: one number to iPhone and Android buyers alike, so the
+ * version rule's threshold for each phone has to be this same one.
+ */
 export const BLUETOOTH_FROM = '1.89.0'
 /** A run's most. The backlog on the first day is about a dozen. */
 const AT_MOST = 25
@@ -207,12 +224,19 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
    * THE OTHER WAY, for an AM4, after the computer's steps and never before
    * them: what it is, that the computer is still the best way, what Bluetooth
    * costs (only what the app's own Bluetooth page says: no editing or saving,
-   * slower, and less on screen), and where in the app it is. "Update the
-   * app" because the email cannot tell which store copy they hold, and only
-   * BLUETOOTH_FROM and later have the row. Help stays the reply to this
-   * email, below, which comes to Justin.
+   * footswitch changes a moment late and the preset list slow to load, which
+   * is Justin's "more lag", and less on screen), and where in the app it is.
+   * "Update the app" because the email cannot tell which store copy they
+   * hold, and only BLUETOOTH_FROM and later have the row. Help stays the
+   * reply to this email, below, which comes to Justin.
+   *
+   * THE COMPUTER IS THE ONLY WAY FOR THE OTHER UNITS, NAMED. It once said
+   * "the one for every Fractal unit", which promises an Axe-Fx II, an AX8 or
+   * an FX8 something the app does not do. These are the units the app works
+   * with (docs/app-store.md SUPPORTED UNITS: the VP4 in part) less the AM4,
+   * and test/server.mjs holds them to that list.
    */
-  const secondWay = `Have an AM4? From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth (beta), through a Bluetooth MIDI adapter plugged into the AM4’s MIDI In and MIDI Out. The computer is still the best way, and the one for every Fractal unit: Bluetooth is slower and does less, with no editing or saving. To try it, update the app, then open Settings → My rig → Bluetooth (beta), which says what to buy and how to plug it in.`
+  const secondWay = `Have an AM4? From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth (beta), through a Bluetooth MIDI adapter plugged into the AM4’s MIDI In and MIDI Out. The computer is still the best way, and the only way for the FM3, FM9, Axe-Fx III and VP4: Bluetooth has more lag and does less, with no editing or saving. To try it, update the app, then open Settings → My rig → Bluetooth (beta), which says what to buy and how to plug it in.`
   const help = first
     ? 'If you get stuck anywhere, just reply to this email. It comes straight to me.'
     : 'If something got in the way, reply and tell me what you see, and I’ll help you get it going.'

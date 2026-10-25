@@ -78,9 +78,15 @@ export const noComputerBody = (email) => `${noComputerSteps(email)} ${NO_COMPUTE
  * "What it can and can't do" says it (mobile/src/screens/Bluetooth.js): no
  * editing or saving, slower to load the preset list, footswitch changes a
  * moment late, no looper, volume button, unit click or Footswitches page.
- * "Slower and does less" is all of that in three words, and "no editing or
+ * "More lag and does less" is all of that in five words, and "no editing or
  * saving" is the part a player would miss first. Then where it is: the row
  * under Settings → My rig, whose page says what to buy and how it plugs in.
+ *
+ * "MORE LAG", HIS WORD, not "slower". He has played it on his AM4, and the
+ * code agrees: a footswitch change reaches the screen at the next poll, up to
+ * two seconds after it is pressed (bleWire POLL_MS), and names come a few at
+ * a time (NAME_GAP_MS). "Slower" read as the preset list taking its time,
+ * when what he asked to have said is a delay on what he plays.
  *
  * "AN ADAPTER", because the AM4 has no Bluetooth of its own: without it, the
  * line reads as if the unit did. And it names no phone (CLAUDE.md: never
@@ -91,9 +97,18 @@ export const noComputerBody = (email) => `${noComputerSteps(email)} ${NO_COMPUTE
  * the Settings row the line names). Everywhere else — every customer's copy
  * today, and the browser, which has no Bluetooth — nothing here is drawn and
  * the words above are exactly what they were.
+ *
+ * A NOTE OF ITS OWN, AFTER "SEND ME THE DOWNLOAD LINK", never inside the
+ * no-computer words: right above that button, "says what to buy" read as if
+ * the button sent the Bluetooth parts, when it sends the computer app. And
+ * never on Play's floating card, which does not scroll and keeps one height
+ * so NOT CONNECTED under it stays put: this line doubled it, and on a
+ * 320-point phone pushed NOT CONNECTED off the bottom. The card's
+ * Troubleshooting opens It will not connect at all, which says it
+ * (mobile/src/components/NoComputer.js NoComputerOtherWay, and Fixes).
  */
 export const NO_COMPUTER_BLUETOOTH =
-  'Have an AM4? The app can also connect to it with no computer, by Bluetooth (beta) through an adapter. The computer is still the best way: Bluetooth is slower and does less, with no editing or saving. Settings → My rig → Bluetooth (beta) says what to buy.'
+  'Have an AM4? The app can also connect to it with no computer, by Bluetooth (beta) through an adapter. The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. Settings → My rig → Bluetooth (beta) says what to buy.'
 
 /** How long after one question before another may be asked. */
 export const ASK_EVERY_MS = 60 * 1000

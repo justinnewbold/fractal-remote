@@ -55,7 +55,7 @@ import { sync, useStored } from '../lib/store'
 import { isPairAccount } from '../lib/pairing'
 import { mayDrive } from '../lib/unlock-rule'
 import { useComputerElsewhere } from '../lib/useComputerElsewhere'
-import NoComputerWords from '../components/NoComputer'
+import NoComputerWords, { NoComputerOtherWay } from '../components/NoComputer'
 import SendLinkButton from '../components/SendLinkButton'
 import { quitEditor } from '../lib/editors'
 import { isAdmin } from '../lib/admin'
@@ -1146,6 +1146,10 @@ export default function Settings({
             {/* And the download link to their inbox, under those words and
                 only with them: to the account's own address, which they name. */}
             {noneSaid ? <SendLinkButton email={noComputer.email} /> : null}
+            {/* And, where this copy offers Bluetooth (beta), the other way
+                for an AM4, after the words and their button, never between
+                them (components/NoComputer.js NoComputerOtherWay). */}
+            {noneSaid ? <NoComputerOtherWay /> : null}
             {/* Which account this is — his words: "make sure you're connected
                 to your computer using and then show the user's email
                 address". A computer signed in as somebody else is the

@@ -274,8 +274,9 @@ async function sendButtonOnABench() {
 }
 
 /*
- * THE OTHER WAY, DRAWN: the phone's NoComputerWords and its Fixes page, their
- * JSX turned into plain calls by esbuild, against the real
+ * THE OTHER WAY, DRAWN: the phone's NoComputerWords, the NoComputerOtherWay
+ * note beside them and its Fixes page, their JSX turned into plain calls by
+ * esbuild, against the real
  * useBluetoothOffered (lib/useBluetoothOffered.js) and the real rule for the
  * full version (lib/unlock-rule.js), with the purchase, who may have
  * Bluetooth (beta) and whether the phone can do it stood in for, as the
@@ -294,6 +295,7 @@ async function sendButtonOnABench() {
  * comes back as { drawn: 'Note', tone, children }.
  *
  *   words(email)      NoComputerWords, as the text it says
+ *   otherWay()        NoComputerOtherWay, as a tree (a Note, or null)
  *   fixes(open)       the Fixes page with `open` unfolded, as a tree
  */
 async function otherWayOnABench() {
@@ -342,7 +344,8 @@ async function otherWayOnABench() {
   take('mobile/src/components/NoComputer.js', 'NoComputer.mjs', [
     ["from 'react-native'", "from './react-native.mjs'"],
     ["from '../lib/no-computer'", `from '${repoUrl('mobile/src/lib/no-computer.js')}'`],
-    ["from '../lib/useBluetoothOffered'", "from './useBluetoothOffered.mjs'"]
+    ["from '../lib/useBluetoothOffered'", "from './useBluetoothOffered.mjs'"],
+    ["from './Note'", "from './Note.mjs'"]
   ])
   take('mobile/src/screens/Fixes.js', 'Fixes.mjs', [
     ["from 'react'", "from './react.mjs'"],
@@ -380,7 +383,7 @@ async function otherWayOnABench() {
     return out
   }
   try {
-    const { default: NoComputerWords } = await import(at('NoComputer.mjs'))
+    const { default: NoComputerWords, NoComputerOtherWay } = await import(at('NoComputer.mjs'))
     const { default: Fixes } = await import(at('Fixes.mjs'))
     return {
       bench,
@@ -388,6 +391,7 @@ async function otherWayOnABench() {
       notes,
       words: (email) => said(NoComputerWords({ email })),
       wordsTree: (email) => NoComputerWords({ email }),
+      otherWay: () => NoComputerOtherWay({}),
       fixes: (open) => Fixes({ onBack: () => {}, open, hostVersion: null })
     }
   } finally {
@@ -1089,16 +1093,17 @@ export function run(test) {
     const line = words.NO_COMPUTER_BLUETOOTH
     assert.equal(
       line,
-      'Have an AM4? The app can also connect to it with no computer, by Bluetooth (beta) through an adapter. The computer is still the best way: Bluetooth is slower and does less, with no editing or saving. Settings → My rig → Bluetooth (beta) says what to buy.'
+      'Have an AM4? The app can also connect to it with no computer, by Bluetooth (beta) through an adapter. The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. Settings → My rig → Bluetooth (beta) says what to buy.'
     )
-    /* In Justin's order: more than one way, the computer the best of them, what Bluetooth costs, then where. */
-    const at = ['AM4', 'with no computer', 'The computer is still the best way', 'slower and does less', 'no editing or saving', 'Settings → My rig → Bluetooth (beta)'].map((w) => line.indexOf(w))
+    /* In Justin's order: more than one way, the computer the best of them, what Bluetooth costs (in his word, lag), then where. */
+    const at = ['AM4', 'with no computer', 'The computer is still the best way', 'more lag and does less', 'no editing or saving', 'Settings → My rig → Bluetooth (beta)'].map((w) => line.indexOf(w))
     assert.ok(at.every((i) => i >= 0), 'the line lost one of the things it has to say')
     assert.deepEqual([...at].sort((a, b) => a - b), at, 'the line says them out of order: the computer is not named the best before what Bluetooth costs')
     /* What it costs, only as far as the Bluetooth page itself says it. */
     const page = read('mobile/src/screens/Bluetooth.js')
     assert.ok(page.includes("'No editing or saving over Bluetooth.'"), 'the Bluetooth page no longer says there is no editing or saving; the line should not either')
-    assert.ok(page.includes("'Slower to load the preset list.'"), 'the Bluetooth page no longer says it is slower; the line should not either')
+    assert.ok(page.includes("'Slower to load the preset list.'"), 'the Bluetooth page no longer says the preset list is slow to load; the line’s “more lag” stands on it')
+    assert.ok(page.includes("'Footswitch changes may take a moment to show.'"), 'the Bluetooth page no longer says footswitch changes come late; the line’s “more lag” stands on it')
     /* Where it sends them is a row that is there: Bluetooth (beta), under My rig. */
     const settings = flat('mobile/src/screens/Settings.js')
     const rig = settings.indexOf('<Group title="My rig">')
@@ -1124,10 +1129,42 @@ export function run(test) {
     assert.match(hook, /const purchase = usePurchase\(\)\s+const allowed = useBluetoothAllowed\(\)\s+return mayDrive\(purchase\) && allowed && bluetoothSupported\(\)/, 'the hook is not the row’s gate, or asks the phone whether it can do Bluetooth before who may have it')
     assert.ok(!/isAdmin|Platform|APP_VERSION|expoConfig|storeVersion/.test(hook), 'the hook decides who may have Bluetooth (beta) for itself: that is useBluetoothAllowed’s alone')
 
-    /* Drawn in the words themselves, after the computer’s steps, and nowhere on the phone but there and Fixes. */
+    /*
+     * A note of its own, never inside the words: right above "Send me the
+     * download link", "says what to buy" made that button read as the link
+     * for the Bluetooth parts. The words are what they were, and ask nothing.
+     */
     const drawn = flat('mobile/src/components/NoComputer.js').replace(/\/\*[\s\S]*?\*\//g, ' ')
-    assert.match(drawn, /const bluetooth = useBluetoothOffered\(\)/)
-    assert.match(drawn, /\{noComputerBody\(email\)\} \{bluetooth \? `\\n\\n\$\{NO_COMPUTER_BLUETOOTH\}` : null\} <\/>/, 'the other way is not after the computer’s steps, or not behind the hook')
+    assert.match(drawn, /export default function NoComputerWords\(\{ email \}\) \{ return \( <> <Text style=\{\{ fontWeight: '700' \}\}>\{NO_COMPUTER_TITLE\}<\/Text> \{'\\n'\} \{noComputerBody\(email\)\} <\/> \) \}/, 'the no-computer words are not what they were, or say the other way inside them')
+    assert.match(drawn, /export function NoComputerOtherWay\(\) \{ const offered = useBluetoothOffered\(\) return offered \? <Note tone="hint">\{NO_COMPUTER_BLUETOOTH\}<\/Note> : null \}/, 'the other way is not its own note behind the hook')
+    /* After the words AND their download button, on the waiting screen and Phone & computer, behind the same no. */
+    const app = flat('mobile/App.js').replace(/\/\*[\s\S]*?\*\//g, ' ')
+    const waking = app.slice(app.indexOf('function Waking('))
+    const settingsCode = settings.replace(/\/\*[\s\S]*?\*\//g, ' ')
+    for (const [where, text, next] of [
+      ['the waiting screen', waking, '<Press label="Look for the computer again"'],
+      ['Phone & computer', settingsCode, 'Make sure you’re connected to your computer using']
+    ]) {
+      const button = text.indexOf('{noneSaid ? <SendLinkButton email={noComputer.email} /> : null}')
+      const other = text.indexOf('{noneSaid ? <NoComputerOtherWay /> : null}')
+      assert.ok(button > 0 && other > button, `${where} draws the other way before the download link button, or not behind the same no`)
+      assert.ok(other < text.indexOf(next), `${where} draws the other way away from the words and their button`)
+    }
+    /* Never on Play's floating card, which does not scroll and keeps one height so NOT CONNECTED stays put. */
+    const stage = read('mobile/src/screens/Stage.js').replace(/\/\*[\s\S]*?\*\//g, ' ')
+    assert.ok(!/NoComputerOtherWay|NO_COMPUTER_BLUETOOTH|useBluetoothOffered/.test(stage), 'Play’s floating card says the other way, and grows past NOT CONNECTED on a small phone')
+    const drawnAt = []
+    const look = (dir) => {
+      for (const name of readdirSync(new URL(`../${dir}`, import.meta.url))) {
+        const path = `${dir}/${name}`
+        if (statSync(new URL(`../${path}`, import.meta.url)).isDirectory()) look(path)
+        else if (/\.js$/.test(name)) for (const m of read(path).replace(/\/\*[\s\S]*?\*\//g, ' ').matchAll(/<NoComputerOtherWay /g)) drawnAt.push(`${path}@${m.index}`)
+      }
+    }
+    look('mobile/src')
+    for (const m of app.matchAll(/<NoComputerOtherWay /g)) drawnAt.push(`mobile/App.js@${m.index}`)
+    assert.deepEqual(drawnAt.map((u) => u.split('@')[0]).sort(), ['mobile/App.js', 'mobile/src/screens/Settings.js'], `the other way is drawn somewhere else as well, or somewhere is missing it: ${drawnAt.join(', ')}`)
+    /* And Fixes, under It will not connect at all, where Play's card sends them. */
     const fixes = flat('mobile/src/screens/Fixes.js')
     assert.match(fixes, /const bluetoothOffered = useBluetoothOffered\(\)/)
     assert.match(fixes, /\{fix\.id === 'connect' && bluetoothOffered && !bluetoothOn\(\) \? \( <Note tone="hint">\{NO_COMPUTER_BLUETOOTH\}<\/Note> \) : null\}/, 'Fixes says the other way somewhere other than under It will not connect at all, or not behind the hook')
@@ -1145,15 +1182,17 @@ export function run(test) {
     assert.deepEqual(uses.sort(), ['mobile/src/components/NoComputer.js', 'mobile/src/screens/Fixes.js'], 'the other way is said somewhere else on the phone as well')
   })
 
-  test('the no-computer words, drawn: word for word as they were wherever this copy does not offer Bluetooth (beta), and the AM4’s other way where it does', async () => {
+  test('the no-computer words, drawn: word for word as they were everywhere, and the AM4’s other way as its own note only where this copy offers Bluetooth (beta)', async () => {
     const b = await otherWayOnABench()
     const words = await import('../mobile/src/lib/no-computer.js')
     const before = `${words.NO_COMPUTER_TITLE}\n${words.noComputerBody('fan@example.com')}`
-    const after = `${before}\n\n${words.NO_COMPUTER_BLUETOOTH}`
+    const line = [{ tone: 'hint', says: words.NO_COMPUTER_BLUETOOTH }]
+    const other = () => b.notes(b.otherWay())
 
     /* Every customer's copy today: not theirs to have. The full version, a phone that can do it, and still nothing — and the phone never asked. */
     b.bench.allowed = false
-    assert.equal(b.words('fan@example.com'), before, 'a customer’s copy is told about Bluetooth (beta), or its words changed')
+    assert.equal(b.words('fan@example.com'), before, 'the no-computer words changed')
+    assert.equal(b.otherWay(), null, 'a customer’s copy is told about Bluetooth (beta)')
     assert.equal(b.bench.asked, 0, 'a phone Bluetooth (beta) is not open to was asked whether it can do Bluetooth')
     /* The title is still its own bold line. */
     const tree = b.wordsTree('fan@example.com')
@@ -1161,25 +1200,27 @@ export function run(test) {
     assert.equal(tree.children[0].drawn, 'Text')
     assert.equal(b.said(tree.children[0]), words.NO_COMPUTER_TITLE)
 
-    /* Where it is offered: the row's three yeses. */
+    /* Where it is offered: the row's three yeses. The words are still what they were; the other way is a hint of its own. */
     b.bench.allowed = true
-    assert.equal(b.words('fan@example.com'), after, 'where Bluetooth (beta) is offered, the words do not add the other way after the computer’s')
-    assert.equal(b.bench.asked, 1)
+    assert.equal(b.words('fan@example.com'), before, 'where Bluetooth (beta) is offered, the no-computer words say it inside them, right above the download link button')
+    assert.deepEqual(other(), line, 'where Bluetooth (beta) is offered, the other way is not drawn as its own hint')
+    assert.equal(b.bench.asked, 1, 'the words themselves ask whether the phone can do Bluetooth')
 
-    /* Allowed, but each of the other two a no: the words as they were. */
+    /* Allowed, but each of the other two a no: nothing. */
     b.bench.supported = false
-    assert.equal(b.words('fan@example.com'), before, 'a phone that cannot do Bluetooth is sent to a row it does not have')
+    assert.equal(b.otherWay(), null, 'a phone that cannot do Bluetooth is sent to a row it does not have')
     b.bench.supported = true
     b.bench.purchase = { unlocked: false, available: true }
     const asked = b.bench.asked
-    assert.equal(b.words('fan@example.com'), before, 'a copy without the full version is sent to a row it does not have')
+    assert.equal(b.otherWay(), null, 'a copy without the full version is sent to a row it does not have')
     assert.equal(b.bench.asked, asked, 'the phone was asked whether it can do Bluetooth before the full version was')
     /* A store that cannot take money is no paywall (unlock-rule mayDrive), and the row shows: so does the line. */
     b.bench.purchase = { unlocked: false, available: false }
-    assert.equal(b.words('fan@example.com'), after, 'where the row shows with purchasing impossible, the words do not say it')
-    /* With no email, the same: only the account's name changes. */
+    assert.deepEqual(other(), line, 'where the row shows with purchasing impossible, the other way is not said')
+    /* With no email, the words name nobody, and the other way is the same. */
     b.bench.purchase = { unlocked: true, available: true }
-    assert.equal(b.words(''), `${words.NO_COMPUTER_TITLE}\n${words.noComputerBody('')}\n\n${words.NO_COMPUTER_BLUETOOTH}`)
+    assert.equal(b.words(''), `${words.NO_COMPUTER_TITLE}\n${words.noComputerBody('')}`)
+    assert.deepEqual(other(), line)
     delete globalThis.__otherWayBench
   })
 
