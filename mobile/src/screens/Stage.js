@@ -5,6 +5,7 @@ import { useKeepAwake } from 'expo-keep-awake'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { bandTop, pedalName, tileWidth as tileWidthIn } from '../lib/tileGrid'
+import { together } from '../lib/name-fit'
 import { firstFrame } from '../lib/screenShape'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
 import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot, vp4Here } from '../lib/device'
@@ -573,6 +574,32 @@ export default function Stage({
   /** The two numbers the tiles are actually drawn with. */
   const tileH = fitted ? fitted.tile : size.tile
   const fxCols = fitted ? fitted.fxCols : shape.fxCols
+  /*
+   * ONE SIZE FOR EVERY SCENE'S NAME (lib/name-fit `together`): each tile says
+   * the biggest size its name fits at, and every tile draws the smallest of
+   * them, so a short name is not drawn twice the size of a long one beside it.
+   * Kept by scene, and read only for the scenes this unit has.
+   */
+  const [sceneFits, setSceneFits] = useState({})
+  const noteSceneFit = useCallback((i, size, name) => {
+    setSceneFits((was) => (was[i]?.name === name && was[i]?.size === size ? was : { ...was, [i]: { name, size } }))
+  }, [])
+  /*
+   * Only once every named scene has said, for the name it has now: until
+   * then, and while any one fits at no size, every scene is drawn as it
+   * always was, so the grid is never two sizes at once.
+   */
+  const sceneNameSize = useMemo(() => {
+    const sizes = []
+    for (let i = 0; i < (scenes.hasScenes ? scenes.count : 0); i++) {
+      const name = sceneNames[i]
+      if (!name) continue
+      const told = sceneFits[i]
+      if (told?.name !== name || told.size == null) return null
+      sizes.push(told.size > 0 ? { size: told.size, fits: true } : { size: 0, fits: false })
+    }
+    return together(sizes)
+  }, [sceneFits, sceneNames, scenes.hasScenes, scenes.count])
   /** Which block's channel picker is open, by effect id. */
   const [picking, setPicking] = useState(null)
   /* Closed, not only hidden: kept, the sheet came back over the new song's
@@ -1222,6 +1249,12 @@ export default function Stage({
                        cut short." Wrapping fixes it for everyone — a hold to
                        show the name would be a footswitch that doesn't switch. */
                     wrap
+                    /* As big as its tile has room for: "the text is bigger on
+                       screens that allow it, and if there's more scenes like on
+                       an FM3, the text can shrink" (lib/name-fit). */
+                    fit
+                    fitCap={sceneNameSize}
+                    onFit={(size, name) => noteSceneFit(i, size, name)}
                     style={{ width: tileWidth(row, sceneCols) }}
                   />
                 )

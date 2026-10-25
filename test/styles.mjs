@@ -790,7 +790,8 @@ export function run(test) {
       assert.match(rule, /minmax\(0, 1fr\)/, `${grid} lets its content push a column wider than its share`)
     }
     assert.match(rule('.gig-block-name'), /font-size: var\(--f-4\)/, 'the block name is small again')
-    assert.match(rule('button.gig-scene.named .gig-scene-name'), /font-size: var\(--f-4\)/, 'the scene name is small again')
+    /* As big as its tile has room for since 25 October 2026 (lib/sceneNameFit), never under --f-4. */
+    assert.match(rule('button.gig-scene.named .gig-scene-name'), /font-size: var\(--name-size, var\(--f-4\)\)/, 'the scene name is small again')
     assert.match(rule('.gig-block-state'), /font-size: var\(--f-2\)/)
     assert.match(rule('.topbar-name'), /font-size: var\(--f-3\)/, 'the preset name in the bar is a headline again')
   })

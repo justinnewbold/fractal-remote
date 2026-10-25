@@ -3971,7 +3971,8 @@ export function run(test) {
     const numCss = css.match(/\.gig-name-num \{([^}]*)\}/)?.[1] || ''
     const nameCss = css.match(/\.gig-name-word \{([^}]*)\}/)?.[1] || ''
     const sceneCss = css.match(/button\.gig-scene\.named \.gig-scene-name \{([^}]*)\}/)?.[1] || ''
-    const size = (r) => r.match(/font-size: (var\(--f-\d\))/)?.[1]
+    /* A scene's name grows with its tile since 25 October 2026 ("the text is bigger on screens that allow it"); its floor is the size it had, and that is what the preset name is held one step above. */
+    const size = (r) => r.match(/font-size: (?:var\(--name-size, )?(var\(--f-\d\))/)?.[1]
     assert.ok(size(sceneCss), 'a named scene no longer sets its size')
     /* "Make the preset name a little bit bigger": one step above a scene's
        name, and the slot number beside it the same size as the name. */

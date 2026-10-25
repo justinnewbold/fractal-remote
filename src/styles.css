@@ -3250,10 +3250,11 @@ button.gig-scene.current .gig-scene-name {
   color: var(--silk-faint);
 }
 
+/* As big as the tile has room for (lib/sceneNameFit sets --name-size), the --f-4 it always was until measured, and never smaller. */
 button.gig-scene.named .gig-scene-name {
   font-family: var(--display);
   font-weight: 700;
-  font-size: var(--f-4);
+  font-size: var(--name-size, var(--f-4));
   color: var(--silk);
   white-space: normal;
   line-height: 1.15;
@@ -14658,4 +14659,19 @@ button.chip.scene-colour {
    not as a line of what is happening. */
 .connect > p.connect-independent {
   margin-top: var(--s-3);
+}
+
+/*
+ * A FITTED SCENE NAME (lib/sceneNameFit, shared/name-fit): "the text is
+ * bigger on screens that allow it, and if there's more scenes like on an
+ * FM3, the text can shrink." Last in the file and one class stronger than
+ * the compact Play's container sizes and the four-across size, which shrink
+ * a name for a tile that cannot hold it: a fitted name has been measured to
+ * fit its tile on two lines, so it is drawn at its size, on up to two lines.
+ * A name that did not fit gets no data-fit, and those rules draw it as before.
+ */
+.gig .gig-scenes button.gig-scene.named[data-fit='yes'] .gig-scene-name {
+  font-size: var(--name-size);
+  line-height: 1.15;
+  -webkit-line-clamp: 2;
 }

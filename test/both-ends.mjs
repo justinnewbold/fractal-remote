@@ -1283,7 +1283,7 @@ export function run(test) {
     const gig = read('src/components/Gig.jsx')
     const stage = read('mobile/src/screens/Stage.js')
     /* Play: this preset's colour for a scene, then yours, then the look's. */
-    assert.match(gig, /'--scene-fill': sceneColor\(i, preset\?\.number\)\.fill, '--scene-ink': sceneColor\(i, preset\?\.number\)\.ink/, 'the browser’s Play does not ask for this preset’s scene colours')
+    assert.match(gig, /'--scene-fill': sceneColor\(i, preset\?\.number\)\.fill,\s*'--scene-ink': sceneColor\(i, preset\?\.number\)\.ink/, 'the browser’s Play does not ask for this preset’s scene colours')
     assert.match(stage, /const hue = sceneColor\(i, preset\?\.number\)/, 'the phone’s Play does not ask for this preset’s scene colours')
     /* Scene arrange lays out every preset's scenes, so it wears every preset's colours. */
     assert.match(read('src/components/SceneArrange.jsx'), /'--scene-fill': sceneColor\(scene\)\.fill/)
@@ -3327,4 +3327,92 @@ export function run(test) {
     const settings = read('mobile/src/screens/Settings.js')
     assert.equal((settings.match(/Platform\.OS === 'ios' && deviceKind\(\) !== 'ipad' && watchSupported\(\)/g) || []).length, 2, 'an iPad is offered the Apple Watch')
   })
+
+  /*
+   * "The scene names are kind of small on the AM4. Can we make those auto
+   * adjust to the screen size so the text is bigger on screens that allow it,
+   * and if there's more scenes like on an FM3, the text can shrink?" (25
+   * October 2026.) One rule for both ends, shared/name-fit.mjs: the biggest
+   * size where the whole name fits its tile on two lines, no word cut, never
+   * under what it was.
+   */
+  test('a scene’s name is as big as its tile has room for, one size for the whole grid, at both ends', async () => {
+    const { fitName, linesAt, NAME_REF, NAME_MAX } = await import('../shared/name-fit.mjs')
+    /* Word widths at NAME_REF (20), roughly a bold system face: about 11.5 a letter, 5.5 a space, 24 a line. */
+    const measure = (name) => ({ words: name.split(' ').map((w) => w.length * 11.5), space: 5.5, line: 24 })
+    /* An AM4's tile on a big phone: about 186 wide inside, 58 tall under its number and rule. */
+    const am4 = { width: 186, height: 58, min: 13 }
+    const lead = fitName({ ...measure('Lead Bright'), ...am4 })
+    assert.ok(lead.size >= 22, `a short name in a big tile is drawn at ${lead.size}`)
+    assert.ok(lead.size <= NAME_MAX)
+    /* Longer names get smaller, never cut: the size is the biggest where every word still fits. */
+    const long = fitName({ ...measure('Lead Cranked Extra Gain'), ...am4 })
+    assert.ok(long.size < lead.size && long.size >= 13 && long.lines <= 2)
+    assert.ok(linesAt(measure('Lead Cranked Extra Gain').words, 5.5, long.size / NAME_REF, am4.width * 0.94) <= 2)
+    /* An FM3's eight, four across on a small phone: the floor, which is the size they had. */
+    const small = fitName({ ...measure('Lead Bright'), width: 74, height: 30, min: 13 })
+    assert.equal(small.size, 13)
+    /* A word too long for any size is not fitted: drawn as it was before. */
+    assert.deepEqual(fitName({ ...measure('Supercalifragilistic'), width: 60, height: 40, min: 13 }), { size: 13, lines: 2, fits: false })
+    /* One size for the grid: the smallest of those that fit; a scene with no name is left out; and one name that fits at no size draws the whole grid as before, never two sizes at once. */
+    const { together } = await import('../shared/name-fit.mjs')
+    assert.equal(together([{ size: 26, fits: true }, { size: 15, fits: true }, null]), 15)
+    assert.equal(together([{ size: 26, fits: true }, { size: 15, fits: true }, { size: 13, fits: false }]), null)
+    assert.equal(together([{ size: 13, fits: false }]), null)
+    assert.equal(together([]), null)
+    /* No measure, or no room yet: drawn as before. */
+    assert.equal(fitName({ words: [], space: 5, line: 24, width: 100, height: 50, min: 13 }), null)
+    assert.equal(fitName({ ...measure('Clean'), width: 0, height: 50, min: 13 }), null)
+    /* Taller than the room never: one line at most of the height, two lines at most of two. */
+    for (const name of ['Clean', 'Lead Bright', 'Rhythm Crunch Doubled']) {
+      for (const [width, height] of [[186, 58], [140, 40], [300, 90]]) {
+        const got = fitName({ ...measure(name), width, height, min: 13 })
+        if (got.size > 13) assert.ok(got.lines * 24 * (got.size / NAME_REF) <= height, `${name} at ${got.size} is taller than its tile's room`)
+      }
+    }
+
+    /* The phone: scene tiles on Play ask for it, the tile measures each word unseen and sizes from its own room. */
+    const flatOf = (p) => read(p).replace(/\s+/g, ' ')
+    const stage = flatOf('mobile/src/screens/Stage.js')
+    assert.match(stage, /wrap \/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/ fit fitCap=/, 'Play’s scene tiles are not fitted')
+    const tile = flatOf('mobile/src/components/Tile.js')
+    assert.match(tile, /import \{ NAME_REF, NAME_TRACK, fitName \} from '\.\.\/lib\/name-fit'/)
+    assert.match(tile, /\[\.\.\.wordsOf\(label\), 'n n', 'nn'\]\.join\('\\n'\)/, 'the phone does not measure each word and a space')
+    assert.match(tile, /min: font\.small \}\) : null/, 'the phone’s fitted name can be drawn smaller than it was')
+    assert.match(tile, /fontSize: drawnAt \|\| \(wrap \? font\.small : font\.body\)/)
+    /* Drawn fitted only where it fits and the grid has its one size; said up to the grid, with the name it is about, before the screen is drawn. */
+    assert.match(tile, /const drawnAt = fitsAt && fitCap > 0 \? Math\.min\(fitsAt, fitCap\) : null/)
+    assert.match(tile, /useLayoutEffect\(\(\) => \{ if \(fit\) onFit\?\.\(told, label\) \}, \[fit, told, label\]\)/)
+    assert.match(stage, /fitCap=\{sceneNameSize\} onFit=\{\(size, name\) => noteSceneFit\(i, size, name\)\}/)
+    /* The grid waits for every named scene, for its name now, and goes back to the old drawing when one fits at no size. */
+    assert.match(stage, /if \(told\?\.name !== name \|\| told\.size == null\) return null/)
+    assert.match(stage, /return together\(sizes\)/)
+    /* The text size is in the measure already, and the phones scale a line height by it again: taken out once, rounded down. */
+    assert.match(tile, /lineHeight: Math\.floor\(\(measure\.line \* drawnAt\) \/ NAME_REF \/ PixelRatio\.getFontScale\(\)\)/)
+    /* A line is measured on a middle line, never the first, which Android pads. */
+    assert.match(tile, /line: lines\[words\.length\]\.height/)
+    /* The two copies are one file (the sync test holds the generated copy to the source). */
+    const { FILES } = await import('../scripts/sync-relay-rules.mjs')
+    assert.ok(FILES.some((f) => f.source === '../shared/name-fit.mjs' && f.target === '../mobile/src/lib/name-fit.js'))
+
+    /* The browser: measured with a canvas, the size set on the tile, the style reading it with the old size as its fallback. */
+    const gig = flatOf('src/components/Gig.jsx')
+    assert.match(gig, /const nameSizes = useSceneNameSizes\(scenesRef, names, sceneCount\)/)
+    assert.match(gig, /\.\.\.\(nameSizes\[i\] \? \{ '--name-size': `\$\{nameSizes\[i\]\}px` \} : null\)/)
+    assert.match(gig, /data-scene=\{i\}/)
+    assert.match(read('src/styles.css'), /button\.gig-scene\.named \.gig-scene-name \{\s*font-family: var\(--display\);\s*font-weight: 700;\s*font-size: var\(--name-size, var\(--f-4\)\);/)
+    assert.match(gig, /data-fit=\{nameSizes\[i\] \? 'yes' : undefined\}/)
+    assert.match(read('src/styles.css'), /\.gig \.gig-scenes button\.gig-scene\.named\[data-fit='yes'\] \.gig-scene-name \{\s*font-size: var\(--name-size\);/, 'the compact Play’s smaller sizes win over a fitted name')
+    const web = flatOf('src/lib/sceneNameFit.js')
+    assert.match(web, /export const NAME_FLOOR = 12/)
+    /* A width taken in the fallback face is never kept, and the fonts arriving measure every name again. */
+    assert.match(web, /if \(document\.fonts\?\.check\?\.\(ctx\.font\) !== false\) WIDTHS\.set\(key, w\)/)
+    assert.match(web, /WIDTHS\.clear\(\) schedule\(\)/)
+    assert.match(web, /document\.fonts\?\.addEventListener\?\.\('loadingdone', fresh\)/)
+    assert.match(web, /min: NAME_FLOOR, max: NAME_MAX/)
+    assert.match(web, /const one = together\(each\) const next = each\.map\(\(f\) => \(one && f\?\.fits \? one : null\)\)/, 'the browser sizes each name on its own')
+    /* Sized from the room the tile is given, so a name never grows the tile Play's fit has sized. */
+    assert.match(web, /const tall = px\(css\.minHeight\) \|\| button\.offsetHeight/)
+  })
+
 }
