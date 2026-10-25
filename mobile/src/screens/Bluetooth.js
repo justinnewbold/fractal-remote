@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Linking, Platform, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
@@ -44,7 +44,9 @@ import {
   betaNote,
   heatLineFor,
   hookupFor,
+  midiSettingsFor,
   partsFor,
+  powerStepOf,
   untriedLine,
   warningFor,
   wrongUnitLine
@@ -713,6 +715,13 @@ function OpenSettings() {
  * unit nobody has tried it on yet says so under the steps rather than being
  * promised to work. The FM3 gets its warning instead: what happened when the
  * parts went straight in, and what owners report.
+ *
+ * On the units nobody here has, the cable is felt in the first minute
+ * (HEAT_CHECK), so that line comes straight after the power step
+ * (powerStepOf), before a step that sends the player into the unit's menus,
+ * as the guide has it. And the Program Change settings, which only an owner
+ * whose presets don't change needs, come under the steps with that
+ * condition first, never as a step for everybody (midiSettingsFor).
  */
 function PlugIn({ unit }) {
   if (!unit) return <Hint>Pick your unit above to see how it plugs in.</Hint>
@@ -721,18 +730,22 @@ function PlugIn({ unit }) {
   const steps = hookupFor(unit, deviceNoun()) || []
   const untried = untriedLine(unit)
   const heat = heatLineFor(unit)
+  const heatAfter = heat ? powerStepOf(unit) : -1
+  const midi = midiSettingsFor(unit, deviceNoun())
   return (
     <View style={{ gap: space.sm }}>
       {/* Once, before any of the plugging in: the Uhost's firmware, which the steps take for granted. */}
       <Hint>{FIRST_TIME}</Hint>
       {steps.map((line, i) => (
-        <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
-          <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22, minWidth: 18 }}>{`${i + 1}.`}</Text>
-          <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
-        </View>
+        <Fragment key={line}>
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22, minWidth: 18 }}>{`${i + 1}.`}</Text>
+            <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
+          </View>
+          {i === heatAfter ? <Note tone="warn">{heat}</Note> : null}
+        </Fragment>
       ))}
-      {/* Straight after the last step, on the units nobody here has: the cable felt in the first minute. */}
-      {heat ? <Note tone="warn">{heat}</Note> : null}
+      {midi ? <Hint>{midi}</Hint> : null}
       <Hint>{ONE_AT_A_TIME}</Hint>
       {untried ? <Note tone="warn">{untried}</Note> : null}
     </View>

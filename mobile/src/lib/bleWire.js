@@ -342,7 +342,7 @@ export function am4Sender(send, log = () => {}, learned = () => null) {
  * @param {{now, setTimeout, clearTimeout}} [o.clock]
  * @param {(line:string) => void} [o.log]
  * @param {(methods:object) => void} [o.remember]  called when auto learns a way, to keep it on the phone
- * @param {(name:string) => void} [o.onForeign]  called once, with its bare name, when another unit answers a connection before the one picked has, so the page can say which
+ * @param {(name:string|null) => void} [o.onForeign]  called once, with its bare name, when another unit answers a connection before the one picked has, so the page can say which; and with null when the one picked answers after it (heardFromIt)
  */
 export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign } = {}) {
   const spec = SPEC[unit]
@@ -409,6 +409,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   let wrongUnit = false
   /* The page has been told which other unit answered (onForeign): once a connection. */
   let foreignTold = false
+  /* A tuner close refused unsent because the unit had not answered yet: it goes the moment it does (see heardFromIt). */
+  let closeWhenHeard = false
 
   /*
    * A QUESTION THAT WENT UNANSWERED MAY STILL BE ANSWERED, late, and that
@@ -458,7 +460,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * gen-3 units have no freezes on record.
    */
   const unheard = () =>
-    failure(`The ${spec.name} has not answered yet, so nothing is sent to it. Check the unit picked on the Bluetooth (beta) page, and the adapter's plugs.`, 504)
+    failure(`The ${spec.name} has not answered yet, so nothing is sent to it. Check the unit picked on the Bluetooth (beta) page, and the adapter's plugs.`, 504, { unheard: true })
 
   /*
    * A TAP'S DEADLINE, ON ITS WAY FROM request() TO THE FIRST MESSAGE IT SENDS.
@@ -694,7 +696,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const got = job.opts.collect(f)
       if (got !== undefined) {
         job.back = f
-        answered = true
+        heardFromIt()
         if (got !== null) return end(job, got)
         time.clearTimeout(job.timer)
         const left = (job.opts.cap ?? Infinity) - (now - job.started)
@@ -706,7 +708,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const got = job.opts.match(f)
       if (got !== null && got !== undefined) {
         job.back = f
-        answered = true
+        heardFromIt()
         return end(job, got)
       }
     }
@@ -714,7 +716,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const no = parseRejected(f, model)
       if (no && no.fn === job.opts.fn) {
         job.back = f
-        answered = true
+        heardFromIt()
         say(`the unit refused ${job.opts.what || 'it'}: ${rejectedWords(no.code)}`)
         return end(job, { rejected: no.code })
       }
@@ -752,11 +754,52 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * log's, not the page's. A model byte nobody knows is the log's too.
    */
   function heardAnother(byte) {
-    if (answered) return
+    /* Once: a wrong unit refuses every message it is sent, a poll's included, and the log keeps 400 lines (debugLog). */
+    if (answered || foreignTold) return
     const name = modelName(byte)
     if (!name) return
     say(`${MODEL_NAMES[byte]} answered, not ${am4 ? 'the AM4' : `the ${spec.name}`}`)
     tellForeign(name)
+  }
+
+  /*
+   * THE UNIT PICKED ANSWERS FOR THE FIRST TIME ON THIS CONNECTION. The line
+   * opens for everything (`unheard`), and two things wait for this moment:
+   *
+   *   - another unit named to the page before it (heardAnother): the
+   *     player moved the cable onto the right unit without tapping Stop,
+   *     say, and it works now, so "An FM9 answered, not the FM3" is taken
+   *     off the page (onForeign(null)). Not after an AM4 on another unit's
+   *     connection, which stops the wire (heardAnAm4): that line stays true.
+   *   - a tuner close refused unsent because the unit had not answered yet
+   *     (closeWhenHeard): the link's close of what the connection before
+   *     left on a Gen 3 unit's tuner, asked once as the connection comes up,
+   *     with the unit silent through the wake and the rig's read. Nothing
+   *     asks again, so the unit stayed on its tuner, muted, under a Play that
+   *     said closed (task 161). It goes now, in its turn, and a Tuner pressed
+   *     after it goes after it. Only a close: an open refused the same way
+   *     is not sent late, because the phone's tuner went down with its
+   *     refusal (rig writeTuner), and a late one would mute the unit under a
+   *     Play that says closed.
+   */
+  function heardFromIt() {
+    if (answered) return
+    answered = true
+    if (foreignTold && !wrongUnit) {
+      say(`the ${spec.name} answers after all: the other unit is no longer named on the page`)
+      try {
+        if (onForeign) onForeign(null)
+      } catch {
+        // Telling the page is a courtesy; the wire goes on as it was.
+      }
+    }
+    if (closeWhenHeard) {
+      closeWhenHeard = false
+      if (!am4 && !tuner.on && (owedFromBefore() || tuner.pushSent || tuner.pageOpen)) {
+        say(`the ${spec.name} answers now: sending the tuner close that was held until it did`)
+        gen3TunerInTurn(false).catch((err) => say(`the tuner close after the first answer did not go: ${err?.message || err}`))
+      }
+    }
   }
 
   function tellForeign(name) {
@@ -1511,7 +1554,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     tuner.run++
     if (tuner.timer !== null) time.clearTimeout(tuner.timer)
     tuner.timer = null
-    await gen3TunerOff()
+    try {
+      await gen3TunerOff()
+    } catch (err) {
+      /* Refused unsent because the unit has not answered yet: sent the moment it does (heardFromIt). */
+      if (err?.unheard) closeWhenHeard = true
+      throw err
+    }
+    closeWhenHeard = false
     return { ok: true }
   }
 

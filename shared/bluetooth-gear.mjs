@@ -302,9 +302,17 @@ export const NOT_STRAIGHT_IN = ['fm3']
  * this is drawn near the top of the page, where nothing folds it (critic,
  * 25 October 2026). Said as the guide and docs/bluetooth-midi.md say it:
  * what happened here, and what owners report, never a fact about the unit.
+ *
+ * WITH "EVEN ON USB POWER", as FM3_WARNING and the guide have it ("Powering
+ * the adapter from USB doesn't stop it, because the jack is still feeding
+ * it"). This is the only FM3 line drawn with the fold closed, and without it
+ * the owner of a WIDI Jack or WIDI Master on a USB charger read it as not
+ * about their adapter. "Can take" power, so an adapter that runs on USB
+ * power alone, and never from the jack (the U2MIDI Pro the FM3 plan tries),
+ * is not in it.
  */
 export const FM3_NEVER =
-  'Never plug the C2MIDI Pro, or any adapter that takes its power from MIDI OUT, into an FM3. When we tried it, the cable got very hot, and FM3 owners report the same.'
+  'Never plug the C2MIDI Pro, or any adapter that can take power from MIDI OUT (even one on USB power), into an FM3. When we tried it, the cable got very hot, and FM3 owners report the same.'
 
 /*
  * FEEL THE CABLE, ON THE UNITS NOBODY HERE HAS. The FM9 and Axe-Fx III have
@@ -313,7 +321,10 @@ export const FM3_NEVER =
  * the same one, and nobody has tried it with the app on either. The guide
  * has said it since it listed them ("Feel the cable in the first minute: it
  * should stay cool"); the app said nothing, and an FM9 or Axe-Fx III
- * owner's first physical risk is this. Said under their steps.
+ * owner's first physical risk is this. Said straight after the power step
+ * (powerStepOf), as the guide says it after the power and the lights, and
+ * before any step that sends the player into the unit's menus: a minute
+ * goes in those.
  */
 export const HEAT_CHECK =
   'In the first minute, feel the C2MIDI Pro. It should stay cool. If it gets more than slightly warm, unplug it at once.'
@@ -322,19 +333,23 @@ export const HEAT_CHECK =
 export const heatLineFor = (unit) => (unit === 'fm9' || unit === 'axefx3' ? HEAT_CHECK : null)
 
 /*
- * THE MIDI CHANNEL. Over Bluetooth a preset can go by Program Change, on
- * channel 1 (bleWire's pcChannel), the way FM3-Edit's own switch is not
- * published: so the unit has to listen for it there. The guide says it
- * ("set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping
- * off"); the steps did not. Every Gen 3 unit's, the FM3's included for the
- * day it has steps again; the AM4's presets never go by Program Change.
+ * THE MIDI CHANNEL, ONLY IF PRESETS DON'T CHANGE. A preset goes first by the
+ * unit's own SysEx switch, and by Program Change on channel 1 (bleWire's
+ * pcChannel) only when that does not land (trialPreset), so most owners
+ * never need this, and moving the MIDI channel or turning PC Mapping off
+ * changes how their own foot controller works on the unit. So it is said
+ * as the guide says it, with its condition first ("if presets don't change
+ * from the phone: ... set Program Change on, the MIDI channel to 1 or Omni,
+ * and PC Mapping off"), under the steps and not one of them: until 25
+ * October 2026 it was the last step, for every owner, and took the place of
+ * the FM9's plain MIDI Thru step. Every Gen 3 unit's, the FM3's included for
+ * the day it has steps again; the AM4's presets never go by Program Change.
+ * The device in hand named by `noun`.
  */
-export const midiSettingsFor = (unit) => {
+export const midiSettingsFor = (unit, noun = 'phone') => {
   const name = UNITS[unit]
   if (!name || unit === 'am4') return null
-  /* The Axe-Fx III has no MIDI Thru setting: its THRU is a jack of its own, which the white plug stays out of. */
-  const thru = unit === 'axefx3' ? '' : 'MIDI Thru to Off, '
-  return `On the ${name}, open Setup → MIDI/Remote and set ${thru}Program Change to On, the MIDI channel to 1 (or Omni), and PC Mapping to Off.`
+  return `If presets don’t change from this ${noun}: on the ${name}, open Setup → MIDI/Remote and set Program Change to On, the MIDI channel to 1 (or Omni), and PC Mapping to Off.`
 }
 
 /** The warning to show for a unit instead of its parts and steps, or null. */
@@ -429,7 +444,7 @@ export function hookupFor(unit, noun = 'phone') {
   const name = UNITS[unit]
   if (!name || NOT_STRAIGHT_IN.includes(unit)) return null
   const usb = 'Plug the C2MIDI Pro’s USB-C plug into the Uhost’s left socket, marked USB Host/Device.'
-  const power = `With the ${name} already on, plug a phone charger or power bank into the Uhost’s right socket, marked USB Power (5 volts, nothing stronger). The Uhost needs this power to work.`
+  const power = powerStep(name)
   if (unit === 'am4') {
     return [
       'Push one 3.5 mm adapter into the AM4’s MIDI IN, and the other into its MIDI OUT.',
@@ -444,8 +459,7 @@ export function hookupFor(unit, noun = 'phone') {
       'C2MIDI Pro: the black plug (TO MIDI IN) into the Axe-Fx III’s MIDI IN.',
       `The white plug (TO MIDI OUT) into its MIDI OUT. Not THRU: the ${noun} would only hear itself there.`,
       usb,
-      power,
-      midiSettingsFor(unit)
+      power
     ]
   }
   return [
@@ -453,9 +467,16 @@ export function hookupFor(unit, noun = 'phone') {
     `The white plug (TO MIDI OUT) into its MIDI OUT/THRU jack.`,
     usb,
     power,
-    midiSettingsFor(unit)
+    `On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off.`
   ]
 }
+
+/* The power step, the same words for every unit: the Uhost's power goes in last, with the unit already on. */
+const powerStep = (name) =>
+  `With the ${name} already on, plug a phone charger or power bank into the Uhost’s right socket, marked USB Power (5 volts, nothing stronger). The Uhost needs this power to work.`
+
+/** Where the power goes in among a unit's steps (hookupFor), counting from 0: the heat line is drawn straight after it. -1 for a unit with no steps. */
+export const powerStepOf = (unit) => (hookupFor(unit) || []).indexOf(powerStep(UNITS[unit]))
 
 /*
  * Said under the steps for a unit nobody has tried it on yet. The FM3 has its
