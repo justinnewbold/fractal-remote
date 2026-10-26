@@ -131,6 +131,12 @@ platform `ios`, Skip building ticked (the Submit only box; never `all` or
 Android is uploaded by hand in Play Console after Managed publishing is on
 and its release notes and App access note are in. docs/app-store.md,
 "Submission day for 1.89.0", steps 3, 7, 9 and 14, says it in order.
+What was done instead, on 26 October 2026: run 40257649461 had the Send box
+ticked, Justin's call ("I don't want managed publishing on in Android. Just
+do it."), so the iPhone went to TestFlight and Android straight to Google
+Play production with Managed publishing off, and the iPhone build (30) still
+has to be added to the 1.89.0 version for review in App Store Connect by
+Justin.
 
 > "I don't do any close testing anymore. Android. It's all production now"
 

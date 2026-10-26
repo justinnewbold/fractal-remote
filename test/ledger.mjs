@@ -64,7 +64,7 @@ export const withoutOpening = (text) =>
  * takes three deliberate edits (the row, the threshold and this), never one
  * slip.
  */
-export const OPENED_AT = null
+export const OPENED_AT = Object.freeze({ version: '1.89.0', ios: '1.89.0', android: '1.89.0', units: ['am4', 'fm3', 'fm9', 'axefx3', 'vp4'] })
 
 /* The first build marked as the opening on this phone, or null. */
 const firstOpening = (builds, platform) =>
