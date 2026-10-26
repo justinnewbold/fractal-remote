@@ -31,6 +31,8 @@ import EdgeBack from './src/components/EdgeBack'
 import SignIn from './src/screens/SignIn'
 import Onboarding from './src/screens/Onboarding'
 import IndependentNotice, { independentNoticeSeen, markIndependentNotice } from './src/components/IndependentNotice'
+import GearShareNotice from './src/components/GearShareNotice'
+import { setSharing, shareQuestionDue, startGearShare } from './src/lib/gearShare'
 import { NOT_AFFILIATED } from './src/lib/affiliation'
 import { walkthroughSeen, markWalkthrough } from './src/lib/walkthrough'
 import Edit from './src/screens/Edit'
@@ -159,12 +161,29 @@ export default function App() {
    * Play can be, and so it is never laid over any of them.
    */
   const [independentDue, setIndependentDue] = useState(false)
+  /*
+   * WHETHER "HELP MAKE FRACTAL REMOTE BETTER?" IS STILL OWED (components/
+   * GearShareNotice, 26 October 2026): never answered on this device. Read
+   * with the other two, so it is known before anything is drawn, but shown
+   * only after all of them (see `askShare`, below).
+   */
+  const [shareDue, setShareDue] = useState(false)
   useEffect(() => {
     /* A first run is told where Match my unit is too, on Play after the walkthrough (components/ColoursNotice): nothing is marked here for it. */
     Promise.all([walkthroughSeen(), independentNoticeSeen()]).then(([seen, noticed]) => {
       setIndependentDue(!noticed)
       setSeenWalk(seen)
     })
+  }, [])
+  /*
+   * Its own read, apart from the two above (whose shape several tests hold):
+   * one stored word, long answered before the sign-in check that has to
+   * come first is. Listening for gear starts here too, and sends nothing
+   * unless this device has said Yes (lib/gearShare).
+   */
+  useEffect(() => {
+    shareQuestionDue().then(setShareDue)
+    startGearShare()
   }, [])
   const [screen, setScreen] = useState('stage')
   /*
@@ -510,6 +529,14 @@ export default function App() {
    * Play does not come by itself from any of them (lib/siri-rule
    * playElsewhereOf says which is which).
    */
+  /*
+   * THE SHARING QUESTION'S MOMENT: signed in and past the purchase page
+   * ('in'), and not in the demo, so the App Review demo is never stopped by
+   * it. It comes after the independent card and the walkthrough because the
+   * branches below put those first; it is drawn in Play's place, never over
+   * it. A name, rather than the condition written out where it is drawn.
+   */
+  const askShare = shareDue && auth === 'in' && !demo
   const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen })
   useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
   /*
@@ -1236,6 +1263,17 @@ export default function App() {
               unlinkAccount().catch(() => {})
               allowBluetooth(null, { signedOut: true })
               setAuth('out')
+            }}
+          />
+        ) : askShare ? (
+          /*
+           * "Help make Fractal Remote better?", once, in Play's place. Either
+           * button is the answer, and Play comes up as it would have.
+           */
+          <GearShareNotice
+            onAnswer={(yes) => {
+              setSharing(yes)
+              setShareDue(false)
             }}
           />
         ) : (

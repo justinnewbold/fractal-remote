@@ -581,6 +581,9 @@ function subscribe(fn) {
   return () => subscribers.delete(fn)
 }
 
+/* The same, outside React: lib/gearShare.js hears the unit answer (or not) through it. */
+export const subscribeRig = subscribe
+
 /**
  * A view over one fact.
  *

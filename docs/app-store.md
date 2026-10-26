@@ -367,6 +367,41 @@ Justin makes these; nothing here says they are done until he has.
 is *capable* of sending, not what it usually sends. Declaring it and being able
 to point at a policy that explains it is the strong position.
 
+### What works: the gear notes (26 October 2026)
+
+"Help make Fractal Remote better?" asks once, Yes, share or No thanks, and is
+off unless Yes (Settings → Troubleshooting → Share what gear works changes it).
+When on, a phone or tablet sends one short note when a unit connects: the
+unit and its firmware, computer or Bluetooth, the computer app's version or
+the adapter's name, whether the unit answered, the phone's system, version
+and model (on an iPhone only "iPhone" or "iPad"), and the app's version. No
+account, no install number, no email, nothing typed, no location, sent
+signed out. The privacy page says so under *Which gear works*. It is not
+Apple's tracking prompt and needs none: nothing is tracking.
+
+It comes by update, not a build, so **these go on the label and in Data
+safety before the update that asks the question is merged** (any day: both
+publish at once and need no version):
+
+- **App Store Connect → App Privacy → Diagnostics → Other Diagnostic
+  Data**: the row is already there (the debug log, linked). Edit it: tick
+  **Analytics** beside App Functionality. Leave Linked to the user as
+  **Yes**, because the log in a signed-in bug report still is, and Apple
+  takes one answer per data type; saying more than the gear notes need is
+  the safe side. Used for tracking: **No**. Nothing else changes: the note
+  carries no Device ID (the Device ID row stays as it is, for Expo), no User
+  ID, no location.
+- **Play Console → App content → Data safety → App info and performance →
+  Diagnostics**: Collected **yes**, Shared **no**, processed ephemerally
+  **no**, **optional** (users can choose), purpose **Analytics** (beside the
+  App functionality it already has for the log). **Device or other IDs:
+  no change** for this: the note carries none (the row stays only for Expo's
+  update check).
+
+Not touched: the 1.89.0 review notes. The question is on screen for anybody
+signed in, and the Developer page that reads the notes is his account's
+alone, like the others.
+
 ---
 
 ## Age rating

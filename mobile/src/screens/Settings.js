@@ -72,6 +72,8 @@ import AccessTool from '../components/AccessTool'
 import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
 import MessagesTool from '../components/MessagesTool'
+import WhatWorksTool from '../components/WhatWorksTool'
+import GearShareSwitch from '../components/GearShareSwitch'
 import LiveTool from '../components/LiveTool'
 import UsageTool from '../components/UsageTool'
 import StuckTool from '../components/StuckTool'
@@ -465,7 +467,7 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'bt-tools': 'developer' }
+  const PARENT = { offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'bt-tools': 'developer', works: 'developer' }
   const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, developer: '‹ Developer', bluetooth: '‹ Bluetooth' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
@@ -932,6 +934,8 @@ export default function Settings({
             <SetupRow title="Everyone with an account" status="Who has signed up" onPress={() => setPage('accounts')} />
             <SetupRow title="Paid but no computer yet" status="Bought it, never set up the computer" onPress={() => setPage('stuck')} />
             <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
+            {/* The gear notes from everybody who said Yes to "Help make Fractal Remote better?" (26 October 2026). */}
+            <SetupRow title="What works" status="Which units, computers and adapters connected" onPress={() => setPage('works')} />
             <SetupRow title="What's live" status="Which version each piece is on" onPress={() => setPage('live')} />
             {bluetoothOffered ? <SetupRow title="Bluetooth testing tools" status="The check, and how each command is sent" onPress={() => setPage('bt-tools')} /> : null}
             {onViewAsCustomer ? (
@@ -1008,6 +1012,11 @@ export default function Settings({
               />
             ) : null}
           </View>
+          {/*
+            "Help make Fractal Remote better?", changed any time: the one-time
+            card's answer (components/GearShareNotice), off unless Yes.
+          */}
+          <GearShareSwitch />
         </>
       ) : null}
 
@@ -1498,6 +1507,14 @@ export default function Settings({
         <>
           {head('Messages from users', 'back')}
           <MessagesTool />
+        </>
+      ) : null}
+
+      {/* ----------------------------------------------------- what works */}
+      {page === 'works' && isAdmin(account?.id) ? (
+        <>
+          {head('What works', 'back')}
+          <WhatWorksTool />
         </>
       ) : null}
 
