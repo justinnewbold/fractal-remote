@@ -10,8 +10,15 @@
     />
     <meta name="robots" content="noindex" />
     <!--
-      THE BLUETOOTH (BETA) SETUP GUIDE, kept for Justin's own testing, and in
-      case Bluetooth (beta) is offered to customers in a later version.
+      THE BLUETOOTH (BETA) SETUP GUIDE, for everyone with the full version
+      from store version 1.89.0, on every unit: "as long as there's warnings
+      for user that it's in beta and they're free to test it and submit
+      feedback, but it might not work properly" (Justin, 25 October 2026).
+      Written true both before and after 1.89.0 is approved, since a reviewer
+      opens it from the app (Full setup guide): earlier versions show the
+      Bluetooth page only on his account, and the page says so. Still
+      unlisted (noindex) until the live day (docs/app-store.md, Submission
+      day).
 
       WHY IT LIVES HERE AND NOT AT /bluetooth. It was written for every
       customer who had unlocked the app, and was public for one day. Then:
@@ -136,22 +143,24 @@
       <p class="when">Fractal Remote · last updated 25 October 2026</p>
 
       <p class="dim">
-        Bluetooth (beta) isn’t in the app for customers. It is still being tested, and may be
-        offered in a later version, with this guide. For now the phone connects through the
-        <a href="/downloads">desktop app</a>.
+        Bluetooth (beta) is in the app from version 1.89.0, for everyone with the full version.
+        Earlier versions show it only on the developer’s own account: if Settings → My rig has no
+        Bluetooth (beta) row, update the app from the store. Without it, the phone connects through
+        the <a href="/downloads">desktop app</a>.
       </p>
 
       <div class="lead">
         <p>
-          <strong>Bluetooth is new (beta), and it may not work correctly with every unit or
-          adapter.</strong> It lets the phone control your unit with no computer, through a
-          Bluetooth MIDI adapter plugged into the unit.
+          <strong>Bluetooth is in beta, and some features might not work as expected.</strong> It
+          lets the phone control your unit with no computer, through a Bluetooth MIDI adapter
+          plugged into the unit.
         </p>
         <p>
           So far it has been tried on one AM4, from an iPhone and from an Android phone, with the
           three parts below. It was tried once on an FM3 with the same parts: the
           cable got very hot and didn’t connect, so <strong>don’t do that</strong> (see
-          <a href="#fm3">FM3</a> below). It has not been tried yet on an FM9 or Axe-Fx III.
+          <a href="#fm3">FM3</a> below), and it hasn’t run on an FM3 yet. It has not been tried yet
+          on an FM9, Axe-Fx III or VP4.
         </p>
         <p>
           The usual way, with your unit on a USB cable to a computer running the desktop app, is
@@ -180,9 +189,9 @@
         own, from a phone charger or a power bank.
       </p>
       <p>
-        In the app it is under <strong>Settings → Bluetooth (beta)</strong>, which for now shows
-        only on the developer’s own account. You can pick an AM4, FM3, FM9 or Axe-Fx III, but so
-        far only the AM4 has been tried. The VP4 isn’t offered over Bluetooth.
+        In the app it is under <strong>Settings → My rig → Bluetooth (beta)</strong>, from
+        version 1.89.0, with the full version. You can pick an AM4, FM3, FM9, Axe-Fx III or VP4,
+        but so far only the AM4 has been tried, and each of the others says so in the app.
       </p>
 
       <h2 id="works">What works over Bluetooth, and what doesn’t</h2>
@@ -190,6 +199,12 @@
         Presets, scenes, names, effects on and off, channels, tempo and the tuner. While Bluetooth
         is on, the phone doesn’t use the computer at all, and <strong>Stop using Bluetooth</strong>
         hands it back to the computer.
+      </p>
+      <p>
+        <strong>On a VP4</strong>, Bluetooth changes presets and scenes, the way a MIDI foot
+        controller does, and nothing else. It can’t hear the VP4 that way, so it can’t show its
+        effects, names or tuner, or check that a preset or scene landed. For those, use the
+        computer.
       </p>
       <p>What’s different from USB, the same list the app shows:</p>
       <ul>
@@ -296,6 +311,24 @@
           settings if MIDI arrives while it starts.</li>
       </ul>
 
+      <h3 id="vp4">VP4 <span class="tag no">Not tried yet</span></h3>
+      <p>
+        The AM4’s parts: the VP4 has the same small 3.5 mm Type A MIDI jacks. Only one adapter is
+        used, in its MIDI IN, because the app only sends to a VP4.
+      </p>
+      <ul>
+        <li>CME WIDI Uhost: <a href="https://www.amazon.com/dp/B09GS326QW">on Amazon</a> ·
+          <a href="https://www.cme-pro.com/widi-uhost/">CME’s page</a></li>
+        <li>CME C2MIDI Pro: <a href="https://www.amazon.com/dp/B0GVXTX5D1">on Amazon</a> ·
+          <a href="https://www.cme-pro.com/c2midi-pro/">CME’s page</a></li>
+        <li>LOOTOOLS Type-A MIDI to 3.5 mm adapters: <a href="https://www.amazon.com/dp/B0FN83P5P7">on Amazon</a></li>
+        <li>A USB phone charger or power bank, and a USB-C cable for the Uhost</li>
+      </ul>
+      <p class="dim">
+        Nobody has tried Fractal Remote over Bluetooth on a VP4 yet. If you try it, please tell us
+        how it went (see the end of this page). Feel the cable in the first minute: it should stay
+        cool.
+      </p>
       <h3>Before the first time: update the Uhost</h3>
       <p>
         CME asks for this before first use. Install CME’s free <strong>WIDI</strong> app on your
@@ -356,6 +389,21 @@
           unplug it at once.</li>
       </ol>
 
+      <h3>VP4</h3>
+      <ol>
+        <li>Turn the VP4 on and let it finish starting up. Leave the Uhost without power for now.</li>
+        <li>Push one LOOTOOLS adapter’s small plug all the way into the VP4’s <strong>MIDI IN</strong>
+          jack.</li>
+        <li>Plug the C2MIDI Pro’s <span class="black">black</span> plug
+          <strong>[TO MIDI IN]</strong> into that adapter. Leave the <span class="white">white</span>
+          plug out: the app only sends to a VP4, and nothing comes back over Bluetooth.</li>
+        <li>Plug the C2MIDI Pro’s USB-C plug into the Uhost’s <strong>left</strong> socket,
+          <strong>USB Host/Device</strong>.</li>
+        <li>Last, power: a phone charger or power bank into the Uhost’s <strong>right</strong>
+          socket, <strong>USB Power</strong>. 5 volts only.</li>
+        <li>Feel the C2MIDI Pro after a minute. It should be cool. If it is more than slightly warm,
+          unplug it at once.</li>
+      </ol>
       <p class="lead">
         <strong>One at a time.</strong> While you use Bluetooth, quit the Fractal Remote app on the
         computer, or unplug the unit’s USB cable, so the unit isn’t driven from two places at once.
@@ -382,6 +430,10 @@
           <strong>Send Realtime Sysex</strong> on. On these
           two the phone changes presets with Program Change, the way Fractal’s manuals give, and
           the tuner’s readings reach the phone only with Send Realtime Sysex on.</li>
+        <li><strong>VP4:</strong> in SETUP &gt; MIDI/Remote, set <strong>Receive MIDI PC</strong>
+          to ON and the <strong>MIDI Channel</strong> to 1 (or OMNI). For scenes, pick a
+          <strong>Scene Select</strong> number there too, and type the same number in the app,
+          in Settings &gt; VP4 scenes &amp; presets.</li>
         <li><strong>FM3, if presets don’t change from the phone:</strong> in
           Setup → MIDI/Remote, set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping
           off.</li>
@@ -391,12 +443,15 @@
 
       <h2 id="connect">Connecting in the app</h2>
       <p>
-        Open <strong>Settings</strong> (the gear at the top right) → <strong>Bluetooth (beta)</strong>,
-        the row just below Phone &amp; computer. The top of the page says whether it is connected,
+        Open <strong>Settings</strong> (the gear at the top right) → <strong>My rig</strong> →
+        <strong>Bluetooth (beta)</strong>. The top of the page says whether it is connected,
         and the two steps are right under that.
       </p>
       <p class="q">1 · Pick your unit</p>
-      <p>Tap AM4, FM3, FM9 or Axe-Fx III. To change it later, tap Stop first.</p>
+      <p>
+        Tap AM4, FM3, FM9, Axe-Fx III or VP4. Every unit but the AM4 says under its name that it
+        hasn’t been tried yet. To change it later, tap Stop first.
+      </p>
       <p class="q">2 · Connect</p>
       <p>
         Under Connect are three rows you tap to open: <strong>How to plug it in</strong> (open
@@ -434,6 +489,10 @@
         <li>If Android shows a Bluetooth pairing request, tap it and accept.</li>
         <li>It says “Connected · AM4 answering” (or your unit) in blue when it is working.</li>
       </ol>
+      <p>
+        On a VP4 it says <strong>“Connected · sending to the VP4”</strong> instead: the app can’t
+        hear a VP4 over Bluetooth, so that only says the adapter is connected.
+      </p>
 
       <h3>Next time, and going back to the computer</h3>
       <ul>
@@ -519,9 +578,9 @@
           button for more than 5 seconds to put it back to how it came.</li>
         <li>As a last resort, reset the Uhost: hold its button while you plug its power in, and let
           go after the green light flashes 3 times.</li>
-        <li>Then send a bug report from the app while it is still connected:
-          <strong>Settings → Troubleshooting → Feedback → “Something is broken”</strong>. It carries what the app saw,
-          which is what explains it. Say which unit and which adapter.</li>
+        <li>Then send a report from the app while it is still connected: tap
+          <strong>Report a Bluetooth problem</strong> on the Bluetooth (beta) page, and pick what
+          went wrong. It sends at once, with what the app saw, which is what explains it.</li>
       </ul>
 
       <h2 id="other">Other adapters</h2>
@@ -554,7 +613,10 @@
 
       <h2>Tell us how it went</h2>
       <p>
-        It is a beta, so every report helps. In the app: <strong>Settings → Troubleshooting → Feedback</strong>. Or email
+        It is a beta, so every report helps, and a report that it works on your unit helps most.
+        In the app: <strong>Report a Bluetooth problem</strong>, on the Bluetooth (beta) page, one
+        tap, with “It works on my unit” among its answers, or <strong>Settings → Troubleshooting →
+        Feedback</strong>. Or email
         <a href="mailto:justinnewbold@gmail.com">justinnewbold@gmail.com</a>, saying which unit,
         which adapter, and which phone. More help is on the <a href="/support">support page</a>.
       </p>

@@ -1053,7 +1053,10 @@ export function run(test) {
     assert.match(read('scripts/sync-relay-rules.mjs'), /source: '\.\.\/shared\/vp4-safety\.mjs', target: '\.\.\/mobile\/src\/lib\/vp4-safety\.js'/)
     const phone = flat('mobile/src/lib/device.js')
     assert.match(phone, /import \{[^}]*\bisVp4\b[^}]*\bvp4Refusal\b[^}]*\bvp4Route\b[^}]*\} from '\.\/vp4-safety'/)
-    assert.match(phone, /onVp4 = !demoDevice\(\) && !bluetoothWire\(\) && isVp4\(res\)/, 'the phone does not learn it is on a VP4, or learns it in the demo')
+    /* Over the computer and, since 25 October 2026, over Bluetooth (beta), whose VP4 wire is sent presets and scenes only (mobile/src/lib/bleVp4.js): never in the demo. */
+    assert.match(phone, /onVp4 = !demoDevice\(\) && isVp4\(res\)/, 'the phone does not learn it is on a VP4, or learns it in the demo')
+    /* And over Bluetooth the same routing first, and the same words for a refusal. */
+    assert.match(phone, /const ble = bluetoothWire\(\) if \(ble\) \{ \/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/ const method = options\?\.method \|\| 'GET' const vp4 = onVp4 && vp4Instead\(method, path, options\) if \(vp4\) return vp4 return ble\.request\(path, options\)\.catch\(\(err\) => Promise\.reject\(said\(method, path, tapOverBle\(options, err\)\)\)\) \}/, 'a VP4 over Bluetooth is not routed the VP4 way, or its refusals are not said in its words')
     assert.match(phone, /if \(refused\.known\(method, path\)\) return Promise\.reject\(rememberedRefusal\(method, path\)\) const vp4 = onVp4 && vp4Instead\(method, path, options\) if \(vp4\) return vp4 return overTheWire\(path, options\)/, 'a VP4 request reaches the computer unrouted')
     const web = flat('src/lib/forgefx.js')
     assert.match(web, /import \{[^}]*\bisVp4\b[^}]*\bvp4Refusal\b[^}]*\bvp4Route\b[^}]*\} from '\.\.\/\.\.\/shared\/vp4-safety\.mjs'/)

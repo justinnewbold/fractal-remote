@@ -25,9 +25,14 @@
  * October 2026, from an Android phone ("I have tried it from an android
  * phone and it works great"). The FM9 and Axe-Fx III have the 5-pin MIDI
  * jacks the C2MIDI Pro was made for, so the same chain without the adapters
- * may work on them — but nobody has tried it, and the page says so rather
- * than promising it. Which is why a customer is offered the AM4 alone
- * (CUSTOMER_UNITS in lib/ble-rule.js): the other three are Justin's to pick.
+ * may work on them, and the VP4 has the AM4's 3.5 mm Type-A jacks, so the
+ * AM4's whole chain may — but nobody has tried any of them, and the page
+ * says so rather than promising it. From the store version that opens
+ * Bluetooth (beta) to customers (lib/ble-rule.js UNITS_FROM_STORE), every
+ * unit is offered, each untried one marked so with the report button by it:
+ * "as long as there's warnings for user that it's in beta and they're free
+ * to test it and submit feedback, but it might not work properly" (Justin,
+ * 25 October 2026).
  *
  * NOT THE FM3, PLUGGED STRAIGHT IN. "I tried to use the exact same WIDI host
  * setup on the FM3 as I did on the AM4 and the CME C2MIDI Pro got extremely
@@ -38,11 +43,14 @@
  * that pin; FM3 owners measured in 2021 that the FM3 has none, and report the
  * same on the Turbo in 2025 and 2026. So every adapter that feeds from it runs
  * hot there — CME's WIDI Master and WIDI Jack, Yamaha's MD-BT01, this cable —
- * and USB power does not stop it. The FM3 stays one HIS account can pick; it
- * gets a warning in place of a shopping list, and no buy links
- * (docs/bluetooth-midi.md has the sources). A customer is not offered it at
- * all, and is told before any pick that it is not for an FM3 (NOT_FOR_FM3),
- * so an FM3 owner reading an AM4's shopping list knows to stop.
+ * and USB power does not stop it. So the FM3 gets a warning in place of a
+ * shopping list, and no buy links (docs/bluetooth-midi.md has the sources),
+ * and everybody is told before any pick that the C2MIDI Pro is never for an
+ * FM3 (NOT_FOR_FM3), so an FM3 owner reading an AM4's shopping list knows
+ * to stop. Offered to customers with the rest from the store version that
+ * opens Bluetooth: "I don't wanna wait for the FM3 test" (25 October 2026).
+ * It has never run on one, and every line that names it says so
+ * (untried, below), the warning first.
  *
  * NO RECIPE FOR THE WAY ROUND IT. The warning and the guide once said what
  * FM3 owners fit (a resistor on one pin of a home-made adapter, "someone who
@@ -91,12 +99,12 @@
 
 /**
  * The full guide on the website, for everything that does not fit on a phone
- * screen. At bluetooth-guide.html, linked from nowhere on the website, since
- * Bluetooth (beta) went back to Justin's account alone on 11 October 2026:
- * /bluetooth itself now tells customers it is not in the app yet, with
- * nothing to buy. Only the app's Bluetooth page links here, which only his
- * account can open on every copy there is today (lib/ble-rule.js: a
- * customer's only on a store copy built to open it).
+ * screen. At bluetooth-guide.html, linked from nowhere on the website until
+ * the store version that opens Bluetooth (beta) to customers is live:
+ * /bluetooth says it is not in the app yet, with nothing to buy. Only the
+ * app's Bluetooth page links here, which only his account can open on every
+ * copy there is today (lib/ble-rule.js: a customer's only on a store copy
+ * built to open it).
  */
 export const GUIDE_URL = 'https://fractal.newbold.cloud/bluetooth-guide.html'
 
@@ -124,7 +132,7 @@ export const TESTED = ['am4']
  * October, stopped on Expo's side a minute in), and Android's note said "not
  * yet from an Android phone". Then: "I have tried it from an android phone
  * and it works great." So Android's note says both, and it is still only
- * the AM4.
+ * the AM4: every other unit is said as not tried yet, on its own lines.
  *
  * TWO COPIES, ONE PER PHONE. The Android clause is for Android only. Apple's
  * guideline 2.3.10: "don't include names, icons, or imagery of other mobile
@@ -191,20 +199,13 @@ export const betaNote = (os) => (os === 'android' ? BETA_NOTE_ANDROID : BETA_NOT
  * from the app yet: two sentences that disagree, where somebody pays. The
  * computer is the best way; what Bluetooth lacks is said after it.
  *
- * One sentence, its one-line form for a button's second line (with the AM4
- * in it, for a customer, who can pick nothing else), and the Settings row's
+ * One sentence, its one-line form for a button's second line, and the Settings row's
  * own, which has one short line to say both halves in: written together here
  * so they can never say different things.
  */
 export const BLUETOOTH_WAYS =
   'There are two ways to connect. The computer is the best one. Bluetooth (beta) needs no computer, but it has more lag and fewer features.'
 export const BLUETOOTH_WAYS_SHORT = 'More lag than the computer, fewer features'
-/*
- * The same line for a customer, with the one unit they can pick in front of
- * it: an FM9 owner with no computer reads it on the waiting screen's way in,
- * before the page turns them away.
- */
-export const BLUETOOTH_WAYS_SHORT_AM4 = `AM4 only for now · ${BLUETOOTH_WAYS_SHORT.toLowerCase()}`
 /*
  * THE SETTINGS ROW, OFF: what it is for and what it costs, in the one line a
  * row has (Settings.js SetupRow, cut at one line on a 320-point screen). It
@@ -214,28 +215,25 @@ export const BLUETOOTH_WAYS_SHORT_AM4 = `AM4 only for now · ${BLUETOOTH_WAYS_SH
 export const BLUETOOTH_ROW_OFF = 'Off · no computer needed, more lag'
 
 /*
- * THE AM4 ONLY, FOR A CUSTOMER (lib/ble-rule.js CUSTOMER_UNITS). Said beside
- * the one unit they can pick, and in the hint when the adapter connects and
- * the unit says nothing: an FM9 owner who picked the AM4 anyway hears that,
- * rather than only "check both MIDI plugs".
+ * NEVER THE C2MIDI PRO ON AN FM3, TO EVERYBODY, BEFORE AND WHATEVER IS
+ * PICKED. FM3_NEVER is drawn once the FM3 is picked; an FM3 owner who has
+ * not picked yet would otherwise read an AM4's shopping list first. So this
+ * goes under the units in step 1, on every visit. It said "Not for an FM3"
+ * while the FM3 was not offered to customers; it is offered now, and what
+ * is not for an FM3 is the cable.
  */
-export const AM4_ONLY = 'For now, Bluetooth (beta) is for an AM4 only.'
-
-/*
- * NOT FOR AN FM3, TO EVERYBODY, BEFORE AND WHATEVER IS PICKED. With the FM3
- * not offered, its warning (FM3_WARNING, drawn when it is picked) would
- * reach nobody who owns one, and an FM3 owner would read an AM4's shopping
- * list. So this goes under the units in step 1, on every visit.
- */
-export const NOT_FOR_FM3 = 'Not for an FM3: when we tried Bluetooth on one, the adapter’s cable got very hot.'
+export const NOT_FOR_FM3 = 'Never plug the C2MIDI Pro into an FM3: when we tried it on one, the cable got very hot.'
 
 /*
  * The purchase page's line, on a copy that opens Bluetooth to customers: the
- * two ways, then what it needs. Every part, by the name on its box (PARTS,
- * below, for the AM4: partsFor('am4')) and what it is, plus POWER_LINE's
- * charger, with no prices: the one screen where somebody pays on what it
- * says, and the list is four parts and a charger, not "an adapter". It said
- * one adapter for a day.
+ * two ways, which units and which have been tried, then what it needs. Every
+ * part, by the name on its box (PARTS, below) and what it is, plus
+ * POWER_LINE's charger, with no prices: the one screen where somebody pays
+ * on what it says, and the list is four parts and a charger, not "an
+ * adapter". It said one adapter for a day, and the AM4 alone until 25
+ * October 2026. And what a VP4 gets over it (presets and scenes), and that
+ * the cable is never for an FM3, on the screen where an owner of either
+ * decides whether to pay.
  *
  * NAMED HERE, NOT SENT ELSEWHERE. It said "(the Bluetooth page lists them)"
  * for a day, but nobody who has not paid can open that page: the Settings
@@ -243,7 +241,7 @@ export const NOT_FOR_FM3 = 'Not for an FM3: when we tried Bluetooth on one, the 
  * purchase. So the names are in the line itself, where somebody deciding
  * whether to pay can read them, and look them up.
  */
-export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} For now it is for an AM4 only, and needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter), a CME C2MIDI Pro (its MIDI cable) and two Type-A MIDI to 3.5 mm adapters, plus a USB charger or power bank.`
+export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and so far has been tried on the AM4 only; on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
 
 
 /** The parts, by the name printed on the box, each with what it is for in a line. */
@@ -263,7 +261,7 @@ export const PARTS = {
   },
   adapters: {
     name: 'Two Type-A MIDI to 3.5 mm adapters',
-    does: 'AM4 only: its MIDI jacks are small 3.5 mm ones. They must be Type A. This is a pack of two (LOOTOOLS).',
+    does: 'For an AM4 or VP4: their MIDI jacks are small 3.5 mm ones. They must be Type A. This is a pack of two (LOOTOOLS).',
     amazon: 'https://www.amazon.com/dp/B0FN83P5P7',
     maker: null
   }
@@ -278,7 +276,7 @@ export const PARTS = {
  */
 export const ALL_LINKS = [GUIDE_URL, ...Object.values(PARTS).flatMap((p) => [p.amazon, p.maker])].filter(Boolean)
 
-const UNITS = { am4: 'AM4', fm3: 'FM3', fm9: 'FM9', axefx3: 'Axe-Fx III' }
+const UNITS = { am4: 'AM4', fm3: 'FM3', fm9: 'FM9', axefx3: 'Axe-Fx III', vp4: 'VP4' }
 
 /*
  * THE FM3 WARNING, in place of its parts and its steps, for the account that
@@ -329,8 +327,8 @@ export const FM3_NEVER =
 export const HEAT_CHECK =
   'In the first minute, feel the C2MIDI Pro. It should stay cool. If it gets more than slightly warm, unplug it at once.'
 
-/** The heat line for a unit's steps, or null: the FM9 and Axe-Fx III, the units it is offered on untried. */
-export const heatLineFor = (unit) => (unit === 'fm9' || unit === 'axefx3' ? HEAT_CHECK : null)
+/** The heat line for a unit's steps, or null: the FM9, Axe-Fx III and VP4, the units it is offered on untried with these parts (the FM3 has FM3_NEVER instead). */
+export const heatLineFor = (unit) => (unit === 'fm9' || unit === 'axefx3' || unit === 'vp4' ? HEAT_CHECK : null)
 
 /*
  * PROGRAM CHANGE FIRST, ON THE FM9 AND AXE-FX III. Fractal publishes no SysEx
@@ -369,7 +367,7 @@ export const PC_FIRST = ['fm9', 'axefx3']
 export const midiSettingsFor = (unit, noun = 'phone') => {
   const name = UNITS[unit]
   /* The FM9 and Axe-Fx III have these in their steps (UNIT_SETTINGS): their presets go by Program Change alone. */
-  if (!name || unit === 'am4' || PC_FIRST.includes(unit)) return null
+  if (!name || unit === 'am4' || unit === 'vp4' || PC_FIRST.includes(unit)) return null
   return `If presets don’t change from this ${noun}: on the ${name}, open Setup → MIDI/Remote and set Program Change to On, the MIDI channel to 1 (or Omni), and PC Mapping to Off.`
 }
 
@@ -382,7 +380,7 @@ export const warningFor = (unit) => (unit === 'fm3' ? FM3_WARNING : null)
  */
 export function partsFor(unit, noun = 'phone') {
   if (NOT_STRAIGHT_IN.includes(unit)) return []
-  const keys = unit === 'am4' ? ['uhost', 'c2midi', 'adapters'] : ['uhost', 'c2midi']
+  const keys = unit === 'am4' || unit === 'vp4' ? ['uhost', 'c2midi', 'adapters'] : ['uhost', 'c2midi']
   return keys.map((key) => {
     const p = PARTS[key]
     return { key, ...p, does: typeof p.does === 'function' ? p.does(noun) : p.does }
@@ -440,19 +438,13 @@ export const PLUGS_CHECK =
 
 /*
  * Before a unit is picked: the whole of it in two lines. The FM3 is not in
- * it any more: NOT_FOR_FM3 says it to everybody under step 1, right above,
- * whatever is picked.
+ * it: NOT_FOR_FM3 says it to everybody under step 1, right above, whatever
+ * is picked. One list for everybody since 25 October 2026, when a customer
+ * stopped being offered the AM4 alone (it had a list of its own,
+ * GEAR_IN_SHORT_AM4, until then).
  */
 export const GEAR_IN_SHORT =
-  'A CME WIDI Uhost, a CME C2MIDI Pro, and a phone charger or power bank with a USB-C cable for the Uhost. For an AM4, also two Type-A MIDI to 3.5 mm adapters. Pick your unit above for where to buy them and how they plug in.'
-
-/*
- * The same for a customer, whose step 1 offers the AM4 alone: one list, with
- * the adapters in it, and no "For an AM4, also" or "Pick your unit", which
- * say there are other units and other lists.
- */
-export const GEAR_IN_SHORT_AM4 =
-  'A CME WIDI Uhost, a CME C2MIDI Pro, two Type-A MIDI to 3.5 mm adapters, and a phone charger or power bank with a USB-C cable. Tap AM4 above for where to buy them and how they plug in.'
+  'A CME WIDI Uhost, a CME C2MIDI Pro, and a phone charger or power bank with a USB-C cable for the Uhost. For an AM4 or VP4, also two Type-A MIDI to 3.5 mm adapters. Pick your unit above for where to buy them and how they plug in.'
 
 /**
  * How it plugs together, for one unit, in at most five short steps, the
@@ -473,6 +465,23 @@ export function hookupFor(unit, noun = 'phone') {
       usb,
       power,
       'On the AM4, open Setup → MIDI/Remote and set MIDI Thru to Off.'
+    ]
+  }
+  /*
+   * THE VP4: ONE PLUG, ONE WAY. The app only ever sends a VP4 its presets
+   * and scenes over Bluetooth, and reads nothing back (lib/bleVp4.js), so
+   * only the black plug goes in, through one adapter, into its MIDI IN, and
+   * the white plug, the one that can take power from a unit's MIDI OUT, is
+   * left out. And its own MIDI settings, in its own manual's words: Receive
+   * MIDI PC ON, and the channel (lib/vp4-safety, VP4_SETUP).
+   */
+  if (unit === 'vp4') {
+    return [
+      'Push one 3.5 mm adapter into the VP4’s MIDI IN.',
+      `C2MIDI Pro: the black plug (TO MIDI IN) into that adapter. Leave the white plug out: the app only sends to a VP4, and nothing comes back over Bluetooth.`,
+      usb,
+      power,
+      'On the VP4, open SETUP > MIDI/Remote and set Receive MIDI PC to ON, and the MIDI Channel to 1 (or OMNI). For scenes, set Scene Select too: Settings > VP4 scenes & presets says how.'
     ]
   }
   if (unit === 'axefx3') {
@@ -531,9 +540,11 @@ export const powerStepOf = (unit) => (hookupFor(unit) || []).indexOf(powerStep(U
  * "It works on my unit" among its answers.
  */
 export const untriedLine = (unit) =>
-  triedOn(unit) || !UNITS[unit] || warningFor(unit)
+  !untried(unit)
     ? null
-    : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: tap ${REPORT_BUTTON}, further down this page.`
+    : unit === 'fm3'
+      ? `It hasn’t run on an FM3 yet. If you get it working with another adapter, tell us how: tap ${REPORT_BUTTON}, further down this page.`
+      : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: tap ${REPORT_BUTTON}, further down this page.`
 
 /*
  * "NOT TRIED YET", WHEREVER AN FM9 OR AXE-FX III OWNER LOOKS. "On any units
@@ -550,28 +561,62 @@ export const untriedLine = (unit) =>
  * line that sends the player somewhere sends them to REPORT_BUTTON, in its
  * own words. Never "official", never "this phone": the device in hand is
  * not named in any of them.
+ *
+ * THE VP4 AND THE FM3 TOO, since 25 October 2026, when every unit opened to
+ * customers in one store version. The VP4 like the FM9: nobody here has
+ * one. The FM3 in words of its own: it has been tried, once, and that cable
+ * got very hot and never connected, so "not tried" would be untrue beside
+ * FM3_NEVER's "when we tried it". It "hasn't run" on one, which is what is
+ * true, and its warning stays where it was, in front.
  */
-export const untried = (unit) => !!UNITS[unit] && !triedOn(unit) && !warningFor(unit)
+export const untried = (unit) => !!UNITS[unit] && !triedOn(unit)
 
-/** Under a unit's name on its button in step 1. */
+/* "Not tried on the FM9 yet", or the FM3's own: it was tried, and did not run. */
+const notYetOn = (unit) => (unit === 'fm3' ? 'It hasn’t run on an FM3 yet.' : `Not tried on the ${UNITS[unit]} yet.`)
+
+/** Under a unit's name on its button in step 1: the FM3's own words, for the same reason. */
 export const UNTRIED_SUB = 'Not tried yet'
+export const FM3_SUB = 'Not run yet'
+export const untriedSubFor = (unit) => (!untried(unit) ? undefined : unit === 'fm3' ? FM3_SUB : UNTRIED_SUB)
 
 /** Under "Connected · FM9 answering". */
 export const untriedConnectedLine = (unit) =>
-  untried(unit) ? `Not tried on the ${UNITS[unit]} yet. Tell us how it goes: tap ${REPORT_BUTTON}, below.` : null
+  untried(unit) ? `${notYetOn(unit)} Tell us how it goes: tap ${REPORT_BUTTON}, below.` : null
 
 /** The first line of What it can and can't do. */
 export const untriedAboutLine = (unit) =>
-  untried(unit) ? `Built from what is known about the ${UNITS[unit]}, but not yet tried on a real one. Some of it may not work as expected.` : null
+  !untried(unit)
+    ? null
+    : unit === 'fm3'
+      ? 'Built from what is known about the FM3, but it hasn’t run on a real one yet. Some of it may not work as expected.'
+      : `Built from what is known about the ${UNITS[unit]}, but not yet tried on a real one. Some of it may not work as expected.`
 
 /** Added to the note under the Bluetooth pill on Play (it starts "Connected over Bluetooth, through …"). */
-export const untriedShortLine = (unit) => (untried(unit) ? `Not tried on the ${UNITS[unit]} yet.` : null)
+export const untriedShortLine = (unit) => (untried(unit) ? notYetOn(unit) : null)
 
 /** The small line on a fault card's Report this, on Play. */
-export const faultSubFor = (unit) => (untried(unit) ? `Bluetooth (beta), not tried on the ${UNITS[unit]} yet` : 'Bluetooth (beta)')
+export const faultSubFor = (unit) =>
+  !untried(unit) ? 'Bluetooth (beta)' : unit === 'fm3' ? 'Bluetooth (beta), not run on an FM3 yet' : `Bluetooth (beta), not tried on the ${UNITS[unit]} yet`
 
-/** The unit's name as a report's log head says it: "FM9 (not tried yet)". */
-export const unitForReport = (unit) => (UNITS[unit] ? `${UNITS[unit]}${untried(unit) ? ' (not tried yet)' : ''}` : null)
+/** The unit's name as a report's log head says it: "FM9 (not tried yet)", "FM3 (not run yet)". */
+export const unitForReport = (unit) => (UNITS[unit] ? `${UNITS[unit]}${!untried(unit) ? '' : unit === 'fm3' ? ' (not run yet)' : ' (not tried yet)'}` : null)
+
+/*
+ * WHAT A VP4 GETS OVER BLUETOOTH, wherever it is the unit picked: What it can
+ * and can't do on the Bluetooth page, in place of the line for the other
+ * units, and on Play in place of the chain the phone cannot read (Stage, a
+ * VP4 over Bluetooth). Presets and scenes, by the two messages a foot
+ * controller sends, and nothing read back (lib/bleVp4.js): no effects, no
+ * names, no tuner, and nothing to say a preset or scene landed. The way to
+ * the rest is the computer, as it is for every unit.
+ */
+export const VP4_OVER_BLUETOOTH =
+  'Over Bluetooth, the app changes a VP4’s presets and scenes, the way a MIDI foot controller does, and nothing else. It can’t hear the VP4 that way, so it can’t show its effects, names or tuner, or check that a preset or scene landed. For those, use the computer.'
+
+/* And under "Connected" on the page: the adapter is all a VP4's link can know. */
+export const VP4_CONNECTED = 'Connected · sending to the VP4'
+export const VP4_CANT_HEAR =
+  'The app can’t hear a VP4 over Bluetooth, so this only says the adapter is connected. If presets don’t change, check the black plug is in the VP4’s MIDI IN, and on the VP4 that SETUP > MIDI/Remote has Receive MIDI PC ON.'
 
 /*
  * THE BLOCKS PLAY DOES NOT DRAW YET, on the units that have them. Fractal's
@@ -658,18 +703,19 @@ export const withArticle = (name) => `${/^[AEFHILMNORSX]/.test(String(name)) ? '
  * wire knows (bleWire MODEL_NAMES) is named, with its article chosen here
  * from its bare name, and told the way out:
  *
- *   - a unit this account can pick: Stop, pick it in step 1, Connect;
- *   - the VP4, which has no Bluetooth: the computer is its way;
- *   - any other (a customer's page offers fewer units): the computer, after
- *     the line that says which units Bluetooth is for, when there is one.
+ *   - a unit this account can pick: Stop, pick it in step 1, Connect (the
+ *     VP4 among them since 25 October 2026: it said "The VP4 isn't a
+ *     Bluetooth unit" until then);
+ *   - any other (a copy that offers fewer units than the wire knows): the
+ *     computer, after the line that says which units Bluetooth is for, when
+ *     there is one.
  *
  * `answered` and `picked` are bare names as the page shows them; `pickable`
  * whether step 1 offers the one that answered; `forWhich` the line saying
- * which units it is for (AM4_ONLY on a customer's page), or ''.
+ * which units it is for, or ''.
  */
 export function wrongUnitLine({ answered, picked, pickable = false, forWhich = '' }) {
   const head = `${withArticle(answered).replace(/^a/, 'A')} answered, not the ${picked}.`
-  if (answered === 'VP4') return `${head} The VP4 isn’t a Bluetooth unit: tap Stop, and use the computer for it.`
   if (pickable) return `${head} Tap Stop, pick ${answered} in step 1, then tap Connect.`
   return `${head} ${forWhich ? `${forWhich} ` : ''}Tap Stop, and use the computer for the ${answered}.`
 }

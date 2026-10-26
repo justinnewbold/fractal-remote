@@ -79,7 +79,7 @@ import Toast, { useStillNews } from '../components/Toast'
 import { droppedLeft, faultLeft } from '../lib/fault-rule'
 import { overBluetooth } from '../lib/bleSwitch'
 import { useBluetoothUnit } from '../lib/bluetooth'
-import { faultSubFor } from '../lib/bluetooth-gear'
+import { VP4_OVER_BLUETOOTH, faultSubFor } from '../lib/bluetooth-gear'
 import { NOT_CONNECTED, missingPickCard, unitElsewhereCard } from '../lib/relay-rules'
 import { chooseHost, keepThisOne, watchUnits } from '../lib/link'
 import ComputerCard from '../components/ComputerCard'
@@ -1299,8 +1299,9 @@ export default function Stage({
 
           <ChainUpdating chain={chainNow} />
 
+          {/* A VP4 over Bluetooth is sent presets and scenes and read nothing (lib/bleVp4.js): its chain is empty because it cannot be read, and Play says that, not that the preset is empty. */}
           {blocks.length === 0 && chain === 'ok' && !chainNow.elsewhere ? (
-            <Note>Nothing in this preset but input and output.</Note>
+            <Note>{vp4Here() && overBluetooth(caps) ? VP4_OVER_BLUETOOTH : 'Nothing in this preset but input and output.'}</Note>
           ) : null}
 
           {/*

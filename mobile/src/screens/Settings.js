@@ -302,7 +302,7 @@ export default function Settings({
   /* A unit whose switches can be read — see the Footswitches page. */
   const caps = useRig(ofCapabilities)
   const switchesReadable = fcReadable(caps)
-  /* A real VP4 on the computer (not the demo's, not over Bluetooth): it gets the Scene Select card. Read again on every change to the rig or to storage. */
+  /* A real VP4, on the computer or over Bluetooth (not the demo's): it gets the Scene Select card, whose number and channel both ways send. Read again on every change to the rig or to storage. */
   useStored()
   const onRealVp4 = vp4Here()
   /* Bluetooth (beta): whether the phone is talking to the unit itself. */

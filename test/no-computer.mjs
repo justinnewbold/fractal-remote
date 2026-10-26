@@ -1093,15 +1093,17 @@ export function run(test) {
    * Bluetooth (beta) — and on every customer's copy today it does not, so
    * there the words must be exactly what they were.
    */
-  test('the other way’s words: a second way for an AM4, the computer still the best, what Bluetooth costs, and where it is', async () => {
+  test('the other way’s words: a second way for every unit, the computer still the best, what Bluetooth costs, that it is a beta, and where it is', async () => {
     const words = await import('../shared/no-computer.mjs')
     const line = words.NO_COMPUTER_BLUETOOTH
+    /* For every unit since 25 October 2026, when they all opened in one store version: it said "Have an AM4?" until then. */
     assert.equal(
       line,
-      'Have an AM4? The app can also connect to it with no computer, by Bluetooth (beta) through an adapter. The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. Settings → My rig → Bluetooth (beta) says what to buy.'
+      'The app can also connect to your unit with no computer, by Bluetooth (beta) through an adapter. The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving, and it is in beta. Settings → My rig → Bluetooth (beta) says what to buy.'
     )
-    /* In Justin's order: more than one way, the computer the best of them, what Bluetooth costs (in his word, lag), then where. */
-    const at = ['AM4', 'with no computer', 'The computer is still the best way', 'more lag and does less', 'no editing or saving', 'Settings → My rig → Bluetooth (beta)'].map((w) => line.indexOf(w))
+    assert.ok(!/\bAM4\b/.test(line), 'the line is still for an AM4 alone')
+    /* In Justin's order: more than one way, the computer the best of them, what Bluetooth costs (in his word, lag), that it is a beta, then where. */
+    const at = ['your unit', 'with no computer', 'The computer is still the best way', 'more lag and does less', 'no editing or saving', 'in beta', 'Settings → My rig → Bluetooth (beta)'].map((w) => line.indexOf(w))
     assert.ok(at.every((i) => i >= 0), 'the line lost one of the things it has to say')
     assert.deepEqual([...at].sort((a, b) => a - b), at, 'the line says them out of order: the computer is not named the best before what Bluetooth costs')
     /* What it costs, only as far as the Bluetooth page itself says it. */

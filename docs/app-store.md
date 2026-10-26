@@ -1340,61 +1340,37 @@ has a release live. Once 1.87.11 is processed, App bundle explorer → 1.87.11
 
 ## 1.89.0: Bluetooth (beta) for customers
 
-**Two things changed on 25 October 2026, and this section is being
-rewritten for them.** 1.89.0 is the first App Store version since 1.87.11
-("Wait till the Bluetooth version"), so its Apple notes and What's New say
-what is new since 1.87.11, not since 1.88.3, and the listing changes held
-for 1.88.3 go in with it. And Bluetooth (beta) opens on every unit, not the
-AM4 alone ("I want it built out for all users"), marked beta, with "some
-features might not work as expected" and an easy way to report a problem.
-Where the blocks below still say AM4 only, or New since 1.88.3, they are
-the earlier plan.
+**The next App Store version, on both phones, and the one that opens
+Bluetooth (beta) to customers on every unit** (rewritten on 25 October
+2026). Three things decided it:
 
-**The store version after 1.88.3, on both phones** (written on 25 October
-2026). "I have tried it from an android phone and it works great." "I'm
-fine with doing new builds for Apple and android." "Make it clear that
-there's multiple ways to connect the device, but also make it clear that
-the computer is the preferred method and that Bluetooth will have more lag
-and not have as many features." So 1.89.0 is the version whose notes,
-What's New and Description say Bluetooth (beta) is in the app, for an AM4,
-for everybody with the full version. It opens by the version built into
-the copy (`BLUETOOTH_FROM_STORE` in mobile/src/lib/ble-rule.js, set in the
-build pull request), never by an update (CLAUDE.md, *It is switched on for
-customers*). Every block here but the last (Google's location question, for
-2027) is pasted on the day 1.89.0 is sent (Google Play's Description later
-still, on the day its rollout reaches everybody), and none of it before:
-until then every copy in a customer's hand was reviewed with notes that say
-customers are not shown it.
+- "Wait till the Bluetooth version" (when asked whether to send 1.88.3 to
+  the App Store with Bluetooth still hidden). So 1.88.3 stays on
+  TestFlight, and 1.89.0 is the first App Store version since 1.87.11: its
+  Apple notes and What's New say what is new since 1.87.11, the 1.88.3
+  block's paragraphs folded in, and the listing changes held for 1.88.3
+  (Description, Keywords, Subtitle) go in with it. On Google Play, 1.89.0
+  follows 1.88.0 (version code 12).
+- "I also dont want to only turn Bluetooth on only for the AM4 I want it
+  built out for all users ... I just want to submit with notes for users
+  that Bluetooth is in beta and some features might not work as expected.
+  And make it super easy for all users to submit bugs and feedback."
+- "I don't wanna wait for the FM3 test. Just get it built and pushed to
+  Apple. as long as there's warnings for user that it's in beta and
+  they're free to test it and submit feedback, but it might not work
+  properly." And: "I'm curious why the VP4 is not listed? ... it uses the
+  same architecture as the AM4."
 
-**Written on the plan that 1.88.3 goes to Apple first.** TestFlight 1.88.3
-(build 29, Bluetooth still the developer's alone) is sent with its own
-notes, above, and Apple reviews one version at a time, so 1.89.0 goes once
-Apple has decided 1.88.3. That is why the notes below say *New since
-1.88.3* and carry only what 1.88.3's do not. On Google Play, 1.89.0 follows
-1.88.0 (version code 12), which is in Google's review or live, and goes
-only once Google has finished with it.
-
-**If Justin skips 1.88.3 instead** (build 29 never sent, and 1.89.0 the
-next thing Apple sees), five things change:
-
-- The notes become *New since 1.87.11*: the nine paragraphs of 1.88.3's
-  block (Siri down to Screenshots), then this block's Bluetooth paragraph and
-  its developer-only paragraph, with this block's opening, Hardware,
-  Services and Videos lines. That comes to about 5170 bytes filled, over
-  Apple's 4000, so about 1250 bytes come out: each 1.88.3 paragraph down to
-  its first sentence, and the Bluetooth one down to its steps (pick AM4,
-  Connect, the permission, video 4). The test that holds this block
-  (test/limits.mjs) is pointed at *New since 1.87.11* with it, and still
-  holds it to 3950.
-- What's New is 1.88.3's list with this one's lines on top.
-- The version page in App Store Connect is 1.89.0. If a 1.88.3 page was
-  made, its number is changed to 1.89.0 and build 30 picked in place of 29,
-  and step 5's Apple part is only that nothing is in review or waiting at
-  Pending Developer Release.
-- Apple's iOS 27 fix for its Bluetooth screen, the reason build 29 exists,
-  reaches App Store customers with 1.89.0 instead (build 30 carries it).
-- Nothing changes on Google Play: Android goes from 1.88.0 to 1.89.0
-  either way.
+So 1.89.0 opens Bluetooth (beta) to everybody with the full version, on the
+AM4, FM3, FM9, Axe-Fx III and VP4. It opens by the version built into the
+copy (`BLUETOOTH_FROM_STORE` in mobile/src/lib/ble-rule.js, set in the
+build pull request, and every unit keyed to it, `UNITS_FROM_STORE`), never
+by an update (CLAUDE.md, *It is switched on for customers*). Every block
+here but the last (Google's location question, for 2027) is pasted on the
+day 1.89.0 is sent (Google Play's Description later still, on the day its
+rollout reaches everybody), and none of it before: until then every copy in
+a customer's hand was reviewed with notes that say customers are not shown
+it.
 
 **What a customer gets, which every text below says and no more.** Each
 line is the app as it is on 25 October 2026:
@@ -1406,9 +1382,18 @@ line is the app as it is on 25 October 2026:
   Bluetooth MIDI. On Android that is a device with both MIDI and Bluetooth
   LE (FractalBleMidiModule.kt `supported()`), so a device or emulator
   without them never shows it.
-- **Which unit:** the AM4 alone (`CUSTOMER_UNITS`). The FM3, FM9 and Axe-Fx
-  III stay on the developer's account, with the testing tools, and the
-  page tells everybody "Not for an FM3" under step 1.
+- **Which units:** all five the page offers (`CUSTOMER_UNITS`), in that
+  order: AM4, FM3, FM9, Axe-Fx III, VP4. Only the AM4 has run it. The FM9,
+  Axe-Fx III and VP4 say "Not tried yet" under their names and "Not tried
+  on the … yet" wherever else they are read, with the report button; the
+  FM3 says "Not run yet" and "It hasn't run on an FM3 yet", and its heat
+  warning (FM3_NEVER) is drawn whenever it is picked, with no parts to buy.
+  Everybody is told under step 1 never to plug the C2MIDI Pro into an FM3.
+- **The beta, in Justin's words:** "Bluetooth is in beta, and some
+  features might not work as expected." It opens the note under the rows
+  on the Bluetooth page, drawn on every visit, and the one-tap **Report a
+  Bluetooth problem** is straight under it ("It works on my unit" among
+  its answers), with Report this beside every fault line.
 - **The two ways, the computer first:** `BLUETOOTH_WAYS` in
   shared/bluetooth-gear.mjs, "There are two ways to connect. The computer
   is the best one. Bluetooth (beta) needs no computer, but it has more lag
@@ -1417,15 +1402,18 @@ line is the app as it is on 25 October 2026:
 - **What it does:** presets, scenes, effects on and off, channels, tempo and
   the tuner. No editing or saving, no looper, volume button, unit metronome
   click or Footswitches page, and about 30 feet of range (the page's *What's
-  different from USB*).
+  different from USB*). On a VP4, presets and scenes only, by the two MIDI
+  messages a foot controller sends, and nothing read back (VP4_OVER_BLUETOOTH):
+  no effects, names or tuner, and nothing to check a preset or scene landed.
 - **What it asks:** nothing touches Bluetooth before Connect is tapped. On
   an iPhone or iPad, Connect asks to use Bluetooth and opens Apple's own
   Bluetooth MIDI screen; on Android it asks for Nearby devices (Location on
   Android 11 and older) and looks for ten seconds.
 - **What it needs:** parts sold separately, by other companies: a CME WIDI
-  Uhost, a CME C2MIDI Pro and two Type-A MIDI to 3.5 mm adapters (LOOTOOLS),
-  plus a USB charger or power bank. The View on Amazon buttons open plain
-  amazon.com pages with no tracking, and the app earns nothing from them.
+  Uhost and a CME C2MIDI Pro, plus two Type-A MIDI to 3.5 mm adapters
+  (LOOTOOLS) for an AM4 or VP4, and a USB charger or power bank. The View
+  on Amazon buttons open plain amazon.com pages with no tracking, and the
+  app earns nothing from them.
 
 **Not one word of Android in Apple's texts** (2.3.10: "don't include names,
 icons, or imagery of other mobile platforms"). The notes, What's New, the
@@ -1433,33 +1421,99 @@ Description and the keywords below name no other platform, and the
 Description, which both stores share, names neither phone: it says where
 Bluetooth was tried by the unit and the parts, not the phone.
 
+### The guideline pass for 1.89.0 (25 October 2026)
+
+Read against https://developer.apple.com/app-store/review/guidelines/,
+"Last Updated: October 16, 2026", and Apple's news since 1.87.11 (12
+October 2026): the guidelines update of 16 October (2.5.19 on hidden or
+dormant features, moved out of 2.3.1; 2.3.14 on creative assets), the
+licence agreement of 13 October, iPhone Duo (5 October: its screenshots are
+required from April 2027, not now), and the age-rating questionnaire's
+social media questions, which must be answered on any update. Against what
+1.89.0 does, and what was done about each. **The day's pass on submission
+day still runs** (step 11), against the guidelines as they are then.
+
+- **2.1 (completeness, hardware).** A hardware feature needs a video of the
+  hardware: video 4, on a real AM4. The other four units have never been on
+  the other end, so the notes say so outright rather than leave a reviewer
+  to find it, and say the computer way is complete and unchanged. Risk
+  left: a reviewer may ask for a video on another unit. Nobody here has one.
+- **2.2 (betas).** "Demos, betas, and trial versions of your app don't
+  belong on the App Store." 1.87.11's notes dropped "It is still being
+  improved" because it read as unfinished (*Notes for App Review, 1.87.11*),
+  and "Edit (Beta)" was refused once. Justin's sentence ("Bluetooth is in
+  beta, and some features might not work as expected") is what he asked
+  for, so it is kept, but only beside "a finished app, one feature marked
+  beta": every block below says the computer way does everything, and the
+  notes call Bluetooth an optional second way. The real risk is this line,
+  and it is told to Justin in plain words before he submits. If Apple
+  refuses under 2.2, the fix is words (*If Bluetooth has to be switched off*),
+  not a build: the sentence comes out of the store texts first.
+- **2.3.1(a) and 2.5.19 (every feature described, nothing hidden).** The
+  Bluetooth paragraph names every unit and says which have been tried, the
+  VP4's presets-and-scenes-only, the report button, and where everything
+  is. What only the developer's account sees (the Developer pages, the
+  testing tools) is its own paragraph. No unit is held back for his account
+  any more, so no unit is named there.
+- **2.3.1(a), the other half (promoting what it does not offer).** No text
+  says Bluetooth works on a unit it has not run on: they say "offered on"
+  and "tried on the AM4 only", and the app says "Not tried yet" on the
+  unit's own button. The VP4 is promised presets and scenes only.
+- **2.3.10 (other platforms).** None named in Apple's texts; the
+  Description, shared with Google, names neither phone. Held by
+  test/limits.mjs.
+- **2.3.12 (What's New).** Bluetooth first, then everything since 1.87.11.
+- **2.3.7 (keywords).** `bluetooth,midi` only; never `cme` or `widi`.
+- **1.4 (physical harm).** New on this pass: "If your app behaves in a way
+  that risks physical harm, we may reject it." The FM3 is offered while the
+  one cable tried on it ran very hot. The app never sends anybody a part for
+  an FM3, warns in red before any pick and whenever the FM3 is picked, and
+  tells every untried unit's owner to feel the cable in the first minute.
+  Nothing the app sends makes an adapter hot; it is the jack. Said here so
+  it is known, not because a guideline names it.
+- **3.1.1 (in-app purchase).** Bluetooth is part of the one unlock, bought
+  through Apple; nothing new to buy in the app. The parts are physical goods
+  sold by others, used outside the app (3.1.3(e)), linked as plain pages with no affiliate code.
+- **4.1(c) and 5.2.1 (trademarks).** Unit names in plain text, the
+  trademark line in the Description, no logo or artwork. CME and LOOTOOLS
+  are named only as the makers of parts, with SELLERS_LINE under them.
+- **5.1.1(i) (privacy policy).** public/privacy.html now lists the one-tap
+  Bluetooth report and what it carries, and the table row gains the
+  computer app's version, how the app is connected and the last fault
+  (with the log only). Bluetooth: "From version 1.89.0 it is in the app for
+  everyone with the full version." Justin's label rows for the report
+  details stay as they are (Diagnostics, linked, not tracking).
+- **5.1.1(v) (account deletion).** Unchanged, in the notes, video 3.
+- **5.1.2 (data use).** Bluetooth goes from the phone to the adapter,
+  through no server; a report is sent only on a tap. Nearby devices and
+  Location are asked for only on Connect.
+- **Agreements.** The licence update of 13 October 2026: Justin accepts it
+  in App Store Connect → Business before Add for Review (step 11).
+
 ### Notes for App Review, 1.89.0
 
-App Store Connect → the 1.89.0 version → App Review Information → Notes, in
-place of 1.88.3's. It starts from 1.88.3's block with its *New since
-1.87.11* paragraphs out (Apple will have seen them), and with every line
-that said the app works only through a computer made true: the opening
-line, the Hardware line (video 4 is Bluetooth) and the Services line
-(Bluetooth goes through no server). Three things a reviewer would trip
-over are said outright: nothing is picked on the Bluetooth page at first
-and Connect stays dimmed until a unit is, so the steps say to tap AM4 first;
-the demo with no account has no Bluetooth (the row waits for the full
-version), so it is found signed in; and with no adapter Apple's screen finds
-nothing and the page says so, which is not a fault. The developer-only
-paragraph is 2.5.19's ("functionality should be clear to end users and App
-Review"): everything his account sees and the review account does not, the
-Developer pages (Access, which grants the full version, among them), the
-testing tools and the three units not yet offered to customers.
+App Store Connect → the 1.89.0 version → App Review Information → Notes.
+*New since 1.87.11*: the 1.88.3 block's paragraphs cut to one line each
+(they are in its own block, above, in full), then Bluetooth, which is most
+of the space. Every line that said the app works only through a computer is
+made true: the opening line, the Hardware line (video 4 is Bluetooth) and
+the Services line (Bluetooth goes through no server). Three things a
+reviewer would trip over are said outright: nothing is picked on the
+Bluetooth page at first and Connect stays dimmed until a unit is, so the
+steps say to tap AM4 first; the demo with no account has no Bluetooth (the
+row waits for the full version), so it is found signed in; and with no
+adapter Apple's screen finds nothing and the page says so, which is not a
+fault. The developer-only paragraph is 2.5.19's: everything his account
+sees and the review account does not.
 
 test/limits.mjs holds it to 3950 bytes with the brackets filled the way the
-1.87.11 block's are (3933 measured that way, about 3870 with the real
-ones), to four
-videos, to the AM4 as the one unit offered (`CUSTOMER_UNITS`), and to the
+1.87.11 block's are, to four videos, to every unit customers are offered
+(`CUSTOMER_UNITS`), to the beta sentence in Justin's words, and to the
 labels the Bluetooth page and Settings really draw. One paragraph a line,
 as before.
 
 ```
-This app is a remote control for Fractal Audio guitar units, through a computer the unit is plugged into by USB, or, new in this version and marked beta, on an AM4 only, through a Bluetooth MIDI adapter plugged into the unit, with no computer.
+This app is a remote control for Fractal Audio guitar units, through a computer the unit is plugged into by USB, or, new in this version and marked beta, through a Bluetooth MIDI adapter plugged into the unit, with no computer.
 
 Without that hardware, use the demo. It needs no account:
 
@@ -1469,25 +1523,25 @@ Without that hardware, use the demo. It needs no account:
 4. Tap "Start free demo"
 5. Choose any unit, tap "Play with ...", then "Open Play"
 
-Every screen but Bluetooth (beta) works in the demo, and nothing in it reaches real hardware. The in-app purchase: in the demo, tap Unlock at the top of the Play screen; Restore a purchase is under the price. For the signed-in screens, use the demo account in App Review Information. It has the full version.
+Every screen but Bluetooth (beta) works in the demo, and nothing in it reaches real hardware. The in-app purchase: in the demo, tap Unlock at the top of Play; Restore a purchase is under the price. For signed-in screens, use the demo account in App Review Information, which has the full version.
 
-New since 1.88.3:
+New since 1.87.11:
 
-Bluetooth (beta), part of the full version, for the AM4 only. With a Bluetooth MIDI adapter in the AM4's MIDI In and MIDI Out (tried with a CME WIDI Uhost and a CME C2MIDI Pro cable), the app controls the AM4 with no computer: presets, scenes, effects on and off, channels, tempo and the tuner, with no editing or saving. It is not in the no-account demo. Signed in with the demo account: tap the gear at the top right for Settings, then Bluetooth (beta) under My rig. On that page, tap AM4 under "1 · Pick your unit" first (Connect stays dimmed until a unit is picked), then tap Connect. Only then does the app ask for Bluetooth permission, and Apple's Bluetooth MIDI screen opens to choose the adapter. With no adapter it finds none, and the page says no adapter was connected. Video 4 below shows it working: filmed on an iPhone signed in with the demo account, from Connect to presets and scenes changing on a real AM4. It is marked beta: the AM4 is the only unit it has run on. Its View on Amazon buttons open amazon.com pages for the parts, which other companies make and sell; the app earns nothing from them.
+Bluetooth (beta), part of the full version, offered on the AM4, FM3, FM9, Axe-Fx III and VP4: with a Bluetooth MIDI adapter on the unit, the app controls it with no computer: presets, scenes, effects, channels, tempo and the tuner, with no editing or saving (a VP4: presets and scenes only). It is not in the no-account demo. Signed in with the demo account: tap the gear at the top right for Settings, then Bluetooth (beta) under My rig. On that page, tap AM4 under "1 · Pick your unit" first (Connect stays dimmed until a unit is picked), then tap Connect. Only then does the app ask for Bluetooth permission, and Apple's Bluetooth MIDI screen opens. With no adapter it finds none, and the page says no adapter was connected. Video 4 below shows it working: filmed on an iPhone signed in with the demo account, on a real AM4. Marked beta on the page ("Bluetooth is in beta, and some features might not work as expected"): tried on the AM4 only so far, the rest are marked not tried yet, and Report a Bluetooth problem sends a report in one tap. View on Amazon opens amazon.com pages for parts other companies make and sell; the app earns nothing from them.
 
-Only on the developer's own account: Settings has Developer pages (access, sales, accounts, messages and the like), and the Bluetooth page has testing tools and offers three more units (FM3, FM9, Axe-Fx III). No other account is shown them, the demo account included; for the Developer pages, the server checks which account is asking.
+Also new: Siri App Shortcuts (Settings, then Siri; it gets only the command, never audio), Settings, then Colors, a wider Play on iPad and iPhone Duo, the unit named in Play's top bar, the AM4 amp pedal as its boost, VP4 presets and scenes through the computer, and up to three screenshots in Feedback and Log (never the camera).
 
-Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and all its data at once. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page. Please try it on a new account, not the demo account. Create account is on the sign-in screen.
+Only on the developer's own account: Settings' Developer pages (access, sales, accounts, messages and the like), and the Bluetooth page's testing tools. No other account is shown them, the demo account included.
 
-Hardware (Guideline 2.1): video 1 below, filmed on an iPhone with a real FM3, shows the computer way from the first pairing through the whole workflow. Video 4 shows Bluetooth with a real AM4.
+Deleting an account (Guideline 5.1.1(v), video 3 below): Settings (the gear, top right), the account card at the top, Delete account, then "Delete my account"; it deletes the account and its data at once. An account without the full version opens on the purchase page instead, with Delete account at its foot. Please try a new account (Create account, on the sign-in screen).
 
-Apple Watch: with the demo's Play screen open on the iPhone, open Fractal Remote on the watch and swipe up or down between Scenes, Pedals, Presets and Tuner.
+Hardware (Guideline 2.1): video 1 below, on an iPhone with a real FM3, shows the computer way from pairing through the whole workflow. Video 4 shows Bluetooth with a real AM4.
+
+Apple Watch: open Fractal Remote on the watch with the demo's Play open on the iPhone.
 
 Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].
 
 Services the app uses: Supabase (accounts, setlists, the phone-to-computer link), RevenueCat with Apple in-app purchase, Resend (emails), Expo (updates). Bluetooth goes from the phone straight to the adapter, through no server.
-
-Regions: the app works the same in every country.
 
 Videos:
 1. FM3 hardware: [FM3 video link]
@@ -1504,40 +1558,57 @@ stands for 1.89.0):
   build was tried on.
 - **The demo account, on TestFlight build 30.** Signed in with the account
   in App Review Information, it opens with the full version, a Bluetooth
-  (beta) row under My rig, and on that page AM4 as the only unit to pick;
-  tap AM4, then check there is no Testing tools button under the beta note
-  at the foot of the page (it is drawn only once a unit is picked, even on
-  his own account). Settings has no Developer section. If the row is not
-  there, stop: the notes would send Apple to something it cannot find. (Its
-  log's head says "store copy: 1.89.0 · Bluetooth for customers: open".)
+  (beta) row under My rig, and on that page all five units to pick, every
+  one but the AM4 marked not tried (the FM3 "Not run yet"); tap AM4, then
+  check there is no Testing tools button under the beta note at the foot
+  of the page (it is drawn only once a unit is picked, even on his own
+  account). Settings has no Developer section. If the row is not there,
+  stop: the notes would send Apple to something it cannot find. (Its log's
+  head says "store copy: 1.89.0 · Bluetooth for customers: open".)
 - **The four video links** replace the brackets under Videos, the fourth
   being video 4 below. Each is a Google Drive link shared as Anyone with the
   link.
 - **The day's guideline pass** (CLAUDE.md, *Before anything goes to
   Apple*): the guidelines as they are that day, Apple's news posts since
-  1.88.3, and every URL in the app and the listing answering, the setup
-  guide the Bluetooth page opens among them.
+  the pass above, and every URL in the app and the listing answering, the
+  setup guide the Bluetooth page opens among them.
 
 ### What's New in This Version, 1.89.0
 
 App Store Connect → the 1.89.0 version → What's New in This Version.
-Everything a customer sees that changed since 1.88.3, Bluetooth first, in
+Everything a customer sees that changed since 1.87.11, Bluetooth first, in
 Justin's terms: two ways, the computer still the best one, Bluetooth with
-more lag and fewer features. 2.3.12 wants the bigger changes listed, and
-this is the biggest since launch. 873 characters of Apple's 4000, and no
-other platform named. The Apple Watch line is there because the build pull
-request applies docs/pending/watch-fill.patch; if it did not, that line
-comes out. The AM4 tuner line still waits for Justin to see it hold on his
-own AM4 (*For the next version's notes: the AM4's own tuner stays up*,
-above); if he has by then, and 1.88.3 went out without it, it goes in here
-in that paragraph's words.
+more lag and fewer features, in beta. Then the 1.88.3 list, which never
+reached the App Store. 2.3.12 wants the bigger changes listed, and this is
+the biggest since launch. Apple takes 4000 characters, and no other
+platform is named. The Apple Watch fill line is there because the build
+pull request applies docs/pending/watch-fill.patch; if it did not, that
+line comes out. The AM4 tuner line still waits for Justin to see it hold on
+his own AM4 (*For the next version's notes: the AM4's own tuner stays up*,
+above).
 
 ```
-• New, in beta: Bluetooth for the AM4. With a Bluetooth MIDI adapter plugged into the AM4's MIDI In and MIDI Out, the app controls it with no computer: presets, scenes, effects on and off, channels, tempo and the tuner. There are now two ways to connect, and the computer is still the best one: Bluetooth has more lag and fewer features, with no editing or saving. It is part of the full version, and the adapter parts are sold separately, by other companies. Settings → My rig → Bluetooth (beta) says what to buy and how to plug it in.
-• No computer signed in yet? The app now offers Bluetooth (beta) as the other way, for an AM4.
+• New, in beta: Bluetooth, offered on the AM4, FM3, FM9, Axe-Fx III and VP4. With a Bluetooth MIDI adapter plugged into your unit's MIDI jacks, the app controls it with no computer: presets, scenes, effects on and off, channels, tempo and the tuner (on a VP4, presets and scenes). There are now two ways to connect, and the computer is still the best one: Bluetooth has more lag and fewer features, with no editing or saving. Bluetooth is in beta, and some features might not work as expected: so far it has been tried on the AM4 only, and Report a Bluetooth problem, on its page, sends us a report in one tap. It is part of the full version, and the adapter parts are sold separately, by other companies. Settings → My rig → Bluetooth (beta) says what to buy and how to plug it in.
+• No computer signed in yet? The app now offers Bluetooth (beta) as the other way.
 • No signal at a gig? The app no longer stops on the sign-in screen when your sign-in has run out.
+• Siri: say "Scene 3 in Fractal Remote", "Next song in Fractal Remote" and more, with the Play screen open. Settings → Siri lists every command, and how to use them with Shortcuts, the Action button and Back Tap.
+• Play's top bar now names your unit and the computer it goes through. Tap it to switch units, or to see Phone & computer.
+• On iPad and an opened iPhone Duo, Play spreads across the wider screen.
+• New: Settings → Colors, with six looks for the tiles and scenes: Fractal Remote (the app's own colors, which a first launch wears), Match my unit (the colors of your Fractal unit), Footswitch lights, Color-blind safe, Sunlight and Stompbox.
+• The app starts in Dark appearance; Settings, under Play screen, has Auto, Light and Dark.
+• On an AM4, the amp's pedal on Play now switches the amp's boost, and says Boost on or Boost off, on the Apple Watch too. Turn the amp itself on and off in Edit.
+• On a VP4, the app changes presets, and scenes once you set one number on the VP4.
+• Apple Watch: hold a pedal to choose its channel. On an AM4 or a VP4, the scenes and pedals fill the watch's page. The watch app is now called Fractal Remote.
+• Feedback and Log (Settings → Troubleshooting) can add up to three screenshots, picked from your photos or pasted.
+• The app opens once on a card saying it is independent of Fractal Audio.
+• Next and Previous now show the name of what each will load.
 • Scene names on Play are as big as their tiles have room for.
-• Apple Watch: on an AM4 or a VP4, the scenes and pedals fill the watch's page.
+• The tempo box opens with the tempo selected, and has the metronome switch in it.
+• Two computers on one account? Which unit shows the unit on each, and switches between them.
+• A new account can be confirmed with the code in its email.
+• Play says NOT CONNECTED as soon as the link drops, and a tap that can't get through is dropped instead of landing late.
+• No unit on the computer you picked? Play says where your unit is, with one tap to switch.
+• The looper's Rec and Play no longer sit under its picture.
 ```
 
 ### Description, from 1.89.0 (App Store and Google Play)
@@ -1545,12 +1616,13 @@ in that paragraph's words.
 The *Description* at the top of this file, with four changes and nothing
 else: one sentence after REQUIRES A COMPUTER, which stays first, as Justin
 asked; the demo paragraph's last sentence and HOW IT WORKS's first, which
-said the computer is the only way; and a BLUETOOTH (BETA), FOR THE AM4
-section after HOW IT WORKS, which opens on `BLUETOOTH_WAYS` word for word.
-Fractal Audio's sentence and the trademark line stay the second paragraph,
-SUPPORTED UNITS and the VP4 line are unchanged, and the parts are named in
-plain words, with who makes them and that the app earns nothing from the
-links. 3903 characters of both stores' 4000.
+said the computer is the only way; and a BLUETOOTH (BETA) section after HOW
+IT WORKS, which opens on `BLUETOOTH_WAYS` word for word. Fractal Audio's
+sentence and the trademark line stay the second paragraph, SUPPORTED UNITS
+and the VP4 line are unchanged (they are about the computer way, and the
+Bluetooth section says what a VP4 gets over Bluetooth), and the parts are
+named in plain words, with who makes them and that the app earns nothing
+from the links. Within both stores' 4000 characters (test/limits.mjs).
 
 On the App Store it goes in with 1.89.0 (Apple changes it only with a
 version, and anybody reading it can get 1.89.0 that day, by downloading it
@@ -1566,7 +1638,7 @@ Play Console for 1.87.11*, permissions the listing gives no reason for, is
 closed: the listing now promotes what Nearby devices is declared for.
 
 ```
-REQUIRES A COMPUTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play. An AM4 can also use Bluetooth (beta), with more lag: see below.
+REQUIRES A COMPUTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play. There is also Bluetooth (beta), with more lag: see below.
 
 Fractal Remote is independently developed and is not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC. “Fractal Audio”, “Axe-Fx”, “FM3”, “FM9”, “AM4” and “VP4” are trademarks of Fractal Audio Systems, LLC, used here only to say which hardware this app works with.
 
@@ -1577,7 +1649,7 @@ FM3, FM9, Axe-Fx III and AM4, and the VP4 in part.
 On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. Changing presets and scenes is new on a VP4, and nobody on our side has tried it on one yet. Knobs, the tuner, tap tempo, channels and saving don't work on a VP4 from the app yet. The app can't show the names of a VP4's presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.
 
 TRY THE DEMO, FOR AS LONG AS YOU LIKE
-The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer described at the top (or Bluetooth (beta), on an AM4).
+The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer described at the top (or Bluetooth (beta)).
 
 WHAT IT DOES
 • Switch any of your presets, by name, in slot order or from a setlist
@@ -1594,8 +1666,8 @@ A phone needs something between it and your Fractal unit, and the best one is th
 
 Once the two are paired, the phone works from anywhere: the same room, the far side of the stage, or a different building.
 
-BLUETOOTH (BETA), FOR THE AM4
-There are two ways to connect. The computer is the best one. Bluetooth (beta) needs no computer, but it has more lag and fewer features. For now it is for an AM4 only: with a Bluetooth MIDI adapter in the AM4's MIDI In and MIDI Out, your phone controls it directly, with presets, scenes, effects on and off, channels, tempo and the tuner, within about 30 feet. No editing or saving, and no looper. It is part of the full version, and a beta, tried on an AM4 with a CME WIDI Uhost, a CME C2MIDI Pro cable and two Type-A MIDI to 3.5 mm adapters; it may not work correctly with every adapter. Those parts are sold separately, by other companies (CME and LOOTOOLS); Fractal Remote has nothing to do with them or with Amazon, and gets nothing from the app's links to them. Not for an FM3: when we tried Bluetooth on one, the adapter's cable got very hot. What to buy and how to plug it in: Settings → My rig → Bluetooth (beta).
+BLUETOOTH (BETA)
+There are two ways to connect. The computer is the best one. Bluetooth (beta) needs no computer, but it has more lag and fewer features. It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4: with a Bluetooth MIDI adapter on the unit's MIDI jacks, your phone controls it directly, with presets, scenes, effects on and off, channels, tempo and the tuner, within about 30 feet (on a VP4, presets and scenes only). No editing or saving, and no looper. It is part of the full version, and a beta: Bluetooth is in beta, and some features might not work as expected. So far it has been tried on the AM4 only, with a CME WIDI Uhost, a CME C2MIDI Pro cable and two Type-A MIDI to 3.5 mm adapters, sold separately, by other companies (CME and LOOTOOLS); Fractal Remote has nothing to do with them or with Amazon, and gets nothing from the app's links to them. Never plug the C2MIDI Pro into an FM3: it got very hot on one. What to buy and how to plug it in: Settings → My rig → Bluetooth (beta).
 
 ONE PAYMENT, LIFETIME UNLOCK
 Controlling real hardware is a single purchase. It unlocks the full app on every device you own, forever, including every future update, on all supported Fractal units (on a VP4, what SUPPORTED UNITS says). No subscription.
@@ -1614,15 +1686,15 @@ guitar,amp,fm3,fm9,axefx,am4,vp4,preset,scene,setlist,tuner,rig,stage,pedalboard
 
 ### Google Play release notes, 1.89.0
 
-Play Console → the 1.89.0 release → Release notes (en-US). 438 of Play's 500
-characters: the changes Android customers see since 1.88.0. This time they
-go in before Google's review, because the release is made by hand
-(*Submission day*, below) rather than by EAS, which cannot send them.
+Play Console → the 1.89.0 release → Release notes (en-US). Within Play's
+500 characters (test/limits.mjs): the changes Android customers see since
+1.88.0, Bluetooth first. This time they go in before Google's review,
+because the release is made by hand (*Submission day*, below) rather than
+by EAS, which cannot send them.
 
 ```
-• New, in beta: Bluetooth for the AM4. With the full version and a Bluetooth MIDI adapter on the AM4's MIDI In and MIDI Out, control it with no computer. The computer is still the best way: Bluetooth has more lag and fewer features, with no editing or saving. Settings → My rig → Bluetooth (beta) says what to buy.
+• New, in beta: Bluetooth, on the AM4, FM3, FM9, Axe-Fx III and VP4 (a VP4: presets and scenes). With the full version and a Bluetooth MIDI adapter, control your unit with no computer. The computer is still the best way: Bluetooth has more lag and fewer features, with no editing or saving. Bluetooth is in beta, and some features might not work as expected: tried on the AM4 only so far. Report a problem in one tap on its page.
 • No signal at a gig? The app no longer stops on the sign-in screen.
-• Scene names are as big as their tiles have room for.
 ```
 
 ### Google Play App access, 1.89.0
@@ -1634,11 +1706,12 @@ stops being true. The same review account, with the full version. Three
 things Google's reviewer would otherwise miss: the row is there only on a
 device with both MIDI and Bluetooth LE, so a device or emulator without
 them, which a review may well run on, shows none; Connect stays dimmed
-until AM4 is picked; and with no adapter, it looks for ten seconds and says
-"No adapter found", which is not a fault. And where a new account deletes
-itself: it opens on the purchase page, not Settings, as Apple's notes say. The video is the same video 4 Apple gets (filmed on
-an iPhone: nothing in Google's rules asks for an Android one, and Justin
-takes Android by update, not by installing the APK).
+until a unit is picked; and with no adapter, it looks for ten seconds and
+says "No adapter found", which is not a fault. And where a new account
+deletes itself: it opens on the purchase page, not Settings, as Apple's
+notes say. The video is the same video 4 Apple gets (filmed on an iPhone:
+nothing in Google's rules asks for an Android one, and Justin takes Android
+by update, not by installing the APK).
 
 ```
 This account has the full version.
@@ -1652,18 +1725,18 @@ No hardware? The app has a full demo that needs no account and no gear:
 
 Delete account: Settings (the gear, top right) → the account card at the top → Delete account → "Delete my account". A new account, without the full version, opens on the purchase page instead, and Delete account is at the foot of that page. Please try it on a new account, not this one.
 
-Bluetooth (beta), new in this version and part of the full version: the phone controls an AM4 with no computer, through a Bluetooth MIDI adapter plugged into the AM4's MIDI In and MIDI Out. Signed in with this account: Settings (the gear, top right) → My rig → Bluetooth (beta). The row is there only on a device that has both MIDI and Bluetooth LE, so a device or emulator without them does not show it. On the page, tap AM4 under "1 · Pick your unit" first (Connect stays dimmed until a unit is picked), then Connect. Only then does Android ask for Nearby devices (Location on Android 11 and older, where Android needs it to find a Bluetooth device); the app never reads where the phone is. With no adapter, it looks for ten seconds and says No adapter found. A video of it working on a real AM4: [Bluetooth video link]
+Bluetooth (beta), new in this version and part of the full version: the phone controls an AM4, FM3, FM9, Axe-Fx III or VP4 with no computer (a VP4, presets and scenes only), through a Bluetooth MIDI adapter plugged into the unit's MIDI jacks. It is in beta, tried on the AM4 only so far, and each other unit says so. Signed in with this account: Settings (the gear, top right) → My rig → Bluetooth (beta). The row is there only on a device that has both MIDI and Bluetooth LE, so a device or emulator without them does not show it. On the page, tap AM4 under "1 · Pick your unit" first (Connect stays dimmed until a unit is picked), then Connect. Only then does Android ask for Nearby devices (Location on Android 11 and older, where Android needs it to find a Bluetooth device); the app never reads where the phone is. With no adapter, it looks for ten seconds and says No adapter found. A video of it working on a real AM4: [Bluetooth video link]
 
-Only on the developer's own account: Settings has Developer pages (access, sales, accounts, messages and the like), and the Bluetooth page has testing tools and offers three more units (FM3, FM9, Axe-Fx III). No other account sees them, this one included; for the Developer pages, the server checks which account is asking.
+Only on the developer's own account: Settings has Developer pages (access, sales, accounts, messages and the like), and the Bluetooth page has testing tools. No other account sees them, this one included; for the Developer pages, the server checks which account is asking.
 ```
 
 If the box will not take all of it, drop the last paragraph first. If it is
-still too long, paste the short one instead (497 characters as written):
+still too long, paste the short one instead:
 
 ```
-This account has the full version. Demo, no account: OK on the independent-app card → Get started → Got it → Start free demo → any unit → Play with ... → Open Play
+This account has the full version. Demo, no account: OK on the independent-app card → Get started → Got it → Start free demo → a unit → Play with ... → Open Play
 
-Bluetooth (beta), new: Settings → My rig → Bluetooth (beta), only on devices with MIDI and Bluetooth LE. Tap AM4, then Connect: only then is Nearby devices asked for (Location on Android 11 and older), never to read location. Video: [Bluetooth video link]. Developer pages, testing tools, three more units: developer's account only.
+Bluetooth (beta) on AM4, FM3, FM9, Axe-Fx III, VP4: Settings → My rig → Bluetooth (beta), only on devices with MIDI and Bluetooth LE. Tap AM4, then Connect: only then is Nearby devices asked for (Location on Android 11 and older), never to read location. Video: [Bluetooth video link]. Developer pages, testing tools: developer's only.
 ```
 
 ### Video 4: Bluetooth with an AM4 (Justin films it)
@@ -1682,8 +1755,9 @@ before 1.89.0 is sent to Apple.
   iPhone's "use Bluetooth" question comes up in the video, as it will for
   the reviewer.
 - Then sign in with the review account (the one in App Review Information),
-  not yours. The video then shows exactly what a customer gets: AM4 the only
-  unit to pick, no Testing tools. It also proves the new version opens
+  not yours. The video then shows exactly what a customer gets: all five
+  units to pick, every one but the AM4 marked not tried, and no Testing
+  tools. It also proves the new version opens
   Bluetooth for a customer.
 - Film with a second phone or a camera, in one take, with the iPhone's
   screen readable. Not a screen recording.
@@ -1766,9 +1840,11 @@ step 7 spends builds, and it waits for his yes, as every build does.
    1.88.0, with "store copy: 1.88.3" and "store copy: 1.88.0" at the top
    (CLAUDE.md: the threshold is set only once these are seen).
 5. **Both stores have finished with the version they have:** Apple with
-   1.88.3 released (Ready for Distribution: one version in review at a
-   time, and an approved one left at Pending Developer Release keeps the +
-   in step 13 from making 1.89.0), Google with 1.88.0 live in Production,
+   nothing in review and nothing waiting at Pending Developer Release (one
+   version in review at a time, and an approved one left at Pending
+   Developer Release keeps the + in step 13 from making 1.89.0; 1.88.3 is
+   never sent: "Wait till the Bluetooth version"), Google with 1.88.0 live
+   in Production,
    not waiting under Changes ready to publish (no new Android release while
    one is in review).
 
@@ -1817,7 +1893,9 @@ step 7 spends builds, and it waits for his yes, as every build does.
 **C. Justin, on TestFlight build 30**
 
 10. Signed in with the review account: the Bluetooth (beta) row under My
-    rig, AM4 the only unit on its page; tap AM4, then check there is no
+    rig, all five units on its page (AM4, FM3, FM9, Axe-Fx III, VP4), each
+    but the AM4 marked not tried, the FM3's warning when it is tapped, and
+    the beta note with Report a Bluetooth problem under it; tap AM4, then check there is no
     Testing tools button under the beta note at the foot of the page (it is
     drawn only once a unit is picked, so the check means nothing before);
     and the log's head says "store copy: 1.89.0 · Bluetooth for customers:
@@ -1827,19 +1905,24 @@ step 7 spends builds, and it waits for his yes, as every build does.
 
 11. **The guideline pass** (CLAUDE.md, *Before anything goes to Apple*),
     against the guidelines as they are that day, and what it found said to
-    Justin in plain words before he sends anything. On 25 October 2026 they
-    say "Last Updated: October 16, 2026", the update that added 2.5.19
-    (hidden or dormant features), which the developer-only paragraph of the
-    notes answers. And App Store Connect → Business (and the banner at the
+    Justin in plain words before he sends anything. The pass of 25 October
+    2026 is written above (*The guideline pass for 1.89.0*); on submission
+    day it is run again from there, and only what has changed since is
+    new. On 25 October 2026 they say "Last Updated: October 16, 2026", the
+    update that added 2.5.19 (hidden or dormant features), which the
+    developer-only paragraph of the notes answers. And App Store Connect → Business (and the banner at the
     top of developer.apple.com/account): if an agreement is waiting to be
     accepted, such as the licence agreement update Apple posted on 13
     October 2026, Justin accepts it first, or Add for Review and Submit in
     step 13 can be refused.
 12. **GitHub: the website, merged before anything is sent**, in words that
-    are true both before and after approval:
+    are true both before and after approval. Done with the 1.89.0 texts (25
+    October 2026), in the pull request that opened every unit: check on the
+    day that each still says it:
     - **bluetooth-guide.html**, the page the app's Full setup guide button
       opens, which a reviewer may well tap: Bluetooth (beta) is in the app
-      from version 1.89.0, with the full version, for an AM4; if Settings
+      from version 1.89.0, with the full version, on the AM4, FM3, FM9,
+      Axe-Fx III and VP4, tried on the AM4 only; if Settings
       has no Bluetooth (beta) row, update the app from the store; and the
       Settings → My rig path. It stays unlisted (noindex) until the live
       day.
@@ -1863,7 +1946,7 @@ step 7 spends builds, and it waits for his yes, as every build does.
       the unit picked, the unit that answered instead, whether Bluetooth
       is off, not allowed or blocked on the device (Screen Time, or
       whoever manages it), and the adapter by its name, never its
-      address; and, for a unit other than the AM4, how each command is
+      address; and, for a unit other than the AM4 and the VP4, how each command is
       sent and the Program Change channel. A report from this screen (or
       Write it out from it) says the same even when it is sent with
       Bluetooth off.
@@ -1877,10 +1960,11 @@ step 7 spends builds, and it waits for his yes, as every build does.
     - **support.html**, the App Store's Support URL, which a reviewer
       checking the listing's links reads: one sentence after "The phone
       doesn't talk to the unit directly, which is why there is a computer
-      in the middle.", saying "From version 1.89.0, an AM4 can also
-      connect with no computer, by Bluetooth (beta); the computer is still
-      the best way." The rest of its rewrite waits for the live day (step
-      18).
+      in the middle.", saying "From version 1.89.0, the app can also
+      connect to your unit with no computer, by Bluetooth (beta) through an
+      adapter; the computer is still the best way, and Bluetooth is in
+      beta, so some features might not work as expected." The rest of its
+      rewrite waits for the live day (step 18).
     - **Not yet** /bluetooth (bluetooth.html), which says the app has no
       Bluetooth: until the live day that is true of every copy a customer
       can get.
@@ -2132,6 +2216,17 @@ way the FM3's cable ran hot, or a crash on connect):
    switched off and redeployed the same hour, and a store version follows,
    a build pair whose notes and What's New say Bluetooth is off and why. A
    fresh install's first launch still opens it until that version is out.
+5. **One unit closed on the 1.89.0 copies, the same emergency step,** for
+   one unit at risk (a unit that freezes, an adapter that runs hot on it)
+   while the rest stay open. Every unit is keyed in `UNITS_FROM_STORE`
+   (mobile/src/lib/ble-rule.js), and once the opening row is written
+   `OPENED_AT.units` in test/ledger.mjs pins the five, so this too is
+   deliberate edits: that unit keyed to a later store version, and taken
+   out of `OPENED_AT.units`, with the reason in the pull request. The
+   page then stops offering it, and a copy left on it goes back to the
+   computer at the next launch (lib/bluetooth allowBluetooth, the unit
+   cleared). A store version follows whose notes say so. A fresh install's
+   first launch still offers it until that version is out.
 
 | What happens | What it costs |
 |---|---|

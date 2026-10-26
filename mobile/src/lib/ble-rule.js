@@ -12,9 +12,10 @@ import { isOlder } from './versions.js'
  *
  * WHY THE STORE VERSION, AND NEVER AN UPDATE OR AN ACCOUNT. Every merge to
  * main is an over-the-air update to every copy on the current runtime: today
- * TestFlight 1.88.3, Google Play 1.88.0 (in Google's review) and the App
- * Store's 1.88.3 once Apple approves it. Their review notes say customers do
- * not see Bluetooth. Switching it on for them by an update is what Apple's
+ * TestFlight 1.88.3 and Google Play 1.88.0 (the App Store's 1.87.11 is
+ * frozen on update 1.87.60, and 1.88.3 is never sent to it: "Wait till the
+ * Bluetooth version"). Their review notes say customers do not see
+ * Bluetooth. Switching it on for them by an update is what Apple's
  * 2.5.19 and 2.3.1(a) and Google's rule on features "designed to be
  * activated remotely" forbid, and the fingerprint cannot be leaned on to
  * keep them apart: the version number is left out of it (mobile/
@@ -110,25 +111,59 @@ export function bluetoothOpen({ platform = null, installed = null, admin = false
 }
 
 /*
- * THE UNITS A CUSTOMER CAN PICK: THE AM4, AND ONLY THE AM4, FOR NOW.
+ * THE UNITS A CUSTOMER CAN PICK: EVERY ONE THE PAGE OFFERS, FROM THE SAME
+ * STORE VERSION.
  *
- * "It seems to be working just fine on my AM four. I haven't been able to
- * test it on an FM three." Only the AM4 has ever run over Bluetooth. The FM3
- * ran a cable hot when the parts went straight in, and the FM9 and Axe-Fx
- * III have never been tried, with one known open fault (a tuner left on,
- * muted, after a reconnect: task 161). So the three stay on his account,
- * where they have always been offered, and each opens to customers only in
- * a later store version whose notes say so.
+ * "I don't wanna wait for the FM3 test. Just get it built and pushed to
+ * Apple. as long as there's warnings for user that it's in beta and they're
+ * free to test it and submit feedback, but it might not work properly."
+ * And: "I'm curious why the VP4 is not listed? ... it uses the same
+ * architecture as the AM4." (Justin, 25 October 2026.) So the store version
+ * that opens Bluetooth (beta) to customers opens it on all five units the
+ * page offers: the AM4, which it has run; the FM9, Axe-Fx III and VP4,
+ * which nobody here has, each marked "not tried yet"; and the FM3, which
+ * has not run yet (the one cable tried on it got very hot), with that
+ * warning kept in front of it. Every untried unit says so, and has the
+ * report button beside it (shared/bluetooth-gear untried).
  *
- * WHICH THIS LIST CANNOT DO AS IT IS. It is a plain list: 'fm9' added here
- * in the next build's pull request would reach every 1.89.0 copy too, by
- * update, whose review notes say the AM4 alone, which is the very switch
- * by update the threshold above exists to prevent. So before a second unit
- * opens, it is keyed the way Bluetooth itself is: a store version for that
- * unit, compared against the copy's built-in version, and the list grows
- * only that way, never by adding a name here.
+ * KEYED BY STORE VERSION, NEVER A PLAIN LIST. A unit added to a plain list
+ * here would reach every copy already out, by update, whose review notes
+ * name the units it was reviewed with: the switch by update the threshold
+ * above exists to prevent. So each unit carries the store version it opens
+ * from, compared against the version built into the copy, exactly as
+ * Bluetooth itself is. All five open together, in the one store version
+ * that opens Bluetooth, so all five are keyed to BLUETOOTH_FROM_STORE
+ * itself: null until the build pull request, and set with it.
+ *
+ * A SIXTH UNIT, OR ONE TAKEN OUT. A unit the page offers that is not keyed
+ * here stays his (unitOffered, below), and test/bluetooth.mjs fails until
+ * somebody decides. Once the opening build's row is written, test/ledger.mjs
+ * pins the units it opened (OPENED_AT.units, unitProblems): a later unit is
+ * keyed to a later store version of its own, never to this threshold, and
+ * an opened unit is never closed by update on the copies reviewed with it.
  */
-export const CUSTOMER_UNITS = Object.freeze(['am4'])
+export const UNITS_FROM_STORE = Object.freeze({
+  am4: BLUETOOTH_FROM_STORE,
+  fm3: BLUETOOTH_FROM_STORE,
+  fm9: BLUETOOTH_FROM_STORE,
+  axefx3: BLUETOOTH_FROM_STORE,
+  vp4: BLUETOOTH_FROM_STORE
+})
 
-/** Whether this unit is offered to this account: his, every one the page knows; anybody else's, CUSTOMER_UNITS. */
-export const unitOffered = (unit, admin = false) => admin === true || CUSTOMER_UNITS.includes(unit)
+/** The units keyed above, in the page's order: every one a customer can be offered, on a copy that opens it. */
+export const CUSTOMER_UNITS = Object.freeze(Object.keys(UNITS_FROM_STORE))
+
+/**
+ * Whether this unit is offered to this account on this copy: his account,
+ * every unit the page knows, on every copy; anybody else, a unit keyed in
+ * UNITS_FROM_STORE on a copy whose built-in version opens it (the same
+ * question as bluetoothOpen, asked of that unit's own threshold).
+ *
+ * `units` is the keying, passed only by the tests that try the rule as the
+ * build will set it; the app always takes UNITS_FROM_STORE.
+ */
+export function unitOffered(unit, { admin = false, platform = null, installed = null, units = UNITS_FROM_STORE } = {}) {
+  if (admin === true) return true
+  if (typeof unit !== 'string' || !Object.prototype.hasOwnProperty.call(units, unit)) return false
+  return bluetoothOpen({ platform, installed, admin: false, from: units[unit] })
+}
