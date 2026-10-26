@@ -7926,7 +7926,7 @@ export function run(test) {
     assert.deepEqual(gear.partsFor('fm3'), [], 'the FM3 is given a shopping list for what overheated on it')
     assert.equal(gear.hookupFor('fm3'), null, 'the FM3 is told to plug it straight in')
     /* It has not run on an FM3, and says so in its own words (it was tried, and ran hot), with the report button: every unit opens to customers together. */
-    assert.equal(gear.untriedLine('fm3'), 'It hasn’t run on an FM3 yet. If you get it working with another adapter, tell us how: tap Report a Bluetooth problem, further down this page.')
+    assert.equal(gear.untriedLine('fm3'), 'It hasn’t run on an FM3 yet. If you get it working, tell us how: tap Report a Bluetooth problem, further down this page.')
     assert.equal(gear.warningFor('fm3'), gear.FM3_WARNING)
     for (const unit of ['am4', 'fm9', 'axefx3', 'vp4']) assert.equal(gear.warningFor(unit), null)
     assert.match(gear.FM3_WARNING, /^Don’t plug the C2MIDI Pro into an FM3\. When we tried it, the cable got very hot and didn’t connect\./)

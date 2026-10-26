@@ -543,7 +543,7 @@ export const untriedLine = (unit) =>
   !untried(unit)
     ? null
     : unit === 'fm3'
-      ? `It hasn’t run on an FM3 yet. If you get it working with another adapter, tell us how: tap ${REPORT_BUTTON}, further down this page.`
+      ? `It hasn’t run on an FM3 yet. If you get it working, tell us how: tap ${REPORT_BUTTON}, further down this page.`
       : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: tap ${REPORT_BUTTON}, further down this page.`
 
 /*
