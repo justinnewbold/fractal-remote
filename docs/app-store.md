@@ -1883,6 +1883,13 @@ step 7 spends builds, and it waits for his yes, as every build does.
    it is approved. mobile/eas.json is not changed for
    it: Android goes by hand (step 14), which is the one way the release
    notes go in before the review.
+
+   What was done instead (26 October 2026, run 40257649461): the box was
+   ticked, Justin's call ("I don't want managed publishing on in Android.
+   Just do it."), so Android went straight to Google Play production with
+   Managed publishing off and the iPhone to TestFlight (build 30) with no
+   run 2, and Justin still adds build 30 to the 1.89.0 version for review
+   in App Store Connect.
 8. **GitHub: the ledger row**, in the first pull request after the build is
    started: 1.89.0, one and one, "Bluetooth (beta) for customers", and
    `OPENED_AT` in test/ledger.mjs (docs/expo-builds.md says how).

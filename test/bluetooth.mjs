@@ -6313,7 +6313,7 @@ export function run(test) {
     /* THE REAL ONE: the ledger, the threshold and the pin as they are. */
     assert.deepEqual(problems(builds, BLUETOOTH_FROM_STORE, app), [])
     const stores = JSON.parse(src('public/store-versions.json'))
-    assert.ok(OPENED_AT === null || (Object.isFrozen(OPENED_AT) && Object.keys(OPENED_AT).sort().join() === 'android,ios,version' && /^\d+\.\d+\.\d+$/.test(OPENED_AT.version)), 'OPENED_AT is not null, nor a frozen { version, ios, android }')
+    assert.ok(OPENED_AT === null || (Object.isFrozen(OPENED_AT) && Object.keys(OPENED_AT).sort().join() === 'android,ios,units,version' && /^\d+\.\d+\.\d+$/.test(OPENED_AT.version) && Array.isArray(OPENED_AT.units)), 'OPENED_AT is not null, nor a frozen { version, ios, android, units }')
     assert.deepEqual(pinProblems({ builds, from: BLUETOOTH_FROM_STORE, stores, pin: OPENED_AT }), [])
 
     /*
