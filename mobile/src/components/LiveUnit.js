@@ -23,7 +23,7 @@ import { notUsingOne } from '../lib/relay-rules'
  * once the new unit has been read: the screen behind it is now a different
  * rig, which is the thing worth looking at.
  */
-export default function LiveUnit({ open, onClose, hosts = [], units = {}, chosen = null, missing = null, asking = false }) {
+export default function LiveUnit({ open, onClose, hosts = [], units = {}, chosen = null, missing = null, asking = false, onBluetooth = null }) {
   const [busy, setBusy] = useState(null)
   /* Opened: a computer that has not said its unit is asked again, with longer (link.js askUnknownUnits). */
   useEffect(() => {
@@ -54,6 +54,8 @@ export default function LiveUnit({ open, onClose, hosts = [], units = {}, chosen
             <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{row.detail}</Text>
           </View>
         ))}
+        {/* The other way, from the Live pill too (Justin, 26 October 2026): for whoever is offered the Bluetooth page. */}
+        {onBluetooth ? <Press label="Connect over Bluetooth" sub="No computer needed. More lag, fewer features." height={52} onPress={onBluetooth} /> : null}
         {/* The pick that does not answer, grayed, with Forget. */}
         <MissingPick name={missing} onForget={() => forgetMissing()} />
         {/* How one you don't use comes off this list: at that computer (relay-rules notUsingOne). Only with two or more listed, as in Settings. */}

@@ -31,35 +31,38 @@ import {
   BLUETOOTH_WAYS,
   CLOSE_AND_REOPEN,
   FIRST_TIME,
+  FIRST_TIME_ADAPTER,
   FM3_NEVER,
   GEAR_IN_SHORT,
   GUIDE_URL,
   NOT_FOR_FM3,
   ONE_AT_A_TIME,
+  PARTS,
   PLUGS_CHECK,
   POWER_LINE,
   REPORT_BUTTON,
   SELLERS_LINE,
+  TROUBLE_LIT,
   VP4_CANT_HEAR,
   VP4_CONNECTED,
   VP4_OVER_BLUETOOTH,
-  ALSO_ON_AM4,
+  WAY_UNTRIED,
   betaNote,
   firmwareLineFor,
-  heatLineFor,
   hookupFor,
   midiSettingsFor,
   missingBlocksLine,
   notAnsweringLine,
-  partsFor,
-  powerStepOf,
   untried,
   untriedAboutLine,
   untriedConnectedLine,
   untriedLine,
   untriedSubFor,
   unitForReport,
+  feelLine,
   warningFor,
+  swapLine,
+  waysFor,
   wrongUnitLine
 } from '../lib/bluetooth-gear'
 import { deviceNoun } from '../lib/device-word'
@@ -256,7 +259,7 @@ function status(b, unitState) {
 /* Blue for the unit answering over Bluetooth, as the bar is; green stays the unit answering through a computer. */
 const TONES = { ok: () => color.ble, fault: () => color.fault, dim: () => color.silkDim }
 
-export default function BluetoothPage({ purchase, admin = false, onReport = null }) {
+export default function BluetoothPage({ purchase, admin = false, onReport = null, onOpen = null }) {
   const b = useBluetooth()
   const unitState = useRig((s) => s.unit)
   const said = status(b, unitState)
@@ -268,52 +271,14 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    */
   const quiet = b.on && b.phase === 'connected' && !b.answeredAs && (unitState === 'missing' || unitState === 'silent')
   const reportable = said.tone === 'fault' && b.trouble !== 'permission' && b.phase !== 'locked' && !!onReport
-  const steps = checkSteps(b.unit)
-  const am4 = b.unit === 'am4'
   const connected = b.on && b.phase === 'connected'
-  const ways = b.unit ? methodsFor(b.unit) : null
   /* The units step 1 offers this account (lib/bluetooth offeredUnits). */
   const units = offeredUnits()
   const vp4 = b.unit === 'vp4'
-  /* A unit nobody has tried it on yet (the FM9, the Axe-Fx III) says so under "Connected" (shared/bluetooth-gear untriedConnectedLine), left out while How to plug it in is open, because untriedLine already says it at the foot of the steps. */
+  /* A unit nobody has tried it on yet (the FM9, the Axe-Fx III, the VP4) says so under "Connected" (shared/bluetooth-gear untriedConnectedLine). */
   const untriedHere = said.tone === 'ok' && !b.answeredAs ? untriedConnectedLine(b.unit) : null
-
-  /* The check's results, newest last, kept while the page is open. */
-  const [results, setResults] = useState([])
-  const [busy, setBusy] = useState(null)
-  const [copied, setCopied] = useState(false)
-
-  const run = async (step) => {
-    if (busy) return
-    setBusy(step)
-    setCopied(false)
-    try {
-      const out = await runCheck(step)
-      setResults((was) => [...was, { ...out, unit: b.unit }])
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  const labelOf = (step) =>
-    step === 'all' ? 'The check' : [...steps.reads, ...steps.writes].find((s) => s.step === step)?.label || step
-
-  const copyAll = async () => {
-    const lines = [`Fractal Remote ${APP_VERSION} · Bluetooth check · ${unitForReport(b.unit) || unitName(b.unit)} · ${Platform.OS}`]
-    for (const r of results) {
-      lines.push('', `${labelOf(r.step)} (${unitName(r.unit)})${r.ok ? '' : ` — failed: ${r.error}`}`)
-      if (r.way) lines.push(`  remembered: ${WAY_NAMES[r.way] || r.way}`)
-      for (const row of r.rows) {
-        lines.push(`  ${row.asked}`, `    out:  ${row.out || '—'}`, `    back: ${row.back || '—'}`, `    ${row.meaning} (${row.ms} ms)`)
-      }
-    }
-    try {
-      await Clipboard.setStringAsync(lines.join('\n'))
-      setCopied(true)
-    } catch {
-      setCopied(false)
-    }
-  }
+  /* Where it stands, in one big line: drawn while it is on, or when something is wrong. Off and fine, the steps are the first thing on the page. */
+  const sayIt = b.on || !!b.trouble || said.tone === 'fault'
 
   /*
    * CONNECT. With an adapter from last time, that is all it does: Bluetooth
@@ -360,6 +325,15 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     const seen = adapterDevices().find((d) => d.id === a.id)
     return !seen || !!seen.offline
   }
+  /*
+   * ONE CONNECT, WHATEVER IS ON THE ADAPTER. "Right now it shows WIDI Uhost
+   * or connect other device. Maybe we can get rid of that since it can
+   * detect what device is connected to Bluetooth already, but it should pull
+   * up the connection box allowing it to connect when they hit connect"
+   * (Justin, 26 October 2026). So the button says Connect and nothing else:
+   * the adapter from last time when it is there, Apple's screen (or the
+   * search, on Android) when it is not. A different adapter is Troubleshooting's.
+   */
   const start = () => {
     if (!canStart) return
     if (b.adapter && ios && offlineHere(b.adapter)) return another()
@@ -376,86 +350,64 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * Bluetooth link nobody is using go after a few minutes (a phone locked
    * between songs), and the link cannot bring it back by itself: only
    * Apple's screen can (lib/bluetooth adapterAway). So while it is on and
-   * away, one button opens that screen straight away (lookForAdapterAgain),
-   * where it was Stop, Connect and the screen. Not while Apple's screen is
-   * kept shut. The hint over it says to check the adapter first (a power
-   * bank that switched itself off leaves Apple's screen empty on every
-   * tap), and the line under it what to do in Apple's screen
-   * (APPLE_SCREEN_OPENS), the same words as the other two buttons that open
-   * it.
+   * away, one button opens that screen straight away (lookForAdapterAgain).
+   * Not while Apple's screen is kept shut.
    */
   const away = b.on && b.phase === 'connecting' && ios && !shut && adapterAway()
   const reconnect = () => lookForAdapterAgain(probeNow)
 
   /* The list is only for a real choice: no adapter chosen yet, and some to choose from. */
   const showList = !b.on && !b.adapter && b.devices.length > 0
-  const [tools, setTools] = useState(false)
-  /* How to plug it in: open for the first setting up, folded once an adapter has been used here. The other two wait to be tapped. */
-  const [plug, setPlug] = useState(!b.adapter)
-  const [buy, setBuy] = useState(false)
-  const [about, setAbout] = useState(false)
-  /* Feel the cable, on the units nobody here has: drawn near the top while How to plug it in is folded, and in its place among the steps when it is open, so it is on the page once. */
-  const heatUp = plug ? null : heatLineFor(b.unit)
 
   return (
     <View style={{ gap: space.xl }}>
       {/*
-        THE FIRST SCREEN: where it stands, which unit, and the one button.
-        Everything a person does on this page is in this block, so nobody
-        scrolls to find Connect.
+        THE STEPS FIRST, BEFORE ANY WARNING. "On the actual Bluetooth screen
+        have the connect steps right there at the top before any warnings or
+        anything ... It's kind of a mess and really long. It should be very
+        streamlined unless there is problems" (Justin, 26 October 2026). So:
+        1, the unit; 2, Connect; and under them four buttons, each to a page
+        of its own. The only things drawn above the steps are what is wrong
+        now, and only while it is.
       */}
       <View style={{ gap: space.lg }}>
+        {sayIt ? (
+          <View style={{ gap: space.sm }}>
+            <Text accessibilityLiveRegion="polite" style={{ color: TONES[said.tone](), fontSize: font.lead, fontWeight: '700', lineHeight: 26 }}>
+              {said.line}
+            </Text>
+            {b.trouble === 'permission' ? <OpenSettings /> : null}
+            {reportable && !quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
+            {untriedHere ? <Hint>{untriedHere}</Hint> : null}
+            {vp4 && connected && !b.answeredAs ? <Hint>{VP4_CANT_HEAR}</Hint> : null}
+          </View>
+        ) : null}
         {/*
-          WHERE IT STANDS, in one big line, on or off: Not connected,
-          Connected, or what is wrong. NOT ALLOWED, AND THE WAY TO ALLOW IT,
-          one tap away directly under it, the one place Open Settings is
-          drawn. Not for 'restricted', whose line says the block is somewhere
-          the app's own page cannot reach.
+          FEEL IT, ON A UNIT NOBODY HERE HAS RUN IT ON, while it is on: the
+          one moment it matters, and never in a fold (the ways page says it
+          again, straight after each way's power step).
         */}
-        <View style={{ gap: space.sm }}>
-          <Text accessibilityLiveRegion="polite" style={{ color: TONES[said.tone](), fontSize: font.lead, fontWeight: '700', lineHeight: 26 }}>
-            {said.line}
-          </Text>
-          {b.trouble === 'permission' ? <OpenSettings /> : null}
-          {reportable && !quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
-          {untriedHere && !plug ? <Hint>{untriedHere}</Hint> : null}
-          {vp4 && connected && !b.answeredAs ? <Hint>{VP4_CANT_HEAR}</Hint> : null}
-        </View>
+        {b.on && untried(b.unit) ? <Note tone="warn">{feelLine('adapter')}</Note> : null}
 
         {/*
-          THE FM3, WHENEVER IT IS THE UNIT PICKED OR THE UNIT THAT ANSWERED, on
-          or off, and never folded: the cable that ran hot on it, and every
-          adapter fed from its MIDI OUT, kept off it (FM3_NEVER). An FM3 that
-          answered a connection made for another unit is the one moment the
-          app knows an adapter is plugged into an FM3, and it is put straight
-          under "An FM3 answered, not the …", which says nothing of heat. How
-          to plug it in, which holds the full warning, starts folded once an
-          adapter has been used here.
+          THE FM3, WHILE IT IS ON, AND AN FM3 THAT ANSWERED A CONNECTION MADE
+          FOR ANOTHER UNIT (the one moment the app knows an adapter is plugged
+          into an FM3): its warning, red, under the line that says where it
+          stands. Off, with the FM3 picked, it is drawn under the units in
+          step 1 instead, so it is on the page once either way.
         */}
-        {b.unit === 'fm3' || b.answeredAs === 'FM3' ? <Note tone="fault">{FM3_NEVER}</Note> : null}
-        {heatUp ? <Note tone="warn">{heatUp}</Note> : null}
+        {(b.on && b.unit === 'fm3') || (b.answeredAs === 'FM3' && b.unit !== 'fm3') ? <Note tone="fault">{FM3_NEVER}</Note> : null}
 
         {b.on ? (
           <View style={{ gap: space.sm }}>
-            {/*
-              The usual reasons a connected adapter hears nothing back: the
-              two plugs swapped, or an adapter that only carries one way.
-            */}
-            {b.phase === 'connected' && !b.answeredAs && (unitState === 'missing' || unitState === 'silent') ? (
-              <Hint>
-                {`${PLUGS_CHECK} The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.`}
-              </Hint>
-            ) : null}
+            {/* The usual reasons a connected adapter hears nothing back: the two plugs swapped, or an adapter that only carries one way. */}
+            {quiet ? <Hint>{`${PLUGS_CHECK} ${BOTH_WAYS}`}</Hint> : null}
             {/*
               STILL NOTHING AFTER THE ADAPTER WAS UNPLUGGED AND PLUGGED BACK
               IN: the way out that worked for him was closing the app
-              completely (shared/bluetooth-gear CLOSE_AND_REOPEN). Wherever
-              it is on and not working: connecting, or connected with the
-              unit silent.
+              completely (shared/bluetooth-gear CLOSE_AND_REOPEN).
             */}
-            {b.phase === 'connecting' || (b.phase === 'connected' && !b.answeredAs && (unitState === 'missing' || unitState === 'silent')) ? (
-              <Hint>{CLOSE_AND_REOPEN}</Hint>
-            ) : null}
+            {b.phase === 'connecting' || quiet ? <Hint>{CLOSE_AND_REOPEN}</Hint> : null}
             {reportable && quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
             {b.phase === 'connecting' ? (
               <Hint>
@@ -469,7 +421,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               </Hint>
             ) : null}
             {away ? <Press label="Reconnect" tone="live" sub={APPLE_SCREEN_OPENS} onPress={reconnect} /> : null}
-            {/* The unit chips are not drawn while it is on, and Connecting… or Disconnected names no unit: which one was picked, and how to change it. */}
+            {/* The unit chips are not drawn while it is on: which one was picked, and how to change it. */}
             {b.unit ? <Hint>{`Unit: ${unitName(b.unit)}. To change it, tap Stop first.`}</Hint> : null}
             <Press label="Stop using Bluetooth" onPress={() => setBluetooth(false)} />
             <Hint>{`While Bluetooth is on, the ${deviceNoun()} does not use the computer at all. Stop goes back to the computer.`}</Hint>
@@ -477,60 +429,32 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
         ) : (
           <View style={{ gap: space.lg }}>
             {/*
-              THE TWO WAYS, BEFORE ANYTHING IS TAPPED: the computer is the
-              best, and this one is slower and does less (BLUETOOTH_WAYS,
-              shared/bluetooth-gear.mjs, the one sentence every way onto this
-              page says).
-            */}
-            <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>{BLUETOOTH_WAYS}</Text>
-            {/*
               STEP 1. Only drawn while it is off: a tap here while connected
               would send the new unit's messages straight away to whatever is
               on the adapter, and the AM4 has frozen on messages it did not
-              expect. While it is on, a line over Stop names the unit, and
-              says Stop comes first.
-
-              The units this account is offered (`units`). Under them, to
-              everybody and whatever is picked, that the cable is never for
-              an FM3.
+              expect. "Not tried yet" under every unit it has not run on
+              (shared/bluetooth-gear untriedSubFor). THE FM3'S WARNING, ONLY
+              WHEN IT IS PICKED: "if they select FM3, why we wanna give the
+              warning" (Justin, 26 October 2026), red, straight under the
+              units and never folded (FM3_NEVER).
             */}
             <View style={{ gap: space.sm }}>
               <Heading>1 · Pick your unit</Heading>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-                {/* "Not tried yet" under every unit it has not run on, the FM3's "Not run yet" (shared/bluetooth-gear untriedSubFor), before anybody picks one. */}
-                {units.map((u) => (
-                  <Press
-                    key={u.key}
-                    label={u.name}
-                    sub={untriedSubFor(u.key)}
-                    tone="signal"
-                    on={u.key === b.unit}
-                    disabled={b.on}
-                    height={units.some((x) => untried(x.key)) ? 52 : 44}
-                    style={{ paddingHorizontal: space.md }}
-                    onPress={() => setBluetoothUnit(u.key)}
-                  />
-                ))}
-              </View>
-              <Hint>{NOT_FOR_FM3}</Hint>
+              <UnitChips units={units} picked={b.unit} disabled={b.on} />
+              {b.unit === 'fm3' ? <Note tone="fault">{FM3_NEVER}</Note> : null}
             </View>
 
             {/* STEP 2. One button. */}
             <View style={{ gap: space.sm }}>
               <Heading>2 · Connect</Heading>
-              <Press
-                label={b.looking ? 'Looking…' : b.adapter ? `Connect to ${b.adapter.name || 'the adapter'}` : 'Connect'}
-                tone="live"
-                disabled={!canStart || b.looking}
-                onPress={start}
-              />
+              <Press label={b.looking ? 'Looking…' : 'Connect'} tone="live" disabled={!canStart || b.looking} onPress={start} />
               {/* Not on iOS 27 once Connect has been tapped: the note under it then says the same, and says it louder. */}
               {shut && b.said ? null : (
                 <Hint>
                   {!b.unit
                     ? 'Pick your unit first, just above.'
                     : b.adapter
-                      ? 'Uses the adapter from last time.'
+                      ? `Uses ${b.adapter.name || 'the adapter'}, from last time.`
                       : shut
                         ? `On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app. Connect uses an adapter that is already connected to this ${deviceNoun()}.`
                         : ios
@@ -538,7 +462,6 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                           : `The ${deviceNoun()} looks for the adapter for ten seconds, then connects to it. If Android asks to pair with it, accept.`}
                 </Hint>
               )}
-              {b.adapter ? <Press label="Use a different adapter" height={44} disabled={!canStart || b.looking} onPress={another} /> : null}
             </View>
           </View>
         )}
@@ -574,61 +497,287 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
       </View>
 
       {/*
-        WHAT IS READ ONCE, under the button rather than over it, each in a
-        row that opens when tapped. "We need to provide as much instructions
-        as possible on how to connect it and hook it up… Maybe we could add
-        these with the Amazon links on how to buy them?" All of it is still
-        here, for the unit picked in step 1, and the rest, from the lights on
-        the Uhost to what to do when nothing answers, is on the website's
-        guide, one tap away.
+        UNDER THE STEPS, ONE BUTTON A PAGE: "Setup Guide > Go to the page that
+        shows the full setup guide. How to connect my Bluetooth device > go to
+        page that shows (depending on what device they have selected) the
+        options of what they need and where they can buy them from on Amazon.
+        Troubleshooting ... What Bluetooth can't do button. Report a problem
+        button" (Justin, 26 October 2026). Settings draws each page
+        (`onOpen`), with ‹ Bluetooth back to this one.
       */}
       <View style={{ gap: space.sm }}>
-        <Fold title="How to plug it in" open={plug} onToggle={() => setPlug(!plug)}>
-          <PlugIn unit={b.unit} />
-        </Fold>
-        <Fold title="What to buy" open={buy} onToggle={() => setBuy(!buy)}>
-          <Buy unit={b.unit} />
-        </Fold>
-        <Fold title="What it can and can’t do" open={about} onToggle={() => setAbout(!about)}>
-          {untriedAboutLine(b.unit) ? <Note tone="warn">{untriedAboutLine(b.unit)}</Note> : null}
-          {/* A VP4's own: presets and scenes, and nothing heard back (lib/bleVp4.js). */}
-          <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
-            {vp4
-              ? VP4_OVER_BLUETOOTH
-              : `The ${deviceNoun()} talks straight to your unit through a Bluetooth MIDI adapter plugged into its MIDI In and MIDI Out. Presets, scenes, names, effects on and off, channels, tempo and the tuner. No editing or saving, and the computer isn’t used.`}
-          </Text>
-          <Heading>What’s different from USB</Heading>
-          {DIFFERENT.map((line) => (
-            <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
-              <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22 }}>•</Text>
-              <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
-            </View>
-          ))}
-          {/* The unit's own: blocks Play does not draw yet on an FM9 or Axe-Fx III (shared/bluetooth-gear missingBlocksLine). */}
-          {missingBlocksLine(b.unit) ? (
-            <View style={{ flexDirection: 'row', gap: space.sm }}>
-              <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22 }}>•</Text>
-              <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{missingBlocksLine(b.unit)}</Text>
-            </View>
-          ) : null}
-        </Fold>
-        <Press label="Full setup guide" height={44} onPress={() => openLink(GUIDE_URL)} />
+        <Press label="Setup guide" sub="The full guide, on the website" height={52} onPress={() => openLink(GUIDE_URL)} />
+        {onOpen ? (
+          <>
+            <Press
+              label="How to connect my Bluetooth device"
+              sub={b.unit ? `What to buy for the ${unitName(b.unit)}, and how it plugs in` : 'What to buy, and how it plugs in'}
+              height={52}
+              onPress={() => onOpen('bt-ways')}
+            />
+            <Press label="Troubleshooting" sub="If it won’t connect, or the unit doesn’t answer" height={52} onPress={() => onOpen('bt-trouble')} />
+            <Press label="What Bluetooth can’t do" sub="And how it differs from the computer" height={52} onPress={() => onOpen('bt-limits')} />
+          </>
+        ) : null}
+        {/* The one-tap report, "It works on my unit" among its answers, on every visit. */}
+        {onReport ? <Press label={REPORT_BUTTON} sub="Or tell us it works" height={52} onPress={() => onReport(null)} /> : null}
       </View>
 
-      {/* The beta, on every visit and never folded: what it is, where it has been tried, and the way back. */}
-      <Note tone="warn">{BETA_NOTE}</Note>
       {/*
-        AND THE BUTTON IT POINTS AT, straight under it on every visit, never
-        folded: the one-tap report, "It works on my unit" among its answers.
+        THE TWO WAYS, AND WHERE IT HAS BEEN TRIED, at the foot of the page
+        rather than over the steps: the computer is the best one, and this
+        one is slower and does less (BLUETOOTH_WAYS, the one sentence every
+        way onto this page says), and the units it has run on (betaNote).
       */}
-      {onReport ? <Press label={REPORT_BUTTON} sub="Or tell us it works" onPress={() => onReport(null)} /> : null}
+      <View style={{ gap: space.sm }}>
+        <Hint>{BLUETOOTH_WAYS}</Hint>
+        <Hint>{BETA_NOTE}</Hint>
+      </View>
+    </View>
+  )
+}
 
-      {/* For finding out what a real unit does: Justin's account only, and out of the way until asked for. */}
-      {/* Not for a VP4, which is never asked anything (lib/bleVp4.js): nothing to check. */}
-      {admin && b.unit && !vp4 ? (
-        <Press label={tools ? 'Hide testing tools' : 'Testing tools'} height={44} onPress={() => setTools(!tools)} />
-      ) : null}
-      {admin && b.unit && !vp4 && tools ? (
+/* The unit chips of step 1, on this page and on How to connect: the same pick, the same rule (not while it is on). */
+function UnitChips({ units, picked, disabled }) {
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+      {units.map((u) => (
+        <Press
+          key={u.key}
+          label={u.name}
+          sub={untriedSubFor(u.key)}
+          tone="signal"
+          on={u.key === picked}
+          disabled={disabled}
+          height={units.some((x) => untried(x.key)) ? 52 : 44}
+          style={{ paddingHorizontal: space.md }}
+          onPress={() => setBluetoothUnit(u.key)}
+        />
+      ))}
+    </View>
+  )
+}
+
+/* The other half of the quiet-unit hint: an adapter that only carries one way. */
+const BOTH_WAYS = 'The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.'
+
+/**
+ * Bluetooth → How to connect my Bluetooth device.
+ *
+ * Every way to hook up the unit picked, best first (shared/bluetooth-gear
+ * waysFor): the WIDI Master, the WIDI Jack, then the WIDI Uhost and a cable
+ * on every unit but the FM3, whose one way is the Uhost and the U2MIDI Pro.
+ * Each way is a row that opens on its parts, each with View on Amazon, and
+ * its steps; the first is open. A way the app has not run on with this unit
+ * says so, and says to feel the adapter in the first minute, straight after
+ * the step that powers it.
+ */
+export function BluetoothWays() {
+  const b = useBluetooth()
+  const units = offeredUnits()
+  const ways = waysFor(b.unit, deviceNoun())
+  const [open, setOpen] = useState(0)
+  const firmware = firmwareLineFor(b.unit)
+  const midi = midiSettingsFor(b.unit, deviceNoun())
+  const untriedUnit = untriedLine(b.unit)
+  return (
+    <View style={{ gap: space.lg }}>
+      <View style={{ gap: space.sm }}>
+        <Heading>Your unit</Heading>
+        <UnitChips units={units} picked={b.unit} disabled={b.on} />
+        {b.on ? <Hint>To change the unit, tap Stop on the Bluetooth page first.</Hint> : null}
+      </View>
+      {!b.unit ? <Hint>{GEAR_IN_SHORT}</Hint> : null}
+      {/* The FM3's warning, red and in front of everything for it: the U2MIDI Pro, never the C2MIDI Pro or a WIDI Master. */}
+      {warningFor(b.unit) ? <Note tone="fault">{warningFor(b.unit)}</Note> : null}
+      {firmware ? <Hint>{firmware}</Hint> : null}
+      {ways.map((w, i) => (
+        <Fold key={w.key} title={`${ways.length > 1 ? `Option ${i + 1} · ` : ''}${w.title}`} sub={w.best ? 'The simplest' : w.tried ? 'Tried and working' : undefined} open={open === i} onToggle={() => setOpen(open === i ? -1 : i)}>
+          <Way way={w} unit={b.unit} />
+        </Fold>
+      ))}
+      {midi ? <Hint>{midi}</Hint> : null}
+      {b.unit ? <Hint>{ONE_AT_A_TIME}</Hint> : null}
+      {untriedUnit ? <Note tone="warn">{untriedUnit}</Note> : null}
+      {b.unit ? <Hint>{SELLERS_LINE}</Hint> : null}
+    </View>
+  )
+}
+
+/* One way to hook it up: whether it has run here, what to buy, the firmware, then the steps with the heat check after the power. */
+function Way({ way, unit }) {
+  return (
+    <View style={{ gap: space.md }}>
+      {way.tried ? null : <Note tone="warn">{WAY_UNTRIED}</Note>}
+      {way.parts.map((key) => {
+        const p = PARTS[key]
+        const does = typeof p.does === 'function' ? p.does(deviceNoun()) : p.does
+        return (
+          <View key={key} style={{ gap: space.xs }}>
+            <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '700' }}>{p.name}</Text>
+            <Hint>{does}</Hint>
+            {/* On Amazon where a link has been checked; the maker's own page where none has. */}
+            <Press
+              label={p.amazon ? 'View on Amazon' : 'View on the maker’s site'}
+              height={44}
+              accessibilityLabel={p.amazon ? `View the ${p.name} on Amazon` : `View the ${p.name} on the maker’s site`}
+              onPress={() => openLink(p.amazon || p.maker)}
+            />
+          </View>
+        )
+      })}
+      {way.key === 'uhost' ? <Hint>{POWER_LINE}</Hint> : null}
+      {/* The C2MIDI Pro or a WIDI Master bought for another unit is the likeliest thing to end up on an FM3: said where they are bought. */}
+      {unit !== 'fm3' && (way.key === 'uhost' || way.key === 'master') ? <Hint>{NOT_FOR_FM3}</Hint> : null}
+      <Hint>{way.key === 'uhost' ? FIRST_TIME : FIRST_TIME_ADAPTER}</Hint>
+      <Heading>How it plugs in</Heading>
+      {way.steps.map((line, i) => (
+        <Fragment key={line}>
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22, minWidth: 18 }}>{`${i + 1}.`}</Text>
+            <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
+          </View>
+          {i === way.powerAt && way.feelLine ? <Note tone="warn">{way.feelLine}</Note> : null}
+        </Fragment>
+      ))}
+    </View>
+  )
+}
+
+/**
+ * Bluetooth → Troubleshooting: "List all the troubleshooting steps that
+ * we've created" (Justin, 26 October 2026). Every fix the page and the guide
+ * know, in the order they are worth trying, for the unit picked, and the
+ * report button at the foot.
+ */
+export function BluetoothTrouble({ onReport = null }) {
+  const b = useBluetooth()
+  const settings = b.unit ? (hookupFor(b.unit, deviceNoun()) || []).at(-1) : null
+  const midi = midiSettingsFor(b.unit, deviceNoun())
+  const steps = [
+    TROUBLE_LIT,
+    `Check Bluetooth is on, and allowed for Fractal Remote in the ${deviceNoun()}’s Settings.`,
+    `${PLUGS_CHECK} ${swapLine(b.unit)}`,
+    BOTH_WAYS,
+    settings,
+    midi,
+    FIRST_TIME,
+    ONE_AT_A_TIME,
+    CLOSE_AND_REOPEN,
+    ios
+      ? `An iPhone or iPad lets an adapter nobody is using go after a few minutes. Tap Reconnect, or Stop and then Connect, and connect it again in Apple’s screen.`
+      : `Android needs Nearby devices allowed for Fractal Remote, and on Android 11 and older Location turned on, to find the adapter.`,
+    `Stay within about 30 feet of the adapter, with nothing big in between.`,
+    `If another unit answered, tap Stop, pick that unit in step 1, and tap Connect again.`
+  ].filter(Boolean)
+  return (
+    <View style={{ gap: space.lg }}>
+      {steps.map((line, i) => (
+        <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
+          <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22, minWidth: 22 }}>{`${i + 1}.`}</Text>
+          <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
+        </View>
+      ))}
+      <View style={{ gap: space.sm }}>
+        <OpenSettings />
+        {/* A different adapter: the old one forgotten here, and Connect on the Bluetooth page finds the new one. */}
+        {b.adapter && !b.on ? (
+          <Press label="Forget the adapter" sub={`${b.adapter.name || 'The adapter'} from last time. Then tap Connect to pick another.`} height={52} onPress={() => forgetAdapter()} />
+        ) : null}
+        {onReport ? <Press label={REPORT_BUTTON} sub="Still stuck? Send us what happened" height={52} onPress={() => onReport(null)} /> : null}
+      </View>
+    </View>
+  )
+}
+
+/** Bluetooth → What Bluetooth can't do: what it does, for the unit picked, and what is different from the computer. */
+export function BluetoothLimits() {
+  const b = useBluetooth()
+  const vp4 = b.unit === 'vp4'
+  return (
+    <View style={{ gap: space.md }}>
+      {untriedAboutLine(b.unit) ? <Note tone="warn">{untriedAboutLine(b.unit)}</Note> : null}
+      {/* A VP4's own: presets and scenes, and nothing heard back (lib/bleVp4.js). */}
+      <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
+        {vp4
+          ? VP4_OVER_BLUETOOTH
+          : `The ${deviceNoun()} talks straight to your unit through a Bluetooth MIDI adapter plugged into its MIDI In and MIDI Out. Presets, scenes, names, effects on and off, channels, tempo and the tuner. No editing or saving, and the computer isn’t used.`}
+      </Text>
+      <Heading>What’s different from USB</Heading>
+      {DIFFERENT.map((line) => (
+        <Bullet key={line}>{line}</Bullet>
+      ))}
+      {/* The unit's own: blocks Play does not draw yet on an FM9 or Axe-Fx III (shared/bluetooth-gear missingBlocksLine). */}
+      {missingBlocksLine(b.unit) ? <Bullet>{missingBlocksLine(b.unit)}</Bullet> : null}
+      <Hint>{BLUETOOTH_WAYS}</Hint>
+    </View>
+  )
+}
+
+function Bullet({ children }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: space.sm }}>
+      <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22 }}>•</Text>
+      <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{children}</Text>
+    </View>
+  )
+}
+
+/**
+ * Developer → Bluetooth testing tools: the check, for finding out what a real
+ * unit does. THE CHECK IS FOR TESTING, and says so. Moved off the Bluetooth
+ * page onto the Developer pages (26 October 2026: "If we don't want users
+ * using that, move that to the developer menu that only I see"), which only
+ * his account is shown, as it was only his on the page: Apple's 2.2 keeps
+ * test benches out of what customers see. Not for a VP4, which is never
+ * asked anything (lib/bleVp4.js): nothing to check.
+ */
+export function BluetoothTools() {
+  const b = useBluetooth()
+  const steps = checkSteps(b.unit)
+  const am4 = b.unit === 'am4'
+  const connected = b.on && b.phase === 'connected'
+  const ways = b.unit ? methodsFor(b.unit) : null
+  /* The check's results, newest last, kept while the page is open. */
+  const [results, setResults] = useState([])
+  const [busy, setBusy] = useState(null)
+  const [copied, setCopied] = useState(false)
+
+  const run = async (step) => {
+    if (busy) return
+    setBusy(step)
+    setCopied(false)
+    try {
+      const out = await runCheck(step)
+      setResults((was) => [...was, { ...out, unit: b.unit }])
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const labelOf = (step) =>
+    step === 'all' ? 'The check' : [...steps.reads, ...steps.writes].find((s) => s.step === step)?.label || step
+
+  const copyAll = async () => {
+    const lines = [`Fractal Remote ${APP_VERSION} · Bluetooth check · ${unitForReport(b.unit) || unitName(b.unit)} · ${Platform.OS}`]
+    for (const r of results) {
+      lines.push('', `${labelOf(r.step)} (${unitName(r.unit)})${r.ok ? '' : ` — failed: ${r.error}`}`)
+      if (r.way) lines.push(`  remembered: ${WAY_NAMES[r.way] || r.way}`)
+      for (const row of r.rows) {
+        lines.push(`  ${row.asked}`, `    out:  ${row.out || '—'}`, `    back: ${row.back || '—'}`, `    ${row.meaning} (${row.ms} ms)`)
+      }
+    }
+    try {
+      await Clipboard.setStringAsync(lines.join('\n'))
+      setCopied(true)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  if (!b.unit) return <Hint>Pick a unit on the Bluetooth page first.</Hint>
+  if (b.unit === 'vp4') return <Hint>A VP4 is never asked anything over Bluetooth, so there is nothing to check.</Hint>
+  return (
         <View style={{ gap: space.md }}>
           <Heading>Check</Heading>
           <Hint>
@@ -729,8 +878,6 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
             </View>
           ) : null}
         </View>
-      ) : null}
-    </View>
   )
 }
 
@@ -756,97 +903,14 @@ function OpenSettings() {
 }
 
 /*
- * How it plugs together, for one unit: the Uhost's first-time update, then
- * the steps, in the gear file's own words, and then that the computer app
- * is quit or the unit's USB unplugged while it is used (ONE_AT_A_TIME). A
- * unit nobody has tried it on yet says so under the steps rather than being
- * promised to work. The FM3 gets its warning instead: what happened when the
- * parts went straight in, and what owners report.
- *
- * On the units nobody here has, the cable is felt in the first minute
- * (HEAT_CHECK), so that line comes straight after the power step
- * (powerStepOf), before a step that sends the player into the unit's menus,
- * as the guide has it. And the Program Change settings: on the FM3, which
- * only an owner whose presets don't change needs, they come under the steps
- * with that condition first (midiSettingsFor); on the FM9 and Axe-Fx III,
- * whose presets go by Program Change alone, they are one of the steps
- * (unitSettingsStep, PC_FIRST).
- */
-function PlugIn({ unit }) {
-  if (!unit) return <Hint>Pick your unit above to see how it plugs in.</Hint>
-  /* The FM3: its warning, red and in front of its steps (the U2MIDI Pro, never the C2MIDI Pro or a WIDI Master). */
-  const warning = warningFor(unit)
-  const steps = hookupFor(unit, deviceNoun()) || []
-  const untried = untriedLine(unit)
-  const heat = heatLineFor(unit)
-  const heatAfter = heat ? powerStepOf(unit) : -1
-  const midi = midiSettingsFor(unit, deviceNoun())
-  const firmware = firmwareLineFor(unit)
-  return (
-    <View style={{ gap: space.sm }}>
-      {warning ? <Note tone="fault">{warning}</Note> : null}
-      {/* Once, before any of the plugging in: the Uhost's firmware, which the steps take for granted. */}
-      <Hint>{FIRST_TIME}</Hint>
-      {/* And the unit's: the FM9 and Axe-Fx III firmware Fractal's notes say the phone needs (shared/bluetooth-gear firmwareLineFor). */}
-      {firmware ? <Hint>{firmware}</Hint> : null}
-      {steps.map((line, i) => (
-        <Fragment key={line}>
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22, minWidth: 18 }}>{`${i + 1}.`}</Text>
-            <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
-          </View>
-          {i === heatAfter ? <Note tone="warn">{heat}</Note> : null}
-        </Fragment>
-      ))}
-      {midi ? <Hint>{midi}</Hint> : null}
-      <Hint>{ONE_AT_A_TIME}</Hint>
-      {untried ? <Note tone="warn">{untried}</Note> : null}
-    </View>
-  )
-}
-
-/*
- * The parts for one unit, each with what it is for and where to buy it, the
- * charger that is not on the list, and who makes them (not this app, which
- * gets nothing from the links). Before a unit is picked, the whole of it in a
- * few words. For the FM3, nothing to buy, and a pointer to the warning in
- * How to plug it in rather than the same red box twice.
- */
-function Buy({ unit }) {
-  if (!unit) return <Hint>{GEAR_IN_SHORT}</Hint>
-  return (
-    <View style={{ gap: space.md }}>
-      {/* The FM3's warning, red and before its list: the U2MIDI Pro, never the C2MIDI Pro or a WIDI Master. */}
-      {warningFor(unit) ? <Note tone="fault">{warningFor(unit)}</Note> : null}
-      {partsFor(unit, deviceNoun()).map((p) => (
-        <View key={p.key} style={{ gap: space.xs }}>
-          <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '700' }}>{p.name}</Text>
-          <Hint>{p.does}</Hint>
-          {/* On Amazon where a link has been checked; the maker's own page where none has (the U2MIDI Pro). */}
-          <Press
-            label={p.amazon ? 'View on Amazon' : 'View on the maker’s site'}
-            height={44}
-            accessibilityLabel={p.amazon ? `View the ${p.name} on Amazon` : `View the ${p.name} on the maker’s site`}
-            onPress={() => openLink(p.amazon || p.maker)}
-          />
-        </View>
-      ))}
-      {unit === 'am4' ? <Hint>{ALSO_ON_AM4}</Hint> : null}
-      <Hint>{POWER_LINE}</Hint>
-      <Hint>{SELLERS_LINE}</Hint>
-    </View>
-  )
-}
-
-/*
  * A row that opens what is under it, and closes it again: its name, and
- * under the name what a tap does. A Press like every other button here, so
- * it is in the tap log and has the haptic.
+ * under the name what it is (or what a tap does). A Press like every other
+ * button here, so it is in the tap log and has the haptic.
  */
-function Fold({ title, open, onToggle, children }) {
+function Fold({ title, sub, open, onToggle, children }) {
   return (
     <View style={{ gap: space.md }}>
-      <Press label={title} sub={open ? 'Tap to hide' : 'Tap to show'} height={52} onPress={onToggle} />
+      <Press label={title} sub={sub ? `${sub} · ${open ? 'tap to hide' : 'tap to show'}` : open ? 'Tap to hide' : 'Tap to show'} height={52} onPress={onToggle} />
       {open ? <View style={{ gap: space.md, paddingHorizontal: space.xs, paddingBottom: space.sm }}>{children}</View> : null}
     </View>
   )

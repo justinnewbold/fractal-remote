@@ -67,7 +67,7 @@ import SiriHelp from '../components/SiriHelp'
 import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
 import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
-import BluetoothPage from './Bluetooth'
+import BluetoothPage, { BluetoothLimits, BluetoothTools, BluetoothTrouble, BluetoothWays } from './Bluetooth'
 import AccessTool from '../components/AccessTool'
 import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
@@ -325,6 +325,8 @@ export default function Settings({
    * yes and which no signal always is; mayDrive's answer for his account.
    */
   const bluetoothAdmin = useBluetoothAdmin()
+  /* Whether this account is offered the Bluetooth page at all: the row, its pages, and the button on Phone & computer all ask this. */
+  const bluetoothOffered = mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported()
   /*
    * SETTINGS → SIRI, where the links are open (lib/siri useSiriLinksOpen):
    * on an iPhone or iPad whose copy has the Siri phrases, on Android from
@@ -463,8 +465,8 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer' }
-  const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, developer: '‹ Developer' }
+  const PARENT = { offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'bt-tools': 'developer' }
+  const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, developer: '‹ Developer', bluetooth: '‹ Bluetooth' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
 
@@ -931,6 +933,7 @@ export default function Settings({
             <SetupRow title="Paid but no computer yet" status="Bought it, never set up the computer" onPress={() => setPage('stuck')} />
             <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
             <SetupRow title="What's live" status="Which version each piece is on" onPress={() => setPage('live')} />
+            {bluetoothOffered ? <SetupRow title="Bluetooth testing tools" status="The check, and how each command is sent" onPress={() => setPage('bt-tools')} /> : null}
             {onViewAsCustomer ? (
               <SetupRow
                 title="View as a new customer"
@@ -1019,6 +1022,23 @@ export default function Settings({
             <Note tone="warn">
               {`Bluetooth is on. This ${deviceNoun()} talks to the unit directly, not through the computer. ${BLUETOOTH_WAYS}`}
             </Note>
+          ) : null}
+          {/*
+            BLUETOOTH FROM THE LIVE PILL. "On the home screen where it shows
+            which live device you're connected to ... when you click on that,
+            I want it to show the Bluetooth button where they can click that
+            to pull up and connect to Bluetooth" (Justin, 26 October 2026).
+            The pill opens this page, so the button is the first thing on it,
+            for whoever is offered the Bluetooth page.
+          */}
+          {bluetoothOffered && !demo ? (
+            <Press
+              label={bluetooth ? 'Bluetooth' : 'Connect over Bluetooth'}
+              sub={bluetooth ? 'Bluetooth is on: open its page' : 'No computer needed. More lag, fewer features.'}
+              tone="live"
+              height={52}
+              onPress={() => setPage('bluetooth')}
+            />
           ) : null}
 
           <View style={{ gap: space.md }}>
@@ -1316,7 +1336,33 @@ export default function Settings({
       {page === 'bluetooth' && mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported() ? (
         <>
           {head('Bluetooth', 'back')}
-          <BluetoothPage purchase={purchase} admin={isAdmin(account?.id)} onReport={onReportBluetooth} />
+          <BluetoothPage purchase={purchase} admin={isAdmin(account?.id)} onReport={onReportBluetooth} onOpen={setPage} />
+        </>
+      ) : null}
+      {/* The Bluetooth page's own pages, one button each under its steps, behind the same gate, with ‹ Bluetooth back. */}
+      {page === 'bt-ways' && bluetoothOffered ? (
+        <>
+          {head('How to connect my Bluetooth device', 'back')}
+          <BluetoothWays />
+        </>
+      ) : null}
+      {page === 'bt-trouble' && bluetoothOffered ? (
+        <>
+          {head('Troubleshooting Bluetooth', 'back')}
+          <BluetoothTrouble onReport={onReportBluetooth} />
+        </>
+      ) : null}
+      {page === 'bt-limits' && bluetoothOffered ? (
+        <>
+          {head('What Bluetooth can’t do', 'back')}
+          <BluetoothLimits />
+        </>
+      ) : null}
+      {/* Its testing tools, moved off the page onto the Developer pages: his account's alone, as they always were. */}
+      {page === 'bt-tools' && bluetoothOffered && isAdmin(account?.id) ? (
+        <>
+          {head('Bluetooth testing tools', 'back')}
+          <BluetoothTools />
         </>
       ) : null}
 

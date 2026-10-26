@@ -1538,7 +1538,7 @@ Bluetooth, part of the full version, offered on the AM4, FM3, FM9, Axe-Fx III an
 
 Also new: Siri App Shortcuts (Settings, then Siri; it gets only the command, never audio), Settings, then Colors, a wider Play on iPad and iPhone Duo, the unit named in Play's top bar, the AM4 amp pedal as its boost, VP4 presets and scenes through the computer, and up to three screenshots in Feedback and Log (never the camera).
 
-Only on the developer's own account: Settings' Developer pages (access, sales, accounts, messages and the like), and the Bluetooth page's testing tools. No other account is shown them, the demo account included.
+Only on the developer's own account: Settings' Developer pages (access, sales, accounts, messages, Bluetooth testing tools and the like). No other account is shown them, the demo account included.
 
 Deleting an account (Guideline 5.1.1(v), video 3 below): Settings (the gear, top right), the account card at the top, Delete account, then "Delete my account"; it deletes the account and its data at once. An account without the full version opens on the purchase page instead, with Delete account at its foot. Please try a new account (Create account, on the sign-in screen).
 
@@ -1566,10 +1566,9 @@ stands for 1.89.0):
 - **The demo account, on TestFlight build 30.** Signed in with the account
   in App Review Information, it opens with the full version, a Bluetooth
   row under My rig, and on that page all five units to pick, the FM9,
-  Axe-Fx III and VP4 marked not tried; tap AM4, then
-  check there is no Testing tools button under the note at the foot
-  of the page (it is drawn only once a unit is picked, even on his own
-  account). Settings has no Developer section. If the row is not there,
+  Axe-Fx III and VP4 marked not tried. The testing tools are on the
+  Developer pages since 1.89.3, so Settings has no Developer section
+  and nothing on the Bluetooth page says testing. If the row is not there,
   stop: the notes would send Apple to something it cannot find. (Its log's
   head says "store copy: 1.89.0 · Bluetooth for customers: open".)
 - **The four video links** replace the brackets under Videos, the fourth
@@ -1739,7 +1738,7 @@ Delete account: Settings (the gear, top right) → the account card at the top �
 
 Bluetooth, new in this version and part of the full version: the phone controls an AM4, FM3, FM9, Axe-Fx III or VP4 with no computer (a VP4, presets and scenes only), through a Bluetooth MIDI adapter plugged into the unit's MIDI jacks. It has been tried on the AM4 and the FM3 so far, and each other unit says so. Signed in with this account: Settings (the gear, top right) → My rig → Bluetooth. The row is there only on a device that has both MIDI and Bluetooth LE, so a device or emulator without them does not show it. On the page, tap AM4 under "1 · Pick your unit" first (Connect stays dimmed until a unit is picked), then Connect. Only then does Android ask for Nearby devices (Location on Android 11 and older, where Android needs it to find a Bluetooth device); the app never reads where the phone is. With no adapter, it looks for ten seconds and says No adapter found. A video of it working on a real AM4: [Bluetooth video link]
 
-Only on the developer's own account: Settings has Developer pages (access, sales, accounts, messages and the like), and the Bluetooth page has testing tools. No other account sees them, this one included; for the Developer pages, the server checks which account is asking.
+Only on the developer's own account: Settings has Developer pages (access, sales, accounts, messages, Bluetooth testing tools and the like). No other account sees them, this one included; for the Developer pages, the server checks which account is asking.
 ```
 
 If the box will not take all of it, drop the last paragraph first. If it is
@@ -1918,10 +1917,8 @@ step 7 spends builds, and it waits for his yes, as every build does.
     rig, all five units on its page (AM4, FM3, FM9, Axe-Fx III, VP4), the
     FM9, Axe-Fx III and VP4 marked not tried, the FM3's warning when it is
     tapped, and the note with Report a Bluetooth problem under it, with no
-    "beta" anywhere; tap AM4, then check there is no
-    Testing tools button under the note at the foot of the page (it is
-    drawn only once a unit is picked, so the check means nothing before);
-    and the log's head says "store copy: 1.89.0 · Bluetooth for customers:
+    "beta" anywhere, and nothing that says testing (the testing tools are
+    on the Developer pages since 1.89.3); and the log's head says "store copy: 1.89.0 · Bluetooth for customers:
     open". Then video 4 (above).
 
 **D. Submission day**
