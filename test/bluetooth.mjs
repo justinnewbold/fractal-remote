@@ -5681,13 +5681,13 @@ export function run(test) {
     assert.match(waking, /\{bluetooth \? \( <View style=\{\{ alignSelf: 'stretch' \}\}> <Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/, 'the Bluetooth waiting screen has no way back to the computer')
     assert.ok(waking.indexOf('Use the computer instead') < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way back to the computer waits fifteen seconds')
     assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, allowBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
-    assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth \(beta\)" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
+    assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     /* Handed only through the Settings row's own gate: test 'every way onto the Bluetooth page' holds it. */
     assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
     assert.match(waking, /\{email && link\.link !== 'connected' && !bluetooth && !noneSaid \? \(/, 'the waiting screen names the computer’s account over Bluetooth')
   })
 
-  test('Settings offers Bluetooth (beta) only where it is open (his account on every copy, a customer’s only on a copy built to open it), unlocked, on a device and build that can do it', () => {
+  test('Settings offers Bluetooth only where it is open (his account on every copy, a customer’s only on a copy built to open it), unlocked, on a device and build that can do it', () => {
     /*
      * The unlock and the build check, and since 11 October 2026 the account
      * as well: "Is there any way to just get the Bluetooth on the developers
@@ -5698,7 +5698,7 @@ export function run(test) {
      * check so a customer's phone is not even asked whether it can do
      * Bluetooth. Its own row on Settings still: "Move the Bluetooth card
      * from the phone and computer menu to its own menu under the settings
-     * menu. Still saying Bluetooth (beta)."
+     * menu. Still saying Bluetooth."
      *
      * And since 25 October 2026 bluetoothAllowed is yes for a customer too,
      * on a copy whose built-in store version opens it (lib/ble-rule.js, which
@@ -5708,10 +5708,10 @@ export function run(test) {
      */
     const settings = src('mobile/src/screens/Settings.js')
     const one = settings.replace(/\s+/g, ' ')
-    assert.match(one, /\{mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/, 'the row is not behind the unlock, the developer’s account and the build check')
-    assert.match(one, /title="Bluetooth \(beta\)"[\s\S]{0,300}onPress=\{\(\) => setPage\('bluetooth'\)\}/, 'the row opens nothing')
+    assert.match(one, /\{mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth"/, 'the row is not behind the unlock, the developer’s account and the build check')
+    assert.match(one, /title="Bluetooth"[\s\S]{0,300}onPress=\{\(\) => setPage\('bluetooth'\)\}/, 'the row opens nothing')
     /* The page itself, through the same gate. It is told whether this is Justin's account (from the server) only for its Testing tools (Apple's 2.2), never to let anybody in. */
-    assert.match(one, /\{page === 'bluetooth' && mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <> \{head\('Bluetooth \(beta\)', 'back'\)\} <BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} \/>/)
+    assert.match(one, /\{page === 'bluetooth' && mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <> \{head\('Bluetooth', 'back'\)\} <BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} \/>/)
     /*
      * The account's answer comes from lib/bluetooth, which App.js tells from
      * the session kept on the phone, redrawn when it changes, so the row
@@ -5723,13 +5723,13 @@ export function run(test) {
     assert.match(one, /const bluetoothAllowed = useBluetoothAllowed\(\)/)
     assert.ok(!/bluetoothAllowed = [^\n;]*account/.test(code('mobile/src/screens/Settings.js')), 'the row asks the account server whose phone this is')
     /* Every way onto the row and the page goes through that gate: no other mention of either. */
-    assert.equal((settings.match(/title="Bluetooth \(beta\)"/g) || []).length, 1, 'a second Bluetooth row skips the gate')
+    assert.equal((settings.match(/title="Bluetooth"/g) || []).length, 1, 'a second Bluetooth row skips the gate')
     assert.equal((settings.match(/label="BLUETOOTH \(BETA\)"/g) || []).length, 0, 'the old card is still on Phone & computer')
     assert.equal((settings.match(/<BluetoothPage /g) || []).length, 1, 'a second way onto the page skips the gate')
     assert.doesNotMatch(one, /bluetooth: 'link'/, 'back from the page goes to Phone & computer, not Settings')
     /* On the front list, after Phone & computer and before the metronome. */
     const front = settings.slice(settings.indexOf('{page === null ? ('), settings.indexOf("{page === 'account' ? ("))
-    const row = front.indexOf('title="Bluetooth (beta)"')
+    const row = front.indexOf('title="Bluetooth"')
     assert.ok(row > front.indexOf('title="Phone & computer"') && row < front.indexOf('title="Metronome"'), 'the row is not on the Settings list beside Phone & computer')
     const link = settings.slice(settings.indexOf("{page === 'link' ? ("), settings.indexOf("{page === 'bluetooth'"))
     assert.doesNotMatch(link, /setPage\('bluetooth'\)/, 'Phone & computer still opens Bluetooth')
@@ -5741,7 +5741,7 @@ export function run(test) {
      * computer the best one (BLUETOOTH_WAYS): changed on purpose on 25
      * October 2026 from "This phone talks to the unit directly".
      */
-    assert.match(one, /\{`Bluetooth \(beta\) is on\. This \$\{deviceNoun\(\)\} talks to the unit directly, not through the computer\. \$\{BLUETOOTH_WAYS\}`\}/, 'Phone & computer does not say Bluetooth is on, or that the computer is the best way')
+    assert.match(one, /\{`Bluetooth is on\. This \$\{deviceNoun\(\)\} talks to the unit directly, not through the computer\. \$\{BLUETOOTH_WAYS\}`\}/, 'Phone & computer does not say Bluetooth is on, or that the computer is the best way')
     /*
      * The row's own line: on, the device in hand; off, what it is for and
      * what it costs against the computer, in the gear file's words, in one
@@ -5754,7 +5754,7 @@ export function run(test) {
     assert.match(one, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) && !onRealVp4 \? \( <SetupRow title="Stop the looper"/)
   })
 
-  test('Bluetooth (beta) is Justin’s account’s on every copy and a customer’s only by the store copy, asked of the session on the phone, at launch and at every change of who is signed in', async () => {
+  test('Bluetooth is Justin’s account’s on every copy and a customer’s only by the store copy, asked of the session on the phone, at launch and at every change of who is signed in', async () => {
     /*
      * "Is there any way to just get the Bluetooth on the developers mode for
      * my own phone? I just feel like it's not ready to have public." (11
@@ -6534,7 +6534,7 @@ export function run(test) {
         await settle()
         assert.equal(kept(bench).unit, null, `a customer’s VP4, keyed later, is kept (${first} first)`)
         assert.equal(kept(bench).on, false)
-        assert.ok(bench.log.some((l) => /the VP4 is not offered over Bluetooth \(beta\) to this account/.test(l)), 'the log does not say why the unit was cleared')
+        assert.ok(bench.log.some((l) => /the VP4 is not offered over Bluetooth to this account/.test(l)), 'the log does not say why the unit was cleared')
       } finally {
         bench.done()
       }
@@ -6586,7 +6586,7 @@ export function run(test) {
           await settle()
           assert.equal(kept(bench).unit, 'fm3', `a closed copy cleared the FM3 that was picked on it (${first} first, ${on ? 'on' : 'off'})`)
           assert.deepEqual(kept(bench).adapter, { id: '1:2', name: 'WIDI Uhost Bluetooth' }, 'the adapter went')
-          assert.ok(!bench.log.some((l) => /is not offered over Bluetooth \(beta\) to this account/.test(l)), 'a closed copy says it cleared a unit')
+          assert.ok(!bench.log.some((l) => /is not offered over Bluetooth to this account/.test(l)), 'a closed copy says it cleared a unit')
         } finally {
           bench.done()
         }
@@ -6635,7 +6635,7 @@ export function run(test) {
     const GATE = 'mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported()'
     const settings = flat('mobile/src/screens/Settings.js')
     assert.equal((settings.match(/setPage\('bluetooth'\)/g) || []).length, 1, 'something else on Settings opens the Bluetooth page')
-    assert.ok(settings.includes(`{${GATE} ? ( <SetupRow title="Bluetooth (beta)"`), 'the row is not behind the gate')
+    assert.ok(settings.includes(`{${GATE} ? ( <SetupRow title="Bluetooth"`), 'the row is not behind the gate')
     assert.ok(settings.includes(`{page === 'bluetooth' && ${GATE} ? (`), 'the page is not behind the gate')
     assert.ok(settings.includes('const bluetoothAllowed = useBluetoothAllowed()') && settings.includes('const bluetoothAdmin = useBluetoothAdmin()'), 'the row’s gate is read from something other than lib/bluetooth')
     /* And the page's own Connect, by the same purchase rule: never mayDrive, whose "store out of reach" is a yes. */
@@ -6658,7 +6658,7 @@ export function run(test) {
     assert.equal(uses, 2, 'the waiting screen opens the Bluetooth page from more or fewer than its two buttons')
     assert.equal((waking.match(/&& onBluetooth (?:&& !elsewhere )?\? (?:\( )?<Press/g) || []).length, 2, 'a waiting-screen button opens the Bluetooth page without the gate')
     /*
-     * THE NEW WAY IN: "No computer? Use Bluetooth (beta)", while it is off,
+     * THE NEW WAY IN: "No computer? Use Bluetooth", while it is off,
      * with what it costs against the computer under it (and, to a customer,
      * that it is the AM4 alone), and after the computer's own button, never
      * before it. Short enough for the one line a button's label has on a
@@ -6669,10 +6669,10 @@ export function run(test) {
      * signed into a different account"): a computer is right there, and the
      * fix is the account, so "No computer?" would point the other way.
      */
-    assert.match(waking, /\{!bluetooth && onBluetooth && !elsewhere \? \( <Press label="No computer\? Use Bluetooth \(beta\)" sub=\{BLUETOOTH_WAYS_SHORT\} onPress=\{onBluetooth\} \/> \) : null\}/, 'the waiting screen offers no way to Bluetooth with no computer, or offers it under the account warning')
-    assert.ok('No computer? Use Bluetooth (beta)'.length <= 34, 'the waiting screen’s way in is too long for one line on a small phone')
+    assert.match(waking, /\{!bluetooth && onBluetooth && !elsewhere \? \( <Press label="No computer\? Use Bluetooth" sub=\{BLUETOOTH_WAYS_SHORT\} onPress=\{onBluetooth\} \/> \) : null\}/, 'the waiting screen offers no way to Bluetooth with no computer, or offers it under the account warning')
+    assert.ok('No computer? Use Bluetooth'.length <= 34, 'the waiting screen’s way in is too long for one line on a small phone')
     const advice = waking.slice(waking.indexOf("{long && link.link !== 'connected' ? ("))
-    const noComputer = advice.indexOf('No computer? Use Bluetooth (beta)')
+    const noComputer = advice.indexOf('No computer? Use Bluetooth')
     const computer = advice.indexOf('label="Look for the computer again"')
     assert.ok(computer > 0 && noComputer > computer, 'Bluetooth is offered before the computer, which is the best way')
     assert.ok(noComputer > 0 && noComputer < advice.indexOf('label="Troubleshooting"'), 'the way to Bluetooth is not with the waiting screen’s advice')
@@ -6705,7 +6705,7 @@ export function run(test) {
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
     /* "More lag": his word, kept (the gear file says why "slower" stood in for a day). */
-    assert.equal(gear.BLUETOOTH_WAYS, 'There are two ways to connect. The computer is the best one. Bluetooth (beta) needs no computer, but it has more lag and fewer features.')
+    assert.equal(gear.BLUETOOTH_WAYS, 'There are two ways to connect. The computer is the best one. Bluetooth needs no computer, but it has more lag and fewer features.')
     /* Not "and does everything": on the purchase page it follows the list of what a VP4 cannot do from the app yet. */
     assert.ok(!/does everything|every feature/i.test(gear.BLUETOOTH_WAYS), 'the sentence says the computer does everything, beside what a VP4 cannot do')
     assert.equal(gear.BLUETOOTH_WAYS_SHORT, 'More lag than the computer, fewer features')
@@ -6730,7 +6730,7 @@ export function run(test) {
      */
     assert.equal(
       gear.BLUETOOTH_PAYWALL,
-      `${gear.BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and so far has been tried on the AM4 only; on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
+      `${gear.BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and so far has been tried on the AM4 and FM3; on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
     )
     const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
     for (const u of BLE_UNITS) assert.ok(new RegExp(`\\b${u.name}\\b`).test(gear.BLUETOOTH_PAYWALL), `the purchase page’s line leaves out the ${u.name}`)
@@ -6900,7 +6900,7 @@ export function run(test) {
     const step1 = page.slice(page.indexOf('<Heading>1 · Pick your unit</Heading>'), page.indexOf('<Heading>2 · Connect</Heading>'))
     assert.match(step1, /<Hint>\{NOT_FOR_FM3\}<\/Hint>/)
     const gear = await import('../shared/bluetooth-gear.mjs')
-    assert.equal(gear.NOT_FOR_FM3, 'Never plug the C2MIDI Pro into an FM3: when we tried it on one, the cable got very hot.')
+    assert.equal(gear.NOT_FOR_FM3, 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master: both got very hot on one.')
     /* The customer's "AM4 only" is gone everywhere: every unit opens together (lib/ble-rule.js UNITS_FROM_STORE). */
     assert.equal(gear.AM4_ONLY, undefined, 'the gear file still has the customer’s AM4-only line')
     assert.ok(!/AM4_ONLY|am4Only|AM4 only/.test(code('mobile/src/screens/Bluetooth.js')), 'the page still says the AM4 only to somebody')
@@ -7410,7 +7410,7 @@ export function run(test) {
       assert.equal(kept.on, false, 'it comes back on at the next launch')
       assert.equal(kept.unit, 'am4', 'the unit is forgotten, so Connect asks again')
       assert.deepEqual(kept.adapter, { id: '1:2', name: 'WIDI Uhost Bluetooth' }, 'the adapter is forgotten, so Connect goes looking again')
-      assert.ok(bench.log.some((l) => /Bluetooth \(beta\) turned off/.test(l)), 'turning it off is not in the log')
+      assert.ok(bench.log.some((l) => /Bluetooth turned off/.test(l)), 'turning it off is not in the log')
     } finally {
       bench.done()
     }
@@ -7890,7 +7890,7 @@ export function run(test) {
     const { BLE_UNITS } = await import(WIRE)
     /*
      * The guide is on the website, at the site's own address: public/bluetooth-guide.html
-     * since Bluetooth (beta) went back to Justin's account alone, because
+     * since Bluetooth went back to Justin's account alone, because
      * /bluetooth now tells customers it is not in the app yet. Only the
      * Bluetooth page, which only his account opens, links it.
      */
@@ -7898,8 +7898,10 @@ export function run(test) {
     /* The three he bought, as checked on amazon.com on 10 October 2026, and nothing on the end of them. */
     assert.deepEqual(
       Object.fromEntries(Object.entries(gear.PARTS).map(([key, p]) => [key, p.amazon])),
-      { uhost: 'https://www.amazon.com/dp/B09GS326QW', c2midi: 'https://www.amazon.com/dp/B0GVXTX5D1', adapters: 'https://www.amazon.com/dp/B0FN83P5P7' }
+      { uhost: 'https://www.amazon.com/dp/B09GS326QW', c2midi: 'https://www.amazon.com/dp/B0GVXTX5D1', u2midi: null, adapters: 'https://www.amazon.com/dp/B0FN83P5P7' }
     )
+    /* The FM3's U2MIDI Pro: CME's own page, checked on 26 October 2026, and no Amazon link until one has been checked. */
+    assert.equal(gear.PARTS.u2midi.maker, 'https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/')
     assert.equal(gear.PARTS.uhost.maker, 'https://www.cme-pro.com/widi-uhost/')
     assert.equal(gear.PARTS.c2midi.maker, 'https://www.cme-pro.com/c2midi-pro/')
     for (const url of gear.ALL_LINKS) {
@@ -7923,34 +7925,41 @@ export function run(test) {
      * soldering job is nothing the app can stand behind, and the app has
      * measured nothing on an FM3 but a hot cable.
      */
-    assert.deepEqual(gear.partsFor('fm3'), [], 'the FM3 is given a shopping list for what overheated on it')
-    assert.equal(gear.hookupFor('fm3'), null, 'the FM3 is told to plug it straight in')
-    /* It has not run on an FM3, and says so in its own words (it was tried, and ran hot), with the report button: every unit opens to customers together. */
-    assert.equal(gear.untriedLine('fm3'), 'It hasn’t run on an FM3 yet. If you get it working, tell us how: tap Report a Bluetooth problem, further down this page.')
+    /*
+     * THE FM3, SINCE 26 OCTOBER 2026: "Using the U2midi pro adapter the FM3
+     * works and does not get hot", and "The Widi Master did not work on the
+     * FM3 and got very hot." So it has the Uhost and the U2MIDI Pro to buy,
+     * and steps of its own, with its warning red and in front of them: the
+     * WIDI Master and the C2MIDI Pro got very hot and the WIDI Master did not work, the
+     * U2MIDI Pro runs on USB power only, works, and stays cool. Changed on
+     * purpose: until then it had nothing to buy and no steps.
+     */
+    assert.deepEqual(gear.partsFor('fm3').map((p) => p.key), ['uhost', 'u2midi'], 'the FM3 is not given the U2MIDI Pro')
+    assert.match(gear.hookupFor('fm3').join(' '), /^U2MIDI Pro: the black plug \(TO MIDI IN\) into the FM3’s MIDI IN\./, 'the FM3’s steps do not use the U2MIDI Pro')
+    assert.ok(!/C2MIDI/.test(gear.hookupFor('fm3').join(' ')), 'the FM3’s steps send it the C2MIDI Pro')
+    assert.equal(gear.untriedLine('fm3'), null, 'the FM3 is still said not to have run')
     assert.equal(gear.warningFor('fm3'), gear.FM3_WARNING)
     for (const unit of ['am4', 'fm9', 'axefx3', 'vp4']) assert.equal(gear.warningFor(unit), null)
-    assert.match(gear.FM3_WARNING, /^Don’t plug the C2MIDI Pro into an FM3\. When we tried it, the cable got very hot and didn’t connect\./)
-    /* Never "straight in", which was there while a way round it was offered: with none any more, it reads as if there still were one. */
-    assert.ok(!/straight/i.test(gear.FM3_WARNING + gear.NOT_FOR_FM3), 'the FM3 warning says not to plug it straight in, as if there were another way')
+    assert.match(gear.FM3_WARNING, /^On an FM3, use the CME U2MIDI Pro\. When we tried the WIDI Master and the C2MIDI Pro on an FM3, both got very hot, and the WIDI Master did not work\. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool\./)
     assert.ok(!/220|resistor|pin 4|solder/i.test(gear.FM3_WARNING), 'the FM3 warning gives a home-made way round it again')
-    assert.match(gear.FM3_WARNING, /FM3 owners report the same with adapters that take power from its MIDI OUT/, 'the FM3 warning does not say what owners report')
+    assert.match(gear.FM3_WARNING, /FM3 owners report the same heat with other adapters that take power from its MIDI OUT/, 'the FM3 warning does not say what owners report')
     assert.ok(!/nothing to limit it/.test(gear.FM3_WARNING), 'the FM3 warning states a fault in the unit as fact')
-    assert.match(gear.FM3_WARNING, /Yamaha MD-BT01/, 'the warning leaves the Yamaha looking like the way round it')
+    /* And the WIDI Master on an AM4, tried and working: said under the AM4's parts, never for an FM3. */
+    assert.match(gear.ALSO_ON_AM4, /^On an AM4, a CME WIDI Master works too[^]*Never on an FM3\.$/)
     /* The FM3 stays one the page knows, offered with the rest on a copy that opens Bluetooth (offeredUnits), its warning in front. */
     assert.ok(BLE_UNITS.some((u) => u.key === 'fm3'), 'the FM3 is gone from the page')
     const page = readFileSync(new URL('../mobile/src/screens/Bluetooth.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
-    /*
-     * How to plug it in shows the FM3 the warning in place of its steps, and
-     * What to buy shows it nothing to buy, pointing at that warning rather
-     * than drawing the same red box a second time (both rows can be open).
-     */
-    assert.match(page.slice(page.indexOf('function PlugIn(')), /^function PlugIn\(\{ unit \}\) \{ if \(!unit\) return <Hint>[^<]+<\/Hint> const warning = warningFor\(unit\) \/\*[^*]*\*\/ if \(warning\) \{ const notYet = untriedLine\(unit\) return \( <View style=\{\{ gap: space\.sm \}\}> <Note tone="fault">\{warning\}<\/Note> \{notYet \? <Note tone="warn">\{notYet\}<\/Note> : null\} <\/View> \) \}/, 'How to plug it in shows the FM3 its steps, or not that it has not run on one')
-    assert.match(page.slice(page.indexOf('function Buy(')), /^function Buy\(\{ unit \}\) \{ if \(!unit\) return <Hint>\{GEAR_IN_SHORT\}<\/Hint> if \(warningFor\(unit\)\) return <Hint>Not for the FM3\. How to plug it in, above, says why\.<\/Hint>/, 'What to buy shows the FM3 a list to buy, or the warning twice')
-    assert.equal((page.match(/<Note tone="fault">\{warning\}<\/Note>/g) || []).length, 1, 'the FM3 warning is drawn in two places')
+    /* How to plug it in and What to buy each open on the FM3's warning, red, before its steps and its list. */
+    const plugIn = page.slice(page.indexOf('function PlugIn('), page.indexOf('function Buy('))
+    const inFront = '{warning ? <Note tone="fault">{warning}</Note> : null}'
+    assert.ok(plugIn.indexOf(inFront) > 0 && plugIn.indexOf(inFront) < plugIn.indexOf('{steps.map('), 'How to plug it in does not put the FM3 warning in front of its steps')
+    const buy = page.slice(page.indexOf('function Buy('))
+    assert.ok(buy.indexOf('{warningFor(unit) ? <Note tone="fault">{warningFor(unit)}</Note> : null}') > 0 && buy.indexOf('{warningFor(unit) ? <Note tone="fault">') < buy.indexOf('{partsFor(unit, deviceNoun())'), 'What to buy does not put the FM3 warning in front of its list')
+    assert.match(buy, /\{unit === 'am4' \? <Hint>\{ALSO_ON_AM4\}<\/Hint> : null\}/, 'What to buy does not say the WIDI Master works on an AM4')
     assert.match(gear.PARTS.adapters.does, /Type A/)
     for (const p of Object.values(gear.PARTS)) assert.ok(p.name && p.does, 'a part with no name or no line saying what it is for')
     /* The device in hand, passed in, for every part: an iPad's owner reads "Your iPad", and nobody is handed a function to draw. */
-    for (const unit of ['am4', 'fm9', 'axefx3', 'vp4']) {
+    for (const unit of ['am4', 'fm3', 'fm9', 'axefx3', 'vp4']) {
       for (const p of gear.partsFor(unit, 'iPad')) assert.equal(typeof p.does, 'string', `${p.key}: the page is handed something it cannot draw`)
     }
     assert.equal(gear.partsFor('am4', 'iPad')[0].does, 'The Bluetooth adapter. Your iPad connects to it.')
@@ -7963,8 +7972,8 @@ export function run(test) {
     /* One thing driving the unit at a time, until the two together have been tried. */
     assert.match(gear.ONE_AT_A_TIME, /^While you use Bluetooth, quit the Fractal Remote app on the computer, or unplug the unit’s USB cable/)
 
-    /* The hookup, for every unit the page offers bar the FM3, in at most five short steps. */
-    for (const { key, name } of BLE_UNITS.filter((u) => u.key !== 'fm3')) {
+    /* The hookup, for every unit the page offers, in at most five short steps: the FM3's with the U2MIDI Pro since 26 October 2026. */
+    for (const { key, name } of BLE_UNITS) {
       const steps = gear.hookupFor(key)
       assert.ok(Array.isArray(steps) && steps.length >= 3 && steps.length <= 5, `${name}: ${steps?.length} steps`)
       const all = steps.join(' ')
@@ -7990,8 +7999,8 @@ export function run(test) {
         assert.ok(!/MIDI Thru to Off/.test(all), 'the Axe-Fx III is told to change a setting it does not have')
         assert.match(all, /into its MIDI OUT\. Not THRU/)
         assert.equal(steps.at(-1), 'On the Axe-Fx III, open Setup → MIDI/Remote and set Program Change to On, the MIDI channel to 1 (or Omni), PC Mapping to Off, MIDI PC Offset to 0, and Send Realtime Sysex to On.')
-      } else if (key === 'am4') {
-        assert.match(all, /On the AM4, open Setup → MIDI\/Remote and set MIDI Thru to Off\./, 'AM4: MIDI Thru is not turned off')
+      } else if (key === 'am4' || key === 'fm3') {
+        assert.ok(all.includes(`On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off.`), `${name}: MIDI Thru is not turned off`)
       } else if (key === 'vp4') {
         /* In the VP4's own manual's words (lib/vp4-safety): Receive MIDI PC ON, the channel, and Scene Select for scenes. */
         assert.equal(steps.at(-1), 'On the VP4, open SETUP > MIDI/Remote and set Receive MIDI PC to ON, and the MIDI Channel to 1 (or OMNI). For scenes, set Scene Select too: Settings > VP4 scenes & presets says how.')
@@ -8030,7 +8039,8 @@ export function run(test) {
         assert.ok(!/MIDI Thru/.test(gear.midiSettingsFor(key)), `${name}: MIDI Thru is in the settings for some owners only`)
       }
       /* Feel the cable in the first minute, on the units nobody here has (the guide has always said so); not the AM4, where it was tried. */
-      assert.equal(gear.heatLineFor(key), key === 'am4' ? null : gear.HEAT_CHECK, `${name}: the heat line`)
+      /* Not the FM3 either, since 26 October 2026: its cable is the U2MIDI Pro, tried there and cool, and the C2MIDI Pro this line names is never for it. */
+      assert.equal(gear.heatLineFor(key), key === 'am4' || key === 'fm3' ? null : gear.HEAT_CHECK, `${name}: the heat line`)
       /* Drawn straight after the power step: the page finds it by powerStepOf, the step the power goes in. */
       assert.equal(gear.powerStepOf(key), power, `${name}: the power step is not where the heat line is drawn after`)
       if (key === 'am4') assert.match(all, /Push one 3\.5 mm adapter into the AM4’s MIDI IN, and the other into its MIDI OUT\./)
@@ -8047,17 +8057,18 @@ export function run(test) {
        * foot of the page it is read on (REPORT_BUTTON, one tap, "It works on
        * my unit" among its answers), not three screens away at a typed form.
        */
-      assert.equal(gear.untriedLine(key), key === 'am4' ? null : `Not tried on the ${name} yet. If you try it, tell us how it went: tap Report a Bluetooth problem, further down this page.`)
+      assert.equal(gear.untriedLine(key), key === 'am4' || key === 'fm3' ? null : `Not tried on the ${name} yet. If you try it, tell us how it went: tap Report a Bluetooth problem, further down this page.`)
     }
-    assert.deepEqual(gear.TESTED, ['am4'])
+    /* The AM4 and, since 26 October 2026, the FM3 (with the U2MIDI Pro). */
+    assert.deepEqual(gear.TESTED, ['am4', 'fm3'])
     assert.equal(gear.hookupFor('vp5'), null, 'steps for a unit the page does not offer')
-    /* The FM3 has no steps (its warning instead), but its MIDI settings are written for the day it has; none for a unit the page does not know. */
+    /* The FM3's MIDI settings, for an owner whose presets don't change, under its steps; none for a unit the page does not know. */
     assert.match(gear.midiSettingsFor('fm3'), /^If presets don’t change from this phone: on the FM3, open Setup → MIDI\/Remote and set Program Change to On/)
     assert.equal(gear.midiSettingsFor('vp4'), null)
     assert.equal(gear.midiSettingsFor('vp5'), null)
-    assert.equal(gear.powerStepOf('fm3'), -1, 'the FM3, which has no steps, has a power step')
+    assert.equal(gear.powerStepOf('fm3'), 3, 'the FM3’s power step is not the fourth')
     assert.equal(gear.powerStepOf('vp5'), -1)
-    assert.equal(gear.heatLineFor('fm3'), null, 'the FM3 is told to feel a cable it is told never to plug in')
+    assert.equal(gear.heatLineFor('fm3'), null, 'the FM3 is told to feel the C2MIDI Pro, which is never for it')
     assert.equal(gear.HEAT_CHECK, 'In the first minute, feel the C2MIDI Pro. It should stay cool. If it gets more than slightly warm, unplug it at once.')
     /* The guide says the same about the channel, and about the heat, so the app and the guide do not disagree. */
     const guide = readFileSync(new URL('../public/bluetooth-guide.html', import.meta.url), 'utf8').replace(/\s+/g, ' ')
@@ -8079,7 +8090,7 @@ export function run(test) {
      * FM3" while the FM3 was not offered to customers; what is not for an
      * FM3 now is the cable.
      */
-    assert.equal(gear.NOT_FOR_FM3, 'Never plug the C2MIDI Pro into an FM3: when we tried it on one, the cable got very hot.')
+    assert.equal(gear.NOT_FOR_FM3, 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master: both got very hot on one.')
     assert.ok(!/FM3/.test(gear.GEAR_IN_SHORT), 'the short list says the FM3 line a second time, right under step 1')
     const step1 = page.slice(page.indexOf('<Heading>1 · Pick your unit</Heading>'), page.indexOf('<Heading>2 · Connect</Heading>'))
     assert.match(step1, /<\/View> <Hint>\{NOT_FOR_FM3\}<\/Hint> <\/View>/, 'the FM3 line is not under the units, for everybody, whatever is picked')
@@ -8100,8 +8111,10 @@ export function run(test) {
      * word; then where it was tried; then the button straight under the
      * note, by the name the button has; then the way back.
      */
+    /* OUT OF BETA, 26 October 2026 ("remove anything that says beta on it for Bluetooth"): it opens on where it has been tried, and never says beta. */
     for (const note of [gear.BETA_NOTE_IPHONE, gear.BETA_NOTE_ANDROID]) {
-      assert.ok(note.startsWith('Bluetooth is in beta, and some features might not work as expected. '), note)
+      assert.ok(note.startsWith('So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone'), note)
+      assert.ok(!/\bbeta\b/i.test(note), `the note still says beta: ${note}`)
       assert.ok(note.includes(`If something doesn’t work, tap ${gear.REPORT_BUTTON}, just below.`), 'the beta note does not point at the report button by its name')
       assert.ok(note.endsWith('The cable to the computer still does everything.'), 'the beta note does not end on the way back')
       assert.ok(!/this phone|Settings →|Feedback/.test(note), 'the beta note names the device in hand, or sends a player round Settings')
@@ -8129,9 +8142,9 @@ export function run(test) {
      * to "and not yet from an Android phone"; changed on purpose. The
      * iPhone's still names no other phone.
      */
-    assert.match(gear.BETA_NOTE_ANDROID, /tried on the AM4, from an iPhone and an Android phone\./, 'the Android beta note does not say it has been tried from an Android phone')
+    assert.match(gear.BETA_NOTE_ANDROID, /tried on the AM4 and the FM3, from an iPhone and an Android phone\./, 'the Android beta note does not say it has been tried from an Android phone')
     assert.ok(!/not yet from an Android phone/.test(gear.BETA_NOTE_ANDROID), 'the Android beta note still says no Android phone has run it')
-    assert.match(gear.BETA_NOTE_IPHONE, /So far it has been tried on the AM4, from an iPhone\. If something/, 'the iPhone’s beta note does not say where it has been tried')
+    assert.match(gear.BETA_NOTE_IPHONE, /So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone\. If something/, 'the iPhone’s beta note does not say where it has been tried')
     assert.ok(!/android|google|play store|\bapk\b/i.test(gear.BETA_NOTE_IPHONE), 'the iPhone’s beta note names another phone, which Apple’s 2.3.10 rejects')
     assert.equal(gear.BETA_NOTE_ANDROID.replace(' and an Android phone', ''), gear.BETA_NOTE_IPHONE, 'the two beta notes say different things besides the Android clause')
     /* Picked by the phone's own platform; anything not Android gets the iPhone's, so no new platform ever shows Android's name. */
@@ -8142,7 +8155,7 @@ export function run(test) {
     for (const unit of gear.TESTED) {
       const name = BLE_UNITS.find((u) => u.key === unit).name
       for (const note of [gear.BETA_NOTE_IPHONE, gear.BETA_NOTE_ANDROID]) {
-        assert.ok(note.includes(`tried on the ${name}`), `the beta note does not say it was tried on the ${name}`)
+        assert.ok(new RegExp(`tried on the [^.]*\\b${name}\\b`).test(note), `the beta note does not say it was tried on the ${name}`)
       }
     }
     /* The phone carries the same file, generated (the sync test holds it to the source). */
@@ -8231,7 +8244,8 @@ export function run(test) {
     const buy = page.slice(page.indexOf('function Buy('), page.indexOf('function Fold('))
     assert.match(buy, /if \(!unit\) return <Hint>\{GEAR_IN_SHORT\}<\/Hint>/)
     assert.match(buy, /partsFor\(unit, deviceNoun\(\)\)\.map\(\(p\) => \( <View key=\{p\.key\}/)
-    assert.match(buy, /\{p\.name\}<\/Text> <Hint>\{p\.does\}<\/Hint> <Press label="View on Amazon" height=\{44\} accessibilityLabel=\{`View the \$\{p\.name\} on Amazon`\} onPress=\{\(\) => openLink\(p\.amazon\)\} \/>/)
+    /* On Amazon where a link has been checked, the maker's own page where none has (the FM3's U2MIDI Pro, since 26 October 2026). */
+    assert.match(buy, /\{p\.name\}<\/Text> <Hint>\{p\.does\}<\/Hint> \{\/\*[^*]*\*\/\} <Press label=\{p\.amazon \? 'View on Amazon' : 'View on the maker’s site'\} height=\{44\} accessibilityLabel=\{p\.amazon \? `View the \$\{p\.name\} on Amazon` : `View the \$\{p\.name\} on the maker’s site`\} onPress=\{\(\) => openLink\(p\.amazon \|\| p\.maker\)\} \/>/)
     assert.match(buy, /<Hint>\{POWER_LINE\}<\/Hint>/, 'the charger is left off the list')
     assert.match(buy, /<Hint>\{POWER_LINE\}<\/Hint> <Hint>\{SELLERS_LINE\}<\/Hint>/, 'the parts are offered with no word that the app is not their maker, and gets nothing from the links')
     /*
@@ -8297,7 +8311,7 @@ export function run(test) {
       'the gear file gives an address that is not one of the three parts'
     )
     for (const p of Object.values(gear.PARTS)) {
-      assert.ok(html.includes(`href="${p.amazon}"`), `the guide does not link the ${p.name} where the app does`)
+      if (p.amazon) assert.ok(html.includes(`href="${p.amazon}"`), `the guide does not link the ${p.name} where the app does`)
       if (p.maker) assert.ok(html.includes(`href="${p.maker}"`), `the guide does not link CME’s page for the ${p.name} where the gear file does`)
     }
   })
@@ -8307,7 +8321,7 @@ export function run(test) {
 
   /*
    * "Super easy for all users to submit bugs and feedback." (Justin, 25
-   * October 2026, deciding that Bluetooth (beta) goes to every customer with
+   * October 2026, deciding that Bluetooth goes to every customer with
    * the full version, on all four units, marked beta.) The Feedback form is
    * every customer's and waits for something to be typed, so Bluetooth's own
    * places open a report of their own: a row of answers, and a tap sends it
@@ -8326,30 +8340,30 @@ export function run(test) {
       assert.ok(!/this phone|colour|grey|favourite/i.test(label), label)
     }
     /* The first line names it and the answer, which is what the email's subject is made of. */
-    assert.equal(r.reportNote('connect'), 'Bluetooth (beta): It won’t connect')
-    assert.equal(r.reportNote('works', '  '), 'Bluetooth (beta): It works on my unit', 'an empty fault line is sent as one')
+    assert.equal(r.reportNote('connect'), 'Bluetooth: It won’t connect')
+    assert.equal(r.reportNote('works', '  '), 'Bluetooth: It works on my unit', 'an empty fault line is sent as one')
     assert.equal(
       r.reportNote('answer', 'Adapter connected, but the AM4 isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.'),
-      'Bluetooth (beta): The unit doesn’t answer\nThe app said: Adapter connected, but the AM4 isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.'
+      'Bluetooth: The unit doesn’t answer\nThe app said: Adapter connected, but the AM4 isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.'
     )
     /* An answer the screen does not know is Something else, never nothing: a report must carry a message. */
-    assert.equal(r.reportNote('nonsense'), 'Bluetooth (beta): Something else')
+    assert.equal(r.reportNote('nonsense'), 'Bluetooth: Something else')
     /*
      * WRITE IT OUT STARTS WITH WHAT THE SCREEN SAID GOES WITH IT: the same
      * first line, so the email's subject says Bluetooth, the fault line under
      * it, and a blank line for what they write.
      */
-    assert.equal(r.writeOutNote('No adapter was connected.'), 'Bluetooth (beta)\nThe app said: No adapter was connected.\n\n')
-    assert.equal(r.writeOutNote(null), 'Bluetooth (beta)\n\n')
-    assert.equal(r.writeOutNote('   '), 'Bluetooth (beta)\n\n', 'an empty fault line is written in as one')
+    assert.equal(r.writeOutNote('No adapter was connected.'), 'Bluetooth\nThe app said: No adapter was connected.\n\n')
+    assert.equal(r.writeOutNote(null), 'Bluetooth\n\n')
+    assert.equal(r.writeOutNote('   '), 'Bluetooth\n\n', 'an empty fault line is written in as one')
     const written = rules.buildReport({ kind: 'bug', message: `${r.writeOutNote('Finding WIDI Uhost…')}It drops after a minute`, context: {}, lines: [], format: () => '' })
-    assert.equal(written.message.split('\n')[0], 'Bluetooth (beta)', 'a written-out report’s subject does not say Bluetooth')
+    assert.equal(written.message.split('\n')[0], 'Bluetooth', 'a written-out report’s subject does not say Bluetooth')
     assert.match(written.message, /^The app said: Finding WIDI Uhost…$/m)
     for (const { key } of r.REASONS) {
       const message = rules.logsMessage(r.reportNote(key, 'Finding WIDI Uhost…'))
       assert.notEqual(message, rules.LOGS_ONLY_MESSAGE, `${key} is sent as "logs only, no message written"`)
       const row = rules.buildReport({ kind: 'bug', message, context: {}, lines: [], format: () => '' })
-      assert.ok(row.message.startsWith('Bluetooth (beta): '), `${key}: the report does not say it is about Bluetooth`)
+      assert.ok(row.message.startsWith('Bluetooth: '), `${key}: the report does not say it is about Bluetooth`)
       assert.equal(row.kind, 'bug')
       assert.notEqual(row.log, null, `${key}: the report goes without its log`)
     }
@@ -8378,7 +8392,7 @@ export function run(test) {
          * line for which units Bluetooth is for, when there is one.
          */
         const his = gear.wrongUnitLine({ answered, picked, pickable: BLE_UNITS.some((u) => u.name === answered) })
-        const elsewhere = gear.wrongUnitLine({ answered, picked, pickable: false, forWhich: 'For now, Bluetooth (beta) is for these units only.' })
+        const elsewhere = gear.wrongUnitLine({ answered, picked, pickable: false, forWhich: 'For now, Bluetooth is for these units only.' })
         for (const line of [his, elsewhere]) {
           assert.ok(line.startsWith(`${capital(gear.withArticle(answered))} answered, not the ${picked}. `), line)
           assert.ok(!/\b(an?|An?) (an?|An?)\b/.test(line), `two articles: ${line}`)
@@ -8386,7 +8400,7 @@ export function run(test) {
           assert.ok(!/isn’t a Bluetooth unit/.test(line), `a unit is told it is not a Bluetooth unit: ${line}`)
         }
         assert.equal(his, `${capital(gear.withArticle(answered))} answered, not the ${picked}. Tap Stop, pick ${answered} in step 1, then tap Connect.`)
-        assert.equal(elsewhere, `${capital(gear.withArticle(answered))} answered, not the ${picked}. For now, Bluetooth (beta) is for these units only. Tap Stop, and use the computer for the ${answered}.`)
+        assert.equal(elsewhere, `${capital(gear.withArticle(answered))} answered, not the ${picked}. For now, Bluetooth is for these units only. Tap Stop, and use the computer for the ${answered}.`)
       }
     }
     assert.equal(gear.wrongUnitLine({ answered: 'VP4', picked: 'AM4', pickable: true }), 'A VP4 answered, not the AM4. Tap Stop, pick VP4 in step 1, then tap Connect.')
@@ -8409,8 +8423,9 @@ export function run(test) {
     const gear = await import('../shared/bluetooth-gear.mjs')
     assert.equal(
       gear.FM3_NEVER,
-      'Never plug the C2MIDI Pro, or any adapter that can take power from MIDI OUT (even one on USB power), into an FM3. When we tried it, the cable got very hot, and FM3 owners report the same.'
+      'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, and when we tried it, it worked and stayed cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
     )
+    /* Since 26 October 2026 ("Using the U2midi pro adapter the FM3 works and does not get hot", "The Widi Master did not work on the FM3 and got very hot"): what to use first, then what never to. */
     /* Said as what happened here and what owners report, with no way round it and nothing said as a fact about the unit. */
     assert.ok(!/straight|220|resistor|solder|nothing to limit/i.test(gear.FM3_NEVER))
     /*
@@ -8419,11 +8434,11 @@ export function run(test) {
      * USB charger, as not about their adapter. "Can take" power, so one that
      * runs on USB power alone, never from the jack, is not in it.
      */
-    assert.match(gear.FM3_NEVER, /any adapter that can take power from MIDI OUT \(even one on USB power\)/, 'the FM3 line that is never folded away leaves out USB power')
+    assert.match(gear.FM3_NEVER, /any adapter that can take power from MIDI OUT, even on USB power/, 'the FM3 line that is never folded away leaves out USB power')
     assert.match(gear.FM3_WARNING, /even on USB power/)
     /* The guide and the notes say the same thing. */
     const guide = readFileSync(new URL('../public/bluetooth-guide.html', import.meta.url), 'utf8').replace(/\s+/g, ' ')
-    assert.match(guide, /keep these parts, and any adapter that takes its power from the MIDI OUT jack, off an FM3/)
+    assert.match(guide, /keep the C2MIDI Pro, the WIDI Master, and any adapter that takes its power from the MIDI OUT jack, off an FM3/)
     assert.match(guide, /Powering the adapter from USB doesn’t stop it, because the jack is still feeding it\./)
     const notes = readFileSync(new URL('../docs/bluetooth-midi.md', import.meta.url), 'utf8').replace(/\s+/g, ' ')
     assert.match(notes, /Every adapter that feeds from MIDI Out runs hot on an FM3/)
@@ -8562,7 +8577,7 @@ export function run(test) {
       platform: 'android 35',
       unit: 'Axe-Fx III',
       preset: `1023 ${'X'.repeat(32)}`,
-      link: `Bluetooth (beta), connected, through ${'W'.repeat(64)}`,
+      link: `Bluetooth, connected, through ${'W'.repeat(64)}`,
       ...r.bluetoothHead({ unit: 'Axe-Fx III', answeredAs: 'FM9', phase: 'connected', trouble: 'restricted', adapter: 'W'.repeat(64), ways: everything })
     })
     assert.ok(Buffer.byteLength(head) < HEAD_BYTES / 2, `the head is ${Buffer.byteLength(head)} bytes`)
@@ -8613,8 +8628,8 @@ export function run(test) {
       bench.ble.chooseAdapter({ id: ADDRESS, name: ADDRESS })
       bench.ble.noteBluetooth({ answeredAs: 'AM4', trouble: 'bluetooth-off' })
       const facts = bench.ble.bluetoothFacts()
-      /* "FM3 (not run yet)": it has never run on one (shared/bluetooth-gear unitForReport). */
-      assert.deepEqual(facts, { unit: 'FM3 (not run yet)', answeredAs: 'AM4', phase: 'off', trouble: 'bluetooth-off', adapter: '', ways: { learned: {}, forced: {}, pcChannel: 1 } })
+      /* "FM3", plain, since it ran on one with the U2MIDI Pro (26 October 2026; shared/bluetooth-gear unitForReport). */
+      assert.deepEqual(facts, { unit: 'FM3', answeredAs: 'AM4', phase: 'off', trouble: 'bluetooth-off', adapter: '', ways: { learned: {}, forced: {}, pcChannel: 1 } })
       /* An AM4 learns no way and has one for everything: its head says nothing about ways, not "none found yet". */
       bench.ble.setBluetoothUnit('am4')
       assert.equal(bench.ble.bluetoothFacts().ways, null, 'an AM4’s head is handed ways it never learns')
@@ -8623,7 +8638,7 @@ export function run(test) {
       const head = headLines(r.bluetoothHead(facts))
       assert.ok(!head.includes(ADDRESS), 'the head names the adapter by its Bluetooth address')
       assert.match(head, /^adapter: one with no name$/m)
-      assert.match(head, /^bluetooth unit: FM3 \(not run yet\)$/m)
+      assert.match(head, /^bluetooth unit: FM3$/m)
       /* A VP4, like an AM4, has one way for each and learns none: no ways in its head. */
       bench.ble.setBluetoothUnit('vp4')
       assert.equal(bench.ble.bluetoothFacts().ways, null, 'a VP4’s head is handed ways it never learns')
@@ -8704,7 +8719,7 @@ export function run(test) {
       s.link = { link: 'connected', macName: 'WIDI Uhost Bluetooth' }
       const over = logHeader({ deviceName: 'FM9' })
       assert.deepEqual(has(over), BLE_KEYS)
-      assert.equal(over.link, 'Bluetooth (beta), connected, through WIDI Uhost Bluetooth')
+      assert.equal(over.link, 'Bluetooth, connected, through WIDI Uhost Bluetooth')
       assert.equal(over['bluetooth unit'], 'FM9')
       assert.equal(over['bluetooth link'], 'connected')
       assert.equal(over['bluetooth ways'], 'tempo Published', 'over Bluetooth the head does not say the ways found')
@@ -8904,11 +8919,32 @@ export function run(test) {
     assert.match(page, /import \{[^}]*\bREPORT_BUTTON\b[^}]*\} from '\.\.\/lib\/bluetooth-gear'/)
   })
 
+  test('not connecting after the adapter was unplugged and plugged back in: the page says to close the app completely, wherever it is on and not working', async () => {
+    /*
+     * "I had to force close the app after Bluetooth was connected, and when
+     * I unplugged the device and plugged it back in. The Bluetooth wouldn't
+     * connect again until I Force quit the app" (Justin, 26 October 2026).
+     * His log: the iPhone still listed the adapter, the app connected to it
+     * at once, and the FM3 never answered; the launch after the force quit
+     * answered in a twentieth of a second. What was stale is the phone's own
+     * MIDI connection, made once a launch (the native module), which an
+     * update cannot change, so the way out is said where it is needed.
+     */
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    assert.equal(gear.CLOSE_AND_REOPEN, 'Still not connecting after unplugging and plugging the adapter back in? Close the app completely (swipe it away) and open it again.')
+    assert.ok(!/this phone|beta/i.test(gear.CLOSE_AND_REOPEN))
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    assert.match(page, /\{b\.phase === 'connecting' \|\| \(b\.phase === 'connected' && !b\.answeredAs && \(unitState === 'missing' \|\| unitState === 'silent'\)\) \? \( <Hint>\{CLOSE_AND_REOPEN\}<\/Hint> \) : null\}/, 'the page does not say to close the app while it is connecting, or connected with the unit silent')
+    const on = page.slice(page.indexOf('{b.on ? ( <View style={{ gap: space.sm }}>'), page.indexOf(') : ( <View style={{ gap: space.lg }}>'))
+    assert.ok(on.includes('{CLOSE_AND_REOPEN}'), 'the line is not in the half of the page drawn while Bluetooth is on')
+  })
+
   test('the beta note opens in his words, points at the report button, and the cable still does everything', async () => {
     const gear = await import('../shared/bluetooth-gear.mjs')
     assert.equal(
       gear.BETA_NOTE_IPHONE,
-      'Bluetooth is in beta, and some features might not work as expected. So far it has been tried on the AM4, from an iPhone. If something doesn’t work, tap Report a Bluetooth problem, just below. The cable to the computer still does everything.'
+      /* Out of beta since 26 October 2026: where it has been tried, the button, and the way back, and never "beta". */
+      'So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone. If something doesn’t work, tap Report a Bluetooth problem, just below. The cable to the computer still does everything.'
     )
     assert.equal(gear.BETA_NOTE_ANDROID.replace(' and an Android phone', ''), gear.BETA_NOTE_IPHONE)
     assert.ok(!/android|google|play store|\bapk\b/i.test(gear.BETA_NOTE_IPHONE))
@@ -8945,7 +8981,7 @@ export function run(test) {
     /* The note keeps its own shape (a test reads it), What to try its own conditional, and Report this a third. */
     assert.match(card, /\{error \? \( <Note tone="fault" onDismiss=\{clearError\}> \{error\} <\/Note> \) : null\}/)
     assert.match(card, /\{error && onOpenFix && fixFor\(error\) \? \( <Press label=\{fixById\(fixFor\(error\)\)\.title\} sub="What to try"/)
-    /* Its small line says "not tried on the FM9 yet" on a unit nobody has tried (shared/bluetooth-gear faultSubFor), and "Bluetooth (beta)" on the rest. */
+    /* Its small line says "not tried on the FM9 yet" on a unit nobody has tried (shared/bluetooth-gear faultSubFor), and "Bluetooth" on the rest. */
     assert.match(card, /\{error && onReport && overBluetooth\(caps\) \? \( <Press label="Report this" sub=\{faultSubFor\(bleUnit\)\} height=\{44\} onPress=\{\(\) => onReport\(error\)\} \/> \) : null\}/)
     assert.ok(card.indexOf('What to try') < card.indexOf('label="Report this"'), 'Report this is above What to try')
     /* Drawn only there: not on the advice card, and not with the dropped tap's note, which is not a fault. */
@@ -9447,7 +9483,7 @@ export function run(test) {
       }
       assert.equal(gear.untriedConnectedLine(unit), `Not tried on the ${name} yet. Tell us how it goes: tap ${gear.REPORT_BUTTON}, below.`)
       assert.equal(gear.untriedAboutLine(unit), `Built from what is known about the ${name}, but not yet tried on a real one. Some of it may not work as expected.`)
-      assert.equal(gear.faultSubFor(unit), `Bluetooth (beta), not tried on the ${name} yet`)
+      assert.equal(gear.faultSubFor(unit), `Bluetooth, not tried on the ${name} yet`)
       assert.equal(gear.unitForReport(unit), `${name} (not tried yet)`)
       assert.equal(gear.untriedSubFor(unit), gear.UNTRIED_SUB)
       if (unit === 'vp4') continue
@@ -9456,27 +9492,12 @@ export function run(test) {
       assert.ok(gear.firmwareLineFor(unit).startsWith(`Use ${name} firmware`))
     }
     assert.match(gear.missingBlocksLine('axefx3'), /IR Player, Dynamic Distortion\)/)
-    /*
-     * THE FM3, IN ITS OWN WORDS. It was tried, once, and that cable got very
-     * hot and never connected, so "not tried" would be untrue beside
-     * FM3_NEVER's "when we tried it": it hasn't run on one. Offered with the
-     * rest since 25 October 2026 ("I don't wanna wait for the FM3 test").
-     */
-    assert.equal(gear.untried('fm3'), true)
-    for (const line of lines('fm3')) {
-      assert.ok(line && /hasn’t run on (an|a real) FM3|run on a real one/.test(line), `fm3: ${line}`)
-      assert.ok(!/not tried/i.test(line), `the FM3 is said not to have been tried: ${line}`)
-    }
-    assert.equal(gear.untriedConnectedLine('fm3'), `It hasn’t run on an FM3 yet. Tell us how it goes: tap ${gear.REPORT_BUTTON}, below.`)
-    assert.equal(gear.untriedShortLine('fm3'), 'It hasn’t run on an FM3 yet.')
-    assert.equal(gear.faultSubFor('fm3'), 'Bluetooth (beta), not run on an FM3 yet')
-    assert.equal(gear.unitForReport('fm3'), 'FM3 (not run yet)')
-    assert.equal(gear.untriedSubFor('fm3'), gear.FM3_SUB)
-    assert.equal(gear.FM3_SUB, 'Not run yet')
-    for (const unit of ['am4', null, 'vp5']) {
+    /* THE FM3, TRIED since 26 October 2026 (the U2MIDI Pro): none of these lines, like the AM4. Its "hasn't run" words went with it. */
+    assert.equal(gear.FM3_SUB, undefined, 'the FM3 still has its own "not run yet"')
+    for (const unit of ['am4', 'fm3', null, 'vp5']) {
       assert.equal(gear.untried(unit), false, String(unit))
       for (const line of lines(unit)) assert.equal(line, null, `${unit}: ${line}`)
-      assert.equal(gear.faultSubFor(unit), 'Bluetooth (beta)')
+      assert.equal(gear.faultSubFor(unit), 'Bluetooth')
       assert.equal(gear.untriedSubFor(unit), undefined)
       assert.equal(gear.missingBlocksLine(unit), null)
       assert.equal(gear.tunerQuietLine(unit), null)
@@ -9494,7 +9515,7 @@ export function run(test) {
     assert.ok(!/never as a step for everybody \(midiSettingsFor\)/.test(page), 'PlugIn still says the Program Change settings are never a step')
     assert.match(page, /<Fold title="What it can and can’t do" open=\{about\} onToggle=\{\(\) => setAbout\(!about\)\}> \{untriedAboutLine\(b\.unit\) \? <Note tone="warn">\{untriedAboutLine\(b\.unit\)\}<\/Note> : null\}/)
     assert.ok(page.indexOf('{missingBlocksLine(b.unit) ? (') > page.indexOf('{DIFFERENT.map('), 'the blocks line is not with what is different')
-    assert.match(page, /Bluetooth \(beta\) check · \$\{unitForReport\(b\.unit\) \|\| unitName\(b\.unit\)\} · /)
+    assert.match(page, /Bluetooth check · \$\{unitForReport\(b\.unit\) \|\| unitName\(b\.unit\)\} · /)
     assert.match(page, /const firmware = firmwareLineFor\(unit\)/)
     assert.ok(page.indexOf('{firmware ? <Hint>{firmware}</Hint> : null}') > page.indexOf('<Hint>{FIRST_TIME}</Hint>'))
     /* The heat line, never folded away on these two: near the top while How to plug it in is shut, among the steps when it is open. */
@@ -9502,7 +9523,7 @@ export function run(test) {
     assert.ok(page.indexOf('{heatUp ? <Note tone="warn">{heatUp}</Note> : null}') < page.indexOf('<Fold title="How to plug it in"'))
     assert.match(flat('mobile/src/components/TopBar.js'), /\? `Connected over Bluetooth, through \$\{adapter\}\.\$\{untried \? ` \$\{untried\}` : ''\}`/)
     assert.match(flat('mobile/src/lib/bluetooth.js'), /unit: saved\.unit \? unitForReport\(saved\.unit\) \|\| unitName\(saved\.unit\) : null,/)
-    /* Only the AM4 has run it: every other unit is said as untried, and none opens to a customer before the store version does (the rule's own test). */
-    assert.deepEqual(gear.TESTED, ['am4'])
+    /* Only the AM4 and the FM3 have run it: every other unit is said as untried, and none opens to a customer before the store version does (the rule's own test). */
+    assert.deepEqual(gear.TESTED, ['am4', 'fm3'])
   })
 }

@@ -5,8 +5,10 @@ Bluetooth capabilities if we had a Bluetooth dongle? ... is it even possible
 with the ForgeFX software?" He already owns a CME WIDI Master, which he uses
 with a mini controller.
 
-Way B below is now built: Bluetooth (beta), in the phone app under Settings →
-Bluetooth (beta). It was a public beta for one day (10 October 2026); since
+Way B below is now built: Bluetooth, in the phone app under Settings → My
+rig → Bluetooth (called Bluetooth (beta) until 26 October 2026, when Justin
+said "I also think we're ready to get the Bluetooth out of beta"). It was
+public for one day (10 October 2026); since
 11 October it shows on Justin's account alone ("I just feel like it's not
 ready to have public"), and its setup guide moved to
 public/bluetooth-guide.html, linked only from that page, while
@@ -25,8 +27,12 @@ over these dongles. Fractal says backups and dumps are not supported over
 5-pin MIDI. On gen-3 units ForgeFX reads the block list by dumping the
 preset, so even the block list may not appear over 5-pin.
 
-None of it has been tried on Justin's hardware yet. That test comes first,
-before any code or any build.
+None of it had been tried on Justin's hardware when this was written. Since
+then (26 October 2026, from an iPhone and an Android phone): his AM4 works
+through the WIDI Uhost with the C2MIDI Pro and the two Type-A adapters, and
+through a WIDI Master; his FM3 works through the WIDI Uhost with a U2MIDI
+Pro, and stays cool. The WIDI Master and the C2MIDI Pro both got very hot on
+the FM3, and the WIDI Master did not work (below).
 
 ## What is true today
 
@@ -155,18 +161,22 @@ MIDI Out/Thru, with the Uhost powered from USB as on the AM4.
 - The fix owners report, 2021 to 2026, including on an FM3 Turbo: a short
   adapter with a 220-ohm resistor in series on pin 4, between the FM3's MIDI
   Out/Thru and the adapter. Not tried with the app yet.
-- Untried alternative with no soldering: CME's U2MIDI Pro (USB-A), which its
+- The one that works, with no soldering: CME's U2MIDI Pro (USB-A), which its
   manual says runs only on USB power, through a USB-A to USB-C adapter into the
-  Uhost. Inference only; feel it in the first minute.
+  Uhost. Tried on his FM3 on 26 October 2026: "Using the U2midi pro adapter
+  the FM3 works and does not get hot."
+- And the WIDI Master, the same day: "The Widi Master did not work on the FM3
+  and got very hot." (On his AM4 it works.)
 - The WIDI Uhost cannot use the FM3's USB socket ("The FM3 is NOT a USB MIDI
   Device").
 - No FM3 has been reported damaged in five years of these reports. A
   C2MIDI Pro that got hot may be: check it on USB power with both MIDI plugs
   touching nothing before it goes back on the AM4.
 
-The website's guide and the app's Bluetooth page now warn FM3 owners instead
-of listing parts for it (shared/bluetooth-gear.mjs FM3_WARNING), and the FM3
-stays pickable for anyone who fits the resistor adapter.
+The website's guide and the app's Bluetooth page list the Uhost and the
+U2MIDI Pro for an FM3, with the warning red and in front of them
+(shared/bluetooth-gear.mjs FM3_WARNING, FM3_NEVER): use the U2MIDI Pro, never
+the WIDI Master or the C2MIDI Pro, which got very hot and did not work.
 
 Sources: CME C2MIDI Pro manual v03
 (https://www.cme-pro.com/wp-content/uploads/2025/02/C2MIDI-Pro-user-manual_English_v03.pdf),
@@ -219,9 +229,10 @@ FM3-Edit's ways (scene, channel, tempo, the 0x27 preset, the polled tuner)
 still go when they are picked in the testing tools, his account only, which
 is how they would be tried on a real unit. The Axe-Fx III stays at 512
 presets, as the computer app does: nothing Fractal publishes tells an
-original III from a Mark II over MIDI. And `TESTED` stays `['am4']`:
-"not tried yet" is said on every Bluetooth surface an FM9 or Axe-Fx III
-owner reaches, each pointing at Report a Bluetooth problem.
+original III from a Mark II over MIDI. And `TESTED` is `['am4', 'fm3']`
+since 26 October 2026: "not tried yet" is said on every Bluetooth surface an
+FM9, Axe-Fx III or VP4 owner reaches, each pointing at Report a Bluetooth
+problem.
 
 ## Dongles
 
@@ -231,9 +242,11 @@ owner reaches, each pointing at Report a Bluetooth problem.
     it carries MIDI both ways, which a remote needs. With only the main plug
     in, it carries one way.
   - It takes power only from a MIDI Out jack.
-  - **On an FM3 it runs hot.** The FM3's MIDI Out supplies 5 V with no
-    current-limiting resistor. Users fix it with a 220-ohm resistor; Fractal
-    has said nothing.
+  - **On an FM3 it runs hot, and did not work** (tried 26 October 2026). The
+    FM3's MIDI Out supplies 5 V with no current-limiting resistor, owners
+    report. Users fix it with a 220-ohm resistor; Fractal has said nothing.
+  - **On an AM4 it works** (tried 26 October 2026), its two plugs in the two
+    Type-A 3.5 mm adapters, in place of the Uhost and the C2MIDI Pro.
   - Some CME firmware versions mishandled SysEx, so update it with CME's app
     first.
 - **CME WIDI Jack** (about $60): plugs into both In and Out, can run from

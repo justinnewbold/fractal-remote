@@ -445,7 +445,7 @@ export function run(test) {
           return true
         })
         /* It was the Bluetooth report that tried, with its own first line. */
-        assert.equal(bench.inserts[0].row.message, 'Bluetooth (beta): It won’t connect\nThe app said: No adapter was connected.')
+        assert.equal(bench.inserts[0].row.message, 'Bluetooth: It won’t connect\nThe app said: No adapter was connected.')
         /* The log screen's one tap with nothing written still offers Copy Logs on a refusal, and a typed note is still kept. */
         await assert.rejects(reports.sendLogs({ deviceName: 'AM4', note: '' }), (err) => !/What you wrote/.test(err.message))
         await assert.rejects(reports.sendLogs({ deviceName: 'AM4', note: 'It froze' }), /What you wrote is still here/)

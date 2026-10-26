@@ -3,7 +3,7 @@
  * fails on any difference between the two. */
 
 /**
- * BLUETOOTH (BETA): WHAT TO BUY, HOW IT PLUGS IN, AND WHERE THE FULL GUIDE IS.
+ * BLUETOOTH: WHAT TO BUY, HOW IT PLUGS IN, AND WHERE THE FULL GUIDE IS.
  *
  * "We need to provide as much instructions as possible on how to connect it
  * and hook it up. So as far as I know, we need a CME Widi host. And then for
@@ -24,10 +24,13 @@
  * plain /dp/<number> form, with no tracking on the end. No prices: they
  * change, and a price in the app is wrong the day it does.
  *
- * WHAT IS KNOWN TO WORK is one rig: his AM4, through the WIDI Uhost, the
- * C2MIDI Pro and the two 3.5 mm adapters, from an iPhone and, since 25
- * October 2026, from an Android phone ("I have tried it from an android
- * phone and it works great"). The FM9 and Axe-Fx III have the 5-pin MIDI
+ * WHAT IS KNOWN TO WORK, since 26 October 2026, from an iPhone and an
+ * Android phone ("They also work with both iPhone and android"): his AM4,
+ * through the WIDI Uhost, the C2MIDI Pro and the two 3.5 mm adapters, and
+ * through a WIDI Master ("The AM4 also works fine using the Widi Master.
+ * And works with the Widi Uhost as well"); and his FM3, through the WIDI
+ * Uhost and a U2MIDI Pro ("Using the U2midi pro adapter the FM3 works and
+ * does not get hot"). The FM9 and Axe-Fx III have the 5-pin MIDI
  * jacks the C2MIDI Pro was made for, so the same chain without the adapters
  * may work on them, and the VP4 has the AM4's 3.5 mm Type-A jacks, so the
  * AM4's whole chain may — but nobody has tried any of them, and the page
@@ -38,7 +41,7 @@
  * to test it and submit feedback, but it might not work properly" (Justin,
  * 25 October 2026).
  *
- * NOT THE FM3, PLUGGED STRAIGHT IN. "I tried to use the exact same WIDI host
+ * NOT THE C2MIDI PRO OR THE WIDI MASTER ON AN FM3. "I tried to use the exact same WIDI host
  * setup on the FM3 as I did on the AM4 and the CME C2MIDI Pro got extremely
  * hot on the FM3 and the connection didn't work." The C2MIDI Pro's white plug
  * can feed itself from the MIDI OUT it goes into (CME's manual: "can be
@@ -47,14 +50,16 @@
  * that pin; FM3 owners measured in 2021 that the FM3 has none, and report the
  * same on the Turbo in 2025 and 2026. So every adapter that feeds from it runs
  * hot there — CME's WIDI Master and WIDI Jack, Yamaha's MD-BT01, this cable —
- * and USB power does not stop it. So the FM3 gets a warning in place of a
- * shopping list, and no buy links (docs/bluetooth-midi.md has the sources),
- * and everybody is told before any pick that the C2MIDI Pro is never for an
- * FM3 (NOT_FOR_FM3), so an FM3 owner reading an AM4's shopping list knows
- * to stop. Offered to customers with the rest from the store version that
- * opens Bluetooth: "I don't wanna wait for the FM3 test" (25 October 2026).
- * It has never run on one, and every line that names it says so
- * (untried, below), the warning first.
+ * and USB power does not stop it. Then, on 26 October 2026: "The Widi
+ * Master did not work on the FM3 and got very hot." So the FM3's warning
+ * names both, red and in front of everything else for an FM3.
+ *
+ * THE U2MIDI PRO ON AN FM3. CME's USB-A cable with the same black and white
+ * plugs, "Powered via Standard 5V USB bus" (CME's page) and never from the
+ * MIDI OUT it goes into. On his FM3, through the Uhost: it works, and stays
+ * cool. So the FM3 has a shopping list and steps of its own (the U2MIDI Pro
+ * in the C2MIDI Pro's place), and everybody is told before any pick that
+ * the C2MIDI Pro and the WIDI Master are never for an FM3 (NOT_FOR_FM3).
  *
  * NO RECIPE FOR THE WAY ROUND IT. The warning and the guide once said what
  * FM3 owners fit (a resistor on one pin of a home-made adapter, "someone who
@@ -113,7 +118,7 @@
 export const GUIDE_URL = 'https://fractal.newbold.cloud/bluetooth-guide.html'
 
 /** The units it has actually been tried on. Every other unit's steps say "not tried yet". */
-export const TESTED = ['am4']
+export const TESTED = ['am4', 'fm3']
 
 /**
  * WHAT TO SAY ABOUT IT BEING A BETA. "Let's just say that Bluetooth is beta
@@ -166,10 +171,17 @@ export const TESTED = ['am4']
  * Justin and nobody else: help with the app is his own channels only.
  */
 export const REPORT_BUTTON = 'Report a Bluetooth problem'
-const BETA_OPENS = 'Bluetooth is in beta, and some features might not work as expected.'
+/*
+ * OUT OF BETA, 26 OCTOBER 2026: "I also think we're ready to get the
+ * Bluetooth out of beta so remove anything that says beta on it for
+ * Bluetooth." So the note no longer opens "Bluetooth is in beta"; it keeps
+ * what is useful in it: where it has been tried, the button for a problem,
+ * and the way back. (The names BETA_NOTE_* and betaNote are kept, not the
+ * word.)
+ */
 const BETA_ENDS = `If something doesn’t work, tap ${REPORT_BUTTON}, just below. The cable to the computer still does everything.`
-export const BETA_NOTE_IPHONE = `${BETA_OPENS} So far it has been tried on the AM4, from an iPhone. ${BETA_ENDS}`
-export const BETA_NOTE_ANDROID = `${BETA_OPENS} So far it has been tried on the AM4, from an iPhone and an Android phone. ${BETA_ENDS}`
+export const BETA_NOTE_IPHONE = `So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone. ${BETA_ENDS}`
+export const BETA_NOTE_ANDROID = `So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone and an Android phone. ${BETA_ENDS}`
 
 /** The beta note for the phone it is shown on, from Platform.OS. */
 export const betaNote = (os) => (os === 'android' ? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE)
@@ -208,7 +220,7 @@ export const betaNote = (os) => (os === 'android' ? BETA_NOTE_ANDROID : BETA_NOT
  * so they can never say different things.
  */
 export const BLUETOOTH_WAYS =
-  'There are two ways to connect. The computer is the best one. Bluetooth (beta) needs no computer, but it has more lag and fewer features.'
+  'There are two ways to connect. The computer is the best one. Bluetooth needs no computer, but it has more lag and fewer features.'
 export const BLUETOOTH_WAYS_SHORT = 'More lag than the computer, fewer features'
 /*
  * THE SETTINGS ROW, OFF: what it is for and what it costs, in the one line a
@@ -226,7 +238,7 @@ export const BLUETOOTH_ROW_OFF = 'Off · no computer needed, more lag'
  * while the FM3 was not offered to customers; it is offered now, and what
  * is not for an FM3 is the cable.
  */
-export const NOT_FOR_FM3 = 'Never plug the C2MIDI Pro into an FM3: when we tried it on one, the cable got very hot.'
+export const NOT_FOR_FM3 = 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master: both got very hot on one.'
 
 /*
  * The purchase page's line, on a copy that opens Bluetooth to customers: the
@@ -245,7 +257,7 @@ export const NOT_FOR_FM3 = 'Never plug the C2MIDI Pro into an FM3: when we tried
  * purchase. So the names are in the line itself, where somebody deciding
  * whether to pay can read them, and look them up.
  */
-export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and so far has been tried on the AM4 only; on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
+export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and so far has been tried on the AM4 and FM3; on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
 
 
 /** The parts, by the name printed on the box, each with what it is for in a line. */
@@ -262,6 +274,19 @@ export const PARTS = {
     does: 'The cable from the Uhost to the unit’s MIDI jacks: one USB-C plug, a black MIDI plug and a white one.',
     amazon: 'https://www.amazon.com/dp/B0GVXTX5D1',
     maker: 'https://www.cme-pro.com/c2midi-pro/'
+  },
+  /*
+   * THE FM3'S CABLE, in the C2MIDI Pro's place: it runs on USB power only.
+   * Its USB plug is the larger USB-A kind (CME's page: "USB-A"), and the
+   * Uhost's sockets are USB-C, so it goes in through a small adapter. No
+   * Amazon link: none has been checked against the live page yet, so its
+   * button is CME's own page.
+   */
+  u2midi: {
+    name: 'CME U2MIDI Pro',
+    does: 'For an FM3, in place of the C2MIDI Pro: the cable from the Uhost to the FM3’s MIDI jacks, with a black MIDI plug and a white one. It runs on USB power only, and stays cool on an FM3. Its USB plug is USB-A, so it goes into the Uhost through a small USB-C to USB-A adapter.',
+    amazon: null,
+    maker: 'https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/'
   },
   adapters: {
     name: 'Two Type-A MIDI to 3.5 mm adapters',
@@ -290,10 +315,10 @@ const UNITS = { am4: 'AM4', fm3: 'FM3', fm9: 'FM9', axefx3: 'Axe-Fx III', vp4: '
  * file).
  */
 export const FM3_WARNING =
-  'Don’t plug the C2MIDI Pro into an FM3. When we tried it, the cable got very hot and didn’t connect. FM3 owners report the same with adapters that take power from its MIDI OUT, the Yamaha MD-BT01 and CME’s other adapters too, even on USB power. The full setup guide has more.'
+  'On an FM3, use the CME U2MIDI Pro. When we tried the WIDI Master and the C2MIDI Pro on an FM3, both got very hot, and the WIDI Master did not work. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool. FM3 owners report the same heat with other adapters that take power from its MIDI OUT, even on USB power.'
 
-/** The units the parts list must not be bought for as it is. */
-export const NOT_STRAIGHT_IN = ['fm3']
+/** The units the parts list must not be bought for as it is: none since the FM3 has the U2MIDI Pro (26 October 2026). */
+export const NOT_STRAIGHT_IN = []
 
 /*
  * THE FM3 LINE THAT IS NEVER FOLDED AWAY. FM3_WARNING is inside How to plug
@@ -314,7 +339,31 @@ export const NOT_STRAIGHT_IN = ['fm3']
  * is not in it.
  */
 export const FM3_NEVER =
-  'Never plug the C2MIDI Pro, or any adapter that can take power from MIDI OUT (even one on USB power), into an FM3. When we tried it, the cable got very hot, and FM3 owners report the same.'
+  'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, and when we tried it, it worked and stayed cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
+
+/*
+ * THE WIDI MASTER ON AN AM4: tried and working (26 October 2026), in place
+ * of the Uhost and the C2MIDI Pro, its two MIDI plugs in the two 3.5 mm
+ * adapters. Said under the AM4's parts, with no link (nobody has checked
+ * one against the live page), and never for an FM3.
+ */
+export const ALSO_ON_AM4 =
+  'On an AM4, a CME WIDI Master works too, in place of the Uhost and the C2MIDI Pro: its two MIDI plugs go into the two 3.5 mm adapters. Never on an FM3.'
+
+/*
+ * STILL NOT CONNECTING AFTER THE ADAPTER WAS UNPLUGGED AND PLUGGED BACK IN.
+ * "I had to force close the app after Bluetooth was connected, and when I
+ * unplugged the device and plugged it back in. The Bluetooth wouldn't
+ * connect again until I Force quit the app" (26 October 2026). His log
+ * says the iPhone still listed the adapter as there, so the app connected
+ * to it at once, and the unit never answered; the launch after the force
+ * quit answered in a twentieth of a second. What is held stale is below the
+ * JavaScript (the phone's own MIDI connection, made once per launch), so
+ * the way out until a store build changes that is the player's: said on
+ * the page wherever it is not connecting, and in the guide.
+ */
+export const CLOSE_AND_REOPEN =
+  'Still not connecting after unplugging and plugging the adapter back in? Close the app completely (swipe it away) and open it again.'
 
 /*
  * FEEL THE CABLE, ON THE UNITS NOBODY HERE HAS. The FM9 and Axe-Fx III have
@@ -384,7 +433,7 @@ export const warningFor = (unit) => (unit === 'fm3' ? FM3_WARNING : null)
  */
 export function partsFor(unit, noun = 'phone') {
   if (NOT_STRAIGHT_IN.includes(unit)) return []
-  const keys = unit === 'am4' || unit === 'vp4' ? ['uhost', 'c2midi', 'adapters'] : ['uhost', 'c2midi']
+  const keys = unit === 'am4' || unit === 'vp4' ? ['uhost', 'c2midi', 'adapters'] : unit === 'fm3' ? ['uhost', 'u2midi'] : ['uhost', 'c2midi']
   return keys.map((key) => {
     const p = PARTS[key]
     return { key, ...p, does: typeof p.does === 'function' ? p.does(noun) : p.does }
@@ -438,7 +487,7 @@ export const POWER_LINE = 'And a phone charger or power bank, with a USB-C cable
 
 /** When the adapter is connected and the unit says nothing: the usual reason, with these parts. */
 export const PLUGS_CHECK =
-  'With the C2MIDI Pro, the black plug goes in the unit’s MIDI IN and the white one in MIDI OUT. Swapped, nothing gets through.'
+  'With the C2MIDI Pro or the U2MIDI Pro, the black plug goes in the unit’s MIDI IN and the white one in MIDI OUT. Swapped, nothing gets through.'
 
 /*
  * Before a unit is picked: the whole of it in two lines. The FM3 is not in
@@ -486,6 +535,20 @@ export function hookupFor(unit, noun = 'phone') {
       usb,
       power,
       'On the VP4, open SETUP > MIDI/Remote and set Receive MIDI PC to ON, and the MIDI Channel to 1 (or OMNI). For scenes, set Scene Select too: Settings > VP4 scenes & presets says how.'
+    ]
+  }
+  /*
+   * THE FM3: the U2MIDI Pro in the C2MIDI Pro's place, the way it was tried
+   * and worked (26 October 2026). Its plugs are marked as the C2MIDI Pro's
+   * are, and its USB-A plug needs an adapter to go in the Uhost.
+   */
+  if (unit === 'fm3') {
+    return [
+      'U2MIDI Pro: the black plug (TO MIDI IN) into the FM3’s MIDI IN.',
+      'The white plug (TO MIDI OUT) into its MIDI OUT/THRU jack.',
+      'Plug the U2MIDI Pro’s USB plug into the Uhost’s left socket, marked USB Host/Device, through a USB-C to USB-A adapter.',
+      power,
+      unitSettingsStep(unit)
     ]
   }
   if (unit === 'axefx3') {
@@ -544,11 +607,7 @@ export const powerStepOf = (unit) => (hookupFor(unit) || []).indexOf(powerStep(U
  * "It works on my unit" among its answers.
  */
 export const untriedLine = (unit) =>
-  !untried(unit)
-    ? null
-    : unit === 'fm3'
-      ? `It hasn’t run on an FM3 yet. If you get it working, tell us how: tap ${REPORT_BUTTON}, further down this page.`
-      : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: tap ${REPORT_BUTTON}, further down this page.`
+  !untried(unit) ? null : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: tap ${REPORT_BUTTON}, further down this page.`
 
 /*
  * "NOT TRIED YET", WHEREVER AN FM9 OR AXE-FX III OWNER LOOKS. "On any units
@@ -572,16 +631,20 @@ export const untriedLine = (unit) =>
  * got very hot and never connected, so "not tried" would be untrue beside
  * FM3_NEVER's "when we tried it". It "hasn't run" on one, which is what is
  * true, and its warning stays where it was, in front.
+ *
+ * THE FM3 TRIED, 26 OCTOBER 2026: it ran, through the Uhost and a U2MIDI
+ * Pro, from an iPhone and an Android phone (TESTED). So it says none of
+ * these, and its own "hasn't run" words went with it; its warning stays in
+ * front, now naming the cable that works.
  */
 export const untried = (unit) => !!UNITS[unit] && !triedOn(unit)
 
-/* "Not tried on the FM9 yet", or the FM3's own: it was tried, and did not run. */
-const notYetOn = (unit) => (unit === 'fm3' ? 'It hasn’t run on an FM3 yet.' : `Not tried on the ${UNITS[unit]} yet.`)
+/* "Not tried on the FM9 yet". */
+const notYetOn = (unit) => `Not tried on the ${UNITS[unit]} yet.`
 
-/** Under a unit's name on its button in step 1: the FM3's own words, for the same reason. */
+/** Under a unit's name on its button in step 1. */
 export const UNTRIED_SUB = 'Not tried yet'
-export const FM3_SUB = 'Not run yet'
-export const untriedSubFor = (unit) => (!untried(unit) ? undefined : unit === 'fm3' ? FM3_SUB : UNTRIED_SUB)
+export const untriedSubFor = (unit) => (!untried(unit) ? undefined : UNTRIED_SUB)
 
 /** Under "Connected · FM9 answering". */
 export const untriedConnectedLine = (unit) =>
@@ -591,19 +654,17 @@ export const untriedConnectedLine = (unit) =>
 export const untriedAboutLine = (unit) =>
   !untried(unit)
     ? null
-    : unit === 'fm3'
-      ? 'Built from what is known about the FM3, but it hasn’t run on a real one yet. Some of it may not work as expected.'
-      : `Built from what is known about the ${UNITS[unit]}, but not yet tried on a real one. Some of it may not work as expected.`
+    : `Built from what is known about the ${UNITS[unit]}, but not yet tried on a real one. Some of it may not work as expected.`
 
 /** Added to the note under the Bluetooth pill on Play (it starts "Connected over Bluetooth, through …"). */
 export const untriedShortLine = (unit) => (untried(unit) ? notYetOn(unit) : null)
 
 /** The small line on a fault card's Report this, on Play. */
 export const faultSubFor = (unit) =>
-  !untried(unit) ? 'Bluetooth (beta)' : unit === 'fm3' ? 'Bluetooth (beta), not run on an FM3 yet' : `Bluetooth (beta), not tried on the ${UNITS[unit]} yet`
+  !untried(unit) ? 'Bluetooth' : `Bluetooth, not tried on the ${UNITS[unit]} yet`
 
-/** The unit's name as a report's log head says it: "FM9 (not tried yet)", "FM3 (not run yet)". */
-export const unitForReport = (unit) => (UNITS[unit] ? `${UNITS[unit]}${!untried(unit) ? '' : unit === 'fm3' ? ' (not run yet)' : ' (not tried yet)'}` : null)
+/** The unit's name as a report's log head says it: "FM9 (not tried yet)", "AM4". */
+export const unitForReport = (unit) => (UNITS[unit] ? `${UNITS[unit]}${!untried(unit) ? '' : ' (not tried yet)'}` : null)
 
 /*
  * WHAT A VP4 GETS OVER BLUETOOTH, wherever it is the unit picked: What it can

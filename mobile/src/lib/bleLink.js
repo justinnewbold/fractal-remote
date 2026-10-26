@@ -114,7 +114,7 @@ export function startBluetoothLink(set) {
   if (!bluetoothSupported()) {
     tell?.({ link: 'off' })
     noteBluetooth({ phase: 'off' })
-    say('Bluetooth (beta) is on, but this build or this phone cannot do it')
+    say('Bluetooth is on, but this build or this phone cannot do it')
     return
   }
   /*

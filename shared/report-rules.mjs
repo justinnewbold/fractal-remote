@@ -498,7 +498,7 @@ export const computerUnasked = (why) => `COMPUTER'S DEVICE SERVER — could not 
  */
 export function computerUnaskedWhy({ via = 'computer', link = 'connected' } = {}) {
   if (via === 'demo') return 'the demo is on, so there is no computer to ask'
-  if (via === 'bluetooth') return 'Bluetooth (beta) is on, so the unit is reached without a computer'
+  if (via === 'bluetooth') return 'Bluetooth is on, so the unit is reached without a computer'
   if (link !== 'connected') return `not connected to a computer (${link || 'off'})`
   return null
 }

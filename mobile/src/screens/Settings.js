@@ -606,7 +606,7 @@ export default function Settings({
             */}
             {mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported() ? (
               <SetupRow
-                title="Bluetooth (beta)"
+                title="Bluetooth"
                 status={bluetooth ? `On · the ${deviceNoun()} talks to the unit itself` : BLUETOOTH_ROW_OFF}
                 onPress={() => setPage('bluetooth')}
               />
@@ -1017,7 +1017,7 @@ export default function Settings({
           {/* And the two ways, with the computer the best one: the Bluetooth page's own sentence (BLUETOOTH_WAYS). */}
           {bluetooth && !demo ? (
             <Note tone="warn">
-              {`Bluetooth (beta) is on. This ${deviceNoun()} talks to the unit directly, not through the computer. ${BLUETOOTH_WAYS}`}
+              {`Bluetooth is on. This ${deviceNoun()} talks to the unit directly, not through the computer. ${BLUETOOTH_WAYS}`}
             </Note>
           ) : null}
 
@@ -1315,7 +1315,7 @@ export default function Settings({
           customers see. */}
       {page === 'bluetooth' && mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported() ? (
         <>
-          {head('Bluetooth (beta)', 'back')}
+          {head('Bluetooth', 'back')}
           <BluetoothPage purchase={purchase} admin={isAdmin(account?.id)} onReport={onReportBluetooth} />
         </>
       ) : null}

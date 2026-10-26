@@ -111,7 +111,7 @@ export const noComputerBody = (email) => `${noComputerSteps(email)} ${NO_COMPUTE
  * (mobile/src/components/NoComputer.js NoComputerOtherWay, and Fixes).
  */
 export const NO_COMPUTER_BLUETOOTH =
-  'The app can also connect to your unit with no computer, by Bluetooth (beta) through an adapter. The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving, and it is in beta. Settings → My rig → Bluetooth (beta) says what to buy.'
+  'The app can also connect to your unit with no computer, by Bluetooth through an adapter. The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. Settings → My rig → Bluetooth says what to buy.'
 
 /** How long after one question before another may be asked. */
 export const ASK_EVERY_MS = 60 * 1000
