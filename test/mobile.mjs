@@ -660,6 +660,28 @@ export function run(test) {
     assert.match(read('.github/workflows/mobile.yml'), /It's all production now\./, 'mobile.yml no longer says why Android goes straight to production')
   })
 
+  test('Expo’s developer error screen is left out of the Android app, and nothing else goes with it', () => {
+    /*
+     * Google Play on 1.88.0: "Your app uses deprecated APIs or parameters for
+     * edge-to-edge". Among the places it names are Material Components'
+     * (com.google.android.material), which is in the Android app only because
+     * @expo/log-box asks for it (its android/build.gradle). log-box is Expo's
+     * error screen for a developer's build, and it does nothing in a store
+     * build: ExpoLogBoxPackage gives React Native nothing unless the build is a
+     * debug one AND was made with EXPO_UNSTABLE_LOG_BOX switched on. So it is
+     * left out of Android's autolinking, and Material goes with it.
+     * mobile/package.json is plain JSON and takes no comment, so the reason
+     * lives here and in docs/pending/README.md; android-minified checks the
+     * built app has no Material in it.
+     */
+    const pkg = JSON.parse(read('mobile/package.json'))
+    assert.deepEqual(pkg.expo?.autolinking?.android?.exclude, ['@expo/log-box'], 'log-box is linked into the Android app again, and Material Components with it')
+    /* Android's alone, so the iPhone's fingerprint stays where it is; and nothing else is left out. */
+    assert.deepEqual(Object.keys(pkg.expo), ['autolinking'], 'mobile/package.json says something else to Expo')
+    assert.deepEqual(Object.keys(pkg.expo.autolinking), ['android'], 'log-box is left out of the iPhone app too, or something besides Android is set')
+    assert.deepEqual(Object.keys(pkg.expo.autolinking.android), ['exclude'])
+  })
+
   test('the iPhone build fills the iPhone Duo: Xcode 27.1 by its full name, and the scene life cycle on', () => {
     /*
      * Only an app built with the iOS 27.1 SDK fills the Duo's inside screen;
@@ -682,6 +704,88 @@ export function run(test) {
     assert.match(duo, /UIApplicationSceneManifest/)
     assert.match(duo, /is not running 30 seconds after it was opened/)
     assert.doesNotMatch(duo, /pull_request:/, 'duo.yml runs on every pull request, on a preview runner that may never start')
+  })
+
+  test('R8 shrinks the Android app’s pictures and layouts too, and keeps every one that is looked up by name', async () => {
+    /*
+     * Since September 2026 Play's R8 card has asked other apps for
+     * optimized resource shrinking as well as R8 itself (Justin: "R8 and
+     * the image fix are quick wins at build time"). expo-build-properties'
+     * enableShrinkResourcesInReleaseBuilds turns it on, and needs R8 on to
+     * run at all; mobile/plugins/withR8Optimize.js makes it R8's own
+     * (android.r8.optimizedResourceShrinking) and writes a keep file for the
+     * three files Google Play's billing library carries for Google's own
+     * services, which nothing in the app's code names. Tried on AGP 8.12
+     * with that billing library, 25 October 2026: without the keep file all
+     * three were gone from the APK, and with it all three were there. Nothing
+     * here runs Gradle, so the plugin is RUN against stand-ins for Expo's
+     * config plugins; android-minified builds the app and fails if any name
+     * in a keep file is missing from it.
+     */
+    const app = JSON.parse(read('mobile/app.json')).expo
+    const props = app.plugins.find((p) => Array.isArray(p) && p[0] === 'expo-build-properties')?.[1]?.android
+    assert.equal(props?.enableShrinkResourcesInReleaseBuilds, true, 'resource shrinking is off')
+    assert.equal(props?.enableMinifyInReleaseBuilds, true, 'resource shrinking is on with R8 off, which expo-build-properties refuses')
+    assert.equal(app.plugins.filter((p) => p === './plugins/withR8Optimize').length, 1)
+
+    const mods = new Map()
+    const stand = {
+      withAppBuildGradle: (config, action) => (mods.set('gradle', action), config),
+      withGradleProperties: (config, action) => (mods.set('properties', action), config),
+      withDangerousMod: (config, [platform, action]) => {
+        assert.equal(platform, 'android', 'the plugin writes into the iPhone project')
+        return mods.set('files', action), config
+      }
+    }
+    const { createRequire } = await import('node:module')
+    const node = createRequire(import.meta.url)
+    const ask = (name) => {
+      if (name === 'fs' || name === 'path') return node(name)
+      assert.equal(name, 'expo/config-plugins', `the plugin asks for ${name}`)
+      return new Proxy(stand, {
+        get: (all, key) => {
+          assert.ok(key in all, `the plugin uses ${String(key)}`)
+          return all[key]
+        }
+      })
+    }
+    const plugin = { exports: {} }
+    new Function('require', 'module', 'exports', read('mobile/plugins/withR8Optimize.js'))(ask, plugin, plugin.exports)
+    const config = {}
+    assert.equal(plugin.exports(config), config)
+    assert.deepEqual([...mods.keys()].sort(), ['files', 'gradle', 'properties'])
+
+    /* R8's optimize file, as before: swapped in, left alone when there, refused when the template changed shape. */
+    const gradle = (contents) => mods.get('gradle')({ modResults: { contents } }).modResults.contents
+    assert.equal(gradle('proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"'), 'proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"')
+    assert.equal(gradle('getDefaultProguardFile("proguard-android-optimize.txt")'), 'getDefaultProguardFile("proguard-android-optimize.txt")')
+    assert.throws(() => gradle('proguardFiles "proguard-rules.pro"'), /names neither/)
+
+    /* The gradle.properties line: there once, true, whatever was there before and however often prebuild runs. */
+    const properties = (list) => mods.get('properties')({ modResults: list }).modResults
+    const template = [{ type: 'comment', value: 'Use this property to enable or disable the Hermes JS engine.' }, { type: 'property', key: 'hermesEnabled', value: 'true' }, { type: 'empty' }]
+    for (const before of [template, [...template, { type: 'property', key: 'android.r8.optimizedResourceShrinking', value: 'false' }]]) {
+      const after = properties(properties(before.map((p) => ({ ...p }))))
+      assert.deepEqual(after.filter((p) => p.key === 'android.r8.optimizedResourceShrinking'), [{ type: 'property', key: 'android.r8.optimizedResourceShrinking', value: 'true' }])
+      assert.deepEqual(after.filter((p) => p.key !== 'android.r8.optimizedResourceShrinking'), template, 'the plugin changed another line of gradle.properties')
+    }
+
+    /* The keep file: under the app's own name, holding the billing library's three. */
+    const root = mkdtempSync(join(tmpdir(), 'r8-keep-'))
+    try {
+      await mods.get('files')({ modRequest: { platformProjectRoot: root } })
+      const raw = join(root, 'app/src/main/res/raw')
+      assert.deepEqual(readdirSync(raw), ['keep_cloud_newbold_fractalremote.xml'], 'the keep file is missing, or named so that another module’s could take its place')
+      const keep = readFileSync(join(raw, 'keep_cloud_newbold_fractalremote.xml'), 'utf8')
+      assert.match(keep, /^<\?xml version="1\.0" encoding="utf-8"\?>\n<resources xmlns:tools="http:\/\/schemas\.android\.com\/tools" tools:keep="[^"]+" \/>\n$/)
+      assert.deepEqual(keep.match(/tools:keep="([^"]+)"/)[1].split(','), [
+        '@raw/com_android_billingclient_heterodyne_info',
+        '@raw/com_android_billingclient_registration_info',
+        '@xml/com_android_billingclient_phenotype'
+      ])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   test('the phone and the browser share every rule they must agree on, character for character', async () => {

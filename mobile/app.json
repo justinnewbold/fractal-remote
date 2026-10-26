@@ -3,7 +3,7 @@
     "name": "Fractal Remote",
     "slug": "fractal-remote",
     "owner": "justinnewbold",
-    "version": "1.88.14",
+    "version": "1.89.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "fractalremote",
@@ -103,6 +103,7 @@
         {
           "android": {
             "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
             "extraProguardRules": "-keep class * extends androidx.room.RoomDatabase { <init>(); }\n-keep interface expo.modules.kotlin.records.Record\n-keep @interface expo.modules.kotlin.records.Field { *; }\n-keepnames class * extends expo.modules.kotlin.exception.CodedException"
           },
           "ios": {
@@ -110,7 +111,8 @@
           }
         }
       ],
-      "./plugins/withR8Optimize"
+      "./plugins/withR8Optimize",
+      "./plugins/withTabletTurns"
     ],
     "extra": {
       "eas": {

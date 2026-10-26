@@ -1687,14 +1687,19 @@ guitar,amp,fm3,fm9,axefx,am4,vp4,preset,scene,setlist,tuner,rig,stage,pedalboard
 ### Google Play release notes, 1.89.0
 
 Play Console → the 1.89.0 release → Release notes (en-US). Within Play's
-500 characters (test/limits.mjs): the changes Android customers see since
-1.88.0, Bluetooth first. This time they go in before Google's review,
+500 characters (test/limits.mjs; 496 since 26 October 2026): the changes
+Android customers see since 1.88.0, Bluetooth first, and last the tablet
+line for docs/pending's tablet-turns, logbox-android and shrink-resources
+(applied in the build pull request). The block was already at 498 by then,
+so the tablet line went in with the Bluetooth line and the sign-in line
+made shorter, saying the same things. This time they go in before Google's review,
 because the release is made by hand (*Submission day*, below) rather than
 by EAS, which cannot send them.
 
 ```
-• New, in beta: Bluetooth, on the AM4, FM3, FM9, Axe-Fx III and VP4 (a VP4: presets and scenes). With the full version and a Bluetooth MIDI adapter, control your unit with no computer. The computer is still the best way: Bluetooth has more lag and fewer features, with no editing or saving. Bluetooth is in beta, and some features might not work as expected: tried on the AM4 only so far. Report a problem in one tap on its page.
-• No signal at a gig? The app no longer stops on the sign-in screen.
+• New, in beta: Bluetooth, on the AM4, FM3, FM9, Axe-Fx III and VP4 (a VP4: presets and scenes). With the full version and a Bluetooth MIDI adapter, no computer is needed. The computer is still the best way: Bluetooth has more lag and fewer features, with no editing or saving. Bluetooth is in beta, and some features might not work as expected: tried on the AM4 only. Report problems in one tap.
+• No signal? The app no longer stops at sign-in.
+• Android tablets and foldables now turn sideways.
 ```
 
 ### Google Play App access, 1.89.0
@@ -1852,9 +1857,12 @@ step 7 spends builds, and it waits for his yes, as every build does.
 
 6. **GitHub: the build pull request**, merged right before the build:
    version 1.89.0, `BLUETOOTH_FROM_STORE` set to '1.89.0' on both phones,
-   docs/pending/watch-fill.patch applied. Its phones' fingerprint says
-   Unchanged, so it waits for the yes like a build and is never merged on
-   green alone. CLAUDE.md's build rule already says 1.89.0 is built with
+   every patch in docs/pending applied (watch-fill, tablet-turns,
+   logbox-android, shrink-resources). Its fingerprint moves on both phones
+   and the watch, so it waits for the yes like a build and is never merged
+   on green alone; from its merge on, no update reaches TestFlight's 1.88.3
+   or Play's 1.88.0, which keep the last update made before it until they
+   take 1.89.0 from the store. CLAUDE.md's build rule already says 1.89.0 is built with
    the Send box unticked and the iPhone sent by a second run (25 October
    2026), so a session that reads only CLAUDE.md does not send Android to
    Google's review with nothing in.
@@ -2197,7 +2205,10 @@ way the FM3's cable ran hot, or a crash on connect):
    release that is fully out too (answer/16285429): new installs, and
    anyone not yet on 1.89.0, are given 1.88.0 instead, and copies already
    on 1.89.0 keep it; then the Description at the top of this file goes
-   back into the listing the same day.
+   back into the listing the same day. A halted 1.88.0 copy no longer takes
+   updates: the build pull request moved both phones' fingerprints, so it
+   keeps the last update made before that merge, and gets no fix by update
+   until another build reaches it.
 3. **Apple:** if 1.89.0 is approved but not yet released, do not release
    it. No build. While the 7-day phased release is running (step 13.5), App
    Store Connect → the 1.89.0 version → Phased Release for Automatic
@@ -2235,7 +2246,7 @@ way the FM3's cable ran hot, or a crash on connect):
 | Apple says no to Bluetooth, and still no after a reply | One iPhone build (and Android's 1.89.0 taken back out of Play's queue) |
 | Google says no to Bluetooth, and still no after a reply | One Android build (and, for both to wait, an iPhone one, once the pending release is cancelled) |
 | Trouble after release: a warning | An update and the website, no build |
-| Trouble after release: Android halted | Nothing: Halt rollout, at 20% or after it is out (halted before 100%, the listing keeps the old Description) |
+| Trouble after release: Android halted | No build to halt it: Halt rollout, at 20% or after it is out (halted before 100%, the listing keeps the old Description). But the 1.88.0 copies left behind take no update made since the build pull request, so a fix for them is a build |
 | Trouble after release: iPhone paused | Nothing: Pause Phased Release, while it is still phasing (automatic updates only) |
 | Trouble after release: Bluetooth closed for customers | An emergency update, then a build pair to say so |
 

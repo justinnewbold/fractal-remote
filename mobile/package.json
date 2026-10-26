@@ -39,5 +39,14 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "patch-package": "8.0.1"
+  },
+  "expo": {
+    "autolinking": {
+      "android": {
+        "exclude": [
+          "@expo/log-box"
+        ]
+      }
+    }
   }
 }
