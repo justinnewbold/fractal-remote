@@ -101,11 +101,11 @@ export default function Fixes({ onBack, open = null, hostVersion = null }) {
 
                 {/*
                   AND THE OTHER WAY IN, under the computer's steps: for an AM4,
-                  Bluetooth (beta), with no computer. Every step above is about
+                  Bluetooth, with no computer. Every step above is about
                   the computer, the cable and the computer app, and an AM4
                   owner who has no computer, or never got one going, reads
                   them as the only way there is. So, where this copy offers
-                  Bluetooth (beta) and it is not already on, the same line
+                  Bluetooth and it is not already on, the same line
                   Phone & computer draws under the no-computer words (the
                   waiting screen has its own button instead; shared/no-computer.mjs
                   NO_COMPUTER_BLUETOOTH): the second way, the computer still
@@ -134,7 +134,7 @@ export default function Fixes({ onBack, open = null, hostVersion = null }) {
                   <View style={{ gap: space.sm }}>
                     {/* Over Bluetooth (beta) no computer is in use: nothing to compare with. */}
                     {bluetoothOn() && !isDemo() ? (
-                      <Note tone="hint">{`Over Bluetooth (beta) the ${deviceNoun()} talks to the unit itself, so no computer app is in use.`}</Note>
+                      <Note tone="hint">{`Over Bluetooth the ${deviceNoun()} talks to the unit itself, so no computer app is in use.`}</Note>
                     ) : (
                       <Note tone={sync.state === 'ok' ? 'hint' : sync.state === 'unknown' ? 'hint' : 'warn'}>
                         {sync.says}

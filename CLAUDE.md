@@ -284,17 +284,28 @@ but it might not work properly", and "I'm curious why the VP4 is not listed?
 five units the page offers, AM4, FM3, FM9, Axe-Fx III and VP4, with no FM3
 test first, and under these rules:
 
-- **Beta, in his words, everywhere it is offered:** "Bluetooth is in beta,
-  and some features might not work as expected." It opens the beta note on
-  the Bluetooth page, and the store texts, the guide and the support page
-  say it.
-- **Every untried unit says so.** Only the AM4 has run it. The FM9,
-  Axe-Fx III and VP4 say "not tried yet", the FM3 "hasn't run yet" (it was
-  tried, and the cable ran hot), wherever an owner looks, each with the
-  one-tap Report a Bluetooth problem by it (`untried` and its kin in
-  shared/bluetooth-gear.mjs). Never a sentence that says it works on a unit
-  it has not run on. The FM3's heat warning stays in front of it, and the
-  C2MIDI Pro is never offered for one.
+- **Not a beta any more, since 26 October 2026:** "I also think we're ready
+  to get the Bluetooth out of beta so remove anything that says beta on it
+  for Bluetooth." So nothing a person reads calls it Bluetooth (beta) or
+  says it is in beta: the Settings row and the page are "Bluetooth", the
+  note on the page says where it has been tried and points at Report a
+  Bluetooth problem, and the store texts, the guide, the support, privacy
+  and /bluetooth pages and the setup email say no beta either. (Edit (Beta)
+  is another feature, and keeps its word.) Names in the code that say
+  beta (`BETA_NOTE_*`, `betaNote`) and the ledger's "Bluetooth (beta) for
+  customers" marker stay, as records, not words on a screen.
+- **Every untried unit says so.** The AM4 and the FM3 have run it, from an
+  iPhone and an Android phone (26 October 2026): the AM4 through the WIDI
+  Uhost with the C2MIDI Pro, and through a WIDI Master; the FM3 through the
+  WIDI Uhost with a CME U2MIDI Pro ("Using the U2midi pro adapter the FM3
+  works and does not get hot"). The FM9, Axe-Fx III and VP4 say "not tried
+  yet" wherever an owner looks, each with the one-tap Report a Bluetooth
+  problem by it (`untried` and its kin in shared/bluetooth-gear.mjs). Never
+  a sentence that says it works on a unit it has not run on. The FM3's
+  warning stays red and in front of it: the WIDI Master and the C2MIDI Pro
+  got very hot on an FM3 and the WIDI Master did not work; use the U2MIDI Pro, which runs
+  on USB power only, works and stays cool. The C2MIDI Pro and the WIDI
+  Master are never offered for one.
 - **The VP4 does only what the computer path does for it, and less:** a
   Program Change for a preset and the player's Scene Select for a scene
   (mobile/src/lib/bleVp4.js, the computer's own bytes from ForgeFX
@@ -452,7 +463,7 @@ features." It is said in several wordings, each in one place:
   Bluetooth page, the Phone & computer note while Bluetooth is on, and the
   purchase page through `BLUETOOTH_PAYWALL`, which also names the parts.
 - `BLUETOOTH_WAYS_SHORT` (same file): the line under the waiting screen's
-  "No computer? Use Bluetooth (beta)", the same for every account since
+  "No computer? Use Bluetooth", the same for every account since
   every unit opened together.
 - `BLUETOOTH_ROW_OFF` (same file): the Settings row, which has one line, so
   it says what it is for and the lag only.
@@ -627,7 +638,7 @@ the remote says "phone or tablet". A shared sentence that names it must be
 read when it is shown (a getter or a function), because the website changes
 role after its files load.
 
-Left as they are on purpose: the Bluetooth (beta) note's "from an iPhone"
+Left as they are on purpose: the Bluetooth note's "from an iPhone"
 (where it was tried, not the device in hand), the Apple Watch words (a watch pairs only with an iPhone, and an
 iPad is not offered one), the feature names "Phone remote" and the computer's
 "Phone & computer" page, the paywall's "Phone Remote", log lines, and the VP4

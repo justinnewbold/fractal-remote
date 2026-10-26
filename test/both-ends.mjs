@@ -388,11 +388,11 @@ export const AREAS = [
         why: 'the browser leaves its Play screen for its connecting screen once the computer has been gone ten seconds, and the Troubleshooting there is listed under getting connected; the phone keeps its Play screen and floats the waiting screen’s advice and buttons over it'
       },
       {
-        /* 25 October 2026: "super easy for all users to submit bugs and feedback", for Bluetooth (beta). */
-        does: 'report a fault on Play, with its words, while the unit is reached over Bluetooth (beta)',
+        /* 25 October 2026: "super easy for all users to submit bugs and feedback", for Bluetooth. */
+        does: 'report a fault on Play, with its words, while the unit is reached over Bluetooth',
         web: null,
         phone: 'Report this',
-        why: 'phone only — a browser never reaches a unit over Bluetooth, and the button is drawn only over Bluetooth (beta), on the phone’s fault card under What to try; it opens the phone’s one-tap Bluetooth report (mobile/src/screens/BluetoothReport.js)'
+        why: 'phone only — a browser never reaches a unit over Bluetooth, and the button is drawn only over Bluetooth, on the phone’s fault card under What to try; it opens the phone’s one-tap Bluetooth report (mobile/src/screens/BluetoothReport.js)'
       }
     ]
   },
@@ -1070,7 +1070,7 @@ export function run(test) {
       /* 25 October 2026: "super easy for all users to submit bugs and feedback". */
       'Report a problem or idea':
         'phone only, for now — a second way in to the phone’s Feedback form, one tap from Settings, which stays under Troubleshooting too (the help sentence in shared/affiliation.mjs names that path). The browser’s Feedback is under its Troubleshooting, and a row for it on the browser’s front list would make a computer release for a link that changes nothing a computer does',
-      'Bluetooth (beta)':
+      'Bluetooth':
         'phone only — a browser cannot reach a Bluetooth MIDI adapter; the phone does it through its own native module, and only where it is open: Justin’s account on every copy since 11 October 2026, and a customer’s only on a store copy built to open it (useBluetoothAllowed, mobile/src/lib/bluetooth.js, and the rule in mobile/src/lib/ble-rule.js)',
       /* SIRI_TITLE: "Siri" on an iPhone or iPad, "Links for Tasker" on Android (mobile/src/lib/siri-help.js). */
       SIRI_TITLE:
@@ -2197,10 +2197,10 @@ export function run(test) {
   })
 
   /*
-   * Over Bluetooth (beta) the screen drew the adapter as a computer, joined
+   * Over Bluetooth the screen drew the adapter as a computer, joined
    * to the unit by a USB cable, under a note about the computer's version.
    */
-  test('over Bluetooth (beta) the chain is the unit, the adapter and the phone, with no computer in it', async () => {
+  test('over Bluetooth the chain is the unit, the adapter and the phone, with no computer in it', async () => {
     const { linkChain } = await import('../shared/link-chain.mjs')
     const blue = (adapter, unit = { name: 'AM4', state: 'present' }) =>
       linkChain({ here: 'phone', via: 'bluetooth', unit, computer: { name: adapter.name, link: adapter.link }, adapter, phone: { version: '1.87.3' } })

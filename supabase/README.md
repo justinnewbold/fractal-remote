@@ -383,7 +383,7 @@ without `--no-verify-jwt`, so the gateway turns the hourly call away before the
 function runs. Deploy it again with the flag. There is no `config.toml` here
 to remember it.
 
-### Bluetooth (beta) in the emails, from 1.89.0
+### Bluetooth in the emails, from 1.89.0
 
 Once Bluetooth (beta) opens to customers (store version 1.89.0, the AM4
 only), a buyer with an AM4 may never sign a computer in, and both emails

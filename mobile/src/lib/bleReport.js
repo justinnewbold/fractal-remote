@@ -41,7 +41,7 @@ export const REASONS = Object.freeze([
 ])
 
 /** Every report this screen sends starts with this, so the email's subject says what it is about. */
-export const REPORT_HEAD = 'Bluetooth (beta)'
+export const REPORT_HEAD = 'Bluetooth'
 
 /**
  * The message a tap sends: the answer on its first line, then what the app

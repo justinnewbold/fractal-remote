@@ -78,7 +78,7 @@ export function logHeader({ deviceName, preset, bluetooth = false } = {}) {
     unit: deviceName || 'not detected',
     preset: Number.isInteger(preset?.number) ? `${preset.number} ${preset.name || ''}`.trim() : 'none',
     ...(throughAdapter
-      ? { link: `Bluetooth (beta), ${link.link}${link.macName && link.link !== 'off' ? `, through ${link.macName}` : ''}` }
+      ? { link: `Bluetooth, ${link.link}${link.macName && link.link !== 'off' ? `, through ${link.macName}` : ''}` }
       : {
           computer: link.macName || 'none',
           /*

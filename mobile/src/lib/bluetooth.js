@@ -410,7 +410,7 @@ export const builtInVersion = () => {
 /** Whether this copy opens Bluetooth (beta) to customers, whoever is signed in: the log's head, and the purchase page. */
 export const openForCustomersHere = () => bluetoothOpen({ platform: Platform.OS, installed: builtInVersion(), admin: false })
 
-const OFF_FOR_OTHERS = 'Bluetooth (beta) is not open to this account in this version of the app, so it is off'
+const OFF_FOR_OTHERS = 'Bluetooth is not open to this account in this version of the app, so it is off'
 
 /* On or off for now, in memory only: the switch, the page, the redraw. Nothing written to the phone's storage. */
 function holdOn(on) {
@@ -437,7 +437,7 @@ export function allowBluetooth(id, { signedOut = false } = {}) {
     if (pendingOn) {
       pendingOn = false
       if (!saved.on && saved.unit && !drop && bluetoothSupported()) {
-        logDebug('ble', `Bluetooth (beta) is on, for the ${unitName(saved.unit)}`)
+        logDebug('ble', `Bluetooth is on, for the ${unitName(saved.unit)}`)
         holdOn(true)
       }
     }
@@ -448,7 +448,7 @@ export function allowBluetooth(id, { signedOut = false } = {}) {
     }
   } else if (saved.on) {
     /* Not known: off for now, and still on on disk, for the next answer that is his. */
-    logDebug('ble', 'Bluetooth (beta) is off until this phone knows whose account it is')
+    logDebug('ble', 'Bluetooth is off until this phone knows whose account it is')
     pendingOn = true
     holdOn(false)
   }
@@ -460,7 +460,7 @@ export function allowBluetooth(id, { signedOut = false } = {}) {
 /* The unit kept is one this account is not offered: Bluetooth off if it was on with it, and the unit forgotten, on disk too. */
 function letGoOfUnit() {
   if (saved.on) setBluetooth(false)
-  logDebug('ble', `the ${unitName(saved.unit)} is not offered over Bluetooth (beta) to this account: the unit is cleared`)
+  logDebug('ble', `the ${unitName(saved.unit)} is not offered over Bluetooth to this account: the unit is cleared`)
   saved = { ...saved, unit: null }
   keep()
   announce()
@@ -520,13 +520,13 @@ export async function restoreBluetooth() {
   }
   setSwitch({ on: saved.on })
   if (refused) logDebug('ble', OFF_FOR_OTHERS)
-  if (dropped) logDebug('ble', `the ${unitName(dropped)} is not offered over Bluetooth (beta) to this account: the unit is cleared`)
+  if (dropped) logDebug('ble', `the ${unitName(dropped)} is not offered over Bluetooth to this account: the unit is cleared`)
   if (refused || dropped) keep()
-  if (pendingOn) logDebug('ble', 'Bluetooth (beta) was on last time: off until this phone knows whose account it is')
+  if (pendingOn) logDebug('ble', 'Bluetooth was on last time: off until this phone knows whose account it is')
   /* Nothing on disk is the ordinary case, and it changes nothing: no screen is redrawn for it. */
   if (JSON.stringify(saved) === before) return saved.on
   now = { ...now, phase: saved.on ? 'idle' : 'off' }
-  if (saved.on) logDebug('ble', `Bluetooth (beta) is on, for the ${unitName(saved.unit)}`)
+  if (saved.on) logDebug('ble', `Bluetooth is on, for the ${unitName(saved.unit)}`)
   announce()
   return saved.on
 }
@@ -558,7 +558,7 @@ export function setBluetooth(on) {
   saved = { ...saved, on: want }
   setSwitch({ on: want })
   now = { ...now, phase: want ? 'idle' : 'off' }
-  logDebug('ble', want ? `Bluetooth (beta) turned on, for the ${unitName(saved.unit)}` : 'Bluetooth (beta) turned off')
+  logDebug('ble', want ? `Bluetooth turned on, for the ${unitName(saved.unit)}` : 'Bluetooth turned off')
   keep()
   announce()
   return want

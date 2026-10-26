@@ -275,7 +275,7 @@ async function rigOnTheBench(over = {}) {
     `,
     'demo.js': "export const isDemo = () => false\nexport const demoDevice = () => null\nexport const demoUnit = () => 'fm3'\n",
     'demoWire.js': "export const demoRequest = () => { throw new Error('no demo on the bench') }\n",
-    /* Bluetooth (beta) off, as it is unless somebody turns it on: every request goes to the pretend computer. */
+    /* Bluetooth off, as it is unless somebody turns it on: every request goes to the pretend computer. */
     'bleSwitch.js': "export const bluetoothWire = () => null\nexport const bluetoothOn = () => false\nexport const overBluetooth = (caps) => caps?.via === 'bluetooth'\n",
     /* Every line the store writes, kept, so a test can read the log a report would carry. */
     'debugLog.js': "export const lines = []\nexport const logDebug = (source, message, detail) => { lines.push({ at: 0, source: String(source || 'app'), message: String(message ?? ''), detail }) }\n",
@@ -3576,7 +3576,7 @@ export function run(test) {
       const code = withoutComments(readFileSync(file, 'utf8'))
       if (/from '(\.\.\/lib|\.)\/(admin|whats-live)'/.test(code)) {
         /*
-         * lib/bluetooth.js too, since Bluetooth (beta) went back to Justin's
+         * lib/bluetooth.js too, since Bluetooth went back to Justin's
          * account alone (11 October 2026): it asks isAdmin whose phone this
          * is, as Settings does, and draws none of the pages' words.
          * And lib/siri.js, whose fractalremote:// links are his account's
@@ -4698,7 +4698,7 @@ export function run(test) {
      * offering suggestions on what to check". It also put the spinner over
      * a rig already on screen at every 'joining'. Now the wait is for as
      * long as there is no rig (`!caps`) and the link is out looking,
-     * 'joining' and 'no-answer' alike — except over Bluetooth (beta), where
+     * 'joining' and 'no-answer' alike — except over Bluetooth, where
      * a lost adapter still brings it back over a rig, because that is where
      * the adapter's own help is; see 'the waiting screen holds through the
      * flip' below for the same rule run rather than read.
@@ -4902,7 +4902,7 @@ export function run(test) {
 
     const phone = read('mobile/App.js').replace(/\s+/g, ' ')
     const waking = phone.slice(phone.indexOf('function Waking('))
-    /* Not over Bluetooth (beta), where no computer is being looked for.
+    /* Not over Bluetooth, where no computer is being looked for.
        Changed on purpose, 12 October 2026 (1.87.17): this pinned `long &&` in
        front, which asked only once the advice was up, so the advice opened on
        "make sure the computer is awake" and turned into the account warning
@@ -7035,14 +7035,14 @@ export function run(test) {
     /* That read failed: the play screen, with the error on it. */
     assert.equal(waits('connected', { readFailed: 'The unit did not answer.' }), false, 'a failed read is waited through')
     assert.equal(waits('connected', { caps: fm3 }), false)
-    /* Not looking: Bluetooth (beta) with no adapter picked, or between links. */
+    /* Not looking: Bluetooth with no adapter picked, or between links. */
     assert.equal(waits('off'), false, 'an adapter nobody has picked is waited for')
     assert.equal(waits('off', { bluetooth: true, caps: fm3 }), false, 'an adapter nobody has picked is waited for')
     /*
      * OVER BLUETOOTH (BETA), A LOST ADAPTER BRINGS THE WAITING SCREEN BACK
      * OVER A RIG, as it always has: that is where "Use the computer
      * instead", what to check on the phone and the adapter, and the
-     * Bluetooth (beta) page are. The card over the play screen is the
+     * Bluetooth page are. The card over the play screen is the
      * computer's alone (`lost` leaves Bluetooth out), so without this a
      * dropped adapter with a rig on screen said nothing at all.
      */
@@ -7188,7 +7188,7 @@ export function run(test) {
     assert.equal(wait(LONG - 1), false)
     assert.equal(wait(1), true)
 
-    /* Bluetooth (beta) on: a different thing looked for, from nothing. And off again, the same. */
+    /* Bluetooth on: a different thing looked for, from nothing. And off again, the same. */
     assert.equal(draw(true, 'adapter'), false, 'turning Bluetooth on carries the computer’s fifteen seconds over')
     assert.equal(wait(LONG), true)
     assert.equal(draw(true, 'computer'), false, 'turning Bluetooth off carries the adapter’s fifteen seconds over')
@@ -7314,7 +7314,7 @@ export function run(test) {
     assert.equal(draw('joining'), 'joining', 'a new stretch is held against the last one')
     assert.equal(draw('no-answer'), 'no-answer')
     assert.equal(draw('joining'), 'no-answer')
-    /* Bluetooth (beta) on, mid-stretch: the adapter is being found, not missed, from the first frame. */
+    /* Bluetooth on, mid-stretch: the adapter is being found, not missed, from the first frame. */
     assert.equal(draw('joining', 'adapter'), 'joining', 'a computer that did not answer is held against the adapter')
     assert.equal(draw('connected', 'adapter'), 'connected')
     /* Signed out, or between links. */
@@ -7759,13 +7759,13 @@ export function run(test) {
     assert.match(pasted, /switched on only for the developer's own account\./, 'the 1.87.11 notes do not say whom the Bluetooth code is for')
     assert.match(pasted, /Customers and the review account don't see it in this build, and the app\s+doesn't ask them for Bluetooth permission\./, 'the 1.87.11 notes do not say the reviewer and customers neither see it nor are asked for Bluetooth')
     assert.ok(!/everyone\s+who\s+has\s+unlocked\s+the\s+app/.test(pasted), 'the 1.87.11 notes say Bluetooth is for everyone who has paid, and it is the developer’s alone')
-    assert.ok(!/Settings,\s+then\s+Bluetooth \(beta\)|marked\s+beta|asks for Bluetooth permission only when Connect/.test(pasted), 'the 1.87.11 notes still tell the reviewer where Bluetooth is and how it asks, and the review account cannot see it')
+    assert.ok(!/Settings,\s+then\s+Bluetooth|marked\s+beta|asks for Bluetooth permission only when Connect/.test(pasted), 'the 1.87.11 notes still tell the reviewer where Bluetooth is and how it asks, and the review account cannot see it')
     const settingsSrc = read('mobile/src/screens/Settings.js')
-    assert.match(settingsSrc, /title="Bluetooth \(beta\)"/)
-    assert.match(settingsSrc, /head\('Bluetooth \(beta\)', 'back'\)/)
+    assert.match(settingsSrc, /title="Bluetooth"/)
+    assert.match(settingsSrc, /head\('Bluetooth', 'back'\)/)
     /* The gate the disclosure describes: the developer's account, read from the session on the phone, on the row and on the page. */
     const oneLine = settingsSrc.replace(/\s+/g, ' ')
-    assert.match(oneLine, /\{mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/)
+    assert.match(oneLine, /\{mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth"/)
     assert.match(oneLine, /\{page === 'bluetooth' && mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \(/)
     assert.equal(existsSync(new URL('../shared/bluetooth-testers.mjs', import.meta.url)), false, 'the Bluetooth tester list is back, and the notes say only the developer’s account has it')
     assert.ok(!/BLUETOOTH_TESTERS|bluetooth-testers/.test(store), 'the store notes still send somebody to a Bluetooth list that no longer exists')
@@ -8874,7 +8874,7 @@ export function run(test) {
       /* Phone & computer, or iPad & computer on an iPad (device-word.mjs). */
       'PAIR_TITLE',
       /* "Move the Bluetooth card from the phone and computer menu to its own menu under the settings menu." */
-      'Bluetooth (beta)',
+      'Bluetooth',
       /* What each footswitch does, where the switches can be read. */
       'Footswitches',
       'Stop the looper',
@@ -9295,7 +9295,7 @@ export function run(test) {
       /* Nobody to ask: sent at once without it, with one line saying why, and the computer never asked. */
       for (const [via, link, why] of [
         ['demo', 'connected', /could not be asked: the demo is on, so there is no computer to ask/],
-        ['bluetooth', 'connected', /could not be asked: Bluetooth \(beta\) is on, so the unit is reached without a computer/],
+        ['bluetooth', 'connected', /could not be asked: Bluetooth is on, so the unit is reached without a computer/],
         ['computer', 'no-answer', /could not be asked: not connected to a computer \(no-answer\)/]
       ]) {
         bench.via = via
@@ -9438,7 +9438,7 @@ export function run(test) {
     /* Who is asked: only a connected computer. */
     assert.equal(r.computerUnaskedWhy({ via: 'computer', link: 'connected' }), null)
     assert.match(r.computerUnaskedWhy({ via: 'demo', link: 'connected' }), /demo/)
-    assert.match(r.computerUnaskedWhy({ via: 'bluetooth', link: 'connected' }), /Bluetooth \(beta\)/)
+    assert.match(r.computerUnaskedWhy({ via: 'bluetooth', link: 'connected' }), /Bluetooth/)
     assert.equal(r.computerUnaskedWhy({ via: 'computer', link: 'off' }), 'not connected to a computer (off)')
     assert.equal(r.computerUnaskedWhy({ via: 'computer', link: null }), 'not connected to a computer (off)')
 
@@ -10925,7 +10925,7 @@ export function run(test) {
       'a pasted log still cannot say what the computer is running'
     )
     /*
-     * And over Bluetooth (beta), where there is no computer: the pasted log
+     * And over Bluetooth, where there is no computer: the pasted log
      * said "computer: WIDI Uhost Bluetooth" and "computer app: did not say".
      */
     const logScreen = read('mobile/src/lib/logHead.js').replace(/\s+/g, ' ')
@@ -10933,7 +10933,7 @@ export function run(test) {
     assert.match(logScreen, /const throughAdapter = bluetoothOn\(\) && !isDemo\(\)/)
     assert.match(
       logScreen,
-      /\.\.\.\(throughAdapter \? \{ link: `Bluetooth \(beta\), \$\{link\.link\}\$\{link\.macName && link\.link !== 'off' \? `, through \$\{link\.macName\}` : ''\}` \} : \{ computer: link\.macName \|\| 'none',/,
+      /\.\.\.\(throughAdapter \? \{ link: `Bluetooth, \$\{link\.link\}\$\{link\.macName && link\.link !== 'off' \? `, through \$\{link\.macName\}` : ''\}` \} : \{ computer: link\.macName \|\| 'none',/,
       'over Bluetooth the pasted log still names the adapter as a computer'
     )
     const rigLines = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')

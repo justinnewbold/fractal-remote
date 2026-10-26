@@ -1664,7 +1664,7 @@ export default function Stage({
           />
         ) : null}
         {/*
-          REPORT THIS, over Bluetooth (beta) only, with the fault's own words
+          REPORT THIS, over Bluetooth only, with the fault's own words
           going with it. Its own conditional, for the same reason What to
           try has one. One compact button: the card is up for seconds
           (lib/fault-rule) and floats over the tiles. Never on the dropped
@@ -1702,7 +1702,7 @@ export default function Stage({
             computer was ever set up, and only then. A label at 44 like the
             two below, so the card is one height whatever it says and NOT
             CONNECTED under it stays put (components/SendLinkButton.js).
-            And never the Bluetooth (beta) line Phone & computer draws under
+            And never the Bluetooth line Phone & computer draws under
             that button (NoComputerOtherWay): this card
             does not scroll, the line roughly doubled it, and on a 320-point
             phone NOT CONNECTED went off the bottom. Troubleshooting, below,

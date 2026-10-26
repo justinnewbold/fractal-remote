@@ -29,6 +29,7 @@ import {
 } from '../lib/bluetooth'
 import {
   BLUETOOTH_WAYS,
+  CLOSE_AND_REOPEN,
   FIRST_TIME,
   FM3_NEVER,
   GEAR_IN_SHORT,
@@ -42,6 +43,7 @@ import {
   VP4_CANT_HEAR,
   VP4_CONNECTED,
   VP4_OVER_BLUETOOTH,
+  ALSO_ON_AM4,
   betaNote,
   firmwareLineFor,
   heatLineFor,
@@ -297,7 +299,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     step === 'all' ? 'The check' : [...steps.reads, ...steps.writes].find((s) => s.step === step)?.label || step
 
   const copyAll = async () => {
-    const lines = [`Fractal Remote ${APP_VERSION} · Bluetooth (beta) check · ${unitForReport(b.unit) || unitName(b.unit)} · ${Platform.OS}`]
+    const lines = [`Fractal Remote ${APP_VERSION} · Bluetooth check · ${unitForReport(b.unit) || unitName(b.unit)} · ${Platform.OS}`]
     for (const r of results) {
       lines.push('', `${labelOf(r.step)} (${unitName(r.unit)})${r.ok ? '' : ` — failed: ${r.error}`}`)
       if (r.way) lines.push(`  remembered: ${WAY_NAMES[r.way] || r.way}`)
@@ -443,6 +445,16 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               <Hint>
                 {`${PLUGS_CHECK} The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.`}
               </Hint>
+            ) : null}
+            {/*
+              STILL NOTHING AFTER THE ADAPTER WAS UNPLUGGED AND PLUGGED BACK
+              IN: the way out that worked for him was closing the app
+              completely (shared/bluetooth-gear CLOSE_AND_REOPEN). Wherever
+              it is on and not working: connecting, or connected with the
+              unit silent.
+            */}
+            {b.phase === 'connecting' || (b.phase === 'connected' && !b.answeredAs && (unitState === 'missing' || unitState === 'silent')) ? (
+              <Hint>{CLOSE_AND_REOPEN}</Hint>
             ) : null}
             {reportable && quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
             {b.phase === 'connecting' ? (
@@ -762,17 +774,8 @@ function OpenSettings() {
  */
 function PlugIn({ unit }) {
   if (!unit) return <Hint>Pick your unit above to see how it plugs in.</Hint>
+  /* The FM3: its warning, red and in front of its steps (the U2MIDI Pro, never the C2MIDI Pro or a WIDI Master). */
   const warning = warningFor(unit)
-  /* The FM3: its warning in place of steps, and that it has not run on one yet, with the report button (untriedLine). */
-  if (warning) {
-    const notYet = untriedLine(unit)
-    return (
-      <View style={{ gap: space.sm }}>
-        <Note tone="fault">{warning}</Note>
-        {notYet ? <Note tone="warn">{notYet}</Note> : null}
-      </View>
-    )
-  }
   const steps = hookupFor(unit, deviceNoun()) || []
   const untried = untriedLine(unit)
   const heat = heatLineFor(unit)
@@ -781,6 +784,7 @@ function PlugIn({ unit }) {
   const firmware = firmwareLineFor(unit)
   return (
     <View style={{ gap: space.sm }}>
+      {warning ? <Note tone="fault">{warning}</Note> : null}
       {/* Once, before any of the plugging in: the Uhost's firmware, which the steps take for granted. */}
       <Hint>{FIRST_TIME}</Hint>
       {/* And the unit's: the FM9 and Axe-Fx III firmware Fractal's notes say the phone needs (shared/bluetooth-gear firmwareLineFor). */}
@@ -810,21 +814,24 @@ function PlugIn({ unit }) {
  */
 function Buy({ unit }) {
   if (!unit) return <Hint>{GEAR_IN_SHORT}</Hint>
-  if (warningFor(unit)) return <Hint>Not for the FM3. How to plug it in, above, says why.</Hint>
   return (
     <View style={{ gap: space.md }}>
+      {/* The FM3's warning, red and before its list: the U2MIDI Pro, never the C2MIDI Pro or a WIDI Master. */}
+      {warningFor(unit) ? <Note tone="fault">{warningFor(unit)}</Note> : null}
       {partsFor(unit, deviceNoun()).map((p) => (
         <View key={p.key} style={{ gap: space.xs }}>
           <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '700' }}>{p.name}</Text>
           <Hint>{p.does}</Hint>
+          {/* On Amazon where a link has been checked; the maker's own page where none has (the U2MIDI Pro). */}
           <Press
-            label="View on Amazon"
+            label={p.amazon ? 'View on Amazon' : 'View on the maker’s site'}
             height={44}
-            accessibilityLabel={`View the ${p.name} on Amazon`}
-            onPress={() => openLink(p.amazon)}
+            accessibilityLabel={p.amazon ? `View the ${p.name} on Amazon` : `View the ${p.name} on the maker’s site`}
+            onPress={() => openLink(p.amazon || p.maker)}
           />
         </View>
       ))}
+      {unit === 'am4' ? <Hint>{ALSO_ON_AM4}</Hint> : null}
       <Hint>{POWER_LINE}</Hint>
       <Hint>{SELLERS_LINE}</Hint>
     </View>

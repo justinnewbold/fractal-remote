@@ -1770,7 +1770,7 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
         THE WAY BACK TO THE COMPUTER, FROM THE FIRST SECOND. "How do I get out
         of Bluetooth mode so I can go back to connecting to computer?" (10
         October 2026, on this screen, with the adapter not there.) The only
-        way was the gear, Phone & computer, Bluetooth (beta), Stop — four
+        way was the gear, Phone & computer, Bluetooth, Stop — four
         taps from a screen that offered nothing for fifteen seconds and then
         only a way to look again. Turning Bluetooth off is what Stop does,
         and the link starts looking for the computer the moment it is off.
@@ -1852,7 +1852,7 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           {/* Over Bluetooth the adapter's own page, where it is found and
               its status is; the computer's troubleshooting is about a
               computer that is not in use. */}
-          {bluetooth && onBluetooth ? <Press label="Bluetooth (beta)" onPress={onBluetooth} /> : null}
+          {bluetooth && onBluetooth ? <Press label="Bluetooth" onPress={onBluetooth} /> : null}
           {/*
             REPORT A BLUETOOTH PROBLEM, where a stuck player actually sits:
             fifteen seconds of Finding the adapter, over Bluetooth only. The
@@ -1876,14 +1876,14 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
             the fix is the account, not "No computer?".
 
             SHORT ENOUGH FOR ONE LINE. A button's label is one line at 15
-            points, and "No computer? Connect by Bluetooth (beta)" was about
+            points, and "No computer? Connect by Bluetooth" was about
             296 points, cut on a 360-point Android phone and a 375-point
             iPhone. This one is about 254 at its widest; the line under it
             carries the cost.
           */}
           {!bluetooth && onBluetooth && !elsewhere ? (
             <Press
-              label="No computer? Use Bluetooth (beta)"
+              label="No computer? Use Bluetooth"
               sub={BLUETOOTH_WAYS_SHORT}
               onPress={onBluetooth}
             />

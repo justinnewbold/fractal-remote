@@ -475,7 +475,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   const isEcho = (bytes, now) => now - lastSent.at <= ECHO_MS && lastSent.messages.some((m) => sameBytes(m, bytes))
 
-  const wrongUnitError = () => failure(`An AM4 answered, not the ${spec.name}. Pick AM4 on the Bluetooth (beta) page in Settings.`, 409)
+  const wrongUnitError = () => failure(`An AM4 answered, not the ${spec.name}. Pick AM4 on the Bluetooth page in Settings.`, 409)
 
   /*
    * NOTHING BUT "ARE YOU THERE?" GOES TO A UNIT THAT HAS NEVER ANSWERED.
@@ -495,7 +495,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * gen-3 units have no freezes on record.
    */
   const unheard = () =>
-    failure(`The ${spec.name} has not answered yet, so nothing is sent to it. Check the unit picked on the Bluetooth (beta) page, and the adapter's plugs.`, 504, { unheard: true })
+    failure(`The ${spec.name} has not answered yet, so nothing is sent to it. Check the unit picked on the Bluetooth page, and the adapter's plugs.`, 504, { unheard: true })
 
   /*
    * A TAP'S DEADLINE, ON ITS WAY FROM request() TO THE FIRST MESSAGE IT SENDS.
