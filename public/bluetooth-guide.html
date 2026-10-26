@@ -15,7 +15,7 @@
       for user that it's in beta and they're free to test it and submit
       feedback, but it might not work properly" (Justin, 25 October 2026).
       Written true both before and after 1.89.0 is approved, since a reviewer
-      opens it from the app (Full setup guide): earlier versions show the
+      opens it from the app (Setup guide): earlier versions show the
       Bluetooth page only on his account, and the page says so. Still
       unlisted (noindex) until the live day (docs/app-store.md, Submission
       day).
@@ -28,7 +28,7 @@
       alone, and /bluetooth is now a short notice that it is not in the app
       yet, with no shopping list. This page moved to bluetooth-guide.html,
       linked from nowhere on the website: only the app's Bluetooth page,
-      which only his account can open, links it (Full setup guide, GUIDE_URL
+      which only his account can open, links it (Setup guide, GUIDE_URL
       in shared/bluetooth-gear.mjs), and search engines are asked not to list
       it. If Bluetooth is opened to customers in a new store version, this
       page goes back where support.html and android.html can link it.
@@ -308,10 +308,21 @@
           USB power only. Its USB plug is the larger USB-A kind, so it goes into the Uhost through a
           small USB-C to USB-A adapter.
         </div>
-        <p class="buy"><a href="https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/">CME’s page for it</a></p>
+        <p class="buy">
+          <a href="https://www.amazon.com/dp/B0BH8DHCLY">On Amazon</a> ·
+          <a href="https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/">CME’s page for it</a>
+        </p>
       </div>
       <div class="part">
-        <div class="name">3. A USB phone charger or a power bank, and a USB-C cable</div>
+        <div class="name">3. A USB-C to USB-A adapter</div>
+        <div class="what">
+          A short one with a USB-C plug and a USB-A socket, for the U2MIDI Pro’s USB plug to go into
+          the Uhost. Any will do; this is Anker’s.
+        </div>
+        <p class="buy"><a href="https://www.amazon.com/dp/B01COOQIKU">On Amazon</a></p>
+      </div>
+      <div class="part">
+        <div class="name">4. A USB phone charger or a power bank, and a USB-C cable</div>
         <div class="what">To power the Uhost, as for the AM4. 5 volts only.</div>
       </div>
       <p>
@@ -502,8 +513,8 @@
       <h2 id="connect">Connecting in the app</h2>
       <p>
         Open <strong>Settings</strong> (the gear at the top right) → <strong>My rig</strong> →
-        <strong>Bluetooth</strong>. The top of the page says whether it is connected,
-        and the two steps are right under that.
+        <strong>Bluetooth</strong>. The two steps are at the top of the page. While it is
+        on, or when something is wrong, a line over them says so.
       </p>
       <p class="q">1 · Pick your unit</p>
       <p>
@@ -512,10 +523,12 @@
       </p>
       <p class="q">2 · Connect</p>
       <p>
-        Under Connect are three rows you tap to open: <strong>How to plug it in</strong> (open
-        the first time), <strong>What to buy</strong>, with a <strong>View on Amazon</strong>
-        button for each part (CME’s own page for the U2MIDI Pro), and <strong>What it can and can’t do</strong>. They say the same
-        as this page, for the unit you picked. <strong>Full setup guide</strong> opens this page.
+        Under Connect are a few buttons. <strong>Setup guide</strong> opens this page.
+        <strong>How to connect my Bluetooth device</strong> shows every way to hook up the unit
+        you picked, simplest first, each with what to buy (a <strong>View on Amazon</strong>
+        button for each part) and how it plugs in. <strong>Troubleshooting</strong> lists every
+        fix, <strong>What Bluetooth can’t do</strong> says what is different from the computer,
+        and <strong>Report a Bluetooth problem</strong> sends us a report in one tap.
       </p>
 
       <h3>On an iPhone</h3>
@@ -646,28 +659,54 @@
           went wrong. It sends at once, with what the app saw, which is what explains it.</li>
       </ul>
 
-      <h2 id="other">Other adapters</h2>
+      <h2 id="other">Other ways to hook it up</h2>
       <p>
-        <strong>None of these has been tried with Fractal Remote</strong>, which is why there are no
-        links to buy them here. Whatever you use, it has
-        to plug into <strong>both</strong> of the unit’s MIDI jacks, In and Out. A MIDI jack carries
-        messages one way only, so an adapter in one jack can send to the unit or hear it, never
-        both, and the app needs the unit’s answers. Update any CME adapter with CME’s WIDI app
-        first: some older firmware mangled the long messages the app sends.
+        The app’s <strong>How to connect my Bluetooth device</strong> page shows these for the unit you
+        pick, simplest first. Whatever you use, it has to plug into <strong>both</strong> of the
+        unit’s MIDI jacks, In and Out: a MIDI jack carries messages one way only, and the app needs
+        the unit’s answers. Update any CME adapter with CME’s free WIDI app first. None of these is
+        for an FM3 (see <a href="#fm3">FM3</a>).
       </p>
+      <div class="part">
+        <div class="name">CME WIDI Master <span class="tag ok">Tried on the AM4</span></div>
+        <div class="what">
+          The adapter and its two MIDI plugs in one piece, and the simplest way. It takes its power
+          from the unit’s MIDI OUT and has no other way to be powered. On an AM4 or VP4 its plugs go
+          into two Type-A MIDI to 3.5 mm adapters (a 5-pin socket on one end, a 3.5 mm plug on the
+          other); the ones it was tried with are Eldraqth’s pack of two,
+          <a href="https://www.amazon.com/dp/B0FJRB9KGV">on Amazon</a>. Not tried yet on the FM9, Axe-Fx III or VP4:
+          feel it in the first minute, and unplug it if it gets more than slightly warm.
+        </div>
+        <p class="buy">
+          <a href="https://www.amazon.com/dp/B08F8F57JX">On Amazon</a> ·
+          <a href="https://www.cme-pro.com/widi-master/">CME’s page for it</a>
+        </p>
+      </div>
+      <div class="part">
+        <div class="name">CME WIDI Jack, TRS-35 bundle <span class="tag no">Not tried yet</span></div>
+        <div class="what">
+          For the AM4 or VP4: a small box with two cables ending in 3.5 mm plugs. Set its switch to
+          Type A. It takes its power from the unit’s MIDI OUT, or from a charger in its USB-C socket.
+        </div>
+        <p class="buy">
+          <a href="https://www.amazon.com/dp/B08ZZSYKQX">On Amazon</a> ·
+          <a href="https://www.cme-pro.com/widi-jack/">CME’s page for it</a>
+        </p>
+      </div>
+      <div class="part">
+        <div class="name">CME WIDI Jack, 5-pin DIN bundle <span class="tag no">Not tried yet</span></div>
+        <div class="what">For the FM9 and Axe-Fx III: the same box, with cables ending in 5-pin MIDI plugs.</div>
+        <p class="buy"><a href="https://www.amazon.com/dp/B08ZZSVM1J">On Amazon</a></p>
+      </div>
+      <p>Not tried with Fractal Remote, so not linked here:</p>
       <ul>
-        <li><strong>CME WIDI Jack, with the TRS-35 cables</strong>, for the AM4: one small box with
-          two leads, one for each 3.5 mm jack. Power it from USB-C. It has a Type A/B switch: on the
-          AM4 start on A, and try B if nothing gets through.</li>
-        <li><strong>CME WIDI Jack, with the 5-pin cables</strong>, for the FM9 and Axe-Fx III. On an
-          FM3 it is reported hot even on USB power (see <a href="#fm3">FM3</a>).</li>
         <li><strong>Yamaha MD-BT01</strong>: two plugs, In and Out, and used by other people with
           Fractal units for years. It runs only on the MIDI OUT’s power, and on an FM3 it is
-          reported hot about as often as not, so it is no better there than the C2MIDI Pro. Yamaha
-          supports it on iPhone, not officially on Android, and it is hard to find now.</li>
+          reported hot about as often as not. Yamaha supports it on iPhone, not officially on
+          Android, and it is hard to find now.</li>
         <li><strong>A WIDI Uhost plugged straight into the unit’s USB socket</strong>, with no MIDI
-          cable: not tried. On an FM3 it can’t work at all, because the FM3’s USB socket doesn’t
-          carry MIDI.</li>
+          cable. On an FM3 it can’t work at all, because the FM3’s USB socket doesn’t carry
+          MIDI.</li>
       </ul>
 
       <h2>Tell us how it went</h2>

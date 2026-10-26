@@ -3521,6 +3521,7 @@ export function run(test) {
       ['src/lib/bluetooth.js', /in Android’s settings/, 'ALLOW_WORDS: the iPhone line is picked first, on Platform.OS'],
       ['src/lib/bluetooth-gear.js', /from an iPhone and an Android phone\./, 'BETA_NOTE_ANDROID: betaNote picks it only for Android'],
       ['src/screens/Bluetooth.js', /If Android asks to pair with it, accept\./, 'the Connect hint, behind ios ? … :'],
+      ['src/screens/Bluetooth.js', /Android needs Nearby devices allowed for Fractal Remote/, 'the Troubleshooting step, behind ios ? … :'],
       ['src/screens/Settings.js', /^Google account$/, 'Delete account: Apple ID on an iPhone'],
       ['src/lib/purchases.js', /^Google account$/, 'storeAccount, in Restore’s and Buy’s words: Apple ID on an iPhone'],
       ['src/lib/cloudSetlists.js', /^Android$/, 'deviceName: iPhone on an iPhone'],
@@ -7838,7 +7839,7 @@ export function run(test) {
      * behind their own check as well, should the page ever open to more.
      */
     assert.ok(!/Testing tools|diagnostic panel/.test(pasted), 'the 1.87.11 notes describe tools on a page the reviewer cannot open')
-    assert.match(read('mobile/src/screens/Bluetooth.js').replace(/\s+/g, ' '), /\{admin && b\.unit && !vp4 && tools \?/, 'the Bluetooth page shows its testing tools without asking whose account it is')
+    assert.match(read('mobile/src/screens/Settings.js').replace(/\s+/g, ' '), /\{page === 'bt-tools' && bluetoothOffered && isAdmin\(account\?\.id\) \? \(/, 'the Bluetooth testing tools are shown without asking whose account it is')
 
     /* Nothing left in the section asks for a Bluetooth video before pasting. */
     assert.ok(!section.includes('- **The video.**'), 'the 1.87.11 section still asks for a Bluetooth video')
@@ -13769,7 +13770,7 @@ export function run(test) {
        red line on the computer card opens, is a child of Phone & computer
        beside 'offline'. And on 15 October 2026, 'stuck', Paid but no computer
        yet, a child of Developer like the other tools. */
-    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer' \}/, 'a page goes back somewhere it did not come from')
+    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'bt-tools': 'developer' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')

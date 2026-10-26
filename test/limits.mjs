@@ -4331,8 +4331,13 @@ export function run(test) {
       ['CME WIDI Uhost', 'https://www.amazon.com/dp/B09GS326QW', 'https://www.cme-pro.com/widi-uhost/'],
       ['CME C2MIDI Pro', 'https://www.amazon.com/dp/B0GVXTX5D1', 'https://www.cme-pro.com/c2midi-pro/'],
       ['LOOTOOLS Type-A MIDI to 3.5 mm adapters', 'https://www.amazon.com/dp/B0FN83P5P7', null],
-      /* The FM3's, since 26 October 2026: CME's own page, checked that day, and no Amazon link until one is. */
-      ['CME U2MIDI Pro', null, 'https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/']
+      /* The FM3's, since 26 October 2026, and the rest of the ways that day, each Amazon page's title checked. */
+      ['CME U2MIDI Pro', 'https://www.amazon.com/dp/B0BH8DHCLY', 'https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/'],
+      ['USB-C to USB-A adapter', 'https://www.amazon.com/dp/B01COOQIKU', null],
+      ['CME WIDI Master', 'https://www.amazon.com/dp/B08F8F57JX', 'https://www.cme-pro.com/widi-master/'],
+      ['CME WIDI Jack, TRS-35 bundle', 'https://www.amazon.com/dp/B08ZZSYKQX', 'https://www.cme-pro.com/widi-jack/'],
+      ['CME WIDI Jack, 5-pin DIN bundle', 'https://www.amazon.com/dp/B08ZZSVM1J', null],
+      ['Eldraqth', 'https://www.amazon.com/dp/B0FJRB9KGV', null]
     ]
     for (const [name, amazon, maker] of PARTS) {
       assert.ok(words.includes(name), `the guide does not name the ${name}`)
@@ -4368,11 +4373,11 @@ export function run(test) {
     const app = read('mobile/src/screens/Bluetooth.js')
     for (const said of [
       '1 · Pick your unit',
-      'How to plug it in',
-      'What to buy',
+      'How to connect my Bluetooth device',
+      'Troubleshooting',
       'View on Amazon',
-      'What it can and can’t do',
-      'Full setup guide',
+      'What Bluetooth can’t do',
+      'Setup guide',
       '2 · Connect',
       'wait until it says Connected, then tap Done',
       /* The app names the device in hand there now (`The ${deviceNoun()} looks…`), the guide "The phone": the rest of the sentence is held. */
@@ -4389,9 +4394,9 @@ export function run(test) {
     /* The report, where the guide sends people: the app's own button. */
     assert.match(words, /Report a Bluetooth problem, on the Bluetooth page, one tap, with “It works on my unit” among its answers/, 'the guide does not send people to the one-tap report')
     /* Changed on purpose, 24 October 2026, with the page: Connect at the top, and the reading in rows under it ("a five-year-old could connect it"). */
-    assert.match(words, /The top of the page says whether it is connected, and the two steps are right under that\./, 'the guide does not say the steps are at the top, as they are in the app')
-    assert.match(words, /Under Connect are three rows you tap to open: How to plug it in \(open the first time\), What to buy/, 'the guide does not say the rows sit under Connect, as they do in the app')
-    assert.match(app, /<Heading>1 · Pick your unit<\/Heading>[\s\S]*<Heading>2 · Connect<\/Heading>[\s\S]*<Fold title="How to plug it in"[\s\S]*<Fold title="What to buy"[\s\S]*<Fold title="What it can and can’t do"/, 'the rows are no longer under the two steps; read the guide against the app again')
+    assert.match(words, /The two steps are at the top of the page\. While it is on, or when something is wrong, a line over them says so\./, 'the guide does not say the steps are at the top, as they are in the app')
+    assert.match(words, /Under Connect are a few buttons\. Setup guide opens this page\. How to connect my Bluetooth device shows every way to hook up the unit you picked, simplest first/, 'the guide does not say the buttons sit under Connect, as they do in the app')
+    assert.match(app, /<Heading>1 · Pick your unit<\/Heading>[\s\S]*<Heading>2 · Connect<\/Heading>[\s\S]*label="Setup guide"[\s\S]*label="How to connect my Bluetooth device"[\s\S]*label="Troubleshooting"[\s\S]*label="What Bluetooth can’t do"/, 'the buttons are no longer under the two steps; read the guide against the app again')
     /* Screen Time: the same place to look as the app's own line for it. */
     const restricted = read('mobile/src/lib/bluetooth.js').match(/export const RESTRICTED_WORDS =\s*`([^`]+)`/)?.[1] ?? ''
     assert.ok(restricted.includes('Settings → Screen Time → Content & Privacy Restrictions'), 'the app’s Screen Time line no longer says where to look; read the guide against it again')
@@ -4418,8 +4423,10 @@ export function run(test) {
     assert.match(words, /steady green means it has found the C2MIDI Pro \(or the U2MIDI Pro\) and has power/, 'the guide does not say what the green light means')
     assert.match(words, /a slow blue flash means it is waiting for the phone\. Steady blue means it is connected\. A fast blue flicker means messages are going through\./, 'the guide does not say what the blue light means')
 
-    /* Other adapters: not tried, both jacks, and nothing to buy them by. */
-    assert.match(words, /None of these has been tried with Fractal Remote/, 'the other adapters are not marked as untried')
+    /* Other ways: each marked tried or not, both jacks, and the untried ones beyond the app's own list with nothing to buy them by. */
+    assert.match(words, /CME WIDI Master Tried on the AM4/, 'the WIDI Master is not marked as tried on the AM4 only')
+    assert.match(words, /CME WIDI Jack, TRS-35 bundle Not tried yet/, 'the WIDI Jack is not marked as untried')
+    assert.match(words, /Not tried with Fractal Remote, so not linked here:/, 'the other adapters are not marked as untried')
     assert.match(words, /plug into both of the unit’s MIDI jacks, In and Out/, 'the guide does not say an adapter has to fill both jacks')
   })
 
@@ -4943,7 +4950,7 @@ export function run(test) {
     const extra = BLE_UNITS.filter((u) => !unitOffered(u.key, { platform: 'ios', installed: '1.89.0', units: KEYED }))
     assert.deepEqual(extra, [], 'the 1.89.0 copy keeps a unit for the developer’s account, and the notes say none is')
     for (const [where, text] of [['Apple notes', paragraph(notes, "Only on the developer's own account:")], ['App access note', paragraph(access, "Only on the developer's own account:")]]) {
-      assert.match(text, /Developer pages \(access, sales, accounts, messages and the like\)/, `the ${where} leave out the Developer pages, or Access, the one that grants the full version`)
+      assert.match(text, /Developer pages \(access, sales, accounts, messages, Bluetooth testing tools and the like\)/, `the ${where} leave out the Developer pages, or Access, the one that grants the full version`)
       assert.match(text, /testing tools/, `the ${where} leave out the Bluetooth page's testing tools`)
       for (const u of BLE_UNITS) assert.ok(!text.includes(u.name), `the ${where} name the ${u.name} as the developer’s alone, and every unit is the review account’s too`)
       assert.match(text, /No other account (is shown|sees) them, (the demo account|this one) included/, `the ${where} do not say the review account is shown none of it`)

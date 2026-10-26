@@ -285,13 +285,69 @@ export const PARTS = {
   u2midi: {
     name: 'CME U2MIDI Pro',
     does: 'For an FM3, in place of the C2MIDI Pro: the cable from the Uhost to the FM3’s MIDI jacks, with a black MIDI plug and a white one. It runs on USB power only, and stays cool on an FM3. Its USB plug is USB-A, so it goes into the Uhost through a small USB-C to USB-A adapter.',
-    amazon: null,
+    amazon: 'https://www.amazon.com/dp/B0BH8DHCLY',
     maker: 'https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/'
+  },
+  /*
+   * THE U2MIDI PRO'S WAY INTO THE UHOST. Its plug is USB-A and the Uhost's
+   * sockets are USB-C, so a short Anker adapter goes between them (A8165,
+   * USB-C plug to a USB-A socket, checked against its Amazon page on 26
+   * October 2026).
+   */
+  usbA: {
+    name: 'USB-C to USB-A adapter',
+    does: 'For the FM3: the U2MIDI Pro’s USB plug is the larger USB-A kind, and this lets it go into the Uhost’s USB-C socket. Any small USB-C (plug) to USB-A (socket) adapter does; this one is Anker’s.',
+    amazon: 'https://www.amazon.com/dp/B01COOQIKU',
+    maker: null
+  },
+  /*
+   * THE WIDI MASTER: the adapter and its two MIDI plugs in one, powered by
+   * the unit's MIDI OUT alone (CME: "No external power option"). Tried and
+   * working on an AM4, through the two 3.5 mm adapters (26 October 2026),
+   * and never for an FM3, where it got very hot and did not work.
+   */
+  master: {
+    name: 'CME WIDI Master',
+    does: (noun = 'phone') => `The Bluetooth adapter and its MIDI plugs in one piece. Your ${noun} connects to it. It takes its power from the unit’s MIDI OUT, so there is nothing else to plug in.`,
+    amazon: 'https://www.amazon.com/dp/B08F8F57JX',
+    maker: 'https://www.cme-pro.com/widi-master/'
+  },
+  /*
+   * THE WIDI JACK, two ways it is sold: with cables ending in 3.5 mm plugs
+   * (the TRS-35 bundle, for an AM4's or VP4's jacks, its switch set to Type
+   * A) or in 5-pin plugs (for an FM9 or Axe-Fx III). Powered by the unit's
+   * MIDI OUT, or by USB-C power into its own socket. Not tried with the app
+   * on any unit yet.
+   */
+  jackTrs: {
+    name: 'CME WIDI Jack, TRS-35 bundle',
+    does: (noun = 'phone') => `The Bluetooth adapter, with two cables that end in 3.5 mm plugs for the unit’s MIDI jacks. Your ${noun} connects to it.`,
+    amazon: 'https://www.amazon.com/dp/B08ZZSYKQX',
+    maker: 'https://www.cme-pro.com/widi-jack/'
+  },
+  jackDin: {
+    name: 'CME WIDI Jack, 5-pin DIN bundle',
+    does: (noun = 'phone') => `The Bluetooth adapter, with two cables that end in 5-pin MIDI plugs. Your ${noun} connects to it.`,
+    amazon: 'https://www.amazon.com/dp/B08ZZSVM1J',
+    maker: 'https://www.cme-pro.com/widi-jack/'
   },
   adapters: {
     name: 'Two Type-A MIDI to 3.5 mm adapters',
-    does: 'For an AM4 or VP4: their MIDI jacks are small 3.5 mm ones. They must be Type A. This is a pack of two (LOOTOOLS).',
+    does: 'For an AM4 or VP4: their MIDI jacks are small 3.5 mm ones. Each adapter has a 5-pin MIDI socket (female) on one end and a 3.5 mm plug (male) on the other. They must be Type A. This is a pack of two (LOOTOOLS).',
     amazon: 'https://www.amazon.com/dp/B0FN83P5P7',
+    maker: null
+  },
+  /*
+   * THE PAIR THE WIDI MASTER WAS TRIED WITH ON AN AM4: "It also needs a 5
+   * pin female to TRS male adapter" (Justin, 26 October 2026, with the
+   * Amazon page of the ones he used: Eldraqth BMIDI-5-35, Type A, a pack
+   * of two). The same kind of part as the LOOTOOLS pair, which the Uhost
+   * way was tried with.
+   */
+  masterAdapters: {
+    name: 'Two Type-A MIDI to 3.5 mm adapters',
+    does: 'For an AM4 or VP4, between the WIDI Master and the unit: a 5-pin MIDI socket (female) on one end for the WIDI Master’s plug, and a 3.5 mm plug (male) on the other for the unit’s jack. They must be Type A. This is a pack of two (Eldraqth), the ones the WIDI Master was tried with.',
+    amazon: 'https://www.amazon.com/dp/B0FJRB9KGV',
     maker: null
   }
 }
@@ -451,7 +507,7 @@ export function partsFor(unit, noun = 'phone') {
  * "isn't connected with them" under a CME adapter read as the app failing to
  * reach it.
  */
-export const SELLERS_LINE = 'CME and LOOTOOLS make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.'
+export const SELLERS_LINE = 'CME, LOOTOOLS, Eldraqth and Anker make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.'
 
 /*
  * ONE THING TALKING TO THE UNIT. With Bluetooth on, the phone never looks
@@ -589,6 +645,115 @@ function unitSettingsStep(unit) {
 /* The power step, the same words for every unit: the Uhost's power goes in last, with the unit already on. */
 const powerStep = (name) =>
   `With the ${name} already on, plug a phone charger or power bank into the Uhost’s right socket, marked USB Power (5 volts, nothing stronger). The Uhost needs this power to work.`
+
+/*
+ * THE WAYS TO HOOK IT UP, BY UNIT, best first. "On the AM4 and VP4, show the
+ * WIDI Master first, as that's a single device that can get them set up. And
+ * then the alternative devices would be the WIDI Jack with TRS connectors, or
+ * the WIDI Uhost ... On the FM3 just show the WIDI Uhost setup with the
+ * U2MIDI Pro ... On the FM9 and Axe-Fx III show the WIDI Master OR the WIDI
+ * Jack with 5-pin connector OR the WIDI Uhost with the C2MIDI Pro" (Justin,
+ * 26 October 2026). Each way: its title, its parts (by PARTS key), its
+ * steps, whether the app has run on this unit through it (`tried`), and the
+ * one thing to feel in the first minute where it has not (`feel`), said
+ * straight after the step that powers it (`powerAt`).
+ *
+ * The FM3 has the one way, the U2MIDI Pro's: everything fed from its MIDI
+ * OUT (the WIDI Master, the WIDI Jack, the C2MIDI Pro) got very hot on one
+ * or is the same kind, so none of them is ever offered for it.
+ */
+const TRIED_WAYS = { am4: ['master', 'uhost'], fm3: ['uhost'] }
+
+const thruOff = (name) => `On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off.`
+const masterPower = (name) => `It takes its power from the ${name}’s MIDI OUT: with the ${name} on, its light comes on. It has no other way to be powered.`
+const jackPower = (name) => `It takes its power from the ${name}’s MIDI OUT. If its light stays off, plug a phone charger or power bank into the Jack’s USB-C socket.`
+const swapIfQuiet = 'If the unit doesn’t answer, swap the two plugs.'
+
+export function waysFor(unit, noun = 'phone') {
+  const name = UNITS[unit]
+  if (!name) return []
+  const uhost = (parts) => ({ key: 'uhost', title: 'WIDI Uhost and a cable', parts, steps: hookupFor(unit, noun), powerAt: powerStepOf(unit), feel: 'C2MIDI Pro', firstTime: true })
+  if (unit === 'fm3') return mark(unit, [{ ...uhost(['uhost', 'u2midi', 'usbA']), feel: null }])
+  if (unit === 'am4' || unit === 'vp4') {
+    const vp4 = unit === 'vp4'
+    return mark(unit, [
+      {
+        key: 'master',
+        title: 'WIDI Master',
+        best: true,
+        parts: ['master', 'masterAdapters'],
+        steps: [
+          `Push one 3.5 mm adapter into the ${name}’s MIDI IN, and the other into its MIDI OUT.`,
+          `Plug the WIDI Master’s two MIDI plugs into the two adapters, as the labels on its plugs say. ${swapIfQuiet}`,
+          masterPower(name),
+          vp4 ? vp4Settings : thruOff(name)
+        ],
+        powerAt: 2,
+        feel: 'WIDI Master'
+      },
+      {
+        key: 'jack',
+        title: 'WIDI Jack with 3.5 mm cables',
+        parts: ['jackTrs'],
+        steps: [
+          'Set the switch on the WIDI Jack to Type A.',
+          `Plug its two cables into the Jack, then their 3.5 mm plugs into the ${name}’s MIDI IN and MIDI OUT, as the labels say. ${swapIfQuiet}`,
+          jackPower(name),
+          vp4 ? vp4Settings : thruOff(name)
+        ],
+        powerAt: 2,
+        feel: 'WIDI Jack'
+      },
+      uhost(['uhost', 'c2midi', 'adapters'])
+    ])
+  }
+  const out = unit === 'axefx3' ? `its MIDI OUT (not THRU: the ${noun} would only hear itself there)` : 'its MIDI OUT/THRU jack'
+  const settings = hookupFor(unit, noun).at(-1)
+  return mark(unit, [
+    {
+      key: 'master',
+      title: 'WIDI Master',
+      best: true,
+      parts: ['master'],
+      steps: [`Plug the WIDI Master’s two MIDI plugs into the ${name}’s MIDI IN and ${out}, as the labels on its plugs say. ${swapIfQuiet}`, masterPower(name), settings],
+      powerAt: 1,
+      feel: 'WIDI Master'
+    },
+    {
+      key: 'jack',
+      title: 'WIDI Jack with 5-pin cables',
+      parts: ['jackDin'],
+      steps: [`Plug its two cables into the Jack, then their 5-pin plugs into the ${name}’s MIDI IN and ${out}, as the labels say. ${swapIfQuiet}`, jackPower(name), settings],
+      powerAt: 1,
+      feel: 'WIDI Jack'
+    },
+    uhost(['uhost', 'c2midi'])
+  ])
+}
+
+/* The VP4's own settings step, in its manual's words (the same as hookupFor's). */
+const vp4Settings = 'On the VP4, open SETUP > MIDI/Remote and set Receive MIDI PC to ON, and the MIDI Channel to 1 (or OMNI). For scenes, set Scene Select too: Settings > VP4 scenes & presets says how.'
+
+function mark(unit, ways) {
+  return ways.map((w) => {
+    const tried = (TRIED_WAYS[unit] || []).includes(w.key)
+    return { ...w, tried, feelLine: tried || !w.feel ? null : feelLine(w.feel) }
+  })
+}
+
+/* The heat check for a way nobody here has run on this unit: HEAT_CHECK's words, for whatever is plugged in. */
+export const feelLine = (part) => `In the first minute, feel the ${part}. It should stay cool. If it gets more than slightly warm, unplug it at once.`
+
+/* Troubleshooting's first two fixes, with the parts named: the light, and the plugs swapped on the one-piece adapters. */
+export const TROUBLE_LIT =
+  'Check the adapter is lit. The WIDI Uhost needs a phone charger or power bank in its USB Power socket. A WIDI Master, or a WIDI Jack with no charger, lights up from the unit’s MIDI OUT once the unit is on.'
+export const swapLine = (unit) => `With a WIDI Master or WIDI Jack, swap its two plugs if the ${UNITS[unit] || 'unit'} doesn’t answer.`
+
+/* Said on a way that has not run on this unit yet. */
+export const WAY_UNTRIED = 'Not tried with this unit yet. Tell us how it goes with Report a Bluetooth problem.'
+
+/* Before the first time, on a WIDI Master or Jack: CME's firmware, as FIRST_TIME says for the Uhost. */
+export const FIRST_TIME_ADAPTER = 'Before the first time: update the adapter in CME’s free WIDI app, then close the WIDI app.'
 
 /** Where the power goes in among a unit's steps (hookupFor), counting from 0: the heat line is drawn straight after it. -1 for a unit with no steps. */
 export const powerStepOf = (unit) => (hookupFor(unit) || []).indexOf(powerStep(UNITS[unit]))

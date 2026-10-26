@@ -5711,7 +5711,7 @@ export function run(test) {
     assert.match(one, /\{mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth"/, 'the row is not behind the unlock, the developer’s account and the build check')
     assert.match(one, /title="Bluetooth"[\s\S]{0,300}onPress=\{\(\) => setPage\('bluetooth'\)\}/, 'the row opens nothing')
     /* The page itself, through the same gate. It is told whether this is Justin's account (from the server) only for its Testing tools (Apple's 2.2), never to let anybody in. */
-    assert.match(one, /\{page === 'bluetooth' && mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <> \{head\('Bluetooth', 'back'\)\} <BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} \/>/)
+    assert.match(one, /\{page === 'bluetooth' && mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <> \{head\('Bluetooth', 'back'\)\} <BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} \/>/)
     /*
      * The account's answer comes from lib/bluetooth, which App.js tells from
      * the session kept on the phone, redrawn when it changes, so the row
@@ -5731,8 +5731,10 @@ export function run(test) {
     const front = settings.slice(settings.indexOf('{page === null ? ('), settings.indexOf("{page === 'account' ? ("))
     const row = front.indexOf('title="Bluetooth"')
     assert.ok(row > front.indexOf('title="Phone & computer"') && row < front.indexOf('title="Metronome"'), 'the row is not on the Settings list beside Phone & computer')
+    /* Phone & computer, which the Live pill opens, has one button to the page (26 October 2026), behind the row's gate as one name. */
     const link = settings.slice(settings.indexOf("{page === 'link' ? ("), settings.indexOf("{page === 'bluetooth'"))
-    assert.doesNotMatch(link, /setPage\('bluetooth'\)/, 'Phone & computer still opens Bluetooth')
+    assert.equal((link.match(/setPage\('bluetooth'\)/g) || []).length, 1, 'Phone & computer opens Bluetooth from more than one button')
+    assert.match(link.replace(/\s+/g, ' '), /\{bluetoothOffered && !demo \? \( <Press/, 'Phone & computer’s Bluetooth button skips the gate')
     /* After the link page and before the metronome: outside every slice the other tests take. */
     const at = settings.indexOf("{page === 'bluetooth'")
     assert.ok(at > settings.indexOf("{page === 'link' ? (") && at < settings.indexOf("{page === 'metronome' ? ("), 'the page moved into a slice another test reads')
@@ -6634,7 +6636,11 @@ export function run(test) {
      */
     const GATE = 'mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported()'
     const settings = flat('mobile/src/screens/Settings.js')
-    assert.equal((settings.match(/setPage\('bluetooth'\)/g) || []).length, 1, 'something else on Settings opens the Bluetooth page')
+    /* Two ways on Settings: the row, and the button on Phone & computer, which the Live pill opens (26 October 2026), behind the same three as one name. */
+    assert.equal((settings.match(/setPage\('bluetooth'\)/g) || []).length, 2, 'something else on Settings opens the Bluetooth page')
+    assert.ok(settings.includes(`const bluetoothOffered = ${GATE}`), 'Phone & computer’s Bluetooth button is behind another gate')
+    assert.match(settings, /\{bluetoothOffered && !demo \? \( <Press label=\{bluetooth \? 'Bluetooth' : 'Connect over Bluetooth'\}[^}]*\}[^]*?onPress=\{\(\) => setPage\('bluetooth'\)\}/, 'the button on Phone & computer is not behind the gate')
+    for (const sub of ['bt-ways', 'bt-trouble', 'bt-limits']) assert.ok(settings.includes(`{page === '${sub}' && bluetoothOffered ? (`), `the ${sub} page is not behind the gate`)
     assert.ok(settings.includes(`{${GATE} ? ( <SetupRow title="Bluetooth"`), 'the row is not behind the gate')
     assert.ok(settings.includes(`{page === 'bluetooth' && ${GATE} ? (`), 'the page is not behind the gate')
     assert.ok(settings.includes('const bluetoothAllowed = useBluetoothAllowed()') && settings.includes('const bluetoothAdmin = useBluetoothAdmin()'), 'the row’s gate is read from something other than lib/bluetooth')
@@ -6646,7 +6652,9 @@ export function run(test) {
     assert.ok(!/mayDrive\(/.test(code('mobile/src/screens/Bluetooth.js')), 'the Bluetooth page lets a free account connect with the store out of reach')
     /* App.js: one way to the page, handed to the waiting screen only through the same three: the row's gate as one hook. */
     const app = flat('mobile/App.js')
-    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 1, 'App.js opens the Bluetooth page from somewhere else too')
+    /* Two: the waiting screen's, and the Which unit sheet's off the Live pill, both behind bluetoothOffered. */
+    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 2, 'App.js opens the Bluetooth page from somewhere else too')
+    assert.ok(app.includes("onBluetooth={bluetoothOffered ? () => (setPickLive(false), openSettings('bluetooth')) : null}"), 'the Which unit sheet’s Bluetooth button is behind another gate')
     assert.ok(app.includes('const bluetoothOffered = useBluetoothOffered()'), 'the waiting screen’s way in is not the Settings row’s gate')
     assert.ok(!/mayDrive|bluetoothSupported\(\)|useBluetoothAllowed\(\)/.test(code('mobile/App.js')), 'App.js writes the Bluetooth gate out again beside the hook')
     const hook = code('mobile/src/lib/useBluetoothOffered.js').replace(/\s+/g, ' ')
@@ -6743,8 +6751,10 @@ export function run(test) {
 
     /* Wherever it is offered, from the gear file and never typed again. */
     const page = flat('mobile/src/screens/Bluetooth.js')
-    const offHalf = page.slice(page.indexOf(') : ( <View style={{ gap: space.lg }}>'))
-    assert.ok(offHalf.indexOf('{BLUETOOTH_WAYS}') > 0 && offHalf.indexOf('{BLUETOOTH_WAYS}') < offHalf.indexOf('<Heading>1 · Pick your unit</Heading>'), 'the page does not say the two ways before step 1 and Connect')
+    /* At the foot of the page since 26 October 2026 ("the connect steps right there at the top before any warnings or anything"), and on What Bluetooth can't do. */
+    const main = page.slice(page.indexOf('export default function BluetoothPage('), page.indexOf('function UnitChips('))
+    assert.ok(main.indexOf('<Hint>{BLUETOOTH_WAYS}</Hint>') > main.indexOf('<Heading>2 · Connect</Heading>'), 'the page does not say the two ways under the steps')
+    assert.ok(page.slice(page.indexOf('export function BluetoothLimits(')).includes('<Hint>{BLUETOOTH_WAYS}</Hint>'), 'What Bluetooth can’t do does not say the two ways')
     assert.match(flat('mobile/src/screens/Settings.js'), /: BLUETOOTH_ROW_OFF\}/, 'the Settings row does not say it')
     assert.match(flat('mobile/src/screens/Settings.js'), /not through the computer\. \$\{BLUETOOTH_WAYS\}`/, 'Phone & computer does not say it while Bluetooth is on')
     assert.match(flat('mobile/App.js'), /sub=\{BLUETOOTH_WAYS_SHORT\}/, 'the waiting screen’s way in does not say it')
@@ -6894,18 +6904,24 @@ export function run(test) {
     assert.ok(!/findAdapters|lookForAdapterAgain/.test(code('mobile/src/lib/link.js') + code('mobile/src/lib/bleLink.js')), 'the link opens Apple’s screen by itself')
   })
 
-  test('every account is told the cable is never for an FM3, before and whatever is picked, and nobody the AM4 only', async () => {
+  test('the cable is never for an FM3: said when the FM3 is picked and where the cables are bought, and nobody is told the AM4 only', async () => {
     const page = flat('mobile/src/screens/Bluetooth.js')
-    /* Under the units, on every visit while it is off. */
+    /*
+     * Under the units only when the FM3 is picked (Justin, 26 October 2026:
+     * "if they select FM3, why we wanna give the warning"), and for every
+     * other unit where the C2MIDI Pro and the WIDI Master are bought, on How
+     * to connect my Bluetooth device.
+     */
     const step1 = page.slice(page.indexOf('<Heading>1 · Pick your unit</Heading>'), page.indexOf('<Heading>2 · Connect</Heading>'))
-    assert.match(step1, /<Hint>\{NOT_FOR_FM3\}<\/Hint>/)
+    assert.match(step1, /\{b\.unit === 'fm3' \? <Note tone="fault">\{FM3_NEVER\}<\/Note> : null\}/)
+    assert.match(page, /\{unit !== 'fm3' && \(way\.key === 'uhost' \|\| way\.key === 'master'\) \? <Hint>\{NOT_FOR_FM3\}<\/Hint> : null\}/)
     const gear = await import('../shared/bluetooth-gear.mjs')
     assert.equal(gear.NOT_FOR_FM3, 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master: both got very hot on one.')
     /* The customer's "AM4 only" is gone everywhere: every unit opens together (lib/ble-rule.js UNITS_FROM_STORE). */
     assert.equal(gear.AM4_ONLY, undefined, 'the gear file still has the customer’s AM4-only line')
     assert.ok(!/AM4_ONLY|am4Only|AM4 only/.test(code('mobile/src/screens/Bluetooth.js')), 'the page still says the AM4 only to somebody')
     /* Connected, the unit silent: the plugs. */
-    assert.match(page, /\{`\$\{PLUGS_CHECK\} The adapter has to carry MIDI both ways\./, 'a unit that does not answer is not told about the plugs')
+    assert.match(page, /\{quiet \? <Hint>\{`\$\{PLUGS_CHECK\} \$\{BOTH_WAYS\}`\}<\/Hint> : null\}/, 'a unit that does not answer is not told about the plugs')
     /*
      * Nothing tells anybody to pick a unit by name in step 1 but the wrong
      * unit's line, which is handed whether this account is offered it
@@ -6978,12 +6994,14 @@ export function run(test) {
      */
     assert.match(page, /const units = offeredUnits\(\) const vp4 = b\.unit === 'vp4'/)
     /* "Not tried yet" under the units nobody has tried it on, "Not run yet" under the FM3 (shared/bluetooth-gear untriedSubFor), since 25 October 2026. */
-    assert.match(page, /\{units\.map\(\(u\) => \( <Press key=\{u\.key\} label=\{u\.name\} sub=\{untriedSubFor\(u\.key\)\} tone="signal" on=\{u\.key === b\.unit\}/)
+    assert.match(page, /\{units\.map\(\(u\) => \( <Press key=\{u\.key\} label=\{u\.name\} sub=\{untriedSubFor\(u\.key\)\} tone="signal" on=\{u\.key === picked\}/)
+    assert.match(page, /<UnitChips units=\{units\} picked=\{b\.unit\} disabled=\{b\.on\} \/>/)
     /* Connect cannot be pressed before a unit is picked, nor by somebody who has not unlocked the app. */
     assert.match(page, /const canStart = !!b\.unit && paid/)
     assert.match(page, /tone="live" disabled=\{!canStart \|\| b\.looking\} onPress=\{start\}/, 'Connect can be pressed with no unit picked')
     /* And the unit cannot be changed while it is on: one mis-tap would send another unit's messages to the one on the adapter. */
-    assert.match(page, /on=\{u\.key === b\.unit\} disabled=\{b\.on\}/, 'the unit can be changed while connected')
+    assert.match(page, /on=\{u\.key === picked\} disabled=\{disabled\}/, 'the unit can be changed while connected')
+    assert.equal((page.match(/<UnitChips units=\{units\} picked=\{b\.unit\} disabled=\{b\.on\} \/>/g) || []).length, 2, 'a unit chip somewhere can be changed while connected')
     /*
      * CHANGED ON PURPOSE, 24 October 2026: "It would be cool if, like, a
      * five-year-old could connect it." The units used to stay on the page
@@ -7002,8 +7020,8 @@ export function run(test) {
     assert.ok(cut > 0, 'the on/off ternary could not be split; this read is probably broken')
     const [onPart, offPart] = [ternary.slice(0, cut), ternary.slice(cut)]
     assert.ok(onPart.includes('<Press label="Stop using Bluetooth"'), 'Stop is not in the on half')
-    assert.ok(!onPart.includes('units.map('), 'the units are drawn while it is on')
-    assert.ok(offPart.includes('units.map('), 'the units are not drawn while it is off')
+    assert.ok(!onPart.includes('<UnitChips '), 'the units are drawn while it is on')
+    assert.ok(offPart.includes('<UnitChips '), 'the units are not drawn while it is off')
     assert.equal((page.match(/units\.map\(/g) || []).length, 1, 'the unit chips are drawn in more than one place')
     assert.ok(!/BLE_UNITS\.map\(/.test(page), 'the page draws every unit there is, not the ones this account is offered')
     assert.ok(!page.includes('To change the unit, tap Stop first.'), 'a hint for units that are no longer drawn while it is on')
@@ -7291,16 +7309,23 @@ export function run(test) {
      * panel says "For testing." and offers Write checks that change the unit.
      */
     /* And never for a VP4, which is asked nothing over Bluetooth (lib/bleVp4.js): there is nothing to check. */
-    assert.match(page, /\{admin && b\.unit && !vp4 \? \( <Press label=\{tools \? 'Hide testing tools' : 'Testing tools'\}/, 'the Testing tools button shows to every customer again, or for a VP4')
-    assert.match(page, /\{admin && b\.unit && !vp4 && tools \? \( <View style=\{\{ gap: space\.md \}\}> <Heading>Check<\/Heading>/, 'the testing tools are on the page unasked, or for every customer')
-    /* And, since 25 October 2026, the one-tap report it is handed (onReport), null unless Settings is given one. */
-    assert.match(page, /export default function BluetoothPage\(\{ purchase, admin = false, onReport = null \}\)/, 'the page shows the testing tools unless told not to')
-    /* No second way in: the button and the panel are each drawn once, both behind admin. */
-    assert.equal(page.split("'Testing tools'").length - 1, 1, 'the Testing tools button is drawn in more than one place')
+    /*
+     * The tools moved off the page onto the Developer pages, which only his
+     * account is shown (26 October 2026: "move that to the developer menu
+     * that only I see"): a row there, and the page behind isAdmin too.
+     */
+    assert.ok(!/'Testing tools'|<Heading>Check<\/Heading>/.test(page.slice(page.indexOf('export default function BluetoothPage('), page.indexOf('export function BluetoothWays('))), 'the testing tools are back on the Bluetooth page')
+    const tools = page.slice(page.indexOf('export function BluetoothTools('))
     assert.equal(page.split('<Heading>Check</Heading>').length - 1, 1, 'the check is drawn in more than one place')
+    assert.ok(tools.includes('<Heading>Check</Heading>'), 'the check is not on the testing tools page')
+    assert.match(tools, /if \(b\.unit === 'vp4'\) return <Hint>/, 'the tools ask a VP4 something')
+    const developer = flat('mobile/src/screens/Settings.js')
+    assert.match(developer, /\{page === 'bt-tools' && bluetoothOffered && isAdmin\(account\?\.id\) \? \(/, 'the testing tools page is drawn for somebody other than his account')
+    assert.match(developer, /\{bluetoothOffered \? <SetupRow title="Bluetooth testing tools"/)
+    assert.ok(developer.indexOf('title="Bluetooth testing tools"') > developer.indexOf("{page === 'developer' && isAdmin(account?.id) ? ("), 'the testing tools row is not on the Developer page')
     /* Settings works admin out as it does for his Developer pages. */
     const settingsFlat = flat('mobile/src/screens/Settings.js')
-    assert.match(settingsFlat, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} \/>/, 'Settings does not tell the Bluetooth page whose account this is')
+    assert.match(settingsFlat, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} \/>/, 'Settings does not tell the Bluetooth page whose account this is')
     /*
      * Nothing a customer needs is only in there. Every command goes Auto by
      * default, and Auto learns what works in ordinary use, not only in the
@@ -7726,17 +7751,25 @@ export function run(test) {
     const uses = page.match(/\{b\.trouble === 'permission' \? <OpenSettings \/> : null\}/g) || []
     assert.equal(uses.length, 1, 'Open Settings is drawn somewhere other than under its line')
     /* Counted however it is written: an && or a bare <OpenSettings /> is a second button too. */
-    const pageBody = page.slice(page.indexOf('return ( <View style={{ gap: space.xl }}>'), page.indexOf('const openLink ='))
+    const pageBody = page.slice(page.indexOf('return ( <View style={{ gap: space.xl }}>'), page.indexOf('function UnitChips('))
     assert.equal((pageBody.match(/<OpenSettings \/>/g) || []).length, 1, 'Open Settings is drawn in more than one place')
+    /* And once more on Troubleshooting, among its fixes. */
+    assert.equal((page.slice(page.indexOf('export function BluetoothTrouble(')).match(/<OpenSettings \/>/g) || []).length, 1)
     assert.match(page, /\{said\.line\} <\/Text> \{b\.trouble === 'permission' \? <OpenSettings \/> : null\}/, 'the button is not under the status line that says what to allow')
     assert.ok(!/\{!b\.on && b\.trouble \?/.test(page), 'the trouble is said twice while it is off: once at the top and again under Connect')
     /* The status line comes before anything else a person can press, on or off: nothing to scroll past to read it. */
     const body = page.slice(page.indexOf('return ( <View style={{ gap: space.xl }}>'))
     assert.ok(body.indexOf('{said.line}') > 0 && body.indexOf('{said.line}') < body.indexOf('<Press'), 'something is drawn above the line that says where it stands')
     assert.ok(!/\{b\.on \? \([^]*\{said\.line\}[^]*\) : \(/.test(body.slice(0, body.indexOf('Pick your unit'))), 'the status line is only drawn while it is on')
-    /* And drawn whatever the state: nothing between the page's start and the line can hide it (Connected, and the wrong unit answering, are only ever said there). */
+    /*
+     * Drawn while it is on, and whenever something is wrong, a trouble or a
+     * fault, on or off (26 October 2026: "very streamlined unless there is
+     * problems"). Off and fine it would only say "Not connected", over the
+     * steps that are about connecting.
+     */
     const head = body.slice(0, body.indexOf('{said.line}')).replace(/\{\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/\}/g, '')
-    assert.ok(!/\?|&&/.test(head), 'the status line is drawn only on some condition')
+    assert.equal((head.match(/\?|&&/g) || []).length, 1, 'the status line is drawn on some other condition')
+    assert.match(head, /\{sayIt \? \(/)
     /* And the status line it sits under is the allow line whenever the trouble is 'permission', on or off. */
     const status = page.slice(page.indexOf('function status('), page.indexOf('const TONES'))
     assert.ok(status.indexOf("b.trouble === 'permission'") < status.indexOf("if (!b.on) return { line: 'Not connected'"), 'with Bluetooth on, the line above the button says something else')
@@ -7898,8 +7931,35 @@ export function run(test) {
     /* The three he bought, as checked on amazon.com on 10 October 2026, and nothing on the end of them. */
     assert.deepEqual(
       Object.fromEntries(Object.entries(gear.PARTS).map(([key, p]) => [key, p.amazon])),
-      { uhost: 'https://www.amazon.com/dp/B09GS326QW', c2midi: 'https://www.amazon.com/dp/B0GVXTX5D1', u2midi: null, adapters: 'https://www.amazon.com/dp/B0FN83P5P7' }
+      {
+        uhost: 'https://www.amazon.com/dp/B09GS326QW',
+        c2midi: 'https://www.amazon.com/dp/B0GVXTX5D1',
+        /* The rest checked against their Amazon pages on 26 October 2026, each title matching. */
+        u2midi: 'https://www.amazon.com/dp/B0BH8DHCLY',
+        usbA: 'https://www.amazon.com/dp/B01COOQIKU',
+        adapters: 'https://www.amazon.com/dp/B0FN83P5P7',
+        master: 'https://www.amazon.com/dp/B08F8F57JX',
+        jackTrs: 'https://www.amazon.com/dp/B08ZZSYKQX',
+        jackDin: 'https://www.amazon.com/dp/B08ZZSVM1J',
+        /* The pair the WIDI Master was tried with on his AM4 (Justin, 26 October 2026). */
+        masterAdapters: 'https://www.amazon.com/dp/B0FJRB9KGV'
+      }
     )
+    /*
+     * THE WAYS, BY UNIT, best first (Justin, 26 October 2026): the WIDI
+     * Master, the WIDI Jack, then the Uhost and a cable; the FM3 the Uhost
+     * and the U2MIDI Pro alone, with the adapter its USB-A plug needs.
+     */
+    const ways = (u) => gear.waysFor(u).map((w) => [w.key, w.parts.join('+')])
+    assert.deepEqual(ways('am4'), [['master', 'master+masterAdapters'], ['jack', 'jackTrs'], ['uhost', 'uhost+c2midi+adapters']])
+    assert.deepEqual(ways('vp4'), [['master', 'master+masterAdapters'], ['jack', 'jackTrs'], ['uhost', 'uhost+c2midi+adapters']])
+    for (const u of ['fm9', 'axefx3']) assert.deepEqual(ways(u), [['master', 'master'], ['jack', 'jackDin'], ['uhost', 'uhost+c2midi']])
+    assert.deepEqual(ways('fm3'), [['uhost', 'uhost+u2midi+usbA']], 'something fed from MIDI OUT is offered for an FM3')
+    /* Tried: the AM4 through the WIDI Master and the Uhost, the FM3 through the Uhost and the U2MIDI Pro. Nothing else says it has run. */
+    const tried = Object.fromEntries(['am4', 'fm3', 'fm9', 'axefx3', 'vp4'].map((u) => [u, gear.waysFor(u).filter((w) => w.tried).map((w) => w.key)]))
+    assert.deepEqual(tried, { am4: ['master', 'uhost'], fm3: ['uhost'], fm9: [], axefx3: [], vp4: [] })
+    /* The WIDI Master runs on the unit's MIDI OUT alone (CME: "No external power option"): its steps never send anybody to a charger for it. */
+    for (const u of ['am4', 'fm9']) assert.match(gear.waysFor(u)[0].steps.join(' '), /It has no other way to be powered\./)
     /* The FM3's U2MIDI Pro: CME's own page, checked on 26 October 2026, and no Amazon link until one has been checked. */
     assert.equal(gear.PARTS.u2midi.maker, 'https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/')
     assert.equal(gear.PARTS.uhost.maker, 'https://www.cme-pro.com/widi-uhost/')
@@ -7949,13 +8009,9 @@ export function run(test) {
     /* The FM3 stays one the page knows, offered with the rest on a copy that opens Bluetooth (offeredUnits), its warning in front. */
     assert.ok(BLE_UNITS.some((u) => u.key === 'fm3'), 'the FM3 is gone from the page')
     const page = readFileSync(new URL('../mobile/src/screens/Bluetooth.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
-    /* How to plug it in and What to buy each open on the FM3's warning, red, before its steps and its list. */
-    const plugIn = page.slice(page.indexOf('function PlugIn('), page.indexOf('function Buy('))
-    const inFront = '{warning ? <Note tone="fault">{warning}</Note> : null}'
-    assert.ok(plugIn.indexOf(inFront) > 0 && plugIn.indexOf(inFront) < plugIn.indexOf('{steps.map('), 'How to plug it in does not put the FM3 warning in front of its steps')
-    const buy = page.slice(page.indexOf('function Buy('))
-    assert.ok(buy.indexOf('{warningFor(unit) ? <Note tone="fault">{warningFor(unit)}</Note> : null}') > 0 && buy.indexOf('{warningFor(unit) ? <Note tone="fault">') < buy.indexOf('{partsFor(unit, deviceNoun())'), 'What to buy does not put the FM3 warning in front of its list')
-    assert.match(buy, /\{unit === 'am4' \? <Hint>\{ALSO_ON_AM4\}<\/Hint> : null\}/, 'What to buy does not say the WIDI Master works on an AM4')
+    /* How to connect my Bluetooth device opens on the FM3's warning, red, before its way. */
+    const waysPage = page.slice(page.indexOf('export function BluetoothWays('), page.indexOf('function Way('))
+    assert.ok(waysPage.indexOf('{warningFor(b.unit) ? <Note tone="fault">') < waysPage.indexOf('{ways.map('), 'How to connect does not put the FM3 warning in front of its way')
     assert.match(gear.PARTS.adapters.does, /Type A/)
     for (const p of Object.values(gear.PARTS)) assert.ok(p.name && p.does, 'a part with no name or no line saying what it is for')
     /* The device in hand, passed in, for every part: an iPad's owner reads "Your iPad", and nobody is handed a function to draw. */
@@ -7967,7 +8023,7 @@ export function run(test) {
     assert.match(gear.hookupFor('axefx3', 'tablet').join(' '), /Not THRU: the tablet would only hear itself there\./)
     /* Who makes the parts, and that the app is not them and gets nothing from the links: the guide has said it all along. */
     /* Without "connected", which on this page is the Bluetooth link: under a CME adapter it read as the app failing to reach it. */
-    assert.equal(gear.SELLERS_LINE, 'CME and LOOTOOLS make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.')
+    assert.equal(gear.SELLERS_LINE, 'CME, LOOTOOLS, Eldraqth and Anker make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.')
     assert.ok(!/connect/i.test(gear.SELLERS_LINE), 'the sellers’ line reads as a connection status')
     /* One thing driving the unit at a time, until the two together have been tried. */
     assert.match(gear.ONE_AT_A_TIME, /^While you use Bluetooth, quit the Fractal Remote app on the computer, or unplug the unit’s USB cable/)
@@ -8092,8 +8148,7 @@ export function run(test) {
      */
     assert.equal(gear.NOT_FOR_FM3, 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master: both got very hot on one.')
     assert.ok(!/FM3/.test(gear.GEAR_IN_SHORT), 'the short list says the FM3 line a second time, right under step 1')
-    const step1 = page.slice(page.indexOf('<Heading>1 · Pick your unit</Heading>'), page.indexOf('<Heading>2 · Connect</Heading>'))
-    assert.match(step1, /<\/View> <Hint>\{NOT_FOR_FM3\}<\/Hint> <\/View>/, 'the FM3 line is not under the units, for everybody, whatever is picked')
+
 
     /*
      * THE BETA, IN PLAIN WORDS. "Let's just say that Bluetooth is beta though
@@ -8176,99 +8231,90 @@ export function run(test) {
    * under a shopping list. Now: where it stands, the unit, Connect; then the
    * reading, in rows that open when tapped; then the beta, never folded.
    */
-  test('the page opens on where it stands, the unit and Connect, with the reading folded under it and the beta always shown', () => {
+  test('the page opens on the two steps, with one button a page under them, and where it has been tried always shown', () => {
+    /*
+     * "On the actual Bluetooth screen have the connect steps right there at
+     * the top before any warnings or anything ... It should be very
+     * streamlined unless there is problems" (Justin, 26 October 2026).
+     */
     const page = flat('mobile/src/screens/Bluetooth.js')
-    const drawn = page.slice(page.indexOf('return ( <View style={{ gap: space.xl }}>'))
+    const drawn = page.slice(page.indexOf('return ( <View style={{ gap: space.xl }}>'), page.indexOf('function UnitChips('))
     const at = (what) => {
       const i = drawn.indexOf(what)
       assert.ok(i >= 0, `the page no longer draws ${what}`)
       return i
     }
-    /* In this order, and nothing a person reads once in front of Connect. */
     const order = [
       '{said.line}',
       '<Heading>1 · Pick your unit</Heading>',
       '<Heading>2 · Connect</Heading>',
-      "label={b.looking ? 'Looking…'",
-      '<Fold title="How to plug it in"',
-      '<Fold title="What to buy"',
-      '<Fold title="What it can and can’t do"',
-      '<Press label="Full setup guide"',
-      '<Note tone="warn">{BETA_NOTE}</Note>'
+      "label={b.looking ? 'Looking…' : 'Connect'}",
+      '<Press label="Setup guide"',
+      '<Press label="How to connect my Bluetooth device"',
+      '<Press label="Troubleshooting"',
+      '<Press label="What Bluetooth can’t do"',
+      '{onReport ? <Press label={REPORT_BUTTON}',
+      '<Hint>{BLUETOOTH_WAYS}</Hint>',
+      '<Hint>{BETA_NOTE}</Hint>'
     ]
     const places = order.map(at)
     for (let i = 1; i < places.length; i++) assert.ok(places[i - 1] < places[i], `${order[i - 1]} is no longer before ${order[i]}`)
-    /*
-     * Where the page draws the rows' contents, not where their functions
-     * are written: PlugIn and Buy's own bodies come after the page's, so
-     * they always sat "below Connect" in the text whatever the page did.
-     */
-    const pageOnly = drawn.slice(0, drawn.indexOf('const openLink ='))
-    for (const used of ['<PlugIn ', '<Buy ']) assert.equal((pageOnly.match(new RegExp(used, 'g')) || []).length, 1, `${used.trim()}> is drawn more than once, or not at all`)
-    for (const reading of ['<PlugIn ', '<Buy ', 'partsFor(', 'hookupFor(', '{FIRST_TIME}', '{POWER_LINE}', 'GEAR_IN_SHORT', 'DIFFERENT.map(']) {
-      const i = pageOnly.indexOf(reading)
-      assert.ok(i < 0 || i > at('<Heading>2 · Connect</Heading>'), `${reading} is drawn above Connect`)
-    }
-    assert.ok(!drawn.includes('What you need'), 'the old What you need heading is back over Connect')
-    assert.ok(!/Show the parts and how they plug in/.test(page), 'the old fold button is back')
+    /* The big line only when there is something to say: on, or something wrong. */
+    assert.match(page, /const sayIt = b\.on \|\| !!b\.trouble \|\| said\.tone === 'fault'/)
+    assert.match(drawn, /\{sayIt \? \( <View style=\{\{ gap: space\.sm \}\}> <Text accessibilityLiveRegion="polite"/)
+    /* Nothing a person reads once is on this page: the parts, the steps and the list of differences are each on their own. */
+    for (const reading of ['waysFor(', 'hookupFor(', '{FIRST_TIME}', '{POWER_LINE}', 'GEAR_IN_SHORT', 'DIFFERENT.map(', '<Fold ']) assert.ok(!drawn.includes(reading), `${reading} is back on the Bluetooth page`)
+    /* Each button opens its page, which Settings draws with ‹ Bluetooth back. */
+    assert.match(drawn, /onPress=\{\(\) => onOpen\('bt-ways'\)\}/)
+    assert.match(drawn, /onPress=\{\(\) => onOpen\('bt-trouble'\)\}/)
+    assert.match(drawn, /onPress=\{\(\) => onOpen\('bt-limits'\)\}/)
+    assert.match(drawn, /<Press label="Setup guide" sub="The full guide, on the website" height=\{52\} onPress=\{\(\) => openLink\(GUIDE_URL\)\} \/>/)
+    const settings = flat('mobile/src/screens/Settings.js')
+    assert.match(settings, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} \/>/)
+    assert.match(settings, /\{head\('How to connect my Bluetooth device', 'back'\)\} <BluetoothWays \/>/)
+    assert.match(settings, /\{head\('Troubleshooting Bluetooth', 'back'\)\} <BluetoothTrouble onReport=\{onReportBluetooth\} \/>/)
+    assert.match(settings, /\{head\('What Bluetooth can’t do', 'back'\)\} <BluetoothLimits \/>/)
+    assert.match(settings, /bluetooth: '‹ Bluetooth'/)
 
-    /* The beta: the phone's own copy, drawn whatever is folded, and outside every Fold. */
+    /* Where it has been tried, the phone's own copy, on every visit, and on no condition. */
     assert.match(page, /const BETA_NOTE = betaNote\(Platform\.OS\)/, 'the page draws one beta note on both phones, and Android’s names another phone on an iPhone')
     assert.ok(!/\bBETA_NOTE,|BETA_NOTE_ANDROID/.test(page), 'the page imports a beta note that is not its phone’s own')
-    assert.ok(!/For trying out\./.test(page), 'the page still calls a public beta something for trying out')
     assert.equal((drawn.match(/\{BETA_NOTE\}/g) || []).length, 1)
-    const lastFold = drawn.lastIndexOf('</Fold>')
-    assert.ok(at('{BETA_NOTE}') > lastFold, 'the beta note is inside a row that has to be opened')
-    assert.match(drawn, /<\/View> \{\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/\} <Note tone="warn">\{BETA_NOTE\}<\/Note>/, 'the beta note is drawn only on some condition')
+    assert.match(drawn, /<View style=\{\{ gap: space\.sm \}\}> <Hint>\{BLUETOOTH_WAYS\}<\/Hint> <Hint>\{BETA_NOTE\}<\/Hint> <\/View>/, 'the note is drawn only on some condition')
 
-    /* The rows: How to plug it in open for the first setting up, folded once an adapter has been used; the other two wait to be tapped. */
-    assert.match(page, /const \[plug, setPlug\] = useState\(!b\.adapter\) const \[buy, setBuy\] = useState\(false\) const \[about, setAbout\] = useState\(false\)/)
-    assert.match(page, /<Fold title="How to plug it in" open=\{plug\} onToggle=\{\(\) => setPlug\(!plug\)\}> <PlugIn unit=\{b\.unit\} \/> <\/Fold>/)
-    assert.match(page, /<Fold title="What to buy" open=\{buy\} onToggle=\{\(\) => setBuy\(!buy\)\}> <Buy unit=\{b\.unit\} \/> <\/Fold>/)
-    assert.match(page, /<Fold title="What it can and can’t do" open=\{about\} onToggle=\{\(\) => setAbout\(!about\)\}>/, 'What it can and can’t do opens with something other than its own tap')
     /* The list's heading says how many there are: one row is not "More than one". */
     assert.match(page, /b\.looking \? 'Found so far\. Tap yours:' : b\.devices\.length > 1 \? 'More than one is here\. Tap yours:' : 'Tap your adapter:'/, 'a single row is headed More than one is here')
-    /* While it is on the unit chips are gone, and Connecting… names no unit: a line over Stop says which, and how to change it. */
+    /* While it is on the unit chips are gone: a line over Stop says which, and how to change it. */
     const onHalf = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('<Press label="Stop using Bluetooth"'))
     assert.match(onHalf, /\{b\.unit \? <Hint>\{`Unit: \$\{unitName\(b\.unit\)\}\. To change it, tap Stop first\.`\}<\/Hint> : null\}/, 'nothing names the unit while it is on')
 
     /* A row is a Press like every other button, so it is in the tap log and has the haptic; and it says what a tap does. */
     const fold = page.slice(page.indexOf('function Fold('), page.indexOf('function Row('))
-    assert.match(fold, /<Press label=\{title\} sub=\{open \? 'Tap to hide' : 'Tap to show'\} height=\{52\} onPress=\{onToggle\} \/> \{open \? <View/)
+    assert.match(fold, /<Press label=\{title\} sub=\{sub \? `\$\{sub\} · \$\{open \? 'tap to hide' : 'tap to show'\}` : open \? 'Tap to hide' : 'Tap to show'\} height=\{52\} onPress=\{onToggle\} \/>/)
     assert.ok(!/Pressable/.test(page), 'a button on the page that is not a Press, so missing from the tap log')
-    /* The full guide, whatever is open. */
-    assert.match(page, /<Press label="Full setup guide" height=\{44\} onPress=\{\(\) => openLink\(GUIDE_URL\)\} \/>/)
     assert.match(page, /const openLink = \(url\) => Linking\.openURL\(url\)\.catch\(\(\) => \{\}\)/)
 
-    /* What to buy: each part, its name, what it is for, and View on Amazon, which opens that part's own address; the short version before a unit is picked. */
-    const buy = page.slice(page.indexOf('function Buy('), page.indexOf('function Fold('))
-    assert.match(buy, /if \(!unit\) return <Hint>\{GEAR_IN_SHORT\}<\/Hint>/)
-    assert.match(buy, /partsFor\(unit, deviceNoun\(\)\)\.map\(\(p\) => \( <View key=\{p\.key\}/)
-    /* On Amazon where a link has been checked, the maker's own page where none has (the FM3's U2MIDI Pro, since 26 October 2026). */
-    assert.match(buy, /\{p\.name\}<\/Text> <Hint>\{p\.does\}<\/Hint> \{\/\*[^*]*\*\/\} <Press label=\{p\.amazon \? 'View on Amazon' : 'View on the maker’s site'\} height=\{44\} accessibilityLabel=\{p\.amazon \? `View the \$\{p\.name\} on Amazon` : `View the \$\{p\.name\} on the maker’s site`\} onPress=\{\(\) => openLink\(p\.amazon \|\| p\.maker\)\} \/>/)
-    assert.match(buy, /<Hint>\{POWER_LINE\}<\/Hint>/, 'the charger is left off the list')
-    assert.match(buy, /<Hint>\{POWER_LINE\}<\/Hint> <Hint>\{SELLERS_LINE\}<\/Hint>/, 'the parts are offered with no word that the app is not their maker, and gets nothing from the links')
     /*
-     * How to plug it in: the Uhost's first-time firmware update, said once,
-     * before the steps. CME and the Amazon listing both ask for it, and a
-     * Uhost that has never had it can mangle the long messages the unit's
-     * names come back in.
+     * How to connect my Bluetooth device: the unit, then every way for it,
+     * each a row, the first open; each way its parts with View on Amazon,
+     * the firmware, and its steps with the heat check after the power.
      */
-    const plug = page.slice(page.indexOf('function PlugIn('), page.indexOf('function Buy('))
-    assert.match(plug, /if \(!unit\) return <Hint>Pick your unit above to see how it plugs in\.<\/Hint>/)
-    assert.ok(plug.indexOf('<Hint>{FIRST_TIME}</Hint>') >= 0 && plug.indexOf('<Hint>{FIRST_TIME}</Hint>') < plug.indexOf('steps.map('), 'the first-time update of the Uhost is not said before the steps')
-    assert.match(plug, /const steps = hookupFor\(unit, deviceNoun\(\)\) \|\| \[\]/)
-    /* After the steps, before an untried unit's note: quit the computer app, or unplug the USB, while Bluetooth is used. */
-    assert.ok(plug.indexOf('<Hint>{ONE_AT_A_TIME}</Hint>') > plug.indexOf('steps.map(') && plug.indexOf('<Hint>{ONE_AT_A_TIME}</Hint>') < plug.indexOf('{untried ?'), 'the steps do not say to keep the computer off the unit while Bluetooth drives it')
-    assert.match(plug, /\{untried \? <Note tone="warn">\{untried\}<\/Note> : null\}/, 'an untried unit is not told so')
-    /* What it can and can't do: the paragraph that used to open the page, and the list of what is different from USB. */
-    /* To that row's own close, so a list moved out after it, always drawn, is not counted as in it. */
-    const aboutAt = at('<Fold title="What it can and can’t do"')
-    const about = drawn.slice(aboutAt, drawn.indexOf('</Fold>', aboutAt))
-    assert.ok(about.includes('No editing or saving, and the computer isn’t used.'))
-    assert.ok(about.includes('<Heading>What’s different from USB</Heading> {DIFFERENT.map('))
-    /* The usual reason a connected adapter hears nothing, with these parts: the plugs swapped; for a customer, the AM4-only line first. */
-    assert.match(page, /\{`\$\{PLUGS_CHECK\} The adapter has to carry MIDI both ways\./)
+    const ways = page.slice(page.indexOf('export function BluetoothWays('), page.indexOf('export function BluetoothTrouble('))
+    assert.match(ways, /const ways = waysFor\(b\.unit, deviceNoun\(\)\) const \[open, setOpen\] = useState\(0\)/)
+    assert.match(ways, /\{!b\.unit \? <Hint>\{GEAR_IN_SHORT\}<\/Hint> : null\}/)
+    assert.match(ways, /\{warningFor\(b\.unit\) \? <Note tone="fault">\{warningFor\(b\.unit\)\}<\/Note> : null\}/, 'the FM3’s warning is not in front of its way')
+    assert.match(ways, /<Press label=\{p\.amazon \? 'View on Amazon' : 'View on the maker’s site'\} height=\{44\} accessibilityLabel=\{p\.amazon \? `View the \$\{p\.name\} on Amazon` : `View the \$\{p\.name\} on the maker’s site`\} onPress=\{\(\) => openLink\(p\.amazon \|\| p\.maker\)\} \/>/)
+    assert.match(ways, /\{way\.key === 'uhost' \? <Hint>\{POWER_LINE\}<\/Hint> : null\}/)
+    assert.match(ways, /<Hint>\{way\.key === 'uhost' \? FIRST_TIME : FIRST_TIME_ADAPTER\}<\/Hint>/)
+    assert.match(ways, /\{i === way\.powerAt && way\.feelLine \? <Note tone="warn">\{way\.feelLine\}<\/Note> : null\}/)
+    assert.match(ways, /\{way\.tried \? null : <Note tone="warn">\{WAY_UNTRIED\}<\/Note>\}/, 'a way not tried on this unit is not said to be')
+    assert.match(ways, /\{b\.unit \? <Hint>\{ONE_AT_A_TIME\}<\/Hint> : null\} \{untriedUnit \? <Note tone="warn">\{untriedUnit\}<\/Note> : null\} \{b\.unit \? <Hint>\{SELLERS_LINE\}<\/Hint> : null\}/)
+    /* What Bluetooth can't do: the paragraph, and the list of what is different from USB. */
+    const limits = page.slice(page.indexOf('export function BluetoothLimits('), page.indexOf('function Bullet('))
+    assert.ok(limits.includes('No editing or saving, and the computer isn’t used.'))
+    assert.ok(limits.includes('<Heading>What’s different from USB</Heading> {DIFFERENT.map('))
+    /* The usual reason a connected adapter hears nothing: the plugs swapped. */
+    assert.match(page, /\{quiet \? <Hint>\{`\$\{PLUGS_CHECK\} \$\{BOTH_WAYS\}`\}<\/Hint> : null\}/)
 
     /* ONE PLACE FOR THE ADDRESSES: no web address typed into the page, and no shop's anywhere in the app but the gear file. */
     assert.ok(!/https?:\/\//.test(code('mobile/src/screens/Bluetooth.js')), 'an address is typed into the page instead of coming from the gear file')
@@ -8444,12 +8490,13 @@ export function run(test) {
     assert.match(notes, /Every adapter that feeds from MIDI Out runs hot on an FM3/)
     const page = flat('mobile/src/screens/Bluetooth.js')
     /* And whenever an FM3 is the unit that answered a connection made for another unit (review of 25 October 2026). */
-    const at = page.indexOf('{b.unit === \'fm3\' || b.answeredAs === \'FM3\' ? <Note tone="fault">{FM3_NEVER}</Note> : null}')
-    assert.ok(at > 0, 'the FM3 line is not drawn whenever the FM3 is picked, or is the unit that answered')
-    /* In the first block, after the line that says where it stands and before the on/off halves: drawn on and off alike, and in no fold. */
+    /* Off with the FM3 picked: under the units. On, or answered when another was picked: under the line that says where it stands. Never folded. */
+    const at = page.indexOf("{(b.on && b.unit === 'fm3') || (b.answeredAs === 'FM3' && b.unit !== 'fm3') ? <Note tone=\"fault\">{FM3_NEVER}</Note> : null}")
+    assert.ok(at > 0, 'the FM3 line is not drawn while it is on with the FM3, or when the FM3 answered')
     assert.ok(at > page.indexOf('{said.line}') && at < page.indexOf('{b.on ? ( <View'), 'the FM3 line is inside one half of the page')
-    assert.ok(at < page.indexOf('<Fold title="How to plug it in"'), 'the FM3 line is inside a fold')
-    assert.equal((page.match(/\{FM3_NEVER\}/g) || []).length, 1)
+    const off = page.indexOf("{b.unit === 'fm3' ? <Note tone=\"fault\">{FM3_NEVER}</Note> : null}")
+    assert.ok(off > page.indexOf('<Heading>1 · Pick your unit</Heading>') && off < page.indexOf('<Heading>2 · Connect</Heading>'), 'the FM3 line is not under the units when the FM3 is picked')
+    assert.equal((page.match(/\{FM3_NEVER\}/g) || []).length, 2)
     /*
      * The heat line, straight after the power step of the units it is for:
      * in the first minute, and before a step that sends the player into the
@@ -8457,23 +8504,29 @@ export function run(test) {
      * and the lights. It was drawn after the last step, which had become the
      * unit's Setup menu.
      */
-    const plug = page.slice(page.indexOf('function PlugIn('), page.indexOf('function Buy('))
-    assert.match(plug, /const heat = heatLineFor\(unit\) const heatAfter = heat \? powerStepOf\(unit\) : -1/)
+    const way = page.slice(page.indexOf('function Way('), page.indexOf('export function BluetoothTrouble('))
     assert.match(
-      plug,
-      /\{steps\.map\(\(line, i\) => \( <Fragment key=\{line\}> <View style=\{[^}]*\}\}> <Text [^>]*>\{`\$\{i \+ 1\}\.`\}<\/Text> <Text [^>]*>\{line\}<\/Text> <\/View> \{i === heatAfter \? <Note tone="warn">\{heat\}<\/Note> : null\} <\/Fragment> \)\)\}/,
+      way,
+      /\{way\.steps\.map\(\(line, i\) => \( <Fragment key=\{line\}> <View style=\{[^}]*\}\}> <Text [^>]*>\{`\$\{i \+ 1\}\.`\}<\/Text> <Text [^>]*>\{line\}<\/Text> <\/View> \{i === way\.powerAt && way\.feelLine \? <Note tone="warn">\{way\.feelLine\}<\/Note> : null\} <\/Fragment> \)\)\}/,
       'the heat line is not drawn straight after the step it follows'
     )
-    assert.equal((plug.match(/<Note tone="warn">\{heat\}<\/Note>/g) || []).length, 1, 'the heat line is drawn twice')
+    /* Every way not tried on its unit has one, straight after its power step; every tried way has none. */
+    for (const u of ['am4', 'fm3', 'fm9', 'axefx3', 'vp4']) {
+      for (const w of gear.waysFor(u)) {
+        assert.equal(!!w.feelLine, !w.tried && !!w.feel, `${u} ${w.key}: the heat line is said where it was tried, or left out where it was not`)
+        assert.match(w.steps[w.powerAt], /power|charger/i, `${u} ${w.key}: the heat line does not follow the step that powers it`)
+      }
+    }
     /* On the FM9 and the Axe-Fx III, that is after step 4 (the power) and before step 5 (the unit's own settings). */
     assert.equal(gear.powerStepOf('fm9'), 3)
     assert.match(gear.hookupFor('fm9')[4], /^On the FM9, open Setup → MIDI\/Remote/)
     assert.equal(gear.powerStepOf('axefx3'), 3)
     assert.match(gear.hookupFor('axefx3')[4], /^On the Axe-Fx III, open Setup → MIDI\/Remote/)
-    /* The Program Change settings, for some owners only: under the steps, with their condition, never numbered among them. */
-    assert.match(plug, /const midi = midiSettingsFor\(unit, deviceNoun\(\)\)/)
-    assert.ok(plug.indexOf('{midi ? <Hint>{midi}</Hint> : null}') > plug.indexOf('</Fragment>'), 'the Program Change settings are among the steps')
-    assert.ok(plug.indexOf('{midi ? <Hint>{midi}</Hint> : null}') < plug.indexOf('<Hint>{ONE_AT_A_TIME}</Hint>'))
+    /* The Program Change settings, for some owners only: under the ways, with their condition, never numbered among them. */
+    const ways = page.slice(page.indexOf('export function BluetoothWays('), page.indexOf('function Way('))
+    assert.match(ways, /const midi = midiSettingsFor\(b\.unit, deviceNoun\(\)\)/)
+    assert.ok(ways.indexOf('{midi ? <Hint>{midi}</Hint> : null}') > ways.indexOf('{ways.map('), 'the Program Change settings are among the steps')
+    assert.ok(ways.indexOf('{midi ? <Hint>{midi}</Hint> : null}') < ways.indexOf('<Hint>{ONE_AT_A_TIME}</Hint>'))
   })
 
   test('the Gen 3 testing tools switch the first effect off and back, and leave it as it was', async () => {
@@ -8883,7 +8936,7 @@ export function run(test) {
     /* Settings hands the page what App gave it, null when App gave nothing. */
     const settings = flat('mobile/src/screens/Settings.js')
     assert.match(settings, /onReportBluetooth = null,/)
-    assert.match(settings, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} \/>/)
+    assert.match(settings, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} \/>/)
 
     /* The waiting screen: over Bluetooth only, in the fifteen-second block where a stuck player sits, with the line it is stuck on. */
     const waking = app.slice(app.indexOf('function Waking('))
@@ -8892,16 +8945,16 @@ export function run(test) {
     assert.ok(waking.indexOf('onReport(said)') > waking.indexOf("{long && link.link !== 'connected' ? ("), 'the waiting screen’s report is drawn before the advice')
   })
 
-  test('the Bluetooth page has Report a Bluetooth problem under the beta note, and Report this beside what is wrong, never under the permission line', () => {
+  test('the Bluetooth page has Report a Bluetooth problem under its steps, and Report this beside what is wrong, never under the permission line', () => {
     const page = flat('mobile/src/screens/Bluetooth.js')
     const drawn = page.slice(page.indexOf('return ( <View style={{ gap: space.xl }}>'), page.indexOf('const openLink ='))
-    /* The big one, straight under the beta note, on every visit, never folded, by the name the note gives it. */
-    assert.match(drawn, /<Note tone="warn">\{BETA_NOTE\}<\/Note> \{\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/\} \{onReport \? <Press label=\{REPORT_BUTTON\} sub="Or tell us it works" onPress=\{\(\) => onReport\(null\)\} \/> : null\}/)
-    assert.ok(drawn.indexOf('label={REPORT_BUTTON}') > drawn.lastIndexOf('</Fold>'), 'the report button is inside a row that has to be opened')
+    /* The big one, last of the buttons under the steps, on every visit, never folded, by the name the note gives it. */
+    assert.match(drawn, /\{onReport \? <Press label=\{REPORT_BUTTON\} sub="Or tell us it works" height=\{52\} onPress=\{\(\) => onReport\(null\)\} \/> : null\}/)
+    assert.ok(!drawn.slice(0, drawn.indexOf('function UnitChips(')).includes('<Fold '), 'the report button is inside a row that has to be opened')
     /* Report this: beside each fault line, the plugs hint, No adapter and the search's own note; never beside the permission line or Unlock. */
     assert.match(page, /const reportable = said\.tone === 'fault' && b\.trouble !== 'permission' && b\.phase !== 'locked' && !!onReport/)
     assert.match(page, /\{said\.line\} <\/Text> \{b\.trouble === 'permission' \? <OpenSettings \/> : null\} \{reportable && !quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/)
-    assert.match(page, /<\/Hint> \) : null\} \{reportable && quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/, 'Report this is not under the plugs hint')
+    assert.match(page, /\{b\.phase === 'connecting' \|\| quiet \? <Hint>\{CLOSE_AND_REOPEN\}<\/Hint> : null\} \{reportable && quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/, 'Report this is not under the plugs hint')
     assert.match(page, /\{!b\.on && missed && !b\.adapter && !b\.trouble && !b\.said && onReport \? <ReportThis onPress=\{\(\) => onReport\('No adapter was connected\.'\)\} \/> : null\}/)
     assert.match(page, /\{b\.said && onReport \? <ReportThis onPress=\{\(\) => onReport\(b\.said\)\} \/> : null\}/)
     assert.equal((drawn.match(/<ReportThis /g) || []).length, 4, 'Report this is drawn somewhere else, or twice for one line')
@@ -8934,7 +8987,8 @@ export function run(test) {
     assert.equal(gear.CLOSE_AND_REOPEN, 'Still not connecting after unplugging and plugging the adapter back in? Close the app completely (swipe it away) and open it again.')
     assert.ok(!/this phone|beta/i.test(gear.CLOSE_AND_REOPEN))
     const page = flat('mobile/src/screens/Bluetooth.js')
-    assert.match(page, /\{b\.phase === 'connecting' \|\| \(b\.phase === 'connected' && !b\.answeredAs && \(unitState === 'missing' \|\| unitState === 'silent'\)\) \? \( <Hint>\{CLOSE_AND_REOPEN\}<\/Hint> \) : null\}/, 'the page does not say to close the app while it is connecting, or connected with the unit silent')
+    assert.match(page, /const quiet = b\.on && b\.phase === 'connected' && !b\.answeredAs && \(unitState === 'missing' \|\| unitState === 'silent'\)/)
+    assert.match(page, /\{b\.phase === 'connecting' \|\| quiet \? <Hint>\{CLOSE_AND_REOPEN\}<\/Hint> : null\}/, 'the page does not say to close the app while it is connecting, or connected with the unit silent')
     const on = page.slice(page.indexOf('{b.on ? ( <View style={{ gap: space.sm }}>'), page.indexOf(') : ( <View style={{ gap: space.lg }}>'))
     assert.ok(on.includes('{CLOSE_AND_REOPEN}'), 'the line is not in the half of the page drawn while Bluetooth is on')
   })
@@ -9511,16 +9565,17 @@ export function run(test) {
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.match(page, /const untriedHere = said\.tone === 'ok' && !b\.answeredAs \? untriedConnectedLine\(b\.unit\) : null/)
     /* Not under Connected while How to plug it in is open: untriedLine says it at the foot of the steps, and the beta note above the button. */
-    assert.match(page, /\{untriedHere && !plug \? <Hint>\{untriedHere\}<\/Hint> : null\}/)
+    assert.match(page, /\{untriedHere \? <Hint>\{untriedHere\}<\/Hint> : null\}/)
     assert.ok(!/never as a step for everybody \(midiSettingsFor\)/.test(page), 'PlugIn still says the Program Change settings are never a step')
-    assert.match(page, /<Fold title="What it can and can’t do" open=\{about\} onToggle=\{\(\) => setAbout\(!about\)\}> \{untriedAboutLine\(b\.unit\) \? <Note tone="warn">\{untriedAboutLine\(b\.unit\)\}<\/Note> : null\}/)
-    assert.ok(page.indexOf('{missingBlocksLine(b.unit) ? (') > page.indexOf('{DIFFERENT.map('), 'the blocks line is not with what is different')
+    assert.match(page, /export function BluetoothLimits\(\) \{ const b = useBluetooth\(\) const vp4 = b\.unit === 'vp4' return \( <View style=\{\{ gap: space\.md \}\}> \{untriedAboutLine\(b\.unit\) \? <Note tone="warn">\{untriedAboutLine\(b\.unit\)\}<\/Note> : null\}/)
+    assert.ok(page.indexOf('{missingBlocksLine(b.unit) ? <Bullet>') > page.indexOf('{DIFFERENT.map('), 'the blocks line is not with what is different')
     assert.match(page, /Bluetooth check · \$\{unitForReport\(b\.unit\) \|\| unitName\(b\.unit\)\} · /)
-    assert.match(page, /const firmware = firmwareLineFor\(unit\)/)
-    assert.ok(page.indexOf('{firmware ? <Hint>{firmware}</Hint> : null}') > page.indexOf('<Hint>{FIRST_TIME}</Hint>'))
-    /* The heat line, never folded away on these two: near the top while How to plug it in is shut, among the steps when it is open. */
-    assert.match(page, /const heatUp = plug \? null : heatLineFor\(b\.unit\)/)
-    assert.ok(page.indexOf('{heatUp ? <Note tone="warn">{heatUp}</Note> : null}') < page.indexOf('<Fold title="How to plug it in"'))
+    /* The unit's firmware line, on How to connect, before its ways. */
+    const waysPage = page.slice(page.indexOf('export function BluetoothWays('), page.indexOf('function Way('))
+    assert.match(waysPage, /const firmware = firmwareLineFor\(b\.unit\)/)
+    assert.ok(waysPage.indexOf('{firmware ? <Hint>{firmware}</Hint> : null}') < waysPage.indexOf('{ways.map('))
+    /* The heat line, never folded away on these units: on the page while it is on, and after each way's power step. */
+    assert.match(page, /\{b\.on && untried\(b\.unit\) \? <Note tone="warn">\{feelLine\('adapter'\)\}<\/Note> : null\}/)
     assert.match(flat('mobile/src/components/TopBar.js'), /\? `Connected over Bluetooth, through \$\{adapter\}\.\$\{untried \? ` \$\{untried\}` : ''\}`/)
     assert.match(flat('mobile/src/lib/bluetooth.js'), /unit: saved\.unit \? unitForReport\(saved\.unit\) \|\| unitName\(saved\.unit\) : null,/)
     /* Only the AM4 and the FM3 have run it: every other unit is said as untried, and none opens to a customer before the store version does (the rule's own test). */
