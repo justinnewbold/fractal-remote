@@ -4,7 +4,7 @@ import * as Clipboard from 'expo-clipboard'
 
 import { color, font, mono, radius, space } from '../lib/theme'
 import { APP_VERSION } from '../lib/version'
-import { BLE_UNITS, WAYS } from '../lib/bleWire'
+import { WAYS } from '../lib/bleWire'
 import {
   ALLOW_WORDS,
   APPLE_SCREEN_OPENS,
@@ -28,12 +28,10 @@ import {
   useBluetoothAdmin
 } from '../lib/bluetooth'
 import {
-  AM4_ONLY,
   BLUETOOTH_WAYS,
   FIRST_TIME,
   FM3_NEVER,
   GEAR_IN_SHORT,
-  GEAR_IN_SHORT_AM4,
   GUIDE_URL,
   NOT_FOR_FM3,
   ONE_AT_A_TIME,
@@ -41,7 +39,9 @@ import {
   POWER_LINE,
   REPORT_BUTTON,
   SELLERS_LINE,
-  UNTRIED_SUB,
+  VP4_CANT_HEAR,
+  VP4_CONNECTED,
+  VP4_OVER_BLUETOOTH,
   betaNote,
   firmwareLineFor,
   heatLineFor,
@@ -55,6 +55,8 @@ import {
   untriedAboutLine,
   untriedConnectedLine,
   untriedLine,
+  untriedSubFor,
+  unitForReport,
   warningFor,
   wrongUnitLine
 } from '../lib/bluetooth-gear'
@@ -115,10 +117,22 @@ import Press from '../components/Press'
  * line over the steps (BLUETOOTH_WAYS, the same words as the Settings row,
  * the waiting screen and the purchase page), before anybody taps Connect.
  *
- * THE AM4 ONLY, FOR A CUSTOMER. Step 1 offers what lib/bluetooth says this
- * account may pick (offeredUnits): the AM4 alone for a customer, all four for
- * his account. And everybody, before any pick and whatever is picked, is
- * told it is not for an FM3, whose owners would otherwise never see why.
+ * EVERY UNIT, AND WHICH HAVE BEEN TRIED. Step 1 offers what lib/bluetooth
+ * says this account may pick (offeredUnits): all five on a copy that opens
+ * Bluetooth (beta) to customers, as on his account. Every unit it has not
+ * run on says so under its name and wherever else it is read (shared/
+ * bluetooth-gear untried), with the report button by it: "as long as
+ * there's warnings for user that it's in beta and they're free to test it
+ * and submit feedback, but it might not work properly" (Justin, 25 October
+ * 2026). And everybody, before any pick and whatever is picked, is told the
+ * cable is never for an FM3 (NOT_FOR_FM3).
+ *
+ * A VP4 IS SENT PRESETS AND SCENES, AND HEARD NOT AT ALL (lib/bleVp4.js). So
+ * its connected line says the adapter is connected and the phone is sending
+ * (VP4_CONNECTED), never that it is answering, with why under it
+ * (VP4_CANT_HEAR); What it can and can't do says what it gets
+ * (VP4_OVER_BLUETOOTH); and it has no testing tools, which have nothing to
+ * ask it.
  *
  * AND ONE TAP TO SAY SO. "Super easy for all users to submit bugs and
  * feedback" (25 October 2026, when Bluetooth (beta) was decided for every
@@ -218,22 +232,17 @@ function status(b, unitState) {
      * the way out (shared/bluetooth-gear wrongUnitLine). Any unit the wire
      * knows: an AM4 on another unit's connection (which also stops the wire
      * sending), an FM9 picked as an FM3, an FM3 on the AM4's, a VP4 on
-     * anybody's. Sent to step 1 only for a unit this account can pick there,
-     * never to one a customer is not offered; a VP4 is told it is not a
-     * Bluetooth unit.
+     * anybody's. Sent to step 1 only for a unit this account can pick there.
      */
     if (b.answeredAs) {
       const units = offeredUnits()
       return {
-        line: wrongUnitLine({
-          answered: b.answeredAs,
-          picked: name,
-          pickable: units.some((u) => u.name === b.answeredAs),
-          forWhich: units.length < BLE_UNITS.length ? AM4_ONLY : ''
-        }),
+        line: wrongUnitLine({ answered: b.answeredAs, picked: name, pickable: units.some((u) => u.name === b.answeredAs) }),
         tone: 'fault'
       }
     }
+    /* A VP4 never answers over Bluetooth (lib/bleVp4.js): connected is the adapter, and the phone sending. */
+    if (b.unit === 'vp4') return { line: VP4_CONNECTED, tone: 'ok' }
     if (unitState === 'present') return { line: `Connected · ${name} answering`, tone: 'ok' }
     /* The usual reasons, by unit (shared/bluetooth-gear notAnsweringLine): the Axe-Fx III has no MIDI Thru setting, only a THRU jack the white plug must stay out of. */
     if (unitState === 'missing' || unitState === 'silent') return { line: notAnsweringLine(b.unit), tone: 'fault' }
@@ -261,9 +270,9 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   const am4 = b.unit === 'am4'
   const connected = b.on && b.phase === 'connected'
   const ways = b.unit ? methodsFor(b.unit) : null
-  /* The units step 1 offers this account (lib/bluetooth offeredUnits), and whether that is the AM4 alone: a customer's page. */
+  /* The units step 1 offers this account (lib/bluetooth offeredUnits). */
   const units = offeredUnits()
-  const am4Only = units.length < BLE_UNITS.length
+  const vp4 = b.unit === 'vp4'
   /* A unit nobody has tried it on yet (the FM9, the Axe-Fx III) says so under "Connected" (shared/bluetooth-gear untriedConnectedLine), left out while How to plug it in is open, because untriedLine already says it at the foot of the steps. */
   const untriedHere = said.tone === 'ok' && !b.answeredAs ? untriedConnectedLine(b.unit) : null
 
@@ -288,7 +297,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     step === 'all' ? 'The check' : [...steps.reads, ...steps.writes].find((s) => s.step === step)?.label || step
 
   const copyAll = async () => {
-    const lines = [`Fractal Remote ${APP_VERSION} · Bluetooth (beta) check · ${unitName(b.unit)}${untried(b.unit) ? ' (not tried yet)' : ''} · ${Platform.OS}`]
+    const lines = [`Fractal Remote ${APP_VERSION} · Bluetooth (beta) check · ${unitForReport(b.unit) || unitName(b.unit)} · ${Platform.OS}`]
     for (const r of results) {
       lines.push('', `${labelOf(r.step)} (${unitName(r.unit)})${r.ok ? '' : ` — failed: ${r.error}`}`)
       if (r.way) lines.push(`  remembered: ${WAY_NAMES[r.way] || r.way}`)
@@ -408,6 +417,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
           {b.trouble === 'permission' ? <OpenSettings /> : null}
           {reportable && !quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
           {untriedHere && !plug ? <Hint>{untriedHere}</Hint> : null}
+          {vp4 && connected && !b.answeredAs ? <Hint>{VP4_CANT_HEAR}</Hint> : null}
         </View>
 
         {/*
@@ -427,13 +437,11 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
           <View style={{ gap: space.sm }}>
             {/*
               The usual reasons a connected adapter hears nothing back: the
-              two plugs swapped, or an adapter that only carries one way. And
-              for a customer, first, that it is the AM4 alone: an FM9 owner
-              who picked the AM4 anyway hears that, not only the plugs.
+              two plugs swapped, or an adapter that only carries one way.
             */}
             {b.phase === 'connected' && !b.answeredAs && (unitState === 'missing' || unitState === 'silent') ? (
               <Hint>
-                {`${am4Only ? `${AM4_ONLY} ` : ''}${PLUGS_CHECK} The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.`}
+                {`${PLUGS_CHECK} The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.`}
               </Hint>
             ) : null}
             {reportable && quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
@@ -470,19 +478,19 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               expect. While it is on, a line over Stop names the unit, and
               says Stop comes first.
 
-              The units this account is offered (`units`): the AM4 alone for a
-              customer. Under them, to everybody and whatever is picked, that
-              it is not for an FM3.
+              The units this account is offered (`units`). Under them, to
+              everybody and whatever is picked, that the cable is never for
+              an FM3.
             */}
             <View style={{ gap: space.sm }}>
               <Heading>1 · Pick your unit</Heading>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-                {/* "Not tried yet" under the FM9 and the Axe-Fx III (shared/bluetooth-gear untried), before anybody picks one. */}
+                {/* "Not tried yet" under every unit it has not run on, the FM3's "Not run yet" (shared/bluetooth-gear untriedSubFor), before anybody picks one. */}
                 {units.map((u) => (
                   <Press
                     key={u.key}
                     label={u.name}
-                    sub={untried(u.key) ? UNTRIED_SUB : undefined}
+                    sub={untriedSubFor(u.key)}
                     tone="signal"
                     on={u.key === b.unit}
                     disabled={b.on}
@@ -492,7 +500,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                   />
                 ))}
               </View>
-              <Hint>{am4Only ? `${AM4_ONLY} ${NOT_FOR_FM3}` : NOT_FOR_FM3}</Hint>
+              <Hint>{NOT_FOR_FM3}</Hint>
             </View>
 
             {/* STEP 2. One button. */}
@@ -567,12 +575,15 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
           <PlugIn unit={b.unit} />
         </Fold>
         <Fold title="What to buy" open={buy} onToggle={() => setBuy(!buy)}>
-          <Buy unit={b.unit} am4Only={am4Only} />
+          <Buy unit={b.unit} />
         </Fold>
         <Fold title="What it can and can’t do" open={about} onToggle={() => setAbout(!about)}>
           {untriedAboutLine(b.unit) ? <Note tone="warn">{untriedAboutLine(b.unit)}</Note> : null}
+          {/* A VP4's own: presets and scenes, and nothing heard back (lib/bleVp4.js). */}
           <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
-            {`The ${deviceNoun()} talks straight to your unit through a Bluetooth MIDI adapter plugged into its MIDI In and MIDI Out. Presets, scenes, names, effects on and off, channels, tempo and the tuner. No editing or saving, and the computer isn’t used.`}
+            {vp4
+              ? VP4_OVER_BLUETOOTH
+              : `The ${deviceNoun()} talks straight to your unit through a Bluetooth MIDI adapter plugged into its MIDI In and MIDI Out. Presets, scenes, names, effects on and off, channels, tempo and the tuner. No editing or saving, and the computer isn’t used.`}
           </Text>
           <Heading>What’s different from USB</Heading>
           {DIFFERENT.map((line) => (
@@ -601,10 +612,11 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
       {onReport ? <Press label={REPORT_BUTTON} sub="Or tell us it works" onPress={() => onReport(null)} /> : null}
 
       {/* For finding out what a real unit does: Justin's account only, and out of the way until asked for. */}
-      {admin && b.unit ? (
+      {/* Not for a VP4, which is never asked anything (lib/bleVp4.js): nothing to check. */}
+      {admin && b.unit && !vp4 ? (
         <Press label={tools ? 'Hide testing tools' : 'Testing tools'} height={44} onPress={() => setTools(!tools)} />
       ) : null}
-      {admin && b.unit && tools ? (
+      {admin && b.unit && !vp4 && tools ? (
         <View style={{ gap: space.md }}>
           <Heading>Check</Heading>
           <Hint>
@@ -751,7 +763,16 @@ function OpenSettings() {
 function PlugIn({ unit }) {
   if (!unit) return <Hint>Pick your unit above to see how it plugs in.</Hint>
   const warning = warningFor(unit)
-  if (warning) return <Note tone="fault">{warning}</Note>
+  /* The FM3: its warning in place of steps, and that it has not run on one yet, with the report button (untriedLine). */
+  if (warning) {
+    const notYet = untriedLine(unit)
+    return (
+      <View style={{ gap: space.sm }}>
+        <Note tone="fault">{warning}</Note>
+        {notYet ? <Note tone="warn">{notYet}</Note> : null}
+      </View>
+    )
+  }
   const steps = hookupFor(unit, deviceNoun()) || []
   const untried = untriedLine(unit)
   const heat = heatLineFor(unit)
@@ -784,13 +805,11 @@ function PlugIn({ unit }) {
  * The parts for one unit, each with what it is for and where to buy it, the
  * charger that is not on the list, and who makes them (not this app, which
  * gets nothing from the links). Before a unit is picked, the whole of it in a
- * few words: for a customer, offered the AM4 alone (`am4Only`), the AM4's
- * own list, with nothing in it about other units. For the FM3, nothing to
- * buy, and a pointer to the warning in How to plug it in rather than the
- * same red box twice.
+ * few words. For the FM3, nothing to buy, and a pointer to the warning in
+ * How to plug it in rather than the same red box twice.
  */
-function Buy({ unit, am4Only = false }) {
-  if (!unit) return <Hint>{am4Only ? GEAR_IN_SHORT_AM4 : GEAR_IN_SHORT}</Hint>
+function Buy({ unit }) {
+  if (!unit) return <Hint>{GEAR_IN_SHORT}</Hint>
   if (warningFor(unit)) return <Hint>Not for the FM3. How to plug it in, above, says why.</Hint>
   return (
     <View style={{ gap: space.md }}>

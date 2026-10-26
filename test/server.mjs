@@ -930,8 +930,8 @@ export function run(test) {
    * BLUETOOTH (BETA) IN THE SETUP EMAILS, OFF UNTIL THE STORE VERSION THAT
    * OPENS IT IS IN BOTH STORES.
    *
-   * Once Bluetooth (beta) opens to customers (store version 1.89.0, the AM4
-   * only), an AM4 owner may never sign a computer in, and both emails would
+   * Once Bluetooth (beta) opens to customers (store version 1.89.0, every
+   * unit), an owner may never sign a computer in, and both emails would
    * tell them "your phone has nothing to connect to". So the function carries
    * a wording that offers both ways, behind one switch, BLUETOOTH_IN_EMAILS.
    * The email cannot tell which store copy a buyer has, so the switch may go
@@ -1085,11 +1085,13 @@ export function run(test) {
     assert.deepEqual(iosOnly.filter((b) => b.version === '1.89.0').map((b) => b.platform), ['ios'])
   })
 
-  test('with the switch on, both emails offer both ways: the computer first and best, then Bluetooth (beta) for an AM4 from 1.89.0, and help still a reply to Justin', async () => {
+  test('with the switch on, both emails offer both ways: the computer first and best, then Bluetooth (beta) for every unit from 1.89.0, marked beta, and help still a reply to Justin', async () => {
     const { setupEmail, BLUETOOTH_FROM } = await setupWords()
+    /* Every unit since 25 October 2026, when they all opened in one store version: it said "Have an AM4?" and "the only way for the FM3, FM9, Axe-Fx III and VP4" until then. */
     const second =
-      `Have an AM4? From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth (beta), through a Bluetooth MIDI adapter plugged into the AM4’s MIDI In and MIDI Out. ` +
-      'The computer is still the best way, and the only way for the FM3, FM9, Axe-Fx III and VP4: Bluetooth has more lag and does less, with no editing or saving. ' +
+      `From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth (beta), through a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). ` +
+      'The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. ' +
+      'Bluetooth is in beta, and some features might not work as expected: so far it has been tried on the AM4 only. ' +
       'To try it, update the app, then open Settings → My rig → Bluetooth (beta), which says what to buy and how to plug it in.'
     const first = setupEmail('first', 'fan@example.com', { bluetooth: true })
     const reminder = setupEmail('reminder', 'fan@example.com', { bluetooth: true })
@@ -1112,13 +1114,16 @@ export function run(test) {
       /* Help is Justin's: the paragraph sends nobody anywhere else. */
       assert.ok(!/@|https?:|www\./.test(second), 'the second way sends people somewhere other than this email’s reply')
     }
-    /* Never a promise for every Fractal unit: the computer is the way for the units the app works with, named, and those are SUPPORTED UNITS less the AM4. */
-    assert.ok(!/every (Fractal )?unit/i.test(second), 'the email promises the computer for every Fractal unit, Axe-Fx II and AX8 among them')
+    /* Never a promise for every Fractal unit: Bluetooth is for the units the app works with, named, and those are SUPPORTED UNITS. */
+    assert.ok(!/every (Fractal )?unit/i.test(second), 'the email promises Bluetooth for every Fractal unit, Axe-Fx II and AX8 among them')
     const supported = read('docs/app-store.md').match(/\nSUPPORTED UNITS\n([^\n]+)\n/)?.[1] || ''
-    assert.equal(supported, 'FM3, FM9, Axe-Fx III and AM4, and the VP4 in part.', 'SUPPORTED UNITS changed; the email names the units the computer is the only way for, from that list')
-    const units = (list) => list.split(/,\s*(?:and\s+)?(?:the\s+)?|\s+and\s+(?:the\s+)?/).map((u) => u.replace(/^the /, '').replace(/ in part\.?$|\.$/, '').trim()).filter(Boolean).sort()
-    const named = second.match(/the only way for the ([^:]+):/)?.[1] || ''
-    assert.deepEqual(units(named), units(supported).filter((u) => u !== 'AM4'), `the email names ${named} as the computer’s alone; SUPPORTED UNITS less the AM4 is ${units(supported).filter((u) => u !== 'AM4').join(', ')}`)
+    assert.equal(supported, 'FM3, FM9, Axe-Fx III and AM4, and the VP4 in part.', 'SUPPORTED UNITS changed; the email names the units Bluetooth is for, from that list')
+    const units = (list) => list.split(/,\s*(?:and\s+)?(?:the\s+)?|\s+(?:and|or)\s+(?:the\s+)?/).map((u) => u.replace(/^(the|an?) /, '').replace(/ in part\.?$|\.$/, '').trim()).filter(Boolean).sort()
+    const named = second.match(/, on (an AM4[^(]+) \(/)?.[1] || ''
+    assert.deepEqual(units(named), units(supported), `the email names ${named} as the units Bluetooth is for; SUPPORTED UNITS is ${units(supported).join(', ')}`)
+    /* And in Justin's words, with which unit has been tried, and what a VP4 gets. */
+    assert.match(second, /Bluetooth is in beta, and some features might not work as expected/)
+    assert.match(second, /on a VP4, presets and scenes only/)
     /* Subjects as they were: the computer is still what the email is about. */
     assert.equal(first.subject, 'One more step: the Fractal Remote computer app')
     assert.equal(reminder.subject, 'Still need a hand with the Fractal Remote computer app?')

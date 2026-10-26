@@ -270,9 +270,35 @@ users. The only unit that might be more difficult to manage figure out is
 the FM3 but luckily I have one of those ... I just want to submit with notes
 for users that Bluetooth is in beta and some features might not work as
 expected. And make it super easy for all users to submit bugs and
-feedback." (25 October 2026.) The AM4-only rules below are being rewritten
-for that, pass by pass; until each pass lands, `CUSTOMER_UNITS` stays as it
-is, and nothing opens to customers before 1.89.0 either way.
+feedback." (25 October 2026.) And the same day: "I don't wanna wait for the
+FM3 test. Just get it built and pushed to Apple. as long as there's warnings
+for user that it's in beta and they're free to test it and submit feedback,
+but it might not work properly", and "I'm curious why the VP4 is not listed?
+... it uses the same architecture as the AM4." So 1.89.0 opens it on all
+five units the page offers, AM4, FM3, FM9, Axe-Fx III and VP4, with no FM3
+test first, and under these rules:
+
+- **Beta, in his words, everywhere it is offered:** "Bluetooth is in beta,
+  and some features might not work as expected." It opens the beta note on
+  the Bluetooth page, and the store texts, the guide and the support page
+  say it.
+- **Every untried unit says so.** Only the AM4 has run it. The FM9,
+  Axe-Fx III and VP4 say "not tried yet", the FM3 "hasn't run yet" (it was
+  tried, and the cable ran hot), wherever an owner looks, each with the
+  one-tap Report a Bluetooth problem by it (`untried` and its kin in
+  shared/bluetooth-gear.mjs). Never a sentence that says it works on a unit
+  it has not run on. The FM3's heat warning stays in front of it, and the
+  C2MIDI Pro is never offered for one.
+- **The VP4 does only what the computer path does for it, and less:** a
+  Program Change for a preset and the player's Scene Select for a scene
+  (mobile/src/lib/bleVp4.js, the computer's own bytes from ForgeFX
+  drivers/vp4.ts), and not one byte of SysEx: nothing it has not been
+  proven on. Its one way out (`vp4BleAllowed`) is held by a test over every
+  two- and three-byte message there is. It reads nothing back, so the page
+  says "sending to the VP4", never "answering", and names, effects and the
+  tuner say they are not available over Bluetooth. Every rule in
+  shared/vp4-safety.mjs holds over it as over the computer (device.js
+  takes it for a VP4).
 
 **Bluetooth (beta) is the developer's only on every copy out today, since 11
 October 2026, and opens to customers in the next store version (1.89.0).**
@@ -292,9 +318,10 @@ the build refused), and an update hides it from everybody but him:
   the phone, `haveSession()`, never `currentAccount()`, which asks the server
   and would take his own Bluetooth away at a gig with no signal) on every
   copy, and anybody else only on a copy whose BUILT-IN store version is at or
-  above `BLUETOOTH_FROM_STORE` (see the next rule). Customers are offered the
-  AM4 only (`CUSTOMER_UNITS`); the FM3, FM9 and Axe-Fx III stay his until
-  each has really run. And a customer needs the purchase itself
+  above `BLUETOOTH_FROM_STORE` (see the next rule). Customers are offered
+  every unit keyed in `UNITS_FROM_STORE` on such a copy: all five, each
+  keyed to `BLUETOOTH_FROM_STORE` itself (see the next rule for a unit added
+  later). And a customer needs the purchase itself
   (`mayDriveBluetooth` in mobile/src/lib/unlock-rule.js, on the row, the
   page, Connect, the waiting screen and bleLink): never the computer's
   "the store cannot be reached" yes, which with no signal, and a sign-in
@@ -303,8 +330,8 @@ the build refused), and an update hides it from everybody but him:
   who is signed in. Anybody it is not open to (or on a unit they are not
   offered) found on Bluetooth goes back to the computer
   (`setBluetooth(false)`, unit and adapter kept, except a unit the account
-  is not offered, which is cleared where Bluetooth is open to it: on a
-  1.89.0 copy a tester signing in on his phone clears his FM3 pick), and
+  is not offered, which is cleared where Bluetooth is open to it: a unit
+  keyed to a later store version, say, on a 1.89.0 copy), and
   `setBluetooth(true)` refuses them.
 - A sign-in that ran out at a gig with no signal still answers with its
   account (mobile/src/lib/relay.js `keptSession`, since 25 October 2026, for
@@ -333,8 +360,12 @@ the build refused), and an update hides it from everybody but him:
   update. The privacy page says the gap as it is, and Google's 1.87.11 App
   access note leaves it out, because that build does not have it.
 - /bluetooth on the website says it isn't in the app and may be offered in
-  a later version, with no promise and nothing to buy; the guide lives at
-  bluetooth-guide.html, linked only from the app's own Bluetooth page.
+  a later version, with no promise and nothing to buy, until the live day of
+  1.89.0. The guide lives at bluetooth-guide.html, linked only from the
+  app's own Bluetooth page and unlisted until then; it, the privacy page
+  and one sentence on support.html say, in words true before and after
+  approval, that Bluetooth (beta) is in the app from 1.89.0 and only on the
+  developer's account before it.
 
 **It is switched on for customers only in a new store version whose review
 notes say so, never by an over-the-air update.** Apple's guideline 2.5.19
@@ -384,10 +415,17 @@ the rest:
   the threshold and the pin hold each other, and taking Bluetooth back out
   takes three deliberate edits, never one slip. Only if no build was ever
   started from the threshold is it set back.
-- A second unit (FM9, Axe-Fx III, FM3) opens to customers only keyed the way
-  Bluetooth is, by a store version for that unit against the copy's built-in
-  one. `CUSTOMER_UNITS` is a plain list, and a name added to it reaches every
-  1.89.0 copy by update, whose notes say the AM4 alone.
+- Every unit opens to customers keyed the way Bluetooth is, by a store
+  version for that unit against the copy's built-in one (`UNITS_FROM_STORE`
+  in ble-rule.js; `CUSTOMER_UNITS` is its keys). The five open together in
+  1.89.0, so all five are keyed to `BLUETOOTH_FROM_STORE`. A unit added to
+  the page later is keyed to a later store version of its own, never to
+  that threshold, which would reach every 1.89.0 copy by update, reviewed
+  without it; the tests fail on a unit the page offers that is not keyed,
+  and once the opening row is written `OPENED_AT.units` in test/ledger.mjs
+  pins the five (`unitProblems`): none closed by update, and no other
+  opened on 1.89.0. Closing one unit in an emergency is the deliberate
+  edits docs/app-store.md describes, never one slip.
 - The review notes, What's New, the descriptions, the setup guide the app
   opens (bluetooth-guide.html), the privacy page, support.html and /bluetooth
   all say so, and the build is asked for like any other. The setup emails'
@@ -403,8 +441,9 @@ features." It is said in several wordings, each in one place:
 - `BLUETOOTH_WAYS` in shared/bluetooth-gear.mjs, the full sentence: the
   Bluetooth page, the Phone & computer note while Bluetooth is on, and the
   purchase page through `BLUETOOTH_PAYWALL`, which also names the parts.
-- `BLUETOOTH_WAYS_SHORT` and `BLUETOOTH_WAYS_SHORT_AM4` (same file): the line
-  under the waiting screen's "No computer? Use Bluetooth (beta)".
+- `BLUETOOTH_WAYS_SHORT` (same file): the line under the waiting screen's
+  "No computer? Use Bluetooth (beta)", the same for every account since
+  every unit opened together.
 - `BLUETOOTH_ROW_OFF` (same file): the Settings row, which has one line, so
   it says what it is for and the lag only.
 - `NO_COMPUTER_BLUETOOTH` in shared/no-computer.mjs: the no-computer note on

@@ -58,7 +58,18 @@ const remoteRequest = (path, options) => {
   if (demo) return demoRequest(demo, path, options)
   if (options?.deadline && linkIsDown()) return Promise.reject(notSentError())
   const ble = bluetoothWire()
-  if (ble) return ble.request(path, options).catch((err) => Promise.reject(tapOverBle(options, err)))
+  if (ble) {
+    /*
+     * A VP4 over Bluetooth is a VP4 like any other to the screens (see
+     * onVp4): knobs, a save and a stored preset's name answered here first,
+     * the chain asked for the way it is over the computer, and a refusal
+     * said in the VP4's own words. Every other unit's wire, as it was.
+     */
+    const method = options?.method || 'GET'
+    const vp4 = onVp4 && vp4Instead(method, path, options)
+    if (vp4) return vp4
+    return ble.request(path, options).catch((err) => Promise.reject(said(method, path, tapOverBle(options, err))))
+  }
   /* What this unit has already refused as unsupported is not asked again. */
   const method = options?.method || 'GET'
   if (refused.known(method, path)) return Promise.reject(rememberedRefusal(method, path))
@@ -84,8 +95,12 @@ const tapOverBle = (options, err) =>
 const refused = unsupportedMemo()
 
 /*
- * WHETHER THE COMPUTER'S UNIT IS A VP4, from the last detect. Never in the
- * demo, and never over Bluetooth.
+ * WHETHER THE UNIT IS A VP4, from the last detect: on the computer, or, since
+ * 25 October 2026, over Bluetooth (beta), whose VP4 wire (bleVp4.js) is sent
+ * presets and scenes by plain MIDI and nothing else. Never in the demo.
+ * Over Bluetooth every rule below holds the same: the VP4 numbers kept on
+ * this phone go with each preset and scene, a scene with no number is not
+ * sent, and knobs and a save are refused here, before the wire.
  *
  * A VP4 is asked for its chain the safe way, and not for its knobs or a save
  * at all. On the computer apps out there now, the chain read and a block's
@@ -118,7 +133,7 @@ export const keepVp4SetupIn = (storage) => {
 }
 /** The player's Scene Select number and MIDI channel for the VP4, as kept on this phone. */
 export const vp4Setup = () => readVp4Setup(vp4Storage)
-/** Whether the unit on the computer is a VP4 (never the demo's, never over Bluetooth). */
+/** Whether the unit is a VP4, on the computer or over Bluetooth (never the demo's). */
 export const vp4Here = () => onVp4
 /** What the computer said this VP4 can do (null when the unit is not a VP4). */
 export const vp4Capabilities = () => (onVp4 ? vp4Caps : null)
@@ -258,7 +273,7 @@ export const detect = async () => {
   /* A unit detected afresh is asked everything afresh: see shared/unsupported.mjs. */
   refused.forget()
   let res = await remoteRequest('/device/detect')
-  onVp4 = !demoDevice() && !bluetoothWire() && isVp4(res)
+  onVp4 = !demoDevice() && isVp4(res)
   vp4Caps = onVp4 ? res?.capabilities ?? null : null
   vp4Name = null
   vp4Scenes = null

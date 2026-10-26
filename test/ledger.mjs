@@ -9,7 +9,7 @@
  * in one and not the other would have left the other reading something else,
  * so there is one, here.
  */
-import { bluetoothOpen } from '../mobile/src/lib/ble-rule.js'
+import { bluetoothOpen, unitOffered } from '../mobile/src/lib/ble-rule.js'
 import { isOlder } from '../shared/versions.mjs'
 
 /* The words a row says when it is the build that opened Bluetooth (beta) to customers (docs/expo-builds.md's header). */
@@ -55,9 +55,12 @@ export const withoutOpening = (text) =>
  * pull request that writes the opening row sets it, in the same change, to
  * that build: its version, and the threshold on each phone, as
  *
- *   export const OPENED_AT = Object.freeze({ version: '1.89.0', ios: '1.89.0', android: '1.89.0' })
+ *   export const OPENED_AT = Object.freeze({ version: '1.89.0', ios: '1.89.0', android: '1.89.0', units: ['am4', 'fm3', 'fm9', 'axefx3', 'vp4'] })
  *
- * and cannot go green without it. After that, taking the protection out
+ * and cannot go green without it. `units` is every unit that build opened
+ * to customers (UNITS_FROM_STORE in mobile/src/lib/ble-rule.js, as it was
+ * built): from then on each stays open on that version, and no other unit
+ * may open on it (unitProblems, below). After that, taking the protection out
  * takes three deliberate edits (the row, the threshold and this), never one
  * slip.
  */
@@ -195,6 +198,55 @@ export const pinProblems = ({ builds, from, stores, pin }) => {
     }
     if (isOlder(stores?.[platform], pin.version) === false && !bluetoothOpen({ platform, installed: pin.version, admin: false, from })) {
       out.push(`${platform}: public/store-versions.json says ${stores[platform]} is live, at or after ${pin.version}, which opened Bluetooth (beta), and the threshold ${at} does not open on ${pin.version}`)
+    }
+  }
+  return out
+}
+
+/**
+ * What is wrong with the units' keying (`units`, UNITS_FROM_STORE's shape),
+ * against the threshold (`from`, BLUETOOTH_FROM_STORE) and the pin: a list
+ * of sentences, empty when nothing is.
+ *
+ *   - every unit is keyed to both phones together, like the threshold: a
+ *     unit open on one phone's copy and not the other's would be reviewed
+ *     with notes that say it is there on a copy that keeps it closed;
+ *   - with no pin, every unit opens no earlier than Bluetooth itself
+ *     (keyed to the threshold, or to a later store version);
+ *   - once pinned, every unit the opening build opened (pin.units) is still
+ *     open on its version on both phones: closing one by update would take
+ *     it from the copies reviewed with it. And every other unit is closed on
+ *     that version: a unit added later, keyed to the threshold, would open
+ *     by update on every copy reviewed without it. A later unit is keyed to
+ *     a later store version of its own.
+ */
+export const unitProblems = ({ units, from, pin }) => {
+  const out = []
+  for (const [unit, at] of Object.entries(units || {})) {
+    const ios = at?.ios ?? null
+    const android = at?.android ?? null
+    if (ios !== android) out.push(`${unit}: keyed to ios ${ios} and android ${android}; a unit opens on both phones together`)
+    for (const platform of ['ios', 'android']) {
+      const mine = at?.[platform] ?? null
+      const blue = from?.[platform] ?? null
+      if (mine !== null && (blue === null || isOlder(mine, blue) === true)) out.push(`${unit}: opens on ${platform} at ${mine}, before Bluetooth (beta) itself (${blue})`)
+    }
+  }
+  if (!pin) return out
+  const opened = Array.isArray(pin.units) ? pin.units : null
+  if (!opened) {
+    out.push('OPENED_AT has no `units`: the pull request that writes the opening row lists every unit that build opened, so none can be closed or added by update')
+    return out
+  }
+  for (const platform of ['ios', 'android']) {
+    if (!pin[platform]) continue
+    for (const unit of opened) {
+      if (!unitOffered(unit, { platform, installed: pin.version, units })) out.push(`${platform}: ${unit} was opened to customers by ${pin.version}, and is closed on it now: an update would take it from the copies reviewed with it`)
+    }
+    for (const unit of Object.keys(units || {})) {
+      if (!opened.includes(unit) && unitOffered(unit, { platform, installed: pin.version, units })) {
+        out.push(`${platform}: ${unit} opens on ${pin.version}, which was reviewed without it: key it to a later store version of its own`)
+      }
     }
   }
   return out

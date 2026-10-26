@@ -2837,7 +2837,185 @@ export function run(test) {
     await assert.rejects(wire.request('/scene', { method: 'POST', body: '{"index":1}' }), (e) => e.status === 504)
     const am4 = createBleWire({ unit: 'am4', send: () => false, clock: fakeClock() })
     await assert.rejects(am4.request('/preset'), (e) => e.status === 503)
-    assert.throws(() => createBleWire({ unit: 'vp4', send: () => true }), /does not know a unit called vp4/)
+    assert.throws(() => createBleWire({ unit: 'vp5', send: () => true }), /does not know a unit called vp5/)
+    /* A VP4 whose adapter will not take the Program Change: an error, never a preset that went. */
+    const vp4 = createBleWire({ unit: 'vp4', send: () => false, clock: fakeClock() })
+    await assert.rejects(vp4.request('/preset/select', { method: 'POST', body: '{"number":3,"midiChannel":1}' }), (e) => e.status === 503)
+  })
+
+  /* ---------------------------------------------------------------- */
+  /* A pretend VP4                                                      */
+  /* ---------------------------------------------------------------- */
+
+  /*
+   * "I'm curious why the VP4 is not listed? ... it uses the same architecture
+   * as the AM4." (Justin, 25 October 2026.) Over Bluetooth a VP4 is sent what
+   * the computer sends it for presets and scenes (ForgeFX drivers/vp4.ts:
+   * vp4ProgramChange and vp4SceneSelect), and nothing else, ever: no SysEx.
+   * A pretend VP4 that writes down every byte it is sent, and answers
+   * nothing, as a VP4 over this link does.
+   */
+  async function pretendVp4({ log = [] } = {}) {
+    const { createBleWire, BLE_UNITS } = await import(WIRE)
+    const clock = fakeClock()
+    const got = []
+    const events = []
+    const foreign = []
+    const wire = createBleWire({ unit: 'vp4', send: (bytes) => (got.push([...bytes]), true), clock, log: (l) => log.push(l), onForeign: (n) => foreign.push(n) })
+    wire.subscribe((e) => events.push(e))
+    const ask = (path, method = 'GET', body = null) => drive(clock, wire.request(path, { method, body: body === null ? undefined : JSON.stringify(body) }))
+    return { wire, clock, got, events, foreign, log, ask, BLE_UNITS }
+  }
+
+  test('a VP4 over Bluetooth is sent a Program Change for a preset and its Scene Select for a scene, the computer’s own bytes, and nothing else', async () => {
+    const v = await import('../mobile/src/lib/bleVp4.js')
+    const t = await pretendVp4()
+    assert.equal(t.wire.unit, 'vp4')
+    assert.deepEqual(t.BLE_UNITS.at(-1), { key: 'vp4', name: 'VP4' }, 'the VP4 is not the last unit the page offers')
+    /* The unit's check: connected while the adapter is, and said as a VP4, so device.js treats it as one (isVp4). */
+    const detect = await t.ask('/device/detect')
+    assert.equal(detect.connected, true)
+    assert.equal(detect.modelId, 0x14)
+    assert.equal(detect.short, 'VP4')
+    assert.equal(detect.sendOnly, true)
+    assert.deepEqual(detect.capabilities.plainMidi, { programChange: true, sceneSelect: true })
+    assert.equal(detect.capabilities.via, 'bluetooth')
+    assert.equal(detect.capabilities.tuner, false)
+    assert.equal(detect.capabilities.hasChannels, false)
+    assert.deepEqual(detect.capabilities.presets, { count: 104, addressing: 'bankLetterShort', canScanNames: false })
+    const vp4Safety = await import('../shared/vp4-safety.mjs')
+    assert.equal(vp4Safety.isVp4(detect), true)
+    assert.equal(vp4Safety.vp4ComputerCan(detect.capabilities), true, 'device.js would refuse a VP4 preset over Bluetooth as needing a computer update')
+    assert.deepEqual(t.got, [], 'the check sent the VP4 something')
+
+    /* A preset: one Program Change on the player's channel, PC n = A1..Z4, no Bank Select, sent once. */
+    const preset = await t.ask('/preset/select', 'POST', { number: 5, midiChannel: 2 })
+    assert.deepEqual(t.got, [[0xc1, 5]])
+    assert.deepEqual(preset, { ok: true, number: 5, code: 'B2', landed: true, sentOnly: true })
+    /* The computer's own bytes (ForgeFX vp4ProgramChange): [0xC0 | channel-1, n]. */
+    assert.deepEqual(v.vp4ProgramChange(0, 1), [0xc0, 0])
+    assert.deepEqual(v.vp4ProgramChange(103, 16), [0xcf, 103])
+    for (const [n, ch] of [[104, 1], [-1, 1], [1.5, 1], [3, 0], [3, 17]]) assert.throws(() => v.vp4ProgramChange(n, ch))
+    /* No channel sent: 1, as the computer takes it. */
+    await t.ask('/preset/select', 'POST', { number: 0 })
+    assert.deepEqual(t.got.at(-1), [0xc0, 0])
+
+    /* A scene: the Scene Select number the player set, value 0..3 = scenes 1..4, on the channel. */
+    const scene = await t.ask('/scene', 'POST', { index: 2, sceneCc: 34, midiChannel: 2, sceneCcSet: 1 })
+    assert.deepEqual(t.got.at(-1), [0xb1, 34, 2])
+    assert.deepEqual(scene, { ok: true, index: 2, sentOnly: true })
+    assert.deepEqual(t.events, [{ type: 'scene', index: 2 }])
+    assert.deepEqual(v.vp4SceneSelect(1, 1, 0), [0xb0, 1, 0])
+    for (const [cc, ch, sc] of [[0, 1, 0], [32, 1, 0], [120, 1, 0], [34, 1, 4], [34, 1, -1], [34, 0, 0]]) assert.throws(() => v.vp4SceneSelect(cc, ch, sc))
+    /* The scene the unit watch asks for is the one this connection sent: nothing is read from a VP4. */
+    assert.deepEqual(await t.ask('/scene'), { index: 2, sentOnly: true })
+    const sent = t.got.length
+
+    /* No number, a bad number, a scene a VP4 does not have, a preset past Z4: refused, nothing sent. */
+    for (const body of [{ index: 1 }, { index: 1, sceneCc: 32 }, { index: 1, sceneCc: 0 }, { index: 1, sceneCc: 120 }, { index: 4, sceneCc: 34 }, { index: 1, sceneCc: 34, midiChannel: 17 }]) {
+      await assert.rejects(t.ask('/scene', 'POST', body), (e) => e.status === 400, JSON.stringify(body))
+    }
+    for (const body of [{ number: 104 }, { number: -1 }, {}, { number: 3, midiChannel: 0 }]) {
+      await assert.rejects(t.ask('/preset/select', 'POST', body), (e) => e.status === 400, JSON.stringify(body))
+    }
+    assert.equal(t.got.length, sent, 'a refused request sent the VP4 something')
+  })
+
+  test('a VP4 over Bluetooth is refused everything else with nothing sent, and every byte it is ever sent is a Program Change or its Scene Select', async () => {
+    const v = await import('../mobile/src/lib/bleVp4.js')
+    const t = await pretendVp4()
+    /* The reads a VP4 cannot answer over Bluetooth: the preset it is on, the tempo, names, the tuner, every write but presets and scenes. */
+    for (const [method, path, status] of [
+      ...REFUSED.filter(([, p]) => p !== '/preset/grid'),
+      ['GET', '/preset', 501],
+      ['GET', '/tempo', 501],
+      ['GET', '/presets/5/scenes', 501],
+      ['GET', '/presets/5/summary', 501],
+      ['POST', '/tuner', 501],
+      ['POST', '/tempo', 501],
+      ['POST', '/tempo/tap', 501],
+      ['POST', '/preset/blocks/58/bypass', 501],
+      ['POST', '/preset/blocks/58/channel', 501],
+      ['PUT', '/preset/blocks/58/params/150', 501]
+    ]) {
+      await assert.rejects(t.ask(path, method, {}), (e) => e.status === status && e.bluetooth === true, `${method} ${path}`)
+    }
+    /* The chain, its names and its on/offs cannot be read: answered empty (Play says why, VP4_OVER_BLUETOOTH). */
+    assert.deepEqual(await t.ask('/preset/grid'), { cells: [], name: null, scenes: null, sentOnly: true })
+    assert.deepEqual(await t.ask('/preset/scene-state'), [])
+    assert.deepEqual(t.got, [], 'a refused request sent the VP4 something')
+    /* No footswitch watch, no check, no tuner owed: a VP4 is never asked anything. */
+    t.wire.startPolls()
+    await advance(t.clock, 60000)
+    assert.deepEqual(t.got, [], 'the VP4 was polled')
+    assert.equal((await t.wire.check('all')).ok, false)
+    assert.deepEqual(t.got, [], 'the check sent the VP4 something')
+
+    /*
+     * EVERY BYTE A VP4 CAN RECEIVE, through its one way out (vp4BleAllowed):
+     * a Program Change for A1..Z4 on any channel, or a Scene Select on a
+     * number the player may use with a scene 0..3. Swept over every two- and
+     * three-byte message there is, and the SysEx frames this wire's other
+     * units are sent: nothing else passes.
+     */
+    let passed = 0
+    for (let a = 0; a < 256; a++) {
+      for (let b = 0; b < 256; b++) {
+        const ok = v.vp4BleAllowed([a, b])
+        if (ok) {
+          passed++
+          assert.ok((a & 0xf0) === 0xc0 && b <= 103, `[${a}, ${b}] passes`)
+        }
+        for (const c of [0, 1, 2, 3, 4, 64, 127, 0xf7]) {
+          if (v.vp4BleAllowed([a, b, c])) assert.ok((a & 0xf0) === 0xb0 && b >= 1 && b <= 119 && b !== 32 && c <= 3, `[${a}, ${b}, ${c}] passes`)
+        }
+      }
+    }
+    assert.equal(passed, 16 * 104, 'not every Program Change for A1..Z4 on every channel passes')
+    const sx = await import('../mobile/src/lib/fractal-sysex.mjs')
+    for (const frame of [sx.buildAm4Structure(), sx.buildAm4Scene(1), sx.buildAm4Preset(3), sx.buildGetScene(0x14), ...sx.buildProgramChange(3).slice(0, 2), sx.buildProgramChange(3), [0xf0, 0x00, 0x01, 0x74, 0x14, 0x01, 0xf7], [0xc0], [0xc0, 1, 2], [0xb0, 34], [0xb0, 34, 2, 0], [0x90, 60, 100], [0xf8], []]) {
+      assert.equal(v.vp4BleAllowed(frame), false, `${sx.toHex(frame)} would go to a VP4`)
+    }
+    for (const nonsense of [null, undefined, 'C0 05', [0xc0, '5'], [0xc0, 5.5], [0xc0, 256], [0x1c0, 5]]) assert.equal(v.vp4BleAllowed(nonsense), false, String(nonsense))
+  })
+
+  test('a VP4 over Bluetooth: a scene straight after a preset waits for it to load, a tap past its deadline is not sent, and another unit answering is named', async () => {
+    const t = await pretendVp4()
+    /* The preset's answer comes PRESET_SETTLE_MS after its Program Change, the computer's own first-read delay. */
+    const { PRESET_SETTLE_MS } = await import('../mobile/src/lib/bleVp4.js')
+    assert.equal(PRESET_SETTLE_MS, 250)
+    const preset = t.wire.request('/preset/select', { method: 'POST', body: JSON.stringify({ number: 8, midiChannel: 1 }) })
+    const scene = t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ index: 1, sceneCc: 34, midiChannel: 1 }), deadline: t.clock.now() + 1500 })
+    await flush()
+    assert.deepEqual(t.got, [[0xc0, 8]], 'the scene went before the VP4 had time to load the preset')
+    await advance(t.clock, PRESET_SETTLE_MS)
+    await drive(t.clock, preset)
+    await drive(t.clock, scene)
+    assert.deepEqual(t.got, [[0xc0, 8], [0xb0, 34, 1]])
+    /* A tap whose deadline the settle would pass: not sent at all. */
+    const again = t.wire.request('/preset/select', { method: 'POST', body: JSON.stringify({ number: 9 }) })
+    const late = t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ index: 2, sceneCc: 34 }), deadline: t.clock.now() + 100 })
+    await assert.rejects(drive(t.clock, late), (e) => e.late === true && e.status === 504)
+    await drive(t.clock, again)
+    assert.deepEqual(t.got.at(-1), [0xc0, 9])
+    assert.ok(!t.got.some((m) => m[0] === 0xb0 && m[2] === 2), 'a scene past its deadline was sent')
+    /* And a preset tapped past its deadline: nothing. */
+    t.clock.set(t.clock.now() + 10)
+    await assert.rejects(t.wire.request('/preset/select', { method: 'POST', body: '{"number":1}', deadline: t.clock.now() - 1 }), (e) => e.late === true)
+    assert.notDeepEqual(t.got.at(-1), [0xc0, 1])
+    /* What comes back is read for one thing only: another unit's message names it, once. */
+    const sx = await import('../mobile/src/lib/fractal-sysex.mjs')
+    t.wire.heard([0xf0, 0x00, 0x01, 0x74, 0x15, 0x0c, 0x02, 0x0f, 0xf7])
+    t.wire.heard([0xf0, 0x00, 0x01, 0x74, 0x12, 0x0c, 0x02, 0x0f, 0xf7])
+    assert.deepEqual(t.foreign, ['AM4'], 'another unit on the adapter is not named, or named twice')
+    t.wire.heard([0xf0, 0x00, 0x01, 0x74, 0x14, 0x0c, 0x02, 0x0f, 0xf7])
+    assert.ok(t.log.some((l) => /over Bluetooth the app reads nothing from a VP4/.test(l)))
+    assert.ok(sx.isFractal([0xf0, 0x00, 0x01, 0x74, 0x14, 0x0c, 0x02, 0x0f, 0xf7]))
+    /* Closed: everything refused, nothing sent. */
+    const before = t.got.length
+    t.wire.close()
+    await assert.rejects(t.wire.request('/preset/select', { method: 'POST', body: '{"number":2}' }), (e) => e.status === 503)
+    assert.equal(t.got.length, before)
   })
 
   test('the AM4’s writes: the exact frames, the echoes rig expects, and the channel at the base code', async () => {
@@ -5024,8 +5202,11 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own. */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./bluetooth-gear.js', './chain-outline.js', './fractal-sysex.mjs'])
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fractal-sysex.mjs'])
     assert.deepEqual(imports(read('bluetooth-gear.js')), [], 'the gear file imports something')
+    /* The VP4's wire: the codec's helpers and the VP4 rules both ends keep, and nothing that sends (never bleWire, which hands it the unit). */
+    assert.deepEqual(imports(read('bleVp4.js')).sort(), ['./fractal-sysex.mjs', './vp4-safety.js'])
+    assert.deepEqual(imports(read('vp4-safety.js')), [], 'the VP4 rules import something')
   })
 
   /* ---------------------------------------------------------------- */
@@ -5064,7 +5245,7 @@ export function run(test) {
       'debugLog.js': 'export const logDebug = () => {}\n',
       'lineage.js': 'export const withLineage = (slug, x) => x\n'
     }
-    for (const f of ['bleSwitch.js', 'tapGate.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js']) {
+    for (const f of ['bleSwitch.js', 'tapGate.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js', 'bleVp4.js', 'fractal-sysex.mjs']) {
       files[f] = esm(lib(f))
     }
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
@@ -5073,8 +5254,67 @@ export function run(test) {
     const sw = await import(at('bleSwitch.js'))
     const relay = await import(at('relay.js'))
     const gate = await import(at('tapGate.js'))
-    return { device, sw, relay, gate, done: () => rmSync(dir, { recursive: true, force: true }) }
+    const vp4wire = await import(at('bleVp4.js'))
+    return { device, sw, relay, gate, vp4wire, done: () => rmSync(dir, { recursive: true, force: true }) }
   }
+
+  /*
+   * A VP4 OVER BLUETOOTH, THROUGH DEVICE.JS, as Play reaches it: device.js
+   * takes it for a VP4 (isVp4 of its check), and every VP4 rule holds as over
+   * the computer. The player's Scene Select number and channel go with each
+   * scene and preset, a scene with no number is not sent, knobs and a save
+   * are refused before the wire, a stored preset's name is unknown (A1..Z4),
+   * and every refusal is said in the VP4's own words. And the VP4 is sent a
+   * Program Change and its Scene Select, and not one byte more.
+   */
+  test('a VP4 over Bluetooth, through device.js: its own numbers on every preset and scene, every other request refused in its own words, and nothing sent but the two', async () => {
+    const { device, sw, relay, vp4wire, done } = await deviceOnABench()
+    try {
+      const got = []
+      const wire = vp4wire.createVp4Wire({ send: (b) => (got.push([...b]), true) })
+      const kept = new Map()
+      const storage = { getItem: (k) => kept.get(k) ?? null, setItem: (k, v) => kept.set(k, String(v)), removeItem: (k) => kept.delete(k) }
+      device.keepVp4SetupIn(storage)
+      sw.setSwitch({ on: true, wire })
+      const unit = await device.detect()
+      assert.equal(device.vp4Here(), true, 'a VP4 over Bluetooth is not taken for a VP4')
+      assert.equal(unit.capabilities.hasChannels, false, 'a VP4’s screens offer channels over Bluetooth')
+      assert.deepEqual(device.vp4Capabilities().plainMidi, { programChange: true, sceneSelect: true })
+
+      /* Not set up: presets go on channel 1, a scene says how to set up the number, and nothing goes for it. */
+      await device.selectPreset(4)
+      assert.deepEqual(got, [[0xc0, 4]])
+      const vp4 = await import('../shared/vp4-safety.mjs')
+      await assert.rejects(device.setScene(1), (e) => e.message === vp4.VP4_SCENES_NOT_SET_UP)
+      assert.deepEqual(got, [[0xc0, 4]], 'a scene with no number was sent')
+
+      /* Set up on the VP4 and saved in the app: Scene Select 34 on channel 3. */
+      assert.equal(vp4.saveVp4Setup(storage, undefined, { sceneCc: 34, midiChannel: 3 }).ok, true)
+      await device.selectPreset(103)
+      await device.setScene(3)
+      assert.deepEqual(got.slice(1), [[0xc2, 103], [0xb2, 34, 3]])
+
+      /* Everything else, refused before anything is sent, in a VP4's words. */
+      await assert.rejects(device.blockParams(58), (e) => e.message === vp4.VP4_NO_KNOBS)
+      await assert.rejects(device.setTuner(true), (e) => e.message === vp4.VP4_NO_TUNER)
+      await assert.rejects(device.setTempo(120), (e) => e.message === vp4.VP4_NO_TEMPO)
+      await assert.rejects(device.currentPreset(), (e) => e.message === vp4.VP4_NO_WHICH_PRESET && e.quiet === true)
+      assert.equal((await device.presetName(7))?.name ?? null, null, 'a VP4 stored preset’s name is not left unknown')
+      assert.deepEqual(await device.presetBlocks(), [], 'the chain of a VP4 over Bluetooth is not empty')
+      assert.deepEqual(got.slice(3), [], 'a refused request sent the VP4 something')
+      for (const m of got) assert.ok(vp4wire.vp4BleAllowed(m), `the VP4 was sent ${m}`)
+      assert.deepEqual(relay.asked, [], 'a request went to the computer while Bluetooth was on')
+
+      /* Off again, and the computer's unit is not a VP4: its requests go as they always did. */
+      sw.setSwitch({ on: false, wire: null })
+      await device.detect()
+      assert.equal(device.vp4Here(), false)
+      await device.setScene(2)
+      assert.deepEqual(relay.asked.at(-1), 'POST /scene')
+    } finally {
+      done()
+    }
+  })
 
   test('with Bluetooth off the computer is asked exactly as before; on, the wire is, and the computer never', async () => {
     const { device, sw, relay, done } = await deviceOnABench()
@@ -5367,7 +5607,11 @@ export function run(test) {
     assert.match(
       device,
       /* With one line between them since 13 October 2026: a tap while the link is down goes nowhere, Bluetooth or not. */
-      /const demo = demoDevice\(\) if \(demo\) return demoRequest\(demo, path, options\) if \(options\?\.deadline && linkIsDown\(\)\) return Promise\.reject\(notSentError\(\)\) const ble = bluetoothWire\(\) if \(ble\) return ble\.request\(path, options\)\.catch\(\(err\) => Promise\.reject\(tapOverBle\(options, err\)\)\) \/\* What this unit has already refused/,
+      /*
+       * And a VP4 over Bluetooth asked the VP4's way first (vp4Instead, as over the computer), its refusals in the VP4's words
+       * (said): every other unit's wire exactly as before, since onVp4 is false for them.
+       */
+      /const demo = demoDevice\(\) if \(demo\) return demoRequest\(demo, path, options\) if \(options\?\.deadline && linkIsDown\(\)\) return Promise\.reject\(notSentError\(\)\) const ble = bluetoothWire\(\) if \(ble\) \{ \/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/ const method = options\?\.method \|\| 'GET' const vp4 = onVp4 && vp4Instead\(method, path, options\) if \(vp4\) return vp4 return ble\.request\(path, options\)\.catch\(\(err\) => Promise\.reject\(said\(method, path, tapOverBle\(options, err\)\)\)\) \} \/\* What this unit has already refused/,
       'the Bluetooth line is not directly under the demo line, or not before the memo'
     )
     /* No Bluetooth path strings in device.js: they all live in bleWire.js, where the tests above drive them. */
@@ -5436,7 +5680,7 @@ export function run(test) {
      */
     assert.match(waking, /\{bluetooth \? \( <View style=\{\{ alignSelf: 'stretch' \}\}> <Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/, 'the Bluetooth waiting screen has no way back to the computer')
     assert.ok(waking.indexOf('Use the computer instead') < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way back to the computer waits fifteen seconds')
-    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, allowBluetooth, lookForAdapterAgain, offeredAm4Only, opensApplesScreen, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
+    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, allowBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth \(beta\)" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     /* Handed only through the Settings row's own gate: test 'every way onto the Bluetooth page' holds it. */
     assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
@@ -5946,14 +6190,62 @@ export function run(test) {
       assert.equal(bluetoothOpen({ platform, installed: '1.89.0', admin: false, from: FROM }), false, `${String(platform)} is let in`)
     }
     assert.equal(bluetoothOpen(), false)
-    /* The AM4 alone for a customer; all four for his account. */
-    assert.deepEqual([...CUSTOMER_UNITS], ['am4'])
-    assert.ok(Object.isFrozen(CUSTOMER_UNITS))
-    for (const unit of ['fm3', 'fm9', 'axefx3']) {
-      assert.equal(unitOffered(unit, false), false, `a customer is offered the ${unit}`)
-      assert.equal(unitOffered(unit, true), true, `his account is not offered the ${unit}`)
+    /*
+     * EVERY UNIT, KEYED TO THE ONE STORE VERSION THAT OPENS BLUETOOTH. "I
+     * don't wanna wait for the FM3 test", and the VP4 with them (25 October
+     * 2026). Each unit carries the threshold it opens from, and all five
+     * carry BLUETOOTH_FROM_STORE itself, so a customer gets each on exactly
+     * the copies that open Bluetooth, and on no other. His account, every
+     * unit on every copy. A unit the page offers that is not keyed here stays
+     * his, and this fails until somebody decides (the page's list and the
+     * keying are compared below).
+     */
+    const { UNITS_FROM_STORE } = rule
+    const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
+    assert.deepEqual([...CUSTOMER_UNITS], ['am4', 'fm3', 'fm9', 'axefx3', 'vp4'])
+    assert.deepEqual([...CUSTOMER_UNITS], BLE_UNITS.map((u) => u.key), 'the Bluetooth page offers a unit that is not keyed to a store version, or the keying names one the page does not offer: decide, and key it')
+    assert.ok(Object.isFrozen(CUSTOMER_UNITS) && Object.isFrozen(UNITS_FROM_STORE))
+    for (const unit of CUSTOMER_UNITS) assert.equal(UNITS_FROM_STORE[unit], BLUETOOTH_FROM_STORE, `the ${unit} is not keyed to the store version that opens Bluetooth`)
+    const KEYED = Object.fromEntries(CUSTOMER_UNITS.map((u) => [u, FROM]))
+    for (const unit of CUSTOMER_UNITS) {
+      for (const platform of ['ios', 'android']) {
+        /* Closed on every copy there is, and open on the build's, for a customer; every copy for his account. */
+        for (const installed of [null, '1.87.11', '1.88.0', '1.88.3', '1.88.99']) {
+          assert.equal(unitOffered(unit, { platform, installed, units: KEYED }), false, `a customer on ${platform} ${installed} is offered the ${unit}`)
+          assert.equal(unitOffered(unit, { platform, installed }), false)
+          assert.equal(unitOffered(unit, { admin: true, platform, installed }), true, `his account is not offered the ${unit}`)
+        }
+        for (const installed of ['1.89.0', '1.90.0']) {
+          assert.equal(unitOffered(unit, { platform, installed, units: KEYED }), true, `a customer on the ${platform} ${installed} copy is not offered the ${unit} with it keyed`)
+          if (BLUETOOTH_FROM_STORE[platform] === null) assert.equal(unitOffered(unit, { platform, installed }), false, `a customer is offered the ${unit} with the threshold null`)
+        }
+      }
     }
-    assert.equal(unitOffered('am4', false), true)
+    /* A unit nobody keyed, or a name that is not a unit: never a customer's, on any copy; his, as every unit the page knows is. */
+    for (const unit of ['vp5', 'axefx2', '__proto__', 'constructor', 'toString', '', null, undefined]) {
+      assert.equal(unitOffered(unit, { platform: 'ios', installed: '1.89.0', units: KEYED }), false, `a customer is offered ${String(unit)}`)
+    }
+    /* And a later unit keyed to a later store version reaches only the copies built to open it, never the 1.89.0 ones by update. */
+    const later = { ...KEYED, vp5: { ios: '1.90.0', android: '1.90.0' } }
+    assert.equal(unitOffered('vp5', { platform: 'ios', installed: '1.89.0', units: later }), false)
+    assert.equal(unitOffered('vp5', { platform: 'android', installed: '1.90.0', units: later }), true)
+    /* The ledger's own check of the keying, as it stands. */
+    const { unitProblems, OPENED_AT } = await import('./ledger.mjs')
+    assert.deepEqual(unitProblems({ units: UNITS_FROM_STORE, from: BLUETOOTH_FROM_STORE, pin: OPENED_AT }), [], 'the units are keyed where the ledger does not allow it')
+    /* And on made-up pins, as the row's pull request and the years after it will have them. */
+    const PIN = { version: '1.89.0', ios: '1.89.0', android: '1.89.0', units: ['am4', 'fm3', 'fm9', 'axefx3', 'vp4'] }
+    assert.deepEqual(unitProblems({ units: KEYED, from: FROM, pin: PIN }), [], 'the opening build’s own keying fails its own pin')
+    assert.deepEqual(unitProblems({ units: KEYED, from: FROM, pin: null }), [])
+    assert.ok(unitProblems({ units: KEYED, from: FROM, pin: { ...PIN, units: undefined } }).some((p) => /OPENED_AT has no `units`/.test(p)), 'a pin with no units passes')
+    /* A sixth unit keyed to the opening threshold after it: opened by update on copies reviewed without it. */
+    assert.ok(unitProblems({ units: { ...KEYED, vp5: FROM }, from: FROM, pin: PIN }).some((p) => /vp5 opens on 1\.89\.0, which was reviewed without it/.test(p)))
+    /* Keyed to a later store version of its own: fine. */
+    assert.deepEqual(unitProblems({ units: { ...KEYED, vp5: { ios: '1.90.0', android: '1.90.0' } }, from: FROM, pin: PIN }), [])
+    /* An opened unit closed by update: refused. */
+    assert.ok(unitProblems({ units: { ...KEYED, fm3: { ios: '1.90.0', android: '1.90.0' } }, from: FROM, pin: PIN }).some((p) => /fm3 was opened to customers by 1\.89\.0, and is closed on it now/.test(p)))
+    /* One phone alone, or before Bluetooth itself: refused. */
+    assert.ok(unitProblems({ units: { ...KEYED, fm9: { ios: '1.89.0', android: null } }, from: FROM, pin: null }).some((p) => /fm9: keyed to ios 1\.89\.0 and android null/.test(p)))
+    assert.ok(unitProblems({ units: { ...KEYED, fm9: { ios: '1.88.0', android: '1.88.0' } }, from: FROM, pin: null }).some((p) => /before Bluetooth \(beta\) itself/.test(p)))
 
     /*
      * PURE, AND READ THE ONE SAFE WAY. It imports the version rule and
@@ -6109,7 +6401,7 @@ export function run(test) {
     assert.ok(pins({ pin: halfPin, from: { ios: '1.89.0', android: null }, stores: { ios: '1.89.0', android: '1.89.2' } }).some((p) => /^android: public\/store-versions\.json says 1\.89\.2 is live, at or after 1\.89\.0, which opened Bluetooth \(beta\), and the threshold null does not open on 1\.89\.0/.test(p)), 'Google Play live on the opening version, with its threshold gone, passes')
   })
 
-  test('on a bench, by the store copy: a customer is closed on every copy there is, and on the copy the build will make they get it, with the AM4 alone', async () => {
+  test('on a bench, by the store copy: a customer is closed on every copy there is, and on the copy the build will make they get it, on every unit', async () => {
     const { ADMINS } = await import('../shared/admin.mjs')
     const JUSTIN = ADMINS[0]
     const CUSTOMER = '0b6c7a51-8f1e-4c2a-9d3b-5e7f9a1c2d4e'
@@ -6168,7 +6460,7 @@ export function run(test) {
     }
 
     /*
-     * 3. The copy at the threshold: open to a customer, the AM4 alone, Connect turns it on, and the next launch starts on it once their id is in.
+     * 3. The copy at the threshold: open to a customer, every unit the page offers (all five, keyed to the same threshold), Connect turns it on, and the next launch starts on it once their id is in.
      *
      * And a customer is never taken for his account there. bluetoothAdmin
      * and useBluetoothAdmin are what keep a free account in airplane mode
@@ -6190,9 +6482,9 @@ export function run(test) {
         assert.equal(bench.ble.useBluetoothAdmin(), false, `the Settings row and Connect take a customer on the ${os} 1.89.0 copy for his account`)
         assert.equal(mayDriveBluetooth({ unlocked: false, available: false }, bench.ble.bluetoothAdmin()), false, `a free account on the ${os} 1.89.0 copy, with the store out of reach, may use Bluetooth`)
         assert.equal(bench.ble.useBluetoothAllowed(), true, 'the Settings row does not show for a customer on the copy that opens it')
-        assert.deepEqual(bench.ble.offeredUnits().map((u) => u.key), ['am4'], 'a customer is offered a unit other than the AM4')
-        for (const unit of ['fm3', 'fm9', 'axefx3']) assert.equal(bench.ble.setBluetoothUnit(unit), null, `a customer can pick the ${unit}`)
+        assert.deepEqual(bench.ble.offeredUnits().map((u) => u.key), ['am4', 'fm3', 'fm9', 'axefx3', 'vp4'], 'a customer on the copy that opens it is not offered every unit')
         assert.equal(bench.ble.setBluetooth(true), false, 'Bluetooth turns on with no unit')
+        for (const unit of ['fm3', 'fm9', 'axefx3', 'vp4']) assert.equal(bench.ble.setBluetoothUnit(unit), unit, `a customer on the copy that opens it cannot pick the ${unit}`)
         assert.equal(bench.ble.setBluetoothUnit('am4'), 'am4')
         bench.ble.chooseAdapter({ id: '1:2', name: 'WIDI Uhost Bluetooth' })
         assert.equal(bench.ble.setBluetooth(true), true, 'Connect does not turn Bluetooth on for a customer on the copy that opens it')
@@ -6209,11 +6501,11 @@ export function run(test) {
         assert.equal(next.ble.allowBluetooth(CUSTOMER), true)
         assert.equal(next.sw.bluetoothOn(), true, `a customer left on Bluetooth on the ${os} copy that opens it starts on the computer`)
         assert.equal(next.ble.bluetoothAdmin(), false, 'a customer is taken for his account at the next launch')
-        /* His account on the same phone: all four units, his own purchase rule, and still on. */
+        /* His account on the same phone: every unit, his own purchase rule, and still on. */
         assert.equal(next.ble.allowBluetooth(JUSTIN), true)
         assert.equal(next.ble.bluetoothAdmin(), true, `his account on the ${os} 1.89.0 copy is not known as his`)
         assert.equal(next.ble.useBluetoothAdmin(), true, `the Settings row and Connect do not know his account on the ${os} 1.89.0 copy`)
-        assert.deepEqual(next.ble.offeredUnits().map((u) => u.key), ['am4', 'fm3', 'fm9', 'axefx3'], 'his account is not offered every unit')
+        assert.deepEqual(next.ble.offeredUnits().map((u) => u.key), ['am4', 'fm3', 'fm9', 'axefx3', 'vp4'], 'his account is not offered every unit')
         assert.equal(next.sw.bluetoothOn(), true)
         /* Signing out on purpose is off, written down, as on every copy. */
         assert.equal(next.ble.allowBluetooth(null, { signedOut: true }), false)
@@ -6224,33 +6516,51 @@ export function run(test) {
       }
     }
 
-    /* 4. An FM3 kept from the one public day: let go of and written down, whichever lands first, and never turned on with it. */
+    /*
+     * 4. A unit this copy does not open to customers, kept from before (as a
+     * unit keyed to a later store version would be: `later`): let go of and
+     * written down, whichever lands first, and never turned on with it. And
+     * an FM3 kept from the one public day, on the copy that opens every unit:
+     * kept, since the FM3 is offered now.
+     */
     for (const first of ['restore', 'account']) {
-      const bench = await bluetoothOnABench({ mod: recording().mod, installed: '1.89.0', from: BUILD, disk: left('fm3', true) })
+      const bench = await bluetoothOnABench({ mod: recording().mod, installed: '1.89.0', from: BUILD, later: ['vp4'], disk: left('vp4', true) })
       try {
         if (first === 'account') assert.equal(bench.ble.allowBluetooth(CUSTOMER), true)
         assert.equal(await bench.ble.restoreBluetooth(), false)
         if (first === 'restore') assert.equal(bench.ble.allowBluetooth(CUSTOMER), true)
-        assert.equal(bench.sw.bluetoothOn(), false, `a customer’s FM3 came on over Bluetooth (${first} first)`)
+        assert.equal(bench.sw.bluetoothOn(), false, `a customer’s VP4, keyed later, came on over Bluetooth (${first} first)`)
+        assert.deepEqual(bench.ble.offeredUnits().map((u) => u.key), ['am4', 'fm3', 'fm9', 'axefx3'], 'a unit keyed to a later store version is offered on this one')
         await settle()
-        assert.equal(kept(bench).unit, null, `a customer’s FM3 is kept (${first} first)`)
+        assert.equal(kept(bench).unit, null, `a customer’s VP4, keyed later, is kept (${first} first)`)
         assert.equal(kept(bench).on, false)
-        assert.ok(bench.log.some((l) => /the FM3 is not offered over Bluetooth \(beta\) to this account/.test(l)), 'the log does not say why the unit was cleared')
+        assert.ok(bench.log.some((l) => /the VP4 is not offered over Bluetooth \(beta\) to this account/.test(l)), 'the log does not say why the unit was cleared')
       } finally {
         bench.done()
       }
     }
-    /* His FM3, on the same copy: kept, and on. */
     {
-      const bench = await bluetoothOnABench({ mod: recording().mod, installed: '1.89.0', from: BUILD, disk: left('fm3', true) })
+      const bench = await bluetoothOnABench({ mod: recording().mod, installed: '1.89.0', from: BUILD, disk: left('fm3', false) })
+      try {
+        assert.equal(await bench.ble.restoreBluetooth(), false)
+        assert.equal(bench.ble.allowBluetooth(CUSTOMER), true)
+        await settle()
+        assert.equal(bench.ble.bluetoothSettings().unit, 'fm3', 'a customer’s FM3 is cleared on the copy that offers it')
+      } finally {
+        bench.done()
+      }
+    }
+    /* His VP4 keyed later, on the same copy: kept, and on. */
+    {
+      const bench = await bluetoothOnABench({ mod: recording().mod, installed: '1.89.0', from: BUILD, later: ['vp4'], disk: left('vp4', true) })
       try {
         assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
-        assert.equal(await bench.ble.restoreBluetooth(), true, 'his FM3 does not come back on')
+        assert.equal(await bench.ble.restoreBluetooth(), true, 'his VP4 does not come back on')
         await settle()
-        assert.equal(kept(bench).unit, 'fm3')
-        /* And another account signing in on his phone: off, and his FM3 let go of. */
+        assert.equal(kept(bench).unit, 'vp4')
+        /* And another account signing in on his phone: off, and his VP4 let go of. */
         assert.equal(bench.ble.allowBluetooth(CUSTOMER), true)
-        assert.equal(bench.sw.bluetoothOn(), false, 'a customer signed in on his phone drives his FM3 over Bluetooth')
+        assert.equal(bench.sw.bluetoothOn(), false, 'a customer signed in on his phone drives his VP4 over Bluetooth')
         await settle()
         assert.equal(kept(bench).unit, null)
       } finally {
@@ -6292,7 +6602,7 @@ export function run(test) {
         await settle()
         assert.equal(kept(bench).unit, 'fm3', 'a customer signing in on his phone, on a copy closed to them, cleared his FM3')
         assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
-        assert.deepEqual(bench.ble.offeredUnits().map((u) => u.key), ['am4', 'fm3', 'fm9', 'axefx3'])
+        assert.deepEqual(bench.ble.offeredUnits().map((u) => u.key), ['am4', 'fm3', 'fm9', 'axefx3', 'vp4'])
       } finally {
         bench.done()
       }
@@ -6359,7 +6669,7 @@ export function run(test) {
      * signed into a different account"): a computer is right there, and the
      * fix is the account, so "No computer?" would point the other way.
      */
-    assert.match(waking, /\{!bluetooth && onBluetooth && !elsewhere \? \( <Press label="No computer\? Use Bluetooth \(beta\)" sub=\{offeredAm4Only\(\) \? BLUETOOTH_WAYS_SHORT_AM4 : BLUETOOTH_WAYS_SHORT\} onPress=\{onBluetooth\} \/> \) : null\}/, 'the waiting screen offers no way to Bluetooth with no computer, or offers it under the account warning')
+    assert.match(waking, /\{!bluetooth && onBluetooth && !elsewhere \? \( <Press label="No computer\? Use Bluetooth \(beta\)" sub=\{BLUETOOTH_WAYS_SHORT\} onPress=\{onBluetooth\} \/> \) : null\}/, 'the waiting screen offers no way to Bluetooth with no computer, or offers it under the account warning')
     assert.ok('No computer? Use Bluetooth (beta)'.length <= 34, 'the waiting screen’s way in is too long for one line on a small phone')
     const advice = waking.slice(waking.indexOf("{long && link.link !== 'connected' ? ("))
     const noComputer = advice.indexOf('No computer? Use Bluetooth (beta)')
@@ -6400,9 +6710,8 @@ export function run(test) {
     assert.ok(!/does everything|every feature/i.test(gear.BLUETOOTH_WAYS), 'the sentence says the computer does everything, beside what a VP4 cannot do')
     assert.equal(gear.BLUETOOTH_WAYS_SHORT, 'More lag than the computer, fewer features')
     assert.ok(gear.BLUETOOTH_WAYS.split(/\s+/).length <= 30, 'the sentence takes longer than two seconds to read')
-    /* The short one goes after "AM4 only for now · " in lower case, for a customer: nothing in it that has to keep a capital. */
-    assert.equal(gear.BLUETOOTH_WAYS_SHORT.slice(1), gear.BLUETOOTH_WAYS_SHORT.slice(1).toLowerCase())
-    assert.equal(gear.BLUETOOTH_WAYS_SHORT_AM4, 'AM4 only for now · more lag than the computer, fewer features')
+    /* One short line for everybody since every unit opened together: the customer's "AM4 only for now · …" is gone. */
+    assert.equal(gear.BLUETOOTH_WAYS_SHORT_AM4, undefined, 'a customer is still told the AM4 only')
     /* The Settings row: both halves, what it is for and what it costs, short enough for one line on a 320-point screen. */
     assert.equal(gear.BLUETOOTH_ROW_OFF, 'Off · no computer needed, more lag')
     assert.ok(gear.BLUETOOTH_ROW_OFF.length <= 36, 'the Settings row is too long for its one line')
@@ -6411,14 +6720,21 @@ export function run(test) {
     assert.match(different, /No editing or saving over Bluetooth\./)
     assert.match(different, /Slower to load the preset list\./)
     /*
-     * The purchase page's line: the two ways, then the AM4 alone and every
-     * part bought separately, with no prices. It said "a Bluetooth MIDI
-     * adapter" for a day, and the list it stands for is four parts and a
-     * charger: each of them has to be in it. And by name, in the line
-     * itself: it sent them to "the Bluetooth page" for a day, which nobody
-     * who has not paid can open.
+     * The purchase page's line: the two ways, then every unit and which has
+     * been tried, what a VP4 gets, and every part bought separately, with no
+     * prices. It said "a Bluetooth MIDI adapter" for a day, and the list it
+     * stands for is four parts and a charger: each of them has to be in it.
+     * And by name, in the line itself: it sent them to "the Bluetooth page"
+     * for a day, which nobody who has not paid can open. The AM4 alone until
+     * 25 October 2026, when every unit opened together.
      */
-    assert.equal(gear.BLUETOOTH_PAYWALL, `${gear.BLUETOOTH_WAYS} For now it is for an AM4 only, and needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter), a CME C2MIDI Pro (its MIDI cable) and two Type-A MIDI to 3.5 mm adapters, plus a USB charger or power bank.`)
+    assert.equal(
+      gear.BLUETOOTH_PAYWALL,
+      `${gear.BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and so far has been tried on the AM4 only; on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
+    )
+    const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
+    for (const u of BLE_UNITS) assert.ok(new RegExp(`\\b${u.name}\\b`).test(gear.BLUETOOTH_PAYWALL), `the purchase page’s line leaves out the ${u.name}`)
+    assert.deepEqual(gear.partsFor('vp4').map((p) => p.key), gear.partsFor('am4').map((p) => p.key), 'a VP4’s parts are not the AM4’s, and the purchase page says they are')
     assert.equal(gear.partsFor('am4').length, 3, 'the AM4’s list changed, and the purchase page’s line names the old one')
     for (const part of gear.partsFor('am4')) assert.ok(gear.BLUETOOTH_PAYWALL.toLowerCase().includes(part.name.toLowerCase()), `the purchase page’s line does not name the ${part.name}`)
     assert.ok(!/Bluetooth page|Settings →/.test(gear.BLUETOOTH_PAYWALL), 'the purchase page sends somebody who has not paid to a page they cannot open yet')
@@ -6431,7 +6747,7 @@ export function run(test) {
     assert.ok(offHalf.indexOf('{BLUETOOTH_WAYS}') > 0 && offHalf.indexOf('{BLUETOOTH_WAYS}') < offHalf.indexOf('<Heading>1 · Pick your unit</Heading>'), 'the page does not say the two ways before step 1 and Connect')
     assert.match(flat('mobile/src/screens/Settings.js'), /: BLUETOOTH_ROW_OFF\}/, 'the Settings row does not say it')
     assert.match(flat('mobile/src/screens/Settings.js'), /not through the computer\. \$\{BLUETOOTH_WAYS\}`/, 'Phone & computer does not say it while Bluetooth is on')
-    assert.match(flat('mobile/App.js'), /sub=\{offeredAm4Only\(\) \? BLUETOOTH_WAYS_SHORT_AM4 : BLUETOOTH_WAYS_SHORT\}/, 'the waiting screen’s way in does not say it')
+    assert.match(flat('mobile/App.js'), /sub=\{BLUETOOTH_WAYS_SHORT\}/, 'the waiting screen’s way in does not say it')
     const paywall = flat('mobile/src/screens/Paywall.js')
     assert.match(paywall, /\{openForCustomersHere\(\) && bluetoothSupported\(\) \? \( <Text[^>]*> \{BLUETOOTH_PAYWALL\} <\/Text> \) : null\}/, 'the purchase page offers Bluetooth on a copy that cannot open it, or not at all')
     for (const f of ['mobile/src/screens/Bluetooth.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/Fixes.js', 'mobile/src/components/NoComputer.js']) {
@@ -6578,20 +6894,25 @@ export function run(test) {
     assert.ok(!/findAdapters|lookForAdapterAgain/.test(code('mobile/src/lib/link.js') + code('mobile/src/lib/bleLink.js')), 'the link opens Apple’s screen by itself')
   })
 
-  test('a customer is told the AM4 only, and an FM3 owner that it is not for an FM3, before and whatever is picked', () => {
+  test('every account is told the cable is never for an FM3, before and whatever is picked, and nobody the AM4 only', async () => {
     const page = flat('mobile/src/screens/Bluetooth.js')
     /* Under the units, on every visit while it is off. */
     const step1 = page.slice(page.indexOf('<Heading>1 · Pick your unit</Heading>'), page.indexOf('<Heading>2 · Connect</Heading>'))
-    assert.match(step1, /<Hint>\{am4Only \? `\$\{AM4_ONLY\} \$\{NOT_FOR_FM3\}` : NOT_FOR_FM3\}<\/Hint>/)
-    /* Connected, the unit silent: the AM4-only line first, for a customer, then the plugs. */
-    assert.match(page, /\{`\$\{am4Only \? `\$\{AM4_ONLY\} ` : ''\}\$\{PLUGS_CHECK\} The adapter has to carry MIDI both ways\./, 'a customer whose unit does not answer is not told it is the AM4 only')
+    assert.match(step1, /<Hint>\{NOT_FOR_FM3\}<\/Hint>/)
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    assert.equal(gear.NOT_FOR_FM3, 'Never plug the C2MIDI Pro into an FM3: when we tried it on one, the cable got very hot.')
+    /* The customer's "AM4 only" is gone everywhere: every unit opens together (lib/ble-rule.js UNITS_FROM_STORE). */
+    assert.equal(gear.AM4_ONLY, undefined, 'the gear file still has the customer’s AM4-only line')
+    assert.ok(!/AM4_ONLY|am4Only|AM4 only/.test(code('mobile/src/screens/Bluetooth.js')), 'the page still says the AM4 only to somebody')
+    /* Connected, the unit silent: the plugs. */
+    assert.match(page, /\{`\$\{PLUGS_CHECK\} The adapter has to carry MIDI both ways\./, 'a unit that does not answer is not told about the plugs')
     /*
      * Nothing tells anybody to pick a unit by name in step 1 but the wrong
      * unit's line, which is handed whether this account is offered it
      * (wrongUnitLine's `pickable`, run in its own test).
      */
     assert.ok(!/in step 1, then tap Connect/.test(page), 'the page words a pick in step 1 of its own, outside wrongUnitLine')
-    assert.ok(!/pick (the )?(FM3|FM9|Axe-Fx III)/.test(page), 'the page sends somebody to pick a unit a customer cannot pick')
+    assert.ok(!/pick (the )?(FM3|FM9|Axe-Fx III|VP4)/.test(page), 'the page sends somebody to pick a unit by name outside wrongUnitLine')
     assert.match(page, /pickable: units\.some\(\(u\) => u\.name === b\.answeredAs\)/)
   })
 
@@ -6639,24 +6960,25 @@ export function run(test) {
      * launch, where a unit kept from before that it is not offered is let go
      * of. Changed on purpose on 25 October 2026 with the AM4-only rule.
      */
-    assert.match(ble, /const want = on === true && allowed === true && !!saved\.unit && unitOffered\(saved\.unit, allUnits\) && bluetoothSupported\(\)/)
+    assert.match(ble, /const want = on === true && allowed === true && !!saved\.unit && offered\(saved\.unit\) && bluetoothSupported\(\)/)
     assert.match(ble, /saved = \{ \.\.\.was, unit: dropped \? null : was\.unit, on: was\.on && !!was\.unit && !dropped && allowed === true && bluetoothSupported\(\) \}/, 'a build without the module, or an account not yet known to be his, comes back with Bluetooth on')
     assert.match(ble, /pendingOn = was\.on && !!was\.unit && allowed === null/, 'the pick-up does not hold an on for the answer')
   })
 
-  test('the page offers the units this account may pick (all four in that order for his, the AM4 alone for a customer), with none of them chosen', async () => {
+  test('the page offers the units this account may pick (all five in that order, the VP4 last), with none of them chosen', async () => {
     const { BLE_UNITS } = await import(WIRE)
-    assert.deepEqual(BLE_UNITS.map((u) => u.name), ['AM4', 'FM3', 'FM9', 'Axe-Fx III'])
+    assert.deepEqual(BLE_UNITS.map((u) => u.name), ['AM4', 'FM3', 'FM9', 'Axe-Fx III', 'VP4'])
     const page = flat('mobile/src/screens/Bluetooth.js')
     /*
      * The chips are what lib/bluetooth offers this account (offeredUnits),
      * not the whole of BLE_UNITS: changed on purpose on 25 October 2026,
-     * when a customer was to get the AM4 alone. The bench test of the store
-     * copy holds what offeredUnits answers.
+     * when a customer was to get the AM4 alone (every unit since, keyed to
+     * the store version: lib/ble-rule.js). The bench test of the store copy
+     * holds what offeredUnits answers.
      */
-    assert.match(page, /const units = offeredUnits\(\) const am4Only = units\.length < BLE_UNITS\.length/)
-    /* "Not tried yet" under the units nobody has tried it on (shared/bluetooth-gear untried: the FM9 and the Axe-Fx III), since 25 October 2026. */
-    assert.match(page, /\{units\.map\(\(u\) => \( <Press key=\{u\.key\} label=\{u\.name\} sub=\{untried\(u\.key\) \? UNTRIED_SUB : undefined\} tone="signal" on=\{u\.key === b\.unit\}/)
+    assert.match(page, /const units = offeredUnits\(\) const vp4 = b\.unit === 'vp4'/)
+    /* "Not tried yet" under the units nobody has tried it on, "Not run yet" under the FM3 (shared/bluetooth-gear untriedSubFor), since 25 October 2026. */
+    assert.match(page, /\{units\.map\(\(u\) => \( <Press key=\{u\.key\} label=\{u\.name\} sub=\{untriedSubFor\(u\.key\)\} tone="signal" on=\{u\.key === b\.unit\}/)
     /* Connect cannot be pressed before a unit is picked, nor by somebody who has not unlocked the app. */
     assert.match(page, /const canStart = !!b\.unit && paid/)
     assert.match(page, /tone="live" disabled=\{!canStart \|\| b\.looking\} onPress=\{start\}/, 'Connect can be pressed with no unit picked')
@@ -6694,7 +7016,9 @@ export function run(test) {
      * shared/bluetooth-gear wrongUnitLine's, run for every pairing in its
      * own test; the page hands it what step 1 offers this account.
      */
-    assert.match(status, /if \(b\.answeredAs\) \{ const units = offeredUnits\(\) return \{ line: wrongUnitLine\(\{ answered: b\.answeredAs, picked: name, pickable: units\.some\(\(u\) => u\.name === b\.answeredAs\), forWhich: units\.length < BLE_UNITS\.length \? AM4_ONLY : '' \}\), tone: 'fault' \}/)
+    assert.match(status, /if \(b\.answeredAs\) \{ const units = offeredUnits\(\) return \{ line: wrongUnitLine\(\{ answered: b\.answeredAs, picked: name, pickable: units\.some\(\(u\) => u\.name === b\.answeredAs\) \}\), tone: 'fault' \}/)
+    /* A VP4 never answers over Bluetooth: its connected line says the phone is sending, never "answering" (lib/bleVp4.js). */
+    assert.match(status, /if \(b\.unit === 'vp4'\) return \{ line: VP4_CONNECTED, tone: 'ok' \} if \(unitState === 'present'\) return \{ line: `Connected · \$\{name\} answering`, tone: 'ok' \}/)
     assert.ok(!/in step 1, then tap Connect/.test(status), 'another line sends somebody to step 1 for a unit')
   })
 
@@ -6966,8 +7290,9 @@ export function run(test) {
      * visible test button a "Beta feature" not fit for release, and this
      * panel says "For testing." and offers Write checks that change the unit.
      */
-    assert.match(page, /\{admin && b\.unit \? \( <Press label=\{tools \? 'Hide testing tools' : 'Testing tools'\}/, 'the Testing tools button shows to every customer again')
-    assert.match(page, /\{admin && b\.unit && tools \? \( <View style=\{\{ gap: space\.md \}\}> <Heading>Check<\/Heading>/, 'the testing tools are on the page unasked, or for every customer')
+    /* And never for a VP4, which is asked nothing over Bluetooth (lib/bleVp4.js): there is nothing to check. */
+    assert.match(page, /\{admin && b\.unit && !vp4 \? \( <Press label=\{tools \? 'Hide testing tools' : 'Testing tools'\}/, 'the Testing tools button shows to every customer again, or for a VP4')
+    assert.match(page, /\{admin && b\.unit && !vp4 && tools \? \( <View style=\{\{ gap: space\.md \}\}> <Heading>Check<\/Heading>/, 'the testing tools are on the page unasked, or for every customer')
     /* And, since 25 October 2026, the one-tap report it is handed (onReport), null unless Settings is given one. */
     assert.match(page, /export default function BluetoothPage\(\{ purchase, admin = false, onReport = null \}\)/, 'the page shows the testing tools unless told not to')
     /* No second way in: the button and the panel are each drawn once, both behind admin. */
@@ -7203,7 +7528,7 @@ export function run(test) {
    * pull request will set it, so the opening can be tried before any copy
    * has it.
    */
-  async function bluetoothOnABench({ os = 'ios', version = 18, mod = null, disk = {}, installed = '1.88.4', from = undefined } = {}) {
+  async function bluetoothOnABench({ os = 'ios', version = 18, mod = null, disk = {}, installed = '1.88.4', from = undefined, later = [] } = {}) {
     const dir = mkdtempSync(join(tmpdir(), 'ble-lib-'))
     const real = (f) => new URL(`../mobile/src/lib/${f}`, import.meta.url).href
     const swaps = [
@@ -7249,7 +7574,14 @@ export function run(test) {
       const rule = src('mobile/src/lib/ble-rule.js')
       const set = rule.replace(/export const BLUETOOTH_FROM_STORE = Object\.freeze\(\{[^}]*\}\)/, `export const BLUETOOTH_FROM_STORE = Object.freeze(${JSON.stringify(from)})`)
       assert.notEqual(set, rule, 'ble-rule.js no longer says BLUETOOTH_FROM_STORE the way the bench sets it')
-      files['ble-rule.js'] = set.replace("from './versions.js'", `from '${real('versions.js')}'`)
+      /* `later`: units keyed to a later store version (1.90.0) instead, as a unit added after the opening build would be. */
+      let keyed = set
+      for (const key of later) {
+        const was = keyed
+        keyed = keyed.replace(`  ${key}: BLUETOOTH_FROM_STORE`, `  ${key}: Object.freeze({ ios: '1.90.0', android: '1.90.0' })`)
+        assert.notEqual(keyed, was, `ble-rule.js no longer keys the ${key} the way the bench re-keys it`)
+      }
+      files['ble-rule.js'] = keyed.replace("from './versions.js'", `from '${real('versions.js')}'`)
     }
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
     const at = (f) => pathToFileURL(join(dir, f)).href
@@ -7574,8 +7906,9 @@ export function run(test) {
       assert.match(url, /^https:\/\/[^?#\s]+$/, `${url} carries tracking or is not a plain address`)
       if (/amazon\.com/.test(url)) assert.match(url, /^https:\/\/www\.amazon\.com\/dp\/[A-Z0-9]{10}$/, `${url} is not the plain /dp/ form`)
     }
-    /* The 3.5 mm adapters are for the AM4 alone: the others have the 5-pin jacks the C2MIDI Pro plugs into. */
+    /* The 3.5 mm adapters are for the AM4 and the VP4 (both Type A, docs/bluetooth-midi.md): the others have the 5-pin jacks the C2MIDI Pro plugs into. */
     assert.deepEqual(gear.partsFor('am4').map((p) => p.key), ['uhost', 'c2midi', 'adapters'])
+    assert.deepEqual(gear.partsFor('vp4').map((p) => p.key), ['uhost', 'c2midi', 'adapters'])
     for (const unit of ['fm9', 'axefx3']) assert.deepEqual(gear.partsFor(unit).map((p) => p.key), ['uhost', 'c2midi'])
     /*
      * "The CME C2MIDI Pro got extremely hot on the FM3 and the connection
@@ -7592,9 +7925,10 @@ export function run(test) {
      */
     assert.deepEqual(gear.partsFor('fm3'), [], 'the FM3 is given a shopping list for what overheated on it')
     assert.equal(gear.hookupFor('fm3'), null, 'the FM3 is told to plug it straight in')
-    assert.equal(gear.untriedLine('fm3'), null)
+    /* It has not run on an FM3, and says so in its own words (it was tried, and ran hot), with the report button: every unit opens to customers together. */
+    assert.equal(gear.untriedLine('fm3'), 'It hasn’t run on an FM3 yet. If you get it working, tell us how: tap Report a Bluetooth problem, further down this page.')
     assert.equal(gear.warningFor('fm3'), gear.FM3_WARNING)
-    for (const unit of ['am4', 'fm9', 'axefx3']) assert.equal(gear.warningFor(unit), null)
+    for (const unit of ['am4', 'fm9', 'axefx3', 'vp4']) assert.equal(gear.warningFor(unit), null)
     assert.match(gear.FM3_WARNING, /^Don’t plug the C2MIDI Pro into an FM3\. When we tried it, the cable got very hot and didn’t connect\./)
     /* Never "straight in", which was there while a way round it was offered: with none any more, it reads as if there still were one. */
     assert.ok(!/straight/i.test(gear.FM3_WARNING + gear.NOT_FOR_FM3), 'the FM3 warning says not to plug it straight in, as if there were another way')
@@ -7602,21 +7936,21 @@ export function run(test) {
     assert.match(gear.FM3_WARNING, /FM3 owners report the same with adapters that take power from its MIDI OUT/, 'the FM3 warning does not say what owners report')
     assert.ok(!/nothing to limit it/.test(gear.FM3_WARNING), 'the FM3 warning states a fault in the unit as fact')
     assert.match(gear.FM3_WARNING, /Yamaha MD-BT01/, 'the warning leaves the Yamaha looking like the way round it')
-    /* The FM3 stays one the page knows, for his account (offeredUnits): a customer is not offered it at all. */
-    assert.ok(BLE_UNITS.some((u) => u.key === 'fm3'), 'the FM3 is gone from the page, so his account can no longer pick it to test')
+    /* The FM3 stays one the page knows, offered with the rest on a copy that opens Bluetooth (offeredUnits), its warning in front. */
+    assert.ok(BLE_UNITS.some((u) => u.key === 'fm3'), 'the FM3 is gone from the page')
     const page = readFileSync(new URL('../mobile/src/screens/Bluetooth.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
     /*
      * How to plug it in shows the FM3 the warning in place of its steps, and
      * What to buy shows it nothing to buy, pointing at that warning rather
      * than drawing the same red box a second time (both rows can be open).
      */
-    assert.match(page.slice(page.indexOf('function PlugIn(')), /^function PlugIn\(\{ unit \}\) \{ if \(!unit\) return <Hint>[^<]+<\/Hint> const warning = warningFor\(unit\) if \(warning\) return <Note tone="fault">\{warning\}<\/Note>/, 'How to plug it in shows the FM3 its steps')
-    assert.match(page.slice(page.indexOf('function Buy(')), /^function Buy\(\{ unit, am4Only = false \}\) \{ if \(!unit\) return <Hint>\{am4Only \? GEAR_IN_SHORT_AM4 : GEAR_IN_SHORT\}<\/Hint> if \(warningFor\(unit\)\) return <Hint>Not for the FM3\. How to plug it in, above, says why\.<\/Hint>/, 'What to buy shows the FM3 a list to buy, or the warning twice')
+    assert.match(page.slice(page.indexOf('function PlugIn(')), /^function PlugIn\(\{ unit \}\) \{ if \(!unit\) return <Hint>[^<]+<\/Hint> const warning = warningFor\(unit\) \/\*[^*]*\*\/ if \(warning\) \{ const notYet = untriedLine\(unit\) return \( <View style=\{\{ gap: space\.sm \}\}> <Note tone="fault">\{warning\}<\/Note> \{notYet \? <Note tone="warn">\{notYet\}<\/Note> : null\} <\/View> \) \}/, 'How to plug it in shows the FM3 its steps, or not that it has not run on one')
+    assert.match(page.slice(page.indexOf('function Buy(')), /^function Buy\(\{ unit \}\) \{ if \(!unit\) return <Hint>\{GEAR_IN_SHORT\}<\/Hint> if \(warningFor\(unit\)\) return <Hint>Not for the FM3\. How to plug it in, above, says why\.<\/Hint>/, 'What to buy shows the FM3 a list to buy, or the warning twice')
     assert.equal((page.match(/<Note tone="fault">\{warning\}<\/Note>/g) || []).length, 1, 'the FM3 warning is drawn in two places')
     assert.match(gear.PARTS.adapters.does, /Type A/)
     for (const p of Object.values(gear.PARTS)) assert.ok(p.name && p.does, 'a part with no name or no line saying what it is for')
     /* The device in hand, passed in, for every part: an iPad's owner reads "Your iPad", and nobody is handed a function to draw. */
-    for (const unit of ['am4', 'fm9', 'axefx3']) {
+    for (const unit of ['am4', 'fm9', 'axefx3', 'vp4']) {
       for (const p of gear.partsFor(unit, 'iPad')) assert.equal(typeof p.does, 'string', `${p.key}: the page is handed something it cannot draw`)
     }
     assert.equal(gear.partsFor('am4', 'iPad')[0].does, 'The Bluetooth adapter. Your iPad connects to it.')
@@ -7635,8 +7969,17 @@ export function run(test) {
       assert.ok(Array.isArray(steps) && steps.length >= 3 && steps.length <= 5, `${name}: ${steps?.length} steps`)
       const all = steps.join(' ')
       /* The colours, from CME's manual: black INTO the unit's MIDI IN, white into its MIDI OUT. Swapped, nothing gets through. */
-      assert.match(all, /the black plug \(TO MIDI IN\) into the [^.]*MIDI IN/, `${name}: the black plug is not said to go in MIDI IN`)
-      assert.match(all, /the white plug \(TO MIDI OUT\) into [^.]*MIDI OUT/i, `${name}: the white plug is not said to go in MIDI OUT`)
+      /* The VP4's black plug goes into "that adapter", the one pushed into its MIDI IN in the step before. */
+      assert.match(all, key === 'vp4' ? /Push one 3\.5 mm adapter into the VP4’s MIDI IN\. C2MIDI Pro: the black plug \(TO MIDI IN\) into that adapter\./ : /the black plug \(TO MIDI IN\) into the [^.]*MIDI IN/, `${name}: the black plug is not said to go in MIDI IN`)
+      /*
+       * THE VP4: THE WHITE PLUG LEFT OUT. The app only sends a VP4 its
+       * presets and scenes over Bluetooth and reads nothing (lib/bleVp4.js),
+       * so the plug that can take power from a unit's MIDI OUT stays out.
+       */
+      if (key === 'vp4') {
+        assert.match(all, /Leave the white plug out: the app only sends to a VP4, and nothing comes back over Bluetooth\./, 'VP4: the white plug is not said to stay out')
+        assert.ok(!/into [^.]*MIDI OUT/.test(all), 'VP4: a plug is sent into its MIDI OUT')
+      } else assert.match(all, /the white plug \(TO MIDI OUT\) into [^.]*MIDI OUT/i, `${name}: the white plug is not said to go in MIDI OUT`)
       assert.match(all, /the Uhost’s left socket, marked USB Host\/Device/)
       /* The Uhost needs power to host, 5 V and no more, and gets it last, with the unit already started. */
       const power = steps.findIndex((l) => /USB Power/.test(l))
@@ -7649,6 +7992,10 @@ export function run(test) {
         assert.equal(steps.at(-1), 'On the Axe-Fx III, open Setup → MIDI/Remote and set Program Change to On, the MIDI channel to 1 (or Omni), PC Mapping to Off, MIDI PC Offset to 0, and Send Realtime Sysex to On.')
       } else if (key === 'am4') {
         assert.match(all, /On the AM4, open Setup → MIDI\/Remote and set MIDI Thru to Off\./, 'AM4: MIDI Thru is not turned off')
+      } else if (key === 'vp4') {
+        /* In the VP4's own manual's words (lib/vp4-safety): Receive MIDI PC ON, the channel, and Scene Select for scenes. */
+        assert.equal(steps.at(-1), 'On the VP4, open SETUP > MIDI/Remote and set Receive MIDI PC to ON, and the MIDI Channel to 1 (or OMNI). For scenes, set Scene Select too: Settings > VP4 scenes & presets says how.')
+        assert.ok(steps.at(-1).includes(src('shared/vp4-safety.mjs').match(/export const VP4_SETUP_TITLE = '([^']+)'/)[1]), 'VP4: the steps name a Settings page the app does not have')
       } else {
         /* The FM9's MIDI Thru, first in the one step that sends the player into its menus, with what Program Change alone and the published tuner need. */
         assert.equal(steps.at(-1), 'On the FM9, open Setup → MIDI/Remote and set MIDI Thru to Off, Program Change to On, the MIDI channel to 1 (or Omni), PC Mapping to Off, MIDI PC Offset to 0, and Send Realtime Sysex to On.')
@@ -7674,7 +8021,7 @@ export function run(test) {
         assert.match(all, /Program Change to On, the MIDI channel to 1 \(or Omni\), PC Mapping to Off, MIDI PC Offset to 0, and Send Realtime Sysex to On\./, `${name}: the settings Program Change needs are not a step`)
         assert.equal(gear.midiSettingsFor(key, 'iPad'), null, `${name}: the settings are said twice`)
       } else assert.ok(!/Program Change|PC Mapping/.test(all), `${name}: every owner is told to set up Program Change`)
-      if (key === 'am4' || gear.PC_FIRST.includes(key)) assert.equal(gear.midiSettingsFor(key), null, `${name}: the Program Change line for some owners is drawn`)
+      if (key === 'am4' || key === 'vp4' || gear.PC_FIRST.includes(key)) assert.equal(gear.midiSettingsFor(key), null, `${name}: the Program Change line for some owners is drawn`)
       else {
         assert.equal(
           gear.midiSettingsFor(key, 'iPad'),
@@ -7687,7 +8034,7 @@ export function run(test) {
       /* Drawn straight after the power step: the page finds it by powerStepOf, the step the power goes in. */
       assert.equal(gear.powerStepOf(key), power, `${name}: the power step is not where the heat line is drawn after`)
       if (key === 'am4') assert.match(all, /Push one 3\.5 mm adapter into the AM4’s MIDI IN, and the other into its MIDI OUT\./)
-      else assert.ok(!/3\.5 mm/.test(all), `${name} is told to use the AM4’s adapters`)
+      else if (key !== 'vp4') assert.ok(!/3\.5 mm/.test(all), `${name} is told to use the AM4’s adapters`)
       if (key === 'fm9') assert.match(all, /MIDI OUT\/THRU jack/)
       /*
        * Tried on the AM4 only; the rest say so rather than promise, and ask
@@ -7703,12 +8050,13 @@ export function run(test) {
       assert.equal(gear.untriedLine(key), key === 'am4' ? null : `Not tried on the ${name} yet. If you try it, tell us how it went: tap Report a Bluetooth problem, further down this page.`)
     }
     assert.deepEqual(gear.TESTED, ['am4'])
-    assert.equal(gear.hookupFor('vp4'), null, 'steps for a unit the page does not offer')
+    assert.equal(gear.hookupFor('vp5'), null, 'steps for a unit the page does not offer')
     /* The FM3 has no steps (its warning instead), but its MIDI settings are written for the day it has; none for a unit the page does not know. */
     assert.match(gear.midiSettingsFor('fm3'), /^If presets don’t change from this phone: on the FM3, open Setup → MIDI\/Remote and set Program Change to On/)
     assert.equal(gear.midiSettingsFor('vp4'), null)
+    assert.equal(gear.midiSettingsFor('vp5'), null)
     assert.equal(gear.powerStepOf('fm3'), -1, 'the FM3, which has no steps, has a power step')
-    assert.equal(gear.powerStepOf('vp4'), -1)
+    assert.equal(gear.powerStepOf('vp5'), -1)
     assert.equal(gear.heatLineFor('fm3'), null, 'the FM3 is told to feel a cable it is told never to plug in')
     assert.equal(gear.HEAT_CHECK, 'In the first minute, feel the C2MIDI Pro. It should stay cool. If it gets more than slightly warm, unplug it at once.')
     /* The guide says the same about the channel, and about the heat, so the app and the guide do not disagree. */
@@ -7721,29 +8069,20 @@ export function run(test) {
     assert.match(guide, /Axe-Fx III:<\/strong> use firmware 25\.00 or later\./)
     assert.match(guide, /Feel the C2MIDI Pro after a minute\. It should be cool\. If it is more than slightly warm, unplug it at once\./)
     assert.match(gear.GEAR_IN_SHORT, /CME WIDI Uhost, a CME C2MIDI Pro, and a phone charger or power bank/)
-    assert.match(gear.GEAR_IN_SHORT, /For an AM4, also two Type-A MIDI to 3\.5 mm adapters\./)
+    assert.match(gear.GEAR_IN_SHORT, /For an AM4 or VP4, also two Type-A MIDI to 3\.5 mm adapters\./)
+    /* One short list for everybody since every unit opened together: the customer's AM4-only list (GEAR_IN_SHORT_AM4) is gone. */
+    assert.equal(gear.GEAR_IN_SHORT_AM4, undefined, 'a customer still has a short list of their own')
     /*
-     * A CUSTOMER'S SHORT LIST, offered the AM4 alone: one list, the adapters
-     * in it, and nothing that says there are other units or other lists
-     * ("For an AM4, also", "Pick your unit"). Every part the AM4's own list
-     * has, and the charger.
+     * NEVER THE C2MIDI PRO ON AN FM3, TO EVERYBODY, WHATEVER IS PICKED. Its
+     * own line under the units in step 1 on every visit (since 25 October
+     * 2026), and the short list does not say it a second time. "Not for an
+     * FM3" while the FM3 was not offered to customers; what is not for an
+     * FM3 now is the cable.
      */
-    assert.equal(gear.GEAR_IN_SHORT_AM4, 'A CME WIDI Uhost, a CME C2MIDI Pro, two Type-A MIDI to 3.5 mm adapters, and a phone charger or power bank with a USB-C cable. Tap AM4 above for where to buy them and how they plug in.')
-    assert.ok(!/For an AM4, also|Pick your unit|FM3|FM9|Axe-Fx/.test(gear.GEAR_IN_SHORT_AM4), 'a customer’s short list talks about other units')
-    for (const p of gear.partsFor('am4')) assert.ok(gear.GEAR_IN_SHORT_AM4.includes(p.key === 'adapters' ? 'two Type-A MIDI to 3.5 mm adapters' : p.name), `a customer’s short list leaves out the ${p.name}`)
-    /*
-     * NOT FOR AN FM3, TO EVERYBODY, WHATEVER IS PICKED. This held the short
-     * list to "Not for an FM3 as it is", which was drawn only before a unit
-     * was picked; with the FM3 not offered to a customer, an FM3 owner would
-     * never see its warning, and would read an AM4's list. So it is its own
-     * line now, under the units in step 1 on every visit (changed on purpose
-     * on 25 October 2026), and the short list does not say it a second time.
-     */
-    assert.equal(gear.NOT_FOR_FM3, 'Not for an FM3: when we tried Bluetooth on one, the adapter’s cable got very hot.')
+    assert.equal(gear.NOT_FOR_FM3, 'Never plug the C2MIDI Pro into an FM3: when we tried it on one, the cable got very hot.')
     assert.ok(!/FM3/.test(gear.GEAR_IN_SHORT), 'the short list says the FM3 line a second time, right under step 1')
     const step1 = page.slice(page.indexOf('<Heading>1 · Pick your unit</Heading>'), page.indexOf('<Heading>2 · Connect</Heading>'))
-    assert.match(step1, /<\/View> <Hint>\{am4Only \? `\$\{AM4_ONLY\} \$\{NOT_FOR_FM3\}` : NOT_FOR_FM3\}<\/Hint> <\/View>/, 'the FM3 line is not under the units, for everybody, whatever is picked')
-    assert.equal(gear.AM4_ONLY, 'For now, Bluetooth (beta) is for an AM4 only.')
+    assert.match(step1, /<\/View> <Hint>\{NOT_FOR_FM3\}<\/Hint> <\/View>/, 'the FM3 line is not under the units, for everybody, whatever is picked')
 
     /*
      * THE BETA, IN PLAIN WORDS. "Let's just say that Bluetooth is beta though
@@ -7872,7 +8211,7 @@ export function run(test) {
     /* The rows: How to plug it in open for the first setting up, folded once an adapter has been used; the other two wait to be tapped. */
     assert.match(page, /const \[plug, setPlug\] = useState\(!b\.adapter\) const \[buy, setBuy\] = useState\(false\) const \[about, setAbout\] = useState\(false\)/)
     assert.match(page, /<Fold title="How to plug it in" open=\{plug\} onToggle=\{\(\) => setPlug\(!plug\)\}> <PlugIn unit=\{b\.unit\} \/> <\/Fold>/)
-    assert.match(page, /<Fold title="What to buy" open=\{buy\} onToggle=\{\(\) => setBuy\(!buy\)\}> <Buy unit=\{b\.unit\} am4Only=\{am4Only\} \/> <\/Fold>/)
+    assert.match(page, /<Fold title="What to buy" open=\{buy\} onToggle=\{\(\) => setBuy\(!buy\)\}> <Buy unit=\{b\.unit\} \/> <\/Fold>/)
     assert.match(page, /<Fold title="What it can and can’t do" open=\{about\} onToggle=\{\(\) => setAbout\(!about\)\}>/, 'What it can and can’t do opens with something other than its own tap')
     /* The list's heading says how many there are: one row is not "More than one". */
     assert.match(page, /b\.looking \? 'Found so far\. Tap yours:' : b\.devices\.length > 1 \? 'More than one is here\. Tap yours:' : 'Tap your adapter:'/, 'a single row is headed More than one is here')
@@ -7890,7 +8229,7 @@ export function run(test) {
 
     /* What to buy: each part, its name, what it is for, and View on Amazon, which opens that part's own address; the short version before a unit is picked. */
     const buy = page.slice(page.indexOf('function Buy('), page.indexOf('function Fold('))
-    assert.match(buy, /if \(!unit\) return <Hint>\{am4Only \? GEAR_IN_SHORT_AM4 : GEAR_IN_SHORT\}<\/Hint>/)
+    assert.match(buy, /if \(!unit\) return <Hint>\{GEAR_IN_SHORT\}<\/Hint>/)
     assert.match(buy, /partsFor\(unit, deviceNoun\(\)\)\.map\(\(p\) => \( <View key=\{p\.key\}/)
     assert.match(buy, /\{p\.name\}<\/Text> <Hint>\{p\.does\}<\/Hint> <Press label="View on Amazon" height=\{44\} accessibilityLabel=\{`View the \$\{p\.name\} on Amazon`\} onPress=\{\(\) => openLink\(p\.amazon\)\} \/>/)
     assert.match(buy, /<Hint>\{POWER_LINE\}<\/Hint>/, 'the charger is left off the list')
@@ -7915,7 +8254,7 @@ export function run(test) {
     assert.ok(about.includes('No editing or saving, and the computer isn’t used.'))
     assert.ok(about.includes('<Heading>What’s different from USB</Heading> {DIFFERENT.map('))
     /* The usual reason a connected adapter hears nothing, with these parts: the plugs swapped; for a customer, the AM4-only line first. */
-    assert.match(page, /\{`\$\{am4Only \? `\$\{AM4_ONLY\} ` : ''\}\$\{PLUGS_CHECK\} The adapter has to carry MIDI both ways\./)
+    assert.match(page, /\{`\$\{PLUGS_CHECK\} The adapter has to carry MIDI both ways\./)
 
     /* ONE PLACE FOR THE ADDRESSES: no web address typed into the page, and no shop's anywhere in the app but the gear file. */
     assert.ok(!/https?:\/\//.test(code('mobile/src/screens/Bluetooth.js')), 'an address is typed into the page instead of coming from the gear file')
@@ -8031,27 +8370,26 @@ export function run(test) {
     const answering = Object.keys(MODEL_NAMES).map((b) => modelName(Number(b)))
     for (const picked of BLE_UNITS.map((u) => u.name)) {
       for (const answered of answering.filter((a) => a !== picked)) {
-        /* His page: every Bluetooth unit is in step 1. A customer's: the AM4 alone, with the line that says so. */
+        /*
+         * Every Bluetooth unit is in step 1 for every account on a copy that
+         * opens it, the VP4 among them since 25 October 2026 (it was told it
+         * "isn't a Bluetooth unit" until then). A unit the wire knows that
+         * the page does not offer (none today) goes to the computer, with the
+         * line for which units Bluetooth is for, when there is one.
+         */
         const his = gear.wrongUnitLine({ answered, picked, pickable: BLE_UNITS.some((u) => u.name === answered) })
-        const theirs = gear.wrongUnitLine({ answered, picked, pickable: answered === 'AM4', forWhich: gear.AM4_ONLY })
-        for (const line of [his, theirs]) {
+        const elsewhere = gear.wrongUnitLine({ answered, picked, pickable: false, forWhich: 'For now, Bluetooth (beta) is for these units only.' })
+        for (const line of [his, elsewhere]) {
           assert.ok(line.startsWith(`${capital(gear.withArticle(answered))} answered, not the ${picked}. `), line)
           assert.ok(!/\b(an?|An?) (an?|An?)\b/.test(line), `two articles: ${line}`)
           assert.ok(!/this phone/i.test(line), line)
-        }
-        if (answered === 'VP4') {
-          assert.equal(his, `A VP4 answered, not the ${picked}. The VP4 isn’t a Bluetooth unit: tap Stop, and use the computer for it.`)
-          assert.equal(theirs, his, 'a customer is told something else about a VP4')
-          continue
+          assert.ok(!/isn’t a Bluetooth unit/.test(line), `a unit is told it is not a Bluetooth unit: ${line}`)
         }
         assert.equal(his, `${capital(gear.withArticle(answered))} answered, not the ${picked}. Tap Stop, pick ${answered} in step 1, then tap Connect.`)
-        if (answered === 'AM4') assert.equal(theirs, his)
-        else {
-          assert.equal(theirs, `${capital(gear.withArticle(answered))} answered, not the ${picked}. For now, Bluetooth (beta) is for an AM4 only. Tap Stop, and use the computer for the ${answered}.`)
-          assert.ok(!/in step 1/.test(theirs), 'a customer is sent to pick a unit they are not offered')
-        }
+        assert.equal(elsewhere, `${capital(gear.withArticle(answered))} answered, not the ${picked}. For now, Bluetooth (beta) is for these units only. Tap Stop, and use the computer for the ${answered}.`)
       }
     }
+    assert.equal(gear.wrongUnitLine({ answered: 'VP4', picked: 'AM4', pickable: true }), 'A VP4 answered, not the AM4. Tap Stop, pick VP4 in step 1, then tap Connect.')
     /* The one in the plan, word for word. */
     assert.equal(gear.wrongUnitLine({ answered: 'FM9', picked: 'FM3', pickable: true }), 'An FM9 answered, not the FM3. Tap Stop, pick FM9 in step 1, then tap Connect.')
     assert.equal(gear.wrongUnitLine({ answered: 'Axe-Fx III', picked: 'AM4', pickable: true }), 'An Axe-Fx III answered, not the AM4. Tap Stop, pick Axe-Fx III in step 1, then tap Connect.')
@@ -8235,7 +8573,8 @@ export function run(test) {
      * and never learns one: its head said "none found yet" on every report.
      */
     const lib = flat('mobile/src/lib/bluetooth.js')
-    assert.match(lib, /ways: saved\.unit && saved\.unit !== 'am4' \? waysFor\(saved\.unit\) : null/)
+    /* Not for an AM4 or a VP4, which have one way for each and learn none. */
+    assert.match(lib, /ways: saved\.unit && saved\.unit !== 'am4' && saved\.unit !== 'vp4' \? waysFor\(saved\.unit\) : null/)
     assert.match(lib, /return \{ learned: \{ \.\.\.m\.learned \}, forced, pcChannel: m\.pcChannel \}/)
   })
 
@@ -8274,7 +8613,8 @@ export function run(test) {
       bench.ble.chooseAdapter({ id: ADDRESS, name: ADDRESS })
       bench.ble.noteBluetooth({ answeredAs: 'AM4', trouble: 'bluetooth-off' })
       const facts = bench.ble.bluetoothFacts()
-      assert.deepEqual(facts, { unit: 'FM3', answeredAs: 'AM4', phase: 'off', trouble: 'bluetooth-off', adapter: '', ways: { learned: {}, forced: {}, pcChannel: 1 } })
+      /* "FM3 (not run yet)": it has never run on one (shared/bluetooth-gear unitForReport). */
+      assert.deepEqual(facts, { unit: 'FM3 (not run yet)', answeredAs: 'AM4', phase: 'off', trouble: 'bluetooth-off', adapter: '', ways: { learned: {}, forced: {}, pcChannel: 1 } })
       /* An AM4 learns no way and has one for everything: its head says nothing about ways, not "none found yet". */
       bench.ble.setBluetoothUnit('am4')
       assert.equal(bench.ble.bluetoothFacts().ways, null, 'an AM4’s head is handed ways it never learns')
@@ -8283,7 +8623,12 @@ export function run(test) {
       const head = headLines(r.bluetoothHead(facts))
       assert.ok(!head.includes(ADDRESS), 'the head names the adapter by its Bluetooth address')
       assert.match(head, /^adapter: one with no name$/m)
-      assert.match(head, /^bluetooth unit: FM3$/m)
+      assert.match(head, /^bluetooth unit: FM3 \(not run yet\)$/m)
+      /* A VP4, like an AM4, has one way for each and learns none: no ways in its head. */
+      bench.ble.setBluetoothUnit('vp4')
+      assert.equal(bench.ble.bluetoothFacts().ways, null, 'a VP4’s head is handed ways it never learns')
+      assert.equal(bench.ble.bluetoothFacts().unit, 'VP4 (not tried yet)')
+      bench.ble.setBluetoothUnit('fm3')
       /* An adapter with a name of its own is named by it. */
       bench.ble.chooseAdapter({ id: '1:2', name: 'WIDI Uhost Bluetooth' })
       assert.equal(bench.ble.bluetoothFacts().adapter, 'WIDI Uhost Bluetooth')
@@ -9086,7 +9431,7 @@ export function run(test) {
     assert.equal((await drive(three.clock, three.wire.check('blocks'))).rows[0].meaning, 'no answer')
   })
 
-  test('“not tried yet” is said wherever an FM9 or Axe-Fx III owner looks, sends them to the report, and never to an AM4 or FM3 owner', async () => {
+  test('“not tried yet” is said wherever an FM9, Axe-Fx III or VP4 owner looks, “hasn’t run” wherever an FM3 owner does, each sends them to the report, and nothing of it to an AM4 owner', async () => {
     const gear = await import('../shared/bluetooth-gear.mjs')
     const lines = (unit) => [
       gear.untriedConnectedLine(unit),
@@ -9094,7 +9439,7 @@ export function run(test) {
       gear.untriedShortLine(unit),
       gear.untriedLine(unit)
     ]
-    for (const [unit, name] of [['fm9', 'FM9'], ['axefx3', 'Axe-Fx III']]) {
+    for (const [unit, name] of [['fm9', 'FM9'], ['axefx3', 'Axe-Fx III'], ['vp4', 'VP4']]) {
       assert.equal(gear.untried(unit), true)
       for (const line of lines(unit)) {
         assert.ok(line && line.includes(name), `${unit}: ${line}`)
@@ -9104,19 +9449,41 @@ export function run(test) {
       assert.equal(gear.untriedAboutLine(unit), `Built from what is known about the ${name}, but not yet tried on a real one. Some of it may not work as expected.`)
       assert.equal(gear.faultSubFor(unit), `Bluetooth (beta), not tried on the ${name} yet`)
       assert.equal(gear.unitForReport(unit), `${name} (not tried yet)`)
+      assert.equal(gear.untriedSubFor(unit), gear.UNTRIED_SUB)
+      if (unit === 'vp4') continue
       assert.ok(gear.missingBlocksLine(unit).startsWith('A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match'))
       assert.equal(gear.tunerQuietLine(unit), `No readings from the ${name} yet. Play a string; if nothing shows, check that Send Realtime Sysex is On (Setup → MIDI/Remote on the ${name}). Until then, use the ${name}’s own display.`)
       assert.ok(gear.firmwareLineFor(unit).startsWith(`Use ${name} firmware`))
     }
     assert.match(gear.missingBlocksLine('axefx3'), /IR Player, Dynamic Distortion\)/)
-    for (const unit of ['am4', 'fm3', 'vp4', null]) {
+    /*
+     * THE FM3, IN ITS OWN WORDS. It was tried, once, and that cable got very
+     * hot and never connected, so "not tried" would be untrue beside
+     * FM3_NEVER's "when we tried it": it hasn't run on one. Offered with the
+     * rest since 25 October 2026 ("I don't wanna wait for the FM3 test").
+     */
+    assert.equal(gear.untried('fm3'), true)
+    for (const line of lines('fm3')) {
+      assert.ok(line && /hasn’t run on (an|a real) FM3|run on a real one/.test(line), `fm3: ${line}`)
+      assert.ok(!/not tried/i.test(line), `the FM3 is said not to have been tried: ${line}`)
+    }
+    assert.equal(gear.untriedConnectedLine('fm3'), `It hasn’t run on an FM3 yet. Tell us how it goes: tap ${gear.REPORT_BUTTON}, below.`)
+    assert.equal(gear.untriedShortLine('fm3'), 'It hasn’t run on an FM3 yet.')
+    assert.equal(gear.faultSubFor('fm3'), 'Bluetooth (beta), not run on an FM3 yet')
+    assert.equal(gear.unitForReport('fm3'), 'FM3 (not run yet)')
+    assert.equal(gear.untriedSubFor('fm3'), gear.FM3_SUB)
+    assert.equal(gear.FM3_SUB, 'Not run yet')
+    for (const unit of ['am4', null, 'vp5']) {
       assert.equal(gear.untried(unit), false, String(unit))
       for (const line of lines(unit)) assert.equal(line, null, `${unit}: ${line}`)
       assert.equal(gear.faultSubFor(unit), 'Bluetooth (beta)')
+      assert.equal(gear.untriedSubFor(unit), undefined)
       assert.equal(gear.missingBlocksLine(unit), null)
       assert.equal(gear.tunerQuietLine(unit), null)
       assert.equal(gear.firmwareLineFor(unit), null)
     }
+    /* No tuner, blocks or firmware words for a VP4 over Bluetooth: it has none of them there (VP4_OVER_BLUETOOTH says so once). */
+    for (const f of ['missingBlocksLine', 'tunerQuietLine', 'firmwareLineFor']) assert.equal(gear[f]('vp4'), null, f)
     assert.equal(gear.unitForReport('am4'), 'AM4')
     assert.equal(gear.UNTRIED_SUB, 'Not tried yet')
     /* Where each is drawn. */
@@ -9127,7 +9494,7 @@ export function run(test) {
     assert.ok(!/never as a step for everybody \(midiSettingsFor\)/.test(page), 'PlugIn still says the Program Change settings are never a step')
     assert.match(page, /<Fold title="What it can and can’t do" open=\{about\} onToggle=\{\(\) => setAbout\(!about\)\}> \{untriedAboutLine\(b\.unit\) \? <Note tone="warn">\{untriedAboutLine\(b\.unit\)\}<\/Note> : null\}/)
     assert.ok(page.indexOf('{missingBlocksLine(b.unit) ? (') > page.indexOf('{DIFFERENT.map('), 'the blocks line is not with what is different')
-    assert.match(page, /Bluetooth \(beta\) check · \$\{unitName\(b\.unit\)\}\$\{untried\(b\.unit\) \? ' \(not tried yet\)' : ''\}/)
+    assert.match(page, /Bluetooth \(beta\) check · \$\{unitForReport\(b\.unit\) \|\| unitName\(b\.unit\)\} · /)
     assert.match(page, /const firmware = firmwareLineFor\(unit\)/)
     assert.ok(page.indexOf('{firmware ? <Hint>{firmware}</Hint> : null}') > page.indexOf('<Hint>{FIRST_TIME}</Hint>'))
     /* The heat line, never folded away on these two: near the top while How to plug it in is shut, among the steps when it is open. */
@@ -9135,9 +9502,7 @@ export function run(test) {
     assert.ok(page.indexOf('{heatUp ? <Note tone="warn">{heatUp}</Note> : null}') < page.indexOf('<Fold title="How to plug it in"'))
     assert.match(flat('mobile/src/components/TopBar.js'), /\? `Connected over Bluetooth, through \$\{adapter\}\.\$\{untried \? ` \$\{untried\}` : ''\}`/)
     assert.match(flat('mobile/src/lib/bluetooth.js'), /unit: saved\.unit \? unitForReport\(saved\.unit\) \|\| unitName\(saved\.unit\) : null,/)
-    /* The AM4's own surfaces, and the beta note, are as they were: this work opens nothing to customers. */
-    const rule = src('mobile/src/lib/ble-rule.js')
-    assert.match(rule, /CUSTOMER_UNITS = Object\.freeze\(\['am4'\]\)|CUSTOMER_UNITS = \['am4'\]/)
+    /* Only the AM4 has run it: every other unit is said as untried, and none opens to a customer before the store version does (the rule's own test). */
     assert.deepEqual(gear.TESTED, ['am4'])
   })
 }

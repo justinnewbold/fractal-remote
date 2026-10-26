@@ -101,17 +101,23 @@ import {
 } from './fractal-sysex.mjs'
 import { outlineChain } from './chain-outline.js'
 import { presetMissLine } from './bluetooth-gear.js'
+import { createVp4Wire } from './bleVp4.js'
 
 /* ------------------------------------------------------------------ */
 /* The units, and how long each question is given                      */
 /* ------------------------------------------------------------------ */
 
-/** The units the Bluetooth page offers, in the order it offers them. */
+/**
+ * The units the Bluetooth page offers, in the order it offers them. The VP4
+ * last, since 25 October 2026 ("I'm curious why the VP4 is not listed?"):
+ * presets and scenes only, by plain MIDI, and its own wire (bleVp4.js).
+ */
 export const BLE_UNITS = [
   { key: 'am4', name: 'AM4' },
   { key: 'fm3', name: 'FM3' },
   { key: 'fm9', name: 'FM9' },
-  { key: 'axefx3', name: 'Axe-Fx III' }
+  { key: 'axefx3', name: 'Axe-Fx III' },
+  { key: 'vp4', name: 'VP4' }
 ]
 
 /*
@@ -300,7 +306,9 @@ export const CHECK_STEPS = {
         warn: 'Changing preset on the AM4 drops any unsaved changes on the unit.'
       }
     ]
-  }
+  },
+  /* A VP4 is only ever sent presets and scenes, and never answers over Bluetooth: there is nothing to check (bleVp4.js). */
+  vp4: { reads: [], writes: [] }
 }
 
 /* ------------------------------------------------------------------ */
@@ -358,7 +366,7 @@ export function am4Sender(send, log = () => {}, learned = () => null) {
 /**
  * @param {object} o
  * @param {(bytes:number[]) => boolean} o.send  one message to the adapter; false when it would not take it
- * @param {'am4'|'fm3'|'fm9'|'axefx3'} o.unit   the unit the player picked
+ * @param {'am4'|'fm3'|'fm9'|'axefx3'|'vp4'} o.unit   the unit the player picked (a VP4 gets its own wire, bleVp4.js)
  * @param {Array} [o.catalog]   block names by effect id (data/blocks.json)
  * @param {object} [o.methods]  how each command is sent, and what auto has learned
  * @param {{now, setTimeout, clearTimeout}} [o.clock]
@@ -367,6 +375,8 @@ export function am4Sender(send, log = () => {}, learned = () => null) {
  * @param {(name:string|null) => void} [o.onForeign]  called once, with its bare name, when another unit answers a connection before the one picked has, so the page can say which; and with null when the one picked answers after it (heardFromIt)
  */
 export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign } = {}) {
+  /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
+  if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
   if (!spec) throw new Error(`Bluetooth does not know a unit called ${unit}.`)
   if (typeof send !== 'function') throw new Error('Bluetooth needs a way to send.')

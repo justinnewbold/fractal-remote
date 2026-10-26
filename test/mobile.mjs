@@ -7734,7 +7734,7 @@ export function run(test) {
      * behind their own check as well, should the page ever open to more.
      */
     assert.ok(!/Testing tools|diagnostic panel/.test(pasted), 'the 1.87.11 notes describe tools on a page the reviewer cannot open')
-    assert.match(read('mobile/src/screens/Bluetooth.js').replace(/\s+/g, ' '), /\{admin && b\.unit && tools \?/, 'the Bluetooth page shows its testing tools without asking whose account it is')
+    assert.match(read('mobile/src/screens/Bluetooth.js').replace(/\s+/g, ' '), /\{admin && b\.unit && !vp4 && tools \?/, 'the Bluetooth page shows its testing tools without asking whose account it is')
 
     /* Nothing left in the section asks for a Bluetooth video before pasting. */
     assert.ok(!section.includes('- **The video.**'), 'the 1.87.11 section still asks for a Bluetooth video')
@@ -12572,7 +12572,8 @@ export function run(test) {
     assert.match(demo, /mock = want \? createMockDevice\(unit\) : null/, 'the switch does not build a unit')
     assert.match(
       read('mobile/src/lib/device.js').replace(/\s+/g, ' '),
-      /const demo = demoDevice\(\) if \(demo\) return demoRequest\(demo, path, options\)[\s\S]{0,500}return overTheWire\(path, options\)/,
+      /* Up to 1200 characters between: the Bluetooth branch, with its VP4 routing and its comment, sits in them since 25 October 2026. */
+      /const demo = demoDevice\(\) if \(demo\) return demoRequest\(demo, path, options\)[\s\S]{0,1200}return overTheWire\(path, options\)/,
       'the app does not route through the demo, so turning it on changes nothing'
     )
   })

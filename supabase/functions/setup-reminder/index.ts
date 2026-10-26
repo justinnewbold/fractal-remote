@@ -78,12 +78,11 @@ const SETTINGS_DOOR = { row: 'Phone & computer', button: 'Sign in to set up the 
 /*
  * BLUETOOTH (BETA) IN THESE EMAILS: OFF, AND ONE SWITCH TURNS IT ON.
  *
- * Once Bluetooth (beta) opens to customers, in store version 1.89.0 and for
- * the AM4 only, a buyer with an AM4 has a second way that needs no computer,
- * and "your phone has nothing to connect to" stops being true for them. So
- * with this on, both emails offer both ways: the computer app first, the best
- * way and the only one for every unit but the AM4, and then, for an AM4,
- * Bluetooth (beta), with what it costs ("make it clear that there's multiple
+ * Once Bluetooth (beta) opens to customers, in store version 1.89.0 and on
+ * every unit the app works with, a buyer has a second way that needs no
+ * computer, and "your phone has nothing to connect to" stops being true for
+ * them. So with this on, both emails offer both ways: the computer app
+ * first, the best way, and then Bluetooth (beta), with what it costs ("make it clear that there's multiple
  * ways to connect the device, but also make it clear that the computer is
  * the preferred method and that Bluetooth will have more lag and not have as
  * many features") and where in the app it is.
@@ -205,7 +204,7 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
   /*
    * With Bluetooth (beta) in the emails, the computer is the best way rather
    * than the only one, and a phone with no computer is no longer one with
-   * "nothing to connect to": an AM4 on Bluetooth has the unit itself.
+   * "nothing to connect to": a unit on Bluetooth has the unit itself.
    */
   const opening = first
     ? [
@@ -221,7 +220,7 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
           : `No computer has signed in to Fractal Remote with ${who} yet, so your phone has nothing to connect to. The computer app is free, and it’s the same three steps:`
       ]
   /*
-   * THE OTHER WAY, for an AM4, after the computer's steps and never before
+   * THE OTHER WAY, after the computer's steps and never before
    * them: what it is, that the computer is still the best way, what Bluetooth
    * costs (only what the app's own Bluetooth page says: no editing or saving,
    * footswitch changes a moment late and the preset list slow to load, which
@@ -230,13 +229,17 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
    * hold, and only BLUETOOTH_FROM and later have the row. Help stays the
    * reply to this email, below, which comes to Justin.
    *
-   * THE COMPUTER IS THE ONLY WAY FOR THE OTHER UNITS, NAMED. It once said
-   * "the one for every Fractal unit", which promises an Axe-Fx II, an AX8 or
-   * an FX8 something the app does not do. These are the units the app works
-   * with (docs/app-store.md SUPPORTED UNITS: the VP4 in part) less the AM4,
-   * and test/server.mjs holds them to that list.
+   * THE UNITS, NAMED. It once said "the one for every Fractal unit", which
+   * promises an Axe-Fx II, an AX8 or an FX8 something the app does not do.
+   * These are the units the app works with (docs/app-store.md SUPPORTED
+   * UNITS), and test/server.mjs holds them to that list. Until 25 October
+   * 2026 this said "Have an AM4?", and the computer "the only way for the
+   * FM3, FM9, Axe-Fx III and VP4"; every unit opens together in 1.89.0, the
+   * AM4 the only one tried, so it says which has been tried, and what a VP4
+   * gets, in the app's own words ("Bluetooth is in beta, and some features
+   * might not work as expected").
    */
-  const secondWay = `Have an AM4? From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth (beta), through a Bluetooth MIDI adapter plugged into the AM4’s MIDI In and MIDI Out. The computer is still the best way, and the only way for the FM3, FM9, Axe-Fx III and VP4: Bluetooth has more lag and does less, with no editing or saving. To try it, update the app, then open Settings → My rig → Bluetooth (beta), which says what to buy and how to plug it in.`
+  const secondWay = `From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth (beta), through a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. Bluetooth is in beta, and some features might not work as expected: so far it has been tried on the AM4 only. To try it, update the app, then open Settings → My rig → Bluetooth (beta), which says what to buy and how to plug it in.`
   const help = first
     ? 'If you get stuck anywhere, just reply to this email. It comes straight to me.'
     : 'If something got in the way, reply and tell me what you see, and I’ll help you get it going.'

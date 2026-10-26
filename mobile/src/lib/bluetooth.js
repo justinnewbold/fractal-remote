@@ -334,17 +334,17 @@ export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth
  * launch, with the unit and the adapter they chose still kept for the day
  * it opens.
  *
- * AND A CUSTOMER GETS THE AM4 ONLY (ble-rule.js CUSTOMER_UNITS), the one
- * unit it has run: the page offers them the AM4 alone (offeredUnits), and
- * Connect and the pick-up refuse any other. A unit kept from before that
- * they are not offered (an FM3 chosen on that public day) is CLEARED, on
- * disk too, but only where Bluetooth is open to the account signed in: on a
- * copy that opens it to customers, where the page would otherwise show an
- * FM3's warning under chips with no FM3 among them. On a copy that keeps it
- * closed it is kept as it was, because nothing can use it there anyway, and
- * clearing it would buy nothing. His account keeps all four, and on a copy
- * that opens it, a tester's account signing in on his phone clears his FM3
- * pick the same way: he picks it again.
+ * AND A CUSTOMER GETS THE UNITS THIS COPY OPENS (ble-rule.js
+ * UNITS_FROM_STORE): all five on the store version that opens Bluetooth,
+ * each keyed to that version, so a unit added later reaches only the copies
+ * built to open it. The page offers them (offeredUnits), and Connect and
+ * the pick-up refuse any other. A unit kept from before that they are not
+ * offered (one the page offers later, picked on a copy that opens it) is
+ * CLEARED, on disk too, but only where Bluetooth is open to the account
+ * signed in, where the page would otherwise show it under chips without
+ * it. On a copy that keeps it closed it is kept as it was, because nothing
+ * can use it there anyway, and clearing it would buy nothing. His account
+ * keeps every unit the page knows.
  *
  * Asked by App.js, with the id of THE SESSION KEPT ON THE PHONE (haveSession),
  * never currentAccount(): that one asks the account server over the
@@ -392,6 +392,9 @@ const readAllowed = () => allowed
 /* Whether the account signed in here is his, so every unit is offered: false for anybody else, and for nobody known. */
 let allUnits = false
 
+/* Whether this account is offered this unit on this copy (ble-rule.js unitOffered): his, every unit; anybody else's, the units this copy's built-in version opens. */
+const offered = (unit) => unitOffered(unit, { admin: allUnits, platform: Platform.OS, installed: builtInVersion() })
+
 /*
  * THE VERSION BUILT INTO THIS COPY, read once (lib/storeVersion: the app
  * config inside the binary, which an update never touches). Never
@@ -427,8 +430,8 @@ export function allowBluetooth(id, { signedOut = false } = {}) {
   const wasAll = allUnits
   allowed = accountId(id) ? bluetoothOpen({ platform: Platform.OS, installed: builtInVersion(), admin: isAdmin(id) }) : null
   allUnits = allowed !== null && isAdmin(id)
-  /* A unit kept from before that this account is not offered: let go below, only where Bluetooth is open to it (see AND A CUSTOMER GETS THE AM4 ONLY). */
-  const drop = allowed === true && !!saved.unit && !unitOffered(saved.unit, allUnits)
+  /* A unit kept from before that this account is not offered: let go below, only where Bluetooth is open to it (see AND A CUSTOMER GETS THE UNITS THIS COPY OPENS). */
+  const drop = allowed === true && !!saved.unit && !offered(saved.unit)
   if (allowed === true) {
     /* On last time, and open to this account: on now, as the pick-up would have, and nothing to write — the disk already says on. */
     if (pendingOn) {
@@ -466,11 +469,8 @@ function letGoOfUnit() {
 /** Whether the account signed in here may use Bluetooth (beta): true only once App.js has said yes. */
 export const bluetoothAllowed = () => allowed === true
 
-/** The units the page offers this account, in the page's order: the AM4 alone for a customer, all four for his. */
-export const offeredUnits = () => BLE_UNITS.filter((u) => unitOffered(u.key, allUnits))
-
-/** Whether that is the AM4 alone, a customer's: for the words outside the page that say so (the waiting screen's way in). */
-export const offeredAm4Only = () => offeredUnits().length < BLE_UNITS.length
+/** The units the page offers this account, in the page's order: every unit the page knows for his, the ones this copy opens for a customer. */
+export const offeredUnits = () => BLE_UNITS.filter((u) => offered(u.key))
 
 /** The same, redrawn when it changes: for the Settings row and the page, which appear and go with signing in. */
 export const useBluetoothAllowed = () => useSyncExternalStore(subscribeBluetooth, readAllowed, readAllowed) === true
@@ -510,7 +510,7 @@ export async function restoreBluetooth() {
     const raw = await AsyncStorage.getItem(KEY)
     const was = settle(raw ? JSON.parse(raw) : null)
     /* A unit this account is not offered, with Bluetooth already open to it: let go of, and the disk told (see allowBluetooth). */
-    dropped = allowed === true && was.unit && !unitOffered(was.unit, allUnits) ? was.unit : null
+    dropped = allowed === true && was.unit && !offered(was.unit) ? was.unit : null
     refused = was.on && allowed === false
     pendingOn = was.on && !!was.unit && allowed === null
     saved = { ...was, unit: dropped ? null : was.unit, on: was.on && !!was.unit && !dropped && allowed === true && bluetoothSupported() }
@@ -545,7 +545,7 @@ export const unitName = (key) => BLE_UNITS.find((u) => u.key === key)?.name || '
  * what connects (bleLink.js).
  */
 export function setBluetooth(on) {
-  const want = on === true && allowed === true && !!saved.unit && unitOffered(saved.unit, allUnits) && bluetoothSupported()
+  const want = on === true && allowed === true && !!saved.unit && offered(saved.unit) && bluetoothSupported()
   /* Off asked for in so many words: an on held for an answer goes too, and the disk is told. */
   if (on !== true && pendingOn) {
     pendingOn = false
@@ -566,7 +566,7 @@ export function setBluetooth(on) {
 
 /** Which unit is on the other end, from those this account is offered. Changing it while connected asks the new one everything (bleLink). */
 export function setBluetoothUnit(key) {
-  if (!UNIT_KEYS.includes(key) || !unitOffered(key, allUnits) || key === saved.unit) return saved.unit
+  if (!UNIT_KEYS.includes(key) || !offered(key) || key === saved.unit) return saved.unit
   saved = { ...saved, unit: key }
   logDebug('ble', `the unit is an ${unitName(key)}`)
   keep()
@@ -620,8 +620,10 @@ export const bluetoothFacts = () => ({
    * How each command is sent for it): its head said "none found yet" on
    * every report, which reads as something the app failed to find, and the
    * Program Change channel moved for a Gen 3 unit, which an AM4 never sends.
+   * Nor for a VP4, which has one way for each (bleVp4.js) and takes its MIDI
+   * channel from Settings → VP4 scenes & presets, not from here.
    */
-  ways: saved.unit && saved.unit !== 'am4' ? waysFor(saved.unit) : null
+  ways: saved.unit && saved.unit !== 'am4' && saved.unit !== 'vp4' ? waysFor(saved.unit) : null
 })
 
 /* The ways, for the log's head: only what has been found or forced, so a unit nothing has been learned on says so (bleReport waysLine). */
@@ -956,8 +958,8 @@ export function closeWire() {
 /* The check panel                                                     */
 /* ------------------------------------------------------------------ */
 
-/** The panel's steps for the chosen unit: the AM4 has its own, from its allowlist. */
-export const checkSteps = (unit = saved.unit) => CHECK_STEPS[unit === 'am4' ? 'am4' : 'gen3']
+/** The panel's steps for the chosen unit: the AM4 has its own, from its allowlist, and a VP4 none (it never answers over Bluetooth: bleVp4.js). */
+export const checkSteps = (unit = saved.unit) => CHECK_STEPS[unit === 'am4' ? 'am4' : unit === 'vp4' ? 'vp4' : 'gen3']
 
 /** One step of the check, or 'all' for every read. Says so, rather than throwing, when nothing is connected. */
 export async function runCheck(step) {

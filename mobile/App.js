@@ -56,7 +56,6 @@ import {
   RESTRICTED_WORDS,
   allowBluetooth,
   lookForAdapterAgain,
-  offeredAm4Only,
   opensApplesScreen,
   restoreBluetooth,
   setBluetooth,
@@ -64,7 +63,7 @@ import {
   useBluetoothTrouble
 } from './src/lib/bluetooth'
 import { useBluetoothOffered } from './src/lib/useBluetoothOffered'
-import { BLUETOOTH_WAYS_SHORT, BLUETOOTH_WAYS_SHORT_AM4, REPORT_BUTTON } from './src/lib/bluetooth-gear'
+import { BLUETOOTH_WAYS_SHORT, REPORT_BUTTON } from './src/lib/bluetooth-gear'
 import { writeOutNote } from './src/lib/bleReport'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
@@ -1868,10 +1867,9 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
             your computer" with nothing to say Bluetooth exists, and the gear
             was the only way to it. After the computer's own button, never
             before it: the computer is the best way, and the line under this
-            one says what Bluetooth costs (BLUETOOTH_WAYS_SHORT), and, to a
-            customer, that it is for an AM4 only (BLUETOOTH_WAYS_SHORT_AM4,
-            by lib/bluetooth offeredAm4Only): an FM9 owner with no computer
-            reads that here, not after the page has turned them away. Only
+            one says what Bluetooth costs (BLUETOOTH_WAYS_SHORT), the same
+            for every account since every unit opened together (it said "AM4
+            only for now" to a customer until 25 October 2026). Only
             where App hands it a way in (`onBluetooth`: the row's own gate),
             only while it is off, and never under the account warning: a
             computer on this wifi on another account is right there, and
@@ -1886,7 +1884,7 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           {!bluetooth && onBluetooth && !elsewhere ? (
             <Press
               label="No computer? Use Bluetooth (beta)"
-              sub={offeredAm4Only() ? BLUETOOTH_WAYS_SHORT_AM4 : BLUETOOTH_WAYS_SHORT}
+              sub={BLUETOOTH_WAYS_SHORT}
               onPress={onBluetooth}
             />
           ) : null}
