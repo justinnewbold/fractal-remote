@@ -42,9 +42,12 @@ three.
 
 The pull request that sets the threshold, the build pull request, is merged
 only after Justin's yes to the build and right before the pair is started,
-never on green alone: its phones' fingerprint says Unchanged, and its merge
-puts a public APK that opens Bluetooth on the Releases page (CLAUDE.md says
-why).
+never on green alone: its fingerprint moves on both phones and the watch
+(the waiting patches applied in it, 26 October 2026), and its merge puts a
+public APK that opens Bluetooth on the Releases page (CLAUDE.md says why).
+From that merge on, updates made on main reach only 1.89.0 copies: phones
+on TestFlight's 1.88.3 and Play's 1.88.0 keep the last update made before
+it until they take 1.89.0 from the store.
 
 **That pair, 1.89.0, is started with the Send box unticked**, the one build
 where it is: platform `all`, profile `production`, and "Send it to

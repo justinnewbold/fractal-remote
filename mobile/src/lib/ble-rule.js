@@ -19,10 +19,12 @@ import { isOlder } from './versions.js'
  * 2.5.19 and 2.3.1(a) and Google's rule on features "designed to be
  * activated remotely" forbid, and the fingerprint cannot be leaned on to
  * keep them apart: the version number is left out of it (mobile/
- * fingerprint.config.js), and the one native piece waiting for the next
- * build (docs/pending/watch-fill.patch) moves the watch's line alone, so the
- * phones' fingerprints stay where they are and every update keeps reaching
- * every copy, the new build's and the old ones alike.
+ * fingerprint.config.js). The build pull request that sets this does move
+ * both phones' fingerprints (docs/pending's tablet-turns and
+ * shrink-resources, applied in it on 26 October 2026), so from its merge on
+ * updates reach 1.89.0 copies alone; but that is the patches' doing, not a
+ * lock to lean on: a later build pair whose fingerprint did not move would
+ * share its updates with the copies before it.
  *
  * So it opens by a fact about the copy itself: the version BUILT INTO it
  * (lib/storeVersion installedStoreVersion, read off the app config inside
@@ -43,10 +45,11 @@ import { isOlder } from './versions.js'
  * (test/ledger.mjs thresholdProblems), so the build pull request goes green
  * with nothing in the tests rewritten.
  *
- * AND THAT PULL REQUEST WAITS FOR JUSTIN'S YES, GREEN OR NOT. Its phones'
- * fingerprint says Unchanged (the version is left out of it, and the watch
- * patch moves only the watch), so by the merge rule alone it would be
- * merged the moment it is green. It must not be: the merge itself puts out
+ * AND THAT PULL REQUEST WAITS FOR JUSTIN'S YES, GREEN OR NOT. Its
+ * fingerprint moves on both phones and the watch (the patches applied in
+ * it), so it is a build by that rule too; and were it Unchanged (the version
+ * is left out of the fingerprint), it still must not be merged on green
+ * alone: the merge itself puts out
  * apk-v1.89.0 on the Releases page, a public APK that opens Bluetooth, and
  * the website pages that say so, before Apple or Google has seen it. So:
  * say what the build is for, wait for the yes, apply the pending patches in
@@ -89,7 +92,7 @@ import { isOlder } from './versions.js'
  * else, and everything about the copy in hand is passed in, so a test can
  * call it.
  */
-export const BLUETOOTH_FROM_STORE = Object.freeze({ ios: null, android: null })
+export const BLUETOOTH_FROM_STORE = Object.freeze({ ios: '1.89.0', android: '1.89.0' })
 
 /**
  * Whether Bluetooth (beta) is open to this account on this copy of the app.

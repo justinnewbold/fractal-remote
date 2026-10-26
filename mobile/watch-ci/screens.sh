@@ -45,6 +45,13 @@ xcrun simctl io "$UDID" screenshot "screens/channels.png"
 # looking at a pull request only, like the channels.
 shoot -page 1 -boostDemo YES
 xcrun simctl io "$UDID" screenshot "screens/boost.png"
+# An AM4's four scenes and four pedals, sharing the page between them rather
+# than filling half of it (Model.swift, fillHeight). For looking at a pull
+# request only, like the channels.
+shoot -page 0 -am4Demo YES
+xcrun simctl io "$UDID" screenshot "screens/am4-scenes.png"
+shoot -page 1 -am4Demo YES
+xcrun simctl io "$UDID" screenshot "screens/am4-pedals.png"
 # And with no phone: what it says when the iPhone app is not open.
 xcrun simctl launch --terminate-running-process "$UDID" "$ID" -demo NO
 sleep 5

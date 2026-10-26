@@ -146,13 +146,13 @@ that Android builds used to go to. The track a build is sent to is
 > changes."
 
 `npm run fingerprint` is the test: "Unchanged" is an update, anything else
-is a build. One change is a build whatever the phones' lines say: the 1.89.0
-pull request that sets `BLUETOOTH_FROM_STORE`, whose phones' fingerprint
-says Unchanged (only the watch line moves, from
-docs/pending/watch-fill.patch; see "It is switched on for customers",
-below). Run it before pushing, and if a change would move it — a new
-package, a plugin, an Expo package version — stop and tell him before
-making it, in plain words, with what it costs (an iOS slot) and what it
+is a build. The 1.89.0 pull request that sets `BLUETOOTH_FROM_STORE` is a
+build twice over: it opens Bluetooth (beta) by the version built into the
+copy (see "It is switched on for customers", below), and the waiting
+patches it applies move all three lines (the watch's from watch-fill, and
+both phones' from tablet-turns and shrink-resources, 26 October 2026).
+Run it before pushing, and if a change would move it — a new package, a
+plugin, an Expo package version — stop and tell him before making it, in plain words, with what it costs (an iOS slot) and what it
 buys. Android APKs from apk.yml are free; iOS slots are not.
 
 **And while the phone is being brought up to the browser, the answer is no.**
@@ -201,9 +201,9 @@ and the fingerprint said Unchanged. Anything that would need an Expo build
 still stops for him first (see above): the merge rule does not cover a
 build, and a change that moves the fingerprint is not "green" for this
 purpose. Nor is the pull request that sets `BLUETOOTH_FROM_STORE`, whose
-phones' fingerprint says Unchanged (only the watch line moves, from
-docs/pending/watch-fill.patch): it is a build pull request, and waits for
-his yes like one (see "It is switched on for customers", below).
+fingerprint moves on both phones and the watch (the patches applied in it):
+it is a build pull request, and waits for his yes like one (see "It is
+switched on for customers", below).
 
 **Before anything goes to Apple, check it against the guidelines as they
 are that day.**
@@ -373,10 +373,14 @@ notes say so, never by an over-the-air update.** Apple's guideline 2.5.19
 wants every new one described in the Notes for Review, its licence (3.3.1(C))
 keeps a change to what an app does for a version it has reviewed, and Google
 forbids features activated remotely after review. An update is exactly that:
-every merge to main reaches every copy on the current runtime (TestFlight
-1.88.3 and Play 1.88.0; the App Store's 1.87.11, like every 1.87.x copy, is
-frozen on update 1.87.60), whose review notes say customers are not shown
-it.
+every merge to main reaches every copy on the current runtime, whose review
+notes say customers are not shown it. Until the 1.89.0 build pull request
+that was TestFlight 1.88.3 and Play 1.88.0 (the App Store's 1.87.11, like
+every 1.87.x copy, is frozen on update 1.87.60). That merge moves both
+phones' fingerprints (tablet-turns and shrink-resources, applied in it), so
+from it on no update reaches 1.88.3 or 1.88.0 either: they keep the last
+update made before it until they take 1.89.0 from the store, and the
+current runtime is 1.89.0's own.
 
 So it opens by a fact about the copy itself, which no update can change: the
 version BUILT INTO it (`installedStoreVersion()` in
@@ -394,12 +398,12 @@ the rest:
   a public APK at every version, and a number set early opens on it. The
   tests ask the threshold the ledger test's own question (test/ledger.mjs),
   so that pull request goes green with no assertion rewritten.
-- THAT PULL REQUEST NEEDS JUSTIN'S YES, GREEN OR NOT. Its phones'
-  fingerprint says Unchanged (the version is left out of it, and
-  docs/pending/watch-fill.patch moves only the watch), so the merge rule
-  alone would merge it the moment it is green, and the merge puts out
-  apk-v1.89.0, a public APK that opens Bluetooth, and website pages that say
-  so, before Apple or Google has reviewed it. So: say what the build is for,
+- THAT PULL REQUEST NEEDS JUSTIN'S YES, GREEN OR NOT. Its fingerprint
+  moves on both phones and the watch (the version is left out of it, but
+  tablet-turns and shrink-resources, applied in it, move both phones), so
+  it is a build by the fingerprint too; and even if it were not, the merge
+  puts out apk-v1.89.0, a public APK that opens Bluetooth, and website pages
+  that say so, before Apple or Google has reviewed it. So: say what the build is for,
   wait for the yes, apply docs/pending's patches in that same pull request,
   and merge it only right before starting the build pair.
 - It is set only after Justin's logs from iPhone 1.88.3 and Android 1.88.0

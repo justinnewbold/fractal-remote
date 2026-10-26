@@ -289,7 +289,8 @@ publishing abilities on Play, not be taken down.
   10 MB from which the February rule counts at all. Play's R8 card can still
   show, for two lines seen on another app's card (Justin's own is what to
   check): "optimized resource shrinking", which
-  docs/pending/shrink-resources.patch turns on for the next build, and an
+  docs/pending/shrink-resources.patch turns on in 1.89.0 (applied in its
+  build pull request, 26 October 2026), and an
   Android Gradle plugin of 9.0 or newer, which only comes with Expo SDK 58
   (its React Native 0.88 uses 9.2.1), a bigger move for a build pair of its
   own. JavaScript is not what Play scores, so no update can change any of
@@ -309,8 +310,9 @@ publishing abilities on Play, not be taken down.
   `"orientation": "portrait"` in mobile/app.json, which locks the whole
   Android app upright. Android 16 and newer already ignore it on a big
   screen; a tablet, foldable or Chromebook on 12 to 15 held sideways shows
-  the app as an upright strip with black bars. The fix is parked for
-  1.89.0 in docs/pending/tablet-turns.patch: the lock comes off on Android,
+  the app as an upright strip with black bars. The fix is in 1.89.0
+  (docs/pending/tablet-turns.patch, applied in its build pull request, 26
+  October 2026): the lock comes off on Android,
   and a screen whose short side is under 600 points (a phone) is held
   upright by the app itself, so only bigger screens turn. iPhones stay
   upright and iPads already turn. It is a build, and it moves both phones.
@@ -338,8 +340,8 @@ publishing abilities on Play, not be taken down.
   screen itself is already drawn edge to edge. React Native 0.88 still
   makes the same calls. One of them can go: Material is in the app only
   for Expo's developer error screen, which does nothing in a store build,
-  and docs/pending/logbox-android.patch leaves it out of Android for
-  1.89.0. That shortens Play's list without emptying it.
+  and docs/pending/logbox-android.patch, applied for 1.89.0 (26 October
+  2026), leaves it out of Android. That shortens Play's list without emptying it.
 - **Bitmap image optimization, nothing due.** Play's scan looks for code
   that downloads a picture and decodes it by hand, and every place it can
   find is library code: Expo's update library (a restart screen picture

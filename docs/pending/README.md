@@ -20,18 +20,21 @@ those must still pass the other.
 
 | Patch | What it does | Moves |
 |---|---|---|
-| `watch-fill.patch` | On the Apple Watch, **four or fewer scenes or pedals fill the page** (an AM4's, a VP4's) instead of its top half: the rows stretch to the page under the heading, into half of the bottom margin the screen's rounded corners keep, pedals two across instead of three, a lone scene or pedal across the whole width, and the names and letters grow with their buttons. A scene name of two words or more may take two lines; its type is never bigger than lets its longest word fit, so no word is broken. The whole of a pedal's button takes the tap and the hold, off as well as on (an off pedal used to answer only on its letters and outline). Eight scenes and five or more pedals (an FM3's) are drawn as before, on the same scrolling page. The rules are `fewTiles`, `fillHeight`, `tileRows`, `sceneColumns`, `pedalColumns`, `grownSize`, `wordFitSize` and `sceneNameSize` in mobile/targets/watch/Model.swift, with the watch's own tests, and CI takes two pictures of an AM4-shaped demo (`-am4Demo YES`: am4-scenes.png, am4-pedals.png). | **Watch only** (tried on 25 October 2026: `npm run fingerprint` moves the watch line alone, so every update keeps reaching every phone, before and after the build) |
-| `tablet-turns.patch` | On an **Android tablet, foldable or Chromebook, the app turns sideways**, and an Android phone stays upright as it is. The upright lock comes out of the Android manifest (the one line Play's large-screen notice quotes), and MainActivity holds the app upright itself when the whole screen's short side is under 600 points, the app's own TABLET_SIDE, asked again at every fold and unfold: mobile/plugins/withTabletTurns.js, listed in mobile/app.json, with its test in test/duo.mjs. The iPhone keeps its lock and an iPad its four ways: app.json still says "portrait", and the iPhone app comes out the same. | **Android and iPhone** (tried on 25 October 2026: `npm run fingerprint` moves the android and ios lines and leaves the watch's; app.json and the plugin file are hashed for both phones, though nothing in the iPhone app changes) |
-| `logbox-android.patch` | **Expo's developer error screen (@expo/log-box) is left out of the Android app**, and with it Google's Material Components, which only it asks for and which is one of the places Play's edge-to-edge notice names. One entry in mobile/package.json (`expo.autolinking.android.exclude`), with its test in test/mobile.mjs. A store build loses nothing: the screen does nothing outside a developer's build. | **Android only** (tried on 25 October 2026: the android line moves, the ios and watch lines stay) |
-| `shrink-resources.patch` | **R8 shrinks the Android app's pictures and layouts too**, the line Play's R8 card still asks for: `enableShrinkResourcesInReleaseBuilds` in mobile/app.json, and mobile/plugins/withR8Optimize.js makes it R8's own (`android.r8.optimizedResourceShrinking`) and writes a keep file for the three files Google Play's billing library carries for Google's own services. Every picture and sound the app finds by name stays, held by the keep list Expo's bundling writes. Its test is in test/mobile.mjs. | **Android and iPhone** (tried on 25 October 2026: the android and ios lines move, the watch's stays; app.json and the plugin file are hashed for both phones) |
 
-ble-pair-ios27 was applied on 24 October 2026 for the iPhone build after
-1.88.0 (1.88.3), and its file deleted in the same change. The four before it
+Nothing is waiting. watch-fill, tablet-turns, logbox-android and
+shrink-resources were applied on 26 October 2026, in that order, in the
+build pull request for the 1.89.0 build pair (the one that opens Bluetooth
+(beta) to customers), and their files deleted in the same change. With
+tablet-turns and shrink-resources in, 1.89.0 moves the android and ios
+lines of `npm run fingerprint` as well as the watch's, so updates made on
+main from that merge on reach only 1.89.0 copies. ble-pair-ios27 was applied
+on 24 October 2026 for the iPhone build after 1.88.0 (1.88.3), and its file
+deleted in the same change. The four before it
 (watch-name, r8, watch-channels and photo-picker) were applied on 23 October
 2026 for the build pair after 1.87.52 (1.88.0). What each one carried, and
 what goes with it that was not in it, is in its section below.
 
-**watch-fill.patch, and why it waits.** Justin, 25 October 2026, with a
+**watch-fill.patch, and why it waited** (applied for 1.89.0). Justin, 25 October 2026, with a
 photo of the watch on an AM4: "On the VP4 and the AM4, can we make the watch
 buttons bigger somehow to maximize the watch space? It's already pretty
 small and we're only using about half the space.. on the FM3 and other
@@ -50,8 +53,9 @@ buttons, bigger), so the Notes for App Review need no line for it. What's
 New may say "On the Apple Watch, an AM4's or VP4's scenes and pedals fill
 the screen."
 
-**tablet-turns, logbox-android and shrink-resources, waiting for Justin's
-yes.** Google Play Console's four suggestions for 1.88.0, which Justin
+**tablet-turns, logbox-android and shrink-resources, and why they waited**
+(applied for 1.89.0, after Justin's yes to the build pair on 25 October
+2026: "I approve all that"). Google Play Console's four suggestions for 1.88.0, which Justin
 pasted on 25 October 2026 with: "R8 and the image fix are quick wins at
 build time. The large-screen change is the one most worth doing for reach,
 since a lot of guitarists keep a tablet on a music stand." They are meant to
@@ -76,8 +80,9 @@ deleting its file and its row. What goes with all three that is not in them:
   logbox-android.patch alone, which moves Android only. Everything merged
   before that day still reaches them. iPhones on the App Store's 1.87.11
   lose nothing: they are held on update 1.87.60 until 1.89.0 anyway.
-- **What says 1.89.0's phones stay "Unchanged" is reworded the day they are
-  applied**, because it is no longer so: CLAUDE.md, the paragraph "And say
+- **What said 1.89.0's phones stay "Unchanged" was reworded the day they were
+  applied** (26 October 2026, in the build pull request), because it was no
+  longer so: CLAUDE.md, the paragraph "And say
   so BEFORE a change that would need a build instead of an update" (and the
   same words under "Merge it yourself" and "THAT PULL REQUEST NEEDS JUSTIN'S
   YES"), and its "It is switched on for customers", whose copies on the
@@ -89,17 +94,19 @@ deleting its file and its row. What goes with all three that is not in them:
   mobile/src/lib/ble-rule.js, the comment's paragraphs WHY THE STORE
   VERSION ("moves the watch's line alone, so the phones' fingerprints stay
   where they are") and AND THAT PULL REQUEST WAITS FOR JUSTIN'S YES ("Its
-  phones' fingerprint says Unchanged"); and the watch-fill row above
-  ("every update keeps reaching every phone, before and after the build").
+  phones' fingerprint says Unchanged"); and the watch-fill row, which
+  left the table with its patch ("every update keeps reaching every phone,
+  before and after the build").
   The build pull request waits for Justin's yes either way; with these in,
   its fingerprint says it is a build too.
 - **Google Play's release notes** (docs/app-store.md, *Google Play release
-  notes, 1.89.0*, at 438 of Play's 500 characters) get one bullet for the
-  three, last: "• Android tablets and foldables now turn sideways." That
-  makes 489, and the count over the block changes with it. Nothing goes in
+  notes, 1.89.0*) got one bullet for the three, last: "• Android tablets and
+  foldables now turn sideways." The block had grown to 498 of Play's 500
+  characters by then, so the Bluetooth and sign-in lines were made shorter
+  to fit it (496), and the count over the block says so. Nothing goes in
   Apple's notes, because the iPhone app comes out the same.
 
-**tablet-turns.patch, and why it waits.** Play's "Remove resizability and
+**tablet-turns.patch, and why it waited** (applied for 1.89.0). Play's "Remove resizability and
 orientation restrictions in your app to support large screen devices" quotes
 one line of 1.88.0's manifest: MainActivity locked upright
 (`android:screenOrientation="1"`), which app.json's "orientation": "portrait"
@@ -143,7 +150,7 @@ first to show an upright app as a strip, as a real Android 12 to 15 tablet
 does: its emulator image would otherwise turn the whole screen for the app,
 and a turned screen the app fills passes whatever the patch does.
 
-**logbox-android.patch, and why it waits.** Play's "Your app uses deprecated
+**logbox-android.patch, and why it waited** (applied for 1.89.0). Play's "Your app uses deprecated
 APIs or parameters for edge-to-edge" reads, by other apps' reports, every line
 of the app's code, code that never runs included. Read the same way, 1.88.0's
 code has six such places, none of them the app's own (a forecast: Play
@@ -184,7 +191,7 @@ edge-to-edge notice will find, to read beside the six above and Play Console's
 own list. Its test is in test/mobile.mjs: package.json takes no comment, so
 the reason lives there and here.
 
-**shrink-resources.patch, and why it waits.** 1.88.0 already has R8 fully on:
+**shrink-resources.patch, and why it waited** (applied for 1.89.0). 1.88.0 already has R8 fully on:
 about 83% on each of Play's three measures (Play's line is 25%), and its code
 9.0 MB, under Play's 10 MB line. Since September 2026 Play's R8 card has asked
 other apps for two things more (quoted from another app's console,

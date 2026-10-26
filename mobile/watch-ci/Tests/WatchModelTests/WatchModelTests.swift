@@ -165,4 +165,59 @@ final class WatchModelTests: XCTestCase {
         XCTAssertEqual(boosted.pedals.first { $0.id == 58 }?.on, false)
         XCTAssertEqual(boosted.pedals.filter { $0.wordLine != nil }.count, 1, "a pedal other than the amp was given a word")
     }
+
+    /* "We're only using about half the space": an AM4's four share the page, an FM3's eight stay as they were. */
+    func testFewTilesShareThePage() {
+        /* Four scenes, two rows of two, in a page with 180 points under the heading: (180 - 4) / 2. */
+        XCTAssertEqual(fillHeight(count: 4, columns: 2, room: 180, least: 36), 88)
+        XCTAssertEqual(fillHeight(count: 3, columns: 2, room: 180, least: 36), 88, "three still take two rows")
+        /* Eight scenes, six pedals: the height they always had, however much room is left. */
+        XCTAssertEqual(fillHeight(count: 8, columns: 2, room: 180, least: 36), 36)
+        XCTAssertEqual(fillHeight(count: 6, columns: 3, room: 180, least: 40), 40)
+        /* One or two: one row, the whole room. */
+        XCTAssertEqual(fillHeight(count: 2, columns: 2, room: 180, least: 36), 180)
+        /* A page too small to share, and nothing to draw: the old height. */
+        XCTAssertEqual(fillHeight(count: 4, columns: 2, room: 60, least: 36), 36)
+        XCTAssertEqual(fillHeight(count: 0, columns: 2, room: 180, least: 36), 36)
+        XCTAssertEqual(fillHeight(count: 4, columns: 2, room: -5, least: 36), 36)
+        /* Which pages share: one to four tiles; none and five or more scroll as they always did. */
+        XCTAssertTrue(fewTiles(4))
+        XCTAssertTrue(fewTiles(1))
+        XCTAssertFalse(fewTiles(0))
+        XCTAssertFalse(fewTiles(5))
+        XCTAssertFalse(fewTiles(8))
+        /* The rows: a short last row keeps its tiles' width with an empty place. */
+        XCTAssertEqual(tileRows(4, columns: 2), [[0, 1], [2, 3]])
+        XCTAssertEqual(tileRows(3, columns: 2), [[0, 1], [2, nil]])
+        XCTAssertEqual(tileRows(1, columns: 2), [[0, nil]])
+        XCTAssertEqual(tileRows(0, columns: 2), [])
+        /* Pedals: two across for an AM4's or a VP4's four, three across from five. */
+        XCTAssertEqual(pedalColumns(4), 2)
+        XCTAssertEqual(pedalColumns(2), 2)
+        XCTAssertEqual(pedalColumns(1), 1, "one pedal alone takes half the page beside an empty half")
+        XCTAssertEqual(sceneColumns(8), 2)
+        XCTAssertEqual(sceneColumns(4), 2)
+        XCTAssertEqual(sceneColumns(1), 1)
+        XCTAssertEqual(pedalColumns(5), 3)
+        XCTAssertEqual(pedalColumns(6), 3)
+        /* Type grows with the tile, from the size it always had. */
+        XCTAssertEqual(grownSize(36, share: 0.28, least: 14, most: 24), 14, "an FM3's scene name is the size it was")
+        XCTAssertEqual(grownSize(40, share: 0.3, least: 13, most: 24), 13, "and so is its pedal")
+        XCTAssertEqual(grownSize(60, share: 0.3, least: 13, most: 24), 18)
+        XCTAssertEqual(grownSize(200, share: 0.3, least: 13, most: 24), 24)
+        /* A name's longest word fits its tile: never broken on two lines. */
+        XCTAssertEqual(wordFitSize("Overdrive", width: 85), 15, "85 / (9 letters x 0.62)")
+        XCTAssertEqual(wordFitSize("Big Distortion", width: 85), 13, "the longest word, not the whole name")
+        XCTAssertEqual(wordFitSize("", width: 85), .infinity)
+        XCTAssertEqual(sceneNameSize("Lead", tall: 85, wide: 85), 23, "a short name grows with its tile")
+        XCTAssertEqual(sceneNameSize("Overdrive", tall: 85, wide: 85), 15, "a long word is held to the tile's width")
+        XCTAssertEqual(sceneNameSize("Supercalifragilistic", tall: 85, wide: 85), 11, "and never under 11, where the page's shrinking takes over")
+        /* CI's AM4 picture is the shape that filled half the page. */
+        let am4 = WatchState.sample.am4Demo
+        XCTAssertEqual(am4.scenes.count, 4)
+        XCTAssertEqual(am4.pedals.count, 4)
+        XCTAssertTrue(am4.pedals.allSatisfy { $0.canPickChannel })
+        XCTAssertEqual(am4.answering(.scene(3)).scene, 3)
+        XCTAssertEqual(am4.answering(.scene(4)).scene, am4.scene, "an AM4 has no fifth scene")
+    }
 }
