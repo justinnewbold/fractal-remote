@@ -35,11 +35,23 @@ export const ledgerBuilds = (text) => {
  * made-up ledgers, which must go on meaning the same thing the day the real
  * opening row is written, rather than finding it there and breaking.
  */
-export const withoutOpening = (text) =>
-  String(text)
+/*
+ * The ledger as it was before the opening: the opening row and every build
+ * row after it gone (a later build, 1.89.3's on 26 October 2026, is not
+ * marked as the opening but was built after it, so it is not part of the
+ * ledger before it either).
+ */
+export const withoutOpening = (text) => {
+  let after = false
+  return String(text)
     .split('\n')
-    .filter((line) => !(line.trim().startsWith('|') && OPENING.test(line)))
+    .filter((line) => {
+      const row = line.trim().startsWith('|') && /^\|\s*\d{1,2} [A-Z][a-z]{2}\s*\|/.test(line.trim())
+      if (row && OPENING.test(line)) after = true
+      return !(row && after)
+    })
     .join('\n')
+}
 
 /*
  * THE PIN: the build that opened Bluetooth (beta) to customers, written here
