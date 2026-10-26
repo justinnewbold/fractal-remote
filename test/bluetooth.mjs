@@ -7940,7 +7940,9 @@ export function run(test) {
         adapters: 'https://www.amazon.com/dp/B0FN83P5P7',
         master: 'https://www.amazon.com/dp/B08F8F57JX',
         jackTrs: 'https://www.amazon.com/dp/B08ZZSYKQX',
-        jackDin: 'https://www.amazon.com/dp/B08ZZSVM1J'
+        jackDin: 'https://www.amazon.com/dp/B08ZZSVM1J',
+        /* The pair the WIDI Master was tried with on his AM4 (Justin, 26 October 2026). */
+        masterAdapters: 'https://www.amazon.com/dp/B0FJRB9KGV'
       }
     )
     /*
@@ -7949,8 +7951,8 @@ export function run(test) {
      * and the U2MIDI Pro alone, with the adapter its USB-A plug needs.
      */
     const ways = (u) => gear.waysFor(u).map((w) => [w.key, w.parts.join('+')])
-    assert.deepEqual(ways('am4'), [['master', 'master+adapters'], ['jack', 'jackTrs'], ['uhost', 'uhost+c2midi+adapters']])
-    assert.deepEqual(ways('vp4'), [['master', 'master+adapters'], ['jack', 'jackTrs'], ['uhost', 'uhost+c2midi+adapters']])
+    assert.deepEqual(ways('am4'), [['master', 'master+masterAdapters'], ['jack', 'jackTrs'], ['uhost', 'uhost+c2midi+adapters']])
+    assert.deepEqual(ways('vp4'), [['master', 'master+masterAdapters'], ['jack', 'jackTrs'], ['uhost', 'uhost+c2midi+adapters']])
     for (const u of ['fm9', 'axefx3']) assert.deepEqual(ways(u), [['master', 'master'], ['jack', 'jackDin'], ['uhost', 'uhost+c2midi']])
     assert.deepEqual(ways('fm3'), [['uhost', 'uhost+u2midi+usbA']], 'something fed from MIDI OUT is offered for an FM3')
     /* Tried: the AM4 through the WIDI Master and the Uhost, the FM3 through the Uhost and the U2MIDI Pro. Nothing else says it has run. */
@@ -8021,7 +8023,7 @@ export function run(test) {
     assert.match(gear.hookupFor('axefx3', 'tablet').join(' '), /Not THRU: the tablet would only hear itself there\./)
     /* Who makes the parts, and that the app is not them and gets nothing from the links: the guide has said it all along. */
     /* Without "connected", which on this page is the Bluetooth link: under a CME adapter it read as the app failing to reach it. */
-    assert.equal(gear.SELLERS_LINE, 'CME, LOOTOOLS and Anker make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.')
+    assert.equal(gear.SELLERS_LINE, 'CME, LOOTOOLS, Eldraqth and Anker make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.')
     assert.ok(!/connect/i.test(gear.SELLERS_LINE), 'the sellers’ line reads as a connection status')
     /* One thing driving the unit at a time, until the two together have been tried. */
     assert.match(gear.ONE_AT_A_TIME, /^While you use Bluetooth, quit the Fractal Remote app on the computer, or unplug the unit’s USB cable/)

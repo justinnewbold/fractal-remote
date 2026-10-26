@@ -4336,7 +4336,8 @@ export function run(test) {
       ['USB-C to USB-A adapter', 'https://www.amazon.com/dp/B01COOQIKU', null],
       ['CME WIDI Master', 'https://www.amazon.com/dp/B08F8F57JX', 'https://www.cme-pro.com/widi-master/'],
       ['CME WIDI Jack, TRS-35 bundle', 'https://www.amazon.com/dp/B08ZZSYKQX', 'https://www.cme-pro.com/widi-jack/'],
-      ['CME WIDI Jack, 5-pin DIN bundle', 'https://www.amazon.com/dp/B08ZZSVM1J', null]
+      ['CME WIDI Jack, 5-pin DIN bundle', 'https://www.amazon.com/dp/B08ZZSVM1J', null],
+      ['Eldraqth', 'https://www.amazon.com/dp/B0FJRB9KGV', null]
     ]
     for (const [name, amazon, maker] of PARTS) {
       assert.ok(words.includes(name), `the guide does not name the ${name}`)

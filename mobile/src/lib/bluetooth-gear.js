@@ -333,8 +333,21 @@ export const PARTS = {
   },
   adapters: {
     name: 'Two Type-A MIDI to 3.5 mm adapters',
-    does: 'For an AM4 or VP4: their MIDI jacks are small 3.5 mm ones. They must be Type A. This is a pack of two (LOOTOOLS).',
+    does: 'For an AM4 or VP4: their MIDI jacks are small 3.5 mm ones. Each adapter has a 5-pin MIDI socket (female) on one end and a 3.5 mm plug (male) on the other. They must be Type A. This is a pack of two (LOOTOOLS).',
     amazon: 'https://www.amazon.com/dp/B0FN83P5P7',
+    maker: null
+  },
+  /*
+   * THE PAIR THE WIDI MASTER WAS TRIED WITH ON AN AM4: "It also needs a 5
+   * pin female to TRS male adapter" (Justin, 26 October 2026, with the
+   * Amazon page of the ones he used: Eldraqth BMIDI-5-35, Type A, a pack
+   * of two). The same kind of part as the LOOTOOLS pair, which the Uhost
+   * way was tried with.
+   */
+  masterAdapters: {
+    name: 'Two Type-A MIDI to 3.5 mm adapters',
+    does: 'For an AM4 or VP4, between the WIDI Master and the unit: a 5-pin MIDI socket (female) on one end for the WIDI Master’s plug, and a 3.5 mm plug (male) on the other for the unit’s jack. They must be Type A. This is a pack of two (Eldraqth), the ones the WIDI Master was tried with.',
+    amazon: 'https://www.amazon.com/dp/B0FJRB9KGV',
     maker: null
   }
 }
@@ -494,7 +507,7 @@ export function partsFor(unit, noun = 'phone') {
  * "isn't connected with them" under a CME adapter read as the app failing to
  * reach it.
  */
-export const SELLERS_LINE = 'CME, LOOTOOLS and Anker make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.'
+export const SELLERS_LINE = 'CME, LOOTOOLS, Eldraqth and Anker make these parts. Fractal Remote has nothing to do with them or with Amazon, and gets nothing from these links.'
 
 /*
  * ONE THING TALKING TO THE UNIT. With Bluetooth on, the phone never looks
@@ -668,7 +681,7 @@ export function waysFor(unit, noun = 'phone') {
         key: 'master',
         title: 'WIDI Master',
         best: true,
-        parts: ['master', 'adapters'],
+        parts: ['master', 'masterAdapters'],
         steps: [
           `Push one 3.5 mm adapter into the ${name}’s MIDI IN, and the other into its MIDI OUT.`,
           `Plug the WIDI Master’s two MIDI plugs into the two adapters, as the labels on its plugs say. ${swapIfQuiet}`,
