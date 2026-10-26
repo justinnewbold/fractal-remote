@@ -1451,8 +1451,8 @@ day still runs** (step 11), against the guidelines as they are then.
   on the app's Bluetooth page says beta from 1.89.2. One gap an update
   cannot close: build 30 runs the copy built into it on its first launch
   after an install, which still says "Bluetooth (beta)" and "Bluetooth is in
-  beta", until its first update has downloaded (usually by the next launch).
-  (and that only the AM4 has run it, with no parts for an FM3). A reviewer
+  beta", until its first update has downloaded (usually by the next launch),
+  and that only the AM4 has run it, with no parts for an FM3. A reviewer
   who opens it once may see that beside notes that say otherwise: older
   wording on one launch, not a hidden feature, and the next launch has the
   update.
