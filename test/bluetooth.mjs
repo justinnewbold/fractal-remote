@@ -5711,7 +5711,7 @@ export function run(test) {
     assert.match(one, /\{mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth"/, 'the row is not behind the unlock, the developer’s account and the build check')
     assert.match(one, /title="Bluetooth"[\s\S]{0,300}onPress=\{\(\) => setPage\('bluetooth'\)\}/, 'the row opens nothing')
     /* The page itself, through the same gate. It is told whether this is Justin's account (from the server) only for its Testing tools (Apple's 2.2), never to let anybody in. */
-    assert.match(one, /\{page === 'bluetooth' && mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <> \{head\('Bluetooth', 'back'\)\} <BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} \/>/)
+    assert.match(one, /\{page === 'bluetooth' && mayDriveBluetooth\(purchase, bluetoothAdmin\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <> \{head\('Bluetooth', 'back'\)\} <BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} onConnected=\{onBack\} \/>/)
     /*
      * The account's answer comes from lib/bluetooth, which App.js tells from
      * the session kept on the phone, redrawn when it changes, so the row
@@ -7325,7 +7325,7 @@ export function run(test) {
     assert.ok(developer.indexOf('title="Bluetooth testing tools"') > developer.indexOf("{page === 'developer' && isAdmin(account?.id) ? ("), 'the testing tools row is not on the Developer page')
     /* Settings works admin out as it does for his Developer pages. */
     const settingsFlat = flat('mobile/src/screens/Settings.js')
-    assert.match(settingsFlat, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} \/>/, 'Settings does not tell the Bluetooth page whose account this is')
+    assert.match(settingsFlat, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} onConnected=\{onBack\} \/>/, 'Settings does not tell the Bluetooth page whose account this is')
     /*
      * Nothing a customer needs is only in there. Every command goes Auto by
      * default, and Auto learns what works in ordinary use, not only in the
@@ -7957,7 +7957,7 @@ export function run(test) {
     assert.deepEqual(ways('fm3'), [['uhost', 'uhost+u2midi+usbA']], 'something fed from MIDI OUT is offered for an FM3')
     /* Tried: the AM4 through the WIDI Master and the Uhost, the FM3 through the Uhost and the U2MIDI Pro. Nothing else says it has run. */
     const tried = Object.fromEntries(['am4', 'fm3', 'fm9', 'axefx3', 'vp4'].map((u) => [u, gear.waysFor(u).filter((w) => w.tried).map((w) => w.key)]))
-    assert.deepEqual(tried, { am4: ['master', 'uhost'], fm3: ['uhost'], fm9: [], axefx3: [], vp4: [] })
+    assert.deepEqual(tried, { am4: ['master', 'jack', 'uhost'], fm3: ['uhost'], fm9: [], axefx3: [], vp4: [] })
     /* The WIDI Master runs on the unit's MIDI OUT alone (CME: "No external power option"): its steps never send anybody to a charger for it. */
     for (const u of ['am4', 'fm9']) assert.match(gear.waysFor(u)[0].steps.join(' '), /It has no other way to be powered\./)
     /* The FM3's U2MIDI Pro: CME's own page, checked on 26 October 2026, and no Amazon link until one has been checked. */
@@ -8270,7 +8270,7 @@ export function run(test) {
     assert.match(drawn, /onPress=\{\(\) => onOpen\('bt-limits'\)\}/)
     assert.match(drawn, /<Press label="Setup guide" sub="The full guide, on the website" height=\{52\} onPress=\{\(\) => openLink\(GUIDE_URL\)\} \/>/)
     const settings = flat('mobile/src/screens/Settings.js')
-    assert.match(settings, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} \/>/)
+    assert.match(settings, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} onConnected=\{onBack\} \/>/)
     assert.match(settings, /\{head\('How to connect my Bluetooth device', 'back'\)\} <BluetoothWays \/>/)
     assert.match(settings, /\{head\('Troubleshooting Bluetooth', 'back'\)\} <BluetoothTrouble onReport=\{onReportBluetooth\} \/>/)
     assert.match(settings, /\{head\('What Bluetooth can’t do', 'back'\)\} <BluetoothLimits \/>/)
@@ -8893,7 +8893,7 @@ export function run(test) {
     assert.equal((formCode.match(/prefill/g) || []).length, 2, 'the Feedback form does more with its prefill than start the box with it')
     assert.ok(!/bleReport|topic/i.test(formCode), 'the Feedback form has learned about the Bluetooth report')
     assert.match(form, /> Feedback <\/Text>/)
-    assert.match(form, /label=\{k === 'bug' \? 'Something is broken' : 'Suggest feature'\}/)
+    assert.match(form, /label=\{k === 'bug' \? 'Problem' : 'Idea'\}/)
     assert.match(form, /Your version, your \{deviceNoun\(\)\}&rsquo;s OS and which unit you&rsquo;re on are sent too/)
     const app = flat('mobile/App.js')
     assert.match(app, /\) : screen === 'report' \? \( \/\*[^]*?\*\/ reportAbout === 'bluetooth' && bluetoothOffered \? \( <BluetoothReport said=\{reportSaid\} onBack=\{\(\) => setScreen\(reportFrom\)\} onWriteMore=\{\(\) => setReportAbout\('written'\)\} \/> \) : \( <Report onBack=\{\(\) => setScreen\(reportFrom\)\} prefill=\{writingOut \? writeOutNote\(reportSaid\) : ''\} bluetooth=\{writingOut\} \/> \)/)
@@ -8936,7 +8936,7 @@ export function run(test) {
     /* Settings hands the page what App gave it, null when App gave nothing. */
     const settings = flat('mobile/src/screens/Settings.js')
     assert.match(settings, /onReportBluetooth = null,/)
-    assert.match(settings, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} \/>/)
+    assert.match(settings, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} onConnected=\{onBack\} \/>/)
 
     /* The waiting screen: over Bluetooth only, in the fifteen-second block where a stuck player sits, with the line it is stuck on. */
     const waking = app.slice(app.indexOf('function Waking('))
@@ -9050,7 +9050,7 @@ export function run(test) {
     const settings = flat('mobile/src/screens/Settings.js')
     const front = settings.slice(settings.indexOf("{page === null ? ("), settings.indexOf("{page === 'account' ? ("))
     const help = front.slice(front.indexOf('<Group title="Help">'), front.indexOf('<Group title="About">'))
-    assert.match(help, /\{onOpenReport \? \( <SetupRow title="Report a problem or idea" status="Something broken, or something you want" onPress=\{onOpenReport\} \/> \) : null\}/)
+    assert.match(help, /\{onOpenReport \? \( <SetupRow title="Feedback" status="Something broken, or something you want" onPress=\{onOpenReport\} \/> \) : null\}/)
     /* Troubleshooting still holds Feedback, the path the fixed help sentence names. */
     const trouble = settings.slice(settings.indexOf("{page === 'trouble' ? ("))
     assert.match(trouble, /<SetupRow title="Feedback" status="Something broken, or something you want" onPress=\{onOpenReport\} \/>/)

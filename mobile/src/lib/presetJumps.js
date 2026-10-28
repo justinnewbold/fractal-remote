@@ -35,11 +35,14 @@ export const jumpStep = (total) => {
  *
  * Never the last slot: a button that carries you to the very bottom of a list
  * you are already at the bottom of has nothing to do.
+ *
+ * AND 0 FIRST: "Add zero slot to the quick jump presets" (Justin, 27 October
+ * 2026), so the top of the list is one tap away too.
  */
 export const jumpsFor = (total) => {
   const step = jumpStep(total)
   if (!step) return []
-  const out = []
+  const out = [0]
   for (let n = step; n < total; n += step) out.push(n)
   return out
 }

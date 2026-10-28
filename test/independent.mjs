@@ -1247,7 +1247,7 @@ export function run(test) {
     )
     assert.ok(!/Settings → Feedback/.test(words), 'the support page sends people to Settings → Feedback, which is not there')
     assert.ok(!/Settings → Fixes/.test(words), 'the support page sends people to Settings → Fixes, which is not there')
-    assert.match(words, /Settings → Troubleshooting → Feedback → "Something is broken"/)
+    assert.match(words, /Settings → Troubleshooting → Feedback → "Problem"/)
     assert.match(words, /Settings → Troubleshooting → Fixes/)
   })
 

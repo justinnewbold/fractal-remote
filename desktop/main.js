@@ -894,14 +894,28 @@ function showInDock(yes) {
   }
 }
 
-function openWindow() {
-  showInDock(true)
+/*
+ * `hidden`: THE PAGE WITH NOBODY LOOKING AT IT. "Having some issues, saving
+ * preset" (Justin, 27 October 2026, an FM3 on a Raspberry Pi 5 started at
+ * power-on): the phone parked the save, the computer took it in, and nothing
+ * ever answered, because what carries a parked save out is this page
+ * (src/App.jsx, the pending-save look), and a start with --hidden had no
+ * page at all. So a start with nobody there loads the page in a window that
+ * is never shown: the work the window does goes on, and nothing appears on
+ * a screen nobody has. The tray's Open shows that same window, so the page
+ * is never loaded twice, and two pages never carry out one save twice.
+ */
+function openWindow({ hidden = false } = {}) {
+  if (!hidden) showInDock(true)
   if (win) {
-    win.show()
-    win.focus()
+    if (!hidden) {
+      win.show()
+      win.focus()
+    }
     return
   }
   win = new BrowserWindow({
+    show: !hidden,
     width: 1100,
     height: 800,
     minWidth: 380,
@@ -929,6 +943,13 @@ function openWindow() {
     setTimeout(() => {
       if (win && where?.local) win.loadURL(where.local)
     }, 1000)
+  })
+  /* With nobody there, closing it only hides it: the page keeps carrying out the phone's saves. */
+  win.on('close', (e) => {
+    if (!startHidden || quitting) return
+    e.preventDefault()
+    win.hide()
+    showInDock(false)
   })
   win.on('closed', () => {
     win = null
@@ -1822,10 +1843,11 @@ app.whenReady().then(async () => {
   // A window somebody opened from the tray before there was a server to show.
   const blank = win && !win.isDestroyed() && !win.webContents.getURL().startsWith(where.local)
   if (windowAtLaunch || wantWindow) openWindow()
+  else if (startHidden) openWindow({ hidden: true })
   if (blank) win.loadURL(where.local)
   wantWindow = false
-  // For whoever reads the log, and for the check in CI that no window opened.
-  console.error(`[launch] done, ${win ? 'with a window' : 'no window'}`)
+  // For whoever reads the log, and for the check in CI that no window is shown.
+  console.error(`[launch] done, ${win?.isVisible() ? 'with a window' : win ? 'with the page in a window nobody sees' : 'no window'}`)
 })
 
 /*

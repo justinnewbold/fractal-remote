@@ -1012,7 +1012,8 @@ jobs:
           bin="$1"
           log="$RUNNER_TEMP/first.log"
           healthy() { curl -fsS --max-time 2 http://localhost:5056/healthz >/dev/null 2>&1; }
-          windows() { xwininfo -root -tree | grep -E '^[[:space:]]*0x[0-9a-f]+ "[^"]*Fractal Remote[^"]*":' || true; }
+          # Windows a person could see: a start with --hidden keeps its page in a window that is never shown (main.js openWindow, hidden), so it is counted only once it is mapped.
+          windows() { xwininfo -root -tree | grep -E '^[[:space:]]*0x[0-9a-f]+ "[^"]*Fractal Remote[^"]*":' | while read -r id rest; do xwininfo -id "$id" 2>/dev/null | grep -q 'Map State: IsViewable' && echo "$id $rest"; done; true; }
           fail() {
             echo "::error::$1"
             echo "---- the app said:"; cat "$log" || true

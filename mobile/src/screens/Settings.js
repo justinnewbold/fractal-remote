@@ -670,7 +670,7 @@ export default function Settings({
               is another way in to the same form, not a move.
             */}
             {onOpenReport ? (
-              <SetupRow title="Report a problem or idea" status="Something broken, or something you want" onPress={onOpenReport} />
+              <SetupRow title="Feedback" status="Something broken, or something you want" onPress={onOpenReport} />
             ) : null}
             {/* What each model on the unit really is — something to look up
                 while playing, so it sits with the help rather than first. */}
@@ -1336,7 +1336,7 @@ export default function Settings({
       {page === 'bluetooth' && mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported() ? (
         <>
           {head('Bluetooth', 'back')}
-          <BluetoothPage purchase={purchase} admin={isAdmin(account?.id)} onReport={onReportBluetooth} onOpen={setPage} />
+          <BluetoothPage purchase={purchase} admin={isAdmin(account?.id)} onReport={onReportBluetooth} onOpen={setPage} onConnected={onBack} />
         </>
       ) : null}
       {/* The Bluetooth page's own pages, one button each under its steps, behind the same gate, with ‹ Bluetooth back. */}
