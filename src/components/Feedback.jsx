@@ -104,7 +104,7 @@ export default function Feedback({ device, link, platform, macVersion }) {
             aria-pressed={kind === k}
             disabled={busy}
           >
-            {k === 'bug' ? 'Something is broken' : 'Suggest feature'}
+            {k === 'bug' ? 'Problem' : 'Idea'}
           </button>
         ))}
       </div>

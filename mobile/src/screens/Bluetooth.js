@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Linking, Platform, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
@@ -259,7 +259,7 @@ function status(b, unitState) {
 /* Blue for the unit answering over Bluetooth, as the bar is; green stays the unit answering through a computer. */
 const TONES = { ok: () => color.ble, fault: () => color.fault, dim: () => color.silkDim }
 
-export default function BluetoothPage({ purchase, admin = false, onReport = null, onOpen = null }) {
+export default function BluetoothPage({ purchase, admin = false, onReport = null, onOpen = null, onConnected = null }) {
   const b = useBluetooth()
   const unitState = useRig((s) => s.unit)
   const said = status(b, unitState)
@@ -336,12 +336,14 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    */
   const start = () => {
     if (!canStart) return
+    arm()
     if (b.adapter && ios && offlineHere(b.adapter)) return another()
     if (b.adapter) setBluetooth(true)
     else find()
   }
   /* A row tapped in the list: that adapter, and on. */
   const choose = (d) => {
+    arm()
     chooseAdapter(d)
     setWanted(true)
   }
@@ -355,6 +357,23 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    */
   const away = b.on && b.phase === 'connecting' && ios && !shut && adapterAway()
   const reconnect = () => lookForAdapterAgain(probeNow)
+
+  /*
+   * STRAIGHT TO PLAY ONCE IT ANSWERS. "Immediately after connecting
+   * Bluetooth, let's have it go to the gig screen again instead of having to
+   * select done" (Justin, 27 October 2026). Only after Connect was tapped
+   * here, and only once the unit answers (or, on a VP4, the adapter is
+   * connected): a page opened while it is already on stays open.
+   */
+  const asked = useRef(false)
+  const arm = () => {
+    asked.current = true
+  }
+  useEffect(() => {
+    if (!asked.current || said.tone !== 'ok' || b.answeredAs) return
+    asked.current = false
+    onConnected?.()
+  }, [said.tone, b.answeredAs])
 
   /* The list is only for a real choice: no adapter chosen yet, and some to choose from. */
   const showList = !b.on && !b.adapter && b.devices.length > 0

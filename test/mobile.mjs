@@ -4870,8 +4870,8 @@ export function run(test) {
      * those like 20 40 60 80 100?"
      */
     const { jumpsFor } = await import('../src/lib/presetJumps.js')
-    assert.deepEqual(jumpsFor(512), [100, 200, 300, 400, 500], 'a 512-slot unit does not get hundreds')
-    assert.deepEqual(jumpsFor(104), [20, 40, 60, 80, 100], 'an AM4 or VP4 does not get twenties')
+    assert.deepEqual(jumpsFor(512), [0, 100, 200, 300, 400, 500], 'a 512-slot unit does not get hundreds')
+    assert.deepEqual(jumpsFor(104), [0, 20, 40, 60, 80, 100], 'an AM4 or VP4 does not get twenties')
     const src = read('mobile/src/screens/Presets.js').replace(/\s+/g, ' ')
     assert.match(src, /import \{ jumpsFor \} from '\.\.\/lib\/presetJumps'/, 'the phone has its own rule for where the jumps land')
     assert.match(src, /const jumps = jumpsFor\(slots\)/, 'the phone’s jumps are not sized to the unit')
@@ -8888,7 +8888,7 @@ export function run(test) {
        * 2026): the Feedback form one tap from Settings, under Troubleshooting,
        * which keeps its own Feedback row too.
        */
-      'Report a problem or idea',
+      'Feedback',
       'Amp & pedal names',
       'REPLAY',
       'Apple Watch',

@@ -4425,7 +4425,7 @@ export function run(test) {
 
     /* Other ways: each marked tried or not, both jacks, and the untried ones beyond the app's own list with nothing to buy them by. */
     assert.match(words, /CME WIDI Master Tried on the AM4/, 'the WIDI Master is not marked as tried on the AM4 only')
-    assert.match(words, /CME WIDI Jack, TRS-35 bundle Not tried yet/, 'the WIDI Jack is not marked as untried')
+    assert.match(words, /CME WIDI Jack, TRS-35 bundle Tried on the AM4/, 'the WIDI Jack is not marked as untried')
     assert.match(words, /Not tried with Fractal Remote, so not linked here:/, 'the other adapters are not marked as untried')
     assert.match(words, /plug into both of the unit’s MIDI jacks, In and Out/, 'the guide does not say an adapter has to fill both jacks')
   })

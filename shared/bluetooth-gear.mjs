@@ -658,7 +658,8 @@ const powerStep = (name) =>
  * OUT (the WIDI Master, the WIDI Jack, the C2MIDI Pro) got very hot on one
  * or is the same kind, so none of them is ever offered for it.
  */
-const TRIED_WAYS = { am4: ['master', 'uhost'], fm3: ['uhost'] }
+/* The WIDI Jack on an AM4 since 28 October 2026: "WIDI jack works perfectly with AM4". */
+const TRIED_WAYS = { am4: ['master', 'jack', 'uhost'], fm3: ['uhost'] }
 
 const thruOff = (name) => `On the ${name}, open Setup → MIDI/Remote and set MIDI Thru to Off.`
 const masterPower = (name) => `It takes its power from the ${name}’s MIDI OUT: with the ${name} on, its light comes on. It has no other way to be powered.`

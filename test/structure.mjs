@@ -3460,7 +3460,7 @@ export function run(test) {
     assert.match(main, /function showInDock\(/, 'the dock icon is set in more than one place')
     assert.match(
       main,
-      /function openWindow\(\) \{\s*\n\s*showInDock\(true\)/,
+      /function openWindow\(\{ hidden = false \} = \{\}\) \{\s*\n\s*if \(!hidden\) showInDock\(true\)/,
       'opening a window does not put the app in the dock, so it stays out of Force Quit'
     )
     assert.match(

@@ -1068,7 +1068,7 @@ export function run(test) {
       'Apple Watch':
         'iPhone only — the watch app comes with the iPhone app and works through it; a browser has no watch, and there is no Android watch app',
       /* 25 October 2026: "super easy for all users to submit bugs and feedback". */
-      'Report a problem or idea':
+      'Feedback':
         'phone only, for now — a second way in to the phone’s Feedback form, one tap from Settings, which stays under Troubleshooting too (the help sentence in shared/affiliation.mjs names that path). The browser’s Feedback is under its Troubleshooting, and a row for it on the browser’s front list would make a computer release for a link that changes nothing a computer does',
       'Bluetooth':
         'phone only — a browser cannot reach a Bluetooth MIDI adapter; the phone does it through its own native module, and only where it is open: Justin’s account on every copy since 11 October 2026, and a customer’s only on a store copy built to open it (useBluetoothAllowed, mobile/src/lib/bluetooth.js, and the rule in mobile/src/lib/ble-rule.js)',

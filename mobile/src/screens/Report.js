@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native'
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native'
 
 import { color, font, mono, radius, space } from '../lib/theme'
 import { KINDS, MAX_MESSAGE, carriesLog, context, logPreview, sendReport, shotsLostWords } from '../lib/reports'
@@ -93,6 +93,26 @@ export default function Report({ onBack, start = 'bug', prefill = '', bluetooth 
     }
   }
 
+  /*
+   * BACK, NOT DONE, AND NEVER A LOST REPORT. "Instead of saying done it should
+   * say back instead of done because done sounds like it's ready to send", and
+   * "we need to make sure that clicking the done button doesn't get rid of
+   * whatever they type ... Send should be up at the top right and then there
+   * should be a back button that also warns them that whatever they typed has
+   * not been sent yet" (Justin, 27 October 2026). So the head is Back on the
+   * left and Send on the right; Back with something written, or a screenshot
+   * added, and not yet sent asks first. Straight back when there is nothing
+   * to lose (nothing typed, or it has gone).
+   */
+  const unsent = !sent && (!!message.trim() || !!contact.trim() || shots.length > 0)
+  const back = () => {
+    if (!unsent || busy) return onBack?.()
+    Alert.alert('Not sent yet', 'What you wrote has not been sent. Leave without sending it?', [
+      { text: 'Keep writing', style: 'cancel' },
+      { text: 'Leave', style: 'destructive', onPress: () => onBack?.() }
+    ])
+  }
+
   const box = {
     color: color.silk,
     fontSize: font.body,
@@ -135,7 +155,19 @@ export default function Report({ onBack, start = 'bug', prefill = '', bluetooth 
               Something broken, or something you want
             </Text>
           </View>
-          <Press label="Done" height={40} onPress={onBack} />
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Press label="Back" height={40} onPress={back} />
+            {sent ? null : (
+              <Press
+                label={busy ? 'Sending…' : 'Send'}
+                tone="signal"
+                height={40}
+                on={!busy && !!message.trim()}
+                disabled={busy || !message.trim()}
+                onPress={send}
+              />
+            )}
+          </View>
         </View>
 
         {sent ? (
@@ -151,7 +183,8 @@ export default function Report({ onBack, start = 'bug', prefill = '', bluetooth 
                   key={k}
                   grow
                   height={48}
-                  label={k === 'bug' ? 'Something is broken' : 'Suggest feature'}
+                  /* Short enough for a 375-wide phone: "Something is broken" was cut to "Something is bro…" (27 October 2026). */
+                  label={k === 'bug' ? 'Problem' : 'Idea'}
                   on={kind === k}
                   disabled={busy}
                   onPress={() => {
@@ -266,14 +299,6 @@ export default function Report({ onBack, start = 'bug', prefill = '', bluetooth 
             <Shots shots={shots} onChange={setShots} disabled={busy} />
 
             {error ? <Note tone="fault">{error}</Note> : null}
-
-            <Press
-              label={busy ? 'Sending…' : 'Send'}
-              tone="signal"
-              on={!busy && !!message.trim()}
-              disabled={busy || !message.trim()}
-              onPress={send}
-            />
 
             <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>
               Your version, your {deviceNoun()}&rsquo;s OS and which unit you&rsquo;re on are sent too, so it

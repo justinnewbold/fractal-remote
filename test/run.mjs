@@ -3395,10 +3395,10 @@ test('the quick jumps fit the unit that is plugged in', async () => {
   const { jumpStep, jumpsFor } = await import('../src/lib/presetJumps.js')
 
   assert.equal(jumpStep(512), 100, 'a 512-slot unit is not jumping in hundreds')
-  assert.deepEqual(jumpsFor(512), [100, 200, 300, 400, 500])
+  assert.deepEqual(jumpsFor(512), [0, 100, 200, 300, 400, 500])
 
   assert.equal(jumpStep(104), 20, 'an AM4 is not jumping in twenties')
-  assert.deepEqual(jumpsFor(104), [20, 40, 60, 80, 100])
+  assert.deepEqual(jumpsFor(104), [0, 20, 40, 60, 80, 100])
 
   // An Axe-Fx II holds 384. Nobody wrote that number down here; the rule
   // reaches it on its own.
@@ -3482,8 +3482,8 @@ test('every unit the server can detect is addressed on its own terms', async () 
   }
 
   // And the jumps, per unit, from the same one rule.
-  assert.deepEqual(jumpsFor(slotCount(units.FM9)), [100, 200, 300, 400, 500])
-  assert.deepEqual(jumpsFor(slotCount(units.AM4)), [20, 40, 60, 80, 100])
+  assert.deepEqual(jumpsFor(slotCount(units.FM9)), [0, 100, 200, 300, 400, 500])
+  assert.deepEqual(jumpsFor(slotCount(units.AM4)), [0, 20, 40, 60, 80, 100])
   assert.deepEqual(jumpsFor(slotCount(units.VP4) ?? 0), [], 'a VP4 gets jump buttons over a list of four')
 })
 
