@@ -51,7 +51,7 @@ export const SHARE_TITLE = 'Help make Fractal Remote better?'
  * device-word.mjs): this iPad, this tablet.
  */
 export const shareWords = () => [
-  `Share which gear works with Fractal Remote, so we can put together a list of everything that works. When your unit connects, this ${deviceNoun()} sends one short note: which unit and its firmware, whether it went through a computer or Bluetooth, the computer app’s version or the Bluetooth adapter’s name, whether the unit answered, the kind of ${deviceNoun()} and its system version, and the app’s version. The same gear is sent once a month at most.`,
+  `Share which gear works with Fractal Remote, so we can put together a list of everything that works. When your unit connects, this ${deviceNoun()} sends one short note: which unit and its firmware, whether it went through a computer or Bluetooth, the kind of computer (Mac, Windows or Raspberry Pi) and the computer app’s version, or the Bluetooth adapter’s name, whether the unit answered, the kind of ${deviceNoun()} and its system version, and the app’s version. The same gear is sent once a month at most.`,
   'Never sent: preset or song names, anything you type, where you are, or your account or email. It is not linked to you, there is no advertising, and nothing goes to anyone else.',
   'It stays off unless you tap Yes, share. You can change it any time in Settings → Troubleshooting.'
 ]
@@ -189,8 +189,8 @@ export function sentFrom(raw, now = Date.now()) {
  *              'missing' or 'silent' when it did not), `deviceName`,
  *              `firmware`, `simulated`
  *   via        lib/link.js linkVia(): 'computer', 'bluetooth' or 'demo'
- *   link       lib/link.js state: `link`, `hostVersion` (and `hostOs` if the
- *              computer app ever says it)
+ *   link       lib/link.js state: `link`, `hostVersion`, and `hostOs`, the
+ *              kind of computer, which its app says from 1.89.8
  *   bluetooth  { phase, unit: the unit's name picked on the Bluetooth page,
  *              adapter: the adapter's name or '', answeredAs: the unit that
  *              answered instead of it, or null }

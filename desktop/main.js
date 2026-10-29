@@ -567,6 +567,7 @@ async function start() {
     readFirewall,
     serverEnv,
     tellPhonesChecked,
+    thisComputer,
     phonesHearLine: hearLine,
     TELL_PHONES_MS,
     waitForServer,
@@ -771,9 +772,11 @@ async function start() {
    * Which app this is, for the phones — written, then read back the way a
    * phone reads it, so the menu can say what they hear. See tellPhonesChecked.
    */
+  /* And what kind of computer this is ("macOS 15.3", "Raspberry Pi 5"), read once: it does not change while the app runs. */
+  const computerOs = thisComputer()
   const tell = async () => {
     if (quitting) return
-    told = await tellPhonesChecked({ port, version: app.getVersion(), log: phoneLog })
+    told = await tellPhonesChecked({ port, version: app.getVersion(), os: computerOs, log: phoneLog })
     if (tray) drawTray()
   }
   /*
@@ -797,7 +800,7 @@ async function start() {
     }
     arming = true
     cancel(phoneTimer)
-    armHost({ port, version: app.getVersion(), log: phoneLog })
+    armHost({ port, version: app.getVersion(), os: computerOs, log: phoneLog })
       .then((result) => {
         const cameOn = Boolean(result?.on) && !phone?.on
         armAnswered(result)

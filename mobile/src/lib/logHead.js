@@ -89,6 +89,8 @@ export function logHeader({ deviceName, preset, bluetooth = false } = {}) {
            * answer, so that case is named rather than left blank.
            */
           'computer app': link.hostVersion || 'did not say (older than 7.205.0, or could not write it)',
+          /* What kind of computer, when its app says (1.89.8 on): "macOS 15.3", "Raspberry Pi 5". Left out until then. */
+          'computer system': link.hostOs || undefined,
           link: link.link,
           /*
            * And with more than one on the account, which answered and which

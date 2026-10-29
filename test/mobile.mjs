@@ -10880,7 +10880,7 @@ export function run(test) {
     assert.match(link, /hostVersion: null/, 'the link state has nowhere to keep it')
     assert.match(
       link.replace(/\s+/g, ' '),
-      /set\(\{ macName: String\(name\), hostVersion: version \? String\(version\) : null \}\)/,
+      /set\(\{ macName: String\(name\), hostVersion: version \? String\(version\) : null, hostOs: data\?\.os \? String\(data\.os\)\.slice\(0, 40\) : null \}\)/,
       'the version the computer sends is still thrown away'
     )
 
@@ -12777,7 +12777,7 @@ export function run(test) {
        preset list over a unit that is right there. */
     assert.match(
       read('mobile/src/lib/link.js').replace(/\s+/g, ' '),
-      /if \(isDemo\(\)\) \{ enterDemo\(\) return stopLink \}[\s\S]*function enterDemo\(\) \{ running = false if \(timer\) clearTimeout\(timer\) timer = null set\(\{ link: 'connected', macName: 'the demo', hostVersion: null \}\)/,
+      /if \(isDemo\(\)\) \{ enterDemo\(\) return stopLink \}[\s\S]*function enterDemo\(\) \{ running = false if \(timer\) clearTimeout\(timer\) timer = null set\(\{ link: 'connected', macName: 'the demo', hostVersion: null, hostOs: null \}\)/,
       'the demo does not read as a working link, so the app refuses to use it'
     )
 

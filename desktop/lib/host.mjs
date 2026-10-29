@@ -10,9 +10,9 @@
  * mDNS. Both are handed in, the same way `deviceState` takes its driver — which
  * is also what makes any of this testable without a Mac, a unit, or a network.
  */
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { networkInterfaces, hostname as osHostname } from 'node:os'
+import { networkInterfaces, hostname as osHostname, release as osRelease } from 'node:os'
 import { DEFAULT_PROJECT, HOSTED_ORIGIN } from './project.mjs'
 
 export const DEFAULT_PORT = 5056
@@ -218,6 +218,66 @@ export function prettyHostname(name = osHostname()) {
 }
 
 /**
+ * WHAT KIND OF COMPUTER THIS IS, in the few words a person says it: "macOS
+ * 15.3 (Apple silicon)", "Windows 11", "Raspberry Pi 5", "Linux (x64)".
+ *
+ * "Can we find out which computer is being used as well?" (Justin, 29
+ * October 2026, reading the first gear notes, whose computer was blank on
+ * every one.) The phones are told it beside the name and the version
+ * (tellPhones), and they put it in a gear note and a report's log. Never the
+ * name somebody gave the machine, which the name line already carries to the
+ * phone and which goes in no note: only the kind, which names nobody.
+ *
+ * `systemVersion` is Electron's own (process.getSystemVersion: "15.3.1" on
+ * a Mac, "10.0.22631" on Windows); without it the kernel's release is read,
+ * which on a Mac is Darwin's number. `model` is a Linux board's own name
+ * (/proc/device-tree/model), which is how a Raspberry Pi says which it is.
+ * Held to 40 characters, the gear notes' own limit.
+ */
+export function computerKind({ platform = process.platform, release = '', systemVersion = '', model = '', arch = process.arch } = {}) {
+  const say = (words) => String(words).slice(0, 40)
+  if (platform === 'darwin') {
+    let v = String(systemVersion || '').split('.').slice(0, 2).join('.')
+    if (!v) {
+      const darwin = Number(String(release).split('.')[0])
+      /* Darwin 20 to 24 are macOS 11 to 15; Darwin 25 is macOS 26. */
+      const major = darwin >= 25 ? darwin + 1 : darwin >= 20 ? darwin - 9 : null
+      v = major ? String(major) : ''
+    }
+    return say(`macOS${v ? ` ${v}` : ''}${arch === 'arm64' ? ' (Apple silicon)' : ''}`)
+  }
+  if (platform === 'win32') {
+    const [major, , build] = String(systemVersion || release).split('.').map(Number)
+    if (major === 10) return build >= 22000 ? 'Windows 11' : 'Windows 10'
+    return say(`Windows${major ? ` ${major}` : ''}`)
+  }
+  if (platform === 'linux') {
+    const pi = String(model || '').replace(/\0/g, '').match(/Raspberry Pi (Zero 2 W|Zero W|Zero|Compute Module \d+|\d+|400|500)/)
+    return say(pi ? `Raspberry Pi ${pi[1]}` : `Linux (${arch})`)
+  }
+  return say(platform || 'unknown')
+}
+
+/** This computer's kind, read from where it is kept here. Never throws. */
+export function thisComputer() {
+  let model = ''
+  if (process.platform === 'linux') {
+    try {
+      model = readFileSync('/proc/device-tree/model', 'utf8')
+    } catch {
+      model = ''
+    }
+  }
+  let systemVersion = ''
+  try {
+    systemVersion = typeof process.getSystemVersion === 'function' ? process.getSystemVersion() : ''
+  } catch {
+    systemVersion = ''
+  }
+  return computerKind({ release: osRelease(), systemVersion, model })
+}
+
+/**
  * What the device server says about the phone remote's link, read the same
  * way whichever ForgeFX answers.
  *
@@ -300,6 +360,7 @@ export async function armHost({
    * already looks.
    */
   version = null,
+  os = null,
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   attempts = 90,
   log = () => {}
@@ -339,7 +400,7 @@ export async function armHost({
     }
 
     // 2. The name the phone will show, and which app this is.
-    await tellPhones({ port, fetch, hostname, version, log })
+    await tellPhones({ port, fetch, hostname, version, os, log })
 
     // 3. Can this ForgeFX host at all, and is anyone signed in?
     const cloud = (await call('/cloud/status')).body || {}
@@ -579,6 +640,8 @@ export async function tellPhones({
   fetch = globalThis.fetch,
   hostname = prettyHostname(),
   version = null,
+  /* What kind of computer this is (thisComputer), beside the name and the version, when the app says it. */
+  os = null,
   log = () => {}
 } = {}) {
   const said = version ? `${hostname}, v${version}` : hostname
@@ -587,7 +650,10 @@ export async function tellPhones({
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        data: version ? { name: hostname, version: String(version) } : { name: hostname },
+        data: {
+          ...(version ? { name: hostname, version: String(version) } : { name: hostname }),
+          ...(os ? { os: String(os).slice(0, 40) } : {})
+        },
         origin: 'fractal'
       })
     })
@@ -625,6 +691,7 @@ export async function tellPhonesChecked({
   fetch = globalThis.fetch,
   hostname = prettyHostname(),
   version = null,
+  os = null,
   log = () => {},
   now = Date.now
 } = {}) {
@@ -634,6 +701,7 @@ export async function tellPhonesChecked({
     fetch,
     hostname,
     version,
+    os,
     log: (line) => {
       said.push(line)
       log(line)
