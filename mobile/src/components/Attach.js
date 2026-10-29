@@ -116,16 +116,19 @@ export default function Attach({ shots = [], onShots, video = null, onVideo, dis
           ) : null}
         </View>
       ) : null}
-      <View style={{ flexDirection: 'row', gap: space.sm }}>
+      {/*
+        One above the other, each the width of the screen: side by side on a
+        375-wide iPhone the first read "Add a photo or vi…" (Justin, 29
+        October 2026), and "video" is the half of it that is new.
+      */}
+      <View style={{ gap: space.sm }}>
         <Press
-          grow
           label={picking ? 'Opening…' : 'Add a photo or video'}
           height={48}
           disabled={disabled || pasting || picking || full}
           onPress={choose}
         />
         <Press
-          grow
           label={pasting ? 'Pasting…' : 'Paste a screenshot'}
           height={48}
           disabled={disabled || pasting || picking || room <= 0}

@@ -239,6 +239,15 @@ export default function Presets({ onBack }) {
    * the row lands at the top of the screen with the run after it below.
    */
   const jumps = jumpsFor(slots)
+  /*
+   * DRAWN WHOLE. On an FM3's 0 to 500, six buttons on a 375-wide iPhone read
+   * "0, 1…, 2…, 3…" (Justin, 29 October 2026): each is about fifty points,
+   * and "100" did not fit between a button's side padding. So the row's gaps
+   * are the narrow ones, and each number is fitted to its button (Press
+   * `fit`), every one at the size the widest needs, so 0 never sits big
+   * beside 500 small.
+   */
+  const jumpLabels = jumps.map(String)
   const jumpTo = (n) => {
     try {
       list.current?.scrollToIndex({ index: Math.min(n, (slots || 1) - 1), viewPosition: 0, animated: true })
@@ -319,10 +328,10 @@ export default function Presets({ onBack }) {
         <View
           accessibilityRole="toolbar"
           accessibilityLabel="Jump to a range"
-          style={{ flexDirection: 'row', gap: space.sm, paddingHorizontal: space.lg, paddingBottom: space.sm }}
+          style={{ flexDirection: 'row', gap: space.xs, paddingHorizontal: space.lg, paddingBottom: space.sm }}
         >
-          {jumps.map((n) => (
-            <Press key={n} grow label={String(n)} height={44} onPress={() => jumpTo(n)} />
+          {jumps.map((n, i) => (
+            <Press key={n} grow fit fitWith={jumpLabels.filter((_, j) => j !== i)} label={jumpLabels[i]} height={44} onPress={() => jumpTo(n)} />
           ))}
         </View>
       ) : null}
