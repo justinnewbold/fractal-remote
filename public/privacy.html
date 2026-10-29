@@ -179,23 +179,35 @@
 
       <h3>Bug reports and suggestions — only when you press Send</h3>
       <p>
-        There are two kinds and they carry different things, deliberately.
+        In the phone and tablet app it is one form, <strong>Leave feedback or report a
+        problem</strong>: a box for what you want to say, up to three pictures and one video if
+        you add them, and two tick boxes, both ticked to start: <strong>Include my email</strong>
+        and <strong>Include the log and what I&rsquo;m using</strong>. On the website the Feedback
+        form has two kinds, Problem and Idea, and they carry different things, deliberately.
       </p>
       <table>
-        <tr><th></th><th>Problem</th><th>Idea</th></tr>
-        <tr><td>What you wrote</td><td>yes</td><td>yes</td></tr>
-        <tr><td>Your email, if you typed one</td><td>optional</td><td>optional</td></tr>
-        <tr><td>Which account sent it, if you are signed in</td><td>yes</td><td>yes</td></tr>
-        <tr><td>App version, your unit, your OS, screen size, the computer app&rsquo;s version and how the app is connected</td><td>yes</td><td>yes</td></tr>
-        <tr><td>The last fault the screen showed</td><td>with the log only</td><td><strong>never</strong></td></tr>
-        <tr><td>Screenshots, only the ones you add</td><td>up to 3, optional</td><td>up to 3, optional</td></tr>
-        <tr><td><strong>The debug log</strong></td><td>yes, and you can turn it off</td><td><strong>never</strong></td></tr>
+        <tr><th></th><th>Phone or tablet</th><th>Website: Problem</th><th>Website: Idea</th></tr>
+        <tr><td>What you wrote</td><td>yes</td><td>yes</td><td>yes</td></tr>
+        <tr><td>Your email</td><td>your account&rsquo;s, while Include my email is ticked; signed out, only one you type</td><td>optional</td><td>optional</td></tr>
+        <tr><td>Which account sent it, if you are signed in</td><td>yes, unless you untick Include my email, which sends it anonymously</td><td>yes</td><td>yes</td></tr>
+        <tr><td>App version, your unit, your OS, screen size, the computer app&rsquo;s version and how the app is connected</td><td>yes, and which phone or tablet (the maker and model on Android, iPhone or iPad on Apple&rsquo;s, never the name you gave it)</td><td>yes</td><td>yes</td></tr>
+        <tr><td>The last fault the screen showed</td><td>with the log only</td><td>with the log only</td><td><strong>never</strong></td></tr>
+        <tr><td>Screenshots and photos, only the ones you add</td><td>up to 3, optional</td><td>up to 3, optional</td><td>up to 3, optional</td></tr>
+        <tr><td>A video, only one you add</td><td>one, optional</td><td>no</td><td>no</td></tr>
+        <tr><td><strong>The debug log</strong></td><td>yes, untick it to leave it out</td><td>yes, and you can turn it off</td><td><strong>never</strong></td></tr>
       </table>
       <p>
         The log is a record of what the app did — buttons pressed, requests made, errors. It is
         gathered the moment you press Send and at no other time, you can read the whole thing
-        first, and you can send the report without it. A suggestion never carries one, and the
-        database itself refuses to store one against a suggestion.
+        first (See what is sent), and you can send the report without it. A suggestion from the
+        website never carries one, and the database itself refuses to store one against a
+        suggestion.
+      </p>
+      <p>
+        <strong>Sent anonymously.</strong> With Include my email unticked, the report carries no
+        account and no email address, and it is sent with no sign-in at all, so nothing links it
+        to you, and deleting your account cannot find it either. If the log goes with it, the log
+        still says what the app saw, such as the name your computer goes by on your network.
       </p>
       <p>
         <strong>Send logs to developer</strong>, on the log page itself, sends a bug report at once:
@@ -209,19 +221,18 @@
         <strong>Report a Bluetooth problem</strong>, on the Bluetooth page (and from
         Report this beside a fault there and on Play&rsquo;s fault card, Report a problem under
         Play&rsquo;s Bluetooth note, and Report a Bluetooth problem on the screen that waits for a
-        computer), sends a bug report at once when you tap one of its answers: the answer you
-        tapped, the line that was on the screen, this session&rsquo;s log and the end of the runs
+        computer), opens the same form. Nothing goes until you press Send; then, under what you
+        wrote, the report says it was opened from Bluetooth and gives the line that was on the
+        screen, and with the log ticked it carries this session&rsquo;s log and the end of the runs
         before it, and, when the app is connected to a computer, the computer&rsquo;s own record
-        described above. You can read the log first (See what is sent, on that screen), and
-        &ldquo;Write it out, or add a screenshot&rdquo; opens the ordinary form instead, where the
-        log can be turned off.
+        described above.
       </p>
       <p>
         A log that goes with a report starts with the same few lines a copied log does: the app&rsquo;s
         version, your unit (and, from the phone app, the preset), and which computer the app is connected to and its version,
         or, over Bluetooth, the name of the Bluetooth adapter it is connected to instead (its name, never its
         Bluetooth address). From the phone app it also says which store version of the app is installed.
-        While the app is on Bluetooth, and on any report sent from Report a Bluetooth problem, those
+        While the app is on Bluetooth, and on any report opened from Report a Bluetooth problem, those
         lines also say the unit picked, a unit that answered in its place, whether Bluetooth is off,
         not allowed or blocked on the device, and, for a unit other than the AM4 and the VP4, how
         each command is sent and the MIDI channel for Program Change.
@@ -230,16 +241,25 @@
         can be read), under its own heading, the same as Copy Logs does.
       </p>
       <p>
-        <strong>Screenshots.</strong> You can add up to three pictures to a report, on the log page,
-        the website&rsquo;s Debug log or the Feedback form. Only the ones you choose: on a phone you
-        pick them in the phone&rsquo;s own photo picker (Choose a screenshot), which shows your photos
-        to you and hands the app only the ones you pick, or copy a screenshot and paste it in (the
-        app reads the clipboard only when you tap Paste a screenshot, and your phone may ask you to
-        allow that); on the website you pick a file.
+        <strong>Screenshots and photos.</strong> You can add up to three pictures to a report, on
+        the log page, the phone&rsquo;s report form, the website&rsquo;s Debug log or the Feedback
+        form. Only the ones you choose: on a phone you pick them in the phone&rsquo;s own photo
+        picker (Add a photo or video, or Choose a screenshot on the log page), which shows your
+        photos to you and hands the app only the ones you pick, or copy a screenshot and paste it
+        in (the app reads the clipboard only when you tap Paste a screenshot, and your phone may
+        ask you to allow that); on the website you pick a file.
         Each is made smaller before it is sent. They are stored privately for a week, readable
         by nobody through the app, not even by you, and they go to the person who builds the app
         with the report&rsquo;s email. A screenshot shows whatever was on the screen, so add only
         ones you are happy for him to see.
+      </p>
+      <p>
+        <strong>A video.</strong> On a phone or tablet you can add one video to a report, picked
+        the same way, in the phone&rsquo;s own photo picker. It goes as it is, up to 50 MB (an
+        iPhone makes it 720p as it hands it over). It is stored privately for a week, readable by
+        nobody through the app, not even by you; the report&rsquo;s email carries a private link to
+        it for the person who builds the app, the link stops working after that week, and the
+        video is deleted. Deleting your account deletes the videos sent from it too.
       </p>
       <p>
         The log holds no preset contents, no audio, no password, and nothing else you have typed
@@ -293,8 +313,8 @@
           RevenueCat from the internet connection, not from the phone's location.</li>
         <li><strong>No contacts, camera or microphone, and nothing read from your photos.</strong>
           None of them are used. The only pictures the app ever sees or sends are the screenshots
-          you choose to add to a report, described above: the phone&rsquo;s photo picker shows your
-          photos to you, not to the app.</li>
+          and photos you choose to add to a report, described above, and the one video you may add with them:
+          the phone&rsquo;s photo picker shows your photos and videos to you, not to the app.</li>
         <li><strong>No audio.</strong> This app sends control messages to your unit. It does not
           record, stream or process sound.</li>
         <li><strong>Nothing is sold or shared with anyone</strong> for advertising or any other
@@ -333,7 +353,7 @@
           was about, and how many purchases it counted (with any card sale beside it) are
           kept, so it is not shown again unless they pay again.</li>
         <li><strong>Messages</strong> — the bug reports and suggestions described above, with their
-          screenshots, in his email.</li>
+          screenshots, and a link to a report&rsquo;s video for its week, in his email.</li>
         <li><strong>What works</strong> — the notes about gear described under <em>Which gear
           works</em>, added up by unit, by computer system or Bluetooth adapter, and by whether the unit
           answered. Nothing in them names anybody.</li>
@@ -398,6 +418,9 @@
         <li><strong>Screenshots added to a report</strong> — the stored copy is deleted a week after it
           was sent, or an hour after if its report never arrived. Until the report itself is deleted,
           the only other copy is in that report&rsquo;s email.</li>
+        <li><strong>A video added to a report</strong> — deleted a week after it was sent, or an hour
+          after if its report never arrived, which is also when the link to it in the report&rsquo;s
+          email stops working. No other copy is kept.</li>
         <li><strong>The purchase record, and the record of the app's checks</strong>, at RevenueCat
           — those under your account until you delete it, which deletes them there too. Checks
           made while no account is signed in on a phone (before signing in, after signing out, or

@@ -160,6 +160,24 @@ export function ownShots(report: Report, id: string): string[] {
     })
 }
 
+/*
+ * AND A REPORT'S VIDEO (29 October 2026), in the private bucket
+ * `report-videos` beside the pictures' (migrations/20261029_report_videos.sql),
+ * by the same rule: one in the account's own folder, or one under anon/ named
+ * by a report it sent signed out.
+ */
+const VIDEO_BUCKET = 'report-videos'
+const VIDEO_PATH =
+  /^(anon|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-video\.(mp4|mov|webm|3gp)$/
+
+/** The video a report names, when this account may delete it. */
+export function ownVideo(report: Report, id: string): string[] {
+  const path = String(report?.context?.video ?? '')
+  if (!VIDEO_PATH.test(path)) return []
+  const folder = path.split('/')[0]
+  return folder === id || (folder === 'anon' && !report.user_id) ? [path] : []
+}
+
 async function forgetShots(url: string, service: string, who: { id: string; email: string }, reports: Report[]) {
   const headers = { apikey: service, Authorization: `Bearer ${service}`, 'Content-Type': 'application/json' }
   const paths = new Set<string>(reports.flatMap((r) => ownShots(r, who.id)))
@@ -179,6 +197,28 @@ async function forgetShots(url: string, service: string, who: { id: string; emai
     if (!res.ok) console.error(`delete-account: screenshots answered ${res.status}`)
   } catch (err) {
     console.error(`delete-account: screenshots unreachable (${err})`)
+  }
+}
+
+/* The videos, the pictures' way: what the reports name, and the account's own folder. */
+async function forgetVideos(url: string, service: string, who: { id: string; email: string }, reports: Report[]) {
+  const headers = { apikey: service, Authorization: `Bearer ${service}`, 'Content-Type': 'application/json' }
+  const paths = new Set<string>(reports.flatMap((r) => ownVideo(r, who.id)))
+  await fetch(`${url}/storage/v1/object/list/${VIDEO_BUCKET}`, { method: 'POST', headers, body: JSON.stringify({ prefix: who.id, limit: 1000, offset: 0 }) })
+    .then(async (res) => {
+      if (!res.ok) return console.error(`delete-account: video folder answered ${res.status}`)
+      for (const file of await res.json()) {
+        const path = `${who.id}/${String(file?.name || '')}`
+        if (VIDEO_PATH.test(path)) paths.add(path)
+      }
+    })
+    .catch((err) => console.error(`delete-account: video folder unreachable (${err})`))
+  if (!paths.size) return
+  try {
+    const res = await fetch(`${url}/storage/v1/object/${VIDEO_BUCKET}`, { method: 'DELETE', headers, body: JSON.stringify({ prefixes: [...paths] }) })
+    if (!res.ok) console.error(`delete-account: videos answered ${res.status}`)
+  } catch (err) {
+    console.error(`delete-account: videos unreachable (${err})`)
   }
 }
 
@@ -266,6 +306,7 @@ Deno.serve(async (req) => {
   const reports = await reportsOf(url, service, who)
   if (!reports) return json({ error: 'The account could not be deleted. Try again in a minute.' }, 502)
   await forgetShots(url, service, who, reports)
+  await forgetVideos(url, service, who, reports)
   await forgetRows(url, service, who)
   /*
    * The emailed copies of its reports are the developer's to delete; he is

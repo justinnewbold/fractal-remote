@@ -3,7 +3,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import { toByteArray } from 'base64-js'
 
-import { SHOT_BYTES, SHOT_EDGE, SHOT_PHONE_QUALITIES, SHOT_QUALITIES, base64Bytes } from './report-rules'
+import { SHOT_BYTES, SHOT_EDGE, SHOT_PHONE_QUALITIES, SHOT_QUALITIES, VIDEO_BYTES, VIDEO_TYPES, VIDEO_WORDS, base64Bytes, videoKind } from './report-rules'
 
 /**
  * A screenshot for a report, pasted from the clipboard.
@@ -124,5 +124,68 @@ export async function pickShots(room) {
     return why ? { shots, why } : { shots }
   } catch {
     return { shots: [], why: 'unreadable' }
+  }
+}
+
+/**
+ * PICTURES AND A VIDEO, from the one picker: "upload a photo or video"
+ * (Justin, 29 October 2026, on the report screen). Up to `room` pictures,
+ * each made smaller as pickShots makes them, and, when `wantVideo`, the
+ * first video picked, left as a file on the phone for lib/reports to send
+ * from (it is never read into the app whole: a minute of video is tens of
+ * MB).
+ *
+ * The same system picker as pickShots, which asks no permission and hands
+ * over only what was picked. On an iPhone the video is made 720p as it is
+ * handed over (videoExportPreset), which keeps a minute well under
+ * VIDEO_BYTES; Android hands the file as it is, so its size is checked here.
+ * Nothing new is installed: videos were always in expo-image-picker, so this
+ * rides an update and not a store build.
+ *
+ * Answers `{ shots, video, why, videoWhy }`: `video` is `{ uri, ext, type,
+ * size, duration }` or null; `why` a key of SHOT_WORDS for a picture that
+ * could not be used, `videoWhy` the words for a video that could not
+ * (VIDEO_WORDS). Never throws.
+ */
+export async function pickMedia(room, wantVideo) {
+  const types = [...(room > 0 ? ['images'] : []), ...(wantVideo ? ['videos'] : [])]
+  if (!types.length) return { shots: [], video: null, why: 'full' }
+  try {
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: types,
+      allowsMultipleSelection: true,
+      selectionLimit: Math.max(1, room + (wantVideo ? 1 : 0)),
+      quality: 1,
+      exif: false,
+      videoExportPreset: ImagePicker.VideoExportPreset.H264_1280x720
+    })
+    if (picked?.canceled || !picked?.assets?.length) return { shots: [], video: null }
+    const shots = []
+    let why
+    let video = null
+    let videoWhy
+    for (const asset of picked.assets) {
+      if (asset.type === 'video') {
+        if (!wantVideo || video) {
+          videoWhy = VIDEO_WORDS.one
+          continue
+        }
+        const ext = videoKind(asset.mimeType, asset.uri)
+        if (!asset.uri || !ext) videoWhy = VIDEO_WORDS.unreadable
+        else if (asset.fileSize > VIDEO_BYTES) videoWhy = VIDEO_WORDS.tooBig(asset.fileSize)
+        else video = { uri: asset.uri, ext, type: VIDEO_TYPES[ext], size: asset.fileSize || 0, duration: asset.duration || 0 }
+        continue
+      }
+      if (shots.length >= room) {
+        why = 'full'
+        continue
+      }
+      const shot = await shrink(asset.uri, asset.width, asset.height).catch(() => undefined)
+      if (shot) shots.push(shot)
+      else why = shot === null ? 'tooBig' : 'unreadable'
+    }
+    return { shots, video, why, videoWhy }
+  } catch {
+    return { shots: [], video: null, why: 'unreadable' }
   }
 }

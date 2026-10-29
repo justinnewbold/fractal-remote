@@ -326,7 +326,7 @@ Tracking Transparency entirely.
 |---|---|---|---|
 | Contact Info → **Email Address** | Yes | Yes | Account sign-in, and answering a support message: the address they leave, or, when they leave none and are signed in, the account's own (22 October 2026) |
 | User Content → **Other User Content** | Yes | Yes | Setlists, so they follow you between devices |
-| User Content → **Photos or Videos** | Yes | Yes | Screenshots somebody chooses to add to a bug report (up to three, pasted or picked on a phone, picked on the website), sent only when they press Send. Added 22 October 2026: **not on the live label yet** |
+| User Content → **Photos or Videos** | Yes | Yes | Screenshots and photos somebody chooses to add to a bug report (up to three, pasted or picked on a phone, picked on the website), and from 29 October 2026 one video picked on a phone or tablet, sent only when they press Send. Linked unless they untick Include my email. Added 22 October 2026: **not on the live label yet** |
 | User Content → **Customer Support** | Yes | Yes | What somebody writes in a bug report or suggestion: the Feedback form, and the note beside Send logs to developer. It was true before the note came, and was never on the label; add it with Photos or Videos. **Not on the live label yet** |
 | Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you, and the number RevenueCat files purchases under. App Functionality and **Analytics** (RevenueCat's own guidance: say how the id is used, as for Purchase History). Analytics added 25 October 2026: **not on the live label yet** |
 | Diagnostics → **Other Diagnostic Data** | Yes | Yes | The debug log, and only when somebody presses Send on a bug report |
@@ -1239,6 +1239,12 @@ and **not shared**:
   adds to a bug report, up to three, sent when they press Send). For App
   functionality. Not processed ephemerally: they are kept a week in storage
   (an hour, if their report never arrived), and in the report's email.
+- **Photos and videos → Videos.** From 29 October 2026 (the phone's report
+  form: "upload a photo or video"). Optional (one video somebody adds to a
+  bug report, sent when they press Send). For App functionality. Not
+  processed ephemerally: kept a week in storage (an hour, if its report
+  never arrived), reached from the report's email by a link that stops
+  working when it is deleted.
 
 Email address, already declared, now also answers a report from the
 account's own address when nobody typed one: keep App functionality and

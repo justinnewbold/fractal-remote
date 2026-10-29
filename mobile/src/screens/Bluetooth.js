@@ -146,9 +146,9 @@ import Press from '../components/Press'
  * line that says something is wrong, which sends that line with the report.
  * Not beside the line that says Bluetooth is not allowed, which has Open
  * Settings, the fix, under it, and not beside "Unlock the app", which is not
- * a problem with Bluetooth. Both open Report a Bluetooth problem
- * (screens/BluetoothReport, `onReport`, App's through Settings), which comes
- * back here.
+ * a problem with Bluetooth. Both open the report screen (screens/Report,
+ * `onReport`, App's through Settings) with what is wrong said on it, which
+ * comes back here.
  *
  * The beta note is the iPhone's or Android's own (betaNote, from
  * shared/bluetooth-gear.mjs): only Android's names an Android phone, because

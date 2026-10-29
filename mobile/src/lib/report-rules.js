@@ -369,6 +369,112 @@ export function withShots(context = {}, { paths = [], lost = 0, why = '' } = {})
   return out
 }
 
+/** What the phone's report screen sends as the message when only pictures or a video were added: a row has to say something. */
+export const ATTACHED_ONLY_MESSAGE = 'No message written, only what is attached.'
+
+/**
+ * THE MESSAGE THE PHONE'S REPORT SCREEN SENDS (screens/Report): what was
+ * written, and, when the screen was opened from Bluetooth or from a fault,
+ * a line under it saying so, which is the one place that survives the log
+ * being unticked. What was written stays the first line, which is what the
+ * email's subject is made of; nothing written is ATTACHED_ONLY_MESSAGE.
+ * Never longer than MAX_MESSAGE: what was written gives way to the line.
+ */
+export function formMessage({ typed = '', bluetooth = false, said = null } = {}) {
+  const words = typeof said === 'string' ? said.trim().slice(0, 600) : ''
+  const tail = [bluetooth ? 'Opened from Bluetooth.' : '', words ? `The app said: ${words}` : ''].filter(Boolean).join(' ')
+  const room = MAX_MESSAGE - (tail ? tail.length + 2 : 0)
+  const body = String(typed ?? '').trim().slice(0, room).trim() || ATTACHED_ONLY_MESSAGE
+  return tail ? `${body}\n\n${tail}` : body
+}
+
+/*
+ * A VIDEO IN A REPORT (29 October 2026). "A box to type out a message, upload
+ * a photo or video, and have the log sent with what devices they're using"
+ * (Justin, on the phone's report screen). One a report, picked from the
+ * phone's own picker, which hands the app only the one picked and asks no
+ * permission for it.
+ *
+ * NOT ATTACHED, LINKED. A screenshot is 1.5 MB at most and rides in the
+ * email; a minute of video is tens of MB, past what an inbox takes. So it goes
+ * to a private bucket of its own (`report-videos`), and the email carries a
+ * link signed for VIDEO_LINK_DAYS, the days the bucket keeps it
+ * (functions/feedback-email, migrations/20261029_report_videos.sql).
+ *
+ * VIDEO_BYTES is the project's own cap on any one upload (Storage's file
+ * size limit, 50 MB), so a video under it is one the bucket takes. An iPhone
+ * makes a picked video smaller as it hands it over (720p); Android hands the
+ * file as it is, so a long one is turned away here, before anything is sent.
+ *
+ * VIDEO_PATH is the only shape a video's place may have, as SHOT_PATH is
+ * for a picture: the sender's folder, the report's key, and its kind. The
+ * bucket's insert rule and the email function take nothing else; a test
+ * holds the three to each other.
+ */
+export const VIDEO_BUCKET = 'report-videos'
+export const VIDEO_BYTES = 50 * 1024 * 1024
+export const VIDEO_LINK_DAYS = 7
+/** How long the video may take to go: minutes, not seconds, on a phone's upload. */
+export const VIDEO_WAIT_MS = 300_000
+/** Each kind of video the bucket takes, by the ending its place has. */
+export const VIDEO_TYPES = Object.freeze({ mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', '3gp': 'video/3gpp' })
+export const VIDEO_PATH =
+  /^(anon|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-video\.(mp4|mov|webm|3gp)$/
+
+export const videoPath = (owner, key, ext) => `${owner || 'anon'}/${key}-video.${VIDEO_TYPES[ext] ? ext : 'mp4'}`
+
+/**
+ * Which kind a picked video is, from what the picker said its type was, or
+ * the ending of its file: a key of VIDEO_TYPES, or null for one the bucket
+ * would turn away.
+ */
+export function videoKind(mimeType, uri = '') {
+  const type = String(mimeType || '').toLowerCase()
+  for (const [ext, t] of Object.entries(VIDEO_TYPES)) if (type === t) return ext
+  const end = String(uri || '').toLowerCase().split('?')[0].match(/\.([a-z0-9]+)$/)?.[1]
+  if (end === 'qt') return 'mov'
+  if (end === 'm4v') return 'mp4'
+  return end && VIDEO_TYPES[end] ? end : null
+}
+
+/** A size in MB, in the words a person reads: "12 MB", "0.4 MB". */
+export function mbWords(bytes) {
+  const mb = (Number(bytes) || 0) / (1024 * 1024)
+  return `${mb >= 10 ? Math.round(mb) : Math.max(0.1, Math.round(mb * 10) / 10)} MB`
+}
+
+/** How long a video runs, from the picker's milliseconds: "0:34", "2:05". Empty when it did not say. */
+export function videoLength(ms) {
+  const s = Math.round((Number(ms) || 0) / 1000)
+  if (!(s > 0)) return ''
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+/** What the screens say about a video, in the picker's words, never a file format. */
+export const VIDEO_WORDS = {
+  one: 'One video a report. Remove it to add a different one.',
+  tooBig: (bytes) =>
+    `That video is too big to send (${mbWords(bytes)}; a report can carry ${mbWords(VIDEO_BYTES)}). Trim it in your Photos app, or choose a shorter one.`,
+  unreadable: 'That video couldn’t be opened. Choose another one.'
+}
+
+/** The one line said when the video did not go, on the screen and in the report. */
+export function videoLostWords(lost) {
+  return lost ? "The video couldn't be added, so the report went without it." : ''
+}
+
+/**
+ * The report's context with its video: where it went, or a line saying it
+ * could not be added. Inside context, as the screenshots are, so the row is
+ * the row every app has always inserted.
+ */
+export function withVideo(context = {}, { path = '', why = '' } = {}) {
+  const out = { ...context }
+  if (path && VIDEO_PATH.test(path)) out.video = path
+  else if (why) out.videoLost = `the video could not be added (${why})`
+  return out
+}
+
 /** Waits for `work`, or for `wait`, and throws a network error past it. */
 export async function inTime(work, wait = SEND_WAIT_MS) {
   let timer = null

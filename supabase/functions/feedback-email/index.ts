@@ -61,7 +61,14 @@
  *     never the bytes;
  *   - a reply address: the one they typed, as before, or when there is none
  *     and the report came from an account, that account's email, looked up
- *     here with the service key and labeled "the account's email".
+ *     here with the service key and labeled "the account's email";
+ *   - and the video, when there is one (29 October 2026: "upload a photo or
+ *     video"), as a LINK, signed for VIDEO_LINK_DAYS, the days its bucket
+ *     keeps it (migrations/20261029_report_videos.sql). Linked rather than
+ *     attached, unlike the pictures: a minute of video is tens of MB, past
+ *     what Resend and an inbox take. The same guards as a picture: only from
+ *     the sender's own folder (VIDEO_PATH and the row's user_id), and only
+ *     one no other row has named.
  *
  * Every request this makes has a deadline (WAIT_MS, RESEND_WAIT_MS), the
  * whole of it stays inside BUDGET_MS (the trigger waits sixty seconds), and a
@@ -73,7 +80,8 @@
  * called for a report, and once a day when asked with `{"sweep": true}`
  * (migrations/20261022_report_shots_sweep.sql), it deletes the pictures that
  * are due: older than 7 days, or older than an hour and named by no report
- * (public.report_shots_due). Through Storage's API with the service key,
+ * (public.report_shots_due), and the videos the same way
+ * (public.report_videos_due). Through Storage's API with the service key,
  * because the database refuses a delete straight from storage.objects.
  */
 
@@ -164,6 +172,18 @@ const SHOT_PATH =
 const SHOTS_MAX = 3
 /** The bucket's own limit, so anything bigger is not a picture the app sent. */
 const SHOT_LIMIT = 2 * 1024 * 1024
+
+/*
+ * THE VIDEOS' BUCKET, and the only places in it a report may name: the
+ * sender's folder, the report's key, and the kind of video. The same pattern
+ * as shared/report-rules.mjs VIDEO_PATH and the bucket's insert rule
+ * (migrations/20261029_report_videos.sql); a test holds the three to each
+ * other. The link lasts as long as the bucket keeps the video.
+ */
+const VIDEO_BUCKET = 'report-videos'
+const VIDEO_PATH =
+  /^(anon|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-video\.(mp4|mov|webm|3gp)$/
+const VIDEO_LINK_DAYS = 7
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /* The box invites "your email, if you want an answer", and people put all sorts in it. */
@@ -331,6 +351,57 @@ async function screenshots(row: Record<string, unknown>, ctx: Record<string, unk
   }
 }
 
+type Film = { link: string; missing: string }
+
+/**
+ * Whether a row other than this one already names the video as its own: a
+ * video is linked from one email only, for the reason a picture is attached
+ * to one. Answers 'no', 'yes', or a reason it could not be told.
+ */
+async function videoNamedElsewhere(url: string, key: string, path: string, id: string): Promise<string> {
+  if (!UUID.test(id)) return 'the report has no id to check it against'
+  const query = `id=neq.${id}&context->>video=eq.${encodeURIComponent(path)}&limit=1`
+  try {
+    const res = await within(`${url}/rest/v1/feedback?select=id&${query}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } })
+    if (!res.ok) return `it could not be checked (${res.status})`
+    const rows = await res.json()
+    return Array.isArray(rows) && rows.length ? 'yes' : 'no'
+  } catch (err) {
+    return `it could not be checked (${err})`
+  }
+}
+
+/**
+ * The video a row names, as a link signed for VIDEO_LINK_DAYS, or a line
+ * saying why there is none. Only the sender's own, named by no other row.
+ * A row with no video answers nothing at all.
+ */
+async function videoOf(row: Record<string, unknown>, ctx: Record<string, unknown>): Promise<Film> {
+  if (ctx.video === undefined || ctx.video === null || ctx.video === '') return { link: '', missing: '' }
+  const path = String(ctx.video)
+  const owner = row.user_id ? String(row.user_id) : 'anon'
+  const url = Deno.env.get('SUPABASE_URL')
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!VIDEO_PATH.test(path) || path.split('/')[0] !== owner) return { link: '', missing: "The video was not the sender's own, so it was left out." }
+  if (!url || !key) return { link: '', missing: 'The video could not be linked: the function has no service key.' }
+  const elsewhere = await videoNamedElsewhere(url, key, path, String(row.id ?? ''))
+  if (elsewhere === 'yes') return { link: '', missing: 'The video was already sent with another report, so it was left out.' }
+  if (elsewhere !== 'no') return { link: '', missing: `The video was left out: ${elsewhere}.` }
+  try {
+    const res = await within(`${url}/storage/v1/object/sign/${VIDEO_BUCKET}/${path}`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expiresIn: VIDEO_LINK_DAYS * 24 * 60 * 60 })
+    })
+    if (!res.ok) return { link: '', missing: `The video could not be linked (${res.status}); it is in the report-videos bucket for ${VIDEO_LINK_DAYS} days.` }
+    const signed = String((await res.json())?.signedURL ?? '')
+    if (!signed) return { link: '', missing: 'The video could not be linked: storage gave no address.' }
+    return { link: signed.startsWith('http') ? signed : `${url}/storage/v1${signed.startsWith('/') ? '' : '/'}${signed}`, missing: '' }
+  } catch (err) {
+    return { link: '', missing: `The video could not be linked (${err}).` }
+  }
+}
+
 /**
  * THE TIDY: the pictures that are due, deleted. Asked of the database
  * (report_shots_due, which only the service key may call) and deleted through
@@ -363,6 +434,40 @@ async function sweepShots(): Promise<number> {
   }
 }
 
+/**
+ * THE VIDEOS' TIDY, the pictures' own for the other bucket: the videos due
+ * (report_videos_due: past their week, or past an hour with no report of
+ * their own naming them), deleted through Storage's API. Never throws.
+ */
+async function sweepVideos(): Promise<number> {
+  const url = Deno.env.get('SUPABASE_URL')
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!url || !key) return 0
+  const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }
+  try {
+    const res = await within(`${url}/rest/v1/rpc/report_videos_due`, { method: 'POST', headers, body: '{}' })
+    if (!res.ok) {
+      console.error('feedback-email: could not ask which videos are due', res.status)
+      return 0
+    }
+    const due = (await res.json()) as unknown
+    const paths = (Array.isArray(due) ? due : []).map((p) => String(p ?? '')).filter((p) => VIDEO_PATH.test(p))
+    if (!paths.length) return 0
+    const gone = await within(`${url}/storage/v1/object/${VIDEO_BUCKET}`, { method: 'DELETE', headers, body: JSON.stringify({ prefixes: paths }) })
+    if (!gone.ok) {
+      console.error('feedback-email: could not delete the videos that are due', gone.status)
+      return 0
+    }
+    return paths.length
+  } catch (err) {
+    console.error('feedback-email: could not tidy the videos', String(err))
+    return 0
+  }
+}
+
+/* Both tidies at once; how many went from the two together. */
+const sweepAll = () => Promise.all([sweepShots(), sweepVideos()]).then(([shots, videos]) => shots + videos)
+
 const pre = (lines: string[]) =>
   `<pre style="white-space:pre-wrap;word-break:break-word;font:12px/1.5 ui-monospace,Menlo,monospace;background:#f4f2ee;border-radius:6px;padding:10px;margin:4px 0 12px">${esc(
     lines.join('\n')
@@ -376,7 +481,11 @@ const part = (title: string, lines: string[]) =>
  */
 export function emailFor(
   row: Record<string, unknown>,
-  { account = null, shots = { files: [], missing: [] } }: { account?: string | null; shots?: { files: Picture[]; missing: string[] } } = {}
+  {
+    account = null,
+    shots = { files: [], missing: [] },
+    film = { link: '', missing: '' }
+  }: { account?: string | null; shots?: { files: Picture[]; missing: string[] }; film?: Film } = {}
 ) {
   const kind = row.kind === 'idea' ? 'Idea' : 'Bug'
   const message = String(row.message ?? '').slice(0, 4000)
@@ -394,7 +503,7 @@ export function emailFor(
    * themselves are below.
    */
   const facts = Object.entries(ctx)
-    .filter(([k, v]) => k !== 'screenshots' && v !== null && v !== undefined && v !== '' && typeof v !== 'object')
+    .filter(([k, v]) => k !== 'screenshots' && k !== 'video' && v !== null && v !== undefined && v !== '' && typeof v !== 'object')
     .map(([k, v]) => `<li><b>${esc(k)}</b>: ${esc(v)}</li>`)
     .join('')
 
@@ -425,6 +534,8 @@ export function emailFor(
   const logBytes = new TextEncoder().encode(log)
 
   const subject = `${kind}: ${message.split('\n')[0].slice(0, 70) || '(no message)'}`
+  /* Every picture and video that could not come, each in a line of its own. */
+  const missing = [...shots.missing, ...(film.missing ? [film.missing] : [])]
   /*
    * What is read at a glance first: who, the note, any picture that could
    * not come, the facts and the log's parts. The pictures after them, full
@@ -437,7 +548,8 @@ export function emailFor(
       <pre style="white-space:pre-wrap;word-break:break-word;font:inherit;background:#f4f2ee;border-radius:6px;padding:12px;margin:12px 0">${esc(
         message
       )}</pre>
-      ${shots.missing.length ? `<p style="color:#a03a2c;margin:8px 0">${shots.missing.map(esc).join('<br>')}</p>` : ''}
+      ${film.link ? `<p style="margin:8px 0"><a href="${esc(film.link)}" style="font-weight:600">Watch the video</a> <span style="color:#5f6670">(the link works for ${VIDEO_LINK_DAYS} days, then the video is deleted)</span></p>` : ''}
+      ${missing.length ? `<p style="color:#a03a2c;margin:8px 0">${missing.map(esc).join('<br>')}</p>` : ''}
       ${facts ? `<ul style="margin:12px 0;padding-left:18px;color:#5f6670">${facts}</ul>` : ''}
       ${part('From the top of the log', sum.head)}
       ${part('Which computer, and why', sum.link)}
@@ -510,7 +622,7 @@ Deno.serve(async (req: Request) => {
 
   /* The once-a-day tidy (migrations/20261022_report_shots_sweep.sql): no report, no email, only the bucket. */
   if (body?.sweep === true) {
-    const swept = await sweepShots()
+    const swept = await sweepAll()
     return new Response(JSON.stringify({ swept }), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
 
@@ -531,13 +643,14 @@ Deno.serve(async (req: Request) => {
   const row = (body?.record ?? body) as Record<string, unknown>
 
   /* The tidy goes on beside the email, so it costs the email no time. */
-  const tidy = sweepShots()
+  const tidy = sweepAll()
   const ctx = (row.context ?? {}) as Record<string, unknown>
   const contact = String(row.contact ?? '').trim()
   /* The account's email only when they gave no address of their own. */
-  const [account, shots] = await Promise.all([
+  const [account, shots, film] = await Promise.all([
     ADDRESS.test(contact) || !row.user_id ? Promise.resolve(null) : accountEmail(row.user_id),
-    screenshots(row, ctx)
+    screenshots(row, ctx),
+    videoOf(row, ctx)
   ])
 
   const send = (payload: Record<string, unknown>, suffix: string, ms: number) =>
@@ -560,7 +673,7 @@ Deno.serve(async (req: Request) => {
 
   let res: Response
   try {
-    res = await send(emailFor(row, { account, shots }), '', RESEND_WAIT_MS)
+    res = await send(emailFor(row, { account, shots, film }), '', RESEND_WAIT_MS)
   } catch (err) {
     console.error('feedback-email: Resend did not answer', String(err))
     return answer({ sent: false, why: 'no answer' })
@@ -588,7 +701,7 @@ Deno.serve(async (req: Request) => {
         ]
       }
       try {
-        res = await send(emailFor(row, { account, shots: without }), '/plain', Math.min(RESEND_WAIT_MS, left))
+        res = await send(emailFor(row, { account, shots: without, film }), '/plain', Math.min(RESEND_WAIT_MS, left))
         plain = true
         detail = res.ok ? '' : await res.text().catch(() => '')
       } catch (err) {
@@ -606,5 +719,11 @@ Deno.serve(async (req: Request) => {
     return answer({ sent: false, status: res.status, detail })
   }
 
-  return answer({ sent: true, screenshots: plain ? 0 : shots.files.length, log: Boolean(row.log), ...(plain ? { withoutScreenshots: true } : {}) })
+  return answer({
+    sent: true,
+    screenshots: plain ? 0 : shots.files.length,
+    ...(film.link ? { video: true } : {}),
+    log: Boolean(row.log),
+    ...(plain ? { withoutScreenshots: true } : {})
+  })
 })
