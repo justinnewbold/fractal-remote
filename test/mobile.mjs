@@ -2744,7 +2744,8 @@ export function run(test) {
        scenes out of settings onto the edit screen". */
     const settings = read('mobile/src/components/RenamePreset.js')
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(read('mobile/src/screens/Edit.js'), /\{chainNow\.elsewhere \? null : <RenameDoor \/>\}/, 'the Edit screen has no way to rename the preset')
+    /* Not over Bluetooth, where renaming is not built (Edit's BLE_NO_CHAIN says so). */
+    assert.match(read('mobile/src/screens/Edit.js'), /\{chainNow\.elsewhere \|\| viaBle \? null : <RenameDoor \/>\}/, 'the Edit screen has no way to rename the preset')
     assert.ok(!/RenamePreset|setPresetName/.test(read('mobile/src/screens/Settings.js')), 'renaming is still in Settings as well')
 
     assert.match(settings, /await setPresetName\(wanted\)/, 'the preset cannot be renamed from the phone')
@@ -4167,7 +4168,7 @@ export function run(test) {
        that ships 50KB and changes nothing on screen. */
     assert.match(
       read('mobile/src/lib/device.js'),
-      /withLineage\(slug, \(await remoteRequest\(`\/blocks\/\$\{slug\}\/types`\)\) \|\| \[\]\)/,
+      /withLineage\(slug, \(await remoteRequest\(`\/blocks\/\$\{slug\}\/types`, EDITING\)\) \|\| \[\]\)/,
       'the phone reads the model list without the catalog on it'
     )
   })
@@ -12215,7 +12216,7 @@ export function run(test) {
     assert.match(dev, /export const cabState = \(eid\) => remoteRequest\(`\/preset\/blocks\/\$\{eid\}\/cab`\)/, 'the phone cannot read cab state')
     assert.match(
       dev,
-      /export const setEnum = \(eid, paramId, ordinal\) => told\(`[^`]+`, put\(`\/preset\/blocks\/\$\{eid\}\/params\/\$\{paramId\}`, \{ value: ordinal, continuous: false \}\)\)/,
+      /export const setEnum = \(eid, paramId, ordinal\) => told\(`[^`]+`, put\(`\/preset\/blocks\/\$\{eid\}\/params\/\$\{paramId\}`, \{ value: ordinal, continuous: false \}, EDITING\)\)/,
       'a discrete write from the phone is normalised, or leaves no line in the log'
     )
     /* The route is one the computer lets a phone use, read and write. */

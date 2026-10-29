@@ -100,6 +100,7 @@ import {
   toHex
 } from './fractal-sysex.mjs'
 import { outlineChain } from './chain-outline.js'
+import { am4EditAllowed, blockParamsOf, buildAm4ReadAll, editBlock, knobFrame, modelFrame, modelsOf, readAllCollector, readsOf } from './am4-edit.js'
 import { presetMissLine } from './bluetooth-gear.js'
 import { createVp4Wire } from './bleVp4.js'
 
@@ -177,7 +178,14 @@ export const WAIT = {
    * frame is about a second at 31,250 baud, and the whole about four.
    */
   am4DumpGap: 2500,
-  am4DumpAll: 20000
+  am4DumpAll: 20000,
+  /*
+   * A block's settings for Edit (am4-edit.js): the longest the AM4 may go
+   * quiet partway through its answer, and the most the whole may take. An
+   * amp's is a couple of thousand bytes, about a second at 31,250 baud.
+   */
+  am4ReadAllGap: 2500,
+  am4ReadAll: 10000
 }
 
 /** A frame identical to one just sent, arriving within this, is the phone hearing itself. */
@@ -188,6 +196,13 @@ export const NAME_GAP_MS = 600
 export const LATE_MS = 2000
 /** The AM4's preset answer is reused for this long, so one screen load is one read. */
 export const STRUCTURE_FRESH_MS = 400
+/**
+ * A block Edit has read is kept this long after its last read, so a knob let
+ * go is one register read, not three whole blocks (editKept); and never longer
+ * than EDIT_WHOLE_MS after it was last read whole.
+ */
+export const EDIT_FRESH_MS = 5000
+export const EDIT_WHOLE_MS = 30000
 
 /*
  * THE FOOTSWITCH WATCH. A unit says nothing when its own footswitch changes
@@ -342,15 +357,19 @@ const silentTuner = () => ({ type: 'tuner', note: '', octave: undefined, cents: 
 
 /**
  * THE AM4'S ONE WAY OUT. Every message for the AM4 passes through this. A
- * SysEx frame goes only if it is on AM4_ALLOWED. Anything shorter goes only
- * if it is the tuner's CC on the number and channel THIS connection read from
- * the AM4 (`learned`, see am4ShortAllowed): before that read, nothing short
- * goes at all. Anything else is logged and dropped.
+ * SysEx frame goes only if it is on AM4_ALLOWED, or, while Edit is open to
+ * this account over Bluetooth, if it is one of Edit's reads and writes for a
+ * block the AM4 has just said is in its preset (`placed`, the codes of the
+ * last answer this connection believed; see am4EditAllowed). Anything
+ * shorter goes only if it is the tuner's CC on the number and channel THIS
+ * connection read from the AM4 (`learned`, see am4ShortAllowed): before that
+ * read, nothing short goes at all. Anything else is logged and dropped.
  * 'sent', 'refused' or 'failed' (the adapter would not take it).
  */
-export function am4Sender(send, log = () => {}, learned = () => null) {
+export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null) {
   return (bytes) => {
-    const ok = Array.isArray(bytes) && bytes[0] === 0xf0 ? am4Allowed(bytes) : am4ShortAllowed(bytes, learned())
+    const sysex = Array.isArray(bytes) && bytes[0] === 0xf0
+    const ok = sysex ? am4Allowed(bytes) || am4EditAllowed(bytes, placed()) : am4ShortAllowed(bytes, learned())
     if (!ok) {
       log(`refused to send the AM4 ${toHex(bytes)}: it is not one of the messages the AM4 is ever sent`)
       return 'refused'
@@ -373,8 +392,9 @@ export function am4Sender(send, log = () => {}, learned = () => null) {
  * @param {(line:string) => void} [o.log]
  * @param {(methods:object) => void} [o.remember]  called when auto learns a way, to keep it on the phone
  * @param {(name:string|null) => void} [o.onForeign]  called once, with its bare name, when another unit answers a connection before the one picked has, so the page can say which; and with null when the one picked answers after it (heardFromIt)
+ * @param {() => boolean} [o.edit]  whether Edit is open over Bluetooth to this account on this unit (ble-rule editOffered), asked at each request
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -393,8 +413,27 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       // The log is for reading afterwards; it can never stop a request.
     }
   }
+  /*
+   * EDIT, OVER BLUETOOTH: open to this account on this unit or not, asked at
+   * every request and every send rather than once, so an account signed out
+   * mid-connection takes it with it. Only the AM4's knobs are built.
+   */
+  const editOn = () => am4 && (typeof edit === 'function' ? edit() === true : edit === true)
+  /* The block codes of the last preset answer believed (readStructure), which Edit's frames are held to. */
+  let editPlaced = null
+  /*
+   * EDIT'S BLOCKS, KEPT FOR A MOMENT. A knob let go is a write, a read to see
+   * it took, and the screen's own read straight after: three whole reads of
+   * the block, five seconds and more down an adapter. So a block's read is
+   * kept for EDIT_FRESH_MS after it was last read (and no more than
+   * EDIT_WHOLE_MS after it was last read whole), and a write marks only the
+   * register it went to as needing reading again. A scene, a preset, a
+   * channel, an on/off or a model makes the block read afresh.
+   */
+  const editKept = new Map()
+  const forgetEdits = (code) => (code === undefined ? editKept.clear() : editKept.delete(code))
   /* Asked at each send, so a short message is held to what this connection has read by then (see the tuner below). */
-  const sendFrame = am4 ? am4Sender(send, say, () => tuner.unitCc) : (bytes) => (send(bytes) === false ? 'failed' : 'sent')
+  const sendFrame = am4 ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null)) : (bytes) => (send(bytes) === false ? 'failed' : 'sent')
 
   const handlers = new Set()
   const emit = (event) => {
@@ -907,11 +946,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       say(`the unit sent Program Change ${msg[1]}: its preset changed`)
       sceneCache = null
       structure = null
+      editPlaced = null
+      forgetEdits()
       emit({ type: 'changed', scope: 'preset' })
     }
   }
 
   function noteScene(s, tell) {
+    /* Another scene can put a block on another channel. Not the first answer: nothing was kept before the scene was known. */
+    if (last.scene !== null && s !== last.scene) forgetEdits()
     if (tell && last.scene !== null && s !== last.scene) {
       say(`scene ${s + 1}, changed on the unit`)
       last.scene = s
@@ -924,6 +967,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const changed = last.preset !== null && p.number !== last.preset
     if (p.number !== last.preset) {
       sceneCache = null
+      if (last.preset !== null) forgetEdits()
       /* A new preset whose name is not known yet has no name, not the last one's. */
       last.name = ''
     }
@@ -1780,6 +1824,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     const value = believeSlots(got)
     structure = { value, at: time.now() }
+    editPlaced = value.slots ? value.slots.filter((c) => Number.isInteger(c) && c > 0) : null
     return value
   }
 
@@ -1984,6 +2029,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const r = await fire(buildAm4Preset(n), `preset ${am4LocationCode(n)}`)
     if (rejected(r)) throw refusedBy(r.rejected)
     structure = null
+    /* Another preset's blocks: nothing of Edit's goes until the AM4 has said what they are. */
+    editPlaced = null
+    forgetEdits()
     notePreset({ number: n }, false)
     emit({ type: 'changed', scope: 'preset' })
     /* Checked a moment later, for the log: the AM4 answers a switch with nothing. */
@@ -2001,6 +2049,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const r = await fire(buildAm4Scene(index), `scene ${index + 1}`)
     if (rejected(r)) throw refusedBy(r.rejected)
     structure = null
+    forgetEdits()
     last.scene = index
     emit({ type: 'scene', index })
     return { ok: true }
@@ -2009,6 +2058,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   async function am4WriteBypass(eid, bypassed) {
     blockNumber(eid)
     const r = await fire(buildAm4Bypass(eid, bypassed === true), `block ${toHex([eid])} ${bypassed === true ? 'off' : 'on'}`)
+    forgetEdits(eid)
     if (rejected(r)) throw refusedBy(r.rejected)
     emit({ type: 'changed', scope: 'grid' })
     return { ok: true }
@@ -2035,6 +2085,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const c = channelIndex(channel)
     if (c === null) throw badInput(`${channel} is not A, B, C or D.`)
     const r = await fire(buildAm4Channel(eid, c), `block ${toHex([eid])} to ${CH[c]}`)
+    forgetEdits(eid)
     if (rejected(r)) throw refusedBy(r.rejected)
     return { ok: true }
   }
@@ -2048,6 +2099,113 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (Number.isInteger(now) && Math.abs(now - bpm) > 1) throw failure(`The AM4 stayed at ${now} BPM.`, 502)
     last.bpm = bpm
     emit({ type: 'tempo', bpm })
+    return { ok: true }
+  }
+
+  /* ---------------- Edit's reads and writes (am4-edit.js) ---------------- */
+
+  /*
+   * THE BLOCK IS IN THE PRESET THE AM4 IS ON, by an answer from just now.
+   * Before every one of Edit's frames, because those are held to the blocks
+   * the last answer named (am4EditAllowed): a footswitch can have changed
+   * the preset since the block was opened, and the frame then goes nowhere
+   * rather than to the next song's block of the same kind.
+   */
+  async function placedHere(code) {
+    let s = await readStructure()
+    if (s && !s.slots) s = await readStructure({ fresh: true })
+    if (!s || s === SKIPPED) throw timedOut()
+    if (!s.slots) throw failure('The AM4 didn’t say what’s in this preset. Try again in a moment.', 504)
+    if (!s.slots.includes(code)) throw failure('That block isn’t in the preset the AM4 is on now.', 409)
+    return s
+  }
+
+  /* One register's settings, the whole answer: {count, values}, {damaged}, {rejected}, or null when nothing came. */
+  const readRegister = (wire, name) =>
+    ask(buildAm4ReadAll(wire), null, WAIT.am4ReadAllGap, `the settings of ${name}`, { cap: WAIT.am4ReadAll, collect: readAllCollector(wire) })
+
+  /*
+   * GET /preset/blocks/<code>/params, as the computer answers it: the
+   * block's on/off and channel (two reads the AM4 has answered all along),
+   * then each of its registers read whole, and the knobs on the channel it
+   * is on. The block's own register is the read: nothing from it is a fault
+   * said on screen. The amp's cab section is a second register: nothing from
+   * that one leaves its knobs out, and says so in the log.
+   */
+  async function am4Params(eid) {
+    const code = blockNumber(eid)
+    const b = editBlock(code)
+    if (!b) throw badInput(`The app can’t open block ${toHex([code])} over Bluetooth yet.`)
+    /* Kept from a moment ago (editKept): nothing to send, or only the registers written since. */
+    const kept = editKept.get(code)
+    const fresh = !!kept && time.now() - kept.at < EDIT_FRESH_MS && time.now() - kept.whole < EDIT_WHOLE_MS
+    if (fresh && !kept.stale.size) return blockParamsOf(code, kept.chunks, { channel: kept.channel, bypassed: kept.bypassed })
+    await placedHere(code)
+    const started = time.now()
+    const ch = fresh ? kept.channel : await am4ChannelNow(code)
+    const off = fresh ? kept.bypassed : await am4BypassNow(code)
+    const chunks = fresh ? new Map(kept.chunks) : new Map()
+    for (const r of readsOf(code)) {
+      if (fresh && chunks.has(r.key) && !kept.stale.has(r.key)) continue
+      chunks.delete(r.key)
+      const name = r.wire === code ? `the ${b.slug}` : `the ${b.slug}’s ${toHex([r.wire])} section`
+      const got = await readRegister(r.wire, name)
+      const own = r.wire === code
+      if (rejected(got)) {
+        if (own) throw refusedBy(got.rejected)
+        say(`the AM4 refused ${name}: ${rejectedWords(got.rejected)}; its settings are left out`)
+        continue
+      }
+      if (!got) {
+        if (own) throw failure(`The AM4 didn’t send the ${b.slug}’s settings. Try again.`, 504)
+        say(`no answer for ${name}; its settings are left out`)
+        continue
+      }
+      if (got.damaged) {
+        if (own) throw failure(`The ${b.slug}’s settings came back damaged. Try again.`, 502)
+        say(`${name} came back damaged; its settings are left out`)
+        continue
+      }
+      chunks.set(r.key, got)
+    }
+    const channel = Number.isInteger(ch) ? ch : 0
+    const bypassed = typeof off === 'boolean' ? off : undefined
+    editKept.set(code, { at: time.now(), whole: fresh ? kept.whole : time.now(), channel, bypassed, chunks, stale: new Set() })
+    const out = blockParamsOf(code, chunks, { channel, bypassed })
+    say(`read the ${b.slug}’s settings in ${((time.now() - started) / 1000).toFixed(1)} s${fresh ? ' (the register written)' : ''}: ${out.named.length} knobs, channel ${Number.isInteger(ch) ? CH[ch] : 'A (not read)'}`)
+    return out
+  }
+
+  /*
+   * PUT /preset/blocks/<code>/params/<id>: one knob or switch, the frame the
+   * computer sends for it. Answered ok when it went; Edit reads the block
+   * back to see whether it took, as it does over the computer.
+   */
+  async function am4WriteKnob(eid, id, body) {
+    const code = blockNumber(eid)
+    if (!editBlock(code)) throw badInput(`The app can’t change block ${toHex([code])} over Bluetooth yet.`)
+    const made = knobFrame(code, Number(id), body)
+    if (made.refused) throw badInput(made.refused)
+    await placedHere(code)
+    const r = await fire(made.frame, made.what)
+    /* Sent or refused, that register is read again next time; the rest of the block is as it was. */
+    editKept.get(code)?.stale.add(made.register)
+    if (rejected(r)) throw refusedBy(r.rejected)
+    return { ok: true }
+  }
+
+  /* POST /preset/blocks/<code>/type: the block's model, the computer's own write for it. */
+  async function am4WriteModel(eid, value) {
+    const code = blockNumber(eid)
+    const made = modelFrame(code, value)
+    if (made.refused) throw badInput(made.refused)
+    await placedHere(code)
+    const r = await fire(made.frame, made.what)
+    /* A new model is new settings, every one. */
+    forgetEdits(code)
+    if (rejected(r)) throw refusedBy(r.rejected)
+    structure = null
+    emit({ type: 'changed', scope: 'grid' })
     return { ok: true }
   }
 
@@ -2481,7 +2639,26 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const isNum = (s) => /^\d+$/.test(String(s ?? ''))
 
   /** The handler for a request, or null when Bluetooth does not answer it. */
-  function routeFor(method, path, part, body) {
+  function routeFor(method, path, part, body, opts) {
+    /*
+     * EDIT'S, ONLY FROM EDIT. The block reads and writes below go only when
+     * Edit is open to this account on this unit (editOn) AND the request
+     * says it is Edit's (device.js EDITING): Play asks for the amp's
+     * settings too, for its boost (lib/am4-boost), and over Bluetooth Play
+     * stays exactly as it was.
+     */
+    const editing = opts?.editing === true && editOn()
+    if (editing && part[0] === 'preset' && part[1] === 'blocks' && isNum(part[2])) {
+      const eid = Number(part[2])
+      if (method === 'GET' && part.length === 4 && part[3] === 'params') return () => am4Params(eid)
+      if (method === 'PUT' && part.length === 5 && part[3] === 'params' && isNum(part[4]) && !(eid === AM4_BLOCKS.amp && Number(part[4]) === AM4.OUT_BOOST)) {
+        return () => am4WriteKnob(eid, Number(part[4]), body)
+      }
+      if (method === 'POST' && part.length === 4 && part[3] === 'type') return () => am4WriteModel(eid, body?.value)
+    }
+    if (editing && method === 'GET' && part[0] === 'blocks' && part.length === 3 && part[2] === 'types') {
+      return () => modelsOf(decodeURIComponent(part[1]))
+    }
     if (method === 'GET') {
       if (path === '/device/detect') return am4 ? am4Detect : gen3Detect
       if (path === '/preset') return am4 ? am4Preset : gen3Preset
@@ -2542,7 +2719,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     } catch {
       body = null
     }
-    const route = method === 'GET' || method === 'POST' || method === 'PUT' ? routeFor(method, clean, part, body) : null
+    const route = method === 'GET' || method === 'POST' || method === 'PUT' ? routeFor(method, clean, part, body, options) : null
     if (!route) {
       /*
        * WHAT BLUETOOTH NEVER ANSWERS IS SAID ONCE A CONNECTION. "Don't know if
@@ -2898,6 +3075,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       await row('Where it landed', () => readStructure({ fresh: true }), (v) => (v ? (v.scene === to ? `scene ${to + 1}: it worked` : `still scene ${v.scene + 1}`) : 'no answer'))
       await row(`Back to scene ${s.scene + 1}`, () => fire(buildAm4Scene(s.scene), `scene ${s.scene + 1}`), sentWords)
       structure = null
+      forgetEdits()
       last.scene = s.scene
     },
     'write-tempo': async (row) => {
@@ -2937,6 +3115,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       await pause(WAIT.landed)
       await row(`Back to scene ${s.scene + 1}`, () => fire(buildAm4Scene(s.scene), `scene ${s.scene + 1}`), sentWords)
       structure = null
+      forgetEdits()
       last.scene = s.scene
       notePreset({ number: from }, false)
       /* The unsaved changes are gone: the app reads the preset afresh. */

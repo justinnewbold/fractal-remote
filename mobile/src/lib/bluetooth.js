@@ -12,7 +12,7 @@ import { logDebug } from './debugLog'
 import { isAdmin } from './admin'
 import { accountId } from './owner-unlock'
 import { installedStoreVersion } from './storeVersion'
-import { bluetoothOpen, unitOffered } from './ble-rule'
+import { bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { unitForReport } from './bluetooth-gear'
 
@@ -406,6 +406,16 @@ export const builtInVersion = () => {
   if (installed === undefined) installed = installedStoreVersion()
   return installed
 }
+
+/**
+ * Whether Edit opens over Bluetooth on the unit picked, for the account
+ * signed in here, on this copy (ble-rule.js editOffered): his account on a
+ * unit whose editing is built; anybody else's on a copy whose built-in
+ * version opens it. Asked by the wire at every request and by Play's Edit
+ * button, never kept, so it goes the moment the account does.
+ */
+export const editOverBluetooth = (unit = saved.unit) =>
+  allowed === true && editOffered(unit, { admin: allUnits, platform: Platform.OS, installed: builtInVersion() })
 
 /** Whether this copy opens Bluetooth (beta) to customers, whoever is signed in: the log's head, and the purchase page. */
 export const openForCustomersHere = () => bluetoothOpen({ platform: Platform.OS, installed: builtInVersion(), admin: false })
@@ -923,7 +933,9 @@ export function openWire() {
     log: (line) => logDebug('ble', line),
     remember: (m) => rememberMethods(unit, m),
     /* The wrong unit was picked: the page says which one answered (bleWire heardAnother, and heardAnAm4, which also stops the wire), and null takes it off when the one picked answers after all (heardFromIt). */
-    onForeign: (name) => noteBluetooth({ answeredAs: name || null })
+    onForeign: (name) => noteBluetooth({ answeredAs: name || null }),
+    /* Edit's knobs over Bluetooth, for this unit, asked at every request (editOverBluetooth). */
+    edit: () => editOverBluetooth(unit)
   })
   const mine = wire
   joiner = createJoiner({

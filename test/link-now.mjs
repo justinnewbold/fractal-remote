@@ -3515,7 +3515,9 @@ export function run(test) {
     const device = read('mobile/src/lib/device.js')
     const save = device.slice(device.indexOf('export function parkSave('), device.indexOf('export async function saveInDemo('))
     assert.ok(save.length > 0 && !/deadline/.test(save), 'a save to a slot can be dropped part-way')
-    assert.match(device, /const put = \(path, body\) => remoteRequest\(path, \{ method: 'PUT', body: JSON\.stringify\(body\) \}\)/, 'a PUT carries a deadline')
+    assert.match(device, /const put = \(path, body, opts\) => remoteRequest\(path, \{ method: 'PUT', body: JSON\.stringify\(body\), \.\.\.\(opts \|\| \{\}\) \}\)/, 'a PUT carries a deadline')
+    /* The one thing a PUT is ever handed is Edit's mark (EDITING), which is no deadline. */
+    assert.match(device, /const EDITING = Object\.freeze\(\{ editing: true \}\)/, 'Edit’s mark carries more than its name')
   })
 
   test('a watch tap that woke the phone waits only for its deadline, and is not tried again', () => {

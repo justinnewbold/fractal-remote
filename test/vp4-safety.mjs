@@ -1661,7 +1661,11 @@ export function run(test) {
     assert.match(flat('mobile/src/lib/device.js'), /if \(onVp4\) res = vp4ScreenUnit\(res\)/)
     assert.match(flat('src/lib/forgefx.js'), /if \(unitIsVp4\) res = vp4ScreenUnit\(res\)/)
     const edit = flat('mobile/src/screens/Edit.js')
-    assert.match(edit, /\{vp4Here\(\) \? \( <Note tone="hint">\{VP4_NO_EDITS\}<\/Note> \) : \( <> \{chainNow\.elsewhere \? null : <ChainEditor/, 'the phone offers a VP4 Edit chain and Modifiers')
+    assert.match(
+      edit,
+      /\{vp4Here\(\) \? \( <Note tone="hint">\{VP4_NO_EDITS\}<\/Note> \) : viaBle \? \( <Note tone="hint">\{BLE_NO_CHAIN\}<\/Note> \) : \( <> \{chainNow\.elsewhere \? null : <ChainEditor/,
+      'the phone offers a VP4 Edit chain and Modifiers'
+    )
     assert.match(edit, /function RenameDoor\(\) \{ const \[open, setOpen\] = useState\(false\) \/\*[^*]*\*\/ if \(vp4Here\(\)\) return null/, 'the phone offers to rename on a VP4')
     const app = flat('src/App.jsx')
     assert.equal((app.match(/\{onRealVp4 \? \( <p className="hint">\{VP4_NO_EDITS\}<\/p> \) : \(/g) || []).length, 2, 'the browser offers a VP4 its chain editor or modifiers')

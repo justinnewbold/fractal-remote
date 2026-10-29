@@ -27,6 +27,21 @@ over these dongles. Fractal says backups and dumps are not supported over
 5-pin MIDI. On gen-3 units ForgeFX reads the block list by dumping the
 preset, so even the block list may not appear over 5-pin.
 
+**Since 29 October 2026 the AM4's knobs are editable over Bluetooth, on
+Justin's account.** "What do we need to do to get the edit stuff working on
+Bluetooth? I know it's possible because other programs are already using
+it." They are: FracPad III edits an FM3, FM9 or Axe-Fx III through a Yamaha
+MD-BT01 or a CME WIDI, knobs and grid but not preset transfers. Fractal's
+own editors time out because they read far more than one screen at a time.
+So the phone does what the computer app does for one block and no more:
+the block's settings in one read (fn 0x1F, a couple of thousand bytes for
+an amp), and one small write per knob (mobile/src/lib/am4-edit.js, with
+the AM4's catalog generated from the computer's codec by
+scripts/am4-knobs.mjs). Knobs, models and on/off; no saving, moving
+blocks, modifiers or names over Bluetooth yet. It opens to customers only
+in a store version that says so (`EDIT_FROM_STORE` in
+mobile/src/lib/ble-rule.js). The FM3 is next.
+
 None of it had been tried on Justin's hardware when this was written. Since
 then (26 October 2026, from an iPhone and an Android phone): his AM4 works
 through the WIDI Uhost with the C2MIDI Pro and the two Type-A adapters, and

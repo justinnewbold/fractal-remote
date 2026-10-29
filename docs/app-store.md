@@ -2337,6 +2337,28 @@ alone moves, so it is one Android slot.
 
 ---
 
+## Later: Edit over Bluetooth for customers (the AM4 first)
+
+Since 29 October 2026 Edit opens over Bluetooth on an AM4 for Justin's
+account only: knobs, models and on/off, with no saving, moving blocks,
+modifiers or names (CLAUDE.md, "Edit over Bluetooth"). Every text in the
+stores and on the website still says Bluetooth has "no editing or saving",
+which stays true for customers until a store version opens it. That version
+is a build like any other, and in its pull request:
+
+- `EDIT_FROM_STORE` in mobile/src/lib/ble-rule.js sets the unit to that
+  version on both phones (`am4: { ios: '1.90.0', android: '1.90.0' }`), and
+  nothing else in the switch moves;
+- the Notes for App Review describe it, and where to find it: Play →
+  Edit, with Bluetooth on and an AM4 picked, and what it does not do;
+- What's New, the Description, the Google Play release notes and App
+  access say editing works over Bluetooth on that unit, without saving;
+- public/bluetooth-guide.html ("No editing or saving over Bluetooth") and
+  the Bluetooth page's own words say the same;
+- after the build is started, its row in docs/expo-builds.md says
+  "Editing over Bluetooth for customers", and `EDIT_OPENED_AT` in
+  test/ledger.mjs is set to it, in the first pull request after.
+
 ## Kept for the record: the 1.87.1 texts (not for pasting)
 
 These were written for the 1.87.1 builds of 10 October 2026, and the 1.87.11
