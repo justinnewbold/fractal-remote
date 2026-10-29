@@ -1524,7 +1524,7 @@ export default function App() {
                  * end it is a screen of empty knobs.
                  *
                  * Over Bluetooth only where the phone can read and turn the
-                 * unit's knobs itself (lib/ble-rule.js editOffered: the AM4,
+                 * unit's knobs itself (lib/ble-rule.js editOffered: the AM4 and the FM3,
                  * on his account until a store version opens it), and even
                  * there no saving, no moving blocks (Edit says so).
                  */

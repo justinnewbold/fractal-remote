@@ -2337,11 +2337,13 @@ alone moves, so it is one Android slot.
 
 ---
 
-## Later: Edit over Bluetooth for customers (the AM4 first)
+## Later: Edit over Bluetooth for customers (the AM4 and the FM3)
 
-Since 29 October 2026 Edit opens over Bluetooth on an AM4 for Justin's
-account only: knobs, models and on/off, with no saving, moving blocks,
-modifiers or names (CLAUDE.md, "Edit over Bluetooth"). Every text in the
+Since 29 October 2026 Edit opens over Bluetooth on an AM4 and an FM3 for
+Justin's account only: knobs, models and on/off, with no saving, moving
+blocks, modifiers or names, and no cab picking on an FM3 (CLAUDE.md, "Edit
+over Bluetooth"). Each unit opens on its own entry, so the notes name the
+unit or units that version opens. Every text in the
 stores and on the website still says Bluetooth has "no editing or saving",
 which stays true for customers until a store version opens it. That version
 is a build like any other, and in its pull request:

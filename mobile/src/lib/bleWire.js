@@ -101,6 +101,7 @@ import {
 } from './fractal-sysex.mjs'
 import { outlineChain } from './chain-outline.js'
 import { am4EditAllowed, blockParamsOf, buildAm4ReadAll, editBlock, knobFrame, modelFrame, modelsOf, readAllCollector, readsOf } from './am4-edit.js'
+import * as fm3Edit from './fm3-edit.js'
 import { presetMissLine } from './bluetooth-gear.js'
 import { createVp4Wire } from './bleVp4.js'
 
@@ -185,7 +186,10 @@ export const WAIT = {
    * amp's is a couple of thousand bytes, about a second at 31,250 baud.
    */
   am4ReadAllGap: 2500,
-  am4ReadAll: 10000
+  am4ReadAll: 10000,
+  /* The same for an FM3's block (fm3-edit.js): an amp is about 1,700 bytes, half a second at 31,250 baud. */
+  gen3ReadAllGap: 2500,
+  gen3ReadAll: 10000
 }
 
 /** A frame identical to one just sent, arriving within this, is the phone hearing itself. */
@@ -378,6 +382,32 @@ export function am4Sender(send, log = () => {}, learned = () => null, placed = (
   }
 }
 
+/*
+ * A GEN-3 UNIT'S EDIT FRAMES, HELD AS THE AM4'S ARE. Everything the gen-3
+ * wire has always sent still goes as it went: it has no frozen unit on
+ * record and no list of its own. What it never sent before Edit came, a
+ * block's whole read (fn 0x1F), a knob (fn 0x01 52 00) and a typed write
+ * to a block's setting (fn 0x01 09 00 at a block the catalog names), goes
+ * only as one of Edit's, to a block the unit has just listed in its preset
+ * (`placed`) and a setting the catalog names (fm3-edit fm3EditAllowed).
+ * The tempo's typed write is at the Controllers (2), not a block, and goes
+ * as before.
+ */
+export function gen3Sender(send, log = () => {}, model, placed = () => null) {
+  const editShaped = (b) =>
+    Array.isArray(b) &&
+    b[0] === 0xf0 &&
+    b[4] === model &&
+    (b[5] === fm3Edit.READ_ALL || (b[5] === FN.PARAM && ((b[6] === fm3Edit.KNOB[0] && b[7] === fm3Edit.KNOB[1]) || (b[6] === fm3Edit.TYPED[0] && b[7] === fm3Edit.TYPED[1] && !!fm3Edit.editBlock((b[8] & 0x7f) | ((b[9] & 0x7f) << 7))))))
+  return (bytes) => {
+    if (editShaped(bytes) && !fm3Edit.fm3EditAllowed(bytes, placed(), model)) {
+      log(`refused to send ${toHex(bytes)}: it is not one of Edit’s reads or writes for a block in this preset`)
+      return 'refused'
+    }
+    return send(bytes) === false ? 'failed' : 'sent'
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* The wire                                                            */
 /* ------------------------------------------------------------------ */
@@ -416,9 +446,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /*
    * EDIT, OVER BLUETOOTH: open to this account on this unit or not, asked at
    * every request and every send rather than once, so an account signed out
-   * mid-connection takes it with it. Only the AM4's knobs are built.
+   * mid-connection takes it with it. The AM4's knobs and the FM3's are built;
+   * an FM9's and an Axe-Fx III's are not (their catalogs differ).
    */
-  const editOn = () => am4 && (typeof edit === 'function' ? edit() === true : edit === true)
+  const editHere = am4 || unit === 'fm3'
+  const editOn = () => editHere && (typeof edit === 'function' ? edit() === true : edit === true)
   /* The block codes of the last preset answer believed (readStructure), which Edit's frames are held to. */
   let editPlaced = null
   /*
@@ -432,8 +464,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const editKept = new Map()
   const forgetEdits = (code) => (code === undefined ? editKept.clear() : editKept.delete(code))
-  /* Asked at each send, so a short message is held to what this connection has read by then (see the tuner below). */
-  const sendFrame = am4 ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null)) : (bytes) => (send(bytes) === false ? 'failed' : 'sent')
+  /*
+   * Asked at each send, so a short message is held to what this connection
+   * has read by then (see the tuner below). A gen-3 unit's own frames go as
+   * they always went; one shaped like Edit's goes only as one of Edit's
+   * (gen3Sender).
+   */
+  const sendFrame = am4
+    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null))
+    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null))
 
   const handlers = new Set()
   const emit = (event) => {
@@ -1142,7 +1181,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const sceneNow = (priority = 'read') => ask(buildGetScene(model), (f) => parseScene(f, model), WAIT.scene, 'the scene', { priority })
   const presetNow = (priority = 'read') => ask(buildGetPreset(model), (f) => parsePresetName(f, model), WAIT.preset, 'the preset', { priority })
   const tempoNow = (priority = 'read') => ask(buildGetTempo(model), (f) => parseTempo(f, model), WAIT.tempo, 'the tempo', { priority })
-  const statusNow = () => ask(buildStatusDump(model), (f) => parseStatusDump(f, model), WAIT.status, 'the blocks')
+  /* Every answer also says which blocks Edit's frames may go to (gen3Sender): the ones in the preset now. */
+  const statusNow = () =>
+    ask(buildStatusDump(model), (f) => parseStatusDump(f, model), WAIT.status, 'the blocks').then((list) => {
+      if (Array.isArray(list)) editPlaced = list.map((b) => b.effectId)
+      return list
+    })
 
   async function channelNow(eid) {
     const list = await statusNow()
@@ -1329,6 +1373,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   async function gen3WriteScene(index) {
     if (!Number.isInteger(index) || index < 0 || index > 7) throw badInput(`There is no scene ${index}.`)
+    forgetEdits()
     await changeScene(index)
     last.scene = index
     emit({ type: 'scene', index })
@@ -1377,6 +1422,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     blockNumber(eid)
     const c = channelIndex(channel)
     if (c === null) throw badInput(`${channel} is not A, B, C or D.`)
+    forgetEdits(eid)
     await changeChannel(eid, c)
     /* No announcement: the app's channel write expects none. */
     return { ok: true }
@@ -1504,6 +1550,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   async function gen3SelectPreset(number) {
     const n = presetNumber(number)
+    /* Another preset's blocks: nothing of Edit's goes until the unit has listed them. */
+    editPlaced = null
+    forgetEdits()
     await changePreset(n)
     notePreset({ number: n }, false)
     emit({ type: 'changed', scope: 'preset' })
@@ -1515,6 +1564,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   async function gen3WriteBypass(eid, bypassed) {
     blockNumber(eid)
     const r = await fire(buildSetBypass(model, eid, bypassed === true), `block ${eid} ${bypassed === true ? 'off' : 'on'}`)
+    forgetEdits(eid)
     if (rejected(r)) throw refusedBy(r.rejected)
     emit({ type: 'changed', scope: 'grid' })
     return { ok: true }
@@ -2209,6 +2259,81 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return { ok: true }
   }
 
+  /* ---------------- Edit's FM3 reads and writes (fm3-edit.js) ---------------- */
+
+  /*
+   * THE BLOCK IS IN THE PRESET THE UNIT IS ON, by its status answer from
+   * just now (STRUCTURE_FRESH_MS), which is also where its channel comes
+   * from and what Edit's frames are held to (gen3Sender, statusNow).
+   */
+  let statusKept = null
+  async function gen3PlacedHere(eid) {
+    let list = statusKept && time.now() - statusKept.at < STRUCTURE_FRESH_MS ? statusKept.list : null
+    if (!list) {
+      list = await statusNow()
+      if (!Array.isArray(list)) throw failure(`The ${spec.name} didn’t say what’s in this preset. Try again in a moment.`, 504)
+      statusKept = { list, at: time.now() }
+    }
+    const b = list.find((x) => x.effectId === eid)
+    if (!b) throw failure(`That block isn’t in the preset the ${spec.name} is on now.`, 409)
+    return b
+  }
+
+  /*
+   * GET /preset/blocks/<eid>/params on an FM3, as the computer answers it:
+   * the block's channel from the status answer, the block read whole, and
+   * its knobs on that channel. Kept a moment as an AM4's are (editKept); a
+   * gen-3 block is one register, so a write has it read whole again.
+   */
+  async function fm3Params(eid) {
+    const e = blockNumber(eid)
+    const b = fm3Edit.editBlock(e)
+    if (!b) throw badInput(`The app can’t open block ${e} over Bluetooth yet.`)
+    const kept = editKept.get(e)
+    if (kept && !kept.stale.size && time.now() - kept.at < EDIT_FRESH_MS && time.now() - kept.whole < EDIT_WHOLE_MS) {
+      return fm3Edit.blockParamsOf(e, kept.bulk, { channel: kept.channel })
+    }
+    const started = time.now()
+    const st = await gen3PlacedHere(e)
+    const got = await ask(fm3Edit.buildReadAll(model, e), null, WAIT.gen3ReadAllGap, `the settings of the ${b.name}`, {
+      cap: WAIT.gen3ReadAll,
+      collect: fm3Edit.readAllCollector(model, e)
+    })
+    if (rejected(got)) throw refusedBy(got.rejected)
+    if (!got) throw failure(`The ${spec.name} didn’t send the ${b.name}’s settings. Try again.`, 504)
+    if (got.damaged) throw failure(`The ${b.name}’s settings came back damaged. Try again.`, 502)
+    editKept.set(e, { at: time.now(), whole: time.now(), channel: st.channel, bulk: got, stale: new Set() })
+    const out = fm3Edit.blockParamsOf(e, got, { channel: st.channel })
+    say(`read the ${b.name}’s settings in ${((time.now() - started) / 1000).toFixed(1)} s: ${out.named.length} knobs, channel ${CH[st.channel] ?? st.channel}`)
+    return out
+  }
+
+  /* PUT /preset/blocks/<eid>/params/<id> on an FM3: one knob or switch, the computer's frame for it. */
+  async function fm3WriteKnob(eid, id, body) {
+    const e = blockNumber(eid)
+    if (!fm3Edit.editBlock(e)) throw badInput(`The app can’t change block ${e} over Bluetooth yet.`)
+    const made = fm3Edit.knobFrame(model, e, id, body)
+    if (made.refused) throw badInput(made.refused)
+    await gen3PlacedHere(e)
+    const r = await fire(made.frame, made.what)
+    editKept.get(e)?.stale.add('block')
+    if (rejected(r)) throw refusedBy(r.rejected)
+    return { ok: true }
+  }
+
+  /* POST /preset/blocks/<eid>/type on an FM3: the block's model, the computer's own write for it. */
+  async function fm3WriteModel(eid, value) {
+    const e = blockNumber(eid)
+    const made = fm3Edit.modelFrame(model, e, value)
+    if (made.refused) throw badInput(made.refused)
+    await gen3PlacedHere(e)
+    const r = await fire(made.frame, made.what)
+    forgetEdits(e)
+    if (rejected(r)) throw refusedBy(r.rejected)
+    emit({ type: 'changed', scope: 'grid' })
+    return { ok: true }
+  }
+
   async function am4TunerTick(run) {
     const values = []
     try {
@@ -2650,14 +2775,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const editing = opts?.editing === true && editOn()
     if (editing && part[0] === 'preset' && part[1] === 'blocks' && isNum(part[2])) {
       const eid = Number(part[2])
-      if (method === 'GET' && part.length === 4 && part[3] === 'params') return () => am4Params(eid)
-      if (method === 'PUT' && part.length === 5 && part[3] === 'params' && isNum(part[4]) && !(eid === AM4_BLOCKS.amp && Number(part[4]) === AM4.OUT_BOOST)) {
-        return () => am4WriteKnob(eid, Number(part[4]), body)
+      if (method === 'GET' && part.length === 4 && part[3] === 'params') return () => (am4 ? am4Params(eid) : fm3Params(eid))
+      if (method === 'PUT' && part.length === 5 && part[3] === 'params' && isNum(part[4]) && !(am4 && eid === AM4_BLOCKS.amp && Number(part[4]) === AM4.OUT_BOOST)) {
+        return () => (am4 ? am4WriteKnob(eid, Number(part[4]), body) : fm3WriteKnob(eid, Number(part[4]), body))
       }
-      if (method === 'POST' && part.length === 4 && part[3] === 'type') return () => am4WriteModel(eid, body?.value)
+      if (method === 'POST' && part.length === 4 && part[3] === 'type') return () => (am4 ? am4WriteModel(eid, body?.value) : fm3WriteModel(eid, body?.value))
     }
     if (editing && method === 'GET' && part[0] === 'blocks' && part.length === 3 && part[2] === 'types') {
-      return () => modelsOf(decodeURIComponent(part[1]))
+      return () => (am4 ? modelsOf(decodeURIComponent(part[1])) : fm3Edit.modelsOf(decodeURIComponent(part[1])))
     }
     if (method === 'GET') {
       if (path === '/device/detect') return am4 ? am4Detect : gen3Detect

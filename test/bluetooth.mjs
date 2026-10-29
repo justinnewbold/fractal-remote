@@ -214,7 +214,10 @@ function fakeGen3(sx, o) {
     ]),
     sceneNames: ['CLEAN', 'CRUNCH', 'LEAD', '', '', '', '', 'AMBIENT'],
     blocks: [...FM3_STATUS, ...(opt.looper ? [[166, 0x40]] : [])].map(([eid, dd]) => ({ eid, bypassed: (dd & 1) === 1, channel: (dd >> 1) & 7 })),
-    pushing: false
+    pushing: false,
+    /* EDIT'S SETTINGS (`edit`): each block's values as fn 0x1F hands them over, {count, values}, four channels one after another. */
+    settings: o.settings ?? new Map(),
+    edits: []
   }
   const nameBytes = (name) => {
     const b = [...name].map((c) => c.charCodeAt(0))
@@ -304,6 +307,27 @@ function fakeGen3(sx, o) {
       case 0x12:
         state.page = p[0] === 0x1e
         return
+      /*
+       * A block read whole, for Edit: the header naming it and how many
+       * values, the values in two pages, the footer. A block not in the
+       * preset is refused, as a real one refuses it; `editDamage` spoils the
+       * second page's checksum, and `editSilent` answers nothing.
+       */
+      case 0x1f: {
+        const eid = sx.decode14(p[0], p[1])
+        if (!opt.edit) return reply(0x64, [0x1f, 0x04])
+        if (!find(eid) || !state.settings.has(eid)) return reply(0x64, [0x1f, 0x07])
+        if (opt.editSilent) return
+        const { count, values } = state.settings.get(eid)
+        const page = (list) => sx.frame(model, 0x75, [0, 0, ...list.flatMap((v) => [v & 0x7f, (v >> 7) & 0x7f, (v >> 14) & 0x03])])
+        const half = Math.ceil(values.length / 2)
+        const second = page(values.slice(half))
+        if (opt.editDamage) second[second.length - 2] ^= 0x01
+        let t = say(sx.frame(model, 0x74, [...sx.encode14(eid), ...sx.encode14(count)]))
+        t = say(page(values.slice(0, half)), t + 2)
+        t = say(second, t + 2)
+        return say(sx.frame(model, 0x76, []), t + 2)
+      }
       case 0x01: {
         const sub = sx.decode14(p[0], p[1])
         const eid = sx.decode14(p[2], p[3])
@@ -315,7 +339,13 @@ function fakeGen3(sx, o) {
           if (opt.sysexPreset) state.preset = v
         } else if (sub === 0x09 && eid === 2 && pid === 0x20) state.bpm = Math.round(sx.bitsFloat(v))
         else if (sub === 0x19 && eid === 0x23 && pid === 2) reply(0x01, [...p.slice(0, 6), ...sx.floatSeptets(state.page ? state.hz : 0), 0, 0, 0, 0])
-        else reply(0x64, [0x01, 0x04])
+        else if (opt.edit && (sub === 0x52 || sub === 0x09) && state.settings.has(eid) && find(eid)) {
+          /* One of Edit's: a knob as its place along 0..65534, a typed write as its number, on the channel the block is on. */
+          const chunk = state.settings.get(eid)
+          const x = sx.bitsFloat(v)
+          chunk.values[find(eid).channel * (chunk.count / 4) + pid] = sub === 0x52 || !Number.isInteger(x) ? Math.round(x * 65534) : x
+          state.edits.push({ eid, pid, sub, value: x })
+        } else reply(0x64, [0x01, 0x04])
         return
       }
       default:
@@ -5251,10 +5281,12 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own. */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fractal-sysex.mjs'])
-    /* Edit's AM4 knobs: the codec and the catalog the computer's codec writes (scripts/am4-knobs.mjs), and nothing that sends. */
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fractal-sysex.mjs'])
+    /* Edit's knobs: the codec and the catalogs the computer's codec writes (scripts/am4-knobs.mjs, scripts/fm3-knobs.mjs), and nothing that sends. */
     assert.deepEqual(imports(read('am4-edit.js')).sort(), ['./am4-knobs.js', './fractal-sysex.mjs'])
     assert.deepEqual(imports(read('am4-knobs.js')), [], 'the AM4 catalog imports something')
+    assert.deepEqual(imports(read('fm3-edit.js')).sort(), ['./fm3-knobs.js', './fractal-sysex.mjs'])
+    assert.deepEqual(imports(read('fm3-knobs.js')), [], 'the FM3 catalog imports something')
     assert.deepEqual(imports(read('bluetooth-gear.js')), [], 'the gear file imports something')
     /* The VP4's wire: the codec's helpers and the VP4 rules both ends keep, and nothing that sends (never bleWire, which hands it the unit). */
     assert.deepEqual(imports(read('bleVp4.js')).sort(), ['./fractal-sysex.mjs', './vp4-safety.js'])
@@ -9863,14 +9895,16 @@ export function run(test) {
     const rule = await import('../mobile/src/lib/ble-rule.js')
     const { ledgerBuilds, thresholdProblems, pinProblems, EDIT_OPENING, EDIT_WORDS, EDIT_OPENED_AT } = await import('./ledger.mjs')
     const { isOlder } = await import('../shared/versions.mjs')
-    assert.deepEqual(rule.EDIT_UNITS, ['am4'], 'Edit over Bluetooth is listed for a unit whose knobs the phone cannot read')
-    assert.deepEqual(rule.EDIT_FROM_STORE, { am4: null }, 'Edit over Bluetooth opens to customers before a store version whose notes say so')
+    assert.deepEqual(rule.EDIT_UNITS, ['am4', 'fm3'], 'Edit over Bluetooth is listed for a unit whose knobs the phone cannot read')
+    assert.deepEqual(rule.EDIT_FROM_STORE, { am4: null, fm3: null }, 'Edit over Bluetooth opens to customers before a store version whose notes say so')
     /* His account: every unit whose editing is built, on every copy. Nobody, a unit not built. */
     for (const installed of [null, '1.87.11', '1.89.0', '9.9.9']) {
-      assert.equal(rule.editOffered('am4', { admin: true, platform: 'ios', installed }), true)
-      assert.equal(rule.editOffered('fm3', { admin: true, platform: 'ios', installed }), false, 'Edit opens over Bluetooth on a unit whose knobs are not built')
-      assert.equal(rule.editOffered('am4', { admin: false, platform: 'ios', installed }), false)
-      assert.equal(rule.editOffered('am4', { admin: false, platform: 'android', installed }), false)
+      for (const unit of ['am4', 'fm3']) {
+        assert.equal(rule.editOffered(unit, { admin: true, platform: 'ios', installed }), true)
+        assert.equal(rule.editOffered(unit, { admin: false, platform: 'ios', installed }), false)
+        assert.equal(rule.editOffered(unit, { admin: false, platform: 'android', installed }), false)
+      }
+      for (const unit of ['fm9', 'axefx3', 'vp4']) assert.equal(rule.editOffered(unit, { admin: true, platform: 'ios', installed }), false, `Edit opens over Bluetooth on the ${unit}, whose knobs are not built`)
     }
     /* The switch as a build will set it: open from that version on, on both phones, and never on a copy that cannot say what it is. */
     const units = { am4: { ios: '1.90.0', android: '1.90.0' } }
@@ -9925,6 +9959,171 @@ export function run(test) {
     assert.match(dev, /export const readAmpBoost = \(path\) => remoteRequest\(path\)/, 'Play’s boost read is marked as Edit’s')
     const wire = flat('mobile/src/lib/bleWire.js')
     assert.match(wire, /const editing = opts\?\.editing === true && editOn\(\)/)
-    assert.match(wire, /const editOn = \(\) => am4 && \(typeof edit === 'function' \? edit\(\) === true : edit === true\)/, 'Edit over Bluetooth reaches a unit whose knobs are not built')
+    assert.match(wire, /const editHere = am4 \|\| unit === 'fm3' const editOn = \(\) => editHere && \(typeof edit === 'function' \? edit\(\) === true : edit === true\)/, 'Edit over Bluetooth reaches a unit whose knobs are not built')
+  })
+  /* ---------------------------------------------------------------- */
+  /* Edit over Bluetooth: the FM3's knobs                               */
+  /* ---------------------------------------------------------------- */
+
+  const FM3E = '../mobile/src/lib/fm3-edit.js'
+  const FM3K = '../mobile/src/lib/fm3-knobs.js'
+
+  /* The pretend FM3's amp, cab and drive, each block's values made up but fixed, four channels at the catalog's stride. */
+  async function fm3Settings() {
+    const { FM3_FAMILIES, FM3_BLOCKS } = await import(FM3K)
+    const random = seeded(31)
+    const settings = new Map()
+    for (const eid of [58, 62, 66, 118]) {
+      const stride = FM3_FAMILIES[FM3_BLOCKS[eid][1]].stride
+      settings.set(eid, { count: stride * 4, values: Array.from({ length: stride * 4 }, () => (random() < 0.4 ? Math.floor(random() * 6) : Math.floor(random() * 65534))) })
+    }
+    const set = (eid, pid, ch, wire) => {
+      const c = settings.get(eid)
+      c.values[ch * (c.count / 4) + pid] = wire
+    }
+    return { settings, set }
+  }
+
+  test('Edit’s FM3 knobs come from the codec the computer app carries, by the computer’s own rules, for every block the pretend FM3 has', async () => {
+    const k = await import(FM3K)
+    const lock = JSON.parse(src('desktop/forgefx.lock.json'))
+    assert.equal(k.FM3_KNOBS_FROM, lock['forgefx-midi'].commit, 'the FM3 knob table is not from the codec desktop/forgefx.lock.json pins: run scripts/fm3-knobs.mjs on it')
+    assert.match(src('scripts/fm3-knobs.mjs'), /if \(head !== pinned\) throw new Error/, 'the table can be written from a codec that is not the pinned one')
+    for (const [eid] of FM3_STATUS) assert.ok(k.FM3_BLOCKS[eid], `effect ${eid}, in the pretend FM3’s preset, is not in the catalog`)
+    assert.deepEqual(k.FM3_BLOCKS[58], ['amp', 'DISTORT', 'Amp', 58])
+    assert.deepEqual(k.FM3_BLOCKS[119], ['drive', 'FUZZ', 'Drive', 118])
+    for (const [family, f] of Object.entries(k.FM3_FAMILIES)) {
+      for (const knob of f.knobs) assert.ok(knob.length === 2 || (knob.length === 6 && knob[2] < knob[3]), `${family} ${knob[1]}: a knob with a range it cannot be drawn on`)
+      for (const [, label, min, max, labels] of f.switches) assert.equal(labels.length, Math.min(128, max - min + 1), `${family} ${label}: options that are not its numbers`)
+    }
+    assert.equal(k.FM3_FAMILIES.DISTORT.stride, 144)
+    assert.equal(k.FM3_FAMILIES.DISTORT.typeId, 6)
+  })
+
+  test('Edit’s FM3 messages are byte for byte the codec’s: the read, a knob, a typed write', async () => {
+    const e = await import(FM3E)
+    /* From forgefx-midi at the pinned commit: buildBlockBulkReadPoll, buildSetParameterContinuous, buildSetParameter (model 0x11). */
+    assert.equal(hex(e.buildReadAll(0x11, 58)), 'F0 00 01 74 11 1F 3A 00 31 F7')
+    assert.equal(hex(e.buildKnob(0x11, 58, 11, 0.5)), 'F0 00 01 74 11 01 52 00 3A 00 0B 00 00 00 00 78 03 00 00 00 00 0D F7')
+    assert.equal(hex(e.buildTyped(0x11, 58, 10, 13)), 'F0 00 01 74 11 01 09 00 3A 00 0A 00 00 00 40 0A 04 00 00 00 00 62 F7')
+    assert.throws(() => e.buildKnob(0x11, 58, 11, 1.2), /not 0\.\.1/)
+  })
+
+  test('an FM3 block’s settings read as the computer reads them: its channel’s slice, each knob’s scale, models, repeated names numbered', async () => {
+    const e = await import(FM3E)
+    const { settings, set } = await fm3Settings()
+    set(58, 7, 1, 32767) // Gain, channel B: 0..10
+    set(58, 1, 1, 65534) // Amp1 Level: -80..20 dB
+    set(58, 12, 1, 32767) // Low Cut Frequency: 10..1000, log
+    set(58, 6, 1, 13) // the model: 1987X Treble
+    set(58, 7, 0, 0) // channel A's gain
+    const out = e.blockParamsOf(58, settings.get(58), { channel: 1 })
+    const knob = (id) => out.named.find((x) => x.id === id)
+    /* The amp has two settings called Gain: the computer numbers them, and so does this. */
+    assert.deepEqual(knob(7), { id: 7, name: 'Gain 1', value: 5, norm: 32767 / 65534, min: 0, max: 10 })
+    assert.equal(knob(1).value, 20)
+    assert.equal(knob(1).unit, 'dB')
+    assert.equal(knob(12).value, 100)
+    assert.equal(knob(12).log, true)
+    assert.deepEqual(out.type, { value: 13, name: '1987X Treble' })
+    assert.deepEqual([out.block, out.slug, out.page], ['Amp', 'amp', 58])
+    assert.equal(out.layout?.family, 'DISTORT')
+    assert.equal(e.blockParamsOf(58, settings.get(58), { channel: 0 }).named.find((x) => x.id === 7).value, 0, 'channel A is not the first slice')
+    /* What the unit counts wins over the catalog's stride when the two disagree; a channel past the last one there is reads the last. */
+    const odd = { count: 144 * 4 + 4, values: Array.from({ length: 144 * 4 + 4 }, (_, i) => i) }
+    assert.equal(e.sliceOf(144, odd, 2).stride, 145)
+    assert.equal(e.sliceOf(144, { count: 144, values: [] }, 3).base, 0)
+    /* Past what the scale holds, it is shown 0 to 10, as the computer shows it. */
+    set(58, 7, 1, 65535)
+    assert.deepEqual(e.blockParamsOf(58, settings.get(58), { channel: 1 }).named.find((x) => x.id === 7), { id: 7, name: 'Gain 1', value: 10, norm: 1 })
+    /* A cab's repeated names are numbered the computer's way (its Low Cuts), and a cab is never picked as a model over Bluetooth. */
+    const cab = e.blockParamsOf(62, settings.get(62), { channel: 0 })
+    assert.deepEqual(cab.named.filter((x) => /^Low Cut \d$/.test(x.name)).map((x) => x.name), ['Low Cut 1', 'Low Cut 2', 'Low Cut 3'])
+    assert.deepEqual(e.modelsOf('cab'), [])
+    assert.ok(e.modelFrame(0x11, 62, 3).refused)
+    assert.equal(e.modelsOf('amp').find((m) => m.value === 13).basedOn, null)
+    assert.equal(e.modelsOf('drive')[0].basedOn, 'Pro Co RAT')
+  })
+
+  test('Edit’s FM3 frames go only to a block the FM3 has just listed, only to settings the catalog names; everything the FM3 was sent before goes as it went', async () => {
+    const e = await import(FM3E)
+    const sx = await import(SX)
+    const { gen3Sender } = await import(WIRE)
+    const placed = FM3_STATUS.map(([eid]) => eid)
+    assert.equal(e.fm3EditAllowed(e.buildReadAll(0x11, 58), placed), 'block settings read')
+    assert.equal(e.fm3EditAllowed(e.buildReadAll(0x11, 74), placed), null, 'a block not in the preset')
+    assert.equal(e.fm3EditAllowed(e.buildReadAll(0x11, 58), []), null)
+    assert.equal(e.fm3EditAllowed(e.buildReadAll(0x12, 58), placed), null, 'another model’s frame')
+    assert.equal(e.fm3EditAllowed(e.buildKnob(0x11, 58, 7, 0.4), placed), 'block knob')
+    assert.equal(e.fm3EditAllowed(e.buildKnob(0x11, 58, 6, 0.4), placed), null, 'a model written as a knob')
+    assert.equal(e.fm3EditAllowed(e.buildKnob(0x11, 58, 1999, 0.4), placed), null, 'a setting the catalog does not name')
+    assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 58, 6, 13), placed), 'block model')
+    assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 58, 6, 9999), placed), null)
+    assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 62, 43, 3), placed), null, 'a cab picked as a model')
+    assert.equal(e.fm3EditAllowed(e.buildTyped(0x11, 58, 7, 0.4), placed), 'block knob (typed)')
+    const out = []
+    let given = null
+    const send = gen3Sender((b) => out.push(b), () => {}, 0x11, () => given)
+    assert.equal(send(e.buildReadAll(0x11, 58)), 'refused', 'Edit’s read went with Edit closed')
+    assert.equal(send(e.buildKnob(0x11, 58, 7, 0.4)), 'refused')
+    given = placed
+    assert.equal(send(e.buildReadAll(0x11, 58)), 'sent')
+    assert.equal(send(e.buildReadAll(0x11, 74)), 'refused')
+    /* What the FM3 was sent before Edit: the tempo's typed write at the Controllers, FM3-Edit's scene and channel, the published messages. */
+    given = null
+    for (const f of [sx.buildSetTempoEdit(0x11, 120), sx.buildSetSceneEdit(0x11, 3), sx.buildSetChannelEdit(0x11, 58, 'B'), sx.buildGetScene(0x11), sx.buildStatusDump(0x11), sx.buildTunerPoll(0x11)]) {
+      assert.equal(send(f), 'sent', `${hex(f)} stopped going to an FM3`)
+    }
+  })
+
+  test('over Bluetooth, Edit reads an FM3 block, turns a knob and picks a model; a block not in the preset, a cab model or Edit closed sends nothing', async () => {
+    const e = await import(FM3E)
+    const { settings, set } = await fm3Settings()
+    set(58, 7, 1, 32767)
+    set(58, 6, 1, 13)
+    const t = await onTheLine('fm3', { edit: () => true, settings })
+    t.unit.state.blocks.find((b) => b.eid === 58).channel = 1
+    const ask = (path, opts = {}) => drive(t.clock, t.wire.request(path, { editing: true, ...opts }))
+    const read = await ask('/preset/blocks/58/params')
+    assert.equal(read.named.find((x) => x.id === 7).value, 5, 'the channel the amp is on was not the one read')
+    assert.deepEqual(read.type, { value: 13, name: '1987X Treble' })
+    const before = t.frames().length
+    assert.deepEqual(await ask('/preset/blocks/58/params/7', { method: 'PUT', body: JSON.stringify({ value: 0.7, continuous: true }) }), { ok: true })
+    assert.deepEqual(t.frames().slice(before).filter((f) => f[5] === 0x01).map(hex), [hex(e.buildKnob(0x11, 58, 7, 0.7))])
+    assert.equal((await ask('/preset/blocks/58/params')).named.find((x) => x.id === 7).value, 7)
+    /* The screen's read straight after the read-back sends nothing. */
+    const quiet = t.frames().length
+    await ask('/preset/blocks/58/params')
+    assert.equal(t.frames().length, quiet, 'the read straight after was read again from the unit')
+    /* A model, and the list the picker shows. */
+    assert.deepEqual(await ask('/preset/blocks/58/type', { method: 'POST', body: JSON.stringify({ value: 2 }) }), { ok: true })
+    assert.equal((await ask('/preset/blocks/58/params')).type.value, 2)
+    assert.equal((await ask('/blocks/amp/types')).find((m) => m.value === 13).name, '1987X Treble')
+    assert.deepEqual(await ask('/blocks/cab/types'), [])
+    /* Refused, and nothing of Edit's sent: a block not in the preset, a cab model, a setting the catalog does not name. */
+    const mark = t.frames().length
+    await assert.rejects(ask('/preset/blocks/74/params'), /isn’t in the preset/)
+    await assert.rejects(ask('/preset/blocks/62/type', { method: 'POST', body: JSON.stringify({ value: 3 }) }), /cab is picked with the computer/)
+    await assert.rejects(ask('/preset/blocks/58/params/1999', { method: 'PUT', body: JSON.stringify({ value: 0.5 }) }), /isn’t one the app can change/)
+    assert.ok(t.frames().slice(mark).every((f) => f[5] !== 0x1f && !(f[5] === 0x01 && (f[6] === 0x52 || f[6] === 0x09))), 'a refused request sent one of Edit’s frames')
+    /* A request that is not Edit's, or Edit closed: refused, nothing sent. */
+    await assert.rejects(t.get('/preset/blocks/58/params'))
+    const closed = await onTheLine('fm3', { edit: () => false, settings })
+    await assert.rejects(drive(closed.clock, closed.wire.request('/preset/blocks/58/params', { editing: true })))
+    assert.ok(closed.frames().every((f) => f[5] !== 0x1f), 'a read went with Edit closed')
+    /* Never an FM9's or an Axe-Fx III's, whose catalogs the phone does not carry. */
+    for (const kind of ['fm9', 'axefx3']) {
+      const other = await onTheLine(kind, { edit: () => true, settings })
+      await assert.rejects(drive(other.clock, other.wire.request('/preset/blocks/58/params', { editing: true })))
+      assert.ok(other.frames().every((f) => f[5] !== 0x1f), `a read went to an ${kind}`)
+    }
+  })
+
+  test('an FM3 block whose settings come back damaged, or not at all, says so', async () => {
+    const { settings } = await fm3Settings()
+    const damaged = await onTheLine('fm3', { edit: () => true, settings, editDamage: true })
+    await assert.rejects(drive(damaged.clock, damaged.wire.request('/preset/blocks/58/params', { editing: true })), /came back damaged/)
+    const silent = await onTheLine('fm3', { edit: () => true, settings, editSilent: true })
+    await assert.rejects(drive(silent.clock, silent.wire.request('/preset/blocks/58/params', { editing: true })), /didn’t send the Amp’s settings/)
   })
 }
