@@ -234,7 +234,18 @@ const post = (path, body, tap) =>
  */
 const tapOf = (opts) => (Number.isFinite(opts?.deadline) ? { deadline: opts.deadline } : undefined)
 
-const put = (path, body) => remoteRequest(path, { method: 'PUT', body: JSON.stringify(body) })
+const put = (path, body, opts) => remoteRequest(path, { method: 'PUT', body: JSON.stringify(body), ...(opts || {}) })
+
+/*
+ * EDIT'S OWN READS AND WRITES SAY SO: a block's settings, its models, a knob,
+ * a switch, a model. Over the computer it changes nothing (the relay reads
+ * method, body and deadline, and nothing else). Over Bluetooth it is the
+ * whole difference: the phone answers these itself only while Edit is open
+ * to this account on this unit (bleWire routeFor, ble-rule editOffered), and
+ * only when they come from here, so Play's own read of the AM4 amp's
+ * settings (its boost, lib/am4-boost) is refused there as it always was.
+ */
+const EDITING = Object.freeze({ editing: true })
 
 /*
  * EVERY WRITE IS IN THE LOG WITH THE UNIT'S ANSWER.
@@ -484,7 +495,7 @@ export const getTempo = () => remoteRequest('/tempo')
  * With the catalog's known mistakes put right on the way in (Presence
  * Frequency is kHz, not Hz) — see lib/param-fixes.js.
  */
-export const blockParams = async (eid) => fixRead(await remoteRequest(`/preset/blocks/${eid}/params`))
+export const blockParams = async (eid) => fixRead(await remoteRequest(`/preset/blocks/${eid}/params`, EDITING))
 
 /** What the unit's footswitches can do — see lib/footswitches and the Footswitches page. */
 export const fcModel = () => remoteRequest('/fc/model')
@@ -777,7 +788,7 @@ export const demoTuner = () => demoDevice()?.tunerStream?.() || null
  * normalising one would be meaningless. Option 2 of 5 is not "40% of the way
  * along".
  */
-export const setType = (eid, value) => told(`block ${eid} model ${value}`, post(`/preset/blocks/${eid}/type`, { value }))
+export const setType = (eid, value) => told(`block ${eid} model ${value}`, post(`/preset/blocks/${eid}/type`, { value }, EDITING))
 
 /**
  * A cab block as the host sees it: which mode it is in (an IR, or DynaCab),
@@ -842,7 +853,7 @@ export async function readUnitMetronome(slug) {
  * intact, the way the browser's `setEnum` sends it.
  */
 export const setEnum = (eid, paramId, ordinal) =>
-  told(`block ${eid} param ${paramId} → ${ordinal}`, put(`/preset/blocks/${eid}/params/${paramId}`, { value: ordinal, continuous: false }))
+  told(`block ${eid} param ${paramId} → ${ordinal}`, put(`/preset/blocks/${eid}/params/${paramId}`, { value: ordinal, continuous: false }, EDITING))
 
 /*
  * THE AM4 AMP'S OUT BOOST, for its pedal on Play (lib/am4-boost, which says
@@ -884,7 +895,7 @@ export const setAmpBoost = (ask, opts) => {
  * worse than it being a code word on both.
  */
 export const blockTypes = async (slug) =>
-  withLineage(slug, (await remoteRequest(`/blocks/${slug}/types`)) || [])
+  withLineage(slug, (await remoteRequest(`/blocks/${slug}/types`, EDITING)) || [])
 
 /* ---------------------------------------------------------------- */
 /* Changing the chain itself                                         */
@@ -1019,10 +1030,14 @@ export function setParam(eid, paramId, value, param, continuous) {
     // sounds like a decision somebody made.
     return Promise.reject(new Error(`No range known for ${param?.name || `parameter ${paramId}`}.`))
   }
-  return put(`/preset/blocks/${eid}/params/${paramId}`, {
-    value: norm,
-    continuous: continuous ?? preferredEncoding(eid, paramId)
-  })
+  return put(
+    `/preset/blocks/${eid}/params/${paramId}`,
+    {
+      value: norm,
+      continuous: continuous ?? preferredEncoding(eid, paramId)
+    },
+    EDITING
+  )
 }
 
 /**
@@ -1062,7 +1077,7 @@ export async function setParamConfirmed(eid, paramId, value, param) {
   }
 
   const write = (continuous) =>
-    put(`/preset/blocks/${eid}/params/${paramId}`, { value: norm, continuous })
+    put(`/preset/blocks/${eid}/params/${paramId}`, { value: norm, continuous }, EDITING)
 
   /* What the unit read back last, so a write that did not take can say what
      the unit is holding instead — which is the difference between "the app

@@ -49,6 +49,15 @@ From that merge on, updates made on main reach only 1.89.0 copies: phones
 on TestFlight's 1.88.3 and Play's 1.88.0 keep the last update made before
 it until they take 1.89.0 from the store.
 
+**The build that opens Edit over Bluetooth to customers says so too**, in
+these words in What it was for: "Editing over Bluetooth for customers".
+The same rules hold it, with its own switch and pin: `EDIT_FROM_STORE` in
+mobile/src/lib/ble-rule.js, one entry per unit (the AM4 first), null until
+the build pull request sets the unit to that build's version on both
+phones, and `EDIT_OPENED_AT` in test/ledger.mjs, set in the pull request
+that writes the row. Until then Edit over Bluetooth is Justin's account's
+alone, on every copy, by update.
+
 **That pair, 1.89.0, is started with the Send box unticked**, the one build
 where it is: platform `all`, profile `production`, and "Send it to
 TestFlight, and to Google Play production" left off. Ticked, Android would

@@ -479,6 +479,41 @@ purchase page, which shows its line only on a copy that opens Bluetooth to
 customers (`openForCustomersHere()`), since somebody who has not paid is not
 past the row's gate.
 
+**Edit over Bluetooth: the AM4 first, his account until a store version
+opens it.**
+
+> "I have an FM3 and AM4 I can test on. But I wanna make it an easy switch
+> if it works to be able to get it out to everyone"
+
+Since 29 October 2026 Edit opens over Bluetooth on an AM4 for his account
+(by update, on every copy): knobs, models and on/off, read and written by
+the phone the way the computer app does it (mobile/src/lib/am4-edit.js,
+the bytes and the decoding checked against the pinned codec). No saving,
+moving blocks, modifiers or names over Bluetooth yet, and Edit says so.
+
+- **The switch is one line**: `EDIT_FROM_STORE` in
+  mobile/src/lib/ble-rule.js, one entry per unit whose knobs are built,
+  null until a store version opens it. To get it out to everyone, set the
+  unit to that store version on both phones in that build's pull request
+  (`am4: { ios: '1.90.0', android: '1.90.0' }`), with the review notes and
+  What's New saying editing works over Bluetooth on that unit. Never by an
+  update: the listing and every copy's review notes say editing does not
+  work over Bluetooth (the same rules as Bluetooth itself, below). The
+  ledger holds it the same way: its row says "Editing over Bluetooth for
+  customers", and `EDIT_OPENED_AT` in test/ledger.mjs pins it.
+- **The AM4's catalog is generated**, mobile/src/lib/am4-knobs.js, by
+  scripts/am4-knobs.mjs from forgefx-midi at the commit
+  desktop/forgefx.lock.json pins (a test holds the two together). A new
+  codec pin means running the script on it.
+- **Every frame of Edit's is held to am4EditAllowed** before it goes: a
+  read only of a block the AM4 has just said is in its preset, a write only
+  to a setting the catalog names on such a block, within its range.
+  AM4_ALLOWED stays as it was for everything else. A request is Edit's only
+  when it says so (device.js `EDITING`), so Play's own read of the amp, for
+  its boost, stays refused over Bluetooth.
+- **The FM3 is next**, the same way: its own reads and writes in bleWire,
+  its own entry in `EDIT_FROM_STORE`.
+
 **Fractal Audio wrote on 18 October 2026, and the app does what it asked,
 except the name.** Their letter on Approved Vendor status asked for a clear
 statement at startup, no logos or product artwork, products named in plain

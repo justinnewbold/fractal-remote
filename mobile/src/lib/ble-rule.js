@@ -170,3 +170,53 @@ export function unitOffered(unit, { admin = false, platform = null, installed = 
   if (typeof unit !== 'string' || !Object.prototype.hasOwnProperty.call(units, unit)) return false
   return bluetoothOpen({ platform, installed, admin: false, from: units[unit] })
 }
+
+/*
+ * EDITING OVER BLUETOOTH: WHICH UNITS, AND FROM WHICH STORE VERSION.
+ *
+ * "I have an FM3 and AM4 I can test on. But I wanna make it an easy switch
+ * if it works to be able to get it out to everyone." (Justin, 29 October
+ * 2026.) Edit (Beta) opens over Bluetooth on a unit only once the phone can
+ * read and turn that unit's knobs itself (bleWire's edit routes): the AM4
+ * first. His account has it on every copy from the update that brings it,
+ * to try on his own units; nobody else has it yet.
+ *
+ * THE SWITCH IS ONE LINE HERE, AND IT IS A STORE VERSION. Every copy out
+ * today was reviewed with notes, and a listing, that say editing does not
+ * work over Bluetooth, so it reaches customers the way Bluetooth itself
+ * did: in a new store version whose review notes say so, never by an update
+ * (the same rules: Apple's 2.5.19 and 2.3.1(a), Google's on features
+ * activated remotely). To open it, set the unit's entry to that version on
+ * both phones, `am4: { ios: '1.90.0', android: '1.90.0' }`, in the build
+ * pull request that moves the app to it. test/bluetooth.mjs holds each
+ * entry to the ledger exactly as the Bluetooth threshold is held (test/
+ * ledger.mjs thresholdProblems, with its own row, "Editing over Bluetooth
+ * for customers", and its own pin, EDIT_OPENED_AT): null, or this app's own
+ * version in the build pull request, until the row is written, and never
+ * moved back after.
+ *
+ * A UNIT IS LISTED HERE ONLY ONCE ITS EDITING IS BUILT. Not listed, it is
+ * nobody's, his account's included: Edit stays closed over Bluetooth on it.
+ */
+export const EDIT_FROM_STORE = Object.freeze({
+  am4: null
+})
+
+/** The units whose knobs the phone can read and turn over Bluetooth, keyed above. */
+export const EDIT_UNITS = Object.freeze(Object.keys(EDIT_FROM_STORE))
+
+/**
+ * Whether Edit opens over Bluetooth on this unit, for this account, on this
+ * copy: his account on every copy, for every unit whose editing is built;
+ * anybody else, a unit keyed to a store version at or below the one built
+ * into this copy (bluetoothOpen's question, asked of the unit's own entry).
+ * A unit not listed is closed to everybody.
+ *
+ * `units` is the keying, passed only by the tests that try the rule as a
+ * build will set it; the app always takes EDIT_FROM_STORE.
+ */
+export function editOffered(unit, { admin = false, platform = null, installed = null, units = EDIT_FROM_STORE } = {}) {
+  if (typeof unit !== 'string' || !Object.prototype.hasOwnProperty.call(units, unit)) return false
+  if (admin === true) return true
+  return bluetoothOpen({ platform, installed, admin: false, from: units[unit] || {} })
+}

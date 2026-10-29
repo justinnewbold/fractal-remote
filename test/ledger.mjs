@@ -15,13 +15,24 @@ import { isOlder } from '../shared/versions.mjs'
 /* The words a row says when it is the build that opened Bluetooth (beta) to customers (docs/expo-builds.md's header). */
 export const OPENING = /Bluetooth \(beta\) for customers/
 
+/*
+ * And the words a row says when it is the build that opened Edit over
+ * Bluetooth to customers (mobile/src/lib/ble-rule.js EDIT_FROM_STORE), held
+ * by the same two rules below with its own pin, EDIT_OPENED_AT.
+ */
+export const EDIT_OPENING = /Editing over Bluetooth for customers/
+
+/* What the rules below call each: in what they say, nothing else. */
+export const BLUETOOTH_WORDS = Object.freeze({ name: 'Bluetooth (beta)', row: 'Bluetooth (beta) for customers', pin: 'OPENED_AT' })
+export const EDIT_WORDS = Object.freeze({ name: 'editing over Bluetooth', row: 'Editing over Bluetooth for customers', pin: 'EDIT_OPENED_AT' })
+
 /* Every build in docs/expo-builds.md, once for each phone it built: a cell that starts with a number is a build on that phone. */
-export const ledgerBuilds = (text) => {
+export const ledgerBuilds = (text, marker = OPENING) => {
   const out = []
   for (const line of String(text).split('\n')) {
     const cells = line.split('|').map((c) => c.trim())
     if (cells.length < 7 || !/^\d+\.\d+\.\d+$/.test(cells[2])) continue
-    const opening = OPENING.test(cells[5])
+    const opening = marker.test(cells[5])
     for (const [platform, cell] of [['ios', cells[3]], ['android', cells[4]]]) {
       if (/^\d/.test(cell)) out.push({ date: cells[1], version: cells[2], platform, opening })
     }
@@ -78,6 +89,15 @@ export const withoutOpening = (text) => {
  */
 export const OPENED_AT = Object.freeze({ version: '1.89.0', ios: '1.89.0', android: '1.89.0', units: ['am4', 'fm3', 'fm9', 'axefx3', 'vp4'] })
 
+/*
+ * THE SAME PIN FOR EDIT OVER BLUETOOTH, one per unit it opened: null until a
+ * build opens it to customers. The pull request that writes that build's
+ * row ("Editing over Bluetooth for customers") sets it, in the same change,
+ * to { am4: { version, ios, android } } for each unit the build opened, and
+ * cannot go green without it (test/bluetooth.mjs asks pinProblems of each).
+ */
+export const EDIT_OPENED_AT = null
+
 /* The first build marked as the opening on this phone, or null. */
 const firstOpening = (builds, platform) =>
   builds.filter((b) => b.platform === platform && b.opening).sort((a, b) => (isOlder(a.version, b.version) ? -1 : 1))[0] || null
@@ -132,7 +152,7 @@ const firstOpening = (builds, platform) =>
  * The rule test in test/bluetooth.mjs asks this of the threshold as it is,
  * so the two can never disagree about what the build pull request may say.
  */
-export const thresholdProblems = (builds, from, appVersion) => {
+export const thresholdProblems = (builds, from, appVersion, w = BLUETOOTH_WORDS) => {
   const out = []
   const firsts = { ios: firstOpening(builds, 'ios'), android: firstOpening(builds, 'android') }
   if (!firsts.ios && !firsts.android) {
@@ -147,7 +167,7 @@ export const thresholdProblems = (builds, from, appVersion) => {
   } else if (firsts.ios?.version !== firsts.android?.version) {
     out.push(
       `the opening is marked on ios at ${firsts.ios?.version ?? 'no build'} and on android at ${firsts.android?.version ?? 'no build'}: ` +
-        'Bluetooth (beta) opens on both phones with one build pair, so its one row builds both phones and says "Bluetooth (beta) for customers" once, for both'
+        `${w.name} opens on both phones with one build pair, so its one row builds both phones and says "${w.row}" once, for both`
     )
   }
   for (const platform of ['ios', 'android']) {
@@ -164,7 +184,7 @@ export const thresholdProblems = (builds, from, appVersion) => {
     if (!first && at && at !== appVersion) {
       out.push(
         `${platform}: the threshold is ${at} with no build marked as the opening, and it is not this app’s version ${appVersion}. ` +
-          `If a build has already been started from threshold ${at}, add its row to docs/expo-builds.md with "Bluetooth (beta) for customers" in What it was for, set OPENED_AT in test/ledger.mjs to that build, and leave the threshold as it is: moving it or setting it to null would close Bluetooth by update on the copies under review. ` +
+          `If a build has already been started from threshold ${at}, add its row to docs/expo-builds.md with "${w.row}" in What it was for, set ${w.pin} in test/ledger.mjs to that build, and leave the threshold as it is: moving it or setting it to null would close ${w.name} by update on the copies under review. ` +
           `Only if no build was ever made from ${at}, move it with the version or set it back to null.`
       )
     }
@@ -189,27 +209,27 @@ export const thresholdProblems = (builds, from, appVersion) => {
  *     pin's version: the copies customers took from it were reviewed with
  *     Bluetooth.
  */
-export const pinProblems = ({ builds, from, stores, pin }) => {
+export const pinProblems = ({ builds, from, stores, pin, w = BLUETOOTH_WORDS }) => {
   const out = []
   const opened = ['ios', 'android'].map((p) => firstOpening(builds, p)).filter(Boolean).sort((a, b) => (isOlder(a.version, b.version) ? -1 : 1))[0] || null
   if (opened && !pin) {
     out.push(
-      `docs/expo-builds.md marks ${opened.version} as the opening, and OPENED_AT in test/ledger.mjs is null: the pull request that writes the row sets it to that build, ` +
+      `docs/expo-builds.md marks ${opened.version} as the opening, and ${w.pin} in test/ledger.mjs is null: the pull request that writes the row sets it to that build, ` +
         `{ version: '${opened.version}', ios: <the threshold on ios>, android: <the threshold on android> }, so the row and the threshold cannot be taken out together`
     )
   }
   if (!pin) return out
-  if (opened && opened.version !== pin.version) out.push(`OPENED_AT says ${pin.version} opened Bluetooth (beta), and docs/expo-builds.md marks ${opened.version} as the opening`)
+  if (opened && opened.version !== pin.version) out.push(`${w.pin} says ${pin.version} opened ${w.name}, and docs/expo-builds.md marks ${opened.version} as the opening`)
   for (const platform of ['ios', 'android']) {
     const at = from[platform] ?? null
     if (pin[platform] && !builds.some((b) => b.platform === platform && b.version === pin.version && b.opening)) {
-      out.push(`${platform}: OPENED_AT says ${pin.version} opened Bluetooth (beta), and docs/expo-builds.md has no ${platform} build of ${pin.version} marked "Bluetooth (beta) for customers": the row is never taken out`)
+      out.push(`${platform}: ${w.pin} says ${pin.version} opened ${w.name}, and docs/expo-builds.md has no ${platform} build of ${pin.version} marked "${w.row}": the row is never taken out`)
     }
     if (at !== (pin[platform] ?? null)) {
-      out.push(`${platform}: OPENED_AT says the threshold is ${pin[platform] ?? null}, and it is ${at}: once a build has opened Bluetooth (beta), the threshold is never moved or set back by an update`)
+      out.push(`${platform}: ${w.pin} says the threshold is ${pin[platform] ?? null}, and it is ${at}: once a build has opened ${w.name}, the threshold is never moved or set back by an update`)
     }
     if (isOlder(stores?.[platform], pin.version) === false && !bluetoothOpen({ platform, installed: pin.version, admin: false, from })) {
-      out.push(`${platform}: public/store-versions.json says ${stores[platform]} is live, at or after ${pin.version}, which opened Bluetooth (beta), and the threshold ${at} does not open on ${pin.version}`)
+      out.push(`${platform}: public/store-versions.json says ${stores[platform]} is live, at or after ${pin.version}, which opened ${w.name}, and the threshold ${at} does not open on ${pin.version}`)
     }
   }
   return out

@@ -467,7 +467,27 @@ function fakeAm4(sx, o) {
     tunerCc: o.unitTunerCc ?? 'none',
     midiChannel: o.unitChannel ?? 1,
     tunerOpen: false,
-    tunerHeard: []
+    tunerHeard: [],
+    /*
+     * EDIT'S SETTINGS (`edit`): each register's values as fn 0x1F hands them
+     * over, {count, values}, four channels one after another. Only a register
+     * of a block in the preset answers; a read of any other, or a write to
+     * one, is what the real one froze on, and freezes this one.
+     */
+    settings: o.settings ?? new Map(),
+    edits: []
+  }
+  /* Whether a register belongs to a block in the preset now: its own code, or the first amp's cab section. */
+  const registerHere = (reg) => state.slots.includes(reg) || (reg === 0x3e && state.slots.includes(0x3a))
+  /* One of Edit's frames this AM4 knows: a whole-register read, or a write to a setting of a block in the preset. */
+  function editFrame(b) {
+    if (!opt.edit || !sx.isFractal(b) || b[4] !== 0x15) return false
+    if (b[5] === 0x1f) return b.length === 10 && registerHere(sx.decode14(b[6], b[7])) && state.settings.has(sx.decode14(b[6], b[7]))
+    if (b[5] !== 0x01 || b.length !== 23) return false
+    const reg = sx.decode14(b[6], b[7])
+    const action = sx.decode14(b[10], b[11])
+    const chunk = state.settings.get(reg)
+    return (action === 0x0001 || action === 0x0002) && registerHere(reg) && !!chunk && sx.decode14(b[8], b[9]) < chunk.count / 4
   }
   const d14 = sx.decode14
   const u32 = (n) => [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff]
@@ -555,7 +575,7 @@ function fakeAm4(sx, o) {
       state.unknown.push(b)
       return
     }
-    if (!sx.isAllowedAm4(b)) {
+    if (!sx.isAllowedAm4(b) && !editFrame(b)) {
       /* What the real one did with a message it did not expect: stopped answering. */
       state.frozen = true
       state.unknown.push(b)
@@ -584,6 +604,25 @@ function fakeAm4(sx, o) {
       /* Until its last frame has started going out: the phone cannot have heard the end before that. */
       if (o.clock) state.sendingUntil = o.clock.now() + last
       return
+    }
+    /*
+     * A register's settings, whole: the header naming it and how many
+     * values, the values in two pieces, the footer. `editDamage` spoils the
+     * second piece's checksum; `editSilent` answers nothing.
+     */
+    if (b[5] === 0x1f) {
+      if (opt.editSilent) return
+      const reg = d14(b[6], b[7])
+      const { count, values } = state.settings.get(reg)
+      const at = [0xf0, 0x00, 0x01, 0x74, 0x15]
+      const part = (list) => close([...at, 0x75, ...sx.encode14(list.length), ...list.flatMap((v) => [v & 0x7f, (v >> 7) & 0x7f, (v >> 14) & 0x03])])
+      const half = Math.ceil(values.length / 2)
+      const second = part(values.slice(half))
+      if (opt.editDamage) second[second.length - 2] ^= 0x01
+      let t = say(close([...at, 0x74, ...sx.encode14(reg), ...sx.encode14(count)]))
+      t = say(part(values.slice(0, half)), t + 2)
+      t = say(second, t + 2)
+      return say(close([...at, 0x76]), t + 2)
     }
     const pidLow = d14(b[6], b[7])
     const pidHigh = d14(b[8], b[9])
@@ -622,6 +661,15 @@ function fakeAm4(sx, o) {
     if (action === 0x10) return say(close([...head(b), 0, 0, 4, 0, ...sx.am4Float(state.tuner[pidHigh - 1])]))
     /* A write. On USB the AM4 also hands back a copy of the write itself. */
     if (opt.usbEcho) say([...b], 2)
+    /* One of Edit's: the setting on the channel the block is on (the cab section is the amp's), a knob as its place along 0..65534. */
+    if (opt.edit && state.settings.has(pidLow) && pidHigh !== 0x0003 && pidHigh !== 0x07d2 && !(pidLow === 0x3a && pidHigh === 0x0096)) {
+      const chunk = state.settings.get(pidLow)
+      const ch = state.channel.get(pidLow === 0x3e ? 0x3a : pidLow) ?? 0
+      const v = sx.am4ReadFloat(b, 16)
+      chunk.values[ch * (chunk.count / 4) + pidHigh] = action === 0x0002 ? Math.round(v * 65534) : v
+      state.edits.push({ reg: pidLow, number: pidHigh, action, value: v })
+      return say(long(b, forty(v, '')), 3)
+    }
     const value = action === 0x0001 && pidHigh === 0x000d ? sx.am4ReadU32(b, 16) : sx.am4ReadFloat(b, 16)
     if (pidLow === 0xce && pidHigh === 0x000d) state.scene = value
     else if (pidLow === 0xce && pidHigh === 0x000a) {
@@ -696,6 +744,7 @@ async function onTheLine(kind, options = {}) {
       log: (l) => logs.push(l),
       remember: (m) => remembered.push(m),
       onForeign: (name) => foreign.push(name),
+      edit: options.edit,
       send: (b) => {
         if (line.gone || line.refuses?.(b)) return false
         sent.push({ at: clock.now(), bytes: [...b] })
@@ -5202,7 +5251,10 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own. */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fractal-sysex.mjs'])
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fractal-sysex.mjs'])
+    /* Edit's AM4 knobs: the codec and the catalog the computer's codec writes (scripts/am4-knobs.mjs), and nothing that sends. */
+    assert.deepEqual(imports(read('am4-edit.js')).sort(), ['./am4-knobs.js', './fractal-sysex.mjs'])
+    assert.deepEqual(imports(read('am4-knobs.js')), [], 'the AM4 catalog imports something')
     assert.deepEqual(imports(read('bluetooth-gear.js')), [], 'the gear file imports something')
     /* The VP4's wire: the codec's helpers and the VP4 rules both ends keep, and nothing that sends (never bleWire, which hands it the unit). */
     assert.deepEqual(imports(read('bleVp4.js')).sort(), ['./fractal-sysex.mjs', './vp4-safety.js'])
@@ -5651,7 +5703,12 @@ export function run(test) {
     for (const p of ['mobile/App.js', 'mobile/src/screens/Settings.js']) assert.ok(!/useBluetooth\(\)/.test(code(p)), `${p} redraws for every change on the Bluetooth page`)
     assert.match(app, /useEffect\(\(\) => \{ restoreBluetooth\(\) \}, \[\]\)/, 'the setting is never picked up at launch')
     assert.match(app, /startLink\(\) return \(\) => \{ stopLink\(\) \} \}, \[auth, demo, bluetooth\]\)/, 'turning Bluetooth on or off does not restart the link')
-    assert.match(app, /BENCH && \(demo \|\| link\.link === 'connected'\) && !overBluetooth\(caps\) \? \(\) => setScreen\('edit'\) : null/, 'Edit opens over Bluetooth')
+    /* Over Bluetooth, Edit only where its knobs are built and open to this account (ble-rule editOffered, through bluetooth.js). */
+    assert.match(
+      app,
+      /BENCH && \(demo \|\| link\.link === 'connected'\) && \(!overBluetooth\(caps\) \|\| editOverBluetooth\(\)\) \? \(\) => setScreen\('edit'\) : null/,
+      'Edit opens over Bluetooth where it is not built or not open'
+    )
     assert.match(app, /<WrongAccount active=\{[^}]*&& !bluetooth\}/, 'the stage warns about a computer on another account while on Bluetooth')
     /* The waiting screen, over Bluetooth, is about the adapter. */
     const waking = app.slice(app.indexOf('function Waking('))
@@ -5680,7 +5737,7 @@ export function run(test) {
      */
     assert.match(waking, /\{bluetooth \? \( <View style=\{\{ alignSelf: 'stretch' \}\}> <Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/, 'the Bluetooth waiting screen has no way back to the computer')
     assert.ok(waking.indexOf('Use the computer instead') < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way back to the computer waits fifteen seconds')
-    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, allowBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
+    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, allowBluetooth, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     /* Handed only through the Settings row's own gate: test 'every way onto the Bluetooth page' holds it. */
     assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
@@ -5788,7 +5845,7 @@ export function run(test) {
     assert.match(lib, /import \{ isAdmin \} from '\.\/admin'/)
     assert.match(lib, /import \{ accountId \} from '\.\/owner-unlock'/)
     assert.match(lib, /import \{ installedStoreVersion \} from '\.\/storeVersion'/)
-    assert.match(lib, /import \{ bluetoothOpen, unitOffered \} from '\.\/ble-rule'/)
+    assert.match(lib, /import \{ bluetoothOpen, editOffered, unitOffered \} from '\.\/ble-rule'/)
     assert.match(
       lib,
       /export function allowBluetooth\(id, \{ signedOut = false \} = \{\}\) \{ const was = allowed const wasAll = allUnits allowed = accountId\(id\) \? bluetoothOpen\(\{ platform: Platform\.OS, installed: builtInVersion\(\), admin: isAdmin\(id\) \}\) : null/,
@@ -9528,5 +9585,346 @@ export function run(test) {
     assert.match(flat('mobile/src/lib/bluetooth.js'), /unit: saved\.unit \? unitForReport\(saved\.unit\) \|\| unitName\(saved\.unit\) : null,/)
     /* Only the AM4 and the FM3 have run it: every other unit is said as untried, and none opens to a customer before the store version does (the rule's own test). */
     assert.deepEqual(gear.TESTED, ['am4', 'fm3'])
+  })
+
+  /* ---------------------------------------------------------------- */
+  /* Edit over Bluetooth: the AM4's knobs, read and turned by the phone */
+  /* ---------------------------------------------------------------- */
+
+  const EDIT = '../mobile/src/lib/am4-edit.js'
+  const KNOBS = '../mobile/src/lib/am4-knobs.js'
+
+  /*
+   * The AM4 in the pretend's preset (an amp at 0x3A, two drives), each
+   * register's values made up but fixed: four channels, each as long as the
+   * catalog's highest number on that register and a little more, so a slip
+   * of one channel or one place reads a different value. `set` puts a value
+   * at a setting's place on a channel.
+   */
+  async function editSettings() {
+    const { AM4_KNOBS } = await import(KNOBS)
+    const random = seeded(29)
+    const settings = new Map()
+    const make = (slug, reg) => {
+      const top = Math.max(...AM4_KNOBS[slug].params.filter((r) => r[2] === reg).map((r) => r[3]))
+      const stride = top + 3
+      const values = Array.from({ length: stride * 4 }, () => Math.floor(random() * 65535))
+      return { count: stride * 4, values }
+    }
+    settings.set(0x3a, make('amp', 0x3a))
+    settings.set(0x3e, make('amp', 0x3e))
+    settings.set(0x76, make('drive', 0x76))
+    settings.set(0x77, make('drive', 0x76))
+    const set = (reg, number, ch, wire) => {
+      const c = settings.get(reg)
+      c.values[ch * (c.count / 4) + number] = wire
+    }
+    return { settings, set }
+  }
+
+  test('Edit’s AM4 knobs come from the codec the computer app carries, every block named as the phone names it', async () => {
+    const { AM4_KNOBS, AM4_KNOBS_FROM, AM4_PAGES, AM4_FAMILY_BY_BLOCK } = await import(KNOBS)
+    const { PRECISION, settingsOf, layoutFor } = await import(EDIT)
+    const sx = await import(SX)
+    const lock = JSON.parse(src('desktop/forgefx.lock.json'))
+    /* A new pin is a new table: scripts/am4-knobs.mjs on the pinned codec, never a phone that names a knob one way and the computer another. */
+    assert.equal(AM4_KNOBS_FROM, lock['forgefx-midi'].commit, 'the AM4 knob table is not from the codec desktop/forgefx.lock.json pins: run scripts/am4-knobs.mjs on it')
+    assert.match(src('scripts/am4-knobs.mjs'), /if \(head !== pinned\) throw new Error/, 'the table can be written from a codec that is not the pinned one')
+    for (const [slug, spec] of Object.entries(AM4_KNOBS)) {
+      assert.ok(Number.isInteger(sx.AM4_BLOCKS[slug]), `${slug} is not a block the phone knows`)
+      assert.ok(spec.reads.includes(sx.AM4_BLOCKS[slug]), `${slug}’s settings are not read at its own code`)
+      assert.ok(AM4_PAGES[AM4_FAMILY_BY_BLOCK[slug]], `${slug} has no editor pages`)
+      assert.ok(!spec.reads.includes(0xce), `${slug} reads the preset’s own register, which the phone never sends fn 0x1F to`)
+      for (const p of settingsOf(slug)) {
+        if (p.unit !== 'enum') assert.ok(Number.isInteger(PRECISION[p.unit]), `${slug}.${p.key}: no places for ${p.unit}`)
+        assert.ok(spec.reads.includes(p.pidLow), `${slug}.${p.key} is on a register that is never read`)
+      }
+      assert.ok(layoutFor(slug)?.pages?.length, `${slug} opens with no pages`)
+    }
+    /* Only the amp has a second register (its cab section, 0x3E), and every block the phone can name has its knobs. */
+    assert.deepEqual(Object.entries(AM4_KNOBS).filter(([, b]) => b.reads.length > 1).map(([k, b]) => [k, b.reads]), [['amp', [0x3a, 0x3e]]])
+    assert.deepEqual(Object.keys(AM4_KNOBS).sort(), Object.keys(sx.AM4_BLOCKS).sort())
+  })
+
+  test('Edit’s AM4 messages are byte for byte the codec’s: the read, a knob, a model', async () => {
+    const e = await import(EDIT)
+    /* From forgefx-midi at the pinned commit: buildGetAllParams, buildSetParamNorm, buildSetFloatParam. */
+    assert.equal(hex(e.buildAm4ReadAll(0x3a)), 'F0 00 01 74 15 1F 3A 00 35 F7')
+    assert.equal(hex(e.buildAm4ReadAll(0x3e)), 'F0 00 01 74 15 1F 3E 00 31 F7')
+    assert.equal(hex(e.buildAm4ReadAll(0x77)), 'F0 00 01 74 15 1F 77 00 78 F7')
+    assert.equal(hex(e.buildAm4SetNorm(0x3a, 1, 0.5)), 'F0 00 01 74 15 01 3A 00 01 00 02 00 00 00 04 00 00 00 00 03 78 57 F7')
+    assert.equal(hex(e.buildAm4SetNorm(0x3e, 34, 0.25)), 'F0 00 01 74 15 01 3E 00 22 00 02 00 00 00 04 00 00 00 10 03 70 68 F7')
+    assert.equal(hex(e.buildAm4SetValue(0x3a, 10, 13)), 'F0 00 01 74 15 01 3A 00 0A 00 01 00 00 00 04 00 00 00 0A 04 08 22 F7')
+    assert.throws(() => e.buildAm4SetNorm(0x3a, 1, 1.5), /not 0\.\.1/)
+    assert.throws(() => e.buildAm4SetValue(0x3a, 10, 1.5), /not a switch/)
+    assert.throws(() => e.buildAm4ReadAll(0), /not one the AM4 is read at/)
+  })
+
+  test('an AM4 block’s settings read as the computer reads them: the channel it is on, each knob’s own scale, the cab under its own id', async () => {
+    const e = await import(EDIT)
+    const { settings, set } = await editSettings()
+    /* Values from forgefx-midi decode and roundDisplayValue at the pinned commit. */
+    set(0x3a, 11, 1, 32767) // amp gain, channel B
+    set(0x3a, 12, 1, 13107) // amp bass
+    set(0x3a, 11, 0, 65534) // the same gain on channel A
+    set(0x3e, 32, 1, 50000) // the cab's master high cut, log10 200..20000 Hz
+    set(0x3a, 10, 1, 13) // the model: AC-20
+    const out = e.blockParamsOf(0x3a, settings, { channel: 1, bypassed: false })
+    const knob = (id) => out.named.find((k) => k.id === id)
+    assert.equal(knob(11).name, 'Gain')
+    assert.equal(knob(11).value, 5)
+    assert.equal(knob(11).min, 0)
+    assert.equal(knob(11).max, 10)
+    assert.equal(knob(12).value, 2)
+    const cut = knob((0x3e << 16) | 32)
+    assert.ok(cut, 'the cab section’s knobs are not under their own register’s id')
+    assert.equal(cut.value, 6714)
+    assert.equal(cut.unit, 'Hz')
+    assert.equal(cut.log, true)
+    assert.ok(Math.abs(cut.norm - Math.log(6714 / 200) / Math.log(100)) < 1e-9)
+    assert.deepEqual(out.type, { value: 13, name: 'AC-20' })
+    assert.equal(out.slug, 'amp')
+    assert.equal(out.page, -1)
+    /* Its on/off first, the made-up switch the computer puts there; no channel among the switches, which has its own buttons. */
+    assert.deepEqual(out.enums[0], { id: 0xffff, name: 'Bypass', value: 0, options: [{ value: 0, label: 'Engaged' }, { value: 1, label: 'Bypassed' }] })
+    assert.ok(!out.enums.some((x) => /^channel$/i.test(x.name)))
+    assert.equal(new Set(out.named.map((k) => k.id)).size, out.named.length, 'two knobs share an id')
+    assert.equal(out.layout?.family, 'DISTORT')
+    /* Channel A is the first quarter. */
+    assert.equal(e.blockParamsOf(0x3a, settings, { channel: 0 }).named.find((k) => k.id === 11).value, 10)
+    /* A register that does not hold four channels holds channel A's alone. */
+    const single = new Map([[0x76, { count: 41, values: Array.from({ length: 41 }, () => 32767) }]])
+    assert.ok(e.blockParamsOf(0x76, single, { channel: 0 }).named.length > 0)
+    assert.equal(e.blockParamsOf(0x76, single, { channel: 2 }).named.length, e.blockParamsOf(0x76, single, { channel: 0 }).named.length, 'channel A is not what a single copy answers')
+    /* A second drive reads at its own code, and only there. */
+    assert.deepEqual(e.readsOf(0x77), [{ wire: 0x77, key: 0x76 }])
+    assert.deepEqual(e.readsOf(0x3a), [{ wire: 0x3a, key: 0x3a }, { wire: 0x3e, key: 0x3e }])
+    assert.deepEqual(e.readsOf(0x3b), [{ wire: 0x3b, key: 0x3a }], 'a second amp is read at the first amp’s cab section')
+    assert.equal(e.editBlock(0x99), null)
+  })
+
+  test('Edit’s frames go only to a block the AM4 has just named, only to settings the catalog names, within their range', async () => {
+    const e = await import(EDIT)
+    const sx = await import(SX)
+    const { am4Sender } = await import(WIRE)
+    const placed = [0x3a, 0x76, 0x77]
+    assert.equal(e.am4EditAllowed(e.buildAm4ReadAll(0x3a), placed), 'block settings read')
+    assert.equal(e.am4EditAllowed(e.buildAm4ReadAll(0x3e), placed), 'block settings read')
+    assert.equal(e.am4EditAllowed(e.buildAm4ReadAll(0x77), placed), 'block settings read')
+    /* Never a block not in the preset, and never a sweep: what froze an AM4. */
+    assert.equal(e.am4EditAllowed(e.buildAm4ReadAll(0x42), placed), null)
+    assert.equal(e.am4EditAllowed(e.buildAm4ReadAll(0x3e), [0x76]), null, 'the cab section is read with no amp in the preset')
+    assert.equal(e.am4EditAllowed(e.buildAm4ReadAll(0x3f), [0x3b]), null)
+    assert.equal(e.am4EditAllowed(e.buildAm4ReadAll(0xce), placed), null)
+    assert.equal(e.am4EditAllowed(e.buildAm4ReadAll(0x3a), []), null)
+    assert.equal(e.am4EditAllowed(e.buildAm4ReadAll(0x3a), null), null)
+    const spoilt = e.buildAm4ReadAll(0x3a)
+    spoilt[8] ^= 1
+    assert.equal(e.am4EditAllowed(spoilt, placed), null, 'a frame with a bad checksum goes')
+    /* A knob: a place along its travel, on a setting the catalog names as a knob. */
+    assert.equal(e.am4EditAllowed(e.buildAm4SetNorm(0x3a, 11, 0.7), placed), 'block knob')
+    assert.equal(e.am4EditAllowed(e.buildAm4SetNorm(0x3e, 32, 0.1), placed), 'block knob')
+    assert.equal(e.am4EditAllowed(e.buildAm4SetNorm(0x77, 2, 0.1), placed), 'block knob', 'a second drive’s Balance')
+    assert.equal(e.am4EditAllowed(e.buildAm4SetNorm(0x3a, 1999, 0.5), placed), null, 'a setting the catalog does not name')
+    assert.equal(e.am4EditAllowed(e.buildAm4SetNorm(0x3a, 10, 0.5), placed), null, 'a model written as a knob')
+    assert.equal(e.am4EditAllowed(e.buildAm4SetNorm(0x42, 1, 0.5), placed), null, 'a block not in the preset')
+    const over = sx.am4Frame({ pidLow: 0x3a, pidHigh: 11, action: sx.AM4.SET_NORM, hdr4: 4, payload: sx.am4Float(1.5) })
+    assert.equal(e.am4EditAllowed(over, placed), null, 'a knob past its end')
+    /* A switch or a model: one of its own numbers, and never the channel, which goes to the base code by its own rule. */
+    assert.equal(e.am4EditAllowed(e.buildAm4SetValue(0x3a, 10, 13), placed), 'block model')
+    assert.equal(e.am4EditAllowed(e.buildAm4SetValue(0x3a, 10, 9999), placed), null, 'a model that does not exist')
+    assert.equal(e.am4EditAllowed(e.buildAm4SetValue(0x3a, 11, 3), placed), null, 'a knob written as a switch')
+    assert.equal(e.am4EditAllowed(sx.buildAm4Channel(0x77, 'B'), placed), null)
+    /* And the one way out asks it only while Edit is open, of the blocks of the last answer. */
+    let given = null
+    const out = []
+    const send = am4Sender((b) => out.push(b), () => {}, () => null, () => given)
+    assert.equal(send(e.buildAm4ReadAll(0x3a)), 'refused', 'Edit’s read went with Edit closed')
+    given = placed
+    assert.equal(send(e.buildAm4ReadAll(0x3a)), 'sent')
+    assert.equal(send(e.buildAm4ReadAll(0x42)), 'refused')
+    assert.equal(send(sx.buildAm4Structure()), 'sent', 'the AM4’s own reads stopped going')
+    assert.equal(out.length, 2)
+  })
+
+  test('over Bluetooth, Edit reads an AM4 block, turns a knob and picks a model, and the AM4 is sent nothing it has not been seen to take', async () => {
+    const e = await import(EDIT)
+    const { settings, set } = await editSettings()
+    set(0x3a, 11, 1, 32767)
+    set(0x3a, 10, 1, 13)
+    const t = await onTheLine('am4', { edit: () => true, settings })
+    const editing = { editing: true }
+    const ask = (path, opts = {}) => drive(t.clock, t.wire.request(path, { ...editing, ...opts }))
+    const read = await ask('/preset/blocks/58/params')
+    assert.equal(read.slug, 'amp')
+    /* The pretend amp is on channel B: its quarter, not A's. */
+    assert.equal(read.named.find((k) => k.id === 11).value, 5)
+    assert.deepEqual(read.type, { value: 13, name: 'AC-20' })
+    assert.ok(read.named.some((k) => k.id === ((0x3e << 16) | 32)), 'the cab section was not read')
+    const reads = t.frames().filter((f) => f[5] === 0x1f).map(hex)
+    assert.deepEqual(reads, [hex(e.buildAm4ReadAll(0x3a)), hex(e.buildAm4ReadAll(0x3e))])
+    /* A knob: the computer's frame, at the block's own code, and read back as it now is. */
+    const before = t.frames().length
+    assert.deepEqual(await ask('/preset/blocks/58/params/11', { method: 'PUT', body: JSON.stringify({ value: 0.7, continuous: true }) }), { ok: true })
+    const wrote = t.frames().slice(before).filter((f) => f[5] === 0x01 && f.length === 23)
+    assert.deepEqual(wrote.map(hex), [hex(e.buildAm4SetNorm(0x3a, 11, 0.7))])
+    /* Whichever way the screen asks, a knob goes as a place along its travel: the other way puts an AM4 knob at its bottom. */
+    await ask('/preset/blocks/58/params/11', { method: 'PUT', body: JSON.stringify({ value: 0.7, continuous: false }) })
+    assert.ok(t.unit.state.edits.every((x) => x.action === 0x0002))
+    assert.equal((await ask('/preset/blocks/58/params')).named.find((k) => k.id === 11).value, 7)
+    /* A model, and the list the picker shows. */
+    assert.deepEqual(await ask('/preset/blocks/58/type', { method: 'POST', body: JSON.stringify({ value: 0 }) }), { ok: true })
+    assert.equal((await ask('/preset/blocks/58/params')).type.value, 0)
+    const models = await ask('/blocks/amp/types')
+    assert.equal(models.find((m) => m.value === 13).name, 'AC-20')
+    /* A second drive, at its own code. */
+    assert.equal((await ask('/preset/blocks/119/params')).slug, 'drive')
+    assert.equal(t.unit.state.frozen, false, `the AM4 was sent something it froze on: ${t.unit.state.unknown.map(hex).join(' | ')}`)
+    assert.ok(t.logs.some((l) => /read the amp’s settings in \d+\.\d s: \d+ knobs, channel B/.test(l)), 'the log does not say what the read found')
+  })
+
+  test('a knob let go over Bluetooth costs the write and one register read, not three whole blocks; a scene reads the block afresh', async () => {
+    const { settings } = await editSettings()
+    const t = await onTheLine('am4', { edit: () => true, settings })
+    const ask = (path, opts = {}) => drive(t.clock, t.wire.request(path, { editing: true, ...opts }))
+    await ask('/preset/blocks/58/params')
+    const kinds = (from) =>
+      t.frames().slice(from).map((f) => (f[5] === 0x1f ? `read ${t.sx.decode14(f[6], f[7]).toString(16)}` : f.length === 23 ? 'write' : t.sx.decode14(f[8], f[9]) === 0 ? 'preset' : `ask ${t.sx.decode14(f[8], f[9]).toString(16)}`))
+    /* As Edit lets go of a knob: the write, the read to see it took, and the screen's read after it. */
+    const from = t.frames().length
+    await ask('/preset/blocks/58/params/11', { method: 'PUT', body: JSON.stringify({ value: 0.3, continuous: true }) })
+    const back = await ask('/preset/blocks/58/params')
+    const again = await ask('/preset/blocks/58/params')
+    assert.equal(back.named.find((k) => k.id === 11).value, 3)
+    assert.deepEqual(again, back, 'the screen’s read straight after is not the one just made')
+    assert.deepEqual(kinds(from).filter((k) => k !== 'preset'), ['write', 'read 3a'], 'a knob let go reads more than the register it wrote')
+    /* The cab section, written: its register alone. */
+    const cab = t.frames().length
+    await ask(`/preset/blocks/58/params/${(0x3e << 16) | 32}`, { method: 'PUT', body: JSON.stringify({ value: 0.5, continuous: true }) })
+    await ask('/preset/blocks/58/params')
+    assert.deepEqual(kinds(cab).filter((k) => k !== 'preset'), ['write', 'read 3e'])
+    /* Another scene can put the block on another channel: read whole again, the channel first. */
+    await drive(t.clock, t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ index: 2 }) }))
+    const scene = t.frames().length
+    await ask('/preset/blocks/58/params')
+    assert.deepEqual(kinds(scene).filter((k) => k !== 'preset'), ['ask 7dd', 'ask 3', 'read 3a', 'read 3e'])
+    /* And kept only a moment: five seconds after its last read, it is read whole. */
+    await advance(t.clock, 6000)
+    const later = t.frames().length
+    await ask('/preset/blocks/58/params')
+    assert.ok(kinds(later).includes('read 3a') && kinds(later).includes('ask 7dd'), 'a block read a while ago is shown as it was then')
+    assert.equal(t.unit.state.frozen, false)
+  })
+
+  test('Edit’s reads and writes go nowhere unless Edit is open and the request is Edit’s, and Play’s boost read stays refused', async () => {
+    const { settings } = await editSettings()
+    const closed = await onTheLine('am4', { edit: () => false, settings })
+    await assert.rejects(drive(closed.clock, closed.wire.request('/preset/blocks/58/params', { editing: true })), (err) => err.status === 501 || /Bluetooth/i.test(err.message))
+    assert.equal(closed.frames().length, 0, 'something went to the AM4 with Edit closed')
+    const t = await onTheLine('am4', { edit: () => true, settings })
+    /* Play's own read of the amp, for its boost (lib/am4-boost): not Edit's, so refused as it always was. */
+    await assert.rejects(t.get('/preset/blocks/58/params'))
+    await assert.rejects(drive(t.clock, t.wire.request('/preset/blocks/58/params/11', { method: 'PUT', body: JSON.stringify({ value: 0.5, continuous: true }) })))
+    assert.equal(t.frames().length, 0, 'a request that was not Edit’s sent something')
+    const ask = (path, opts = {}) => drive(t.clock, t.wire.request(path, { editing: true, ...opts }))
+    /* A block that is not in the preset: the AM4 is asked what is, and nothing else goes. */
+    await assert.rejects(ask('/preset/blocks/66/params'), /isn’t in the preset/)
+    await assert.rejects(ask('/preset/blocks/66/params/1', { method: 'PUT', body: JSON.stringify({ value: 0.5 }) }), /isn’t in the preset/)
+    /* A setting the catalog does not name, a model that does not exist, a knob past its end: refused, nothing sent. */
+    await assert.rejects(ask('/preset/blocks/58/params/1999', { method: 'PUT', body: JSON.stringify({ value: 0.5 }) }), /isn’t one the app can change/)
+    await assert.rejects(ask('/preset/blocks/58/type', { method: 'POST', body: JSON.stringify({ value: 9999 }) }), /no model 9999/)
+    assert.ok(t.frames().every((f) => f[5] !== 0x1f && !(f[5] === 0x01 && [0x0001, 0x0002].includes(t.sx.decode14(f[10], f[11])) && t.sx.decode14(f[8], f[9]) !== 0x000d)), 'a refused request sent a write or a read of settings')
+    /* And the boost's own write, Play's, still goes as it did. */
+    assert.deepEqual(await drive(t.clock, t.wire.request('/preset/blocks/58/params/150', { method: 'PUT', body: JSON.stringify({ value: 1, continuous: false }) })), { ok: true })
+    assert.equal(t.unit.state.boost, 1)
+    assert.equal(t.unit.state.frozen, false)
+  })
+
+  test('an AM4 block whose settings come back damaged, or not at all, says so, and its cab section going missing leaves only those knobs out', async () => {
+    const { settings } = await editSettings()
+    const ask = (t, path) => drive(t.clock, t.wire.request(path, { editing: true }))
+    const damaged = await onTheLine('am4', { edit: () => true, settings, editDamage: true })
+    await assert.rejects(ask(damaged, '/preset/blocks/58/params'), /came back damaged/)
+    const silent = await onTheLine('am4', { edit: () => true, settings, editSilent: true })
+    await assert.rejects(ask(silent, '/preset/blocks/58/params'), /didn’t send the amp’s settings/)
+    /* The pretend's cab section gone: the amp's own knobs are still there, and the log says what is not. */
+    const { settings: noCab } = await editSettings()
+    const t = await onTheLine('am4', { edit: () => true, settings: noCab })
+    noCab.delete(0x3e)
+    const real = t.unit.hear
+    t.unit.hear = (b) => (b[5] === 0x1f && t.sx.decode14(b[6], b[7]) === 0x3e ? undefined : real(b))
+    const read = await ask(t, '/preset/blocks/58/params')
+    assert.ok(read.named.some((k) => k.id === 11))
+    assert.ok(!read.named.some((k) => k.id > 0xffff))
+    assert.ok(t.logs.some((l) => /no answer for the amp’s 3E section; its settings are left out/.test(l)))
+  })
+
+  test('Edit over Bluetooth is one switch per unit, a store version, null until the build that opens it, held to the ledger like Bluetooth itself', async () => {
+    const rule = await import('../mobile/src/lib/ble-rule.js')
+    const { ledgerBuilds, thresholdProblems, pinProblems, EDIT_OPENING, EDIT_WORDS, EDIT_OPENED_AT } = await import('./ledger.mjs')
+    const { isOlder } = await import('../shared/versions.mjs')
+    assert.deepEqual(rule.EDIT_UNITS, ['am4'], 'Edit over Bluetooth is listed for a unit whose knobs the phone cannot read')
+    assert.deepEqual(rule.EDIT_FROM_STORE, { am4: null }, 'Edit over Bluetooth opens to customers before a store version whose notes say so')
+    /* His account: every unit whose editing is built, on every copy. Nobody, a unit not built. */
+    for (const installed of [null, '1.87.11', '1.89.0', '9.9.9']) {
+      assert.equal(rule.editOffered('am4', { admin: true, platform: 'ios', installed }), true)
+      assert.equal(rule.editOffered('fm3', { admin: true, platform: 'ios', installed }), false, 'Edit opens over Bluetooth on a unit whose knobs are not built')
+      assert.equal(rule.editOffered('am4', { admin: false, platform: 'ios', installed }), false)
+      assert.equal(rule.editOffered('am4', { admin: false, platform: 'android', installed }), false)
+    }
+    /* The switch as a build will set it: open from that version on, on both phones, and never on a copy that cannot say what it is. */
+    const units = { am4: { ios: '1.90.0', android: '1.90.0' } }
+    for (const platform of ['ios', 'android']) {
+      assert.equal(rule.editOffered('am4', { platform, installed: '1.90.0', units }), true)
+      assert.equal(rule.editOffered('am4', { platform, installed: '1.91.2', units }), true)
+      assert.equal(rule.editOffered('am4', { platform, installed: '1.89.9', units }), false)
+      assert.equal(rule.editOffered('am4', { platform, installed: null, units }), false)
+    }
+    /* Held to the ledger as the Bluetooth threshold is: null, or this app's own version in the build pull request, until its row is written. */
+    const app = JSON.parse(src('package.json')).version
+    const builds = ledgerBuilds(src('docs/expo-builds.md'), EDIT_OPENING)
+    for (const [unit, from] of Object.entries(rule.EDIT_FROM_STORE)) {
+      assert.deepEqual(thresholdProblems(builds, from || {}, app, EDIT_WORDS), [], `${unit}: Edit over Bluetooth is set where the ledger does not allow it`)
+      for (const p of ['ios', 'android']) {
+        if (from?.[p]) assert.notEqual(isOlder(from[p], rule.BLUETOOTH_FROM_STORE[p]), true, `${unit} opens Edit over Bluetooth before Bluetooth itself on ${p}`)
+      }
+      const pin = EDIT_OPENED_AT?.[unit] ?? null
+      assert.deepEqual(pinProblems({ builds, from: from || {}, stores: JSON.parse(src('public/store-versions.json')), pin, w: EDIT_WORDS }), [], `${unit}: Edit over Bluetooth's pin`)
+    }
+    /* The rule says no to the slips it is there for: a store version already out (it would open by update), one phone alone. */
+    assert.ok(thresholdProblems(builds, { ios: '1.89.0', android: '1.89.0' }, app, EDIT_WORDS).length > 0, 'Edit over Bluetooth could open by update on copies already out')
+    assert.ok(thresholdProblems(builds, { ios: app, android: null }, app, EDIT_WORDS).length > 0, 'Edit over Bluetooth could open on one phone alone')
+    assert.deepEqual(thresholdProblems(builds, { ios: app, android: app }, app, EDIT_WORDS), [], 'the build pull request cannot set the switch')
+    assert.ok(thresholdProblems(builds, { ios: app, android: app }, app, EDIT_WORDS).length === 0 && thresholdProblems(builds, { ios: app, android: app }, '9.0.0', EDIT_WORDS)[0]?.includes('Editing over Bluetooth for customers'), 'the rule does not say which row to write')
+  })
+
+  test('Edit opens over Bluetooth only through the switch, says what it does there, and keeps the computer’s jobs away', () => {
+    const app = flat('mobile/App.js')
+    assert.match(app, /\(!overBluetooth\(caps\) \|\| editOverBluetooth\(\)\) \? \(\) => setScreen\('edit'\)/)
+    const lib = flat('mobile/src/lib/bluetooth.js')
+    assert.match(lib, /export const editOverBluetooth = \(unit = saved\.unit\) => allowed === true && editOffered\(unit, \{ admin: allUnits, platform: Platform\.OS, installed: builtInVersion\(\) \}\)/)
+    assert.match(lib, /edit: \(\) => editOverBluetooth\(unit\)/, 'the wire is not asked the switch at each request')
+    const edit = flat('mobile/src/screens/Edit.js')
+    assert.match(edit, /const viaBle = overBluetooth\(caps\)/)
+    assert.match(edit, /\{viaBle \? <Note>\{BLE_NOTE\}<\/Note> : null\}/)
+    assert.match(edit, /channels\?\.length > 1 && block\.channel && !overBle \? \( <ChannelCopy/)
+    assert.match(edit, /overBle=\{viaBle\}/)
+    const words = code('mobile/src/screens/Edit.js')
+    const note = /export const BLE_NOTE =\s*'([^']+)'/.exec(src('mobile/src/screens/Edit.js'))?.[1]
+    assert.ok(note && /can’t save them over Bluetooth yet/.test(note) && /save it on the unit itself/.test(note), 'Edit does not say a change made over Bluetooth is lost unless it is saved on the unit')
+    assert.ok(!/this phone/i.test(words), 'Edit names the device as a phone')
+    /* Edit's own requests say so; Play's boost read does not, so over Bluetooth it stays refused. */
+    const dev = flat('mobile/src/lib/device.js')
+    for (const re of [
+      /export const blockParams = async \(eid\) => fixRead\(await remoteRequest\(`\/preset\/blocks\/\$\{eid\}\/params`, EDITING\)\)/,
+      /post\(`\/preset\/blocks\/\$\{eid\}\/type`, \{ value \}, EDITING\)/,
+      /remoteRequest\(`\/blocks\/\$\{slug\}\/types`, EDITING\)/,
+      /put\(`\/preset\/blocks\/\$\{eid\}\/params\/\$\{paramId\}`, \{ value: norm, continuous \}, EDITING\)/
+    ])
+      assert.match(dev, re)
+    assert.match(dev, /export const readAmpBoost = \(path\) => remoteRequest\(path\)/, 'Play’s boost read is marked as Edit’s')
+    const wire = flat('mobile/src/lib/bleWire.js')
+    assert.match(wire, /const editing = opts\?\.editing === true && editOn\(\)/)
+    assert.match(wire, /const editOn = \(\) => am4 && \(typeof edit === 'function' \? edit\(\) === true : edit === true\)/, 'Edit over Bluetooth reaches a unit whose knobs are not built')
   })
 }

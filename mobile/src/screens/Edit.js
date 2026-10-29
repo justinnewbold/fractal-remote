@@ -22,6 +22,7 @@ import {
   setType
 } from '../lib/device'
 import { vp4Here } from '../lib/device'
+import { overBluetooth } from '../lib/bleSwitch'
 import { VP4_NO_EDITS, VP4_NO_KNOBS } from '../lib/vp4-safety'
 import {
   CAB_REFUSED,
@@ -185,6 +186,8 @@ export default function Edit({ onBack, onOpenGear }) {
   const preset = useRig(ofPreset)
   const unsaved = useRig(ofUnsaved)
   const pending = !!unsaved && unsaved.number === preset?.number
+  /* Over Bluetooth: knobs, models and on/off, and no Save (rig.noteEdited marks nothing there). See BLE_NOTE. */
+  const viaBle = overBluetooth(caps)
 
   const [openEid, setOpenEid] = useState(null)
   const [error, setError] = useState(null)
@@ -357,6 +360,8 @@ export default function Edit({ onBack, onOpenGear }) {
 
       <SaveNotes s={saveTo} />
 
+      {viaBle ? <Note>{BLE_NOTE}</Note> : null}
+
       {error ? (
         <Note tone="fault" onDismiss={() => setError(null)}>
           {error}
@@ -509,6 +514,7 @@ export default function Edit({ onBack, onOpenGear }) {
             }
             undoSaid={undoSaid && sameBlock(block, undoSaid.eid) && undoSaid.rev === bufferRev ? undoSaid : null}
             onUndoSaid={(said) => setUndoSaid(said ? { ...said, eid: idOf(block), rev: bufferRev } : null)}
+            overBle={viaBle}
           />
         </View>
       ) : blocks.length && !chainNow.elsewhere && !vp4Here() ? (
@@ -523,6 +529,8 @@ export default function Edit({ onBack, onOpenGear }) {
       */}
       {vp4Here() ? (
         <Note tone="hint">{VP4_NO_EDITS}</Note>
+      ) : viaBle ? (
+        <Note tone="hint">{BLE_NO_CHAIN}</Note>
       ) : (
         <>
           {chainNow.elsewhere ? null : <ChainEditor blocks={blocks} caps={caps} onError={setError} onScrollLock={setHeld} />}
@@ -537,7 +545,7 @@ export default function Edit({ onBack, onOpenGear }) {
         settings onto the edit screen." Closed until asked for, like the chain
         editor and the modifiers above it.
       */}
-      {chainNow.elsewhere ? null : <RenameDoor />}
+      {chainNow.elsewhere || viaBle ? null : <RenameDoor />}
 
       {/* Last on the page, under everything it is about. */}
       <Note tone="warn">{BETA_NOTE}</Note>
@@ -554,6 +562,22 @@ export default function Edit({ onBack, onOpenGear }) {
  */
 const BETA_NOTE =
   'Edit is a beta feature. Some blocks and controls may be missing, or may not change the same way they do on your unit yet. If something looks wrong, tell us with Feedback in Settings.'
+
+/*
+ * WHAT EDIT DOES OVER BLUETOOTH, said once at the top, and what it leaves to
+ * the computer, said once where the chain editor would be.
+ *
+ * "I have an FM3 and AM4 I can test on." Over Bluetooth the phone reads and
+ * turns the unit's knobs itself (bleWire's edit routes, lib/am4-edit.js):
+ * knobs, models and on/off. Saving is the computer's (lib/saveViaComputer),
+ * so a change made here plays and is lost at the next preset change unless
+ * it is saved on the unit; and moving blocks, modifiers and names are not
+ * built over Bluetooth yet. Plain about both, rather than a Save that cannot
+ * work and doors that open on refusals.
+ */
+export const BLE_NOTE =
+  'Over Bluetooth you can turn knobs, change models and switch blocks on and off. Changes play right away, but the app can’t save them over Bluetooth yet: to keep a change, save it on the unit itself before you change presets.'
+export const BLE_NO_CHAIN = 'Moving, adding and removing blocks, modifiers and renaming need the computer for now.'
 
 /**
  * One block's controls.
@@ -576,7 +600,8 @@ function BlockPanel({
   restoring,
   onRestoring,
   undoSaid,
-  onUndoSaid
+  onUndoSaid,
+  overBle = false
 }) {
   /* Read once and used everywhere below: see unit.mjs on why this is not
      `block.eid`, and what it cost to find out. */
@@ -1096,8 +1121,8 @@ function BlockPanel({
         </View>
       ) : null}
 
-      {/* Copy this channel onto another — see ChannelCopy below. */}
-      {channels?.length > 1 && block.channel ? (
+      {/* Copy this channel onto another — see ChannelCopy below. Not over Bluetooth, where it is not built yet. */}
+      {channels?.length > 1 && block.channel && !overBle ? (
         <ChannelCopy
           eid={eid}
           block={block}

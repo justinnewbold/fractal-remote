@@ -56,6 +56,7 @@ import {
   APPLE_SCREEN_OPENS,
   RESTRICTED_WORDS,
   allowBluetooth,
+  editOverBluetooth,
   lookForAdapterAgain,
   opensApplesScreen,
   restoreBluetooth,
@@ -1522,11 +1523,13 @@ export default function App() {
                  * that screen is read off the unit, so with nothing on the other
                  * end it is a screen of empty knobs.
                  *
-                 * And never over Bluetooth (beta), which carries playing and
-                 * nothing else: no knobs, no models, no saving.
+                 * Over Bluetooth only where the phone can read and turn the
+                 * unit's knobs itself (lib/ble-rule.js editOffered: the AM4,
+                 * on his account until a store version opens it), and even
+                 * there no saving, no moving blocks (Edit says so).
                  */
                 onOpenEdit={
-                  BENCH && (demo || link.link === 'connected') && !overBluetooth(caps) ? () => setScreen('edit') : null
+                  BENCH && (demo || link.link === 'connected') && (!overBluetooth(caps) || editOverBluetooth()) ? () => setScreen('edit') : null
                 }
                 onUnlock={() => setBuying(true)}
                 onAccount={toMakeAccount}
