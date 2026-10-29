@@ -57,7 +57,10 @@ async function phone(b, use) {
       export const DEFAULT_PROJECT = { url: 'https://example.invalid', anonKey: 'anon' }
       export const remoteRequest = async () => ({ transportOpen: true, recent: [], reopens: [] })
       export const supabaseClient = () => ({
-        auth: { getUser: async () => ({ data: { user: b.user ? { id: b.user } : null } }) },
+        auth: {
+          getUser: async () => ({ data: { user: b.user ? { id: b.user } : null } }),
+          getSession: async () => ({ data: { session: b.user ? { access_token: \`pass-\${b.user}\` } : null } })
+        },
         storage: {
           from: (bucket) => ({
             upload: async (path, body, options) => {
@@ -76,6 +79,7 @@ async function phone(b, use) {
       })
     `,
     'version.js': "export const APP_VERSION = '1.87.48'\n",
+    'thisDevice.js': "export const deviceFacts = () => ({ os: 'ios', osVersion: '27.0.1', model: 'iPhone' })\n",
     'link.js': "export const linkState = () => ({ link: 'connected', hostVersion: '1.87.47' })\nexport const linkVia = () => 'computer'\n",
     'clip.js': `
       const b = globalThis.__reportsBench
@@ -90,6 +94,7 @@ async function phone(b, use) {
     /* The phone's own photo picker and the redraw, as their native halves would answer: `picked` (the picker's result) and `saved(compress)` (a base64 JPEG). */
     'picker.js': `
       const b = globalThis.__reportsBench
+      export const VideoExportPreset = { Passthrough: 0, H264_1280x720: 6 }
       export const launchImageLibraryAsync = async (options) => {
         b.pickerAsked = options
         if (b.pickerThrows) throw new Error('no picker')
@@ -120,13 +125,82 @@ async function phone(b, use) {
     `,
     'debugLog.js': read('mobile/src/lib/debugLog.js'),
     'report-rules.js': quick(read('mobile/src/lib/report-rules.js')),
-    'reports.js': esm(read('mobile/src/lib/reports.js')).replace("from 'react-native'", "from './rn.js'"),
+    /* supabase-js itself, for the client with no sign-in an anonymous report goes on: what it was made with, and what it was asked. */
+    'supa.js': `
+      const b = globalThis.__reportsBench
+      export const createClient = (url, key, options) => {
+        ;(b.bare ||= []).push({ url, key, options })
+        return {
+          auth: { getUser: async () => ({ data: { user: null } }), getSession: async () => ({ data: { session: null } }) },
+          storage: {
+            from: (bucket) => ({
+              upload: async (path, body, options) => {
+                b.uploads.push({ bucket, path, body, options, bare: true })
+                return b.upload ? b.upload(path) : { error: null }
+              }
+            })
+          },
+          from: (table) => ({
+            insert: async (row) => {
+              b.inserts.push({ table, row, bare: true })
+              return { error: b.insertError || null }
+            }
+          })
+        }
+      }
+    `,
+    'reports.js': esm(read('mobile/src/lib/reports.js'))
+      .replace("from 'react-native'", "from './rn.js'")
+      .replace(/import\('@supabase\/supabase-js'\)/g, "import('./supa.js')"),
     'shots.js': esm(read('mobile/src/lib/shots.js'))
       .replace("from 'expo-clipboard'", "from './clip.js'")
       .replace("from 'base64-js'", "from './b64.js'")
       .replace("from 'expo-image-picker'", "from './picker.js'")
       .replace("from 'expo-image-manipulator'", "from './manip.js'")
   }
+  /*
+   * React Native's XMLHttpRequest and FormData, as the video's upload uses
+   * them: each request is kept with its headers and the form it sent, says
+   * how much has gone (`b.progress`, a list of fractions), and answers
+   * `b.video` (a status, or 'drop' for a dropped connection, or 'late').
+   */
+  const was = { XMLHttpRequest: globalThis.XMLHttpRequest, FormData: globalThis.FormData }
+  class Form {
+    constructor() {
+      this.parts = []
+    }
+    append(key, value) {
+      this.parts.push([key, value])
+    }
+  }
+  class Xhr {
+    constructor() {
+      this.headers = {}
+      this.upload = {}
+      ;(bench.videoSends ||= []).push(this)
+    }
+    open(method, url) {
+      this.method = method
+      this.url = url
+    }
+    setRequestHeader(k, v) {
+      this.headers[k] = v
+    }
+    send(form) {
+      this.form = form
+      setTimeout(() => {
+        for (const part of bench.progress || []) this.upload.onprogress?.({ lengthComputable: true, loaded: part * 100, total: 100 })
+        const said = bench.video ?? 200
+        if (said === 'drop') return this.onerror?.()
+        if (said === 'late') return this.ontimeout?.()
+        this.status = said
+        this.responseText = said === 200 ? '{"Key":"report-videos/x"}' : '{"statusCode":"413","error":"Payload too large"}'
+        this.onload?.()
+      }, 0)
+    }
+  }
+  globalThis.XMLHttpRequest = Xhr
+  globalThis.FormData = Form
   try {
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
     const at = (f) => import(pathToFileURL(join(dir, f)).href)
@@ -135,6 +209,8 @@ async function phone(b, use) {
     await use({ reports, rules, log, shots, bench })
   } finally {
     delete globalThis.__reportsBench
+    globalThis.XMLHttpRequest = was.XMLHttpRequest
+    globalThis.FormData = was.FormData
     rmSync(dir, { recursive: true, force: true })
   }
 }
@@ -194,7 +270,22 @@ const PROJECT = 'https://project.test'
 const SERVICE = 'the-service-role-key'
 let fnRuns = 0
 
-async function feedbackEmail({ row, users = {}, userFail = null, stored = {}, named = [], due = [], dueStatus = 200, resend = [], hold = 0, resendKey = 're_key', given = 'the-hook-secret' } = {}) {
+async function feedbackEmail({
+  row,
+  users = {},
+  userFail = null,
+  stored = {},
+  named = [],
+  due = [],
+  dueStatus = 200,
+  videoDue = [],
+  videoNamed = [],
+  signStatus = 200,
+  resend = [],
+  hold = 0,
+  resendKey = 're_key',
+  given = 'the-hook-secret'
+} = {}) {
   const calls = []
   const logged = []
   const reads = { now: 0, most: 0 }
@@ -209,6 +300,16 @@ async function feedbackEmail({ row, users = {}, userFail = null, stored = {}, na
     calls.push(call)
     if (call.url === `${PROJECT}/rest/v1/rpc/feedback_hook_secret`) return answer(200, 'the-hook-secret')
     if (call.url === `${PROJECT}/rest/v1/rpc/report_shots_due`) return answer(dueStatus, dueStatus === 200 ? due : { message: 'Could not find the function public.report_shots_due' })
+    if (call.url === `${PROJECT}/rest/v1/rpc/report_videos_due`) return answer(200, videoDue)
+    if (call.url.startsWith(`${PROJECT}/rest/v1/feedback?select=id&`) && call.url.includes('context->>video=eq.')) {
+      const asked = decodeURIComponent(call.url.match(/context->>video=eq\.([^&]+)/)[1])
+      return answer(200, videoNamed.includes(asked) ? [{ id: 'another-row' }] : [])
+    }
+    if (call.url.startsWith(`${PROJECT}/storage/v1/object/sign/report-videos/`)) {
+      const path = call.url.slice(`${PROJECT}/storage/v1/object/sign/report-videos/`.length)
+      return signStatus === 200 ? answer(200, { signedURL: `/object/sign/report-videos/${path}?token=signed` }) : answer(signStatus, { error: 'not_found' })
+    }
+    if (call.url === `${PROJECT}/storage/v1/object/report-videos` && call.method === 'DELETE') return answer(200, [])
     if (call.url.startsWith(`${PROJECT}/rest/v1/feedback?select=id&`)) {
       const asked = JSON.parse(decodeURIComponent(call.url.match(/context->screenshots=cs\.([^&]+)/)[1]))
       return answer(200, asked.some((p) => named.includes(p)) ? [{ id: 'another-row' }] : [])
@@ -261,7 +362,7 @@ async function feedbackEmail({ row, users = {}, userFail = null, stored = {}, na
 const DEL = new URL('../supabase/functions/delete-account/index.ts', import.meta.url).href
 let delRuns = 0
 
-async function deleteAccount({ reports = [], folder = [], resendKey = 're_key', email = 'player@example.com', authStatus = 200, lookupStatus = {} } = {}) {
+async function deleteAccount({ reports = [], folder = [], videoFolder = [], resendKey = 're_key', email = 'player@example.com', authStatus = 200, lookupStatus = {} } = {}) {
   const calls = []
   const logged = []
   const was = { fetch: globalThis.fetch, Deno: globalThis.Deno, log: console.log, error: console.error }
@@ -280,6 +381,7 @@ async function deleteAccount({ reports = [], folder = [], resendKey = 're_key', 
       return answer(200, reports.filter((r) => (byId ? r.user_id === USER : r.user_id !== USER)))
     }
     if (call.url === `${PROJECT}/storage/v1/object/list/report-shots`) return answer(200, folder.map((name) => ({ name })))
+    if (call.url === `${PROJECT}/storage/v1/object/list/report-videos`) return answer(200, videoFolder.map((name) => ({ name })))
     if (call.url === `${PROJECT}/auth/v1/admin/users/${USER}` && call.method === 'DELETE') return answer(authStatus, authStatus === 200 ? {} : { msg: 'Database error deleting user' })
     return answer(200, {})
   }
@@ -295,8 +397,9 @@ async function deleteAccount({ reports = [], folder = [], resendKey = 're_key', 
       })
     )
     const removed = calls.find((c) => c.url === `${PROJECT}/storage/v1/object/report-shots` && c.method === 'DELETE')
+    const videosRemoved = calls.find((c) => c.url === `${PROJECT}/storage/v1/object/report-videos` && c.method === 'DELETE')
     const notes = calls.filter((c) => c.url === 'https://api.resend.com/emails')
-    return { status: res.status, said: await res.json().catch(() => null), calls, logged, removed: removed?.body?.prefixes || [], notes, mod }
+    return { status: res.status, said: await res.json().catch(() => null), calls, logged, removed: removed?.body?.prefixes || [], videosRemoved: videosRemoved?.body?.prefixes || [], notes, mod }
   } finally {
     globalThis.fetch = was.fetch
     globalThis.Deno = was.Deno
@@ -421,16 +524,16 @@ export function run(test) {
   })
 
   /*
-   * REPORT A BLUETOOTH PROBLEM HAS NOTHING TO TYPE AND NO COPY LOGS, so a
-   * report from it that did not go says neither "What you wrote is still
-   * here" nor "use Copy Logs instead" (review of 25 October 2026): its note
-   * is the app's (typed: false) and the screen has no Copy Logs (copyLogs:
-   * false). The log screen's own send and the Feedback form say what they
-   * said before.
+   * THE REPORT SCREEN IS TYPED INTO AND HAS NO COPY LOGS, so a report from
+   * it that did not go says what was written is still there, and never "use
+   * Copy Logs instead" (copyLogs: false, the default); the log screen's own
+   * send says what it said before. Every Report a Bluetooth problem opens
+   * this screen now (29 October 2026), where it was a screen of one-tap
+   * answers with nothing to type.
    */
-  test('a Bluetooth report that did not go never says what you wrote is still here, or to use Copy Logs', async () => {
-    const { reportNote } = await import('../mobile/src/lib/bleReport.js')
-    const fromBluetooth = { deviceName: 'AM4', note: reportNote('connect', 'No adapter was connected.'), typed: false, copyLogs: false }
+  test('a report from the report screen that did not go keeps what was written, and never says to use Copy Logs', async () => {
+    const r = await import('../shared/report-rules.mjs')
+    const written = { kind: 'bug', message: r.formMessage({ typed: 'It drops after a minute', bluetooth: true, said: 'No adapter was connected.' }), context: {} }
     const refusals = [
       { message: 'TypeError: Network request failed' },
       { message: 'new row violates row-level security policy for table "feedback"' },
@@ -438,14 +541,14 @@ export function run(test) {
     ]
     for (const insertError of refusals) {
       await phone({ user: USER, insertError }, async ({ reports, bench }) => {
-        await assert.rejects(reports.sendLogs(fromBluetooth), (err) => {
-          assert.doesNotMatch(err.message, /What you wrote|Copy Logs/, `${insertError.message}: ${err.message}`)
-          assert.match(err.message, /Try again in a moment\.$/)
+        await assert.rejects(reports.sendReport(written), (err) => {
+          assert.match(err.message, /What you wrote is still here/, `${insertError.message}: ${err.message}`)
+          assert.doesNotMatch(err.message, /Copy Logs/, `${insertError.message}: ${err.message}`)
           assert.equal(err.reason, insertError.message, 'the database’s reason is lost')
           return true
         })
-        /* It was the Bluetooth report that tried, with its own first line. */
-        assert.equal(bench.inserts[0].row.message, 'Bluetooth: It won’t connect\nThe app said: No adapter was connected.')
+        /* It was the report screen that tried, with what was written first and the Bluetooth line under it. */
+        assert.equal(bench.inserts[0].row.message, 'It drops after a minute\n\nOpened from Bluetooth. The app said: No adapter was connected.')
         /* The log screen's one tap with nothing written still offers Copy Logs on a refusal, and a typed note is still kept. */
         await assert.rejects(reports.sendLogs({ deviceName: 'AM4', note: '' }), (err) => !/What you wrote/.test(err.message))
         await assert.rejects(reports.sendLogs({ deviceName: 'AM4', note: 'It froze' }), /What you wrote is still here/)
@@ -453,15 +556,161 @@ export function run(test) {
     }
     await phone({ user: USER, insertError: { message: 'new row violates row-level security policy' } }, async ({ reports }) => {
       await assert.rejects(reports.sendLogs({ deviceName: 'AM4', note: '' }), /^Error: That didn't send\. Try again in a moment, or use Copy Logs instead\.$/)
-      /* The form, which has words typed, as before. */
-      await assert.rejects(reports.sendReport({ kind: 'bug', message: 'It froze', context: {} }), /What you wrote is still here/)
     })
-    /* And the app's own deadline: wait, rather than send a second one, and nothing about what was written. */
+    /* And the app's own deadline: wait, rather than send a second one. */
     await phone({ user: USER, insertHold: new Promise(() => {}) }, async ({ reports }) => {
-      await assert.rejects(reports.sendLogs(fromBluetooth), (err) => {
-        assert.equal(err.message, "The internet didn't answer in time. It may still arrive, so wait a minute before sending it again.")
+      await assert.rejects(reports.sendReport(written), (err) => {
+        assert.equal(err.message, "The internet didn't answer in time. It may still arrive, so wait a minute before sending it again. What you wrote is still here.")
         return true
       })
+    })
+  })
+
+  /*
+   * "IT WOULD BE NICE TO KNOW WHAT USER IT'S COMING FROM UNLESS THEY WANT IT
+   * ANONYMOUS" (Justin, 29 October 2026). Include my email ticked: the
+   * account and its address. Unticked: nothing about the account at all, not
+   * on the row, not in the request (a client with no sign-in, the gear
+   * notes' way), and the files under anon/.
+   */
+  test('a report sent with Include my email unticked carries no account, no address and no sign-in, and its files go under anon/', async () => {
+    await phone({ user: USER }, async ({ reports, bench }) => {
+      await reports.sendReport({ kind: 'bug', message: 'It froze', contact: 'player@example.com', context: {}, anonymous: true, shots: [shot(1)] })
+      assert.equal(bench.inserts.length, 1)
+      const { row, bare } = bench.inserts[0]
+      assert.equal(row.user_id, null, 'an anonymous report names its account')
+      assert.equal(row.contact, null, 'an anonymous report carries an address')
+      assert.equal(bare, true, 'an anonymous report went on the signed-in client')
+      assert.ok(bench.uploads[0].bare && bench.uploads[0].path.startsWith('anon/'), 'an anonymous report’s picture went under the account, or with its sign-in')
+      /* The client with no sign-in keeps none and renews none. */
+      assert.deepEqual(bench.bare[0].options, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } })
+    })
+    /* Ticked: the account, its address, and the files in its own folder, on its own client. */
+    await phone({ user: USER }, async ({ reports, bench }) => {
+      await reports.sendReport({ kind: 'bug', message: 'It froze', contact: 'player@example.com', context: {}, shots: [shot(1)] })
+      const { row, bare } = bench.inserts[0]
+      assert.equal(row.user_id, USER)
+      assert.equal(row.contact, 'player@example.com')
+      assert.ok(!bare)
+      assert.ok(bench.uploads[0].path.startsWith(`${USER}/`))
+      assert.equal(bench.bare, undefined, 'a report from the account made a client with no sign-in')
+    })
+    /* The screen asks for it only with an account on the phone and the box unticked, and sends the address only ticked. */
+    const form = flat('mobile/src/screens/Report.js')
+    assert.match(form, /const anonymous = !!account && !includeMe/)
+    assert.match(form, /contact: account \? \(includeMe \? email : ''\) : contact,/)
+    assert.match(form, /keptAccount\(\)\.then\(\(a\) => alive && setAccount\(a \|\| null\)\)/, 'the address is not read off the phone')
+  })
+
+  /*
+   * A VIDEO IN A REPORT (29 October 2026): one, from the phone's own picker,
+   * sent from its file before anything else, saying how much has gone, under
+   * the sender's folder; a video that does not go costs the report a line,
+   * never the report.
+   */
+  test('a report’s video goes first, from its file, under the sender’s folder, says how much has gone, and never costs the report', async () => {
+    const r = await import('../shared/report-rules.mjs')
+    const video = { uri: 'file:///cache/ImagePicker/abc.mp4', ext: 'mp4', type: 'video/mp4', size: 12_000_000, duration: 34_000 }
+    await phone({ user: USER, progress: [0.25, 0.5, 1] }, async ({ reports, bench }) => {
+      const heard = []
+      const sent = await reports.sendReport({ kind: 'bug', message: 'Watch this', context: {}, video, onVideoProgress: (p) => heard.push(p) })
+      assert.equal(bench.videoSends.length, 1)
+      const xhr = bench.videoSends[0]
+      assert.equal(xhr.method, 'POST')
+      const path = xhr.url.slice('https://example.invalid/storage/v1/object/report-videos/'.length)
+      assert.ok(xhr.url.startsWith('https://example.invalid/storage/v1/object/report-videos/'))
+      assert.ok(r.VIDEO_PATH.test(path) && path.startsWith(`${USER}/`), `${path} is not a video’s place in the sender’s folder`)
+      /* Signed in with the account's own pass, never upserting, the file part named by its place on the phone. */
+      assert.equal(xhr.headers.Authorization, `Bearer pass-${USER}`)
+      assert.equal(xhr.headers['x-upsert'], 'false')
+      assert.deepEqual(xhr.form.parts, [['cacheControl', '3600'], ['file', { uri: video.uri, name: 'video.mp4', type: 'video/mp4' }]])
+      assert.deepEqual(heard, [0.25, 0.5, 1], 'the screen was not told how much had gone')
+      /* The row names it, and the report says nothing was lost. */
+      assert.equal(bench.inserts[0].row.context.video, path)
+      assert.equal(sent.videoLost, false)
+      /* The same key as the pictures would have had: one report, one key. */
+      assert.equal(path.split('/')[1].replace(/-video\.mp4$/, '').length, 36)
+    })
+    /* Anonymous: under anon/, on the app's public key. */
+    await phone({ user: USER }, async ({ reports, bench }) => {
+      await reports.sendReport({ kind: 'bug', message: 'Watch this', context: {}, video, anonymous: true })
+      const xhr = bench.videoSends[0]
+      assert.ok(xhr.url.includes('/report-videos/anon/'))
+      assert.equal(xhr.headers.Authorization, 'Bearer anon')
+      assert.equal(bench.inserts[0].row.user_id, null)
+    })
+    /* Refused, dropped or late: the report goes without it, saying so, and the log says why. */
+    for (const [said, why] of [
+      [413, /storage answered 413/],
+      ['drop', /network: the video could not be sent/],
+      ['late', /no answer within 300 seconds/]
+    ]) {
+      await phone({ user: USER, video: said }, async ({ reports, bench, log }) => {
+        const sent = await reports.sendReport({ kind: 'bug', message: 'Watch this', context: {}, video })
+        assert.equal(bench.inserts.length, 1, `${said}: the report did not go without its video`)
+        assert.equal(bench.inserts[0].row.context.video, undefined)
+        assert.match(bench.inserts[0].row.context.videoLost, why)
+        assert.equal(sent.videoLost, true)
+        assert.ok(log.getDebugLog().some((l) => /video not added to the report/.test(l.message)), `${said}: the log does not say the video was left out`)
+      })
+    }
+    /* No video: nothing is sent for one, and nothing about one is in the row. */
+    await phone({ user: USER }, async ({ reports, bench }) => {
+      const sent = await reports.sendReport({ kind: 'bug', message: 'No video', context: {} })
+      assert.equal(bench.videoSends, undefined)
+      assert.ok(!('video' in bench.inserts[0].row.context) && !('videoLost' in bench.inserts[0].row.context))
+      assert.equal(sent.videoLost, false)
+    })
+    /* And the screen says it under Sent, with the pictures' line. */
+    assert.match(flat('mobile/src/screens/Report.js'), /setSent\(\{ lost: \[shotsLostWords\(done\?\.shotsLost\), videoLostWords\(done\?\.videoLost\)\]\.filter\(Boolean\)\.join\(' '\) \}\)/)
+    assert.equal(r.videoLostWords(true), "The video couldn't be added, so the report went without it.")
+    assert.equal(r.videoLostWords(false), '')
+  })
+
+  test('a picked video is checked before it goes: its kind, its size, one a report, in the picker’s words', async () => {
+    const r = await import('../shared/report-rules.mjs')
+    assert.equal(r.videoKind('video/mp4'), 'mp4')
+    assert.equal(r.videoKind('video/quicktime'), 'mov')
+    assert.equal(r.videoKind('', 'file:///x/IMG_0001.MOV'), 'mov')
+    assert.equal(r.videoKind(undefined, 'file:///x/a.m4v'), 'mp4')
+    assert.equal(r.videoKind('video/x-matroska', 'file:///x/a.mkv'), null, 'a kind the bucket turns away is offered')
+    assert.equal(r.mbWords(12_000_000), '11 MB')
+    assert.equal(r.mbWords(400_000), '0.4 MB')
+    assert.equal(r.videoLength(34_000), '0:34')
+    assert.equal(r.videoLength(125_400), '2:05')
+    assert.equal(r.videoLength(0), '')
+    assert.equal(r.VIDEO_BYTES, 50 * 1024 * 1024, 'the app’s cap is not the project’s own 50 MB')
+    for (const words of [r.VIDEO_WORDS.one, r.VIDEO_WORDS.tooBig(80_000_000), r.VIDEO_WORDS.unreadable]) {
+      assert.doesNotMatch(words, /\b(mp4|mov|webm|3gp|quicktime)\b|this phone/i, words)
+    }
+    assert.match(r.VIDEO_WORDS.tooBig(80_000_000), /^That video is too big to send \(76 MB; a report can carry 50 MB\)\./)
+
+    /* The picker, as its native half answers: pictures made smaller, the first video kept as a file, a second turned away. */
+    const big = { type: 'video', uri: 'file:///big.mp4', mimeType: 'video/mp4', fileSize: 90_000_000, duration: 200_000 }
+    const ok = { type: 'video', uri: 'file:///ok.mp4', mimeType: 'video/mp4', fileSize: 9_000_000, duration: 30_000 }
+    const pic = { type: 'image', uri: 'file:///a.png', width: 1320, height: 2868 }
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]).toString('base64')
+    await phone({ picked: { canceled: false, assets: [pic, ok, { ...ok, uri: 'file:///two.mp4' }] }, saved: () => jpeg }, async ({ shots, bench }) => {
+      const got = await shots.pickMedia(3, true)
+      assert.equal(got.shots.length, 1)
+      assert.deepEqual(got.video, { uri: 'file:///ok.mp4', ext: 'mp4', type: 'video/mp4', size: 9_000_000, duration: 30_000 })
+      assert.equal(got.videoWhy, r.VIDEO_WORDS.one, 'a second video is taken, or turned away without a word')
+      /* Both kinds in the one picker, and an iPhone makes the video 720p as it hands it over. */
+      assert.deepEqual(bench.pickerAsked.mediaTypes, ['images', 'videos'])
+      assert.equal(bench.pickerAsked.allowsMultipleSelection, true)
+      assert.equal(bench.pickerAsked.selectionLimit, 4)
+      assert.equal(bench.pickerAsked.videoExportPreset, 6, 'an iPhone hands the video over at its full size')
+    })
+    await phone({ picked: { canceled: false, assets: [big] } }, async ({ shots }) => {
+      const got = await shots.pickMedia(0, true)
+      assert.equal(got.video, null)
+      assert.equal(got.videoWhy, r.VIDEO_WORDS.tooBig(90_000_000))
+    })
+    /* With a video already added, the picker offers pictures only; with no room for pictures either, nothing. */
+    await phone({ picked: { canceled: true, assets: null } }, async ({ shots, bench }) => {
+      await shots.pickMedia(2, false)
+      assert.deepEqual(bench.pickerAsked.mediaTypes, ['images'])
+      assert.deepEqual(await shots.pickMedia(0, false), { shots: [], video: null, why: 'full' })
     })
   })
 
@@ -718,8 +967,8 @@ export function run(test) {
       assert.equal(sent.shotsLost, 1)
     })
 
-    /* The screens say it under the button, and keep the note and pictures until the report has gone. */
-    assert.match(flat('mobile/src/screens/Report.js'), /setSent\(\{ lost: shotsLostWords\(done\?\.shotsLost\) \}\)/)
+    /* The screens say it under the button, and keep the note and pictures until the report has gone (the phone's with the video's line beside it). */
+    assert.match(flat('mobile/src/screens/Report.js'), /setSent\(\{ lost: \[shotsLostWords\(done\?\.shotsLost\), videoLostWords\(done\?\.videoLost\)\]\.filter\(Boolean\)\.join\(' '\) \}\)/)
     assert.match(flat('src/components/Feedback.jsx'), /setSent\(\{ lost: shotsLostWords\(done\?\.shotsLost\) \}\)/)
   })
 
@@ -787,6 +1036,111 @@ export function run(test) {
     assert.match(flat('mobile/src/screens/Log.js'), /formatDebugLog\(logHeader\(\{ deviceName, preset \}\), runsBefore\(before\)\.join\('\\n\\n'\)\)/)
     /* The browser keeps nothing from the page's last run, so it has none to send, and says why. */
     assert.match(read('src/lib/logHead.js'), /The browser keeps nothing from the page's last run/)
+  })
+
+  /*
+   * THE VIDEO'S PLACE, the same in the app, the bucket's rule, the email and
+   * Delete account, as a picture's is; and its bucket: private, a phone's four
+   * kinds of video, 50 MB, a rule for putting in and none for anything else,
+   * room counted per folder, and nothing kept past its week.
+   */
+  test('a video has one place in its bucket, the same in the app, the bucket’s rule, the email and Delete account, and the bucket keeps only so much for a week', async () => {
+    const r = await import('../shared/report-rules.mjs')
+    const plain = (re) => re.source.replace(/\\\//g, '/')
+    const shared = plain(r.VIDEO_PATH)
+    for (const f of ['supabase/functions/feedback-email/index.ts', 'supabase/functions/delete-account/index.ts']) {
+      const m = read(f).match(/const VIDEO_PATH =\s*\/(.+)\/\n/)
+      assert.ok(m, `${f} has no VIDEO_PATH`)
+      assert.equal(m[1].replace(/\\\//g, '/'), shared, `${f} takes a different shape of video path from the app`)
+      assert.match(read(f), /const VIDEO_BUCKET = 'report-videos'/)
+    }
+    const sql = read('supabase/migrations/20261029_report_videos.sql')
+    assert.ok(sql.includes(`name ~ '${shared}'`), 'the bucket’s rule takes a different shape of path from the app')
+    assert.equal(r.VIDEO_BUCKET, 'report-videos')
+    assert.ok(r.VIDEO_PATH.test(r.videoPath(USER, KEY, 'mov')))
+    assert.ok(r.videoPath(null, KEY, 'mp4').startsWith('anon/') && r.VIDEO_PATH.test(r.videoPath(null, KEY, 'mp4')))
+    assert.equal(r.videoPath(USER, KEY, 'exe'), `${USER}/${KEY}-video.mp4`, 'a kind the bucket does not take was given a place')
+    assert.ok(!r.VIDEO_PATH.test(`${USER}/${KEY}-1.jpg`) && !r.SHOT_PATH.test(r.videoPath(USER, KEY, 'mp4')), 'a picture’s place and a video’s can be taken for each other')
+    assert.ok(!r.VIDEO_PATH.test(`${USER}/../${KEY}-video.mp4`))
+    assert.deepEqual(r.withVideo({ unit: 'FM3' }, { path: r.videoPath(USER, KEY, 'mp4') }), { unit: 'FM3', video: `${USER}/${KEY}-video.mp4` })
+    assert.deepEqual(r.withVideo({}, { path: 'gear/amp.png' }), {}, 'a place that is not a video’s went into the row')
+    assert.deepEqual(r.withVideo({}, { why: 'storage answered 413' }), { videoLost: 'the video could not be added (storage answered 413)' })
+    assert.deepEqual(r.withVideo({}, {}), {})
+
+    const q = sql.replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ')
+    assert.match(q, /insert into storage\.buckets \(id, name, public, file_size_limit, allowed_mime_types\) values \('report-videos', 'report-videos', false, 52428800, array\['video\/mp4', 'video\/quicktime', 'video\/webm', 'video\/3gpp'\]\)/)
+    assert.equal(52428800, r.VIDEO_BYTES, 'the bucket and the app disagree on how big a video may be')
+    assert.deepEqual(Object.values(r.VIDEO_TYPES).sort(), ['video/3gpp', 'video/mp4', 'video/quicktime', 'video/webm'], 'the app offers a kind of video the bucket turns away')
+    assert.match(q, /on storage\.objects for insert to anon, authenticated with check \( bucket_id = 'report-videos' and name ~ /)
+    assert.match(q, /\(storage\.foldername\(name\)\)\[1\] = 'anon' or \(storage\.foldername\(name\)\)\[1\] = \(select auth\.uid\(\)\)::text \) and public\.report_videos_room\(\(storage\.foldername\(name\)\)\[1\]\) \);/)
+    assert.equal((q.match(/create policy/g) || []).length, 1, 'the bucket has a rule for something besides putting a video in')
+    assert.doesNotMatch(q, /for (select|update|delete|all)\b/, 'a video can be read, listed, replaced or removed through the app’s key')
+    assert.doesNotMatch(q, /alter table public\.feedback/)
+    assert.match(q, /split_part\(o\.name, '\/', 1\) = folder and o\.created_at > now\(\) - interval '1 hour'\) < 2/, 'the videos an hour are counted for everybody together')
+    assert.match(q, /where o\.bucket_id = 'report-videos'\) < 1024 \* 1024 \* 1024/, 'nothing limits how much the bucket holds')
+    assert.match(q, /split_part\(o\.name, '\/', 1\) = 'anon'\) < 500 \* 1024 \* 1024\)/, 'signed out, a stranger can fill the whole bucket')
+    assert.match(q, /o\.created_at < now\(\) - interval '7 days' or \( o\.created_at < now\(\) - interval '1 hour' and not exists \( select 1 from public\.feedback f where coalesce\(f\.user_id::text, 'anon'\) = split_part\(o\.name, '\/', 1\) and f\.context ->> 'video' = o\.name \) \)/)
+    assert.match(q, /revoke all on function public\.report_videos_due\(\) from public, anon, authenticated; grant execute on function public\.report_videos_due\(\) to service_role;/)
+    assert.equal(r.VIDEO_LINK_DAYS, 7)
+    assert.match(read('supabase/functions/feedback-email/index.ts'), /const VIDEO_LINK_DAYS = 7\n/, 'the email’s link outlives the video, or dies before it')
+
+    /* The tidy, run: asked, it deletes what is due and is a video's place, and the pictures' as before. */
+    const v = `anon/${KEY}-video.mp4`
+    const sweep = await feedbackEmail({ row: { sweep: true }, due: [`anon/${KEY}-1.jpg`], videoDue: [v, `anon/${KEY}-1.jpg`, 'gear/amp.png'], resendKey: '' })
+    assert.deepEqual(sweep.said, { swept: 2 })
+    const gone = sweep.calls.filter((c) => c.method === 'DELETE')
+    assert.deepEqual(gone.map((c) => [c.url, c.body.prefixes]).sort(), [
+      [`${PROJECT}/storage/v1/object/report-shots`, [`anon/${KEY}-1.jpg`]],
+      [`${PROJECT}/storage/v1/object/report-videos`, [v]]
+    ], 'the tidy deleted something that is not its own bucket’s')
+
+    /* Delete account: the account's own video, and one under anon/ named by a report it sent signed out; never another's. */
+    const mine = `${USER}/${KEY}-video.mov`
+    const anon = `anon/${KEY}-video.mp4`
+    const theirs = `${OTHER}/${KEY}-video.mp4`
+    const del = await deleteAccount({
+      reports: [
+        { id: 'a', user_id: USER, context: { video: mine } },
+        { id: 'b', user_id: null, context: { video: anon } },
+        { id: 'c', user_id: null, context: { video: theirs } }
+      ],
+      videoFolder: [`${KEY}-video.mp4`, 'notes.txt']
+    })
+    assert.equal(del.status, 200)
+    assert.deepEqual([...del.videosRemoved].sort(), [anon, mine, `${USER}/${KEY}-video.mp4`].sort(), 'Delete account left a video of the account’s, or took somebody else’s')
+  })
+
+  test('the email links the video, signed for its week, once, and only the sender’s own', async () => {
+    const path = `${USER}/${KEY}-video.mp4`
+    const row = { id: '21be6661-e330-415e-b6e6-7bbae82da811', kind: 'bug', message: 'Watch this', contact: null, user_id: USER, context: { unit: 'AM4', video: path }, log: '' }
+    const run = await feedbackEmail({ row, users: { [USER]: 'player@example.com' } })
+    assert.equal(run.sent.length, 1)
+    const html = run.sent[0].html
+    assert.match(html, new RegExp(`<a href="${PROJECT}/storage/v1/object/sign/report-videos/${path}\\?token=signed" style="font-weight:600">Watch the video</a>`))
+    assert.match(html, /the link works for 7 days, then the video is deleted/)
+    assert.doesNotMatch(html, /<b>video<\/b>/, 'the video’s place was listed as a fact')
+    assert.ok(!(run.sent[0].attachments || []).some((a) => /video/.test(a.filename)), 'the video was attached to the email')
+    const signed = run.calls.find((c) => c.url.startsWith(`${PROJECT}/storage/v1/object/sign/report-videos/`))
+    assert.deepEqual(signed.body, { expiresIn: 7 * 24 * 60 * 60 })
+    assert.equal(signed.headers.Authorization, `Bearer ${SERVICE}`)
+    assert.equal(run.said.video, true)
+
+    /* Somebody else's, one already linked from another report, or one storage will not sign: a line, never a link. */
+    for (const [why, options, said] of [
+      ['another folder', { row: { ...row, context: { video: `${OTHER}/${KEY}-video.mp4` } } }, /The video was not the sender's own, so it was left out\./],
+      ['anon/ from an account', { row: { ...row, context: { video: `anon/${KEY}-video.mp4` } } }, /The video was not the sender's own/],
+      ['named before', { row, videoNamed: [path] }, /The video was already sent with another report, so it was left out\./],
+      ['not signed', { row, signStatus: 404 }, /The video could not be linked \(404\); it is in the report-videos bucket for 7 days\./]
+    ]) {
+      const other = await feedbackEmail({ users: { [USER]: 'player@example.com' }, ...options })
+      const body = other.sent[0].html
+      assert.doesNotMatch(body, /Watch the video/, `${why}: the video was linked`)
+      assert.match(body.replace(/&#39;|&apos;/g, "'"), said, `${why}: the email does not say why the video is missing`)
+      assert.equal(other.said.video, undefined)
+    }
+    /* A report with no video asks nothing about one. */
+    const none = await feedbackEmail({ row: { ...row, context: { unit: 'AM4' } }, users: { [USER]: 'player@example.com' } })
+    assert.ok(!none.calls.some((c) => c.url.includes('/sign/') || c.url.includes('context->>video')), 'a report with no video asked about one')
   })
 
   test('the email carries the head, what went wrong, the screenshots and the whole log', async () => {
@@ -978,9 +1332,16 @@ export function run(test) {
       const src = code(read(f)).replace(/\s+/g, ' ')
       assert.match(src, /\.upload\(path, shot\.body, \{ contentType: 'image\/jpeg', upsert: false \}\)/, `${f} uploads in a way the bucket's rule does not allow`)
       assert.ok(src.indexOf('await uploadShots(') < src.indexOf(".from('feedback').insert("), `${f} writes the row before the pictures are in`)
-      assert.match(src, /owner: userId \|\| 'anon'/)
-      assert.match(src, /context: withShots\(row\.context, pictures\)/)
     }
+    const web = code(read('src/lib/reports.js')).replace(/\s+/g, ' ')
+    assert.match(web, /owner: userId \|\| 'anon'/)
+    assert.match(web, /context: withShots\(row\.context, pictures\)/)
+    /* The phone: one owner and one key for the pictures and the video, and both in the row's context. */
+    const mine = code(read('mobile/src/lib/reports.js')).replace(/\s+/g, ' ')
+    assert.match(mine, /const owner = userId \|\| 'anon' const key = reportKey\(\)/)
+    assert.match(mine, /uploadShots\(shots, \{ owner, key,/)
+    assert.match(mine, /context: withVideo\(withShots\(row\.context, pictures\), moving\)/)
+    assert.ok(mine.indexOf('await putVideo(') < mine.indexOf('await uploadShots('), 'the phone sends its pictures before the long part')
   })
 
   /*
@@ -1025,7 +1386,7 @@ export function run(test) {
     /* The hour the rule counts is never emptied under it: the tidy takes nothing younger, and the email deletes nothing it sends. */
     assert.doesNotMatch(due, /interval '(\d+ minutes?|[0-9.]+ seconds?)'/)
     const fn = code(read('supabase/functions/feedback-email/index.ts'))
-    assert.equal((fn.match(/method: 'DELETE'/g) || []).length, 1, 'the email function deletes something besides the tidy')
+    assert.equal((fn.match(/method: 'DELETE'/g) || []).length, 2, 'the email function deletes something besides the two tidies (pictures and videos)')
     assert.match(fn, /async function sweepShots\(\)[\s\S]*?rpc\/report_shots_due[\s\S]*?method: 'DELETE', headers, body: JSON\.stringify\(\{ prefixes: paths \}\)/)
 
     /* And once a day, asked by the database with the trigger's own secret, in a file of its own because it needs pg_cron. */
@@ -1325,11 +1686,13 @@ export function run(test) {
   })
 
   test('the screenshots are said the same way with or without the log, and shown whole, at both ends', async () => {
-    for (const f of ['src/components/Feedback.jsx', 'mobile/src/screens/Report.js']) {
-      const src = flat(f)
-      assert.match(src, /\{shots\.length \? ' The screenshots you added go too\.' : ''\}/, `${f}: the screenshots sentence leans on one that may not be there`)
-      assert.doesNotMatch(src, /So do the screenshots/)
-    }
+    /* Each sentence stands on its own: the browser's for its screenshots, the phone's for its pictures and its video. */
+    const webForm = flat('src/components/Feedback.jsx')
+    assert.match(webForm, /\{shots\.length \? ' The screenshots you added go too\.' : ''\}/, 'the browser’s screenshots sentence leans on one that may not be there')
+    const phoneForm = flat('mobile/src/screens/Report.js')
+    assert.match(phoneForm, /\{shots\.length \? ' The pictures you added go too\.' : ''\}/, 'the phone’s pictures sentence leans on one that may not be there')
+    assert.match(phoneForm, /\{video \? ' The video goes too, and is deleted after 7 days\.' : ''\}/, 'the phone’s video sentence leans on one that may not be there')
+    for (const src of [webForm, phoneForm]) assert.doesNotMatch(src, /So do the screenshots/)
     const r = await import('../shared/report-rules.mjs')
     assert.deepEqual(r.thumbSize(2880, 1800, 72), { width: 72, height: 45 }, 'a computer’s wide screenshot is drawn as a tall tile')
     assert.deepEqual(r.thumbSize(1320, 2868, 64), { width: 64, height: 128 })

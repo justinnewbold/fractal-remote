@@ -8362,57 +8362,45 @@ export function run(test) {
     }
   })
   /* ---------------------------------------------------------------- */
-  /* Report a Bluetooth problem, in one tap                            */
+  /* Report a Bluetooth problem: the one report screen                 */
   /* ---------------------------------------------------------------- */
 
   /*
-   * "Super easy for all users to submit bugs and feedback." (Justin, 25
-   * October 2026, deciding that Bluetooth goes to every customer with
-   * the full version, on all four units, marked beta.) The Feedback form is
-   * every customer's and waits for something to be typed, so Bluetooth's own
-   * places open a report of their own: a row of answers, and a tap sends it
-   * with the log (lib/bleReport, screens/BluetoothReport), through the
-   * one-tap send the log screen uses (lib/reports sendLogs). These hold what
-   * it sends, where it is reached from, and that nobody else is shown it.
+   * "It should basically be Leave feedback or report a problem. Then a box
+   * to type out a message, upload a photo or video, and have the log sent
+   * with what devices they're using." (Justin, 29 October 2026, holding
+   * Report a Bluetooth problem, which was then seven buttons that each sent a
+   * report in one tap.) So every Report a Bluetooth problem opens the one
+   * report screen (screens/Report), and what made a Bluetooth report one
+   * survives as a line under what was written: that it was opened from
+   * Bluetooth, and what the app was saying then (shared/report-rules
+   * formMessage). The Bluetooth lines still ride in the log's head.
    */
-  test('a Bluetooth report is one tap: an answer as the first line, the fault it came from under it, and nothing to type', async () => {
-    const r = await import(pathToFileURL(fileURLToPath(new URL('../mobile/src/lib/bleReport.js', import.meta.url))).href)
+  test('a report opened from Bluetooth says so under what was written, with the fault it came from, and keeps what was written first', async () => {
     const rules = await import('../shared/report-rules.mjs')
-    /* The answers, in the order a player meets the problems, and "it works" last. */
-    assert.deepEqual(r.REASONS.map((x) => x.key), ['connect', 'answer', 'button', 'tuner', 'names', 'other', 'works'])
-    assert.equal(r.REASONS.at(-1).label, 'It works on my unit')
-    for (const { label } of r.REASONS) {
-      assert.ok(label.length <= 28, `“${label}” is too long for one line of a button on a 320-point screen`)
-      assert.ok(!/this phone|colour|grey|favourite/i.test(label), label)
-    }
-    /* The first line names it and the answer, which is what the email's subject is made of. */
-    assert.equal(r.reportNote('connect'), 'Bluetooth: It won’t connect')
-    assert.equal(r.reportNote('works', '  '), 'Bluetooth: It works on my unit', 'an empty fault line is sent as one')
+    const ble = await import(pathToFileURL(fileURLToPath(new URL('../mobile/src/lib/bleReport.js', import.meta.url))).href)
+    /* The one-tap answers are gone with the screen that drew them. */
+    for (const gone of ['REASONS', 'reportNote', 'writeOutNote', 'REPORT_HEAD']) assert.ok(!(gone in ble), `lib/bleReport still has ${gone}`)
+    assert.ok(!existsSync(fileURLToPath(new URL('../mobile/src/screens/BluetoothReport.js', import.meta.url))), 'the one-tap Bluetooth report is still in the app')
+
+    /* What was written is the first line, which is what the email's subject is made of. */
+    assert.equal(rules.formMessage({ typed: '  It drops after a minute  ' }), 'It drops after a minute')
+    assert.equal(rules.formMessage({ typed: 'It drops after a minute', bluetooth: true }), 'It drops after a minute\n\nOpened from Bluetooth.')
     assert.equal(
-      r.reportNote('answer', 'Adapter connected, but the AM4 isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.'),
-      'Bluetooth: The unit doesn’t answer\nThe app said: Adapter connected, but the AM4 isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.'
+      rules.formMessage({ typed: 'It drops', bluetooth: true, said: '  No adapter was connected.  ' }),
+      'It drops\n\nOpened from Bluetooth. The app said: No adapter was connected.'
     )
-    /* An answer the screen does not know is Something else, never nothing: a report must carry a message. */
-    assert.equal(r.reportNote('nonsense'), 'Bluetooth: Something else')
-    /*
-     * WRITE IT OUT STARTS WITH WHAT THE SCREEN SAID GOES WITH IT: the same
-     * first line, so the email's subject says Bluetooth, the fault line under
-     * it, and a blank line for what they write.
-     */
-    assert.equal(r.writeOutNote('No adapter was connected.'), 'Bluetooth\nThe app said: No adapter was connected.\n\n')
-    assert.equal(r.writeOutNote(null), 'Bluetooth\n\n')
-    assert.equal(r.writeOutNote('   '), 'Bluetooth\n\n', 'an empty fault line is written in as one')
-    const written = rules.buildReport({ kind: 'bug', message: `${r.writeOutNote('Finding WIDI Uhost…')}It drops after a minute`, context: {}, lines: [], format: () => '' })
-    assert.equal(written.message.split('\n')[0], 'Bluetooth', 'a written-out report’s subject does not say Bluetooth')
-    assert.match(written.message, /^The app said: Finding WIDI Uhost…$/m)
-    for (const { key } of r.REASONS) {
-      const message = rules.logsMessage(r.reportNote(key, 'Finding WIDI Uhost…'))
-      assert.notEqual(message, rules.LOGS_ONLY_MESSAGE, `${key} is sent as "logs only, no message written"`)
-      const row = rules.buildReport({ kind: 'bug', message, context: {}, lines: [], format: () => '' })
-      assert.ok(row.message.startsWith('Bluetooth: '), `${key}: the report does not say it is about Bluetooth`)
-      assert.equal(row.kind, 'bug')
-      assert.notEqual(row.log, null, `${key}: the report goes without its log`)
-    }
+    assert.equal(rules.formMessage({ typed: 'It drops', said: '   ' }), 'It drops', 'an empty fault line is sent as one')
+    /* Nothing written (only a picture or a video) still says something: a row has to. */
+    assert.equal(rules.formMessage({ typed: '   ' }), rules.ATTACHED_ONLY_MESSAGE)
+    assert.equal(rules.formMessage({ bluetooth: true }).split('\n')[0], rules.ATTACHED_ONLY_MESSAGE)
+    /* Never longer than the box can send: what was written gives way to the line, never the line to it. */
+    const long = rules.formMessage({ typed: 'x'.repeat(rules.MAX_MESSAGE), bluetooth: true, said: 'Finding WIDI Uhost…' })
+    assert.ok(long.length <= rules.MAX_MESSAGE, `${long.length} characters is longer than a report can carry`)
+    assert.ok(long.endsWith('Opened from Bluetooth. The app said: Finding WIDI Uhost…'))
+    const row = rules.buildReport({ kind: 'bug', message: long, context: {}, lines: [], format: () => '' })
+    assert.equal(row.kind, 'bug')
+    assert.notEqual(row.log, null, 'a Bluetooth report goes without its log')
   })
 
   /*
@@ -8792,11 +8780,13 @@ export function run(test) {
       rmSync(dir, { recursive: true, force: true })
     }
 
-    /* The Bluetooth report asks for it; the Feedback form and the log screen do not, so a customer's head is what it was. */
-    assert.match(flat('mobile/src/screens/BluetoothReport.js'), /head: headLines\(logHeader\(\{ deviceName, preset, bluetooth: true \}\)\)/)
-    /* The form passes its own `bluetooth`, false unless Write it out on the Bluetooth report opened it (App.js writingOut). */
+    /*
+     * The report screen asks for it only when a Bluetooth place opened it
+     * (`bluetooth`, false by default, App.js reportAbout), and the log screen
+     * never does, so a customer's head is what it was.
+     */
     assert.match(flat('mobile/src/screens/Report.js'), /headLines\(logHeader\(\{ deviceName, preset, bluetooth \}\)\)/)
-    assert.match(flat('mobile/src/screens/Report.js'), /export default function Report\(\{ onBack, start = 'bug', prefill = '', bluetooth = false \}\)/)
+    assert.match(flat('mobile/src/screens/Report.js'), /export default function Report\(\{ onBack, bluetooth = false, said = null \}\)/)
     assert.match(flat('mobile/src/screens/Log.js'), /headLines\(logHeader\(\{ deviceName, preset \}\)\)/)
     /*
      * IN THE LOG, NEVER IN THE DETAILS. lib/reports context goes with every
@@ -8843,71 +8833,29 @@ export function run(test) {
     assert.ok(bullet.includes('The phone and the website both send that last fault only with the log'), 'the list still says the website sends the last fault without the log')
   })
 
-  test('Report a Bluetooth problem sends through the log screen’s one tap, one at a time, and leaves the Feedback form as it was', () => {
-    const page = flat('mobile/src/screens/BluetoothReport.js')
-    /* The one-tap send, with the answer and the fault it came from as the message, and the runs before. */
-    assert.match(page, /import \{ SENT_WORDS, logPreview, sendLogs \} from '\.\.\/lib\/reports'/)
-    assert.match(page, /const extra = \(\) => \(\{ head: headLines\(logHeader\(\{ deviceName, preset, bluetooth: true \}\)\), before: runsBefore\(before\) \}\)/)
-    /*
-     * The note is the app's, not typed, and the screen has no Copy Logs, so a
-     * report that did not go says neither "What you wrote is still here" nor
-     * "use Copy Logs" (test/reports.mjs runs the words).
-     */
-    assert.match(page, /await sendLogs\(\{ deviceName, note: reportNote\(key, said\), typed: false, copyLogs: false, \.\.\.extra\(\) \}\)/)
-    /* What goes can be read first, by the function that sends it, with this report's head. */
-    assert.match(page, /<Press label=\{preview === null \? 'See what is sent' : 'Hide it'\} height=\{44\} disabled=\{!!sending\} onPress=\{\(\) => setPreview\(preview === null \? logPreview\('bug', extra\(\)\) : null\)\} \/>/)
-    assert.match(page, /You can read it first, above\./)
-    assert.match(page, /To send a report without the log, write it out and turn the log off there\./)
-    assert.ok(!/sendReport|TextInput/.test(page), 'the one-tap report has a form in it')
-    /* Every answer drawn, each a button that sends that answer; grayed while one is on its way, and never two at once. */
-    assert.match(page, /\{REASONS\.map\(\(r\) => \( <Press key=\{r\.key\} label=\{sending === r\.key \? 'Sending…' : r\.label\}[^>]*disabled=\{!!sending\} onPress=\{\(\) => send\(r\.key\)\} \/> \)\)\}/)
-    assert.match(page, /const send = async \(key\) => \{ if \(inFlight\.current\) return inFlight\.current = true/)
-    /* Said so it is seen: Sent, or why not, in the bright note under the answers. */
-    assert.match(page, /setAnswer\(\{ ok: true, words: SENT_WORDS \}\)/)
-    assert.match(page, /<Note tone=\{answer\.ok \? 'hint' : 'fault'\} strong size=\{font\.body\}>/)
-    /* Its title is the button's name, and Done and Write it out are what App hands it. */
-    assert.match(page, /\{REPORT_BUTTON\} <\/Text>/)
-    assert.match(page, /<Press label="Done" height=\{40\} onPress=\{onBack\} \/>/)
-    assert.match(page, /\{onWriteMore \? <Press label="Write it out, or add a screenshot"[^>]*onPress=\{onWriteMore\} \/> : null\}/)
-    /* The small print says what goes, the adapter by name and never its address, and names the device in hand. */
-    assert.match(page, /the adapter by its name, never its Bluetooth address/)
-    assert.match(page, /Your version, your \$\{deviceNoun\(\)\}’s OS/)
-    /* Help is Justin's own channel: no address anywhere else, and nobody sent to Fractal. */
-    assert.ok(!/https?:|Fractal Audio|forum/i.test(code('mobile/src/screens/BluetoothReport.js')), 'the Bluetooth report sends a player somewhere else for help')
-    assert.ok(!/this phone/i.test(src('mobile/src/screens/BluetoothReport.js').replace(/\/\*[\s\S]*?\*\//g, '')), 'the Bluetooth report says “this phone”')
-
-    /*
-     * THE FEEDBACK FORM IS EVERY CUSTOMER'S, AND ITS DEFAULTS ARE THE FORM AS
-     * IT WAS. Two props, used only by Write it out on the Bluetooth report:
-     * `prefill`, where the box starts ('' by default, an empty box), and
-     * `bluetooth`, handed to the log's head and nothing else (false by
-     * default, the head it always had). The same title, kinds and small
-     * print, and App draws it as it always did whenever the report screen
-     * is not the Bluetooth one or its Write it out.
-     */
+  test('every Report a Bluetooth problem opens the one report screen, with the Bluetooth lines and the fault it came from, through the page’s gate', () => {
     const form = flat('mobile/src/screens/Report.js')
-    assert.match(form, /export default function Report\(\{ onBack, start = 'bug', prefill = '', bluetooth = false \}\)/)
-    assert.match(form, /const \[message, setMessage\] = useState\(\(\) => String\(prefill \|\| ''\)\.slice\(0, MAX_MESSAGE\)\)/)
+    /* Two props, both off unless a Bluetooth place opened it: the log's head, and the line under what was written. */
+    assert.match(form, /export default function Report\(\{ onBack, bluetooth = false, said = null \}\)/)
+    assert.match(form, /const extra = \(\) => \(\{ head: headLines\(logHeader\(\{ deviceName, preset, bluetooth \}\)\), before: runsBefore\(before\) \}\)/)
+    assert.match(form, /message: formMessage\(\{ typed: message, bluetooth, said \}\),/)
+    /* The fault it was opened from is said on the screen, so they know it goes too. */
+    assert.match(form, /\{said \? <Note>\{`This goes with it: \$\{said\}`\}<\/Note> : null\}/)
     const formCode = code('mobile/src/screens/Report.js').replace(/\s+/g, ' ')
-    assert.equal((formCode.match(/bluetooth/gi) || []).length, 2, 'the Feedback form does more with Bluetooth than hand it to the log’s head')
-    assert.equal((formCode.match(/prefill/g) || []).length, 2, 'the Feedback form does more with its prefill than start the box with it')
-    assert.ok(!/bleReport|topic/i.test(formCode), 'the Feedback form has learned about the Bluetooth report')
-    assert.match(form, /> Feedback <\/Text>/)
-    assert.match(form, /label=\{k === 'bug' \? 'Problem' : 'Idea'\}/)
-    assert.match(form, /Your version, your \{deviceNoun\(\)\}&rsquo;s OS and which unit you&rsquo;re on are sent too/)
+    assert.ok(!/bleReport|topic|REASONS/i.test(formCode), 'the report screen has grown a Bluetooth report of its own again')
+    /* Help is Justin's own channel: no address anywhere else, and nobody sent to Fractal. */
+    assert.ok(!/https?:|Fractal Audio|forum/i.test(formCode), 'the report screen sends a player somewhere else for help')
+    assert.ok(!/this phone/i.test(src('mobile/src/screens/Report.js').replace(/\/\*[\s\S]*?\*\//g, '')), 'the report screen says “this phone”')
+
+    /* App draws it once, for every way in; the Bluetooth half only through the page's gate. */
     const app = flat('mobile/App.js')
-    assert.match(app, /\) : screen === 'report' \? \( \/\*[^]*?\*\/ reportAbout === 'bluetooth' && bluetoothOffered \? \( <BluetoothReport said=\{reportSaid\} onBack=\{\(\) => setScreen\(reportFrom\)\} onWriteMore=\{\(\) => setReportAbout\('written'\)\} \/> \) : \( <Report onBack=\{\(\) => setScreen\(reportFrom\)\} prefill=\{writingOut \? writeOutNote\(reportSaid\) : ''\} bluetooth=\{writingOut\} \/> \)/)
-    /*
-     * WRITE IT OUT KEEPS WHAT THE SCREEN SAID GOES WITH IT: the form starts
-     * with the report's first line and the fault line, and its log's head
-     * says how Bluetooth stood. Only through the page's gate, so everybody
-     * else's form is the defaults.
-     */
-    assert.match(app, /const writingOut = reportAbout === 'written' && bluetoothOffered/)
-    assert.match(app, /import \{ writeOutNote \} from '\.\/src\/lib\/bleReport'/)
-    assert.equal((app.match(/writeOutNote\(/g) || []).length, 1)
-    assert.equal((app.match(/<Report /g) || []).length, 1, 'the Feedback form is drawn somewhere else too')
-    /* One screen, so Done, the swipe and Android's back go to the one reportFrom. */
+    assert.match(
+      app,
+      /\) : screen === 'report' \? \( \/\*[^]*?\*\/ <Report onBack=\{\(\) => setScreen\(reportFrom\)\} bluetooth=\{reportAbout === 'bluetooth' && bluetoothOffered\} said=\{reportAbout === 'bluetooth' && bluetoothOffered \? reportSaid : null\} \/> \)/
+    )
+    assert.equal((app.match(/<Report /g) || []).length, 1, 'the report screen is drawn somewhere else too')
+    assert.ok(!/BluetoothReport|writeOutNote|writingOut/.test(code('mobile/App.js')), 'App still opens the one-tap Bluetooth report')
+    /* One screen, so Back, the swipe and Android's back go to the one reportFrom. */
     assert.match(app, /report: reportFrom,/)
   })
 
@@ -8919,13 +8867,13 @@ export function run(test) {
     /* Each place, and where Done comes back to. */
     assert.match(app, /onReport=\{reportBluetooth && !typingReport \? \(said\) => reportBluetooth\(screen, said\) : null\}/, 'the note under the pill does not come back to the screen it was opened over')
     /*
-     * NEVER OVER THE FORM. The pill's note is drawn over every screen, the
-     * Feedback form and the log screen too, where its Report a problem would
-     * swap the Bluetooth report in and lose what was typed, the email and
-     * the screenshots. Over the Bluetooth report itself it is still offered:
-     * nothing is typed there, and it only changes the line that goes.
+     * NEVER OVER A REPORT. The pill's note is drawn over every screen, the
+     * report screen and the log screen too, where its Report a problem would
+     * open a fresh report in their place and lose what was typed, and the
+     * pictures and video. Every report is typed into now, so it is never
+     * offered over one.
      */
-    assert.match(app, /const typingReport = \(screen === 'report' && reportAbout !== 'bluetooth'\) \|\| screen === 'log'/)
+    assert.match(app, /const typingReport = screen === 'report' \|\| screen === 'log'/)
     assert.equal((app.match(/typingReport/g) || []).length, 3, 'typingReport is used somewhere else, or not by the pill')
     assert.equal((app.match(/onReport=\{reportBluetooth \? \(said\) => reportBluetooth\('stage', said\) : null\}/g) || []).length, 2, 'Play’s fault card and the waiting screen do not both come back to Play')
     assert.match(app, /onReportBluetooth=\{reportBluetooth \? \(said\) => reportBluetooth\('settings', said\) : null\}/)

@@ -163,7 +163,7 @@ export const TESTED = ['am4', 'fm3']
  * never call it two different things. On the Bluetooth page under the note,
  * and wherever else a Bluetooth problem is met (the note under Play's pill,
  * a fault on Play while over Bluetooth, the waiting screen), it opens the
- * one-tap report (mobile/src/screens/BluetoothReport.js), which goes to
+ * report screen (mobile/src/screens/Report.js), which goes to
  * Justin and nobody else: help with the app is his own channels only.
  */
 export const REPORT_BUTTON = 'Report a Bluetooth problem'

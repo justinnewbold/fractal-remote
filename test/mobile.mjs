@@ -46,7 +46,11 @@ const PHONE_GLOBALS = new Set([
   'TextDecoder', 'TextEncoder', 'Uint8Array', 'WeakMap', 'WeakSet',
   'cancelAnimationFrame', 'clearInterval', 'clearTimeout', 'console', 'decodeURIComponent',
   'encodeURIComponent', 'fetch', 'globalThis', 'isNaN', 'localStorage', 'parseFloat', 'parseInt',
-  'requestAnimationFrame', 'setInterval', 'setTimeout', 'undefined', 'window'
+  'requestAnimationFrame', 'setInterval', 'setTimeout', 'undefined', 'window',
+  /* FormData and XMLHttpRequest: a report's video goes from its file on the
+     phone, with how much has gone (lib/reports putVideo). React Native sets
+     both up itself, as it does fetch. */
+  'FormData', 'XMLHttpRequest'
 ])
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
@@ -9130,34 +9134,45 @@ export function run(test) {
     assert.match(phone, /macVersion: link\?\.hostVersion/, 'the phone does not send the computer’s version')
 
     /*
-     * And both screens draw the switch only where it means something. The
+     * And the browser draws the switch only where it means something. The
      * idea side does not get a log toggle it could leave on by accident.
      */
-    for (const [where, src] of [
-      ['the browser', read('src/components/Feedback.jsx')],
-      ['the phone', read('mobile/src/screens/Report.js')]
-    ]) {
-      assert.match(src, /carriesLog\(kind\)/, `${where} decides for itself which kinds carry a log`)
-      assert.match(src, /No log goes with this one/, `${where} never says that an idea sends no log`)
-      assert.match(src, /logPreview\(kind(\)|, )/, `${where} offers no way to see what would be sent`)
-      /* Switching kinds drops the preview: a log shown beside a form that is
-         not sending one is worse than showing nothing. */
-      assert.match(src, /setPreview\(null\)/, `${where} keeps a preview across a change of kind`)
-    }
+    const webForm = read('src/components/Feedback.jsx')
+    assert.match(webForm, /carriesLog\(kind\)/, 'the browser decides for itself which kinds carry a log')
+    assert.match(webForm, /No log goes with this one/, 'the browser never says that an idea sends no log')
+    assert.match(webForm, /logPreview\(kind(\)|, )/, 'the browser offers no way to see what would be sent')
+    /* Switching kinds drops the preview: a log shown beside a form that is
+       not sending one is worse than showing nothing. */
+    assert.match(webForm, /setPreview\(null\)/, 'the browser keeps a preview across a change of kind')
 
     /*
-     * THE PHONE'S SWITCH SAYS IT IS ONE (Justin, 25 October 2026, on Android:
-     * "it just highlights the button and doesn't say anything else", after
-     * twelve taps on "Send the log of what the app just did" before Send). The
-     * browser's is a tick box, which reads as one already. The phone's says
-     * on or off in its own words, as the metronome's does, and the line under
-     * it says what that means for Send, both ways round.
+     * THE PHONE HAS ONE KIND AND TWO TICK BOXES (Justin, 29 October 2026:
+     * "It should basically be Leave feedback or report a problem ... have the
+     * log sent with what devices they're using ... a checkbox that says
+     * include email ... checked by default"). Before that it had Problem and
+     * Idea, and a lit button that had to say "on" and "off" in its own words
+     * before anybody could tell it was a switch (25 October 2026, twelve taps
+     * on Android). A tick box reads as one at a glance. Both start ticked,
+     * the line under each says what it means both ways round, and the log can
+     * still be read first, and goes away with its tick.
      */
-    const phoneForm = read('mobile/src/screens/Report.js')
-    assert.doesNotMatch(phoneForm, /label="Send the log of what the app just did"/, 'the phone’s log switch reads as a button that sends again')
-    assert.match(phoneForm, /label=\{withLog \? 'Include the log: on' : 'Include the log: off'\}/, 'the phone’s log switch does not say whether it is on')
-    assert.match(phoneForm, /'The log of what the app just did goes with your report when you tap Send\.'/, 'nothing under the switch says what “on” sends')
-    assert.match(phoneForm, /'Only what you wrote goes when you tap Send\.'/, 'nothing under the switch says what “off” sends')
+    const phoneForm = read('mobile/src/screens/Report.js').replace(/\s+/g, ' ')
+    assert.match(phoneForm, /const KIND = 'bug'/, 'the phone’s report has kinds to pick between again')
+    assert.ok(!/'Problem'|'Idea'|KINDS\.map/.test(phoneForm), 'the phone’s report still asks Problem or Idea')
+    assert.match(phoneForm, /const \[includeMe, setIncludeMe\] = useState\(true\)/, 'Include my email does not start ticked')
+    assert.match(phoneForm, /const \[withLog, setWithLog\] = useState\(true\)/, 'the log does not start ticked')
+    assert.match(phoneForm, /<TickBox on=\{withLog\} label="Include the log and what I’m using"/)
+    assert.match(phoneForm, /label=\{email \? 'Include my email' : 'Include my account'\}/)
+    assert.match(phoneForm, /'Only what you wrote, and any picture or video, goes\.'/, 'nothing under the log’s tick box says what unticked sends')
+    assert.match(phoneForm, /'Sent anonymously: no name, no email, no account\.'/, 'nothing under Include my email says what unticked means')
+    assert.match(phoneForm, /onPress=\{\(\) => setPreview\(preview === null \? logPreview\(KIND, extra\(\)\) : null\)\}/, 'the phone offers no way to see what would be sent')
+    assert.match(phoneForm, /setWithLog\(!withLog\) \/\*[^*]*\*\/ setPreview\(null\)/, 'a preview stays up with the log unticked')
+    /* Unticked is anonymous for real: the screen asks for it, and the send leaves the account behind. */
+    assert.match(phoneForm, /const anonymous = !!account && !includeMe/)
+    assert.match(phoneForm, /contact: account \? \(includeMe \? email : ''\) : contact, anonymous,/)
+    const tick = read('mobile/src/components/TickBox.js')
+    assert.match(tick, /accessibilityRole="checkbox"/, 'the tick box is not a checkbox to a screen reader')
+    assert.match(tick, /accessibilityState=\{\{ checked: !!on, disabled: !!disabled \}\}/)
 
     /* Setup reaches the form on the phone. The log screen sends by itself
        now (the next test), so it no longer opens the form at all. */
@@ -9243,7 +9258,10 @@ export function run(test) {
         export const DEFAULT_PROJECT = { url: 'https://example.invalid', anonKey: 'anon' }
         export const remoteRequest = (path, options) => { b.asked.push({ path, options }); return b.diag(path, options) }
         export const supabaseClient = () => ({
-          auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
+          auth: {
+            getUser: async () => ({ data: { user: { id: 'user-1' } } }),
+            getSession: async () => ({ data: { session: { access_token: 'pass-1' } } })
+          },
           from: (table) => ({
             insert: async (row) => {
               b.inserts.push({ table, row })
@@ -9254,6 +9272,7 @@ export function run(test) {
         })
       `,
       'version.js': "export const APP_VERSION = '1.87.46'\n",
+      'thisDevice.js': "export const deviceFacts = () => ({ os: 'ios', osVersion: '18.0', model: 'iPhone' })\n",
       'link.js': 'const b = globalThis.__sendLogsBench\nexport const linkState = () => b.link\nexport const linkVia = () => b.via\n',
       'debugLog.js': read('mobile/src/lib/debugLog.js'),
       /* The computer's deadline shortened, so the case where it passes costs no real time. */
@@ -9388,7 +9407,8 @@ export function run(test) {
 
     /* "Sent to the developer — thank you." — the form's own words, at both ends. */
     assert.equal(r.SENT_WORDS, 'Sent to the developer — thank you.')
-    assert.ok(read('mobile/src/screens/Report.js').includes(r.SENT_WORDS), 'the phone’s form says something else when it has sent')
+    /* The phone's report screen says them by their name, so they cannot drift. */
+    assert.match(read('mobile/src/screens/Report.js').replace(/\s+/g, ' '), /<Note tone="hint" strong size=\{font\.body\}>\{`\$\{SENT_WORDS\}\$\{sent\.lost \? ` \$\{sent\.lost\}` : ''\}`\}<\/Note>/, 'the phone’s form says something else when it has sent')
     assert.ok(read('src/components/Feedback.jsx').includes(r.SENT_WORDS), 'the browser’s form says something else when it has sent')
 
     /* The words for one that did not go. The form keeps its promise that the words are still there; the one-tap send makes none. */

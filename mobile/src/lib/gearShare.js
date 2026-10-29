@@ -1,5 +1,4 @@
 import { useSyncExternalStore } from 'react'
-import { Platform } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import { SETTLE_MS, createGearSharer, gearKey, gearRecord, noteFacts, sharing } from './gear-share-rules'
@@ -9,7 +8,7 @@ import { logDebug } from './debugLog'
 import { getState as rigState, subscribeRig } from './rig'
 import { adapterName, bluetoothPhase, bluetoothSettings, subscribeBluetooth, unitName } from './bluetooth'
 import { linkState, linkVia, subscribeLink } from './link'
-import { DEVICE_KIND } from './thisDevice'
+import { deviceFacts } from './thisDevice'
 
 /**
  * WHAT WORKS, ON THE PHONE: the question's answer kept on this device, and
@@ -87,29 +86,6 @@ export const useSharing = () => useSyncExternalStore(subscribe, readOn, readOn)
 /* Listening for gear                                                        */
 /* ------------------------------------------------------------------------ */
 
-/*
- * What a handset can say about itself without a new package: which system
- * and its version, and on Android the maker and model React Native already
- * reports (Platform.constants). An iPhone says only whether it is an iPad.
- * Never the name somebody gave the device ("Justin's iPhone").
- */
-function phone() {
-  const c = Platform.constants || {}
-  let model = null
-  if (Platform.OS === 'android') {
-    const maker = typeof c.Manufacturer === 'string' ? c.Manufacturer : ''
-    const name = typeof c.Model === 'string' ? c.Model : ''
-    model = name && maker && !name.toLowerCase().startsWith(maker.toLowerCase()) ? `${maker} ${name}` : name || maker || null
-  } else if (Platform.OS === 'ios') {
-    model = DEVICE_KIND === 'ipad' ? 'iPad' : 'iPhone'
-  }
-  return {
-    os: Platform.OS,
-    osVersion: Platform.OS === 'android' && c.Release ? String(c.Release) : String(Platform.Version ?? ''),
-    model
-  }
-}
-
 function factsNow() {
   const saved = bluetoothSettings() || {}
   return noteFacts({
@@ -121,7 +97,7 @@ function factsNow() {
       unit: saved.unit ? unitName(saved.unit) : null,
       adapter: saved.adapter ? adapterName(saved.adapter) || '' : null
     },
-    phone: phone(),
+    phone: deviceFacts(),
     appVersion: APP_VERSION
   })
 }

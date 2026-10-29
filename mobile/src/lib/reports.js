@@ -37,14 +37,20 @@ import {
   reportLog,
   shotsLostWords,
   uploadShots,
-  withShots
+  videoLostWords,
+  videoPath,
+  withShots,
+  withVideo,
+  VIDEO_BUCKET,
+  VIDEO_WAIT_MS
 } from './report-rules'
 import { DEFAULT_PROJECT, remoteRequest, supabaseClient } from './relay'
 import { APP_VERSION } from './version'
 import { formatLine, formatMacDiag, getDebugLog, logDebug } from './debugLog'
 import { linkState, linkVia } from './link'
+import { deviceFacts } from './thisDevice'
 
-export { KINDS, MAX_MESSAGE, SENT_WORDS, carriesLog, shotsLostWords }
+export { KINDS, MAX_MESSAGE, SENT_WORDS, carriesLog, shotsLostWords, videoLostWords }
 
 /**
  * What was going on when they wrote it.
@@ -71,6 +77,11 @@ export function context({ deviceName } = {}) {
        itself: which OS and which version of it. Enough to tell an iOS 17 bug
        from an Android one, which is the whole of what a layout report needs. */
     os: `${Platform.OS} ${Platform.Version}`,
+    /* Which handset: the maker and model on Android, iPhone or iPad on Apple's
+       (lib/thisDevice deviceFacts, the gear notes' own words), never the name
+       somebody gave it. "Have the log sent with what devices they're using"
+       (Justin, 29 October 2026). */
+    device: deviceFacts().model,
     screen: win?.width ? `${Math.round(win.width)}x${Math.round(win.height)}` : undefined,
     lastError: lastErrorFrom(getDebugLog())
   })
@@ -109,6 +120,19 @@ export function logPreview(kind, { head = '', before = [] } = {}) {
  * still here"; left out, it is anything but the log screen's own sentence
  * (LOGS_ONLY_MESSAGE). `copyLogs` is whether the screen it was sent from has
  * Copy Logs to offer instead (the log screen's does; see notSentHere).
+ *
+ * `video` is one picked by lib/shots pickMedia, sent from the file it is on
+ * the phone (putVideo, below) before anything else, since it is the long
+ * part; `onVideoProgress` hears how much of it has gone, 0 to 1. One that
+ * does not go costs the report a line, never the report (`videoLost`).
+ *
+ * `anonymous` is "Include my email" unticked on the report screen: "It would
+ * be nice to know what user it's coming from unless they want it anonymous"
+ * (Justin, 29 October 2026). Then nothing about the account goes: no
+ * account id on the row, no address, and the row and everything with it go
+ * on a database client with no sign-in at all, so not even the request
+ * carries one (the gear notes' way, lib/gearShare), and the files go under
+ * anon/, where the bucket keeps everybody's signed-out ones.
  */
 export async function sendReport({
   kind,
@@ -120,13 +144,16 @@ export async function sendReport({
   head = '',
   before = [],
   shots = [],
+  video = null,
+  onVideoProgress,
+  anonymous = false,
   typed,
   copyLogs = false
 }) {
   const row = buildReport({
     kind,
     message,
-    contact,
+    contact: anonymous ? '' : contact,
     /*
      * WHAT LAST WENT WRONG GOES WITH THE LOG AND NEVER WITHOUT IT. `lastError`
      * is the newest fault the screen showed, read off the log (context, above),
@@ -148,24 +175,50 @@ export async function sendReport({
     before: withLog ? before : []
   })
 
-  let c = supabaseClient()
+  let c = anonymous ? await bareClient() : supabaseClient()
   let userId = null
-  if (c) {
+  /* What the video's upload signs in with: the account's own pass, or the app's public key for nobody. */
+  let pass = null
+  if (c && !anonymous) {
     try {
       const { data } = await c.auth.getUser()
       userId = data?.user?.id || null
     } catch {
       // No session is not a problem; it goes as an anonymous report.
     }
-  } else {
+    if (userId) {
+      try {
+        pass = (await c.auth.getSession())?.data?.session?.access_token || null
+      } catch {
+        pass = null
+      }
+    }
+  } else if (!c) {
     const { createClient } = await import('@supabase/supabase-js')
     c = createClient(DEFAULT_PROJECT.url, DEFAULT_PROJECT.anonKey)
   }
+  /* A pass that could not be read goes as nobody, under anon/, as its row does then. */
+  if (!pass) userId = null
+  const owner = userId || 'anon'
+  const key = reportKey()
 
-  /* The pictures first, so they are in the bucket by the time the row's email goes. */
+  /* The video first: the long part, so the pictures and the row follow it rather than waiting on it twice. */
+  let moving = {}
+  if (video?.uri) {
+    const path = videoPath(owner, key, video.ext)
+    try {
+      await putVideo(path, video, { pass: pass || DEFAULT_PROJECT.anonKey, onProgress: onVideoProgress })
+      moving = { path }
+    } catch (e) {
+      moving = { why: e?.message || String(e) }
+      logDebug('app', 'video not added to the report', moving.why)
+    }
+  }
+
+  /* The pictures next, so they are in the bucket by the time the row's email goes. */
   const pictures = await uploadShots(shots, {
-    owner: userId || 'anon',
-    key: reportKey(),
+    owner,
+    key,
     put: async (path, shot) => {
       const { error } = await c.storage.from(SHOT_BUCKET).upload(path, shot.body, { contentType: 'image/jpeg', upsert: false })
       if (error) throw error
@@ -174,9 +227,9 @@ export async function sendReport({
   })
   if (pictures.lost) logDebug('app', 'screenshots not added to the report', `${pictures.lost} — ${pictures.why}`)
 
-  const answer = await inTime(() => c.from('feedback').insert({ ...row, context: withShots(row.context, pictures), user_id: userId })).catch(
-    (late) => ({ error: late })
-  )
+  const answer = await inTime(() =>
+    c.from('feedback').insert({ ...row, context: withVideo(withShots(row.context, pictures), moving), user_id: userId })
+  ).catch((late) => ({ error: late }))
   const error = answer?.error
 
   /* Nothing was written for a log sent in one tap, so nothing is "still here".
@@ -186,7 +239,61 @@ export async function sendReport({
     logDebug('app', 'report not sent', err.reason)
     throw err
   }
-  return { sent: true, shotsLost: pictures.lost }
+  return { sent: true, shotsLost: pictures.lost, videoLost: !!moving.why }
+}
+
+/*
+ * A database client with no sign-in on it at all, for a report sent without
+ * the account: made once, with the public key, and never keeping or renewing
+ * a session (the gear notes' client, lib/gearShare).
+ */
+let bare = null
+async function bareClient() {
+  if (!bare) {
+    const { createClient } = await import('@supabase/supabase-js')
+    bare = createClient(DEFAULT_PROJECT.url, DEFAULT_PROJECT.anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    })
+  }
+  return bare
+}
+
+/**
+ * The video, sent to its bucket straight from its file on the phone.
+ *
+ * A form whose one file part names the file (React Native reads it from disk
+ * as it goes), so a 50 MB video is never held in the app whole, as a
+ * screenshot's bytes are. By XMLHttpRequest rather than the storage client:
+ * React Native's form has no `has`, which the storage client asks of one, and
+ * only XMLHttpRequest says how much of an upload has gone, which is what the
+ * screen shows while a minute of video goes on a phone's connection. Given
+ * VIDEO_WAIT_MS; throws in words for the log when it does not go.
+ */
+function putVideo(path, video, { pass, onProgress, wait = VIDEO_WAIT_MS }) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${DEFAULT_PROJECT.url}/storage/v1/object/${VIDEO_BUCKET}/${path}`)
+    xhr.setRequestHeader('Authorization', `Bearer ${pass}`)
+    xhr.setRequestHeader('apikey', DEFAULT_PROJECT.anonKey)
+    xhr.setRequestHeader('x-upsert', 'false')
+    xhr.timeout = wait
+    if (xhr.upload && typeof onProgress === 'function') {
+      xhr.upload.onprogress = (e) => {
+        if (e?.lengthComputable && e.total > 0) onProgress(Math.min(1, e.loaded / e.total))
+      }
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(true)
+      reject(new Error(`storage answered ${xhr.status}${xhr.responseText ? `: ${String(xhr.responseText).slice(0, 160)}` : ''}`))
+    }
+    xhr.onerror = () => reject(new Error('network: the video could not be sent'))
+    xhr.ontimeout = () => reject(new Error(`no answer within ${Math.round(wait / 1000)} seconds`))
+    const form = new FormData()
+    /* Before the file, which is where Storage reads it. */
+    form.append('cacheControl', '3600')
+    form.append('file', { uri: video.uri, name: `video.${video.ext}`, type: video.type })
+    xhr.send(form)
+  })
 }
 
 /** A report's details without what was read off the log (`lastError`), for a report that carries no log. */
@@ -200,9 +307,9 @@ function apartFromLog(ctx) {
  * THE WORDS FOR A REPORT THAT DID NOT GO, FOR THE SCREEN IT WAS SENT FROM.
  * shared/report-rules notSentWords is the browser's and the phone's, and for
  * a report with nothing written it ends its last case with "or use Copy Logs
- * instead", which is the log screen's own button. Report a Bluetooth problem
- * (screens/BluetoothReport) has none, so from there the sentence stops at
- * "Try again in a moment." Done here, on the phone, so the shared words (and
+ * instead", which is the log screen's own button. Anywhere that has none (a
+ * report that is not the log screen's) the sentence stops at "Try again in a
+ * moment." Done here, on the phone, so the shared words (and
  * the computer app that carries them) stay as they are.
  */
 const COPY_LOGS_TAIL = /, or use Copy Logs instead\.$/

@@ -2,14 +2,17 @@ import { useEffect, useState } from 'react'
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native'
 
 import { color, font, mono, radius, space } from '../lib/theme'
-import { KINDS, MAX_MESSAGE, carriesLog, context, logPreview, sendReport, shotsLostWords } from '../lib/reports'
-import { headLines } from '../lib/report-rules'
+import { MAX_MESSAGE, SENT_WORDS, context, logPreview, sendReport, shotsLostWords, videoLostWords } from '../lib/reports'
+import { formMessage, headLines } from '../lib/report-rules'
 import { logHeader, runsBefore } from '../lib/logHead'
 import { pastRuns } from '../lib/logKeep'
+import { keptAccount } from '../lib/relay'
+import { isPairAccount } from '../lib/pairing'
 import { useRig } from '../lib/rig'
+import Attach from '../components/Attach'
 import Note from '../components/Note'
 import Press from '../components/Press'
-import Shots from '../components/Shots'
+import TickBox from '../components/TickBox'
 import { deviceNoun } from '../lib/device-word'
 
 const face = Platform.select(mono)
@@ -20,48 +23,82 @@ const face = Platform.select(mono)
 const ofDeviceName = (s) => s.deviceName
 const ofPreset = (s) => s.preset
 
+/* Every report from here is one kind: it carries the log when the box says so (shared/report-rules carriesLog). */
+const KIND = 'bug'
+
+/** The screen's title, and the name it goes by wherever it is pointed at. */
+export const REPORT_TITLE = 'Leave feedback or report a problem'
+
 /**
- * Telling us something is broken, or asking for something — from the phone.
+ * LEAVE FEEDBACK OR REPORT A PROBLEM: one screen for both, from the phone.
  *
- * THE PHONE HAD NOWHERE TO SAY SO, which is the gap this fills. The browser
- * has had a box like this for a while, and a handset — the surface where the
- * bad evenings actually happen — could copy its log and nothing else. The
- * report only ever arrived if somebody remembered to paste it into a message
- * later, from another device, after the gig.
+ * "What's clean this up? It should basically be Leave feedback or report a
+ * problem. Then a box to type out a message, upload a photo or video, and
+ * have the log sent with what devices they're using. For their email since
+ * they already have an account, they should be able to just click a checkbox
+ * that says include email instead of having to type it out. Have that check
+ * box checked by default. It would be nice to know what user it's coming
+ * from unless they want it anonymous." (Justin, 29 October 2026, holding
+ * Report a Bluetooth problem, which was seven buttons that each sent a report
+ * in one tap, and a Feedback form with Problem and Idea.)
  *
- * TWO KINDS AND ONLY ONE CARRIES THE LOG. Somebody asking for a bigger tuner
- * has not offered a transcript of their evening, and this screen does not
- * quietly take one: the switch is not drawn at all on that side. On the bug
- * side it is drawn, it is on, and it can be turned off — and what it would
- * send can be read in full first, by the same function that sends it, so the
- * preview cannot drift from the thing being previewed.
+ * So, from top to bottom: Back and Send; the title; the box; Add a photo or
+ * video (components/Attach); and two tick boxes, both ticked to start:
+ *
+ *   - INCLUDE MY EMAIL, with the address the phone is signed in with
+ *     (lib/relay keptAccount, read off the phone, never asking the server).
+ *     Ticked, the report goes from the account, with its address to reply
+ *     to. Unticked, it goes anonymously: no account and no address, on a
+ *     client with no sign-in at all (lib/reports `anonymous`). Signed out
+ *     there is no account to include, so the old box for an address is
+ *     there instead, and the report is anonymous as it always was.
+ *   - INCLUDE THE LOG AND WHAT I'M USING: the log of what the app just did,
+ *     and with it the unit, the phone's model and system, and the versions
+ *     (lib/reports context). It can be read first (See what is sent, by the
+ *     function that sends it) and unticked, as the log always could.
+ *
+ * Every Report a problem, Report this and Report a Bluetooth problem in the
+ * app opens this one screen. One opened from Bluetooth's own places carries
+ * the Bluetooth lines in its log's head (`bluetooth`, lib/logHead) and what
+ * the app was saying when it was opened (`said`, a fault line), shown above
+ * the box and sent under what was written.
  *
  * Nothing is gathered while somebody types. The log is read when Send is
  * pressed and at no other moment, so a report half-written and abandoned
  * leaves no copy of anything anywhere.
- *
- * EVERY CUSTOMER'S FORM IS THE DEFAULTS. `prefill` and `bluetooth` are handed
- * only by "Write it out, or add a screenshot" on Report a Bluetooth problem
- * (App.js `writingOut`, behind the Bluetooth page's own gate): the box
- * starts with what that screen said goes with it, and the log's head says
- * how Bluetooth stood (lib/logHead, `bluetooth`), which it does only for an
- * account Bluetooth is open to. Left out, as everywhere else, the box starts
- * empty and the head is what it always was.
  */
-export default function Report({ onBack, start = 'bug', prefill = '', bluetooth = false }) {
+export default function Report({ onBack, bluetooth = false, said = null }) {
   const deviceName = useRig(ofDeviceName)
   const preset = useRig(ofPreset)
-  const [kind, setKind] = useState(KINDS.includes(start) ? start : 'bug')
-  const [message, setMessage] = useState(() => String(prefill || '').slice(0, MAX_MESSAGE))
+  const [message, setMessage] = useState('')
   const [contact, setContact] = useState('')
+  const [includeMe, setIncludeMe] = useState(true)
   const [withLog, setWithLog] = useState(true)
   const [preview, setPreview] = useState(null)
   const [shots, setShots] = useState([])
+  const [video, setVideo] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [moved, setMoved] = useState(null)
   const [sent, setSent] = useState(null)
   const [error, setError] = useState(null)
 
-  /* The runs before this one, as the log screen has them: a bug's log carries them (lib/logHead runsBefore). */
+  /*
+   * WHO IS SIGNED IN ON THE PHONE, read off the phone: undefined until it
+   * answers, then { id, email } or null. An account made by the old pairing
+   * has a made-up address nobody reads, so it is offered as the account and
+   * not as an email.
+   */
+  const [account, setAccount] = useState(undefined)
+  useEffect(() => {
+    let alive = true
+    keptAccount().then((a) => alive && setAccount(a || null))
+    return () => {
+      alive = false
+    }
+  }, [])
+  const email = account?.email && !isPairAccount(account.email) ? account.email : ''
+
+  /* The runs before this one, as the log screen has them: a report's log carries them (lib/logHead runsBefore). */
   const [before, setBefore] = useState([])
   useEffect(() => {
     let alive = true
@@ -71,25 +108,43 @@ export default function Report({ onBack, start = 'bug', prefill = '', bluetooth 
     }
   }, [])
 
-  const bug = carriesLog(kind)
   /* What the log carries besides its lines: the same head and runs before as the log screen's send. */
   const extra = () => ({ head: headLines(logHeader({ deviceName, preset, bluetooth })), before: runsBefore(before) })
 
+  const somethingToSend = !!message.trim() || shots.length > 0 || !!video
+  const anonymous = !!account && !includeMe
+
   const send = async () => {
+    if (busy || !somethingToSend) return
     setBusy(true)
     setError(null)
+    setMoved(null)
     try {
-      const done = await sendReport({ kind, message, contact, context: context({ deviceName }), withLog, ...extra(), shots })
+      const done = await sendReport({
+        kind: KIND,
+        /* What they wrote, with a line under it when Bluetooth or a fault opened this (shared/report-rules formMessage). */
+        message: formMessage({ typed: message, bluetooth, said }),
+        contact: account ? (includeMe ? email : '') : contact,
+        anonymous,
+        context: context({ deviceName }),
+        withLog,
+        ...extra(),
+        shots,
+        video,
+        onVideoProgress: (part) => setMoved(part)
+      })
       // The text goes only once it is actually gone.
-      setSent({ lost: shotsLostWords(done?.shotsLost) })
+      setSent({ lost: [shotsLostWords(done?.shotsLost), videoLostWords(done?.videoLost)].filter(Boolean).join(' ') })
       setMessage('')
       setContact('')
       setPreview(null)
       setShots([])
+      setVideo(null)
     } catch (err) {
       setError(err.message)
     } finally {
       setBusy(false)
+      setMoved(null)
     }
   }
 
@@ -100,11 +155,11 @@ export default function Report({ onBack, start = 'bug', prefill = '', bluetooth 
    * whatever they type ... Send should be up at the top right and then there
    * should be a back button that also warns them that whatever they typed has
    * not been sent yet" (Justin, 27 October 2026). So the head is Back on the
-   * left and Send on the right; Back with something written, or a screenshot
-   * added, and not yet sent asks first. Straight back when there is nothing
-   * to lose (nothing typed, or it has gone).
+   * left and Send on the right; Back with something written, or a picture or
+   * video added, and not yet sent asks first. Straight back when there is
+   * nothing to lose (nothing typed, or it has gone).
    */
-  const unsent = !sent && (!!message.trim() || !!contact.trim() || shots.length > 0)
+  const unsent = !sent && (!!message.trim() || !!contact.trim() || shots.length > 0 || !!video)
   const back = () => {
     if (!unsent || busy) return onBack?.()
     Alert.alert('Not sent yet', 'What you wrote has not been sent. Leave without sending it?', [
@@ -123,6 +178,9 @@ export default function Report({ onBack, start = 'bug', prefill = '', bluetooth 
     padding: space.md
   }
 
+  /* While a video goes, how much of it has: a minute of video on a phone's connection is not a moment. */
+  const sending = moved === null ? 'Sending…' : `Sending… ${Math.round(moved * 100)}%`
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -136,67 +194,26 @@ export default function Report({ onBack, start = 'bug', prefill = '', bluetooth 
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: space.xxl }}
       >
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: space.md
-          }}
-        >
-          <View style={{ flexShrink: 1 }}>
-            <Text
-              accessibilityRole="header"
-              style={{ color: color.silk, fontSize: font.title, fontWeight: '700' }}
-            >
-              Feedback
-            </Text>
-            <Text style={{ color: color.silkDim, fontSize: font.small }}>
-              Something broken, or something you want
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            <Press label="Back" height={40} onPress={back} />
-            {sent ? null : (
-              <Press
-                label={busy ? 'Sending…' : 'Send'}
-                tone="signal"
-                height={40}
-                on={!busy && !!message.trim()}
-                disabled={busy || !message.trim()}
-                onPress={send}
-              />
-            )}
-          </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
+          <Press label="Back" height={40} onPress={back} />
+          {sent ? null : (
+            <Press label={busy ? sending : 'Send'} tone="signal" height={40} on={!busy && somethingToSend} disabled={busy || !somethingToSend} onPress={send} />
+          )}
         </View>
+
+        <Text accessibilityRole="header" style={{ color: color.silk, fontSize: font.title, fontWeight: '700' }}>
+          {REPORT_TITLE}
+        </Text>
 
         {sent ? (
           <View style={{ gap: space.md }}>
-            <Note tone="hint">{`Sent to the developer — thank you.${sent.lost ? ` ${sent.lost}` : ''}`}</Note>
+            <Note tone="hint" strong size={font.body}>{`${SENT_WORDS}${sent.lost ? ` ${sent.lost}` : ''}`}</Note>
             <Press label="Send another" onPress={() => setSent(null)} />
           </View>
         ) : (
           <>
-            <View style={{ flexDirection: 'row', gap: space.sm }}>
-              {KINDS.map((k) => (
-                <Press
-                  key={k}
-                  grow
-                  height={48}
-                  /* Short enough for a 375-wide phone: "Something is broken" was cut to "Something is bro…" (27 October 2026). */
-                  label={k === 'bug' ? 'Problem' : 'Idea'}
-                  on={kind === k}
-                  disabled={busy}
-                  onPress={() => {
-                    setKind(k)
-                    /* A preview belongs to the kind it was made for. Left up
-                       while switching to the side that sends no log, it would
-                       show a log beside a form not sending one. */
-                    setPreview(null)
-                  }}
-                />
-              ))}
-            </View>
+            {/* The fault it was opened from, said so they know it goes too. */}
+            {said ? <Note>{`This goes with it: ${said}`}</Note> : null}
 
             <TextInput
               value={message}
@@ -205,108 +222,90 @@ export default function Report({ onBack, start = 'bug', prefill = '', bluetooth 
               multiline
               maxLength={MAX_MESSAGE}
               textAlignVertical="top"
-              placeholder={
-                bug
-                  ? 'What happened, and what did you expect instead?'
-                  : 'What would you like it to do?'
-              }
+              placeholder="What happened, or what would you like it to do?"
               placeholderTextColor={color.silkFaint}
-              accessibilityLabel={bug ? 'What went wrong' : 'What you want'}
-              style={{ ...box, minHeight: 120, lineHeight: 22 }}
+              accessibilityLabel="Your message"
+              style={{ ...box, minHeight: 140, lineHeight: 22 }}
             />
 
-            <TextInput
-              value={contact}
-              onChangeText={setContact}
-              editable={!busy}
-              placeholder="Email, if you want an answer (optional)"
-              placeholderTextColor={color.silkFaint}
-              accessibilityLabel="Your email, if you want an answer"
-              autoCapitalize="none"
-              autoCorrect={false}
-              inputMode="email"
-              style={box}
-            />
+            <Attach shots={shots} onShots={setShots} video={video} onVideo={setVideo} disabled={busy} />
 
-            {bug ? (
-              <View
-                style={{
-                  gap: space.md,
-                  padding: space.md,
-                  borderWidth: 1,
-                  borderColor: color.rule,
-                  borderRadius: radius.md,
-                  backgroundColor: color.panel
-                }}
-              >
-                {/*
-                  A SWITCH THAT SAYS IT IS ONE. "The button that says 'send
-                  what the app just did' when you click it, it just highlights
-                  the button and doesn't say anything else. I don't even know if
-                  you got the report or not" (Justin, 25 October 2026, on
-                  Android, after tapping it twelve times before Send). It read
-                  as a button that sends, and all a tap did was light it or
-                  dim it. So it says on or off, as the metronome's does, and
-                  the line under it says what that means for Send.
-                */}
-                <View style={{ gap: space.xs }}>
-                  <Press
-                    label={withLog ? 'Include the log: on' : 'Include the log: off'}
-                    tone="live"
-                    on={withLog}
-                    disabled={busy}
-                    onPress={() => setWithLog(!withLog)}
-                  />
-                  <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
-                    {withLog
-                      ? 'The log of what the app just did goes with your report when you tap Send.'
-                      : 'Only what you wrote goes when you tap Send.'}
-                  </Text>
-                </View>
-                <Press
-                  label={preview === null ? 'See what that is' : 'Hide it'}
-                  height={44}
-                  disabled={busy || !withLog}
-                  onPress={() => setPreview(preview === null ? logPreview(kind, extra()) : null)}
+            <View style={{ gap: space.xs, padding: space.md, borderWidth: 1, borderColor: color.rule, borderRadius: radius.md, backgroundColor: color.panel }}>
+              {account ? (
+                <TickBox
+                  on={includeMe}
+                  label={email ? 'Include my email' : 'Include my account'}
+                  sub={
+                    includeMe
+                      ? email
+                        ? `${email}, so the answer comes back to you.`
+                        : 'So the developer knows whose report it is.'
+                      : 'Sent anonymously: no name, no email, no account.'
+                  }
+                  disabled={busy}
+                  onPress={() => setIncludeMe(!includeMe)}
                 />
-                {preview !== null ? (
-                  /* Its own scroller, capped: the log is long by design and a
-                     screen that grew by two hundred lines would put Send off
-                     the bottom of the phone. */
-                  <ScrollView
-                    nestedScrollEnabled
-                    style={{
-                      maxHeight: 220,
-                      backgroundColor: color.chassis,
-                      borderRadius: radius.sm
-                    }}
-                    contentContainerStyle={{ padding: space.sm }}
-                  >
-                    <Text
-                      selectable
-                      style={{ color: color.silkDim, fontSize: font.micro, fontFamily: face, lineHeight: 16 }}
-                    >
-                      {preview || '(nothing has been logged yet this session)'}
-                    </Text>
-                  </ScrollView>
-                ) : null}
-              </View>
-            ) : (
-              <Note tone="hint">No log goes with this one — just what you wrote.</Note>
-            )}
+              ) : account === null ? (
+                <TextInput
+                  value={contact}
+                  onChangeText={setContact}
+                  editable={!busy}
+                  placeholder="Email, if you want an answer (optional)"
+                  placeholderTextColor={color.silkFaint}
+                  accessibilityLabel="Your email, if you want an answer"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  inputMode="email"
+                  style={box}
+                />
+              ) : null}
 
-            {/* A picture of what went wrong, or of what they want: either kind can carry them. */}
-            <Shots shots={shots} onChange={setShots} disabled={busy} />
+              <TickBox
+                on={withLog}
+                label="Include the log and what I’m using"
+                sub={
+                  withLog
+                    ? `The log of what the app just did, your unit, and your ${deviceNoun()}’s model and system.`
+                    : 'Only what you wrote, and any picture or video, goes.'
+                }
+                disabled={busy}
+                onPress={() => {
+                  setWithLog(!withLog)
+                  /* A preview belongs to a report that sends the log: left up with it unticked, it would show a log that is not going. */
+                  setPreview(null)
+                }}
+              />
+              <Press
+                label={preview === null ? 'See what is sent' : 'Hide it'}
+                height={44}
+                disabled={busy || !withLog}
+                onPress={() => setPreview(preview === null ? logPreview(KIND, extra()) : null)}
+              />
+              {preview !== null ? (
+                /* Its own scroller, capped: the log is long by design and a
+                   screen that grew by two hundred lines would put the rest
+                   off the bottom of the phone. */
+                <ScrollView nestedScrollEnabled style={{ maxHeight: 220, backgroundColor: color.chassis, borderRadius: radius.sm }} contentContainerStyle={{ padding: space.sm }}>
+                  <Text selectable style={{ color: color.silkDim, fontSize: font.micro, fontFamily: face, lineHeight: 16 }}>
+                    {preview || '(nothing has been logged yet this session)'}
+                  </Text>
+                </ScrollView>
+              ) : null}
+            </View>
 
             {error ? <Note tone="fault">{error}</Note> : null}
 
             <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>
-              Your version, your {deviceNoun()}&rsquo;s OS and which unit you&rsquo;re on are sent too, so it
+              Your version, your {deviceNoun()}&rsquo;s model and OS, and which unit you&rsquo;re on are sent too, so it
               can be looked into.
-              {bug && withLog ? ' The log goes as well — you can read it above first.' : ''}
-              {shots.length ? ' The screenshots you added go too.' : ''} Nothing
-              you&rsquo;ve built goes with it. If you&rsquo;re signed in, the report is linked to your account,
-              so deleting the account deletes it too.
+              {withLog ? ' The log goes as well — you can read it above first.' : ''}
+              {shots.length ? ' The pictures you added go too.' : ''}
+              {video ? ' The video goes too, and is deleted after 7 days.' : ''} Nothing you&rsquo;ve built goes with it.
+              {anonymous
+                ? ' Sent anonymously, it is linked to nobody.'
+                : account
+                  ? ' It is linked to your account, so deleting the account deletes it too.'
+                  : ''}
             </Text>
           </>
         )}

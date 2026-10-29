@@ -28,10 +28,11 @@ const forCustomers = () => (openForCustomersHere() ? ' · Bluetooth for customer
 /**
  * The head, as `key: value` pairs; a pair with nothing in it is left out when it is written.
  *
- * `bluetooth` is a report about Bluetooth (beta) (screens/BluetoothReport):
- * its head says how Bluetooth stood even with Bluetooth off, which is where
- * "It won't connect" is sent from, but only to an account Bluetooth is open
- * to (lib/bluetooth bluetoothAllowed), the only one that report is reached by.
+ * `bluetooth` is a report opened from one of Bluetooth's own places
+ * (screens/Report, App.js `reportAbout`): its head says how Bluetooth stood
+ * even with Bluetooth off, which is where "it won't connect" is sent from,
+ * but only to an account Bluetooth is open to (lib/bluetooth
+ * bluetoothAllowed), the only one those places are drawn for.
  */
 export function logHeader({ deviceName, preset, bluetooth = false } = {}) {
   const link = linkState()
