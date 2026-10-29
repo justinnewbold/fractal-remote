@@ -6499,6 +6499,10 @@ console.log('\nPlay on a screen of any shape: the groundwork, and a phone held u
 const { run: duo } = await import('./duo.mjs')
 duo(test)
 
+console.log('\nwhat works: the gear notes, off unless somebody says yes')
+const { run: gearShare } = await import('./gear-share.mjs')
+gearShare(test)
+
 test('both file kinds are listed and told apart', async () => {
   // A .syx goes back to the unit verbatim; a design re-validates first. Load
   // treating one as the other would either corrupt or silently no-op.

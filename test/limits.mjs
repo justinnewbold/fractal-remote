@@ -3825,9 +3825,11 @@ export function run(test) {
 
     assert.deepEqual(
       [...tables].sort(),
-      ['feedback', 'stage_lists'],
+      /* gear_reports since 26 October 2026: the opt-in gear notes, under "Which gear works". */
+      ['feedback', 'gear_reports', 'stage_lists'],
       'the apps write to a table the privacy policy has never been checked against'
     )
+    assert.match(policy, /Which gear works — only if you say yes/, 'nothing is said about the gear notes')
 
     /* And each of those is described, in the words a person would search for
        rather than the table's name. */

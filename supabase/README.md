@@ -502,3 +502,48 @@ select account_id, kind, paid_until, to_timestamp(paid_until / 1000.0) as newest
        bought_count, near_count, handled_at
 from public.sales_handled order by handled_at desc;
 ```
+
+## What works: the gear notes (opt-in, not linked to anybody)
+
+"Build the analytics opt-in, opt out, and whatever needs to be built so that
+we can collect which devices have been connected and tested for all
+devices, whether they're computers, Bluetooth devices, so that it helps us
+put together a list of everything that works." (26 October 2026.) The phone
+asks once, "Help make Fractal Remote better?" (Yes, share / No thanks), and
+Settings → Troubleshooting changes it. Off unless Yes. Three pieces:
+
+- `migrations/20261026_gear_reports.sql` — one table, `gear_reports`: the
+  unit, its firmware, computer or Bluetooth, the adapter's name or the
+  computer app's version, whether the unit answered, the phone's system,
+  version and model, the app's version. No account, no install number, no
+  address. Anybody may insert (each field length-checked, the column grant
+  limited to those fields so a row cannot pick its own date); nobody may
+  read one through the API. `sweep_gear_reports()`, service_role only,
+  deletes anything over two years old.
+- `migrations/20261026_gear_reports_sweep.sql` — the daily sweep, needing
+  pg_cron, in a file of its own as the screenshots' sweep is.
+- `functions/gear-reports/` — `list`, after the same ADMINS lock as
+  owner-messages: sweeps, then answers the newest 5000 notes for Settings →
+  Developer → What works.
+
+### Putting it live, in this order
+
+1. **Apply `20261026_gear_reports.sql` before the app update that asks the
+   question is merged.** Before it, a phone that said Yes gets a refusal for
+   every note, logs it, and tries again the next time the gear connects:
+   nothing is lost, and nobody sees anything.
+2. **Deploy gear-reports**: `supabase functions deploy gear-reports`. Until
+   then What works says the server could not be reached or answered 404.
+3. **Apply `20261026_gear_reports_sweep.sql`** once pg_cron is on. Until then
+   the function's own sweep keeps the two years.
+4. **Before the update goes out, the App Store privacy label and Google's
+   Data safety get their rows** (docs/app-store.md, *What works: the gear
+   notes*). The update starts collecting on every copy where somebody taps
+   Yes, so the label has to say so first.
+
+### Checking it
+
+```sql
+select unit, via, coalesce(adapter, computer_os, 'computer') as way, outcome, count(*), max(created_at)
+from public.gear_reports group by 1, 2, 3, 4 order by max(created_at) desc;
+```

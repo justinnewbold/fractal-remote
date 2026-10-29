@@ -3527,6 +3527,8 @@ export function run(test) {
       ['src/lib/cloudSetlists.js', /^Android$/, 'deviceName: iPhone on an iPhone'],
       /* Sales at a glance names Google Play in Paid twice, as it names Android in Where they bought. */
       ['src/lib/admin.js', /Android|Google Play/, 'Justin’s Developer pages only'],
+      /* What works adds the gear notes up, and says which phones they came from (26 October 2026). */
+      ['src/lib/gear-share-rules.js', /^Android$/, 'gearSections: What works, a Developer page, Justin’s only'],
       ['src/lib/whats-live.js', /^Android build$/, 'What is live, a Developer page, Justin’s only'],
       ['src/lib/ways-in.js', /Google Play/, 'the browser’s list of routes; nothing on the phone imports it'],
       /* "A newer version is on Google Play", the store's page and its button: each looked up by the platform passed in. */
@@ -13769,8 +13771,9 @@ export function run(test) {
        Changed on purpose, 13 October 2026 (1.87.21): 'updating', the steps the
        red line on the computer card opens, is a child of Phone & computer
        beside 'offline'. And on 15 October 2026, 'stuck', Paid but no computer
-       yet, a child of Developer like the other tools. */
-    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'bt-tools': 'developer' \}/, 'a page goes back somewhere it did not come from')
+       yet, a child of Developer like the other tools. And on 26 October 2026,
+       'works', What works (the gear notes), a child of Developer too. */
+    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'bt-tools': 'developer', works: 'developer' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')
