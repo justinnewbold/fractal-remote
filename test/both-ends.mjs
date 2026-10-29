@@ -1077,6 +1077,9 @@ export function run(test) {
         'phone only — Siri and the fractalremote:// links are the phone app’s: the phrases are in the iPhone app, the links open the installed app, and a browser has neither. Shown only where the links are open (useSiriLinksOpen, mobile/src/lib/siri.js)',
       Footswitches:
         'phone only as a Settings row — the browser shows the same panel, from the same shared/footswitches.mjs, as a section of the Edit sheet, where it has been since it was built',
+      /* 29 October 2026: "Move stop the looper to the troubleshooting menu" (on the phone). */
+      'Stop the looper':
+        'browser only on the front list — on the phone it is under Settings → Troubleshooting, with Fixes, since 29 October 2026; the browser keeps it on its Setup list, where it has been since it was built',
       'Get it on your phone or tablet': 'browser only — a phone has no use for a way to get itself onto a phone, and it stays on the front page rather than inside About because "somebody who has a rig connected and wants the remote in their pocket is the likeliest buyer there is"'
       /* 'Unlock the full version' was here as phone-only — "the browser has
          nothing to sell". Web Billing changed that, and the row is at both

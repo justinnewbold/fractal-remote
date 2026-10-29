@@ -8884,7 +8884,7 @@ export function run(test) {
       'Bluetooth',
       /* What each footswitch does, where the switches can be read. */
       'Footswitches',
-      'Stop the looper',
+      /* Stop the looper is under Troubleshooting since 29 October 2026 ("Move stop the looper to the troubleshooting menu"). */
       /* "A metronome that plays out loud that can be toggled on and off in settings." */
       'Metronome',
       '# Help',
@@ -8908,6 +8908,10 @@ export function run(test) {
       /* "A section where a user can edit the colors": beside the other choices about how Play looks. */
       'Colors'
     ], 'the Setup rows are not in the order he asked for')
+    /* Stop the looper, with the fixes: on the Troubleshooting page, after Fixes and before the log. */
+    const trouble = settings.slice(settings.indexOf("{page === 'trouble' ? ("), settings.indexOf("{page === 'link' ? ("))
+    const troubleRows = [...trouble.matchAll(/title="([^"]+)"/g)].map((m) => m[1])
+    assert.deepEqual(troubleRows, ['Fixes', 'Stop the looper', 'Log', 'Feedback'], 'Stop the looper is not with the fixes under Troubleshooting')
     /* And the names are a tap from Edit too: "add the amps and pedals names as a link in the edit area". */
     assert.match(read('mobile/src/screens/Edit.js'), /<Press label="Amp & pedal names"[^>]*onPress=\{onOpenGear\}/, 'Edit has no way to the amp and pedal names')
     assert.match(read('mobile/App.js'), /<Gear onBack=\{\(\) => setScreen\(gearBack\)\} \/>/, 'the names go back to Settings even when Edit opened them')

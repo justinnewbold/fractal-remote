@@ -615,27 +615,10 @@ export default function Settings({
                 onPress={() => setPage('bluetooth')}
               />
             ) : null}
-            {/*
-              THE LOOPER'S EMERGENCY STOP. "There needs to be something in
-              settings … for when it keeps playing." It carries on across a
-              preset change when the next preset has a Looper block too, and
-              this stops it on one tap from wherever the player is.
-            */}
             {/* What each switch does, read off the unit — the browser's
                 Footswitches panel, here. Only where the switches can be read. */}
             {(link === 'connected' || demo) && switchesReadable ? (
               <SetupRow title="Footswitches" status="What each switch does" onPress={() => setPage('footswitches')} />
-            ) : null}
-            {/* Not over Bluetooth (beta): the looper is left off its chain.
-                And not on a real VP4: no computer app can work its looper,
-                so the row could only say "Didn’t stop" (lib/vp4-safety
-                VP4_NO_LOOPER). The browser's Setup leaves it out too. */}
-            {(link === 'connected' || demo) && !overBluetooth(caps) && !onRealVp4 ? (
-              <SetupRow
-                title="Stop the looper"
-                status={looperSaid || 'If a loop keeps playing'}
-                onPress={stopTheLooper}
-              />
             ) : null}
             {/* "A metronome that plays out loud that can be toggled on and
                 off in settings." On the unit, the phone or both. */}
@@ -989,6 +972,26 @@ export default function Settings({
                 title="Fixes"
                 status="What to try when it isn’t working"
                 onPress={onOpenFixes}
+              />
+            ) : null}
+            {/*
+              THE LOOPER'S EMERGENCY STOP. "There needs to be something in
+              settings … for when it keeps playing." It carries on across a
+              preset change when the next preset has a Looper block too, and
+              this stops it on one tap. Here with the fixes since 29 October
+              2026 ("Move stop the looper to the troubleshooting menu"), out
+              of My rig, which is for setting things up.
+
+              Not over Bluetooth: the looper is left off its chain. And not
+              on a real VP4: no computer app can work its looper, so the row
+              could only say "Didn’t stop" (lib/vp4-safety VP4_NO_LOOPER).
+              The browser's Setup leaves it out too.
+            */}
+            {(link === 'connected' || demo) && !overBluetooth(caps) && !onRealVp4 ? (
+              <SetupRow
+                title="Stop the looper"
+                status={looperSaid || 'If a loop keeps playing'}
+                onPress={stopTheLooper}
               />
             ) : null}
             {/* Called Log, because that is what it opens. It said "Help &
