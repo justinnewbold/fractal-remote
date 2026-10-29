@@ -2501,7 +2501,7 @@ test('the computer app says which version it is, where the phone already looks',
     'the version did not reach the host doc'
   )
   const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
-  assert.match(main, /armHost\(\{ port, version: app\.getVersion\(\), log: phoneLog \}\)/, 'the computer app does not say which version it is, or says nothing when it cannot')
+  assert.match(main, /armHost\(\{ port, version: app\.getVersion\(\), os: computerOs, log: phoneLog \}\)/, 'the computer app does not say which version it is, or says nothing when it cannot')
   /*
    * AND AGAIN EVERY FEW MINUTES. "The app on the computer is running the
    * latest version, so I'm not sure why it's saying this." A write that failed
@@ -2510,7 +2510,7 @@ test('the computer app says which version it is, where the phone already looks',
    * said, and the menu says which version the phones are told.
    */
   assert.match(main, /setInterval\(tell, TELL_PHONES_MS\)/, 'the name and version are written once and never again')
-  assert.match(main, /told = await tellPhonesChecked\(\{ port, version: app\.getVersion\(\), log: phoneLog \}\)/, 'the write is not read back')
+  assert.match(main, /told = await tellPhonesChecked\(\{ port, version: app\.getVersion\(\), os: computerOs, log: phoneLog \}\)/, 'the write is not read back')
   assert.match(main, /this app is v\$\{app\.getVersion\(\)\}/, 'the menu does not say which version the phones are told')
   assert.match(main, /phonesHearLine\(told, app\.getVersion\(\)\)/, 'the menu does not say what the phones hear')
   assert.equal(host.TELL_PHONES_MS, 5 * 60 * 1000)
@@ -2527,6 +2527,32 @@ test('the computer app says which version it is, where the phone already looks',
   assert.deepEqual(fine.calls, ['PUT /store/config/host.name {"data":{"name":"Studio computer","version":"7.281.0"},"origin":"fractal"}'])
   const link = readSrc(new URL('../src/lib/link.js', import.meta.url), 'utf8')
   assert.match(link, /macVersion: doc\.version \? String\(doc\.version\) : null/, 'the phone does not read the version back')
+
+  /*
+   * AND WHAT KIND OF COMPUTER (29 October 2026): "Can we find out which
+   * computer is being used as well?" The kind, never the name: a Mac by its
+   * macOS, Windows by 10 or 11, a Pi by its board, anything else as Linux.
+   */
+  assert.equal(host.computerKind({ platform: 'darwin', systemVersion: '15.3.1', arch: 'arm64' }), 'macOS 15.3 (Apple silicon)')
+  assert.equal(host.computerKind({ platform: 'darwin', release: '24.3.0', arch: 'x64' }), 'macOS 15')
+  assert.equal(host.computerKind({ platform: 'darwin', release: '25.1.0', arch: 'arm64' }), 'macOS 26 (Apple silicon)')
+  assert.equal(host.computerKind({ platform: 'win32', systemVersion: '10.0.22631' }), 'Windows 11')
+  assert.equal(host.computerKind({ platform: 'win32', release: '10.0.19045' }), 'Windows 10')
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi 5 Model B Rev 1.0\0', arch: 'arm64' }), 'Raspberry Pi 5')
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi 3 Model B Plus Rev 1.3\0', arch: 'arm64' }), 'Raspberry Pi 3')
+  assert.equal(host.computerKind({ platform: 'linux', model: '', arch: 'x64' }), 'Linux (x64)')
+  for (const p of ['darwin', 'win32', 'linux']) assert.ok(host.computerKind({ platform: p }).length <= 40)
+  assert.equal(typeof host.thisComputer(), 'string')
+  /* Written beside the name and the version when given, and the doc as before when not. */
+  const kind = fakeForgeFX()
+  assert.equal(await host.tellPhones({ port: 5056, fetch: kind.fetch, hostname: 'Studio computer', version: '1.89.8', os: 'Raspberry Pi 5' }), true)
+  assert.deepEqual(kind.calls, ['PUT /store/config/host.name {"data":{"name":"Studio computer","version":"1.89.8","os":"Raspberry Pi 5"},"origin":"fractal"}'])
+  assert.match(main, /const computerOs = thisComputer\(\)/, 'the computer app never says what kind of computer it is')
+  /* The phone keeps it, and puts it in a gear note and a report's log. */
+  const phoneLink = readSrc(new URL('../mobile/src/lib/link.js', import.meta.url), 'utf8')
+  assert.match(phoneLink, /hostOs: data\?\.os \? String\(data\.os\)\.slice\(0, 40\) : null/, 'the phone throws away what kind of computer it is')
+  assert.match(readSrc(new URL('../mobile/src/lib/gear-share-rules.js', import.meta.url), 'utf8'), /computer_os: link\.hostOs,/)
+  assert.match(readSrc(new URL('../mobile/src/lib/logHead.js', import.meta.url), 'utf8'), /'computer system': link\.hostOs \|\| undefined,/)
 
   /*
    * AND READ BACK. "My Mac is on the correct version 7.281" — and the phone
@@ -11140,7 +11166,7 @@ test('the phone remote is asked for again, in the same words as before, with or 
   const arm = main.slice(main.indexOf('const arm = () => {'), main.indexOf('rearm = arm'))
   assert.ok(arm, 'there is no retry around armHost')
   // The call text the version test above pins, inside the retry.
-  assert.match(arm, /armHost\(\{ port, version: app\.getVersion\(\), log: phoneLog \}\)/)
+  assert.match(arm, /armHost\(\{ port, version: app\.getVersion\(\), os: computerOs, log: phoneLog \}\)/)
   /*
    * Changed on purpose, 12 October 2026 (1.87.19). This pinned the retry to
    * a start with no window (`startHidden ? … : null`), on the grounds that a

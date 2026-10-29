@@ -227,6 +227,10 @@ export function run(test) {
     const silent = bt({ unit: 'missing' }, { phase: 'connected', unit: 'FM3', adapter: 'WIDI Uhost' })
     assert.deepEqual([silent.unit, silent.adapter, silent.outcome], ['FM3', 'WIDI Uhost', 'not answering'])
     assert.equal(bt({ unit: 'present', deviceName: 'AM4' }, { phase: 'connected', unit: 'AM4', adapter: '' }).adapter, null, 'an adapter with no name is sent as an empty name')
+    /* A different unit answered (the adapter in the FM3, the AM4 picked): a mix-up, never "AM4 not answering", nor a note for the FM3. */
+    assert.equal(bt({ unit: 'missing' }, { phase: 'connected', unit: 'AM4', adapter: 'WIDI Uhost Bluetooth', answeredAs: 'FM3' }), null, 'a wrong unit answering is sent as the picked unit not answering')
+    assert.equal(bt({ unit: 'present', deviceName: 'FM3' }, { phase: 'connected', unit: 'AM4', adapter: 'WIDI Uhost Bluetooth', answeredAs: 'FM3' }), null)
+    assert.match(read('mobile/src/lib/gearShare.js'), /answeredAs: bluetoothFacts\(\)\.answeredAs/, 'the phone never tells the rule a different unit answered')
   })
 
   test('The card says exactly what goes and what never does, and Settings changes it', async () => {

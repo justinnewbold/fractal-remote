@@ -438,6 +438,18 @@ export default function Settings({
       : link === 'joining'
         ? 'Bluetooth · looking for the adapter'
         : 'Bluetooth · not connected'
+  /* The Phone & computer row's line: how far along the chain gets. My rig's heading says it too while it is closed. */
+  const pairStatus = demo
+    ? `Demo — simulated ${DEMO_UNITS.find((u) => u.key === unit)?.name || 'unit'}`
+    : bluetooth
+      ? bluetoothWord
+      : link !== 'connected'
+        ? linkWord
+        : unitState === 'missing'
+          ? 'Computer connected · no unit'
+          : unitState === 'silent'
+            ? `Computer connected · ${deviceName || 'unit'} not answering`
+            : `${deviceName || 'Unit'} · connected`
 
   /*
    * TWO WAYS OUT OF EVERY PAGE, and they go to different places on purpose.
@@ -555,28 +567,12 @@ export default function Settings({
             }}
           />
 
-          <Group title="My rig">
+          <Group title="My rig" hint={pairStatus}>
             {/*
               One row for the whole chain: this phone, the computer, and the
               unit plugged into it — the status says how far along it gets.
             */}
-            <SetupRow
-              title={PAIR_TITLE}
-              status={
-                demo
-                  ? `Demo — simulated ${DEMO_UNITS.find((u) => u.key === unit)?.name || 'unit'}`
-                  : bluetooth
-                    ? bluetoothWord
-                    : link !== 'connected'
-                      ? linkWord
-                      : unitState === 'missing'
-                        ? 'Computer connected · no unit'
-                        : unitState === 'silent'
-                          ? `Computer connected · ${deviceName || 'unit'} not answering`
-                          : `${deviceName || 'Unit'} · connected`
-              }
-              onPress={() => setPage('link')}
-            />
+            <SetupRow title={PAIR_TITLE} status={pairStatus} onPress={() => setPage('link')} />
             {/*
               BLUETOOTH (BETA), ITS OWN ROW. "Move the Bluetooth card from the
               phone and computer menu to its own menu under the settings menu.
@@ -615,27 +611,10 @@ export default function Settings({
                 onPress={() => setPage('bluetooth')}
               />
             ) : null}
-            {/*
-              THE LOOPER'S EMERGENCY STOP. "There needs to be something in
-              settings … for when it keeps playing." It carries on across a
-              preset change when the next preset has a Looper block too, and
-              this stops it on one tap from wherever the player is.
-            */}
             {/* What each switch does, read off the unit — the browser's
                 Footswitches panel, here. Only where the switches can be read. */}
             {(link === 'connected' || demo) && switchesReadable ? (
               <SetupRow title="Footswitches" status="What each switch does" onPress={() => setPage('footswitches')} />
-            ) : null}
-            {/* Not over Bluetooth (beta): the looper is left off its chain.
-                And not on a real VP4: no computer app can work its looper,
-                so the row could only say "Didn’t stop" (lib/vp4-safety
-                VP4_NO_LOOPER). The browser's Setup leaves it out too. */}
-            {(link === 'connected' || demo) && !overBluetooth(caps) && !onRealVp4 ? (
-              <SetupRow
-                title="Stop the looper"
-                status={looperSaid || 'If a loop keeps playing'}
-                onPress={stopTheLooper}
-              />
             ) : null}
             {/* "A metronome that plays out loud that can be toggled on and
                 off in settings." On the unit, the phone or both. */}
@@ -652,7 +631,7 @@ export default function Settings({
             ) : null}
           </Group>
 
-          <Group title="Help">
+          <Group title="Help" hint="Troubleshooting, feedback, and how to use it">
             {/* Up from inside About: the page needed most on a bad evening
                 is now one tap from Settings, not two. */}
             {onOpenFixes || onOpenLog || onOpenReport ? (
@@ -697,7 +676,7 @@ export default function Settings({
             {siriOpen ? <SetupRow title={SIRI_TITLE} status={siriStatus} onPress={() => setPage('siri')} /> : null}
           </Group>
 
-          <Group title="About">
+          <Group title="About" hint={updates.phase === 'ready' ? 'Update ready' : `v${APP_VERSION}`}>
             {/*
               The version, and an update waiting says so here, where the list
               is read, instead of one page further in.
@@ -713,13 +692,13 @@ export default function Settings({
               row for all three: "we should probably just make that into one
               menu called developer". */}
           {isAdmin(account?.id) ? (
-            <Group title="Developer">
+            <Group title="Developer" hint="Your own tools">
               <SetupRow title="Developer" status="Access, sales, accounts, messages, what's live" onPress={() => setPage('developer')} />
             </Group>
           ) : null}
 
           {/* Last: "Move the Play Screen section down to the bottom of the list." */}
-          <Group title="Play screen">
+          <Group title="Play screen" hint="Tiles, colors, light or dark">
             <SetupRow
               title="Tiles & scenes"
               status="Tile size, effect pictures, scene layout"
@@ -989,6 +968,26 @@ export default function Settings({
                 title="Fixes"
                 status="What to try when it isn’t working"
                 onPress={onOpenFixes}
+              />
+            ) : null}
+            {/*
+              THE LOOPER'S EMERGENCY STOP. "There needs to be something in
+              settings … for when it keeps playing." It carries on across a
+              preset change when the next preset has a Looper block too, and
+              this stops it on one tap. Here with the fixes since 29 October
+              2026 ("Move stop the looper to the troubleshooting menu"), out
+              of My rig, which is for setting things up.
+
+              Not over Bluetooth: the looper is left off its chain. And not
+              on a real VP4: no computer app can work its looper, so the row
+              could only say "Didn’t stop" (lib/vp4-safety VP4_NO_LOOPER).
+              The browser's Setup leaves it out too.
+            */}
+            {(link === 'connected' || demo) && !overBluetooth(caps) && !onRealVp4 ? (
+              <SetupRow
+                title="Stop the looper"
+                status={looperSaid || 'If a loop keeps playing'}
+                onPress={stopTheLooper}
               />
             ) : null}
             {/* Called Log, because that is what it opens. It said "Help &
@@ -2099,15 +2098,66 @@ const deleteCosts = (from) => {
   return `The full version you bought stays with your ${mine}. Restore a purchase brings it back on a new account.`
 }
 
-/** A heading and the rows under it — one group of Settings. */
-function Group({ title, children }) {
+/** A heading and the rows under it: one group of Settings, closed until tapped.
+ *
+ * "Make it so each section under the settings menu is collapsible and
+ * collapse by default. For example My rigs, Help, About, Play screen"
+ * (Justin, 29 October 2026). So the front of Settings is the account and a
+ * short list of headings, each saying in a line what is inside it, or what
+ * matters from it (`hint`): My rig says how the unit is connected, About the
+ * version, or that an update is ready, so nothing that wants seeing is
+ * folded away unseen. Tapping a heading opens it; tapping it again closes
+ * it. Said open or closed to a screen reader.
+ */
+function Group({ title, hint, children }) {
+  const [open, setOpen] = useState(() => OPEN_GROUPS.has(title))
+  const toggle = () => {
+    tick()
+    if (open) OPEN_GROUPS.delete(title)
+    else OPEN_GROUPS.add(title)
+    setOpen(!open)
+  }
   return (
-    <View style={{ gap: space.xs }}>
-      <Section>{title}</Section>
-      <View style={{ gap: 0 }}>{children}</View>
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={open || !hint ? title : `${title}, ${hint}`}
+        onPress={toggle}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.md,
+          minHeight: TAP + 8,
+          paddingHorizontal: space.md,
+          paddingVertical: space.md,
+          borderRadius: radius.md,
+          backgroundColor: pressed ? color.panelHi : color.panel
+        })}
+      >
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text accessibilityRole="header" style={{ color: color.silk, fontSize: font.lead, fontWeight: '700' }}>
+            {title}
+          </Text>
+          {hint && !open ? (
+            <Text numberOfLines={1} style={{ color: color.ok, fontSize: font.small }}>
+              {hint}
+            </Text>
+          ) : null}
+        </View>
+        {/* The row's own chevron, turned down when the group is open. */}
+        <Text style={{ color: color.silkFaint, fontSize: font.lead, transform: [{ rotate: open ? '90deg' : '0deg' }] }}>›</Text>
+      </Pressable>
+      {open ? <View style={{ gap: 0, paddingLeft: space.sm }}>{children}</View> : null}
     </View>
   )
 }
+
+/*
+ * Which groups are open, for as long as the app runs: back in Settings, a
+ * group opened a minute ago is still open. Every launch starts them closed.
+ */
+const OPEN_GROUPS = new Set()
 
 /**
  * Who this is, at the top of Settings: the account, and whether the app is

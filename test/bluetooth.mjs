@@ -8997,7 +8997,7 @@ export function run(test) {
   test('Settings has Report a problem or idea under Help, and Troubleshooting → Feedback stays where the help sentence says it is', async () => {
     const settings = flat('mobile/src/screens/Settings.js')
     const front = settings.slice(settings.indexOf("{page === null ? ("), settings.indexOf("{page === 'account' ? ("))
-    const help = front.slice(front.indexOf('<Group title="Help">'), front.indexOf('<Group title="About">'))
+    const help = front.slice(front.indexOf('<Group title="Help"'), front.indexOf('<Group title="About"'))
     assert.match(help, /\{onOpenReport \? \( <SetupRow title="Feedback" status="Something broken, or something you want" onPress=\{onOpenReport\} \/> \) : null\}/)
     /* Troubleshooting still holds Feedback, the path the fixed help sentence names. */
     const trouble = settings.slice(settings.indexOf("{page === 'trouble' ? ("))

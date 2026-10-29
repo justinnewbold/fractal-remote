@@ -380,7 +380,7 @@ export function run(test) {
     assert.match(settings, /const SIRI_TITLE = siriRow\(\{ os: Platform\.OS \}\)\.title/)
     assert.match(settings, /const siriStatus = siriRow\(\{ os: Platform\.OS, native: siriNative \}\)\.status/)
     assert.match(settings, /\{siriOpen \? <SetupRow title=\{SIRI_TITLE\} status=\{siriStatus\} onPress=\{\(\) => setPage\('siri'\)\} \/> : null\}/)
-    const help = settings.slice(settings.indexOf('<Group title="Help">'), settings.indexOf('<Group title="About">'))
+    const help = settings.slice(settings.indexOf('<Group title="Help"'), settings.indexOf('<Group title="About"'))
     assert.ok(help.includes("setPage('siri')"), 'the Siri row is not under Help')
     assert.match(settings, /\{page === 'siri' && siriOpen \? \(\s*<>\s*\{head\(SIRI_TITLE, 'back'\)\}\s*<SiriHelp os=\{Platform\.OS\} kind=\{deviceKind\(\)\} native=\{siriNative\} noun=\{deviceNoun\(\)\} \/>/)
     /* Not behind the purchase: Apple's reviewer tries Siri in the demo. */

@@ -6058,7 +6058,7 @@ export function run(test) {
     /* And App's read, with the unit's answer in hand, is where the browser's clean start lands. */
     assert.match(read('src/App.jsx'), /answered = true\s*\/\*[^*]*\*\/\s*unitRead\(currentDeviceSlug\(\), \{ demo: isDemo\(\), since: unitAt \}\)\s*doneReading = beginChainRead\(\)/)
     const phone = read('mobile/src/lib/link.js')
-    assert.match(phone, /const ok = await pickHost\(name\)\s*const moved = switchOwed\s*switchOwed = false[\s\S]{0,800}if \(moved\) \{\s*startClean\(\{ unit: true \}\)\s*const picked = remoteChosenHost\(\)\s*if \(picked\) set\(\{ macName: picked, hostVersion: null \}\)\s*\}\s*readMacName\(\)/)
+    assert.match(phone, /const ok = await pickHost\(name\)\s*const moved = switchOwed\s*switchOwed = false[\s\S]{0,800}if \(moved\) \{\s*startClean\(\{ unit: true \}\)\s*const picked = remoteChosenHost\(\)\s*if \(picked\) set\(\{ macName: picked, hostVersion: null, hostOs: null \}\)\s*\}\s*readMacName\(\)/)
     assert.match(phone, /function switchedComputer\(\) \{\s*switchOwed = true\s*computerChanged\(\)\s*\}/)
     assert.match(phone, /subscribeSwitching\(switchedComputer\)/, 'the phone is not told before a read goes to the new computer')
   })

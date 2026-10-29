@@ -206,10 +206,8 @@ export default function Report({ onBack, bluetooth = false, said = null }) {
         </Text>
 
         {sent ? (
-          <View style={{ gap: space.md }}>
-            <Note tone="hint" strong size={font.body}>{`${SENT_WORDS}${sent.lost ? ` ${sent.lost}` : ''}`}</Note>
-            <Press label="Send another" onPress={() => setSent(null)} />
-          </View>
+          /* Said, and nothing more: "Remove 'send another'" (Justin, 29 October 2026). Back is the way on. */
+          <Note tone="hint" strong size={font.body}>{`${SENT_WORDS}${sent.lost ? ` ${sent.lost}` : ''}`}</Note>
         ) : (
           <>
             {/* The fault it was opened from, said so they know it goes too. */}

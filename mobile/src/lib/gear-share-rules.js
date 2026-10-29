@@ -51,7 +51,7 @@ export const SHARE_TITLE = 'Help make Fractal Remote better?'
  * device-word.mjs): this iPad, this tablet.
  */
 export const shareWords = () => [
-  `Share which gear works with Fractal Remote, so we can put together a list of everything that works. When your unit connects, this ${deviceNoun()} sends one short note: which unit and its firmware, whether it went through a computer or Bluetooth, the computer app’s version or the Bluetooth adapter’s name, whether the unit answered, the kind of ${deviceNoun()} and its system version, and the app’s version. The same gear is sent once a month at most.`,
+  `Share which gear works with Fractal Remote, so we can put together a list of everything that works. When your unit connects, this ${deviceNoun()} sends one short note: which unit and its firmware, whether it went through a computer or Bluetooth, the kind of computer (Mac, Windows or Raspberry Pi) and the computer app’s version, or the Bluetooth adapter’s name, whether the unit answered, the kind of ${deviceNoun()} and its system version, and the app’s version. The same gear is sent once a month at most.`,
   'Never sent: preset or song names, anything you type, where you are, or your account or email. It is not linked to you, there is no advertising, and nothing goes to anyone else.',
   'It stays off unless you tap Yes, share. You can change it any time in Settings → Troubleshooting.'
 ]
@@ -189,10 +189,11 @@ export function sentFrom(raw, now = Date.now()) {
  *              'missing' or 'silent' when it did not), `deviceName`,
  *              `firmware`, `simulated`
  *   via        lib/link.js linkVia(): 'computer', 'bluetooth' or 'demo'
- *   link       lib/link.js state: `link`, `hostVersion` (and `hostOs` if the
- *              computer app ever says it)
+ *   link       lib/link.js state: `link`, `hostVersion`, and `hostOs`, the
+ *              kind of computer, which its app says from 1.89.8
  *   bluetooth  { phase, unit: the unit's name picked on the Bluetooth page,
- *              adapter: the adapter's name or '' }
+ *              adapter: the adapter's name or '', answeredAs: the unit that
+ *              answered instead of it, or null }
  *   phone      { os, osVersion, model }, appVersion
  *
  * The demo is never a note: nothing real connected. Through a computer, only
@@ -223,6 +224,14 @@ export function noteFacts({ rig = {}, via, link = {}, bluetooth = {}, phone = {}
     }
   }
   if (bluetooth.phase !== 'connected') return null
+  /*
+   * A DIFFERENT UNIT ANSWERED: a mix-up, not a result for either unit. His
+   * own first note was "AM4 · bluetooth · not answering" (29 October 2026)
+   * from the WIDI Uhost plugged into his FM3, with the AM4 picked and the
+   * page saying "An FM3 answered, not the AM4": true of nothing. The page
+   * says how to fix it, and the note waits for the right unit.
+   */
+  if (bluetooth.answeredAs) return null
   const adapter = bluetooth.adapter || null
   if (rig.unit === 'present') {
     return { ...base, outcome: 'answered', unit: rig.deviceName || bluetooth.unit, firmware: rig.firmware, adapter }

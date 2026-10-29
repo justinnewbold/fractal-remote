@@ -88,6 +88,12 @@ const initial = {
    * and an old enough launcher never says — which is itself an answer.
    */
   hostVersion: null,
+  /*
+   * What kind of computer it is ("macOS 15.3", "Windows 11", "Raspberry Pi
+   * 5"), when its app says (1.89.8 on): for a gear note and a report's log.
+   * Null until it says, and cleared with the version.
+   */
+  hostOs: null,
   hosts: [],
   units: {},
   /* While a computer that has not said its unit is asked again (askUnknownUnits): Which unit says so. */
@@ -206,6 +212,7 @@ const set = (patch) => {
     // reads it, and an updated computer keeps the same name, so a check
     // without it left that line up after the update had already happened.
     next.hostVersion === state.hostVersion &&
+    next.hostOs === state.hostOs &&
     next.clash === state.clash &&
     next.chosenHost === state.chosenHost &&
     next.missingPick === state.missingPick &&
@@ -804,7 +811,7 @@ export async function chooseHost(name) {
   if (moved) {
     startClean({ unit: true })
     const picked = remoteChosenHost()
-    if (picked) set({ macName: picked, hostVersion: null })
+    if (picked) set({ macName: picked, hostVersion: null, hostOs: null })
   }
   readMacName()
   try {
@@ -871,7 +878,7 @@ async function readMacName() {
      * stopped saying one is a screen reporting an app that may not be running
      * any more.
      */
-    set({ macName: String(name), hostVersion: version ? String(version) : null })
+    set({ macName: String(name), hostVersion: version ? String(version) : null, hostOs: data?.os ? String(data.os).slice(0, 40) : null })
     say(version ? `the computer is ${name}, v${version}` : `the computer is ${name} and did not say its version`)
   } catch (err) {
     // "your Mac" is a fine name. The log still says the asking failed.
@@ -1109,7 +1116,7 @@ function enterDemo() {
   running = false
   if (timer) clearTimeout(timer)
   timer = null
-  set({ link: 'connected', macName: 'the demo', hostVersion: null })
+  set({ link: 'connected', macName: 'the demo', hostVersion: null, hostOs: null })
 }
 
 export async function stopLink() {
