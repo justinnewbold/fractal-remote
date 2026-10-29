@@ -40,7 +40,9 @@ the AM4's catalog generated from the computer's codec by
 scripts/am4-knobs.mjs). Knobs, models and on/off; no saving, moving
 blocks, modifiers or names over Bluetooth yet. It opens to customers only
 in a store version that says so (`EDIT_FROM_STORE` in
-mobile/src/lib/ble-rule.js). The FM3 is next.
+mobile/src/lib/ble-rule.js). The FM3 followed the same day, the same way
+(mobile/src/lib/fm3-edit.js, scripts/fm3-knobs.mjs), on its own entry, with
+no cab picking.
 
 None of it had been tried on Justin's hardware when this was written. Since
 then (26 October 2026, from an iPhone and an Android phone): his AM4 works
