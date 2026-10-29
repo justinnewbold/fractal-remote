@@ -4397,7 +4397,7 @@ export function run(test) {
     assert.match(words, /Nearby devices/, 'the guide does not say what Android 12 and later asks for')
     assert.match(words, /On Android 11 and older it asks for Location instead[^.]*make sure Location is switched on/, 'the guide does not say Android 11 and older need Location on')
     assert.match(words, /Settings \(the gear at the top right\) → My rig → Bluetooth\./, 'the guide does not say where Bluetooth is in the app, under My rig as the app has it')
-    assert.ok(read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ').indexOf('<SetupRow title="Bluetooth"') > read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ').indexOf('<Group title="My rig">'), 'the guide sends people to My rig for a row that is not there')
+    assert.ok(read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ').indexOf('<SetupRow title="Bluetooth"') > read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ').indexOf('<Group title="My rig"'), 'the guide sends people to My rig for a row that is not there')
     /* The report, where the guide sends people: the app's own button. */
     assert.match(words, /Report a Bluetooth problem, on the Bluetooth page, one tap, with “It works on my unit” among its answers/, 'the guide does not send people to the one-tap report')
     /* Changed on purpose, 24 October 2026, with the page: Connect at the top, and the reading in rows under it ("a five-year-old could connect it"). */
@@ -4944,7 +4944,7 @@ export function run(test) {
     assert.ok(page.includes(": 'Connect'}") && page.includes('No adapter was connected.'), 'the notes name a Connect button or a no-adapter line the page no longer has')
     assert.match(read('mobile/src/components/Press.js'), /opacity: disabled \? 0\.45/, 'a button that waits no longer looks dimmed, and the notes say Connect does')
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
-    assert.ok(settings.indexOf('<SetupRow title="Bluetooth"') > settings.indexOf('<Group title="My rig">'), 'the texts send people to Settings → My rig → Bluetooth, which is not there')
+    assert.ok(settings.indexOf('<SetupRow title="Bluetooth"') > settings.indexOf('<Group title="My rig"'), 'the texts send people to Settings → My rig → Bluetooth, which is not there')
 
     /*
      * 2.5.19: what the developer's own account sees and the review account

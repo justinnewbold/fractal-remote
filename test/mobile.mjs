@@ -2980,7 +2980,23 @@ export function run(test) {
 
     /* Each row says something true about the state it leads to, which is the
        whole point of the list: it answers most questions without a tap. */
-    assert.match(settings, /status=\{\s*demo\s*\?[\s\S]{0,900}?`\$\{deviceName \|\| 'Unit'\} · connected`/)
+    assert.match(settings, /const pairStatus = demo\s*\?[\s\S]{0,900}?`\$\{deviceName \|\| 'Unit'\} · connected`/)
+    assert.match(settings, /<SetupRow title=\{PAIR_TITLE\} status=\{pairStatus\}/)
+    /*
+     * AND THE GROUPS START CLOSED (29 October 2026: "Make it so each section
+     * under the settings menu is collapsible and collapse by default"), each
+     * heading saying in a line what matters inside it: My rig the same line
+     * as Phone & computer, About the version or an update ready.
+     */
+    assert.match(settings, /const OPEN_GROUPS = new Set\(\)/)
+    assert.match(settings, /const \[open, setOpen\] = useState\(\(\) => OPEN_GROUPS\.has\(title\)\)/, 'a group starts open')
+    assert.match(settings, /accessibilityState=\{\{ expanded: open \}\}/, 'a screen reader cannot tell a group is open or closed')
+    assert.match(settings, /\{open \? <View style=\{\{ gap: 0, paddingLeft: space\.sm \}\}>\{children\}<\/View> : null\}/, 'a closed group still draws its rows')
+    assert.match(settings, /<Group title="My rig" hint=\{pairStatus\}>/)
+    assert.match(settings, /<Group title="About" hint=\{updates\.phase === 'ready' \? 'Update ready' : `v\$\{APP_VERSION\}`\}>/, 'an update waiting is folded away unseen')
+    for (const g of ['My rig', 'Help', 'About', 'Developer', 'Play screen']) {
+      assert.match(settings, new RegExp(`<Group title="${g}" hint=`), `${g} has nothing to say while it is closed`)
+    }
   })
 
   test('the version on the About page is the version that was built', async () => {
@@ -4850,7 +4866,7 @@ export function run(test) {
      */
     /* An account card at the top now, the version on it, opening an Account page of its own. */
     const phone = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
-    const top = phone.slice(phone.indexOf("{head('Settings')}"), phone.indexOf('<Group title="My rig">'))
+    const top = phone.slice(phone.indexOf("{head('Settings')}"), phone.indexOf('<Group title="My rig"'))
     assert.match(top, /<AccountCard asked=\{asked\} email=\{signedInAs \|\| keptEmail\}/, 'the phone’s Settings does not open on who is signed in')
     assert.match(top, /setPage\('account'\)/, 'the phone’s account card does not open the account')
     assert.match(phone, /`\$\{what\} · v\$\{APP_VERSION\}`/, 'the version left the top of the phone’s Settings')
@@ -7816,7 +7832,7 @@ export function run(test) {
      * Auto"; changed on purpose, so a reviewer looking for it finds it.
      */
     assert.match(pasted, /Appearance\. On iPhone, Auto \(Settings, under Play screen\), which is the\s+default, now follows the phone's own light or dark setting\./, 'the 1.87.11 notes do not say Auto now follows the iPhone’s light or dark setting, or where Auto is')
-    assert.match(read('mobile/src/screens/Settings.js').replace(/\s+/g, ' '), /<Group title="Play screen">[\s\S]{0,600}<Appearance \/>/, 'Auto is no longer under Play screen in Settings, and the notes say it is')
+    assert.match(read('mobile/src/screens/Settings.js').replace(/\s+/g, ' '), /<Group title="Play screen"[^>]*>[\s\S]{0,600}<Appearance \/>/, 'Auto is no longer under Play screen in Settings, and the notes say it is')
     assert.ok(whatsNew.split('\n').some((l) => /^• On iPhone, Appearance set to Auto now follows your phone's light or dark setting\.$/.test(l)), 'What’s New does not say Auto follows the iPhone')
     assert.ok(!/Appearance|On iPhone/.test(play), 'the Play release notes carry the iPhone-only Appearance line')
 
@@ -8930,7 +8946,7 @@ export function run(test) {
     const about = settings.slice(settings.indexOf("{page === 'about' ?"))
     assert.ok(/title="Updates"/.test(about), 'Updates is not inside About')
     assert.ok(!/title="Troubleshooting"/.test(about), 'Troubleshooting is still buried inside About')
-    const help = front.slice(front.indexOf('<Group title="Help">'), front.indexOf('<Group title="About">'))
+    const help = front.slice(front.indexOf('<Group title="Help"'), front.indexOf('<Group title="About"'))
     assert.ok(/title="Troubleshooting"/.test(help) && /title=\{REPLAY\}/.test(help), 'Troubleshooting or the walkthrough is not under Help')
   })
 
@@ -13256,7 +13272,7 @@ export function run(test) {
        about how the thing on the stand looks. */
     const settings = read('mobile/src/screens/Settings.js')
     /* On the front of Settings now, under Play screen: one tap, not a page. */
-    assert.match(settings, /<Group title="Play screen">[\s\S]{0,600}<Appearance \/>/, 'there is nowhere to choose a theme')
+    assert.match(settings, /<Group title="Play screen"[^>]*>[\s\S]{0,600}<Appearance \/>/, 'there is nowhere to choose a theme')
     assert.match(settings, /setMode\(m, sync\)/, 'choosing a theme does not remember it')
 
     theme.setMode('auto')
@@ -19663,7 +19679,7 @@ export function run(test) {
   test('Settings has a Colours row under Play screen, and the page it opens', () => {
     const settings = read('mobile/src/screens/Settings.js')
     const front = settings.slice(settings.indexOf('{page === null ? ('), settings.indexOf("{page === 'account' ? ("))
-    const play = front.slice(front.indexOf('<Group title="Play screen">'))
+    const play = front.slice(front.indexOf('<Group title="Play screen"'))
     /* Between Tiles & scenes and the Auto / Light / Dark buttons, as the plan put it. */
     assert.match(
       play,

@@ -1139,7 +1139,7 @@ export function run(test) {
       assert.ok(page.includes(line), `the Bluetooth page no longer says ${line}, which the email’s “more lag and does less, with no editing or saving” stands on`)
     }
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
-    assert.ok(settings.indexOf('<SetupRow title="Bluetooth"') > settings.indexOf('<Group title="My rig">'), 'the email sends them to Settings → My rig → Bluetooth, which is not there')
+    assert.ok(settings.indexOf('<SetupRow title="Bluetooth"') > settings.indexOf('<Group title="My rig"'), 'the email sends them to Settings → My rig → Bluetooth, which is not there')
   })
 
   test('the way it goes on is written down: only for the build that opens it, in both stores, and Justin reads the sample before a customer gets one', () => {

@@ -1114,7 +1114,7 @@ export function run(test) {
     assert.ok(page.includes("'Footswitch changes may take a moment to show.'"), 'the Bluetooth page no longer says footswitch changes come late; the line’s “more lag” stands on it')
     /* Where it sends them is a row that is there: Bluetooth, under My rig. */
     const settings = flat('mobile/src/screens/Settings.js')
-    const rig = settings.indexOf('<Group title="My rig">')
+    const rig = settings.indexOf('<Group title="My rig"')
     const row = settings.indexOf('<SetupRow title="Bluetooth"')
     assert.ok(rig > 0 && row > rig && row < settings.indexOf('<Group title=', rig + 1), 'Settings has no Bluetooth row under My rig, where the line sends them')
     /* Plain, for every device and both stores: no phone named, no other platform, and nothing official. */
