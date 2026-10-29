@@ -6,7 +6,7 @@ import { DEFAULT_PROJECT } from './project'
 import { APP_VERSION } from './version'
 import { logDebug } from './debugLog'
 import { getState as rigState, subscribeRig } from './rig'
-import { adapterName, bluetoothPhase, bluetoothSettings, subscribeBluetooth, unitName } from './bluetooth'
+import { adapterName, bluetoothFacts, bluetoothPhase, bluetoothSettings, subscribeBluetooth, unitName } from './bluetooth'
 import { linkState, linkVia, subscribeLink } from './link'
 import { deviceFacts } from './thisDevice'
 
@@ -95,7 +95,9 @@ function factsNow() {
     bluetooth: {
       phase: bluetoothPhase(),
       unit: saved.unit ? unitName(saved.unit) : null,
-      adapter: saved.adapter ? adapterName(saved.adapter) || '' : null
+      adapter: saved.adapter ? adapterName(saved.adapter) || '' : null,
+      /* A unit other than the one picked, when one answered instead (lib/bluetooth): then nothing is a note. */
+      answeredAs: bluetoothFacts().answeredAs
     },
     phone: deviceFacts(),
     appVersion: APP_VERSION

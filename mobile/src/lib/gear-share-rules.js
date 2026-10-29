@@ -192,7 +192,8 @@ export function sentFrom(raw, now = Date.now()) {
  *   link       lib/link.js state: `link`, `hostVersion` (and `hostOs` if the
  *              computer app ever says it)
  *   bluetooth  { phase, unit: the unit's name picked on the Bluetooth page,
- *              adapter: the adapter's name or '' }
+ *              adapter: the adapter's name or '', answeredAs: the unit that
+ *              answered instead of it, or null }
  *   phone      { os, osVersion, model }, appVersion
  *
  * The demo is never a note: nothing real connected. Through a computer, only
@@ -223,6 +224,14 @@ export function noteFacts({ rig = {}, via, link = {}, bluetooth = {}, phone = {}
     }
   }
   if (bluetooth.phase !== 'connected') return null
+  /*
+   * A DIFFERENT UNIT ANSWERED: a mix-up, not a result for either unit. His
+   * own first note was "AM4 · bluetooth · not answering" (29 October 2026)
+   * from the WIDI Uhost plugged into his FM3, with the AM4 picked and the
+   * page saying "An FM3 answered, not the AM4": true of nothing. The page
+   * says how to fix it, and the note waits for the right unit.
+   */
+  if (bluetooth.answeredAs) return null
   const adapter = bluetooth.adapter || null
   if (rig.unit === 'present') {
     return { ...base, outcome: 'answered', unit: rig.deviceName || bluetooth.unit, firmware: rig.firmware, adapter }
