@@ -4028,10 +4028,15 @@ export function run(test) {
      * full version from 1.89.0, and his alone before it.
      */
     assert.match(words, /Bluetooth lets the phone talk to your unit through a Bluetooth MIDI adapter, with no computer\. From version 1\.89\.0 it is in the app for everyone with the full version; earlier versions show it only on the developer's own account\./, 'the policy does not say who Bluetooth is open to, and from which version')
-    /* The one-tap report, and what its log's head says (docs/app-store.md, 1.89.0 step 12). */
-    assert.match(words, /Report a Bluetooth problem ?, on the Bluetooth page[^.]*sends a bug report at once when you tap one of its answers/, 'the policy does not cover the one-tap Bluetooth report')
-    assert.match(words, /While the app is on Bluetooth, and on any report sent from Report a Bluetooth problem, those lines also say the unit picked/, 'the policy does not say what a Bluetooth report’s log head carries')
-    assert.match(words, /The last fault the screen showed with the log only never/, 'the policy’s table does not say the last fault goes only with the log')
+    /*
+     * The Bluetooth report, and what its log's head says (docs/app-store.md,
+     * 1.89.0 step 12). Since 29 October 2026 it opens the one report form,
+     * where nothing goes until Send, in place of the one-tap answers.
+     */
+    assert.match(words, /Report a Bluetooth problem ?, on the Bluetooth page[^.]*opens the same form\. Nothing goes until you press Send/, 'the policy does not cover the Bluetooth report')
+    assert.doesNotMatch(words, /when you tap one of its answers/, 'the policy still describes the one-tap Bluetooth answers')
+    assert.match(words, /While the app is on Bluetooth, and on any report opened from Report a Bluetooth problem, those lines also say the unit picked/, 'the policy does not say what a Bluetooth report’s log head carries')
+    assert.match(words, /The last fault the screen showed with the log only with the log only never/, 'the policy’s table does not say the last fault goes only with the log')
     assert.match(words, /There is one gap: the first time version 1\.87\.1 opens after it is installed or updated, before its first update has arrived, an account with the full version can still see a Bluetooth card under Settings → Phone &amp; computer\. It goes once the app has downloaded that update, usually from the next time it is opened\. Version 1\.87\.11 and later do not show it at all\. Nothing is asked for unless Connect is tapped on the Bluetooth page\./, 'the policy does not name the first-launch gap of the 1.87.1 builds, that 1.87.11 closes it, or when anything is asked for')
     assert.ok(!/does not show it to anyone else|never asks anyone else/.test(words), 'the policy says nobody else is ever shown Bluetooth or asked, and a fresh 1.87.1 install can show it on its first launch')
     assert.equal(JSON.parse(read('mobile/app.json')).expo.updates.fallbackToCacheTimeout, 0, 'the app now waits for its update before opening; the first-launch gap the policy names may be gone')
