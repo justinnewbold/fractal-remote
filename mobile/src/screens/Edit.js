@@ -23,6 +23,7 @@ import {
 } from '../lib/device'
 import { vp4Here } from '../lib/device'
 import { overBluetooth } from '../lib/bleSwitch'
+import { bleEditNoteSeen, editBetaNoteSeen, markBleEditNote, markEditBetaNote } from '../lib/coach'
 import { VP4_NO_EDITS, VP4_NO_KNOBS } from '../lib/vp4-safety'
 import {
   CAB_REFUSED,
@@ -188,6 +189,29 @@ export default function Edit({ onBack, onOpenGear }) {
   const pending = !!unsaved && unsaved.number === preset?.number
   /* Over Bluetooth: knobs, models and on/off, and no Save (rig.noteEdited marks nothing there). See BLE_NOTE. */
   const viaBle = overBluetooth(caps)
+  /* Up until its cross is pressed, once per device; hidden until storage has answered, so it never flashes up for somebody who put it away. */
+  const [bleNoteUp, setBleNoteUp] = useState(false)
+  useEffect(() => {
+    if (!viaBle) return undefined
+    let alive = true
+    bleEditNoteSeen().then((seen) => {
+      if (alive && !seen) setBleNoteUp(true)
+    })
+    return () => {
+      alive = false
+    }
+  }, [viaBle])
+  /* The beta note at the foot, the same way. */
+  const [betaNoteUp, setBetaNoteUp] = useState(false)
+  useEffect(() => {
+    let alive = true
+    editBetaNoteSeen().then((seen) => {
+      if (alive && !seen) setBetaNoteUp(true)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const [openEid, setOpenEid] = useState(null)
   const [error, setError] = useState(null)
@@ -360,7 +384,16 @@ export default function Edit({ onBack, onOpenGear }) {
 
       <SaveNotes s={saveTo} />
 
-      {viaBle ? <Note>{BLE_NOTE}</Note> : null}
+      {viaBle && bleNoteUp ? (
+        <Note
+          onDismiss={() => {
+            setBleNoteUp(false)
+            markBleEditNote()
+          }}
+        >
+          {BLE_NOTE}
+        </Note>
+      ) : null}
 
       {error ? (
         <Note tone="fault" onDismiss={() => setError(null)}>
@@ -547,8 +580,18 @@ export default function Edit({ onBack, onOpenGear }) {
       */}
       {chainNow.elsewhere || viaBle ? null : <RenameDoor />}
 
-      {/* Last on the page, under everything it is about. */}
-      <Note tone="warn">{BETA_NOTE}</Note>
+      {/* Last on the page, under everything it is about, until its cross is pressed. */}
+      {betaNoteUp ? (
+        <Note
+          tone="warn"
+          onDismiss={() => {
+            setBetaNoteUp(false)
+            markEditBetaNote()
+          }}
+        >
+          {BETA_NOTE}
+        </Note>
+      ) : null}
     </ScrollView>
   )
 }
