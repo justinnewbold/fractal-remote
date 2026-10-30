@@ -3544,7 +3544,7 @@ export function run(test) {
     const KNOWN = [
       ['src/lib/bluetooth.js', /in Android’s settings/, 'ALLOW_WORDS: the iPhone line is picked first, on Platform.OS'],
       ['src/lib/bluetooth-gear.js', /from an iPhone and an Android phone\./, 'BETA_NOTE_ANDROID: betaNote picks it only for Android'],
-      ['src/screens/Bluetooth.js', /If Android asks to pair with it, accept\./, 'the Connect hint, behind ios ? … :'],
+      ['src/screens/Bluetooth.js', /If Android asks to pair, accept\./, 'the Connect hint, behind ios ? … :'],
       ['src/screens/Bluetooth.js', /Android needs Nearby devices allowed for Fractal Remote/, 'the Troubleshooting step, behind ios ? … :'],
       ['src/screens/Settings.js', /^Google account$/, 'Delete account: Apple ID on an iPhone'],
       ['src/lib/purchases.js', /^Google account$/, 'storeAccount, in Restore’s and Buy’s words: Apple ID on an iPhone'],
@@ -3587,7 +3587,7 @@ export function run(test) {
     /* And each reason on the list, checked rather than trusted. */
     const flat = (f) => withoutComments(read(f)).replace(/\s+/g, ' ')
     assert.match(flat('mobile/src/lib/bluetooth.js'), /export const ALLOW_WORDS = Platform\.OS === 'ios' \? 'Bluetooth isn’t allowed[^']*' : OLD_ANDROID/)
-    assert.match(flat('mobile/src/screens/Bluetooth.js'), /: ios \? `Apple’s Bluetooth screen opens\.[^`]*` : `The \$\{deviceNoun\(\)\} looks for the adapter for ten seconds, then connects to it\. If Android asks/)
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /: ios \? 'In Apple’s screen, tap your adapter[^']*' : `The \$\{deviceNoun\(\)\} looks for the adapter for ten seconds, then connects to it\. If Android asks/)
     assert.match(flat('mobile/src/screens/Settings.js'), /const mine = Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'/)
     assert.match(flat('mobile/src/lib/purchases.js'), /const storeAccount = \(\) => \(Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'\)/)
     assert.match(flat('mobile/src/lib/cloudSetlists.js'), /export const deviceName = \(\) => \(Platform\.OS === 'ios' \? 'iPhone' : 'Android'\)/)
@@ -3618,8 +3618,11 @@ export function run(test) {
       }
       assert.ok(!/from '(\.\.\/lib|\.)\/ways-in'/.test(code), `${name} imports the browser's routes, which name Google Play`)
     }
-    for (const [tool, page] of [['AccessTool', 'access'], ['SalesTool', 'sales'], ['UsageTool', 'usage'], ['LiveTool', 'live'], ['MessagesTool', 'messages'], ['AccountsTool', 'accounts'], ['StuckTool', 'stuck']]) {
-      assert.match(settings, new RegExp(`\\{page === '${page}' && isAdmin\\(account\\?\\.id\\) \\? \\( <> \\{head\\([^)]*\\)\\} <${tool} \\/>`), `${tool} is drawn for somebody other than Justin`)
+    /* Four Developer rows since 30 October 2026 ("so many different menus"): each tool inside the page that groups it, behind his account. */
+    for (const [tool, page] of [['AccessTool', 'customers'], ['SalesTool', 'customers'], ['UsageTool', 'customers'], ['LiveTool', 'health'], ['MessagesTool', 'messages'], ['AccountsTool', 'customers'], ['StuckTool', 'customers'], ['WhatWorksTool', 'health']]) {
+      const at = settings.indexOf(`<${tool} `)
+      const gate = settings.lastIndexOf('{page === ', at)
+      assert.ok(at > 0 && settings.startsWith(`{page === '${page}' && isAdmin(account?.id) ? (`, gate), `${tool} is drawn for somebody other than Justin`)
       assert.equal(settings.split(`<${tool} `).length - 1, 1, `${tool} is drawn in a second place`)
     }
   })
@@ -3765,7 +3768,7 @@ export function run(test) {
     }
     /* The phone's tip says which row to tap in the iPhone's Watch app, so it names the watch as the watch is named, whichever that is. */
     const keep = readFileSync(new URL('mobile/src/screens/Settings.js', root), 'utf8')
-    assert.ok(keep.includes(`Scroll down, tap ${watchName},`) || keep.includes(`Scroll down, tap ${watchName} (`), `the watch tips do not say "tap ${watchName}", the watch’s name`)
+    assert.ok(keep.includes(`Return to Clock → ${watchName} →`), `the watch tips do not name the row "${watchName}", the watch’s name`)
   })
 
   test('every patch waiting for a build still applies, and the list says what each one moves', () => {
@@ -5091,7 +5094,7 @@ export function run(test) {
     assert.match(sql, /revoke all on function public\.account_for_email\(text\) from public, anon, authenticated/, 'a client can look up whether an email has an account')
 
     /* Both ends draw the page only for him. */
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'access' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'customers' && isAdmin\(account\?\.id\) \?[\s\S]*?<AccessTool \/>/)
     assert.match(read('src/App.jsx'), /\{setupPage === 'access' && isAdmin\(link\.account\?\.id\) \?/)
 
     /* And the call never throws, whatever the line does. */
@@ -6394,7 +6397,7 @@ export function run(test) {
     assert.match(body, /return \{ lastSignIn: d\.last_sign_in \?\? null, devices, seen \}/, 'the usage answer carries more than counts need')
 
     /* Both ends draw it only for him, from the Developer page. */
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'usage' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'customers' && isAdmin\(account\?\.id\) \?[\s\S]*?<UsageTool \/>/)
     assert.match(read('src/App.jsx'), /\{setupPage === 'usage' && isAdmin\(link\.account\?\.id\) \?/)
     assert.match(read('mobile/src/components/UsageTool.js'), /action: 'usage'/)
     assert.match(read('src/components/UsageTool.jsx'), /action: 'usage'/)
@@ -6549,7 +6552,7 @@ export function run(test) {
     for (const fn of ['account_details(text)', 'owner_overview()']) {
       assert.ok(sql.includes(`revoke all on function public.${fn} from public, anon, authenticated`), `a client can call ${fn}`)
     }
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'sales' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'customers' && isAdmin\(account\?\.id\) \?[\s\S]*?<SalesTool \/>/)
     assert.match(read('src/App.jsx'), /\{setupPage === 'sales' && isAdmin\(link\.account\?\.id\) \?/)
 
     /*
@@ -6639,7 +6642,7 @@ export function run(test) {
     assert.match(server, /if \(action === 'accounts'\) return json\(\{ ok: true, \.\.\.\(\(await rpc\('owner_accounts', \{\}\)\)/)
     assert.ok(server.indexOf("action === 'accounts'") > server.indexOf('ADMINS.includes(me.id)'), 'the list is read before checking who is asking')
     assert.match(read('supabase/migrations/20260924_owner_accounts.sql'), /revoke all on function public\.owner_accounts\(\) from public, anon, authenticated/, 'a client can read every account')
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'accounts' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'customers' && isAdmin\(account\?\.id\) \?[\s\S]*?<AccountsTool \/>/)
     assert.match(read('src/App.jsx'), /\{setupPage === 'accounts' && isAdmin\(link\.account\?\.id\) \?/)
   })
 
@@ -7865,7 +7868,7 @@ export function run(test) {
      * behind their own check as well, should the page ever open to more.
      */
     assert.ok(!/Testing tools|diagnostic panel/.test(pasted), 'the 1.87.11 notes describe tools on a page the reviewer cannot open')
-    assert.match(read('mobile/src/screens/Settings.js').replace(/\s+/g, ' '), /\{page === 'bt-tools' && bluetoothOffered && isAdmin\(account\?\.id\) \? \(/, 'the Bluetooth testing tools are shown without asking whose account it is')
+    assert.match(read('mobile/src/screens/Settings.js').replace(/\s+/g, ' '), /\{page === 'testing' && isAdmin\(account\?\.id\) \? \([^]*?\{bluetoothOffered \? \( <> <Section>Bluetooth check<\/Section> <BluetoothTools \/>/, 'the Bluetooth testing tools are shown without asking whose account it is')
 
     /* Nothing left in the section asks for a Bluetooth video before pasting. */
     assert.ok(!section.includes('- **The video.**'), 'the 1.87.11 section still asks for a Bluetooth video')
@@ -8385,7 +8388,7 @@ export function run(test) {
     assert.match(arrange, /sceneColor\(scene\)/, 'the tiles are not in the colours Play gives them')
     const settings = read('mobile/src/screens/Settings.js')
     assert.match(settings, /\{layout === 'mine' \? <ArrangeScenes onScrollLock=\{onScrollLock\} \/> : null\}/, 'the grid is not offered with your own order')
-    assert.match(settings, /Tap a scene, then tap the one to swap it with\. Or drag one onto another\. This order is used for every preset\./, 'the phone does not say how')
+    assert.match(settings, /Tap two scenes to swap them, or drag one onto another\. Used for every preset\./, 'the phone does not say how')
     assert.match(settings, /label="Put them back in order" onPress=\{\(\) => saveSceneOrder\(\[0, 1, 2, 3, 4, 5, 6, 7\], sync\)\}/, 'the phone cannot put them back')
     assert.match(settings, /scrollEnabled=\{!held\}/, 'the page scrolls under a dragged scene')
     assert.match(settings, /<TileSize onScrollLock=\{setHeld\} \/>/, 'the page is never told a scene is held')
@@ -8988,7 +8991,7 @@ export function run(test) {
      */
     assert.match(shown, /web browser/, 'the instructions do not say to use the browser')
     assert.match(shown, /menu bar/, 'nothing says where to find the address')
-    assert.match(shown, /kept by that browser rather than in your account/, 'nothing says where those settings live')
+    assert.match(shown, /stay in that browser, not in your account/, 'nothing says where those settings live')
 
     /* The claim the phone app can do it itself stays false, so it stays unmade. */
     for (const src of ['mobile/src/lib/relay.js', 'mobile/src/lib/rig.js', 'mobile/src/lib/device.js']) {
@@ -12778,7 +12781,7 @@ export function run(test) {
        simulated FM3 is their FM3. */
     /* It names whichever unit it is being, which is the whole point of
        offering five of them. */
-    assert.match(settings, /This is the demo — a simulated \$\{/, 'the demo does not say it is one')
+    assert.match(settings, /This is the demo: a simulated \$\{/, 'the demo does not say it is one')
     /* Named off the SUBSCRIPTION rather than a plain read. It was
        `demoUnit()`, which cannot be told it has gone stale, so this sentence
        went on naming the unit the app started as after somebody had picked
@@ -13816,8 +13819,10 @@ export function run(test) {
        red line on the computer card opens, is a child of Phone & computer
        beside 'offline'. And on 15 October 2026, 'stuck', Paid but no computer
        yet, a child of Developer like the other tools. And on 26 October 2026,
-       'works', What works (the gear notes), a child of Developer too. */
-    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'bt-tools': 'developer', works: 'developer' \}/, 'a page goes back somewhere it did not come from')
+       'works', What works (the gear notes), a child of Developer too. And on
+       30 October 2026 Developer's ten became four: Messages from users and
+       the three pages that group the rest, all children of Developer. */
+    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', messages: 'developer', customers: 'developer', health: 'developer', testing: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')

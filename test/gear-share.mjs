@@ -283,10 +283,12 @@ export function run(test) {
   test('What works is on the Developer pages for his account alone, and the server checks before it reads', async () => {
     const { ADMINS } = await import('../shared/admin.mjs')
     const settings = read('mobile/src/screens/Settings.js')
-    assert.match(settings, /\{page === 'works' && isAdmin\(account\?\.id\) \?/, 'What works is drawn for anybody')
+    /* Under Developer → App health since 30 October 2026, when ten Developer rows became four. */
+    assert.match(settings, /\{page === 'health' && isAdmin\(account\?\.id\) \?[^]*?\{devTab\.health === 'works' \? <WhatWorksTool \/> : null\}/, 'What works is drawn for anybody')
     const developer = settings.slice(settings.indexOf("{page === 'developer' && isAdmin(account?.id) ? ("), settings.indexOf('{/* ------------------------------------------------------ appearance */}'))
-    assert.match(developer, /title="What works"[^\n]*setPage\('works'\)/, 'the row is not on the Developer page')
-    assert.match(settings, /works: 'developer'/, 'Back from What works does not go to Developer')
+    assert.match(developer, /title="App health"[^\n]*setPage\('health'\)/, 'the row is not on the Developer page')
+    assert.match(settings, /\{ key: 'works', label: 'What works' \}/, 'App health has no What works button')
+    assert.match(settings, /health: 'developer'/, 'Back from App health does not go to Developer')
 
     const fn = read('supabase/functions/gear-reports/index.ts')
     assert.deepEqual(JSON.parse((fn.match(/const ADMINS = (\[[^\]]*\])/) || [])[1]?.replace(/'/g, '"') || 'null'), ADMINS, 'the gear server and the apps disagree about whose tools these are')

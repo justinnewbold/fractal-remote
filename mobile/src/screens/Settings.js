@@ -391,6 +391,8 @@ export default function Settings({
   const throughAdapter = bluetooth && !demo
 
   const [page, setPage] = useState(startPage)
+  /* Which tool each Developer page has open, kept while Settings is open. */
+  const [devTab, setDevTab] = useState({ customers: 'sales', health: 'live' })
   useEffect(() => {
     onPage?.(page)
   }, [page, onPage])
@@ -479,7 +481,7 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'bt-tools': 'developer', works: 'developer' }
+  const PARENT = { offline: 'link', updating: 'link', messages: 'developer', customers: 'developer', health: 'developer', testing: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth' }
   const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, developer: '‹ Developer', bluetooth: '‹ Bluetooth' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
@@ -693,7 +695,7 @@ export default function Settings({
               menu called developer". */}
           {isAdmin(account?.id) ? (
             <Group title="Developer" hint="Your own tools">
-              <SetupRow title="Developer" status="Access, sales, accounts, messages, what's live" onPress={() => setPage('developer')} />
+              <SetupRow title="Developer" status="Messages, customers, app health, testing" onPress={() => setPage('developer')} />
             </Group>
           ) : null}
 
@@ -809,9 +811,8 @@ export default function Settings({
 
           <Sheet open={deleting} onClose={() => (busy ? null : setDeleting(false))} title="Delete account" note={account?.email || ''}>
             <Text style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
-              This deletes your account for good: your sign-in, your set lists, bug reports you sent from it and
-              everything else stored under it. It happens straight away and cannot be undone. Any computer signed in
-              to this account is signed out.
+              This deletes your account and everything saved in it, straight away. It can’t be undone, and any
+              computer signed in to it is signed out.
             </Text>
             {/*
               TRUE ONLY OF A STORE PURCHASE, and it was said to everybody.
@@ -903,28 +904,66 @@ export default function Settings({
       ) : null}
 
       {/* ------------------------------------------------------ developer */}
+      {/*
+        FOUR ROWS, NOT TEN. "Can we consolidate any of this developer stuff?
+        It's kind of confusing and a lot to have so many different menus"
+        (Justin, 30 October 2026). There were ten rows, each to a page of its
+        own. Now Messages from users keeps its own row, being the one opened
+        most, and the rest are three pages, each with its tools in a row of
+        buttons across the top (DevTabs): Customers (sales, how many people,
+        accounts, paid but no computer, giving access), App health (what's
+        live, what works) and Testing (view as a new customer, and the
+        Bluetooth check). Every tool is the same one it was, opened the same
+        way, on his account alone.
+      */}
       {page === 'developer' && isAdmin(account?.id) ? (
         <>
           {head('Developer', 'back')}
           <View style={{ gap: 0 }}>
-            <SetupRow title="Give someone access" status="Look someone up, or unlock them" onPress={() => setPage('access')} />
-            <SetupRow title="Sales at a glance" status="Today, this week, all time" onPress={() => setPage('sales')} />
-            <SetupRow title="How many people" status="Who used it today, this week, this month" onPress={() => setPage('usage')} />
-            <SetupRow title="Everyone with an account" status="Who has signed up" onPress={() => setPage('accounts')} />
-            <SetupRow title="Paid but no computer yet" status="Bought it, never set up the computer" onPress={() => setPage('stuck')} />
             <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
-            {/* The gear notes from everybody who said Yes to "Help make Fractal Remote better?" (26 October 2026). */}
-            <SetupRow title="What works" status="Which units, computers and adapters connected" onPress={() => setPage('works')} />
-            <SetupRow title="What's live" status="Which version each piece is on" onPress={() => setPage('live')} />
-            {bluetoothOffered ? <SetupRow title="Bluetooth testing tools" status="The check, and how each command is sent" onPress={() => setPage('bt-tools')} /> : null}
-            {onViewAsCustomer ? (
-              <SetupRow
-                title="View as a new customer"
-                status="The walkthrough and the paywall, as a stranger sees them"
-                onPress={onViewAsCustomer}
-              />
-            ) : null}
+            <SetupRow title="Customers" status="Sales, sign-ups, and giving access" onPress={() => setPage('customers')} />
+            <SetupRow title="App health" status="What's live, and what works" onPress={() => setPage('health')} />
+            <SetupRow title="Testing" status="View as a new customer, Bluetooth check" onPress={() => setPage('testing')} />
           </View>
+        </>
+      ) : null}
+
+      {page === 'customers' && isAdmin(account?.id) ? (
+        <>
+          {head('Customers', 'back')}
+          <DevTabs tabs={CUSTOMER_TABS} on={devTab.customers} onPick={(t) => setDevTab({ ...devTab, customers: t })} />
+          {devTab.customers === 'sales' ? <SalesTool /> : null}
+          {devTab.customers === 'usage' ? <UsageTool /> : null}
+          {devTab.customers === 'accounts' ? <AccountsTool /> : null}
+          {/* "A 'paid but stuck' list on your Developer page" (15 October 2026). */}
+          {devTab.customers === 'stuck' ? <StuckTool /> : null}
+          {devTab.customers === 'access' ? <AccessTool /> : null}
+        </>
+      ) : null}
+
+      {page === 'health' && isAdmin(account?.id) ? (
+        <>
+          {head('App health', 'back')}
+          <DevTabs tabs={HEALTH_TABS} on={devTab.health} onPick={(t) => setDevTab({ ...devTab, health: t })} />
+          {devTab.health === 'live' ? <LiveTool /> : null}
+          {/* The gear notes from everybody who said Yes to "Help make Fractal Remote better?" (26 October 2026). */}
+          {devTab.health === 'works' ? <WhatWorksTool /> : null}
+        </>
+      ) : null}
+
+      {page === 'testing' && isAdmin(account?.id) ? (
+        <>
+          {head('Testing', 'back')}
+          {onViewAsCustomer ? (
+            <Press label="View as a new customer" sub="The walkthrough and the paywall, as a stranger sees them" height={52} onPress={onViewAsCustomer} />
+          ) : null}
+          {/* Its testing tools, moved off the Bluetooth page onto the Developer pages: his account's alone, as they always were. */}
+          {bluetoothOffered ? (
+            <>
+              <Section>Bluetooth check</Section>
+              <BluetoothTools />
+            </>
+          ) : null}
         </>
       ) : null}
 
@@ -959,8 +998,7 @@ export default function Settings({
         <>
           {head('Troubleshooting', 'back')}
           <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 20 }}>
-            In order: try the fixes, read the log if they did not help, then tell us and the log
-            goes with it.
+            Try Fixes first, then the Log, then Feedback.
           </Text>
           <View style={{ gap: 0 }}>
             {onOpenFixes ? (
@@ -1113,10 +1151,8 @@ export default function Settings({
                 */}
                 <Note tone="warn">
                   {unit === 'vp4'
-                    ? `${demoSentence(unit)} It also answers instantly, so anything still slow in here is this app rather than the line to a computer.`
-                    : `This is the demo — a simulated ${
-                        DEMO_UNITS.find((u) => u.key === unit)?.name || 'FM3'
-                      }. Every screen works and nothing reaches hardware. It also answers instantly, so anything still slow in here is this app rather than the line to a computer.`}
+                    ? demoSentence(unit)
+                    : `This is the demo: a simulated ${DEMO_UNITS.find((u) => u.key === unit)?.name || 'FM3'}. Nothing here reaches real hardware.`}
                 </Note>
                 {/*
                   Which unit, because the demo was an FM3 and only an FM3 —
@@ -1182,8 +1218,8 @@ export default function Settings({
             {link === 'no-answer' && elsewhere ? (
               <Note tone="fault">
                 {account?.email && !isPairAccount(account.email)
-                  ? `The computer on this wifi is signed into a different account. This ${deviceNoun()} is signed in as ${account.email}. On the computer, sign in to the Fractal Remote app with ${account.email}, or sign this ${deviceNoun()} out below and into the computer’s account.`
-                  : `The computer on this wifi is signed into a different account than this ${deviceNoun()}. Sign both into the same account.`}
+                  ? `The computer on this wifi is on a different account. Sign it in with ${account.email}, or sign this ${deviceNoun()} into its account.`
+                  : `The computer on this wifi is on a different account than this ${deviceNoun()}. Sign both into the same one.`}
               </Note>
             ) : noneSaid ? (
               <Note tone="warn">
@@ -1191,8 +1227,7 @@ export default function Settings({
               </Note>
             ) : link === 'no-answer' ? (
               <Note tone="warn">
-                Open the Fractal Remote app on the computer and make sure the computer is awake. This keeps trying on
-                its own.
+                Open Fractal Remote on the computer, and check the computer is awake.
               </Note>
             ) : null}
             {/* And the download link to their inbox, under those words and
@@ -1366,13 +1401,6 @@ export default function Settings({
           <BluetoothLimits />
         </>
       ) : null}
-      {/* Its testing tools, moved off the page onto the Developer pages: his account's alone, as they always were. */}
-      {page === 'bt-tools' && bluetoothOffered && isAdmin(account?.id) ? (
-        <>
-          {head('Bluetooth testing tools', 'back')}
-          <BluetoothTools />
-        </>
-      ) : null}
 
       {/* ------------------------------------------------------- metronome */}
       {page === 'metronome' ? (
@@ -1402,8 +1430,8 @@ export default function Settings({
             ))}
             {clickSaid ? <Note tone="fault">{clickSaid}</Note> : null}
             <Note tone="hint">
-              {`It keeps the unit’s tempo${Number.isFinite(rigBpm) ? `, ${Math.round(rigBpm)} BPM right now` : ''}: tap tempo changes it. ${
-                unitCan.can ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.' : unitCan.why
+              {`Follows the unit’s tempo${Number.isFinite(rigBpm) ? ` (${Math.round(rigBpm)} BPM now)` : ''}. ${
+                unitCan.can ? 'The unit’s own click is the steadiest one to play to.' : unitCan.why
               }${
                 unitCan.can && clickSetting.on && clickSetting.where === 'unit' && !clickHeard
                   ? ` Until the unit says its click is on, the ${deviceNoun()} keeps time as well.`
@@ -1436,7 +1464,7 @@ export default function Settings({
                   />
                 </View>
                 <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
-                  {`${flashTimingNote(flashTiming, Platform.OS)}. If the flash comes before the click, tap Later; if it comes after, tap Earlier. Through a Bluetooth speaker or headphones it usually needs Later several times.`}
+                  {`${flashTimingNote(flashTiming, Platform.OS)}. Flash before the click? Tap Later. After it? Tap Earlier. Bluetooth headphones usually need Later a few times.`}
                 </Text>
                 {flashTiming !== 0 ? <Press label="Back to standard" onPress={() => setFlashTiming(0)} /> : null}
               </>
@@ -1469,68 +1497,11 @@ export default function Settings({
         </>
       ) : null}
 
-      {/* ---------------------------------------------------------- access */}
-      {page === 'access' && isAdmin(account?.id) ? (
-        <>
-          {head('Give someone access', 'back')}
-          <AccessTool />
-        </>
-      ) : null}
-
-      {/* ----------------------------------------------------------- sales */}
-      {page === 'sales' && isAdmin(account?.id) ? (
-        <>
-          {head('Sales at a glance', 'back')}
-          <SalesTool />
-        </>
-      ) : null}
-
-      {/* ----------------------------------------------------------- usage */}
-      {page === 'usage' && isAdmin(account?.id) ? (
-        <>
-          {head('How many people', 'back')}
-          <UsageTool />
-        </>
-      ) : null}
-
-      {/* ------------------------------------------------------------ live */}
-      {page === 'live' && isAdmin(account?.id) ? (
-        <>
-          {head("What's live", 'back')}
-          <LiveTool />
-        </>
-      ) : null}
-
       {/* -------------------------------------------------------- messages */}
       {page === 'messages' && isAdmin(account?.id) ? (
         <>
           {head('Messages from users', 'back')}
           <MessagesTool />
-        </>
-      ) : null}
-
-      {/* ----------------------------------------------------- what works */}
-      {page === 'works' && isAdmin(account?.id) ? (
-        <>
-          {head('What works', 'back')}
-          <WhatWorksTool />
-        </>
-      ) : null}
-
-      {/* -------------------------------------------------------- accounts */}
-      {page === 'accounts' && isAdmin(account?.id) ? (
-        <>
-          {head('Everyone with an account', 'back')}
-          <AccountsTool />
-        </>
-      ) : null}
-
-      {/* ----------------------------------------------------------- stuck */}
-      {/* "A 'paid but stuck' list on your Developer page" (15 October 2026). */}
-      {page === 'stuck' && isAdmin(account?.id) ? (
-        <>
-          {head('Paid but no computer yet', 'back')}
-          <StuckTool />
         </>
       ) : null}
 
@@ -1553,8 +1524,7 @@ export default function Settings({
         <>
           {head('Playing with no internet', 'back')}
           <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>
-            This app reaches your computer over the internet, so it needs a signal. For a room that
-            has none, there is another way round and it does not use this app.
+            {`No signal? Use the computer’s own page in the ${deviceNoun()}’s web browser instead.`}
           </Text>
           <View style={{ gap: space.md }}>
             <TipCard icon={sendIcon} label="1  SAME WIFI" body={`Put the ${deviceNoun()} on the same wifi as the computer.`} />
@@ -1571,15 +1541,14 @@ export default function Settings({
             <TipCard
               icon={setupIcon}
               label="OR TYPE THE ADDRESS"
-              body="The same address is in the computer’s menu bar (the system tray on Windows), next to the Fractal Remote icon, to type instead."
+              body="The address is also in the computer’s menu bar (the system tray on Windows), to type in."
             />
           </View>
           <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>
             You get the same screens, and no part of it goes near the internet.
           </Text>
           <Note size={font.body}>
-            What you change there is kept by that browser rather than in your account, so it does not
-            follow you to this app or to another phone or tablet.
+            Changes made there stay in that browser, not in your account.
           </Note>
         </>
       ) : null}
@@ -1646,8 +1615,7 @@ export default function Settings({
 
             <Section>What it does</Section>
             <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 24 }}>
-              Fractal Remote comes with an Apple Watch app. Switch scenes, turn pedals on and off, step through presets
-              and tune, all from your wrist, without reaching for the phone.
+              Switch scenes, turn pedals on and off, step through presets and tune, from your wrist.
             </Text>
 
             <Section>Setting it up</Section>
@@ -1827,9 +1795,9 @@ export default function Settings({
 /* How the watch app gets onto a watch. It comes with this app; nothing
    separate is bought or downloaded. */
 const WATCH_SETUP = [
-  'There is nothing separate to download. The watch app comes with Fractal Remote, and on most watches it installs by itself. On the watch it is called Fractal.',
-  'If it is not on your watch: open the Watch app on this iPhone, scroll down to Available Apps, and tap Install next to Fractal Remote.',
-  'It needs watchOS 10 or later, and the watch paired with this iPhone.'
+  'It comes with Fractal Remote, and usually installs by itself.',
+  'Not on your watch? In the Watch app on this iPhone, scroll to Available Apps and tap Install next to Fractal Remote.',
+  'Needs watchOS 10 or later.'
 ]
 
 /*
@@ -1840,10 +1808,34 @@ const WATCH_SETUP = [
  * help is telling him where they are.
  */
 const WATCH_KEEP = [
-  'On this iPhone, open the Watch app, then General, then Return to Clock. Scroll down, tap Fractal Remote, choose Custom, and set it to After 1 hour. The watch then comes back to Fractal Remote, not the clock, every time you raise your wrist.',
-  'In the same Watch app, under Display & Brightness, turn on Always On. Fractal Remote stays on screen, dimmed, while your wrist is down.',
-  'Also under Display & Brightness, set Wake Duration to Wake for 70 Seconds, so a tap on the screen keeps it bright for longer.'
+  'Watch app on this iPhone → General → Return to Clock → Fractal Remote → Custom → After 1 hour.',
+  'Watch app → Display & Brightness → turn on Always On.',
+  'Display & Brightness → Wake Duration → Wake for 70 Seconds.'
 ]
+
+/* The Developer pages' tools, in the order their buttons go across the top. */
+const CUSTOMER_TABS = [
+  { key: 'sales', label: 'Sales' },
+  { key: 'usage', label: 'People' },
+  { key: 'accounts', label: 'Accounts' },
+  { key: 'stuck', label: 'No computer' },
+  { key: 'access', label: 'Give access' }
+]
+const HEALTH_TABS = [
+  { key: 'live', label: "What's live" },
+  { key: 'works', label: 'What works' }
+]
+
+/* A row of buttons across the top of a Developer page, one per tool: the one open is lit. */
+function DevTabs({ tabs, on, onPick }) {
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+      {tabs.map((t) => (
+        <Press key={t.key} label={t.label} tone="signal" on={t.key === on} height={40} style={{ paddingHorizontal: space.md }} onPress={() => onPick(t.key)} />
+      ))}
+    </View>
+  )
+}
 
 function SetupRow({ title, status, onPress }) {
   return (
@@ -1948,20 +1940,19 @@ function TileSize({ onScrollLock }) {
         />
       </View>
       <Note>
-        Bigger tiles are easier to hit without looking; smaller ones fit more of the rig on screen.
-        This device remembers it.
+        Bigger is easier to hit without looking; smaller fits more on screen.
       </Note>
       <Choice
         on={fit}
         label="Fit everything on one screen"
-        sub="Sizes the scenes and effects so the whole rig is on screen at once, with no scrolling. Bigger presets get smaller buttons, never under a thumb’s width. Overrides the size above while it is on."
+        sub="The whole rig on one screen, no scrolling. Overrides the size above."
         onPress={() => saveFit(!fit, sync)}
       />
       {/* "Is it something that could be turned on and off?" */}
       <Choice
         on={icons}
         label="Show effect pictures"
-        sub="A small picture on each effect in the chain — a flame for drive, a wave for chorus — above its letters. Off leaves the letters alone."
+        sub="A small picture on each effect, like a flame for drive."
         onPress={() => saveIcons(!icons, sync)}
       />
       {/*
@@ -2000,7 +1991,7 @@ function ArrangeScenes({ onScrollLock }) {
   return (
     <View style={{ gap: space.md }}>
       <Section>Arrange scenes</Section>
-      <Note>Tap a scene, then tap the one to swap it with. Or drag one onto another. This order is used for every preset.</Note>
+      <Note>Tap two scenes to swap them, or drag one onto another. Used for every preset.</Note>
       <SceneArrange order={order} onChange={(next) => saveSceneOrder(next, sync)} onScrollLock={onScrollLock} />
       <Press label="Put them back in order" onPress={() => saveSceneOrder([0, 1, 2, 3, 4, 5, 6, 7], sync)} />
     </View>

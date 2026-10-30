@@ -179,7 +179,14 @@ export const REPORT_BUTTON = 'Report a Bluetooth problem'
  * and the way back. (The names BETA_NOTE_* and betaNote are kept, not the
  * word.)
  */
-const BETA_ENDS = `If something doesn’t work, tap ${REPORT_BUTTON}, just below. The cable to the computer still does everything.`
+/*
+ * SHORTER, 30 OCTOBER 2026: "It seems like there's too much to read
+ * everywhere you go." It sits at the foot of the page, under the report
+ * button and BLUETOOTH_WAYS, so it says where it has been tried and names
+ * the button, and no more: "just below" pointed at nothing, and the way back
+ * is BLUETOOTH_WAYS's, one line above it.
+ */
+const BETA_ENDS = `Something not working? Tap ${REPORT_BUTTON}.`
 export const BETA_NOTE_IPHONE = `So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone. ${BETA_ENDS}`
 export const BETA_NOTE_ANDROID = `So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone and an Android phone. ${BETA_ENDS}`
 
