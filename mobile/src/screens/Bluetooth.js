@@ -33,7 +33,6 @@ import {
   FIRST_TIME,
   FIRST_TIME_ADAPTER,
   FM3_NEVER,
-  GEAR_IN_SHORT,
   GUIDE_URL,
   NOT_FOR_FM3,
   ONE_AT_A_TIME,
@@ -419,8 +418,13 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
 
         {b.on ? (
           <View style={{ gap: space.sm }}>
-            {/* The usual reasons a connected adapter hears nothing back: the two plugs swapped, or an adapter that only carries one way. */}
-            {quiet ? <Hint>{`${PLUGS_CHECK} ${BOTH_WAYS}`}</Hint> : null}
+            {/*
+              The usual reason a connected adapter hears nothing back: the two
+              plugs swapped. An adapter that only carries one way is
+              Troubleshooting's, one tap away: "It seems like there's too much
+              to read everywhere you go" (Justin, 30 October 2026).
+            */}
+            {quiet ? <Hint>{PLUGS_CHECK}</Hint> : null}
             {/*
               STILL NOTHING AFTER THE ADAPTER WAS UNPLUGGED AND PLUGGED BACK
               IN: the way out that worked for him was closing the app
@@ -441,9 +445,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
             ) : null}
             {away ? <Press label="Reconnect" tone="live" sub={APPLE_SCREEN_OPENS} onPress={reconnect} /> : null}
             {/* The unit chips are not drawn while it is on: which one was picked, and how to change it. */}
-            {b.unit ? <Hint>{`Unit: ${unitName(b.unit)}. To change it, tap Stop first.`}</Hint> : null}
-            <Press label="Stop using Bluetooth" onPress={() => setBluetooth(false)} />
-            <Hint>{`While Bluetooth is on, the ${deviceNoun()} does not use the computer at all. Stop goes back to the computer.`}</Hint>
+            {b.unit ? <Hint>{`Unit: ${unitName(b.unit)}. Tap Stop to change it.`}</Hint> : null}
+            <Press label="Stop using Bluetooth" sub="Goes back to the computer" height={52} onPress={() => setBluetooth(false)} />
           </View>
         ) : (
           <View style={{ gap: space.lg }}>
@@ -471,14 +474,14 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               {shut && b.said ? null : (
                 <Hint>
                   {!b.unit
-                    ? 'Pick your unit first, just above.'
+                    ? 'Pick your unit first.'
                     : b.adapter
                       ? `Uses ${b.adapter.name || 'the adapter'}, from last time.`
                       : shut
                         ? `On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app. Connect uses an adapter that is already connected to this ${deviceNoun()}.`
                         : ios
-                          ? `Apple’s Bluetooth screen opens. Tap your adapter, wait until it says Connected, then tap Done. The ${deviceNoun()} does the rest.`
-                          : `The ${deviceNoun()} looks for the adapter for ten seconds, then connects to it. If Android asks to pair with it, accept.`}
+                          ? 'In Apple’s screen, tap your adapter, wait until it says Connected, then tap Done.'
+                          : `The ${deviceNoun()} looks for the adapter for ten seconds, then connects to it. If Android asks to pair, accept.`}
                 </Hint>
               )}
             </View>
@@ -488,7 +491,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
         {/* Not under a trouble line or a note, which already say what is wrong: on iOS 27 the note says Apple's screen stayed shut, and this line would send him to it. */}
         {!b.on && missed && !b.adapter && !b.trouble && !b.said ? (
           <Text style={{ color: color.fault, fontSize: font.body, lineHeight: 22 }}>
-            {`No adapter was connected. Check Bluetooth is on, and allowed for Fractal Remote in the ${deviceNoun()}’s Settings. Then tap Connect again, and in Apple’s screen tap your adapter and wait for Connected before Done.`}
+            {'No adapter was connected. Check Bluetooth is on and allowed for Fractal Remote, then tap Connect again.'}
           </Text>
         ) : null}
         {!b.on && missed && !b.adapter && !b.trouble && !b.said && onReport ? <ReportThis onPress={() => onReport('No adapter was connected.')} /> : null}
@@ -525,17 +528,17 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
         (`onOpen`), with ‹ Bluetooth back to this one.
       */}
       <View style={{ gap: space.sm }}>
-        <Press label="Setup guide" sub="The full guide, on the website" height={52} onPress={() => openLink(GUIDE_URL)} />
+        <Press label="Setup guide" sub="On the website" height={52} onPress={() => openLink(GUIDE_URL)} />
         {onOpen ? (
           <>
             <Press
               label="How to connect my Bluetooth device"
-              sub={b.unit ? `What to buy for the ${unitName(b.unit)}, and how it plugs in` : 'What to buy, and how it plugs in'}
+              sub={b.unit ? `What to buy for the ${unitName(b.unit)}` : 'What to buy, and how it plugs in'}
               height={52}
               onPress={() => onOpen('bt-ways')}
             />
-            <Press label="Troubleshooting" sub="If it won’t connect, or the unit doesn’t answer" height={52} onPress={() => onOpen('bt-trouble')} />
-            <Press label="What Bluetooth can’t do" sub="And how it differs from the computer" height={52} onPress={() => onOpen('bt-limits')} />
+            <Press label="Troubleshooting" sub="If it won’t connect" height={52} onPress={() => onOpen('bt-trouble')} />
+            <Press label="What Bluetooth can’t do" height={52} onPress={() => onOpen('bt-limits')} />
           </>
         ) : null}
         {/* The one-tap report, "It works on my unit" among its answers, on every visit. */}
@@ -606,7 +609,7 @@ export function BluetoothWays() {
         <UnitChips units={units} picked={b.unit} disabled={b.on} />
         {b.on ? <Hint>To change the unit, tap Stop on the Bluetooth page first.</Hint> : null}
       </View>
-      {!b.unit ? <Hint>{GEAR_IN_SHORT}</Hint> : null}
+      {!b.unit ? <Hint>Pick your unit to see what to buy and how it plugs in.</Hint> : null}
       {/* The FM3's warning, red and in front of everything for it: the U2MIDI Pro, never the C2MIDI Pro or a WIDI Master. */}
       {warningFor(b.unit) ? <Note tone="fault">{warningFor(b.unit)}</Note> : null}
       {firmware ? <Hint>{firmware}</Hint> : null}
@@ -720,7 +723,7 @@ export function BluetoothLimits() {
       <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
         {vp4
           ? VP4_OVER_BLUETOOTH
-          : `The ${deviceNoun()} talks straight to your unit through a Bluetooth MIDI adapter plugged into its MIDI In and MIDI Out. Presets, scenes, names, effects on and off, channels, tempo and the tuner. No editing or saving, and the computer isn’t used.`}
+          : 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. No editing or saving.'}
       </Text>
       <Heading>What’s different from USB</Heading>
       {DIFFERENT.map((line) => (

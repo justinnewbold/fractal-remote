@@ -2135,7 +2135,7 @@ export function run(test) {
      */
     assert.match(settings, /const clickHere = \{ bluetooth: bluetooth && !demo, demo \} const unitCan = unitClick\(rigSlug, clickHere\)/)
     assert.match(settings, /placesFor\(unitCan\.can\)\.map/, 'Unit and Both are offered where the unit cannot click')
-    assert.match(settings, /unitCan\.can \? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to\.' : unitCan\.why/)
+    assert.match(settings, /unitCan\.can \? 'The unit’s own click is the steadiest one to play to\.' : unitCan\.why/)
     assert.match(flat('mobile/App.js'), /useUnitMetronome\(rigSlug, unitHere && !demo, \{ bluetooth \}\)/, 'a refused click is still sent on every Bluetooth arrival')
     /* And a tuner with no readings blames no computer when there is none. */
     const tuner = flat('mobile/src/components/Tuner.js')
@@ -7010,7 +7010,8 @@ export function run(test) {
     assert.equal(gear.AM4_ONLY, undefined, 'the gear file still has the customer’s AM4-only line')
     assert.ok(!/AM4_ONLY|am4Only|AM4 only/.test(code('mobile/src/screens/Bluetooth.js')), 'the page still says the AM4 only to somebody')
     /* Connected, the unit silent: the plugs. */
-    assert.match(page, /\{quiet \? <Hint>\{`\$\{PLUGS_CHECK\} \$\{BOTH_WAYS\}`\}<\/Hint> : null\}/, 'a unit that does not answer is not told about the plugs')
+    /* Shorter since 30 October 2026 ("too much to read everywhere you go"): the plugs on the page, an adapter that carries one way in Troubleshooting. */
+    assert.match(page, /\{quiet \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/, 'a unit that does not answer is not told about the plugs')
     /*
      * Nothing tells anybody to pick a unit by name in step 1 but the wrong
      * unit's line, which is handed whether this account is offered it
@@ -7190,7 +7191,7 @@ export function run(test) {
     assert.match(lib, /if \(!saved\.adapter && !now\.devices\.length\) \{/, 'an Android search that finds nothing ends in silence')
     assert.match(lib, /Location has to be on for it to find one/)
     /* The iPhone's "nothing connected" says where Bluetooth is allowed, and a one-way adapter is named as the likely cause. */
-    assert.match(page, /No adapter was connected\. Check Bluetooth is on, and allowed for Fractal Remote in the \$\{deviceNoun\(\)\}’s Settings\./)
+    assert.match(page, /'No adapter was connected\. Check Bluetooth is on and allowed for Fractal Remote, then tap Connect again\.'/)
     assert.match(page, /The adapter has to carry MIDI both ways\./)
   })
 
@@ -7226,7 +7227,7 @@ export function run(test) {
     /* And no hint on the page sends anybody to the screen while it is shut, nor the red "nothing connected" line under the note that says why. */
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.match(page, /const shut = pairScreenShut\(\)/)
-    assert.match(page, /: shut \? `On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app\. Connect uses an adapter that is already connected to this \$\{deviceNoun\(\)\}\.` : ios \? `Apple’s Bluetooth screen opens\./, 'an iPad on iOS 27 is told its adapter must be connected to the iPhone')
+    assert.match(page, /: shut \? `On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app\. Connect uses an adapter that is already connected to this \$\{deviceNoun\(\)\}\.` : ios \? 'In Apple’s screen, tap your adapter/, 'an iPad on iOS 27 is told its adapter must be connected to the iPhone')
     assert.match(page, /\{shut \? 'If this stays here, tap Stop, check the adapter is plugged in and lit, then tap Connect\.' : away \?/)
     /* Reconnect, which opens Apple's screen, is never offered while it is shut. */
     assert.match(page, /const away = b\.on && b\.phase === 'connecting' && ios && !shut && adapterAway\(\)/)
@@ -7381,7 +7382,7 @@ export function run(test) {
     /* Except on an iPhone it is not connected to: Apple's screen is the only way back, so Connect opens it. */
     assert.match(page, /if \(b\.adapter && ios && offlineHere\(b\.adapter\)\) return another\(\)/, 'Connect on an iPhone waits for an offline adapter instead of opening Apple’s screen')
     assert.match(page, /const seen = adapterDevices\(\)\.find\(\(d\) => d\.id === a\.id\) return !seen \|\| !!seen\.offline/)
-    assert.match(page, /<Press label="Stop using Bluetooth" onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
+    assert.match(page, /<Press label="Stop using Bluetooth" sub="Goes back to the computer" height=\{52\} onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
     /* The old buttons are gone from the way through. */
     const drawn = code('mobile/src/screens/Bluetooth.js')
     for (const gone of ['Use Bluetooth: on', 'Use Bluetooth: off', 'Forget this adapter', 'Use this one', '"Disconnect"']) {
@@ -7506,7 +7507,7 @@ export function run(test) {
       /onPress=\{\(\) => \{ tick\(\) fire\('press Turn off Bluetooth', \(\) => setBluetooth\(false\)\) onClose\(\) \}\}/,
       'Turn off Bluetooth does something other than Stop'
     )
-    assert.match(flat('mobile/src/screens/Bluetooth.js'), /<Press label="Stop using Bluetooth" onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /<Press label="Stop using Bluetooth" sub="Goes back to the computer" height=\{52\} onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
     assert.match(flat('mobile/App.js'), /<Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
     assert.match(ble, /accessible=\{false\} onPress=\{onClose\}/, 'VoiceOver cannot reach Turn off Bluetooth inside the note')
     /* On a bench: off, kept off, unit and adapter kept, said in the log. */
@@ -8259,8 +8260,9 @@ export function run(test) {
     for (const note of [gear.BETA_NOTE_IPHONE, gear.BETA_NOTE_ANDROID]) {
       assert.ok(note.startsWith('So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone'), note)
       assert.ok(!/\bbeta\b/i.test(note), `the note still says beta: ${note}`)
-      assert.ok(note.includes(`If something doesn’t work, tap ${gear.REPORT_BUTTON}, just below.`), 'the beta note does not point at the report button by its name')
-      assert.ok(note.endsWith('The cable to the computer still does everything.'), 'the beta note does not end on the way back')
+      /* Shorter since 30 October 2026: it sits under the button and BLUETOOTH_WAYS, so it names the button and leaves the way back to the line above it. */
+      assert.ok(note.endsWith(`Something not working? Tap ${gear.REPORT_BUTTON}.`), 'the beta note does not point at the report button by its name')
+      assert.ok(!/just below/.test(note), 'the beta note points below itself, and it is the last thing on the page')
       assert.ok(!/this phone|Settings →|Feedback/.test(note), 'the beta note names the device in hand, or sends a player round Settings')
     }
     assert.equal(gear.REPORT_BUTTON, 'Report a Bluetooth problem')
@@ -8288,7 +8290,7 @@ export function run(test) {
      */
     assert.match(gear.BETA_NOTE_ANDROID, /tried on the AM4 and the FM3, from an iPhone and an Android phone\./, 'the Android beta note does not say it has been tried from an Android phone')
     assert.ok(!/not yet from an Android phone/.test(gear.BETA_NOTE_ANDROID), 'the Android beta note still says no Android phone has run it')
-    assert.match(gear.BETA_NOTE_IPHONE, /So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone\. If something/, 'the iPhone’s beta note does not say where it has been tried')
+    assert.match(gear.BETA_NOTE_IPHONE, /So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone\. Something not working/, 'the iPhone’s beta note does not say where it has been tried')
     assert.ok(!/android|google|play store|\bapk\b/i.test(gear.BETA_NOTE_IPHONE), 'the iPhone’s beta note names another phone, which Apple’s 2.3.10 rejects')
     assert.equal(gear.BETA_NOTE_ANDROID.replace(' and an Android phone', ''), gear.BETA_NOTE_IPHONE, 'the two beta notes say different things besides the Android clause')
     /* Picked by the phone's own platform; anything not Android gets the iPhone's, so no new platform ever shows Android's name. */
@@ -8357,7 +8359,7 @@ export function run(test) {
     assert.match(drawn, /onPress=\{\(\) => onOpen\('bt-ways'\)\}/)
     assert.match(drawn, /onPress=\{\(\) => onOpen\('bt-trouble'\)\}/)
     assert.match(drawn, /onPress=\{\(\) => onOpen\('bt-limits'\)\}/)
-    assert.match(drawn, /<Press label="Setup guide" sub="The full guide, on the website" height=\{52\} onPress=\{\(\) => openLink\(GUIDE_URL\)\} \/>/)
+    assert.match(drawn, /<Press label="Setup guide" sub="On the website" height=\{52\} onPress=\{\(\) => openLink\(GUIDE_URL\)\} \/>/)
     const settings = flat('mobile/src/screens/Settings.js')
     assert.match(settings, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} onConnected=\{onBack\} \/>/)
     assert.match(settings, /\{head\('How to connect my Bluetooth device', 'back'\)\} <BluetoothWays \/>/)
@@ -8375,7 +8377,7 @@ export function run(test) {
     assert.match(page, /b\.looking \? 'Found so far\. Tap yours:' : b\.devices\.length > 1 \? 'More than one is here\. Tap yours:' : 'Tap your adapter:'/, 'a single row is headed More than one is here')
     /* While it is on the unit chips are gone: a line over Stop says which, and how to change it. */
     const onHalf = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('<Press label="Stop using Bluetooth"'))
-    assert.match(onHalf, /\{b\.unit \? <Hint>\{`Unit: \$\{unitName\(b\.unit\)\}\. To change it, tap Stop first\.`\}<\/Hint> : null\}/, 'nothing names the unit while it is on')
+    assert.match(onHalf, /\{b\.unit \? <Hint>\{`Unit: \$\{unitName\(b\.unit\)\}\. Tap Stop to change it\.`\}<\/Hint> : null\}/, 'nothing names the unit while it is on')
 
     /* A row is a Press like every other button, so it is in the tap log and has the haptic; and it says what a tap does. */
     const fold = page.slice(page.indexOf('function Fold('), page.indexOf('function Row('))
@@ -8390,7 +8392,8 @@ export function run(test) {
      */
     const ways = page.slice(page.indexOf('export function BluetoothWays('), page.indexOf('export function BluetoothTrouble('))
     assert.match(ways, /const ways = waysFor\(b\.unit, deviceNoun\(\)\) const \[open, setOpen\] = useState\(0\)/)
-    assert.match(ways, /\{!b\.unit \? <Hint>\{GEAR_IN_SHORT\}<\/Hint> : null\}/)
+    /* With no unit picked, one line to pick one, not the parts list: the parts come with the unit (30 October 2026, "too much to read everywhere you go"). */
+    assert.match(ways, /\{!b\.unit \? <Hint>Pick your unit to see what to buy and how it plugs in\.<\/Hint> : null\}/)
     assert.match(ways, /\{warningFor\(b\.unit\) \? <Note tone="fault">\{warningFor\(b\.unit\)\}<\/Note> : null\}/, 'the FM3’s warning is not in front of its way')
     assert.match(ways, /<Press label=\{p\.amazon \? 'View on Amazon' : 'View on the maker’s site'\} height=\{44\} accessibilityLabel=\{p\.amazon \? `View the \$\{p\.name\} on Amazon` : `View the \$\{p\.name\} on the maker’s site`\} onPress=\{\(\) => openLink\(p\.amazon \|\| p\.maker\)\} \/>/)
     assert.match(ways, /\{way\.key === 'uhost' \? <Hint>\{POWER_LINE\}<\/Hint> : null\}/)
@@ -8400,10 +8403,10 @@ export function run(test) {
     assert.match(ways, /\{b\.unit \? <Hint>\{ONE_AT_A_TIME\}<\/Hint> : null\} \{untriedUnit \? <Note tone="warn">\{untriedUnit\}<\/Note> : null\} \{b\.unit \? <Hint>\{SELLERS_LINE\}<\/Hint> : null\}/)
     /* What Bluetooth can't do: the paragraph, and the list of what is different from USB. */
     const limits = page.slice(page.indexOf('export function BluetoothLimits('), page.indexOf('function Bullet('))
-    assert.ok(limits.includes('No editing or saving, and the computer isn’t used.'))
+    assert.ok(limits.includes('with no computer. No editing or saving.'))
     assert.ok(limits.includes('<Heading>What’s different from USB</Heading> {DIFFERENT.map('))
     /* The usual reason a connected adapter hears nothing: the plugs swapped. */
-    assert.match(page, /\{quiet \? <Hint>\{`\$\{PLUGS_CHECK\} \$\{BOTH_WAYS\}`\}<\/Hint> : null\}/)
+    assert.match(page, /\{quiet \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/)
 
     /* ONE PLACE FOR THE ADDRESSES: no web address typed into the page, and no shop's anywhere in the app but the gear file. */
     assert.ok(!/https?:\/\//.test(code('mobile/src/screens/Bluetooth.js')), 'an address is typed into the page instead of coming from the gear file')
@@ -9034,8 +9037,8 @@ export function run(test) {
     const gear = await import('../shared/bluetooth-gear.mjs')
     assert.equal(
       gear.BETA_NOTE_IPHONE,
-      /* Out of beta since 26 October 2026: where it has been tried, the button, and the way back, and never "beta". */
-      'So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone. If something doesn’t work, tap Report a Bluetooth problem, just below. The cable to the computer still does everything.'
+      /* Out of beta since 26 October 2026, and shorter since 30 October: where it has been tried and the button, and never "beta". The way back is BLUETOOTH_WAYS, the line above it. */
+      'So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone. Something not working? Tap Report a Bluetooth problem.'
     )
     assert.equal(gear.BETA_NOTE_ANDROID.replace(' and an Android phone', ''), gear.BETA_NOTE_IPHONE)
     assert.ok(!/android|google|play store|\bapk\b/i.test(gear.BETA_NOTE_IPHONE))

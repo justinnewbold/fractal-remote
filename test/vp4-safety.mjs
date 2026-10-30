@@ -1195,7 +1195,8 @@ export function run(test) {
     assert.match(flat('mobile/src/components/DemoUnit.js'), /onPress=\{\(\) => \{ setDemoUnit\(u\.key\) if \(u\.key !== 'vp4'\) onClose\(\) \}\}/, 'the phone’s demo sheet closes on a VP4 pick before its sentence is shown')
     /* The phone's Settings said "Every screen works" of the demo's VP4: it says the VP4's sentence, and every other unit's note is as it was. */
     const settings = flat('mobile/src/screens/Settings.js')
-    assert.match(settings, /\{unit === 'vp4' \? `\$\{demoSentence\(unit\)\} It also answers instantly, so anything still slow in here is this app rather than the line to a computer\.` : `This is the demo — a simulated \$\{ DEMO_UNITS\.find\(\(u\) => u\.key === unit\)\?\.name \|\| 'FM3' \}\. Every screen works and nothing reaches hardware\./, 'the phone’s Settings says “Every screen works” of the demo’s VP4')
+    /* Shorter since 30 October 2026, for every unit: what it is and that nothing reaches hardware, and the VP4's own sentence. */
+    assert.match(settings, /\{unit === 'vp4' \? demoSentence\(unit\) : `This is the demo: a simulated \$\{DEMO_UNITS\.find\(\(u\) => u\.key === unit\)\?\.name \|\| 'FM3'\}\. Nothing here reaches real hardware\.`\}/, 'the phone’s Settings says “Every screen works” of the demo’s VP4')
     /*
      * The browser's banner was put away for every unit by one Got it, so after
      * Got it on the FM3 the VP4's never came up. A VP4 has its own, and the

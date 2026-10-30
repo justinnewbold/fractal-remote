@@ -790,7 +790,7 @@ export function run(test) {
     assert.match(settings, /const noneSaid = link === 'no-answer' && Boolean\(noComputer\) && elsewhere === false/, 'Setup says it before the account warning has answered')
     assert.match(
       settings,
-      /\{link === 'no-answer' && elsewhere \? \( <Note tone="fault">[\s\S]*?<\/Note> \) : noneSaid \? \( <Note tone="warn"> <NoComputerWords email=\{noComputer\.email\} \/> <\/Note> \) : link === 'no-answer' \? \( <Note tone="warn"> Open the Fractal Remote app on the computer and make sure the computer is awake\. This keeps trying on its own\. <\/Note> \) : null\}/,
+      /\{link === 'no-answer' && elsewhere \? \( <Note tone="fault">[\s\S]*?<\/Note> \) : noneSaid \? \( <Note tone="warn"> <NoComputerWords email=\{noComputer\.email\} \/> <\/Note> \) : link === 'no-answer' \? \( <Note tone="warn"> Open Fractal Remote on the computer, and check the computer is awake\. <\/Note> \) : null\}/,
       'Setup puts the new words before the account warning, or lost today’s'
     )
     assert.match(app, /noComputer=\{noComputer\} \/\* As the top bar says it[^*]*\*\/ link=\{shownLink\.link\}/, 'Setup is not told')
