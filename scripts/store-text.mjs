@@ -3,8 +3,9 @@
  * change without a new build and without a review.
  *
  * It is the first thing on the listing, above the description, so it is where
- * "REQUIRES A COMPUTER" goes: "It's a lot of reading to get to that point. Just
- * want people to know up front what is needed." Everything else on the page
+ * what is needed goes: "It's a lot of reading to get to that point. Just want
+ * people to know up front what is needed." REQUIRES A COMPUTER until 30
+ * October 2026, the two ways since Bluetooth went live. Everything else on the page
  * (description, subtitle, screenshots) belongs to a version, and only changes
  * when a new build goes in for review.
  *

@@ -366,7 +366,7 @@ export function run(test) {
     assert.equal(paragraphs[1], AFFILIATION, 'the Description’s second paragraph is not the shared disclaimer')
     assert.equal(description.split(AFFILIATION).length, 2, 'the Description says the disclaimer twice')
     assert.ok(promoText(store).includes(NOT_AFFILIATED_SHORT), 'the App Store promotional text does not say it')
-    assert.match(promoText(store), new RegExp(`^REQUIRES A COMPUTER\\. ${NOT_AFFILIATED_SHORT.replace(/[.,]/g, '\\$&')} On a VP4`), 'the promotional text does not put the computer first and the disclaimer second')
+    assert.match(promoText(store), /^By computer or by Bluetooth\./, 'the promotional text does not put the two ways first')
 
     /* The computer app's tray, which cannot import shared/. */
     const main = read('desktop/main.js')
@@ -1255,7 +1255,7 @@ export function run(test) {
     const { fenced } = await import('../scripts/store-text.mjs')
     const store = read('docs/app-store.md')
     assert.equal(store.match(/\| \*\*Subtitle\*\* \| 30 \| `([^`]+)` \|/)?.[1], 'Independent · needs a computer')
-    assert.equal(fenced(store, '### Google Play: short description').trim(), 'Requires a computer and our desktop app. Not made or supported by Fractal Audio.')
+    assert.equal(fenced(store, '### Google Play: short description').trim(), 'Through a computer, or by Bluetooth. Not made or supported by Fractal Audio.')
     /* Written rules, so the next screenshot or listing does not undo them. */
     assert.match(flat(store), /\*\*Never a Fractal logo, a product photo or a real Fractal unit\*\* \(18 October 2026\), in any screenshot, App Preview, Play feature graphic, store video or picture on the website\./)
     assert.match(flat(store), /\*\*The one exception is the review videos\*\*/)

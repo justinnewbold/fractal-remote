@@ -43,12 +43,30 @@ with every text it needs and the steps for the day it is sent. None of
 | **Category** | — | Primary: **Music**. Secondary: **Utilities** |
 | **Price** | — | **Free** (USD 0.00). The $9.99 unlock is an in-app purchase, set up separately under In-App Purchases |
 
-**Say it needs a computer before anything else.** "I think we need to make it
+**Say how it connects before anything else.** "I think we need to make it
 more clear that this app requires a computer connected to the fractal to work…
 It's a lot of reading to get to that point." So the promotional text, the
-description and the Play summary all open on it (in capitals everywhere but
-the Play summary, which Google asks not to shout), and the demo paragraph
-says the demo is the one part that needs nothing.
+description and the Play summary all opened on REQUIRES A COMPUTER (in
+capitals everywhere but the Play summary, which Google asks not to shout), and
+the demo paragraph says the demo is the one part that needs nothing.
+
+**Not "requires a computer" any more** (30 October 2026, with 1.89.3 live in
+both stores): "It doesn't require a computer anymore if people are using
+Bluetooth instead. So we can drop that now." So what opens the listing is the
+two ways, the computer first: the promotional text and the Play summary now,
+since both change any time, and the Description and the subtitle with the
+next version, since Apple changes those only with one. The App Store's live
+Description is Justin's own edit of the 1.89.0 block: it opens "REQUIRES A
+COMPUTER, RASPBERRY PI, OR BLUETOOTH ADAPTER" and lists the VP4 with no
+warnings. The next version's Description starts from that live one, not from
+the blocks below, with the opening changed to the two ways.
+
+**No VP4 warnings in the listing** (30 October 2026): "Don't give any
+warnings about VP4 I removed all those." So the promotional text, the
+Description and the custom product pages say nothing about what does not
+work on a VP4. They still promise it nothing it does not do: a VP4 page says
+presets and scenes, never the tuner or knobs. The app itself keeps its VP4
+notes (the purchase page, Play and Edit), which are not the listing.
 
 **Never call the computer app free.** "That could confuse people thinking the
 iOS/android app is free." Call it the desktop app. A test holds every block
@@ -66,7 +84,7 @@ just not gonna change the app name unless Fractal pushes back on it." So:
   `Independent · needs a computer` (30 of 30, and it still says computer).
   Apple changes the subtitle only with a new version, so it goes in with the
   next one.
-- The **promotional text** carries the short form, after REQUIRES A COMPUTER.
+- The **promotional text** carries the short form, after the two ways.
 - The **Description** carries the full sentence and the trademark line as its
   second paragraph, straight after REQUIRES A COMPUTER, not at the very end
   where both stores' "more" hides it.
@@ -96,29 +114,27 @@ paragraph, and that copy can be empty. 1.87.11 came out on 12 October 2026
 with no promotional text at all. The run warns about any version it could not
 change.
 
-**On a VP4 it says what does not work yet** (since 15 October 2026), because
-it is the one part of the App Store page that can change before the next
-version, and the live Description there still promises a VP4 presets,
-scenes, the tuner and tap tempo (see *Description*, below). It names the
-same five things the purchase page does, and gave up "and your phone
-controls it from there" and "The demo needs no gear" for the room: the
-Description says both straight after it.
+**It said what does not work on a VP4** from 15 October 2026, the five
+things the purchase page names, while the live Description promised a VP4
+the tuner and tap tempo. Since 30 October 2026 it does not: Justin took the
+VP4 warnings out of the listing (above).
 
 **And it says whose app it is not** (18 October 2026), in the short form of
-Fractal Audio's sentence (NOT_AFFILIATED_SHORT in shared/affiliation.mjs),
-because the live Description on the App Store keeps its old disclaimer, at
-its very end, until the next version. 170 characters do not hold the full
-sentence beside the computer and the VP4, so the order is the one that
-matters: the computer first, the disclaimer second, and the VP4 line
-shortened to fit ("knobs, tuner, tap tempo, channels and saving", the same
-five, without "the app's"). 169 of 170. It goes live only when the
+Fractal Audio's sentence (NOT_AFFILIATED_SHORT in shared/affiliation.mjs).
+How it connects first, then what it does, then the disclaimer. It opened on
+REQUIRES A COMPUTER until 30 October 2026, when Bluetooth made that untrue
+(above): "By computer or by Bluetooth." in its place. 158 of 170. It goes live only when the
 store-text workflow is run with **Write it**, which is Justin's call, not a
-merge's. And whether the App Store's web page shows promotional text at all
+merge's. **And since 30 October 2026 it is never run with Write it:** "No
+don't put any text live on the App Store. I already updated it the way I
+want it." Justin sets the App Store's texts himself, so the block below is a
+suggestion, not what is live; the store-text run without Write it shows
+what is. And whether the App Store's web page shows promotional text at all
 (the App Store app on an iPhone does, above the description) is worth a look
 in a desktop browser before anybody is told it is there.
 
 ```
-REQUIRES A COMPUTER. Not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC. On a VP4, knobs, tuner, tap tempo, channels and saving don't work yet.
+By computer or by Bluetooth. Your presets, scenes and setlists, from your phone. Not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC.
 ```
 
 ### Keywords (100, commas, no spaces after them)
@@ -258,11 +274,14 @@ change Google has passed also waits under Changes ready to publish until
 The line right under the app's name on Play. It said "Control your Fractal
 from your phone", which, under the name Fractal Remote, reads as Fractal's
 own remote for your Fractal. Since 18 October 2026 it says whose app it is
-not instead, cut to fit: 80 of 80, still opening on the computer, and in
-ordinary letters.
+not instead, cut to fit, in ordinary letters. It opened "Requires a computer
+and our desktop app" until 30 October 2026, when Bluetooth made that untrue:
+now the two ways, the computer first, 76 of 80. Play changes it any time:
+Play Console → Grow users → Store presence → Store listings → Short
+description.
 
 ```
-Requires a computer and our desktop app. Not made or supported by Fractal Audio.
+Through a computer, or by Bluetooth. Not made or supported by Fractal Audio.
 ```
 
 ### URLs
@@ -2121,7 +2140,11 @@ step 7 spends builds, and it waits for his yes, as every build does.
        stays. **Save**, then Publishing overview → **Send changes for
        review**. With Managed publishing off, it goes live as soon as
        Google passes it, usually within a day.
-18. **GitHub, a pull request for each store as it goes live**, the iPhone
+18. **Done for both stores on 30 October 2026**, in one pull request, once
+    the App Store's listing and Google Play both showed 1.89.3 (the
+    version that went in, in 1.89.0's place): /bluetooth, support.html,
+    the guide listed, and store-versions.json at 1.89.3 on both.
+    **GitHub, a pull request for each store as it goes live**, the iPhone
     the hour it is released (step 15), Android on its 100% day (step 17):
     - /bluetooth (bluetooth.html) becomes the real page, naming only the
       store or stores that are live, and links the guide.
@@ -2139,8 +2162,9 @@ step 7 spends builds, and it waits for his yes, as every build does.
     reads the sample, emails on.
 20. **The promotional text:** Actions → store-text → Run workflow, **Write
     it** ticked, once 1.89.0 is released (a version in review keeps its own
-    copy of the paragraph, and that copy can be empty). The paragraph
-    itself does not change: it still opens on REQUIRES A COMPUTER.
+    copy of the paragraph, and that copy can be empty). Since 30 October
+    2026 it opens on the two ways, not REQUIRES A COMPUTER (see
+    *Promotional text*).
 
 ### If Bluetooth has to be switched off, or Apple says no to it
 

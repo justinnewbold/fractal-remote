@@ -257,6 +257,11 @@ icon now (mobile/assets/watch-icon.png); keep it light.
   holding a build under review). Fixes go out as before; a big new phone
   feature waits until any review in progress is over.
 
+**1.89.3 is live in both stores** (the App Store's listing and Google
+Play both show it, 30 October 2026), so Bluetooth is open to customers, and
+public/store-versions.json says 1.89.3 on both. What follows about waiting
+for 1.89.0 is how it got there.
+
 **The next App Store version is the Bluetooth one.** "Wait till the
 Bluetooth version" (25 October 2026, when asked whether to send 1.88.3 to
 the App Store with Bluetooth still hidden). So 1.88.3 stays on TestFlight,
@@ -376,13 +381,22 @@ the build refused), and an update hides it from everybody but him:
   Android copies from Google Play that have not yet taken the 1.87.11 store
   update. The privacy page says the gap as it is, and Google's 1.87.11 App
   access note leaves it out, because that build does not have it.
-- /bluetooth on the website says it isn't in the app and may be offered in
-  a later version, with no promise and nothing to buy, until the live day of
-  1.89.0. The guide lives at bluetooth-guide.html, linked only from the
-  app's own Bluetooth page and unlisted until then; it, the privacy page
-  and one sentence on support.html say, in words true before and after
-  approval, that Bluetooth (beta) is in the app from 1.89.0 and only on the
-  developer's account before it.
+- /bluetooth on the website said it isn't in the app until the live day.
+  Since 30 October 2026 (1.89.3 live in both stores) it is the real page:
+  in the app from 1.89.0, the two ways with the computer first, what it
+  does, the untried units, the FM3's warning, and a link to the guide
+  (bluetooth-guide.html), which search engines may list now. support.html
+  says the two ways, the computer first.
+- The store listing no longer opens on REQUIRES A COMPUTER: "It doesn't
+  require a computer anymore if people are using Bluetooth instead. So we
+  can drop that now." (30 October 2026.) The promotional text and the Play
+  summary say the two ways now; the Description and the subtitle follow
+  with the next version (docs/app-store.md). And no VP4 warnings in the
+  listing: "Don't give any warnings about VP4 I removed all those." (30
+  October 2026.) It still promises a VP4 nothing it does not do. And
+  nothing puts text live on the App Store: "No don't put any text live on
+  the App Store. I already updated it the way I want it." He sets the
+  listing himself, so the store-text workflow is never run with Write it.
 
 **It is switched on for customers only in a new store version whose review
 notes say so, never by an over-the-air update.** Apple's guideline 2.5.19

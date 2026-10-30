@@ -114,7 +114,7 @@ const SETTINGS_DOOR = { row: 'Phone & computer', button: 'Sign in to set up the 
  * A constant, not a secret: the words it turns on are reviewed in the same
  * change that turns them on, and the test above can see it.
  */
-export const BLUETOOTH_IN_EMAILS = false
+export const BLUETOOTH_IN_EMAILS = true
 /**
  * The first store version that offers Bluetooth (beta) to customers, as the
  * email says it: one number to iPhone and Android buyers alike, so the

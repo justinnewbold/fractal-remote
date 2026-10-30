@@ -2,8 +2,8 @@
 #
 # The promotional text is the paragraph at the very top of the listing, and the
 # only part of it Apple lets change without a new build or a review. It is where
-# "REQUIRES A COMPUTER" goes, so somebody knows what they need before reading
-# anything else. scripts/store-text.mjs does the work; this hands it the App
+# what is needed goes (the computer, or Bluetooth), so somebody knows before
+# reading anything else. scripts/store-text.mjs does the work; this hands it the App
 # Store Connect key the builds already use (ASC_KEY_ID, ASC_ISSUER_ID,
 # ASC_KEY_P8). Started by hand. It builds nothing and spends no build slot.
 #

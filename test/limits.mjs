@@ -3587,7 +3587,7 @@ export function run(test) {
     assert.match(store, /Review notes/, 'there are no review notes at all')
   })
 
-  test('the store says it needs a computer first, and never calls the computer app free', async () => {
+  test('the store says what it needs first, and never calls the computer app free', async () => {
     /*
      * "I think we need to make it more clear that this app requires a computer
      * connected to the fractal to work. Maybe even in all caps. It's a lot of
@@ -3600,6 +3600,14 @@ export function run(test) {
      * And then: "Don't say free fractal remote app. That could confuse people
      * thinking the iOS/android app is free." So the computer app is the
      * desktop app, never the free one, anywhere in the store copy.
+     *
+     * And since 30 October 2026, with Bluetooth live in both stores: "It
+     * doesn't require a computer anymore if people are using Bluetooth
+     * instead. So we can drop that now." So the two parts that change any
+     * time, the promotional text and the Play summary, open on the two ways,
+     * the computer first; the Description and the subtitle still say the
+     * computer until the next version, which is the only way Apple changes
+     * them.
      */
     const { fenced, promoText, PROMO_LIMIT } = await import('../scripts/store-text.mjs')
     const store = read('docs/app-store.md')
@@ -3609,12 +3617,14 @@ export function run(test) {
     const subtitle = store.match(/\| \*\*Subtitle\*\* \| 30 \| `([^`]+)` \|/)?.[1]
     const length = (s) => [...s].length
 
-    assert.match(promo, /^REQUIRES A COMPUTER\./, 'the top of the listing no longer opens on the computer')
+    assert.match(promo, /^By computer or by Bluetooth\./, 'the top of the listing does not open on the two ways, the computer first')
+    assert.ok(!/REQUIRES A COMPUTER/i.test(promo), 'the top of the listing still says a computer is required, and Bluetooth needs none')
     assert.match(description, /^REQUIRES A COMPUTER\./, 'the description no longer opens on the computer')
     /* Sentence case on Play alone: its help for this field says "Do not use
        capitalization for emphasis", and its metadata policy calls ALL CAPS
        outside a brand name a violation. */
-    assert.match(short, /^Requires a computer\b/, 'the Play summary no longer opens on the computer')
+    assert.match(short, /^Through a computer, or by Bluetooth\./, 'the Play summary does not open on the two ways, the computer first')
+    assert.ok(!/requires a computer/i.test(short), 'the Play summary still says a computer is required, and Bluetooth needs none')
     assert.ok(!/\b[A-Z]{4,}\b/.test(short), 'the Play summary shouts, which Google asks it not to')
     assert.match(subtitle ?? '', /computer/i, 'the subtitle no longer says it needs a computer')
     assert.match(description.split('\n\n')[0], /stay on and connected/, 'the description stopped saying the computer is needed while you play')
@@ -4248,7 +4258,8 @@ export function run(test) {
     /* Where the app's Full setup guide goes, and nowhere a search engine sends a customer. */
     const { GUIDE_URL } = await import('../shared/bluetooth-gear.mjs')
     assert.equal(GUIDE_URL, 'https://fractal.newbold.cloud/bluetooth-guide.html', 'the app’s Full setup guide opens somewhere other than the guide')
-    assert.match(html, /<meta name="robots" content="noindex" \/>/, 'the guide asks to be listed by search engines before 1.89.0 is live')
+    /* Listed since the live day (30 October 2026, 1.89.3 in both stores), and /bluetooth links it. */
+    assert.ok(!/noindex/.test(html), 'the guide still asks search engines not to list it, and Bluetooth is live in both stores')
     /*
      * And anybody who lands on it is told which versions have it, in words
      * true before 1.89.0 is approved and after (written with the 1.89.0
@@ -4437,69 +4448,57 @@ export function run(test) {
     assert.match(words, /plug into both of the unit’s MIDI jacks, In and Out/, 'the guide does not say an adapter has to fill both jacks')
   })
 
-  test('/bluetooth tells customers Bluetooth is not in the app yet, and no public page sells it or links the guide', () => {
+  test('/bluetooth says Bluetooth is in the app, the computer first, and leads on to the guide, as the support page does', async () => {
     /*
-     * This held the support page and the Android page to linking the
-     * Bluetooth guide, and /bluetooth to reaching it, while Bluetooth
-     * was a public beta. Changed on purpose, on 11 October 2026: "Is there
-     * any way to just get the Bluetooth on the developers mode for my own
-     * phone? I just feel like it's not ready to have public." The app shows
-     * it to his account alone now, so a page that gave everybody else a
-     * shopping list for it would be selling them a feature they cannot open.
-     *
-     * So /bluetooth, which What's New and the 1.87.1 listing may already have
-     * sent people to, still answers, with a short notice: not in the app,
-     * being tested, and the desktop app for now. It promised once that
-     * Bluetooth "will come back in a later version"; it may, and nothing more
-     * is promised. Nothing to buy, and no way on to the guide, which moved to
-     * bluetooth-guide.html.
+     * From 11 October 2026 until the live day this held /bluetooth to a
+     * short notice that Bluetooth was not in the app ("I just feel like it's
+     * not ready to have public"), with nothing to buy and no way on to the
+     * guide. 1.89.3 is live in both stores since 30 October 2026, so it is
+     * the real page the live day promised (docs/app-store.md, Submission day,
+     * step 18): which versions, the two ways with the computer first, what
+     * it does, which units and which are untried, the FM3's warning, and the
+     * guide for what to buy. Short, because the parts are the guide's.
      */
+    const { BLUETOOTH_WAYS, NOT_FOR_FM3 } = await import('../shared/bluetooth-gear.mjs')
     const notice = read('public/bluetooth.html')
-    const said = notice.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ')
-    assert.match(notice, /<title>Bluetooth — Fractal Remote<\/title>/)
-    assert.match(said, /Bluetooth isn’t available in the app\. It is still being tested, and may be offered in a later version of the app\./, '/bluetooth does not say Bluetooth is not in the app')
-    assert.ok(!/will come back|comes back|until it/i.test(notice.replace(/<!--[\s\S]*?-->/g, '')), '/bluetooth promises Bluetooth to customers')
-    assert.match(said, /Your phone connects to your Fractal unit through the desktop app/, '/bluetooth does not say what to use instead')
-    assert.match(notice, /href="\/downloads"/, '/bluetooth does not link the desktop app')
-    assert.match(said, /There is nothing to buy for it now\./)
-    /* The 1.87.1 copy's own guide button opened this page, so somebody in the first-launch gap can land here with the card in front of them. */
-    assert.match(said, /If you have just installed or updated the app and still see a Bluetooth card, it goes away by itself once the app has updated\./, '/bluetooth does not tell somebody in the first-launch gap that the card goes by itself')
-    /* Read with the comment taken out, as the guide is: the comment names what it no longer does. */
     const page = notice.replace(/<!--[\s\S]*?-->/g, '')
-    assert.ok(!/amazon\.|cme-pro\.com|lootools/i.test(page), '/bluetooth gives somewhere to buy the parts, and customers cannot use them')
-    assert.ok(!/WIDI|C2MIDI|Uhost|MD-BT01/.test(page), '/bluetooth names the parts to buy')
-    assert.ok(!/bluetooth-guide/.test(page), '/bluetooth leads customers to the guide')
+    const said = page.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ')
+    assert.match(notice, /<title>Bluetooth — Fractal Remote<\/title>/)
+    assert.match(said, /Bluetooth is in the app, from version 1\.89\.0\./, '/bluetooth does not say which versions have Bluetooth')
+    assert.ok(said.includes(BLUETOOTH_WAYS), '/bluetooth does not say the computer is the best way, with more lag and fewer features on Bluetooth')
+    assert.ok(said.indexOf(BLUETOOTH_WAYS) < said.indexOf('What it does'), '/bluetooth says what Bluetooth does before it says the computer is best')
+    assert.match(said, /No editing or saving over Bluetooth/, '/bluetooth does not say editing and saving need the computer')
+    assert.match(said, /on a VP4, presets and scenes/, '/bluetooth promises a VP4 more than presets and scenes')
+    assert.match(said, /It has not been tried yet on an FM9, Axe-Fx III or VP4\./, '/bluetooth does not say which units are untried')
+    assert.ok(said.replace(/\s+/g, ' ').includes(NOT_FOR_FM3), '/bluetooth does not carry the FM3’s warning word for word')
+    assert.ok(!/beta/i.test(said), '/bluetooth still calls Bluetooth a beta')
+    assert.match(page, /href="\/bluetooth-guide\.html"/, '/bluetooth does not lead on to the setup guide')
+    assert.match(page, /href="\/downloads"/, '/bluetooth does not link the desktop app')
+    assert.match(said, /Report a Bluetooth problem/, '/bluetooth does not say how to report a problem')
+    /* What to buy is the guide's: this page links no shop. */
+    assert.ok(!/amazon\.|cme-pro\.com|lootools/i.test(page), '/bluetooth links a shop, and the parts are the guide’s')
     const outside = [...page.matchAll(/href="(https?:[^"]*)"/g)].map((m) => m[1])
     assert.deepEqual(outside, ['https://apps.apple.com/app/id6812916461'], '/bluetooth links somewhere outside this site other than the App Store page')
-    assert.ok(notice.length < 6000, '/bluetooth has grown back into a guide')
+    assert.ok(notice.length < 8000, '/bluetooth has grown into a second guide')
 
-    /* Typed without the extension, as What's New wrote it: still the notice, not the web app. */
+    /* Typed without the extension, as What's New wrote it: still this page, not the web app. */
     const vercel = JSON.parse(read('vercel.json'))
     const at = vercel.rewrites.findIndex((r) => r.source === '/bluetooth')
-    assert.ok(at !== -1, '/bluetooth is not routed, so it serves the web app instead of the notice')
+    assert.ok(at !== -1, '/bluetooth is not routed, so it serves the web app instead of the page')
     assert.equal(vercel.rewrites[at].destination, '/bluetooth.html')
-    assert.ok(at < vercel.rewrites.findIndex((r) => r.source === '/(.*)'), '/bluetooth sits after the catch-all, so it never reaches the notice')
+    assert.ok(at < vercel.rewrites.findIndex((r) => r.source === '/(.*)'), '/bluetooth sits after the catch-all, so it never reaches the page')
 
-    /* The support page and the Android page say nothing about it, and link neither page. */
-    const support = read('public/support.html')
-    const android = read('public/android.html')
-    assert.ok(!/<h2>Bluetooth/.test(support), 'the support page still has a Bluetooth section')
-    assert.ok(!/The one exception is Bluetooth/.test(support), 'the support page still says Bluetooth is an exception to needing the computer')
-    assert.match(support, /The phone doesn’t talk to the unit directly, which\s+is why there is a computer in the middle\./, 'the support page no longer says the computer is in the middle')
-    /*
-     * The Android page says nothing about it; the support page, since the
-     * 1.89.0 texts (25 October 2026), one sentence and no more, true before
-     * and after 1.89.0 is approved, and no link to the guide. The rest of
-     * its rewrite waits for the live day (docs/app-store.md step 18).
-     */
-    assert.ok(!/bluetooth/i.test(android), 'the Android page mentions Bluetooth')
-    const supportWords = support.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
-    assert.equal((supportWords.match(/bluetooth/gi) || []).length, 2, 'the support page says more about Bluetooth than its one sentence')
-    assert.ok(supportWords.includes('From version 1.89.0, the app can also connect to your unit with no computer, by Bluetooth through an adapter; the computer is still the best way, and Bluetooth has more lag and fewer features.'), 'the support page’s one Bluetooth sentence is not the one docs/app-store.md gives')
-    /* No page on the website links the guide: only the app's own Bluetooth page does, which only his account opens. */
-    for (const file of readdirSync(new URL('../public/', import.meta.url)).filter((f) => f.endsWith('.html') && f !== 'bluetooth-guide.html')) {
-      assert.ok(!/bluetooth-guide/.test(read(`public/${file}`).replace(/<!--[\s\S]*?-->/g, '')), `public/${file} links the Bluetooth guide, and customers cannot use it`)
-    }
+    /* The support page: the two ways, the computer first, and /bluetooth for the rest. Help stays Justin's own channels. */
+    const support = read('public/support.html').replace(/<!--[\s\S]*?-->/g, '')
+    const supportWords = support.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+    assert.ok(!/<h2>Bluetooth/.test(support), 'the support page has grown a Bluetooth section of its own')
+    assert.ok(!/The phone doesn’t talk to the unit directly/.test(support), 'the support page still says the phone never talks to the unit itself')
+    assert.ok(supportWords.includes(BLUETOOTH_WAYS), 'the support page does not say the two ways, the computer first')
+    assert.ok(supportWords.indexOf('Through a computer.') > -1 && supportWords.indexOf('Through a computer.') < supportWords.indexOf('By Bluetooth, with no computer.'), 'the support page puts Bluetooth before the computer')
+    assert.match(support, /href="\/bluetooth"/, 'the support page does not lead on to /bluetooth')
+    assert.match(supportWords, /From version 1\.89\.0/, 'the support page does not say which versions have Bluetooth')
+    /* The Android page is about getting the app, and still says nothing about Bluetooth. */
+    assert.ok(!/bluetooth/i.test(read('public/android.html')), 'the Android page mentions Bluetooth')
   })
 
   test('the 1.87.11 store notes disclose the Bluetooth code in one paragraph, and nothing a customer reads offers Bluetooth', async () => {
@@ -4662,10 +4661,19 @@ export function run(test) {
     const { fenced } = await import('../scripts/store-text.mjs')
     const { AFFILIATION } = await import('../shared/affiliation.mjs')
     const current = fenced(store, '### Description')
+    /*
+     * EXCEPT THE PROMOTIONAL TEXT AND THE PLAY SUMMARY, since 30 October
+     * 2026: 1.89.3 is live in both stores, so customers can open Bluetooth,
+     * and both change any time, so they say the two ways (the test on what
+     * the store says first holds their words). Only while the live store
+     * versions are ones that open it.
+     */
+    const live = JSON.parse(read('public/store-versions.json'))
+    const atLeast = (v, w) => { const a = v.split('.').map(Number), b = w.split('.').map(Number); for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i]; return true }
+    assert.ok(atLeast(live.ios, '1.89.0') && atLeast(live.android, '1.89.0'), 'the promotional text and the Play summary offer Bluetooth, and a live store version does not open it')
+    const anyTime = [fenced(store, '### Promotional text').trim(), fenced(store, '### Google Play: short description').trim()]
     for (const [where, text] of [
       ['Description', current],
-      ['promotional text', fenced(store, '### Promotional text')],
-      ['Play summary', fenced(store, '### Google Play: short description')],
       ['live review notes', fenced(store, '## Review notes')]
     ]) assert.ok(!/bluetooth|adapter|cme\b|widi/i.test(text), `the ${where} mentions Bluetooth, and customers cannot open it`)
     assert.match(current, /Controlling your real unit needs the computer described at the top\.\n/, 'the demo paragraph does not say the computer is what controls a real unit')
@@ -4696,10 +4704,10 @@ export function run(test) {
     assert.ok(opening.length > 1000 && store.indexOf('## 1.89.0: Bluetooth (beta) for customers') > at, 'the 1.89.0 section is missing, or sits above the 1.87.11 one')
     const blocks = store.replace(opening, '').split('```').filter((_, i) => i % 2 === 1)
     assert.ok(blocks.length >= 8, 'the blocks to paste could not be read')
-    const offering = blocks.filter((b) => /bluetooth/i.test(b) && !/switched on only for the developer's own account/.test(b))
+    const offering = blocks.filter((b) => /bluetooth/i.test(b) && !/switched on only for the developer's own account/.test(b) && !anyTime.includes(b.trim()))
     assert.deepEqual(offering, [], 'a block to paste offers Bluetooth, and customers cannot open it')
     /* Apple's notes (1.87.11's, and the next version's), Google's App access note, and its short version for a box that will not take the long one. */
-    assert.equal(blocks.filter((b) => /bluetooth/i.test(b)).length, 4, 'Bluetooth is disclosed in some other block than Apple’s notes and Google’s App access (long and short)')
+    assert.equal(blocks.filter((b) => /bluetooth/i.test(b) && !anyTime.includes(b.trim())).length, 4, 'Bluetooth is disclosed in some other block than Apple’s notes and Google’s App access (long and short)')
     const draftNote = section.slice(withdrawn, section.indexOf('### By hand in Play Console for 1.87.11'))
     assert.ok(!/```/.test(draftNote), 'the withdrawn draft still has a block to paste')
     /* The 1.87.1 texts are kept at the end for the record, quoted rather than fenced, so none of them is a block to paste. */
@@ -5149,13 +5157,11 @@ export function run(test) {
     const beforeSending = day.slice(at('**GitHub: the website, merged before anything is sent**'), at('**Justin: App Store Connect.**'))
     /* The Support URL a reviewer reads gets one sentence true before and after approval; /bluetooth waits for the live day. */
     assert.match(beforeSending, /\*\*bluetooth-guide\.html\*\*[^]*\*\*privacy\.html\*\*[^]*\*\*support\.html\*\*, the App Store's Support URL[^]*"From version 1\.89\.0, the app can also connect to your unit with no computer, by Bluetooth through an adapter; the computer is still the best way, and Bluetooth has more lag and fewer features\."[^]*\*\*Not yet\*\* \/bluetooth \(bluetooth\.html\), which says/, 'the guide, the privacy page and the support page do not change before submitting, or /bluetooth does')
-    /* Done with the 1.89.0 texts, and the pages say it now. */
-    assert.ok(read('public/support.html').replace(/\s+/g, ' ').includes('From version 1.89.0, the app can also connect to your unit with no computer, by Bluetooth through an adapter; the computer is still the best way, and Bluetooth has more lag and fewer features.'), 'support.html does not say the sentence the steps say it does')
+    /* Done with the 1.89.0 texts; since the live day (30 October 2026) support.html says the two ways instead (step 18, held by the /bluetooth test). */
     /* The guideline pass, written down, with the date of the guidelines it read. */
     const pass = flat(section.slice(section.indexOf('### The guideline pass for 1.89.0'), section.indexOf('### Notes for App Review, 1.89.0')))
     assert.match(pass, /"Last Updated: October 16, 2026"/, 'the guideline pass does not say which guidelines it read')
     for (const g of ['2.1', '2.2', '2.3.1(a)', '2.5.19', '2.3.10', '2.3.12', '1.4', '3.1.1', '4.1(c)', '5.2.1', '5.1.1(i)', '5.1.1(v)', '5.1.2']) assert.ok(pass.includes(`**${g}`) || pass.includes(` ${g} `) || pass.includes(`${g} (`) || pass.includes(`and ${g}`), `the guideline pass leaves out ${g}`)
-    assert.ok(read('public/support.html').includes('The phone doesn’t talk to the unit directly, which'), 'the steps add a sentence after one support.html no longer has')
     const liveDay = day.slice(at("**E. Each store's live day**"))
     for (const [said, why] of [
       [/\/bluetooth \(bluetooth\.html\) becomes the real page/, '/bluetooth'],
