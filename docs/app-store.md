@@ -57,10 +57,16 @@ two ways, the computer first: the promotional text and the Play summary now,
 since both change any time, and the Description and the subtitle with the
 next version, since Apple changes those only with one. The App Store's live
 Description is Justin's own edit of the 1.89.0 block: it opens "REQUIRES A
-COMPUTER, RASPBERRY PI, OR BLUETOOTH ADAPTER" and lists the VP4 with no word
-on what does not work on it. The next version's Description drops the first
-and puts the second back (the VP4 line under SUPPORTED UNITS, below); until
-then the promotional text is the one place on that page that says it.
+COMPUTER, RASPBERRY PI, OR BLUETOOTH ADAPTER" and lists the VP4 with no
+warnings. The next version's Description starts from that live one, not from
+the blocks below, with the opening changed to the two ways.
+
+**No VP4 warnings in the listing** (30 October 2026): "Don't give any
+warnings about VP4 I removed all those." So the promotional text, the
+Description and the custom product pages say nothing about what does not
+work on a VP4. They still promise it nothing it does not do: a VP4 page says
+presets and scenes, never the tuner or knobs. The app itself keeps its VP4
+notes (the purchase page, Play and Edit), which are not the listing.
 
 **Never call the computer app free.** "That could confuse people thinking the
 iOS/android app is free." Call it the desktop app. A test holds every block
@@ -108,29 +114,23 @@ paragraph, and that copy can be empty. 1.87.11 came out on 12 October 2026
 with no promotional text at all. The run warns about any version it could not
 change.
 
-**On a VP4 it says what does not work yet** (since 15 October 2026), because
-it is the one part of the App Store page that can change before the next
-version, and the live Description there still promises a VP4 presets,
-scenes, the tuner and tap tempo (see *Description*, below). It names the
-same five things the purchase page does, and gave up "and your phone
-controls it from there" and "The demo needs no gear" for the room: the
-Description says both straight after it.
+**It said what does not work on a VP4** from 15 October 2026, the five
+things the purchase page names, while the live Description promised a VP4
+the tuner and tap tempo. Since 30 October 2026 it does not: Justin took the
+VP4 warnings out of the listing (above).
 
 **And it says whose app it is not** (18 October 2026), in the short form of
 Fractal Audio's sentence (NOT_AFFILIATED_SHORT in shared/affiliation.mjs).
-170 characters do not hold the full sentence beside the two ways and the
-VP4, so the order is the one that matters: how it connects first, the
-disclaimer second, and the VP4 line shortened to fit ("knobs, tuner, tempo,
-channels and saving", the same five). It opened on REQUIRES A COMPUTER until
-30 October 2026, when Bluetooth made that untrue (above): "By computer or by
-Bluetooth." in its place. 169 of 170. It goes live only when the
+How it connects first, then what it does, then the disclaimer. It opened on
+REQUIRES A COMPUTER until 30 October 2026, when Bluetooth made that untrue
+(above): "By computer or by Bluetooth." in its place. 158 of 170. It goes live only when the
 store-text workflow is run with **Write it**, which is Justin's call, not a
 merge's. And whether the App Store's web page shows promotional text at all
 (the App Store app on an iPhone does, above the description) is worth a look
 in a desktop browser before anybody is told it is there.
 
 ```
-By computer or by Bluetooth. Not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC. VP4: knobs, tuner, tempo, channels and saving don't work yet.
+By computer or by Bluetooth. Your presets, scenes and setlists, from your phone. Not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC.
 ```
 
 ### Keywords (100, commas, no spaces after them)

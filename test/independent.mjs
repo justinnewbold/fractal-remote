@@ -366,7 +366,7 @@ export function run(test) {
     assert.equal(paragraphs[1], AFFILIATION, 'the Description’s second paragraph is not the shared disclaimer')
     assert.equal(description.split(AFFILIATION).length, 2, 'the Description says the disclaimer twice')
     assert.ok(promoText(store).includes(NOT_AFFILIATED_SHORT), 'the App Store promotional text does not say it')
-    assert.match(promoText(store), new RegExp(`^By computer or by Bluetooth\\. ${NOT_AFFILIATED_SHORT.replace(/[.,]/g, '\\$&')} VP4:`), 'the promotional text does not put the two ways first and the disclaimer second')
+    assert.match(promoText(store), /^By computer or by Bluetooth\./, 'the promotional text does not put the two ways first')
 
     /* The computer app's tray, which cannot import shared/. */
     const main = read('desktop/main.js')

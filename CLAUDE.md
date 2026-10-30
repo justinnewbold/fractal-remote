@@ -391,7 +391,9 @@ the build refused), and an update hides it from everybody but him:
   require a computer anymore if people are using Bluetooth instead. So we
   can drop that now." (30 October 2026.) The promotional text and the Play
   summary say the two ways now; the Description and the subtitle follow
-  with the next version (docs/app-store.md).
+  with the next version (docs/app-store.md). And no VP4 warnings in the
+  listing: "Don't give any warnings about VP4 I removed all those." (30
+  October 2026.) It still promises a VP4 nothing it does not do.
 
 **It is switched on for customers only in a new store version whose review
 notes say so, never by an over-the-air update.** Apple's guideline 2.5.19

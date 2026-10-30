@@ -1146,14 +1146,14 @@ export function run(test) {
 
     /*
      * The promotional text: the one part of the App Store page that changes
-     * before the next version, and that page's Description still promises a
-     * VP4 everything. So it names the five, after the two ways it connects.
+     * before the next version. It named the five from 15 October 2026, and
+     * since 30 October names no VP4 at all, by Justin's choice.
      */
     const promo = promoText(store)
     assert.match(promo, /^By computer or by Bluetooth\./)
     assert.ok([...promo].length <= PROMO_LIMIT)
-    assert.match(promo, /\bVP4\b/, 'the promotional text no longer says what doesn’t work on a VP4, and the live App Store Description still promises it')
-    namesEveryNotYet('the promotional text', promo, v.VP4_NOT_YET)
+    /* No VP4 warnings in the listing since 30 October 2026: "Don't give any warnings about VP4 I removed all those." Nor any promise to one. */
+    assert.ok(!/\bVP4\b/.test(promo), 'the promotional text gives a VP4 warning, and Justin took those out of the listing')
     promisesAVp4Nothing('the promotional text', promo)
 
     /* The download page: what you need, word for word, and a demo that says it does more. */
