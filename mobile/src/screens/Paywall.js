@@ -149,7 +149,7 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
           Phone Remote
         </Text>
         <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: font.body * 1.45 }}>
-          {`One-time payment unlocks the full version of this app, forever, including all future updates, on all supported Fractal devices: ${supportedWords}. Sign in with the same account on another phone or tablet and it is unlocked there too.`}
+          {`One-time payment, with every future update, on the ${supportedWords}. It unlocks on every phone or tablet you sign in on.`}
         </Text>
       </View>
 
@@ -162,8 +162,7 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
         }}
       >
         <Text style={{ color: color.silk, fontSize: font.body, lineHeight: font.body * 1.45 }}>
-          You&rsquo;ll be able to control and switch presets, scenes, amp &amp; effects blocks,
-          tuner, tap tempo, setlists, and so much more.
+          Presets, scenes, amp &amp; effect blocks, the tuner, tap tempo, setlists and more.
         </Text>
         {/*
           AND WHAT A VP4 GETS OF THAT, right under the list it is an exception
@@ -224,9 +223,8 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
         {freeFirst ? (
           <>
             <Text style={{ color: color.silk, fontSize: font.body, lineHeight: font.body * 1.45 }}>
-              Already bought it on another device? Don&rsquo;t buy it again here: sign in with the account you
-              used there. Signing in never charges you. If that device has no account yet, make one on it first,
-              then sign in here with it.
+              Bought it on another device? Sign in with that account instead of buying again. Signing in never
+              charges you.
             </Text>
             <Press
               label={ALREADY_UNLOCKED}
@@ -271,8 +269,7 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
       </View>
 
       <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>
-        The demo stays free for as long as you want it. It is the whole app
-        against a simulated unit — nothing in it is cut short.
+        The demo stays free, for as long as you like.
       </Text>
 
       {signedInAs ? (
@@ -290,9 +287,8 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
       {signedInAs ? (
         <Sheet open={deleting} onClose={() => (busy ? null : setDeleting(false))} title="Delete account" note={signedInAs}>
           <Text style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
-            This deletes your account for good: your sign-in, your set lists, bug reports you sent from it and
-            everything else stored under it. It happens straight away and cannot be undone. Any computer signed in
-            to this account is signed out.
+            This deletes your account and everything saved in it, straight away. It can’t be undone, and any
+            computer signed in to it is signed out.
           </Text>
           <Press
             label={busy ? 'Deleting…' : 'Delete my account'}

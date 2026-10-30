@@ -1292,8 +1292,8 @@ export default function Stage({
 
           {chain === 'failed' && !chainNow.elsewhere ? (
             <Note tone="warn">
-              The unit didn’t answer when we asked what’s in this preset, so these buttons are
-              whatever it last told us. Pull down to ask again.
+              The unit didn’t say what’s in this preset, so these buttons may be out of date. Pull down to ask
+              again.
             </Note>
           ) : null}
 
@@ -1693,8 +1693,8 @@ export default function Stage({
             <NoComputerWords email={noComputer.email} />
           ) : (
             <>
-              The {deviceNoun()} can’t reach your computer. Open the Fractal Remote app on the computer and make sure the
-              computer is awake. This keeps trying on its own.
+              Can’t reach your computer. Open the Fractal Remote app on the computer, and check the computer is
+              awake.
             </>
           )}
         </Note>

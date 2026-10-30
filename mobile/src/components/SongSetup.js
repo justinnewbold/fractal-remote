@@ -51,8 +51,7 @@ export default function SongSetup({ device, list, nameOf, addressing }) {
   return (
     <View style={{ gap: space.md }}>
       <Text style={{ color: color.silkDim, fontSize: font.small }}>
-        What each song sets up when Next or Previous lands on it. Leave it as saved and the song plays as its preset is
-        saved.
+        What each song sets when Next or Previous lands on it. Left as saved, it plays as its preset is saved.
       </Text>
       {list.presets.map((n, i) => {
         const song = songIn(list, n) || {}

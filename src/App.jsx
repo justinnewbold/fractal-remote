@@ -4217,13 +4217,12 @@ export default function App() {
       <p className="device-meta">One payment, once</p>
       <h3 className="unlock-head">Phone Remote</h3>
       <p className="hint">
-        {`One-time payment unlocks the full version of this app, forever, including all future updates, on all supported Fractal devices: ${
+        {`One-time payment, with every future update, on the ${
           DEMO_UNITS.slice(0, -1).map((u) => u.name).join(', ') + ' and ' + DEMO_UNITS[DEMO_UNITS.length - 1].name
-        }. Sign in with the same account on another phone or tablet and it is unlocked there too.`}
+        }. It unlocks on every phone or tablet you sign in on.`}
       </p>
       <p className="unlock-features">
-        You&rsquo;ll be able to control and switch presets, scenes, amp &amp; effects blocks,
-        tuner, tap tempo, setlists, and so much more.
+        Presets, scenes, amp &amp; effect blocks, the tuner, tap tempo, setlists and more.
       </p>
       {/* What a VP4 gets of that, under the list it is an exception to: the phone paywall's line, from shared/vp4-safety.mjs. */}
       <p className="hint">{VP4_SO_FAR}</p>
