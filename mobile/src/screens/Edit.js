@@ -23,7 +23,7 @@ import {
 } from '../lib/device'
 import { vp4Here } from '../lib/device'
 import { overBluetooth } from '../lib/bleSwitch'
-import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
+import { bleEditNoteSeen, editBetaNoteSeen, markBleEditNote, markEditBetaNote } from '../lib/coach'
 import { VP4_NO_EDITS, VP4_NO_KNOBS } from '../lib/vp4-safety'
 import {
   CAB_REFUSED,
@@ -201,6 +201,17 @@ export default function Edit({ onBack, onOpenGear }) {
       alive = false
     }
   }, [viaBle])
+  /* The beta note at the foot, the same way. */
+  const [betaNoteUp, setBetaNoteUp] = useState(false)
+  useEffect(() => {
+    let alive = true
+    editBetaNoteSeen().then((seen) => {
+      if (alive && !seen) setBetaNoteUp(true)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const [openEid, setOpenEid] = useState(null)
   const [error, setError] = useState(null)
@@ -569,8 +580,18 @@ export default function Edit({ onBack, onOpenGear }) {
       */}
       {chainNow.elsewhere || viaBle ? null : <RenameDoor />}
 
-      {/* Last on the page, under everything it is about. */}
-      <Note tone="warn">{BETA_NOTE}</Note>
+      {/* Last on the page, under everything it is about, until its cross is pressed. */}
+      {betaNoteUp ? (
+        <Note
+          tone="warn"
+          onDismiss={() => {
+            setBetaNoteUp(false)
+            markEditBetaNote()
+          }}
+        >
+          {BETA_NOTE}
+        </Note>
+      ) : null}
     </ScrollView>
   )
 }

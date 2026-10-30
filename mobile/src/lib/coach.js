@@ -126,6 +126,29 @@ export function markBleEditNote() {
 }
 
 /*
+ * Edit's beta note at the foot of the page (screens/Edit BETA_NOTE), the same
+ * way: up until its cross is pressed, then gone on this device. "Same with the
+ * notice at the bottom of the screen that says edit is a beta feature." The
+ * (Beta) beside Edit's title stays, so the screen still says what it is.
+ */
+const EDIT_BETA_KEY = 'fractal.coach.editBeta.v1'
+let editBetaSettled = false
+
+export async function editBetaNoteSeen() {
+  if (editBetaSettled) return true
+  try {
+    return (await AsyncStorage.getItem(EDIT_BETA_KEY)) === 'done'
+  } catch {
+    return true
+  }
+}
+
+export function markEditBetaNote() {
+  editBetaSettled = true
+  AsyncStorage.setItem(EDIT_BETA_KEY, 'done').catch(() => {})
+}
+
+/*
  * PLAY'S ONE-TIME NOTES TAKE TURNS: ONE AT A TIME, IN THIS ORDER (Stage).
  *
  * The notes at the top of Play that come before the rest: a purchase made on

@@ -1124,7 +1124,10 @@ export function run(test) {
     assert.match(edit, /const BETA_NOTE = 'Edit is a beta feature\./, 'the beta notice is gone')
     /* At the foot: after the last thing on the page, and before it closes. */
     const foot = edit.slice(edit.indexOf('<RenameDoor />'), edit.indexOf('</ScrollView>', edit.indexOf('<RenameDoor />')))
-    assert.match(foot, /<Note tone="warn">\{BETA_NOTE\}<\/Note>/, 'the beta notice is not at the bottom of the page')
+    /* Until its cross is pressed: "Same with the notice at the bottom of the screen that says edit is a beta feature." */
+    assert.match(foot, /\{betaNoteUp \? \( <Note tone="warn" onDismiss=\{\(\) => \{ setBetaNoteUp\(false\) markEditBetaNote\(\) \}\} > \{BETA_NOTE\} <\/Note> \) : null\}/, 'the beta notice is not at the bottom of the page, or has no cross')
+    assert.match(edit, /const \[betaNoteUp, setBetaNoteUp\] = useState\(false\)/, 'the beta notice flashes up before storage has said it was put away')
+    assert.match(edit, /editBetaNoteSeen\(\)\.then\(\(seen\) => \{ if \(alive && !seen\) setBetaNoteUp\(true\) \}\)/)
     /* And it points at a way to say what is wrong that exists. */
     assert.match(read('mobile/src/screens/Settings.js'), /title="Feedback"/, 'the notice sends people to a Feedback row that is gone')
   })
