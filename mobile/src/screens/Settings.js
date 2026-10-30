@@ -391,6 +391,8 @@ export default function Settings({
   const throughAdapter = bluetooth && !demo
 
   const [page, setPage] = useState(startPage)
+  /* Which tool each Developer page has open, kept while Settings is open. */
+  const [devTab, setDevTab] = useState({ customers: 'sales', health: 'live' })
   useEffect(() => {
     onPage?.(page)
   }, [page, onPage])
@@ -479,7 +481,7 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'bt-tools': 'developer', works: 'developer' }
+  const PARENT = { offline: 'link', updating: 'link', messages: 'developer', customers: 'developer', health: 'developer', testing: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth' }
   const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, developer: '‹ Developer', bluetooth: '‹ Bluetooth' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
@@ -693,7 +695,7 @@ export default function Settings({
               menu called developer". */}
           {isAdmin(account?.id) ? (
             <Group title="Developer" hint="Your own tools">
-              <SetupRow title="Developer" status="Access, sales, accounts, messages, what's live" onPress={() => setPage('developer')} />
+              <SetupRow title="Developer" status="Messages, customers, app health, testing" onPress={() => setPage('developer')} />
             </Group>
           ) : null}
 
@@ -902,28 +904,66 @@ export default function Settings({
       ) : null}
 
       {/* ------------------------------------------------------ developer */}
+      {/*
+        FOUR ROWS, NOT TEN. "Can we consolidate any of this developer stuff?
+        It's kind of confusing and a lot to have so many different menus"
+        (Justin, 30 October 2026). There were ten rows, each to a page of its
+        own. Now Messages from users keeps its own row, being the one opened
+        most, and the rest are three pages, each with its tools in a row of
+        buttons across the top (DevTabs): Customers (sales, how many people,
+        accounts, paid but no computer, giving access), App health (what's
+        live, what works) and Testing (view as a new customer, and the
+        Bluetooth check). Every tool is the same one it was, opened the same
+        way, on his account alone.
+      */}
       {page === 'developer' && isAdmin(account?.id) ? (
         <>
           {head('Developer', 'back')}
           <View style={{ gap: 0 }}>
-            <SetupRow title="Give someone access" status="Look someone up, or unlock them" onPress={() => setPage('access')} />
-            <SetupRow title="Sales at a glance" status="Today, this week, all time" onPress={() => setPage('sales')} />
-            <SetupRow title="How many people" status="Who used it today, this week, this month" onPress={() => setPage('usage')} />
-            <SetupRow title="Everyone with an account" status="Who has signed up" onPress={() => setPage('accounts')} />
-            <SetupRow title="Paid but no computer yet" status="Bought it, never set up the computer" onPress={() => setPage('stuck')} />
             <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
-            {/* The gear notes from everybody who said Yes to "Help make Fractal Remote better?" (26 October 2026). */}
-            <SetupRow title="What works" status="Which units, computers and adapters connected" onPress={() => setPage('works')} />
-            <SetupRow title="What's live" status="Which version each piece is on" onPress={() => setPage('live')} />
-            {bluetoothOffered ? <SetupRow title="Bluetooth testing tools" status="The check, and how each command is sent" onPress={() => setPage('bt-tools')} /> : null}
-            {onViewAsCustomer ? (
-              <SetupRow
-                title="View as a new customer"
-                status="The walkthrough and the paywall, as a stranger sees them"
-                onPress={onViewAsCustomer}
-              />
-            ) : null}
+            <SetupRow title="Customers" status="Sales, sign-ups, and giving access" onPress={() => setPage('customers')} />
+            <SetupRow title="App health" status="What's live, and what works" onPress={() => setPage('health')} />
+            <SetupRow title="Testing" status="View as a new customer, Bluetooth check" onPress={() => setPage('testing')} />
           </View>
+        </>
+      ) : null}
+
+      {page === 'customers' && isAdmin(account?.id) ? (
+        <>
+          {head('Customers', 'back')}
+          <DevTabs tabs={CUSTOMER_TABS} on={devTab.customers} onPick={(t) => setDevTab({ ...devTab, customers: t })} />
+          {devTab.customers === 'sales' ? <SalesTool /> : null}
+          {devTab.customers === 'usage' ? <UsageTool /> : null}
+          {devTab.customers === 'accounts' ? <AccountsTool /> : null}
+          {/* "A 'paid but stuck' list on your Developer page" (15 October 2026). */}
+          {devTab.customers === 'stuck' ? <StuckTool /> : null}
+          {devTab.customers === 'access' ? <AccessTool /> : null}
+        </>
+      ) : null}
+
+      {page === 'health' && isAdmin(account?.id) ? (
+        <>
+          {head('App health', 'back')}
+          <DevTabs tabs={HEALTH_TABS} on={devTab.health} onPick={(t) => setDevTab({ ...devTab, health: t })} />
+          {devTab.health === 'live' ? <LiveTool /> : null}
+          {/* The gear notes from everybody who said Yes to "Help make Fractal Remote better?" (26 October 2026). */}
+          {devTab.health === 'works' ? <WhatWorksTool /> : null}
+        </>
+      ) : null}
+
+      {page === 'testing' && isAdmin(account?.id) ? (
+        <>
+          {head('Testing', 'back')}
+          {onViewAsCustomer ? (
+            <Press label="View as a new customer" sub="The walkthrough and the paywall, as a stranger sees them" height={52} onPress={onViewAsCustomer} />
+          ) : null}
+          {/* Its testing tools, moved off the Bluetooth page onto the Developer pages: his account's alone, as they always were. */}
+          {bluetoothOffered ? (
+            <>
+              <Section>Bluetooth check</Section>
+              <BluetoothTools />
+            </>
+          ) : null}
         </>
       ) : null}
 
@@ -1361,13 +1401,6 @@ export default function Settings({
           <BluetoothLimits />
         </>
       ) : null}
-      {/* Its testing tools, moved off the page onto the Developer pages: his account's alone, as they always were. */}
-      {page === 'bt-tools' && bluetoothOffered && isAdmin(account?.id) ? (
-        <>
-          {head('Bluetooth testing tools', 'back')}
-          <BluetoothTools />
-        </>
-      ) : null}
 
       {/* ------------------------------------------------------- metronome */}
       {page === 'metronome' ? (
@@ -1464,68 +1497,11 @@ export default function Settings({
         </>
       ) : null}
 
-      {/* ---------------------------------------------------------- access */}
-      {page === 'access' && isAdmin(account?.id) ? (
-        <>
-          {head('Give someone access', 'back')}
-          <AccessTool />
-        </>
-      ) : null}
-
-      {/* ----------------------------------------------------------- sales */}
-      {page === 'sales' && isAdmin(account?.id) ? (
-        <>
-          {head('Sales at a glance', 'back')}
-          <SalesTool />
-        </>
-      ) : null}
-
-      {/* ----------------------------------------------------------- usage */}
-      {page === 'usage' && isAdmin(account?.id) ? (
-        <>
-          {head('How many people', 'back')}
-          <UsageTool />
-        </>
-      ) : null}
-
-      {/* ------------------------------------------------------------ live */}
-      {page === 'live' && isAdmin(account?.id) ? (
-        <>
-          {head("What's live", 'back')}
-          <LiveTool />
-        </>
-      ) : null}
-
       {/* -------------------------------------------------------- messages */}
       {page === 'messages' && isAdmin(account?.id) ? (
         <>
           {head('Messages from users', 'back')}
           <MessagesTool />
-        </>
-      ) : null}
-
-      {/* ----------------------------------------------------- what works */}
-      {page === 'works' && isAdmin(account?.id) ? (
-        <>
-          {head('What works', 'back')}
-          <WhatWorksTool />
-        </>
-      ) : null}
-
-      {/* -------------------------------------------------------- accounts */}
-      {page === 'accounts' && isAdmin(account?.id) ? (
-        <>
-          {head('Everyone with an account', 'back')}
-          <AccountsTool />
-        </>
-      ) : null}
-
-      {/* ----------------------------------------------------------- stuck */}
-      {/* "A 'paid but stuck' list on your Developer page" (15 October 2026). */}
-      {page === 'stuck' && isAdmin(account?.id) ? (
-        <>
-          {head('Paid but no computer yet', 'back')}
-          <StuckTool />
         </>
       ) : null}
 
@@ -1836,6 +1812,30 @@ const WATCH_KEEP = [
   'Watch app → Display & Brightness → turn on Always On.',
   'Display & Brightness → Wake Duration → Wake for 70 Seconds.'
 ]
+
+/* The Developer pages' tools, in the order their buttons go across the top. */
+const CUSTOMER_TABS = [
+  { key: 'sales', label: 'Sales' },
+  { key: 'usage', label: 'People' },
+  { key: 'accounts', label: 'Accounts' },
+  { key: 'stuck', label: 'No computer' },
+  { key: 'access', label: 'Give access' }
+]
+const HEALTH_TABS = [
+  { key: 'live', label: "What's live" },
+  { key: 'works', label: 'What works' }
+]
+
+/* A row of buttons across the top of a Developer page, one per tool: the one open is lit. */
+function DevTabs({ tabs, on, onPick }) {
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+      {tabs.map((t) => (
+        <Press key={t.key} label={t.label} tone="signal" on={t.key === on} height={40} style={{ paddingHorizontal: space.md }} onPress={() => onPick(t.key)} />
+      ))}
+    </View>
+  )
+}
 
 function SetupRow({ title, status, onPress }) {
   return (

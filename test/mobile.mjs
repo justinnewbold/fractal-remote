@@ -3618,8 +3618,11 @@ export function run(test) {
       }
       assert.ok(!/from '(\.\.\/lib|\.)\/ways-in'/.test(code), `${name} imports the browser's routes, which name Google Play`)
     }
-    for (const [tool, page] of [['AccessTool', 'access'], ['SalesTool', 'sales'], ['UsageTool', 'usage'], ['LiveTool', 'live'], ['MessagesTool', 'messages'], ['AccountsTool', 'accounts'], ['StuckTool', 'stuck']]) {
-      assert.match(settings, new RegExp(`\\{page === '${page}' && isAdmin\\(account\\?\\.id\\) \\? \\( <> \\{head\\([^)]*\\)\\} <${tool} \\/>`), `${tool} is drawn for somebody other than Justin`)
+    /* Four Developer rows since 30 October 2026 ("so many different menus"): each tool inside the page that groups it, behind his account. */
+    for (const [tool, page] of [['AccessTool', 'customers'], ['SalesTool', 'customers'], ['UsageTool', 'customers'], ['LiveTool', 'health'], ['MessagesTool', 'messages'], ['AccountsTool', 'customers'], ['StuckTool', 'customers'], ['WhatWorksTool', 'health']]) {
+      const at = settings.indexOf(`<${tool} `)
+      const gate = settings.lastIndexOf('{page === ', at)
+      assert.ok(at > 0 && settings.startsWith(`{page === '${page}' && isAdmin(account?.id) ? (`, gate), `${tool} is drawn for somebody other than Justin`)
       assert.equal(settings.split(`<${tool} `).length - 1, 1, `${tool} is drawn in a second place`)
     }
   })
@@ -5091,7 +5094,7 @@ export function run(test) {
     assert.match(sql, /revoke all on function public\.account_for_email\(text\) from public, anon, authenticated/, 'a client can look up whether an email has an account')
 
     /* Both ends draw the page only for him. */
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'access' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'customers' && isAdmin\(account\?\.id\) \?[\s\S]*?<AccessTool \/>/)
     assert.match(read('src/App.jsx'), /\{setupPage === 'access' && isAdmin\(link\.account\?\.id\) \?/)
 
     /* And the call never throws, whatever the line does. */
@@ -6394,7 +6397,7 @@ export function run(test) {
     assert.match(body, /return \{ lastSignIn: d\.last_sign_in \?\? null, devices, seen \}/, 'the usage answer carries more than counts need')
 
     /* Both ends draw it only for him, from the Developer page. */
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'usage' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'customers' && isAdmin\(account\?\.id\) \?[\s\S]*?<UsageTool \/>/)
     assert.match(read('src/App.jsx'), /\{setupPage === 'usage' && isAdmin\(link\.account\?\.id\) \?/)
     assert.match(read('mobile/src/components/UsageTool.js'), /action: 'usage'/)
     assert.match(read('src/components/UsageTool.jsx'), /action: 'usage'/)
@@ -6549,7 +6552,7 @@ export function run(test) {
     for (const fn of ['account_details(text)', 'owner_overview()']) {
       assert.ok(sql.includes(`revoke all on function public.${fn} from public, anon, authenticated`), `a client can call ${fn}`)
     }
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'sales' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'customers' && isAdmin\(account\?\.id\) \?[\s\S]*?<SalesTool \/>/)
     assert.match(read('src/App.jsx'), /\{setupPage === 'sales' && isAdmin\(link\.account\?\.id\) \?/)
 
     /*
@@ -6639,7 +6642,7 @@ export function run(test) {
     assert.match(server, /if \(action === 'accounts'\) return json\(\{ ok: true, \.\.\.\(\(await rpc\('owner_accounts', \{\}\)\)/)
     assert.ok(server.indexOf("action === 'accounts'") > server.indexOf('ADMINS.includes(me.id)'), 'the list is read before checking who is asking')
     assert.match(read('supabase/migrations/20260924_owner_accounts.sql'), /revoke all on function public\.owner_accounts\(\) from public, anon, authenticated/, 'a client can read every account')
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'accounts' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'customers' && isAdmin\(account\?\.id\) \?[\s\S]*?<AccountsTool \/>/)
     assert.match(read('src/App.jsx'), /\{setupPage === 'accounts' && isAdmin\(link\.account\?\.id\) \?/)
   })
 
@@ -7865,7 +7868,7 @@ export function run(test) {
      * behind their own check as well, should the page ever open to more.
      */
     assert.ok(!/Testing tools|diagnostic panel/.test(pasted), 'the 1.87.11 notes describe tools on a page the reviewer cannot open')
-    assert.match(read('mobile/src/screens/Settings.js').replace(/\s+/g, ' '), /\{page === 'bt-tools' && bluetoothOffered && isAdmin\(account\?\.id\) \? \(/, 'the Bluetooth testing tools are shown without asking whose account it is')
+    assert.match(read('mobile/src/screens/Settings.js').replace(/\s+/g, ' '), /\{page === 'testing' && isAdmin\(account\?\.id\) \? \([^]*?\{bluetoothOffered \? \( <> <Section>Bluetooth check<\/Section> <BluetoothTools \/>/, 'the Bluetooth testing tools are shown without asking whose account it is')
 
     /* Nothing left in the section asks for a Bluetooth video before pasting. */
     assert.ok(!section.includes('- **The video.**'), 'the 1.87.11 section still asks for a Bluetooth video')
@@ -13816,8 +13819,10 @@ export function run(test) {
        red line on the computer card opens, is a child of Phone & computer
        beside 'offline'. And on 15 October 2026, 'stuck', Paid but no computer
        yet, a child of Developer like the other tools. And on 26 October 2026,
-       'works', What works (the gear notes), a child of Developer too. */
-    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'bt-tools': 'developer', works: 'developer' \}/, 'a page goes back somewhere it did not come from')
+       'works', What works (the gear notes), a child of Developer too. And on
+       30 October 2026 Developer's ten became four: Messages from users and
+       the three pages that group the rest, all children of Developer. */
+    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', messages: 'developer', customers: 'developer', health: 'developer', testing: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')

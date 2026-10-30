@@ -7410,9 +7410,10 @@ export function run(test) {
     assert.ok(tools.includes('<Heading>Check</Heading>'), 'the check is not on the testing tools page')
     assert.match(tools, /if \(b\.unit === 'vp4'\) return <Hint>/, 'the tools ask a VP4 something')
     const developer = flat('mobile/src/screens/Settings.js')
-    assert.match(developer, /\{page === 'bt-tools' && bluetoothOffered && isAdmin\(account\?\.id\) \? \(/, 'the testing tools page is drawn for somebody other than his account')
-    assert.match(developer, /\{bluetoothOffered \? <SetupRow title="Bluetooth testing tools"/)
-    assert.ok(developer.indexOf('title="Bluetooth testing tools"') > developer.indexOf("{page === 'developer' && isAdmin(account?.id) ? ("), 'the testing tools row is not on the Developer page')
+    /* On Developer → Testing since 30 October 2026, when ten Developer rows became four. */
+    assert.match(developer, /\{page === 'testing' && isAdmin\(account\?\.id\) \? \([^]*?\{bluetoothOffered \? \( <> <Section>Bluetooth check<\/Section> <BluetoothTools \/>/, 'the testing tools page is drawn for somebody other than his account')
+    assert.match(developer, /<SetupRow title="Testing" status="View as a new customer, Bluetooth check" onPress=\{\(\) => setPage\('testing'\)\} \/>/)
+    assert.ok(developer.indexOf('title="Testing"') > developer.indexOf("{page === 'developer' && isAdmin(account?.id) ? ("), 'the testing row is not on the Developer page')
     /* Settings works admin out as it does for his Developer pages. */
     const settingsFlat = flat('mobile/src/screens/Settings.js')
     assert.match(settingsFlat, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} onConnected=\{onBack\} \/>/, 'Settings does not tell the Bluetooth page whose account this is')
