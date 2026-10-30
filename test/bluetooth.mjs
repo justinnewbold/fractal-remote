@@ -9940,7 +9940,12 @@ export function run(test) {
     assert.match(lib, /edit: \(\) => editOverBluetooth\(unit\)/, 'the wire is not asked the switch at each request')
     const edit = flat('mobile/src/screens/Edit.js')
     assert.match(edit, /const viaBle = overBluetooth\(caps\)/)
-    assert.match(edit, /\{viaBle \? <Note>\{BLE_NOTE\}<\/Note> : null\}/)
+    /* Up until its cross is pressed: "Make it so that this is a dismissible thing ... until they hit like an X". */
+    assert.match(edit, /\{viaBle && bleNoteUp \? \( <Note onDismiss=\{\(\) => \{ setBleNoteUp\(false\) markBleEditNote\(\) \}\} > \{BLE_NOTE\} <\/Note> \) : null\}/)
+    assert.match(edit, /const \[bleNoteUp, setBleNoteUp\] = useState\(false\)/, 'the note flashes up before storage has said it was put away')
+    assert.match(edit, /bleEditNoteSeen\(\)\.then\(\(seen\) => \{ if \(alive && !seen\) setBleNoteUp\(true\) \}\)/)
+    const coach = flat('mobile/src/lib/coach.js')
+    assert.match(coach, /export function markBleEditNote\(\) \{ bleEditSettled = true AsyncStorage\.setItem\(BLE_EDIT_KEY, 'done'\)/)
     assert.match(edit, /channels\?\.length > 1 && block\.channel && !overBle \? \( <ChannelCopy/)
     assert.match(edit, /overBle=\{viaBle\}/)
     const words = code('mobile/src/screens/Edit.js')

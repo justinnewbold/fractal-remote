@@ -100,6 +100,32 @@ export function markColoursNotice() {
 }
 
 /*
+ * Edit's note on what Bluetooth can and cannot do there (screens/Edit
+ * BLE_NOTE), until its cross is pressed. "Make it so that this is a
+ * dismissible thing, the only stays up temporarily, until they hit like an X."
+ * Remembered when it is put away, not when it is shown, because it is the one
+ * place that says a change made over Bluetooth is lost unless it is saved on
+ * the unit: it stays until somebody has said they read it. A new key if the
+ * words ever change enough to be read again.
+ */
+const BLE_EDIT_KEY = 'fractal.coach.bleEdit.v1'
+let bleEditSettled = false
+
+export async function bleEditNoteSeen() {
+  if (bleEditSettled) return true
+  try {
+    return (await AsyncStorage.getItem(BLE_EDIT_KEY)) === 'done'
+  } catch {
+    return true
+  }
+}
+
+export function markBleEditNote() {
+  bleEditSettled = true
+  AsyncStorage.setItem(BLE_EDIT_KEY, 'done').catch(() => {})
+}
+
+/*
  * PLAY'S ONE-TIME NOTES TAKE TURNS: ONE AT A TIME, IN THIS ORDER (Stage).
  *
  * The notes at the top of Play that come before the rest: a purchase made on
