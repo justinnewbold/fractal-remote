@@ -26,7 +26,7 @@ import Press from './Press'
  */
 export function copyHint(os = Platform.OS) {
   return os === 'ios'
-    ? 'Choose one from your photos, or copy one to paste: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions, tap Done at the top left instead.'
+    ? 'Choose one from your photos, or paste one you have copied.'
     : 'Choose one from your photos (screenshots have a folder of their own), or paste one you have copied.'
 }
 

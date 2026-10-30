@@ -2760,7 +2760,7 @@ export function run(test) {
        check that breaks when a line reflows is a check nobody can edit around. */
     assert.match(
       settings.replace(/\s+/g, ' '),
-      /lost on the next preset change unless it is saved/,
+      /lost at the next preset change unless you tap Save/,
       'nothing says a new name is not permanent until the preset is saved'
     )
   })
@@ -4948,7 +4948,7 @@ export function run(test) {
        main screen, not just in settings." */
     const wrong = read('mobile/src/components/WrongAccount.js').replace(/\s+/g, ' ')
     assert.match(wrong, /useComputerElsewhere\(active\)/, 'the stage never asks')
-    assert.match(wrong, /This \$\{deviceNoun\(\)\} is signed in as \$\{email\}/, 'the stage does not say which account it is on')
+    assert.match(wrong, /Sign it in with \$\{email\}/, 'the stage does not say which account it is on')
     assert.match(wrong, /Switch account on this \$\{deviceNoun\(\)\}/, 'the stage gives no way to change account')
     assert.match(
       phone,
@@ -7022,7 +7022,7 @@ export function run(test) {
       'the help shows while the unit is being asked, when the computer has already answered'
     )
     /* Changed on purpose, 12 October 2026: "the Fractal Remote app", not "the Fractal app", which reads as Fractal Audio's own (FM3-Edit). */
-    assert.match(waking, /Open the Fractal Remote app on the computer and make sure the computer is awake\./, 'no advice on the phone')
+    assert.match(waking, /Open the Fractal Remote app on the computer, and check the computer is awake\./, 'no advice on the phone')
     assert.match(waking, /<Press label="Look for the computer again" onPress=\{\(\) => onRetry\?\.\(\)\} \/>/, 'no button on the phone')
 
     const web = read('src/components/ConnectScreen.jsx').replace(/\s+/g, ' ')
@@ -7380,7 +7380,7 @@ export function run(test) {
     const advice = stage.slice(card, stage.indexOf('</Toast>', card))
     assert.match(advice, /<Note tone="warn" onDismiss=\{\(\) => onPutAway\?\.\(\)\}>/, 'the advice cannot be put away')
     /* Changed on purpose, 12 October 2026: "the Fractal Remote app", not "the Fractal app", which reads as Fractal Audio's own (FM3-Edit). */
-    assert.match(advice, /Open the Fractal Remote app on the computer and make sure the computer is awake\. This keeps trying on its own\./, 'the play screen does not say what to check')
+    assert.match(advice, /Can’t reach your computer\. Open the Fractal Remote app on the computer, and check the computer is awake\./, 'the play screen does not say what to check')
     assert.match(advice, /<Press label="Look for the computer again" height=\{44\} onPress=\{\(\) => onLookAgain\?\.\(\)\} \/>/, 'no way to look again from the play screen')
     assert.match(advice, /<Press label="Troubleshooting" height=\{44\} onPress=\{\(\) => onOpenFix\('connect'\)\} \/>/, 'no way to Troubleshooting from the play screen')
     /* Put away until the computer has answered again, not for ever — and
@@ -7733,7 +7733,7 @@ export function run(test) {
      * (5.1.1(v): no sign-up for what does not need one).
      */
     assert.match(pasted, /Paying once\. With nobody signed in, the purchase page now tells someone who\s+bought on another device to sign in instead of buying again/, 'the 1.87.11 notes do not describe the pay-once line on the purchase page')
-    assert.match(paywall, /Already bought it on another device\? Don&rsquo;t buy it again here: sign in with the account you/, 'the paywall no longer tells somebody who bought elsewhere to sign in, and the notes say it does')
+    assert.match(paywall, /Bought it on another device\? Sign in with that account instead of buying again\./, 'the paywall no longer tells somebody who bought elsewhere to sign in, and the notes say it does')
     assert.match(pasted, /checks again just before charging/, 'the 1.87.11 notes do not say the app checks again before charging')
     assert.match(read('mobile/src/lib/purchases.js'), /export const ALREADY_HAD = 'You already have the full version, so nothing was charged\.'/, 'Buy no longer says nothing was charged when the full version was already there')
     assert.match(pasted, /since an account is what joins the phone to the user's\s+computer\. Nothing is forced: the demo keeps working, and the purchase waits\s+on the phone\./, 'the 1.87.11 notes do not say why an account is asked for after buying, or that nothing is forced')
@@ -12503,7 +12503,7 @@ export function run(test) {
     assert.match(names, /export function learn\(n, name\) \{ if \(!Number\.isInteger\(n\) \|\| typeof name !== 'string'\) return names\.set\(n, cleanPresetName\(name\)\) persist\(\) announce\(\)/, 'a learned name is not kept or announced')
 
     /* And the note says what makes it permanent, in the app's own words. */
-    assert.match(settings, /Save asks the computer to write this slot, and that keeps everything changed from this\{' '\} \{deviceNoun\(\)\}: names, knobs, blocks and the chain\./)
+    assert.match(settings, /unless you tap Save, which keeps everything changed here: names, knobs, blocks and the chain\./)
   })
 
   test('a dead account service is given twelve seconds, not the whole evening', async () => {
@@ -16922,7 +16922,7 @@ export function run(test) {
     assert.match(pay, /if \(unlocked && !busy\) onUnlocked\?\.\(\)/, 'the paywall closes on the store’s listener before the purchase has said how it went')
     /* Nobody signed in: the free way first, above Buy. */
     assert.match(pay, /const freeFirst = nobody && Boolean\(onSignIn\)/)
-    const free = pay.indexOf('Already bought it on another device? Don&rsquo;t buy it again here: sign in with the account you used there. Signing in never charges you. If that device has no account yet, make one on it first, then sign in here with it.')
+    const free = pay.indexOf('Bought it on another device? Sign in with that account instead of buying again. Signing in never charges you.')
     const buy = pay.indexOf('Unlock Full Version — ${price}')
     /* Nothing called free over the price, and no other place to pay named (Apple 3.1.3). */
     const over = pay.slice(pay.indexOf('{freeFirst ? ('), buy)

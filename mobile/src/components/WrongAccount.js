@@ -48,8 +48,8 @@ export default function WrongAccount({ active, onSwitch, onTroubleshoot, onSayin
     <View style={{ paddingHorizontal: space.lg, paddingTop: space.sm, gap: space.sm }}>
       <Note tone="fault">
         {email
-          ? `The computer on this wifi is signed into a different account. This ${deviceNoun()} is signed in as ${email}. On the computer, sign in to the Fractal Remote app with ${email}, or sign this ${deviceNoun()} into the computer’s account.`
-          : `The computer on this wifi is signed into a different account than this ${deviceNoun()}. Sign both into the same account.`}
+          ? `The computer on this wifi is on a different account. Sign it in with ${email}, or sign this ${deviceNoun()} into its account.`
+          : `The computer on this wifi is on a different account than this ${deviceNoun()}. Sign both into the same one.`}
       </Note>
       {onSwitch ? <Press label={`Switch account on this ${deviceNoun()}`} onPress={onSwitch} /> : null}
       {onTroubleshoot ? <Press label="Troubleshooting" onPress={onTroubleshoot} /> : null}

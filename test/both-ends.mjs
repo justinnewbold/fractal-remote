@@ -1410,9 +1410,10 @@ export function run(test) {
     const norm = (t) => t.replace(/&rsquo;/g, '’').replace(/&amp;/g, '&').replace(/\s+/g, ' ')
     for (const line of [
       'Phone Remote',
-      'One-time payment unlocks the full version of this app, forever, including all future updates, on all supported Fractal devices:',
-      'Sign in with the same account on another phone or tablet and it is unlocked there too.',
-      'You’ll be able to control and switch presets, scenes, amp & effects blocks, tuner, tap tempo, setlists, and so much more.',
+      /* Shorter since 30 October 2026 ("too much to read everywhere you go"), at both ends together. */
+      'One-time payment, with every future update, on the',
+      'It unlocks on every phone or tablet you sign in on.',
+      'Presets, scenes, amp & effect blocks, the tuner, tap tempo, setlists and more.',
       'Unlock Full Version — ${'
     ]) {
       assert.ok(norm(phone).includes(line), `the phone paywall no longer says: ${line}`)
@@ -1427,8 +1428,8 @@ export function run(test) {
      */
     assert.match(phone, /import \{ VP4_SO_FAR \} from '\.\.\/lib\/vp4-safety'/, 'the phone paywall does not take its VP4 line from the shared rule')
     assert.match(web, /import \{ VP4_SO_FAR \} from '\.\.\/shared\/vp4-safety\.mjs'/, 'the web unlock page does not take its VP4 line from the shared rule')
-    assert.match(phone, /and so much more\.\s*<\/Text>[\s\S]{0,1200}?<Text[^>]*>\s*\{VP4_SO_FAR\}\s*<\/Text>\s*<\/View>/, 'the phone paywall does not say what a VP4 gets, under the list of what the app does')
-    assert.match(page, /and so much more\.\s*<\/p>[\s\S]{0,300}?<p className="hint">\{VP4_SO_FAR\}<\/p>/, 'the web unlock page does not say what a VP4 gets, under the list of what the app does')
+    assert.match(phone, /setlists and more\.\s*<\/Text>[\s\S]{0,1200}?<Text[^>]*>\s*\{VP4_SO_FAR\}\s*<\/Text>\s*<\/View>/, 'the phone paywall does not say what a VP4 gets, under the list of what the app does')
+    assert.match(page, /setlists and more\.\s*<\/p>[\s\S]{0,300}?<p className="hint">\{VP4_SO_FAR\}<\/p>/, 'the web unlock page does not say what a VP4 gets, under the list of what the app does')
     /* The Setup row is the phone's row, word for word. */
     const settings = read('mobile/src/screens/Settings.js')
     assert.match(settings, /title="Unlock the full version"/, 'the phone renamed its unlock row')

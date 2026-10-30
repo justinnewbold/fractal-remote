@@ -1227,7 +1227,7 @@ export default function Settings({
               </Note>
             ) : link === 'no-answer' ? (
               <Note tone="warn">
-                Open Fractal Remote on the computer, and check the computer is awake.
+                Open the Fractal Remote app on the computer, and check the computer is awake.
               </Note>
             ) : null}
             {/* And the download link to their inbox, under those words and

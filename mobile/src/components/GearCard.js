@@ -277,9 +277,7 @@ export default function GearCard({ entry, entries = [], onGo, onBack }) {
         */}
         {!about.length && !photo ? (
           <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 20 }}>
-            Nothing written down about this one yet. The catalog only
-            holds what can be said for certain — a plausible guess would be read as fact by somebody
-            who owns the real thing.
+            No notes on this one yet.
           </Text>
         ) : null}
       </ScrollView>

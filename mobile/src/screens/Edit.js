@@ -1853,7 +1853,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
       ) : null}
 
       <Text style={{ color: color.silkFaint, fontSize: font.micro }}>
-        Hold ≡ and drag a block up or down to move it. Swipe a block left to remove it, or tap it for Add and Remove.
+        Hold ≡ and drag to move a block. Swipe left to remove it, or tap it for Add and Remove.
       </Text>
 
       {lanes.map((lane) => {
@@ -2143,8 +2143,7 @@ function Modifiers({ blocks, onError }) {
         <Note tone="warn">Couldn’t read the list of things to attach from your unit.</Note>
       ) : model.bindingSupported === false ? (
         <Note>
-          This unit doesn’t let an app attach a modifier — the FM3 and larger units do. You can
-          still set one up on the unit itself.
+          This unit doesn’t let an app attach a modifier. Set one up on the unit itself.
         </Note>
       ) : (
         <>

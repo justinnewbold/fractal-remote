@@ -1832,8 +1832,7 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
             </Note>
           ) : (
             <Note tone="warn">
-              Open the Fractal Remote app on the computer and make sure the computer is awake. This keeps trying on
-              its own.
+              Open the Fractal Remote app on the computer, and check the computer is awake.
             </Note>
           )}
           {/*

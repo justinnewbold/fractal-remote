@@ -1651,8 +1651,8 @@ export function run(test) {
       const m = shotsSrc.match(/export function copyHint\(os = Platform\.OS\) \{\s*return os === 'ios'\s*\? '([^']+)'\s*: '([^']+)'/)
       return os === 'ios' ? m[1] : m[2]
     }
-    /* The photo picker first, on both; on an iPhone the copy route too, with the check mark at the top right (Done only on older versions). */
-    assert.equal(hint('ios'), 'Choose one from your photos, or copy one to paste: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions, tap Done at the top left instead.')
+    /* The photo picker first, on both. Since 30 October 2026 ("too much to read everywhere you go") an iPhone's copy route is the support page's and the empty paste's to say, not this line's. */
+    assert.equal(hint('ios'), 'Choose one from your photos, or paste one you have copied.')
     /* Android: no maker's copy route to explain any more, because the picker is there. */
     assert.equal(hint('android'), 'Choose one from your photos (screenshots have a folder of their own), or paste one you have copied.')
     /* The support page says the same steps. */

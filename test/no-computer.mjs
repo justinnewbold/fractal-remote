@@ -765,7 +765,7 @@ export function run(test) {
     const advice = card.slice(0, card.indexOf('</Toast>'))
     assert.match(
       advice,
-      /<Note tone="warn" onDismiss=\{\(\) => onPutAway\?\.\(\)\}> \{noComputer \? \( <NoComputerWords email=\{noComputer\.email\} \/> \) : \( <> The \{deviceNoun\(\)\} can’t reach your computer\. Open the Fractal Remote app on the computer and make sure the computer is awake\. This keeps trying on its own\. <\/> \)\} <\/Note>/,
+      /<Note tone="warn" onDismiss=\{\(\) => onPutAway\?\.\(\)\}> \{noComputer \? \( <NoComputerWords email=\{noComputer\.email\} \/> \) : \( <> Can’t reach your computer\. Open the Fractal Remote app on the computer, and check the computer is awake\. <\/> \)\} <\/Note>/,
       'the play screen says the new words without a definite no, or lost today’s'
     )
     assert.match(advice, /<Press label="Look for the computer again" height=\{44\} onPress=\{\(\) => onLookAgain\?\.\(\)\} \/>/, 'Look for the computer again went')
@@ -779,7 +779,7 @@ export function run(test) {
     assert.match(waking, /const noneSaid = Boolean\(noComputer\) && !bluetooth && elsewhere === false/, 'the waiting screen says it over Bluetooth, or before the account warning has answered')
     assert.match(
       waking,
-      /\) : elsewhere \? \( <Note tone="fault">[\s\S]*?<\/Note> \) : noneSaid \? \( <Note tone="warn"> <NoComputerWords email=\{noComputer\.email\} \/> <\/Note> \) : \( <Note tone="warn"> Open the Fractal Remote app on the computer and make sure the computer is awake\. This keeps trying on its own\. <\/Note> \)\}/,
+      /\) : elsewhere \? \( <Note tone="fault">[\s\S]*?<\/Note> \) : noneSaid \? \( <Note tone="warn"> <NoComputerWords email=\{noComputer\.email\} \/> <\/Note> \) : \( <Note tone="warn"> Open the Fractal Remote app on the computer, and check the computer is awake\. <\/Note> \)\}/,
       'the waiting screen puts the new words before the account warning, or lost today’s'
     )
     assert.match(waking, /<Press label="Look for the computer again" onPress=\{\(\) => onRetry\?\.\(\)\} \/>/, 'Look for the computer again went')
@@ -790,7 +790,7 @@ export function run(test) {
     assert.match(settings, /const noneSaid = link === 'no-answer' && Boolean\(noComputer\) && elsewhere === false/, 'Setup says it before the account warning has answered')
     assert.match(
       settings,
-      /\{link === 'no-answer' && elsewhere \? \( <Note tone="fault">[\s\S]*?<\/Note> \) : noneSaid \? \( <Note tone="warn"> <NoComputerWords email=\{noComputer\.email\} \/> <\/Note> \) : link === 'no-answer' \? \( <Note tone="warn"> Open Fractal Remote on the computer, and check the computer is awake\. <\/Note> \) : null\}/,
+      /\{link === 'no-answer' && elsewhere \? \( <Note tone="fault">[\s\S]*?<\/Note> \) : noneSaid \? \( <Note tone="warn"> <NoComputerWords email=\{noComputer\.email\} \/> <\/Note> \) : link === 'no-answer' \? \( <Note tone="warn"> Open the Fractal Remote app on the computer, and check the computer is awake\. <\/Note> \) : null\}/,
       'Setup puts the new words before the account warning, or lost today’s'
     )
     assert.match(app, /noComputer=\{noComputer\} \/\* As the top bar says it[^*]*\*\/ link=\{shownLink\.link\}/, 'Setup is not told')

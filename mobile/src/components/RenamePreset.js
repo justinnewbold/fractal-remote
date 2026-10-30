@@ -135,9 +135,8 @@ export default function RenamePreset() {
       <SaveNotes s={saveTo} />
       <SaveButton s={saveTo} height={TAP} grow waiting={pending} />
       <Note>
-        A new name is on the unit straight away and is lost on the next preset change unless it is
-        saved. Save asks the computer to write this slot, and that keeps everything changed from this{' '}
-        {deviceNoun()}: names, knobs, blocks and the chain.
+        A new name is lost at the next preset change unless you tap Save, which keeps everything changed
+        here: names, knobs, blocks and the chain.
       </Note>
     </View>
   )
