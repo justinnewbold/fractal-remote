@@ -125,7 +125,11 @@ How it connects first, then what it does, then the disclaimer. It opened on
 REQUIRES A COMPUTER until 30 October 2026, when Bluetooth made that untrue
 (above): "By computer or by Bluetooth." in its place. 158 of 170. It goes live only when the
 store-text workflow is run with **Write it**, which is Justin's call, not a
-merge's. And whether the App Store's web page shows promotional text at all
+merge's. **And since 30 October 2026 it is never run with Write it:** "No
+don't put any text live on the App Store. I already updated it the way I
+want it." Justin sets the App Store's texts himself, so the block below is a
+suggestion, not what is live; the store-text run without Write it shows
+what is. And whether the App Store's web page shows promotional text at all
 (the App Store app on an iPhone does, above the description) is worth a look
 in a desktop browser before anybody is told it is there.
 
