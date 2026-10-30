@@ -1147,10 +1147,10 @@ export function run(test) {
     /*
      * The promotional text: the one part of the App Store page that changes
      * before the next version, and that page's Description still promises a
-     * VP4 everything. So it names the five, and still opens on the computer.
+     * VP4 everything. So it names the five, after the two ways it connects.
      */
     const promo = promoText(store)
-    assert.match(promo, /^REQUIRES A COMPUTER\./)
+    assert.match(promo, /^By computer or by Bluetooth\./)
     assert.ok([...promo].length <= PROMO_LIMIT)
     assert.match(promo, /\bVP4\b/, 'the promotional text no longer says what doesn’t work on a VP4, and the live App Store Description still promises it')
     namesEveryNotYet('the promotional text', promo, v.VP4_NOT_YET)

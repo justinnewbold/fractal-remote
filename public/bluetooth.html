@@ -6,30 +6,28 @@
     <title>Bluetooth — Fractal Remote</title>
     <meta
       name="description"
-      content="Bluetooth isn't available in Fractal Remote. It is still being tested; the phone connects to your Fractal unit through the desktop app."
+      content="Fractal Remote can control your Fractal unit with no computer, by Bluetooth through a MIDI adapter: what it does, which units, and the setup guide."
     />
     <!--
-      WHAT /bluetooth SAYS NOW: THAT BLUETOOTH (BETA) IS NOT IN THE APP.
+      WHAT /bluetooth SAYS NOW: THAT BLUETOOTH IS IN THE APP.
 
-      "Is there any way to just get the Bluetooth on the developers mode for
-      my own phone? I just feel like it's not ready to have public." (Justin,
-      11 October 2026.) The day before, this address was the full setup guide,
-      with links to buy the parts, and the store texts sent customers here.
-      Now the app shows Bluetooth (beta) on his account alone, so a page
-      telling everybody else what to buy for it would be selling them a
-      feature they cannot open. So this is a short notice instead: not in the
-      app, being tested, and the desktop app for now. It does not promise the
-      feature: it MAY be offered in a later version, and nothing more is said
-      until one does. No links to buy anything, and no link to the guide,
-      which moved to bluetooth-guide.html (test/limits.mjs holds this page to
-      that).
+      1.89.3 is live in both stores (30 October 2026: Apple's listing and
+      Google Play both show it), so this is the real page the live day
+      promised (docs/app-store.md, Submission day, step 18): what it does,
+      which units, the computer still first, and the way on to the setup
+      guide. Until then it said Bluetooth was not in the app, which was true
+      of every copy a customer could get.
 
-      Kept at the same address because What's New and the store pages of
-      1.87.1 may already have sent people here (vercel.json routes /bluetooth
-      to this file).
+      Short on purpose. What to buy and how it plugs in is the guide's
+      (bluetooth-guide.html), so the two cannot disagree; this page names
+      no part but the FM3's, whose warning goes wherever an owner looks
+      (shared/bluetooth-gear.mjs NOT_FOR_FM3, copied because a static page
+      cannot import, and held to it by a test).
 
-      Same look as support.html and privacy.html: the same colours and type,
-      no build step, nothing loaded from anywhere.
+      Kept at the same address because What's New and the store pages have
+      sent people here since 1.87.1 (vercel.json routes /bluetooth to this
+      file). Same look as support.html and privacy.html: the same colours and
+      type, no build step, nothing loaded from anywhere.
     -->
     <style>
       :root {
@@ -50,6 +48,7 @@
       }
       main { max-width: 720px; margin: 0 auto; }
       h1 { font-size: 30px; line-height: 1.2; margin: 0 0 4px; }
+      h2 { font-size: 20px; margin: 40px 0 8px; }
       .when { color: var(--silk-dim); margin: 0 0 32px; font-size: 14px; }
       .lead {
         padding: 16px 20px;
@@ -66,29 +65,48 @@
   <body>
     <main>
       <h1>Bluetooth</h1>
-      <p class="when">Fractal Remote · last updated 11 October 2026</p>
+      <p class="when">Fractal Remote · last updated 30 October 2026</p>
 
       <div class="lead">
         <p>
-          <strong>Bluetooth isn’t available in the app.</strong> It is still being
-          tested, and may be offered in a later version of the app.
+          <strong>Bluetooth is in the app, from version 1.89.0.</strong> With a Bluetooth MIDI
+          adapter plugged into your unit’s MIDI jacks, the app controls it with no computer. It is
+          part of the full version, under Settings → My rig → Bluetooth. Get the app from the
+          App Store or Google Play.
         </p>
         <p>
-          Your phone connects to your Fractal unit through the desktop app: the unit
-          plugs into a Mac, Windows or Linux computer with a USB cable, and the computer runs the
-          Fractal Remote desktop app. <a href="/downloads">Get the desktop app</a>.
+          There are two ways to connect. The computer is the best one. Bluetooth needs no computer,
+          but it has more lag and fewer features.
         </p>
       </div>
 
+      <h2>What it does</h2>
       <p>
-        There is nothing to buy for it now. If you turned Bluetooth on while it was in the
-        app, the app goes back to the computer by itself once it has updated. If you have just
-        installed or updated the app and still see a Bluetooth card, it goes away by itself
-        once the app has updated.
+        Presets, scenes, effects on and off, channels, tempo and the tuner (on a VP4, presets and
+        scenes). No editing or saving over Bluetooth: for those, use the
+        <a href="/downloads">desktop app</a>.
+      </p>
+
+      <h2>Which units</h2>
+      <p>
+        It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4. So far it has been tried on the
+        AM4 and the FM3. It has not been tried yet on an FM9, Axe-Fx III or VP4.
+      </p>
+      <p>
+        <strong>On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master: both got
+        very hot on one.</strong>
+      </p>
+
+      <h2>Setting it up</h2>
+      <p>
+        The <a href="/bluetooth-guide.html">Bluetooth setup guide</a> says what to buy for your
+        unit, how it plugs in, and what to try when it doesn’t connect. The parts are sold
+        separately, by other companies.
       </p>
 
       <p>
-        Questions: the <a href="/support">support page</a>, or email
+        Something not working? <strong>Report a Bluetooth problem</strong>, on the app’s Bluetooth
+        page, sends us a report in one tap. Or use the <a href="/support">support page</a>, or email
         <a href="mailto:justinnewbold@gmail.com">justinnewbold@gmail.com</a>.
       </p>
 

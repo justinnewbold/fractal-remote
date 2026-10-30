@@ -1350,7 +1350,9 @@ export function run(test) {
     /* The newest store version made before the links, on both stores, and nothing built since. */
     assert.equal(LINKS_AFTER_STORE, '1.87.11')
     assert.match(read('docs/expo-builds.md'), /\| 11 Oct \| 1\.87\.11 \| 1 \| 1 \|/)
-    assert.equal(JSON.parse(read('public/store-versions.json')).ios, LINKS_AFTER_STORE, 'a newer store version is out: LINKS_AFTER_STORE is the one before the links')
+    /* 1.89.3 is live in both stores since 30 October 2026, and carries them: LINKS_AFTER_STORE stays the one before. */
+    const { isOlder } = await import('../mobile/src/lib/versions.js')
+    for (const platform of ['ios', 'android']) assert.equal(isOlder(LINKS_AFTER_STORE, JSON.parse(read('public/store-versions.json'))[platform]), true, `${platform}: the live store version is not one made after the links`)
     for (const platform of ['ios', 'android']) {
       assert.equal(linksOpen({ platform, installed: '1.87.11' }), false, `${platform}: open on 1.87.11, whose review notes say nothing of them`)
       assert.equal(linksOpen({ platform, installed: '1.87.11', admin: true }), true, `${platform}: shut to his own account`)

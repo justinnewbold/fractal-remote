@@ -1,5 +1,5 @@
 {
   "about": "The newest Fractal Remote version live in each store. The phone app reads this at most once a day and tells a phone on an older store copy. Move a number on the day that version goes live in that store, and not before: docs/expo-builds.md.",
-  "ios": "1.87.11",
-  "android": "1.87.11"
+  "ios": "1.89.3",
+  "android": "1.89.3"
 }
