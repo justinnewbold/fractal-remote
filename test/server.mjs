@@ -1092,7 +1092,7 @@ export function run(test) {
       `From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth, through a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). ` +
       'The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. ' +
       /* Out of beta since 26 October 2026, and the FM3 tried with the U2MIDI Pro: where it has been tried, and the FM3's warning in a clause. */
-      'So far it has been tried on the AM4 and the FM3; on the FM3, with a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one. ' +
+      'So far it has been tried on the AM4, the FM3 and the Axe-Fx III; on the FM3, with a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one. ' +
       'To try it, update the app, then open Settings → My rig → Bluetooth, which says what to buy and how to plug it in.'
     const first = setupEmail('first', 'fan@example.com', { bluetooth: true })
     const reminder = setupEmail('reminder', 'fan@example.com', { bluetooth: true })
@@ -1124,7 +1124,7 @@ export function run(test) {
     assert.deepEqual(units(named), units(supported), `the email names ${named} as the units Bluetooth is for; SUPPORTED UNITS is ${units(supported).join(', ')}`)
     /* And in Justin's words, with which unit has been tried, and what a VP4 gets. */
     assert.ok(!/\bbeta\b/i.test(second), 'the email still calls Bluetooth a beta')
-    assert.match(second, /So far it has been tried on the AM4 and the FM3/)
+    assert.match(second, /So far it has been tried on the AM4, the FM3 and the Axe-Fx III/)
     assert.match(second, /on a VP4, presets and scenes only/)
     /* Subjects as they were: the computer is still what the email is about. */
     assert.equal(first.subject, 'One more step: the Fractal Remote computer app')

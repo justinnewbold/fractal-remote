@@ -1777,114 +1777,151 @@ function PlayFoot({
   bpm,
   setTyping
 }) {
-  return (
-    <View style={oneRow ? FOOT_ONE_ROW : { gap: space.sm }}>
-      <View style={oneRow ? FOOT_HALF : { flexDirection: 'row', gap: space.sm }}>
-        <Press
-          grow
-          label="Previous"
-          icon={chevronIcon}
-          flip
-          /* What Previous will load, on a line as tall as Next's, so the two words sit level. */
-          under={behind.shown}
-          /* The word and the name drawn smaller rather than cut: "Previ..." over "OLIVIA RODRI..." on a third of an iPhone (Press `fit`), at one size with Next's. */
-          fit
-          fitWith={STEP_BESIDE_PREVIOUS}
-          accessibilityLabel={behind.said}
-          height={foot}
-          disabled={landing(-1) === null && !(noSlotSteps && !order)}
-          onPress={() => step(-1)}
-          style={dimmed}
-        />
-        <Press
-          grow
-          caption="Setlists"
-          label={order ? sourceLabel(source, { favourites, lists }) : 'All'}
-          sub={where || undefined}
-          tone="signal"
-          on={Boolean(order)}
-          height={foot}
-          disabled={!onOpenSetlists}
-          onPress={onOpenSetlists}
-        />
-        <Press
-          grow
-          label="Next"
-          after={chevronIcon}
-          under={ahead.shown}
-          fit
-          fitWith={STEP_BESIDE_NEXT}
-          accessibilityLabel={ahead.said}
-          height={foot}
-          disabled={landing(1) === null && !(noSlotSteps && !order)}
-          onPress={() => step(1)}
-          style={dimmed}
-        />
+  const previous = (
+    <Press
+      grow
+      label="Previous"
+      icon={chevronIcon}
+      flip
+      /* What Previous will load, on a line as tall as Next's, so the two words sit level. */
+      under={behind.shown}
+      /* The word and the name drawn smaller rather than cut: "Previ..." over "OLIVIA RODRI..." on a third of an iPhone (Press `fit`), at one size with Next's. */
+      fit
+      fitWith={STEP_BESIDE_PREVIOUS}
+      accessibilityLabel={behind.said}
+      height={foot}
+      disabled={landing(-1) === null && !(noSlotSteps && !order)}
+      onPress={() => step(-1)}
+      style={dimmed}
+    />
+  )
+  const setlists = (
+    <Press
+      grow
+      caption="Setlists"
+      label={order ? sourceLabel(source, { favourites, lists }) : 'All'}
+      sub={where || undefined}
+      tone="signal"
+      on={Boolean(order)}
+      height={foot}
+      disabled={!onOpenSetlists}
+      onPress={onOpenSetlists}
+    />
+  )
+  const next = (
+    <Press
+      grow
+      label="Next"
+      after={chevronIcon}
+      under={ahead.shown}
+      fit
+      fitWith={STEP_BESIDE_NEXT}
+      accessibilityLabel={ahead.said}
+      height={foot}
+      disabled={landing(1) === null && !(noSlotSteps && !order)}
+      onPress={() => step(1)}
+      style={dimmed}
+    />
+  )
+  /*
+    Tuner and Tap on one row, and the tempo ON the Tap button rather than
+    beside it as its own heading with a forty-point number. That number
+    was answering "what is this preset at" with a third of the screen; on
+    the button it answers the same question and costs nothing.
+
+    Tuner only where the unit has one. Absent means unknown — an older
+    host predating the flag — and unknown still gets to try.
+   */
+  const tuner = caps?.tuner !== false ? (
+    <Press
+      grow
+      label={tunerOn ? 'Stop tuner' : 'Tuner'}
+      icon={tunerIcon}
+      tone="live"
+      on={tunerOn}
+      height={foot}
+      onPress={() => writeTuner(!tunerOn)}
+      style={tunerOn ? undefined : dimmed}
+    />
+  ) : null
+  /*
+    The way to the bench, in the middle. "Let's move the edit button to
+    the center and the tap tempo button to the right."
+
+    It sat on the right because it is the only one of the three that
+    leaves this screen, and last felt like the place for that. What
+    that reasoning missed is which hand is holding the phone: the
+    right edge is where a thumb rests, and the button under the thumb
+    should be the one pressed mid-song, not the one pressed between
+    them.
+   */
+  const edit = onOpenEdit ? (
+    <Press grow label="Edit" icon={editIcon} height={foot} onPress={onOpenEdit} />
+  ) : null
+  /*
+    Tap Tempo on the right, where the thumb is.
+
+    The one thing in this app that must never be sent twice. A parameter
+    arriving twice leaves the unit where it was; a beat arriving twice is
+    a beat that never happened, so the relay excludes this route from its
+    retry.
+
+    Hold it to type a tempo: "on the tap button, let's do where they hold
+    the tap button they can manually enter in the beats per minute they
+    want."
+   */
+  const tap = (
+    <Press
+      grow
+      /* "Change the label on the tap tempo button to just say Tap." */
+      label="Tap"
+      accessibilityLabel={Number.isFinite(bpm) ? `Tap tempo, ${Math.round(bpm)}` : 'Tap tempo'}
+      sub={Number.isFinite(bpm) ? String(Math.round(bpm)) : undefined}
+      icon={tempoIcon}
+      tone="signal"
+      height={foot}
+      onPress={tapTempo}
+      onLongPress={() => setTyping(true)}
+      /* "A green light dot ... that flashes at the current tempo." */
+      badge={<TempoDot bpm={bpm} />}
+      style={dimmed}
+    />
+  )
+  /*
+   * ON THE SPREAD LAYOUT, PREVIOUS AND NEXT AT THE TWO ENDS. "This is an
+   * iPad screenshot can you make it so the previous Next buttons are the
+   * buttons on the end of each side?" (Justin, 31 October 2026.) One row,
+   * Previous on the far left and Next on the far right, the way a pedal
+   * board's step switches sit, with Setlists and Tuner in the left half and
+   * Edit and Tap in the right: Tap beside Next, where the thumb is. The
+   * opened iPhone Duo is the same row, with its fold between the halves.
+   * Under the line it stays today's two rows of three, whose own ends are
+   * Previous and Next already.
+   */
+  return oneRow ? (
+    <View style={FOOT_ONE_ROW}>
+      <View style={FOOT_HALF}>
+        {previous}
+        {setlists}
+        {tuner}
       </View>
-
-      {/*
-        Tuner and Tap on one row, and the tempo ON the Tap button rather than
-        beside it as its own heading with a forty-point number. That number
-        was answering "what is this preset at" with a third of the screen; on
-        the button it answers the same question and costs nothing.
-
-        Tuner only where the unit has one. Absent means unknown — an older
-        host predating the flag — and unknown still gets to try.
-      */}
-      <View style={oneRow ? FOOT_HALF : { flexDirection: 'row', gap: space.sm }}>
-        {caps?.tuner !== false ? (
-          <Press
-            grow
-            label={tunerOn ? 'Stop tuner' : 'Tuner'}
-            icon={tunerIcon}
-            tone="live"
-            on={tunerOn}
-            height={foot}
-            onPress={() => writeTuner(!tunerOn)}
-            style={tunerOn ? undefined : dimmed}
-          />
-        ) : null}
-        {/*
-          The way to the bench, in the middle. "Let's move the edit button to
-          the center and the tap tempo button to the right."
-
-          It sat on the right because it is the only one of the three that
-          leaves this screen, and last felt like the place for that. What
-          that reasoning missed is which hand is holding the phone: the
-          right edge is where a thumb rests, and the button under the thumb
-          should be the one pressed mid-song, not the one pressed between
-          them.
-        */}
-        {onOpenEdit ? (
-          <Press grow label="Edit" icon={editIcon} height={foot} onPress={onOpenEdit} />
-        ) : null}
-        {/*
-          Tap Tempo on the right, where the thumb is.
-
-          The one thing in this app that must never be sent twice. A parameter
-          arriving twice leaves the unit where it was; a beat arriving twice is
-          a beat that never happened, so the relay excludes this route from its
-          retry.
-
-          Hold it to type a tempo: "on the tap button, let's do where they hold
-          the tap button they can manually enter in the beats per minute they
-          want."
-        */}
-        <Press
-          grow
-          /* "Change the label on the tap tempo button to just say Tap." */
-          label="Tap"
-          accessibilityLabel={Number.isFinite(bpm) ? `Tap tempo, ${Math.round(bpm)}` : 'Tap tempo'}
-          sub={Number.isFinite(bpm) ? String(Math.round(bpm)) : undefined}
-          icon={tempoIcon}
-          tone="signal"
-          height={foot}
-          onPress={tapTempo}
-          onLongPress={() => setTyping(true)}
-          /* "A green light dot ... that flashes at the current tempo." */
-          badge={<TempoDot bpm={bpm} />}
-          style={dimmed}
-        />
+      <View style={FOOT_HALF}>
+        {edit}
+        {tap}
+        {next}
+      </View>
+    </View>
+  ) : (
+    <View style={{ gap: space.sm }}>
+      <View style={FOOT_ROW}>
+        {previous}
+        {setlists}
+        {next}
+      </View>
+      <View style={FOOT_ROW}>
+        {tuner}
+        {edit}
+        {tap}
       </View>
     </View>
   )
@@ -1896,6 +1933,8 @@ const FOOT_ONE_ROW = { flexDirection: 'row', gap: space.sm }
 const STEP_BESIDE_PREVIOUS = ['Next']
 const STEP_BESIDE_NEXT = ['Previous']
 const FOOT_HALF = { flex: 1, flexDirection: 'row', gap: space.sm }
+/* Under the line, each of the two rows of three. */
+const FOOT_ROW = { flexDirection: 'row', gap: space.sm }
 
 /**
  * Which channel a block is on.

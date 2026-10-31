@@ -4286,7 +4286,7 @@ export function run(test) {
      */
     assert.ok(!/\bbeta\b/i.test(words), 'the guide still calls Bluetooth a beta')
     const { BETA_NOTE_IPHONE, CLOSE_AND_REOPEN } = await import('../shared/bluetooth-gear.mjs')
-    assert.ok(BETA_NOTE_IPHONE.startsWith('So far, Bluetooth has been tried on the AM4 and the FM3'), 'the app’s note says it was tried somewhere else than the guide does')
+    assert.ok(BETA_NOTE_IPHONE.startsWith('So far, Bluetooth has been tried on the AM4, the FM3 and the Axe-Fx III'), 'the app’s note says it was tried somewhere else than the guide does')
     /* The way out he found when unplugging and plugging the adapter back in left it not connecting (26 October 2026), the app's words. */
     assert.ok(words.includes(CLOSE_AND_REOPEN), 'the guide does not say to close the app completely when it will not connect after the adapter was plugged back in')
     /*
@@ -4295,8 +4295,9 @@ export function run(test) {
      * Android to "not been tried yet"; changed on purpose, with the app's
      * Android beta note.
      */
-    assert.match(words, /So far it has been tried on an AM4 and an FM3, from an iPhone and from an Android phone\. On the AM4, with the three parts below, and with a CME WIDI Master\. On the FM3, with a CME U2MIDI Pro in place of the C2MIDI Pro\./, 'the guide does not say the AM4 and the FM3, from both phones, and with what, are what it was tried on')
-    assert.match(words, /It has not been tried yet on an FM9, Axe-Fx III or VP4\./, 'the guide does not say the FM9, Axe-Fx III and VP4 are untried')
+    /* And the Axe-Fx III, from an iPhone, since 31 October 2026 ("had someone confirm that this works on the Axefx lll"). */
+    assert.match(words, /So far it has been tried on an AM4 and an FM3, from an iPhone and from an Android phone, and on an Axe-Fx III from an iPhone\. On the AM4, with the three parts below, and with a CME WIDI Master\. On the FM3, with a CME U2MIDI Pro in place of the C2MIDI Pro\./, 'the guide does not say the AM4 and the FM3, from both phones, and with what, are what it was tried on')
+    assert.match(words, /It has not been tried yet on an FM9 or VP4\./, 'the guide does not say the FM9 and VP4 are untried')
     assert.ok(!/not been tried[^.]*Android/.test(words), 'the guide still says no Android phone has run it')
     /*
      * "The CME C2MIDI Pro got extremely hot on the FM3 and the connection
@@ -4341,8 +4342,8 @@ export function run(test) {
 
     /* And nothing on the page says the reverse. */
     assert.ok(!/\bworks with the AM4, FM3/.test(words), 'the guide says Bluetooth works with units nobody has tried')
-    assert.ok(!/\bworks? (on|with)\b[^.]{0,60}\b(FM9|Axe-Fx III|VP4)\b/.test(words), 'the guide says Bluetooth works on an FM9, Axe-Fx III or VP4, and nobody has run it on those')
-    assert.match(words, /You can pick an AM4, FM3, FM9, Axe-Fx III or VP4\. So far the AM4 and the FM3 have been tried, and each of the others says so in the app\./, 'the guide does not say which units can be picked, and which have been tried')
+    assert.ok(!/\bworks? (on|with)\b[^.]{0,60}\b(FM9|VP4)\b/.test(words), 'the guide says Bluetooth works on an FM9 or VP4, and nobody has run it on those')
+    assert.match(words, /You can pick an AM4, FM3, FM9, Axe-Fx III or VP4\. So far the AM4, the FM3 and the Axe-Fx III have been tried, and each of the others says so in the app\./, 'the guide does not say which units can be picked, and which have been tried')
 
     /* The parts, at the addresses checked on 10 October 2026. */
     const PARTS = [
@@ -4469,7 +4470,7 @@ export function run(test) {
     assert.ok(said.indexOf(BLUETOOTH_WAYS) < said.indexOf('What it does'), '/bluetooth says what Bluetooth does before it says the computer is best')
     assert.match(said, /No editing or saving over Bluetooth/, '/bluetooth does not say editing and saving need the computer')
     assert.match(said, /on a VP4, presets and scenes/, '/bluetooth promises a VP4 more than presets and scenes')
-    assert.match(said, /It has not been tried yet on an FM9, Axe-Fx III or VP4\./, '/bluetooth does not say which units are untried')
+    assert.match(said, /So far it has been tried on the AM4, the FM3 and the Axe-Fx III\. It has not been tried yet on an FM9 or VP4\./, '/bluetooth does not say which units are untried')
     assert.ok(said.replace(/\s+/g, ' ').includes(NOT_FOR_FM3), '/bluetooth does not carry the FM3’s warning word for word')
     assert.ok(!/beta/i.test(said), '/bluetooth still calls Bluetooth a beta')
     assert.match(page, /href="\/bluetooth-guide\.html"/, '/bluetooth does not lead on to the setup guide')
@@ -4940,7 +4941,8 @@ export function run(test) {
     /* The words the notes quote are the app's own. */
     const gearWords = await import('../shared/bluetooth-gear.mjs')
     /* Out of beta since 26 October 2026 ("remove anything that says beta on it for Bluetooth"): the page's note and these texts say where it has been tried, and never "beta". */
-    assert.ok(gearWords.BETA_NOTE_IPHONE.startsWith('So far, Bluetooth has been tried on the AM4 and the FM3'), 'the notes say it has been tried where the page does not')
+    /* The notes were sent with "the AM4 and the FM3"; the page has added the Axe-Fx III since (31 October 2026), which the notes do not deny. */
+    assert.ok(gearWords.BETA_NOTE_IPHONE.startsWith('So far, Bluetooth has been tried on the AM4, the FM3'), 'the notes say it has been tried where the page does not')
     for (const [where, text] of [['notes', notes], ['What’s New', whatsNew], ['Description', description], ['Play release notes', play], ['App access note', access], ['short App access note', accessShort]]) {
       for (const l of text.split('\n').filter((x) => /bluetooth/i.test(x))) assert.doesNotMatch(l, /\bbeta\b/i, `the 1.89.0 ${where} still call Bluetooth a beta`)
     }

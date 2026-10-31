@@ -1241,12 +1241,18 @@ export function run(test) {
     assert.equal(stage.match(/\bfull=/g).length, 2)
     assert.match(stage, /const fold = shape\.foldPad \? foldInset\(insets\.left, insets\.right\) : NO_FOLD/)
     assert.match(read('mobile/src/screens/Stage.js'), /const NO_FOLD = \{ left: 0, right: 0 \}/)
-    /* The buttons themselves: today's two rows of three under the line, one row of two halves on the spread layout, Tap last in both. */
+    /*
+     * The buttons themselves: today's two rows of three under the line, and
+     * on the spread layout one row of two halves with Previous and Next at
+     * its two ends (31 October 2026: "can you make it so the previous Next
+     * buttons are the buttons on the end of each side?").
+     */
     const foot = stage.slice(stage.indexOf('function PlayFoot('), stage.indexOf('const FOOT_HALF'))
-    assert.match(foot, /<View style=\{oneRow \? FOOT_ONE_ROW : \{ gap: space\.sm \}\}>/)
-    assert.equal(foot.match(/<View style=\{oneRow \? FOOT_HALF : \{ flexDirection: 'row', gap: space\.sm \}\}>/g).length, 2)
-    const order = ['label="Previous"', 'caption="Setlists"', 'label="Next"', "label={tunerOn ? 'Stop tuner' : 'Tuner'}", 'label="Edit"', 'label="Tap"'].map((l) => foot.indexOf(l))
-    assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), 'the six buttons are not Previous, Setlists, Next, Tuner, Edit, Tap')
+    const drawn = foot.slice(foot.indexOf('return oneRow ? (')).replace(/\s+/g, ' ')
+    assert.match(drawn, /^return oneRow \? \( <View style=\{FOOT_ONE_ROW\}> <View style=\{FOOT_HALF\}> \{previous\} \{setlists\} \{tuner\} <\/View> <View style=\{FOOT_HALF\}> \{edit\} \{tap\} \{next\} <\/View> <\/View> \)/, 'the spread layout does not put Previous and Next at its two ends')
+    assert.match(drawn, /: \( <View style=\{\{ gap: space\.sm \}\}> <View style=\{FOOT_ROW\}> \{previous\} \{setlists\} \{next\} <\/View> <View style=\{FOOT_ROW\}> \{tuner\} \{edit\} \{tap\} <\/View> <\/View> \)/, 'under the line the six buttons are not Previous, Setlists, Next over Tuner, Edit, Tap')
+    for (const [name, label] of [['previous', 'label="Previous"'], ['setlists', 'caption="Setlists"'], ['next', 'label="Next"'], ['tap', 'label="Tap"']]) assert.match(foot, new RegExp(`const ${name} = \\(\\s*<Press\\s+grow\\s+(/\\*[^*]*\\*/\\s+)?${label.replace(/[{}()?]/g, '\\$&')}`), `${name} is not the ${label} button`)
+    assert.match(stage, /const FOOT_ROW = \{ flexDirection: 'row', gap: space\.sm \}/)
     assert.match(stage, /const FOOT_ONE_ROW = \{ flexDirection: 'row', gap: space\.sm \}/)
     assert.match(stage, /const FOOT_HALF = \{ flex: 1, flexDirection: 'row', gap: space\.sm \}/)
     /* Still nothing from the kind of device or which way up it is. */

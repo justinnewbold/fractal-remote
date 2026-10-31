@@ -117,8 +117,16 @@
  */
 export const GUIDE_URL = 'https://fractal.newbold.cloud/bluetooth-guide.html'
 
-/** The units it has actually been tried on. Every other unit's steps say "not tried yet". */
-export const TESTED = ['am4', 'fm3']
+/*
+ * The units it has actually been tried on. Every other unit's steps say "not
+ * tried yet". The Axe-Fx III since 31 October 2026: "had someone confirm that
+ * this works on the Axefx lll so that one has been tested", with a
+ * screenshot of Play live on an Axe-Fx III over Bluetooth from an iPhone, its
+ * scenes and chain read. Which adapter it went through was not said, so no
+ * way of hooking one up is marked tried on it (TRIED_WAYS), and each way still
+ * says so with its heat check.
+ */
+export const TESTED = ['am4', 'fm3', 'axefx3']
 
 /**
  * WHAT TO SAY ABOUT IT BEING A BETA. "Let's just say that Bluetooth is beta
@@ -187,8 +195,8 @@ export const REPORT_BUTTON = 'Report a Bluetooth problem'
  * is BLUETOOTH_WAYS's, one line above it.
  */
 const BETA_ENDS = `Something not working? Tap ${REPORT_BUTTON}.`
-export const BETA_NOTE_IPHONE = `So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone. ${BETA_ENDS}`
-export const BETA_NOTE_ANDROID = `So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone and an Android phone. ${BETA_ENDS}`
+export const BETA_NOTE_IPHONE = `So far, Bluetooth has been tried on the AM4, the FM3 and the Axe-Fx III, from an iPhone. ${BETA_ENDS}`
+export const BETA_NOTE_ANDROID = `So far, Bluetooth has been tried on the AM4, the FM3 and the Axe-Fx III, from an iPhone and an Android phone. ${BETA_ENDS}`
 
 /** The beta note for the phone it is shown on, from Platform.OS. */
 export const betaNote = (os) => (os === 'android' ? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE)
@@ -264,7 +272,7 @@ export const NOT_FOR_FM3 = 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI 
  * purchase. So the names are in the line itself, where somebody deciding
  * whether to pay can read them, and look them up.
  */
-export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and so far has been tried on the AM4 and FM3; on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
+export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and so far has been tried on the AM4, FM3 and Axe-Fx III; on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
 
 
 /** The parts, by the name printed on the box, each with what it is for in a line. */
