@@ -3192,7 +3192,7 @@ export function run(test) {
      * and the tempo, on the strip for what you do BETWEEN songs.
      */
     const stageSrc = read('mobile/src/screens/Stage.js')
-    assert.match(stageSrc, /\{onOpenEdit \? \(\s*<Press grow label="Edit" icon=\{editIcon\} height=\{foot\} onPress=\{onOpenEdit\} \/>\s*\) : null\}/, 'the Edit button is drawn whether or not there is anywhere to go')
+    assert.match(stageSrc, /const edit = onOpenEdit \? \(\s*<Press grow label="Edit" icon=\{editIcon\} height=\{foot\} onPress=\{onOpenEdit\} \/>\s*\) : null\n/, 'the Edit button is drawn whether or not there is anywhere to go')
     /*
      * On the foot row, in the middle: Tuner, Edit, Tap Tempo.
      *
