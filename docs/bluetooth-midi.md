@@ -246,10 +246,13 @@ FM3-Edit's ways (scene, channel, tempo, the 0x27 preset, the polled tuner)
 still go when they are picked in the testing tools, his account only, which
 is how they would be tried on a real unit. The Axe-Fx III stays at 512
 presets, as the computer app does: nothing Fractal publishes tells an
-original III from a Mark II over MIDI. And `TESTED` is `['am4', 'fm3']`
-since 26 October 2026: "not tried yet" is said on every Bluetooth surface an
-FM9, Axe-Fx III or VP4 owner reaches, each pointing at Report a Bluetooth
-problem.
+original III from a Mark II over MIDI. And `TESTED` is `['am4', 'fm3',
+'axefx3']` since 31 October 2026 (the III from an iPhone, through an
+adapter nobody said). Since the same day it is ours alone: drawn on
+Developer → App health → Tried and in the head of every log ("FM9 (not
+tried yet)"), and said nowhere a player reads ("we just need to keep track
+of it ourselves in the developer menu", Justin). Only the FM3 has a heat
+warning.
 
 ## Dongles
 

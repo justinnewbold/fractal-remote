@@ -293,27 +293,34 @@ test first, and under these rules:
   to get the Bluetooth out of beta so remove anything that says beta on it
   for Bluetooth." So nothing a person reads calls it Bluetooth (beta) or
   says it is in beta: the Settings row and the page are "Bluetooth", the
-  note on the page says where it has been tried and points at Report a
-  Bluetooth problem, and the store texts, the guide, the support, privacy
+  note at the foot of the page points at Report a Bluetooth problem
+  (`REPORT_NOTE`), and the store texts, the guide, the support, privacy
   and /bluetooth pages and the setup email say no beta either. (Edit (Beta)
-  is another feature, and keeps its word.) Names in the code that say
-  beta (`BETA_NOTE_*`, `betaNote`) and the ledger's "Bluetooth (beta) for
-  customers" marker stay, as records, not words on a screen.
-- **Every untried unit says so.** The AM4 and the FM3 have run it, from an
-  iPhone and an Android phone (26 October 2026): the AM4 through the WIDI
-  Uhost with the C2MIDI Pro, and through a WIDI Master; the FM3 through the
-  WIDI Uhost with a CME U2MIDI Pro ("Using the U2midi pro adapter the FM3
-  works and does not get hot"). The Axe-Fx III from an iPhone since 31
-  October 2026, through an adapter nobody said ("had someone confirm that
-  this works on the Axefx lll so that one has been tested"), so its ways
-  still each say not tried. The FM9 and VP4 say "not tried
-  yet" wherever an owner looks, each with the one-tap Report a Bluetooth
-  problem by it (`untried` and its kin in shared/bluetooth-gear.mjs). Never
-  a sentence that says it works on a unit it has not run on. The FM3's
-  warning stays red and in front of it: the WIDI Master and the C2MIDI Pro
-  got very hot on an FM3 and the WIDI Master did not work; use the U2MIDI Pro, which runs
-  on USB power only, works and stays cool. The C2MIDI Pro and the WIDI
-  Master are never offered for one.
+  is another feature, and keeps its word.) The ledger's "Bluetooth (beta)
+  for customers" marker stays, as a record, not words on a screen.
+- **What has been tried is ours, not the customer's.** "We don't need to
+  mention really whether or not something has been tested or not, we just
+  need to keep track of it ourselves in the developer menu so that we can
+  confirm it or if someone leaves us a note saying it doesn't work then we
+  can investigate" (31 October 2026). So no screen, store text, web page
+  or email says tried, untried or "not tried yet". The record is
+  `TESTED`, `TRIED_WAYS` and `TRIED_NOTES` in shared/bluetooth-gear.mjs,
+  drawn on Developer → App health → Tried (his account only), and the
+  head of every log says "FM9 (not tried yet)" (`unitForReport`). Update
+  it there when a unit or adapter is confirmed. So far: the AM4 and the
+  FM3 from an iPhone and an Android phone (26 October 2026), the AM4
+  through the WIDI Uhost with the C2MIDI Pro, a WIDI Master and a WIDI
+  Jack, the FM3 through the WIDI Uhost with a CME U2MIDI Pro; the Axe-Fx
+  III from an iPhone (31 October 2026, adapter not said, "It just works
+  probably with all the connectors"). Not the FM9 or the VP4. Still never
+  a sentence that says it works on a unit it has not run on.
+- **The FM3 is the only unit with a heat warning.** "The FM three is the
+  only one that ever has overheating issues so we don't need to worry
+  about it for any other devices" (31 October 2026). So no heat check for
+  any other unit. The FM3's stays red and in front of it: the WIDI Master
+  and the C2MIDI Pro got very hot on an FM3 and the WIDI Master did not
+  work; use the U2MIDI Pro, which runs on USB power only, works and stays
+  cool. The C2MIDI Pro and the WIDI Master are never offered for one.
 - **The VP4 does only what the computer path does for it, and less:** a
   Program Change for a preset and the player's Scene Select for a scene
   (mobile/src/lib/bleVp4.js, the computer's own bytes from ForgeFX
@@ -387,7 +394,7 @@ the build refused), and an update hides it from everybody but him:
 - /bluetooth on the website said it isn't in the app until the live day.
   Since 30 October 2026 (1.89.3 live in both stores) it is the real page:
   in the app from 1.89.0, the two ways with the computer first, what it
-  does, the untried units, the FM3's warning, and a link to the guide
+  does, the units it is offered on, the FM3's warning, and a link to the guide
   (bluetooth-guide.html), which search engines may list now. support.html
   says the two ways, the computer first.
 - The store listing no longer opens on REQUIRES A COMPUTER: "It doesn't

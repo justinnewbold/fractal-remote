@@ -123,11 +123,9 @@ export function bluetoothOpen({ platform = null, installed = null, admin = false
  * And: "I'm curious why the VP4 is not listed? ... it uses the same
  * architecture as the AM4." (Justin, 25 October 2026.) So the store version
  * that opens Bluetooth (beta) to customers opens it on all five units the
- * page offers: the AM4, which it has run; the FM9, Axe-Fx III and VP4,
- * which nobody here has, each marked "not tried yet"; and the FM3, which
- * has not run yet (the one cable tried on it got very hot), with that
- * warning kept in front of it. Every untried unit says so, and has the
- * report button beside it (shared/bluetooth-gear untried).
+ * page offers, with the FM3's warning kept in front of it. Which have been
+ * tried is kept on Developer → App health → Tried since 31 October 2026,
+ * never said to a player (shared/bluetooth-gear TESTED, TRIED_NOTES).
  *
  * KEYED BY STORE VERSION, NEVER A PLAIN LIST. A unit added to a plain list
  * here would reach every copy already out, by update, whose review notes

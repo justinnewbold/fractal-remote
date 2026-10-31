@@ -48,16 +48,16 @@
       Bluetooth out of beta so remove anything that says beta on it for
       Bluetooth" (Justin). So nothing here calls it a beta.
 
-      TRIED AND NOT TRIED. Since 26 October 2026, from an iPhone and an
-      Android phone: his AM4, through the WIDI Uhost with the C2MIDI Pro and
-      through a WIDI Master, and his FM3, through the WIDI Uhost with a
-      U2MIDI Pro ("Using the U2midi pro adapter the FM3 works and does not
-      get hot"). The WIDI Master "did not work on the FM3 and got very hot",
-      as the C2MIDI Pro had. The page may say which
-      units can be PICKED, never that any other one WORKS: "It works with the AM4, FM3, FM9 and Axe-Fx III" once stood
-      under What it is, three paragraphs below the note saying three of
-      those had never been tried, with every test green. test/limits.mjs now
-      refuses that shape of sentence.
+      NOTHING ABOUT WHAT HAS BEEN TRIED, since 31 October 2026: "we don't
+      need to mention really whether or not something has been tested or
+      not, we just need to keep track of it ourselves in the developer
+      menu" (Justin). The record is the app's Developer → App health → Tried
+      (shared/bluetooth-gear TESTED). And no heat check but the FM3's: "The
+      FM three is the only one that ever has overheating issues" (the WIDI
+      Master and the C2MIDI Pro got very hot on one). The page may say which
+      units can be PICKED, never that one WORKS: "It works with the AM4,
+      FM3, FM9 and Axe-Fx III" once stood here, and test/limits.mjs refuses
+      that shape of sentence.
 
       NO TESTING TOOLS. The Bluetooth page's Testing tools are a test bench,
       not a place to send a guitarist, so nothing here quotes them. Every outside link here was checked by hand
@@ -120,19 +120,6 @@
       footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--silk-dim); font-size: 14px; }
       code { background: var(--panel); padding: 1px 5px; border-radius: 4px; font-size: 14px; }
       .q { font-weight: 600; color: var(--silk); margin-bottom: 2px; }
-      /* Whether a unit has been tried, beside its name. */
-      .tag {
-        display: inline-block;
-        margin-left: 6px;
-        padding: 0 8px;
-        border-radius: 999px;
-        border: 1px solid var(--rule);
-        font-size: 13px;
-        font-weight: 600;
-        vertical-align: 2px;
-      }
-      .tag.ok { color: var(--ok); border-color: var(--ok); }
-      .tag.no { color: var(--silk-dim); }
       /* A part to buy: its name, then what it is for, then where to get it. */
       .part { margin: 12px 0; padding: 12px 16px; background: var(--panel); border-radius: 8px; }
       .part .name { font-weight: 700; }
@@ -160,12 +147,8 @@
           Bluetooth MIDI adapter plugged into the unit.
         </p>
         <p>
-          So far it has been tried on an AM4 and an FM3, from an iPhone and from an Android phone, and on
-          an Axe-Fx III from an iPhone.
-          On the AM4, with the three parts below, and with a CME WIDI Master. On the FM3, with a
-          CME U2MIDI Pro in place of the C2MIDI Pro. <strong>On an FM3, the WIDI Master and the
-          C2MIDI Pro got very hot, and the WIDI Master did not work: don’t use them on one</strong> (see
-          <a href="#fm3">FM3</a> below). It has not been tried yet on an FM9 or VP4.
+          <strong>On an FM3, the WIDI Master and the C2MIDI Pro got very hot, and the WIDI Master
+          did not work: use a CME U2MIDI Pro instead</strong> (see <a href="#fm3">FM3</a> below).
         </p>
         <p>
           If something doesn’t work, <strong>Report a Bluetooth problem</strong> on the app’s
@@ -201,7 +184,6 @@
       <p>
         In the app it is under <strong>Settings → My rig → Bluetooth</strong>, from
         version 1.89.0, with the full version. You can pick an AM4, FM3, FM9, Axe-Fx III or VP4.
-        So far the AM4, the FM3 and the Axe-Fx III have been tried, and each of the others says so in the app.
       </p>
 
       <h2 id="works">What works over Bluetooth, and what doesn’t</h2>
@@ -235,12 +217,12 @@
 
       <h2 id="need">What you need</h2>
       <p>
-        These are the exact parts used on the AM4 and the FM3 it was tried on. The links are plain links
+        These are the parts to buy for each unit. The links are plain links
         to Amazon in the US: Fractal Remote gets nothing from them, and the same parts are sold
         elsewhere too.
       </p>
 
-      <h3>AM4 <span class="tag ok">Tried, works</span></h3>
+      <h3>AM4</h3>
       <div class="part">
         <div class="name">1. CME WIDI Uhost</div>
         <div class="what">The Bluetooth box, and the one in charge of the USB. Your phone connects to it.</div>
@@ -278,13 +260,12 @@
       </div>
 
       <p class="dim">
-        <strong>Or a CME WIDI Master</strong>, in place of the Uhost and the C2MIDI Pro: tried on
-        the AM4, and it works. Its two MIDI plugs go into the two LOOTOOLS adapters, the main plug
+        <strong>Or a CME WIDI Master</strong>, in place of the Uhost and the C2MIDI Pro. Its two MIDI plugs go into the two LOOTOOLS adapters, the main plug
         in MIDI OUT and the small plug on its short lead in MIDI IN, and it needs no charger. Never
         on an FM3 (below).
       </p>
 
-      <h3 id="fm3">FM3 <span class="tag ok">Tried, works with the U2MIDI Pro</span></h3>
+      <h3 id="fm3">FM3</h3>
       <p class="lead">
         <strong>On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master.</strong>
         When we tried the WIDI Master and the C2MIDI Pro on an FM3, both got very hot, and the WIDI
@@ -338,7 +319,7 @@
         OUT jack, off an FM3.
       </p>
 
-      <h3>FM9 and Axe-Fx III <span class="tag no">Not tried yet</span></h3>
+      <h3>FM9 and Axe-Fx III</h3>
       <p>
         The same parts without the adapters: these units have full-size 5-pin MIDI jacks, and the
         C2MIDI Pro’s plugs go straight in. Owners report CME adapters running cool on these two.
@@ -350,12 +331,6 @@
           <a href="https://www.cme-pro.com/c2midi-pro/">CME’s page</a></li>
         <li>A USB phone charger or power bank, and a USB-C cable for the Uhost</li>
       </ul>
-      <p class="dim">
-        Nobody has tried Fractal Remote over Bluetooth on these two yet. It is built from what is
-        known about them, so some of it may not work as expected. If you try it, please tell us how
-        it went (see the end of this page). Feel the cable in the first minute: it should stay
-        cool.
-      </p>
       <ul>
         <li><strong>FM9:</strong> use firmware 7.00 or later. Older firmware may not list its
           effects, or may lose its settings if MIDI arrives while it starts.</li>
@@ -363,7 +338,7 @@
           settings if MIDI arrives while it starts.</li>
       </ul>
 
-      <h3 id="vp4">VP4 <span class="tag no">Not tried yet</span></h3>
+      <h3 id="vp4">VP4</h3>
       <p>
         The AM4’s parts: the VP4 has the same small 3.5 mm Type A MIDI jacks. Only one adapter is
         used, in its MIDI IN, because the app only sends to a VP4.
@@ -376,11 +351,6 @@
         <li>LOOTOOLS Type-A MIDI to 3.5 mm adapters: <a href="https://www.amazon.com/dp/B0FN83P5P7">on Amazon</a></li>
         <li>A USB phone charger or power bank, and a USB-C cable for the Uhost</li>
       </ul>
-      <p class="dim">
-        Nobody has tried Fractal Remote over Bluetooth on a VP4 yet. If you try it, please tell us
-        how it went (see the end of this page). Feel the cable in the first minute: it should stay
-        cool.
-      </p>
       <h3>Before the first time: update the Uhost</h3>
       <p>
         CME asks for this before first use. Install CME’s free <strong>WIDI</strong> app on your
@@ -453,8 +423,6 @@
           socket, <strong>USB Power</strong>. 5 volts only.</li>
         <li>Check the lights, as for the AM4: steady green on the Uhost’s right, slow blue flashing
           on its left.</li>
-        <li>Feel the C2MIDI Pro after a minute. It should be cool. If it is more than slightly warm,
-          unplug it at once.</li>
       </ol>
 
       <h3>VP4</h3>
@@ -469,8 +437,6 @@
           <strong>USB Host/Device</strong>.</li>
         <li>Last, power: a phone charger or power bank into the Uhost’s <strong>right</strong>
           socket, <strong>USB Power</strong>. 5 volts only.</li>
-        <li>Feel the C2MIDI Pro after a minute. It should be cool. If it is more than slightly warm,
-          unplug it at once.</li>
       </ol>
       <p class="lead">
         <strong>One at a time.</strong> While you use Bluetooth, quit the Fractal Remote app on the
@@ -517,8 +483,7 @@
       </p>
       <p class="q">1 · Pick your unit</p>
       <p>
-        Tap AM4, FM3, FM9, Axe-Fx III or VP4. The FM9 and VP4 say under their names that they
-        haven’t been tried yet. To change it later, tap Stop first.
+        Tap AM4, FM3, FM9, Axe-Fx III or VP4. To change it later, tap Stop first.
       </p>
       <p class="q">2 · Connect</p>
       <p>
@@ -574,8 +539,8 @@
       <h2 id="trouble">When it doesn’t work</h2>
 
       <p class="lead">
-        <strong>Anything getting hot:</strong> if any cable or adapter on a MIDI jack gets more than
-        slightly warm, unplug it at once. On an FM3 that is the known problem described under
+        <strong>On an FM3, anything getting hot:</strong> if a cable or adapter on its MIDI jacks
+        gets more than slightly warm, unplug it at once. That is the known problem described under
         <a href="#fm3">FM3</a> with anything but the U2MIDI Pro, not a fault in the app or the
         phone.
       </p>
@@ -667,14 +632,13 @@
         for an FM3 (see <a href="#fm3">FM3</a>).
       </p>
       <div class="part">
-        <div class="name">CME WIDI Master <span class="tag ok">Tried on the AM4</span></div>
+        <div class="name">CME WIDI Master</div>
         <div class="what">
           The adapter and its two MIDI plugs in one piece, and the simplest way. It takes its power
           from the unit’s MIDI OUT and has no other way to be powered. On an AM4 or VP4 its plugs go
           into two Type-A MIDI to 3.5 mm adapters (a 5-pin socket on one end, a 3.5 mm plug on the
-          other); the ones it was tried with are Eldraqth’s pack of two,
-          <a href="https://www.amazon.com/dp/B0FJRB9KGV">on Amazon</a>. Not tried yet on the FM9, Axe-Fx III or VP4:
-          feel it in the first minute, and unplug it if it gets more than slightly warm.
+          other), such as Eldraqth’s pack of two,
+          <a href="https://www.amazon.com/dp/B0FJRB9KGV">on Amazon</a>.
         </div>
         <p class="buy">
           <a href="https://www.amazon.com/dp/B08F8F57JX">On Amazon</a> ·
@@ -682,7 +646,7 @@
         </p>
       </div>
       <div class="part">
-        <div class="name">CME WIDI Jack, TRS-35 bundle <span class="tag ok">Tried on the AM4</span></div>
+        <div class="name">CME WIDI Jack, TRS-35 bundle</div>
         <div class="what">
           For the AM4 or VP4: a small box with two cables ending in 3.5 mm plugs. Set its switch to
           Type A. It takes its power from the unit’s MIDI OUT, or from a charger in its USB-C socket.
@@ -693,11 +657,11 @@
         </p>
       </div>
       <div class="part">
-        <div class="name">CME WIDI Jack, 5-pin DIN bundle <span class="tag no">Not tried yet</span></div>
+        <div class="name">CME WIDI Jack, 5-pin DIN bundle</div>
         <div class="what">For the FM9 and Axe-Fx III: the same box, with cables ending in 5-pin MIDI plugs.</div>
         <p class="buy"><a href="https://www.amazon.com/dp/B08ZZSVM1J">On Amazon</a></p>
       </div>
-      <p>Not tried with Fractal Remote, so not linked here:</p>
+      <p>Other adapters, not linked here:</p>
       <ul>
         <li><strong>Yamaha MD-BT01</strong>: two plugs, In and Out, and used by other people with
           Fractal units for years. It runs only on the MIDI OUT’s power, and on an FM3 it is

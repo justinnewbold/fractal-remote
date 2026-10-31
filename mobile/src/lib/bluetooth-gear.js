@@ -118,58 +118,29 @@
 export const GUIDE_URL = 'https://fractal.newbold.cloud/bluetooth-guide.html'
 
 /*
- * The units it has actually been tried on. Every other unit's steps say "not
- * tried yet". The Axe-Fx III since 31 October 2026: "had someone confirm that
- * this works on the Axefx lll so that one has been tested", with a
- * screenshot of Play live on an Axe-Fx III over Bluetooth from an iPhone, its
- * scenes and chain read. Which adapter it went through was not said, so no
- * way of hooking one up is marked tried on it (TRIED_WAYS), and each way still
- * says so with its heat check.
+ * THE UNITS IT HAS BEEN TRIED ON: OUR RECORD, NOT THE CUSTOMER'S. "We don't
+ * need to mention really whether or not something has been tested or not,
+ * we just need to keep track of it ourselves in the developer menu so that
+ * we can confirm it or if someone leaves us a note saying it doesn't work
+ * then we can investigate." (Justin, 31 October 2026.) Until then every
+ * untried unit said "Not tried yet" wherever its owner looked; now nothing
+ * a customer reads says tried or untried, and this, TRIED_WAYS and
+ * TRIED_NOTES are drawn on Developer → App health → Tried (BluetoothTried),
+ * and named in a report's log head (unitForReport), where they are ours.
+ *
+ * The Axe-Fx III since 31 October 2026: "had someone confirm that this works
+ * on the Axefx lll", with a screenshot of Play live on one over Bluetooth
+ * from an iPhone, its scenes and chain read; which adapter was not said.
  */
 export const TESTED = ['am4', 'fm3', 'axefx3']
 
-/**
- * WHAT TO SAY ABOUT IT BEING A BETA. "Let's just say that Bluetooth is beta
- * though in the app and give like a disclaimer saying that Bluetooth might
- * not function correctly." Short and calm, and with the way back: the cable
- * to the computer is untouched by any of this.
- *
- * IN HIS WORDS, SINCE 25 OCTOBER 2026. Bluetooth (beta) is to reach every
- * customer with the full version, marked beta with "Bluetooth is in beta, and
- * some features might not work as expected", and "super easy for all users to
- * submit bugs and feedback". So the note opens with his sentence word for
- * word, says where it has been tried, sends a player who meets a problem to
- * the button straight under the note (REPORT_BUTTON, which sends one in a
- * tap), and ends on the way back: the cable to the computer still does
- * everything. It said "Bluetooth is new (beta), and may not work correctly
- * with every unit or adapter" until then.
- *
- * FROM AN IPHONE, AND FROM AN ANDROID PHONE. Until 25 October 2026 every
- * hardware test was an iPhone (the one Android build that carried this, on 8
- * October, stopped on Expo's side a minute in), and Android's note said "not
- * yet from an Android phone". Then: "I have tried it from an android phone
- * and it works great." So Android's note says both, and it is still only
- * the AM4: every other unit is said as not tried yet, on its own lines.
- *
- * TWO COPIES, ONE PER PHONE. The Android clause is for Android only. Apple's
- * guideline 2.3.10: "don't include names, icons, or imagery of other mobile
- * platforms or alternative app marketplaces in your app or metadata", and
- * "Your app includes references to Android" is one of the commonest
- * rejections there is. This note is on the Bluetooth page, always drawn and
- * never folded, under Connect and the rows that open (since 24 October
- * 2026; before, it was the first thing on it), and the version that opens
- * Bluetooth to customers will have review notes
- * that send Apple's reviewer to exactly that page. (The 1.87.1 notes that
- * would have done it never reached Apple: build 26 stayed on TestFlight, and
- * the 1.87.11 notes Apple approved say only the developer's account sees
- * it.) So the
- * iPhone says where it has been tried and stops; Android says the same and
- * that it has not been tried on a phone like theirs.
- *
- * Picked by betaNote(Platform.OS) on the page. This file imports nothing, so
- * the platform is passed in, and anything that is not Android gets the
- * iPhone's copy: a phone this has never heard of never shows Android's name.
- */
+/** What we know of each try, for the Developer page. */
+export const TRIED_NOTES = {
+  am4: 'From an iPhone and an Android phone, 26 October 2026; the WIDI Jack on 28 October.',
+  fm3: 'From an iPhone and an Android phone, 26 October 2026, with the U2MIDI Pro: the WIDI Master and the C2MIDI Pro got very hot on it.',
+  axefx3: 'From an iPhone, 31 October 2026: a customer confirmed it works. Which adapter was not said.'
+}
+
 /*
  * THE BUTTON THE NOTE POINTS AT, named once, so the note and the button can
  * never call it two different things. On the Bluetooth page under the note,
@@ -179,27 +150,17 @@ export const TESTED = ['am4', 'fm3', 'axefx3']
  * Justin and nobody else: help with the app is his own channels only.
  */
 export const REPORT_BUTTON = 'Report a Bluetooth problem'
-/*
- * OUT OF BETA, 26 OCTOBER 2026: "I also think we're ready to get the
- * Bluetooth out of beta so remove anything that says beta on it for
- * Bluetooth." So the note no longer opens "Bluetooth is in beta"; it keeps
- * what is useful in it: where it has been tried, the button for a problem,
- * and the way back. (The names BETA_NOTE_* and betaNote are kept, not the
- * word.)
- */
-/*
- * SHORTER, 30 OCTOBER 2026: "It seems like there's too much to read
- * everywhere you go." It sits at the foot of the page, under the report
- * button and BLUETOOTH_WAYS, so it says where it has been tried and names
- * the button, and no more: "just below" pointed at nothing, and the way back
- * is BLUETOOTH_WAYS's, one line above it.
- */
-const BETA_ENDS = `Something not working? Tap ${REPORT_BUTTON}.`
-export const BETA_NOTE_IPHONE = `So far, Bluetooth has been tried on the AM4, the FM3 and the Axe-Fx III, from an iPhone. ${BETA_ENDS}`
-export const BETA_NOTE_ANDROID = `So far, Bluetooth has been tried on the AM4, the FM3 and the Axe-Fx III, from an iPhone and an Android phone. ${BETA_ENDS}`
 
-/** The beta note for the phone it is shown on, from Platform.OS. */
-export const betaNote = (os) => (os === 'android' ? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE)
+/*
+ * THE LINE AT THE FOOT OF THE BLUETOOTH PAGE: the button for a problem, and
+ * nothing more. It said where Bluetooth had been tried, "So far, Bluetooth
+ * has been tried on the AM4 and the FM3, from an iPhone", until 31 October
+ * 2026: "we don't need to mention really whether or not something has been
+ * tested". (It was the beta note, BETA_NOTE_IPHONE and BETA_NOTE_ANDROID,
+ * one per phone because Apple's 2.3.10 keeps an Android phone's name out of
+ * an iPhone app; with no phone named, one line does for both.)
+ */
+export const REPORT_NOTE = `Something not working? Tap ${REPORT_BUTTON}.`
 
 /*
  * TWO WAYS TO CONNECT, AND WHICH IS BEST. "Make it clear that there's
@@ -272,7 +233,7 @@ export const NOT_FOR_FM3 = 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI 
  * purchase. So the names are in the line itself, where somebody deciding
  * whether to pay can read them, and look them up.
  */
-export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and so far has been tried on the AM4, FM3 and Axe-Fx III; on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
+export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
 
 
 /** The parts, by the name printed on the box, each with what it is for in a line. */
@@ -437,22 +398,12 @@ export const CLOSE_AND_REOPEN =
   'Still not connecting after unplugging and plugging the adapter back in? Close the app completely (swipe it away) and open it again.'
 
 /*
- * FEEL THE CABLE, ON THE UNITS NOBODY HERE HAS. The FM9 and Axe-Fx III have
- * the 5-pin jacks the C2MIDI Pro was made for, and owners report CME's
- * adapters running cool on them; but the cable that ran hot on the FM3 is
- * the same one, and nobody has tried it with the app on either. The guide
- * has said it since it listed them ("Feel the cable in the first minute: it
- * should stay cool"); the app said nothing, and an FM9 or Axe-Fx III
- * owner's first physical risk is this. Said straight after the power step
- * (powerStepOf), as the guide says it after the power and the lights, and
- * before any step that sends the player into the unit's menus: a minute
- * goes in those.
+ * NO HEAT CHECK BUT THE FM3'S. Each untried way said "In the first minute,
+ * feel the adapter" until 31 October 2026: "The FM three is the only one
+ * that ever has overheating issues so we don't need to worry about it for
+ * any other devices." The FM3 keeps its warning (FM3_NEVER, FM3_WARNING,
+ * NOT_FOR_FM3), red and in front.
  */
-export const HEAT_CHECK =
-  'In the first minute, feel the C2MIDI Pro. It should stay cool. If it gets more than slightly warm, unplug it at once.'
-
-/** The heat line for a unit's steps, or null: the FM9, Axe-Fx III and VP4, the units it is offered on untried with these parts (the FM3 has FM3_NEVER instead). */
-export const heatLineFor = (unit) => (unit === 'fm9' || unit === 'axefx3' || unit === 'vp4' ? HEAT_CHECK : null)
 
 /*
  * PROGRAM CHANGE FIRST, ON THE FM9 AND AXE-FX III. Fractal publishes no SysEx
@@ -688,8 +639,8 @@ const swapIfQuiet = 'If the unit doesn’t answer, swap the two plugs.'
 export function waysFor(unit, noun = 'phone') {
   const name = UNITS[unit]
   if (!name) return []
-  const uhost = (parts) => ({ key: 'uhost', title: 'WIDI Uhost and a cable', parts, steps: hookupFor(unit, noun), powerAt: powerStepOf(unit), feel: 'C2MIDI Pro', firstTime: true })
-  if (unit === 'fm3') return mark(unit, [{ ...uhost(['uhost', 'u2midi', 'usbA']), feel: null }])
+  const uhost = (parts) => ({ key: 'uhost', title: 'WIDI Uhost and a cable', parts, steps: hookupFor(unit, noun), powerAt: powerStepOf(unit), firstTime: true })
+  if (unit === 'fm3') return mark(unit, [uhost(['uhost', 'u2midi', 'usbA'])])
   if (unit === 'am4' || unit === 'vp4') {
     const vp4 = unit === 'vp4'
     return mark(unit, [
@@ -704,8 +655,7 @@ export function waysFor(unit, noun = 'phone') {
           masterPower(name),
           vp4 ? vp4Settings : thruOff(name)
         ],
-        powerAt: 2,
-        feel: 'WIDI Master'
+        powerAt: 2
       },
       {
         key: 'jack',
@@ -717,8 +667,7 @@ export function waysFor(unit, noun = 'phone') {
           jackPower(name),
           vp4 ? vp4Settings : thruOff(name)
         ],
-        powerAt: 2,
-        feel: 'WIDI Jack'
+        powerAt: 2
       },
       uhost(['uhost', 'c2midi', 'adapters'])
     ])
@@ -732,16 +681,14 @@ export function waysFor(unit, noun = 'phone') {
       best: true,
       parts: ['master'],
       steps: [`Plug the WIDI Master’s two MIDI plugs into the ${name}’s MIDI IN and ${out}, as the labels on its plugs say. ${swapIfQuiet}`, masterPower(name), settings],
-      powerAt: 1,
-      feel: 'WIDI Master'
+      powerAt: 1
     },
     {
       key: 'jack',
       title: 'WIDI Jack with 5-pin cables',
       parts: ['jackDin'],
       steps: [`Plug its two cables into the Jack, then their 5-pin plugs into the ${name}’s MIDI IN and ${out}, as the labels say. ${swapIfQuiet}`, jackPower(name), settings],
-      powerAt: 1,
-      feel: 'WIDI Jack'
+      powerAt: 1
     },
     uhost(['uhost', 'c2midi'])
   ])
@@ -750,23 +697,16 @@ export function waysFor(unit, noun = 'phone') {
 /* The VP4's own settings step, in its manual's words (the same as hookupFor's). */
 const vp4Settings = 'On the VP4, open SETUP > MIDI/Remote and set Receive MIDI PC to ON, and the MIDI Channel to 1 (or OMNI). For scenes, set Scene Select too: Settings > VP4 scenes & presets says how.'
 
+/* Which ways have run on this unit: for the Developer page (BluetoothTried), never said to a customer. */
 function mark(unit, ways) {
-  return ways.map((w) => {
-    const tried = (TRIED_WAYS[unit] || []).includes(w.key)
-    return { ...w, tried, feelLine: tried || !w.feel ? null : feelLine(w.feel) }
-  })
+  return ways.map((w) => ({ ...w, tried: (TRIED_WAYS[unit] || []).includes(w.key) }))
 }
-
-/* The heat check for a way nobody here has run on this unit: HEAT_CHECK's words, for whatever is plugged in. */
-export const feelLine = (part) => `In the first minute, feel the ${part}. It should stay cool. If it gets more than slightly warm, unplug it at once.`
 
 /* Troubleshooting's first two fixes, with the parts named: the light, and the plugs swapped on the one-piece adapters. */
 export const TROUBLE_LIT =
   'Check the adapter is lit. The WIDI Uhost needs a phone charger or power bank in its USB Power socket. A WIDI Master, or a WIDI Jack with no charger, lights up from the unit’s MIDI OUT once the unit is on.'
 export const swapLine = (unit) => `With a WIDI Master or WIDI Jack, swap its two plugs if the ${UNITS[unit] || 'unit'} doesn’t answer.`
 
-/* Said on a way that has not run on this unit yet. */
-export const WAY_UNTRIED = 'Not tried with this unit yet. Tell us how it goes with Report a Bluetooth problem.'
 
 /* Before the first time, on a WIDI Master or Jack: CME's firmware, as FIRST_TIME says for the Uhost. */
 export const FIRST_TIME_ADAPTER = 'Before the first time: update the adapter in CME’s free WIDI app, then close the WIDI app.'
@@ -775,74 +715,16 @@ export const FIRST_TIME_ADAPTER = 'Before the first time: update the adapter in 
 export const powerStepOf = (unit) => (hookupFor(unit) || []).indexOf(powerStep(UNITS[unit]))
 
 /*
- * Said under the steps for a unit nobody has tried it on yet. The FM3 has its
- * warning instead. It said "It should work the same way.", which is a promise
- * about a unit nobody has run, and Apple's 2.3.1(a) keeps an app from
- * claiming what it has not shown. Now it asks to hear how it went, through
- * the app's own report: help with the app is Justin's channels only.
- *
- * THE BUTTON ON THIS PAGE, NOT A PATH THROUGH SETTINGS. It said "Settings →
- * Troubleshooting → Feedback" until 25 October 2026, three screens away from
- * the page it is read on, and a typed form at the end of them. The page has
- * REPORT_BUTTON further down, under the beta note, which sends in one tap,
- * "It works on my unit" among its answers.
- */
-export const untriedLine = (unit) =>
-  !untried(unit) ? null : `Not tried on the ${UNITS[unit]} yet. If you try it, tell us how it went: tap ${REPORT_BUTTON}, further down this page.`
-
-/*
- * "NOT TRIED YET", WHEREVER AN FM9 OR AXE-FX III OWNER LOOKS. "On any units
- * that haven't been tried we still want to build everything out from what
- * we know, but yes, we can say this hasn't been tried on a real device yet
- * ... just mention that they haven't been tried and to report problems if
- * they find them." (Justin, 25 October 2026.) untriedLine says it inside How
- * to plug it in, which folds closed once an adapter has been used; these say
- * it everywhere else an owner of one of them is: on its button in step 1,
- * under "Connected", in What it can and can't do, under the Bluetooth pill
- * on Play, on a fault card on Play, and in the head of a report's log. The
- * units are the ones with steps, no warning, and no try on record: the FM9
- * and the Axe-Fx III (the FM3 has its heat warning in place of steps). Each
- * line that sends the player somewhere sends them to REPORT_BUTTON, in its
- * own words. Never "official", never "this phone": the device in hand is
- * not named in any of them.
- *
- * THE VP4 AND THE FM3 TOO, since 25 October 2026, when every unit opened to
- * customers in one store version. The VP4 like the FM9: nobody here has
- * one. The FM3 in words of its own: it has been tried, once, and that cable
- * got very hot and never connected, so "not tried" would be untrue beside
- * FM3_NEVER's "when we tried it". It "hasn't run" on one, which is what is
- * true, and its warning stays where it was, in front.
- *
- * THE FM3 TRIED, 26 OCTOBER 2026: it ran, through the Uhost and a U2MIDI
- * Pro, from an iPhone and an Android phone (TESTED). So it says none of
- * these, and its own "hasn't run" words went with it; its warning stays in
- * front, now naming the cable that works.
+ * WHETHER A UNIT IS ONE NOBODY HAS RUN IT ON: ours to know, never said to
+ * its owner. Until 31 October 2026 it put "Not tried yet" on the unit's
+ * button, under "Connected", in What Bluetooth can't do, under Play's pill
+ * and on a fault card ("On any units that haven't been tried ... just
+ * mention that they haven't been tried", 25 October 2026). Then: "we don't
+ * need to mention really whether or not something has been tested or not,
+ * we just need to keep track of it ourselves in the developer menu". So it
+ * decides only the Developer page's list and a report's log head.
  */
 export const untried = (unit) => !!UNITS[unit] && !triedOn(unit)
-
-/* "Not tried on the FM9 yet". */
-const notYetOn = (unit) => `Not tried on the ${UNITS[unit]} yet.`
-
-/** Under a unit's name on its button in step 1. */
-export const UNTRIED_SUB = 'Not tried yet'
-export const untriedSubFor = (unit) => (!untried(unit) ? undefined : UNTRIED_SUB)
-
-/** Under "Connected · FM9 answering". */
-export const untriedConnectedLine = (unit) =>
-  untried(unit) ? `${notYetOn(unit)} Tell us how it goes: tap ${REPORT_BUTTON}, below.` : null
-
-/** The first line of What it can and can't do. */
-export const untriedAboutLine = (unit) =>
-  !untried(unit)
-    ? null
-    : `Built from what is known about the ${UNITS[unit]}, but not yet tried on a real one. Some of it may not work as expected.`
-
-/** Added to the note under the Bluetooth pill on Play (it starts "Connected over Bluetooth, through …"). */
-export const untriedShortLine = (unit) => (untried(unit) ? notYetOn(unit) : null)
-
-/** The small line on a fault card's Report this, on Play. */
-export const faultSubFor = (unit) =>
-  !untried(unit) ? 'Bluetooth' : `Bluetooth, not tried on the ${UNITS[unit]} yet`
 
 /** The unit's name as a report's log head says it: "FM9 (not tried yet)", "AM4". */
 export const unitForReport = (unit) => (UNITS[unit] ? `${UNITS[unit]}${!untried(unit) ? '' : ' (not tried yet)'}` : null)
