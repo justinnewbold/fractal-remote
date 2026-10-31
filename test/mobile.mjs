@@ -3543,7 +3543,8 @@ export function run(test) {
     const NAMES = /android|google|play store|play console|\bapk\b/i
     const KNOWN = [
       ['src/lib/bluetooth.js', /in Android’s settings/, 'ALLOW_WORDS: the iPhone line is picked first, on Platform.OS'],
-      ['src/lib/bluetooth-gear.js', /from an iPhone and an Android phone\./, 'BETA_NOTE_ANDROID: betaNote picks it only for Android'],
+      /* What we know of each try, drawn only on Developer → App health → Tried, which only his account opens, and never for Apple's reviewer (31 October 2026). */
+      ['src/lib/bluetooth-gear.js', /^From an iPhone and an Android phone, 26 October 2026/, 'TRIED_NOTES: on Developer → App health → Tried, his account alone'],
       ['src/screens/Bluetooth.js', /If Android asks to pair, accept\./, 'the Connect hint, behind ios ? … :'],
       ['src/screens/Bluetooth.js', /Android needs Nearby devices allowed for Fractal Remote/, 'the Troubleshooting step, behind ios ? … :'],
       ['src/screens/Settings.js', /^Google account$/, 'Delete account: Apple ID on an iPhone'],
@@ -3591,7 +3592,8 @@ export function run(test) {
     assert.match(flat('mobile/src/screens/Settings.js'), /const mine = Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'/)
     assert.match(flat('mobile/src/lib/purchases.js'), /const storeAccount = \(\) => \(Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'\)/)
     assert.match(flat('mobile/src/lib/cloudSetlists.js'), /export const deviceName = \(\) => \(Platform\.OS === 'ios' \? 'iPhone' : 'Android'\)/)
-    assert.match(flat('mobile/src/lib/bluetooth-gear.js'), /export const betaNote = \(os\) => \(os === 'android' \? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE\)/)
+    assert.match(flat('mobile/src/screens/Settings.js'), /\{devTab\.health === 'tried' \? <BluetoothTried \/> : null\}/)
+    assert.match(flat('mobile/src/screens/Settings.js'), /\{page === 'health' && isAdmin\(account\?\.id\) \?/)
     assert.match(flat('mobile/src/lib/storeVersion.js'), /const platform = Platform\.OS === 'ios' \|\| Platform\.OS === 'android' \? Platform\.OS : null/)
     assert.match(flat('mobile/src/lib/store-rule.js'), /title: `A newer version of Fractal Remote is \$\{STORE_WHERE\[platform\]\}`/)
     assert.match(flat('mobile/src/lib/siri-help.js'), /export function siriPage\(\{ os = 'ios', kind = 'phone', native = false, noun = 'phone' \} = \{\}\) \{ if \(os === 'android'\) \{ return \[ \{ title: 'Links for Tasker', note: 'There are no voice commands on Android yet\./)

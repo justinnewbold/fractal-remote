@@ -1,10 +1,10 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Linking, Platform, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
 import { color, font, mono, radius, space } from '../lib/theme'
 import { APP_VERSION } from '../lib/version'
-import { WAYS } from '../lib/bleWire'
+import { BLE_UNITS, WAYS } from '../lib/bleWire'
 import {
   ALLOW_WORDS,
   APPLE_SCREEN_OPENS,
@@ -41,24 +41,19 @@ import {
   POWER_LINE,
   REPORT_BUTTON,
   SELLERS_LINE,
+  REPORT_NOTE,
   TROUBLE_LIT,
+  TRIED_NOTES,
   VP4_CANT_HEAR,
   VP4_CONNECTED,
   VP4_OVER_BLUETOOTH,
-  WAY_UNTRIED,
-  betaNote,
   firmwareLineFor,
   hookupFor,
   midiSettingsFor,
   missingBlocksLine,
   notAnsweringLine,
   untried,
-  untriedAboutLine,
-  untriedConnectedLine,
-  untriedLine,
-  untriedSubFor,
   unitForReport,
-  feelLine,
   warningFor,
   swapLine,
   waysFor,
@@ -72,7 +67,7 @@ import Note from '../components/Note'
 import Press from '../components/Press'
 
 /**
- * Settings → Bluetooth (beta).
+ * Settings → Bluetooth.
  *
  * The phone talking straight to the unit, through a Bluetooth MIDI adapter
  * plugged into the unit's MIDI In and Out, with no computer anywhere.
@@ -104,15 +99,11 @@ import Press from '../components/Press'
  * How to plug it in is open until an adapter has been used, because nothing
  * connects until it is plugged in; the other two wait to be tapped.
  *
- * A BETA, and it says so: in the head (Bluetooth (beta)), and in the note
- * under the rows, always drawn and never folded. "Let's just say that
- * Bluetooth is beta though in the app and give like a disclaimer saying that
- * Bluetooth might not function correctly." It was a public beta for one day;
- * since 11 October 2026 it is Justin's account's on every copy, and a
- * customer's only on a copy whose built-in store version opens it (lib/
- * ble-rule.js, which no copy today does): Settings draws this page for
- * nobody else (useBluetoothAllowed, lib/bluetooth.js). It has run one AM4,
- * from an iPhone and from an Android phone.
+ * NOT A BETA since 26 October 2026 ("remove anything that says beta on it
+ * for Bluetooth"). Justin's account's on every copy, and a customer's on a
+ * copy whose built-in store version opens it (lib/ble-rule.js, from 1.89.0):
+ * Settings draws this page for nobody else (useBluetoothAllowed,
+ * lib/bluetooth.js).
  *
  * TWO WAYS TO CONNECT, AND THE COMPUTER IS THE BEST. "Make it clear that
  * there's multiple ways to connect the device, but also make it clear that
@@ -121,15 +112,18 @@ import Press from '../components/Press'
  * line over the steps (BLUETOOTH_WAYS, the same words as the Settings row,
  * the waiting screen and the purchase page), before anybody taps Connect.
  *
- * EVERY UNIT, AND WHICH HAVE BEEN TRIED. Step 1 offers what lib/bluetooth
- * says this account may pick (offeredUnits): all five on a copy that opens
- * Bluetooth (beta) to customers, as on his account. Every unit it has not
- * run on says so under its name and wherever else it is read (shared/
- * bluetooth-gear untried), with the report button by it: "as long as
- * there's warnings for user that it's in beta and they're free to test it
- * and submit feedback, but it might not work properly" (Justin, 25 October
- * 2026). And everybody, before any pick and whatever is picked, is told the
- * cable is never for an FM3 (NOT_FOR_FM3).
+ * EVERY UNIT, AND NOTHING OF WHICH HAVE BEEN TRIED. Step 1 offers what
+ * lib/bluetooth says this account may pick (offeredUnits): all five on a
+ * copy that opens Bluetooth to customers, as on his account. Whether a unit
+ * or a way was tried is said nowhere a player reads, since 31 October 2026:
+ * "we just need to keep track of it ourselves in the developer menu so that
+ * we can confirm it or if someone leaves us a note saying it doesn't work
+ * then we can investigate" (Justin). It is drawn on Developer → App health
+ * → Tried (BluetoothTried, below), and the head of every log says it. And
+ * everybody, before any pick and whatever is picked, is told the cable is
+ * never for an FM3 (NOT_FOR_FM3): "The FM three is the only one that ever
+ * has overheating issues" (the same day), so no other unit has a heat
+ * check.
  *
  * A VP4 IS SENT PRESETS AND SCENES, AND HEARD NOT AT ALL (lib/bleVp4.js). So
  * its connected line says the adapter is connected and the phone is sending
@@ -140,8 +134,8 @@ import Press from '../components/Press'
  *
  * AND ONE TAP TO SAY SO. "Super easy for all users to submit bugs and
  * feedback" (25 October 2026, when Bluetooth (beta) was decided for every
- * customer with the full version): a big Report a Bluetooth problem straight
- * under the beta note, on every visit, and a small Report this beside each
+ * customer with the full version): a big Report a Bluetooth problem over
+ * the note at the foot, on every visit, and a small Report this beside each
  * line that says something is wrong, which sends that line with the report.
  * Not beside the line that says Bluetooth is not allowed, which has Open
  * Settings, the fix, under it, and not beside "Unlock the app", which is not
@@ -149,12 +143,9 @@ import Press from '../components/Press'
  * `onReport`, App's through Settings) with what is wrong said on it, which
  * comes back here.
  *
- * The beta note is the iPhone's or Android's own (betaNote, from
- * shared/bluetooth-gear.mjs): only Android's names an Android phone, because
- * Apple's 2.3.10 keeps other phones' names out of an iPhone app, and this is
- * the page the review notes will send Apple's reviewer to on the day
- * Bluetooth goes to customers. (The 1.87.11 notes Apple approved say only
- * the developer's account sees it.)
+ * The note at the foot (REPORT_NOTE) names no phone, so Apple's 2.3.10,
+ * which keeps other phones' names out of an iPhone app, has nothing to find
+ * on the page the review notes send Apple's reviewer to.
  *
  * THE DEVICE IN HAND, BY ITS NAME (lib/device-word deviceNoun): an iPad or a
  * tablet reads "this iPad", "the tablet's settings", never "this phone".
@@ -185,8 +176,6 @@ import Press from '../components/Press'
 
 const face = Platform.select(mono)
 const ios = Platform.OS === 'ios'
-/* The iPhone's copy names the iPhone it was tried from; Android's names an Android phone as well. */
-const BETA_NOTE = betaNote(Platform.OS)
 
 /* What a player loses by leaving the cable at home, in the order it is noticed. */
 const DIFFERENT = [
@@ -274,8 +263,6 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   /* The units step 1 offers this account (lib/bluetooth offeredUnits). */
   const units = offeredUnits()
   const vp4 = b.unit === 'vp4'
-  /* A unit nobody has tried it on yet (the FM9, the Axe-Fx III, the VP4) says so under "Connected" (shared/bluetooth-gear untriedConnectedLine). */
-  const untriedHere = said.tone === 'ok' && !b.answeredAs ? untriedConnectedLine(b.unit) : null
   /* Where it stands, in one big line: drawn while it is on, or when something is wrong. Off and fine, the steps are the first thing on the page. */
   const sayIt = b.on || !!b.trouble || said.tone === 'fault'
 
@@ -396,17 +383,14 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
             </Text>
             {b.trouble === 'permission' ? <OpenSettings /> : null}
             {reportable && !quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
-            {untriedHere ? <Hint>{untriedHere}</Hint> : null}
             {vp4 && connected && !b.answeredAs ? <Hint>{VP4_CANT_HEAR}</Hint> : null}
           </View>
         ) : null}
         {/*
-          FEEL IT, ON A UNIT NOBODY HERE HAS RUN IT ON, while it is on: the
-          one moment it matters, and never in a fold (the ways page says it
-          again, straight after each way's power step).
+          No "feel the adapter" for any unit but the FM3, which has its own
+          warning, just below: "The FM three is the only one that ever has
+          overheating issues" (Justin, 31 October 2026).
         */}
-        {b.on && untried(b.unit) ? <Note tone="warn">{feelLine('adapter')}</Note> : null}
-
         {/*
           THE FM3, WHILE IT IS ON, AND AN FM3 THAT ANSWERED A CONNECTION MADE
           FOR ANOTHER UNIT (the one moment the app knows an adapter is plugged
@@ -454,8 +438,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               STEP 1. Only drawn while it is off: a tap here while connected
               would send the new unit's messages straight away to whatever is
               on the adapter, and the AM4 has frozen on messages it did not
-              expect. "Not tried yet" under every unit it has not run on
-              (shared/bluetooth-gear untriedSubFor). THE FM3'S WARNING, ONLY
+              expect. Just the names (whether a unit was tried is the
+              Developer page's). THE FM3'S WARNING, ONLY
               WHEN IT IS PICKED: "if they select FM3, why we wanna give the
               warning" (Justin, 26 October 2026), red, straight under the
               units and never folded (FM3_NEVER).
@@ -546,14 +530,14 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
       </View>
 
       {/*
-        THE TWO WAYS, AND WHERE IT HAS BEEN TRIED, at the foot of the page
-        rather than over the steps: the computer is the best one, and this
-        one is slower and does less (BLUETOOTH_WAYS, the one sentence every
-        way onto this page says), and the units it has run on (betaNote).
+        THE TWO WAYS, AND THE BUTTON, at the foot of the page rather than
+        over the steps: the computer is the best one, and this one is slower
+        and does less (BLUETOOTH_WAYS, the one sentence every way onto this
+        page says), and where to say something is not working (REPORT_NOTE).
       */}
       <View style={{ gap: space.sm }}>
         <Hint>{BLUETOOTH_WAYS}</Hint>
-        <Hint>{BETA_NOTE}</Hint>
+        <Hint>{REPORT_NOTE}</Hint>
       </View>
     </View>
   )
@@ -567,11 +551,10 @@ function UnitChips({ units, picked, disabled }) {
         <Press
           key={u.key}
           label={u.name}
-          sub={untriedSubFor(u.key)}
           tone="signal"
           on={u.key === picked}
           disabled={disabled}
-          height={units.some((x) => untried(x.key)) ? 52 : 44}
+          height={44}
           style={{ paddingHorizontal: space.md }}
           onPress={() => setBluetoothUnit(u.key)}
         />
@@ -601,7 +584,6 @@ export function BluetoothWays() {
   const [open, setOpen] = useState(0)
   const firmware = firmwareLineFor(b.unit)
   const midi = midiSettingsFor(b.unit, deviceNoun())
-  const untriedUnit = untriedLine(b.unit)
   return (
     <View style={{ gap: space.lg }}>
       <View style={{ gap: space.sm }}>
@@ -614,13 +596,12 @@ export function BluetoothWays() {
       {warningFor(b.unit) ? <Note tone="fault">{warningFor(b.unit)}</Note> : null}
       {firmware ? <Hint>{firmware}</Hint> : null}
       {ways.map((w, i) => (
-        <Fold key={w.key} title={`${ways.length > 1 ? `Option ${i + 1} · ` : ''}${w.title}`} sub={w.best ? 'The simplest' : w.tried ? 'Tried and working' : undefined} open={open === i} onToggle={() => setOpen(open === i ? -1 : i)}>
+        <Fold key={w.key} title={`${ways.length > 1 ? `Option ${i + 1} · ` : ''}${w.title}`} sub={w.best ? 'The simplest' : undefined} open={open === i} onToggle={() => setOpen(open === i ? -1 : i)}>
           <Way way={w} unit={b.unit} />
         </Fold>
       ))}
       {midi ? <Hint>{midi}</Hint> : null}
       {b.unit ? <Hint>{ONE_AT_A_TIME}</Hint> : null}
-      {untriedUnit ? <Note tone="warn">{untriedUnit}</Note> : null}
       {b.unit ? <Hint>{SELLERS_LINE}</Hint> : null}
     </View>
   )
@@ -630,7 +611,6 @@ export function BluetoothWays() {
 function Way({ way, unit }) {
   return (
     <View style={{ gap: space.md }}>
-      {way.tried ? null : <Note tone="warn">{WAY_UNTRIED}</Note>}
       {way.parts.map((key) => {
         const p = PARTS[key]
         const does = typeof p.does === 'function' ? p.does(deviceNoun()) : p.does
@@ -654,13 +634,10 @@ function Way({ way, unit }) {
       <Hint>{way.key === 'uhost' ? FIRST_TIME : FIRST_TIME_ADAPTER}</Hint>
       <Heading>How it plugs in</Heading>
       {way.steps.map((line, i) => (
-        <Fragment key={line}>
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22, minWidth: 18 }}>{`${i + 1}.`}</Text>
-            <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
-          </View>
-          {i === way.powerAt && way.feelLine ? <Note tone="warn">{way.feelLine}</Note> : null}
-        </Fragment>
+        <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
+          <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22, minWidth: 18 }}>{`${i + 1}.`}</Text>
+          <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
+        </View>
       ))}
     </View>
   )
@@ -718,7 +695,6 @@ export function BluetoothLimits() {
   const vp4 = b.unit === 'vp4'
   return (
     <View style={{ gap: space.md }}>
-      {untriedAboutLine(b.unit) ? <Note tone="warn">{untriedAboutLine(b.unit)}</Note> : null}
       {/* A VP4's own: presets and scenes, and nothing heard back (lib/bleVp4.js). */}
       <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
         {vp4
@@ -900,6 +876,35 @@ export function BluetoothTools() {
             </View>
           ) : null}
         </View>
+  )
+}
+
+/**
+ * Developer → App health → Tried: which units Bluetooth has run on, through
+ * which ways, and what we know of each try (shared/bluetooth-gear TESTED,
+ * TRIED_WAYS, TRIED_NOTES). "We just need to keep track of it ourselves in
+ * the developer menu so that we can confirm it or if someone leaves us a
+ * note saying it doesn't work then we can investigate" (Justin, 31 October
+ * 2026). Ours alone: nothing a customer reads says tried or untried.
+ */
+export function BluetoothTried() {
+  return (
+    <View style={{ gap: space.md }}>
+      <Hint>Updated in the code (shared/bluetooth-gear.mjs) when a unit or an adapter is confirmed.</Hint>
+      {BLE_UNITS.map((u) => {
+        const ways = waysFor(u.key).filter((w) => w.tried).map((w) => w.title)
+        const tried = !untried(u.key)
+        return (
+          <View key={u.key} style={{ gap: 2, padding: space.sm, borderRadius: radius.sm, backgroundColor: color.panel }}>
+            <Text style={{ color: tried ? color.ok : color.silkDim, fontSize: font.body, fontWeight: '700' }}>
+              {`${u.name} · ${tried ? 'Tried' : 'Not tried yet'}`}
+            </Text>
+            {ways.length ? <Hint>{`Through: ${ways.join(', ')}`}</Hint> : null}
+            {TRIED_NOTES[u.key] ? <Hint>{TRIED_NOTES[u.key]}</Hint> : null}
+          </View>
+        )
+      })}
+    </View>
   )
 }
 

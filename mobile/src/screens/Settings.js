@@ -67,7 +67,7 @@ import SiriHelp from '../components/SiriHelp'
 import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
 import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
-import BluetoothPage, { BluetoothLimits, BluetoothTools, BluetoothTrouble, BluetoothWays } from './Bluetooth'
+import BluetoothPage, { BluetoothLimits, BluetoothTools, BluetoothTried, BluetoothTrouble, BluetoothWays } from './Bluetooth'
 import AccessTool from '../components/AccessTool'
 import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
@@ -922,7 +922,7 @@ export default function Settings({
           <View style={{ gap: 0 }}>
             <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
             <SetupRow title="Customers" status="Sales, sign-ups, and giving access" onPress={() => setPage('customers')} />
-            <SetupRow title="App health" status="What's live, and what works" onPress={() => setPage('health')} />
+            <SetupRow title="App health" status="What's live, what works, and what's been tried" onPress={() => setPage('health')} />
             <SetupRow title="Testing" status="View as a new customer, Bluetooth check" onPress={() => setPage('testing')} />
           </View>
         </>
@@ -948,6 +948,8 @@ export default function Settings({
           {devTab.health === 'live' ? <LiveTool /> : null}
           {/* The gear notes from everybody who said Yes to "Help make Fractal Remote better?" (26 October 2026). */}
           {devTab.health === 'works' ? <WhatWorksTool /> : null}
+          {/* Which units Bluetooth has run on: ours to keep, never said to a customer (31 October 2026). */}
+          {devTab.health === 'tried' ? <BluetoothTried /> : null}
         </>
       ) : null}
 
@@ -1823,7 +1825,8 @@ const CUSTOMER_TABS = [
 ]
 const HEALTH_TABS = [
   { key: 'live', label: "What's live" },
-  { key: 'works', label: 'What works' }
+  { key: 'works', label: 'What works' },
+  { key: 'tried', label: 'Tried' }
 ]
 
 /* A row of buttons across the top of a Developer page, one per tool: the one open is lit. */

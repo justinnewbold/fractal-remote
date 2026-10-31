@@ -304,7 +304,7 @@ export const useBluetooth = () => useSyncExternalStore(subscribeBluetooth, read,
  */
 export const useBluetoothOn = () => useSyncExternalStore(subscribeBluetooth, readOn, readOn)
 
-/** The unit picked on the Bluetooth page ('fm9'), or null: for Play's pill note, its fault card and the tuner, which say "not tried yet" for an FM9 or Axe-Fx III. A word, so it redraws only when it changes. */
+/** The unit picked on the Bluetooth page ('fm9'), or null: for the tuner, whose quiet line names the unit and its setting. A word, so it redraws only when it changes. */
 export const useBluetoothUnit = () => useSyncExternalStore(subscribeBluetooth, readUnit, readUnit)
 
 /** What stands between the phone and the adapter, or null: for the waiting screen. A word, so it redraws only when it changes. */

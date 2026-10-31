@@ -4194,7 +4194,7 @@ export function run(test) {
     assert.ok(deleting.includes('the app opens on the purchase page'), 'the purchase page’s Delete account is not under Deleting your data')
   })
 
-  test('the Bluetooth guide says it is a beta, names the parts it was tried with, and links only what was checked', async () => {
+  test('the Bluetooth guide says nothing of where it was tried, keeps the FM3 warning, names the parts, and links only what was checked', async () => {
     /*
      * "We need to provide as much instructions as possible on how to connect
      * it and hook it up. So as far as I know, we need a CME Widi host. And
@@ -4281,24 +4281,27 @@ export function run(test) {
     /*
      * OUT OF BETA, 26 October 2026: "remove anything that says beta on it
      * for Bluetooth". This held the guide to opening on "Bluetooth is in
-     * beta"; changed on purpose, with the app's note, which now opens on
-     * where it has been tried.
+     * beta"; changed on purpose, with the app's note.
      */
     assert.ok(!/\bbeta\b/i.test(words), 'the guide still calls Bluetooth a beta')
-    const { BETA_NOTE_IPHONE, CLOSE_AND_REOPEN } = await import('../shared/bluetooth-gear.mjs')
-    assert.ok(BETA_NOTE_IPHONE.startsWith('So far, Bluetooth has been tried on the AM4, the FM3 and the Axe-Fx III'), 'the app’s note says it was tried somewhere else than the guide does')
+    const { REPORT_NOTE, CLOSE_AND_REOPEN } = await import('../shared/bluetooth-gear.mjs')
+    assert.ok(!/tried/.test(REPORT_NOTE), 'the app’s note says where it was tried again')
     /* The way out he found when unplugging and plugging the adapter back in left it not connecting (26 October 2026), the app's words. */
     assert.ok(words.includes(CLOSE_AND_REOPEN), 'the guide does not say to close the app completely when it will not connect after the adapter was plugged back in')
     /*
-     * From an iPhone and, since 25 October 2026, from an Android phone ("I
-     * have tried it from an android phone and it works great"). This held
-     * Android to "not been tried yet"; changed on purpose, with the app's
-     * Android beta note.
+     * NOTHING ABOUT WHAT HAS BEEN TRIED, since 31 October 2026: "we don't
+     * need to mention really whether or not something has been tested or
+     * not, we just need to keep track of it ourselves in the developer menu"
+     * (Justin). Changed on purpose: this held the guide to "So far it has
+     * been tried on an AM4 and an FM3…" and "It has not been tried yet on an
+     * FM9 or VP4", and each unit and adapter to a Tried or Not tried yet tag.
+     * The FM3's warning is the one place a try is told, because it is why
+     * the parts are kept off one.
      */
-    /* And the Axe-Fx III, from an iPhone, since 31 October 2026 ("had someone confirm that this works on the Axefx lll"). */
-    assert.match(words, /So far it has been tried on an AM4 and an FM3, from an iPhone and from an Android phone, and on an Axe-Fx III from an iPhone\. On the AM4, with the three parts below, and with a CME WIDI Master\. On the FM3, with a CME U2MIDI Pro in place of the C2MIDI Pro\./, 'the guide does not say the AM4 and the FM3, from both phones, and with what, are what it was tried on')
-    assert.match(words, /It has not been tried yet on an FM9 or VP4\./, 'the guide does not say the FM9 and VP4 are untried')
-    assert.ok(!/not been tried[^.]*Android/.test(words), 'the guide still says no Android phone has run it')
+    const withoutFm3 = words.replace(/When we tried the WIDI Master and the C2MIDI Pro on an FM3, both got very hot, and the WIDI Master did not work\./g, '')
+    assert.ok(!/\btried\b|\btested\b/i.test(withoutFm3), `the guide says where it was tried: ${(withoutFm3.match(/[^.]*\b(tried|tested)\b[^.]*\./i) || [''])[0]}`)
+    assert.ok(!/class="tag"/.test(html.replace(/<!--[\s\S]*?-->/g, '')), 'a Tried or Not tried yet tag is back')
+    assert.match(words, /These are the parts to buy for each unit\./)
     /*
      * "The CME C2MIDI Pro got extremely hot on the FM3 and the connection
      * didn't work." The FM3's MIDI OUT has no current limit and the cable
@@ -4308,8 +4311,7 @@ export function run(test) {
      * still were one.
      */
     /* Since 26 October 2026: the WIDI Master and the C2MIDI Pro ran very hot on his FM3 and the WIDI Master did not work; the U2MIDI Pro works and stays cool. */
-    assert.match(words, /On an FM3, the WIDI Master and the C2MIDI Pro got very hot, and the WIDI Master did not work: don’t use them on one/, 'the guide does not warn FM3 owners off what overheated, at the top')
-    assert.match(words, /FM3 Tried, works with the U2MIDI Pro/, 'the FM3 is not marked as tried with the U2MIDI Pro')
+    assert.match(words, /On an FM3, the WIDI Master and the C2MIDI Pro got very hot, and the WIDI Master did not work: use a CME U2MIDI Pro instead \(see FM3 below\)\./, 'the guide does not warn FM3 owners off what overheated, at the top')
     assert.match(words, /On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master\. When we tried the WIDI Master and the C2MIDI Pro on an FM3, both got very hot, and the WIDI Master did not work\. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool\./, 'the FM3 section does not open on its warning')
     assert.ok(!/parts plugged straight in|plug straight in|straight into an FM3/i.test(words), 'the guide says not to plug it straight in, as if there were another way')
     /*
@@ -4326,12 +4328,11 @@ export function run(test) {
     assert.ok(fm3.length > 200 && !/B0GVXTX5D1|c2midi-pro|widi-master/.test(fm3), 'the FM3 section gives somewhere to buy what overheated')
     assert.ok(fm3.includes('href="https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/"'), 'the FM3 section does not say where to find the U2MIDI Pro')
     assert.ok(!/<h3>FM3, FM9/.test(html), 'the FM3 is still grouped with the units the parts suit')
-    assert.match(words, /if any cable or adapter on a MIDI jack gets more than slightly warm, unplug it at once\./i, 'the guide does not say to unplug anything that gets hot')
+    /* The heat check is the FM3's alone since 31 October 2026: "The FM three is the only one that ever has overheating issues" (Justin). */
+    assert.match(words, /On an FM3, anything getting hot: if a cable or adapter on its MIDI jacks gets more than slightly warm, unplug it at once\./, 'the guide does not tell FM3 owners to unplug anything that gets hot')
+    assert.ok(!/feel the C2MIDI Pro/i.test(words), 'the guide tells owners of other units to check the C2MIDI Pro for heat')
     assert.match(words, /Yamaha MD-BT01[^.]*\. It runs only on the MIDI OUT’s power, and on an FM3 it is reported hot about as often as not/, 'the Yamaha is offered to FM3 owners as the way round it')
     assert.match(words, /USB cable to a computer[^.]*keeps working as it always has/, 'the guide does not say the computer way is untouched')
-    assert.match(words, /AM4 Tried, works/, 'the AM4 is not marked as the one it was tried on')
-    assert.match(words, /FM9 and Axe-Fx III Not tried yet/, 'the other units are not marked as untried')
-    assert.match(words, /VP4 Not tried yet/, 'the VP4 is not marked as untried')
     /* The VP4: the AM4's parts, one plug, and only presets and scenes (mobile/src/lib/bleVp4.js). */
     assert.match(words, /Leave the white plug out: the app only sends to a VP4, and nothing comes back over Bluetooth\./, 'the guide does not keep the white plug off a VP4')
     assert.match(words, /On a VP4, Bluetooth changes presets and scenes, the way a MIDI foot controller does, and nothing else\./, 'the guide promises a VP4 more than presets and scenes')
@@ -4343,7 +4344,7 @@ export function run(test) {
     /* And nothing on the page says the reverse. */
     assert.ok(!/\bworks with the AM4, FM3/.test(words), 'the guide says Bluetooth works with units nobody has tried')
     assert.ok(!/\bworks? (on|with)\b[^.]{0,60}\b(FM9|VP4)\b/.test(words), 'the guide says Bluetooth works on an FM9 or VP4, and nobody has run it on those')
-    assert.match(words, /You can pick an AM4, FM3, FM9, Axe-Fx III or VP4\. So far the AM4, the FM3 and the Axe-Fx III have been tried, and each of the others says so in the app\./, 'the guide does not say which units can be picked, and which have been tried')
+    assert.match(words, /You can pick an AM4, FM3, FM9, Axe-Fx III or VP4\./, 'the guide does not say which units can be picked')
 
     /* The parts, at the addresses checked on 10 October 2026. */
     const PARTS = [
@@ -4442,10 +4443,10 @@ export function run(test) {
     assert.match(words, /steady green means it has found the C2MIDI Pro \(or the U2MIDI Pro\) and has power/, 'the guide does not say what the green light means')
     assert.match(words, /a slow blue flash means it is waiting for the phone\. Steady blue means it is connected\. A fast blue flicker means messages are going through\./, 'the guide does not say what the blue light means')
 
-    /* Other ways: each marked tried or not, both jacks, and the untried ones beyond the app's own list with nothing to buy them by. */
-    assert.match(words, /CME WIDI Master Tried on the AM4/, 'the WIDI Master is not marked as tried on the AM4 only')
-    assert.match(words, /CME WIDI Jack, TRS-35 bundle Tried on the AM4/, 'the WIDI Jack is not marked as untried')
-    assert.match(words, /Not tried with Fractal Remote, so not linked here:/, 'the other adapters are not marked as untried')
+    /* Other ways: both jacks, and the ones beyond the app's own list with nothing to buy them by. */
+    assert.match(words, /CME WIDI Master /, 'the WIDI Master is not among the other ways')
+    assert.match(words, /CME WIDI Jack, TRS-35 bundle /, 'the WIDI Jack is not among the other ways')
+    assert.match(words, /Other adapters, not linked here:/, 'the other adapters are linked')
     assert.match(words, /plug into both of the unit’s MIDI jacks, In and Out/, 'the guide does not say an adapter has to fill both jacks')
   })
 
@@ -4457,7 +4458,8 @@ export function run(test) {
      * guide. 1.89.3 is live in both stores since 30 October 2026, so it is
      * the real page the live day promised (docs/app-store.md, Submission day,
      * step 18): which versions, the two ways with the computer first, what
-     * it does, which units and which are untried, the FM3's warning, and the
+     * it does, which units (and, since 31 October 2026, nothing of which were
+     * tried, which is the Developer page's), the FM3's warning, and the
      * guide for what to buy. Short, because the parts are the guide's.
      */
     const { BLUETOOTH_WAYS, NOT_FOR_FM3 } = await import('../shared/bluetooth-gear.mjs')
@@ -4470,7 +4472,8 @@ export function run(test) {
     assert.ok(said.indexOf(BLUETOOTH_WAYS) < said.indexOf('What it does'), '/bluetooth says what Bluetooth does before it says the computer is best')
     assert.match(said, /No editing or saving over Bluetooth/, '/bluetooth does not say editing and saving need the computer')
     assert.match(said, /on a VP4, presets and scenes/, '/bluetooth promises a VP4 more than presets and scenes')
-    assert.match(said, /So far it has been tried on the AM4, the FM3 and the Axe-Fx III\. It has not been tried yet on an FM9 or VP4\./, '/bluetooth does not say which units are untried')
+    assert.match(said, /It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4\./, '/bluetooth does not say which units it is offered on')
+    assert.ok(!/\btried\b|\btested\b/i.test(said), '/bluetooth says where it was tried')
     assert.ok(said.replace(/\s+/g, ' ').includes(NOT_FOR_FM3), '/bluetooth does not carry the FM3’s warning word for word')
     assert.ok(!/beta/i.test(said), '/bluetooth still calls Bluetooth a beta')
     assert.match(page, /href="\/bluetooth-guide\.html"/, '/bluetooth does not lead on to the setup guide')
@@ -4940,9 +4943,15 @@ export function run(test) {
     ]) assert.match(bt, said, `the 1.89.0 Bluetooth paragraph does not say ${why}`)
     /* The words the notes quote are the app's own. */
     const gearWords = await import('../shared/bluetooth-gear.mjs')
-    /* Out of beta since 26 October 2026 ("remove anything that says beta on it for Bluetooth"): the page's note and these texts say where it has been tried, and never "beta". */
-    /* The notes were sent with "the AM4 and the FM3"; the page has added the Axe-Fx III since (31 October 2026), which the notes do not deny. */
-    assert.ok(gearWords.BETA_NOTE_IPHONE.startsWith('So far, Bluetooth has been tried on the AM4, the FM3'), 'the notes say it has been tried where the page does not')
+    /* Out of beta since 26 October 2026 ("remove anything that says beta on it for Bluetooth"): these texts never say "beta". */
+    /*
+     * The notes were sent with "Tried so far on the AM4 and the FM3", and
+     * the page said so then. Since 31 October 2026 the page keeps that to the
+     * Developer page (Justin's call), and the record still has both, so the
+     * notes are still true of what was tried; the next version's notes say
+     * nothing of it.
+     */
+    assert.ok(gearWords.TESTED.includes('am4') && gearWords.TESTED.includes('fm3'), 'the notes say it has been tried where the record does not')
     for (const [where, text] of [['notes', notes], ['What’s New', whatsNew], ['Description', description], ['Play release notes', play], ['App access note', access], ['short App access note', accessShort]]) {
       for (const l of text.split('\n').filter((x) => /bluetooth/i.test(x))) assert.doesNotMatch(l, /\bbeta\b/i, `the 1.89.0 ${where} still call Bluetooth a beta`)
     }
