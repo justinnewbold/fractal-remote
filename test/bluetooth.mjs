@@ -6827,7 +6827,7 @@ export function run(test) {
      */
     assert.equal(
       gear.BLUETOOTH_PAYWALL,
-      `${gear.BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and so far has been tried on the AM4 and FM3; on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
+      `${gear.BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and so far has been tried on the AM4, FM3 and Axe-Fx III; on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
     )
     const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
     for (const u of BLE_UNITS) assert.ok(new RegExp(`\\b${u.name}\\b`).test(gear.BLUETOOTH_PAYWALL), `the purchase page’s line leaves out the ${u.name}`)
@@ -8204,10 +8204,10 @@ export function run(test) {
        * foot of the page it is read on (REPORT_BUTTON, one tap, "It works on
        * my unit" among its answers), not three screens away at a typed form.
        */
-      assert.equal(gear.untriedLine(key), key === 'am4' || key === 'fm3' ? null : `Not tried on the ${name} yet. If you try it, tell us how it went: tap Report a Bluetooth problem, further down this page.`)
+      assert.equal(gear.untriedLine(key), key === 'am4' || key === 'fm3' || key === 'axefx3' ? null : `Not tried on the ${name} yet. If you try it, tell us how it went: tap Report a Bluetooth problem, further down this page.`)
     }
     /* The AM4 and, since 26 October 2026, the FM3 (with the U2MIDI Pro). */
-    assert.deepEqual(gear.TESTED, ['am4', 'fm3'])
+    assert.deepEqual(gear.TESTED, ['am4', 'fm3', 'axefx3'])
     assert.equal(gear.hookupFor('vp5'), null, 'steps for a unit the page does not offer')
     /* The FM3's MIDI settings, for an owner whose presets don't change, under its steps; none for a unit the page does not know. */
     assert.match(gear.midiSettingsFor('fm3'), /^If presets don’t change from this phone: on the FM3, open Setup → MIDI\/Remote and set Program Change to On/)
@@ -8259,7 +8259,7 @@ export function run(test) {
      */
     /* OUT OF BETA, 26 October 2026 ("remove anything that says beta on it for Bluetooth"): it opens on where it has been tried, and never says beta. */
     for (const note of [gear.BETA_NOTE_IPHONE, gear.BETA_NOTE_ANDROID]) {
-      assert.ok(note.startsWith('So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone'), note)
+      assert.ok(note.startsWith('So far, Bluetooth has been tried on the AM4, the FM3 and the Axe-Fx III, from an iPhone'), note)
       assert.ok(!/\bbeta\b/i.test(note), `the note still says beta: ${note}`)
       /* Shorter since 30 October 2026: it sits under the button and BLUETOOTH_WAYS, so it names the button and leaves the way back to the line above it. */
       assert.ok(note.endsWith(`Something not working? Tap ${gear.REPORT_BUTTON}.`), 'the beta note does not point at the report button by its name')
@@ -8289,9 +8289,9 @@ export function run(test) {
      * to "and not yet from an Android phone"; changed on purpose. The
      * iPhone's still names no other phone.
      */
-    assert.match(gear.BETA_NOTE_ANDROID, /tried on the AM4 and the FM3, from an iPhone and an Android phone\./, 'the Android beta note does not say it has been tried from an Android phone')
+    assert.match(gear.BETA_NOTE_ANDROID, /tried on the AM4, the FM3 and the Axe-Fx III, from an iPhone and an Android phone\./, 'the Android beta note does not say it has been tried from an Android phone')
     assert.ok(!/not yet from an Android phone/.test(gear.BETA_NOTE_ANDROID), 'the Android beta note still says no Android phone has run it')
-    assert.match(gear.BETA_NOTE_IPHONE, /So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone\. Something not working/, 'the iPhone’s beta note does not say where it has been tried')
+    assert.match(gear.BETA_NOTE_IPHONE, /So far, Bluetooth has been tried on the AM4, the FM3 and the Axe-Fx III, from an iPhone\. Something not working/, 'the iPhone’s beta note does not say where it has been tried')
     assert.ok(!/android|google|play store|\bapk\b/i.test(gear.BETA_NOTE_IPHONE), 'the iPhone’s beta note names another phone, which Apple’s 2.3.10 rejects')
     assert.equal(gear.BETA_NOTE_ANDROID.replace(' and an Android phone', ''), gear.BETA_NOTE_IPHONE, 'the two beta notes say different things besides the Android clause')
     /* Picked by the phone's own platform; anything not Android gets the iPhone's, so no new platform ever shows Android's name. */
@@ -9039,7 +9039,7 @@ export function run(test) {
     assert.equal(
       gear.BETA_NOTE_IPHONE,
       /* Out of beta since 26 October 2026, and shorter since 30 October: where it has been tried and the button, and never "beta". The way back is BLUETOOTH_WAYS, the line above it. */
-      'So far, Bluetooth has been tried on the AM4 and the FM3, from an iPhone. Something not working? Tap Report a Bluetooth problem.'
+      'So far, Bluetooth has been tried on the AM4, the FM3 and the Axe-Fx III, from an iPhone. Something not working? Tap Report a Bluetooth problem.'
     )
     assert.equal(gear.BETA_NOTE_ANDROID.replace(' and an Android phone', ''), gear.BETA_NOTE_IPHONE)
     assert.ok(!/android|google|play store|\bapk\b/i.test(gear.BETA_NOTE_IPHONE))
@@ -9570,7 +9570,8 @@ export function run(test) {
       gear.untriedShortLine(unit),
       gear.untriedLine(unit)
     ]
-    for (const [unit, name] of [['fm9', 'FM9'], ['axefx3', 'Axe-Fx III'], ['vp4', 'VP4']]) {
+    /* The Axe-Fx III tried since 31 October 2026 ("had someone confirm that this works on the Axefx lll"): the FM9 and VP4 are the untried ones. */
+    for (const [unit, name] of [['fm9', 'FM9'], ['vp4', 'VP4']]) {
       assert.equal(gear.untried(unit), true)
       for (const line of lines(unit)) {
         assert.ok(line && line.includes(name), `${unit}: ${line}`)
@@ -9587,6 +9588,16 @@ export function run(test) {
       assert.ok(gear.firmwareLineFor(unit).startsWith(`Use ${name} firmware`))
     }
     assert.match(gear.missingBlocksLine('axefx3'), /IR Player, Dynamic Distortion\)/)
+    /* Tried, it says none of the "not tried" lines, and keeps its own: the blocks Play does not draw yet, the tuner's setting, its firmware. */
+    assert.equal(gear.untried('axefx3'), false)
+    for (const line of lines('axefx3')) assert.equal(line, null, `axefx3: ${line}`)
+    assert.equal(gear.faultSubFor('axefx3'), 'Bluetooth')
+    assert.equal(gear.unitForReport('axefx3'), 'Axe-Fx III')
+    assert.equal(gear.untriedSubFor('axefx3'), undefined)
+    assert.equal(gear.tunerQuietLine('axefx3'), 'No readings from the Axe-Fx III yet. Play a string; if nothing shows, check that Send Realtime Sysex is On (Setup → MIDI/Remote on the Axe-Fx III). Until then, use the Axe-Fx III’s own display.')
+    assert.ok(gear.firmwareLineFor('axefx3').startsWith('Use Axe-Fx III firmware'))
+    /* Which adapter it went through was not said, so every way on it still says not tried. */
+    assert.ok(gear.waysFor('axefx3').every((w) => !w.tried))
     /* THE FM3, TRIED since 26 October 2026 (the U2MIDI Pro): none of these lines, like the AM4. Its "hasn't run" words went with it. */
     assert.equal(gear.FM3_SUB, undefined, 'the FM3 still has its own "not run yet"')
     for (const unit of ['am4', 'fm3', null, 'vp5']) {
@@ -9620,7 +9631,7 @@ export function run(test) {
     assert.match(flat('mobile/src/components/TopBar.js'), /\? `Connected over Bluetooth, through \$\{adapter\}\.\$\{untried \? ` \$\{untried\}` : ''\}`/)
     assert.match(flat('mobile/src/lib/bluetooth.js'), /unit: saved\.unit \? unitForReport\(saved\.unit\) \|\| unitName\(saved\.unit\) : null,/)
     /* Only the AM4 and the FM3 have run it: every other unit is said as untried, and none opens to a customer before the store version does (the rule's own test). */
-    assert.deepEqual(gear.TESTED, ['am4', 'fm3'])
+    assert.deepEqual(gear.TESTED, ['am4', 'fm3', 'axefx3'])
   })
 
   /* ---------------------------------------------------------------- */

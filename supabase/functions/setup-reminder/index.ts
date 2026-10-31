@@ -239,7 +239,7 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
    * gets, in the app's own words ("Bluetooth is in beta, and some features
    * might not work as expected").
    */
-  const secondWay = `From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth, through a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. So far it has been tried on the AM4 and the FM3; on the FM3, with a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one. To try it, update the app, then open Settings → My rig → Bluetooth, which says what to buy and how to plug it in.`
+  const secondWay = `From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth, through a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. So far it has been tried on the AM4, the FM3 and the Axe-Fx III; on the FM3, with a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one. To try it, update the app, then open Settings → My rig → Bluetooth, which says what to buy and how to plug it in.`
   const help = first
     ? 'If you get stuck anywhere, just reply to this email. It comes straight to me.'
     : 'If something got in the way, reply and tell me what you see, and I’ll help you get it going.'

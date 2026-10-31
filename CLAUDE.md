@@ -303,7 +303,10 @@ test first, and under these rules:
   iPhone and an Android phone (26 October 2026): the AM4 through the WIDI
   Uhost with the C2MIDI Pro, and through a WIDI Master; the FM3 through the
   WIDI Uhost with a CME U2MIDI Pro ("Using the U2midi pro adapter the FM3
-  works and does not get hot"). The FM9, Axe-Fx III and VP4 say "not tried
+  works and does not get hot"). The Axe-Fx III from an iPhone since 31
+  October 2026, through an adapter nobody said ("had someone confirm that
+  this works on the Axefx lll so that one has been tested"), so its ways
+  still each say not tried. The FM9 and VP4 say "not tried
   yet" wherever an owner looks, each with the one-tap Report a Bluetooth
   problem by it (`untried` and its kin in shared/bluetooth-gear.mjs). Never
   a sentence that says it works on a unit it has not run on. The FM3's
