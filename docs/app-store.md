@@ -382,6 +382,17 @@ own address is App Functionality, which Apple's definition of it names
 ("perform customer support"). None needs a build.
 Justin makes these; nothing here says they are done until he has.
 
+**1 November 2026: one more row, for the setup emails.** The app now tells
+the account server once, the first time it connects to the account's unit
+over Bluetooth, so the setup emails go only to buyers who have connected
+neither way (supabase/migrations/20261101_bluetooth_seen.sql). One date
+beside the account and nothing else. In App Store Connect → App Privacy:
+Usage Data → Product Interaction, "used for App Functionality", linked to
+the user, not used for tracking. In Google Play's Data safety: App activity →
+App interactions, collected, not shared, for App functionality. Neither
+needs a build. The privacy page says it under *Help getting connected*.
+Justin makes these; nothing here says they are done until he has.
+
 **Why the log is declared even though it is opt-in:** Apple asks what the app
 is *capable* of sending, not what it usually sends. Declaring it and being able
 to point at a policy that explains it is the strong position.

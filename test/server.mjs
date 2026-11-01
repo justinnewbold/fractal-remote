@@ -676,8 +676,8 @@ export function run(test) {
       assert.ok(!JSON.stringify(p).includes('attacker@example.com') && !JSON.stringify(p).includes('Free money') && !JSON.stringify(p).includes('<script>'), 'something in the request reached the email')
     }
     assert.deepEqual(first.to, [odd])
-    assert.equal(first.subject, 'One more step: the Fractal Remote computer app')
-    assert.equal(reminder.subject, 'Still need a hand with the Fractal Remote computer app?')
+    assert.equal(first.subject, 'Having trouble getting Fractal Remote connected?')
+    assert.equal(reminder.subject, 'Still need a hand getting Fractal Remote connected?')
     assert.ok(first.html.includes('o&#39;neil+&amp;x@example.com') && !first.html.includes(odd), 'the address goes into the email unescaped')
     assert.ok(first.text.includes(odd), 'the plain words do not name the address to sign in with')
     assert.ok(!run.text.includes('@'), 'the answer names somebody')
@@ -890,7 +890,7 @@ export function run(test) {
     assert.equal(run.status, 200)
     assert.deepEqual(run.said, { ok: true, sent: 2 })
     assert.deepEqual(run.sent.map((p) => p.to), [['justinnewbold@gmail.com'], ['justinnewbold@gmail.com']], 'the sample went somewhere other than Justin’s inbox')
-    assert.deepEqual(run.sent.map((p) => p.subject), ['[Sample] One more step: the Fractal Remote computer app', '[Sample] Still need a hand with the Fractal Remote computer app?'])
+    assert.deepEqual(run.sent.map((p) => p.subject), ['[Sample] Having trouble getting Fractal Remote connected?', '[Sample] Still need a hand getting Fractal Remote connected?'])
     assert.ok(!run.calls.some((c) => c.url.includes('/rest/v1/')), 'the sample read or wrote the database')
     /* No key on a sample: asked for twice in an hour, it goes twice. */
     assert.ok(run.calls.filter((c) => c.url === 'https://api.resend.com/emails').every((c) => !('Idempotency-Key' in c.headers)), 'a second sample asked for within the day would not go')
@@ -919,9 +919,10 @@ export function run(test) {
       /* Plain, and for a guitarist: never "Mac", never "yesterday" (the first day sends to people weeks in). */
       assert.ok(!/\bMac\b|yesterday|\bOTA\b|\brelay\b/i.test(e.text + e.subject), `the ${which} email says something it should not`)
     }
-    assert.match(first.text, /no computer has signed in with your account yet\. Setting it up takes about five minutes:/, 'the first email’s “it” has nothing to point to')
+    assert.match(first.text, /It looks like it hasn’t connected to your Fractal yet, so here’s how\./, 'the first email does not say why it is here')
+    assert.match(first.text, /\nThe computer \(the best way, about five minutes\):\n\n1\. /, 'the computer’s steps have no heading saying how long they take')
     assert.match(first.text, /If you get stuck anywhere, just reply to this email\. It comes straight to me\./)
-    assert.match(first.text, /You’re getting this because fan@example\.com has the full version of Fractal Remote and no computer has signed in with it yet\./, 'the first email does not say why it came')
+    assert.match(first.text, /You’re getting this because fan@example\.com has the full version of Fractal Remote and it hasn’t connected to a unit yet, through a computer or over Bluetooth\./, 'the first email does not say why it came')
     assert.match(first.text, /I’ll send one reminder at most, and nothing after that\./, 'the first email does not say at most one reminder follows')
     assert.match(reminder.text, /This is the last email about it\./, 'the reminder does not say it is the last')
   })
@@ -1085,23 +1086,31 @@ export function run(test) {
     assert.deepEqual(iosOnly.filter((b) => b.version === '1.89.0').map((b) => b.platform), ['ios'])
   })
 
-  test('with the switch on, both emails offer both ways: the computer first and best, then Bluetooth for every unit from 1.89.0, marked beta, and help still a reply to Justin', async () => {
+  test('with the switch on, both emails offer both ways: the computer first and best, then Bluetooth for every unit from 1.89.0, and help still a reply to Justin', async () => {
     const { setupEmail, BLUETOOTH_FROM } = await setupWords()
-    /* Every unit since 25 October 2026, when they all opened in one store version: it said "Have an AM4?" and "the only way for the FM3, FM9, Axe-Fx III and VP4" until then. */
+    /*
+     * "Having trouble getting connected? Here's how to set up the computer or
+     * connect with Bluetooth" (Justin, 1 November 2026): each way under a
+     * heading of its own, the computer's first. Changed on purpose: until
+     * then the email was about the computer, with Bluetooth one paragraph
+     * after it, "From version 1.89.0 of the app there’s a second way".
+     */
     const second =
-      `From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth, through a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). ` +
-      'The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. ' +
-      /* Out of beta since 26 October 2026; since 31 October nothing of where it has been tried (the Developer page's), and the FM3's warning alone. */
-      'On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one. ' +
-      'To try it, update the app, then open Settings → My rig → Bluetooth, which says what to buy and how to plug it in.'
+      'You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. ' +
+      `Bluetooth is offered from version ${BLUETOOTH_FROM} of the app, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only), with no editing or saving. ` +
+      /* Since 31 October nothing of where it has been tried (the Developer page's), and the FM3's warning alone. */
+      'On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one.'
+    const allSet = 'Already up and running? Then you’re all set, and you can ignore this email.'
     const first = setupEmail('first', 'fan@example.com', { bluetooth: true })
     const reminder = setupEmail('reminder', 'fan@example.com', { bluetooth: true })
     for (const [which, e, help] of [
       ['first', first, 'If you get stuck anywhere, just reply to this email.'],
       ['reminder', reminder, 'If something got in the way, reply and tell me what you see']
     ]) {
-      assert.ok(e.text.includes(`\n\n${second}\n\n`), `the ${which} email does not say the second way as its own paragraph`)
+      assert.ok(e.text.includes(`\nThe computer (the best way, about five minutes):\n\n1. `), `the ${which} email has no heading over the computer’s steps`)
+      assert.ok(e.text.includes(`\nBluetooth (no computer needed):\n\n${second}\n\n${allSet}\n\n`), `the ${which} email does not say the second way under its own heading, with the all-set line`)
       assert.ok(e.html.includes(`<p style="margin:0 0 16px">${second}</p>`), `the ${which} email’s HTML does not say the second way`)
+      assert.ok(e.html.includes('font-weight:700">Bluetooth (no computer needed):</p>'), `the ${which} email’s HTML has no Bluetooth heading`)
       /* After every word about the computer, and before the help. */
       const at = e.text.indexOf(second)
       assert.ok(at > e.text.indexOf('3. Open Fractal Remote on your phone.') && at > e.text.indexOf('Used the computer app before?'), `the ${which} email offers Bluetooth before the computer`)
@@ -1114,6 +1123,8 @@ export function run(test) {
       assert.ok(!/\bMac\b|yesterday|\bOTA\b|\brelay\b|official|endorsed|approved/i.test(e.text + e.subject), `the ${which} email says something it should not`)
       /* Help is Justin's: the paragraph sends nobody anywhere else. */
       assert.ok(!/@|https?:|www\./.test(second), 'the second way sends people somewhere other than this email’s reply')
+      /* Never that it works on a unit: offered on. */
+      assert.ok(!/\bworks (on|with)\b/i.test(second), 'the email says Bluetooth works on units nobody here has run it on')
     }
     /* Never a promise for every Fractal unit: Bluetooth is for the units the app works with, named, and those are SUPPORTED UNITS. */
     assert.ok(!/every (Fractal )?unit/i.test(second), 'the email promises Bluetooth for every Fractal unit, Axe-Fx II and AX8 among them')
@@ -1126,12 +1137,17 @@ export function run(test) {
     assert.ok(!/\bbeta\b/i.test(second), 'the email still calls Bluetooth a beta')
     assert.ok(!/So far|been tried|not tried/.test(second), 'the email says where Bluetooth has been tried')
     assert.match(second, /on a VP4, presets and scenes only/)
-    /* Subjects as they were: the computer is still what the email is about. */
-    assert.equal(first.subject, 'One more step: the Fractal Remote computer app')
-    assert.equal(reminder.subject, 'Still need a hand with the Fractal Remote computer app?')
-    /* The computer the best way rather than the only one, and nobody told their phone has nothing to connect to. */
-    assert.match(first.text, /The best way for your phone to control your Fractal is through a free app on the computer your unit is plugged into, and no computer has signed in with your account yet\. Setting it up takes about five minutes:/)
-    assert.match(reminder.text, /No computer has signed in to Fractal Remote with fan@example\.com yet\. The computer app is free, and it’s the same three steps:/)
+    /* Getting connected is what the emails are about now, either way. */
+    assert.equal(first.subject, 'Having trouble getting Fractal Remote connected?')
+    assert.equal(reminder.subject, 'Still need a hand getting Fractal Remote connected?')
+    /* The two ways in the opening, the computer best, Bluetooth with its cost, and nobody told their phone has nothing to connect to. */
+    assert.match(first.text, /There are two ways: through a free app on the computer your unit is plugged into, which is the best way, or over Bluetooth with no computer, which has more lag and fewer features\./)
+    assert.match(reminder.text, /Fractal Remote still hasn’t connected to your Fractal with fan@example\.com, so here are the two ways again: through the free computer app, which is the best way, or over Bluetooth with no computer\./)
+    assert.match(reminder.text, /This is the last email about it\. You got it because fan@example\.com has the full version of Fractal Remote and it hasn’t connected to a unit yet\./)
+    /* And with the switch off, the computer alone, as before Bluetooth. */
+    const off = setupEmail('first', 'fan@example.com', { bluetooth: false })
+    assert.equal(off.subject, 'One more step: the Fractal Remote computer app')
+    assert.ok(!/bluetooth/i.test(off.text + off.html), 'with the switch off the email still says Bluetooth')
     assert.ok(!/nothing to connect to/.test(first.text + reminder.text), 'with Bluetooth in the emails, an AM4 owner is told their phone has nothing to connect to')
     /* What it costs is only what the app's Bluetooth page says (more lag: the preset list slow to load and footswitch changes a moment late), and the row it names is there. */
     const page = read('mobile/src/screens/Bluetooth.js')
@@ -1140,6 +1156,62 @@ export function run(test) {
     }
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
     assert.ok(settings.indexOf('<SetupRow title="Bluetooth"') > settings.indexOf('<Group title="My rig"'), 'the email sends them to Settings → My rig → Bluetooth, which is not there')
+  })
+
+  /*
+   * CONNECTED OVER BLUETOOTH, SO NO SETUP EMAIL. "Is there a way to do that
+   * now only if they haven't connected a computer or Bluetooth?" (Justin,
+   * 1 November 2026.) The server cannot see Bluetooth, so the phone says it
+   * once (mobile/src/lib/bluetoothSeen.js) and 20261101_bluetooth_seen.sql
+   * keeps the first date and leaves that account out of the rule.
+   */
+  test('an account that has connected over Bluetooth gets no setup email: one date, written only by its own phone, and nothing else about the connection', async () => {
+    const sql = sqlOf('supabase/migrations/20261101_bluetooth_seen.sql')
+    /* The ledger: the account's, gone with it, and no client can read it. */
+    assert.match(sql, /create table if not exists public\.bluetooth_seen \( account_id uuid primary key references auth\.users \(id\) on delete cascade, first_seen_at timestamptz not null \);/)
+    assert.ok(sql.includes('alter table public.bluetooth_seen enable row level security;'))
+    assert.ok(sql.includes('revoke all on table public.bluetooth_seen from public, anon, authenticated;'))
+    assert.ok(!/create policy/.test(sql), 'a policy opens the ledger to a client')
+    /* The one call a phone may make: no argument, its own account only, the first date only. */
+    const note = fnBody(sql, 'note_bluetooth_connected')
+    assert.match(note.head, /create or replace function public\.note_bluetooth_connected\(\) returns boolean language plpgsql volatile security definer set search_path = ''/, 'the call takes an argument, or runs with the caller’s path')
+    assert.match(note.body, /if auth\.uid\(\) is null then return null; end if; insert into public\.bluetooth_seen \(account_id, first_seen_at\) values \(auth\.uid\(\), now\(\)\) on conflict \(account_id\) do nothing; return true;/, 'it writes for somebody other than the caller, or moves the first date')
+    assert.ok(sql.includes('revoke all on function public.note_bluetooth_connected() from public, anon;'))
+    assert.ok(sql.includes('grant execute on function public.note_bluetooth_connected() to authenticated;'))
+    /* Nothing else here reaches a client. */
+    const toClients = [...sql.matchAll(/grant [^;]* to (anon|authenticated|public)\b[^;]*;/g)].map((m) => m[0])
+    assert.deepEqual(toClients, ['grant execute on function public.note_bluetooth_connected() to authenticated;'])
+    /* The rule: the 20261015 one, word for word, and Bluetooth left out. */
+    const before = fnBody(sqlOf(SETUP_SQL), 'setup_stuck').body
+    const after = fnBody(sql, 'setup_stuck').body
+    assert.equal(after, `${before} and not exists (select 1 from public.bluetooth_seen b where b.account_id = e.account_id)`, 'the rule changed in more than leaving out Bluetooth')
+    assert.match(fnBody(sql, 'owner_setup_stuck').body, /exists \(select 1 from public\.bluetooth_seen b where b\.account_id = r\.account_id and b\.first_seen_at > r\.first_sent_at\)/, 'the Developer page does not count somebody who connected over Bluetooth after the email')
+    for (const name of ['setup_stuck', 'owner_setup_stuck']) {
+      assert.match(fnBody(sql, name).head, /security definer set search_path = ''/)
+      assert.ok(sql.includes(`revoke all on function public.${name}() from public, anon, authenticated;`) && sql.includes(`grant execute on function public.${name}() to service_role;`), `${name} is not the server’s alone`)
+    }
+
+    /* The phone: what counts as connected, said once per account, and asked again only when it did not land. */
+    const { bluetoothSetUp, toldKey } = await import('../mobile/src/lib/bluetooth-seen-rule.js')
+    assert.equal(bluetoothSetUp({ via: 'bluetooth', phase: 'connected', unit: 'am4', rigUnit: 'present' }), true)
+    assert.equal(bluetoothSetUp({ via: 'bluetooth', phase: 'connected', unit: 'vp4', rigUnit: 'missing' }), true, 'a VP4, which answers nothing over Bluetooth, never counts')
+    for (const [facts, why] of [
+      [{ via: 'computer', phase: 'connected', unit: 'am4', rigUnit: 'present' }, 'a unit on the computer counts as Bluetooth'],
+      [{ via: 'bluetooth', phase: 'connecting', unit: 'am4', rigUnit: 'present' }, 'a connection not made yet counts'],
+      [{ via: 'bluetooth', phase: 'connected', unit: 'fm3', rigUnit: 'silent' }, 'a unit that does not answer counts'],
+      [{ via: 'bluetooth', phase: 'connected', unit: 'am4', rigUnit: 'present', answeredAs: 'FM3' }, 'the wrong unit answering counts'],
+      [{ via: 'bluetooth', phase: 'connected', unit: 'am4', rigUnit: 'present', simulated: true }, 'the demo counts']
+    ]) assert.equal(bluetoothSetUp(facts), false, why)
+    assert.equal(toldKey('abc'), 'bluetooth-seen-told:abc')
+    const seen = read('mobile/src/lib/bluetoothSeen.js').replace(/\s+/g, ' ')
+    assert.match(seen, /if \(await noteBluetoothConnected\(\)\) \{ told\.add\(account\.id\) await AsyncStorage\.setItem\(key, 'yes'\)/, 'the phone remembers it told the server before the server said so')
+    assert.match(seen, /if \(!account\?\.id \|\| told\.has\(account\.id\)\) return/, 'it asks signed out, or twice for one account')
+    assert.match(read('mobile/src/lib/relay.js'), /supabase\(\)\.rpc\('note_bluetooth_connected'\)/, 'the phone calls a name the database does not have')
+    assert.ok(!/rpc\('note_bluetooth_connected', \{/.test(read('mobile/src/lib/relay.js')), 'the phone sends something with the call')
+    assert.match(read('mobile/App.js').replace(/\s+/g, ' '), /startGearShare\(\) \/\*[^*]*\*\/ startBluetoothSeen\(\)/, 'the app never starts listening')
+    /* And the privacy page says the date is kept, and why. */
+    const privacy = read('public/privacy.html').replace(/\s+/g, ' ')
+    assert.match(privacy, /the first time the app connected to your unit over Bluetooth while you were signed in/, 'the privacy page does not say the Bluetooth date is kept')
   })
 
   test('the way it goes on is written down: only for the build that opens it, in both stores, and Justin reads the sample before a customer gets one', () => {

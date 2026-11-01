@@ -200,63 +200,79 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
   /* For somebody who opened the computer app before and went past its first screen. */
   const opened = `Used the computer app before? Click the gear at the top, choose ${SETTINGS_DOOR.row}, then “${SETTINGS_DOOR.button}”, and sign in with ${who}.`
   const first = kind === 'first'
-  const subject = first ? 'One more step: the Fractal Remote computer app' : 'Still need a hand with the Fractal Remote computer app?'
   /*
-   * With Bluetooth (beta) in the emails, the computer is the best way rather
-   * than the only one, and a phone with no computer is no longer one with
-   * "nothing to connect to": a unit on Bluetooth has the unit itself.
+   * TWO WAYS, SINCE 1 NOVEMBER 2026: "Having trouble getting connected?
+   * Here's how to set up the computer or connect with Bluetooth" (Justin).
+   * The emails go only to somebody who has connected neither (the rule in
+   * supabase/migrations/20261101_bluetooth_seen.sql), so with Bluetooth in
+   * them they say both ways, the computer first and best, in the app's own
+   * three things (the computer best, more lag, fewer features). With the
+   * switch off they say the computer alone, as they did before Bluetooth.
    */
-  const opening = first
-    ? [
-        'Thanks for getting Fractal Remote!',
-        both
-          ? 'The best way for your phone to control your Fractal is through a free app on the computer your unit is plugged into, and no computer has signed in with your account yet. Setting it up takes about five minutes:'
-          : 'Your phone controls your Fractal through a free app on the computer your unit is plugged into, and no computer has signed in with your account yet. Setting it up takes about five minutes:'
-      ]
-    : [
-        'Just checking in.',
-        both
-          ? `No computer has signed in to Fractal Remote with ${who} yet. The computer app is free, and it’s the same three steps:`
-          : `No computer has signed in to Fractal Remote with ${who} yet, so your phone has nothing to connect to. The computer app is free, and it’s the same three steps:`
-      ]
+  const subject = both
+    ? first
+      ? 'Having trouble getting Fractal Remote connected?'
+      : 'Still need a hand getting Fractal Remote connected?'
+    : first
+      ? 'One more step: the Fractal Remote computer app'
+      : 'Still need a hand with the Fractal Remote computer app?'
+  const opening = both
+    ? first
+      ? [
+          'Thanks for getting Fractal Remote!',
+          'It looks like it hasn’t connected to your Fractal yet, so here’s how. There are two ways: through a free app on the computer your unit is plugged into, which is the best way, or over Bluetooth with no computer, which has more lag and fewer features.'
+        ]
+      : [
+          'Just checking in.',
+          `Fractal Remote still hasn’t connected to your Fractal with ${who}, so here are the two ways again: through the free computer app, which is the best way, or over Bluetooth with no computer.`
+        ]
+    : first
+      ? [
+          'Thanks for getting Fractal Remote!',
+          'Your phone controls your Fractal through a free app on the computer your unit is plugged into, and no computer has signed in with your account yet. Setting it up takes about five minutes:'
+        ]
+      : [
+          'Just checking in.',
+          `No computer has signed in to Fractal Remote with ${who} yet, so your phone has nothing to connect to. The computer app is free, and it’s the same three steps:`
+        ]
+  /* The two ways' own headings, with both in the email. */
+  const computerHead = 'The computer (the best way, about five minutes):'
+  const bluetoothHead = 'Bluetooth (no computer needed):'
   /*
-   * THE OTHER WAY, after the computer's steps and never before
-   * them: what it is, that the computer is still the best way, what Bluetooth
-   * costs (only what the app's own Bluetooth page says: no editing or saving,
-   * footswitch changes a moment late and the preset list slow to load, which
-   * is Justin's "more lag", and less on screen), and where in the app it is.
-   * "Update the app" because the email cannot tell which store copy they
-   * hold, and only BLUETOOTH_FROM and later have the row. Help stays the
-   * reply to this email, below, which comes to Justin.
-   *
-   * THE UNITS, NAMED. It once said "the one for every Fractal unit", which
-   * promises an Axe-Fx II, an AX8 or an FX8 something the app does not do.
-   * These are the units the app works with (docs/app-store.md SUPPORTED
-   * UNITS), and test/server.mjs holds them to that list. Until 25 October
-   * 2026 this said "Have an AM4?", and the computer "the only way for the
-   * FM3, FM9, Axe-Fx III and VP4"; every unit opens together in 1.89.0, the
-   * AM4 the only one tried, so it says which has been tried, and what a VP4
-   * gets, in the app's own words ("Bluetooth is in beta, and some features
-   * might not work as expected").
+   * THE OTHER WAY, after the computer's steps and never before them: what
+   * it needs, where in the app it is, what it costs (no editing or saving),
+   * the units it is offered on (docs/app-store.md SUPPORTED UNITS, which
+   * test/server.mjs holds it to), what a VP4 gets, and the FM3's warning,
+   * the one unit with one. "Update the app" because the email cannot tell
+   * which store copy they hold, and only BLUETOOTH_FROM and later have the
+   * row. Never what has been tried, and never that it works on a unit:
+   * "offered on".
    */
-  const secondWay = `From version ${BLUETOOTH_FROM} of the app there’s a second way, with no computer: Bluetooth, through a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one. To try it, update the app, then open Settings → My rig → Bluetooth, which says what to buy and how to plug it in.`
+  const secondWay = `You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. Bluetooth is offered from version ${BLUETOOTH_FROM} of the app, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only), with no editing or saving. On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one.`
+  /* Somebody who got going since the account server last heard (a phone that has not had the update that tells it): no harm done. */
+  const allSet = 'Already up and running? Then you’re all set, and you can ignore this email.'
   const help = first
     ? 'If you get stuck anywhere, just reply to this email. It comes straight to me.'
     : 'If something got in the way, reply and tell me what you see, and I’ll help you get it going.'
-  const why = first
-    ? `You’re getting this because ${who} has the full version of Fractal Remote and no computer has signed in with it yet. I’ll send one reminder at most, and nothing after that.`
-    : `This is the last email about it. You got it because ${who} has the full version of Fractal Remote and no computer has signed in with it.`
+  const why = both
+    ? first
+      ? `You’re getting this because ${who} has the full version of Fractal Remote and it hasn’t connected to a unit yet, through a computer or over Bluetooth. I’ll send one reminder at most, and nothing after that.`
+      : `This is the last email about it. You got it because ${who} has the full version of Fractal Remote and it hasn’t connected to a unit yet.`
+    : first
+      ? `You’re getting this because ${who} has the full version of Fractal Remote and no computer has signed in with it yet. I’ll send one reminder at most, and nothing after that.`
+      : `This is the last email about it. You got it because ${who} has the full version of Fractal Remote and no computer has signed in with it.`
 
   const text = [
     'Hi,',
     '',
     opening.join(' '),
     '',
+    ...(both ? [computerHead, ''] : []),
     ...steps.map((s, i) => `${i + 1}. ${s}`),
     '',
     opened,
     '',
-    ...(both ? [secondWay, ''] : []),
+    ...(both ? [bluetoothHead, '', secondWay, '', allSet, ''] : []),
     help,
     '',
     'Justin',
@@ -267,15 +283,16 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
   ].join('\n')
 
   const p = (t: string, style = 'margin:0 0 16px') => `<p style="${style}">${esc(t)}</p>`
+  const h = (t: string) => p(t, 'margin:0 0 8px;font-weight:700')
   const html = `
     <div style="font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1d21;max-width:560px">
       ${p('Hi,')}
-      ${p(opening.join(' '))}
+      ${p(opening.join(' '))}${both ? `\n      ${h(computerHead)}` : ''}
       <ol style="margin:0 0 20px;padding-left:22px">${steps.map((s) => `<li style="margin:0 0 8px">${esc(s)}</li>`).join('')}</ol>
       <p style="margin:0 0 20px">
         <a href="https://${DOWNLOADS}" style="background:#7c5cff;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block;font-weight:600">Get the computer app</a>
       </p>
-      ${p(opened)}${both ? `\n      ${p(secondWay)}` : ''}
+      ${p(opened)}${both ? `\n      ${h(bluetoothHead)}\n      ${p(secondWay)}\n      ${p(allSet)}` : ''}
       ${p(help)}
       ${p('Justin', 'margin:0')}
       ${p('Fractal Remote', 'margin:0 0 24px;color:#5f6670')}

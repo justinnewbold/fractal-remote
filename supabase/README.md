@@ -328,6 +328,15 @@ reply address).
 1. **Apply `20261015_setup_reminders.sql`.** The tables, the rule, the list and
    the switch, which is off. It looks once at today's accounts on the way in.
    Nothing calls anything yet.
+   **Then `20261101_bluetooth_seen.sql`**, straight after (1 November 2026):
+   the phone's one call, `note_bluetooth_connected()`, which writes the
+   first date the app connected to the account's unit over Bluetooth, and
+   the rule again with that account left out, so the emails go only to
+   somebody who has connected neither a computer nor Bluetooth. A phone
+   older than 1.89.19 never makes the call, which is why the emails carry
+   "Already up and running? … ignore this email", and why they are best
+   turned on a few days after that update, once Bluetooth owners' phones
+   have had it.
 2. **Deploy the function**: `supabase functions deploy setup-reminder --no-verify-jwt`.
    Secrets: `RESEND_API_KEY` is already set (feedback-email and download-link
    use it). Optional: `SETUP_FROM`, `SETUP_REPLY_TO`.

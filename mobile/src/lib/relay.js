@@ -495,6 +495,23 @@ export async function accountHasComputer() {
 }
 
 /**
+ * Tell the account server this account has connected over Bluetooth, so the
+ * setup emails leave it alone (lib/bluetoothSeen.js, and
+ * supabase/migrations/20261015_setup_reminders.sql's
+ * note_bluetooth_connected, which takes nothing and keeps the first date
+ * only). True only when the server said it has it; anything else is asked
+ * again later.
+ */
+export async function noteBluetoothConnected() {
+  try {
+    const { data, error } = await supabase().rpc('note_bluetooth_connected')
+    return !error && data === true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Who the session kept on this phone belongs to, read off the phone: no
  * question to the account server, so it answers with no signal as well.
  */
