@@ -616,7 +616,7 @@ export const adapterName = (a) => (a && typeof a.name === 'string' && a.name && 
  * adapter chosen. Read when the report is sent, and at no other moment.
  */
 export const bluetoothFacts = () => ({
-  /* "FM9 (not tried yet)" for a unit nobody has tried it on (shared/bluetooth-gear unitForReport), so the report says so where it is read first. */
+  /* "VP4 (not tried yet)" for a unit nobody has tried it on (shared/bluetooth-gear unitForReport), so the report says so where it is read first. */
   unit: saved.unit ? unitForReport(saved.unit) || unitName(saved.unit) : null,
   answeredAs: now.answeredAs || null,
   phase: now.phase,

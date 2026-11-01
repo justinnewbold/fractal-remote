@@ -306,13 +306,15 @@ test first, and under these rules:
   or email says tried, untried or "not tried yet". The record is
   `TESTED`, `TRIED_WAYS` and `TRIED_NOTES` in shared/bluetooth-gear.mjs,
   drawn on Developer → App health → Tried (his account only), and the
-  head of every log says "FM9 (not tried yet)" (`unitForReport`). Update
+  head of every log says "VP4 (not tried yet)" (`unitForReport`). Update
   it there when a unit or adapter is confirmed. So far: the AM4 and the
   FM3 from an iPhone and an Android phone (26 October 2026), the AM4
   through the WIDI Uhost with the C2MIDI Pro, a WIDI Master and a WIDI
   Jack, the FM3 through the WIDI Uhost with a CME U2MIDI Pro; the Axe-Fx
   III from an iPhone (31 October 2026, adapter not said, "It just works
-  probably with all the connectors"). Not the FM9 or the VP4. Still never
+  probably with all the connectors"); the FM9 ("FM9 has already been tested
+  and works", 1 November 2026, phone and adapter not said). Not the VP4.
+  Still never
   a sentence that says it works on a unit it has not run on.
 - **The FM3 is the only unit with a heat warning.** "The FM three is the
   only one that ever has overheating issues so we don't need to worry

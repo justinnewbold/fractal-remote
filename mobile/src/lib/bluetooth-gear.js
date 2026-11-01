@@ -131,13 +131,17 @@ export const GUIDE_URL = 'https://fractal.newbold.cloud/bluetooth-guide.html'
  * The Axe-Fx III since 31 October 2026: "had someone confirm that this works
  * on the Axefx lll", with a screenshot of Play live on one over Bluetooth
  * from an iPhone, its scenes and chain read; which adapter was not said.
+ * The FM9 since 1 November 2026: "FM9 has already been tested and works"
+ * (Justin); which phone and adapter were not said. The VP4 is the one
+ * left.
  */
-export const TESTED = ['am4', 'fm3', 'axefx3']
+export const TESTED = ['am4', 'fm3', 'fm9', 'axefx3']
 
 /** What we know of each try, for the Developer page. */
 export const TRIED_NOTES = {
   am4: 'From an iPhone and an Android phone, 26 October 2026; the WIDI Jack on 28 October.',
   fm3: 'From an iPhone and an Android phone, 26 October 2026, with the U2MIDI Pro: the WIDI Master and the C2MIDI Pro got very hot on it.',
+  fm9: 'Confirmed working, 1 November 2026. Which phone and adapter were not said.',
   axefx3: 'From an iPhone, 31 October 2026: a customer confirmed it works. Which adapter was not said.'
 }
 
@@ -726,7 +730,7 @@ export const powerStepOf = (unit) => (hookupFor(unit) || []).indexOf(powerStep(U
  */
 export const untried = (unit) => !!UNITS[unit] && !triedOn(unit)
 
-/** The unit's name as a report's log head says it: "FM9 (not tried yet)", "AM4". */
+/** The unit's name as a report's log head says it: "VP4 (not tried yet)", "AM4". */
 export const unitForReport = (unit) => (UNITS[unit] ? `${UNITS[unit]}${!untried(unit) ? '' : ' (not tried yet)'}` : null)
 
 /*
