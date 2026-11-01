@@ -1,0 +1,71 @@
+{
+  "_why": "What each update changed, in plain words, newest first. Settings → About → What’s new shows the newest shownInApp days; the website page public/whats-new.html (generated, with the phone's copy, by npm run sync:rules) keeps them all. Every change a player would notice adds a line here in the same pull request, under that day, and the day's version moves to the newest one that carried a line. A line is a string, or { text, only } for one phone only: only 'ios' for anything that names the iPhone, the iPad, the Apple Watch or Siri, only 'android' for anything that names Android, since Apple's 2.3.10 keeps other phones' names out of an iPhone app. Never a feature only Justin's account has, never 'this phone', never Bluetooth as a beta, never what has been tried. test/whats-new.mjs holds the rest.",
+  "shownInApp": 10,
+  "days": [
+    {
+      "date": "2026-10-31",
+      "version": "1.89.18",
+      "lines": [
+        "New: What’s new, under Settings → About, lists what each update changed.",
+        "On a wide screen, such as a tablet or a folding phone opened out, Previous and Next sit at the two ends of the buttons under Play.",
+        "Shorter Bluetooth pages, and the heat warning is shown only for the FM3, the one unit that needs it."
+      ]
+    },
+    {
+      "date": "2026-10-30",
+      "version": "1.89.14",
+      "lines": [
+        "Less to read: the Bluetooth page, Settings, the purchase page and Edit say the same things in fewer words."
+      ]
+    },
+    {
+      "date": "2026-10-29",
+      "version": "1.89.12",
+      "lines": [
+        "One screen for feedback and problem reports: type what happened, add a photo or video, and choose whether to include your email and the app’s log.",
+        "New, and only if you say yes: share which gear works with Fractal Remote, to help build a list of everything that works. It is not linked to you. Settings → Troubleshooting → Share what gear works.",
+        "Settings sections fold open and closed, so the list is shorter.",
+        "The quick preset jump numbers are no longer cut off on smaller screens.",
+        "Edit’s beta note has an X, and stays closed once you close it."
+      ]
+    },
+    {
+      "date": "2026-10-28",
+      "version": "1.89.5",
+      "lines": [
+        "Saving works when the computer app runs on a Raspberry Pi that starts it at power-on.",
+        "Quick preset jumps start at 0.",
+        "After Bluetooth connects and the unit answers, the app goes straight back to Play."
+      ]
+    },
+    {
+      "date": "2026-10-26",
+      "version": "1.89.3",
+      "lines": [
+        "The Bluetooth page starts with two steps: pick your unit, then Connect. How to connect, Troubleshooting and What Bluetooth can’t do each have a page of their own, with every way to hook up each unit and what to buy.",
+        "If Bluetooth won’t connect after you plug the adapter back in, close the app completely and open it again."
+      ]
+    },
+    {
+      "date": "2026-10-25",
+      "version": "1.89.0",
+      "lines": [
+        "New: Bluetooth, from version 1.89.0. With the full version and a Bluetooth MIDI adapter on your unit, control an AM4, FM3, FM9, Axe-Fx III or VP4 with no computer (on a VP4, presets and scenes). The computer is still the best way: Bluetooth has more lag and fewer features. Settings → My rig → Bluetooth.",
+        "Report a Bluetooth problem, on the Bluetooth page, sends a report straight from the app.",
+        { "text": "On a tablet, the app turns sideways with the screen.", "only": "android" },
+        { "text": "On the Apple Watch, an AM4’s or VP4’s scenes and pedals fill the screen.", "only": "ios" },
+        "Previous and Next, and the names under them, are drawn smaller rather than cut off."
+      ]
+    },
+    {
+      "date": "2026-10-24",
+      "version": "1.88.6",
+      "lines": [
+        "Scene names are as big as their tiles have room for, one size across the whole grid.",
+        "Play’s top bar says which unit you are on, and on which computer. Tap it to switch.",
+        "A problem report can carry a screenshot.",
+        { "text": "On the Apple Watch, an AM4 amp’s pedal says Boost on, Boost off or Amp off.", "only": "ios" }
+      ]
+    }
+  ]
+}

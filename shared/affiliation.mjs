@@ -100,6 +100,15 @@ export const SUPPORT_LINE =
 export const SUPPORT_URL = 'https://fractal.newbold.cloud/support.html'
 
 /**
+ * The website's What's new page (public/whats-new.html, from
+ * shared/whats-new.json): the browser's About row opens it, and so does the
+ * phone's All updates. Here rather than with the list, so the browser and
+ * the computer window import the address and never the list, which would
+ * make a computer release of every update.
+ */
+export const WHATS_NEW_URL = 'https://fractal.newbold.cloud/whats-new.html'
+
+/**
  * The startup card's heading, over the sentence and the line above: once on
  * every device, before anything else, with one button, OK.
  */

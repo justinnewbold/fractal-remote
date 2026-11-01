@@ -609,6 +609,25 @@ not suggest renaming. Everything else is held, and is not to regress:
 base branch and fails if they match. `desktop/package.json` has to move with
 it — a test holds the two to each other.
 
+**And every change a player would notice gets a line in What's new.**
+
+> "Under the about menu can we make a change log that shows what each
+> update change was made? Needs to be user friendly." (1 November 2026)
+
+shared/whats-new.json is the list, newest day first: Settings → About →
+What's new on the phone shows the newest `shownInApp` days (10), and the
+website's public/whats-new.html, which the phone's All updates and the
+browser's About row open, keeps every one. Both are rendered from the list
+by `npm run sync:rules` (scripts/whats-new.mjs). So in the same pull
+request: add the line under today's date (or a new day on top), in plain
+words for a guitarist, and move that day's version to this one. Internal
+work (tests, store bookkeeping, the Developer pages, anything only his
+account has) gets no line. A line naming the iPhone, iPad, Apple Watch or
+Siri is `only: 'ios'`, one naming Android is `only: 'android'`.
+test/whats-new.mjs holds the rest. The browser imports only the page's
+address (`WHATS_NEW_URL`), never the list, so a new line is never a new
+computer release.
+
 **But a new number is not a new computer app.**
 
 > "Fewer, smaller computer updates … a new computer version only when its

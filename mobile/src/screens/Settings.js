@@ -101,6 +101,7 @@ import SceneArrange from '../components/SceneArrange'
 import EdgeBack from '../components/EdgeBack'
 import Sheet from '../components/Sheet'
 import { deviceKind, deviceNoun, pairTitle } from '../lib/device-word'
+import WhatsNew, { latestLine } from './WhatsNew'
 
 /* "Phone & computer", or "iPad & computer" on an iPad (device-word.mjs). Read
    once: App.js says which device this is before this file is loaded. */
@@ -481,8 +482,8 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', updating: 'link', messages: 'developer', customers: 'developer', health: 'developer', testing: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth' }
-  const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, developer: '‹ Developer', bluetooth: '‹ Bluetooth' }
+  const PARENT = { offline: 'link', updating: 'link', messages: 'developer', customers: 'developer', health: 'developer', testing: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'whats-new': 'about' }
+  const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, developer: '‹ Developer', bluetooth: '‹ Bluetooth', about: '‹ About' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
 
@@ -1651,6 +1652,13 @@ export default function Settings({
         </>
       ) : null}
 
+      {page === 'whats-new' ? (
+        <>
+          {head('What’s new', 'back')}
+          <WhatsNew />
+        </>
+      ) : null}
+
       {page === 'about' ? (
         <>
           {head('About', 'back')}
@@ -1724,6 +1732,13 @@ export default function Settings({
             getting updates. Said here, quietly, for as long as it is true.
           */}
           {newer.note ? <SetupRow title={newer.note.row} status={newer.note.line} onPress={() => openStore(newer.note)} /> : null}
+          {/*
+            WHAT EACH UPDATE CHANGED, beside Updates, which says which one is
+            running (screens/WhatsNew, from shared/whats-new.json): "a change
+            log that shows what each update change was made" (Justin,
+            1 November 2026).
+          */}
+          <SetupRow title="What’s new" status={latestLine()} onPress={() => setPage('whats-new')} />
           {/*
             HELP WITH THIS APP, A ROW OF ITS OWN, at both ends in the same
             place. Fractal Audio's letter (18 October 2026) asks that support

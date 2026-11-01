@@ -6489,6 +6489,10 @@ console.log('\nthe colours: the units’ own, readable, and the ones you choose'
 const { run: colours } = await import('./colours.mjs')
 colours(test)
 
+console.log('\nwhat’s new: what each update changed, on the phone and the website')
+const { run: whatsNew } = await import('./whats-new.mjs')
+whatsNew(test)
+
 console.log('\nwhose app this is not: Fractal Audio’s letter')
 const { run: independent } = await import('./independent.mjs')
 independent(test)
