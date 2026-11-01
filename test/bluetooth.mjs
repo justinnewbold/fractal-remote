@@ -8200,8 +8200,8 @@ export function run(test) {
       /* Never a promise that it works there, and never a word on whether it was tried: that is the Developer page's. */
       assert.ok(!/should work the same way|not tried|tried on|has been tried/i.test(all), `${name}: the steps say whether it was tried`)
     }
-    /* The AM4 and, since 26 October 2026, the FM3 (with the U2MIDI Pro). */
-    assert.deepEqual(gear.TESTED, ['am4', 'fm3', 'axefx3'])
+    /* The AM4 and, since 26 October 2026, the FM3 (with the U2MIDI Pro); the Axe-Fx III since 31 October, the FM9 since 1 November. */
+    assert.deepEqual(gear.TESTED, ['am4', 'fm3', 'fm9', 'axefx3'])
     assert.equal(gear.hookupFor('vp5'), null, 'steps for a unit the page does not offer')
     /* The FM3's MIDI settings, for an owner whose presets don't change, under its steps; none for a unit the page does not know. */
     assert.match(gear.midiSettingsFor('fm3'), /^If presets don’t change from this phone: on the FM3, open Setup → MIDI\/Remote and set Program Change to On/)
@@ -9539,15 +9539,16 @@ export function run(test) {
      * of the steps).
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
-    /* The record itself: the FM9 and VP4 not tried, the rest tried. */
-    for (const unit of ['fm9', 'vp4']) assert.equal(gear.untried(unit), true, unit)
-    for (const unit of ['am4', 'fm3', 'axefx3', null, 'vp5']) assert.equal(gear.untried(unit), false, String(unit))
-    assert.deepEqual(gear.TESTED, ['am4', 'fm3', 'axefx3'])
-    /* Which adapter the Axe-Fx III went through was not said, so no way on it is marked tried. */
+    /* The record itself: the VP4 not tried, the rest tried ("FM9 has already been tested and works", Justin, 1 November 2026). */
+    assert.equal(gear.untried('vp4'), true)
+    for (const unit of ['am4', 'fm3', 'fm9', 'axefx3', null, 'vp5']) assert.equal(gear.untried(unit), false, String(unit))
+    assert.deepEqual(gear.TESTED, ['am4', 'fm3', 'fm9', 'axefx3'])
+    /* Which adapter the Axe-Fx III and the FM9 went through was not said, so no way on them is marked tried. */
     assert.ok(gear.waysFor('axefx3').every((w) => !w.tried))
+    assert.ok(gear.waysFor('fm9').every((w) => !w.tried))
     assert.ok(gear.waysFor('am4').some((w) => w.tried) && gear.waysFor('fm3').some((w) => w.tried))
     /* The head of every log he is sent still says it, so a report from an untried unit stands out. */
-    assert.equal(gear.unitForReport('fm9'), 'FM9 (not tried yet)')
+    assert.equal(gear.unitForReport('fm9'), 'FM9')
     assert.equal(gear.unitForReport('vp4'), 'VP4 (not tried yet)')
     assert.equal(gear.unitForReport('axefx3'), 'Axe-Fx III')
     assert.equal(gear.unitForReport('am4'), 'AM4')
