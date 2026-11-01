@@ -22,6 +22,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { phoneModule, websitePage } from './whats-new.mjs'
 
 /**
  * Every file the phone carries a copy of, and where it came from.
@@ -605,6 +606,13 @@ export const FILES = [
    * `addEventListener` and simply does nothing where there is no window.
    */
   { source: '../src/lib/debugLog.js', target: '../mobile/src/lib/debugLog.js' },
+  /*
+   * What each update changed (scripts/whats-new.mjs): one list, rendered
+   * into the phone's What's new and the website's page, so the two never
+   * say different things. The page is raw: an HTML file takes no banner.
+   */
+  { source: '../shared/whats-new.json', target: '../mobile/src/lib/whatsNew.js', render: (text) => phoneModule(text) },
+  { source: '../shared/whats-new.json', target: '../public/whats-new.html', raw: true, render: (text) => websitePage(text) },
   /*
    * What this build of the phone app is.
    *

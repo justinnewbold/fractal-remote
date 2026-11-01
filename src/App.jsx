@@ -123,7 +123,7 @@ import {
 import { editButtonShows } from './lib/playMode'
 import { FIXES, FIRMWARE_NOTE, fixById, fixFor, versionsInSync } from '../shared/troubleshooting.mjs'
 import { osGuess, waysFor, waysWord } from '../shared/ways-in.mjs'
-import { AFFILIATION, SUPPORT_LINE, SUPPORT_URL } from '../shared/affiliation.mjs'
+import { AFFILIATION, SUPPORT_LINE, SUPPORT_URL, WHATS_NEW_URL } from '../shared/affiliation.mjs'
 import { isAdmin } from '../shared/admin.mjs'
 import AccessTool from './components/AccessTool'
 import SalesTool from './components/SalesTool'
@@ -6650,6 +6650,17 @@ export default function App() {
                 of it is never kept current (WEBSITE_ONLY in
                 scripts/computer-fingerprint.mjs).
               */}
+              {/*
+                WHAT EACH UPDATE CHANGED, the website's page, as the phone's
+                All updates opens it: the list itself stays out of the web
+                app, so a new line is never a new computer release.
+              */}
+              <SetupRow
+                key="whats-new"
+                title="What’s new"
+                status="What each update changed"
+                onClick={() => window.open(WHATS_NEW_URL, '_blank', 'noopener')}
+              />
               <SetupRow
                 key="help"
                 title="Help with this app"

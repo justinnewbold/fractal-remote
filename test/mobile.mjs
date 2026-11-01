@@ -13823,8 +13823,9 @@ export function run(test) {
        yet, a child of Developer like the other tools. And on 26 October 2026,
        'works', What works (the gear notes), a child of Developer too. And on
        30 October 2026 Developer's ten became four: Messages from users and
-       the three pages that group the rest, all children of Developer. */
-    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', messages: 'developer', customers: 'developer', health: 'developer', testing: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth' \}/, 'a page goes back somewhere it did not come from')
+       the three pages that group the rest, all children of Developer. And
+       on 1 November 2026 'whats-new', What’s new, a child of About. */
+    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', messages: 'developer', customers: 'developer', health: 'developer', testing: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'whats-new': 'about' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')

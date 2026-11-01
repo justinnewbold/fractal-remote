@@ -92,6 +92,8 @@ export const WEBSITE_ONLY = [
   'public/downloads.html',
   'public/raspberry-pi.html',
   'public/support.html',
+  /* Opened at the website's address from both About pages (WHATS_NEW_URL). */
+  'public/whats-new.html',
   /* Read by the phone from the website's address, never from a computer. */
   'public/store-versions.json'
 ]
