@@ -271,8 +271,9 @@ Justin says so, and the emails themselves off even then:
   The claim reads the switch again before every email, so turning the emails
   off in the middle of a run stops that run at the next one. Each email goes
   from `noreply@newbold.cloud`, with replies to `justinnewbold@gmail.com`.
-  At most two emails per account, ever: the first a day after the full
-  version is first seen, one reminder four days after that, none once a
+  At most two emails per account, ever: the first two days after the full
+  version is first seen, one reminder a week after that (since 1 November
+  2026, 20261101_setup_timing.sql: it was a day and four days), none once a
   computer has signed in, none to an unconfirmed address, and none after the
   mail service refuses one of them.
 

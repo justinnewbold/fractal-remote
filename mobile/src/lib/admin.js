@@ -615,8 +615,9 @@ export function accountChoices(row) {
 
 const DAY_MS = 86400000
 /* The setup emails' timing, as supabase/migrations/20261015_setup_reminders.sql has it. */
-const FIRST_AFTER_MS = DAY_MS
-const REMINDER_AFTER_MS = 4 * DAY_MS
+/* Two days, then a week (supabase/migrations/20261101_setup_timing.sql): time for an adapter ordered online to arrive. */
+const FIRST_AFTER_MS = 2 * DAY_MS
+const REMINDER_AFTER_MS = 7 * DAY_MS
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
@@ -645,11 +646,11 @@ function emailed(row, sending, now) {
   if (row.reminder_sent_at) return `First email ${dayOf(first)}, reminder ${dayOf(row.reminder_sent_at)}. No more emails.`
   if (first) {
     const due = at(first) + REMINDER_AFTER_MS
-    if (due > now) return `First email ${dayOf(first)}. Reminder ${dayOf(due)}, if there’s still no computer.`
+    if (due > now) return `First email ${dayOf(first)}. Reminder ${dayOf(due)}, if they still haven’t connected.`
     return sending ? `First email ${dayOf(first)}. The reminder goes within the hour.` : `First email ${dayOf(first)}. The reminder is due, once the emails are on.`
   }
   if (!row.confirmed) return 'Not emailed.'
-  if (at(row.unlocked_at) + FIRST_AFTER_MS > now) return 'Not emailed yet. The first goes a day after they got the full version.'
+  if (at(row.unlocked_at) + FIRST_AFTER_MS > now) return 'Not emailed yet. The first goes two days after they got the full version.'
   return sending ? 'Not emailed yet. The first goes within the hour.' : 'Not emailed yet. It goes as soon as the emails are on.'
 }
 
@@ -677,7 +678,7 @@ export function stuckSections(answer, now = Date.now()) {
     {
       label: '',
       value: sending
-        ? 'Setup emails: on. A first email a day after somebody gets the full version, one reminder four days after that, and only while no computer has signed in.'
+        ? 'Setup emails: on. A first email two days after somebody gets the full version, one reminder a week after that, and only while they haven’t connected a computer or Bluetooth.'
         : 'Setup emails: off. Nothing is sent until you turn them on.'
     },
     { label: 'Due now', value: `${plural(dueFirst, 'first email', 'first emails')}, ${plural(dueReminder, 'reminder', 'reminders')}` }

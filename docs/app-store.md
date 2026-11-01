@@ -345,12 +345,12 @@ Tracking Transparency entirely.
 |---|---|---|---|
 | Contact Info → **Email Address** | Yes | Yes | Account sign-in, and answering a support message: the address they leave, or, when they leave none and are signed in, the account's own (22 October 2026) |
 | User Content → **Other User Content** | Yes | Yes | Setlists, so they follow you between devices |
-| User Content → **Photos or Videos** | Yes | Yes | Screenshots and photos somebody chooses to add to a bug report (up to three, pasted or picked on a phone, picked on the website), and from 29 October 2026 one video picked on a phone or tablet, sent only when they press Send. Linked unless they untick Include my email. Added 22 October 2026: **not on the live label yet** |
-| User Content → **Customer Support** | Yes | Yes | What somebody writes in a bug report or suggestion: the Feedback form, and the note beside Send logs to developer. It was true before the note came, and was never on the label; add it with Photos or Videos. **Not on the live label yet** |
-| Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you, and the number RevenueCat files purchases under. App Functionality and **Analytics** (RevenueCat's own guidance: say how the id is used, as for Purchase History). Analytics added 25 October 2026: **not on the live label yet** |
+| User Content → **Photos or Videos** | Yes | Yes | Screenshots and photos somebody chooses to add to a bug report (up to three, pasted or picked on a phone, picked on the website), and from 29 October 2026 one video picked on a phone or tablet, sent only when they press Send. Linked unless they untick Include my email. Added 22 October 2026: on the live label since 1 November 2026 |
+| User Content → **Customer Support** | Yes | Yes | What somebody writes in a bug report or suggestion: the Feedback form, and the note beside Send logs to developer. It was true before the note came, and was never on the label; add it with Photos or Videos. on the live label since 1 November 2026 |
+| Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you, and the number RevenueCat files purchases under. App Functionality and **Analytics** (RevenueCat's own guidance: say how the id is used, as for Purchase History). Analytics added 25 October 2026: on the live label since 1 November 2026 |
 | Diagnostics → **Other Diagnostic Data** | Yes | Yes | The debug log, and only when somebody presses Send on a bug report |
-| Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices. App Functionality and **Analytics**: RevenueCat's App Privacy page says "All RevenueCat users must select these two options", because its dashboard charts the purchases. Analytics added 25 October 2026: **not on the live label yet** |
-| Identifiers → **Device ID** | Yes | No | The random number Expo's update check carries for that install, made up the first time the app runs, so Expo can tell one install from another. The app itself never reads it. App Functionality and **Analytics**: Expo's dashboard counts the installs that took each update and the ones that crashed, by this number, which is measuring audience size in Apple's words. Play's Data safety declares it too (*Device or other IDs*, below), and the privacy page describes it and its counts. Added 25 October 2026: **not on the live label yet** |
+| Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices. App Functionality and **Analytics**: RevenueCat's App Privacy page says "All RevenueCat users must select these two options", because its dashboard charts the purchases. Analytics added 25 October 2026: on the live label since 1 November 2026 |
+| Identifiers → **Device ID** | Yes | No | The random number Expo's update check carries for that install, made up the first time the app runs, so Expo can tell one install from another. The app itself never reads it. App Functionality and **Analytics**: Expo's dashboard counts the installs that took each update and the ones that crashed, by this number, which is measuring audience size in Apple's words. Play's Data safety declares it too (*Device or other IDs*, below), and the privacy page describes it and its counts. Added 25 October 2026: on the live label since 1 November 2026 |
 | Diagnostics → **Crash Data** | Yes | No | After a launch that crashed, the phone's update check sends Expo the error message the app stopped on, so a broken update can be found and taken back. The privacy page says so. Added 11 October 2026, and on the live label by 24 October 2026 (apps.apple.com shows Crash Data under Not Linked) |
 
 Do **not** declare location, contacts, audio, search history, browsing
@@ -366,6 +366,18 @@ binary with no purpose string for an API its code reaches (ITMS-90683), so
 switching the sentence off would have cost the build. The app never opens
 the camera, so nobody is ever shown it. On Android the camera is blocked,
 and the microphone is off on both.
+
+**THE APP STORE LABEL IS UP TO DATE, 1 November 2026** (Justin published it
+in App Store Connect, from a screenshot checked here). It shows ten data
+types, none used for tracking: Email Address, Other User Content, Photos or
+Videos and Customer Support (App Functionality, linked); User ID, Purchase
+History and Other Diagnostic Data (App Functionality and Analytics,
+linked); Product Interaction (App Functionality, linked); Device ID (App
+Functionality and Analytics, not linked); Crash Data (App Functionality,
+not linked). Everything asked of the label below is done. Google Play's
+Data safety is done too, the same day (Justin: "Google play is done also
+with the updates like Apple"), to the table under *Google Play's Data
+safety, the whole list*.
 
 **Before the next version is sent to Apple** (still not on the live label
 on 24 October 2026, which shows Purchase History, Email Address, Other User
@@ -392,6 +404,29 @@ the user, not used for tracking. In Google Play's Data safety: App activity →
 App interactions, collected, not shared, for App functionality. Neither
 needs a build. The privacy page says it under *Help getting connected*.
 Justin makes these; nothing here says they are done until he has.
+
+**Google Play's Data safety, the whole list as it should stand (1 November
+2026).** Written for Justin to hand to his browser assistant, and the one
+place it is all together: everything in the notes above and below, with the
+setup emails added (Email address gains Developer communications for them,
+and App interactions is Required now, because the Bluetooth date goes with
+no choice to opt out). Each is Collected yes, Shared no, Processed
+ephemerally no. Nothing else is declared: no Location, no Messages.
+
+| Data type | Required or optional | Purposes |
+|---|---|---|
+| Personal info → Email address | Required | App functionality, Account management, Developer communications |
+| Personal info → User IDs | Optional | App functionality, Account management |
+| Financial info → Purchase history | Required | App functionality, Analytics |
+| Photos and videos → Photos | Optional | App functionality |
+| Photos and videos → Videos | Optional | App functionality |
+| App activity → App interactions | Required | App functionality, Analytics |
+| App activity → Other user-generated content | Optional | App functionality |
+| App info and performance → Crash logs | Required | App functionality |
+| App info and performance → Diagnostics | Optional | App functionality, Analytics |
+| Device or other IDs | Required | App functionality, Analytics |
+
+Done on 1 November 2026 (Justin), through his browser assistant.
 
 **Why the log is declared even though it is opt-in:** Apple asks what the app
 is *capable* of sending, not what it usually sends. Declaring it and being able
