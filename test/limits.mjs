@@ -4067,10 +4067,12 @@ export function run(test) {
     const sql = read('supabase/migrations/20261015_setup_reminders.sql')
     const fn = read('supabase/functions/setup-reminder/index.ts')
 
-    assert.match(sql, /s\.unlocked_at <= now\(\) - interval '24 hours'/, 'the first email no longer waits a day; the policy should say when it goes')
-    assert.match(sql, /s\.first_sent_at <= now\(\) - interval '4 days'/, 'the reminder no longer waits four days; the policy should say when it goes')
+    /* The waits are 20261101_setup_timing.sql's since 1 November 2026: two days, then a week. */
+    const timing = read('supabase/migrations/20261101_setup_timing.sql')
+    assert.match(timing, /s\.unlocked_at <= now\(\) - interval '48 hours'/, 'the first email no longer waits two days; the policy should say when it goes')
+    assert.match(timing, /s\.first_sent_at <= now\(\) - interval '7 days'/, 'the reminder no longer waits a week; the policy should say when it goes')
     /* Since 1 November 2026 the emails are about getting connected either way, and an account that has connected over Bluetooth gets none (20261101_bluetooth_seen.sql). */
-    assert.match(words, /If your account has connected neither way a day after the full version arrives on it, one email goes to your address saying how to set up each, and one reminder at least four days later if it still has not\./, 'the policy does not say when the setup emails go')
+    assert.match(words, /If your account has connected neither way two days after the full version arrives on it, one email goes to your address saying how to set up each, and one reminder at least a week later if it still has not\./, 'the policy does not say when the setup emails go')
     assert.match(words, /Never more than those two, none at all once a computer has signed in or the app has connected over Bluetooth, and none to an address that was never confirmed\./, 'the policy does not say two is the most, or who never gets one')
     assert.match(fn, /const DEFAULT_REPLY_TO = 'justinnewbold@gmail\.com'/)
     assert.match(words, /A reply goes to Justin\./, 'the policy does not say where a reply goes')

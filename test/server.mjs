@@ -1159,6 +1159,32 @@ export function run(test) {
   })
 
   /*
+   * TWO DAYS, THEN A WEEK. "Let's change the check to 48 hours after first
+   * purchase, and then one week after that. Some people that are going to be
+   * using Bluetooth might decide to order it on Amazon" (Justin, 1 November
+   * 2026). 20261101_setup_timing.sql replaces the two functions that say
+   * when, and nothing else in them.
+   */
+  test('the first setup email waits two days, the reminder a week after it, and nothing else in the rule moved', () => {
+    const before = sqlOf(SETUP_SQL)
+    const after = sqlOf('supabase/migrations/20261101_setup_timing.sql')
+    const due = fnBody(after, 'setup_due').body
+    assert.equal(due, fnBody(before, 'setup_due').body.replace("interval '24 hours'", "interval '48 hours'").replace("interval '4 days'", "interval '7 days'"), 'who is due changed in more than the two waits')
+    assert.match(due, /s\.unlocked_at <= now\(\) - interval '48 hours'/)
+    assert.match(due, /s\.first_sent_at <= now\(\) - interval '7 days'/)
+    const claim = fnBody(after, 'claim_setup_reminder').body
+    assert.equal(claim, fnBody(before, 'claim_setup_reminder').body.replace("interval '4 days'", "interval '7 days'"), 'the claim changed in more than the reminder’s wait')
+    for (const [name, args] of [['setup_due', ''], ['claim_setup_reminder', 'uuid, text']]) {
+      assert.match(fnBody(after, name).head, /security definer set search_path = ''/)
+      assert.ok(after.includes(`revoke all on function public.${name}(${args}) from public, anon, authenticated;`) && after.includes(`grant execute on function public.${name}(${args}) to service_role;`), `${name} is not the server’s alone`)
+    }
+    assert.ok(!/\bgrant\b[^;]*\bto\b[^;]*\b(anon|authenticated|public)\b/.test(after), 'something here is granted to a client')
+    /* And the Developer page counts the same waits. */
+    const admin = read('shared/admin.mjs')
+    assert.match(admin, /const FIRST_AFTER_MS = 2 \* DAY_MS\nconst REMINDER_AFTER_MS = 7 \* DAY_MS/)
+  })
+
+  /*
    * CONNECTED OVER BLUETOOTH, SO NO SETUP EMAIL. "Is there a way to do that
    * now only if they haven't connected a computer or Bluetooth?" (Justin,
    * 1 November 2026.) The server cannot see Bluetooth, so the phone says it
@@ -1438,7 +1464,7 @@ export function run(test) {
     assert.deepEqual(sections[0].rows.slice(1).map((r) => [r.label, r.value]), [['Due now', '1 first email, 0 reminders'], ['Set up after an email', '2 people']])
     assert.equal(sections[1].title, 'Paid but no computer yet (3)')
     const [fan, tester, fresh] = sections[1].rows
-    assert.equal(fan.value, 'fan@example.com\nPaid on the App Store, 3 days ago\nFirst email Oct 18, 2026. Reminder Oct 22, 2026, if there’s still no computer.')
+    assert.equal(fan.value, 'fan@example.com\nPaid on the App Store, 3 days ago\nFirst email Oct 18, 2026. Reminder Oct 25, 2026, if they still haven’t connected.')
     assert.equal(tester.value, 'tester@example.com\nGiven the full version by hand, on or before Oct 10, 2026\nLeft out: never emailed.')
     assert.equal(fresh.value, 'new@example.com\nGot the full version today\nEmail not confirmed, so the setup emails don’t go to them.\nNot emailed.')
     assert.deepEqual(stuckChoices(fan), { leaveOut: true, putBack: false, tryAgain: false })
@@ -1447,8 +1473,11 @@ export function run(test) {
     const one = (row, sending = false) => stuckSections({ ok: true, sending, stuck: [{ email: 'a@b.co', confirmed: true, unlocked_at: iso(now - 9 * DAY), ...row }] }, now)[1].rows[0].line.split('\n').pop()
     assert.equal(one({}), 'Not emailed yet. It goes as soon as the emails are on.')
     assert.equal(one({}, true), 'Not emailed yet. The first goes within the hour.')
-    assert.equal(one({ unlocked_at: iso(now - 3600000) }, true), 'Not emailed yet. The first goes a day after they got the full version.')
-    assert.equal(one({ first_sent_at: iso(now - 5 * DAY) }, true), 'First email Oct 15, 2026. The reminder goes within the hour.')
+    /* Two days, then a week, since 1 November 2026 (20261101_setup_timing.sql): a day and four days until then. */
+    assert.equal(one({ unlocked_at: iso(now - 3600000) }, true), 'Not emailed yet. The first goes two days after they got the full version.')
+    assert.equal(one({ unlocked_at: iso(now - 36 * 3600000) }, true), 'Not emailed yet. The first goes two days after they got the full version.', 'a day and a half in, the list says the first email goes within the hour')
+    assert.equal(one({ first_sent_at: iso(now - 5 * DAY) }, true), 'First email Oct 15, 2026. Reminder Oct 22, 2026, if they still haven’t connected.')
+    assert.equal(one({ first_sent_at: iso(now - 8 * DAY) }, true), 'First email Oct 12, 2026. The reminder goes within the hour.')
     assert.equal(one({ first_sent_at: iso(now - 8 * DAY), reminder_sent_at: iso(now - 4 * DAY) }), 'First email Oct 12, 2026, reminder Oct 16, 2026. No more emails.')
     assert.equal(one({ failed_at: iso(now - DAY), failed_kind: 'first' }), 'The email to them was refused yesterday: the mail service won’t take their address. No more go unless you try again.')
     assert.equal(one({ first_sent_at: iso(now - 6 * DAY), failed_at: iso(now), failed_kind: 'reminder' }), 'First email Oct 14, 2026. The reminder to them was refused today: the mail service won’t take their address. No more go unless you try again.')
