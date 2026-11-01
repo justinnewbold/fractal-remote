@@ -33,6 +33,7 @@ import Onboarding from './src/screens/Onboarding'
 import IndependentNotice, { independentNoticeSeen, markIndependentNotice } from './src/components/IndependentNotice'
 import GearShareNotice from './src/components/GearShareNotice'
 import { setSharing, shareQuestionDue, startGearShare } from './src/lib/gearShare'
+import { startBluetoothSeen } from './src/lib/bluetoothSeen'
 import { NOT_AFFILIATED } from './src/lib/affiliation'
 import { walkthroughSeen, markWalkthrough } from './src/lib/walkthrough'
 import Edit from './src/screens/Edit'
@@ -183,6 +184,8 @@ export default function App() {
   useEffect(() => {
     shareQuestionDue().then(setShareDue)
     startGearShare()
+    /* And the account server told, once, that this account has connected over Bluetooth (lib/bluetoothSeen), so the setup emails leave it alone. */
+    startBluetoothSeen()
   }, [])
   const [screen, setScreen] = useState('stage')
   /*

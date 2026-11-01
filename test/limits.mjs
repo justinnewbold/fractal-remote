@@ -4069,8 +4069,9 @@ export function run(test) {
 
     assert.match(sql, /s\.unlocked_at <= now\(\) - interval '24 hours'/, 'the first email no longer waits a day; the policy should say when it goes')
     assert.match(sql, /s\.first_sent_at <= now\(\) - interval '4 days'/, 'the reminder no longer waits four days; the policy should say when it goes')
-    assert.match(words, /If no computer app has signed in with your account a day after the full version arrives on it, one email goes to your address with the download link and the three steps to set it up, and one reminder at least four days later if there is still none\./, 'the policy does not say when the setup emails go')
-    assert.match(words, /Never more than those two, none at all once a computer has signed in, and none to an address that was never confirmed\./, 'the policy does not say two is the most, or who never gets one')
+    /* Since 1 November 2026 the emails are about getting connected either way, and an account that has connected over Bluetooth gets none (20261101_bluetooth_seen.sql). */
+    assert.match(words, /If your account has connected neither way a day after the full version arrives on it, one email goes to your address saying how to set up each, and one reminder at least four days later if it still has not\./, 'the policy does not say when the setup emails go')
+    assert.match(words, /Never more than those two, none at all once a computer has signed in or the app has connected over Bluetooth, and none to an address that was never confirmed\./, 'the policy does not say two is the most, or who never gets one')
     assert.match(fn, /const DEFAULT_REPLY_TO = 'justinnewbold@gmail\.com'/)
     assert.match(words, /A reply goes to Justin\./, 'the policy does not say where a reply goes')
     /*
@@ -4127,7 +4128,7 @@ export function run(test) {
     /* "Except two" still holds: the setup emails go to people who bought, under Unlocking the full version. */
     assert.match(words, /something you choose to turn on, except two:/)
     const unlocking = words.slice(words.indexOf('Unlocking the full version — a purchase record only if you buy it'), words.indexOf('Your setlists — only if you are signed in'))
-    assert.ok(unlocking.includes('Help setting up the computer.'), 'the setup emails are not described under Unlocking the full version')
+    assert.ok(unlocking.includes('Help getting connected.'), 'the setup emails are not described under Unlocking the full version')
     /* And the date moved with the words. */
     const when = words.match(/last updated (\d{1,2} \w+ 2026)/)?.[1]
     assert.ok(when && Date.parse(`${when} UTC`) >= Date.parse('15 October 2026 UTC'), `the privacy page still says it was last updated ${when}`)

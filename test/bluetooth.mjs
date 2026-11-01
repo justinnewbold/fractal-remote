@@ -6863,10 +6863,11 @@ export function run(test) {
      * left saying something else.
      */
     const { NO_COMPUTER_BLUETOOTH } = await import('../shared/no-computer.mjs')
-    const email = src('supabase/functions/setup-reminder/index.ts').match(/const secondWay = `([^`]*)`/)?.[1] ?? ''
-    assert.ok(email.length > 100, 'the setup email’s Bluetooth paragraph was not found; this check needs telling')
+    /* The setup email says them in its first email's opening, since 1 November 2026 ("Having trouble getting connected?"), and the Bluetooth paragraph says the cost again: no editing or saving. */
+    const email = src('supabase/functions/setup-reminder/index.ts').match(/'(It looks like it hasn’t connected to your Fractal yet[^']*)'/)?.[1] ?? ''
+    assert.ok(email.length > 100, 'the setup email’s opening was not found; this check needs telling')
     for (const [where, words] of [['the gear file’s sentence', gear.BLUETOOTH_WAYS], ['the no-computer note and Fixes', NO_COMPUTER_BLUETOOTH], ['the setup email', email]]) {
-      assert.match(words, /The computer is (?:still )?the best (?:one|way)/, `${where} does not say the computer is the best way`)
+      assert.match(words, /The computer is (?:still )?the best (?:one|way)|the computer [^.]*, which is the best way/, `${where} does not say the computer is the best way`)
       assert.match(words, /more lag/, `${where} does not say Bluetooth has more lag`)
       assert.match(words, /fewer features|does less/, `${where} does not say Bluetooth does less`)
     }

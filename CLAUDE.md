@@ -496,7 +496,12 @@ features." It is said in several wordings, each in one place:
 - `NO_COMPUTER_BLUETOOTH` in shared/no-computer.mjs: the no-computer note on
   Phone & computer, and the Fixes page. Not on the waiting screen, which
   has its own button for it.
-- `secondWay` in supabase/functions/setup-reminder/index.ts: the setup email.
+- the first email's opening in supabase/functions/setup-reminder/index.ts:
+  the setup email, which since 1 November 2026 says both ways under their
+  own headings, the computer first ("Having trouble getting connected?
+  Here's how to set up the computer or connect with Bluetooth"), and goes
+  only to a buyer who has connected neither (20261101_bluetooth_seen.sql,
+  told once by the phone, lib/bluetoothSeen.js).
 
 A change to the wording changes all of them; a test holds the three full
 wordings to the same three things (the computer best, more lag, fewer
