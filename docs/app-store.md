@@ -403,6 +403,29 @@ App interactions, collected, not shared, for App functionality. Neither
 needs a build. The privacy page says it under *Help getting connected*.
 Justin makes these; nothing here says they are done until he has.
 
+**Google Play's Data safety, the whole list as it should stand (1 November
+2026).** Written for Justin to hand to his browser assistant, and the one
+place it is all together: everything in the notes above and below, with the
+setup emails added (Email address gains Developer communications for them,
+and App interactions is Required now, because the Bluetooth date goes with
+no choice to opt out). Each is Collected yes, Shared no, Processed
+ephemerally no. Nothing else is declared: no Location, no Messages.
+
+| Data type | Required or optional | Purposes |
+|---|---|---|
+| Personal info → Email address | Required | App functionality, Account management, Developer communications |
+| Personal info → User IDs | Optional | App functionality, Account management |
+| Financial info → Purchase history | Required | App functionality, Analytics |
+| Photos and videos → Photos | Optional | App functionality |
+| Photos and videos → Videos | Optional | App functionality |
+| App activity → App interactions | Required | App functionality, Analytics |
+| App activity → Other user-generated content | Optional | App functionality |
+| App info and performance → Crash logs | Required | App functionality |
+| App info and performance → Diagnostics | Optional | App functionality, Analytics |
+| Device or other IDs | Required | App functionality, Analytics |
+
+Not confirmed done until Justin says it is.
+
 **Why the log is declared even though it is opt-in:** Apple asks what the app
 is *capable* of sending, not what it usually sends. Declaring it and being able
 to point at a policy that explains it is the strong position.
