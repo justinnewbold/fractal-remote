@@ -1371,8 +1371,8 @@ export function run(test) {
     /* The schedule in a file of its own, so a refusal there cannot sink the tables. */
     assert.ok(!/\bcron\./.test(sql), 'the schedule is in the same file as the tables')
     const schedule = sqlOf(SETUP_SCHEDULE)
-    /* With the two grants Supabase's own pg_cron steps give the postgres role, and nothing else. */
-    assert.match(schedule, /^create extension if not exists pg_cron with schema pg_catalog; grant usage on schema cron to postgres; grant all privileges on all tables in schema cron to postgres; select cron\.schedule\('setup-reminders', '23 \* \* \* \*', \$\$select public\.run_setup_reminders\(\)\$\$\);$/, 'the schedule is not one hourly call and nothing else')
+    /* The job and nothing else, as the sweeps' files are: pg_cron is on here, and its grants failed when the file touched them (1 November 2026). */
+    assert.match(schedule, /^select cron\.schedule\('setup-reminders', '23 \* \* \* \*', \$\$select public\.run_setup_reminders\(\)\$\$\);$/, 'the schedule is not one hourly call and nothing else')
     /* And the function reads the switch, the due list and the claim by these names. */
     const fn = code(read('supabase/functions/setup-reminder/index.ts'))
     for (const name of ['setup_reminder_hook_secret', 'setup_reminder_sending', 'setup_reminders_due', 'claim_setup_reminder', 'note_setup_reminder_failed', 'release_setup_reminder']) {

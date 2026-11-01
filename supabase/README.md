@@ -340,10 +340,14 @@ reply address).
 2. **Deploy the function**: `supabase functions deploy setup-reminder --no-verify-jwt`.
    Secrets: `RESEND_API_KEY` is already set (feedback-email and download-link
    use it). Optional: `SETUP_FROM`, `SETUP_REPLY_TO`.
-3. **Apply `20261015_setup_reminders_schedule.sql`.** If `create extension
-   pg_cron` is refused, turn pg_cron on in the dashboard (Integrations → Cron,
-   or Database → Extensions) and run the file again. The hourly run then keeps
-   the record of computers up to date, and still sends nothing.
+3. **Apply `20261015_setup_reminders_schedule.sql`**, the job alone (pg_cron is
+   on here; where it is not, turn it on in the dashboard, Integrations → Cron,
+   first). The hourly run then keeps the record of computers up to date, and
+   still sends nothing.
+
+   **Done on 1 November 2026**: steps 1 to 3, with the switch off, and one run
+   by hand answered `{"sending":false,"first":14,"reminder":0}`. grant-access
+   was already the repository's (step 4). What is left is step 5, Justin's.
 4. **Deploy grant-access**: `supabase functions deploy grant-access`. The phone's
    Developer → Paid but no computer yet then fills in. Before that it says the
    server doesn't have the list yet.

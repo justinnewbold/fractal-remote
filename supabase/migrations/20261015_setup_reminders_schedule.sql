@@ -1,14 +1,17 @@
 -- THE HOURLY LOOK FOR SETUP EMAILS THAT ARE DUE.
 --
--- In a file of its own, after 20261015_setup_reminders.sql, because it needs
--- pg_cron, which this project has never used: if creating the extension is
--- refused, only this file fails, and the tables, the list on the Developer
--- page and the switch are all still there.
+-- In a file of its own, after 20261015_setup_reminders.sql and
+-- 20261101_bluetooth_seen.sql. pg_cron is on in this project (the report and
+-- gear sweeps use it), so the file is the job alone, as theirs are.
 --
--- If it IS refused: Supabase dashboard → Integrations → Cron (or Database →
--- Extensions → pg_cron), turn it on, and run this file again. Until then
--- nothing is sent at all, and `select public.run_setup_reminders();` by hand
--- does one run.
+-- APPLIED 1 NOVEMBER 2026 AS THIS, the one line below. It carried
+-- `create extension if not exists pg_cron` and two grants to postgres, as
+-- Supabase's own pg_cron steps give them, and the grants failed here
+-- ("dependent privileges exist": Supabase's event trigger re-grants cron
+-- with grant option whenever cron's privileges are touched). Where pg_cron
+-- is off, turn it on in the dashboard (Integrations → Cron) first, and then
+-- run this. Until the job exists nothing is sent at all, and
+-- `select public.run_setup_reminders();` by hand does one run.
 --
 -- At 23 minutes past every hour, so the first email lands a day and up to an
 -- hour after the full version was first seen, at about the time of day they
@@ -18,13 +21,5 @@
 --
 -- Scheduling under the same name again replaces the job rather than adding a
 -- second one.
---
--- The two grants are the ones Supabase's own pg_cron steps give, so the
--- postgres role this file runs as can make the job. Where it has them
--- already they change nothing.
-
-create extension if not exists pg_cron with schema pg_catalog;
-grant usage on schema cron to postgres;
-grant all privileges on all tables in schema cron to postgres;
 
 select cron.schedule('setup-reminders', '23 * * * *', $$select public.run_setup_reminders()$$);
