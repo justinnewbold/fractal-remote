@@ -375,7 +375,9 @@ History and Other Diagnostic Data (App Functionality and Analytics,
 linked); Product Interaction (App Functionality, linked); Device ID (App
 Functionality and Analytics, not linked); Crash Data (App Functionality,
 not linked). Everything asked of the label below is done. Google Play's
-Data safety is a separate form, and its rows below are not confirmed done.
+Data safety is done too, the same day (Justin: "Google play is done also
+with the updates like Apple"), to the table under *Google Play's Data
+safety, the whole list*.
 
 **Before the next version is sent to Apple** (still not on the live label
 on 24 October 2026, which shows Purchase History, Email Address, Other User
@@ -424,7 +426,7 @@ ephemerally no. Nothing else is declared: no Location, no Messages.
 | App info and performance → Diagnostics | Optional | App functionality, Analytics |
 | Device or other IDs | Required | App functionality, Analytics |
 
-Not confirmed done until Justin says it is.
+Done on 1 November 2026 (Justin), through his browser assistant.
 
 **Why the log is declared even though it is opt-in:** Apple asks what the app
 is *capable* of sending, not what it usually sends. Declaring it and being able
