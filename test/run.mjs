@@ -1755,8 +1755,10 @@ test('the device server lets Axiom onto the unit’s own routes only while its s
   assert.equal(host.serverEnv({ env: { FORGEFX_DEVICE_ORIGINS: 'http://localhost:4000' }, port: 5056, dist: '/d', axiom: true }).FORGEFX_DEVICE_ORIGINS, 'http://localhost:4000')
 
   // Where the switch is kept: ForgeFX's own store, outside the app, so it survives updates.
-  assert.equal(axiom.axiomStorePath({ env: {}, home: '/home/pi' }), '/home/pi/.axis/store/config.json')
-  assert.equal(axiom.axiomStorePath({ env: { FORGEFX_DATA_DIR: '/srv/forgefx' }, home: '/home/pi' }), '/srv/forgefx/store/config.json')
+  /* Joined the way ForgeFX joins it, so the same file on every computer, Windows's backslashes included. */
+  const { join: joinPath } = await import('node:path')
+  assert.equal(axiom.axiomStorePath({ env: {}, home: '/home/pi' }), joinPath('/home/pi', '.axis', 'store', 'config.json'))
+  assert.equal(axiom.axiomStorePath({ env: { FORGEFX_DATA_DIR: '/srv/forgefx' }, home: '/home/pi' }), joinPath('/srv/forgefx', 'store', 'config.json'))
 
   const doc = (data, more = {}) => JSON.stringify({ 'phone.seen': { id: 'phone.seen', collection: 'config', data: { at: 1 } }, 'fractal.axiom': { id: 'fractal.axiom', collection: 'config', data, rev: 1, updatedAt: 1, ...more } })
   assert.equal(axiom.axiomOn(doc({ on: true, at: 5 })), true)
@@ -1776,7 +1778,7 @@ test('the device server lets Axiom onto the unit’s own routes only while its s
     assert.equal(axiom.axiomOn(text), false, `${why} reads as on`)
   }
   assert.equal(axiom.readAxiom({ env: {}, home: '/h', read: () => { throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' }) } }), false, 'a computer with no store reads as on')
-  assert.equal(axiom.readAxiom({ env: {}, home: '/h', read: (path) => (path === '/h/.axis/store/config.json' ? doc({ on: true }) : '') }), true)
+  assert.equal(axiom.readAxiom({ env: {}, home: '/h', read: (path) => (path === joinPath('/h', '.axis', 'store', 'config.json') ? doc({ on: true }) : '') }), true)
   assert.equal(axiom.readAxiom({ env: {}, home: '/h' }), false)
 
   // The computer app reads it before every start, watches it, and starts the server again for a change.
