@@ -28,6 +28,13 @@
  * as the other. The key is derived by shared/device-slug, on both ends, for
  * the same reason.
  *
+ * NOR THE DEMO'S DRAWER (`fm3:demo`, shared/device-slug stageKey). A star
+ * tapped while looking round the demo is not one of the account's, and it
+ * was the newest tap there, so it replaced the real stars on every device at
+ * the first sync. It is left out of what goes up, out of what comes down, and
+ * out of what is written back here, so a demo drawer that reached the account
+ * some other way is dropped from it rather than carried.
+ *
  * ## Which copy wins
  *
  * Not "the newest device", which would throw away a setlist built on the other
@@ -57,6 +64,7 @@ import {
   putFavourites,
   starredAtFor
 } from './presetMarks.js'
+import { isDemoStage } from '../../shared/device-slug.mjs'
 
 const num = (n) => (Number.isFinite(n) ? n : 0)
 
@@ -148,9 +156,9 @@ export function mergeUnit(mine = {}, theirs = {}, now = Date.now()) {
   }
 }
 
-/** Every unit named by either copy, merged one at a time. */
+/** Every unit named by either copy, merged one at a time. Never the demo's drawer, from either side. */
 export function mergeUnits(mine = {}, theirs = {}, now = Date.now()) {
-  const keys = [...new Set([...Object.keys(mine || {}), ...Object.keys(theirs || {})])]
+  const keys = [...new Set([...Object.keys(mine || {}), ...Object.keys(theirs || {})])].filter((key) => !isDemoStage(key))
   const out = {}
   for (const key of keys) out[key] = mergeUnit(mine?.[key], theirs?.[key], now)
   return out
@@ -188,9 +196,9 @@ const canonical = (v) => {
 export const sameUnits = (a, b) =>
   JSON.stringify(canonical(a || {})) === JSON.stringify(canonical(b || {}))
 
-/** What this browser holds, for every unit it knows about. */
+/** What this browser holds, for every unit it knows about: what the account may see, so never the demo's drawer. */
 export function localUnits(storage) {
-  const keys = [...new Set([...devicesWithLists(storage), ...devicesWithMarks(storage)])]
+  const keys = [...new Set([...devicesWithLists(storage), ...devicesWithMarks(storage)])].filter((key) => !isDemoStage(key))
   const out = {}
   for (const key of keys) {
     const unit = unitFor(key, storage)
@@ -211,6 +219,8 @@ export function localUnits(storage) {
  */
 export function applyUnits(units, storage) {
   for (const [key, unit] of Object.entries(units || {})) {
+    /* The demo's drawer is this device's own, and nothing from the account writes over it. */
+    if (isDemoStage(key)) continue
     putUnit(key, unit, storage)
     putFavourites(key, unit.favourites, unit.starredAt, storage)
   }

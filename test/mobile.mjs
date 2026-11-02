@@ -1318,7 +1318,84 @@ export function run(test) {
 
     const lists = read('mobile/src/lib/lists.js')
     assert.match(lists, /import \{ sync \} from '\.\/store'/, 'lib/lists is not binding the phone storage')
-    assert.match(lists, /listsForIn\(device, sync\)/, 'lib/lists is not handing the storage down')
+    /* Handed the drawer rather than the bare unit since the 2 November 2026
+       audit: in the demo it is the demo's own (shared/device-slug stageKey),
+       so the storage is still handed down, beside it. */
+    assert.match(lists, /listsForIn\(drawer\(device\), sync\)/, 'lib/lists is not handing the storage down')
+  })
+
+  test('in the demo the phone stars and edits the demo’s own drawer, and the real unit’s is left as it was', async () => {
+    /*
+     * The demo's FM3 and a real FM3 are both 'fm3'. Before the 2 November
+     * 2026 audit the demo filed its stars and setlists in the real FM3's
+     * drawer, so somebody signed in who opened the demo to look round was
+     * editing the real gig setlist, and a star tapped in the demo on a new
+     * phone, then a sign-in, replaced the account's real stars on every
+     * device (the newest tap wins the merge whole).
+     *
+     * Run, not read: lib/lists as the phone has it, over a storage of lib/store's
+     * shape, with the demo switched on and off under it.
+     */
+    const dir = mkdtempSync(join(tmpdir(), 'demo-drawer-'))
+    const esm = (src) => src.replace(/from '\.\/([\w.-]+)'/g, (whole, name) => (/\.m?js$/.test(name) ? whole : `from './${name}.js'`))
+    try {
+      const files = {
+        'package.json': '{ "type": "module" }',
+        'store.js': [
+          'export const memory = new Map()',
+          'export const sync = { getItem: (k) => (memory.has(k) ? memory.get(k) : null), setItem: (k, v) => { memory.set(k, String(v)) }, removeItem: (k) => { memory.delete(k) } }',
+          ''
+        ].join('\n'),
+        'demo.js': 'let on = false\nexport const isDemo = () => on\nexport const turn = (v) => { on = !!v }\n'
+      }
+      for (const f of ['lists.js', 'setlists.js', 'presetMarks.js', 'presetName.js', 'device-slug.js', 'setlistMerge.js']) {
+        files[f] = esm(read(`mobile/src/lib/${f}`))
+      }
+      for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+      const at = (f) => pathToFileURL(join(dir, f)).href
+      const lists = await import(at('lists.js'))
+      const store = await import(at('store.js'))
+      const demo = await import(at('demo.js'))
+      const merge = await import(at('setlistMerge.js'))
+
+      /* His real FM3: two stars and a gig setlist, followed by Previous and Next. */
+      lists.toggleFavourite('fm3', 3)
+      lists.toggleFavourite('fm3', 7)
+      const gig = lists.createList('fm3', 'Friday gig')
+      lists.updateList('fm3', gig.id, { presets: [3, 7, 12] })
+      lists.setSource('fm3', gig.id)
+      const real = (key) => JSON.parse(store.memory.get(key) || '{}').fm3
+      const realMarks = JSON.stringify(real('fractal.presetMarks'))
+      const realLists = JSON.stringify(real('fractal.setlists'))
+
+      /* The demo: a look round with nothing of his on screen, a star, a setlist of its own, a song moved in his. */
+      demo.turn(true)
+      assert.deepEqual(lists.marksFor('fm3').favourites, [], 'the demo shows the real FM3’s stars')
+      assert.deepEqual(lists.listsFor('fm3'), [], 'the demo shows the real gig setlist')
+      lists.toggleFavourite('fm3', 40)
+      const tour = lists.createList('fm3', 'Demo set')
+      lists.updateList('fm3', tour.id, { presets: [40, 41] })
+      lists.setSource('fm3', lists.STARRED)
+      lists.updateList('fm3', gig.id, { presets: [12] })
+      assert.deepEqual(lists.marksFor('fm3').favourites, [40])
+      assert.deepEqual(lists.listsFor('fm3').map((l) => l.name), ['Demo set'])
+
+      /* Not one byte of the real drawer moved, and the demo's is its own. */
+      assert.equal(JSON.stringify(real('fractal.presetMarks')), realMarks, 'a star in the demo reached the real FM3’s stars')
+      assert.equal(JSON.stringify(real('fractal.setlists')), realLists, 'the demo edited the real FM3’s setlists')
+      assert.ok(JSON.parse(store.memory.get('fractal.presetMarks'))['fm3:demo'], 'the demo’s star went nowhere')
+
+      /* And none of the demo's goes to the account: what the sync sends up is the real FM3 alone. */
+      assert.deepEqual(Object.keys(merge.localUnits(store.sync)), ['fm3'], 'the demo’s drawer is in what the phone syncs')
+
+      /* Out of the demo, his own are there as he left them. */
+      demo.turn(false)
+      assert.deepEqual(lists.marksFor('fm3').favourites, [3, 7])
+      assert.deepEqual(lists.listsFor('fm3').map((l) => l.presets), [[3, 7, 12]])
+      assert.equal(lists.sourceFor('fm3'), gig.id)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   test('Previous and Next on the phone follow the setlist, and the Setlists button says which', () => {
@@ -14184,8 +14261,16 @@ export function run(test) {
 
     /* It is genuinely a different question from the slug, which is the whole
        reason this bug existed: same model, different source. */
+    /* Narrowed in the 2 November 2026 audit, which put the demo's own drawer
+       for stars and setlists in this file (stageKey). The slug itself still
+       knows nothing of the demo, and the file never asks whether the demo is
+       on: stageKey is handed the flag, as forgetNames is above. */
     const slugs = read('mobile/src/lib/device-slug.js')
-    assert.ok(!/isDemo|demo/i.test(slugs), 'the slug now knows about the demo — then the flag above is redundant and one of them is wrong')
+    const slugRule = slugs.slice(slugs.indexOf('export function deviceSlug('), slugs.indexOf('}', slugs.indexOf('export function deviceSlug(')))
+    assert.ok(slugRule.length > 40, 'deviceSlug moved; this check reads it')
+    assert.ok(!/demo/i.test(slugRule), 'the slug now knows about the demo — then the flag above is redundant and one of them is wrong')
+    assert.ok(!/\bisDemo\(|demoDevice|from '\.\/demo/.test(slugs), 'the unit’s key asks whether the demo is on, rather than being told')
+    assert.match(slugs, /export const stageKey = \(slug, demo\) =>/, 'the demo’s drawer is not handed the flag')
   })
 
   /**

@@ -35,6 +35,35 @@ export function deviceSlug(unit) {
 }
 
 /**
+ * THE DEMO'S OWN DRAWER, for the stars, the setlists and which of them
+ * Previous and Next step through.
+ *
+ * The demo's FM3 and a real FM3 both come out of deviceSlug as 'fm3', so the
+ * demo filed its stars and setlists in the real unit's drawer. The 2 November
+ * 2026 audit found it going wrong two ways. A star tapped in the demo on a new
+ * phone, and then a sign-in: that tap was the newest the account had seen, so
+ * the sync kept it whole (lib/setlistMerge: the later tap wins) and the real
+ * stars on every device were replaced by the demo's. And somebody signed in
+ * who opened the demo to look around was editing the real gig setlist.
+ *
+ * So in the demo they are filed under `fm3:demo`, the way the preset names
+ * already are (nameOwner, on both ends), and outside it under the slug exactly
+ * as before, so every drawer already on a phone or in a browser reads as it
+ * did. A real slug never has a colon in it (deviceSlug keeps letters and
+ * digits only), so the two can never meet.
+ *
+ * The demo's drawer stays on the device it was made on: lib/setlistMerge
+ * leaves every key isDemoStage answers for out of the sync, both ways.
+ */
+export const DEMO_STAGE = ':demo'
+
+/** Where a unit's stars and setlists are filed: `slug` as it always was, or the demo's own drawer while `demo` is true. */
+export const stageKey = (slug, demo) => (demo ? `${slug || DEFAULT_SLUG}${DEMO_STAGE}` : slug)
+
+/** Whether a drawer is the demo's, and so never the account's. */
+export const isDemoStage = (key) => typeof key === 'string' && key.endsWith(DEMO_STAGE)
+
+/**
  * WHETHER ANOTHER UNIT ANSWERED THAN THE LAST REAL ONE.
  *
  * Two computers on one account, an FM3 on one and an AM4 on the other: at

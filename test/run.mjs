@@ -12967,6 +12967,144 @@ test('a setlist knows when it changed, and a delete leaves a mark', async () => 
   assert.deepEqual(listsFor('fm3', store).map((l) => l.name), ['Sunday'])
 })
 
+test('the demo files its stars and setlists in a drawer of its own, and the real one is left exactly as it was', async () => {
+  /*
+   * The demo's FM3 and a real FM3 are both 'fm3', so before the 2 November
+   * 2026 audit a look round the demo starred and edited the real FM3's
+   * presets and setlists. stageKey is the one rule both ends file them by:
+   * the slug as it always was, or in the demo `fm3:demo`, which no real slug
+   * can ever be.
+   */
+  const { DEFAULT_SLUG, deviceSlug, isDemoStage, stageKey } = await import('../shared/device-slug.mjs')
+  assert.equal(stageKey('fm3', false), 'fm3', 'outside the demo a unit’s drawer moved, and every star already kept would be lost')
+  assert.equal(stageKey(undefined, false), undefined, 'a unit not named yet is no longer the drawer it was')
+  assert.equal(stageKey('fm3', true), 'fm3:demo')
+  assert.equal(stageKey('', true), `${DEFAULT_SLUG}:demo`, 'the demo before its unit has answered is filed in a real drawer')
+  assert.ok(isDemoStage('fm3:demo') && isDemoStage(stageKey('axefxiii', true)))
+  for (const name of ['FM3', 'AM4', 'Axe-Fx III', 'FM9', 'VP4', 'fm3:demo', 'demo', '']) {
+    assert.ok(!isDemoStage(deviceSlug(name)), `a real unit called ${JSON.stringify(name)} reads as the demo’s drawer`)
+  }
+
+  const { marksFor, toggleFavourite, remember } = await import('../src/lib/presetMarks.js')
+  const { createList, updateList, setSource, sourceFor, listsFor, STARRED } = await import('../src/lib/setlists.js')
+  const store = {
+    data: new Map(),
+    getItem(k) { return this.data.has(k) ? this.data.get(k) : null },
+    setItem(k, v) { this.data.set(k, v) }
+  }
+
+  /* His real FM3, as it is before anybody opens the demo. */
+  toggleFavourite('fm3', 3, store)
+  toggleFavourite('fm3', 7, store)
+  const gig = createList('fm3', 'Friday gig', store)
+  updateList('fm3', gig.id, { presets: [3, 7, 12] }, store)
+  setSource('fm3', gig.id, store)
+  const before = {
+    marks: JSON.stringify(JSON.parse(store.getItem('fractal.presetMarks')).fm3),
+    lists: JSON.stringify(JSON.parse(store.getItem('fractal.setlists')).fm3)
+  }
+
+  /* The demo, by the key both ends now hand these modules there. */
+  const demo = stageKey('fm3', true)
+  assert.deepEqual(marksFor(demo, store), { recent: [], favourites: [] }, 'the demo opens on the real FM3’s stars')
+  assert.deepEqual(listsFor(demo, store), [], 'the demo opens on the real gig setlist')
+  toggleFavourite(demo, 40, store)
+  remember(demo, 40, store)
+  const tour = createList(demo, 'Demo set', store)
+  updateList(demo, tour.id, { presets: [40, 41] }, store)
+  updateList(demo, gig.id, { presets: [12] }, store)
+  setSource(demo, STARRED, store)
+
+  assert.equal(JSON.stringify(JSON.parse(store.getItem('fractal.presetMarks')).fm3), before.marks, 'a star in the demo reached the real FM3’s stars')
+  assert.equal(JSON.stringify(JSON.parse(store.getItem('fractal.setlists')).fm3), before.lists, 'the demo edited the real gig setlist')
+  assert.deepEqual(marksFor('fm3', store).favourites, [3, 7])
+  assert.equal(sourceFor('fm3', store), gig.id, 'the demo changed what Previous and Next walk on the real FM3')
+  assert.deepEqual(marksFor(demo, store).favourites, [40])
+  assert.equal(sourceFor(demo, store), STARRED)
+})
+
+test('a star tapped in the demo never reaches the account, and the account’s stars are not replaced by it', async () => {
+  /*
+   * The 2 November 2026 audit's case, run: a new phone, a star tapped in the
+   * demo, then a sign-in. That tap was the newest the account had seen, and
+   * the stars merge whole by the later tap, so the account's real stars were
+   * replaced on every device by the demo's one. Now the demo's drawer is left
+   * out of the sync both ways: nothing of it goes up, nothing comes down over
+   * it, and one that reached the account some other way is dropped from it.
+   */
+  const { syncStage, localUnits, mergeUnits, applyUnits } = await import('../src/lib/setlistMerge.js')
+  const { marksFor, toggleFavourite } = await import('../src/lib/presetMarks.js')
+  const { createList, listsFor } = await import('../src/lib/setlists.js')
+  const { stageKey } = await import('../shared/device-slug.mjs')
+  const store = () => ({
+    data: new Map(),
+    getItem(k) { return this.data.has(k) ? this.data.get(k) : null },
+    setItem(k, v) { this.data.set(k, v) }
+  })
+
+  /* The account: his real FM3 stars, tapped an hour ago at the Mac. */
+  const hourAgo = Date.now() - 60 * 60 * 1000
+  let row = { fm3: { lists: [], removed: [], favourites: [3, 7], starredAt: hourAgo, source: 'all', at: hourAgo } }
+  const sent = []
+  const cloud = {
+    load: async () => ({ units: JSON.parse(JSON.stringify(row)), at: 1, device: 'computer' }),
+    save: async (units) => { sent.push(JSON.parse(JSON.stringify(units))); row = JSON.parse(JSON.stringify(units)); return true }
+  }
+
+  /* A new phone: the demo first, a star and a setlist in it, then the sign-in and the first sync. */
+  const phone = store()
+  const demo = stageKey('fm3', true)
+  toggleFavourite(demo, 40, phone)
+  createList(demo, 'Demo set', phone)
+  assert.deepEqual(localUnits(phone), {}, 'the demo’s drawer is in what this device would sync')
+
+  const res = await syncStage(cloud, phone)
+  assert.deepEqual(row.fm3.favourites, [3, 7], 'a star tapped in the demo replaced the account’s real stars')
+  assert.ok(!sent.some((units) => Object.keys(units).some((k) => k.endsWith(':demo'))), 'the demo’s drawer went to the account')
+  assert.equal(res.pushed, false, 'a sync that only had the demo’s star to add wrote to the account')
+  /* The real stars came down to the real drawer, and the demo's own is as it was. */
+  assert.deepEqual(marksFor('fm3', phone).favourites, [3, 7])
+  assert.deepEqual(marksFor(demo, phone).favourites, [40])
+  assert.deepEqual(listsFor(demo, phone).map((l) => l.name), ['Demo set'])
+
+  /* And a demo drawer that reached the account some other way (a copy of
+     the app from before this) comes down over nothing, and is dropped from
+     the account at the next write rather than carried. */
+  row['fm3:demo'] = { lists: [], removed: [], favourites: [99], starredAt: Date.now() + 1000, source: 'all', at: Date.now() + 1000 }
+  await syncStage(cloud, phone)
+  assert.deepEqual(marksFor(demo, phone).favourites, [40], 'the account wrote over this device’s demo drawer')
+  assert.ok(!('fm3:demo' in row), 'the account kept a demo drawer')
+  assert.deepEqual(row.fm3.favourites, [3, 7])
+  assert.ok(!('fm3:demo' in mergeUnits({ 'fm3:demo': { favourites: [1] } }, {})), 'the merge carries a demo drawer')
+  const other = store()
+  applyUnits({ 'fm3:demo': { favourites: [5], starredAt: 1 } }, other)
+  assert.equal(other.getItem('fractal.presetMarks'), null, 'a demo drawer handed to applyUnits was written')
+})
+
+test('every caller in the browser files the stars and setlists by the demo-aware key', () => {
+  /*
+   * The browser has no lib/lists to bind it once, so the callers are held
+   * here: Play's reads and its setlist sheet, both preset pickers, and the
+   * recents. The pedals still go by the unit's own slug (am4-boost).
+   */
+  const flat = (p) => readSrc(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ')
+  const gig = flat('src/components/Gig.jsx')
+  assert.match(gig, /const stage = stageKey\(deviceKey, isDemo\(\)\)/, 'Play does not know the demo has its own drawer')
+  for (const fn of ['marksFor', 'listsFor', 'sourceFor']) {
+    assert.match(gig, new RegExp(`${fn}\\(stage\\)`), `Play reads ${fn} from the real unit’s drawer in the demo`)
+    assert.ok(!new RegExp(`${fn}\\(deviceKey\\)`).test(gig), `Play still reads ${fn} by the bare slug`)
+  }
+  const sheet = gig.slice(gig.indexOf('<Setlists'), gig.indexOf('/>', gig.indexOf('<Setlists')))
+  assert.match(sheet, /deviceKey=\{stage\}/, 'the setlist sheet edits the real unit’s drawer in the demo')
+
+  const app = flat('src/App.jsx')
+  assert.match(app, /const stageNow = \(\) => stageKey\(currentDeviceSlug\(\), isDemo\(\)\)/)
+  assert.match(app, /rememberPreset\(stageNow\(\), number\)/, 'the recents are filed by the bare slug in the demo')
+  const pickers = [...app.matchAll(/<PresetList\b[\s\S]*?\/>/g)].map((m) => m[0])
+  assert.ok(pickers.length >= 2, 'App.jsx moved; this test reads both preset pickers')
+  for (const picker of pickers) assert.match(picker, /device=\{stageNow\(\)\}/, 'a preset picker stars the real unit’s presets in the demo')
+})
+
 console.log('\na tone with more scenes than the unit holds')
 
 
