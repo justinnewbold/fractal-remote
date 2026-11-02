@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { Alert, BackHandler, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native'
 
 import { color, font, mono, radius, space } from '../lib/theme'
 import { MAX_MESSAGE, SENT_WORDS, context, logPreview, sendReport, shotsLostWords, videoLostWords } from '../lib/reports'
@@ -10,6 +10,7 @@ import { keptAccount } from '../lib/relay'
 import { isPairAccount } from '../lib/pairing'
 import { useRig } from '../lib/rig'
 import Attach from '../components/Attach'
+import EdgeBack from '../components/EdgeBack'
 import Note from '../components/Note'
 import Press from '../components/Press'
 import TickBox from '../components/TickBox'
@@ -168,6 +169,26 @@ export default function Report({ onBack, bluetooth = false, said = null }) {
     ])
   }
 
+  /*
+   * AND ANDROID'S BACK AND THE SWIPE ASK THE SAME. Only the Back button
+   * asked: Android's back went through App.js, and the swipe through App's
+   * own EdgeBack, both straight to where the report was opened from, and a
+   * report half written was gone with no "Not sent yet" (the 2 November 2026
+   * audit). So this screen hears Android's back for itself, ahead of App.js,
+   * and wraps itself in the swipe the way Settings does, and both are this
+   * back(). The listener is added once and reads back() out of a ref, so it
+   * always asks about what is on the screen now.
+   */
+  const backNow = useRef(back)
+  backNow.current = back
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      backNow.current()
+      return true
+    })
+    return () => sub.remove()
+  }, [])
+
   const box = {
     color: color.silk,
     fontSize: font.body,
@@ -182,6 +203,7 @@ export default function Report({ onBack, bluetooth = false, said = null }) {
   const sending = moved === null ? 'Sending…' : `Sending… ${Math.round(moved * 100)}%`
 
   return (
+    <EdgeBack onBack={back}>
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       /* The message box sits low on the screen and the keyboard covers it on
@@ -309,5 +331,6 @@ export default function Report({ onBack, bluetooth = false, said = null }) {
         )}
       </ScrollView>
     </KeyboardAvoidingView>
+    </EdgeBack>
   )
 }

@@ -248,14 +248,20 @@ export default function App() {
    * Where a left-edge swipe goes from the screen you are on.
    *
    * The same targets the Done buttons already use, named in one place so the
-   * gesture and the button cannot drift into disagreeing. Two of them are not
-   * constants — the guide is reached from Setup AND from the stage, and the
-   * feedback form keeps its own way back (reportFrom) for the same reason.
+   * gesture and the button cannot drift into disagreeing. One of them is not
+   * a constant — the guide is reached from Setup AND from the stage.
    *
    * Nothing for `stage`: it is the bottom of the stack. Nothing for
    * `settings` either — it wraps itself, because it is the one screen with
    * pages inside it and only it knows whether back means its own list or the
    * way out.
+   *
+   * And nothing for `report`, which wraps itself too, because only it knows
+   * whether something written on it would be lost. It was here, and the
+   * swipe went straight back to reportFrom past "Not sent yet", which only
+   * its Back button asked (the 2 November 2026 audit). Its Back, the swipe
+   * and Android's back all ask the one back() in screens/Report.js now,
+   * which still ends at reportFrom.
    */
   const BACK_TO = {
     presets: 'stage',
@@ -264,7 +270,6 @@ export default function App() {
     connect: 'settings',
     gear: 'settings',
     log: 'settings',
-    report: reportFrom,
     fixes: fixFrom
   }
   const backFrom = BACK_TO[screen] ? () => setScreen(BACK_TO[screen]) : null
@@ -279,35 +284,49 @@ export default function App() {
    *
    * Now it goes one step back, the same place the swipe from the edge goes,
    * or to Play from a screen with only Done. Settings and the amp and pedal
-   * page listen for themselves first, because they have pages inside them.
+   * page listen for themselves first, because they have pages inside them,
+   * and so does the report screen, because it asks before throwing away
+   * what was written on it.
    *
    * On Play itself, in the demo: "have a little pop-up that says Exit demo?
    * If yes, same action as the exit demo button." Only for somebody who has
    * the Exit demo button, which is somebody who has paid. Everywhere else on
    * Play, back does what Android always does and leaves the app.
+   *
+   * ADDED ONCE, AND SO HEARD LAST. React Native asks the newest listener
+   * first. This one was taken away and added again after every render of the
+   * app, which made it the newest whenever anything at all had changed, so it
+   * answered ahead of Settings' own: on any page inside Settings (Phone &
+   * computer, Bluetooth, Appearance) back went straight to Play instead of
+   * one page up (the 2 November 2026 audit). So it is added once, when the
+   * app starts and before any screen that listens for itself is drawn, and
+   * it reads where the app is now out of a ref, the way EdgeBack reads its
+   * onBack. Every screen's own listener is newer, and heard first.
    */
+  const hardwareBack = useRef(null)
+  hardwareBack.current = () => {
+    if (buying) {
+      setBuying(false)
+      return true
+    }
+    if (auth !== 'in') return false
+    if (screen !== 'stage') {
+      setScreen(BACK_TO[screen] || 'stage')
+      return true
+    }
+    if (demo && purchase.unlocked) {
+      Alert.alert('Exit demo?', 'Back to your own rig.', [
+        { text: 'Stay', style: 'cancel' },
+        { text: 'Exit demo', onPress: () => setDemo(false) }
+      ])
+      return true
+    }
+    return false
+  }
   useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (buying) {
-        setBuying(false)
-        return true
-      }
-      if (auth !== 'in') return false
-      if (screen !== 'stage') {
-        setScreen(BACK_TO[screen] || 'stage')
-        return true
-      }
-      if (demo && purchase.unlocked) {
-        Alert.alert('Exit demo?', 'Back to your own rig.', [
-          { text: 'Stay', style: 'cancel' },
-          { text: 'Exit demo', onPress: () => setDemo(false) }
-        ])
-        return true
-      }
-      return false
-    })
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => hardwareBack.current())
     return () => sub.remove()
-  })
+  }, [])
   /** The last "picked up 2 setlists from your Mac", until it has been read. */
   const [picked, setPicked] = useState(null)
   /** Whether the five units are up, from the name in the corner. */
@@ -1343,7 +1362,8 @@ export default function App() {
               the same `onBack` each screen is handed a line below. Settings
               is the exception and carries its own: it is the only screen with
               pages INSIDE it, so only it can say whether back means its own
-              list or the stage.
+              list or the stage. The report screen carries its own too, so
+              the swipe asks "Not sent yet" the way its Back button does.
 
               `null` on the stage screen itself: there is nowhere behind it,
               and a gesture that does nothing is worse than none at all.

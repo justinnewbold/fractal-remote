@@ -13865,10 +13865,15 @@ export function run(test) {
     ]) {
       assert.match(map, new RegExp(`${screen}: '${target}'`), `a swipe on ${screen} does not go to ${target}`)
     }
-    /* The two that are not constants, because they are reached from two
-       places and going "back" to the wrong one is the wrong room. */
-    assert.match(map, /report: reportFrom/, 'the feedback form sends a swipe to a fixed screen')
+    /* The one that is not a constant, because it is reached from two places
+       and going "back" to the wrong one is the wrong room. */
     assert.match(map, /fixes: fixFrom/, 'the guide sends a swipe to a fixed screen')
+    /* The feedback form was the other, `report: reportFrom`, and is out of the
+       map since the 2 November 2026 audit: a swipe through here went straight
+       to reportFrom past "Not sent yet". It wraps itself now, as Settings does,
+       and its own back() still ends at reportFrom (the next test, and
+       test/bluetooth.mjs). */
+    assert.ok(!/\breport: /.test(map), 'a swipe on the feedback form goes back past “Not sent yet” again')
 
     /* The stage is the bottom of the stack: no handler, rather than a
        gesture that does nothing. */
@@ -13931,6 +13936,124 @@ export function run(test) {
     assert.match(back, /label="Done" height=\{40\} onPress=\{onBack\}/, 'a submenu has no Done, so leaving takes a tap per level')
   })
 
+  /**
+   * ANDROID'S BACK IS HEARD BY THE SCREEN ON IT FIRST, AND THE REPORT ASKS
+   * BEFORE WHAT WAS WRITTEN IS LOST (the 2 November 2026 audit).
+   *
+   * React Native asks the newest back listener first. App.js took its own
+   * away and added it again after every render, so it was the newest
+   * whenever anything had changed: on any page inside Settings back went
+   * straight to Play instead of one page up, and on a model's page to
+   * Settings instead of All models. And on the report screen Android's back
+   * and the swipe both left with no "Not sent yet", which only its Back
+   * button asked.
+   *
+   * What is read here is each listener's own effect, out of the code. What
+   * is played out with it is the two rules that decide who answers: React
+   * Native's (newest first, and the first to say true ends it) and React's
+   * (an effect with no list, or a list that can change, runs again after
+   * every render, a child's before its parent's; one with [] runs once).
+   */
+  test('Android back is heard by the screen on it first, and the report asks before what was written is lost', () => {
+    const listeners = (file) => {
+      const found = []
+      traverse(parse(read(file), { sourceType: 'module', plugins: ['jsx'] }), {
+        CallExpression(path) {
+          const c = path.node.callee
+          if (c.type !== 'MemberExpression' || c.object.name !== 'BackHandler' || c.property.name !== 'addEventListener') return
+          const effect = path.findParent((p) => p.isCallExpression() && p.node.callee.name === 'useEffect')
+          found.push({ event: path.node.arguments[0]?.value, handler: path.node.arguments[1], effect: effect?.node })
+        }
+      })
+      return found
+    }
+    const once = (l) => l.effect.arguments[1]?.type === 'ArrayExpression' && l.effect.arguments[1].elements.length === 0
+    const saysTrueLast = (fn) => {
+      const last = fn?.body?.type === 'BlockStatement' ? fn.body.body.at(-1) : null
+      return last?.type === 'ReturnStatement' && last.argument?.type === 'BooleanLiteral' && last.argument.value === true
+    }
+
+    /* App's: one, added once, the step back read out of a ref when back is pressed. */
+    const [app, ...more] = listeners('mobile/App.js')
+    assert.equal(more.length, 0, 'App listens for Android’s back more than once')
+    assert.equal(app.event, 'hardwareBackPress')
+    assert.ok(app.effect, 'App’s back listener is not added in an effect')
+    assert.ok(once(app), 'App’s back listener is added again after a render, so it answers ahead of Settings’ own and back goes to Play')
+    const appSrc = read('mobile/App.js').replace(/\s+/g, ' ')
+    assert.match(appSrc, /BackHandler\.addEventListener\('hardwareBackPress', \(\) => hardwareBack\.current\(\)\)/, 'App’s back listener does not ask the ref')
+    let refSetIn = null
+    traverse(parse(read('mobile/App.js'), { sourceType: 'module', plugins: ['jsx'] }), {
+      AssignmentExpression(path) {
+        const l = path.node.left
+        if (l.type === 'MemberExpression' && l.object.name === 'hardwareBack' && l.property.name === 'current') refSetIn = path.getFunctionParent()?.node.id?.name
+      }
+    })
+    assert.equal(refSetIn, 'App', 'the ref App’s back reads is not set on every render, so back would go where the app was a render ago')
+    /* And it still does what it did: the paywall shut, the screen's own step, Exit demo? on Play. */
+    const ask = appSrc.slice(appSrc.indexOf('hardwareBack.current = () => {'), appSrc.indexOf("BackHandler.addEventListener('hardwareBackPress'"))
+    assert.ok(ask.length > 100, 'App’s back moved; this check reads it')
+    for (const part of [/if \(buying\) \{ setBuying\(false\) return true \}/, /if \(auth !== 'in'\) return false/, /if \(screen !== 'stage'\) \{ setScreen\(BACK_TO\[screen\] \|\| 'stage'\) return true \}/, /if \(demo && purchase\.unlocked\) \{ Alert\.alert\('Exit demo\?'/]) {
+      assert.match(ask, part, `Android back no longer does ${part}`)
+    }
+
+    /* Every screen that listens for itself says it has answered, so App is not asked after it. */
+    const screens = { settings: 'mobile/src/screens/Settings.js', model: 'mobile/src/components/GearCard.js', report: 'mobile/src/screens/Report.js' }
+    const own = {}
+    for (const [name, file] of Object.entries(screens)) {
+      const found = listeners(file)
+      assert.equal(found.length, 1, `${file} listens for Android’s back ${found.length} times`)
+      own[name] = found[0]
+      assert.equal(own[name].event, 'hardwareBackPress')
+      assert.ok(own[name].effect, `${file} adds its back listener outside an effect`)
+      assert.ok(saysTrueLast(own[name].handler), `${file} lets App answer Android’s back after it`)
+    }
+
+    /* Played out: App up on Play, the screen opened, then anything at all changing, twice. */
+    for (const [name, mine] of Object.entries(own)) {
+      const heard = []
+      const effect = (who, l) => {
+        let off = null
+        const run = () => {
+          heard.push(who)
+          off = () => heard.splice(heard.indexOf(who), 1)
+        }
+        run()
+        return () => {
+          if (once(l)) return
+          off()
+          run()
+        }
+      }
+      const appRenders = effect('App', app)
+      const screenRenders = effect(name, mine)
+      appRenders()
+      for (let i = 0; i < 2; i++) {
+        screenRenders()
+        appRenders()
+      }
+      assert.equal(heard.at(-1), name, `Android back on the ${name} screen is heard by App first`)
+    }
+
+    /* The report: Android's back, the swipe and Back are the one back(), which asks first. */
+    const report = read('mobile/src/screens/Report.js')
+    const form = report.replace(/\s+/g, ' ')
+    assert.ok(once(own.report), 'the report screen’s back listener is added again after a render')
+    assert.match(form, /BackHandler\.addEventListener\('hardwareBackPress', \(\) => \{ backNow\.current\(\) return true \}\)/, 'Android back on the report screen does not ask back()')
+    assert.match(form, /const backNow = useRef\(back\) backNow\.current = back /, 'Android back on the report screen asks a back() from a render ago')
+    assert.match(form, /<Press label="Back" height=\{40\} onPress=\{back\} \/>/, 'the report’s Back button no longer asks back()')
+    assert.match(form, /const back = \(\) => \{ if \(!unsent \|\| busy\) return onBack\?\.\(\) Alert\.alert\('Not sent yet', 'What you wrote has not been sent\. Leave without sending it\?'/, 'back() on the report screen no longer asks before what was written is lost')
+    assert.match(form, /import EdgeBack from '\.\.\/components\/EdgeBack'/)
+    let root = null
+    traverse(parse(report, { sourceType: 'module', plugins: ['jsx'] }), {
+      ExportDefaultDeclaration(path) {
+        const last = path.node.declaration.body.body.at(-1)
+        root = last?.type === 'ReturnStatement' ? last.argument : null
+      }
+    })
+    assert.equal(root?.openingElement?.name?.name, 'EdgeBack', 'the report screen is not wrapped in its own swipe, so the swipe goes past “Not sent yet”')
+    const onBack = root.openingElement.attributes.find((a) => a.name?.name === 'onBack')
+    assert.equal(onBack?.value?.expression?.name, 'back', 'the swipe on the report screen does not ask back()')
+  })
   /**
    * A ROW THAT SCROLLS SIDEWAYS KEEPS ITS DRAGS FROM THE BACK SWIPE.
    *

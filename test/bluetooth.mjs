@@ -9055,8 +9055,15 @@ export function run(test) {
     )
     assert.equal((app.match(/<Report /g) || []).length, 1, 'the report screen is drawn somewhere else too')
     assert.ok(!/BluetoothReport|writeOutNote|writingOut/.test(code('mobile/App.js')), 'App still opens the one-tap Bluetooth report')
-    /* One screen, so Back, the swipe and Android's back go to the one reportFrom. */
-    assert.match(app, /report: reportFrom,/)
+    /* One screen, so Back, the swipe and Android's back go to the one reportFrom.
+       Through the screen's own back() since the 2 November 2026 audit, which
+       asks "Not sent yet" first: the swipe went through App's map
+       (`report: reportFrom`) and Android's back through App's own listener,
+       both past the question. So the map has no report in it now, and the
+       screen hears both for itself (test/mobile.mjs holds the rest). */
+    assert.doesNotMatch(app, /report: reportFrom,/)
+    assert.match(form, /<EdgeBack onBack=\{back\}>/)
+    assert.match(form, /BackHandler\.addEventListener\('hardwareBackPress', \(\) => \{ backNow\.current\(\) return true \}\)/)
   })
 
   test('every way to Report a Bluetooth problem goes through the Bluetooth page’s own gate, and comes back where it was opened', () => {
