@@ -1999,7 +1999,16 @@ export function run(test) {
      * helper a website does not have — it failed every time. "There's
      * actually no place to even sign in anywhere on the web app."
      */
-    assert.match(app, /if \(signIn === 'account'\) \{\s*await signInAccount\(/, 'the unlock’s sign-in sets up a phone remote instead of signing in')
+    /*
+     * Changed on purpose, 2 November 2026 (the audit's live-1). This pinned
+     * `if (signIn === 'account')`: the plain sign-in, whatever end this was.
+     * On the computer itself that left the device server signed out under a
+     * window signed in, so the choice is signInErrand's now, which keeps it
+     * plain everywhere but the computer (the demo included: it takes the
+     * computer's role with no device server behind it). Held below, in "a
+     * sign-in made in the computer's window always reaches the device server".
+     */
+    assert.match(app, /if \(errand === 'account'\) \{\s*await signInAccount\(/, 'the unlock’s sign-in sets up a phone remote instead of signing in')
     const link = read('src/lib/link.js')
     const plain = link.slice(link.indexOf('export async function signInAccount'), link.indexOf('export async function reconnectPhone'))
     assert.ok(plain.length > 0 && !/join\(|turnOnMac|autoConnect/.test(plain), 'the plain sign-in has an errand attached again')
@@ -2200,6 +2209,58 @@ export function run(test) {
     assert.match(css, /\.onb \{[^}]*z-index: var\(--z-onb\);/, 'the walkthrough has a height of its own again')
     assert.ok(z('bar') < z('onb') && z('onb') < z('scrim'), 'the walkthrough is over a sheet it opens, or under the bar it covers')
     assert.equal(D4.notUnlocked('a@b.c'), 'a@b.c hasn’t unlocked the phone remote yet. This computer app is free to use on its own; the phone remote is the one-time unlock.')
+  })
+
+  /**
+   * A SIGN-IN MADE IN THE COMPUTER'S WINDOW ALWAYS REACHES THE DEVICE SERVER.
+   *
+   * The audit of 2 November 2026 (live-1), from one new buyer's sign-ins
+   * that day: signed in on a Mac with an old account, he made a new one on
+   * the phone, then on the computer signed out under Settings → Account and
+   * signed back in there with "Sign in with an email and password". Sign
+   * out took the window and the device server out together, as it should;
+   * the sign-in put the window back alone. The device server, whose own
+   * sign-in is what a phone finds the computer by, stayed signed out, and
+   * the phone, on the new account, found no computer.
+   *
+   * So on the computer every sign-in sheet runs the computer's own set-up
+   * (setUpMac: the window, the device server with the same details, then
+   * the phone remote on, or the unlock), whichever button opened it; and
+   * everywhere else the plain one stays plain. test/link-now.mjs runs
+   * setUpMac itself on a bench.
+   */
+  test('a sign-in made in the computer’s window always reaches the device server', async () => {
+    const { signInErrand } = await import('../src/lib/link.js')
+    // The computer: every sheet, however it was opened, is the computer's set-up.
+    for (const asked of [true, 'account', false, null, undefined]) {
+      assert.equal(signInErrand({ asked, role: 'mac', demo: false }), 'computer', `a sign-in on the computer asked as ${JSON.stringify(asked)} leaves its device server signed out`)
+    }
+    // The website's demo takes the computer's role with nothing behind it: the plain sign-in stays plain there.
+    assert.equal(signInErrand({ asked: 'account', role: 'mac', demo: true }), 'account', 'the demo’s plain sign-in goes looking for a device server it does not have')
+    assert.equal(signInErrand({ asked: true, role: 'mac', demo: true }), 'computer', 'the demo’s own set-up sheet changed what it does')
+    // A phone or a browser: as before.
+    for (const role of ['remote', 'wifi', 'unknown']) {
+      assert.equal(signInErrand({ asked: 'account', role }), 'account', `${role}: the plain sign-in has an errand again`)
+      assert.equal(signInErrand({ asked: true, role }), 'phone', `${role}: the connect sheet stopped connecting`)
+    }
+
+    // Both ways the sheet signs in ask it, and the computer's answer runs the set-up.
+    const app = read('src/App.jsx').replace(/\s+/g, ' ')
+    const submit = app.slice(app.indexOf('const signInSubmit = useCallback('), app.indexOf('/** Do at the Mac what the phone asked for'))
+    assert.match(submit, /const errand = signInErrand\(\{ asked: signIn, role: linkState\(\)\.role, demo: isDemo\(\) \}\) if \(errand === 'account'\) \{/, 'the sheet’s sign-in decides for itself again')
+    assert.match(submit, /\} else if \(errand === 'computer'\) \{ try \{ await setUpMac\(\{ email, password \}\)/, 'the computer’s sign-in does not set the computer up')
+    const sheet = app.slice(app.indexOf('<SignInSheet'), app.indexOf('onSubmit={signInSubmit} />'))
+    assert.match(sheet, /if \(signInErrand\(\{ asked: signIn, role: linkState\(\)\.role, demo: isDemo\(\) \}\) === 'account'\) \{/, 'Create Account on the computer’s Account page leaves its device server signed out')
+    // No other place in App picks the plain sign-in over the computer's: what is left of it only words the sheet.
+    assert.deepEqual(app.match(/signIn === 'account'/g), ["signIn === 'account'"], 'App picks the plain sign-in somewhere signInErrand does not see')
+    assert.match(app, /account=\{signIn === 'account'\}/)
+
+    // And the set-up signs the device server in, with the same details, on both of its outcomes.
+    const link = read('src/lib/link.js')
+    const setUp = link.slice(link.indexOf('export async function setUpMac'), link.indexOf('/** The relay'))
+    assert.match(setUp, /if \(!unlocked && !unknown\) \{\s*const \{ cloudLogin \} = await device\(\)\s*await cloudLogin\(email, password\)/, 'an account without the unlock leaves the device server signed out')
+    assert.match(setUp, /await turnOnMac\(\{ email, password \}\)/)
+    assert.match(link.slice(link.indexOf('async function turnOnMac')), /await cloudLogin\(email, password\)[\s\S]{0,200}await remoteEnable\(true\)/, 'the set-up turns the phone remote on without signing the device server in')
   })
 
   test('a phone gets the phone’s walkthrough, in the browser too', () => {

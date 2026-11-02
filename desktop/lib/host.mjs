@@ -825,6 +825,38 @@ export async function waitForServer({
 }
 
 /**
+ * Wait for a device server that was just started again to answer, for as
+ * long as it takes, while it is still the one wanted.
+ *
+ *   waitForRestart({ port, still, onSlow, wait }) → true | false
+ *
+ * True once it answers and is still wanted; false the moment it is not
+ * (`still()` says no: it stopped, and its own stop starts it again; or
+ * something replaced it; or the app is quitting), checked before every round
+ * of waitForServer's minute and after the one that answers.
+ *
+ * Not a minute and give up, as waitForServer is on its own. A Pi short of
+ * memory, swapping after the system killed its server, can take longer than
+ * that to bring the next one up, and a restart that gave up after a minute
+ * left the unit answering on the Wi-Fi page and the phone remote off for
+ * good, until the Pi was unplugged (the audit of 2 November 2026,
+ * computer-4). `onSlow` is said once, when the first minute is over, so the
+ * menu can say it is still waiting rather than counting down to a restart
+ * that has already happened. A server that is still wanted and never answers
+ * is waited for until somebody quits: there is nothing else to do with it,
+ * and the menu says so.
+ *
+ * Everything is handed in, so the waiting can be tested with no server.
+ */
+export async function waitForRestart({ port = DEFAULT_PORT, still = () => true, onSlow = () => {}, wait = waitForServer } = {}) {
+  for (let round = 0; ; round++) {
+    if (!still()) return false
+    if (await wait({ port })) return Boolean(still())
+    if (round === 0) onSlow()
+  }
+}
+
+/**
  * Who, if anyone, already has the port.
  *
  * ForgeFX allocates its own port when the one it is given is taken: it catches

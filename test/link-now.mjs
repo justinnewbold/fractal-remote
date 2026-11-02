@@ -712,10 +712,15 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       export const localHelperAlive = async () => bench.helper
       export const canReachHelper = async () => false
       export const readHostDoc = async () => null
-      export const writeHostDoc = async () => {}
+      /* What the computer's own set-up asks of its device server, in order, as \`bench.server\`. */
+      export const writeHostDoc = async (id, data) => { (bench.server ||= []).push(['write', id, data?.wanted ?? data?.name ?? null]) }
       export const cloudStatus = async () => ({ enabled: false, user: null })
       export const remoteStatus = async () => ({ enabled: false, connected: false })
-      export const remoteEnable = async () => ({})
+      export const remoteEnable = async (on) => { (bench.server ||= []).push(['remote', !!on]); return {} }
+      export const cloudLogin = async (email, password) => { (bench.server ||= []).push(['login', email, password]); return { ok: true } }
+      export const cloudLogout = async () => { (bench.server ||= []).push(['logout']); return { ok: true } }
+      /* And whether the account has bought the phone remote, as setUpMac asks it (src/lib/webPurchase.js): \`bench.unlocked\`, yes when unset. */
+      export const checkUnlocked = async () => bench.unlocked || { unlocked: true, unknown: false }
     `,
     /* The relay as link.js hears it, in the order remote.js gives its news. */
     'remote.mjs': `
@@ -763,9 +768,10 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       export const setAutoConnect = () => {}
       export const wantsAutoConnect = () => true
       export const hasSavedSession = () => true
-      export const remoteSignIn = async () => {}
+      /* The window's own sign-in and sign-out, in the same log as the device server's (\`bench.server\`). */
+      export const remoteSignIn = async ({ email } = {}) => { (bench.server ||= []).push(['window', email]) }
       export const remoteSignUp = async () => {}
-      export const signOut = async () => {}
+      export const signOut = async () => { (bench.server ||= []).push(['window out']) }
       /* Every roll call, with the options it was taken with (\`late\`: at the first answer, link.js countIfDue). */
       export const censusHosts = async (options) => { bench.censuses = (bench.censuses || 0) + 1; (bench.censusOptions = bench.censusOptions || []).push(options ?? null); return [] }
       export const hostConflict = () => null
@@ -797,7 +803,13 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
     ["from '../../shared/editors.mjs'", `from '${shared('editors.mjs')}'`],
     ["from '../../shared/onboarding.mjs'", `from '${shared('onboarding.mjs')}'`],
     ["from '../../shared/device-word.mjs'", `from '${shared('device-word.mjs')}'`],
-    ["import('./forgefx.js')", "import('./forgefx.mjs')"]
+    ["import('./forgefx.js')", "import('./forgefx.mjs')"],
+    /*
+     * setUpMac's purchase check, from the stand-in above. A file of its own
+     * would first be looked for when a test signs in, long after this folder
+     * has gone; this one link.js has already found, when it booted.
+     */
+    ["import('./webPurchase.js')", "import('./forgefx.mjs')"]
   ]
   let src = read('src/lib/link.js')
   for (const [from, to] of swaps) {
@@ -6265,6 +6277,41 @@ export function run(test) {
     /* The same unit still on screen: as before. */
     const here = Object.assign(() => true, { unit: () => true })
     assert.deepEqual((await ffx.readSceneNames(53, { shown: () => 'Recto 1', still: here })).slice(0, 2), ['CLEAN', 'LEAD'])
+  })
+
+  /* ------------------------------------------------------------------ */
+  /* The computer's window: an account switched there, run               */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * The audit's live-1 (2 November 2026), run: the computer's window signs
+   * out under Settings → Account, then signs back in there with another
+   * account. Sign out takes the window and the device server out together;
+   * the sign-in is setUpMac now (signInErrand, held in test/both-ends.mjs),
+   * so the device server is signed back in with the same details and the
+   * phone remote turned on, and a phone on the new account finds the
+   * computer. An account that has not bought the phone remote still has the
+   * device server signed in, so buying it later turns the remote on with no
+   * second password, and is told to buy it rather than shown an error.
+   */
+  test('browser: on the computer, signing out and in with another account signs the device server in with it and turns the phone remote on', async () => {
+    const t = await webLinkOnABench({ role: 'mac' })
+    t.bench.server = []
+    await t.link.signOutHere()
+    assert.deepEqual(t.bench.server, [['window out'], ['remote', false], ['logout']], 'signing out on the computer leaves its device server signed in')
+    t.bench.server = []
+    await t.link.setUpMac({ email: 'new.buyer@example.com', password: 'a new password' })
+    assert.deepEqual(
+      t.bench.server.slice(0, 4),
+      [['window', 'new.buyer@example.com'], ['login', 'new.buyer@example.com', 'a new password'], ['remote', true], ['write', 'remote.host', true]],
+      'the window signed in without the device server, or the phone remote was not turned on'
+    )
+
+    // Not bought yet: the device server is signed in all the same, and the remote is left off, with the reason.
+    t.bench.server = []
+    t.bench.unlocked = { unlocked: false, unknown: false }
+    await assert.rejects(t.link.setUpMac({ email: 'free@example.com', password: 'pw' }), (err) => err.code === 'not-unlocked')
+    assert.deepEqual(t.bench.server, [['window', 'free@example.com'], ['login', 'free@example.com', 'pw']], 'an account without the unlock leaves the device server signed out, or switches the remote on to be refused')
   })
 
   test('browser: the unit is not read twice at launch when every read of the roll call went to the computer it chose', () => {

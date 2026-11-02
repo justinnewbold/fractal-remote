@@ -1243,6 +1243,45 @@ export async function bootLink() {
    Actions — what the buttons call
    ------------------------------------------------------------------ */
 
+/**
+ * WHICH ERRAND A SIGN-IN RUNS, from what the sheet was opened for and which
+ * end this is.
+ *
+ *   signInErrand({ asked, role, demo }) → 'computer' | 'account' | 'phone'
+ *
+ *   'computer' — setUpMac: the window, then the device server with the same
+ *                details, then the phone remote on (or the unlock, when the
+ *                account has not bought it).
+ *   'account'  — signInAccount: the account and nothing else.
+ *   'phone'    — connectPhone: sign in and join the computer.
+ *
+ * `asked` is the sheet's errand as App holds it: 'account' for the plain
+ * sign-in (the Account page's "Sign in with an email and password", the
+ * unlock's, the join link's), anything else for the one this end's role
+ * calls for.
+ *
+ * ON THE COMPUTER ITSELF, EVERY SIGN-IN IS THE COMPUTER'S. The plain one was
+ * plain everywhere, and on the computer that left the device server (the
+ * part that talks to the unit, whose own sign-in is what lets a phone find
+ * this computer) signed out under a window signed in: somebody who signed
+ * out on the Account page and back in with a new account there, as a new
+ * buyer did on 2 November 2026 (the audit's live-1), had a window on the new
+ * account, a device server on none, and a phone that found no computer. So
+ * on the computer (role 'mac', and not the demo) the plain sign-in runs the
+ * set-up one, the same sign-in the computer's "Sign in to set up the phone
+ * remote" makes. Everywhere else it stays plain, the demo included: the
+ * website's demo takes the computer's role with no device server behind it,
+ * and a sign-in there that went looking for one failed every time. (A
+ * sign-in in the demo in the computer's own window ends the demo with a
+ * reload, after which Phone & computer offers "Sign in to set up the phone
+ * remote" for the device server, as before.)
+ */
+export function signInErrand({ asked, role, demo = false } = {}) {
+  if (role === 'mac' && !demo) return 'computer'
+  if (asked === 'account') return 'account'
+  return role === 'mac' ? 'computer' : 'phone'
+}
+
 /** Sign in on this phone and connect. Stays signed in from here on. */
 export async function connectPhone({ email, password }) {
   const config = loadRemoteConfig() || {}
@@ -1268,7 +1307,8 @@ export async function connectPhone({ email, password }) {
  * What the demo needs an account for is the account itself: buying the
  * unlock, which has to belong to somebody. So this is the sign-in with no
  * errand attached — the one the phone's Setup offers as "Sign in with an
- * email and password".
+ * email and password". Not on the computer itself, where the same button
+ * signs the device server in too: see signInErrand.
  */
 export async function signInAccount({ email, password }) {
   const config = loadRemoteConfig() || {}

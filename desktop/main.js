@@ -231,9 +231,15 @@ const pause = (ms) => new Promise((resolve) => later(resolve, ms))
  * The log, for anybody who looks, and one line at the top of the tray's
  * menu, for anybody who plugs a screen in to find out why the phone cannot
  * reach the unit.
+ *
+ * And, since 2 November 2026, for a device server that stopped on any
+ * computer, not only one with nobody there: a box in front of somebody
+ * mid-song is no better than a box on a screen that is not there, and the
+ * server is being started again anyway (see restartServer). The log says
+ * which kind of start this was.
  */
 function unattended(line, detail = '') {
-  console.error(`[unattended] ${line}${detail ? `\n${detail}` : ''}`)
+  console.error(`[${startHidden ? 'unattended' : 'menu'}] ${line}${detail ? `\n${detail}` : ''}`)
   notice = line
   drawTray()
 }
@@ -572,6 +578,7 @@ async function start() {
     phonesHearLine: hearLine,
     TELL_PHONES_MS,
     waitForServer,
+    waitForRestart,
     whoHasPort,
     PORT_TAKEN
   } = await host()
@@ -712,45 +719,77 @@ async function start() {
     /*
      * A server that could not be started at all — out of memory on a 1 GB
      * Pi, say, or the AppImage's folder gone from under it — never sends
-     * 'exit', only this. With nobody listening it would be an error nobody
-     * caught, which is a box on a screen that is not there; so with nobody
-     * there, it is one more stop, and the server is started again like any
-     * other. Elsewhere it is what it always was.
+     * 'exit', only this. Nobody listening, it was an error nobody caught:
+     * Electron's own box, or with nobody there a box on a screen that is not
+     * there. So it is one more stop, and the server is started again like
+     * any other, on every computer.
      */
-    if (startHidden) {
-      child.on('error', (err) => {
-        if (server !== child || quitting) return
-        if (!String(err?.syscall || '').startsWith('spawn')) {
-          console.error('[server]', err?.message || err)
-          return
-        }
-        restartServer(`could not be started (${err?.code || err?.message || err})`)
-      })
-    }
-    child.on('exit', (code, signal) => {
-      // A server this app has already replaced or put down is not news.
-      if (server !== child) return
-      /*
-       * With nobody there, a server that stops is started again, after a
-       * wait that grows if it keeps stopping. Nobody would ever see the box,
-       * and without a server the unit is gone until somebody pulls the plug.
-       */
-      if (startHidden && !quitting) {
-        restartServer(code === null ? signal : `code ${code}`)
+    child.on('error', (err) => {
+      if (server !== child || quitting) return
+      if (!String(err?.syscall || '').startsWith('spawn')) {
+        console.error('[server]', err?.message || err)
         return
       }
-      /*
-       * Not while quitting. Stopping the server is the first thing the quit does,
-       * and a ForgeFX that exits non-zero on SIGINT would then put a modal box on
-       * screen mid-quit — one belonging to an app whose window has gone and whose
-       * dock icon is on its way out, so it can land behind everything with no
-       * obvious way to reach it. The app looks like it is refusing to close, and
-       * the only way out is the one nobody should need.
-       */
-      if (code && !quitting) {
-        dialog.showErrorBox('The device server stopped', `ForgeFX exited with code ${code}.`)
-      }
+      restartServer(`could not be started (${err?.code || err?.message || err})`)
     })
+    child.on('exit', (code, signal) => {
+      /*
+       * A server this app has already replaced or put down is not news: the
+       * Axiom switch's restart lets go of it before stopping it. And nothing
+       * at all while quitting, which says so before it stops the server.
+       * Stopping it is the first thing the quit does, and anything said
+       * about it then (it used to be a modal box) lands mid-quit, behind
+       * everything, from an app on its way out.
+       */
+      if (server !== child || quitting) return
+      /*
+       * A SERVER THAT STOPS IS STARTED AGAIN, ON EVERY COMPUTER, after a wait
+       * that grows if it keeps stopping (restartPlan in lib/autostart.mjs),
+       * and the menu says so meanwhile.
+       *
+       * Only a start with no window did this until 2 November 2026 (the
+       * audit's computer-3). Everywhere else a server that stopped with an
+       * exit code put up a box, and nothing started it again, so a laptop at
+       * a gig had no unit until somebody quit and reopened the app; and one
+       * that died of a crash or a kill (a native module going down when the
+       * cable is knocked, the system out of memory) has no exit code on a Mac
+       * or Linux, only a signal, so it put up nothing at all, and the menu
+       * went on saying the phone remote was on. A box mid-song is no help
+       * either: what is wanted is the unit back. So a stop of any kind, with
+       * a code or a signal, is the same stop everywhere: the menu's line, a
+       * restart, the phone remote asked for again once it answers.
+       */
+      restartServer(code === null ? signal : `code ${code}`)
+    })
+    return child
+  }
+  /*
+   * A SERVER JUST STARTED AGAIN, ANSWERING: the menu's line about it goes,
+   * and the phone remote is asked for again, because ForgeFX forgets its
+   * switch every time it starts. Shared by the two things that start it
+   * again (a stop, and the Axiom switch), so they cannot disagree about
+   * what comes after.
+   *
+   * As long as it takes, while it is still the server wanted (the audit's
+   * computer-4). This waited one minute, and a Pi short of memory, swapping
+   * after the system killed its server, can take longer than that to come
+   * back: the unit then answered on the Wi-Fi page and the phone remote
+   * never came back on, until the Pi was unplugged. Now a slow one is
+   * waited for, said so in the menu, and the remote is turned on the moment
+   * it answers. A server that stops while it is waited for is not waited
+   * for any more (its own stop starts it again), and nor is one the Axiom
+   * switch has replaced, or any once the app is quitting.
+   */
+  const backUp = async (child) => {
+    const up = await waitForRestart({
+      port,
+      still: () => server === child && !quitting,
+      onSlow: () => unattended("The part that talks to your unit hasn't started yet — still waiting for it")
+    })
+    if (!up) return false
+    settled()
+    rearm()
+    return true
   }
   const restartServer = (how) => {
     server = null
@@ -772,10 +811,7 @@ async function start() {
         restartServer(`could not be started (${err?.code || err?.message || err})`)
         return
       }
-      if ((await waitForServer({ port })) && !quitting) {
-        settled()
-        rearm()
-      }
+      await backUp(server)
     }, plan.wait)
   }
   runServer()
@@ -793,6 +829,17 @@ async function start() {
    * SIGKILL), and only while a server is running: one that is being started
    * again for another reason reads the switch as it starts. Never while
    * quitting.
+   *
+   * NOT A STOP, AND NOT COUNTED AS ONE. It lets go of the old server before
+   * stopping it (`server = null`), so that one's exit is not taken for a
+   * crash (see the exit handler in runServer), and the count restartPlan
+   * keeps of stops in a row is left alone. What comes after is backUp, the
+   * same as after a stop: waited for as long as it takes, then the phone
+   * remote back on. The switch is held only while the old one is stopped
+   * and the new one started, never through that wait; the moment it is let
+   * go of it is looked at once more, so a change made meanwhile is acted on
+   * (its look stops the one coming up, and backUp lets go of it) rather
+   * than missed, since the file's watch fired while the switch was held.
    */
   let axiomRestarting = false
   let axiomRestartedAt = -Infinity
@@ -801,6 +848,7 @@ async function start() {
     const first = axiomNow()
     if (first === null || first === axiomLetIn) return
     axiomRestarting = true
+    let started = null
     try {
       await pause(Math.max(axiomRules.AXIOM_CONFIRM_MS, axiomRestartedAt + axiomRules.AXIOM_GAP_MS - uptime()))
       const want = axiomNow()
@@ -821,18 +869,15 @@ async function start() {
         restartServer(`could not be started (${err?.code || err?.message || err})`)
         return
       }
-      const up = await waitForServer({ port })
-      if (quitting) return
-      if (up) settled()
-      // The phone remote back on either way: one asked of a server still starting asks again by itself.
-      rearm()
+      started = server
     } catch (err) {
       console.error('[axiom] starting the device server again failed:', err?.message || err)
     } finally {
       axiomRestarting = false
     }
-    // Changed again while the server was starting: once more.
+    // Changed again while the switch was held: looked at now, not missed.
     relookAxiom()
+    if (started && !quitting) await backUp(started)
   }
   try {
     watchFile(axiomRules.axiomStorePath(), { interval: 2000, persistent: false }, () => {
@@ -1026,9 +1071,30 @@ function openWindow({ hidden = false } = {}) {
       if (win && where?.local) win.loadURL(where.local)
     }, 1000)
   })
-  /* With nobody there, closing it only hides it: the page keeps carrying out the phone's saves. */
+  /*
+   * ON A COMPUTER SET UP TO RUN WITH NOBODY THERE, CLOSING IT ONLY HIDES IT:
+   * the page keeps carrying out the phone's saves, restores and renames.
+   *
+   * That was a start with no window only, and it is every time the app is
+   * going to stay in the tray (stayInTray, below the launch): started with
+   * no window, or with "Start when this computer turns on" switched on (the
+   * audit of 2 November 2026, computer-2). A Pi owner who opens the app by
+   * hand, ticks the switch and closes the window, as the setup guide says,
+   * or who quits and opens it again as the app itself advises, has a copy
+   * that was not started hidden. Its window really closed, the app stayed in
+   * the tray as the switch promises, and with the page gone every save from
+   * the phone was parked and never carried out, until somebody opened the
+   * window again. Now that window is hidden instead, as a hidden start's is,
+   * and the tray's Open shows that same page again, so it is still never
+   * loaded twice.
+   *
+   * Everywhere else nothing changes: on a Mac or a Windows computer not
+   * started hidden, and on a Linux one with the switch off, stayInTray says
+   * no, the window closes, and closing it quits, exactly as it did. Read
+   * afresh at every close, as window-all-closed reads it.
+   */
   win.on('close', (e) => {
-    if (!startHidden || quitting) return
+    if (quitting || !stayInTray()) return
     e.preventDefault()
     win.hide()
     showInDock(false)
@@ -1038,6 +1104,100 @@ function openWindow({ hidden = false } = {}) {
     showInDock(false)
   })
 }
+
+/*
+ * THE WEB IN THE COMPUTER'S OWN BROWSER, AND THE WINDOW ON THE APP'S PAGE.
+ *
+ * "Web links open inside the computer app's own browser, which is Electron
+ * 33 … with every permission granted automatically" (the audit of 2
+ * November 2026, computer-5). Every link the page has to the website (What's
+ * new, Help with this app, a store chip, ForgeFX on GitHub) uses
+ * target=_blank or window.open, and each one opened a bare window of the
+ * app's own, with the bridge to the computer in it, instead of the player's
+ * own browser; and anything any page asked for, the camera, the location,
+ * MIDI with SysEx straight to the unit on the cable, it was simply given.
+ *
+ * So, for every page the app ever shows (the window, and any window of its
+ * own page that it opens, such as the privacy page), as Electron's own
+ * advice for this has it:
+ *
+ *   - a new window for anything but the app's own page is not opened: a web
+ *     page or an email address goes to the computer's own browser or mail
+ *     app (lib/window.mjs linkVerdict), and anything else goes nowhere;
+ *   - the page going somewhere else in its own window is stopped the same
+ *     way, and sent to the same place;
+ *   - every permission is refused, except the two the app's own page uses,
+ *     for that page alone (PAGE_PERMISSIONS), and no device (a serial port,
+ *     a USB or HID device) is ever handed to a page. The device server is
+ *     what talks to the unit; the page never needs to.
+ *
+ * Nothing changes for the app's own page: its own addresses still load in
+ * the window, and its questions to the app are still answered (askedByOwnPage).
+ * The rules are loaded at launch, before anything can make a window; until
+ * they are, nothing is opened, and nothing is let go anywhere else.
+ */
+let windowRules = null
+const verdictFor = (url) => (windowRules ? windowRules.linkVerdict(url, where?.local) : 'refuse')
+
+/** Handed to the computer's own browser or mail app; a failure is a line in the log, never a box. */
+function openOutside(url) {
+  const failed = (err) => console.error('[window] could not open it in the browser:', err?.message || err)
+  try {
+    Promise.resolve(shell.openExternal(url)).catch(failed)
+  } catch (err) {
+    failed(err)
+  }
+}
+
+function guardPage(contents) {
+  contents.setWindowOpenHandler?.(({ url }) => {
+    const verdict = verdictFor(url)
+    if (verdict === 'own') return { action: 'allow' }
+    if (verdict === 'browser') openOutside(url)
+    else console.error(`[window] not opened: ${String(url).slice(0, 80)}`)
+    return { action: 'deny' }
+  })
+  contents.on?.('will-navigate', (event, url) => {
+    const to = event?.url || url
+    const verdict = verdictFor(to)
+    if (verdict === 'own') return
+    event?.preventDefault?.()
+    if (verdict === 'browser') openOutside(to)
+    else console.error(`[window] not gone to: ${String(to).slice(0, 80)}`)
+  })
+  guardPermissions(contents.session)
+}
+
+/* Each session once: the window and the windows it opens share one. */
+const guardedSessions = new WeakSet()
+function guardPermissions(session) {
+  if (!session || guardedSessions.has(session)) return
+  guardedSessions.add(session)
+  const allowed = (permission, from) => Boolean(windowRules?.permitted({ permission, from, local: where?.local }))
+  const said = new Set()
+  session.setPermissionRequestHandler?.((contents, permission, callback, details) => {
+    const from = details?.requestingUrl || contents?.getURL?.() || ''
+    const yes = allowed(permission, from)
+    // Said once a permission and page, as a refused question to the app is.
+    if (!yes && said.size < 50 && !said.has(`${permission} ${from}`)) {
+      said.add(`${permission} ${from}`)
+      console.error(`[window] refused ${permission} to ${from || 'a page'}`)
+    }
+    callback(yes)
+  })
+  session.setPermissionCheckHandler?.((contents, permission, origin, details) =>
+    allowed(permission, origin || details?.requestingUrl || contents?.getURL?.() || '')
+  )
+  session.setDevicePermissionHandler?.(() => false)
+}
+
+app.on('web-contents-created', (_event, contents) => {
+  try {
+    guardPage(contents)
+  } catch (err) {
+    console.error('[window] could not guard a page:', err?.message || err)
+  }
+})
 
 /*
  * Clicking the app when it is already running.
@@ -1886,6 +2046,8 @@ app.whenReady().then(async () => {
   }
   // A service, not a document: no dock icon, no window until asked.
   showInDock(false)
+  // What the window may open and use, before anything can make one. See guardPage.
+  windowRules = await import('./lib/window.mjs')
   boot = await import('./lib/autostart.mjs')
   healStartAtBoot()
   if (!(await settleInPlace())) return // reopening from Applications

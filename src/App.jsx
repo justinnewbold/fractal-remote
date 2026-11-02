@@ -260,6 +260,7 @@ import {
   disconnectPhone,
   setUpMac,
   signInAccount,
+  signInErrand,
   createAccount,
   isPairAccount,
   setMacRemote,
@@ -2578,14 +2579,23 @@ export default function App() {
   /** The sign-in sheet's submit: the same form does a different job per role. */
   const signInSubmit = useCallback(
     async ({ email, password }) => {
-      if (signIn === 'account') {
+      /*
+       * Which job, from signInErrand: on the computer itself every sign-in
+       * is the computer's, the plain one on the Account page included, so
+       * the device server is signed in with the window and the phone can
+       * find this computer. It was plain there too, and an account switched
+       * on the Account page left the device server signed out (the audit's
+       * live-1, 2 November 2026).
+       */
+      const errand = signInErrand({ asked: signIn, role: linkState().role, demo: isDemo() })
+      if (errand === 'account') {
         await signInAccount({ email, password })
         record('remote', `Signed in as ${email}`)
         /* Not closed first when the demo is about to end — see afterAccount. */
         if (!isDemo()) setSignIn(false)
         await afterAccount()
         return
-      } else if (linkState().role === 'mac') {
+      } else if (errand === 'computer') {
         try {
           await setUpMac({ email, password })
         } catch (err) {
@@ -5344,8 +5354,10 @@ export default function App() {
           if (out.needsConfirmation) return out
           record('remote', `Account made for ${details.email}`)
           /* Then the errand the sheet was opened for — connect this phone, or
-             turn the computer's phone remote on — as the sign-in would have. */
-          if (signIn === 'account') {
+             turn the computer's phone remote on — as the sign-in would have.
+             Asked of signInErrand, as the sign-in asks: an account made on
+             the computer's Account page signs its device server in too. */
+          if (signInErrand({ asked: signIn, role: linkState().role, demo: isDemo() }) === 'account') {
             if (!isDemo()) setSignIn(false)
             await afterAccount()
           } else await signInSubmit(details)
