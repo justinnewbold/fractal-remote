@@ -540,10 +540,73 @@ export function usageSections(answer, now = Date.now()) {
  * typed. The waiting list — addresses given access before they signed up —
  * comes after, so both kinds of person are on one screen.
  */
-export function accountSections(answer, filter = '', now = Date.now()) {
+/*
+ * THE BUTTONS ACROSS THE TOP OF EVERYONE WITH AN ACCOUNT, one picked at a
+ * time, beside the box that finds an address. "Can we also make a filter for
+ * seeing confirmed accounts, unconfirmed, unlocked, not unlocked, last on
+ * today, anything else??" (Justin, 2 November 2026.) The anything else:
+ *
+ *   - Unlocked, not confirmed: somebody with the full version who can't
+ *     sign in to use it on the computer, the buyer of 24 September whose
+ *     mistyped address every email bounced off. Confirm now is under them.
+ *   - Never signed in, and New this week.
+ *   - Waiting to sign up: the waiting list on its own.
+ *
+ * "Last on" is the list's own word for the last time the account signed in
+ * with its password (the account service's last sign-in), not the last time
+ * the app was opened: a phone stays signed in for weeks. People, on the
+ * Customers page, counts who used the app. Today is from midnight here.
+ * Only the accounts the server sent are filtered (the newest 500).
+ */
+const startOfToday = (now) => {
+  const d = new Date(now)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+const at = (iso) => {
+  const t = Date.parse(iso || '')
+  return Number.isFinite(t) ? t : null
+}
+const WEEK_MS = 7 * 86400000
+export const ACCOUNT_FILTERS = [
+  { key: 'all', label: 'Everyone', keep: () => true },
+  { key: 'confirmed', label: 'Confirmed', keep: (a) => !!a.confirmed },
+  { key: 'unconfirmed', label: 'Not confirmed', keep: (a) => !a.confirmed },
+  { key: 'unlocked', label: 'Unlocked', keep: (a) => !!a.unlocked },
+  { key: 'locked', label: 'Not unlocked', keep: (a) => !a.unlocked },
+  { key: 'stuck', label: 'Unlocked, not confirmed', keep: (a) => !!a.unlocked && !a.confirmed },
+  { key: 'today', label: 'Last on today', keep: (a, now) => (at(a.last_sign_in) ?? -Infinity) >= startOfToday(now) },
+  { key: 'week', label: 'Last on this week', keep: (a, now) => (at(a.last_sign_in) ?? -Infinity) >= now - WEEK_MS },
+  { key: 'never', label: 'Never signed in', keep: (a) => !a.last_sign_in },
+  { key: 'new', label: 'New this week', keep: (a, now) => (at(a.signed_up) ?? -Infinity) >= now - WEEK_MS },
+  { key: 'waiting', label: 'Waiting to sign up', keep: () => false }
+]
+const filterOf = (key) => ACCOUNT_FILTERS.find((f) => f.key === key) || ACCOUNT_FILTERS[0]
+
+/** The people in the answer, without the pairing accounts (devices, not people). */
+const peopleIn = (answer) =>
+  (Array.isArray(answer?.accounts) ? answer.accounts : []).filter((a) => !/@pair\.fractal\.newbold\.cloud$/i.test(String(a?.email || '')))
+
+/**
+ * Each button's label with how many it would show, given what is typed in the
+ * find box: "Not confirmed · 3". Asked of the same rows the list draws.
+ */
+export function accountFilterButtons(answer, find = '', now = Date.now()) {
+  const want = String(find || '').trim().toLowerCase()
+  const match = (email) => !want || String(email || '').toLowerCase().includes(want)
+  const people = peopleIn(answer).filter((a) => match(a.email))
+  const waiting = (Array.isArray(answer?.waiting) ? answer.waiting : []).filter((w) => match(w.email))
+  return ACCOUNT_FILTERS.map((f) => {
+    const count = f.key === 'waiting' ? waiting.length : people.filter((a) => f.keep(a, now)).length
+    return { key: f.key, label: `${f.label} · ${count}`, count }
+  })
+}
+
+export function accountSections(answer, filter = '', now = Date.now(), show = 'all') {
   if (!answer?.ok) return []
   const want = String(filter || '').trim().toLowerCase()
   const match = (email) => !want || String(email || '').toLowerCase().includes(want)
+  const picked = filterOf(show)
   /*
    * Not the hidden accounts the old pairing codes stood for
    * (…@pair.fractal.newbold.cloud): they are devices, not people, and on the
@@ -551,8 +614,10 @@ export function accountSections(answer, filter = '', now = Date.now()) {
    * an email. The same test as shared/pairing.mjs's isPairAccount.
    */
   const everyone = Array.isArray(answer.accounts) ? answer.accounts : []
-  const devices = everyone.filter((a) => /@pair\.fractal\.newbold\.cloud$/i.test(String(a?.email || '')))
-  const people = everyone.filter((a) => !devices.includes(a)).filter((a) => match(a.email))
+  const devices = everyone.length - peopleIn(answer).length
+  const people = peopleIn(answer)
+    .filter((a) => match(a.email))
+    .filter((a) => picked.keep(a, now))
   const waiting = (Array.isArray(answer.waiting) ? answer.waiting : []).filter((w) => match(w.email))
   /* Every address on the waiting list, filtered or not: Confirm now on one of them hands its unlock to whoever made the account. */
   const onWaitingList = new Set((Array.isArray(answer.waiting) ? answer.waiting : []).map((w) => String(w?.email || '').trim().toLowerCase()))
@@ -568,10 +633,17 @@ export function accountSections(answer, filter = '', now = Date.now()) {
       unlock(a)
     ].join(', ')
 
-  const total = Math.max(people.length, (Number(answer.total) || people.length) - devices.length)
-  const sections = [
-    {
-      title: want ? `Accounts matching "${want}" (${people.length})` : `Everyone with an account (${total})`,
+  const total = Math.max(peopleIn(answer).length, (Number(answer.total) || peopleIn(answer).length) - devices)
+  const filtered = picked.key !== 'all'
+  const sections = []
+  /* Waiting to sign up is the waiting list alone: no account to list above it. */
+  if (picked.key !== 'waiting') {
+    sections.push({
+      title: want
+        ? `${filtered ? picked.label : 'Accounts'} matching "${want}" (${people.length})`
+        : filtered
+          ? `${picked.label} (${people.length})`
+          : `Everyone with an account (${total})`,
       rows: people.length
         ? people.map((a) => ({
             label: '',
@@ -583,10 +655,13 @@ export function accountSections(answer, filter = '', now = Date.now()) {
             confirmed: !!a.confirmed,
             onWaitingList: onWaitingList.has(String(a.email || '').trim().toLowerCase())
           }))
-        : [{ label: '', value: want ? 'Nobody with an account matches that.' : 'Nobody has made an account yet.' }]
-    }
-  ]
-  if (waiting.length) {
+        : [{ label: '', value: want || filtered ? 'Nobody with an account matches that.' : 'Nobody has made an account yet.' }]
+    })
+  }
+  if (picked.key === 'waiting' && !waiting.length) {
+    sections.push({ title: 'Waiting for them to sign up (0)', rows: [{ label: '', value: 'Nobody is waiting to sign up.' }] })
+  }
+  if (waiting.length && (picked.key === 'all' || picked.key === 'waiting')) {
     sections.push({
       title: `Waiting for them to sign up (${waiting.length})`,
       rows: waiting.map((w) => {
@@ -595,7 +670,7 @@ export function accountSections(answer, filter = '', now = Date.now()) {
       })
     })
   }
-  if (!want && total > people.length) {
+  if (!want && !filtered && total > people.length) {
     sections.push({ title: 'Note', rows: [{ label: '', value: `Only the newest ${people.length} of ${total} accounts are shown.` }] })
   }
   return sections

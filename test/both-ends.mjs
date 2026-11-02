@@ -2707,6 +2707,82 @@ export function run(test) {
    * 2026): it was only on Give access, behind typing the address into the
    * Customer lookup.
    */
+  /*
+   * "Can we also make a filter for seeing confirmed accounts, unconfirmed,
+   * unlocked, not unlocked, last on today, anything else??" (2 November 2026)
+   */
+  test('Everyone with an account narrows to one kind at a time, with how many each holds, at both ends', async () => {
+    const { ACCOUNT_FILTERS, accountFilterButtons, accountSections } = await import('../shared/admin.mjs')
+    const now = Date.parse('2026-11-02T18:00:00')
+    const midnight = new Date(now)
+    midnight.setHours(0, 0, 0, 0)
+    const iso = (ms) => new Date(ms).toISOString()
+    const answer = {
+      ok: true,
+      total: 6,
+      accounts: [
+        /* On this morning, confirmed, paid. */
+        { email: 'today@x.com', signed_up: iso(now - 30 * 86400000), confirmed: true, last_sign_in: iso(midnight.getTime() + 3600000), unlocked: true },
+        /* On three days ago, confirmed, not paid. */
+        { email: 'week@x.com', signed_up: iso(now - 20 * 86400000), confirmed: true, last_sign_in: iso(now - 3 * 86400000), unlocked: false },
+        /* The buyer whose address bounces: paid, never confirmed, never on. */
+        { email: 'typo@gmial.com', signed_up: iso(now - 40 * 86400000), confirmed: false, last_sign_in: null, unlocked: true },
+        /* Signed up yesterday, never confirmed. */
+        { email: 'new@x.com', signed_up: iso(now - 86400000), confirmed: false, last_sign_in: null, unlocked: false },
+        /* A pairing account is a device, never a person, under any button. */
+        { email: 'abc@pair.fractal.newbold.cloud', signed_up: iso(now), confirmed: false, last_sign_in: iso(now), unlocked: false }
+      ],
+      waiting: [{ email: 'soon@x.com', added: iso(now - 86400000) }]
+    }
+    const shown = (show, find = '') =>
+      accountSections(answer, find, now, show)
+        .flatMap((s) => s.rows)
+        .map((r) => r.email)
+        .filter(Boolean)
+    assert.deepEqual(shown('all'), ['today@x.com', 'week@x.com', 'typo@gmial.com', 'new@x.com', 'soon@x.com'], 'Everyone is not everyone')
+    assert.deepEqual(shown('confirmed'), ['today@x.com', 'week@x.com'])
+    assert.deepEqual(shown('unconfirmed'), ['typo@gmial.com', 'new@x.com'])
+    assert.deepEqual(shown('unlocked'), ['today@x.com', 'typo@gmial.com'])
+    assert.deepEqual(shown('locked'), ['week@x.com', 'new@x.com'], 'Not unlocked carries the waiting list or a device')
+    assert.deepEqual(shown('stuck'), ['typo@gmial.com'], 'Unlocked, not confirmed does not find the buyer who cannot sign in')
+    assert.deepEqual(shown('today'), ['today@x.com'], 'Last on today is not from this midnight')
+    assert.deepEqual(shown('week'), ['today@x.com', 'week@x.com'])
+    assert.deepEqual(shown('never'), ['typo@gmial.com', 'new@x.com'])
+    assert.deepEqual(shown('new'), ['new@x.com'])
+    assert.deepEqual(shown('waiting'), ['soon@x.com'], 'Waiting to sign up is not the waiting list alone')
+    /* With the find box: both at once. */
+    assert.deepEqual(shown('unconfirmed', 'gmial'), ['typo@gmial.com'])
+    /* An unknown key, or none, is Everyone, never an empty page. */
+    assert.deepEqual(shown('nonsense'), shown('all'))
+    /* The titles say which, and an empty one says so. */
+    assert.equal(accountSections(answer, '', now, 'stuck')[0].title, 'Unlocked, not confirmed (1)')
+    assert.equal(accountSections(answer, 'nobody', now, 'confirmed')[0].rows[0].value, 'Nobody with an account matches that.')
+    assert.equal(accountSections({ ...answer, waiting: [] }, '', now, 'waiting')[0].rows[0].value, 'Nobody is waiting to sign up.')
+
+    /* Each button says how many it holds, counted the same way as the list. */
+    const buttons = accountFilterButtons(answer, '', now)
+    assert.deepEqual(buttons.map((b) => b.key), ACCOUNT_FILTERS.map((f) => f.key))
+    for (const b of buttons) {
+      const rows = shown(b.key).filter((e) => (b.key === 'all' ? e !== 'soon@x.com' : true))
+      assert.equal(b.count, rows.length, `${b.key} says ${b.count} and shows ${rows.length}`)
+      assert.match(b.label, / · \d+$/)
+    }
+    assert.ok(ACCOUNT_FILTERS.every((f) => !/this phone|beta/i.test(f.label)))
+
+    /* Both ends draw the buttons from the one list, under the find box, and the list through them. */
+    const phone = read('mobile/src/components/AccountsTool.js')
+    assert.match(phone, /accountFilterButtons\(said, find\)\.map/)
+    assert.match(phone, /on=\{f\.key === show\}/)
+    assert.match(phone, /accountSections\(said, find, Date\.now\(\), show\)/)
+    assert.ok(phone.indexOf('placeholder="Find an email"') < phone.indexOf('accountFilterButtons(said, find)'), 'the phone’s buttons are not under the find box')
+    assert.match(phone, /flexWrap: 'wrap'/, 'the phone’s buttons scroll out of sight instead of wrapping')
+    const web = read('src/components/AccountsTool.jsx')
+    assert.match(web, /accountFilterButtons\(said, find\)\.map/)
+    assert.match(web, /aria-pressed=\{f\.key === show\}/)
+    assert.match(web, /accountSections\(said, find, Date\.now\(\), show\)/)
+    assert.ok(web.indexOf('placeholder="Find an email"') < web.indexOf('accountFilterButtons(said, find)'), 'the browser’s buttons are not under the find box')
+  })
+
   test('an account that never confirmed can be confirmed from Everyone with an account, under Give access, at both ends', async () => {
     const { accountSections, accountChoices, accountConfirmHint, ACCOUNT_CONFIRM_HINT, CONFIRM_NOW_WAITING, signInHelpWords } = await import('../shared/admin.mjs')
     const answer = {
