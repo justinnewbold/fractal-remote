@@ -4,9 +4,11 @@
   "days": [
     {
       "date": "2026-11-02",
-      "version": "1.89.23",
+      "version": "1.89.24",
       "lines": [
-        "Settings → About opens straight onto Updates, What’s new, Help with this app and The small print, with no extra tap."
+        "Settings → About opens straight onto Updates, What’s new, Help with this app and The small print, with no extra tap.",
+        "Fixed: on the Bluetooth page, How to connect my Bluetooth device, Troubleshooting and What Bluetooth can’t do open properly again, and Phone & computer has its Connect over Bluetooth button back.",
+        "Phone & computer checks again for your computers and their units each time it opens."
       ]
     },
     {
