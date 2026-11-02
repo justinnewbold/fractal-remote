@@ -3756,7 +3756,14 @@ export function run(test) {
     const fn = read('supabase/functions/delete-account/index.ts')
     /* Who is deleted comes from the verified session, never the request. */
     assert.match(fn, /\/auth\/v1\/user/, 'the function no longer verifies who is asking')
-    assert.match(fn, /\/auth\/v1\/admin\/users\/\$\{id\}/, 'the function no longer deletes the account it verified')
+    /*
+     * The deletion itself moved on 2 November 2026 into
+     * ../_shared/forget-account.ts, which Developer → Accounts' Delete shares,
+     * so it is read there: handed the account delete-account verified, and
+     * deleting that one.
+     */
+    assert.match(fn, /const who = token \? await accountFrom\(url, anon, token\) : null[\s\S]*?await forgetAccount\(url, service, who, 'delete-account'\)/, 'the function no longer deletes the account it verified')
+    assert.match(read('supabase/functions/_shared/forget-account.ts'), /\/auth\/v1\/admin\/users\/\$\{who\.id\}/, 'the shared deletion no longer deletes the account it was handed')
     assert.ok(!/body\??\.(id|user|account|email)\b/.test(fn), 'the function reads whom to delete from the request body')
     assert.match(fn, /confirm !== 'delete'/, 'a call without the confirmation can delete an account')
 

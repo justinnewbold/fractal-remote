@@ -48,7 +48,12 @@ const SERVICE = 'the-service-role-key'
 const ENV = { SUPABASE_URL: PROJECT, SUPABASE_ANON_KEY: 'the-anon-key', SUPABASE_SERVICE_ROLE_KEY: SERVICE, REVENUECAT_SECRET: 'rc' }
 let grantHandler = null
 
-async function grantAccess({ token, body, account = null, refuse = 0, waiting = false, rpcs = {}, purchases = {}, setup = null, users = null }) {
+/*
+ * `more` answers first, for what a test needs that nothing below does (the
+ * feedback table and Storage, for Delete): (call) => a Response, or nothing
+ * to let the rest answer.
+ */
+async function grantAccess({ token, body, account = null, refuse = 0, waiting = false, rpcs = {}, purchases = {}, setup = null, users = null, more = null }) {
   const calls = []
   const logged = []
   const was = { fetch: globalThis.fetch, Deno: globalThis.Deno, log: console.log, error: console.error }
@@ -57,6 +62,8 @@ async function grantAccess({ token, body, account = null, refuse = 0, waiting = 
   globalThis.fetch = async (url, init = {}) => {
     const call = { url: String(url), method: init.method || 'GET', headers: init.headers || {}, body: init.body ? JSON.parse(init.body) : null }
     calls.push(call)
+    const first = more ? more(call) : null
+    if (first) return first
     if (call.url === `${PROJECT}/auth/v1/user`) {
       const who = { 'Bearer his-token': ADMIN, 'Bearer a-strangers-token': STRANGER }[call.headers.Authorization]
       return who ? answer(200, { id: who, email: 'someone@example.com' }) : answer(401, { msg: 'JWT expired' })
@@ -422,9 +429,13 @@ export function run(test) {
      * account held one purchase and Paid twice could not see it.
      *
      * The function itself, run: its TypeScript stripped by esbuild (which
-     * Vite already brings), Deno and the network stood in for.
+     * Vite already brings), Deno and the network stood in for. Bundled since
+     * 2 November 2026, when it began importing ../_shared/forget-account.ts
+     * (Delete on Everyone with an account): a copy written alone into a
+     * temporary folder could not find it.
      */
-    const { transformSync } = await import('esbuild')
+    const { buildSync } = await import('esbuild')
+    const { fileURLToPath } = await import('node:url')
     const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
     const { tmpdir } = await import('node:os')
     const { join } = await import('node:path')
@@ -470,7 +481,8 @@ export function run(test) {
       return reply({}, 404)
     }
     try {
-      writeFileSync(join(dir, 'grant.mjs'), transformSync(src, { loader: 'ts', format: 'esm' }).code)
+      const entry = fileURLToPath(new URL('../supabase/functions/grant-access/index.ts', import.meta.url))
+      writeFileSync(join(dir, 'grant.mjs'), buildSync({ entryPoints: [entry], bundle: true, format: 'esm', platform: 'neutral', write: false, logLevel: 'silent' }).outputFiles[0].text)
       await import(pathToFileURL(join(dir, 'grant.mjs')).href)
       assert.ok(handler, 'the function no longer starts with Deno.serve')
       const res = await handler(new Request('https://fn.test/', { method: 'POST', headers: { Authorization: 'Bearer owner-token' }, body: JSON.stringify({ action: 'sales' }) }))
@@ -2015,4 +2027,278 @@ export function run(test) {
     assert.match(read('supabase/functions/download-link/index.ts'), /if \(recently !== false\) \{[\s\S]*?return json\(\{ sent: true \}\)/)
   })
 
+  /*
+   * DELETE ON EVERYONE WITH AN ACCOUNT, RUN.
+   *
+   * "How do I remove accounts altogether like the irecon one that's
+   * misspelled?" and, of Apple's review login, "How do I remove it?" (Justin,
+   * 2 November 2026). The first is grant-access's 'delete', his alone; the
+   * second must never go, and neither must his own account, whatever the
+   * page sends. Run, not read: a lock is worth more tried.
+   */
+  test('only Justin can delete an account: no token, a stale one, a stranger’s and the server’s own key are turned away before anything is read', async () => {
+    const body = { action: 'delete', email: 'irecon@gmial.com', id: CUSTOMER, confirm: 'delete' }
+    for (const [who, token, status] of [
+      ['nobody signed in', undefined, 403],
+      ['a token that has run out', 'an-expired-token', 403],
+      ['somebody else', 'a-strangers-token', 403],
+      /* The entitlement function's key may only claim a waiting grant. */
+      ['the server’s own key', SERVICE, 400]
+    ]) {
+      const run = await grantAccess({ token, body, account: { id: CUSTOMER, email: 'irecon@gmial.com' }, more: deletes() })
+      assert.equal(run.status, status, `${who} asking to delete was answered ${run.status}`)
+      assert.equal(run.said.ok, false, `${who} was told it worked`)
+      assert.ok(!run.calls.some((c) => c.method === 'DELETE'), `${who} deleted something`)
+      assert.ok(!run.calls.some((c) => c.url.includes('/rest/v1/')), `${who} had the database asked`)
+    }
+  })
+
+  test('Delete looks before it deletes, never takes his own account or Apple’s review login, and needs the confirm and the id its look gave', async () => {
+    const asHim = (body, over = {}) =>
+      grantAccess({ token: 'his-token', body: { action: 'delete', email: 'Irecon@Gmial.com ', ...body }, account: { id: CUSTOMER, email: 'irecon@gmial.com', unlock: null }, more: deletes(), ...over })
+    const deleted = (run) => run.calls.filter((c) => c.method === 'DELETE')
+
+    /* The look: nothing deleted, nothing about the reports even read, and the id and what it holds come back. */
+    const look = await asHim({}, { purchases: { [CUSTOMER]: [bought('app_store'), bought('rc_billing', { status: 'refunded' }), bought('play_store', { environment: 'sandbox' })] } })
+    assert.equal(look.status, 200, look.said.message)
+    assert.deepEqual([look.said.ok, look.said.ask, look.said.id, look.said.email], [true, true, CUSTOMER, 'irecon@gmial.com'])
+    assert.deepEqual(look.said.paid, { stores: ['app_store'], byHand: false }, 'a refunded or test purchase is said to go with the account')
+    assert.equal(deleted(look).length, 0, 'looking deleted something')
+    assert.ok(!look.calls.some((c) => c.url.includes('/rest/v1/feedback')), 'looking read the account’s reports')
+    /* RevenueCat not answering is unknown, never "nothing bought". */
+    const blind = await asHim({}, { purchases: { [CUSTOMER]: 'fail' } })
+    assert.equal(blind.said.paid, null)
+    /* A full version given by hand, with no purchase. */
+    const given = await asHim({}, { account: { id: CUSTOMER, email: 'irecon@gmial.com', unlock: { active: true, source: 'revenuecat' } } })
+    assert.deepEqual(given.said.paid, { stores: [], byHand: true })
+
+    /* Anything but the exact confirm is a look, whatever else it carries. */
+    for (const confirm of [undefined, 'yes', true, 'DELETE']) {
+      const run = await asHim({ id: CUSTOMER, confirm })
+      assert.equal(run.said.ask, true, `confirm ${String(confirm)} did not stop at a look`)
+      assert.equal(deleted(run).length, 0, `confirm ${String(confirm)} deleted something`)
+    }
+    /* The confirm with no id, another id, or an account that is no longer the one looked at: refused, nothing deleted. */
+    for (const [why, body, over] of [
+      ['no id', { confirm: 'delete' }, {}],
+      ['another account’s id', { confirm: 'delete', id: STRANGER }, {}],
+      ['an address the account no longer has', { confirm: 'delete', id: CUSTOMER }, { account: { id: CUSTOMER, email: 'someone-else@x.com' } }]
+    ]) {
+      const run = await asHim(body, over)
+      assert.equal(run.status, 409, `${why} was answered ${run.status}`)
+      assert.equal(run.said.ok, false, `${why} was told it worked`)
+      assert.equal(deleted(run).length, 0, `${why} deleted something`)
+      assert.match(run.said.message, /nothing was deleted\. Refresh and try again\.$/)
+    }
+    /* No account: said, nothing deleted, and the waiting list is not touched. */
+    const nobody = await asHim({ confirm: 'delete', id: CUSTOMER }, { account: null })
+    assert.deepEqual([nobody.said.ok, nobody.said.found], [false, false])
+    assert.equal(deleted(nobody).length, 0)
+    assert.ok(!nobody.calls.some((c) => /waiting_grant/.test(c.url)), 'deleting an address with no account went to the waiting list')
+
+    /* His own account: by its id, the lock, whatever its address. Looked at or confirmed, never deleted, and said in words. */
+    for (const body of [{}, { confirm: 'delete', id: ADMIN }]) {
+      const run = await asHim(body, { account: { id: ADMIN, email: 'irecon@gmial.com' } })
+      assert.equal(run.status, 403)
+      assert.equal(run.said.kept, 'admin')
+      assert.equal(deleted(run).length, 0, 'his own account was deleted')
+      assert.ok(!run.calls.some((c) => /\/purchases/.test(c.url)), 'his own account was looked at for deleting')
+      assert.match(run.said.message, /^That’s your own account/)
+    }
+    /* Apple's review login: by its digest, whatever case it is typed in. */
+    await asReviewLogin('stand-in@review.test', async () => {
+      for (const body of [{}, { confirm: 'delete', id: CUSTOMER }]) {
+        const run = await asHim({ ...body, email: 'Stand-In@Review.test' }, { account: { id: CUSTOMER, email: 'stand-in@review.test' } })
+        assert.equal(run.status, 403, run.said.message)
+        assert.equal(run.said.kept, 'review')
+        assert.equal(deleted(run).length, 0, 'Apple’s review login was deleted')
+        assert.equal(run.said.message, 'That’s Apple’s review login. Apple signs in with it for every review, so it stays.')
+      }
+    })
+
+    /* And the real thing: the account itself, by its id, as the service role, and a line in the log with the id and never the address. */
+    const done = await asHim({ confirm: 'delete', id: CUSTOMER })
+    assert.equal(done.status, 200, done.said.message)
+    assert.deepEqual([done.said.ok, done.said.deleted], [true, true])
+    assert.equal(done.said.message, 'irecon@gmial.com is deleted, with everything saved under it.')
+    const gone = deleted(done).find((c) => c.url.startsWith(`${PROJECT}/auth/v1/admin/users/`))
+    assert.ok(gone, 'the account itself was not deleted')
+    assert.equal(gone.url, `${PROJECT}/auth/v1/admin/users/${CUSTOMER}`)
+    assert.equal(gone.headers.Authorization, `Bearer ${SERVICE}`)
+    assert.ok(done.logged.some((l) => l === `grant-access: deleted ${CUSTOMER} by hand`), done.logged.join(' | '))
+    assert.ok(!done.logged.some((l) => /irecon/i.test(l)), 'the log names the address')
+    /* The account service refusing: said, and try again. */
+    const refused = await asHim({ confirm: 'delete', id: CUSTOMER }, { more: deletes({ auth: 500 }) })
+    assert.equal(refused.status, 502)
+    assert.equal(refused.said.ok, false)
+    assert.match(refused.said.message, /could not be deleted\. Try again in a minute\./)
+  })
+
+  test('an account deleted from his page goes exactly as one deleted by its owner: the same rows, pictures, account and customer, in the same order', async () => {
+    const page = await grantAccess({
+      token: 'his-token',
+      body: { action: 'delete', email: 'player@x.com', id: CUSTOMER, confirm: 'delete' },
+      account: { id: CUSTOMER, email: 'player@x.com' },
+      more: deletes()
+    })
+    assert.equal(page.said.deleted, true, page.said.message)
+    const self = await deleteAccountAs({ id: CUSTOMER, email: 'player@x.com' }, deletes())
+    assert.equal(self.status, 200)
+    /* From the first report lookup on: everything before it is only finding out who. */
+    const cleanup = (run) => {
+      const from = run.calls.findIndex((c) => c.url.startsWith(`${PROJECT}/rest/v1/feedback?select=`))
+      return run.calls.slice(from).map((c) => [c.method, c.url, c.body])
+    }
+    assert.ok(cleanup(self).length > 6, 'delete-account did less than this test expects')
+    assert.deepEqual(cleanup(page), cleanup(self), 'Developer → Accounts deletes differently from the app’s own Delete account')
+    for (const want of [`${PROJECT}/rest/v1/feedback?user_id=eq.${CUSTOMER}`, `${PROJECT}/storage/v1/object/report-shots`, `${PROJECT}/auth/v1/admin/users/${CUSTOMER}`, `${RC_PROJECT}/customers/${CUSTOMER}`]) {
+      assert.ok(cleanup(page).some(([method, url]) => method === 'DELETE' && url === want), `${want} was not deleted`)
+    }
+    /* One file says it, and both import it: neither function keeps a copy of its own. */
+    for (const f of ['supabase/functions/delete-account/index.ts', 'supabase/functions/grant-access/index.ts']) {
+      const src = code(read(f))
+      assert.match(src, /import \{ forgetAccount \} from '\.\.\/_shared\/forget-account\.ts'/, `${f} does not use the shared deletion`)
+      assert.doesNotMatch(src, /\/storage\/v1\/object|waiting_grants\?email|download_link_sends|method: 'DELETE'/, `${f} deletes something itself, beside the shared deletion`)
+    }
+    /* The note about report emails says which way it went. */
+    globalThis.Deno = { env: { get: () => undefined } }
+    try {
+      const { deletedReportsEmail } = await import('../supabase/functions/_shared/forget-account.ts')
+      assert.match(deletedReportsEmail(['r1'], 'grant-access').text, /^You deleted an account from Developer → Accounts\. One report it sent was emailed here/)
+      assert.match(deletedReportsEmail(['r1']).text, /^An account was deleted in the app\. One report it sent was emailed here/)
+    } finally {
+      delete globalThis.Deno
+    }
+  })
+
+  test('Everyone with an account comes marked: Apple’s review login, his own account, and that this server can delete', async () => {
+    const list = {
+      total: 3,
+      accounts: [
+        { email: 'fan@x.com', unlocked: false },
+        { email: 'Stand-In@Review.test', unlocked: true },
+        { email: 'him@x.test', unlocked: true }
+      ],
+      waiting: []
+    }
+    const him = (call) => (call.url === `${PROJECT}/auth/v1/admin/users/${ADMIN}` ? new Response(JSON.stringify({ id: ADMIN, email: 'Him@x.test' }), { status: 200 }) : null)
+    const run = await asReviewLogin('stand-in@review.test', () => grantAccess({ token: 'his-token', body: { action: 'accounts' }, rpcs: { owner_accounts: list }, more: him }))
+    assert.equal(run.said.ok, true)
+    assert.equal(run.said.deletes, true)
+    assert.equal(run.said.total, 3)
+    assert.deepEqual(
+      run.said.accounts.map((a) => [a.email, !!a.review, !!a.admin]),
+      [
+        ['fan@x.com', false, false],
+        ['Stand-In@Review.test', true, false],
+        ['him@x.test', false, true]
+      ]
+    )
+    /* His address read by his account's id, the lock, never from the token's word. */
+    assert.ok(run.calls.some((c) => c.url === `${PROJECT}/auth/v1/admin/users/${ADMIN}` && c.method === 'GET'))
+    /* The account service not answering marks nobody as his, and takes nothing else away. */
+    const blind = await grantAccess({ token: 'his-token', body: { action: 'accounts' }, rpcs: { owner_accounts: list }, more: (c) => (c.url.includes('/auth/v1/admin/users/') ? new Response('{}', { status: 500 }) : null) })
+    assert.equal(blind.said.accounts.length, 3)
+    assert.ok(blind.said.accounts.every((a) => !a.admin))
+  })
+
+  /*
+   * APPLE'S REVIEW LOGIN GETS NO SETUP EMAIL. It has the full version and
+   * never a computer, so it is always "paid but no computer yet", and it has
+   * no mailbox: every email to it bounces. Left out by hand on 2 November
+   * 2026; skipped by the function too, so Put back cannot undo it.
+   */
+  test('the setup emails skip Apple’s review login before claiming it, and its digest is the same in every file that names it', async () => {
+    const due = [
+      { account_id: CUSTOMER, email: 'Stand-In@Review.test', kind: 'first' },
+      { account_id: STRANGER, email: 'fan@example.com', kind: 'first' }
+    ]
+    const run = await asReviewLogin('stand-in@review.test', () => setupReminder({ sending: true, due }))
+    assert.deepEqual(run.said, { sending: true, first: 1, reminder: 0, refused: 0, skipped: 1, stopped: null })
+    assert.deepEqual(run.calls.filter((c) => c.url.endsWith('/rpc/claim_setup_reminder')).map((c) => c.body.uid), [STRANGER], 'the review login was claimed, so it reads as emailed')
+    assert.deepEqual(run.sent.map((s) => s.to), [['fan@example.com']])
+
+    const { REVIEW_LOGINS } = await import('../shared/admin.mjs')
+    assert.equal(REVIEW_LOGINS.length, 1)
+    assert.match(REVIEW_LOGINS[0], /^[0-9a-f]{64}$/)
+    for (const f of ['supabase/functions/grant-access/index.ts', 'supabase/functions/setup-reminder/index.ts']) {
+      const copied = JSON.parse(read(f).match(/const REVIEW_LOGINS = (\[[^\]]*\])/)?.[1]?.replace(/'/g, '"') || 'null')
+      assert.deepEqual(copied, REVIEW_LOGINS, `${f} and shared/admin.mjs disagree about which account is Apple’s`)
+    }
+    /* By its digest only: the only address on newbold.cloud these name is the one they send from. */
+    for (const f of ['shared/admin.mjs', 'supabase/functions/grant-access/index.ts', 'supabase/functions/setup-reminder/index.ts', 'supabase/functions/_shared/forget-account.ts', 'test/server.mjs', 'test/both-ends.mjs']) {
+      const named = [...read(f).matchAll(/[\w.+-]+@newbold\.cloud/g)].map((m) => m[0])
+      assert.ok(named.every((a) => a === 'noreply@newbold.cloud'), `${f} names an address on newbold.cloud: ${named.join(', ')}`)
+    }
+  })
+}
+
+/*
+ * The account service, the feedback table, Storage and RevenueCat as a
+ * delete finds them: one report sent signed in with a picture, another
+ * picture in the account's folder, no videos, and every delete answered
+ * (the account's own with `auth`). For grant-access's `more`, and for
+ * delete-account run alike.
+ */
+const SHOT_KEY = '22222222-3333-4444-8555-666666666666'
+function deletes({ auth = 200 } = {}) {
+  const reply = (status, value) => new Response(JSON.stringify(value), { status })
+  return (call) => {
+    if (call.url.startsWith(`${PROJECT}/rest/v1/feedback?select=id,user_id,context&`)) {
+      return reply(200, call.url.includes(`user_id=eq.${CUSTOMER}`) ? [{ id: 'r1', user_id: CUSTOMER, context: { screenshots: [`${CUSTOMER}/${SHOT_KEY}-1.jpg`] } }] : [])
+    }
+    if (call.url === `${PROJECT}/storage/v1/object/list/report-shots`) return reply(200, [{ name: `${SHOT_KEY}-2.jpg` }])
+    if (call.url === `${PROJECT}/storage/v1/object/list/report-videos`) return reply(200, [])
+    if (call.method === 'DELETE' && call.url.startsWith(`${PROJECT}/auth/v1/admin/users/`)) return reply(auth, {})
+    if (call.method === 'DELETE') return reply(200, {})
+    return null
+  }
+}
+
+/* A purchase as RevenueCat lists one: real money, kept, unless `over` says otherwise. */
+const bought = (store, over = {}) => ({ store, purchased_at: Date.now(), environment: 'production', status: 'owned', product_id: 'full', ...over })
+
+/*
+ * Run `job` with `address` standing in for Apple's review login: its sha256
+ * answered as the review login's digest, every other one as it is. The real
+ * address is never written here (the repository is public), so this is how
+ * the refusal is tried.
+ */
+async function asReviewLogin(address, job) {
+  const { REVIEW_LOGINS } = await import('../shared/admin.mjs')
+  const digest = Uint8Array.from(REVIEW_LOGINS[0].match(/../g).map((h) => parseInt(h, 16)))
+  const real = crypto.subtle.digest.bind(crypto.subtle)
+  crypto.subtle.digest = async (alg, data) => (new TextDecoder().decode(data) === address ? digest.slice().buffer : real(alg, data))
+  try {
+    return await job()
+  } finally {
+    delete crypto.subtle.digest
+  }
+}
+
+/* DELETE-ACCOUNT, RUN, signed in as `who`, with `more` answering what it asks. */
+let selfDeletes = 0
+async function deleteAccountAs(who, more) {
+  const calls = []
+  const was = { fetch: globalThis.fetch, Deno: globalThis.Deno, log: console.log, error: console.error }
+  let handler = null
+  globalThis.Deno = { serve: (h) => (handler = h), env: { get: (name) => ENV[name] } }
+  globalThis.fetch = async (url, init = {}) => {
+    const call = { url: String(url), method: init.method || 'GET', headers: init.headers || {}, body: init.body ? JSON.parse(init.body) : null }
+    calls.push(call)
+    if (call.url === `${PROJECT}/auth/v1/user`) return new Response(JSON.stringify(who), { status: 200 })
+    return more(call) || new Response(JSON.stringify({ msg: `nothing answers ${call.url} here` }), { status: 500 })
+  }
+  console.log = () => {}
+  console.error = () => {}
+  try {
+    await import(`${new URL('../supabase/functions/delete-account/index.ts', import.meta.url).href}?self=${++selfDeletes}`)
+    const res = await handler(new Request('https://functions.test/delete-account', { method: 'POST', headers: { Authorization: 'Bearer a-token' }, body: JSON.stringify({ confirm: 'delete' }) }))
+    return { status: res.status, said: await res.json(), calls }
+  } finally {
+    globalThis.fetch = was.fetch
+    globalThis.Deno = was.Deno
+    console.log = was.log
+    console.error = was.error
+  }
 }

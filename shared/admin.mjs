@@ -43,6 +43,32 @@ export const isAdmin = (id) => {
 }
 
 /**
+ * APPLE'S REVIEW LOGIN, the account Apple signs in with at every review
+ * (App Store Connect → App Review Information, and the same in Google Play's
+ * App access). "I didn't add the appreview email, I think you did that so
+ * Apple had a login. How do I remove it?" (Justin, 2 November 2026.) He
+ * can't, and shouldn't: Apple's Guideline 2.1 wants a working demo account
+ * for the signed-in screens, and one that has gone, or lost its full
+ * version, gets the next version rejected at the purchase page.
+ *
+ * So Developer → Accounts labels it and offers no Delete (and no Take it
+ * back) on it, and grant-access refuses to delete it whatever is asked.
+ *
+ * NAMED BY ITS DIGEST, never its address: the sha256 of the address,
+ * trimmed and in lower case. This repository is public and the account is
+ * the one Apple signs in with, so the address is kept out of it, as
+ * supabase/migrations/20261102_email_limits.sql keeps it out when it stops
+ * the download link to it. The page never works the digest out itself (a
+ * phone has no sha256 to hand): grant-access marks the row `review` in the
+ * list it sends. Copied into grant-access and setup-reminder; a test holds
+ * the copies equal.
+ */
+export const REVIEW_LOGINS = ['132dcf3f4a48ad6cad50a6389e88c02c2f27a09e3ec89f92b67987a1d592acb9']
+
+/** What its row on Everyone with an account says first. */
+export const REVIEW_LOGIN_LINE = 'Apple’s review login: keep it, Apple signs in with it for every review.'
+
+/**
  * Ask the server to check, grant or revoke the unlock for an email, or to
  * confirm that email by hand ('confirm').
  *
@@ -50,9 +76,10 @@ export const isAdmin = (id) => {
  * asking out of it. Never throws: whatever happens comes back as
  * { ok, message }, with `found` and `unlocked` when there is an answer.
  *
- * `extra` is what one action needs besides an email, and only the setup
- * emails' two use it: { on } for 'reminders', { out } for 'leave-out'. It
- * can never change which action is asked, or about whom.
+ * `extra` is what one action needs besides an email: { on } for 'reminders',
+ * { out } for 'leave-out', and for 'delete' the account's id the server's
+ * own look handed back and { confirm: 'delete' } (accountDeleteAsk, below).
+ * It can never change which action is asked, or about whom.
  */
 export async function accessAction({ url, anonKey, token, action, email, extra, fetchImpl }) {
   if (!token) return { ok: false, message: 'Sign in first.' }
@@ -654,12 +681,23 @@ export function accountSections(answer, filter = '', now = Date.now(), show = 'a
     if (!a.unlocked) return 'Not unlocked'
     return a.source === 'owner' ? 'Unlocked, owner account' : 'Unlocked'
   }
-  const line = (a) =>
-    [
+  /* Apple's review login says so first, on the list and in its sheet: the server marks it (REVIEW_LOGINS above). */
+  const line = (a) => {
+    const facts = [
       `Signed up ${ago(a.signed_up, now)}`,
       a.confirmed ? (a.last_sign_in ? `last on ${ago(a.last_sign_in, now)}` : 'never signed in') : 'has not confirmed their email yet',
       unlock(a)
     ].join(', ')
+    return a.review === true ? `${REVIEW_LOGIN_LINE} ${facts}` : facts
+  }
+  /*
+   * Delete this account, only where the server said it can delete
+   * (`deletes`, from the grant-access that has the action), and never on the
+   * review login, on his own account (`admin`, which the server marks by
+   * looking up the ADMINS account), or on an owner account. A server too old
+   * to mark them sends no `deletes`, so no row anywhere offers it.
+   */
+  const deletable = (a) => answer.deletes === true && a.review !== true && a.admin !== true && a.source !== 'owner'
 
   const total = Math.max(peopleIn(answer).length, (Number(answer.total) || peopleIn(answer).length) - devices)
   const filtered = picked.key !== 'all'
@@ -681,7 +719,10 @@ export function accountSections(answer, filter = '', now = Date.now(), show = 'a
             unlocked: !!a.unlocked,
             owner: a.source === 'owner',
             confirmed: !!a.confirmed,
-            onWaitingList: onWaitingList.has(String(a.email || '').trim().toLowerCase())
+            onWaitingList: onWaitingList.has(String(a.email || '').trim().toLowerCase()),
+            review: a.review === true,
+            admin: a.admin === true,
+            canDelete: deletable(a)
           }))
         : [{ label: '', value: want || filtered ? 'Nobody with an account matches that.' : 'Nobody has made an account yet.' }]
     })
@@ -739,12 +780,70 @@ export function accountSections(answer, filter = '', now = Date.now(), show = 'a
  * The owner's own account offers none of them: it is unlocked by being his.
  * A waiting-list row is an address, not an account, so there is nothing of
  * it to confirm.
+ *
+ * AND DELETE THIS ACCOUNT, last. "How do I remove accounts altogether like
+ * the irecon one that's misspelled?" (Justin, 2 November 2026.) Only on a
+ * row the list says can go (`canDelete`, in accountSections): never Apple's
+ * review login, never his own account, never an owner account or a
+ * waiting-list address, and only from a server that has the action. The
+ * server refuses the first two whatever is asked; this only keeps the button
+ * off them.
+ *
+ * And no Take it back on the review login either: Apple's reviewer would
+ * stop at the purchase page, which is the same rejection by another road.
+ * Give access stays, for the day it has lost the full version.
  */
 export function accountChoices(row) {
-  if (!row?.email) return { give: false, takeBack: false, confirmNow: false }
-  if (row.owner) return { give: false, takeBack: false, confirmNow: false }
-  if (row.waiting) return { give: false, takeBack: true, confirmNow: false }
-  return { give: !row.unlocked, takeBack: !!row.unlocked, confirmNow: row.confirmed === false }
+  if (!row?.email) return { give: false, takeBack: false, confirmNow: false, remove: false }
+  /* Deleted just now (the phone's sheet stays open on what the server said): nothing left to do to it. */
+  if (row.owner || row.deleted) return { give: false, takeBack: false, confirmNow: false, remove: false }
+  if (row.waiting) return { give: false, takeBack: true, confirmNow: false, remove: false }
+  return {
+    give: !row.unlocked,
+    takeBack: !!row.unlocked && row.review !== true,
+    confirmNow: row.confirmed === false,
+    remove: row.canDelete === true && row.review !== true && row.admin !== true
+  }
+}
+
+/**
+ * WHAT DELETE THIS ACCOUNT ASKS FIRST, in plain words, once the server has
+ * looked: `said` is grant-access's answer to 'delete' without the confirm,
+ * which deletes nothing and says who the account is now (its id, sent back
+ * with the confirm, and the server checks it again) and what it holds:
+ * `paid` is { stores, byHand }, the stores of its purchases still paid for,
+ * and whether it has a full version given by hand, or null when RevenueCat
+ * did not answer. Then the row's own Unlocked is all there is to go on, so
+ * both ways are said.
+ *
+ * Why the store matters: a purchase on the App Store or Google Play belongs
+ * to the buyer's Apple ID or Google account, and Restore a purchase brings it
+ * back on a new account. A card purchase on the website, or the full version
+ * given by hand, lives on the account's RevenueCat customer, which is deleted
+ * with it: nothing brings either back, and deleting refunds nothing.
+ */
+export function accountDeleteAsk(row, said) {
+  const email = String(said?.email || row?.email || '')
+  const out = [
+    `Delete ${email} for good? The account goes straight away, with its sign-in, its setlists and everything else saved under it, and any computer, phone or tablet signed in to it is signed out. It can’t be undone.`
+  ]
+  const paid = said?.paid && typeof said.paid === 'object' ? said.paid : null
+  if (paid) {
+    const stores = Array.isArray(paid.stores) ? paid.stores.map(String) : []
+    const inStore = [...new Set(stores.filter((s) => !CARD.includes(s)))]
+    if (inStore.length) {
+      out.push(`They paid ${inStore.map(paidBy).join(' and ')}: that stays with the store account they paid with, and Restore a purchase brings it back if they make a new account.`)
+    }
+    if (stores.some((s) => CARD.includes(s))) {
+      out.push('They paid by card on the website: that goes with the account, and nothing brings it back. Deleting refunds nothing, so refund it in RevenueCat first if they’re owed it.')
+    }
+    if (paid.byHand === true) out.push('The full version you gave them goes with it. Give it again if they make a new account.')
+  } else if (row?.unlocked) {
+    out.push(
+      'They have the full version. Paid on the App Store or Google Play, it stays with them, and Restore a purchase brings it back on a new account. Paid by card on the website, or given by you, it goes with the account for good, and deleting refunds nothing.'
+    )
+  }
+  return out.join(' ')
 }
 
 /*

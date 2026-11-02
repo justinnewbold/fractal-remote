@@ -2774,11 +2774,12 @@ export function run(test) {
     const row = (email) => people.rows.concat(waiting.rows).find((r) => r.email === email)
     assert.equal(row('new@x.com').email, 'new@x.com', 'a row does not say whose it is')
     assert.match(row('new@x.com').value, /^new@x\.com\n/, 'the list reads differently than it did')
-    assert.deepEqual(accountChoices(row('new@x.com')), { give: true, takeBack: false, confirmNow: false })
-    assert.deepEqual(accountChoices(row('paid@x.com')), { give: false, takeBack: true, confirmNow: false })
-    assert.deepEqual(accountChoices(row('me@x.com')), { give: false, takeBack: false, confirmNow: false }, 'the owner can take his own access away')
-    assert.deepEqual(accountChoices(row('soon@x.com')), { give: false, takeBack: true, confirmNow: false })
-    assert.deepEqual(accountChoices({ label: '', value: 'Nobody has made an account yet.' }), { give: false, takeBack: false, confirmNow: false })
+    /* `remove` is Delete this account (2 November 2026): never from an answer that does not say the server can (`deletes`), as this one does not. */
+    assert.deepEqual(accountChoices(row('new@x.com')), { give: true, takeBack: false, confirmNow: false, remove: false })
+    assert.deepEqual(accountChoices(row('paid@x.com')), { give: false, takeBack: true, confirmNow: false, remove: false })
+    assert.deepEqual(accountChoices(row('me@x.com')), { give: false, takeBack: false, confirmNow: false, remove: false }, 'the owner can take his own access away')
+    assert.deepEqual(accountChoices(row('soon@x.com')), { give: false, takeBack: true, confirmNow: false, remove: false })
+    assert.deepEqual(accountChoices({ label: '', value: 'Nobody has made an account yet.' }), { give: false, takeBack: false, confirmNow: false, remove: false })
 
     /* The phone: a tap opens the person in a sheet; the words can be held and copied. */
     const facts = read('mobile/src/components/Facts.js')
@@ -2920,8 +2921,8 @@ export function run(test) {
     const [people, waiting] = accountSections(answer)
     const row = (email) => people.rows.concat(waiting.rows).find((r) => r.email === email)
     /* Paid or not: the buyer whose emails bounce is the one this is for. */
-    assert.deepEqual(accountChoices(row('typo@gmial.com')), { give: false, takeBack: true, confirmNow: true })
-    assert.deepEqual(accountChoices(row('Given@x.com')), { give: true, takeBack: false, confirmNow: true })
+    assert.deepEqual(accountChoices(row('typo@gmial.com')), { give: false, takeBack: true, confirmNow: true, remove: false })
+    assert.deepEqual(accountChoices(row('Given@x.com')), { give: true, takeBack: false, confirmNow: true, remove: false })
     assert.equal(accountChoices(row('fine@x.com')).confirmNow, false, 'an account that confirmed is offered Confirm now again')
     assert.equal(accountChoices(row('me@x.com')).confirmNow, false, 'the owner’s own account is offered Confirm now')
     assert.equal(accountChoices(row('given@x.com')).confirmNow, false, 'a waiting-list address, which has no account, is offered Confirm now')
@@ -2955,6 +2956,106 @@ export function run(test) {
       /* Confirming changes whether they confirmed, never whether they are unlocked. */
       assert.match(tool, /action === 'confirm' \? \{ \.\.\.was, confirmed: true \} : \{ \.\.\.was, unlocked: action === 'grant', waiting: false \}/, `${file}: confirming marks them locked or unlocked`)
     }
+  })
+
+  /*
+   * "How do I remove accounts altogether like the irecon one that's
+   * misspelled?" and "I didn't add the appreview email, I think you did that
+   * so Apple had a login. How do I remove it?" (Justin, 2 November 2026.)
+   * The first is Delete this account, on his page alone. The second must
+   * stay, for Apple's next review, and its row says so. The server's half is
+   * run in test/server.mjs.
+   */
+  test('Delete this account is on Everyone with an account at both ends, never on Apple’s review login or his own, and asks what goes with it first', async () => {
+    const { accountSections, accountChoices, accountDeleteAsk, REVIEW_LOGIN_LINE } = await import('../shared/admin.mjs')
+    const now = Date.now()
+    /* As grant-access sends it now: marked, and saying it can delete. */
+    const answer = {
+      ok: true,
+      total: 5,
+      deletes: true,
+      accounts: [
+        { email: 'irecon@gmial.com', signed_up: now, confirmed: false, last_sign_in: null, unlocked: false },
+        { email: 'paid@x.com', signed_up: now, confirmed: true, last_sign_in: now, unlocked: true, source: 'revenuecat' },
+        { email: 'review@x.test', signed_up: now, confirmed: true, last_sign_in: now, unlocked: true, source: 'revenuecat', review: true },
+        { email: 'justin@x.test', signed_up: now, confirmed: true, last_sign_in: now, unlocked: true, source: 'revenuecat', admin: true },
+        { email: 'me@x.com', signed_up: now, confirmed: true, last_sign_in: now, unlocked: true, source: 'owner' }
+      ],
+      waiting: [{ email: 'soon@x.com', added: now }]
+    }
+    const rows = (a) => accountSections(a, '', now).flatMap((s) => s.rows)
+    const row = (email, a = answer) => rows(a).find((r) => r.email === email)
+    assert.equal(accountChoices(row('irecon@gmial.com')).remove, true, 'a misspelled account cannot be deleted')
+    assert.equal(accountChoices(row('paid@x.com')).remove, true)
+    assert.equal(accountChoices(row('review@x.test')).remove, false, 'Apple’s review login is offered Delete')
+    assert.equal(accountChoices(row('review@x.test')).takeBack, false, 'Apple’s review login can have its full version taken back, which stops the reviewer at the purchase page')
+    assert.equal(accountChoices(row('review@x.test')).give, false, 'it already has it')
+    assert.equal(accountChoices(row('justin@x.test')).remove, false, 'his own account is offered Delete')
+    assert.equal(accountChoices(row('me@x.com')).remove, false, 'an owner account is offered Delete')
+    assert.equal(accountChoices(row('soon@x.com')).remove, false, 'a waiting-list address, which is not an account, is offered Delete')
+    /* A server that cannot delete sends no `deletes` and marks nobody: then no row offers it, the review login's included. */
+    const old = { ...answer, deletes: undefined, accounts: answer.accounts.map(({ review, admin, ...a }) => a) }
+    assert.ok(rows(old).every((r) => !accountChoices(r).remove), 'a server without Delete has it offered')
+    /* And a row's own say is never enough against the review login or his account. */
+    assert.equal(accountChoices({ email: 'x@x.com', canDelete: true, review: true }).remove, false)
+    assert.equal(accountChoices({ email: 'x@x.com', canDelete: true, admin: true }).remove, false)
+
+    /* Apple's review login says so first, on the list and in its sheet; nobody else's does. */
+    assert.equal(REVIEW_LOGIN_LINE, 'Apple’s review login: keep it, Apple signs in with it for every review.')
+    assert.ok(row('review@x.test').line.startsWith(`${REVIEW_LOGIN_LINE} Signed up`), row('review@x.test').line)
+    assert.match(row('review@x.test').value, /^review@x\.test\nApple’s review login: keep it/)
+    assert.ok(rows(answer).filter((r) => r.email && r.email !== 'review@x.test').every((r) => !r.line.includes('review login')))
+    /* Still counted: it is an account, and it is on the list. */
+    assert.equal(accountSections(answer, '', now)[0].title, 'Everyone with an account (5)')
+
+    /* The question, from the server's look, in plain words. */
+    const ask = (paid, r = row('paid@x.com')) => accountDeleteAsk(r, { ok: true, ask: true, id: 'acct-1', email: r.email, paid })
+    const opening =
+      'Delete paid@x.com for good? The account goes straight away, with its sign-in, its setlists and everything else saved under it, and any computer, phone or tablet signed in to it is signed out. It can’t be undone.'
+    const store = ask({ stores: ['app_store'], byHand: false })
+    assert.equal(store, `${opening} They paid on the App Store: that stays with the store account they paid with, and Restore a purchase brings it back if they make a new account.`)
+    assert.match(ask({ stores: ['play_store'], byHand: false }), /They paid on Google Play: that stays with the store account/)
+    const card = ask({ stores: ['rc_billing'], byHand: false })
+    assert.match(card, /They paid by card on the website: that goes with the account, and nothing brings it back\. Deleting refunds nothing, so refund it in RevenueCat first if they’re owed it\.$/)
+    assert.doesNotMatch(card, /Restore/, 'a website purchase is said to come back with Restore')
+    assert.match(ask({ stores: [], byHand: true }), /The full version you gave them goes with it\. Give it again if they make a new account\.$/)
+    /* RevenueCat did not answer: the row's Unlocked, and both ways said. */
+    assert.match(ask(null), /They have the full version\. Paid on the App Store or Google Play, it stays with them, and Restore a purchase brings it back on a new account\. Paid by card on the website, or given by you, it goes with the account for good, and deleting refunds nothing\.$/)
+    /* Nothing bought and not unlocked: the account and its data, and no word about paying. */
+    assert.equal(ask({ stores: [], byHand: false }, row('irecon@gmial.com')), opening.replace('paid@x.com', 'irecon@gmial.com'))
+    assert.equal(ask(null, row('irecon@gmial.com')), opening.replace('paid@x.com', 'irecon@gmial.com'))
+    for (const words of [store, card, ask(null), REVIEW_LOGIN_LINE]) assert.doesNotMatch(words, /this phone|beta|official/i)
+
+    /* Both ends: last in the sheet, behind accountChoices, the look first and then the confirm with the id it gave. */
+    for (const file of ['mobile/src/components/AccountsTool.js', 'src/components/AccountsTool.jsx']) {
+      const tool = read(file)
+      assert.match(tool, /\{choices\.remove \? \(/, `${file}: Delete is not behind accountChoices`)
+      const del = Math.max(tool.indexOf('onClick={lookToDelete}'), tool.indexOf('onPress={lookToDelete}'))
+      assert.ok(tool.indexOf("act('confirm')") > 0 && del > tool.indexOf("act('confirm')"), `${file}: Delete is not under the other three`)
+      /* The look sends no confirm; the confirm sends the look's id. */
+      assert.match(tool, /const lookToDelete = async \(\) => \{[\s\S]*?action: 'delete',\s+email: who\.email\s+\}\)/, `${file}: the look sends more than the address`)
+      assert.match(tool, /extra: \{ id: said\.id, confirm: 'delete' \}/, `${file}: the confirm does not carry the id the server’s look gave`)
+      assert.match(tool, /if \(res\.ok && res\.ask && res\.id\) setAsking\(\{ who, said: res \}\)/, `${file}: the question comes up without the server having looked`)
+      assert.match(tool, /accountDeleteAsk\(open, askingNow\.said\)/, `${file}: the question is not the shared words`)
+      assert.match(tool, /'Deleting…' : 'Delete for good'/)
+      assert.match(tool, /Keep it/)
+      assert.match(tool, /asking && samePerson\(asking\.who, open\) \? asking : null/, `${file}: the question shows on somebody else’s sheet`)
+      /* Gone: the list is read again without them, and what the server said stays on the page. */
+      assert.match(tool, /setGone\(res\)\s+load\(\)/, `${file}: a deleted account stays on the list`)
+      assert.match(tool, /\{gone\.message\}/, `${file}: what the server said is not shown`)
+    }
+    /*
+     * And in sight. The phone's sheet covers the list, so it stays open on the
+     * server's words with nothing left to do; the browser's row has left the
+     * list, so its line at the top is brought into view. Either list can be
+     * long enough for the top to be out of sight.
+     */
+    const phone = read('mobile/src/components/AccountsTool.js')
+    assert.match(phone, /setOpen\(\(was\) => \(samePerson\(was, who\) \? \{ \.\.\.was, deleted: true, line: 'Deleted just now\.' \} : was\)\)\s+setTold\(res\)/, 'the phone’s sheet does not say it was deleted')
+    assert.deepEqual(accountChoices({ email: 'gone@x.com', deleted: true, canDelete: true, unlocked: false, confirmed: false }), { give: false, takeBack: false, confirmNow: false, remove: false }, 'a deleted account is offered something')
+    const web = read('src/components/AccountsTool.jsx')
+    assert.match(web, /if \(samePerson\(openNow\.current, who\)\) setOpen\(null\)\s+setGone\(res\)/, 'the browser keeps a deleted account open')
+    assert.match(web, /goneAt\.current\?\.scrollIntoView\?\.\(\{ block: 'nearest' \}\)/, 'what the browser said is left out of sight')
   })
 
   /*

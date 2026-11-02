@@ -5093,7 +5093,8 @@ export function run(test) {
     const lock = handler.indexOf('ADMINS.includes(me.id)')
     /* And Paid but no computer yet's four (15 October 2026): the list, the switch, leaving somebody out, the sample. */
     /* And Sales at a glance's Handled (15 October 2026). */
-    for (const step of ["rpc('account_details'", 'await sales()', 'await usage()', "rpc('owner_accounts'", 'confirmByHand(', 'await stuck()', 'reminderSwitch(', 'leaveOut(', 'reminderSample(', 'markHandled(']) {
+    /* And Everyone with an account's Delete (2 November 2026). */
+    for (const step of ["rpc('account_details'", 'await sales()', 'await usage()', "rpc('owner_accounts'", 'confirmByHand(', 'await stuck()', 'reminderSwitch(', 'leaveOut(', 'reminderSample(', 'markHandled(', 'deleteByHand(']) {
       assert.ok(lock > 0 && handler.includes(step) && lock < handler.indexOf(step), `the server does ${step} before checking who is asking`)
     }
     /*
@@ -6719,7 +6720,8 @@ export function run(test) {
     const found = accountSections(list, 'PAID', nowAt)
     assert.equal(found[0].rows.length, 1, 'finding an email does not narrow the list')
     assert.equal(accountSections(list, 'nobody', nowAt)[0].rows[0].value, 'Nobody with an account matches that.')
-    assert.match(server, /if \(action === 'accounts'\) return json\(\{ ok: true, \.\.\.\(\(await rpc\('owner_accounts', \{\}\)\)/)
+    /* Marked since 2 November 2026 (Apple's review login, his own account, and whether Delete is here), and the list itself as it was. */
+    assert.match(server, /if \(action === 'accounts'\) return json\(await markEveryone\(\{ ok: true, \.\.\.\(\(await rpc\('owner_accounts', \{\}\)\)/)
     assert.ok(server.indexOf("action === 'accounts'") > server.indexOf('ADMINS.includes(me.id)'), 'the list is read before checking who is asking')
     assert.match(read('supabase/migrations/20260924_owner_accounts.sql'), /revoke all on function public\.owner_accounts\(\) from public, anon, authenticated/, 'a client can read every account')
     assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'customers' && isAdmin\(account\?\.id\) \?[\s\S]*?<AccountsTool \/>/)

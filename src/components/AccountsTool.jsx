@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { DEFAULT_PROJECT, supabaseClient } from '../lib/remote'
-import { accessAction, accountChoices, accountConfirmHint, accountFilterButtons, accountRow, accountSections, samePerson, signInHelpWords } from '../../shared/admin.mjs'
+import {
+  accessAction,
+  accountChoices,
+  accountConfirmHint,
+  accountDeleteAsk,
+  accountFilterButtons,
+  accountRow,
+  accountSections,
+  samePerson,
+  signInHelpWords
+} from '../../shared/admin.mjs'
 import Facts from './Facts'
 
 /**
@@ -15,6 +25,12 @@ import Facts from './Facts'
  * And Confirm their account now for somebody who never confirmed their email,
  * beside them (2 November 2026), as on the phone. And the phone's buttons
  * to narrow the list (ACCOUNT_FILTERS in shared/admin.mjs), under the find box.
+ *
+ * And Delete this account, last, as on the phone: the server looks first and
+ * deletes nothing, the row asks what goes with it (accountDeleteAsk), and
+ * only Delete for good deletes. Never on Apple's review login or his own
+ * account. Once it is gone the row has left the list, so what the server
+ * said stands above it.
  */
 export default function AccountsTool() {
   const [busy, setBusy] = useState(false)
@@ -24,8 +40,16 @@ export default function AccountsTool() {
   const [open, setOpen] = useState(null)
   const [doing, setDoing] = useState(null)
   const [told, setTold] = useState(null)
+  /* Delete this account: the server's look ({ who, said }) while the question is up, and what the last delete said. */
+  const [asking, setAsking] = useState(null)
+  const [gone, setGone] = useState(null)
   const openNow = useRef(open)
   openNow.current = open
+  /* The deleted row has left the list, so its line is brought into sight: the list can be long. */
+  const goneAt = useRef(null)
+  useEffect(() => {
+    if (gone) goneAt.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [gone])
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -55,7 +79,10 @@ export default function AccountsTool() {
   }, [said])
 
   const pick = (row) => {
+    if (doing === 'delete') return
     setTold(null)
+    setAsking(null)
+    setGone(null)
     setOpen((was) => (samePerson(was, row) ? null : row))
   }
 
@@ -100,10 +127,68 @@ export default function AccountsTool() {
     }
   }
 
+  /* The server looks first and deletes nothing: who the account is now (its id) and what it holds, for the question. */
+  const lookToDelete = async () => {
+    const who = open
+    setDoing('look')
+    setTold(null)
+    setAsking(null)
+    try {
+      const client = supabaseClient()
+      const { data } = client ? await client.auth.getSession() : { data: null }
+      const res = await accessAction({
+        url: DEFAULT_PROJECT.url,
+        anonKey: DEFAULT_PROJECT.anonKey,
+        token: data?.session?.access_token,
+        action: 'delete',
+        email: who.email
+      })
+      if (samePerson(openNow.current, who)) {
+        if (res.ok && res.ask && res.id) setAsking({ who, said: res })
+        else setTold(res)
+      }
+      /* Gone already: the list is read again without them. */
+      if (res.found === false) load()
+    } finally {
+      setDoing(null)
+    }
+  }
+
+  /* Delete for good: the id the look gave goes back with the confirm, and the server checks both again. */
+  const deleteNow = async () => {
+    const { who, said } = asking
+    setDoing('delete')
+    setTold(null)
+    try {
+      const client = supabaseClient()
+      const { data } = client ? await client.auth.getSession() : { data: null }
+      const res = await accessAction({
+        url: DEFAULT_PROJECT.url,
+        anonKey: DEFAULT_PROJECT.anonKey,
+        token: data?.session?.access_token,
+        action: 'delete',
+        email: who.email,
+        extra: { id: said.id, confirm: 'delete' }
+      })
+      setAsking(null)
+      if (res.ok && res.deleted) {
+        if (samePerson(openNow.current, who)) setOpen(null)
+        setGone(res)
+        load()
+      } else {
+        if (samePerson(openNow.current, who)) setTold(res)
+        if (res.found === false) load()
+      }
+    } finally {
+      setDoing(null)
+    }
+  }
+
   const detail = (row) => {
     /* The account and the same address on the waiting list are two rows: only the one clicked opens. */
     if (!open || !samePerson(row, open)) return null
     const choices = accountChoices(open)
+    const askingNow = asking && samePerson(asking.who, open) ? asking : null
     return (
       <div className="facts-open">
         {told ? (
@@ -132,6 +217,27 @@ export default function AccountsTool() {
           ) : null}
         </div>
         {choices.confirmNow ? <p className="hint">{accountConfirmHint(open)}</p> : null}
+        {choices.remove ? (
+          askingNow ? (
+            <div role="alertdialog" aria-label="Delete this account">
+              <p className="hint">{accountDeleteAsk(open, askingNow.said)}</p>
+              <div className="history-actions">
+                <button type="button" className="primary" disabled={!!doing} onClick={deleteNow}>
+                  {doing === 'delete' ? 'Deleting…' : 'Delete for good'}
+                </button>
+                <button type="button" className="chip" disabled={!!doing} onClick={() => setAsking(null)}>
+                  Keep it
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="history-actions">
+              <button type="button" className="chip" disabled={!!doing} onClick={lookToDelete}>
+                {doing === 'look' ? 'Looking…' : 'Delete this account'}
+              </button>
+            </div>
+          )
+        ) : null}
       </div>
     )
   }
@@ -163,6 +269,11 @@ export default function AccountsTool() {
             </button>
           ))}
         </div>
+      ) : null}
+      {gone ? (
+        <p ref={goneAt} className={gone.ok ? 'access-said' : 'access-said save-error'} role="status">
+          {gone.message}
+        </p>
       ) : null}
       {said && !said.ok ? (
         <p className="save-error" role="status">
