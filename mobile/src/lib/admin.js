@@ -588,6 +588,27 @@ const peopleIn = (answer) =>
   (Array.isArray(answer?.accounts) ? answer.accounts : []).filter((a) => !/@pair\.fractal\.newbold\.cloud$/i.test(String(a?.email || '')))
 
 /**
+ * The row for one person as the list draws it, from a fresh answer: the open
+ * sheet is redrawn from it after the list is read again, so its line says
+ * what just happened ("Unlocked", confirmed) rather than what it said when
+ * it was tapped. Matched on the address and on being a waiting-list row, so
+ * an account and the same address on the waiting list stay two people.
+ */
+export function accountRow(answer, row, now = Date.now()) {
+  if (!row?.email) return null
+  const want = String(row.email).trim().toLowerCase()
+  return (
+    accountSections(answer, '', now, 'all')
+      .flatMap((s) => s.rows)
+      .find((r) => r.email && String(r.email).trim().toLowerCase() === want && !!r.waiting === !!row.waiting) || null
+  )
+}
+
+/** The same person: one address, and both a waiting-list row or both not. */
+export const samePerson = (a, b) =>
+  !!a?.email && !!b?.email && String(a.email).trim().toLowerCase() === String(b.email).trim().toLowerCase() && !!a.waiting === !!b.waiting
+
+/**
  * Each button's label with how many it would show, given what is typed in the
  * find box: "Not confirmed · 3". Asked of the same rows the list draws.
  */
@@ -602,11 +623,20 @@ export function accountFilterButtons(answer, find = '', now = Date.now()) {
   })
 }
 
-export function accountSections(answer, filter = '', now = Date.now(), show = 'all') {
+/*
+ * `keep` is the person whose sheet or row is open ({ email, waiting }): kept
+ * in the list whatever the button says, so acting on them never makes their
+ * row, and the line saying what just happened, vanish when the list is read
+ * again (Confirm under Not confirmed, Give access under Not unlocked). The
+ * title and the buttons still count only who the button holds.
+ */
+export function accountSections(answer, filter = '', now = Date.now(), show = 'all', keep = null) {
   if (!answer?.ok) return []
   const want = String(filter || '').trim().toLowerCase()
   const match = (email) => !want || String(email || '').toLowerCase().includes(want)
   const picked = filterOf(show)
+  const keptEmail = String(keep?.email || '').trim().toLowerCase()
+  const kept = (email, waitingRow) => !!keptEmail && String(email || '').trim().toLowerCase() === keptEmail && !!keep?.waiting === waitingRow
   /*
    * Not the hidden accounts the old pairing codes stood for
    * (…@pair.fractal.newbold.cloud): they are devices, not people, and on the
@@ -615,10 +645,12 @@ export function accountSections(answer, filter = '', now = Date.now(), show = 'a
    */
   const everyone = Array.isArray(answer.accounts) ? answer.accounts : []
   const devices = everyone.length - peopleIn(answer).length
-  const people = peopleIn(answer)
-    .filter((a) => match(a.email))
-    .filter((a) => picked.keep(a, now))
-  const waiting = (Array.isArray(answer.waiting) ? answer.waiting : []).filter((w) => match(w.email))
+  const people = peopleIn(answer).filter((a) => (match(a.email) && picked.keep(a, now)) || kept(a.email, false))
+  const held = people.filter((a) => match(a.email) && picked.keep(a, now)).length
+  const allWaiting = (Array.isArray(answer.waiting) ? answer.waiting : []).filter((w) => match(w.email))
+  /* The waiting list is shown under Everyone and Waiting to sign up; under any other button only an open row of it stays. */
+  const waitingShown = picked.key === 'all' || picked.key === 'waiting'
+  const waiting = waitingShown ? allWaiting : (Array.isArray(answer.waiting) ? answer.waiting : []).filter((w) => kept(w.email, true))
   /* Every address on the waiting list, filtered or not: Confirm now on one of them hands its unlock to whoever made the account. */
   const onWaitingList = new Set((Array.isArray(answer.waiting) ? answer.waiting : []).map((w) => String(w?.email || '').trim().toLowerCase()))
 
@@ -640,9 +672,9 @@ export function accountSections(answer, filter = '', now = Date.now(), show = 'a
   if (picked.key !== 'waiting') {
     sections.push({
       title: want
-        ? `${filtered ? picked.label : 'Accounts'} matching "${want}" (${people.length})`
+        ? `${filtered ? picked.label : 'Accounts'} matching "${want}" (${held})`
         : filtered
-          ? `${picked.label} (${people.length})`
+          ? `${picked.label} (${held})`
           : `Everyone with an account (${total})`,
       rows: people.length
         ? people.map((a) => ({
@@ -659,15 +691,31 @@ export function accountSections(answer, filter = '', now = Date.now(), show = 'a
     })
   }
   if (picked.key === 'waiting' && !waiting.length) {
-    sections.push({ title: 'Waiting for them to sign up (0)', rows: [{ label: '', value: 'Nobody is waiting to sign up.' }] })
-  }
-  if (waiting.length && (picked.key === 'all' || picked.key === 'waiting')) {
     sections.push({
-      title: `Waiting for them to sign up (${waiting.length})`,
+      title: 'Waiting for them to sign up (0)',
+      rows: [{ label: '', value: want ? 'Nobody waiting to sign up matches that.' : 'Nobody is waiting to sign up.' }]
+    })
+  }
+  if (waiting.length) {
+    sections.push({
+      title: `Waiting for them to sign up (${waitingShown ? waiting.length : allWaiting.length})`,
       rows: waiting.map((w) => {
         const said = `Given access ${ago(w.added, now)}. Unlocked the first time they sign in.`
         return { label: '', value: `${w.email}\n${said}`, email: w.email, line: said, unlocked: false, waiting: true }
       })
+    })
+  }
+  /*
+   * What Unlocked, not confirmed cannot see: a buyer who paid before making
+   * the account and then never confirmed it. The purchase moves onto the
+   * account without RevenueCat telling the server, so the server's list says
+   * Not unlocked for them (grant-access, PAID, ACCOUNT NEVER CONFIRMED); Sales
+   * asks RevenueCat about each such account and lists them.
+   */
+  if (picked.key === 'stuck') {
+    sections.push({
+      title: 'Note',
+      rows: [{ label: '', value: 'Somebody who paid before making their account can be missing here. Sales, under Paid, account never confirmed, finds them.' }]
     })
   }
   if (!want && !filtered && total > people.length) {
