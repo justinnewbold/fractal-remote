@@ -239,6 +239,47 @@ export const NOT_FOR_FM3 = 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI 
  */
 export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
 
+/*
+ * THE WALKTHROUGH AND THE SIGN-IN SCREEN, ON A COPY THAT OPENS BLUETOOTH.
+ *
+ * "It doesn't require a computer anymore if people are using Bluetooth
+ * instead. So we can drop that now." (Justin, 30 October 2026, of the store
+ * listing.) The phone's first minute still said the computer was the only
+ * way until the audit of 2 November 2026: the box ticked before Unlock read
+ * "I understand this app requires a computer connected to my Fractal unit
+ * via USB cable", the demo's last page said the app works with a computer,
+ * and Get connected on the sign-in screen gave the computer's steps and
+ * nothing else. So on a copy that opens Bluetooth to customers, and on a
+ * device that can do it (the purchase page's own gate, Paywall.js), the
+ * phone says both ways in those three places instead
+ * (mobile/src/screens/Onboarding.js and SignIn.js). On every other copy, and
+ * in the browser, which has no Bluetooth to offer and does need the
+ * computer, his words in shared/onboarding.mjs are what is shown.
+ *
+ * HERE AND NOT IN shared/onboarding.mjs, because the browser draws that file:
+ * a line it carries and never shows would still make a new computer app
+ * (scripts/computer-fingerprint.mjs hashes every file the web app imports).
+ *
+ * MY WORDING, from his, and he can change any of it. The box keeps his shape
+ * ("I understand this app ... my Fractal unit via USB cable"), with the free
+ * desktop app named the way Get connected names it and the other way beside
+ * it. An adapter sold separately, because no Fractal unit has Bluetooth of
+ * its own; Unlock opens the purchase page next, which names every part
+ * (BLUETOOTH_PAYWALL). And each line ends with what Bluetooth costs, one
+ * sentence for all three (BEST_WAY): "make it clear that the computer is the
+ * preferred method and that Bluetooth will have more lag and not have as
+ * many features" (25 October 2026), wherever Bluetooth is offered.
+ */
+const BEST_WAY = 'The computer is the best way: Bluetooth has more lag and fewer features.'
+export const WALKTHROUGH_TWO_WAYS = {
+  /* In place of P3.real.agree, the box under Connect my real rig. */
+  agree: `I understand this app needs a computer running the free desktop app, connected to my Fractal unit via USB cable, or a Bluetooth MIDI adapter sold separately. ${BEST_WAY}`,
+  /* In place of P9.demo.sub, under Here’s the app at the end of the demo's walkthrough. */
+  demoSub: `This app works with a computer connected to your Fractal guitar processor by USB, or by Bluetooth through an adapter sold separately. ${BEST_WAY}`,
+  /* Under SETUP.steps, the computer's three, on the sign-in screen. */
+  setup: `No computer? Sign in here, and the app can connect by Bluetooth instead, through an adapter sold separately. ${BEST_WAY}`
+}
+
 
 /** The parts, by the name printed on the box, each with what it is for in a line. */
 export const PARTS = {

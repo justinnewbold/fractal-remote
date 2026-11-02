@@ -16,6 +16,8 @@ import Press from '../components/Press'
 import Connect from './Connect'
 import { setDemo } from '../lib/demo'
 import { SETUP } from '../lib/onboarding'
+import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
+import { WALKTHROUGH_TWO_WAYS } from '../lib/bluetooth-gear'
 import { MADE_HERE, ONLY_HERE } from '../lib/purchases'
 import mailIcon from '../../assets/icons/mail.png'
 import lockIcon from '../../assets/icons/lock.png'
@@ -48,6 +50,8 @@ import { deviceNoun } from '../lib/device-word'
  */
 export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = false, madeHere = false, onAccountMade }) {
   const [mode, setMode] = useState(start === 'up' ? 'up' : 'in') // 'in' | 'up'
+  /* Whether Get connected says Bluetooth is the other way: see under its steps. */
+  const twoWays = openForCustomersHere() && bluetoothSupported()
   /*
    * The instructions, from the one screen that needs them most.
    *
@@ -341,6 +345,21 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
               </Text>
             </View>
           ))}
+          {/*
+            AND THE OTHER WAY, under the computer's three steps, on a copy that
+            opens Bluetooth to customers and a device that can do it: "It
+            doesn't require a computer anymore if people are using Bluetooth
+            instead." (Justin, 30 October 2026.) The purchase page's own gate
+            (Paywall.js), because somebody here may not have paid yet; the
+            steps stay the browser's word for word (shared/onboarding.mjs
+            SETUP), which does need the computer. Since the audit of 2
+            November 2026.
+          */}
+          {twoWays ? (
+            <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>
+              {WALKTHROUGH_TWO_WAYS.setup}
+            </Text>
+          ) : null}
         </View>
 
         {/* Paid on this phone, with no account yet: said where the form is.

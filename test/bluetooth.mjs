@@ -6850,7 +6850,8 @@ export function run(test) {
     assert.match(flat('mobile/App.js'), /sub=\{BLUETOOTH_WAYS_SHORT\}/, 'the waiting screen’s way in does not say it')
     const paywall = flat('mobile/src/screens/Paywall.js')
     assert.match(paywall, /\{openForCustomersHere\(\) && bluetoothSupported\(\) \? \( <Text[^>]*> \{BLUETOOTH_PAYWALL\} <\/Text> \) : null\}/, 'the purchase page offers Bluetooth on a copy that cannot open it, or not at all')
-    for (const f of ['mobile/src/screens/Bluetooth.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/Fixes.js', 'mobile/src/components/NoComputer.js']) {
+    /* The walkthrough and the sign-in screen too, since the audit of 2 November 2026 (WALKTHROUGH_TWO_WAYS). */
+    for (const f of ['mobile/src/screens/Bluetooth.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/Fixes.js', 'mobile/src/components/NoComputer.js', 'mobile/src/screens/Onboarding.js', 'mobile/src/screens/SignIn.js']) {
       assert.ok(!/two ways to connect|(slower|more lag) than the computer|no computer needed, more lag|AM4 only for now ·|Opens Apple’s Bluetooth screen|best (?:one|way)|more lag and/i.test(code(f)), `${f} types the words out again instead of taking them from the gear file or shared/no-computer.mjs`)
     }
     /*
@@ -6866,10 +6867,113 @@ export function run(test) {
     /* The setup email says them in its first email's opening, since 1 November 2026 ("Having trouble getting connected?"), and the Bluetooth paragraph says the cost again: no editing or saving. */
     const email = src('supabase/functions/setup-reminder/index.ts').match(/'(It looks like it hasn’t connected to your Fractal yet[^']*)'/)?.[1] ?? ''
     assert.ok(email.length > 100, 'the setup email’s opening was not found; this check needs telling')
-    for (const [where, words] of [['the gear file’s sentence', gear.BLUETOOTH_WAYS], ['the no-computer note and Fixes', NO_COMPUTER_BLUETOOTH], ['the setup email', email]]) {
+    /* And the walkthrough's three, on a copy that opens Bluetooth (the next test), since the audit of 2 November 2026. */
+    const walk = Object.entries(gear.WALKTHROUGH_TWO_WAYS).map(([key, words]) => [`the walkthrough’s ${key}`, words])
+    for (const [where, words] of [['the gear file’s sentence', gear.BLUETOOTH_WAYS], ['the no-computer note and Fixes', NO_COMPUTER_BLUETOOTH], ['the setup email', email], ...walk]) {
       assert.match(words, /The computer is (?:still )?the best (?:one|way)|the computer [^.]*, which is the best way/, `${where} does not say the computer is the best way`)
       assert.match(words, /more lag/, `${where} does not say Bluetooth has more lag`)
       assert.match(words, /fewer features|does less/, `${where} does not say Bluetooth does less`)
+    }
+  })
+
+  test('the phone’s walkthrough and sign-in screen never say a computer is required on a copy that opens Bluetooth', async () => {
+    /*
+     * "It doesn't require a computer anymore if people are using Bluetooth
+     * instead. So we can drop that now." (Justin, 30 October 2026, of the
+     * store listing.) The audit of 2 November 2026 found the phone's first
+     * minute still saying it: the box ticked before Unlock ("I understand
+     * this app requires a computer connected to my Fractal unit via USB
+     * cable"), the demo's last page ("This app works with a computer"), and
+     * Get connected on the sign-in screen, the computer's steps alone. On a
+     * copy that opens Bluetooth to customers each says both ways, the
+     * computer first; the browser, which does need the computer, keeps his
+     * words (test/both-ends.mjs).
+     */
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    const two = gear.WALKTHROUGH_TWO_WAYS
+    assert.deepEqual(Object.keys(two).sort(), ['agree', 'demoSub', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
+    for (const [key, words] of Object.entries(two)) {
+      assert.ok(!/requires? a computer|computer is required|only (?:with|through) a computer/i.test(words), `the walkthrough’s ${key} says a computer is required`)
+      assert.match(words, /Bluetooth/, `the walkthrough’s ${key} does not name Bluetooth`)
+      assert.match(words, /adapter,? sold separately/, `the walkthrough’s ${key} does not say the adapter is bought separately`)
+      /* CLAUDE.md: never "this phone", never Bluetooth as a beta, and nothing a customer reads says what has been tried. */
+      assert.ok(!/this phone|beta|\btried\b|tested/i.test(words), `the walkthrough’s ${key} says something a customer is never told`)
+    }
+    /* The box keeps his shape, with the free desktop app and the cable, and the other way beside them. */
+    assert.match(two.agree, /^I understand this app needs a computer running the free desktop app, connected to my Fractal unit via USB cable, or a Bluetooth MIDI adapter sold separately\./)
+    assert.match(two.demoSub, /^This app works with a computer connected to your Fractal guitar processor by USB, or by Bluetooth/)
+
+    /*
+     * EVERY LINE OF HIS THAT SAYS A COMPUTER IS NEEDED, found in the words
+     * the phone's walkthrough imports rather than listed by hand, and each
+     * drawn only where Bluetooth is not open. A new one fails here until it
+     * is given a two-ways line of its own, or this check is told why not.
+     */
+    const onboarding = await import('../shared/onboarding.mjs')
+    const screen = code('mobile/src/screens/Onboarding.js')
+    const imported = (screen.match(/import \{([^}]*)\} from '\.\.\/lib\/onboarding'/)?.[1] ?? '').split(',').map((n) => n.trim()).filter(Boolean)
+    assert.ok(imported.includes('P3') && imported.includes('P9'), 'the walkthrough’s imports were not found; this check needs telling')
+    const says = []
+    const walkWords = (value, path) => {
+      if (typeof value === 'string') says.push([path, value])
+      else if (Array.isArray(value)) value.forEach((v, i) => walkWords(v, `${path}[${i}]`))
+      else if (value && typeof value === 'object') for (const key of Object.keys(value)) walkWords(value[key], `${path}.${key}`)
+    }
+    for (const name of imported) walkWords(onboarding[name], name)
+    assert.ok(says.length > 40, 'the walkthrough’s words were not read; this check needs telling')
+    const computerOnly = says.filter(([, words]) => /requires? a computer|works with a computer/i.test(words)).map(([path]) => path)
+    assert.deepEqual(computerOnly.sort(), ['P3.real.agree', 'P9.demo.sub'], 'a line of the phone’s walkthrough says a computer is needed, and nothing says the other way where Bluetooth is open')
+    const flatScreen = screen.replace(/\s+/g, ' ')
+    for (const [path, key] of [['P3.real.agree', 'agree'], ['P9.demo.sub', 'demoSub']]) {
+      const drawn = flatScreen.split(path).length - 1
+      const gated = flatScreen.split(`twoWays ? WALKTHROUGH_TWO_WAYS.${key} : ${path}`).length - 1
+      assert.ok(drawn >= 1, `the walkthrough no longer draws ${path}; this check follows it`)
+      assert.equal(gated, drawn, `the walkthrough draws ${path} on a copy that opens Bluetooth`)
+    }
+
+    /* The sign-in screen: the computer's three steps, then the other way, inside the card. */
+    const signIn = code('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
+    const card = signIn.slice(signIn.indexOf('{SETUP.title}'), signIn.indexOf('</View>', signIn.indexOf('{WALKTHROUGH_TWO_WAYS.setup}')))
+    assert.ok(card.indexOf('SETUP.steps.map') > 0 && card.indexOf('SETUP.steps.map') < card.indexOf('{WALKTHROUGH_TWO_WAYS.setup}'), 'Get connected does not say the other way under the computer’s steps')
+    assert.match(card, /\{twoWays \? \( <Text[^>]*> \{WALKTHROUGH_TWO_WAYS\.setup\} <\/Text> \) : null\}/, 'Get connected says Bluetooth on a copy that does not open it, or never')
+    const between = card.slice(0, card.indexOf('{WALKTHROUGH_TWO_WAYS.setup}'))
+    assert.equal((between.match(/<View\b/g) || []).length, (between.match(/<\/View>/g) || []).length, 'the other way is drawn outside the Get connected card')
+
+    /*
+     * THE GATE, the purchase page's word for word: a copy that opens
+     * Bluetooth to customers, on a device that can do it. Nobody on these
+     * screens has paid yet, so never the Settings row's, which waits for the
+     * purchase.
+     */
+    const GATE = 'const twoWays = openForCustomersHere() && bluetoothSupported()'
+    for (const [file, text] of [['the walkthrough', flatScreen], ['the sign-in screen', signIn]]) {
+      assert.ok(text.includes(GATE), `${file} says both ways behind another gate`)
+      assert.match(text, /import \{ bluetoothSupported, openForCustomersHere \} from '\.\.\/lib\/bluetooth'/, `${file} reads the gate from somewhere else`)
+      assert.match(text, /import \{ WALKTHROUGH_TWO_WAYS \} from '\.\.\/lib\/bluetooth-gear'/, `${file} types its two-ways words out`)
+      assert.ok(!/mayDrive|usePurchase|useBluetoothOffered/.test(text), `${file} waits for a purchase to say both ways`)
+    }
+    assert.ok(flat('mobile/src/screens/Paywall.js').includes('{openForCustomersHere() && bluetoothSupported() ? ('), 'the purchase page’s gate moved, and the walkthrough’s still says the old one')
+
+    /*
+     * AND ON THE COPIES IN THE STORES TODAY, it is both ways: the version in
+     * public/store-versions.json on each phone opens Bluetooth to customers,
+     * and a copy before 1.89.0, or a device without Bluetooth, keeps the
+     * computer's words.
+     */
+    const live = JSON.parse(src('public/store-versions.json'))
+    for (const os of ['ios', 'android']) {
+      for (const [installed, mod, open, why] of [
+        [live[os], iphoneModule().mod, true, `the ${os} ${live[os]} copy in the store does not say both ways`],
+        ['1.88.3', iphoneModule().mod, false, `a ${os} copy before Bluetooth opened says both ways`],
+        [live[os], { ...iphoneModule().mod, supported: () => false }, false, `a ${os} device without Bluetooth says both ways`]
+      ]) {
+        const bench = await bluetoothOnABench({ os, mod, installed })
+        try {
+          assert.equal(bench.ble.openForCustomersHere() && bench.ble.bluetoothSupported(), open, why)
+        } finally {
+          bench.done()
+        }
+      }
     }
   })
 

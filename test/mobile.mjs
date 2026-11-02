@@ -6791,12 +6791,15 @@ export function run(test) {
     assert.match(rig, /state\.unit === 'missing' \|\| state\.unit === 'silent' \? MISSING_WATCH_MS : watchEvery\(true\)/, 'the phone waits half a minute to notice an editor was closed')
   })
 
-  test('Unlock waits for the box saying a computer and a USB cable are needed', async () => {
+  test('Unlock waits for the box saying what the app needs to reach the unit', async () => {
     /*
      * "On the unlock part of this can we add a disclaimer question that
      * says… I understand this app requires a computer connected to my
      * Fractal unit via USB cable for the Fractal Remote app to work. With a
      * checkbox that must be selected to select the unlock button?"
+     *
+     * His sentence stays, in the browser (which does need the computer) and
+     * on a phone whose copy does not open Bluetooth to customers.
      */
     const { P3 } = await import('../shared/onboarding.mjs')
     assert.equal(
@@ -6806,7 +6809,15 @@ export function run(test) {
     )
     const phone = read('mobile/src/screens/Onboarding.js').replace(/\s+/g, ' ')
     assert.match(phone, /const \[agreed, setAgreed\] = useState\(false\)/, 'the phone’s box starts ticked, or is not there')
-    assert.match(phone, /<Agree on=\{agreed\} label=\{P3\.real\.agree\}/, 'the phone draws no box')
+    /*
+     * CHANGED ON PURPOSE in the audit of 2 November 2026: the phone's box was
+     * held to his sentence alone, which says the app "requires a computer",
+     * and on a copy that opens Bluetooth to customers it does not ("It
+     * doesn't require a computer anymore if people are using Bluetooth
+     * instead", 30 October 2026). There the box says both ways
+     * (test/bluetooth.mjs holds those words and the gate).
+     */
+    assert.match(phone, /<Agree on=\{agreed\} label=\{twoWays \? WALKTHROUGH_TWO_WAYS\.agree : P3\.real\.agree\}/, 'the phone draws no box')
     assert.match(phone, /<Press label=\{P3\.real\.go\} height=\{TAP\} disabled=\{!agreed\}/, 'the phone’s Unlock presses before the box is ticked')
     assert.match(phone, /accessibilityRole="checkbox"/, 'a screen reader cannot tell the phone’s box is a box')
     const web = read('src/components/PhoneWalkthrough.jsx').replace(/\s+/g, ' ')
@@ -14775,9 +14786,13 @@ export function run(test) {
     assert.match(block.mode, /label: P3\.signIn[^]{0,80}onAccount\?\.\(\)/, 'there is no way to sign in from the first screen')
 
     /* The last screen names no unit at all now: his "Here's the app"
-       mockup puts the line about the computer and the USB cable there. */
+       mockup puts the line about the computer and the USB cable there.
+       Changed on purpose in the audit of 2 November 2026: on a copy that
+       opens Bluetooth to customers that line says both ways, the computer
+       first, since the app no longer needs a computer there
+       (WALKTHROUGH_TWO_WAYS; test/bluetooth.mjs holds the words and the gate). */
     assert.ok(!/P9\.tag|P9\.demo\.status/.test(block.connected), 'the last screen names a unit again, over his mockup')
-    assert.match(block.connected, /<Sub>\{P9\.demo\.sub\}<\/Sub>/, 'the last screen lost the line about the computer')
+    assert.match(block.connected, /<Sub>\{twoWays \? WALKTHROUGH_TWO_WAYS\.demoSub : P9\.demo\.sub\}<\/Sub>/, 'the last screen lost the line about the computer')
     /* The picker itself still names what is lit, which is the one place the
        demo choice IS the answer. */
     assert.match(block.pick, /P4\.go\(unitName\)/, 'the demo picker stopped naming the unit you picked')

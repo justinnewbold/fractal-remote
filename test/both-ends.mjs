@@ -2150,6 +2150,20 @@ export function run(test) {
       assert.ok(web.includes(words), `the browser’s phone walkthrough does not say ${words}, and the phone’s does`)
     }
     assert.match(web, /from '\.\.\/\.\.\/shared\/onboarding\.mjs'/, 'the browser’s phone walkthrough has words of its own')
+    /*
+     * THE ONE PLACE THE TWO ENDS SAY DIFFERENT THINGS, on purpose, since the
+     * audit of 2 November 2026. The box before Unlock and the demo's last
+     * page say the app needs a computer, which the browser does; on a phone
+     * whose copy opens Bluetooth to customers they say both ways
+     * (WALKTHROUGH_TWO_WAYS, held in test/bluetooth.mjs). So the phone draws
+     * his lines only where Bluetooth is not open, and the browser draws them
+     * always, with no Bluetooth words to draw instead.
+     */
+    for (const [path, key] of [['P3.real.agree', 'agree'], ['P9.demo.sub', 'demoSub']]) {
+      assert.ok(web.includes(`{${path}}`), `the browser’s phone walkthrough no longer says ${path}, which it needs: the browser has no Bluetooth`)
+      assert.ok(phone.replace(/\s+/g, ' ').includes(`twoWays ? WALKTHROUGH_TWO_WAYS.${key} : ${path}`), `the phone’s walkthrough says ${path} on a copy that opens Bluetooth, or no longer says it at all`)
+    }
+    assert.ok(!/bluetooth-gear|WALKTHROUGH_TWO_WAYS|twoWays/.test(web), 'the browser’s phone walkthrough offers Bluetooth, which a browser does not have')
     /* His pictures, the phone's own files, and the plain box that took the
        place of the two with Fractal's logo on them (test/independent.mjs). */
     for (const art of ['unit-plain.png', 'piece-computer.png', 'piece-phone.png']) {

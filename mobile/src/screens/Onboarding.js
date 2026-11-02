@@ -8,6 +8,8 @@ import { UNITS } from '../lib/demoUnits'
 import { setDemo, setDemoUnit } from '../lib/demo'
 import { walkthroughTips } from '../lib/vp4-safety'
 import { tick } from '../lib/feedback'
+import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
+import { WALKTHROUGH_TWO_WAYS } from '../lib/bluetooth-gear'
 /* An ES import rather than require(): Metro resolves both, but require is not
    a name this app has anywhere, and a test is right to refuse it. */
 /*
@@ -53,9 +55,11 @@ import chevronIcon from '../../assets/icons/chevron.png'
  * The first minute, on the phone.
  *
  * Nine screens in the PDF, and the shape of them is a decision rather than a
- * sequence: this phone cannot reach a Fractal unit on its own, ever. It talks
- * to a computer, and the computer holds the cable. Everything here is either
- * explaining that or getting one of the two ends in place.
+ * sequence: this phone cannot reach a Fractal unit on its own. It talks to a
+ * computer, and the computer holds the cable. Everything here is either
+ * explaining that or getting one of the two ends in place. (On a copy that
+ * opens Bluetooth to customers it can, through an adapter, and the two lines
+ * that said otherwise say both ways there: see `twoWays`.)
  *
  * WHICH IS WHY THE DEMO COMES FIRST AND COSTS NOTHING. Somebody who has just
  * installed this may have no computer running, no code, and no idea a
@@ -72,7 +76,9 @@ import chevronIcon from '../../assets/icons/chevron.png'
  *
  * Not one word is typed here: every string is from lib/onboarding, generated
  * from shared/onboarding.mjs. "Do not change any wording without asking me
- * first."
+ * first." Except two lines on a copy that opens Bluetooth to customers,
+ * which say both ways and come from lib/bluetooth-gear (WALKTHROUGH_TWO_WAYS
+ * says why); see `twoWays`, below.
  */
 const face = Platform.select(mono)
 
@@ -91,6 +97,19 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
   const [needsApp, setNeedsApp] = useState(false)
 
   const unitName = UNITS.find((u) => u.key === unit)?.name || UNITS[0].name
+
+  /*
+   * WHETHER THIS COPY CAN SAY THERE ARE TWO WAYS. "It doesn't require a
+   * computer anymore if people are using Bluetooth instead." (Justin, 30
+   * October 2026.) The box before Unlock and the demo's last page said the
+   * computer was the only way until the audit of 2 November 2026. On a copy
+   * that opens Bluetooth to customers, on a device that can do it, they say
+   * both (WALKTHROUGH_TWO_WAYS); anywhere else they say what they always did.
+   * The purchase page's own gate, word for word (Paywall.js): nobody here has
+   * paid yet, so the Settings row's gate, which waits for the purchase, is
+   * not the question.
+   */
+  const twoWays = openForCustomersHere() && bluetoothSupported()
 
   /*
    * ONE WAY BETWEEN STEPS, AND IT CLEARS THE LAST SCREEN'S NOTES.
@@ -390,8 +409,12 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
                 icon slot and widening a component used on every screen for
                 one glyph is the wrong trade — the card's own lock, above
                 right, already says it.
+
+                THE BOX SAYS BOTH WAYS where Bluetooth is open: his sentence
+                said the app "requires a computer", which stopped being true
+                on the copies that open it (see `twoWays`).
             */}
-            <Agree on={agreed} label={P3.real.agree} onPress={() => setAgreed((v) => !v)} />
+            <Agree on={agreed} label={twoWays ? WALKTHROUGH_TWO_WAYS.agree : P3.real.agree} onPress={() => setAgreed((v) => !v)} />
             <Press label={P3.real.go} height={TAP} disabled={!agreed} onPress={() => agreed && onUnlock?.()} />
           </Choice>
 
@@ -532,8 +555,9 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
 
             The unit's name and "simulated" came off the top: the mockup
             puts the one sentence that matters there instead — this app
-            needs a computer with the unit on its USB. The demo's words,
-            because the demo is the only way here now.
+            needs a computer with the unit on its USB, or, where Bluetooth is
+            open, either way, the computer first (see `twoWays`). The demo's
+            words, because the demo is the only way here now.
 
             Each card goes into the app, the same as the button; the row at
             the foot goes in and straight to Settings, where the walkthrough
@@ -541,7 +565,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
           */}
           <Steps at={2} of={3} label={P9.count} />
           <Head>{P9.demo.head}</Head>
-          <Sub>{P9.demo.sub}</Sub>
+          <Sub>{twoWays ? WALKTHROUGH_TWO_WAYS.demoSub : P9.demo.sub}</Sub>
           {/* A VP4 is not shown SAVE: see walkthroughTips. */}
           {walkthroughTips(P9.tips, unit).map((tip) => (
             <TipCard key={tip.key} icon={TIP_ICONS[tip.key]} label={tip.label} body={tip.body} onPress={onEnterDemo} />
