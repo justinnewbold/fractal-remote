@@ -690,6 +690,7 @@ async function start() {
    * why it lives in the store and not in this app's own settings.
    */
   const axiomRules = await import('./lib/axiom.mjs')
+  /* true, false, or null when not known (a file caught half written): see readAxiom. */
   const axiomNow = () => axiomRules.readAxiom({ read: (path) => readFileSync(path, 'utf8') })
   /** What the device server running now was started with. */
   let axiomLetIn = false
@@ -698,9 +699,11 @@ async function start() {
    * Through lib/child.cjs rather than directly, so the server leaves when this
    * process does — however this process goes. See that file.
    */
-  const runServer = () => {
+  const runServer = (axiom) => {
     serverSince = uptime()
-    axiomLetIn = axiomNow()
+    /* As told (a restart for the switch, which has just read it twice), or as the store says now; not known keeps what the last one had. */
+    const seen = typeof axiom === 'boolean' ? axiom : axiomNow()
+    axiomLetIn = seen === null ? axiomLetIn : seen
     const child = spawn(process.execPath, [wrapperPath(), join(forgefx, 'server', 'dist', 'index.js')], {
       env: serverEnv({ port, dist: distPath(), asNode: true, axiom: axiomLetIn }),
       stdio: 'inherit'
@@ -781,28 +784,39 @@ async function start() {
    * AND STARTED AGAIN WHEN THE AXIOM SWITCH CHANGES. The window or a phone
    * writes it into the store (shared/axiom.mjs); this looks at the store's
    * file every two seconds, and when what it says is not what the running
-   * server was started with, stops that server and starts it again with the
-   * new list: a few seconds without the unit, once, when somebody changes it.
-   * Stopped the way a quit stops it (SIGINT, then SIGKILL), and only while a
-   * server is running: one that is being started again for another reason
-   * reads the switch as it starts. Never while quitting.
+   * server was started with, reads it again a moment later, and only if it
+   * still says so stops that server and starts it again with the new list: a
+   * few seconds without the unit, once, when somebody changes it. A file
+   * caught half written is "not known" and changes nothing, and however often
+   * the document is written, the server is started again for it no more than
+   * once every AXIOM_GAP_MS. Stopped the way a quit stops it (SIGINT, then
+   * SIGKILL), and only while a server is running: one that is being started
+   * again for another reason reads the switch as it starts. Never while
+   * quitting.
    */
   let axiomRestarting = false
+  let axiomRestartedAt = -Infinity
   const relookAxiom = async () => {
-    if (quitting || axiomRestarting || !server || axiomNow() === axiomLetIn) return
+    if (quitting || axiomRestarting || !server) return
+    const first = axiomNow()
+    if (first === null || first === axiomLetIn) return
     axiomRestarting = true
     try {
+      await pause(Math.max(axiomRules.AXIOM_CONFIRM_MS, axiomRestartedAt + axiomRules.AXIOM_GAP_MS - uptime()))
+      const want = axiomNow()
+      if (quitting || !server || want === null || want === axiomLetIn) return
+      axiomRestartedAt = uptime()
       const old = server
       // The old one's exit is not news, and ForgeFX forgets the phone remote's switch every time it starts.
       server = null
       phone = null
       relay = null
       linkNudged = false
-      console.error(axiomRules.axiomLine(!axiomLetIn))
+      console.error(axiomRules.axiomLine(want))
       await shutdown({ server: old })
       if (quitting) return
       try {
-        runServer()
+        runServer(want)
       } catch (err) {
         restartServer(`could not be started (${err?.code || err?.message || err})`)
         return

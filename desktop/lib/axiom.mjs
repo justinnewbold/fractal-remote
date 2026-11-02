@@ -62,35 +62,64 @@ export function axiomStorePath({ env = process.env, home = homedir() } = {}) {
 }
 
 /**
- * Whether the store file's text says Axiom is let in: true only for a
- * document `fractal.axiom` that is not deleted and whose data says
- * `on: true`. No file, a file cut short or not JSON, no document, a deleted
- * one, or one that says anything else is off. Never throws.
+ * What the store file's text says about the switch:
+ *
+ *   true   a document `fractal.axiom`, not deleted, whose data says `on: true`
+ *   false  anything else that could be read: no document, a deleted one, one
+ *          that says anything else, or no file at all (undefined or null)
+ *   null   a file that is there and cannot be read as JSON: empty, or cut
+ *          short. ForgeFX writes the whole file in place (a truncate, then
+ *          the write; fsStoreBackend saveColl), and every phone note, scene
+ *          name and Axiom's own writes rewrite it, so a look that lands in the
+ *          middle of one sees half a file. That is "not known", never "off":
+ *          taken for off, it would restart the device server for nothing,
+ *          mid-song, with the switch on.
+ *
+ * Never throws.
  */
-export function axiomOn(text) {
-  if (typeof text !== 'string' || !text) return false
+export function axiomState(text) {
+  if (text === undefined || text === null) return false
+  if (typeof text !== 'string' || !text) return null
+  let all
   try {
-    const all = JSON.parse(text)
-    const doc = all && typeof all === 'object' && !Array.isArray(all) ? all[AXIOM_ID] : null
-    return Boolean(doc && typeof doc === 'object' && !doc.deleted && doc.data && doc.data.on === true)
+    all = JSON.parse(text)
   } catch {
-    return false
+    return null
   }
+  const doc = all && typeof all === 'object' && !Array.isArray(all) ? all[AXIOM_ID] : null
+  return Boolean(doc && typeof doc === 'object' && !doc.deleted && doc.data && doc.data.on === true)
 }
+
+/** Whether the store file's text says Axiom is let in: axiomState, with "not known" as no. */
+export const axiomOn = (text) => axiomState(text) === true
 
 /**
  * The switch as this computer's store says it now, read through `read`
- * (readFileSync, handed in so this is tested without a disk). Off when the
- * file cannot be read.
+ * (readFileSync, handed in so this is tested without a disk): true, false,
+ * or null when it is not known. No file at all is false, the state of every
+ * computer that never had the switch; a file that could not be read for any
+ * other reason, or was caught half written, is null.
  */
 export function readAxiom({ env = process.env, home = homedir(), read } = {}) {
   if (typeof read !== 'function') return false
+  let text
   try {
-    return axiomOn(read(axiomStorePath({ env, home })))
-  } catch {
-    return false
+    text = read(axiomStorePath({ env, home }))
+  } catch (err) {
+    return err?.code === 'ENOENT' ? false : null
   }
+  return axiomState(text)
 }
+
+/**
+ * How a change is taken. A change is read again AXIOM_CONFIRM_MS later and
+ * acted on only when it still says the same (a write caught half done, or a
+ * switch flicked twice, is the second look's), and the device server is
+ * started again for it no more often than every AXIOM_GAP_MS, however often
+ * the document is written.
+ */
+export const AXIOM_CONFIRM_MS = 1000
+export const AXIOM_GAP_MS = 10000
 
 /** What the log says when the switch has changed and the device server is started again for it. */
 export const axiomLine = (on) =>

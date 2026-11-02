@@ -50,7 +50,23 @@ export const AXIOM_LABEL = 'Also let Axiom use this pedal'
  * "this computer" in its own window, its name on a phone.
  */
 export const axiomSub = (where = 'this computer') =>
-  `For Axiom’s page in a browser on ${where}. It gets presets, scenes, blocks, tempo and the tuner, never the account. Changing this restarts the link to the unit for a few seconds.`
+  `For Axiom’s page in a browser on ${where}. It can use the unit the way this app does, but never the account. Changing this restarts the link to the unit for a few seconds.`
+
+/**
+ * How the tick boxes wait out the restart a change causes. The computer looks
+ * at the switch every two seconds, holds a change a moment to be sure of it,
+ * and starts its link to the unit again, which takes a few seconds more; the
+ * box is held still for AXIOM_SETTLE_MS meanwhile, so a second click cannot
+ * land in the gap, then reads the switch back. A read the computer could not
+ * answer is asked again every AXIOM_RELOOK_MS, up to AXIOM_RELOOKS times,
+ * keeping what was shown rather than showing "off".
+ */
+export const AXIOM_SETTLE_MS = 10000
+export const AXIOM_RELOOK_MS = 3000
+export const AXIOM_RELOOKS = 5
+
+/** The line under the box while that is happening. */
+export const AXIOM_SETTLING = 'Starting the link to the unit again, a few seconds…'
 
 /** What the line says when the change could not be made. */
 export const AXIOM_FAILED = 'That didn’t reach the computer. Try again.'

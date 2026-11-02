@@ -1781,13 +1781,23 @@ test('the device server lets Axiom onto the unit’s own routes only while its s
   assert.equal(axiom.readAxiom({ env: {}, home: '/h', read: (path) => (path === joinPath('/h', '.axis', 'store', 'config.json') ? doc({ on: true }) : '') }), true)
   assert.equal(axiom.readAxiom({ env: {}, home: '/h' }), false)
 
+  /* A file caught half written is "not known", never "off": ForgeFX rewrites the whole file in place on every store write. */
+  assert.equal(axiom.axiomState(doc({ on: true })), true)
+  assert.equal(axiom.axiomState(doc({ on: false })), false)
+  assert.equal(axiom.axiomState(undefined), false, 'no file is not off')
+  assert.equal(axiom.axiomState(''), null, 'a file emptied for its rewrite reads as off')
+  assert.equal(axiom.axiomState(doc({ on: true }).slice(0, 40)), null, 'a file cut short reads as off')
+  assert.equal(axiom.readAxiom({ env: {}, home: '/h', read: () => doc({ on: true }).slice(0, 30) }), null)
+  assert.equal(axiom.readAxiom({ env: {}, home: '/h', read: () => { throw Object.assign(new Error('EACCES'), { code: 'EACCES' }) } }), null, 'a file that could not be read reads as off')
+  assert.ok(axiom.AXIOM_CONFIRM_MS >= 500 && axiom.AXIOM_GAP_MS >= 5000, 'a change is acted on at once, or the server can be restarted again and again')
+
   // The computer app reads it before every start, watches it, and starts the server again for a change.
   const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
-  const run = main.slice(main.indexOf('const runServer = () => {'), main.indexOf('const restartServer ='))
-  assert.ok(run.indexOf('axiomLetIn = axiomNow()') > -1 && run.indexOf('axiomLetIn = axiomNow()') < run.indexOf('spawn('), 'the switch is not read before the server is started')
+  const run = main.slice(main.indexOf('const runServer = (axiom) => {'), main.indexOf('const restartServer ='))
+  assert.ok(run.indexOf("const seen = typeof axiom === 'boolean' ? axiom : axiomNow()") > -1 && run.indexOf('axiomLetIn = seen === null ? axiomLetIn : seen') < run.indexOf('spawn('), 'the switch is not read before the server is started, or not known is taken for off')
   const relook = main.slice(main.indexOf('const relookAxiom = async () => {'), main.indexOf('watchFile(axiomRules.axiomStorePath()'))
   assert.ok(relook.length > 0, 'nothing starts the server again when the switch changes')
-  for (const step of ['quitting', 'axiomNow() === axiomLetIn', 'server = null', 'await shutdown({ server: old })', 'runServer()', 'await waitForServer({ port })', 'if (up) settled()', 'rearm()']) {
+  for (const step of ['quitting', 'first === null || first === axiomLetIn', 'await pause(Math.max(axiomRules.AXIOM_CONFIRM_MS, axiomRestartedAt + axiomRules.AXIOM_GAP_MS - uptime()))', 'want === null || want === axiomLetIn', 'axiomRestartedAt = uptime()', 'server = null', 'await shutdown({ server: old })', 'runServer(want)', 'await waitForServer({ port })', 'if (up) settled()', 'rearm()']) {
     assert.ok(relook.includes(step), `starting the server again for the switch leaves out ${step}`)
   }
   assert.ok(relook.indexOf('server = null') < relook.indexOf('await shutdown({ server: old })'), 'the old server’s exit would be taken for a crash')
@@ -1824,6 +1834,18 @@ test('the device server lets Axiom onto the unit’s own routes only while its s
   assert.match(windowSwitch, /const usable = inDesktopApp\(\) && !isDemo\(\)/)
   assert.match(windowSwitch, /if \(!usable \|\| on === null \|\| \(!admin && !on\)\) return null/, 'the window shows the Axiom switch to customers')
   assert.match(windowSwitch, /writeHostDoc\(AXIOM_ID, axiomData\(next, Date\.now\(\)\)\)/)
+  /* No answer is never shown as off (the restart a change causes is a few seconds without one), and nothing can be clicked until it is over. */
+  assert.ok(!/readHostDoc\(/.test(windowSwitch), 'the window takes a computer that did not answer for a switch that is off')
+  assert.match(windowSwitch, /const data = await hostDocOrUnknown\(AXIOM_ID\)[\s\S]*?if \(data === undefined\) \{[\s\S]*?return\s*\}\s*setOn\(axiomOnIn\(data\)\)/)
+  assert.match(windowSwitch, /disabled=\{busy \|\| settling\}/)
+  const forgefx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
+  assert.match(forgefx, /export async function hostDocOrUnknown\(id\) \{[\s\S]*?return err\?\.status === 404 \? null : undefined/)
+  /* The phone: another computer starts from nothing, and a read with no answer is asked again rather than shown. */
+  assert.match(phoneSwitch, /useEffect\(\(\) => \{\s*setOn\(null\)\s*setFailed\(false\)\s*\}, \[macName\]\)/)
+  assert.match(phoneSwitch, /if \(value === null\) \{\s*if \(left > 0\) again = setTimeout/)
+  assert.match(phoneSwitch, /disabled=\{busy \|\| settling \|\| on === null\}/)
+  assert.ok(shared.AXIOM_SETTLE_MS >= 8000, 'the box can be tapped again before the computer has started its link again')
+  assert.doesNotMatch(shared.AXIOM_SETTLING, /this phone|\bbeta\b/i)
 })
 
 /*
