@@ -1982,4 +1982,37 @@ export function run(test) {
     assert.match(stuckTurnOnWords({}), /^Nobody is due one right now\./)
     assert.match(tool, /Alert\.alert\( 'Turn the setup emails on\?', stuckTurnOnWords\(said\),/)
   })
+
+  /*
+   * THE TWO EMAILS ANYBODY CAN MAKE THE APP SEND, held to a limit across
+   * everybody ("Yes make the server changes", Justin, 2 November 2026).
+   * Resend's Free plan stops at 100 a day for every email the app sends,
+   * sign-up confirmations and password resets included, and one bulk insert
+   * into feedback, or a hundred name+N@ addresses at the download link, used
+   * to be enough. Applied live the same day; this is what the database does.
+   */
+  test('nobody can flood the feedback or download-link emails, and Apple’s review login is sent no download link', () => {
+    const sql = read('supabase/migrations/20261102_email_limits.sql')
+    const fb = fnBody(sql, 'notify_feedback')
+    const dl = fnBody(sql, 'note_download_link')
+    for (const f of [fb, dl]) assert.match(f.head.replace(/\s+/g, ' '), /security definer set search_path = '' $/, 'a security-definer function that takes the caller’s path')
+    /* Feedback: past 20 in an hour the row is kept and only its email is held, and the count comes before anything is queued. */
+    assert.match(fb.body, /where f\.created_at > now\(\) - interval '1 hour';\s+if lately > 20 then[\s\S]*?return new;/)
+    assert.ok(fb.body.indexOf('lately > 20') < fb.body.indexOf('net.http_post'), 'the email is queued before the count')
+    assert.match(fb.body, /exception when others then/, 'a failed email can lose the report itself')
+    /* Download link: Apple's review login first, writing nothing; one person per +tag and Gmail dots; 20 an hour across everybody, counted in turn. */
+    /* Named by its digest: the repository is public, and the address is the account Apple signs in with. */
+    assert.ok(!/@newbold\.cloud/.test(sql), 'the public repository names the review login’s address')
+    const review = dl.body.match(/if encode\(extensions\.digest\(norm, 'sha256'\), 'hex'\) = '([0-9a-f]{64})' then\s+return false;/)
+    assert.ok(review, 'Apple’s review login is sent the download link')
+    assert.ok(dl.body.indexOf(review[0]) < dl.body.indexOf('insert into'), 'the review login is written down before it is refused')
+    assert.match(dl.body, /split_part\(local_part, '\+', 1\)/)
+    assert.match(dl.body, /if domain_part in \('gmail\.com', 'googlemail\.com'\) then\s+local_part := replace\(local_part, '\.', ''\);/)
+    assert.ok(dl.body.indexOf('pg_advisory_xact_lock') > -1 && dl.body.indexOf('pg_advisory_xact_lock') < dl.body.indexOf('if lately >= 20'), 'two at once can both count nineteen')
+    assert.match(dl.body, /if lately >= 20 then[\s\S]*?return false;/)
+    assert.match(sql, /revoke all on function public\.note_download_link\(text, integer\) from public, anon, authenticated;/)
+    /* A "no" is still answered as sent, as the ten-minute limit always was, so a flood learns nothing and a person sees no error. */
+    assert.match(read('supabase/functions/download-link/index.ts'), /if \(recently !== false\) \{[\s\S]*?return json\(\{ sent: true \}\)/)
+  })
+
 }
