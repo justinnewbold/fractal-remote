@@ -7453,12 +7453,17 @@ export function run(test) {
      * truth was that no adapter was connected. Its driver is held empty here,
      * so the name alone has to tell it.
      */
-    const { isNetworkSession, isAdapter, pickAdapter, sessionName } = await import('../mobile/src/lib/bleAdapters.js')
+    const { isNetworkSession, isAdapter, pickAdapter, sessionName, NETWORK_WORDS } = await import('../mobile/src/lib/bleAdapters.js')
     const romanian = { id: '1:2', name: 'Rețea Session 1', driver: '' }
     assert.equal(isNetworkSession(romanian), true, 'the Romanian network session is offered as an adapter')
     assert.equal(isAdapter(romanian), false)
     assert.equal(pickAdapter([romanian]), null, 'the Romanian network session is picked as the only adapter there is')
-    /* Every way the iPhone may write it: the other t, the t and its comma apart, and the endpoint's own name alone. */
+    /*
+     * Every way the iPhone may write it: the other t, the t and its comma
+     * apart, and the endpoint's own name alone. These all carry a word for
+     * session, so they pass on that word; the names after the next list do
+     * not, and hold the other two halves of the rule.
+     */
     for (const name of ['Reţea Session 1', 'Rețea Session 1', 'Session 1', 'Session1', 'Rețea Sesiune 1']) {
       assert.equal(isNetworkSession({ id: '1:2', name, driver: '' }), true, `${name} is offered as an adapter`)
     }
@@ -7469,6 +7474,25 @@ export function run(test) {
       'ネットワーク Session 1', 'ネットワーク セッション1', '网络 Session 1', '网络会话1', '網路 Session 1', '네트워크 세션 1'
     ]
     for (const name of sessions) assert.ok(sessionName(name), `${name} is not told as Apple’s network session`)
+    /*
+     * With no word for session in it at all, so nothing but the word for
+     * network as the first word decides it (NETWORK_WORDS), and, for a ț or
+     * an é stored as a letter and its mark apart, nothing but joining them
+     * first (composed). Written with escapes, so no editor can join them.
+     */
+    const apart = 'Re\u0074\u0326ea'
+    assert.equal(apart.length, 6, 'the t and its comma are not stored apart here')
+    assert.ok(!NETWORK_WORDS.includes(apart.toLowerCase()), 'the t and its comma apart are in the word list itself')
+    const networkOnly = [apart, `${apart} 1`, 'Rețea', 'Rețea 1', 'Reţea 2', 'Netzwerk 2', 'Réseau', 'R\u0065\u0301seau', 'Сеть', 'Сеть 1', 'Network Studio']
+    for (const name of networkOnly) assert.equal(sessionName(name), true, `${name} is not told as Apple’s network session by its word for network`)
+    assert.equal(isNetworkSession({ id: '1:2', name: `${apart} 1`, driver: '' }), true, 'the t and its comma apart are offered as an adapter')
+    assert.equal(pickAdapter([{ id: '1:2', name: `${apart} 1`, driver: '' }]), null, 'the t and its comma apart are picked as the only adapter there is')
+    /* The Japanese, Chinese and Korean words alone, with nothing spaced apart to find them by. */
+    for (const name of ['ネットワーク', '网络', '네트워크']) assert.equal(sessionName(name), true, `${name} is not told as Apple’s network session`)
+    /* A word for network anywhere but first is not Apple's: the first word is where Apple puts it. */
+    for (const name of ['Studio Network', 'My Red WIDI', 'WIDI Rede', 'Home Netzwerk 2']) {
+      assert.equal(sessionName(name), false, `${name} is taken for Apple’s network session`)
+    }
     /* Apple's network driver says so whatever the name. */
     assert.equal(isNetworkSession({ id: '1:2', name: 'Studio', driver: 'com.apple.AppleMIDIRTPDriver' }), true)
 

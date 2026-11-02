@@ -29,11 +29,21 @@
  * and Thai are found anywhere in the name, since those words do not sit
  * between spaces.
  *
- * NEVER A PORT ON APPLE'S BLUETOOTH OR USB MIDI DRIVER, whatever its name:
- * that is an adapter Apple's Bluetooth screen connected, or a unit on a USB
- * cable (an AM4 plugged straight in, on com.apple.AppleMIDIUSBDriver). The
+ * And a port on what should be Apple's Bluetooth or USB MIDI driver is kept
+ * as an adapter whatever its name: an adapter Apple's Bluetooth screen
+ * connected, or a unit on a USB cable (an AM4 plugged straight in). The
  * iPhone module reads the driver from CoreMIDI (kMIDIPropertyDriverOwner,
  * FractalBleMidiModule.swift devices()); Android sends none.
+ *
+ * THE TWO DRIVER NAMES ARE A GUESS. Apple does not write them down, and no
+ * log from a real iPhone has shown them yet: "AppleMIDIBluetoothDriver" and
+ * "AppleMIDIUSBDriver" came from an earlier test's example, not from a
+ * phone. They are trusted only to KEEP a port, never to drop one, so if they
+ * are wrong nothing breaks: the check never fires and the name decides,
+ * which every real adapter's name passes. The device log's "ports after
+ * Apple's Bluetooth screen" line names each port's driver; once a pasted log
+ * from a real adapter and a USB-cabled unit shows them, put the real strings
+ * here and drop this paragraph.
  */
 const ADAPTER_DRIVER = /AppleMIDI(Bluetooth|USB)Driver/i
 const NETWORK_DRIVER = /RTP/i

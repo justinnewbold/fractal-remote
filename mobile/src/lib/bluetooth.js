@@ -114,8 +114,13 @@ function keep() {
 
 /*
  * THE ADAPTER AS IT IS KEPT: its id and name, and on an iPhone the driver
- * that owns it, so the next launch can tell a real adapter whose name looks
- * like Apple's network session from the session itself (restoreBluetooth).
+ * that owns it, so the next launch judges it as the list does
+ * (restoreBluetooth, bleAdapters isNetworkSession). Without the driver, a
+ * port on what should be Apple's Bluetooth or USB driver whose name looks
+ * like the network session would be kept by the list and forgotten at every
+ * launch. Those two driver names are a guess until a real log shows them
+ * (bleAdapters ADAPTER_DRIVER): if they are wrong, the kept driver changes
+ * nothing and the name decides, as it does in the list.
  */
 const keptAdapter = (a) => ({
   id: a.id,
@@ -812,8 +817,10 @@ export async function findAdapters() {
     fresh = new Set(list.map((d) => d.id).filter((id) => !before.has(id)))
     /*
      * Every port and the driver that owns it, in the log. Which driver is
-     * Apple's Bluetooth one is not written down anywhere reliable, so the
-     * page matches on nothing; a pasted log from a real adapter settles it.
+     * Apple's Bluetooth one is not written down anywhere reliable. The page
+     * guesses two names (bleAdapters ADAPTER_DRIVER), used only to keep a
+     * port whose name looks like Apple's network session, never to drop one;
+     * a pasted log from a real adapter settles them.
      */
     logDebug('ble', 'ports after Apple’s Bluetooth screen', list.map((d) => `${d.name || '?'} [${d.driver || 'no driver'}${d.offline ? ', offline' : ''}${fresh.has(d.id) ? ', new' : ''}]`).join('; ') || 'none')
     showList(list)
