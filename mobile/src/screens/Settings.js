@@ -74,6 +74,7 @@ import SalesTool from '../components/SalesTool'
 import MessagesTool from '../components/MessagesTool'
 import WhatWorksTool from '../components/WhatWorksTool'
 import GearShareSwitch from '../components/GearShareSwitch'
+import AxiomSwitch from '../components/AxiomSwitch'
 import LiveTool from '../components/LiveTool'
 import UsageTool from '../components/UsageTool'
 import StuckTool from '../components/StuckTool'
@@ -1448,6 +1449,20 @@ export default function Settings({
               {/* How one you don't use comes off this list: at that computer (relay-rules notUsingOne). */}
               <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{notUsingOne('app')}</Text>
             </View>
+          ) : null}
+
+          {/* "Also let Axiom use this pedal" (shared/axiom.mjs), for the
+              computer this page is about: his account only, and drawn only
+              for a computer app that reads it. */}
+          {isAdmin(account?.id) ? (
+            <AxiomSwitch
+              link={link}
+              demo={demo}
+              throughAdapter={throughAdapter}
+              hostVersion={hostVersion}
+              macName={macName}
+              heading={<Section>Developer</Section>}
+            />
           ) : null}
 
           {/* Who this is signed in as moved to its own Account page, off the

@@ -14,6 +14,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { networkInterfaces, hostname as osHostname, release as osRelease } from 'node:os'
 import { DEFAULT_PROJECT, HOSTED_ORIGIN } from './project.mjs'
+import { AXIOM_ORIGIN } from './axiom.mjs'
 
 export const DEFAULT_PORT = 5056
 export const DEFAULT_NAME = 'fractal'
@@ -151,6 +152,12 @@ export function addresses({ port = DEFAULT_PORT, name = DEFAULT_NAME, ip } = {})
  * http://localhost:5173) is added by setting the variable, comma-separated;
  * set to an empty string, nothing else is let in. A device server older than
  * the guard reads nothing from it.
+ *
+ * FORGEFX_DEVICE_ORIGINS is the pages let onto the unit's own routes and
+ * nothing more (ForgeFX c7b4d3c): Axiom's, while "Also let Axiom use this
+ * pedal" is on (`axiom`, read from the store before every start; see
+ * lib/axiom.mjs), and none otherwise, so a customer's computer answers as it
+ * did. An operator's own value wins here too.
  */
 export function serverEnv({
   env = process.env,
@@ -158,7 +165,8 @@ export function serverEnv({
   dist,
   project = DEFAULT_PROJECT,
   hosted = HOSTED_ORIGIN,
-  asNode = false
+  asNode = false,
+  axiom = false
 }) {
   /* Not passed on: see PYTHON, below. */
   const { PYTHONPATH: _path, PYTHONHOME: _home, ...rest } = env
@@ -199,7 +207,8 @@ export function serverEnv({
     AXIS_CLOUD: env.AXIS_CLOUD ?? '1',
     SUPABASE_URL: env.SUPABASE_URL ?? project.url,
     SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY ?? project.anonKey,
-    FORGEFX_ALLOWED_ORIGINS: env.FORGEFX_ALLOWED_ORIGINS ?? hosted
+    FORGEFX_ALLOWED_ORIGINS: env.FORGEFX_ALLOWED_ORIGINS ?? hosted,
+    FORGEFX_DEVICE_ORIGINS: env.FORGEFX_DEVICE_ORIGINS ?? (axiom === true ? AXIOM_ORIGIN : '')
   }
 }
 

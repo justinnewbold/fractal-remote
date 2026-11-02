@@ -683,6 +683,30 @@ export async function readSaveProgress(slug) {
 }
 
 /**
+ * One of the computer's own settings, kept in its store's `config`
+ * collection by name: its data, null when the computer has none by that name
+ * (a 404, which is normal for one never written), or undefined when the
+ * computer could not be asked. Never in the demo or over Bluetooth, where
+ * there is no computer to ask. "Also let Axiom use this pedal" is one
+ * (shared/axiom.mjs, components/AxiomSwitch).
+ */
+export async function readComputerSetting(id) {
+  if (!id || demoDevice() || bluetoothWire()) return undefined
+  try {
+    const doc = await remoteRequest(`/store/config/${encodeURIComponent(id)}`)
+    return doc && typeof doc === 'object' && 'data' in doc ? doc.data : (doc ?? null)
+  } catch (err) {
+    return err?.status === 404 ? null : undefined
+  }
+}
+
+/** And write one, as the browser writes the computer's documents. */
+export function writeComputerSetting(id, data) {
+  if (!id || demoDevice() || bluetoothWire()) return Promise.reject(new Error('There is no computer to tell.'))
+  return put(`/store/config/${encodeURIComponent(id)}`, { data, origin: 'fractal' })
+}
+
+/**
  * Whose names these are, on disk. The demo's are kept apart from the real
  * unit's — the browser does the same — so a look around the demo never leaves
  * a made-up name over a real slot.

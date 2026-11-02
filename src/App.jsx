@@ -89,6 +89,7 @@ import ParamSearch from './components/ParamSearch'
 import UpdateNotice from './components/UpdateNotice'
 import Updates, { UpdateReadyNotice } from './components/Updates'
 import StartAtBoot from './components/StartAtBoot'
+import AxiomSwitch from './components/AxiomSwitch'
 import Am4Check from './components/Am4Check'
 import RenamePreset from './components/RenamePreset'
 import { countFromRefusal, slotCount, slotLabel, slotOutside, slotProblem, slotsForChat, timeLeft } from './lib/slots'
@@ -5783,6 +5784,11 @@ export default function App() {
                 it. Draws nothing unless the computer can do it, which is the
                 Linux app only. */}
             <StartAtBoot />
+            {/* And beside it, the other pedalboard-computer switch: "Also let
+                Axiom use this pedal" (shared/axiom.mjs). His account only, by
+                the window's sign-in or the computer's own, and in the
+                computer app's window only. */}
+            <AxiomSwitch admin={isAdmin(link.account?.id) || isAdmin(link.cloud?.user?.id)} />
 
             {isAdmin(link.account?.id) ? (
               <>

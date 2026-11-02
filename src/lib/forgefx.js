@@ -656,6 +656,24 @@ export async function readHostDoc(id) {
   }
 }
 
+/**
+ * One of the computer's own documents, telling "there is none" from "the
+ * computer did not answer": its data, null for a 404 (never written, which is
+ * normal), or undefined when it could not be asked (the device server
+ * restarting, say). readHostDoc says null for both, which suits its callers,
+ * who only want a value when there is one; a switch drawn from the answer must
+ * not show "off" because the computer was busy for a moment.
+ */
+export async function hostDocOrUnknown(id) {
+  if (mock) return undefined
+  try {
+    const doc = await request(`/store/config/${encodeURIComponent(id)}`)
+    return doc?.data ?? null
+  } catch (err) {
+    return err?.status === 404 ? null : undefined
+  }
+}
+
 export async function deleteHostDoc(id) {
   if (mock) return false
   try {

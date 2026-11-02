@@ -24,7 +24,7 @@
 const { app, BrowserWindow, Tray, Menu, shell, nativeImage, dialog, ipcMain, powerMonitor, powerSaveBlocker } = require('electron')
 const { spawn, execFile, execFileSync } = require('node:child_process')
 const { join, sep, dirname } = require('node:path')
-const { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, renameSync } = require('node:fs')
+const { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, renameSync, watchFile } = require('node:fs')
 const { homedir, networkInterfaces } = require('node:os')
 const { performance } = require('node:perf_hooks')
 const net = require('node:net')
@@ -566,6 +566,7 @@ async function start() {
     publish,
     readFirewall,
     serverEnv,
+    shutdown,
     tellPhonesChecked,
     thisComputer,
     phonesHearLine: hearLine,
@@ -682,13 +683,29 @@ async function start() {
   })
 
   /*
+   * "ALSO LET AXIOM USE THIS PEDAL", as the device server's store says it,
+   * read before every start of the server: its guard reads its lists once,
+   * when it starts. Off whenever it cannot be read, and a customer's computer
+   * has no such document, so it answers as it always did. lib/axiom.mjs says
+   * why it lives in the store and not in this app's own settings.
+   */
+  const axiomRules = await import('./lib/axiom.mjs')
+  /* true, false, or null when not known (a file caught half written): see readAxiom. */
+  const axiomNow = () => axiomRules.readAxiom({ read: (path) => readFileSync(path, 'utf8') })
+  /** What the device server running now was started with. */
+  let axiomLetIn = false
+
+  /*
    * Through lib/child.cjs rather than directly, so the server leaves when this
    * process does — however this process goes. See that file.
    */
-  const runServer = () => {
+  const runServer = (axiom) => {
     serverSince = uptime()
+    /* As told (a restart for the switch, which has just read it twice), or as the store says now; not known keeps what the last one had. */
+    const seen = typeof axiom === 'boolean' ? axiom : axiomNow()
+    axiomLetIn = seen === null ? axiomLetIn : seen
     const child = spawn(process.execPath, [wrapperPath(), join(forgefx, 'server', 'dist', 'index.js')], {
-      env: serverEnv({ port, dist: distPath(), asNode: true }),
+      env: serverEnv({ port, dist: distPath(), asNode: true, axiom: axiomLetIn }),
       stdio: 'inherit'
     })
     server = child
@@ -762,6 +779,68 @@ async function start() {
     }, plan.wait)
   }
   runServer()
+
+  /*
+   * AND STARTED AGAIN WHEN THE AXIOM SWITCH CHANGES. The window or a phone
+   * writes it into the store (shared/axiom.mjs); this looks at the store's
+   * file every two seconds, and when what it says is not what the running
+   * server was started with, reads it again a moment later, and only if it
+   * still says so stops that server and starts it again with the new list: a
+   * few seconds without the unit, once, when somebody changes it. A file
+   * caught half written is "not known" and changes nothing, and however often
+   * the document is written, the server is started again for it no more than
+   * once every AXIOM_GAP_MS. Stopped the way a quit stops it (SIGINT, then
+   * SIGKILL), and only while a server is running: one that is being started
+   * again for another reason reads the switch as it starts. Never while
+   * quitting.
+   */
+  let axiomRestarting = false
+  let axiomRestartedAt = -Infinity
+  const relookAxiom = async () => {
+    if (quitting || axiomRestarting || !server) return
+    const first = axiomNow()
+    if (first === null || first === axiomLetIn) return
+    axiomRestarting = true
+    try {
+      await pause(Math.max(axiomRules.AXIOM_CONFIRM_MS, axiomRestartedAt + axiomRules.AXIOM_GAP_MS - uptime()))
+      const want = axiomNow()
+      if (quitting || !server || want === null || want === axiomLetIn) return
+      axiomRestartedAt = uptime()
+      const old = server
+      // The old one's exit is not news, and ForgeFX forgets the phone remote's switch every time it starts.
+      server = null
+      phone = null
+      relay = null
+      linkNudged = false
+      console.error(axiomRules.axiomLine(want))
+      await shutdown({ server: old })
+      if (quitting) return
+      try {
+        runServer(want)
+      } catch (err) {
+        restartServer(`could not be started (${err?.code || err?.message || err})`)
+        return
+      }
+      const up = await waitForServer({ port })
+      if (quitting) return
+      if (up) settled()
+      // The phone remote back on either way: one asked of a server still starting asks again by itself.
+      rearm()
+    } catch (err) {
+      console.error('[axiom] starting the device server again failed:', err?.message || err)
+    } finally {
+      axiomRestarting = false
+    }
+    // Changed again while the server was starting: once more.
+    relookAxiom()
+  }
+  try {
+    watchFile(axiomRules.axiomStorePath(), { interval: 2000, persistent: false }, () => {
+      relookAxiom()
+    })
+  } catch (err) {
+    console.error('[axiom] cannot watch the switch:', err?.message || err)
+  }
 
   /*
    * Turn the phone remote on once the server is up, and say so in the menu.

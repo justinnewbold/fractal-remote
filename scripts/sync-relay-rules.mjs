@@ -144,6 +144,12 @@ export const FILES = [
    */
   { source: '../shared/phone-note.mjs', target: '../mobile/src/lib/phone-note.js' },
   /*
+   * "Also let Axiom use this pedal": the switch's document, and its words, for
+   * the phone and the computer's window alike. The computer app reads it by
+   * the same name (desktop/lib/axiom.mjs).
+   */
+  { source: '../shared/axiom.mjs', target: '../mobile/src/lib/axiom.js' },
+  /*
    * What counts as the code in a confirmation email, and what is said about
    * one that is not, or that the account service turned down. The phone and
    * the website both take it, and the same code has to be refused the same

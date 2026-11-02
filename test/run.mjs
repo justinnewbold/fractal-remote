@@ -1721,8 +1721,131 @@ test('the device server lets the public site in, and nothing else unless somebod
   // And an empty one stays empty: somebody turning the site off is not overruled.
   assert.equal(host.serverEnv({ env: { FORGEFX_ALLOWED_ORIGINS: '' }, port: 5056, dist: '/d' }).FORGEFX_ALLOWED_ORIGINS, '')
   // The launch passes it on: both launchers start the server with serverEnv.
-  assert.match(readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8'), /serverEnv\(\{ port, dist: distPath\(\), asNode: true \}\)/)
+  assert.match(readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8'), /serverEnv\(\{ port, dist: distPath\(\), asNode: true, axiom: axiomLetIn \}\)/)
   assert.match(readSrc(new URL('../scripts/serve.mjs', import.meta.url), 'utf8'), /serverEnv\(/)
+})
+
+/*
+ * "Also let Axiom use this pedal" (Justin, 2 November 2026): Axiom's page,
+ * in Chromium on the same Raspberry Pi, may use the unit's own routes, only
+ * while the switch in the computer's store is on. Off is every customer's
+ * computer, and it answers exactly as before.
+ */
+test('the device server lets Axiom onto the unit’s own routes only while its switch is on', async () => {
+  const axiom = await import('../desktop/lib/axiom.mjs')
+  const shared = await import('../shared/axiom.mjs')
+  const { isOlder } = await import('../shared/versions.mjs')
+  const { hostAllows } = await import('../shared/relay-rules.mjs')
+  const { HOSTED_ORIGIN: HOSTED_ORIGIN_FOR_AXIOM } = await import('../shared/pairing.mjs')
+  const pkg = JSON.parse(readSrc(new URL('../package.json', import.meta.url), 'utf8'))
+
+  // The computer app and the phone and window name one document and one page.
+  assert.equal(axiom.AXIOM_ID, shared.AXIOM_ID, 'the computer app reads a different document from the one the phone writes')
+  assert.equal(axiom.AXIOM_ORIGIN, shared.AXIOM_ORIGIN)
+  assert.equal(shared.AXIOM_ORIGIN, 'https://axiom.newbold.cloud')
+  assert.equal(shared.AXIOM_PATH, `/store/config/${shared.AXIOM_ID}`)
+  assert.ok(hostAllows('GET', shared.AXIOM_PATH) && hostAllows('PUT', shared.AXIOM_PATH), 'the relay does not let a phone read and write the switch')
+
+  // Off unless the store says so, exactly.
+  assert.equal(host.serverEnv({ env: {}, port: 5056, dist: '/d', asNode: true }).FORGEFX_DEVICE_ORIGINS, '', 'a computer with no switch lets a page in')
+  assert.equal(host.serverEnv({ env: {}, port: 5056, dist: '/d', axiom: true }).FORGEFX_DEVICE_ORIGINS, 'https://axiom.newbold.cloud')
+  assert.equal(host.serverEnv({ env: {}, port: 5056, dist: '/d', axiom: 'yes' }).FORGEFX_DEVICE_ORIGINS, '', 'only true is on')
+  assert.equal(host.serverEnv({ env: {}, port: 5056, dist: '/d', axiom: true }).FORGEFX_ALLOWED_ORIGINS, HOSTED_ORIGIN_FOR_AXIOM, 'turning Axiom on changed who is trusted')
+  // An operator's own value wins, as FORGEFX_ALLOWED_ORIGINS's does.
+  assert.equal(host.serverEnv({ env: { FORGEFX_DEVICE_ORIGINS: 'http://localhost:4000' }, port: 5056, dist: '/d', axiom: true }).FORGEFX_DEVICE_ORIGINS, 'http://localhost:4000')
+
+  // Where the switch is kept: ForgeFX's own store, outside the app, so it survives updates.
+  /* Joined the way ForgeFX joins it, so the same file on every computer, Windows's backslashes included. */
+  const { join: joinPath } = await import('node:path')
+  assert.equal(axiom.axiomStorePath({ env: {}, home: '/home/pi' }), joinPath('/home/pi', '.axis', 'store', 'config.json'))
+  assert.equal(axiom.axiomStorePath({ env: { FORGEFX_DATA_DIR: '/srv/forgefx' }, home: '/home/pi' }), joinPath('/srv/forgefx', 'store', 'config.json'))
+
+  const doc = (data, more = {}) => JSON.stringify({ 'phone.seen': { id: 'phone.seen', collection: 'config', data: { at: 1 } }, 'fractal.axiom': { id: 'fractal.axiom', collection: 'config', data, rev: 1, updatedAt: 1, ...more } })
+  assert.equal(axiom.axiomOn(doc({ on: true, at: 5 })), true)
+  for (const [text, why] of [
+    [doc({ on: false }), 'off'],
+    [doc({ on: 'true' }), 'a string'],
+    [doc({ on: 1 }), 'a number'],
+    [doc(true), 'no object'],
+    [doc({ on: true }, { deleted: true }), 'a deleted document'],
+    [JSON.stringify({ 'phone.seen': { data: { at: 1 } } }), 'no document'],
+    ['{"fractal.axiom": {"data": {"on": tr', 'a file cut short'],
+    ['[]', 'a list'],
+    ['null', 'null'],
+    ['', 'an empty file'],
+    [undefined, 'no file']
+  ]) {
+    assert.equal(axiom.axiomOn(text), false, `${why} reads as on`)
+  }
+  assert.equal(axiom.readAxiom({ env: {}, home: '/h', read: () => { throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' }) } }), false, 'a computer with no store reads as on')
+  assert.equal(axiom.readAxiom({ env: {}, home: '/h', read: (path) => (path === joinPath('/h', '.axis', 'store', 'config.json') ? doc({ on: true }) : '') }), true)
+  assert.equal(axiom.readAxiom({ env: {}, home: '/h' }), false)
+
+  /* A file caught half written is "not known", never "off": ForgeFX rewrites the whole file in place on every store write. */
+  assert.equal(axiom.axiomState(doc({ on: true })), true)
+  assert.equal(axiom.axiomState(doc({ on: false })), false)
+  assert.equal(axiom.axiomState(undefined), false, 'no file is not off')
+  assert.equal(axiom.axiomState(''), null, 'a file emptied for its rewrite reads as off')
+  assert.equal(axiom.axiomState(doc({ on: true }).slice(0, 40)), null, 'a file cut short reads as off')
+  assert.equal(axiom.readAxiom({ env: {}, home: '/h', read: () => doc({ on: true }).slice(0, 30) }), null)
+  assert.equal(axiom.readAxiom({ env: {}, home: '/h', read: () => { throw Object.assign(new Error('EACCES'), { code: 'EACCES' }) } }), null, 'a file that could not be read reads as off')
+  assert.ok(axiom.AXIOM_CONFIRM_MS >= 500 && axiom.AXIOM_GAP_MS >= 5000, 'a change is acted on at once, or the server can be restarted again and again')
+
+  // The computer app reads it before every start, watches it, and starts the server again for a change.
+  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  const run = main.slice(main.indexOf('const runServer = (axiom) => {'), main.indexOf('const restartServer ='))
+  assert.ok(run.indexOf("const seen = typeof axiom === 'boolean' ? axiom : axiomNow()") > -1 && run.indexOf('axiomLetIn = seen === null ? axiomLetIn : seen') < run.indexOf('spawn('), 'the switch is not read before the server is started, or not known is taken for off')
+  const relook = main.slice(main.indexOf('const relookAxiom = async () => {'), main.indexOf('watchFile(axiomRules.axiomStorePath()'))
+  assert.ok(relook.length > 0, 'nothing starts the server again when the switch changes')
+  for (const step of ['quitting', 'first === null || first === axiomLetIn', 'await pause(Math.max(axiomRules.AXIOM_CONFIRM_MS, axiomRestartedAt + axiomRules.AXIOM_GAP_MS - uptime()))', 'want === null || want === axiomLetIn', 'axiomRestartedAt = uptime()', 'server = null', 'await shutdown({ server: old })', 'runServer(want)', 'await waitForServer({ port })', 'if (up) settled()', 'rearm()']) {
+    assert.ok(relook.includes(step), `starting the server again for the switch leaves out ${step}`)
+  }
+  assert.ok(relook.indexOf('server = null') < relook.indexOf('await shutdown({ server: old })'), 'the old server’s exit would be taken for a crash')
+  assert.match(main, /watchFile\(axiomRules\.axiomStorePath\(\), \{ interval: 2000, persistent: false \}/)
+  // And the terminal launcher reads it too.
+  assert.match(readSrc(new URL('../scripts/serve.mjs', import.meta.url), 'utf8'), /serverEnv\(\{ port, dist: join\(root, 'dist'\), axiom: readAxiom\(/)
+
+  // Shown only for a computer app that reads it.
+  for (const [version, can] of [['1.89.26', true], ['1.90.0', true], ['1.89.25', false], ['1.87.55', false], [null, false], ['', false], [undefined, false]]) {
+    assert.equal(shared.axiomComputerCan(version, isOlder), can, `a computer on ${version}`)
+  }
+  assert.ok(!isOlder(pkg.version, shared.AXIOM_COMPUTER_FROM), 'AXIOM_COMPUTER_FROM is a computer app that does not exist yet')
+  assert.equal(shared.axiomOnIn({ on: true }), true)
+  assert.equal(shared.axiomOnIn({ on: 'true' }), false)
+  assert.equal(shared.axiomOnIn(null), false)
+  assert.deepEqual(shared.axiomData(true, 7), { on: true, at: 7 })
+  assert.deepEqual(shared.axiomData('yes', 7), { on: false, at: 7 })
+  assert.equal(shared.AXIOM_LABEL, 'Also let Axiom use this pedal')
+  for (const words of [shared.axiomSub(), shared.axiomSub('Studio Pi'), shared.AXIOM_FAILED]) {
+    assert.doesNotMatch(words, /this phone|\bbeta\b|official|endorsed|approved/i)
+  }
+  assert.match(shared.axiomSub('Studio Pi'), /on Studio Pi\./)
+
+  // Shown to his account only, on the phone and in the computer's window, and only where it can be honoured.
+  const settings = readSrc(new URL('../mobile/src/screens/Settings.js', import.meta.url), 'utf8')
+  assert.match(settings, /\{isAdmin\(account\?\.id\) \? \(\s*<AxiomSwitch\b/, 'the phone shows the Axiom switch to customers')
+  const phoneSwitch = readSrc(new URL('../mobile/src/components/AxiomSwitch.js', import.meta.url), 'utf8')
+  assert.match(phoneSwitch, /const usable = link === 'connected' && !demo && !throughAdapter && axiomComputerCan\(hostVersion, isOlder\)/)
+  assert.match(phoneSwitch, /if \(!usable\) return null/)
+  assert.match(phoneSwitch, /writeComputerSetting\(AXIOM_ID, axiomData\(next, Date\.now\(\)\)\)/)
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  assert.match(app, /<AxiomSwitch admin=\{isAdmin\(link\.account\?\.id\) \|\| isAdmin\(link\.cloud\?\.user\?\.id\)\} \/>/)
+  const windowSwitch = readSrc(new URL('../src/components/AxiomSwitch.jsx', import.meta.url), 'utf8')
+  assert.match(windowSwitch, /const usable = inDesktopApp\(\) && !isDemo\(\)/)
+  assert.match(windowSwitch, /if \(!usable \|\| on === null \|\| \(!admin && !on\)\) return null/, 'the window shows the Axiom switch to customers')
+  assert.match(windowSwitch, /writeHostDoc\(AXIOM_ID, axiomData\(next, Date\.now\(\)\)\)/)
+  /* No answer is never shown as off (the restart a change causes is a few seconds without one), and nothing can be clicked until it is over. */
+  assert.ok(!/readHostDoc\(/.test(windowSwitch), 'the window takes a computer that did not answer for a switch that is off')
+  assert.match(windowSwitch, /const data = await hostDocOrUnknown\(AXIOM_ID\)[\s\S]*?if \(data === undefined\) \{[\s\S]*?return\s*\}\s*setOn\(axiomOnIn\(data\)\)/)
+  assert.match(windowSwitch, /disabled=\{busy \|\| settling\}/)
+  const forgefx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
+  assert.match(forgefx, /export async function hostDocOrUnknown\(id\) \{[\s\S]*?return err\?\.status === 404 \? null : undefined/)
+  /* The phone: another computer starts from nothing, and a read with no answer is asked again rather than shown. */
+  assert.match(phoneSwitch, /useEffect\(\(\) => \{\s*setOn\(null\)\s*setFailed\(false\)\s*\}, \[macName\]\)/)
+  assert.match(phoneSwitch, /if \(value === null\) \{\s*if \(left > 0\) again = setTimeout/)
+  assert.match(phoneSwitch, /disabled=\{busy \|\| settling \|\| on === null\}/)
+  assert.ok(shared.AXIOM_SETTLE_MS >= 8000, 'the box can be tapped again before the computer has started its link again')
+  assert.doesNotMatch(shared.AXIOM_SETTLING, /this phone|\bbeta\b/i)
 })
 
 /*
@@ -16098,8 +16221,9 @@ test('the computer app carries the server that keeps the AM4’s own tuner scree
  */
 test('the computer app carries the device server that answers only its own callers', () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
-  assert.match(lock.forgefx.tag, /\+am4tunerlease\+serverguard$/, 'the computer app carries a device server any web page can sign out')
-  assert.equal(lock.forgefx.commit, '93c153067c06834e9aef6cf06f62e5ed4f093f03')
+  assert.match(lock.forgefx.tag, /\+am4tunerlease\+serverguard(\+|$)/, 'the computer app carries a device server any web page can sign out')
+  /* Pinned at 93c1530, or at a later commit of the same branch that carries it (Axiom's own list, c7b4d3c, sits on top). */
+  assert.ok(['93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170'].includes(lock.forgefx.commit), 'the pin moved off the guard')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /93c1530/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -16110,6 +16234,27 @@ test('the computer app carries the device server that answers only its own calle
   for (const row of ['Sign out on the computer with scope `local`', 'Answer only the device server\u2019s own callers'.replace('\u2019', "'"), 'Check the relay\u2019s rule on the path the router will match'.replace('\u2019', "'")]) {
     assert.ok(mods.includes(row), `licences/MODIFICATIONS.md has no row for: ${row}`)
   }
+})
+
+/*
+ * And Axiom's page may play the unit again, but only on a computer whose
+ * "Also let Axiom use this pedal" switch is on (ForgeFX c7b4d3c, on top of
+ * the guard): FORGEFX_DEVICE_ORIGINS lets a page onto the open routes and
+ * nothing more, and the computer app names Axiom in it only while the
+ * switch is on, so every customer's computer answers as before.
+ */
+test('the computer app carries the device server that can let Axiom onto the unit’s own routes only', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+serverguard\+deviceorigins$/, 'the computer app carries a device server with no way to let Axiom in')
+  assert.equal(lock.forgefx.commit, 'c7b4d3c7caa44247dcf56f051204ce5679b28170')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  const why = lock._why.find((w) => /c7b4d3c/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/FORGEFX_DEVICE_ORIGINS/, /open routes only/, /five account routes/, /'computer-only'/, /trusted, not device/, /'\*' and 'null'/, /Also let Axiom use this pedal/, /COMPUTER_NEEDED stays/, /one commit on top of 93c1530/]) {
+    assert.match(why, said, `the lock's reason leaves out ${said}`)
+  }
+  const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
+  assert.ok(mods.includes('| Let a page named in `FORGEFX_DEVICE_ORIGINS` onto the open routes only'), 'licences/MODIFICATIONS.md has no row for FORGEFX_DEVICE_ORIGINS')
 })
 
 /*
@@ -16124,7 +16269,10 @@ test('the computer app carries the server whose keep of the AM4’s own tuner en
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+am4tunerkeep\+am4tunerlease(\+|$)/, 'the computer app carries a keep that only a Close can end')
   /* Pinned at 41a0c1b, or at a later commit of the same branch that carries it (the device server's guard, 93c1530, sits on top). */
-  assert.ok(['41a0c1b05d6172b057223c70565eec364dff4d67', '93c153067c06834e9aef6cf06f62e5ed4f093f03'].includes(lock.forgefx.commit), 'the pin moved off the tuner lease')
+  assert.ok(
+    ['41a0c1b05d6172b057223c70565eec364dff4d67', '93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170'].includes(lock.forgefx.commit),
+    'the pin moved off the tuner lease'
+  )
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   for (const piece of ['am4tunercc', 'am4tunerkeep', 'am4boosttap', 'am4crossedcopy', 'am4keywrite', 'linuxmidi', 'vp4midi', 'quietMeters']) {
     assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
