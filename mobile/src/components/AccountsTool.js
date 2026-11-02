@@ -5,7 +5,7 @@ import * as Clipboard from 'expo-clipboard'
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { DEFAULT_PROJECT } from '../lib/project'
 import { supabaseClient } from '../lib/relay'
-import { accessAction, accountChoices, accountSections } from '../lib/admin'
+import { accessAction, accountChoices, accountConfirmHint, accountFilterButtons, accountSections, signInHelpWords } from '../lib/admin'
 import Facts from './Facts'
 import Note from './Note'
 import Press from './Press'
@@ -23,11 +23,20 @@ import Sheet from './Sheet'
  * of this page? Or that I can click on it to give them access from that
  * screen?" A tap opens them in a sheet: their email to copy (or hold down to
  * select), and Give access or Take it back — see accountChoices in admin.
+ * And, under those, Confirm their account now for somebody who never
+ * confirmed their email ("Add the option to the accounts page under the
+ * section where I can give access", 2 November 2026).
+ *
+ * AND BUTTONS TO NARROW IT, under the find box: Confirmed, Not confirmed,
+ * Unlocked, Last on today and the rest (ACCOUNT_FILTERS in admin), each with
+ * how many it holds, one picked at a time. They wrap rather than scroll
+ * sideways, so none of them is out of sight.
  */
 export default function AccountsTool() {
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState(null)
   const [find, setFind] = useState('')
+  const [show, setShow] = useState('all')
   const [open, setOpen] = useState(null)
   const [doing, setDoing] = useState(null)
   const [told, setTold] = useState(null)
@@ -79,11 +88,12 @@ export default function AccountsTool() {
         action,
         email: open.email
       })
-      setTold(res)
-      /* The list under the sheet says Unlocked or Not unlocked; read it again
-         so it says what just happened. */
+      /* Confirming emails nobody, so its line says to tell them (signInHelpWords, as on Give access). */
+      setTold(action === 'confirm' ? signInHelpWords('confirmNow', open.email, res.ok ? null : res.message) : res)
+      /* The list under the sheet says Unlocked or Not unlocked, and whether they
+         confirmed; read it again so it says what just happened. */
       if (res.ok) {
-        setOpen((was) => (was ? { ...was, unlocked: action === 'grant', waiting: false } : was))
+        setOpen((was) => (was ? (action === 'confirm' ? { ...was, confirmed: true } : { ...was, unlocked: action === 'grant', waiting: false }) : was))
         load()
       }
     } finally {
@@ -114,9 +124,24 @@ export default function AccountsTool() {
           fontSize: font.body
         }}
       />
+      {said?.ok ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+          {accountFilterButtons(said, find).map((f) => (
+            <Press
+              key={f.key}
+              label={f.label}
+              tone="signal"
+              on={f.key === show}
+              height={40}
+              style={{ paddingHorizontal: space.md }}
+              onPress={() => setShow(f.key)}
+            />
+          ))}
+        </View>
+      ) : null}
       {said && !said.ok ? <Note tone="fault">{said.message}</Note> : null}
       {said?.ok
-        ? accountSections(said, find).map((s) => <Facts key={s.title} title={s.title} rows={s.rows} onRow={pick} />)
+        ? accountSections(said, find, Date.now(), show).map((s) => <Facts key={s.title} title={s.title} rows={s.rows} onRow={pick} />)
         : null}
       <Press label={busy ? 'Loading…' : 'Refresh'} height={TAP} disabled={busy} onPress={load} />
 
@@ -151,6 +176,17 @@ export default function AccountsTool() {
               disabled={!!doing}
               onPress={() => act('revoke')}
             />
+          ) : null}
+          {choices.confirmNow ? (
+            <>
+              <Press
+                label={doing === 'confirm' ? 'Confirming…' : 'Confirm their account now'}
+                height={TAP}
+                disabled={!!doing}
+                onPress={() => act('confirm')}
+              />
+              <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>{accountConfirmHint(open)}</Text>
+            </>
           ) : null}
         </View>
       </Sheet>

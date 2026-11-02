@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DEFAULT_PROJECT, supabaseClient } from '../lib/remote'
-import { accessAction, accountChoices, accountSections } from '../../shared/admin.mjs'
+import { accessAction, accountChoices, accountConfirmHint, accountFilterButtons, accountSections, signInHelpWords } from '../../shared/admin.mjs'
 import Facts from './Facts'
 
 /**
@@ -12,11 +12,15 @@ import Facts from './Facts'
  * click on it to give them access from that screen?" Click somebody and their
  * row opens: Copy email, and Give access or Take it back — see accountChoices
  * in shared/admin.mjs. The words on the page could always be selected here.
+ * And Confirm their account now for somebody who never confirmed their email,
+ * beside them (2 November 2026), as on the phone. And the phone's buttons
+ * to narrow the list (ACCOUNT_FILTERS in shared/admin.mjs), under the find box.
  */
 export default function AccountsTool() {
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState(null)
   const [find, setFind] = useState('')
+  const [show, setShow] = useState('all')
   const [open, setOpen] = useState(null)
   const [doing, setDoing] = useState(null)
   const [told, setTold] = useState(null)
@@ -70,9 +74,10 @@ export default function AccountsTool() {
         action,
         email: open.email
       })
-      setTold(res)
+      /* Confirming emails nobody, so its line says to tell them (signInHelpWords, as on Give access). */
+      setTold(action === 'confirm' ? signInHelpWords('confirmNow', open.email, res.ok ? null : res.message) : res)
       if (res.ok) {
-        setOpen((was) => (was ? { ...was, unlocked: action === 'grant', waiting: false } : was))
+        setOpen((was) => (was ? (action === 'confirm' ? { ...was, confirmed: true } : { ...was, unlocked: action === 'grant', waiting: false }) : was))
         load()
       }
     } finally {
@@ -104,7 +109,13 @@ export default function AccountsTool() {
               {doing === 'revoke' ? 'Taking it back…' : 'Take it back'}
             </button>
           ) : null}
+          {choices.confirmNow ? (
+            <button type="button" className="chip" disabled={!!doing} onClick={() => act('confirm')}>
+              {doing === 'confirm' ? 'Confirming…' : 'Confirm their account now'}
+            </button>
+          ) : null}
         </div>
+        {choices.confirmNow ? <p className="hint">{accountConfirmHint(open)}</p> : null}
       </div>
     )
   }
@@ -122,13 +133,28 @@ export default function AccountsTool() {
         autoCorrect="off"
         spellCheck={false}
       />
+      {said?.ok ? (
+        <div className="history-actions" role="group" aria-label="Show">
+          {accountFilterButtons(said, find).map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              aria-pressed={f.key === show}
+              className={`chip${f.key === show ? ' active' : ''}`}
+              onClick={() => setShow(f.key)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {said && !said.ok ? (
         <p className="save-error" role="status">
           {said.message}
         </p>
       ) : null}
       {said?.ok
-        ? accountSections(said, find).map((s) => (
+        ? accountSections(said, find, Date.now(), show).map((s) => (
             <Facts key={s.title} title={s.title} rows={s.rows} onRow={pick} detail={detail} />
           ))
         : null}

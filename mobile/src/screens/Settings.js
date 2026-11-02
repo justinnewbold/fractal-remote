@@ -265,6 +265,17 @@ export default function Settings({
     }
   }, [])
 
+  /*
+   * WHICH PAGE IS OPEN, declared before anything that reads it during a
+   * render. The two effects below list it as a dependency, and a dependency
+   * list is read as the screen draws: declared further down, as it was until
+   * 2 November 2026, `page` was still undefined there on every render (the
+   * phone's compiler turns const into var), so opening Phone & computer never
+   * asked for the computers and their units again. test/structure.mjs holds
+   * every screen to this now.
+   */
+  const [page, setPage] = useState(startPage)
+
   /* Again on opening a page: the roll call finishes a few seconds after the
      link does, so the list can arrive while nothing about the link changes. */
   useEffect(() => {
@@ -328,6 +339,15 @@ export default function Settings({
    * yes and which no signal always is; mayDrive's answer for his account.
    */
   const bluetoothAdmin = useBluetoothAdmin()
+  /*
+   * The purchase, read before the gate below. It was declared about eighty
+   * lines further down until 2 November 2026, so `purchase` was undefined
+   * here on every render: the gate said no to every customer, and the
+   * Bluetooth page's How to connect, Troubleshooting and What Bluetooth can't
+   * do opened onto an empty screen, and Phone & computer had no Connect over
+   * Bluetooth, for everybody but Justin's account.
+   */
+  const purchase = usePurchase()
   /* Whether this account is offered the Bluetooth page at all: the row, its pages, and the button on Phone & computer all ask this. */
   const bluetoothOffered = mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported()
   /*
@@ -391,7 +411,6 @@ export default function Settings({
      adapter's name where the computer's goes (macName), and never a version. */
   const throughAdapter = bluetooth && !demo
 
-  const [page, setPage] = useState(startPage)
   /* Which tool each Developer page has open, kept while Settings is open. */
   const [devTab, setDevTab] = useState({ customers: 'sales', health: 'live' })
   useEffect(() => {
@@ -414,7 +433,6 @@ export default function Settings({
     const up = upFrom(from) === page
     scroller.current?.scrollTo({ y: up ? offsets.current[page ?? ''] || 0 : 0, animated: false })
   }, [page])
-  const purchase = usePurchase()
   const updates = useUpdates()
   /* This phone's copy older than the store's: the card at the top, once, and the line under Updates. See lib/store-rule.js. */
   const newer = useStoreNote()

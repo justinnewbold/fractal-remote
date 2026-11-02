@@ -12,10 +12,18 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-02",
     "day": "2 November 2026",
-    "version": "1.89.23",
+    "version": "1.89.24",
     "lines": [
       {
         "text": "Settings → About opens straight onto Updates, What’s new, Help with this app and The small print, with no extra tap.",
+        "only": null
+      },
+      {
+        "text": "Fixed: on the Bluetooth page, How to connect my Bluetooth device, Troubleshooting and What Bluetooth can’t do open properly again, and Phone & computer has its Connect over Bluetooth button back.",
+        "only": null
+      },
+      {
+        "text": "Phone & computer checks again for your computers and their units each time it opens.",
         "only": null
       }
     ]

@@ -6035,4 +6035,46 @@ export function run(test) {
     }
   })
 
+  test('nothing is read during a render before the line that sets it, on the phone, the browser or in shared', () => {
+    /*
+     * A const or let read before its own line, in the same function, is
+     * undefined on the phone rather than an error: the phone's compiler turns
+     * them into var (babel-preset-expo's block-scoping, with no check for it).
+     * Settings.js read `purchase` eighty lines before it was set, so the
+     * Bluetooth gate said no to every customer and the Bluetooth page's How to
+     * connect, Troubleshooting and What Bluetooth can't do opened blank for
+     * everybody but Justin's account (26 October to 2 November 2026). Two
+     * dependency lists there read `page` before it was set too, so Phone &
+     * computer never asked for the computers again on opening.
+     *
+     * A read inside a function written further in (a callback, an effect's
+     * body) runs later and is fine; only a read in the same function as the
+     * declaration, above it, is refused.
+     */
+    const root = new URL('../', import.meta.url)
+    const walk = (dir) =>
+      readdirSync(new URL(dir, root)).flatMap((name) => {
+        if (name === 'node_modules') return []
+        const rel = `${dir}${name}`
+        if (statSync(new URL(rel, root)).isDirectory()) return walk(`${rel}/`)
+        return /\.(m?js|jsx)$/.test(name) ? [rel] : []
+      })
+    const files = ['mobile/App.js', ...walk('mobile/src/'), ...walk('src/'), ...walk('shared/')]
+    assert.ok(files.length > 300, `only ${files.length} files were read; this check no longer finds the code`)
+    const early = []
+    for (const file of files) {
+      const ast = parse(readFileSync(new URL(file, root), 'utf8'), { sourceType: 'module', plugins: ['jsx'] })
+      traverse(ast, {
+        ReferencedIdentifier(path) {
+          const binding = path.scope.getBinding(path.node.name)
+          if (!binding || (binding.kind !== 'const' && binding.kind !== 'let')) return
+          if (binding.path.node.start <= path.node.start) return
+          if (path.getFunctionParent()?.node !== binding.path.getFunctionParent()?.node) return
+          early.push(`${file}:${path.node.loc.start.line} reads ${path.node.name}, set at line ${binding.path.node.loc.start.line}`)
+        }
+      })
+    }
+    assert.deepEqual(early, [], `read before it is set:\n  ${early.join('\n  ')}`)
+  })
+
 }
