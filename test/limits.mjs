@@ -2059,7 +2059,8 @@ export function run(test) {
       'click Turn on',
       'Create account',
       'Show the walkthrough',
-      'choose About, and tick Start when this computer turns on.',
+      /* Under About on the front of Settings since 2 November 2026, where About lists its rows itself. */
+      'and, under About, tick Start when this computer turns on.',
       'Plug your unit into one of the Pi’s USB ports',
       'On your phone, open Fractal Remote, signed in to that same account.',
       'Look for the computer again',
@@ -2076,7 +2077,8 @@ export function run(test) {
     assert.match(read('src/components/SignInSheet.jsx'), /submitLabel=\{phone \? 'Connect' : 'Turn on'\}/, 'the computer’s sign-in button no longer says Turn on')
     assert.match(read('src/components/SignIn.jsx'), />\s*Create account\s*</, 'the sign-in form no longer offers Create account')
     assert.match(read('src/components/StartAtBoot.jsx'), /Start when this computer turns on/, 'the switch was renamed; read the guide against it again')
-    assert.match(read('src/App.jsx'), /\babout: 'About',/, 'Settings has no About page, which the guide sends people to')
+    /* Under About on the front of Settings since 2 November 2026, which is where the guide sends people. */
+    assert.match(read('src/App.jsx'), /setup-group">About<\/p>[\s\S]{0,4000}<StartAtBoot \/>/, 'Settings has no About heading over the switch, which the guide sends people to')
     assert.match(read('src/App.jsx'), /\bhelp: 'Troubleshooting',/, 'Settings has no Troubleshooting page, where the guide says Feedback is')
     assert.match(read('src/App.jsx'), /<Section key="feedback" title="Feedback"/, 'the computer app’s Troubleshooting page has no Feedback, as the guide says')
     assert.match(read('mobile/src/screens/Settings.js'), /title="Troubleshooting"[\s\S]*title="Feedback"/, 'the phone’s Troubleshooting has no Feedback, as the guide says')
@@ -2422,7 +2424,7 @@ export function run(test) {
       'open Fractal Remote from Downloads, which brings up its window',
       'Open Settings (the gear ⚙ at the top right), choose Phone & computer, open Phone remote, and click Turn off.',
       'It stays off through restarts, until someone clicks Turn on there.',
-      'choose About and untick Start when this computer turns on',
+      'under About, untick Start when this computer turns on',
       'the menu of the Fractal Remote icon',
       'Then shut the Pi down and unplug it, as in For gigs.',
       'close Fractal Remote all the way and open it again (in a web browser, reload the page): the old Pi is gone from Which unit.',
@@ -2437,7 +2439,8 @@ export function run(test) {
     /* The words are the computer app's: read from it, so a rename there fails here. */
     const app = read('src/App.jsx')
     assert.match(app, /link: 'Phone & computer',/)
-    assert.match(app, /\babout: 'About',/)
+    /* The switch is on the front of Settings, under the About heading (2 November 2026), as the guide says. */
+    assert.match(app, /setup-group">About<\/p>[\s\S]{0,4000}<StartAtBoot \/>/)
     assert.match(app, /<Section key="phone-remote" title="Phone remote"/)
     assert.match(read('src/components/PhoneRemote.jsx'), /onAction\('mac-off'\)[^>]*>\s*Turn off\s*</)
     assert.match(read('src/components/PhoneRemote.jsx'), /onAction\('mac-on'\)[^>]*>\s*Turn on\s*</)

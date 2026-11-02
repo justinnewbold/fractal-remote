@@ -83,14 +83,14 @@ export function run(test) {
     assert.match(page, /export const daysHere = \(\) => daysFor\(Platform\.OS\)\.slice\(0, SHOWN_IN_APP\)/)
     assert.match(page, /<Press label="All updates" sub="On the website" height=\{52\} onPress=\{\(\) => Linking\.openURL\(WHATS_NEW_URL\)\.catch\(\(\) => \{\}\)\} \/>/)
     assert.ok(!/this phone/i.test(page))
-    /* Under About, beside Updates, with ‹ About back. */
+    /* Under About on the front of Settings, beside Updates (2 November 2026: About opens
+       onto its rows, with no page of its own between), so back goes to Settings. */
     const settings = flat('mobile/src/screens/Settings.js')
-    const about = settings.slice(settings.indexOf("{page === 'about' ? ("), settings.indexOf('<Section>The small print</Section>'))
-    assert.ok(about.indexOf('title="Updates"') > 0 && about.indexOf('title="Updates"') < about.indexOf('<SetupRow title="What’s new"'), 'What’s new is not under Updates on the About page')
+    const about = settings.slice(settings.indexOf('<Group title="About"'), settings.indexOf('</Group>', settings.indexOf('<Group title="About"')))
+    assert.ok(about.indexOf('title="Updates"') > 0 && about.indexOf('title="Updates"') < about.indexOf('<SetupRow title="What’s new"'), 'What’s new is not under Updates in About')
     assert.match(about, /<SetupRow title="What’s new" status=\{latestLine\(\)\} onPress=\{\(\) => setPage\('whats-new'\)\} \/>/)
     assert.match(settings, /\{page === 'whats-new' \? \( <> \{head\('What’s new', 'back'\)\} <WhatsNew \/> <\/> \) : null\}/)
-    assert.match(settings, /'whats-new': 'about' \}/)
-    assert.match(settings, /about: '‹ About' \}/)
+    assert.ok(!/'whats-new': 'about'/.test(settings), 'back from What’s new goes to a page that is not there any more')
   })
 
   test('the browser opens the website’s page, and never carries the list, so a new line is never a new computer release', async () => {

@@ -1038,11 +1038,12 @@ export function run(test) {
   })
 
   test('About says where help comes from and opens the support page, at both ends', () => {
+    /* Since 2 November 2026 About's rows are on the front of Settings, under the
+       About heading, and The small print is the page one of them opens. */
     const phone = read('mobile/src/screens/Settings.js')
-    const aboutPage = phone.slice(phone.indexOf("{page === 'about' ? ("))
-    const phoneRows = aboutPage.slice(0, aboutPage.indexOf('<Section>The small print</Section>'))
+    const phoneRows = phone.slice(phone.indexOf('<Group title="About"'), phone.indexOf('</Group>', phone.indexOf('<Group title="About"')))
     assert.match(phoneRows, /<SetupRow\s+title="Help with this app"[\s\S]{0,120}onPress=\{\(\) => Linking\.openURL\(SUPPORT_URL\)\}/, 'the phone’s About has no Help with this app')
-    const small = aboutPage.slice(aboutPage.indexOf('<Section>The small print</Section>'))
+    const small = phone.slice(phone.indexOf("{page === 'about' ? ("))
     assert.match(small, /<Note>\{AFFILIATION\}<\/Note>[\s\S]{0,600}<Note>\{SUPPORT_LINE\}<\/Note>/, 'the phone’s small print does not say where help comes from')
     /*
      * The browser's, in sight: a row on the About page itself, as on the
@@ -1050,11 +1051,11 @@ export function run(test) {
      * review, where it was also the browser's own link blue on the dark panel.
      */
     const web = read('src/App.jsx')
-    const page = web.slice(web.indexOf("{setupPage === 'about' ? ("))
-    const rows = page.slice(page.indexOf('<div className="setup-rows">'), page.indexOf('<Section key="small-print"'))
+    const front = web.slice(web.indexOf('setup-group">About<'))
+    const rows = front.slice(front.indexOf('<div className="setup-rows">'))
     assert.match(rows, /<SetupRow\s+key="help"\s+title="Help with this app"[\s\S]{0,160}onClick=\{\(\) => window\.open\(SUPPORT_URL, '_blank', 'noopener'\)\}/, 'the browser’s About has no Help with this app in sight')
-    assert.ok(rows.indexOf('key="help"') < rows.indexOf('</div>'), 'Help with this app is not one of the About page’s rows')
-    const about = page.slice(page.indexOf('<Section key="small-print"'))
+    assert.ok(rows.indexOf('key="help"') < rows.indexOf('<StartAtBoot />'), 'Help with this app is not one of About’s rows')
+    const about = web.slice(web.indexOf("{setupPage === 'about' ? ("))
     assert.match(about, /<p className="hint">\{AFFILIATION\}<\/p>[\s\S]{0,400}<p className="hint">\{SUPPORT_LINE\}<\/p>/, 'the browser’s small print does not say where help comes from')
     /* And a link dressed as a chip reads as one, never the browser's own blue. */
     const css = read('src/styles.css')

@@ -1102,9 +1102,19 @@ export function run(test) {
       assert.notEqual(at, -1, 'the browser Setup list moved; this check reads it')
       return block.slice(at, block.indexOf('</div>', at))
     }
-    /* The front page is every group now, from the account card to the first page behind it. */
-    const webFront = rowsIn(webSheet.slice(webSheet.indexOf('setup-account-card'), webSheet.indexOf("setupPage === 'appearance'")), 'title')
-    const webAbout = rowsIn(firstList(webSheet.slice(webSheet.indexOf("setupPage === 'about'"))), 'title')
+    /* The front page is every group now, from the account card to the first page behind it.
+       Developer's rows are his account's own tools, laid out for each end (the phone
+       groups them in four, the browser lists its seven), so they are left out of the
+       comparison; the Developer heading itself is compared below. Since 2 November 2026
+       About's rows are on the front too, so About is compared as part of it. */
+    const withoutDeveloper = (block, from, next) => {
+      const at = block.indexOf(from)
+      assert.notEqual(at, -1, `the Developer group moved; this check reads ${from}`)
+      return block.slice(0, at) + block.slice(block.indexOf(next, at + from.length))
+    }
+    const webFrontBlock = webSheet.slice(webSheet.indexOf('setup-account-card'), webSheet.indexOf("setupPage === 'appearance'"))
+    const webFront = rowsIn(withoutDeveloper(webFrontBlock, 'setup-group">Developer<', 'setup-group">'), 'title')
+    const webAbout = rowsIn(webFrontBlock.slice(webFrontBlock.indexOf('setup-group">About<'), webFrontBlock.indexOf('setup-group">Developer<')), 'title')
 
     /* The phone: the front page is `page === null`, About is `page === 'about'`. */
     const app = read('mobile/src/screens/Settings.js')
@@ -1117,8 +1127,9 @@ export function run(test) {
     /* Up to the first page that is not the front one — 'unit', today. Named
        by the shape rather than by which page happens to come first, so adding
        a page does not silently widen the slice. */
-    const phoneFront = rowsIn(between('{page === null ? (', "{page === 'account' ? ("), 'title')
-    const phoneAbout = rowsIn(between("{page === 'about' ? (", '<Section>The small print</Section>'), 'title')
+    const phoneFrontBlock = between('{page === null ? (', "{page === 'account' ? (")
+    const phoneFront = rowsIn(withoutDeveloper(phoneFrontBlock, '<Group title="Developer"', '<Group title='), 'title')
+    const phoneAbout = rowsIn(phoneFrontBlock.slice(phoneFrontBlock.indexOf('<Group title="About"'), phoneFrontBlock.indexOf('<Group title="Developer"')), 'title')
 
     for (const [where, rows] of [['browser front', webFront], ['phone front', phoneFront], ['browser About', webAbout], ['phone About', phoneAbout]]) {
       assert.ok(rows.length > 0, `${where} came back empty; this check no longer reads the list`)
@@ -1173,13 +1184,17 @@ export function run(test) {
      */
     assert.ok(webAbout.includes('Updates'), "Updates is not inside the browser's About")
     assert.ok(phoneAbout.includes('Updates'), "Updates is not inside the phone's About")
-    for (const row of ['Troubleshooting', 'REPLAY', 'Developer']) {
+    for (const row of ['Troubleshooting', 'REPLAY']) {
       assert.ok(webFront.includes(row), `${row} is not on the browser's front list`)
       assert.ok(phoneFront.includes(row), `${row} is not on the phone's front list`)
     }
-    for (const row of ['Give someone access', 'Sales at a glance', 'Everyone with an account']) {
-      assert.ok(!webFront.includes(row) && !phoneFront.includes(row), `${row} is back on a front list instead of inside Developer`)
+    /* About and Developer open onto their rows (2 November 2026): no row on either
+       front list named only for the group it sits under. */
+    for (const row of ['About', 'Developer']) {
+      assert.ok(!webFront.includes(row) && !phoneFront.includes(row), `${row} is a row that opens a page of its own again, under a heading of the same name`)
     }
+    assert.match(webFrontBlock, /isAdmin\(link\.account\?\.id\) \? \(\s*<>\s*<p className="silk-label setup-group">Developer<\/p>/, "the browser's Developer rows are not his account's only")
+    assert.match(phoneFrontBlock, /<Group title="Developer"/, "the phone's Developer rows are not on the front list")
   })
 
   /*
@@ -2330,7 +2345,7 @@ export function run(test) {
     assert.match(read('src/components/Updates.jsx'), /Move to Applications\s*<\/button>/, 'the Updates page has no Move to Applications')
     assert.match(read('src/components/TopBar.jsx'), /<span aria-hidden="true">⚙<\/span>/, 'the window’s gear is not ⚙')
     const app = read('src/App.jsx')
-    assert.match(app, /<SetupRow key="about" title="About"/)
+    assert.match(app, /<SetupRow key="about" title="The small print"/)
     assert.match(app, /<SetupRow key="updates" title="Updates"/)
     assert.match(read('desktop/electron-builder.yml'), /deleteAppDataOnUninstall: false/, 'a reinstall on Windows throws the settings away')
     /* Step 3 quits first and opens after: Finder will not replace an app that

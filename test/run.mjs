@@ -11920,9 +11920,10 @@ test('the switch is in Settings and the tray, and the page reaches it only throu
   // And a failure in plain words, not the computer's own ("EACCES: permission denied, …").
   assert.ok(!/The computer said: \{state\.error\}/.test(ui), 'the page shows the computer’s raw error to a guitarist')
   assert.match(main, /label: 'Start when this computer turns on',\s*\n\s*type: 'checkbox',\s*\n\s*checked: bootOn,\s*\n\s*click: \(item\) => setStartAtBoot\(item\.checked\)/, 'the tray item does not call the same function')
-  // On the About page, beside Updates.
-  const about = appSrc.slice(appSrc.indexOf('<SetupRow key="updates"'))
-  assert.ok(about.indexOf('<StartAtBoot />') !== -1 && about.indexOf('<StartAtBoot />') < about.indexOf('key="small-print"'), 'the switch is not on the About page under Updates')
+  // Under the About heading on the front of Settings, after Updates and before Developer
+  // (2 November 2026: About lists its rows itself, with no page of its own to open first).
+  const about = appSrc.slice(appSrc.indexOf('setup-group">About<'))
+  assert.ok(about.indexOf('<StartAtBoot />') !== -1 && about.indexOf('<SetupRow key="updates"') < about.indexOf('<StartAtBoot />') && about.indexOf('<StartAtBoot />') < about.indexOf('setup-group">Developer<'), 'the switch is not under About, after Updates')
   // And the module it needs is packaged: lib/** carries it.
   assert.match(main, /import\('\.\/lib\/autostart\.mjs'\)/)
   assert.match(builder, /^\s*- lib\/\*\*$/m, 'lib/ is not packaged, so the installed app has no autostart module')
