@@ -7443,6 +7443,112 @@ export function run(test) {
     assert.ok(wake > 0 && wake < link.indexOf('await refreshAll()', wake), 'the rig asks its questions before the link is woken')
   })
 
+  test('Apple’s network session is never the adapter, in any language, and one kept from before is forgotten', async () => {
+    /*
+     * The 2 November 2026 audit. A report from an iPhone set to Romanian (30
+     * October 2026) had "Rețea Session 1" as the only port: Apple's Wi-Fi
+     * MIDI, its network half in the iPhone's own language. The name was told
+     * in English only, so the phone picked it as the adapter by itself (the
+     * only one there is) and the page said the FM3 was not answering, when the
+     * truth was that no adapter was connected. Its driver is held empty here,
+     * so the name alone has to tell it.
+     */
+    const { isNetworkSession, isAdapter, pickAdapter, sessionName } = await import('../mobile/src/lib/bleAdapters.js')
+    const romanian = { id: '1:2', name: 'Rețea Session 1', driver: '' }
+    assert.equal(isNetworkSession(romanian), true, 'the Romanian network session is offered as an adapter')
+    assert.equal(isAdapter(romanian), false)
+    assert.equal(pickAdapter([romanian]), null, 'the Romanian network session is picked as the only adapter there is')
+    /* Every way the iPhone may write it: the other t, the t and its comma apart, and the endpoint's own name alone. */
+    for (const name of ['Reţea Session 1', 'Rețea Session 1', 'Session 1', 'Session1', 'Rețea Sesiune 1']) {
+      assert.equal(isNetworkSession({ id: '1:2', name, driver: '' }), true, `${name} is offered as an adapter`)
+    }
+    /* And in the other languages an iPhone can be set to, the session half translated or not. */
+    const sessions = [
+      'Netzwerk Session 1', 'Netzwerk Sitzung 1', 'Réseau Session 1', 'Red Session 1', 'Red Sesión 1', 'Rede Sessão 1',
+      'Rete Sessione 1', 'Netwerk Sessie 1', 'Sieć Sesja 1', 'Nätverk Session 1', 'Сеть Сеанс 1',
+      'ネットワーク Session 1', 'ネットワーク セッション1', '网络 Session 1', '网络会话1', '網路 Session 1', '네트워크 세션 1'
+    ]
+    for (const name of sessions) assert.ok(sessionName(name), `${name} is not told as Apple’s network session`)
+    /* Apple's network driver says so whatever the name. */
+    assert.equal(isNetworkSession({ id: '1:2', name: 'Studio', driver: 'com.apple.AppleMIDIRTPDriver' }), true)
+
+    /* The real adapters, by the names they give, with no driver and with Apple's Bluetooth one: always adapters. */
+    const real = ['WIDI Uhost', 'WIDI Uhost Bluetooth', 'WIDI Master', 'WIDI Jack', 'WIDI BUD Pro', 'CME U2MIDI Pro', 'U2MIDI Pro', 'C2MIDI Pro']
+    for (const name of real) {
+      for (const driver of ['', 'com.apple.AppleMIDIBluetoothDriver']) {
+        assert.equal(isAdapter({ id: '3:4', name, driver }), true, `${name} (${driver || 'no driver'}) is not offered as an adapter`)
+      }
+    }
+    /* A word for network further in is anybody's: "Red" is Spanish for it, and a WIDI can be renamed. */
+    assert.equal(isAdapter({ id: '3:4', name: 'My Red WIDI', driver: '' }), true, 'a renamed adapter is taken for the network session')
+    /* An AM4 on a USB cable is Apple's USB driver's, and an adapter, whatever its name; so is anything on Apple's Bluetooth driver. */
+    const usbAm4 = { id: '7:8', name: 'AM4', driver: 'com.apple.AppleMIDIUSBDriver' }
+    assert.equal(isAdapter(usbAm4), true, 'an AM4 on a USB cable is not offered')
+    assert.equal(isAdapter({ ...usbAm4, name: 'Netzwerk Session 1' }), true, 'a port on Apple’s USB driver is taken for the network session by its name')
+    assert.equal(isAdapter({ id: '3:4', name: 'Session 1', driver: 'com.apple.AppleMIDIBluetoothDriver' }), true, 'a port on Apple’s Bluetooth driver is taken for the network session by its name')
+    /* With the session beside them, the real one is picked without asking. */
+    const widi = { id: '3:4', name: 'WIDI Uhost', driver: '' }
+    assert.equal(pickAdapter([romanian, widi]), widi)
+    assert.equal(pickAdapter([romanian, usbAm4]), usbAm4)
+
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const JUSTIN = ADMINS[0]
+    const keptOnDisk = (bench) => JSON.parse(bench.disk.get('fractal.bluetooth')).adapter
+    const left = (adapter) => ({ 'fractal.bluetooth': JSON.stringify({ on: true, unit: 'fm3', adapter }) })
+
+    /* The Romanian iPhone after the update: the session it kept is forgotten at launch, on the phone and on its storage. */
+    {
+      const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk: left({ id: '1:2', name: 'Rețea Session 1' }) })
+      try {
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        assert.equal(await bench.ble.restoreBluetooth(), true)
+        assert.equal(bench.ble.bluetoothSettings().adapter, null, 'the network session is still the adapter after the update')
+        await new Promise((r) => setTimeout(r, 0))
+        assert.equal(keptOnDisk(bench), null, 'the network session is kept on the phone’s storage, to come back next launch')
+        assert.ok(bench.log.some((l) => l.includes('Rețea Session 1, is Apple’s network session, not an adapter: forgotten')), 'the log does not say the network session was forgotten')
+      } finally {
+        bench.done()
+      }
+    }
+
+    /* A real adapter kept, a USB AM4 kept, and an adapter on Apple's Bluetooth driver whose name looks like a session: all kept. */
+    for (const adapter of [{ id: '3:4', name: 'WIDI Uhost' }, usbAm4, { id: '5:6', name: 'Session 1', driver: 'com.apple.AppleMIDIBluetoothDriver' }]) {
+      const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk: left(adapter) })
+      try {
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        await bench.ble.restoreBluetooth()
+        assert.deepEqual(bench.ble.bluetoothSettings().adapter, adapter, `${adapter.name} was forgotten at launch`)
+      } finally {
+        bench.done()
+      }
+    }
+
+    /*
+     * The session is never chosen, whoever asks; a real port is, with its
+     * driver kept beside it, so the next launch tells a USB AM4 or a renamed
+     * adapter from the session. And Apple's screen closing on the session
+     * alone chooses nothing and lists nothing, so the page says no adapter
+     * was connected (Bluetooth.js `missed`), not that the FM3 is silent.
+     */
+    {
+      const mod = { ...iphoneModule('allowedAlways').mod, devices: () => [romanian] }
+      const bench = await bluetoothOnABench({ mod })
+      try {
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        await bench.ble.restoreBluetooth()
+        assert.equal(await bench.ble.findAdapters(), null, 'Apple’s screen closing on the network session alone chose it')
+        assert.deepEqual(bench.ble.adapterDevices(), [], 'the network session is offered on the page')
+        assert.equal(bench.ble.bluetoothSettings().adapter, null)
+        bench.ble.chooseAdapter(romanian)
+        assert.equal(bench.ble.bluetoothSettings().adapter, null, 'the network session was chosen')
+        bench.ble.chooseAdapter(usbAm4)
+        assert.deepEqual(bench.ble.bluetoothSettings().adapter, usbAm4, 'the USB AM4 is not kept with its driver')
+      } finally {
+        bench.done()
+      }
+    }
+  })
+
   test('over Bluetooth the bar is blue and its lamp is a wireless mark', async () => {
     /*
      * "Can we change the connected thing to be blue when it's on a Bluetooth

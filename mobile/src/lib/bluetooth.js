@@ -7,7 +7,7 @@ import { BLE_UNITS, CHECK_STEPS, WAYS, createBleWire, settleMethods } from './bl
 import { createJoiner } from './fractal-sysex.mjs'
 import { catalogFor } from './gen3Catalog'
 import { setSwitch } from './bleSwitch'
-import { isAdapter, pickAdapter, pairScreenCrashes, pairScreenShutWords } from './bleAdapters'
+import { isAdapter, isNetworkSession, pickAdapter, pairScreenCrashes, pairScreenShutWords } from './bleAdapters'
 import { logDebug } from './debugLog'
 import { isAdmin } from './admin'
 import { accountId } from './owner-unlock'
@@ -112,13 +112,21 @@ function keep() {
   })
 }
 
+/*
+ * THE ADAPTER AS IT IS KEPT: its id and name, and on an iPhone the driver
+ * that owns it, so the next launch can tell a real adapter whose name looks
+ * like Apple's network session from the session itself (restoreBluetooth).
+ */
+const keptAdapter = (a) => ({
+  id: a.id,
+  name: typeof a.name === 'string' ? a.name : '',
+  ...(typeof a.driver === 'string' && a.driver ? { driver: a.driver } : {})
+})
+
 /** Whatever was on disk, made safe: storage can hold an older shape, or nonsense. */
 function settle(raw) {
   const s = raw && typeof raw === 'object' ? raw : {}
-  const adapter =
-    s.adapter && typeof s.adapter.id === 'string' && s.adapter.id
-      ? { id: s.adapter.id, name: typeof s.adapter.name === 'string' ? s.adapter.name : '' }
-      : null
+  const adapter = s.adapter && typeof s.adapter.id === 'string' && s.adapter.id ? keptAdapter(s.adapter) : null
   const methods = {}
   for (const key of UNIT_KEYS) {
     if (s.methods?.[key] && typeof s.methods[key] === 'object') methods[key] = perUnit(settleMethods(s.methods[key]))
@@ -516,14 +524,25 @@ export async function restoreBluetooth() {
   const before = JSON.stringify(saved)
   let refused = false
   let dropped = null
+  let session = null
   try {
     const raw = await AsyncStorage.getItem(KEY)
     const was = settle(raw ? JSON.parse(raw) : null)
     /* A unit this account is not offered, with Bluetooth already open to it: let go of, and the disk told (see allowBluetooth). */
     dropped = allowed === true && was.unit && !offered(was.unit) ? was.unit : null
+    /*
+     * APPLE'S NETWORK SESSION, KEPT AS THE ADAPTER: forgotten, and the disk
+     * told. Before the 2 November 2026 audit an iPhone in another language
+     * could pick "Rețea Session 1" by itself (bleAdapters isNetworkSession),
+     * and it stayed the adapter at every launch after, with the page saying
+     * the unit was not answering. Forgotten, the page says there is no
+     * adapter yet, and Connect goes looking for the real one.
+     */
+    session = was.adapter && isNetworkSession(was.adapter) ? was.adapter : null
     refused = was.on && allowed === false
     pendingOn = was.on && !!was.unit && allowed === null
     saved = { ...was, unit: dropped ? null : was.unit, on: was.on && !!was.unit && !dropped && allowed === true && bluetoothSupported() }
+    if (session) saved = { ...saved, adapter: null }
   } catch {
     pendingOn = false
     saved = { ...SAVED }
@@ -531,7 +550,8 @@ export async function restoreBluetooth() {
   setSwitch({ on: saved.on })
   if (refused) logDebug('ble', OFF_FOR_OTHERS)
   if (dropped) logDebug('ble', `the ${unitName(dropped)} is not offered over Bluetooth to this account: the unit is cleared`)
-  if (refused || dropped) keep()
+  if (session) logDebug('ble', `the adapter kept from last time, ${adapterName(session) || 'with no name'}, is Apple’s network session, not an adapter: forgotten`)
+  if (refused || dropped || session) keep()
   if (pendingOn) logDebug('ble', 'Bluetooth was on last time: off until this phone knows whose account it is')
   /* Nothing on disk is the ordinary case, and it changes nothing: no screen is redrawn for it. */
   if (JSON.stringify(saved) === before) return saved.on
@@ -587,8 +607,10 @@ export function setBluetoothUnit(key) {
 /** Use this adapter from now on. bleLink hears the change and connects to it. */
 export function chooseAdapter(dev) {
   if (!dev || typeof dev.id !== 'string' || !dev.id) return
+  /* Never Apple's network session, whoever asks (bleAdapters isNetworkSession). */
+  if (!isAdapter(dev)) return
   if (saved.adapter?.id === dev.id) return
-  saved = { ...saved, adapter: { id: dev.id, name: typeof dev.name === 'string' ? dev.name : '' } }
+  saved = { ...saved, adapter: keptAdapter(dev) }
   logDebug('ble', `adapter chosen: ${adapterName(dev) || 'an adapter with no name'}`)
   keep()
   /*
