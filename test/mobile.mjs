@@ -17008,26 +17008,87 @@ export function run(test) {
     } finally {
       benchIn.done()
     }
-    /* And signed in on a sign-in kept on the phone (no signal to renew it) is signed in too. */
-    const rcKept = pretendRevenueCat()
+    /* And signed in on a sign-in kept on the phone (no signal to renew it) is
+       signed in too: no ask, and RevenueCat put on that account BEFORE the
+       Restore, never left on the nameless id it would move it to. */
+    const rcKept = pretendRevenueCat({ owns: { 'acct-kept': 'APP_STORE' }, aliased: ['acct-kept'] })
+    rcKept.receipt = 'acct-kept'
     const benchKept = await benchWith(rcKept)
     try {
       benchKept.who.kept = 'acct-kept'
+      assert.equal(rcKept.me, rcKept.NAMELESS, 'the bench’s RevenueCat started on the account')
       const out = await benchKept.p.restorePurchase()
       assert.equal(out.ask, undefined, 'a customer on a kept sign-in was asked as if nobody were signed in')
-      assert.ok(rcKept.calls.includes('restorePurchases'))
-      assert.match(out.message, /or on the account you’re signed in to/)
+      const linkAt = rcKept.calls.indexOf('logIn acct-kept')
+      assert.ok(linkAt >= 0 && linkAt < rcKept.calls.indexOf('restorePurchases'), 'Restore went to the store before RevenueCat was on the signed-in account')
+      assert.equal(out.ok, true)
+      assert.equal(rcKept.has.get('acct-kept'), 'APP_STORE', 'Restore on a sign-in that never linked took the purchase off the account')
+      assert.equal(rcKept.has.has(rcKept.NAMELESS), false)
     } finally {
       benchKept.done()
     }
 
-    /* The words: whose it is first, signing in the main way, restoring here the second with its cost. */
-    assert.equal(bench.p.RESTORE_WHOSE, 'Your purchase belongs to the account you bought it with. Sign in to that account and it unlocks on this phone too, and keeps working on your computer.')
+    /* Signed in, and the link cannot be made (RevenueCat out of reach at the
+       sign-in, and still): nothing is sent, and it says to try again. */
+    const rcCut = pretendRevenueCat({ owns: { 'acct-cut': 'APP_STORE' }, aliased: ['acct-cut'] })
+    rcCut.receipt = 'acct-cut'
+    rcCut.loginFails = true
+    const benchCut = await benchWith(rcCut, { session: 'acct-cut' })
+    try {
+      assert.equal(rcCut.me, rcCut.NAMELESS, 'the bench linked with the link failing')
+      const out = await benchCut.p.restorePurchase()
+      assert.equal(out.ok, false)
+      assert.equal(out.ask, undefined)
+      assert.equal(out.message, benchCut.p.RESTORE_NO_LINK)
+      assert.ok(!rcCut.calls.includes('restorePurchases'), 'Restore with the link failed sent the receipt to the nameless id')
+      assert.equal(rcCut.has.get('acct-cut'), 'APP_STORE', 'the purchase came off the signed-in account, and its computer with it')
+    } finally {
+      benchCut.done()
+    }
+
+    /* A purchase on its way, and its Restore finds nobody signed in after all
+       (a sign-in turned away since): the line for nobody signed in goes up,
+       whose way is an account, and nothing moves. */
+    const rcGone = pretendRevenueCat({ aliased: ['acct-used'] })
+    const benchGone = await benchWith(rcGone)
+    try {
+      await benchGone.p.buyUnlock()
+      rcGone.syncCarries = false
+      benchGone.who.session = 'acct-used'
+      await benchGone.p.linkAccount()
+      assert.equal(benchGone.p.purchaseState().stuck, true, 'the bench’s purchase is not on its way')
+      assert.equal(benchGone.p.purchaseState().held, benchGone.p.NOT_ACROSS)
+      benchGone.who.session = null
+      const before = rcGone.calls.length
+      const out = await benchGone.p.restorePurchase()
+      assert.equal(out.ask, true)
+      assert.ok(!rcGone.calls.slice(before).includes('restorePurchases'))
+      assert.equal(benchGone.p.purchaseState().held, benchGone.p.NOT_ACROSS_SIGNED_OUT, 'the stage still offers Restore, which only asks again, to nobody signed in')
+      assert.equal(benchGone.p.purchaseState().unlocked, true)
+    } finally {
+      benchGone.done()
+    }
+
+    /*
+     * The words: whether there is an account first, signing in the main way,
+     * restoring here the second with who it is for and its cost. Asked, never
+     * told: buying needs no account, so for some buyers there is none, and
+     * none after Delete account either. And the cost is everything signed in
+     * to the account, not a computer alone, which a Bluetooth player may not
+     * have.
+     */
+    assert.equal(bench.p.RESTORE_WHOSE, 'Bought it while signed in to an account? Sign in to that account and it unlocks on this phone too, and stays on everything else signed in to it.')
     assert.equal(bench.p.SIGN_IN_TO_IT, 'Sign in to that account')
     assert.equal(bench.p.RESTORE_HERE, 'Restore to this phone only')
-    assert.equal(bench.p.RESTORE_HERE_COSTS, 'Your computer stops seeing the purchase until you sign in on this phone.')
+    assert.equal(
+      bench.p.RESTORE_HERE_COSTS,
+      'Use this if you bought it without an account, or deleted the account since. If the purchase is on an account, this takes it off: anything else signed in to that account, a computer, phone or tablet, stops seeing it until you sign in on this phone.'
+    )
+    assert.equal(bench.p.RESTORE_NO_LINK, 'Couldn’t reach your account just now, so nothing was restored. Try again in a moment.')
+    assert.ok(!/belongs to|your computer/i.test(bench.p.RESTORE_WHOSE + bench.p.RESTORE_HERE_COSTS), 'the ask says the purchase is on an account, or that there is a computer, as fact')
     /* The device in hand by name (CLAUDE.md: never "this phone" typed), and nothing a phone app may not say (Apple 3.1.3). */
     const lib = read('mobile/src/lib/purchases.js')
+    assert.ok(!/this phone|website|beta/i.test(lib.split('\n').find((l) => l.startsWith('export const RESTORE_NO_LINK =')) || 'missing'))
     for (const name of ['RESTORE_WHOSE', 'RESTORE_HERE', 'RESTORE_HERE_COSTS']) {
       const line = lib.split('\n').find((l) => l.startsWith(`export const ${name} =`)) || ''
       assert.match(line, /this \$\{deviceNoun\(\)\}/, `${name} does not name the device in hand`)
@@ -17045,13 +17106,16 @@ export function run(test) {
     assert.match(onb, /\{ label: P3\.restore, onPress: \(\) => restore\('app'\), disabled: busy \}/)
     assert.match(onb, /\{asking \? <RestoreAsk onSignIn=\{\(\) => onAccount\?\.\(\)\} onHere=\{\(\) => restore\('app', true\)\} busy=\{busy\} \/> : null\}/)
     assert.match(onb, /const go = \(next\) => \{ setSaid\(null\) setError\(null\) setAsking\(false\) setAt\(next\) \}/, 'the ask follows the walkthrough onto the next screen')
+    /* And a new Restore clears the last one's note, so a failed "Restore to this phone only" does not sit under the ask it reopens. */
+    assert.match(onb, /const restore = async \(then, here = false\) => \{ setBusy\(true\) setSaid\(null\) setError\(null\) setAsking\(false\)/, 'a failed Restore’s note stays under the next one')
     const ask = withoutComments(read('mobile/src/components/RestoreAsk.js')).replace(/\s+/g, ' ')
     assert.match(
       ask,
-      /<Note tone="warn">\{RESTORE_WHOSE\}<\/Note> \{onSignIn \? <Press label=\{SIGN_IN_TO_IT\} tone="signal" disabled=\{busy\} onPress=\{onSignIn\} \/> : null\} <Press label=\{RESTORE_HERE\} sub=\{RESTORE_HERE_COSTS\} disabled=\{busy\} onPress=\{onHere\} \/>/,
+      /<Note tone="warn">\{RESTORE_WHOSE\}<\/Note> \{onSignIn \? <Press label=\{SIGN_IN_TO_IT\} tone="signal" disabled=\{busy\} onPress=\{onSignIn\} \/> : null\} <Press label=\{RESTORE_HERE\} disabled=\{busy\} onPress=\{onHere\} \/> <Note>\{RESTORE_HERE_COSTS\}<\/Note>/,
       'the ask does not say whose it is first, then Sign in, then Restore here with what it costs'
     )
-    /* OnlyOnThisPhone's Restore is the signed-in line's alone (pinned above), so it needs no ask. */
+    /* OnlyOnThisPhone's Restore is the signed-in line's alone (pinned above), so it needs no ask: a Restore
+       there that finds nobody signed in puts the signed-out line up instead (benchGone, above). */
   })
 
   test('deleting the account says what it costs, by where the full version came from', async () => {
@@ -17177,7 +17241,8 @@ export function run(test) {
     assert.match(only, /if \(!onAccount \|\| !onlyHere\) return null/)
     /* A purchase stuck short of the account is said on the stage, with the way to try again now. */
     assert.match(only, /if \(stuck\) \{ return \( <View style=\{\{ gap: space\.sm \}\}> <Note tone="warn" onDismiss=\{\(\) => setGone\(true\)\}>\{said \|\| NOT_ACROSS\}<\/Note> <Press label=\{busy \? 'Trying…' : 'Restore a purchase'\}/, 'nothing on the stage says the purchase has not reached the account')
-    assert.match(only, /const out = await restorePurchase\(\) setBusy\(false\) setSaid\(out\.ok \? null : out\.message\)/)
+    /* And never the signed-out ask in that line (the 2 November 2026 audit): purchases.js swaps the signed-out line in for it. */
+    assert.match(only, /const out = await restorePurchase\(\) setBusy\(false\) setSaid\(out\.ok \|\| out\.ask \? null : out\.message\)/)
     assert.match(only, /<Note onDismiss=\{\(\) => setGone\(true\)\}>\{ONLY_HERE\}<\/Note>/, 'the line cannot be put away')
     assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} onWant=\{says\.only\} \/>/)
     const settings = withoutComments(read('mobile/src/screens/Settings.js')).replace(/\s+/g, ' ')

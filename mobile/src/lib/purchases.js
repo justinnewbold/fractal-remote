@@ -208,11 +208,23 @@ export const NO_ACCOUNT_THERE =
  * off anybody, so it is the main choice. Restoring here stays, the second
  * one, because Apple wants a Restore that needs no account, and it says
  * what it costs: signing in here later sends it back (linkTo).
+ *
+ * ASKED, NEVER TOLD. Buying needs no account, so plenty of buyers have
+ * none, and somebody who deleted theirs has none either: the store purchase
+ * stays with the Apple ID or Google account (Settings, Delete account). So
+ * the first line asks whether there is an account rather than saying there
+ * is one, and the second says who restoring here is for. Its cost is
+ * everything signed in to the account, not only a computer: a Transfer
+ * takes it off the account itself, and a phone or tablet signed in to it
+ * locks on its next answer (the listener, below), and a Bluetooth player
+ * may have no computer at all.
  */
-export const RESTORE_WHOSE = `Your purchase belongs to the account you bought it with. Sign in to that account and it unlocks on this ${deviceNoun()} too, and keeps working on your computer.`
+export const RESTORE_WHOSE = `Bought it while signed in to an account? Sign in to that account and it unlocks on this ${deviceNoun()} too, and stays on everything else signed in to it.`
 export const SIGN_IN_TO_IT = 'Sign in to that account'
 export const RESTORE_HERE = `Restore to this ${deviceNoun()} only`
-export const RESTORE_HERE_COSTS = `Your computer stops seeing the purchase until you sign in on this ${deviceNoun()}.`
+export const RESTORE_HERE_COSTS = `Use this if you bought it without an account, or deleted the account since. If the purchase is on an account, this takes it off: anything else signed in to that account, a computer, phone or tablet, stops seeing it until you sign in on this ${deviceNoun()}.`
+/* Signed in, and RevenueCat could not be put on the account first (below). */
+export const RESTORE_NO_LINK = 'Couldn’t reach your account just now, so nothing was restored. Try again in a moment.'
 
 /* The hold, less that one: once the account changes, or has the purchase, its words are not true. */
 const notStuck = () => (state.held === NOT_ACROSS || state.held === NOT_ACROSS_SIGNED_OUT ? null : state.held)
@@ -1248,14 +1260,37 @@ export const restorePurchase = async ({ here = false } = {}) => {
   /*
    * NOBODY SIGNED IN: SAID FIRST, AND NOTHING MOVED (RESTORE_WHOSE, above).
    * The screen offers the two ways, and only the second comes back here
-   * with `here`. Signed in, Restore goes straight to the store as it always
-   * has: the receipt lands on the account signed in to.
+   * with `here`. Signed in, Restore goes to the store as it always has,
+   * once RevenueCat is on the account (below): the receipt lands on the
+   * account signed in to.
    */
   if (!who && !here) {
     logDebug('purchases: Restore with nobody signed in, so it asks first and moves nothing')
+    /* A purchase on its way, Restore tapped on its signed-in line by
+       somebody no longer signed in (a sign-in turned away since): the line
+       for nobody signed in from now, the way a sign-in puts the other back
+       (link, stuckLine), and its way is to an account, never this ask. */
+    if (state.stuck && state.held === NOT_ACROSS) set({ held: NOT_ACROSS_SIGNED_OUT })
     return { ok: false, ask: true, message: RESTORE_WHOSE }
   }
   try {
+    /*
+     * SIGNED IN, BUT RevenueCat NOT ON THE ACCOUNT: linked first, and never
+     * restored from anywhere else. The receipt goes to whoever RevenueCat is
+     * answering as, not to whoever is signed in, and a sign-in whose link
+     * failed (no signal at the time, or a sign-in kept on the phone that
+     * never linked) leaves it on the phone's nameless id: Restore there took
+     * the purchase off this very account, and off its computer, the same
+     * TRANSFER as signed out. The same way Buy asks (ownedNow), and when the
+     * link cannot be made, nothing is sent.
+     */
+    if (who && (await currentId(api)) !== who) {
+      const linked = await linkTo(api, who)
+      if (!linked && (await currentId(api)) !== who) {
+        logDebug('purchases: Restore could not put the store on the signed-in account first, so nothing was sent')
+        return { ok: false, message: RESTORE_NO_LINK }
+      }
+    }
     /* Fresh: when the store has nothing new to send, Restore answers with
        RevenueCat's saved copy, from before a purchase made on the website or
        another phone a minute ago. */

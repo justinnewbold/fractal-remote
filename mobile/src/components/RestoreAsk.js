@@ -13,8 +13,12 @@ import Press from './Press'
  * phone's nameless id, and their computer was refused (purchases.js,
  * RESTORE_WHOSE). So the purchase's own account comes first, and signing
  * in to it moves nothing off anybody. Restoring here is the second button,
- * with what it costs under it, and it is the only thing that sends the
- * Restore on (`onHere`, which calls restorePurchase with `here`).
+ * with who it is for and what it costs under it, and it is the only thing
+ * that sends the Restore on (`onHere`, which calls restorePurchase with
+ * `here`).
+ *
+ * The cost as a note of its own under the button, not the button's `sub`,
+ * which stops at two lines and would cut it off.
  *
  * Shown by the paywall and the walkthrough, under their Restore. No words
  * typed here: they are purchases.js's, so the two screens say the same.
@@ -24,7 +28,8 @@ export default function RestoreAsk({ onSignIn, onHere, busy = false }) {
     <View style={{ gap: space.sm }}>
       <Note tone="warn">{RESTORE_WHOSE}</Note>
       {onSignIn ? <Press label={SIGN_IN_TO_IT} tone="signal" disabled={busy} onPress={onSignIn} /> : null}
-      <Press label={RESTORE_HERE} sub={RESTORE_HERE_COSTS} disabled={busy} onPress={onHere} />
+      <Press label={RESTORE_HERE} disabled={busy} onPress={onHere} />
+      <Note>{RESTORE_HERE_COSTS}</Note>
     </View>
   )
 }

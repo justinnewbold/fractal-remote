@@ -156,6 +156,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
    */
   const restore = async (then, here = false) => {
     setBusy(true)
+    setSaid(null)
     setError(null)
     setAsking(false)
     const out = await restorePurchase({ here })
