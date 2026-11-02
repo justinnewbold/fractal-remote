@@ -1752,6 +1752,15 @@ out to 100% of users." Once it is live, the risk named under *By hand in
 Play Console for 1.87.11*, permissions the listing gives no reason for, is
 closed: the listing now promotes what Nearby devices is declared for.
 
+The block below is kept as the record of what went in with 1.89.0, never
+as a source: the next version's Description starts from the live one (*Not
+"requires a computer" any more*, at the top of this file). Its BLUETOOTH
+section's sentence "So far it has been tried on the AM4 and the FM3: ..."
+stays here only as that record, and goes into no later Description, since
+no store text says what has been tried (31 October 2026). Its SUPPORTED
+UNITS VP4 line is today's words (2 November 2026), not 1.89.0's, because
+test/limits.mjs holds that paragraph to the *Description* at the top.
+
 ```
 REQUIRES A COMPUTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play. There is also Bluetooth, with more lag: see below.
 
