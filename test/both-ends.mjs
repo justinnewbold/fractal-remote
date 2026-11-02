@@ -2675,11 +2675,11 @@ export function run(test) {
     const row = (email) => people.rows.concat(waiting.rows).find((r) => r.email === email)
     assert.equal(row('new@x.com').email, 'new@x.com', 'a row does not say whose it is')
     assert.match(row('new@x.com').value, /^new@x\.com\n/, 'the list reads differently than it did')
-    assert.deepEqual(accountChoices(row('new@x.com')), { give: true, takeBack: false })
-    assert.deepEqual(accountChoices(row('paid@x.com')), { give: false, takeBack: true })
-    assert.deepEqual(accountChoices(row('me@x.com')), { give: false, takeBack: false }, 'the owner can take his own access away')
-    assert.deepEqual(accountChoices(row('soon@x.com')), { give: false, takeBack: true })
-    assert.deepEqual(accountChoices({ label: '', value: 'Nobody has made an account yet.' }), { give: false, takeBack: false })
+    assert.deepEqual(accountChoices(row('new@x.com')), { give: true, takeBack: false, confirmNow: false })
+    assert.deepEqual(accountChoices(row('paid@x.com')), { give: false, takeBack: true, confirmNow: false })
+    assert.deepEqual(accountChoices(row('me@x.com')), { give: false, takeBack: false, confirmNow: false }, 'the owner can take his own access away')
+    assert.deepEqual(accountChoices(row('soon@x.com')), { give: false, takeBack: true, confirmNow: false })
+    assert.deepEqual(accountChoices({ label: '', value: 'Nobody has made an account yet.' }), { give: false, takeBack: false, confirmNow: false })
 
     /* The phone: a tap opens the person in a sheet; the words can be held and copied. */
     const facts = read('mobile/src/components/Facts.js')
@@ -2699,6 +2699,58 @@ export function run(test) {
     assert.match(web, /act\('grant'\)/)
     assert.match(web, /accountChoices\(open\)/)
     assert.match(read('src/styles.css'), /\.facts-pick \{[\s\S]*?user-select: text;/, 'a clickable email can no longer be selected in the browser')
+  })
+
+  /*
+   * "I confirmed crawlerrobo but it was hard to find. Add the option to the
+   * accounts page under the section where I can give access" (2 November
+   * 2026): it was only on Give access, behind typing the address into the
+   * Customer lookup.
+   */
+  test('an account that never confirmed can be confirmed from Everyone with an account, under Give access, at both ends', async () => {
+    const { accountSections, accountChoices, accountConfirmHint, ACCOUNT_CONFIRM_HINT, CONFIRM_NOW_WAITING, signInHelpWords } = await import('../shared/admin.mjs')
+    const answer = {
+      ok: true,
+      total: 4,
+      accounts: [
+        { email: 'typo@gmial.com', signed_up: Date.now(), confirmed: false, last_sign_in: null, unlocked: true },
+        { email: 'Given@x.com', signed_up: Date.now(), confirmed: false, last_sign_in: null, unlocked: false },
+        { email: 'fine@x.com', signed_up: Date.now(), confirmed: true, last_sign_in: Date.now(), unlocked: false },
+        { email: 'me@x.com', signed_up: Date.now(), confirmed: false, last_sign_in: Date.now(), unlocked: true, source: 'owner' }
+      ],
+      waiting: [{ email: 'given@x.com', added: Date.now() }]
+    }
+    const [people, waiting] = accountSections(answer)
+    const row = (email) => people.rows.concat(waiting.rows).find((r) => r.email === email)
+    /* Paid or not: the buyer whose emails bounce is the one this is for. */
+    assert.deepEqual(accountChoices(row('typo@gmial.com')), { give: false, takeBack: true, confirmNow: true })
+    assert.deepEqual(accountChoices(row('Given@x.com')), { give: true, takeBack: false, confirmNow: true })
+    assert.equal(accountChoices(row('fine@x.com')).confirmNow, false, 'an account that confirmed is offered Confirm now again')
+    assert.equal(accountChoices(row('me@x.com')).confirmNow, false, 'the owner’s own account is offered Confirm now')
+    assert.equal(accountChoices(row('given@x.com')).confirmNow, false, 'a waiting-list address, which has no account, is offered Confirm now')
+    /* A row that says nothing about confirming is never offered it on a guess. */
+    assert.equal(accountChoices({ email: 'old@x.com', unlocked: false }).confirmNow, false)
+    /* The line under it: no "Try Resend first" where there is no Resend, and the waiting list's warning, in any case. */
+    assert.equal(accountConfirmHint(row('typo@gmial.com')), ACCOUNT_CONFIRM_HINT)
+    assert.doesNotMatch(ACCOUNT_CONFIRM_HINT, /resend/i, 'the line points at a Resend this page does not have')
+    assert.equal(accountConfirmHint(row('Given@x.com')), `${ACCOUNT_CONFIRM_HINT} ${CONFIRM_NOW_WAITING}`, 'an address on the waiting list is confirmed without saying what it hands over')
+    assert.ok(!/this phone/i.test(ACCOUNT_CONFIRM_HINT))
+    assert.match(signInHelpWords('confirmNow', 'typo@gmial.com').message, /^typo@gmial\.com is confirmed\. Nothing is emailed to them/)
+
+    /* Both ends: the same server action as the Customer lookup, beside Give access and Take it back, in the same words. */
+    for (const file of ['mobile/src/components/AccountsTool.js', 'src/components/AccountsTool.jsx']) {
+      const tool = read(file)
+      const give = tool.indexOf("act('grant')")
+      const back = tool.indexOf("act('revoke')")
+      const confirm = tool.indexOf("act('confirm')")
+      assert.ok(give > 0 && back > give && confirm > back, `${file}: Confirm now is not under Give access and Take it back`)
+      assert.match(tool, /\{choices\.confirmNow \? \(/, `${file}: Confirm now is not behind accountChoices`)
+      assert.match(tool, /'Confirming…' : 'Confirm their account now'/, `${file}: the button is not worded as on Give access`)
+      assert.match(tool, /accountConfirmHint\(open\)/, `${file}: the button has no line saying what it does`)
+      assert.match(tool, /action === 'confirm' \? signInHelpWords\('confirmNow', open\.email, res\.ok \? null : res\.message\) : res/, `${file}: confirming does not say to tell them`)
+      /* Confirming changes whether they confirmed, never whether they are unlocked. */
+      assert.match(tool, /action === 'confirm' \? \{ \.\.\.was, confirmed: true \} : \{ \.\.\.was, unlocked: action === 'grant', waiting: false \}/, `${file}: confirming marks them locked or unlocked`)
+    }
   })
 
   /*

@@ -550,6 +550,8 @@ export function accountSections(answer, filter = '', now = Date.now()) {
   const devices = everyone.filter((a) => /@pair\.fractal\.newbold\.cloud$/i.test(String(a?.email || '')))
   const people = everyone.filter((a) => !devices.includes(a)).filter((a) => match(a.email))
   const waiting = (Array.isArray(answer.waiting) ? answer.waiting : []).filter((w) => match(w.email))
+  /* Every address on the waiting list, filtered or not: Confirm now on one of them hands its unlock to whoever made the account. */
+  const onWaitingList = new Set((Array.isArray(answer.waiting) ? answer.waiting : []).map((w) => String(w?.email || '').trim().toLowerCase()))
 
   const unlock = (a) => {
     if (!a.unlocked) return 'Not unlocked'
@@ -567,7 +569,16 @@ export function accountSections(answer, filter = '', now = Date.now()) {
     {
       title: want ? `Accounts matching "${want}" (${people.length})` : `Everyone with an account (${total})`,
       rows: people.length
-        ? people.map((a) => ({ label: '', value: `${a.email}\n${line(a)}`, email: a.email, line: line(a), unlocked: !!a.unlocked, owner: a.source === 'owner' }))
+        ? people.map((a) => ({
+            label: '',
+            value: `${a.email}\n${line(a)}`,
+            email: a.email,
+            line: line(a),
+            unlocked: !!a.unlocked,
+            owner: a.source === 'owner',
+            confirmed: !!a.confirmed,
+            onWaitingList: onWaitingList.has(String(a.email || '').trim().toLowerCase())
+          }))
         : [{ label: '', value: want ? 'Nobody with an account matches that.' : 'Nobody has made an account yet.' }]
     }
   ]
@@ -596,13 +607,37 @@ export function accountSections(answer, filter = '', now = Date.now()) {
  * (or are waiting). The same server as Give someone access does the work;
  * it refuses to take back an unlock somebody paid for, and says so.
  *
- * The owner's own account offers neither: it is unlocked by being his.
+ * AND CONFIRM NOW, under them, for an account that never confirmed its
+ * email. "I confirmed crawlerrobo but it was hard to find. Add the option to
+ * the accounts page under the section where I can give access" (Justin,
+ * 2 November 2026): it was only on Give access, after typing the address into
+ * the Customer lookup. The same server action ('confirm') as there.
+ *
+ * The owner's own account offers none of them: it is unlocked by being his.
+ * A waiting-list row is an address, not an account, so there is nothing of
+ * it to confirm.
  */
 export function accountChoices(row) {
-  if (!row?.email) return { give: false, takeBack: false }
-  if (row.owner) return { give: false, takeBack: false }
-  if (row.waiting) return { give: false, takeBack: true }
-  return { give: !row.unlocked, takeBack: !!row.unlocked }
+  if (!row?.email) return { give: false, takeBack: false, confirmNow: false }
+  if (row.owner) return { give: false, takeBack: false, confirmNow: false }
+  if (row.waiting) return { give: false, takeBack: true, confirmNow: false }
+  return { give: !row.unlocked, takeBack: !!row.unlocked, confirmNow: row.confirmed === false }
+}
+
+/*
+ * The line under Confirm now on Everyone with an account. Not the Customer
+ * lookup's, which starts "Try Resend first": there is no Resend here, and the
+ * person this was asked for is the one Resend cannot reach, a buyer whose
+ * address was mistyped, so every email to it bounces. Confirming lets in
+ * whoever made the account, so it still says to be sure that is them; and an
+ * address on the waiting list says what it hands over, as the lookup does.
+ */
+export const ACCOUNT_CONFIRM_HINT =
+  'Lets them sign in with the password they chose, without the confirmation email: for someone whose emails bounce or never arrive. It lets in whoever made this account, so only use it when you know that was them.'
+
+/** The words under Confirm now for one row of Everyone with an account. */
+export function accountConfirmHint(row) {
+  return row?.onWaitingList ? `${ACCOUNT_CONFIRM_HINT} ${CONFIRM_NOW_WAITING}` : ACCOUNT_CONFIRM_HINT
 }
 
 /* ------------------------------------------------------------------------ */
