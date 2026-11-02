@@ -1098,9 +1098,24 @@ export function run(test) {
       'what the words say a VP4 can’t do yet is not what the app refuses on one'
     )
 
-    /* The purchase page's sentence: what works, that presets and scenes are untried, and the five, in one sentence. */
+    /* The purchase page's sentence: what works, how presets and scenes go, and the five, in one sentence. */
     assert.match(v.VP4_SO_FAR, /^On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself\. /)
-    assert.match(v.VP4_SO_FAR, /nobody on our side has tried it on one yet/, 'the VP4 line no longer says presets and scenes are untried')
+    /*
+     * NOTHING ABOUT WHAT HAS BEEN TRIED. Changed on purpose in the 2 November
+     * 2026 audit: this held the line to "nobody on our side has tried it on
+     * one yet", and the demo's and the setup card's said the same. "We don't
+     * need to mention really whether or not something has been tested or
+     * not, we just need to keep track of it ourselves in the developer menu"
+     * (Justin, 31 October 2026). They say what the app does instead: presets
+     * and scenes by the same MIDI messages a foot controller sends.
+     */
+    assert.match(v.VP4_SO_FAR, / It changes presets and scenes with the same MIDI messages a foot controller sends\. /, 'the VP4 line does not say how presets and scenes go')
+    assert.match(v.VP4_SETUP.intro, /^The app changes a VP4’s presets and scenes with the same MIDI messages a foot controller sends\.$/)
+    /* Every string of the setup card too, its status lines and notes as they are drawn (Scene Select 34, channel 1). */
+    const wordsOf = (w) => (typeof w === 'string' ? [w] : typeof w === 'function' ? wordsOf(w(34, 1)) : w && typeof w === 'object' ? Object.values(w).flatMap(wordsOf) : [])
+    const vp4Words = [v.VP4_SO_FAR, v.VP4_DEMO, ...wordsOf(v.VP4_SETUP)]
+    assert.ok(vp4Words.length > 20, 'the setup card’s words were not all read')
+    for (const line of vp4Words) assert.doesNotMatch(line, /tried|tested|on our side/i, `a VP4 owner is told what has been tried: ${line}`)
     namesEveryNotYet('the VP4 line', v.VP4_SO_FAR, v.VP4_NOT_YET)
     promisesAVp4Nothing('the VP4 line', v.VP4_SO_FAR)
     /*
@@ -1163,11 +1178,15 @@ export function run(test) {
     assert.ok(asRead(need).includes(asRead(v.VP4_SO_FAR)), 'the download page’s “A Fractal unit” does not say what the purchase page says about a VP4')
     assert.match(asRead(body), /The simulated VP4 does more than the app can do on a real one yet/, 'the download page’s demo does not say its VP4 does more than a real one')
     promisesAVp4Nothing('the download page', body)
+    /* And nothing there says what has been tried (the 2 November 2026 audit, as above). */
+    const pageWords = asRead(body.replace(/<!--[\s\S]*?-->/g, '').replace(/<script\b[\s\S]*?<\/script>/gi, ' '))
+    assert.doesNotMatch(pageWords, /tried|tested|on our side/i, 'the download page tells a customer what has been tried')
 
     /* And the README, on GitHub. */
     const readme = read('README.md')
     assert.ok(asRead(readme).includes(asRead(v.VP4_SO_FAR)), 'the README does not say what the app does on a VP4')
     promisesAVp4Nothing('the README', readme.slice(0, readme.indexOf('\n## ')))
+    assert.doesNotMatch(readme.slice(0, readme.indexOf('\n## ')), /tried|tested|on our side/i, 'the README’s opening tells a reader what has been tried')
 
     /* The Play checklist says the VP4 line is the one still to paste. */
     assert.match(store, /- \*\*The VP4 line\*\* under SUPPORTED UNITS/, 'the Play checklist does not say the VP4 line is still to go on')

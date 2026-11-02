@@ -367,8 +367,14 @@ export const VP4_SETUP = {
     held: (cc) => `Stopped: ${cc} didn’t work last time`,
     update: 'Update the computer app first'
   },
-  intro:
-    'The app changes a VP4’s presets and scenes with the same MIDI messages a foot controller sends. This is new, and nobody on our side has tried it on a VP4 yet.',
+  /*
+   * What it does, and nothing about whether it has been tried on a VP4: it
+   * said "This is new, and nobody on our side has tried it on a VP4 yet"
+   * until the 2 November 2026 audit. "We don't need to mention really
+   * whether or not something has been tested or not, we just need to keep
+   * track of it ourselves in the developer menu" (Justin, 31 October 2026).
+   */
+  intro: 'The app changes a VP4’s presets and scenes with the same MIDI messages a foot controller sends.',
   /*
    * It said "Presets need nothing set up", above a channel box that could not
    * be saved without a Scene Select number: a VP4 moved off channel 1 could
@@ -644,10 +650,16 @@ export function vp4Said(method, path, err) {
  *
  * So it says what is true with the computer app that carries the VP4's
  * presets and scenes: effects on and off, presets, and scenes once the
- * player has set the one number. Presets and scenes are new and nobody here
- * has tried them on a VP4, so it says that too. And it names what does not
- * work, in "yet", never "coming": "coming" is a promise to somebody deciding
- * whether to pay, with no date and no tried way to keep it.
+ * player has set the one number, and how those go (the same MIDI messages a
+ * foot controller sends). It said presets and scenes were new and "nobody on
+ * our side has tried it on one yet" until the 2 November 2026 audit: what
+ * has been tried is ours, not the customer's ("We don't need to mention
+ * really whether or not something has been tested or not, we just need to
+ * keep track of it ourselves in the developer menu", Justin, 31 October
+ * 2026), and test/vp4-safety.mjs refuses tried or tested in these words.
+ * And it names what does not work, in "yet", never "coming": "coming" is a
+ * promise to somebody deciding whether to pay, with no date and no tried way
+ * to keep it.
  *
  * The list of what does not work is the list the request rules above refuse
  * (vp4Route, vp4Words), and test/vp4-safety.mjs holds the words to them: the
@@ -673,7 +685,7 @@ export const VP4_CANT_SHOW = ['preset names', 'on or off']
 
 /** The purchase page's line, at both ends, and the Description's and the download page's, word for word. */
 export const VP4_SO_FAR =
-  'On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. Changing presets and scenes is new on a VP4, and nobody on our side has tried it on one yet. Knobs, the tuner, tap tempo, channels and saving don’t work on a VP4 from the app yet. The app can’t show the names of a VP4’s presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.'
+  'On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. It changes presets and scenes with the same MIDI messages a foot controller sends. Knobs, the tuner, tap tempo, channels and saving don’t work on a VP4 from the app yet. The app can’t show the names of a VP4’s presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.'
 
 /**
  * The demo's sentence when it is a VP4. The demo's VP4 does everything an FM3
@@ -686,7 +698,7 @@ export const VP4_SO_FAR =
  * ones": a real VP4's knobs have no known ranges anywhere in this stack.
  */
 export const VP4_DEMO =
-  'This is a practice VP4. Nothing you do here touches a real unit. Knobs, the tuner, tap tempo, channels and saving work in this demo, but don’t work on a real VP4 from the app yet. The demo also shows preset names and whether effects are on or off, which the app can’t show on a real VP4 yet. On a real VP4, scenes need one number set on the VP4 first, and Previous and Next go through a setlist or your starred presets. Changing presets and scenes is new on a real VP4, and nobody on our side has tried it on one yet.'
+  'This is a practice VP4. Nothing you do here touches a real unit. Knobs, the tuner, tap tempo, channels and saving work in this demo, but don’t work on a real VP4 from the app yet. The demo also shows preset names and whether effects are on or off, which the app can’t show on a real VP4 yet. On a real VP4, scenes need one number set on the VP4 first, and Previous and Next go through a setlist or your starred presets. The app changes a real VP4’s presets and scenes with the same MIDI messages a foot controller sends.'
 
 /*
  * THE WALKTHROUGH'S LAST SCREEN LEAVES OUT SAVE FOR A VP4.

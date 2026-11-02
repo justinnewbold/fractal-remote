@@ -1745,7 +1745,7 @@ export default function Settings({
       {page === 'siri' && siriOpen ? (
         <>
           {head(SIRI_TITLE, 'back')}
-          <SiriHelp os={Platform.OS} kind={deviceKind()} native={siriNative} noun={deviceNoun()} />
+          <SiriHelp os={Platform.OS} kind={deviceKind()} native={siriNative} noun={deviceNoun()} version={Platform.Version} />
         </>
       ) : null}
 

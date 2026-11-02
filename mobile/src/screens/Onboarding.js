@@ -8,6 +8,8 @@ import { UNITS } from '../lib/demoUnits'
 import { setDemo, setDemoUnit } from '../lib/demo'
 import { walkthroughTips } from '../lib/vp4-safety'
 import { tick } from '../lib/feedback'
+import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
+import { WALKTHROUGH_TWO_WAYS } from '../lib/bluetooth-gear'
 /* An ES import rather than require(): Metro resolves both, but require is not
    a name this app has anywhere, and a test is right to refuse it. */
 /*
@@ -40,6 +42,7 @@ import { sendDownloadLink, DOWNLOADS_URL } from '../lib/downloadLink'
 import CopyAddress from '../components/CopyAddress'
 import Note from '../components/Note'
 import Press from '../components/Press'
+import RestoreAsk from '../components/RestoreAsk'
 import { TipCard } from '../components/Walk'
 import playIcon from '../../assets/icons/play.png'
 import slidersIcon from '../../assets/icons/sliders.png'
@@ -52,9 +55,11 @@ import chevronIcon from '../../assets/icons/chevron.png'
  * The first minute, on the phone.
  *
  * Nine screens in the PDF, and the shape of them is a decision rather than a
- * sequence: this phone cannot reach a Fractal unit on its own, ever. It talks
- * to a computer, and the computer holds the cable. Everything here is either
- * explaining that or getting one of the two ends in place.
+ * sequence: this phone cannot reach a Fractal unit on its own. It talks to a
+ * computer, and the computer holds the cable. Everything here is either
+ * explaining that or getting one of the two ends in place. (On a copy that
+ * opens Bluetooth to customers it can, through an adapter, and the demo's
+ * last page says both ways there: see `twoWays`.)
  *
  * WHICH IS WHY THE DEMO COMES FIRST AND COSTS NOTHING. Somebody who has just
  * installed this may have no computer running, no code, and no idea a
@@ -71,7 +76,9 @@ import chevronIcon from '../../assets/icons/chevron.png'
  *
  * Not one word is typed here: every string is from lib/onboarding, generated
  * from shared/onboarding.mjs. "Do not change any wording without asking me
- * first."
+ * first." Except one line on a copy that opens Bluetooth to customers, the
+ * demo's last page, which was mine and says both ways there, from
+ * lib/bluetooth-gear (WALKTHROUGH_TWO_WAYS says why); see `twoWays`, below.
  */
 const face = Platform.select(mono)
 
@@ -84,10 +91,26 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState(null)
   const [error, setError] = useState(null)
+  /* Restore tapped with nobody signed in: RestoreAsk is up under the footnote. */
+  const [asking, setAsking] = useState(false)
   /* Whether the download help on the "installed?" step is open — see there. */
   const [needsApp, setNeedsApp] = useState(false)
 
   const unitName = UNITS.find((u) => u.key === unit)?.name || UNITS[0].name
+
+  /*
+   * WHETHER THIS COPY CAN SAY THERE ARE TWO WAYS. "It doesn't require a
+   * computer anymore if people are using Bluetooth instead." (Justin, 30
+   * October 2026.) The demo's last page said the computer was the only way
+   * until the audit of 2 November 2026. On a copy that opens Bluetooth to
+   * customers, on a device that can do it, it says both
+   * (WALKTHROUGH_TWO_WAYS); anywhere else it says what it always did. The
+   * purchase page's own gate, word for word (Paywall.js): nobody here has
+   * paid yet, so the Settings row's gate, which waits for the purchase, is
+   * not the question. The box before Unlock is his own sentence and waits
+   * for his answer (WALKTHROUGH_TWO_WAYS says what was put to him).
+   */
+  const twoWays = openForCustomersHere() && bluetoothSupported()
 
   /*
    * ONE WAY BETWEEN STEPS, AND IT CLEARS THE LAST SCREEN'S NOTES.
@@ -106,6 +129,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
   const go = (next) => {
     setSaid(null)
     setError(null)
+    setAsking(false)
     setAt(next)
   }
 
@@ -145,12 +169,20 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
    * a computer is `onAccount` now — the sign-in screen, which already signs
    * in, makes an account and resets a password, and is the only door.
    */
-  const restore = async (then) => {
+  /*
+   * `here`: the second of RestoreAsk's two ways, with nobody signed in,
+   * which is everybody new here. Without it they are asked first
+   * (purchases.js RESTORE_WHOSE), and nothing is sent to the store.
+   */
+  const restore = async (then, here = false) => {
     setBusy(true)
+    setSaid(null)
     setError(null)
-    const out = await restorePurchase()
+    setAsking(false)
+    const out = await restorePurchase({ here })
     setBusy(false)
     if (out.ok) return go(then)
+    if (out.ask) return setAsking(true)
     setSaid(out.message)
   }
 
@@ -402,6 +434,8 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
               { label: P3.signIn, onPress: () => onAccount?.() }
             ]}
           />
+          {/* With nobody signed in: whose the purchase is, and the two ways on. */}
+          {asking ? <RestoreAsk onSignIn={() => onAccount?.()} onHere={() => restore('app', true)} busy={busy} /> : null}
           {said ? <Note>{said}</Note> : null}
         </>
       ) : null}
@@ -518,8 +552,10 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
 
             The unit's name and "simulated" came off the top: the mockup
             puts the one sentence that matters there instead — this app
-            needs a computer with the unit on its USB. The demo's words,
-            because the demo is the only way here now.
+            needs a computer with the unit on its USB, or, where Bluetooth is
+            open, that there are two ways, the computer first (see
+            `twoWays`). The demo's words, because the demo is the only way
+            here now.
 
             Each card goes into the app, the same as the button; the row at
             the foot goes in and straight to Settings, where the walkthrough
@@ -527,7 +563,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
           */}
           <Steps at={2} of={3} label={P9.count} />
           <Head>{P9.demo.head}</Head>
-          <Sub>{P9.demo.sub}</Sub>
+          <Sub>{twoWays ? WALKTHROUGH_TWO_WAYS.demoSub : P9.demo.sub}</Sub>
           {/* A VP4 is not shown SAVE: see walkthroughTips. */}
           {walkthroughTips(P9.tips, unit).map((tip) => (
             <TipCard key={tip.key} icon={TIP_ICONS[tip.key]} label={tip.label} body={tip.body} onPress={onEnterDemo} />

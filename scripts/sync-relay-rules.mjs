@@ -448,7 +448,12 @@ export const FILES = [
    * Supabase and hands them to syncStage, because the two reach Supabase
    * through different modules and that difference is harmless.
    */
-  { source: '../src/lib/setlistMerge.js', target: '../mobile/src/lib/setlistMerge.js' },
+  /* It asks shared/device-slug which drawer is the demo's, never synced; on the phone that file sits beside it. */
+  {
+    source: '../src/lib/setlistMerge.js',
+    target: '../mobile/src/lib/setlistMerge.js',
+    render: (text) => banner('../src/lib/setlistMerge.js') + text.replace("from '../../shared/device-slug.mjs'", "from './device-slug.js'")
+  },
   /*
    * What each model is modelled on.
    *

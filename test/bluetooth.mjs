@@ -6850,7 +6850,8 @@ export function run(test) {
     assert.match(flat('mobile/App.js'), /sub=\{BLUETOOTH_WAYS_SHORT\}/, 'the waiting screen’s way in does not say it')
     const paywall = flat('mobile/src/screens/Paywall.js')
     assert.match(paywall, /\{openForCustomersHere\(\) && bluetoothSupported\(\) \? \( <Text[^>]*> \{BLUETOOTH_PAYWALL\} <\/Text> \) : null\}/, 'the purchase page offers Bluetooth on a copy that cannot open it, or not at all')
-    for (const f of ['mobile/src/screens/Bluetooth.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/Fixes.js', 'mobile/src/components/NoComputer.js']) {
+    /* The walkthrough and the sign-in screen too, since the audit of 2 November 2026 (WALKTHROUGH_TWO_WAYS). */
+    for (const f of ['mobile/src/screens/Bluetooth.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/Fixes.js', 'mobile/src/components/NoComputer.js', 'mobile/src/screens/Onboarding.js', 'mobile/src/screens/SignIn.js']) {
       assert.ok(!/two ways to connect|(slower|more lag) than the computer|no computer needed, more lag|AM4 only for now ·|Opens Apple’s Bluetooth screen|best (?:one|way)|more lag and/i.test(code(f)), `${f} types the words out again instead of taking them from the gear file or shared/no-computer.mjs`)
     }
     /*
@@ -6866,10 +6867,154 @@ export function run(test) {
     /* The setup email says them in its first email's opening, since 1 November 2026 ("Having trouble getting connected?"), and the Bluetooth paragraph says the cost again: no editing or saving. */
     const email = src('supabase/functions/setup-reminder/index.ts').match(/'(It looks like it hasn’t connected to your Fractal yet[^']*)'/)?.[1] ?? ''
     assert.ok(email.length > 100, 'the setup email’s opening was not found; this check needs telling')
-    for (const [where, words] of [['the gear file’s sentence', gear.BLUETOOTH_WAYS], ['the no-computer note and Fixes', NO_COMPUTER_BLUETOOTH], ['the setup email', email]]) {
+    /* And the walkthrough's two, on a copy that opens Bluetooth (the next test), since the audit of 2 November 2026. */
+    const walk = Object.entries(gear.WALKTHROUGH_TWO_WAYS).map(([key, words]) => [`the walkthrough’s ${key}`, words])
+    for (const [where, words] of [['the gear file’s sentence', gear.BLUETOOTH_WAYS], ['the no-computer note and Fixes', NO_COMPUTER_BLUETOOTH], ['the setup email', email], ...walk]) {
       assert.match(words, /The computer is (?:still )?the best (?:one|way)|the computer [^.]*, which is the best way/, `${where} does not say the computer is the best way`)
       assert.match(words, /more lag/, `${where} does not say Bluetooth has more lag`)
       assert.match(words, /fewer features|does less/, `${where} does not say Bluetooth does less`)
+    }
+  })
+
+  test('the phone’s walkthrough and sign-in screen say both ways on a copy that opens Bluetooth, and every line about needing a computer is decided', async () => {
+    /*
+     * "It doesn't require a computer anymore if people are using Bluetooth
+     * instead. So we can drop that now." (Justin, 30 October 2026, of the
+     * store listing.) The audit of 2 November 2026 found the phone's first
+     * minute still saying it: the demo's last page ("This app works with a
+     * computer"), Get connected on the sign-in screen, the computer's steps
+     * alone, and the box ticked before Unlock ("I understand this app
+     * requires a computer connected to my Fractal unit via USB cable"). On a
+     * copy that opens Bluetooth to customers the first two say both ways, the
+     * computer first; the box is his own sentence and waits for his answer;
+     * the browser, which does need the computer, keeps the words it had
+     * (test/both-ends.mjs).
+     */
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    const two = gear.WALKTHROUGH_TWO_WAYS
+    assert.deepEqual(Object.keys(two).sort(), ['demoSub', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
+    /* Any way of saying the app needs a computer, which is the claim these lines exist to take back. */
+    const NEEDS = /(?:needs?|requires?|works? with|only (?:with|through)) a computer|computer is (?:required|needed)/i
+    for (const [key, words] of Object.entries(two)) {
+      assert.ok(!NEEDS.test(words), `the walkthrough’s ${key} says a computer is needed`)
+      assert.match(words, /Bluetooth/, `the walkthrough’s ${key} does not name Bluetooth`)
+      /*
+       * AND THE BLUETOOTH WAY SAYS IT NEEDS NO COMPUTER, before it names
+       * Bluetooth: "a computer connected by USB, or by Bluetooth" reads as a
+       * computer reaching the unit by Bluetooth, which nothing does, and
+       * still as a computer being needed.
+       */
+      assert.match(words.slice(0, words.indexOf('Bluetooth')), /\bno computer\b/i, `the walkthrough’s ${key} does not say the Bluetooth way needs no computer`)
+      assert.match(words, /adapter,? sold separately/, `the walkthrough’s ${key} does not say the adapter is bought separately`)
+      /* docs/app-store.md: never the "free" computer app, "That could confuse people thinking the iOS/android app is free." */
+      assert.ok(!/\bfree\b/i.test(words), `the walkthrough’s ${key} calls the computer app free`)
+      /* CLAUDE.md: never "this phone", never Bluetooth as a beta, and nothing a customer reads says what has been tried. */
+      assert.ok(!/this phone|beta|\btried\b|tested/i.test(words), `the walkthrough’s ${key} says something a customer is never told`)
+    }
+    assert.match(two.demoSub, /^This app connects to your Fractal guitar processor one of two ways: through a computer connected to it by USB, or with no computer, through a Bluetooth MIDI adapter sold separately\./)
+    assert.match(two.setup, /^No computer\? Sign in here, and the app can connect by Bluetooth instead/)
+
+    /*
+     * EVERY LINE THE PHONE'S WALKTHROUGH SHOWS THAT SPEAKS OF HAVING A
+     * COMPUTER OR NOT, found in the words it imports rather than listed by
+     * hand, and each one decided. A new one fails here until it is given a
+     * two-ways line of its own, or this list says why not.
+     */
+    const DECIDED = {
+      /* Mine ("These two lines are mine"): WALKTHROUGH_TWO_WAYS.demoSub in its place where Bluetooth is open. */
+      'P9.demo.sub': 'demoSub',
+      /*
+       * HELD. His own sentence, dictated word for word, in a file that says
+       * "Do not change any wording without asking me first." It stays on
+       * every copy until he answers; the sentence put to him is in the
+       * comment over WALKTHROUGH_TWO_WAYS. When he says yes, it becomes a
+       * two-ways line like the one above, and this entry names its key.
+       */
+      'P3.real.agree': 'held',
+      /*
+       * LEFT, both about the demo, which needs no computer on every copy:
+       * neither says the real rig needs one. P2.foot is the foot of HOW IT
+       * WORKS, whose three boxes are the computer's way from his mockup; he
+       * had text taken off that screen so its button shows without
+       * scrolling, so no Bluetooth line is added there. The demo's last page
+       * and the purchase page (BLUETOOTH_PAYWALL) say both ways before any
+       * money is taken.
+       */
+      'P2.foot': 'left',
+      'P3.demo.body': 'left'
+    }
+    const onboarding = await import('../shared/onboarding.mjs')
+    const screen = code('mobile/src/screens/Onboarding.js')
+    const imported = (screen.match(/import \{([^}]*)\} from '\.\.\/lib\/onboarding'/)?.[1] ?? '').split(',').map((n) => n.trim()).filter(Boolean)
+    assert.ok(imported.includes('P2') && imported.includes('P3') && imported.includes('P9'), 'the walkthrough’s imports were not found; this check needs telling')
+    const says = []
+    const walkWords = (value, path) => {
+      if (typeof value === 'string') says.push([path, value])
+      else if (Array.isArray(value)) value.forEach((v, i) => walkWords(v, `${path}[${i}]`))
+      else if (value && typeof value === 'object') for (const key of Object.keys(value)) walkWords(value[key], `${path}.${key}`)
+    }
+    for (const name of imported) walkWords(onboarding[name], name)
+    assert.ok(says.length > 40, 'the walkthrough’s words were not read; this check needs telling')
+    const aboutTheComputer = says.filter(([, words]) => NEEDS.test(words) || /\bno computer\b/i.test(words)).map(([path]) => path)
+    assert.deepEqual(aboutTheComputer.sort(), Object.keys(DECIDED).sort(), 'a line of the phone’s walkthrough speaks of needing a computer, and nothing here decides what it says where Bluetooth is open')
+    const flatScreen = screen.replace(/\s+/g, ' ')
+    for (const [path, decision] of Object.entries(DECIDED)) {
+      const drawn = flatScreen.split(`{${path}}`).length - 1
+      const swapped = flatScreen.split(` : ${path}}`).length - 1
+      assert.ok(drawn + swapped >= 1, `the walkthrough no longer draws ${path}; this check follows it`)
+      if (decision in two) {
+        assert.equal(drawn, 0, `the walkthrough draws ${path} on a copy that opens Bluetooth`)
+        assert.equal(flatScreen.split(`{twoWays ? WALKTHROUGH_TWO_WAYS.${decision} : ${path}}`).length - 1, swapped, `the walkthrough draws ${path} on a copy that opens Bluetooth, or behind another gate`)
+      } else {
+        assert.equal(swapped, 0, `the walkthrough puts something else in place of ${path}, which this check says is ${decision}`)
+      }
+    }
+    /* The held box is drawn as his sentence, on every copy, and Unlock still waits for it. */
+    assert.match(flatScreen, /<Agree on=\{agreed\} label=\{P3\.real\.agree\}/, 'the box before Unlock says something other than his sentence, which waits for his answer')
+
+    /* The sign-in screen: the computer's three steps, then the other way, inside the card. */
+    const signIn = code('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
+    const card = signIn.slice(signIn.indexOf('{SETUP.title}'), signIn.indexOf('</View>', signIn.indexOf('{WALKTHROUGH_TWO_WAYS.setup}')))
+    assert.ok(card.indexOf('SETUP.steps.map') > 0 && card.indexOf('SETUP.steps.map') < card.indexOf('{WALKTHROUGH_TWO_WAYS.setup}'), 'Get connected does not say the other way under the computer’s steps')
+    assert.match(card, /\{twoWays \? \( <Text[^>]*> \{WALKTHROUGH_TWO_WAYS\.setup\} <\/Text> \) : null\}/, 'Get connected says Bluetooth on a copy that does not open it, or never')
+    const between = card.slice(0, card.indexOf('{WALKTHROUGH_TWO_WAYS.setup}'))
+    assert.equal((between.match(/<View\b/g) || []).length, (between.match(/<\/View>/g) || []).length, 'the other way is drawn outside the Get connected card')
+
+    /*
+     * THE GATE, the purchase page's word for word: a copy that opens
+     * Bluetooth to customers, on a device that can do it. Nobody on these
+     * screens has paid yet, so never the Settings row's, which waits for the
+     * purchase.
+     */
+    const GATE = 'const twoWays = openForCustomersHere() && bluetoothSupported()'
+    for (const [file, text] of [['the walkthrough', flatScreen], ['the sign-in screen', signIn]]) {
+      assert.ok(text.includes(GATE), `${file} says both ways behind another gate`)
+      assert.match(text, /import \{ bluetoothSupported, openForCustomersHere \} from '\.\.\/lib\/bluetooth'/, `${file} reads the gate from somewhere else`)
+      assert.match(text, /import \{ WALKTHROUGH_TWO_WAYS \} from '\.\.\/lib\/bluetooth-gear'/, `${file} types its two-ways words out`)
+      assert.ok(!/mayDrive|usePurchase|useBluetoothOffered/.test(text), `${file} waits for a purchase to say both ways`)
+    }
+    assert.ok(flat('mobile/src/screens/Paywall.js').includes('{openForCustomersHere() && bluetoothSupported() ? ('), 'the purchase page’s gate moved, and the walkthrough’s still says the old one')
+
+    /*
+     * AND ON THE COPIES IN THE STORES TODAY, it is both ways: the version in
+     * public/store-versions.json on each phone opens Bluetooth to customers,
+     * and a copy before 1.89.0, or a device without Bluetooth, keeps the
+     * computer's words.
+     */
+    const live = JSON.parse(src('public/store-versions.json'))
+    for (const os of ['ios', 'android']) {
+      for (const [installed, mod, open, why] of [
+        [live[os], iphoneModule().mod, true, `the ${os} ${live[os]} copy in the store does not say both ways`],
+        ['1.88.3', iphoneModule().mod, false, `a ${os} copy before Bluetooth opened says both ways`],
+        [live[os], { ...iphoneModule().mod, supported: () => false }, false, `a ${os} device without Bluetooth says both ways`]
+      ]) {
+        const bench = await bluetoothOnABench({ os, mod, installed })
+        try {
+          assert.equal(bench.ble.openForCustomersHere() && bench.ble.bluetoothSupported(), open, why)
+        } finally {
+          bench.done()
+        }
+      }
     }
   })
 
@@ -7441,6 +7586,136 @@ export function run(test) {
     const link = flat('mobile/src/lib/bleLink.js')
     const wake = link.indexOf("const woke = await made.request('/device/detect')")
     assert.ok(wake > 0 && wake < link.indexOf('await refreshAll()', wake), 'the rig asks its questions before the link is woken')
+  })
+
+  test('Apple’s network session is never the adapter, in any language, and one kept from before is forgotten', async () => {
+    /*
+     * The 2 November 2026 audit. A report from an iPhone set to Romanian (30
+     * October 2026) had "Rețea Session 1" as the only port: Apple's Wi-Fi
+     * MIDI, its network half in the iPhone's own language. The name was told
+     * in English only, so the phone picked it as the adapter by itself (the
+     * only one there is) and the page said the FM3 was not answering, when the
+     * truth was that no adapter was connected. Its driver is held empty here,
+     * so the name alone has to tell it.
+     */
+    const { isNetworkSession, isAdapter, pickAdapter, sessionName, NETWORK_WORDS } = await import('../mobile/src/lib/bleAdapters.js')
+    const romanian = { id: '1:2', name: 'Rețea Session 1', driver: '' }
+    assert.equal(isNetworkSession(romanian), true, 'the Romanian network session is offered as an adapter')
+    assert.equal(isAdapter(romanian), false)
+    assert.equal(pickAdapter([romanian]), null, 'the Romanian network session is picked as the only adapter there is')
+    /*
+     * Every way the iPhone may write it: the other t, the t and its comma
+     * apart, and the endpoint's own name alone. These all carry a word for
+     * session, so they pass on that word; the names after the next list do
+     * not, and hold the other two halves of the rule.
+     */
+    for (const name of ['Reţea Session 1', 'Rețea Session 1', 'Session 1', 'Session1', 'Rețea Sesiune 1']) {
+      assert.equal(isNetworkSession({ id: '1:2', name, driver: '' }), true, `${name} is offered as an adapter`)
+    }
+    /* And in the other languages an iPhone can be set to, the session half translated or not. */
+    const sessions = [
+      'Netzwerk Session 1', 'Netzwerk Sitzung 1', 'Réseau Session 1', 'Red Session 1', 'Red Sesión 1', 'Rede Sessão 1',
+      'Rete Sessione 1', 'Netwerk Sessie 1', 'Sieć Sesja 1', 'Nätverk Session 1', 'Сеть Сеанс 1',
+      'ネットワーク Session 1', 'ネットワーク セッション1', '网络 Session 1', '网络会话1', '網路 Session 1', '네트워크 세션 1'
+    ]
+    for (const name of sessions) assert.ok(sessionName(name), `${name} is not told as Apple’s network session`)
+    /*
+     * With no word for session in it at all, so nothing but the word for
+     * network as the first word decides it (NETWORK_WORDS), and, for a ț or
+     * an é stored as a letter and its mark apart, nothing but joining them
+     * first (composed). Written with escapes, so no editor can join them.
+     */
+    const apart = 'Re\u0074\u0326ea'
+    assert.equal(apart.length, 6, 'the t and its comma are not stored apart here')
+    assert.ok(!NETWORK_WORDS.includes(apart.toLowerCase()), 'the t and its comma apart are in the word list itself')
+    const networkOnly = [apart, `${apart} 1`, 'Rețea', 'Rețea 1', 'Reţea 2', 'Netzwerk 2', 'Réseau', 'R\u0065\u0301seau', 'Сеть', 'Сеть 1', 'Network Studio']
+    for (const name of networkOnly) assert.equal(sessionName(name), true, `${name} is not told as Apple’s network session by its word for network`)
+    assert.equal(isNetworkSession({ id: '1:2', name: `${apart} 1`, driver: '' }), true, 'the t and its comma apart are offered as an adapter')
+    assert.equal(pickAdapter([{ id: '1:2', name: `${apart} 1`, driver: '' }]), null, 'the t and its comma apart are picked as the only adapter there is')
+    /* The Japanese, Chinese and Korean words alone, with nothing spaced apart to find them by. */
+    for (const name of ['ネットワーク', '网络', '네트워크']) assert.equal(sessionName(name), true, `${name} is not told as Apple’s network session`)
+    /* A word for network anywhere but first is not Apple's: the first word is where Apple puts it. */
+    for (const name of ['Studio Network', 'My Red WIDI', 'WIDI Rede', 'Home Netzwerk 2']) {
+      assert.equal(sessionName(name), false, `${name} is taken for Apple’s network session`)
+    }
+    /* Apple's network driver says so whatever the name. */
+    assert.equal(isNetworkSession({ id: '1:2', name: 'Studio', driver: 'com.apple.AppleMIDIRTPDriver' }), true)
+
+    /* The real adapters, by the names they give, with no driver and with Apple's Bluetooth one: always adapters. */
+    const real = ['WIDI Uhost', 'WIDI Uhost Bluetooth', 'WIDI Master', 'WIDI Jack', 'WIDI BUD Pro', 'CME U2MIDI Pro', 'U2MIDI Pro', 'C2MIDI Pro']
+    for (const name of real) {
+      for (const driver of ['', 'com.apple.AppleMIDIBluetoothDriver']) {
+        assert.equal(isAdapter({ id: '3:4', name, driver }), true, `${name} (${driver || 'no driver'}) is not offered as an adapter`)
+      }
+    }
+    /* A word for network further in is anybody's: "Red" is Spanish for it, and a WIDI can be renamed. */
+    assert.equal(isAdapter({ id: '3:4', name: 'My Red WIDI', driver: '' }), true, 'a renamed adapter is taken for the network session')
+    /* An AM4 on a USB cable is Apple's USB driver's, and an adapter, whatever its name; so is anything on Apple's Bluetooth driver. */
+    const usbAm4 = { id: '7:8', name: 'AM4', driver: 'com.apple.AppleMIDIUSBDriver' }
+    assert.equal(isAdapter(usbAm4), true, 'an AM4 on a USB cable is not offered')
+    assert.equal(isAdapter({ ...usbAm4, name: 'Netzwerk Session 1' }), true, 'a port on Apple’s USB driver is taken for the network session by its name')
+    assert.equal(isAdapter({ id: '3:4', name: 'Session 1', driver: 'com.apple.AppleMIDIBluetoothDriver' }), true, 'a port on Apple’s Bluetooth driver is taken for the network session by its name')
+    /* With the session beside them, the real one is picked without asking. */
+    const widi = { id: '3:4', name: 'WIDI Uhost', driver: '' }
+    assert.equal(pickAdapter([romanian, widi]), widi)
+    assert.equal(pickAdapter([romanian, usbAm4]), usbAm4)
+
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const JUSTIN = ADMINS[0]
+    const keptOnDisk = (bench) => JSON.parse(bench.disk.get('fractal.bluetooth')).adapter
+    const left = (adapter) => ({ 'fractal.bluetooth': JSON.stringify({ on: true, unit: 'fm3', adapter }) })
+
+    /* The Romanian iPhone after the update: the session it kept is forgotten at launch, on the phone and on its storage. */
+    {
+      const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk: left({ id: '1:2', name: 'Rețea Session 1' }) })
+      try {
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        assert.equal(await bench.ble.restoreBluetooth(), true)
+        assert.equal(bench.ble.bluetoothSettings().adapter, null, 'the network session is still the adapter after the update')
+        await new Promise((r) => setTimeout(r, 0))
+        assert.equal(keptOnDisk(bench), null, 'the network session is kept on the phone’s storage, to come back next launch')
+        assert.ok(bench.log.some((l) => l.includes('Rețea Session 1, is Apple’s network session, not an adapter: forgotten')), 'the log does not say the network session was forgotten')
+      } finally {
+        bench.done()
+      }
+    }
+
+    /* A real adapter kept, a USB AM4 kept, and an adapter on Apple's Bluetooth driver whose name looks like a session: all kept. */
+    for (const adapter of [{ id: '3:4', name: 'WIDI Uhost' }, usbAm4, { id: '5:6', name: 'Session 1', driver: 'com.apple.AppleMIDIBluetoothDriver' }]) {
+      const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk: left(adapter) })
+      try {
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        await bench.ble.restoreBluetooth()
+        assert.deepEqual(bench.ble.bluetoothSettings().adapter, adapter, `${adapter.name} was forgotten at launch`)
+      } finally {
+        bench.done()
+      }
+    }
+
+    /*
+     * The session is never chosen, whoever asks; a real port is, with its
+     * driver kept beside it, so the next launch tells a USB AM4 or a renamed
+     * adapter from the session. And Apple's screen closing on the session
+     * alone chooses nothing and lists nothing, so the page says no adapter
+     * was connected (Bluetooth.js `missed`), not that the FM3 is silent.
+     */
+    {
+      const mod = { ...iphoneModule('allowedAlways').mod, devices: () => [romanian] }
+      const bench = await bluetoothOnABench({ mod })
+      try {
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        await bench.ble.restoreBluetooth()
+        assert.equal(await bench.ble.findAdapters(), null, 'Apple’s screen closing on the network session alone chose it')
+        assert.deepEqual(bench.ble.adapterDevices(), [], 'the network session is offered on the page')
+        assert.equal(bench.ble.bluetoothSettings().adapter, null)
+        bench.ble.chooseAdapter(romanian)
+        assert.equal(bench.ble.bluetoothSettings().adapter, null, 'the network session was chosen')
+        bench.ble.chooseAdapter(usbAm4)
+        assert.deepEqual(bench.ble.bluetoothSettings().adapter, usbAm4, 'the USB AM4 is not kept with its driver')
+      } finally {
+        bench.done()
+      }
+    }
   })
 
   test('over Bluetooth the bar is blue and its lamp is a wireless mark', async () => {
@@ -8099,7 +8374,14 @@ export function run(test) {
     assert.ok(!/C2MIDI/.test(gear.hookupFor('fm3').join(' ')), 'the FM3’s steps send it the C2MIDI Pro')
     assert.equal(gear.warningFor('fm3'), gear.FM3_WARNING)
     for (const unit of ['am4', 'fm9', 'axefx3', 'vp4']) assert.equal(gear.warningFor(unit), null)
-    assert.match(gear.FM3_WARNING, /^On an FM3, use the CME U2MIDI Pro\. When we tried the WIDI Master and the C2MIDI Pro on an FM3, both got very hot, and the WIDI Master did not work\. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool\./)
+    /*
+     * What happened, never that it was tried. Changed on purpose in the 2
+     * November 2026 audit: this held it to "When we tried the WIDI Master and
+     * the C2MIDI Pro on an FM3". "We don't need to mention really whether or
+     * not something has been tested or not, we just need to keep track of it
+     * ourselves in the developer menu" (Justin, 31 October 2026).
+     */
+    assert.match(gear.FM3_WARNING, /^On an FM3, use the CME U2MIDI Pro\. The WIDI Master and the C2MIDI Pro both got very hot on an FM3, and the WIDI Master did not work\. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool\./)
     assert.ok(!/220|resistor|pin 4|solder/i.test(gear.FM3_WARNING), 'the FM3 warning gives a home-made way round it again')
     assert.match(gear.FM3_WARNING, /FM3 owners report the same heat with other adapters that take power from its MIDI OUT/, 'the FM3 warning does not say what owners report')
     assert.ok(!/nothing to limit it/.test(gear.FM3_WARNING), 'the FM3 warning states a fault in the unit as fact')
@@ -8529,8 +8811,29 @@ export function run(test) {
     const gear = await import('../shared/bluetooth-gear.mjs')
     assert.equal(
       gear.FM3_NEVER,
-      'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, and when we tried it, it worked and stayed cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
+      'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, works, and stays cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
     )
+    /*
+     * NOTHING A CUSTOMER READS SAYS IT WAS TRIED, the FM3's warnings and the
+     * parts included. Changed on purpose in the 2 November 2026 audit: this
+     * held FM3_NEVER to "when we tried it, it worked and stayed cool", and
+     * FM3_WARNING and the WIDI Master's adapters said "When we tried" and
+     * "the ones the WIDI Master was tried with". "We don't need to mention
+     * really whether or not something has been tested or not, we just need
+     * to keep track of it ourselves in the developer menu" (Justin, 31
+     * October 2026): that record is TESTED, TRIED_WAYS and TRIED_NOTES, on
+     * Developer → App health → Tried, and is not read here.
+     */
+    const customerWords = [
+      gear.FM3_NEVER,
+      gear.FM3_WARNING,
+      gear.NOT_FOR_FM3,
+      gear.ALSO_ON_AM4,
+      gear.VP4_OVER_BLUETOOTH,
+      gear.VP4_CANT_HEAR,
+      ...Object.values(gear.PARTS).map((p) => (typeof p.does === 'function' ? p.does('phone') : p.does))
+    ]
+    for (const line of customerWords) assert.doesNotMatch(line, /tried|tested/i, `a customer is told what was tried: ${line}`)
     /* Since 26 October 2026 ("Using the U2midi pro adapter the FM3 works and does not get hot", "The Widi Master did not work on the FM3 and got very hot"): what to use first, then what never to. */
     /* Said as what happened here and what owners report, with no way round it and nothing said as a fact about the unit. */
     assert.ok(!/straight|220|resistor|solder|nothing to limit/i.test(gear.FM3_NEVER))
@@ -8925,8 +9228,15 @@ export function run(test) {
     )
     assert.equal((app.match(/<Report /g) || []).length, 1, 'the report screen is drawn somewhere else too')
     assert.ok(!/BluetoothReport|writeOutNote|writingOut/.test(code('mobile/App.js')), 'App still opens the one-tap Bluetooth report')
-    /* One screen, so Back, the swipe and Android's back go to the one reportFrom. */
-    assert.match(app, /report: reportFrom,/)
+    /* One screen, so Back, the swipe and Android's back go to the one reportFrom.
+       Through the screen's own back() since the 2 November 2026 audit, which
+       asks "Not sent yet" first: the swipe went through App's map
+       (`report: reportFrom`) and Android's back through App's own listener,
+       both past the question. So the map has no report in it now, and the
+       screen hears both for itself (test/mobile.mjs holds the rest). */
+    assert.doesNotMatch(app, /report: reportFrom,/)
+    assert.match(form, /<EdgeBack onBack=\{back\}>/)
+    assert.match(form, /BackHandler\.addEventListener\('hardwareBackPress', \(\) => \{ backNow\.current\(\) return true \}\)/)
   })
 
   test('every way to Report a Bluetooth problem goes through the Bluetooth page’s own gate, and comes back where it was opened', () => {

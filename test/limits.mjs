@@ -1926,6 +1926,17 @@ export function run(test) {
     assert.match(support, /<h2 id="contact">Reaching a person<\/h2>/, 'the guide’s link to the support page’s contact lands nowhere')
     assert.match(html, /href="\/support#contact"/, 'the guide does not say where to send a report')
     assert.match(words, /The Fractal Remote app is new on the Raspberry Pi\./, 'the guide does not say the app is new on the Pi')
+    /*
+     * NOTHING ABOUT WHAT HAS OR HAS NOT BEEN TRIED (the 2 November 2026
+     * audit). It said the app "is still being tried on real ones", that
+     * "nobody has tried it with this app on a Pi 3 yet", and what had and
+     * had not "been seen" on a Pi. "We don't need to mention really whether
+     * or not something has been tested or not, we just need to keep track of
+     * it ourselves in the developer menu" (Justin, 31 October 2026). It says
+     * what a thing does, and asks to be told when it doesn't.
+     */
+    const triedSaid = /\btried\b|\btested\b|\bbeen seen\b|\bhas seen\b|being tried/i
+    assert.ok(!triedSaid.test(words), `the guide says what has been tried: ${(words.match(/[^.]*\b(tried|tested|been seen|has seen)\b[^.]*\./i) || [''])[0]}`)
     /* Feedback is a row under Troubleshooting, in the computer app and on the phone, not under Settings itself. */
     assert.match(words, /in the app, Settings → Troubleshooting → Feedback, or by email/, 'the guide names a way to Feedback the app does not have')
     assert.ok(!/Settings → Feedback/.test(words), 'the guide sends a report to Settings → Feedback, which is not there')
@@ -2102,12 +2113,15 @@ export function run(test) {
         assert.ok(w.includes(step), `the ${way} way does not say "${step}"`)
       }
       /*
-       * The Pi 3, right where screen sharing is: untried there, and a TV as the
+       * The Pi 3, right where screen sharing is: "should", and a TV as the
        * fallback, in the reader's own way. Its card is written and it is
        * running, so the screen way's first steps (power off, write the card)
        * would be the wrong ones, and the parts after this are the same.
+       * Changed on purpose in the 2 November 2026 audit: this held it to
+       * "but nobody has tried it with this app on a Pi 3 yet", and what has
+       * been tried is ours to keep, not the customer's to read.
        */
-      assert.match(w, /On a Pi 3: screen sharing should work on today’s Raspberry Pi OS, but nobody has tried it with this app on a Pi 3 yet\./, `the ${way} way promises a Pi 3 screen sharing`)
+      assert.match(w, /On a Pi 3: screen sharing should work on today’s Raspberry Pi OS\. If your Pi still shows no Screen sharing badge/, `the ${way} way promises a Pi 3 screen sharing`)
       assert.match(w, /then do parts 3 and 4 below on the TV instead of in your browser\. In part 4, unplug the keyboard, mouse and TV before you plug the power back in\./, `the ${way} way gives a Pi 3 with no screen sharing nowhere to go`)
       /*
        * Imager's own screens, as rpi-imager 2.0.12 draws them. The Connect
@@ -2521,10 +2535,19 @@ export function run(test) {
     /* Which Pis, and why, in plain words. */
     assert.match(words, /On a Raspberry Pi 3 or Pi 4, the Pi 400 included, give the Pi one setting for an AM4\./, 'the entry does not say which Pis need it')
     assert.match(words, /sets aside 4 KB to catch what the AM4 sends, and a whole AM4 preset is about 12 KB\. A Pi 3 loses most of it on the way in\./, 'the entry does not say why')
-    /* What has been seen, and what hasn't: the loss on a Pi 3 only, and the cure nowhere yet. */
-    assert.match(words, /A Pi 4 or 400 sets aside the same 4 KB, though nobody has seen one lose any of a preset yet; the setting does it no harm, so give it the setting too\./, 'the entry says a Pi 4 loses the preset, which nobody has seen')
+    /*
+     * The loss said of a Pi 3 only, and the setting never given as a known
+     * cure. Changed on purpose in the 2 November 2026 audit: this held the
+     * entry to "though nobody has seen one lose any of a preset yet" and
+     * "hasn’t yet been seen bringing the scene names back on a real Pi",
+     * which tell a customer what has and has not been tried ("We don't need
+     * to mention really whether or not something has been tested or not",
+     * Justin, 31 October 2026). It says what each Pi sets aside, and asks to
+     * be told when the setting doesn't help.
+     */
+    assert.match(words, /A Pi 4 or 400 sets aside the same 4 KB, and the setting does it no harm, so give it the setting too\./, 'the entry says a Pi 4 loses the preset')
     assert.ok(!/so most of it is lost on the way in/.test(words), 'the entry says every Pi 3 and Pi 4 loses most of a preset')
-    assert.match(words, /This setting is new\. What it fixes has been seen on a Pi 3, but the setting itself hasn’t yet been seen bringing the scene names back on a real Pi\. If it does on yours, or doesn’t, please say so: in the app, Settings → Troubleshooting → Feedback\./, 'the entry gives the setting as a known cure, and nobody has seen it work on a Pi yet')
+    assert.match(words, /This setting is new\. If it doesn’t bring your AM4’s scene names back, please say so: in the app, Settings → Troubleshooting → Feedback\./, 'the entry does not ask to be told when the setting does not help')
     assert.match(words, /A Pi 5, 500 or 500\+ sets aside 16 KB by itself, room for a whole preset, so it shouldn’t need this; the check below says for sure on any Pi\./, 'a Pi 5 owner is not told it should not need this')
     /* How a player would notice, and why only now and then since the structure read. */
     assert.match(words, /the scene buttons in the app show numbers, 1 to 4, where your AM4’s scene names should be/, 'the entry does not say how a player would notice')
@@ -4301,11 +4324,11 @@ export function run(test) {
      * (Justin). Changed on purpose: this held the guide to "So far it has
      * been tried on an AM4 and an FM3…" and "It has not been tried yet on an
      * FM9 or VP4", and each unit and adapter to a Tried or Not tried yet tag.
-     * The FM3's warning is the one place a try is told, because it is why
-     * the parts are kept off one.
+     * The FM3's warning was the one place a try was told ("When we tried the
+     * WIDI Master and the C2MIDI Pro on an FM3") until the 2 November 2026
+     * audit: it says what happened now, and nothing is let through.
      */
-    const withoutFm3 = words.replace(/When we tried the WIDI Master and the C2MIDI Pro on an FM3, both got very hot, and the WIDI Master did not work\./g, '')
-    assert.ok(!/\btried\b|\btested\b/i.test(withoutFm3), `the guide says where it was tried: ${(withoutFm3.match(/[^.]*\b(tried|tested)\b[^.]*\./i) || [''])[0]}`)
+    assert.ok(!/\btried\b|\btested\b/i.test(words), `the guide says where it was tried: ${(words.match(/[^.]*\b(tried|tested)\b[^.]*\./i) || [''])[0]}`)
     assert.ok(!/class="tag"/.test(html.replace(/<!--[\s\S]*?-->/g, '')), 'a Tried or Not tried yet tag is back')
     assert.match(words, /These are the parts to buy for each unit\./)
     /*
@@ -4318,7 +4341,7 @@ export function run(test) {
      */
     /* Since 26 October 2026: the WIDI Master and the C2MIDI Pro ran very hot on his FM3 and the WIDI Master did not work; the U2MIDI Pro works and stays cool. */
     assert.match(words, /On an FM3, the WIDI Master and the C2MIDI Pro got very hot, and the WIDI Master did not work: use a CME U2MIDI Pro instead \(see FM3 below\)\./, 'the guide does not warn FM3 owners off what overheated, at the top')
-    assert.match(words, /On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master\. When we tried the WIDI Master and the C2MIDI Pro on an FM3, both got very hot, and the WIDI Master did not work\. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool\./, 'the FM3 section does not open on its warning')
+    assert.match(words, /On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master\. The WIDI Master and the C2MIDI Pro both got very hot on an FM3, and the WIDI Master did not work\. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool\./, 'the FM3 section does not open on its warning')
     assert.ok(!/parts plugged straight in|plug straight in|straight into an FM3/i.test(words), 'the guide says not to plug it straight in, as if there were another way')
     /*
      * NO HOME-MADE WAY ROUND IT. This held the guide to what FM3 owners fit

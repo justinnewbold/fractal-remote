@@ -199,8 +199,11 @@ don't, we need to put that in there for now." So SUPPORTED UNITS gives the
 VP4 a line of its own, the purchase page's sentence word for word
 (VP4_SO_FAR in shared/vp4-safety.mjs; test/vp4-safety.mjs holds this file,
 the download page and both purchase pages to it): effects on and off,
-presets, and scenes once one number is set on the VP4, which are new and
-untried by us; knobs, the tuner, tap tempo, channels and saving not yet; and
+presets, and scenes once one number is set on the VP4, by the same MIDI
+messages a foot controller sends (until the 2 November 2026 audit it said
+they were new and untried by us, and what has been tried is ours to keep,
+not the customer's to read); knobs, the tuner, tap tempo, channels and
+saving not yet; and
 what a VP4 owner meets on the first screen, since WHAT IT DOES, just under
 it, promises presets "by name, in slot order": the list shows A1 to Z4, not
 names, the effects say neither on nor off until tapped, and Previous and Next
@@ -223,7 +226,7 @@ Fractal Remote turns your phone into a remote control for your Fractal Audio rig
 
 SUPPORTED UNITS
 FM3, FM9, Axe-Fx III and AM4, and the VP4 in part.
-On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. Changing presets and scenes is new on a VP4, and nobody on our side has tried it on one yet. Knobs, the tuner, tap tempo, channels and saving don't work on a VP4 from the app yet. The app can't show the names of a VP4's presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.
+On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. It changes presets and scenes with the same MIDI messages a foot controller sends. Knobs, the tuner, tap tempo, channels and saving don't work on a VP4 from the app yet. The app can't show the names of a VP4's presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.
 
 TRY THE DEMO, FOR AS LONG AS YOU LIKE
 The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer described at the top.
@@ -836,6 +839,16 @@ Remote: Apple's iOS 27 guide names no switch there for Siri's requests (the
 privacy page's Use with Siri Requests is in iOS 26's words), so the page
 says "turn its switches off". If the switch is there by that name, the page
 can say so in an update.
+And on an iPhone on iOS 27.2 or later (the 2 November 2026 audit): look for
+Settings → Siri → Excluded Apps → Add Apps, which the press says replaced
+App Access in 27.2 but nobody has read on Apple's own page yet. Look on an
+iPhone without Apple Intelligence too, or with Siri Classic, if one is to
+hand. Then put Fractal Remote in the list and try a phrase ("Scene 3 in
+Fractal Remote"): the press says it limits what Siri reads, and nobody says
+whether it stops the app's own commands. Until that is seen, the page gives
+27.2 Excluded Apps first and App Access after it, for a device that has no
+Excluded Apps (lib/siri-help.js TURN_OFF). If App Access is gone on 27.2, or
+the phrases still run with the app left out, the page says so in an update.
 
 **For the next version's notes: the AM4's own tuner stays up** (23 October
 2026). Waiting: not for a store version until Justin has watched his own
@@ -1749,6 +1762,15 @@ out to 100% of users." Once it is live, the risk named under *By hand in
 Play Console for 1.87.11*, permissions the listing gives no reason for, is
 closed: the listing now promotes what Nearby devices is declared for.
 
+The block below is kept as the record of what went in with 1.89.0, never
+as a source: the next version's Description starts from the live one (*Not
+"requires a computer" any more*, at the top of this file). Its BLUETOOTH
+section's sentence "So far it has been tried on the AM4 and the FM3: ..."
+stays here only as that record, and goes into no later Description, since
+no store text says what has been tried (31 October 2026). Its SUPPORTED
+UNITS VP4 line is today's words (2 November 2026), not 1.89.0's, because
+test/limits.mjs holds that paragraph to the *Description* at the top.
+
 ```
 REQUIRES A COMPUTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play. There is also Bluetooth, with more lag: see below.
 
@@ -1758,7 +1780,7 @@ Fractal Remote turns your phone into a remote control for your Fractal Audio rig
 
 SUPPORTED UNITS
 FM3, FM9, Axe-Fx III and AM4, and the VP4 in part.
-On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. Changing presets and scenes is new on a VP4, and nobody on our side has tried it on one yet. Knobs, the tuner, tap tempo, channels and saving don't work on a VP4 from the app yet. The app can't show the names of a VP4's presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.
+On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. It changes presets and scenes with the same MIDI messages a foot controller sends. Knobs, the tuner, tap tempo, channels and saving don't work on a VP4 from the app yet. The app can't show the names of a VP4's presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.
 
 TRY THE DEMO, FOR AS LONG AS YOU LIKE
 The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer described at the top (or Bluetooth).

@@ -4,6 +4,7 @@ import { Alert, ScrollView, Text, View } from 'react-native'
 import { color, font, radius, space } from '../lib/theme'
 import Note from '../components/Note'
 import Press from '../components/Press'
+import RestoreAsk from '../components/RestoreAsk'
 import Sheet from '../components/Sheet'
 import { buyUnlock, restorePurchase, usePurchase } from '../lib/purchases'
 import { UNITS } from '../lib/demoUnits'
@@ -47,6 +48,8 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
   const { price, unlocked, available, why, detail, held } = usePurchase()
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState(null)
+  /* Restore tapped with nobody signed in: RestoreAsk is up under it. */
+  const [asking, setAsking] = useState(false)
   /*
    * NOBODY SIGNED IN, AND THE FREE WAY FIRST.
    *
@@ -70,9 +73,11 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
    * AND NOT RESTORE, which with nobody signed in moves the purchase to this
    * phone's nameless id — off the account it is on, and off every other
    * phone and computer signed in to it. Its button stays below, as Apple
-   * requires. Signing in moves nothing off anybody. For the buyer this was
-   * written for — paid on a phone before he had any account — there is no
-   * account to sign in with yet, so it says to make one there first.
+   * requires, and since the 2 November 2026 audit it says so before it
+   * moves anything (RestoreAsk). Signing in moves nothing off anybody. For
+   * the buyer this was written for — paid on a phone before he had any
+   * account — there is no account to sign in with yet, so it says to make
+   * one there first.
    */
   const [nobody, setNobody] = useState(false)
   useEffect(() => {
@@ -130,12 +135,19 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
     if (!out.cancelled) setSaid({ tone: out.held ? 'warn' : 'fault', text: out.message })
   }
 
-  const restore = async () => {
+  /*
+   * `here`: the second of RestoreAsk's two ways, with nobody signed in.
+   * Without it, nobody signed in is asked first (purchases.js RESTORE_WHOSE)
+   * and nothing is sent to the store.
+   */
+  const restore = async (here = false) => {
     setBusy(true)
     setSaid(null)
-    const out = await restorePurchase()
+    setAsking(false)
+    const out = await restorePurchase({ here })
     setBusy(false)
     if (out.ok) return onUnlocked?.()
+    if (out.ask) return setAsking(true)
     setSaid({ tone: 'warn', text: out.message })
   }
 
@@ -240,7 +252,9 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
           disabled={busy || !available || Boolean(held)}
           onPress={buy}
         />
-        <Press label="Restore a purchase" disabled={busy} onPress={restore} />
+        <Press label="Restore a purchase" disabled={busy} onPress={() => restore()} />
+        {/* With nobody signed in: whose the purchase is, and the two ways on. */}
+        {asking ? <RestoreAsk onSignIn={onSignIn} onHere={() => restore(true)} busy={busy} /> : null}
         {/*
           Restore asks the STORE whether this Apple or Google account has
           bought it. That is a different question from "am I signed in as

@@ -4,11 +4,14 @@
   "days": [
     {
       "date": "2026-11-02",
-      "version": "1.89.24",
+      "version": "1.89.27",
       "lines": [
-        "Settings → About opens straight onto Updates, What’s new, Help with this app and The small print, with no extra tap.",
-        "Fixed: on the Bluetooth page, How to connect my Bluetooth device, Troubleshooting and What Bluetooth can’t do open properly again, and Phone & computer has its Connect over Bluetooth button back.",
-        "Phone & computer checks again for your computers and their units each time it opens."
+        "Settings → About opens straight onto its rows, the Bluetooth page’s three help pages open properly again, and Phone & computer has its Connect over Bluetooth button back and checks again for your computers and their units each time it opens.",
+        "Stars and setlists you make while trying the demo now stay in the demo, never changing your real ones or your account’s. The end of the demo walkthrough and the sign-in screen say you can connect with a computer or, with no computer, by Bluetooth, and that the computer is the best way.",
+        "Restore a purchase, tapped while signed out, says first that the purchase belongs to the account you bought it with, and offers to sign in to it. On a VP4, the purchase page and the demo say presets and scenes go as the messages a MIDI foot controller sends, and the FM3 warning on the Bluetooth page reads more plainly.",
+        { "text": "On an iPhone or iPad set to another language, the Bluetooth page no longer mistakes its own Wi-Fi MIDI connection for your adapter. With no adapter connected, it now says so.", "only": "ios" },
+        { "text": "Settings → Siri shows the newer way to stop Siri using the app on iOS 27.2 and later, and the Apple Watch tips say plainly to keep your iPhone unlocked on Play for every tap to land, and to tap again if the first one after a long pause doesn’t.", "only": "ios" },
+        { "text": "The back button inside Settings goes up one page instead of jumping straight to Play, and on the feedback screen it asks before throwing away what you wrote.", "only": "android" }
       ]
     },
     {

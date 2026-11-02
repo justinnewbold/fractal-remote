@@ -239,6 +239,58 @@ export const NOT_FOR_FM3 = 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI 
  */
 export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
 
+/*
+ * THE WALKTHROUGH AND THE SIGN-IN SCREEN, ON A COPY THAT OPENS BLUETOOTH.
+ *
+ * "It doesn't require a computer anymore if people are using Bluetooth
+ * instead. So we can drop that now." (Justin, 30 October 2026, of the store
+ * listing.) The phone's first minute still said the computer was the only
+ * way until the audit of 2 November 2026: the demo's last page said the app
+ * works with a computer, and Get connected on the sign-in screen gave the
+ * computer's steps and nothing else. So on a copy that opens Bluetooth to
+ * customers, and on a device that can do it (the purchase page's own gate,
+ * Paywall.js), the phone says both ways in those two places instead
+ * (mobile/src/screens/Onboarding.js and SignIn.js). On every other copy, and
+ * in the browser, which has no Bluetooth to offer and does need the
+ * computer, the words in shared/onboarding.mjs are what is shown.
+ *
+ * NOT THE BOX TICKED BEFORE UNLOCK, YET. "I understand this app requires a
+ * computer connected to my Fractal unit via USB cable for the Fractal Remote
+ * app to work" is his own sentence, dictated word for word, and the file it
+ * lives in says "Do not change any wording without asking me first." So it
+ * stays his on every copy until he answers. The sentence put to him for a
+ * copy that opens Bluetooth: "I understand this app connects to my Fractal
+ * unit one of two ways: through a computer running the desktop app,
+ * connected by USB cable, or with no computer, through a Bluetooth MIDI
+ * adapter sold separately. The computer is the best way: Bluetooth has more
+ * lag and fewer features." (test/bluetooth.mjs holds the box as held.)
+ *
+ * HERE AND NOT IN shared/onboarding.mjs, because the browser draws that file:
+ * a line it carries and never shows would still make a new computer app
+ * (scripts/computer-fingerprint.mjs hashes every file the web app imports).
+ *
+ * MY WORDING, and he can change any of it. The demo's line was mine already
+ * (P9.demo.sub, "These two lines are mine"); the sign-in line is new, under
+ * his mockup's three steps, which stay as he drew them. Each way gets its
+ * own half, and the Bluetooth half says "no computer" out loud, so neither
+ * reads as a computer reaching the unit by Bluetooth (nothing does that).
+ * Never the "free" desktop app here (docs/app-store.md: "That could confuse
+ * people thinking the iOS/android app is free"). An adapter sold
+ * separately, because no Fractal unit has Bluetooth of its own; the purchase
+ * page names every part (BLUETOOTH_PAYWALL). And each line ends with what
+ * Bluetooth costs, one sentence for both (BEST_WAY): "make it clear that the
+ * computer is the preferred method and that Bluetooth will have more lag and
+ * not have as many features" (25 October 2026), wherever Bluetooth is
+ * offered.
+ */
+const BEST_WAY = 'The computer is the best way: Bluetooth has more lag and fewer features.'
+export const WALKTHROUGH_TWO_WAYS = {
+  /* In place of P9.demo.sub, under Here’s the app at the end of the demo's walkthrough. */
+  demoSub: `This app connects to your Fractal guitar processor one of two ways: through a computer connected to it by USB, or with no computer, through a Bluetooth MIDI adapter sold separately. ${BEST_WAY}`,
+  /* Under SETUP.steps, the computer's three, on the sign-in screen. */
+  setup: `No computer? Sign in here, and the app can connect by Bluetooth instead, through an adapter sold separately. ${BEST_WAY}`
+}
+
 
 /** The parts, by the name printed on the box, each with what it is for in a line. */
 export const PARTS = {
@@ -326,7 +378,7 @@ export const PARTS = {
    */
   masterAdapters: {
     name: 'Two Type-A MIDI to 3.5 mm adapters',
-    does: 'For an AM4 or VP4, between the WIDI Master and the unit: a 5-pin MIDI socket (female) on one end for the WIDI Master’s plug, and a 3.5 mm plug (male) on the other for the unit’s jack. They must be Type A. This is a pack of two (Eldraqth), the ones the WIDI Master was tried with.',
+    does: 'For an AM4 or VP4, between the WIDI Master and the unit: a 5-pin MIDI socket (female) on one end for the WIDI Master’s plug, and a 3.5 mm plug (male) on the other for the unit’s jack. They must be Type A. This is a pack of two (Eldraqth).',
     amazon: 'https://www.amazon.com/dp/B0FJRB9KGV',
     maker: null
   }
@@ -348,10 +400,13 @@ const UNITS = { am4: 'AM4', fm3: 'FM3', fm9: 'FM9', axefx3: 'Axe-Fx III', vp4: '
  * can still pick it: what happened, and what owners report, in the fewest
  * words that say both. Said as their reports, not as a fact about the
  * FM3's hardware, and with no home-made way round it (see the head of this
- * file).
+ * file). What happened, never that it was tried: it said "When we tried the
+ * WIDI Master and the C2MIDI Pro on an FM3" until the 2 November 2026 audit
+ * ("We don't need to mention really whether or not something has been
+ * tested or not", Justin, 31 October 2026).
  */
 export const FM3_WARNING =
-  'On an FM3, use the CME U2MIDI Pro. When we tried the WIDI Master and the C2MIDI Pro on an FM3, both got very hot, and the WIDI Master did not work. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool. FM3 owners report the same heat with other adapters that take power from its MIDI OUT, even on USB power.'
+  'On an FM3, use the CME U2MIDI Pro. The WIDI Master and the C2MIDI Pro both got very hot on an FM3, and the WIDI Master did not work. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool. FM3 owners report the same heat with other adapters that take power from its MIDI OUT, even on USB power.'
 
 /** The units the parts list must not be bought for as it is: none since the FM3 has the U2MIDI Pro (26 October 2026). */
 export const NOT_STRAIGHT_IN = []
@@ -373,9 +428,13 @@ export const NOT_STRAIGHT_IN = []
  * about their adapter. "Can take" power, so an adapter that runs on USB
  * power alone, and never from the jack (the U2MIDI Pro the FM3 plan tries),
  * is not in it.
+ *
+ * And what the U2MIDI Pro does, never that it was tried: "when we tried it,
+ * it worked and stayed cool" until the 2 November 2026 audit, the same rule
+ * as FM3_WARNING's.
  */
 export const FM3_NEVER =
-  'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, and when we tried it, it worked and stayed cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
+  'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, works, and stays cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
 
 /*
  * THE WIDI MASTER ON AN AM4: tried and working (26 October 2026), in place

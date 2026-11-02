@@ -1318,7 +1318,84 @@ export function run(test) {
 
     const lists = read('mobile/src/lib/lists.js')
     assert.match(lists, /import \{ sync \} from '\.\/store'/, 'lib/lists is not binding the phone storage')
-    assert.match(lists, /listsForIn\(device, sync\)/, 'lib/lists is not handing the storage down')
+    /* Handed the drawer rather than the bare unit since the 2 November 2026
+       audit: in the demo it is the demo's own (shared/device-slug stageKey),
+       so the storage is still handed down, beside it. */
+    assert.match(lists, /listsForIn\(drawer\(device\), sync\)/, 'lib/lists is not handing the storage down')
+  })
+
+  test('in the demo the phone stars and edits the demo’s own drawer, and the real unit’s is left as it was', async () => {
+    /*
+     * The demo's FM3 and a real FM3 are both 'fm3'. Before the 2 November
+     * 2026 audit the demo filed its stars and setlists in the real FM3's
+     * drawer, so somebody signed in who opened the demo to look round was
+     * editing the real gig setlist, and a star tapped in the demo on a new
+     * phone, then a sign-in, replaced the account's real stars on every
+     * device (the newest tap wins the merge whole).
+     *
+     * Run, not read: lib/lists as the phone has it, over a storage of lib/store's
+     * shape, with the demo switched on and off under it.
+     */
+    const dir = mkdtempSync(join(tmpdir(), 'demo-drawer-'))
+    const esm = (src) => src.replace(/from '\.\/([\w.-]+)'/g, (whole, name) => (/\.m?js$/.test(name) ? whole : `from './${name}.js'`))
+    try {
+      const files = {
+        'package.json': '{ "type": "module" }',
+        'store.js': [
+          'export const memory = new Map()',
+          'export const sync = { getItem: (k) => (memory.has(k) ? memory.get(k) : null), setItem: (k, v) => { memory.set(k, String(v)) }, removeItem: (k) => { memory.delete(k) } }',
+          ''
+        ].join('\n'),
+        'demo.js': 'let on = false\nexport const isDemo = () => on\nexport const turn = (v) => { on = !!v }\n'
+      }
+      for (const f of ['lists.js', 'setlists.js', 'presetMarks.js', 'presetName.js', 'device-slug.js', 'setlistMerge.js']) {
+        files[f] = esm(read(`mobile/src/lib/${f}`))
+      }
+      for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+      const at = (f) => pathToFileURL(join(dir, f)).href
+      const lists = await import(at('lists.js'))
+      const store = await import(at('store.js'))
+      const demo = await import(at('demo.js'))
+      const merge = await import(at('setlistMerge.js'))
+
+      /* His real FM3: two stars and a gig setlist, followed by Previous and Next. */
+      lists.toggleFavourite('fm3', 3)
+      lists.toggleFavourite('fm3', 7)
+      const gig = lists.createList('fm3', 'Friday gig')
+      lists.updateList('fm3', gig.id, { presets: [3, 7, 12] })
+      lists.setSource('fm3', gig.id)
+      const real = (key) => JSON.parse(store.memory.get(key) || '{}').fm3
+      const realMarks = JSON.stringify(real('fractal.presetMarks'))
+      const realLists = JSON.stringify(real('fractal.setlists'))
+
+      /* The demo: a look round with nothing of his on screen, a star, a setlist of its own, a song moved in his. */
+      demo.turn(true)
+      assert.deepEqual(lists.marksFor('fm3').favourites, [], 'the demo shows the real FM3’s stars')
+      assert.deepEqual(lists.listsFor('fm3'), [], 'the demo shows the real gig setlist')
+      lists.toggleFavourite('fm3', 40)
+      const tour = lists.createList('fm3', 'Demo set')
+      lists.updateList('fm3', tour.id, { presets: [40, 41] })
+      lists.setSource('fm3', lists.STARRED)
+      lists.updateList('fm3', gig.id, { presets: [12] })
+      assert.deepEqual(lists.marksFor('fm3').favourites, [40])
+      assert.deepEqual(lists.listsFor('fm3').map((l) => l.name), ['Demo set'])
+
+      /* Not one byte of the real drawer moved, and the demo's is its own. */
+      assert.equal(JSON.stringify(real('fractal.presetMarks')), realMarks, 'a star in the demo reached the real FM3’s stars')
+      assert.equal(JSON.stringify(real('fractal.setlists')), realLists, 'the demo edited the real FM3’s setlists')
+      assert.ok(JSON.parse(store.memory.get('fractal.presetMarks'))['fm3:demo'], 'the demo’s star went nowhere')
+
+      /* And none of the demo's goes to the account: what the sync sends up is the real FM3 alone. */
+      assert.deepEqual(Object.keys(merge.localUnits(store.sync)), ['fm3'], 'the demo’s drawer is in what the phone syncs')
+
+      /* Out of the demo, his own are there as he left them. */
+      demo.turn(false)
+      assert.deepEqual(lists.marksFor('fm3').favourites, [3, 7])
+      assert.deepEqual(lists.listsFor('fm3').map((l) => l.presets), [[3, 7, 12]])
+      assert.equal(lists.sourceFor('fm3'), gig.id)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   test('Previous and Next on the phone follow the setlist, and the Setlists button says which', () => {
@@ -3596,7 +3673,8 @@ export function run(test) {
     assert.match(flat('mobile/src/screens/Settings.js'), /\{page === 'health' && isAdmin\(account\?\.id\) \?/)
     assert.match(flat('mobile/src/lib/storeVersion.js'), /const platform = Platform\.OS === 'ios' \|\| Platform\.OS === 'android' \? Platform\.OS : null/)
     assert.match(flat('mobile/src/lib/store-rule.js'), /title: `A newer version of Fractal Remote is \$\{STORE_WHERE\[platform\]\}`/)
-    assert.match(flat('mobile/src/lib/siri-help.js'), /export function siriPage\(\{ os = 'ios', kind = 'phone', native = false, noun = 'phone' \} = \{\}\) \{ if \(os === 'android'\) \{ return \[ \{ title: 'Links for Tasker', note: 'There are no voice commands on Android yet\./)
+    /* `version` joined the page's arguments in the 2 November 2026 audit (iOS 27.2's Excluded Apps); the Android page is still picked by os alone. */
+    assert.match(flat('mobile/src/lib/siri-help.js'), /export function siriPage\(\{ os = 'ios', kind = 'phone', native = false, noun = 'phone', version \} = \{\}\) \{ if \(os === 'android'\) \{ return \[ \{ title: 'Links for Tasker', note: 'There are no voice commands on Android yet\./)
     assert.match(flat('mobile/src/screens/Settings.js'), /<SiriHelp os=\{Platform\.OS\} /)
     /* The Developer pages: only their own tools import admin.js and whats-live.js, and Settings draws each tool for Justin's account alone. */
     const settings = flat('mobile/src/screens/Settings.js')
@@ -13788,10 +13866,15 @@ export function run(test) {
     ]) {
       assert.match(map, new RegExp(`${screen}: '${target}'`), `a swipe on ${screen} does not go to ${target}`)
     }
-    /* The two that are not constants, because they are reached from two
-       places and going "back" to the wrong one is the wrong room. */
-    assert.match(map, /report: reportFrom/, 'the feedback form sends a swipe to a fixed screen')
+    /* The one that is not a constant, because it is reached from two places
+       and going "back" to the wrong one is the wrong room. */
     assert.match(map, /fixes: fixFrom/, 'the guide sends a swipe to a fixed screen')
+    /* The feedback form was the other, `report: reportFrom`, and is out of the
+       map since the 2 November 2026 audit: a swipe through here went straight
+       to reportFrom past "Not sent yet". It wraps itself now, as Settings does,
+       and its own back() still ends at reportFrom (the next test, and
+       test/bluetooth.mjs). */
+    assert.ok(!/\breport: /.test(map), 'a swipe on the feedback form goes back past “Not sent yet” again')
 
     /* The stage is the bottom of the stack: no handler, rather than a
        gesture that does nothing. */
@@ -13854,6 +13937,124 @@ export function run(test) {
     assert.match(back, /label="Done" height=\{40\} onPress=\{onBack\}/, 'a submenu has no Done, so leaving takes a tap per level')
   })
 
+  /**
+   * ANDROID'S BACK IS HEARD BY THE SCREEN ON IT FIRST, AND THE REPORT ASKS
+   * BEFORE WHAT WAS WRITTEN IS LOST (the 2 November 2026 audit).
+   *
+   * React Native asks the newest back listener first. App.js took its own
+   * away and added it again after every render, so it was the newest
+   * whenever anything had changed: on any page inside Settings back went
+   * straight to Play instead of one page up, and on a model's page to
+   * Settings instead of All models. And on the report screen Android's back
+   * and the swipe both left with no "Not sent yet", which only its Back
+   * button asked.
+   *
+   * What is read here is each listener's own effect, out of the code. What
+   * is played out with it is the two rules that decide who answers: React
+   * Native's (newest first, and the first to say true ends it) and React's
+   * (an effect with no list, or a list that can change, runs again after
+   * every render, a child's before its parent's; one with [] runs once).
+   */
+  test('Android back is heard by the screen on it first, and the report asks before what was written is lost', () => {
+    const listeners = (file) => {
+      const found = []
+      traverse(parse(read(file), { sourceType: 'module', plugins: ['jsx'] }), {
+        CallExpression(path) {
+          const c = path.node.callee
+          if (c.type !== 'MemberExpression' || c.object.name !== 'BackHandler' || c.property.name !== 'addEventListener') return
+          const effect = path.findParent((p) => p.isCallExpression() && p.node.callee.name === 'useEffect')
+          found.push({ event: path.node.arguments[0]?.value, handler: path.node.arguments[1], effect: effect?.node })
+        }
+      })
+      return found
+    }
+    const once = (l) => l.effect.arguments[1]?.type === 'ArrayExpression' && l.effect.arguments[1].elements.length === 0
+    const saysTrueLast = (fn) => {
+      const last = fn?.body?.type === 'BlockStatement' ? fn.body.body.at(-1) : null
+      return last?.type === 'ReturnStatement' && last.argument?.type === 'BooleanLiteral' && last.argument.value === true
+    }
+
+    /* App's: one, added once, the step back read out of a ref when back is pressed. */
+    const [app, ...more] = listeners('mobile/App.js')
+    assert.equal(more.length, 0, 'App listens for Android’s back more than once')
+    assert.equal(app.event, 'hardwareBackPress')
+    assert.ok(app.effect, 'App’s back listener is not added in an effect')
+    assert.ok(once(app), 'App’s back listener is added again after a render, so it answers ahead of Settings’ own and back goes to Play')
+    const appSrc = read('mobile/App.js').replace(/\s+/g, ' ')
+    assert.match(appSrc, /BackHandler\.addEventListener\('hardwareBackPress', \(\) => hardwareBack\.current\(\)\)/, 'App’s back listener does not ask the ref')
+    let refSetIn = null
+    traverse(parse(read('mobile/App.js'), { sourceType: 'module', plugins: ['jsx'] }), {
+      AssignmentExpression(path) {
+        const l = path.node.left
+        if (l.type === 'MemberExpression' && l.object.name === 'hardwareBack' && l.property.name === 'current') refSetIn = path.getFunctionParent()?.node.id?.name
+      }
+    })
+    assert.equal(refSetIn, 'App', 'the ref App’s back reads is not set on every render, so back would go where the app was a render ago')
+    /* And it still does what it did: the paywall shut, the screen's own step, Exit demo? on Play. */
+    const ask = appSrc.slice(appSrc.indexOf('hardwareBack.current = () => {'), appSrc.indexOf("BackHandler.addEventListener('hardwareBackPress'"))
+    assert.ok(ask.length > 100, 'App’s back moved; this check reads it')
+    for (const part of [/if \(buying\) \{ setBuying\(false\) return true \}/, /if \(auth !== 'in'\) return false/, /if \(screen !== 'stage'\) \{ setScreen\(BACK_TO\[screen\] \|\| 'stage'\) return true \}/, /if \(demo && purchase\.unlocked\) \{ Alert\.alert\('Exit demo\?'/]) {
+      assert.match(ask, part, `Android back no longer does ${part}`)
+    }
+
+    /* Every screen that listens for itself says it has answered, so App is not asked after it. */
+    const screens = { settings: 'mobile/src/screens/Settings.js', model: 'mobile/src/components/GearCard.js', report: 'mobile/src/screens/Report.js' }
+    const own = {}
+    for (const [name, file] of Object.entries(screens)) {
+      const found = listeners(file)
+      assert.equal(found.length, 1, `${file} listens for Android’s back ${found.length} times`)
+      own[name] = found[0]
+      assert.equal(own[name].event, 'hardwareBackPress')
+      assert.ok(own[name].effect, `${file} adds its back listener outside an effect`)
+      assert.ok(saysTrueLast(own[name].handler), `${file} lets App answer Android’s back after it`)
+    }
+
+    /* Played out: App up on Play, the screen opened, then anything at all changing, twice. */
+    for (const [name, mine] of Object.entries(own)) {
+      const heard = []
+      const effect = (who, l) => {
+        let off = null
+        const run = () => {
+          heard.push(who)
+          off = () => heard.splice(heard.indexOf(who), 1)
+        }
+        run()
+        return () => {
+          if (once(l)) return
+          off()
+          run()
+        }
+      }
+      const appRenders = effect('App', app)
+      const screenRenders = effect(name, mine)
+      appRenders()
+      for (let i = 0; i < 2; i++) {
+        screenRenders()
+        appRenders()
+      }
+      assert.equal(heard.at(-1), name, `Android back on the ${name} screen is heard by App first`)
+    }
+
+    /* The report: Android's back, the swipe and Back are the one back(), which asks first. */
+    const report = read('mobile/src/screens/Report.js')
+    const form = report.replace(/\s+/g, ' ')
+    assert.ok(once(own.report), 'the report screen’s back listener is added again after a render')
+    assert.match(form, /BackHandler\.addEventListener\('hardwareBackPress', \(\) => \{ backNow\.current\(\) return true \}\)/, 'Android back on the report screen does not ask back()')
+    assert.match(form, /const backNow = useRef\(back\) backNow\.current = back /, 'Android back on the report screen asks a back() from a render ago')
+    assert.match(form, /<Press label="Back" height=\{40\} onPress=\{back\} \/>/, 'the report’s Back button no longer asks back()')
+    assert.match(form, /const back = \(\) => \{ if \(!unsent \|\| busy\) return onBack\?\.\(\) Alert\.alert\('Not sent yet', 'What you wrote has not been sent\. Leave without sending it\?'/, 'back() on the report screen no longer asks before what was written is lost')
+    assert.match(form, /import EdgeBack from '\.\.\/components\/EdgeBack'/)
+    let root = null
+    traverse(parse(report, { sourceType: 'module', plugins: ['jsx'] }), {
+      ExportDefaultDeclaration(path) {
+        const last = path.node.declaration.body.body.at(-1)
+        root = last?.type === 'ReturnStatement' ? last.argument : null
+      }
+    })
+    assert.equal(root?.openingElement?.name?.name, 'EdgeBack', 'the report screen is not wrapped in its own swipe, so the swipe goes past “Not sent yet”')
+    const onBack = root.openingElement.attributes.find((a) => a.name?.name === 'onBack')
+    assert.equal(onBack?.value?.expression?.name, 'back', 'the swipe on the report screen does not ask back()')
+  })
   /**
    * A ROW THAT SCROLLS SIDEWAYS KEEPS ITS DRAGS FROM THE BACK SWIPE.
    *
@@ -14184,8 +14385,16 @@ export function run(test) {
 
     /* It is genuinely a different question from the slug, which is the whole
        reason this bug existed: same model, different source. */
+    /* Narrowed in the 2 November 2026 audit, which put the demo's own drawer
+       for stars and setlists in this file (stageKey). The slug itself still
+       knows nothing of the demo, and the file never asks whether the demo is
+       on: stageKey is handed the flag, as forgetNames is above. */
     const slugs = read('mobile/src/lib/device-slug.js')
-    assert.ok(!/isDemo|demo/i.test(slugs), 'the slug now knows about the demo — then the flag above is redundant and one of them is wrong')
+    const slugRule = slugs.slice(slugs.indexOf('export function deviceSlug('), slugs.indexOf('}', slugs.indexOf('export function deviceSlug(')))
+    assert.ok(slugRule.length > 40, 'deviceSlug moved; this check reads it')
+    assert.ok(!/demo/i.test(slugRule), 'the slug now knows about the demo — then the flag above is redundant and one of them is wrong')
+    assert.ok(!/\bisDemo\(|demoDevice|from '\.\/demo/.test(slugs), 'the unit’s key asks whether the demo is on, rather than being told')
+    assert.match(slugs, /export const stageKey = \(slug, demo\) =>/, 'the demo’s drawer is not handed the flag')
   })
 
   /**
@@ -14537,11 +14746,12 @@ export function run(test) {
      * MOVING CLEARS THE LAST SCREEN'S NOTES. `said` and `error` are one pair
      * for the whole walkthrough and most steps draw them, so a failed restore
      * followed you onto the next screen and sat under a heading it had
-     * nothing to do with.
+     * nothing to do with. And, since the 2 November 2026 audit, Restore's
+     * ask with nobody signed in (`asking`, RestoreAsk) goes with them.
      */
     assert.match(
       src.replace(/\s+/g, ' '),
-      /const go = \(next\) => \{ setSaid\(null\) setError\(null\) setAt\(next\) \}/,
+      /const go = \(next\) => \{ setSaid\(null\) setError\(null\) setAsking\(false\) setAt\(next\) \}/,
       'there is no single way between steps, so the last screen’s notes follow you'
     )
     assert.ok(
@@ -14566,9 +14776,13 @@ export function run(test) {
     assert.match(block.mode, /label: P3\.signIn[^]{0,80}onAccount\?\.\(\)/, 'there is no way to sign in from the first screen')
 
     /* The last screen names no unit at all now: his "Here's the app"
-       mockup puts the line about the computer and the USB cable there. */
+       mockup puts the line about the computer and the USB cable there.
+       Changed on purpose in the audit of 2 November 2026: on a copy that
+       opens Bluetooth to customers that line says both ways, the computer
+       first, since the app no longer needs a computer there
+       (WALKTHROUGH_TWO_WAYS; test/bluetooth.mjs holds the words and the gate). */
     assert.ok(!/P9\.tag|P9\.demo\.status/.test(block.connected), 'the last screen names a unit again, over his mockup')
-    assert.match(block.connected, /<Sub>\{P9\.demo\.sub\}<\/Sub>/, 'the last screen lost the line about the computer')
+    assert.match(block.connected, /<Sub>\{twoWays \? WALKTHROUGH_TWO_WAYS\.demoSub : P9\.demo\.sub\}<\/Sub>/, 'the last screen lost the line about the computer')
     /* The picker itself still names what is lit, which is the one place the
        demo choice IS the answer. */
     assert.match(block.pick, /P4\.go\(unitName\)/, 'the demo picker stopped naming the unit you picked')
@@ -14708,8 +14922,10 @@ export function run(test) {
      * is a screen of its own, and the Paywall asks about the purchase.
      */
     assert.ok(!/pairCredentials|<ScanCode|await buyUnlock/.test(onb), 'the walkthrough pairs or sells again')
-    /* Restore stays: somebody who already paid needs it before anything. */
-    assert.match(onb, /await restorePurchase\(\)/, 'there is no way to restore a purchase already made')
+    /* Restore stays: somebody who already paid needs it before anything.
+       With `{ here }` since the 2 November 2026 audit: with nobody signed in
+       it asks first (RestoreAsk), and only its second way restores here. */
+    assert.match(onb, /await restorePurchase\(\{ here \}\)/, 'there is no way to restore a purchase already made')
     /*
      * AND NO PRICE ON THE BUTTON THAT TAKES NO MONEY.
      *
@@ -16824,25 +17040,29 @@ export function run(test) {
     }
 
     /* Signed out, a receipt Restore brings back from another account lands on
-       this phone's nameless id: on this phone alone, and said so. */
+       this phone's nameless id: on this phone alone, and said so. Since the
+       2 November 2026 audit only once the person has chosen Restore to this
+       phone only (`here`): asked plain, it moves nothing (the test below). */
     const rcBack = pretendRevenueCat({ owns: { 'acct-old': 'APP_STORE' } })
     rcBack.receipt = 'acct-old'
     const benchBack = await benchWith(rcBack)
     try {
       assert.equal(benchBack.p.purchaseState().onlyHere, false)
-      const out = await benchBack.p.restorePurchase()
+      const out = await benchBack.p.restorePurchase({ here: true })
       assert.equal(out.ok, true)
       assert.equal(benchBack.p.purchaseState().onlyHere, true, 'a purchase restored with nobody signed in is not said to be on this phone alone')
     } finally {
       benchBack.done()
     }
 
-    /* Nothing anywhere: the words say what was asked, and what works instead. */
+    /* Nothing anywhere: the words say what was asked, and what works instead.
+       Nobody is signed in on this bench, so `here`, the way past the ask
+       since the 2 November 2026 audit. */
     for (const [os, store] of [['ios', 'Apple ID'], ['android', 'Google account']]) {
       const rc3 = pretendRevenueCat()
       const bench3 = await benchWith(rc3, { os })
       try {
-        const out = await bench3.p.restorePurchase()
+        const out = await bench3.p.restorePurchase({ here: true })
         assert.equal(out.ok, false)
         assert.equal(
           out.message,
@@ -16862,6 +17082,168 @@ export function run(test) {
     } finally {
       bench4.done()
     }
+  })
+
+  test('Restore with nobody signed in says whose the purchase is, and moves nothing until told to', async () => {
+    /*
+     * THE 2 NOVEMBER 2026 AUDIT. "revenuecat-webhook: TRANSFER for 1
+     * account(s)", 12:46: a phone with nobody signed in tapped Restore, and
+     * RevenueCat's default (Transfer) moved the purchase off the buyer's
+     * account onto the phone's nameless id, so their computer was refused.
+     * The bench's RevenueCat does what the real one does: Restore carries
+     * the receipt to whoever the phone is now.
+     */
+    const rc = pretendRevenueCat({ owns: { 'acct-buyer': 'APP_STORE' }, aliased: ['acct-buyer'] })
+    rc.receipt = 'acct-buyer'
+    const bench = await benchWith(rc)
+    try {
+      const before = rc.calls.length
+      const asked = await bench.p.restorePurchase()
+      assert.equal(asked.ok, false)
+      assert.equal(asked.ask, true, 'Restore with nobody signed in went to the store without saying whose the purchase is')
+      assert.equal(asked.message, bench.p.RESTORE_WHOSE)
+      assert.ok(!rc.calls.slice(before).includes('restorePurchases'), 'Restore with nobody signed in sent the receipt before anybody chose to')
+      assert.equal(rc.has.get('acct-buyer'), 'APP_STORE', 'the purchase came off the buyer’s account, and their computer with it')
+      assert.equal(rc.has.has(rc.NAMELESS), false)
+      assert.equal(bench.p.purchaseState().unlocked, false)
+      assert.equal(bench.p.purchaseState().onlyHere, false)
+
+      /* Restore to this phone only, chosen: it goes as it always went, and it is on this phone alone. */
+      const here = await bench.p.restorePurchase({ here: true })
+      assert.equal(here.ok, true)
+      assert.ok(rc.calls.includes('restorePurchases'))
+      assert.equal(rc.has.get(rc.NAMELESS), 'APP_STORE')
+      assert.equal(bench.p.purchaseState().onlyHere, true, 'a purchase restored to this phone only is not said to be on it alone')
+
+      /* And signing in on it afterwards sends it back to the account, as the second button says. */
+      bench.who.session = 'acct-buyer'
+      await bench.p.linkAccount()
+      assert.equal(rc.has.get('acct-buyer'), 'APP_STORE', 'signing in here did not send the purchase back to the account')
+      assert.equal(bench.p.purchaseState().onlyHere, false)
+    } finally {
+      bench.done()
+    }
+
+    /* Signed in, nothing changes: no ask, straight to the store, onto the account signed in to. */
+    const rcIn = pretendRevenueCat({ owns: { 'acct-in': 'APP_STORE' } })
+    rcIn.me = 'acct-in'
+    const benchIn = await benchWith(rcIn, { session: 'acct-in' })
+    try {
+      const out = await benchIn.p.restorePurchase()
+      assert.equal(out.ask, undefined, 'somebody signed in was asked whose the purchase is')
+      assert.equal(out.ok, true)
+      assert.ok(rcIn.calls.includes('restorePurchases'))
+    } finally {
+      benchIn.done()
+    }
+    /* And signed in on a sign-in kept on the phone (no signal to renew it) is
+       signed in too: no ask, and RevenueCat put on that account BEFORE the
+       Restore, never left on the nameless id it would move it to. */
+    const rcKept = pretendRevenueCat({ owns: { 'acct-kept': 'APP_STORE' }, aliased: ['acct-kept'] })
+    rcKept.receipt = 'acct-kept'
+    const benchKept = await benchWith(rcKept)
+    try {
+      benchKept.who.kept = 'acct-kept'
+      assert.equal(rcKept.me, rcKept.NAMELESS, 'the bench’s RevenueCat started on the account')
+      const out = await benchKept.p.restorePurchase()
+      assert.equal(out.ask, undefined, 'a customer on a kept sign-in was asked as if nobody were signed in')
+      const linkAt = rcKept.calls.indexOf('logIn acct-kept')
+      assert.ok(linkAt >= 0 && linkAt < rcKept.calls.indexOf('restorePurchases'), 'Restore went to the store before RevenueCat was on the signed-in account')
+      assert.equal(out.ok, true)
+      assert.equal(rcKept.has.get('acct-kept'), 'APP_STORE', 'Restore on a sign-in that never linked took the purchase off the account')
+      assert.equal(rcKept.has.has(rcKept.NAMELESS), false)
+    } finally {
+      benchKept.done()
+    }
+
+    /* Signed in, and the link cannot be made (RevenueCat out of reach at the
+       sign-in, and still): nothing is sent, and it says to try again. */
+    const rcCut = pretendRevenueCat({ owns: { 'acct-cut': 'APP_STORE' }, aliased: ['acct-cut'] })
+    rcCut.receipt = 'acct-cut'
+    rcCut.loginFails = true
+    const benchCut = await benchWith(rcCut, { session: 'acct-cut' })
+    try {
+      assert.equal(rcCut.me, rcCut.NAMELESS, 'the bench linked with the link failing')
+      const out = await benchCut.p.restorePurchase()
+      assert.equal(out.ok, false)
+      assert.equal(out.ask, undefined)
+      assert.equal(out.message, benchCut.p.RESTORE_NO_LINK)
+      assert.ok(!rcCut.calls.includes('restorePurchases'), 'Restore with the link failed sent the receipt to the nameless id')
+      assert.equal(rcCut.has.get('acct-cut'), 'APP_STORE', 'the purchase came off the signed-in account, and its computer with it')
+    } finally {
+      benchCut.done()
+    }
+
+    /* A purchase on its way, and its Restore finds nobody signed in after all
+       (a sign-in turned away since): the line for nobody signed in goes up,
+       whose way is an account, and nothing moves. */
+    const rcGone = pretendRevenueCat({ aliased: ['acct-used'] })
+    const benchGone = await benchWith(rcGone)
+    try {
+      await benchGone.p.buyUnlock()
+      rcGone.syncCarries = false
+      benchGone.who.session = 'acct-used'
+      await benchGone.p.linkAccount()
+      assert.equal(benchGone.p.purchaseState().stuck, true, 'the bench’s purchase is not on its way')
+      assert.equal(benchGone.p.purchaseState().held, benchGone.p.NOT_ACROSS)
+      benchGone.who.session = null
+      const before = rcGone.calls.length
+      const out = await benchGone.p.restorePurchase()
+      assert.equal(out.ask, true)
+      assert.ok(!rcGone.calls.slice(before).includes('restorePurchases'))
+      assert.equal(benchGone.p.purchaseState().held, benchGone.p.NOT_ACROSS_SIGNED_OUT, 'the stage still offers Restore, which only asks again, to nobody signed in')
+      assert.equal(benchGone.p.purchaseState().unlocked, true)
+    } finally {
+      benchGone.done()
+    }
+
+    /*
+     * The words: whether there is an account first, signing in the main way,
+     * restoring here the second with who it is for and its cost. Asked, never
+     * told: buying needs no account, so for some buyers there is none, and
+     * none after Delete account either. And the cost is everything signed in
+     * to the account, not a computer alone, which a Bluetooth player may not
+     * have.
+     */
+    assert.equal(bench.p.RESTORE_WHOSE, 'Bought it while signed in to an account? Sign in to that account and it unlocks on this phone too, and stays on everything else signed in to it.')
+    assert.equal(bench.p.SIGN_IN_TO_IT, 'Sign in to that account')
+    assert.equal(bench.p.RESTORE_HERE, 'Restore to this phone only')
+    assert.equal(
+      bench.p.RESTORE_HERE_COSTS,
+      'Use this if you bought it without an account, or deleted the account since. If the purchase is on an account, this takes it off: anything else signed in to that account, a computer, phone or tablet, stops seeing it until you sign in on this phone.'
+    )
+    assert.equal(bench.p.RESTORE_NO_LINK, 'Couldn’t reach your account just now, so nothing was restored. Try again in a moment.')
+    assert.ok(!/belongs to|your computer/i.test(bench.p.RESTORE_WHOSE + bench.p.RESTORE_HERE_COSTS), 'the ask says the purchase is on an account, or that there is a computer, as fact')
+    /* The device in hand by name (CLAUDE.md: never "this phone" typed), and nothing a phone app may not say (Apple 3.1.3). */
+    const lib = read('mobile/src/lib/purchases.js')
+    assert.ok(!/this phone|website|beta/i.test(lib.split('\n').find((l) => l.startsWith('export const RESTORE_NO_LINK =')) || 'missing'))
+    for (const name of ['RESTORE_WHOSE', 'RESTORE_HERE', 'RESTORE_HERE_COSTS']) {
+      const line = lib.split('\n').find((l) => l.startsWith(`export const ${name} =`)) || ''
+      assert.match(line, /this \$\{deviceNoun\(\)\}/, `${name} does not name the device in hand`)
+      assert.ok(!/this phone|website|beta/i.test(line), `${name}: ${line}`)
+    }
+
+    /* The two screens that offer Restore with nobody signed in: the ask is drawn, and only its second way restores. */
+    const pay = withoutComments(read('mobile/src/screens/Paywall.js')).replace(/\s+/g, ' ')
+    assert.match(pay, /const out = await restorePurchase\(\{ here \}\) setBusy\(false\) if \(out\.ok\) return onUnlocked\?\.\(\) if \(out\.ask\) return setAsking\(true\)/)
+    assert.match(pay, /<Press label="Restore a purchase" disabled=\{busy\} onPress=\{\(\) => restore\(\)\} \/> (\{\} )?\{asking \? <RestoreAsk onSignIn=\{onSignIn\} onHere=\{\(\) => restore\(true\)\} busy=\{busy\} \/> : null\}/)
+    /* Never handed the tap itself: a press event would read as `here`. */
+    assert.ok(!/onPress=\{restore\}/.test(pay), 'the paywall’s Restore passes its tap in as the choice to restore here')
+    const onb = withoutComments(read('mobile/src/screens/Onboarding.js')).replace(/\s+/g, ' ')
+    assert.match(onb, /const out = await restorePurchase\(\{ here \}\) setBusy\(false\) if \(out\.ok\) return go\(then\) if \(out\.ask\) return setAsking\(true\)/)
+    assert.match(onb, /\{ label: P3\.restore, onPress: \(\) => restore\('app'\), disabled: busy \}/)
+    assert.match(onb, /\{asking \? <RestoreAsk onSignIn=\{\(\) => onAccount\?\.\(\)\} onHere=\{\(\) => restore\('app', true\)\} busy=\{busy\} \/> : null\}/)
+    assert.match(onb, /const go = \(next\) => \{ setSaid\(null\) setError\(null\) setAsking\(false\) setAt\(next\) \}/, 'the ask follows the walkthrough onto the next screen')
+    /* And a new Restore clears the last one's note, so a failed "Restore to this phone only" does not sit under the ask it reopens. */
+    assert.match(onb, /const restore = async \(then, here = false\) => \{ setBusy\(true\) setSaid\(null\) setError\(null\) setAsking\(false\)/, 'a failed Restore’s note stays under the next one')
+    const ask = withoutComments(read('mobile/src/components/RestoreAsk.js')).replace(/\s+/g, ' ')
+    assert.match(
+      ask,
+      /<Note tone="warn">\{RESTORE_WHOSE\}<\/Note> \{onSignIn \? <Press label=\{SIGN_IN_TO_IT\} tone="signal" disabled=\{busy\} onPress=\{onSignIn\} \/> : null\} <Press label=\{RESTORE_HERE\} disabled=\{busy\} onPress=\{onHere\} \/> <Note>\{RESTORE_HERE_COSTS\}<\/Note>/,
+      'the ask does not say whose it is first, then Sign in, then Restore here with what it costs'
+    )
+    /* OnlyOnThisPhone's Restore is the signed-in line's alone (pinned above), so it needs no ask: a Restore
+       there that finds nobody signed in puts the signed-out line up instead (benchGone, above). */
   })
 
   test('deleting the account says what it costs, by where the full version came from', async () => {
@@ -16987,7 +17369,8 @@ export function run(test) {
     assert.match(only, /if \(!onAccount \|\| !onlyHere\) return null/)
     /* A purchase stuck short of the account is said on the stage, with the way to try again now. */
     assert.match(only, /if \(stuck\) \{ return \( <View style=\{\{ gap: space\.sm \}\}> <Note tone="warn" onDismiss=\{\(\) => setGone\(true\)\}>\{said \|\| NOT_ACROSS\}<\/Note> <Press label=\{busy \? 'Trying…' : 'Restore a purchase'\}/, 'nothing on the stage says the purchase has not reached the account')
-    assert.match(only, /const out = await restorePurchase\(\) setBusy\(false\) setSaid\(out\.ok \? null : out\.message\)/)
+    /* And never the signed-out ask in that line (the 2 November 2026 audit): purchases.js swaps the signed-out line in for it. */
+    assert.match(only, /const out = await restorePurchase\(\) setBusy\(false\) setSaid\(out\.ok \|\| out\.ask \? null : out\.message\)/)
     assert.match(only, /<Note onDismiss=\{\(\) => setGone\(true\)\}>\{ONLY_HERE\}<\/Note>/, 'the line cannot be put away')
     assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} onWant=\{says\.only\} \/>/)
     const settings = withoutComments(read('mobile/src/screens/Settings.js')).replace(/\s+/g, ' ')

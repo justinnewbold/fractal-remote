@@ -2150,6 +2150,32 @@ export function run(test) {
       assert.ok(web.includes(words), `the browser’s phone walkthrough does not say ${words}, and the phone’s does`)
     }
     assert.match(web, /from '\.\.\/\.\.\/shared\/onboarding\.mjs'/, 'the browser’s phone walkthrough has words of its own')
+    /*
+     * WHERE THE TWO ENDS SAY DIFFERENT THINGS, on purpose, since the audit of
+     * 2 November 2026: the demo's last page here, and Get connected on the
+     * sign-in screen (the next check). The browser's demo page says the app
+     * works with a computer, which the browser does need; on a phone whose
+     * copy opens Bluetooth to customers it says both ways
+     * (WALKTHROUGH_TWO_WAYS, held in test/bluetooth.mjs). So the phone draws
+     * that line only where Bluetooth is not open, and the browser draws it
+     * always, with no Bluetooth words to draw instead. The box before Unlock
+     * is his sentence at both ends until he answers.
+     */
+    assert.ok(web.includes('{P9.demo.sub}'), 'the browser’s phone walkthrough no longer says P9.demo.sub, which it needs: the browser has no Bluetooth')
+    assert.ok(phone.replace(/\s+/g, ' ').includes('{twoWays ? WALKTHROUGH_TWO_WAYS.demoSub : P9.demo.sub}'), 'the phone’s walkthrough says P9.demo.sub on a copy that opens Bluetooth, or no longer says it at all')
+    assert.ok(web.includes('{P3.real.agree}') && phone.includes('label={P3.real.agree}'), 'the box before Unlock says something other than his sentence at one end')
+    assert.ok(!/bluetooth-gear|WALKTHROUGH_TWO_WAYS|twoWays|Bluetooth/.test(web), 'the browser’s phone walkthrough offers Bluetooth, which a browser does not have')
+    /*
+     * And the browser's sign-in screen: Get connected is the computer's three
+     * steps there, and only there. The phone adds the Bluetooth way under
+     * them on a copy that opens it (SignIn.js); a browser cannot reach a
+     * Bluetooth adapter, so nothing it draws for signing in names one.
+     */
+    for (const f of ['src/components/ConnectScreen.jsx', 'src/components/SignIn.jsx', 'src/components/SignInSheet.jsx']) {
+      const drawn = read(f).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+      assert.ok(!/bluetooth-gear|WALKTHROUGH_TWO_WAYS|twoWays|Bluetooth/i.test(drawn), `${f} offers Bluetooth on the browser’s sign-in screen, which a browser does not have`)
+    }
+    assert.ok(read('mobile/src/screens/SignIn.js').includes('{WALKTHROUGH_TWO_WAYS.setup}'), 'the phone’s sign-in screen no longer says the Bluetooth way; the browser’s check above follows it')
     /* His pictures, the phone's own files, and the plain box that took the
        place of the two with Fractal's logo on them (test/independent.mjs). */
     for (const art of ['unit-plain.png', 'piece-computer.png', 'piece-phone.png']) {

@@ -24,7 +24,11 @@ import Press from './Press'
  * Except with nobody signed in (NOT_ACROSS_SIGNED_OUT): there is no account
  * it has not reached, and Restore after a sign-out would put it on the
  * phone's nameless id rather than on anybody's account. Signing in, or
- * making the account, sends it, so that is the button.
+ * making the account, sends it, so that is the button. And the same line
+ * once a Restore finds nobody signed in after all (a sign-in the account
+ * service turned away, which supabase-js takes off the phone): purchases.js
+ * puts the signed-out line up for it, so this is never left saying "sign
+ * in" with no way to.
  *
  * NEVER IN THE WAY. A line and one button, put away with the cross for the
  * rest of this run; it comes back next time only while it is still true.
@@ -60,7 +64,7 @@ export default function OnlyOnThisPhone({ onAccount, onWant }) {
             setBusy(true)
             const out = await restorePurchase()
             setBusy(false)
-            setSaid(out.ok ? null : out.message)
+            setSaid(out.ok || out.ask ? null : out.message)
           }}
         />
       </View>

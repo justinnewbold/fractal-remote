@@ -48,6 +48,22 @@
  *     ask-siri-dictation), in those versions' words, names the switch: Use
  *     with Siri Requests. On 16 and 17 the apps are listed in Siri & Search
  *     itself ("scroll down and select an app").
+ *     And 27.2 (26 October 2026) is reported to have moved 27's: Settings
+ *     → Siri → Excluded Apps → Add Apps, then the app. That is from the 2
+ *     November 2026 audit and the press (MacRumors, BGR, Gadget Hacks), NOT
+ *     yet read on Apple's own page or seen on a 27.2 iPhone, and the press
+ *     calls it a control for Siri's Apple Intelligence half, which not
+ *     every iPhone, country or language has (and a "Siri Classic" choice is
+ *     reported). Nobody says what a 27.2 device without it shows, or whether
+ *     leaving the app out stops its spoken commands. So the version on the
+ *     device in hand (Platform.Version, onAppAccess below) picks which is
+ *     said: App Access alone on 27.0 and 27.0.1; from 27.2, Excluded Apps
+ *     first and App Access after it for a device with no Excluded Apps,
+ *     with 27's own hedge on both. One not on 27 at all, or not known, is
+ *     given 27.2's, which carries both. App Access is dropped from 27.2's
+ *     only once Apple's iOS 27 "Change Siri settings" or Justin's own
+ *     iPhone shows it gone (docs/app-store.md, the Siri check before a
+ *     version goes to Apple).
  *   - Turning all of Siri off: on 27, Settings → Siri → Turn Off Siri, at the
  *     bottom ("Turn on and activate Siri", iOS and iPadOS 27). On 26 and
  *     earlier there is no such button: Talk to Siri (or Talk & Type to Siri)
@@ -82,8 +98,43 @@
  * note, as a tap has, and says Siri "may" speak.
  *
  * Nothing here imports anything: the device in hand comes in as `noun`
- * (lib/device-word deviceNoun) and everything else as a plain fact.
+ * (lib/device-word deviceNoun), its system's version as `version`
+ * (Platform.Version), and everything else as a plain fact.
  */
+
+/*
+ * WHETHER A VERSION IS AT LEAST ANOTHER. `version` is Platform.Version,
+ * which on an iPhone or iPad is a string such as '27.2' or '27.0.1'.
+ * Compared number by number, so 27.10 comes after 27.2, and a part left off
+ * counts as 0, so '27' is 27.0. Anything that is not a version answers
+ * false.
+ */
+export function versionAtLeast(version, floor) {
+  const parts = (v) => {
+    const s = typeof v === 'number' && Number.isFinite(v) ? String(v) : typeof v === 'string' ? v.trim() : ''
+    return /^\d+(\.\d+)*$/.test(s) ? s.split('.').map(Number) : null
+  }
+  const have = parts(version)
+  const want = parts(floor)
+  if (!have || !want) return false
+  for (let i = 0; i < Math.max(have.length, want.length); i++) {
+    const a = have[i] || 0
+    const b = want[i] || 0
+    if (a !== b) return a > b
+  }
+  return true
+}
+
+/* The version that moved Siri's list of apps from App Access to Excluded Apps (see the top). */
+export const EXCLUDED_APPS_FROM = '27.2'
+
+/**
+ * Whether the device in hand is on a 27 from before 27.2, where the app is
+ * turned off under App Access alone. Every other version, and one not
+ * known, is shown 27.2's: Excluded Apps, then App Access for a device
+ * without it.
+ */
+export const onAppAccess = (version) => versionAtLeast(version, '27') && !versionAtLeast(version, EXCLUDED_APPS_FROM)
 
 /** What Siri hears for a pedal, the Swift's PedalKind words, Boost last (an AM4 amp's). */
 export const SIRI_PEDAL_WORDS = Object.freeze([
@@ -218,9 +269,11 @@ const OLD_SIRI = 'Siri (or Apple Intelligence & Siri, or Siri & Search)'
 const LOCKED = (noun, system) =>
   `With this ${noun} locked, Siri asks you to unlock it first, because these commands open the app. If Siri won’t listen at all while it’s locked: on ${system} 27, look under Allow Access When Locked in Settings → Face ID & Passcode (or Touch ID & Passcode). On ${system} 26 and earlier, turn on Allow Siri When Locked in Settings → ${OLD_SIRI}.`
 
-/* Turning it off, for the app and for all of Siri, version by version as Apple says it (see the top). */
-const TURN_OFF = (system, iphone) => [
-  `To stop Siri using Fractal Remote, on ${system} 27: Settings → Siri → App Access → Fractal Remote, and turn its switches off. Which switches it has depends on the version of Siri.`,
+/* Turning it off, for the app and for all of Siri, version by version as Apple says it (see the top). 27's for the app, by the version in hand. */
+const TURN_OFF = (system, iphone, version) => [
+  onAppAccess(version)
+    ? `To stop Siri using Fractal Remote, on ${system} 27 before 27.2: Settings → Siri → App Access → Fractal Remote, and turn its switches off. Which switches it has depends on the version of Siri.`
+    : `To stop Siri using Fractal Remote, on ${system} 27.2 and later: Settings → Siri → Excluded Apps → Add Apps, then pick Fractal Remote. If your ${system} 27 has no Excluded Apps there: Settings → Siri → App Access → Fractal Remote, and turn its switches off. Which of these you see, and what each one covers, depends on the version of Siri.`,
   `On ${system} 18 and 26: Settings → Siri (or Apple Intelligence & Siri) → Apps → Fractal Remote, then turn off Use with Siri Requests. On ${system} 17 and earlier: Settings → Siri & Search, then Fractal Remote in the list of apps, and turn its switches off.`,
   `To turn Siri off altogether, on ${system} 27: Settings → Siri, then Turn Off Siri at the bottom. On ${system} 26 and earlier: in Settings → ${OLD_SIRI}, set Talk to Siri (or Listen for) to Off, then turn off ${iphone ? 'Press Side Button for Siri' : 'Press Top Button for Siri'} (or Press Home for Siri).`
 ]
@@ -229,9 +282,10 @@ const TURN_OFF = (system, iphone) => [
  * The page, as sections in order: each `{ title, note?, phrases?, links?,
  * lines? }`. `os` is 'ios' or 'android'; `kind` lib/device-word's ('phone',
  * 'ipad', 'tablet'); `native` whether this copy has the Siri phrases; `noun`
- * what to call the device in hand (deviceNoun()).
+ * what to call the device in hand (deviceNoun()); `version` its system's
+ * version (Platform.Version), which picks iOS 27's way to turn the app off.
  */
-export function siriPage({ os = 'ios', kind = 'phone', native = false, noun = 'phone' } = {}) {
+export function siriPage({ os = 'ios', kind = 'phone', native = false, noun = 'phone', version } = {}) {
   if (os === 'android') {
     return [
       {
@@ -298,7 +352,7 @@ export function siriPage({ os = 'ios', kind = 'phone', native = false, noun = 'p
     },
     ...(iphone ? IPHONE_BUTTONS : []),
     linksSection('A shortcut can also open one of these links, with its Open URLs step. Nothing is said back: Play shows what happened.'),
-    { title: 'Turning it off', lines: TURN_OFF(system, iphone) },
+    { title: 'Turning it off', lines: TURN_OFF(system, iphone, version) },
     {
       title: 'What Siri won’t do, on purpose',
       lines: [

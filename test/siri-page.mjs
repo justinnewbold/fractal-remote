@@ -66,10 +66,15 @@ function pedalWords(code) {
 /* Every phrase in a sentence that names the app, inside “ ”: more than the name alone, which is said as a name. */
 const quotedPhrases = (text) => [...text.matchAll(/“([^”]*Fractal Remote[^”]*)”/g)].map((m) => m[1]).filter((p) => p !== 'Fractal Remote')
 
-/* Every page the app can show: an iPhone and an iPad with the phrases and without, an Android phone and tablet. */
+/*
+ * Every page the app can show: an iPhone and an iPad with the phrases and without, an Android phone and tablet.
+ * And iOS 27 before 27.2 and from it, whose ways to turn the app off differ (Platform.Version, the 2 November 2026 audit).
+ */
 const PAGES = [
   { os: 'ios', kind: 'phone', native: true },
   { os: 'ios', kind: 'ipad', native: true },
+  { os: 'ios', kind: 'phone', native: true, version: '27.0.1' },
+  { os: 'ios', kind: 'ipad', native: true, version: '27.2' },
   { os: 'ios', kind: 'phone', native: false },
   { os: 'ios', kind: 'ipad', native: false },
   { os: 'android', kind: 'phone', native: false },
@@ -207,8 +212,33 @@ export function run(test) {
      * Apple does not name; 18 and 26's Apps and the switch the Siri privacy page names in their words;
      * 16 and 17's Siri & Search; and all of Siri, by 27's Turn Off Siri and the older Talk to Siri.
      * Changed only after reading Apple's pages again.
+     *
+     * Except 27's for the app, changed by the 2 November 2026 audit: from 27.2 it is reported to be
+     * Excluded Apps → Add Apps, which is not yet read on Apple's own page, and the press calls it a
+     * control for Siri's Apple Intelligence half. So 27.2's keeps App Access after it, for a device
+     * with no Excluded Apps, and 27's own hedge over both, until Apple's iOS 27 "Change Siri settings"
+     * or Justin's iPhone shows App Access gone (docs/app-store.md). 27.0 and 27.0.1 are given App Access
+     * alone. The version in hand picks one (onAppAccess, from Platform.Version), and a page with no
+     * version, or one not on 27, is given 27.2's.
      */
-    assert.match(words, /on iOS 27: Settings → Siri → App Access → Fractal Remote, and turn its switches off\. Which switches it has depends on the version of Siri\./)
+    const EXCLUDED = /To stop Siri using Fractal Remote, on iOS 27\.2 and later: Settings → Siri → Excluded Apps → Add Apps, then pick Fractal Remote\. If your iOS 27 has no Excluded Apps there: Settings → Siri → App Access → Fractal Remote, and turn its switches off\. Which of these you see, and what each one covers, depends on the version of Siri\./
+    const APP_ACCESS = /To stop Siri using Fractal Remote, on iOS 27 before 27\.2: Settings → Siri → App Access → Fractal Remote, and turn its switches off\. Which switches it has depends on the version of Siri\./
+    const onVersion = (version, kind = 'phone') => help.siriWords({ os: 'ios', kind, native: true, noun: NOUN[kind], version }).join('\n')
+    assert.match(words, EXCLUDED)
+    for (const v of ['27.0', '27.0.1', '27']) {
+      assert.match(onVersion(v), APP_ACCESS, `iOS ${v} is not sent to App Access`)
+      assert.doesNotMatch(onVersion(v), /Excluded Apps/, `iOS ${v} is sent to Excluded Apps, which it does not have`)
+    }
+    for (const v of ['27.2', '27.2.1', '27.10', '28.0', '26.4', '17.6.1', undefined]) {
+      assert.match(onVersion(v), EXCLUDED, `iOS ${v} is not sent to Excluded Apps, with App Access after it`)
+      assert.doesNotMatch(onVersion(v), APP_ACCESS, `iOS ${v} is given 27.0’s App Access alone`)
+      /* App Access is 27.2's second way, never its only one, until Apple's page says it is gone. */
+      const line = onVersion(v).split('\n').find((l) => l.startsWith('To stop Siri using Fractal Remote'))
+      assert.ok(line.indexOf('Excluded Apps') < line.indexOf('App Access'), `iOS ${v} is given App Access before Excluded Apps`)
+      assert.match(line, /depends on the version of Siri\.$/, `iOS ${v}’s way to turn the app off lost its hedge, and Apple’s pages do not say it more firmly`)
+    }
+    assert.match(onVersion('27.2', 'ipad'), /To stop Siri using Fractal Remote, on iPadOS 27\.2 and later: Settings → Siri → Excluded Apps → Add Apps, then pick Fractal Remote\. If your iPadOS 27 has no Excluded Apps there: Settings → Siri → App Access → Fractal Remote/)
+    assert.match(onVersion('27.0.1', 'ipad'), /To stop Siri using Fractal Remote, on iPadOS 27 before 27\.2: Settings → Siri → App Access → Fractal Remote/)
     assert.match(words, /On iOS 18 and 26: Settings → Siri \(or Apple Intelligence & Siri\) → Apps → Fractal Remote, then turn off Use with Siri Requests\./)
     assert.match(words, /On iOS 17 and earlier: Settings → Siri & Search, then Fractal Remote in the list of apps/)
     assert.match(words, /To turn Siri off altogether, on iOS 27: Settings → Siri, then Turn Off Siri at the bottom\./)
@@ -220,8 +250,8 @@ export function run(test) {
      * a bare "Settings → Siri" sent an iOS 26 phone with Apple Intelligence, or an iOS 17 one, to a row it does not have.
      */
     for (const [kind, system] of [['phone', 'iOS'], ['ipad', 'iPadOS']]) {
-      for (const native of [true, false]) {
-        const sentences = help.siriWords({ os: 'ios', kind, native, noun: NOUN[kind] }).flatMap((w) => w.split(/(?<=\.)\s+/))
+      for (const [native, version] of [[true, undefined], [true, '27.0.1'], [true, '27.2'], [false, undefined]]) {
+        const sentences = help.siriWords({ os: 'ios', kind, native, noun: NOUN[kind], version }).flatMap((w) => w.split(/(?<=\.)\s+/))
         for (const sentence of sentences.filter((x) => x.includes('Settings → Siri'))) {
           /* Each mention, read against the version said last before it. */
           for (const at of [...sentence.matchAll(/Settings → Siri(?! \(or| & Search)/g)].map((m) => m.index)) {
@@ -325,6 +355,38 @@ export function run(test) {
     }
   })
 
+  test('Siri page: iOS 27.2 and later by Platform.Version, compared number by number', async () => {
+    const { help } = await wordsOnABench()
+    const { versionAtLeast, onAppAccess, EXCLUDED_APPS_FROM } = help
+    assert.equal(EXCLUDED_APPS_FROM, '27.2')
+    /* Platform.Version on an iPhone or iPad: '27.2', '27.0.1', and once in a while '27' with no point. */
+    for (const [v, floor, want] of [
+      ['27.2', '27.2', true],
+      ['27.2.1', '27.2', true],
+      ['27.10', '27.2', true],
+      ['28', '27.2', true],
+      ['27.1.9', '27.2', false],
+      ['27.0.1', '27.2', false],
+      ['27', '27.2', false],
+      ['27', '27', true],
+      ['27.0', '27', true],
+      ['26.4.1', '27', false],
+      [' 27.2 ', '27.2', true],
+      [27.2, '27.2', true],
+      [undefined, '27', false],
+      [null, '27', false],
+      ['', '27', false],
+      ['27.x', '27', false],
+      ['27..2', '27', false],
+      [NaN, '27', false]
+    ]) {
+      assert.equal(versionAtLeast(v, floor), want, `versionAtLeast(${JSON.stringify(v)}, ${floor}) is not ${want}`)
+    }
+    /* App Access alone on 27.0 and 27.0.1, and on nothing else: 27.2 and later, anything older, and a version not known get Excluded Apps, then App Access. */
+    for (const v of ['27', '27.0', '27.0.1']) assert.equal(onAppAccess(v), true, `${v} is not told App Access`)
+    for (const v of ['27.2', '27.2.1', '27.3', '28.0', '26.4', '18.7', '16.4', undefined, null, '']) assert.equal(onAppAccess(v), false, `${v} is told App Access`)
+  })
+
   test('Siri page: drawn, it shows every word and nothing else, and Settings opens it only where the links are open', async () => {
     const { transformSync } = await import('esbuild')
     const dir = mkdtempSync(join(tmpdir(), 'siri-help-'))
@@ -382,7 +444,9 @@ export function run(test) {
     assert.match(settings, /\{siriOpen \? <SetupRow title=\{SIRI_TITLE\} status=\{siriStatus\} onPress=\{\(\) => setPage\('siri'\)\} \/> : null\}/)
     const help = settings.slice(settings.indexOf('<Group title="Help"'), settings.indexOf('<Group title="About"'))
     assert.ok(help.includes("setPage('siri')"), 'the Siri row is not under Help')
-    assert.match(settings, /\{page === 'siri' && siriOpen \? \(\s*<>\s*\{head\(SIRI_TITLE, 'back'\)\}\s*<SiriHelp os=\{Platform\.OS\} kind=\{deviceKind\(\)\} native=\{siriNative\} noun=\{deviceNoun\(\)\} \/>/)
+    /* With the system's version, which picks iOS 27's way to turn the app off (the 2 November 2026 audit). */
+    assert.match(settings, /\{page === 'siri' && siriOpen \? \(\s*<>\s*\{head\(SIRI_TITLE, 'back'\)\}\s*<SiriHelp os=\{Platform\.OS\} kind=\{deviceKind\(\)\} native=\{siriNative\} noun=\{deviceNoun\(\)\} version=\{Platform\.Version\} \/>/)
+    assert.match(read('mobile/src/components/SiriHelp.js'), /version = Platform\.Version \}\) \{[\s\S]*siriPage\(\{ os, kind, native, noun, version \}\)/, 'the Siri page is drawn without the system’s version')
     /* Not behind the purchase: Apple's reviewer tries Siri in the demo. */
     assert.ok(!/mayDrive\(purchase\) && siriOpen|siriOpen && mayDrive/.test(settings), 'the Siri page waits for the full version, and the demo needs it')
   })

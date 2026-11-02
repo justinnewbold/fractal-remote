@@ -14,7 +14,7 @@ import TapTempo from './components/TapTempo'
 import MetronomeBeat from './components/MetronomeBeat'
 import { setMetronome, useMetronome, useUnitHeardOn, useUnitMetronome, wakeScreenClick } from './lib/metronome'
 import { metronomeNote, placeLit, placesFor, unitClick } from '../shared/metronome.mjs'
-import { deviceSlug as slugOfUnit } from '../shared/device-slug.mjs'
+import { deviceSlug as slugOfUnit, stageKey } from '../shared/device-slug.mjs'
 import SaveBar, { SaveLate } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
 import { overwriteCheck } from './lib/overwrite'
@@ -365,6 +365,15 @@ attachDriver({
   blockParams,
   setAmpBoost
 })
+
+/*
+ * Where this unit's stars and recents are filed: under its slug, or in the
+ * demo the demo's own drawer (shared/device-slug stageKey), which never goes
+ * to the account. The demo's FM3 and a real FM3 are both 'fm3', and a star
+ * tapped in the demo replaced the account's real stars at the first sync (the
+ * 2 November 2026 audit). Play files its setlists the same way (Gig `stage`).
+ */
+const stageNow = () => stageKey(currentDeviceSlug(), isDemo())
 
 /* Whether the page is in view, for the AM4's own tuner, kept up only while it is (deviceState keepUnitTuner). */
 if (typeof document !== 'undefined') {
@@ -3558,7 +3567,7 @@ export default function App() {
            * counts — the list, Previous and Next, a footswitch — because
            * "recent" is about where you have been, not how you got there.
            */
-          rememberPreset(currentDeviceSlug(), number)
+          rememberPreset(stageNow(), number)
           setDirty(false)
           setSavedAt(null)
           setSafety(null)
@@ -4156,7 +4165,7 @@ export default function App() {
       <PresetList
         slots={allSlots}
         slowNames={namesCostADump()}
-        device={currentDeviceSlug()}
+        device={stageNow()}
         current={preset?.number}
         deviceSlots={device?.capabilities?.presets?.count}
         addressing={device?.capabilities?.presets?.addressing}
@@ -5381,6 +5390,7 @@ export default function App() {
           progress={scanProgress}
           onScan={scanPresets}
           onStopScan={stopNames}
+          device={stageNow()}
         />
       </Sheet>
 
@@ -5393,7 +5403,7 @@ export default function App() {
         <PresetList
           slots={allSlots}
           slowNames={namesCostADump()}
-          device={currentDeviceSlug()}
+          device={stageNow()}
           current={preset?.number}
           deviceSlots={device?.capabilities?.presets?.count}
           addressing={device?.capabilities?.presets?.addressing}

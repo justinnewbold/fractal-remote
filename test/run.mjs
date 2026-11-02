@@ -20,7 +20,7 @@ import * as gigSize from '../src/lib/gigSize.js'
 import * as marks from '../src/lib/presetMarks.js'
 import * as setlists from '../src/lib/setlists.js'
 import * as palette from '../src/lib/palette.js'
-import { readFileSync as readSrc } from 'node:fs'
+import { readFileSync as readSrc, readdirSync as listSrc } from 'node:fs'
 /*
  * The platform's own join, used by the findForgeFX tests below.
  *
@@ -12967,6 +12967,170 @@ test('a setlist knows when it changed, and a delete leaves a mark', async () => 
   assert.deepEqual(listsFor('fm3', store).map((l) => l.name), ['Sunday'])
 })
 
+test('the demo files its stars and setlists in a drawer of its own, and the real one is left exactly as it was', async () => {
+  /*
+   * The demo's FM3 and a real FM3 are both 'fm3', so before the 2 November
+   * 2026 audit a look round the demo starred and edited the real FM3's
+   * presets and setlists. stageKey is the one rule both ends file them by:
+   * the slug as it always was, or in the demo `fm3:demo`, which no real slug
+   * can ever be.
+   */
+  const { DEFAULT_SLUG, deviceSlug, isDemoStage, stageKey } = await import('../shared/device-slug.mjs')
+  assert.equal(stageKey('fm3', false), 'fm3', 'outside the demo a unit’s drawer moved, and every star already kept would be lost')
+  assert.equal(stageKey(undefined, false), undefined, 'a unit not named yet is no longer the drawer it was')
+  assert.equal(stageKey('fm3', true), 'fm3:demo')
+  assert.equal(stageKey('', true), `${DEFAULT_SLUG}:demo`, 'the demo before its unit has answered is filed in a real drawer')
+  assert.ok(isDemoStage('fm3:demo') && isDemoStage(stageKey('axefxiii', true)))
+  for (const name of ['FM3', 'AM4', 'Axe-Fx III', 'FM9', 'VP4', 'fm3:demo', 'demo', '']) {
+    assert.ok(!isDemoStage(deviceSlug(name)), `a real unit called ${JSON.stringify(name)} reads as the demo’s drawer`)
+  }
+
+  const { marksFor, toggleFavourite, remember } = await import('../src/lib/presetMarks.js')
+  const { createList, updateList, setSource, sourceFor, listsFor, STARRED } = await import('../src/lib/setlists.js')
+  const store = {
+    data: new Map(),
+    getItem(k) { return this.data.has(k) ? this.data.get(k) : null },
+    setItem(k, v) { this.data.set(k, v) }
+  }
+
+  /* His real FM3, as it is before anybody opens the demo. */
+  toggleFavourite('fm3', 3, store)
+  toggleFavourite('fm3', 7, store)
+  const gig = createList('fm3', 'Friday gig', store)
+  updateList('fm3', gig.id, { presets: [3, 7, 12] }, store)
+  setSource('fm3', gig.id, store)
+  const before = {
+    marks: JSON.stringify(JSON.parse(store.getItem('fractal.presetMarks')).fm3),
+    lists: JSON.stringify(JSON.parse(store.getItem('fractal.setlists')).fm3)
+  }
+
+  /* The demo, by the key both ends now hand these modules there. */
+  const demo = stageKey('fm3', true)
+  assert.deepEqual(marksFor(demo, store), { recent: [], favourites: [] }, 'the demo opens on the real FM3’s stars')
+  assert.deepEqual(listsFor(demo, store), [], 'the demo opens on the real gig setlist')
+  toggleFavourite(demo, 40, store)
+  remember(demo, 40, store)
+  const tour = createList(demo, 'Demo set', store)
+  updateList(demo, tour.id, { presets: [40, 41] }, store)
+  updateList(demo, gig.id, { presets: [12] }, store)
+  setSource(demo, STARRED, store)
+
+  assert.equal(JSON.stringify(JSON.parse(store.getItem('fractal.presetMarks')).fm3), before.marks, 'a star in the demo reached the real FM3’s stars')
+  assert.equal(JSON.stringify(JSON.parse(store.getItem('fractal.setlists')).fm3), before.lists, 'the demo edited the real gig setlist')
+  assert.deepEqual(marksFor('fm3', store).favourites, [3, 7])
+  assert.equal(sourceFor('fm3', store), gig.id, 'the demo changed what Previous and Next walk on the real FM3')
+  assert.deepEqual(marksFor(demo, store).favourites, [40])
+  assert.equal(sourceFor(demo, store), STARRED)
+})
+
+test('a star tapped in the demo never reaches the account, and the account’s stars are not replaced by it', async () => {
+  /*
+   * The 2 November 2026 audit's case, run: a new phone, a star tapped in the
+   * demo, then a sign-in. That tap was the newest the account had seen, and
+   * the stars merge whole by the later tap, so the account's real stars were
+   * replaced on every device by the demo's one. Now the demo's drawer is left
+   * out of the sync both ways: nothing of it goes up, nothing comes down over
+   * it, and one that reached the account some other way is dropped from it.
+   */
+  const { syncStage, localUnits, mergeUnits, applyUnits } = await import('../src/lib/setlistMerge.js')
+  const { marksFor, toggleFavourite } = await import('../src/lib/presetMarks.js')
+  const { createList, listsFor } = await import('../src/lib/setlists.js')
+  const { stageKey } = await import('../shared/device-slug.mjs')
+  const store = () => ({
+    data: new Map(),
+    getItem(k) { return this.data.has(k) ? this.data.get(k) : null },
+    setItem(k, v) { this.data.set(k, v) }
+  })
+
+  /* The account: his real FM3 stars, tapped an hour ago at the Mac. */
+  const hourAgo = Date.now() - 60 * 60 * 1000
+  let row = { fm3: { lists: [], removed: [], favourites: [3, 7], starredAt: hourAgo, source: 'all', at: hourAgo } }
+  const sent = []
+  const cloud = {
+    load: async () => ({ units: JSON.parse(JSON.stringify(row)), at: 1, device: 'computer' }),
+    save: async (units) => { sent.push(JSON.parse(JSON.stringify(units))); row = JSON.parse(JSON.stringify(units)); return true }
+  }
+
+  /* A new phone: the demo first, a star and a setlist in it, then the sign-in and the first sync. */
+  const phone = store()
+  const demo = stageKey('fm3', true)
+  toggleFavourite(demo, 40, phone)
+  createList(demo, 'Demo set', phone)
+  assert.deepEqual(localUnits(phone), {}, 'the demo’s drawer is in what this device would sync')
+
+  const res = await syncStage(cloud, phone)
+  assert.deepEqual(row.fm3.favourites, [3, 7], 'a star tapped in the demo replaced the account’s real stars')
+  assert.ok(!sent.some((units) => Object.keys(units).some((k) => k.endsWith(':demo'))), 'the demo’s drawer went to the account')
+  assert.equal(res.pushed, false, 'a sync that only had the demo’s star to add wrote to the account')
+  /* The real stars came down to the real drawer, and the demo's own is as it was. */
+  assert.deepEqual(marksFor('fm3', phone).favourites, [3, 7])
+  assert.deepEqual(marksFor(demo, phone).favourites, [40])
+  assert.deepEqual(listsFor(demo, phone).map((l) => l.name), ['Demo set'])
+
+  /* And a demo drawer that reached the account some other way (a copy of
+     the app from before this) comes down over nothing, and is dropped from
+     the account at the next write rather than carried. */
+  row['fm3:demo'] = { lists: [], removed: [], favourites: [99], starredAt: Date.now() + 1000, source: 'all', at: Date.now() + 1000 }
+  await syncStage(cloud, phone)
+  assert.deepEqual(marksFor(demo, phone).favourites, [40], 'the account wrote over this device’s demo drawer')
+  assert.ok(!('fm3:demo' in row), 'the account kept a demo drawer')
+  assert.deepEqual(row.fm3.favourites, [3, 7])
+  assert.ok(!('fm3:demo' in mergeUnits({ 'fm3:demo': { favourites: [1] } }, {})), 'the merge carries a demo drawer')
+  const other = store()
+  applyUnits({ 'fm3:demo': { favourites: [5], starredAt: 1 } }, other)
+  assert.equal(other.getItem('fractal.presetMarks'), null, 'a demo drawer handed to applyUnits was written')
+})
+
+test('every caller in the browser files the stars and setlists by the demo-aware key', () => {
+  /*
+   * The browser has no lib/lists to bind it once, so the callers are held
+   * here: Play's reads and its setlist sheet, both preset pickers, and the
+   * recents. The pedals still go by the unit's own slug (am4-boost).
+   */
+  const flat = (p) => readSrc(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ')
+  const gig = flat('src/components/Gig.jsx')
+  assert.match(gig, /const stage = stageKey\(deviceKey, isDemo\(\)\)/, 'Play does not know the demo has its own drawer')
+  for (const fn of ['marksFor', 'listsFor', 'sourceFor']) {
+    assert.match(gig, new RegExp(`${fn}\\(stage\\)`), `Play reads ${fn} from the real unit’s drawer in the demo`)
+    assert.ok(!new RegExp(`${fn}\\(deviceKey\\)`).test(gig), `Play still reads ${fn} by the bare slug`)
+  }
+  const sheet = gig.slice(gig.indexOf('<Setlists'), gig.indexOf('/>', gig.indexOf('<Setlists')))
+  assert.match(sheet, /deviceKey=\{stage\}/, 'the setlist sheet edits the real unit’s drawer in the demo')
+
+  const app = flat('src/App.jsx')
+  assert.match(app, /const stageNow = \(\) => stageKey\(currentDeviceSlug\(\), isDemo\(\)\)/)
+  assert.match(app, /rememberPreset\(stageNow\(\), number\)/, 'the recents are filed by the bare slug in the demo')
+  const pickers = [...app.matchAll(/<PresetList\b[\s\S]*?\/>/g)].map((m) => m[0])
+  assert.ok(pickers.length >= 2, 'App.jsx moved; this test reads both preset pickers')
+  for (const picker of pickers) assert.match(picker, /device=\{stageNow\(\)\}/, 'a preset picker stars the real unit’s presets in the demo')
+
+  /*
+   * AND THE SAVE SHEET'S PICKER, the third star button, missed at first (the
+   * 2 November 2026 audit's review): it had no device at all, so its stars
+   * went to the 'unknown' drawer and up to the account, demo or not. App
+   * hands it the demo-aware key and it hands that on.
+   */
+  const saveCall = app.slice(app.indexOf('<SaveSheet'), app.indexOf('/>', app.indexOf('<SaveSheet')))
+  assert.match(saveCall, /device=\{stageNow\(\)\}/, 'the Save sheet is not told which drawer its stars go in')
+  const saveSheet = flat('src/components/SaveSheet.jsx')
+  const savePickers = [...saveSheet.matchAll(/<PresetList\b[\s\S]*?\/>/g)].map((m) => m[0])
+  assert.ok(savePickers.length >= 1, 'SaveSheet.jsx moved; this test reads its preset picker')
+  for (const picker of savePickers) assert.match(picker, /device=\{device\}/, 'the Save sheet’s picker stars into the unknown drawer')
+
+  /* No preset picker anywhere in the browser goes without a drawer. */
+  const jsx = listSrc(new URL('../src', import.meta.url), { recursive: true })
+    .filter((f) => /\.jsx?$/.test(f))
+    .map((f) => `src/${String(f).split('\\').join('/')}`)
+  let seen = 0
+  for (const file of jsx) {
+    for (const m of flat(file).matchAll(/<PresetList\b[\s\S]*?\/>/g)) {
+      seen++
+      assert.match(m[0], /\bdevice=\{/, `a preset picker in ${file} has no drawer, so its stars go to 'unknown'`)
+    }
+  }
+  assert.ok(seen >= 3, `found ${seen} preset pickers in src; there are three (two in App, one in the Save sheet)`)
+})
+
 console.log('\na tone with more scenes than the unit holds')
 
 
@@ -16585,6 +16749,26 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.ok(!/"(Boost on|Boost off|Amp off)"/.test(pagesCode), 'the watch works out a boost word of its own, a second copy of Play’s rule')
   const tips = bridge.slice(bridge.indexOf('export const WATCH_HOW_OPEN'), bridge.indexOf('export function watchWakes'))
   assert.ok(tips.length > 100 && !/\bhold/i.test(tips), 'the phone’s watch tips promise a hold that a watch from before this build cannot do')
+  /*
+   * And the locked tip promises only what a woken tap does (the 2 November 2026 audit). It said to lock
+   * the iPhone and put it away, while a tap that wakes it is dropped at its deadline, and after the
+   * iPhone has slept most are. So: every tap lands with it unlocked on Play, and locked, the first tap
+   * after a long pause may not go through.
+   */
+  const lockedTip = /export const WATCH_HOW_LOCKED = '([^']*)'/.exec(bridge)?.[1]
+  assert.ok(lockedTip, 'the locked watch tip is not one plain string any more')
+  assert.ok(!/lock your iPhone|put it away|pocket|each tap[^.]*wakes/i.test(lockedTip), 'the watch tip tells somebody to lock the iPhone and put it away, and most taps after it sleeps are dropped')
+  assert.match(lockedTip, /^For every tap on the watch to land, keep your iPhone unlocked with this app on the Play screen\./)
+  /* The retry is straight away: a woken tap holds the iPhone awake for 25 seconds, and a tap after that is a first one again. */
+  assert.match(lockedTip, /With the iPhone locked, the first tap after a long pause may not go through; tap again straight away and it usually does\./)
+  assert.ok(!/the next one usually/i.test(lockedTip), 'the watch tip says the next tap usually lands, and one a minute later is a first tap again')
+  assert.match(readSrc(new URL('../mobile/modules/fractal-watch/ios/FractalWatchModule.swift', import.meta.url), 'utf8'), /private static let WAKE_SECONDS: Double = 25\b/, 'a woken tap no longer holds the iPhone awake for 25 seconds: the watch tip’s “straight away” may say too little or too much')
+  /* And the Play screen's note was shown once under the old words, so its key moved with them: shown once more to everybody who read v1. */
+  const coach = readSrc(new URL('../mobile/src/lib/coach.js', import.meta.url), 'utf8')
+  assert.match(coach, /const WATCH_TIP_KEY = 'fractal\.coach\.watch\.v2'/, 'the watch tip’s words were reversed and its once-shown key was not moved, so nobody who read “lock it and put it away” sees the new words on Play')
+  assert.ok(!/this (phone|iPhone)/i.test(lockedTip), 'the watch tip says “this phone”')
+  assert.match(bridge, /if \(!up \|\| Date\.now\(\) >= deadline\) \{ logDebug\('watch', `\$\{cmd\.do\} not sent: the phone could not reach the rig in time after waking`\) return undefined \}/, 'a woken tap is no longer dropped at its deadline: the watch tip says it may be, and could say more')
+  assert.match(bridge, /export const watchHow = \(\) => \(watchWakes\(\) \? \[WATCH_HOW_LOCKED, \.\.\.WATCH_HOW\.slice\(1\)\] : WATCH_HOW\)/)
   const wf = readSrc(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')
   for (const step of ['swift test', 'xcodegen generate', '-sdk watchsimulator', 'screens.sh', 'watch-screens']) assert.ok(wf.includes(step), `the watch check has no ${step}`)
 })

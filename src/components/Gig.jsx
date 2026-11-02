@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
-import { liveMeters, setChannel, setMetersWanted, vp4Capabilities, vp4Here } from '../lib/forgefx'
+import { isDemo, liveMeters, setChannel, setMetersWanted, vp4Capabilities, vp4Here } from '../lib/forgefx'
+import { stageKey } from '../../shared/device-slug.mjs'
 import { VP4_ON_OFF_UNKNOWN, aboutVp4, vp4StepWords } from '../../shared/vp4-safety.mjs'
 import {
   useDevice,
@@ -620,7 +621,13 @@ export default function Gig({
    * storage whenever either file changes, because the star is pressed in the
    * picker, over this screen, and the count on the button has to follow it.
    * See lib/setlists for the order each source gives.
+   *
+   * In the demo's own drawer while the demo is on (shared/device-slug
+   * stageKey): the demo's FM3 and a real FM3 are both 'fm3', and looking
+   * round the demo was editing the real gig setlist (the 2 November 2026
+   * audit). The pedals above still go by the unit's own slug.
    */
+  const stage = stageKey(deviceKey, isDemo())
   const [marksRev, setMarksRev] = useState(0)
   useEffect(() => {
     const bump = () => setMarksRev((n) => n + 1)
@@ -632,11 +639,11 @@ export default function Gig({
     }
   }, [])
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const favourites = useMemo(() => marksFor(deviceKey).favourites, [deviceKey, marksRev])
+  const favourites = useMemo(() => marksFor(stage).favourites, [stage, marksRev])
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const lists = useMemo(() => listsFor(deviceKey), [deviceKey, marksRev])
+  const lists = useMemo(() => listsFor(stage), [stage, marksRev])
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const source = useMemo(() => sourceFor(deviceKey), [deviceKey, marksRev])
+  const source = useMemo(() => sourceFor(stage), [stage, marksRev])
   const order = orderFor(source, { favourites, lists })
   const [setlistOpen, setSetlistOpen] = useState(false)
 
@@ -1308,7 +1315,7 @@ export default function Gig({
       <Setlists
         open={setlistOpen}
         onClose={() => setSetlistOpen(false)}
-        deviceKey={deviceKey}
+        deviceKey={stage}
         preset={preset}
         slots={slots}
         addressing={capabilities?.presets?.addressing}
