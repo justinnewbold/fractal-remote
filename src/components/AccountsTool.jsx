@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { DEFAULT_PROJECT, supabaseClient } from '../lib/remote'
-import { accessAction, accountChoices, accountConfirmHint, accountFilterButtons, accountSections, signInHelpWords } from '../../shared/admin.mjs'
+import { accessAction, accountChoices, accountConfirmHint, accountFilterButtons, accountRow, accountSections, samePerson, signInHelpWords } from '../../shared/admin.mjs'
 import Facts from './Facts'
 
 /**
@@ -24,6 +24,8 @@ export default function AccountsTool() {
   const [open, setOpen] = useState(null)
   const [doing, setDoing] = useState(null)
   const [told, setTold] = useState(null)
+  const openNow = useRef(open)
+  openNow.current = open
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -47,9 +49,14 @@ export default function AccountsTool() {
     load()
   }, [load])
 
+  /* The open row redrawn from the list just read, so what it offers is what is true now. */
+  useEffect(() => {
+    if (said?.ok) setOpen((was) => (was ? accountRow(said, was) || was : was))
+  }, [said])
+
   const pick = (row) => {
     setTold(null)
-    setOpen((was) => (was?.email === row.email ? null : row))
+    setOpen((was) => (samePerson(was, row) ? null : row))
   }
 
   const copy = async () => {
@@ -62,6 +69,8 @@ export default function AccountsTool() {
   }
 
   const act = async (action) => {
+    /* Who this is for, kept: another person can be opened while it runs, and the answer is this one's alone. */
+    const who = open
     setDoing(action)
     setTold(null)
     try {
@@ -72,21 +81,28 @@ export default function AccountsTool() {
         anonKey: DEFAULT_PROJECT.anonKey,
         token: data?.session?.access_token,
         action,
-        email: open.email
+        email: who.email
       })
-      /* Confirming emails nobody, so its line says to tell them (signInHelpWords, as on Give access). */
-      setTold(action === 'confirm' ? signInHelpWords('confirmNow', open.email, res.ok ? null : res.message) : res)
-      if (res.ok) {
-        setOpen((was) => (was ? (action === 'confirm' ? { ...was, confirmed: true } : { ...was, unlocked: action === 'grant', waiting: false }) : was))
-        load()
+      if (samePerson(openNow.current, who)) {
+        /* Confirming emails nobody, so its line says to tell them (signInHelpWords, as on Give access). */
+        setTold(action === 'confirm' ? signInHelpWords('confirmNow', who.email, res.ok ? null : res.message) : res)
+        /* The list under the sheet says Unlocked or Not unlocked, and whether they
+           confirmed; read it again so it says what just happened. */
+        if (res.ok) {
+          setOpen((was) =>
+            samePerson(was, who) ? (action === 'confirm' ? { ...was, confirmed: true } : { ...was, unlocked: action === 'grant', waiting: false }) : was
+          )
+        }
       }
+      if (res.ok) load()
     } finally {
       setDoing(null)
     }
   }
 
   const detail = (row) => {
-    if (!open || row.email !== open.email) return null
+    /* The account and the same address on the waiting list are two rows: only the one clicked opens. */
+    if (!open || !samePerson(row, open)) return null
     const choices = accountChoices(open)
     return (
       <div className="facts-open">
@@ -154,7 +170,7 @@ export default function AccountsTool() {
         </p>
       ) : null}
       {said?.ok
-        ? accountSections(said, find, Date.now(), show).map((s) => (
+        ? accountSections(said, find, Date.now(), show, open).map((s) => (
             <Facts key={s.title} title={s.title} rows={s.rows} onRow={pick} detail={detail} />
           ))
         : null}

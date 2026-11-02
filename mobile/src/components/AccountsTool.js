@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Text, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { DEFAULT_PROJECT } from '../lib/project'
 import { supabaseClient } from '../lib/relay'
-import { accessAction, accountChoices, accountConfirmHint, accountFilterButtons, accountSections, signInHelpWords } from '../lib/admin'
+import { accessAction, accountChoices, accountConfirmHint, accountFilterButtons, accountRow, accountSections, samePerson, signInHelpWords } from '../lib/admin'
 import Facts from './Facts'
 import Note from './Note'
 import Press from './Press'
@@ -40,6 +40,8 @@ export default function AccountsTool() {
   const [open, setOpen] = useState(null)
   const [doing, setDoing] = useState(null)
   const [told, setTold] = useState(null)
+  const openNow = useRef(open)
+  openNow.current = open
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -62,6 +64,11 @@ export default function AccountsTool() {
     load()
   }, [load])
 
+  /* The open sheet redrawn from the list just read, so its line under the email says what just happened. */
+  useEffect(() => {
+    if (said?.ok) setOpen((was) => (was ? accountRow(said, was) || was : was))
+  }, [said])
+
   const pick = (row) => {
     setTold(null)
     setOpen(row)
@@ -77,6 +84,8 @@ export default function AccountsTool() {
   }
 
   const act = async (action) => {
+    /* Who this is for, kept: another person can be opened while it runs, and the answer is this one's alone. */
+    const who = open
     setDoing(action)
     setTold(null)
     try {
@@ -86,16 +95,20 @@ export default function AccountsTool() {
         anonKey: DEFAULT_PROJECT.anonKey,
         token: data?.session?.access_token,
         action,
-        email: open.email
+        email: who.email
       })
-      /* Confirming emails nobody, so its line says to tell them (signInHelpWords, as on Give access). */
-      setTold(action === 'confirm' ? signInHelpWords('confirmNow', open.email, res.ok ? null : res.message) : res)
-      /* The list under the sheet says Unlocked or Not unlocked, and whether they
-         confirmed; read it again so it says what just happened. */
-      if (res.ok) {
-        setOpen((was) => (was ? (action === 'confirm' ? { ...was, confirmed: true } : { ...was, unlocked: action === 'grant', waiting: false }) : was))
-        load()
+      if (samePerson(openNow.current, who)) {
+        /* Confirming emails nobody, so its line says to tell them (signInHelpWords, as on Give access). */
+        setTold(action === 'confirm' ? signInHelpWords('confirmNow', who.email, res.ok ? null : res.message) : res)
+        /* The list under the sheet says Unlocked or Not unlocked, and whether they
+           confirmed; read it again so it says what just happened. */
+        if (res.ok) {
+          setOpen((was) =>
+            samePerson(was, who) ? (action === 'confirm' ? { ...was, confirmed: true } : { ...was, unlocked: action === 'grant', waiting: false }) : was
+          )
+        }
       }
+      if (res.ok) load()
     } finally {
       setDoing(null)
     }
@@ -141,7 +154,7 @@ export default function AccountsTool() {
       ) : null}
       {said && !said.ok ? <Note tone="fault">{said.message}</Note> : null}
       {said?.ok
-        ? accountSections(said, find, Date.now(), show).map((s) => <Facts key={s.title} title={s.title} rows={s.rows} onRow={pick} />)
+        ? accountSections(said, find, Date.now(), show, open).map((s) => <Facts key={s.title} title={s.title} rows={s.rows} onRow={pick} />)
         : null}
       <Press label={busy ? 'Loading…' : 'Refresh'} height={TAP} disabled={busy} onPress={load} />
 

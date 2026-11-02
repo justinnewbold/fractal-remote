@@ -2725,7 +2725,7 @@ export function run(test) {
         { email: 'today@x.com', signed_up: iso(now - 30 * 86400000), confirmed: true, last_sign_in: iso(midnight.getTime() + 3600000), unlocked: true },
         /* On three days ago, confirmed, not paid. */
         { email: 'week@x.com', signed_up: iso(now - 20 * 86400000), confirmed: true, last_sign_in: iso(now - 3 * 86400000), unlocked: false },
-        /* The buyer whose address bounces: paid, never confirmed, never on. */
+        /* The buyer whose address bounces, as the server lists them once their purchase is on the account: unlocked, never confirmed, never on. */
         { email: 'typo@gmial.com', signed_up: iso(now - 40 * 86400000), confirmed: false, last_sign_in: null, unlocked: true },
         /* Signed up yesterday, never confirmed. */
         { email: 'new@x.com', signed_up: iso(now - 86400000), confirmed: false, last_sign_in: null, unlocked: false },
@@ -2759,6 +2759,26 @@ export function run(test) {
     assert.equal(accountSections(answer, 'nobody', now, 'confirmed')[0].rows[0].value, 'Nobody with an account matches that.')
     assert.equal(accountSections({ ...answer, waiting: [] }, '', now, 'waiting')[0].rows[0].value, 'Nobody is waiting to sign up.')
 
+    /* The open person stays in the list under any button, so acting on them never takes their row and its message away; the title still counts who the button holds. */
+    const after = { ...answer, accounts: answer.accounts.map((a) => (a.email === 'new@x.com' ? { ...a, confirmed: true } : a)) }
+    const kept = accountSections(after, '', now, 'unconfirmed', { email: 'new@x.com' })
+    assert.ok(kept[0].rows.some((r) => r.email === 'new@x.com'), 'the person just confirmed vanished from Not confirmed while their sheet was open')
+    assert.equal(kept[0].title, 'Not confirmed (1)', 'the title counts the open person as well as who the button holds')
+    assert.ok(!accountSections(after, '', now, 'unconfirmed').flatMap((s) => s.rows).some((r) => r.email === 'new@x.com'), 'a confirmed account stays under Not confirmed once nobody has it open')
+    /* A waiting-list row open under another button stays as itself, and an account of the same address is not it. */
+    assert.deepEqual(accountSections(answer, '', now, 'confirmed', { email: 'soon@x.com', waiting: true }).flatMap((s) => s.rows).filter((r) => r.waiting).map((r) => r.email), ['soon@x.com'])
+    const { accountRow, samePerson } = await import('../shared/admin.mjs')
+    assert.equal(samePerson({ email: 'A@x.com' }, { email: 'a@x.com' }), true)
+    assert.equal(samePerson({ email: 'a@x.com' }, { email: 'a@x.com', waiting: true }), false, 'an account and the same address on the waiting list read as one person')
+    assert.equal(samePerson(null, { email: 'a@x.com' }), false)
+    /* The fresh row for an open person: the line says what is true now. */
+    assert.match(accountRow(after, { email: 'new@x.com' }, now).line, /never signed in/, 'the open sheet keeps saying they have not confirmed')
+    assert.equal(accountRow(after, { email: 'nobody@x.com' }, now), null)
+    /* Waiting to sign up with a find that matches nobody waiting does not say nobody is waiting. */
+    assert.equal(accountSections(answer, 'zzz', now, 'waiting')[0].rows[0].value, 'Nobody waiting to sign up matches that.')
+    /* Unlocked, not confirmed says who it cannot see, and where they are. */
+    assert.match(accountSections(answer, '', now, 'stuck').at(-1).rows[0].value, /paid before making their account[^]*Sales, under Paid, account never confirmed/)
+
     /* Each button says how many it holds, counted the same way as the list. */
     const buttons = accountFilterButtons(answer, '', now)
     assert.deepEqual(buttons.map((b) => b.key), ACCOUNT_FILTERS.map((f) => f.key))
@@ -2773,13 +2793,15 @@ export function run(test) {
     const phone = read('mobile/src/components/AccountsTool.js')
     assert.match(phone, /accountFilterButtons\(said, find\)\.map/)
     assert.match(phone, /on=\{f\.key === show\}/)
-    assert.match(phone, /accountSections\(said, find, Date\.now\(\), show\)/)
+    assert.match(phone, /accountSections\(said, find, Date\.now\(\), show, open\)/)
     assert.ok(phone.indexOf('placeholder="Find an email"') < phone.indexOf('accountFilterButtons(said, find)'), 'the phone’s buttons are not under the find box')
     assert.match(phone, /flexWrap: 'wrap'/, 'the phone’s buttons scroll out of sight instead of wrapping')
     const web = read('src/components/AccountsTool.jsx')
     assert.match(web, /accountFilterButtons\(said, find\)\.map/)
     assert.match(web, /aria-pressed=\{f\.key === show\}/)
-    assert.match(web, /accountSections\(said, find, Date\.now\(\), show\)/)
+    assert.match(web, /accountSections\(said, find, Date\.now\(\), show, open\)/)
+    /* The browser opens a row in place: the account and the same address waiting to sign up are two rows, and only the one clicked opens. */
+    assert.match(web, /if \(!open \|\| !samePerson\(row, open\)\) return null/)
     assert.ok(web.indexOf('placeholder="Find an email"') < web.indexOf('accountFilterButtons(said, find)'), 'the browser’s buttons are not under the find box')
   })
 
@@ -2823,7 +2845,14 @@ export function run(test) {
       assert.match(tool, /\{choices\.confirmNow \? \(/, `${file}: Confirm now is not behind accountChoices`)
       assert.match(tool, /'Confirming…' : 'Confirm their account now'/, `${file}: the button is not worded as on Give access`)
       assert.match(tool, /accountConfirmHint\(open\)/, `${file}: the button has no line saying what it does`)
-      assert.match(tool, /action === 'confirm' \? signInHelpWords\('confirmNow', open\.email, res\.ok \? null : res\.message\) : res/, `${file}: confirming does not say to tell them`)
+      assert.match(tool, /action === 'confirm' \? signInHelpWords\('confirmNow', who\.email, res\.ok \? null : res\.message\) : res/, `${file}: confirming does not say to tell them`)
+      /* The answer is the person's it was asked for: nothing lands on somebody opened meanwhile. */
+      assert.match(tool, /const who = open/, `${file}: the person acted on is not kept`)
+      assert.match(tool, /email: who\.email/, `${file}: the action is sent for whoever is open when it is sent, not the one tapped`)
+      assert.match(tool, /if \(samePerson\(openNow\.current, who\)\) \{/, `${file}: the answer lands on whoever is open when it arrives`)
+      assert.match(tool, /samePerson\(was, who\) \?/, `${file}: the patch lands on whoever is open when it arrives`)
+      /* And the open one is redrawn from the list read again, so its line says what just happened. */
+      assert.match(tool, /if \(said\?\.ok\) setOpen\(\(was\) => \(was \? accountRow\(said, was\) \|\| was : was\)\)/, `${file}: the open person is not redrawn from the fresh list`)
       /* Confirming changes whether they confirmed, never whether they are unlocked. */
       assert.match(tool, /action === 'confirm' \? \{ \.\.\.was, confirmed: true \} : \{ \.\.\.was, unlocked: action === 'grant', waiting: false \}/, `${file}: confirming marks them locked or unlocked`)
     }
