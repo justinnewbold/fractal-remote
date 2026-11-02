@@ -5390,6 +5390,7 @@ export default function App() {
           progress={scanProgress}
           onScan={scanPresets}
           onStopScan={stopNames}
+          device={stageNow()}
         />
       </Sheet>
 

@@ -143,7 +143,8 @@ export default function SaveSheet({
   onScan,
   onStopScan,
   check,
-  late
+  late,
+  device
 }) {
   const problem = slotProblem(slot, deviceSlots)
   const target = problem ? NaN : slot === '' ? preset?.number : Number(slot)
@@ -250,8 +251,12 @@ export default function SaveSheet({
       </div>
 
       <p className="silk-label save-pick-label">Or pick a slot</p>
+      {/* Starred and filed in the same drawer as the preset menu's, the demo's
+          own in the demo (App stageNow). With none it was 'unknown', which
+          went to the account, demo or not (the 2 November 2026 audit). */}
       <PresetList
         slots={slots}
+        device={device}
         current={target}
         deviceSlots={deviceSlots}
         addressing={addressing}

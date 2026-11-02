@@ -20,7 +20,7 @@ import * as gigSize from '../src/lib/gigSize.js'
 import * as marks from '../src/lib/presetMarks.js'
 import * as setlists from '../src/lib/setlists.js'
 import * as palette from '../src/lib/palette.js'
-import { readFileSync as readSrc } from 'node:fs'
+import { readFileSync as readSrc, readdirSync as listSrc } from 'node:fs'
 /*
  * The platform's own join, used by the findForgeFX tests below.
  *
@@ -13103,6 +13103,32 @@ test('every caller in the browser files the stars and setlists by the demo-aware
   const pickers = [...app.matchAll(/<PresetList\b[\s\S]*?\/>/g)].map((m) => m[0])
   assert.ok(pickers.length >= 2, 'App.jsx moved; this test reads both preset pickers')
   for (const picker of pickers) assert.match(picker, /device=\{stageNow\(\)\}/, 'a preset picker stars the real unit’s presets in the demo')
+
+  /*
+   * AND THE SAVE SHEET'S PICKER, the third star button, missed at first (the
+   * 2 November 2026 audit's review): it had no device at all, so its stars
+   * went to the 'unknown' drawer and up to the account, demo or not. App
+   * hands it the demo-aware key and it hands that on.
+   */
+  const saveCall = app.slice(app.indexOf('<SaveSheet'), app.indexOf('/>', app.indexOf('<SaveSheet')))
+  assert.match(saveCall, /device=\{stageNow\(\)\}/, 'the Save sheet is not told which drawer its stars go in')
+  const saveSheet = flat('src/components/SaveSheet.jsx')
+  const savePickers = [...saveSheet.matchAll(/<PresetList\b[\s\S]*?\/>/g)].map((m) => m[0])
+  assert.ok(savePickers.length >= 1, 'SaveSheet.jsx moved; this test reads its preset picker')
+  for (const picker of savePickers) assert.match(picker, /device=\{device\}/, 'the Save sheet’s picker stars into the unknown drawer')
+
+  /* No preset picker anywhere in the browser goes without a drawer. */
+  const jsx = listSrc(new URL('../src', import.meta.url), { recursive: true })
+    .filter((f) => /\.jsx?$/.test(f))
+    .map((f) => `src/${String(f).split('\\').join('/')}`)
+  let seen = 0
+  for (const file of jsx) {
+    for (const m of flat(file).matchAll(/<PresetList\b[\s\S]*?\/>/g)) {
+      seen++
+      assert.match(m[0], /\bdevice=\{/, `a preset picker in ${file} has no drawer, so its stars go to 'unknown'`)
+    }
+  }
+  assert.ok(seen >= 3, `found ${seen} preset pickers in src; there are three (two in App, one in the Save sheet)`)
 })
 
 console.log('\na tone with more scenes than the unit holds')
