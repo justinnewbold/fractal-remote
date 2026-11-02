@@ -574,9 +574,9 @@ const SETUP_PAGES = {
   colours: 'Colors',
   help: 'Troubleshooting',
   updates: 'Updates',
-  about: 'About',
-  /* Justin's own tools, on his account only — see shared/admin.mjs. */
-  developer: 'Developer',
+  about: 'The small print',
+  /* Justin's own tools, on his account only — see shared/admin.mjs. Their rows
+     are under the Developer heading on the front list (2 November 2026). */
   access: 'Give someone access',
   sales: 'Sales at a glance',
   accounts: 'Everyone with an account',
@@ -607,7 +607,7 @@ const SETUP_PAGES = {
  * A map rather than an `if`, so the next nested page is a line rather than a
  * branch.
  */
-const SETUP_PARENT = { updates: 'about', demo: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', am4check: 'developer' }
+const SETUP_PARENT = { demo: 'link', updating: 'link' }
 const upFrom = (page) => SETUP_PARENT[page] || null
 const upLabel = (page) => `\u2039 ${SETUP_PAGES[upFrom(page)] || 'Settings'}`
 /** What the chat says when a request needed the model and the model is off. */
@@ -5735,15 +5735,71 @@ export default function App() {
             </div>
 
             <p className="silk-label setup-group">About</p>
+            {/*
+              THE ROWS THEMSELVES, as on the phone. "Can you make it so that
+              when you click on that, it shows the sub menus instead of just
+              another button that says the same word?" (Justin, 2 November
+              2026, of About and Developer.) There was one row here, About,
+              opening a page with these on it.
+            */}
             <div className="setup-rows">
-              <SetupRow key="about" title="About" status={FULL} onClick={() => setSetupPage('about')} />
+              {inDesktopApp() ? (
+                <SetupRow key="updates" title="Updates" status="This app, not your unit" onClick={() => setSetupPage('updates')} />
+              ) : null}
+              {/*
+                WHAT EACH UPDATE CHANGED, the website's page, as the phone's
+                All updates opens it: the list itself stays out of the web
+                app, so a new line is never a new computer release.
+              */}
+              <SetupRow
+                key="whats-new"
+                title="What’s new"
+                status="What each update changed"
+                onClick={() => window.open(WHATS_NEW_URL, '_blank', 'noopener')}
+              />
+              {/*
+                HELP WITH THIS APP, IN SIGHT. Fractal Audio's letter (18
+                October 2026) asks for support through the developer's own
+                channels, and the way to them sat inside the small print
+                below, which opens closed, as a link in the browser's own
+                blue. The phone has it as a full row on the page; so does
+                this. The website's address, never a local link: the
+                computer window is served from the computer's own copy of
+                the site, and the support page is website-only, so that copy
+                of it is never kept current (WEBSITE_ONLY in
+                scripts/computer-fingerprint.mjs).
+              */}
+              <SetupRow
+                key="help"
+                title="Help with this app"
+                status="Questions, problems, a person"
+                onClick={() => window.open(SUPPORT_URL, '_blank', 'noopener')}
+              />
+              <SetupRow key="about" title="The small print" status={FULL} onClick={() => setSetupPage('about')} />
             </div>
+            {/* The pedalboard computer's switch, under About because it is
+                about this app rather than the unit, and in the list itself
+                (2 November 2026), where the Raspberry Pi guide says to tick
+                it. Draws nothing unless the computer can do it, which is the
+                Linux app only. */}
+            <StartAtBoot />
 
             {isAdmin(link.account?.id) ? (
               <>
                 <p className="silk-label setup-group">Developer</p>
+                {/* Its rows themselves (2 November 2026), as on the phone: there was one, Developer, opening a page with these on it. */}
                 <div className="setup-rows">
-                  <SetupRow key="developer" title="Developer" status="Access, sales, accounts, messages, what's live" onClick={() => setSetupPage('developer')} />
+                  <SetupRow key="access" title="Give someone access" status="Look someone up, or unlock them" onClick={() => setSetupPage('access')} />
+                  <SetupRow key="sales" title="Sales at a glance" status="Today, this week, all time" onClick={() => setSetupPage('sales')} />
+                  <SetupRow key="usage" title="How many people" status="Who used it today, this week, this month" onClick={() => setSetupPage('usage')} />
+                  <SetupRow key="accounts" title="Everyone with an account" status="Who has signed up" onClick={() => setSetupPage('accounts')} />
+                  <SetupRow key="messages" title="Messages from users" status="Bug reports and suggestions, with their logs" onClick={() => setSetupPage('messages')} />
+                  <SetupRow key="live" title="What's live" status="Which version each piece is on" onClick={() => setSetupPage('live')} />
+                  {/* Only in the Mac app's own window, with an AM4 on it: the check
+                      talks to the unit directly, which nothing over the relay may. */}
+                  {inDesktopApp() && slugOfUnit(device) === 'am4' ? (
+                    <SetupRow key="am4check" title="AM4 check" status="Read one AM4 setting at a time" onClick={() => setSetupPage('am4check')} />
+                  ) : null}
                 </div>
               </>
             ) : null}
@@ -6448,28 +6504,6 @@ export default function App() {
           </div>
         ) : null}
 
-        {setupPage === 'developer' && isAdmin(link.account?.id) ? (
-          <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
-              ‹ Settings
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.developer}</p>
-            <div className="setup-rows">
-              <SetupRow key="access" title="Give someone access" status="Look someone up, or unlock them" onClick={() => setSetupPage('access')} />
-              <SetupRow key="sales" title="Sales at a glance" status="Today, this week, all time" onClick={() => setSetupPage('sales')} />
-              <SetupRow key="usage" title="How many people" status="Who used it today, this week, this month" onClick={() => setSetupPage('usage')} />
-              <SetupRow key="accounts" title="Everyone with an account" status="Who has signed up" onClick={() => setSetupPage('accounts')} />
-              <SetupRow key="messages" title="Messages from users" status="Bug reports and suggestions, with their logs" onClick={() => setSetupPage('messages')} />
-              <SetupRow key="live" title="What's live" status="Which version each piece is on" onClick={() => setSetupPage('live')} />
-              {/* Only in the Mac app's own window, with an AM4 on it: the check
-                  talks to the unit directly, which nothing over the relay may. */}
-              {inDesktopApp() && slugOfUnit(device) === 'am4' ? (
-                <SetupRow key="am4check" title="AM4 check" status="Read one AM4 setting at a time" onClick={() => setSetupPage('am4check')} />
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
         {setupPage === 'unlock' ? (
           <div className="setup-page">
             <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('unlock'))}>
@@ -6622,59 +6656,10 @@ export default function App() {
             </button>
             <p className="setup-page-title">{SETUP_PAGES.about}</p>
             <p className="device-meta mono">{FULL} · built {BUILT_AT} UTC</p>
-            {/*
-              UPDATES, TROUBLESHOOTING AND THE WALKTHROUGH, in that order,
-              because that is the order the phone has them in.
-
-              "Move walkthrough, updates and troubleshooting INSIDE of the
-              'About' menu." That instruction was carried out on the phone and
-              not here, and Troubleshooting and the walkthrough went on sitting
-              on the browser's front list for it — which is the drift he spotted.
-              They are three rows now rather than two Sections and a chip, for
-              the same reason the phone's are: everything else at this level is
-              a row, and the one thing that is not is the one thing nobody finds.
-            */}
-            <div className="setup-rows">
-              {inDesktopApp() ? (
-                <SetupRow key="updates" title="Updates" status="This app, not your unit" onClick={() => setSetupPage('updates')} />
-              ) : null}
-              {/*
-                HELP WITH THIS APP, IN SIGHT. Fractal Audio's letter (18
-                October 2026) asks for support through the developer's own
-                channels, and the way to them sat inside the small print
-                below, which opens closed, as a link in the browser's own
-                blue. The phone has it as a full row on the page; so does
-                this. The website's address, never a local link: the
-                computer window is served from the computer's own copy of
-                the site, and the support page is website-only, so that copy
-                of it is never kept current (WEBSITE_ONLY in
-                scripts/computer-fingerprint.mjs).
-              */}
-              {/*
-                WHAT EACH UPDATE CHANGED, the website's page, as the phone's
-                All updates opens it: the list itself stays out of the web
-                app, so a new line is never a new computer release.
-              */}
-              <SetupRow
-                key="whats-new"
-                title="What’s new"
-                status="What each update changed"
-                onClick={() => window.open(WHATS_NEW_URL, '_blank', 'noopener')}
-              />
-              <SetupRow
-                key="help"
-                title="Help with this app"
-                status="Questions, problems, a person"
-                onClick={() => window.open(SUPPORT_URL, '_blank', 'noopener')}
-              />
-            </div>
-            {/* The pedalboard computer's switch, under Updates because both are
-                about this app rather than the unit. Draws nothing unless the
-                computer can do it, which is the Linux app only. */}
-            <StartAtBoot />
             {/* Reachable from inside the app, which is the point of writing
-                them. Same two links as the phone's About page. */}
-            <Section key="small-print" title="The small print" note="Worth knowing, once">
+                them. Same two links as the phone's small print. Open, not a
+                fold: this page is the small print (2 November 2026). */}
+            <div className="small-print">
               {/* Said in the app rather than only in a file somebody would have
                   to go looking for. One string, shared with the phone — see
                   shared/affiliation.mjs for why it is not typed twice. */}
@@ -6693,7 +6678,7 @@ export default function App() {
                   Licenses
                 </a>
               </div>
-            </Section>
+            </div>
           </div>
         ) : null}
       </Sheet>

@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-02",
+    "day": "2 November 2026",
+    "version": "1.89.23",
+    "lines": [
+      {
+        "text": "Settings → About opens straight onto Updates, What’s new, Help with this app and The small print, with no extra tap.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-10-31",
     "day": "31 October 2026",
     "version": "1.89.18",

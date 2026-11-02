@@ -3,6 +3,13 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-02",
+      "version": "1.89.23",
+      "lines": [
+        "Settings → About opens straight onto Updates, What’s new, Help with this app and The small print, with no extra tap."
+      ]
+    },
+    {
       "date": "2026-10-31",
       "version": "1.89.18",
       "lines": [

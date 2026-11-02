@@ -8923,10 +8923,19 @@ export function run(test) {
       'Amp & pedal names',
       'REPLAY',
       'Apple Watch',
+      /* "When you click on that, it shows the sub menus instead of just another
+         button that says the same word" (2 November 2026): About and Developer
+         open straight onto their rows. */
       '# About',
-      'About',
+      'Updates',
+      'What’s new',
+      'Help with this app',
+      'The small print',
       '# Developer',
-      'Developer',
+      'Messages from users',
+      'Customers',
+      'App health',
+      'Testing',
       /* "Move the Play Screen section down to the bottom of the list." */
       '# Play screen',
       'Tiles & scenes',
@@ -8952,7 +8961,7 @@ export function run(test) {
     /* Updates stays inside About. Troubleshooting and the walkthrough came
        back out, under Help on the front: the page needed most on a bad
        evening was two taps deep. */
-    const about = settings.slice(settings.indexOf("{page === 'about' ?"))
+    const about = front.slice(front.indexOf('<Group title="About"'), front.indexOf('<Group title="Developer"'))
     assert.ok(/title="Updates"/.test(about), 'Updates is not inside About')
     assert.ok(!/title="Troubleshooting"/.test(about), 'Troubleshooting is still buried inside About')
     const help = front.slice(front.indexOf('<Group title="Help"'), front.indexOf('<Group title="About"'))
@@ -13824,8 +13833,10 @@ export function run(test) {
        'works', What works (the gear notes), a child of Developer too. And on
        30 October 2026 Developer's ten became four: Messages from users and
        the three pages that group the rest, all children of Developer. And
-       on 1 November 2026 'whats-new', What’s new, a child of About. */
-    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', messages: 'developer', customers: 'developer', health: 'developer', testing: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'whats-new': 'about' \}/, 'a page goes back somewhere it did not come from')
+       on 1 November 2026 'whats-new', What’s new, a child of About. And on
+       2 November 2026 About and Developer opened onto their rows on the front
+       of Settings, with no page between, so their pages go back to Settings. */
+    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')

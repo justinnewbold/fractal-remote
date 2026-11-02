@@ -1430,9 +1430,11 @@ export function run(test) {
     /* And the phone and the browser draw the page for his account alone. */
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
     assert.match(settings, /\{page === 'customers' && isAdmin\(account\?\.id\) \? \( <> \{head\('Customers', 'back'\)\}[^]*?\{devTab\.customers === 'stuck' \? <StuckTool \/> : null\}/, 'the list is drawn for somebody other than Justin')
-    const developer = settings.slice(settings.indexOf("{page === 'developer' && isAdmin(account?.id) ? ("), settings.indexOf('{/* ------------------------------------------------------ appearance */}'))
-    /* Since 30 October 2026 a button on Developer → Customers, which is his alone. */
-    assert.match(developer, /<SetupRow title="Customers" status="[^"]+" onPress=\{\(\) => setPage\('customers'\)\} \/>/, 'the list’s row is not on the Developer page, which is his alone')
+    /* Since 30 October 2026 a button on Developer → Customers, which is his alone; the
+       Customers row is under the Developer heading on the front of Settings since 2 November 2026. */
+    const developer = settings.slice(settings.indexOf('{isAdmin(account?.id) ? ( <Group title="Developer"'), settings.indexOf('</Group>', settings.indexOf('<Group title="Developer"')))
+    assert.ok(developer.length > 0, 'the Developer rows moved; this check reads them')
+    assert.match(developer, /<SetupRow title="Customers" status="[^"]+" onPress=\{\(\) => setPage\('customers'\)\} \/>/, 'the list’s row is not under Developer, which is his alone')
     assert.match(settings, /\{ key: 'stuck', label: 'No computer' \}/, 'Customers has no button for the list')
     assert.ok(!/setPage\('stuck'\)/.test(settings.replace(developer, '')), 'the list can be opened from somewhere besides the Developer page')
   })

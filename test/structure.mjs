@@ -1555,11 +1555,26 @@ export function run(test) {
         'Troubleshooting',
         'Amp & pedal names',
         'REPLAY',
+        /*
+         * About and Developer list their rows themselves since 2 November
+         * 2026: "Can you make it so that when you click on that, it shows the
+         * sub menus instead of just another button that says the same word?"
+         * Each had one row, About and Developer, opening a page of these.
+         */
         '# About',
-        'About',
+        'Updates',
+        'What’s new',
+        'Help with this app',
+        'The small print',
         /* Drawn only on his own account: see shared/admin.mjs. */
         '# Developer',
-        'Developer',
+        'Give someone access',
+        'Sales at a glance',
+        'How many people',
+        'Everyone with an account',
+        'Messages from users',
+        "What's live",
+        'AM4 check',
         /* Last: "Move the Play Screen section down to the bottom of the list." */
         '# Play screen',
         'Tiles & scenes',
@@ -1571,9 +1586,12 @@ export function run(test) {
     /* Light or dark on the front, under Play screen, as on the phone. */
     assert.match(front, /setup-group">Play screen<[\s\S]{0,800}<Theme \/>/, 'light and dark are not on the front of Settings')
 
-    /* About holds Updates now, What’s new (1 November 2026, the website’s page), Help with this app (Fractal Audio's letter: help through our own channels, in sight), and the small print; Troubleshooting and the walkthrough moved up to Help. */
-    const about = setup.slice(setup.indexOf("setupPage === 'about'"))
-    assert.deepEqual(rowsIn(frontList(about)), ['Updates', 'What’s new', 'Help with this app'], 'the About page is not what the phone has')
+    /* The page behind The small print is the small print alone: the version, Fractal Audio's sentence, where help comes from, Privacy and Licenses, open and not folded. No rows: they are on the front list, under About. */
+    const about = setup.slice(setup.indexOf("setupPage === 'about'"), setup.indexOf('</Sheet>', setup.indexOf("setupPage === 'about'")))
+    assert.ok(!/<SetupRow\b/.test(about), 'the small print page has rows again; they belong under About on the front list')
+    assert.ok(!/<Section\b/.test(about), 'the small print is a closed fold on its own page')
+    assert.ok(about.includes('{AFFILIATION}') && about.includes('{SUPPORT_LINE}') && about.includes('href="/privacy.html"') && about.includes('href="/notices.txt"'), 'the small print page lost part of the small print')
+    assert.match(readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8'), /\babout: 'The small print',/, 'the page behind The small print has another name')
     assert.ok(!setup.includes('<Group'), 'the doors are back')
 
     /*
@@ -1633,10 +1651,10 @@ export function run(test) {
       /* Updates is a page of its own now rather than a panel on About, for
          the same reason the walkthrough is a row rather than a chip: they are
          rows inside About, which is where Justin put the phone's. The rows
-         themselves are asserted above; what is left folded on About is the
-         small print. */
+         themselves are asserted above. The page behind The small print is the
+         small print, open, with no fold (2 November 2026). */
       ['updates', []],
-      ['about', ['small-print']]
+      ['about', []]
     ]) {
       assert.deepEqual(behind(page), panels, `the ${page} page holds ${behind(page).join(', ')}`)
     }

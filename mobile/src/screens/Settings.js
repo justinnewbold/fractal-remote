@@ -482,8 +482,8 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', updating: 'link', messages: 'developer', customers: 'developer', health: 'developer', testing: 'developer', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', 'whats-new': 'about' }
-  const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, developer: '‹ Developer', bluetooth: '‹ Bluetooth', about: '‹ About' }
+  const PARENT = { offline: 'link', updating: 'link', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth' }
+  const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, bluetooth: '‹ Bluetooth' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
 
@@ -681,22 +681,98 @@ export default function Settings({
 
           <Group title="About" hint={updates.phase === 'ready' ? 'Update ready' : `v${APP_VERSION}`}>
             {/*
-              The version, and an update waiting says so here, where the list
-              is read, instead of one page further in.
+              THE ROWS THEMSELVES, open as soon as About is. "Can you make it
+              so that when you click on that, it shows the sub menus instead
+              of just another button that says the same word?" (Justin,
+              2 November 2026, of About and Developer.) There was one row
+              here, About, opening a page with these on it.
+            */}
+            {/*
+              * WHAT IS RUNNING, AND HOW TO GET THE NEWEST.
+              *
+              * "I have not yet successfully had a single over-the-air update
+              * work correctly. They never come through, so I keep refreshing
+              * the android app, closing it, force closing it, reopening it
+              * over and over again."
+              *
+              * They were arriving. What was missing was any way to SEE it,
+              * plus one detail that makes a working app look stuck: this app
+              * never waits for a download at launch — app.json sets
+              * fallbackToCacheTimeout to 0, so it starts on the bundle it
+              * already has, fetches the new one in the BACKGROUND, and runs it
+              * the NEXT time it opens.
+              *
+              * First launch downloads. Second launch shows it. Somebody
+              * force-closing once, seeing the same number and concluding
+              * nothing happened was one restart short, with nothing on screen
+              * to say so.
+              *
+              * That default is right for a stage and is not what changes here.
+              * This says what is going on, and offers the restart instead of
+              * waiting for it to happen by accident.
+              */}
+            <SetupRow
+              title="Updates"
+              status={
+                updates.phase === 'ready'
+                  ? 'Ready — tap to restart into it'
+                  : updates.phase === 'downloading'
+                    ? 'Downloading…'
+                    : updates.phase === 'checking'
+                      ? 'Checking…'
+                      : updates.phase === 'current'
+                        ? `v${APP_VERSION} · up to date`
+                        : updates.phase === 'off'
+                          ? 'Not available in this build'
+                          : updates.error
+                            ? 'Could not check — tap to try again'
+                            : `v${APP_VERSION} · running ${updates.source === 'update' ? 'an update' : 'the installed build'} · tap to check`
+              }
+              onPress={() => (updates.phase === 'ready' ? applyNow() : checkNow())}
+            />
+            {/*
+              AND WHEN THE COPY ITSELF IS OLD. An update changes what the app
+              does; only the store changes the copy it runs in, and once a new
+              store version changes what an update needs, the older copies stop
+              getting updates. Said here, quietly, for as long as it is true.
+            */}
+            {newer.note ? <SetupRow title={newer.note.row} status={newer.note.line} onPress={() => openStore(newer.note)} /> : null}
+            {/*
+              WHAT EACH UPDATE CHANGED, beside Updates, which says which one is
+              running (screens/WhatsNew, from shared/whats-new.json): "a change
+              log that shows what each update change was made" (Justin,
+              1 November 2026).
+            */}
+            <SetupRow title="What’s new" status={latestLine()} onPress={() => setPage('whats-new')} />
+            {/*
+              HELP WITH THIS APP, A ROW OF ITS OWN, at both ends in the same
+              place. Fractal Audio's letter (18 October 2026) asks that support
+              come through the developer's own channels. The browser's way to
+              the support page sat in its small print, which opens closed, so
+              it went up beside Updates there, and here too, so the two lists
+              stay one list. Its line is short because a row's line is one line
+              (SetupRow): "The support page, and how to reach a person" stopped
+              at "a p…" on a 320-wide phone.
             */}
             <SetupRow
-              title="About"
-              status={updates.phase === 'ready' ? 'Update ready — tap to restart into it' : `v${APP_VERSION}`}
-              onPress={() => (updates.phase === 'ready' ? applyNow() : setPage('about'))}
+              title="Help with this app"
+              status="Questions, problems, a person"
+              onPress={() => Linking.openURL(SUPPORT_URL)}
             />
+            {/* What was left on the About page: the version, Fractal Audio's sentence, where help comes from, privacy and licenses. */}
+            <SetupRow title="The small print" status="Privacy, licenses, who makes this" onPress={() => setPage('about')} />
           </Group>
 
-          {/* Justin's own tools, on his account only — see lib/admin.js. One
-              row for all three: "we should probably just make that into one
-              menu called developer". */}
+          {/* Justin's own tools, on his account only — see lib/admin.js.
+              Their rows sit here under the Developer heading (2 November
+              2026), rather than behind a Developer row of the same name. */}
           {isAdmin(account?.id) ? (
-            <Group title="Developer" hint="Your own tools">
-              <SetupRow title="Developer" status="Messages, customers, app health, testing" onPress={() => setPage('developer')} />
+            <Group title="Developer" hint="Messages, customers, app health, testing">
+              {/* The four rows themselves (2 November 2026): there was one, Developer, opening a page with these on it. */}
+              <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
+              <SetupRow title="Customers" status="Sales, sign-ups, and giving access" onPress={() => setPage('customers')} />
+              <SetupRow title="App health" status="What's live, what works, and what's been tried" onPress={() => setPage('health')} />
+              <SetupRow title="Testing" status="View as a new customer, Bluetooth check" onPress={() => setPage('testing')} />
             </Group>
           ) : null}
 
@@ -917,18 +993,6 @@ export default function Settings({
         Bluetooth check). Every tool is the same one it was, opened the same
         way, on his account alone.
       */}
-      {page === 'developer' && isAdmin(account?.id) ? (
-        <>
-          {head('Developer', 'back')}
-          <View style={{ gap: 0 }}>
-            <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
-            <SetupRow title="Customers" status="Sales, sign-ups, and giving access" onPress={() => setPage('customers')} />
-            <SetupRow title="App health" status="What's live, what works, and what's been tried" onPress={() => setPage('health')} />
-            <SetupRow title="Testing" status="View as a new customer, Bluetooth check" onPress={() => setPage('testing')} />
-          </View>
-        </>
-      ) : null}
-
       {page === 'customers' && isAdmin(account?.id) ? (
         <>
           {head('Customers', 'back')}
@@ -1661,100 +1725,10 @@ export default function Settings({
 
       {page === 'about' ? (
         <>
-          {head('About', 'back')}
+          {head('The small print', 'back')}
           <Text style={{ color: color.silk, fontSize: font.body, fontFamily: face }}>
             {`Fractal Remote v${APP_VERSION}`}
           </Text>
-
-          {/*
-            INSIDE ABOUT, not beside it.
-
-            "Move walkthrough, updates and troubleshooting INSIDE of the
-            'About' menu."
-
-            They were moved under About an hour ago, which was the smaller
-            version of the same instruction: they are the rows you go looking
-            for on an evening when something is wrong, or once, ever. Under it
-            they still cost five lines of a list somebody opens to do
-            something else. In it they cost one.
-
-            What is left on the front page is the four things Setup is opened
-            FOR, and one door to everything else.
-          */}
-          <View style={{ gap: 0 }}>
-          {/*
-            * WHAT IS RUNNING, AND HOW TO GET THE NEWEST.
-            *
-            * "I have not yet successfully had a single over-the-air update
-            * work correctly. They never come through, so I keep refreshing
-            * the android app, closing it, force closing it, reopening it
-            * over and over again."
-            *
-            * They were arriving. What was missing was any way to SEE it,
-            * plus one detail that makes a working app look stuck: this app
-            * never waits for a download at launch — app.json sets
-            * fallbackToCacheTimeout to 0, so it starts on the bundle it
-            * already has, fetches the new one in the BACKGROUND, and runs it
-            * the NEXT time it opens.
-            *
-            * First launch downloads. Second launch shows it. Somebody
-            * force-closing once, seeing the same number and concluding
-            * nothing happened was one restart short, with nothing on screen
-            * to say so.
-            *
-            * That default is right for a stage and is not what changes here.
-            * This says what is going on, and offers the restart instead of
-            * waiting for it to happen by accident.
-            */}
-          <SetupRow
-            title="Updates"
-            status={
-              updates.phase === 'ready'
-                ? 'Ready — tap to restart into it'
-                : updates.phase === 'downloading'
-                  ? 'Downloading…'
-                  : updates.phase === 'checking'
-                    ? 'Checking…'
-                    : updates.phase === 'current'
-                      ? 'Up to date'
-                      : updates.phase === 'off'
-                        ? 'Not available in this build'
-                        : updates.error
-                          ? 'Could not check — tap to try again'
-                          : `Running ${updates.source === 'update' ? 'an update' : 'the installed build'} · tap to check`
-            }
-            onPress={() => (updates.phase === 'ready' ? applyNow() : checkNow())}
-          />
-          {/*
-            AND WHEN THE COPY ITSELF IS OLD. An update changes what the app
-            does; only the store changes the copy it runs in, and once a new
-            store version changes what an update needs, the older copies stop
-            getting updates. Said here, quietly, for as long as it is true.
-          */}
-          {newer.note ? <SetupRow title={newer.note.row} status={newer.note.line} onPress={() => openStore(newer.note)} /> : null}
-          {/*
-            WHAT EACH UPDATE CHANGED, beside Updates, which says which one is
-            running (screens/WhatsNew, from shared/whats-new.json): "a change
-            log that shows what each update change was made" (Justin,
-            1 November 2026).
-          */}
-          <SetupRow title="What’s new" status={latestLine()} onPress={() => setPage('whats-new')} />
-          {/*
-            HELP WITH THIS APP, A ROW OF ITS OWN, at both ends in the same
-            place. Fractal Audio's letter (18 October 2026) asks that support
-            come through the developer's own channels. The browser's way to
-            the support page sat in its small print, which opens closed, so
-            it went up beside Updates there, and here too, so the two lists
-            stay one list. Its line is short because a row's line is one line
-            (SetupRow): "The support page, and how to reach a person" stopped
-            at "a p…" on a 320-wide phone.
-          */}
-          <SetupRow
-            title="Help with this app"
-            status="Questions, problems, a person"
-            onPress={() => Linking.openURL(SUPPORT_URL)}
-          />
-          </View>
 
           {/*
             No "What stays at the computer" box any more. It said saving was
@@ -1769,7 +1743,6 @@ export default function Settings({
             satisfied by a file nobody can open from the thing it describes.
           */}
           <View style={{ gap: space.md }}>
-            <Section>The small print</Section>
             {/* Said in the app, not only in a file somebody would have to go
                 looking for. Same string as the browser — shared/affiliation.mjs. */}
             <Note>{AFFILIATION}</Note>
