@@ -91,7 +91,7 @@ export function run(test) {
     const main = read('desktop/main.js')
     assert.match(
       main,
-      /serverEnv\(\{ port, dist: distPath\(\), asNode: true \}\)/,
+      /serverEnv\(\{ port, dist: distPath\(\), asNode: true, axiom: axiomLetIn \}\)/,
       'the device server is spawned without ELECTRON_RUN_AS_NODE, so a packaged app starts itself again'
     )
     const tray = main.slice(main.indexOf('function buildTray()'), main.indexOf('app.whenReady'))

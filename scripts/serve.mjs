@@ -17,6 +17,7 @@
  *   npm run serve
  */
 import { spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Bonjour } from 'bonjour-service'
@@ -33,6 +34,7 @@ import {
   publish,
   serverEnv
 } from '../desktop/lib/host.mjs'
+import { readAxiom } from '../desktop/lib/axiom.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const port = Number(process.env.PORT || DEFAULT_PORT)
@@ -71,7 +73,8 @@ console.log('\n  Ctrl-C to stop.\n')
 const server = spawn('npm', ['run', 'dev'], {
   cwd: join(forgefx, 'server'),
   stdio: 'inherit',
-  env: serverEnv({ port, dist: join(root, 'dist') }),
+  /* "Also let Axiom use this pedal", as the store says it at launch (lib/axiom.mjs). Started again to change it. */
+  env: serverEnv({ port, dist: join(root, 'dist'), axiom: readAxiom({ read: (path) => readFileSync(path, 'utf8') }) }),
   ...npmSpawn()
 })
 
