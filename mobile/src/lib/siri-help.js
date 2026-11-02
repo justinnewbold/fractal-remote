@@ -48,12 +48,22 @@
  *     ask-siri-dictation), in those versions' words, names the switch: Use
  *     with Siri Requests. On 16 and 17 the apps are listed in Siri & Search
  *     itself ("scroll down and select an app").
- *     And 27.2 (26 October 2026) moved 27's: Settings → Siri → Excluded
- *     Apps → Add Apps, then the app. That is from the 2 November 2026 audit,
- *     not yet read again on Apple's own page. So the version on the device
- *     in hand (Platform.Version, onAppAccess below) picks which of 27's two
- *     is said: App Access on 27.0 and 27.0.1, Excluded Apps from 27.2. One
- *     not on 27 at all is given 27.2's, the one an update now brings it.
+ *     And 27.2 (26 October 2026) is reported to have moved 27's: Settings
+ *     → Siri → Excluded Apps → Add Apps, then the app. That is from the 2
+ *     November 2026 audit and the press (MacRumors, BGR, Gadget Hacks), NOT
+ *     yet read on Apple's own page or seen on a 27.2 iPhone, and the press
+ *     calls it a control for Siri's Apple Intelligence half, which not
+ *     every iPhone, country or language has (and a "Siri Classic" choice is
+ *     reported). Nobody says what a 27.2 device without it shows, or whether
+ *     leaving the app out stops its spoken commands. So the version on the
+ *     device in hand (Platform.Version, onAppAccess below) picks which is
+ *     said: App Access alone on 27.0 and 27.0.1; from 27.2, Excluded Apps
+ *     first and App Access after it for a device with no Excluded Apps,
+ *     with 27's own hedge on both. One not on 27 at all, or not known, is
+ *     given 27.2's, which carries both. App Access is dropped from 27.2's
+ *     only once Apple's iOS 27 "Change Siri settings" or Justin's own
+ *     iPhone shows it gone (docs/app-store.md, the Siri check before a
+ *     version goes to Apple).
  *   - Turning all of Siri off: on 27, Settings → Siri → Turn Off Siri, at the
  *     bottom ("Turn on and activate Siri", iOS and iPadOS 27). On 26 and
  *     earlier there is no such button: Talk to Siri (or Talk & Type to Siri)
@@ -120,8 +130,9 @@ export const EXCLUDED_APPS_FROM = '27.2'
 
 /**
  * Whether the device in hand is on a 27 from before 27.2, where the app is
- * turned off under App Access. Every other version, and one not known, is
- * shown 27.2's Excluded Apps.
+ * turned off under App Access alone. Every other version, and one not
+ * known, is shown 27.2's: Excluded Apps, then App Access for a device
+ * without it.
  */
 export const onAppAccess = (version) => versionAtLeast(version, '27') && !versionAtLeast(version, EXCLUDED_APPS_FROM)
 
@@ -262,7 +273,7 @@ const LOCKED = (noun, system) =>
 const TURN_OFF = (system, iphone, version) => [
   onAppAccess(version)
     ? `To stop Siri using Fractal Remote, on ${system} 27 before 27.2: Settings → Siri → App Access → Fractal Remote, and turn its switches off. Which switches it has depends on the version of Siri.`
-    : `To stop Siri using Fractal Remote, on ${system} 27.2 and later: Settings → Siri → Excluded Apps → Add Apps, then pick Fractal Remote.`,
+    : `To stop Siri using Fractal Remote, on ${system} 27.2 and later: Settings → Siri → Excluded Apps → Add Apps, then pick Fractal Remote. If your ${system} 27 has no Excluded Apps there: Settings → Siri → App Access → Fractal Remote, and turn its switches off. Which of these you see, and what each one covers, depends on the version of Siri.`,
   `On ${system} 18 and 26: Settings → Siri (or Apple Intelligence & Siri) → Apps → Fractal Remote, then turn off Use with Siri Requests. On ${system} 17 and earlier: Settings → Siri & Search, then Fractal Remote in the list of apps, and turn its switches off.`,
   `To turn Siri off altogether, on ${system} 27: Settings → Siri, then Turn Off Siri at the bottom. On ${system} 26 and earlier: in Settings → ${OLD_SIRI}, set Talk to Siri (or Listen for) to Off, then turn off ${iphone ? 'Press Side Button for Siri' : 'Press Top Button for Siri'} (or Press Home for Siri).`
 ]

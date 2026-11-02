@@ -63,12 +63,16 @@ export const WATCH_CLOSE_WINDOW_MS = 20000
  * wakes a locked iPhone is dropped when the connection is not back inside
  * the tap's second and a half (WOKEN BY THE TAP, below), and after the
  * iPhone has slept it mostly is not. The connection keeps coming back while
- * the tap holds the iPhone awake, so the tap after that one usually lands.
- * So: every tap lands with the iPhone unlocked on Play, and locked, the
- * first tap after a long pause may not.
+ * the tap holds the iPhone awake (25 seconds, FractalWatchModule
+ * WAKE_SECONDS), so a tap again straight away usually lands; one after that
+ * is a first tap after a long pause again. So: every tap lands with the
+ * iPhone unlocked on Play, and locked, the first tap after a long pause may
+ * not, and the retry is to tap again straight away. The Play screen's note
+ * was shown once under the old words, so its key moved with them (lib/coach
+ * WATCH_TIP_KEY, v2).
  */
 export const WATCH_HOW_OPEN = 'Keep the Play screen open on your iPhone while you use the watch. The watch works through this app, so it stops when the app is closed or the phone locks.'
-export const WATCH_HOW_LOCKED = 'For every tap on the watch to land, keep your iPhone unlocked with this app on the Play screen. With the iPhone locked, the first tap after a long pause may not go through, and the next one usually does. The live tuner needs the phone open.'
+export const WATCH_HOW_LOCKED = 'For every tap on the watch to land, keep your iPhone unlocked with this app on the Play screen. With the iPhone locked, the first tap after a long pause may not go through; tap again straight away and it usually does. The live tuner needs the phone open.'
 export const WATCH_HOW = [
   WATCH_HOW_OPEN,
   'Swipe up or down on the watch, or turn the Digital Crown, to move between its four pages: Scenes, Pedals, Presets and Tuner.',

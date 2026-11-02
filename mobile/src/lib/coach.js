@@ -54,8 +54,11 @@ export function markSwipeHint() {
  * "How the user uses the Apple Watch", once per phone, the first time the
  * Play screen finds a paired watch with the app on it. Shown on the phone
  * because the phone's words travel in an update and the watch's need a build.
+ * v2 since 2 November 2026: v1 said to lock the iPhone and put it away, and
+ * the tip now says the opposite (lib/watchBridge WATCH_HOW_LOCKED), so it is
+ * shown once more to everybody who read the old one.
  */
-const WATCH_TIP_KEY = 'fractal.coach.watch.v1'
+const WATCH_TIP_KEY = 'fractal.coach.watch.v2'
 
 export async function watchTipSeen() {
   try {

@@ -16759,7 +16759,13 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.ok(lockedTip, 'the locked watch tip is not one plain string any more')
   assert.ok(!/lock your iPhone|put it away|pocket|each tap[^.]*wakes/i.test(lockedTip), 'the watch tip tells somebody to lock the iPhone and put it away, and most taps after it sleeps are dropped')
   assert.match(lockedTip, /^For every tap on the watch to land, keep your iPhone unlocked with this app on the Play screen\./)
-  assert.match(lockedTip, /With the iPhone locked, the first tap after a long pause may not go through, and the next one usually does\./)
+  /* The retry is straight away: a woken tap holds the iPhone awake for 25 seconds, and a tap after that is a first one again. */
+  assert.match(lockedTip, /With the iPhone locked, the first tap after a long pause may not go through; tap again straight away and it usually does\./)
+  assert.ok(!/the next one usually/i.test(lockedTip), 'the watch tip says the next tap usually lands, and one a minute later is a first tap again')
+  assert.match(readSrc(new URL('../mobile/modules/fractal-watch/ios/FractalWatchModule.swift', import.meta.url), 'utf8'), /private static let WAKE_SECONDS: Double = 25\b/, 'a woken tap no longer holds the iPhone awake for 25 seconds: the watch tip’s “straight away” may say too little or too much')
+  /* And the Play screen's note was shown once under the old words, so its key moved with them: shown once more to everybody who read v1. */
+  const coach = readSrc(new URL('../mobile/src/lib/coach.js', import.meta.url), 'utf8')
+  assert.match(coach, /const WATCH_TIP_KEY = 'fractal\.coach\.watch\.v2'/, 'the watch tip’s words were reversed and its once-shown key was not moved, so nobody who read “lock it and put it away” sees the new words on Play')
   assert.ok(!/this (phone|iPhone)/i.test(lockedTip), 'the watch tip says “this phone”')
   assert.match(bridge, /if \(!up \|\| Date\.now\(\) >= deadline\) \{ logDebug\('watch', `\$\{cmd\.do\} not sent: the phone could not reach the rig in time after waking`\) return undefined \}/, 'a woken tap is no longer dropped at its deadline: the watch tip says it may be, and could say more')
   assert.match(bridge, /export const watchHow = \(\) => \(watchWakes\(\) \? \[WATCH_HOW_LOCKED, \.\.\.WATCH_HOW\.slice\(1\)\] : WATCH_HOW\)/)

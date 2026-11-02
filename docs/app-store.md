@@ -839,6 +839,16 @@ Remote: Apple's iOS 27 guide names no switch there for Siri's requests (the
 privacy page's Use with Siri Requests is in iOS 26's words), so the page
 says "turn its switches off". If the switch is there by that name, the page
 can say so in an update.
+And on an iPhone on iOS 27.2 or later (the 2 November 2026 audit): look for
+Settings → Siri → Excluded Apps → Add Apps, which the press says replaced
+App Access in 27.2 but nobody has read on Apple's own page yet. Look on an
+iPhone without Apple Intelligence too, or with Siri Classic, if one is to
+hand. Then put Fractal Remote in the list and try a phrase ("Scene 3 in
+Fractal Remote"): the press says it limits what Siri reads, and nobody says
+whether it stops the app's own commands. Until that is seen, the page gives
+27.2 Excluded Apps first and App Access after it, for a device that has no
+Excluded Apps (lib/siri-help.js TURN_OFF). If App Access is gone on 27.2, or
+the phrases still run with the app left out, the page says so in an update.
 
 **For the next version's notes: the AM4's own tuner stays up** (23 October
 2026). Waiting: not for a store version until Justin has watched his own

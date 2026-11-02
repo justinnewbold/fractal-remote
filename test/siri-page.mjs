@@ -213,24 +213,31 @@ export function run(test) {
      * 16 and 17's Siri & Search; and all of Siri, by 27's Turn Off Siri and the older Talk to Siri.
      * Changed only after reading Apple's pages again.
      *
-     * Except 27's for the app, changed by the 2 November 2026 audit: from 27.2 it is Excluded Apps → Add
-     * Apps, and App Access is kept for 27.0 and 27.0.1. The version in hand picks one (onAppAccess, from
-     * Platform.Version), and a page with no version, or one not on 27, is given 27.2's.
+     * Except 27's for the app, changed by the 2 November 2026 audit: from 27.2 it is reported to be
+     * Excluded Apps → Add Apps, which is not yet read on Apple's own page, and the press calls it a
+     * control for Siri's Apple Intelligence half. So 27.2's keeps App Access after it, for a device
+     * with no Excluded Apps, and 27's own hedge over both, until Apple's iOS 27 "Change Siri settings"
+     * or Justin's iPhone shows App Access gone (docs/app-store.md). 27.0 and 27.0.1 are given App Access
+     * alone. The version in hand picks one (onAppAccess, from Platform.Version), and a page with no
+     * version, or one not on 27, is given 27.2's.
      */
-    const EXCLUDED = /on iOS 27\.2 and later: Settings → Siri → Excluded Apps → Add Apps, then pick Fractal Remote\./
-    const APP_ACCESS = /on iOS 27 before 27\.2: Settings → Siri → App Access → Fractal Remote, and turn its switches off\. Which switches it has depends on the version of Siri\./
+    const EXCLUDED = /To stop Siri using Fractal Remote, on iOS 27\.2 and later: Settings → Siri → Excluded Apps → Add Apps, then pick Fractal Remote\. If your iOS 27 has no Excluded Apps there: Settings → Siri → App Access → Fractal Remote, and turn its switches off\. Which of these you see, and what each one covers, depends on the version of Siri\./
+    const APP_ACCESS = /To stop Siri using Fractal Remote, on iOS 27 before 27\.2: Settings → Siri → App Access → Fractal Remote, and turn its switches off\. Which switches it has depends on the version of Siri\./
     const onVersion = (version, kind = 'phone') => help.siriWords({ os: 'ios', kind, native: true, noun: NOUN[kind], version }).join('\n')
     assert.match(words, EXCLUDED)
-    assert.doesNotMatch(words, /App Access/)
     for (const v of ['27.0', '27.0.1', '27']) {
       assert.match(onVersion(v), APP_ACCESS, `iOS ${v} is not sent to App Access`)
       assert.doesNotMatch(onVersion(v), /Excluded Apps/, `iOS ${v} is sent to Excluded Apps, which it does not have`)
     }
     for (const v of ['27.2', '27.2.1', '27.10', '28.0', '26.4', '17.6.1', undefined]) {
-      assert.match(onVersion(v), EXCLUDED, `iOS ${v} is not sent to Excluded Apps`)
-      assert.doesNotMatch(onVersion(v), /App Access/, `iOS ${v} is sent to App Access, which 27.2 took away`)
+      assert.match(onVersion(v), EXCLUDED, `iOS ${v} is not sent to Excluded Apps, with App Access after it`)
+      assert.doesNotMatch(onVersion(v), APP_ACCESS, `iOS ${v} is given 27.0’s App Access alone`)
+      /* App Access is 27.2's second way, never its only one, until Apple's page says it is gone. */
+      const line = onVersion(v).split('\n').find((l) => l.startsWith('To stop Siri using Fractal Remote'))
+      assert.ok(line.indexOf('Excluded Apps') < line.indexOf('App Access'), `iOS ${v} is given App Access before Excluded Apps`)
+      assert.match(line, /depends on the version of Siri\.$/, `iOS ${v}’s way to turn the app off lost its hedge, and Apple’s pages do not say it more firmly`)
     }
-    assert.match(onVersion('27.2', 'ipad'), /To stop Siri using Fractal Remote, on iPadOS 27\.2 and later: Settings → Siri → Excluded Apps → Add Apps, then pick Fractal Remote\./)
+    assert.match(onVersion('27.2', 'ipad'), /To stop Siri using Fractal Remote, on iPadOS 27\.2 and later: Settings → Siri → Excluded Apps → Add Apps, then pick Fractal Remote\. If your iPadOS 27 has no Excluded Apps there: Settings → Siri → App Access → Fractal Remote/)
     assert.match(onVersion('27.0.1', 'ipad'), /To stop Siri using Fractal Remote, on iPadOS 27 before 27\.2: Settings → Siri → App Access → Fractal Remote/)
     assert.match(words, /On iOS 18 and 26: Settings → Siri \(or Apple Intelligence & Siri\) → Apps → Fractal Remote, then turn off Use with Siri Requests\./)
     assert.match(words, /On iOS 17 and earlier: Settings → Siri & Search, then Fractal Remote in the list of apps/)
@@ -375,7 +382,7 @@ export function run(test) {
     ]) {
       assert.equal(versionAtLeast(v, floor), want, `versionAtLeast(${JSON.stringify(v)}, ${floor}) is not ${want}`)
     }
-    /* App Access on 27.0 and 27.0.1, and on nothing else: 27.2 and later, anything older, and a version not known get Excluded Apps. */
+    /* App Access alone on 27.0 and 27.0.1, and on nothing else: 27.2 and later, anything older, and a version not known get Excluded Apps, then App Access. */
     for (const v of ['27', '27.0', '27.0.1']) assert.equal(onAppAccess(v), true, `${v} is not told App Access`)
     for (const v of ['27.2', '27.2.1', '27.3', '28.0', '26.4', '18.7', '16.4', undefined, null, '']) assert.equal(onAppAccess(v), false, `${v} is told App Access`)
   })
