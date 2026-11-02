@@ -5261,7 +5261,10 @@ export function run(test) {
     for (const [file, mustSay] of [
       ['licences/forgefx-MIT.txt', /MIT License/],
       ['licences/forgefx-midi-APACHE-2.0.txt', /Apache License/],
-      ['licences/forgefx-midi-NOTICE.txt', /Apache License, Version 2\.0/]
+      ['licences/forgefx-midi-NOTICE.txt', /Apache License, Version 2\.0/],
+      /* The web app's two fonts, carried as its own files since 2 November 2026 (src/fonts.css). */
+      ['licences/archivo-OFL-1.1.txt', /SIL OPEN FONT LICENSE Version 1\.1/],
+      ['licences/dm-mono-OFL-1.1.txt', /SIL OPEN FONT LICENSE Version 1\.1/]
     ]) {
       const text = read(file)
       assert.ok(text.trim().length > 200, `${file} is empty or a stub`)
@@ -5329,6 +5332,118 @@ export function run(test) {
     /* And it is reachable as a plain URL, which is what a store listing and an
        About screen can both be given. `public/` is served at the site root. */
     assert.ok(read('public/notices.txt').length > 1000, 'there is no plain-text copy to link to')
+  })
+
+  test('the web app’s fonts are its own files, so opening it asks Google for nothing and works with no internet', async () => {
+    /*
+     * index.html loaded Archivo and DM Mono from fonts.googleapis.com and
+     * fonts.gstatic.com on every load (audit WEB-6, approved 2 November
+     * 2026). The same page is the computer app's own window and the page a
+     * phone on the same Wi-Fi opens from the computer, so each of those told
+     * Google the player's address and browser, while the privacy page says
+     * the computer app alone, or a phone on the same Wi-Fi, sends nothing
+     * anywhere; and at a gig with no internet the fonts never came.
+     */
+    const html = read('index.html')
+    const shipped = (dir) =>
+      readdirSync(new URL(`../${dir}/`, import.meta.url), { recursive: true })
+        .filter((f) => /\.(m?js|jsx|css|html)$/.test(f))
+        .map((f) => `${dir}/${f}`)
+    /* Comments out: src/fonts.css says where the fonts used to come from. */
+    const uncommented = (text) => text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ')
+    for (const f of ['index.html', ...shipped('src'), ...shipped('shared')]) {
+      assert.ok(!/fonts\.googleapis\.com|fonts\.gstatic\.com/.test(uncommented(read(f))), `${f} asks Google for a font again`)
+    }
+    assert.ok(!/<link[^>]+rel="(?:stylesheet|preconnect)"[^>]+https?:/.test(html), 'index.html loads a stylesheet or opens a connection somewhere else again')
+
+    /* Loaded before the styles that name them, from the bundle's entry. */
+    const main = read('src/main.jsx')
+    assert.ok(main.indexOf("import './fonts.css'") !== -1, 'the fonts are not part of the app')
+    assert.ok(main.indexOf("import './fonts.css'") < main.indexOf("import './styles.css'"), 'the fonts come after the styles that use them')
+
+    /* Every face points at a file that is there, and every file is used. */
+    const css = read('src/fonts.css')
+    const faces = [...css.matchAll(/@font-face \{([^}]*)\}/g)].map((m) => ({
+      family: m[1].match(/font-family: '([^']+)'/)?.[1],
+      weight: m[1].match(/font-weight: ([^;]+);/)?.[1],
+      url: m[1].match(/url\('([^']+)'\)/)?.[1],
+      range: m[1].match(/unicode-range: ([^;]+);/)?.[1]
+    }))
+    const files = readdirSync(new URL('../public/fonts/', import.meta.url)).sort()
+    assert.deepEqual([...new Set(faces.map((f) => f.url))].sort(), files.map((f) => `/fonts/${f}`), 'a face points at a missing file, or a file in public/fonts is never used')
+    for (const f of files) {
+      assert.match(f, /\.woff2$/, `${f} is not a woff2`)
+      const bytes = readFileSync(new URL(`../public/fonts/${f}`, import.meta.url))
+      assert.equal(bytes.subarray(0, 4).toString('latin1'), 'wOF2', `public/fonts/${f} is not a font file`)
+    }
+    /* Exactly what Google served, so the app looks as it did: Archivo 400 to
+       600 (the file goes to 900, which would make every bold heading heavier),
+       DM Mono 400 and 500, no italic, and every face limited to its subset. */
+    assert.deepEqual(
+      [...new Set(faces.map((f) => `${f.family} ${f.weight}`))].sort(),
+      ['Archivo 400 600', 'DM Mono 400', 'DM Mono 500'],
+      'the weights are not the ones the app was drawn with'
+    )
+    assert.ok(faces.every((f) => f.range), 'a face has no unicode-range, so every page downloads it')
+    assert.ok(!/font-style: italic/.test(css), 'an italic was added that the app never had')
+    assert.equal(faces.length, (css.match(/font-display: swap;/g) || []).length, 'a face hides the words until its file arrives')
+    /* Archivo Expanded was never served (Google Fonts has no such family), so
+       headings have always been Archivo: no file for it, and --display still
+       falls back to Archivo as it always did. */
+    assert.match(read('src/styles.css'), /--display: 'Archivo Expanded', 'Archivo',/, 'the heading font stack changed')
+
+    /* In the bundle the computer app carries, and on the website. */
+    const fp = await import('../scripts/computer-fingerprint.mjs')
+    const inside = fp.computerInputs()
+    for (const want of ['src/fonts.css', ...files.map((f) => `public/fonts/${f}`)]) {
+      assert.ok(inside.includes(want), `${want} is not in the computer app's fingerprint, so a change to it would not reach a computer`)
+    }
+
+    /* Their licences travel with them: the files, and the notices. */
+    for (const [file, holder] of [
+      ['licences/archivo-OFL-1.1.txt', 'Copyright 2020 The Archivo Project Authors (https://github.com/Omnibus-Type/Archivo)'],
+      ['licences/dm-mono-OFL-1.1.txt', 'Copyright 2020 The DM Mono Project Authors (https://www.github.com/googlefonts/dm-mono)']
+    ]) {
+      assert.ok(read(file).startsWith(`${holder}\n`), `${file} does not start with its copyright line`)
+      for (const notices of ['NOTICES.md', 'public/notices.txt']) {
+        assert.ok(read(notices).includes(holder), `${notices} does not carry ${file}; run npm run notices`)
+      }
+      assert.ok(read('scripts/notices.mjs').includes(`file: '${file}'`), `the notices generator does not carry ${file}`)
+    }
+  })
+
+  test('the Android page leads with Google Play, and says what the copy from outside it cannot do', async () => {
+    /*
+     * Every page's "Get the Android app" lands on /android, and so does
+     * downloads.html for a visitor on Android. Its one big green button was
+     * the APK from GitHub (audit WEB-5, approved 2 November 2026), which is
+     * signed with the React Native template's key (apk.yml), so Android
+     * refuses it over the Google Play copy; and a copy from outside Google
+     * Play has no Google Play billing (mobile/src/lib/purchases.js), so it
+     * could not buy the full version either.
+     */
+    const page = read('public/android.html')
+    const { GOOGLE } = await import('../shared/stores.mjs')
+    const green = [...page.matchAll(/<a class="get" href="([^"]+)"/g)].map((m) => m[1])
+    assert.deepEqual(green, [GOOGLE.url], 'the big green button is not Google Play')
+    assert.match(page, /a\.className = 'other'/, 'the copy from GitHub is drawn as the big green button again')
+    assert.ok(!/className = 'get'/.test(page), 'the script draws a second green button')
+    /* Google Play first, the copy from GitHub under it. */
+    assert.ok(page.indexOf(GOOGLE.url) < page.indexOf('id="card"'), 'the copy from GitHub comes before Google Play')
+    const words = page
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<script[\s\S]*?<\/script>/g, ' ')
+      .replace(/<style[\s\S]*?<\/style>/g, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&rsquo;/g, '’')
+      .replace(/&mdash;/g, '—')
+      .replace(/\s+/g, ' ')
+    assert.match(words, /A copy from outside Google Play/, 'the copy from GitHub is not labelled for what it is')
+    assert.match(words, /It won’t install over the Google Play copy/, 'the page does not say the copy will not install over Google Play’s')
+    assert.match(words, /buying the full version needs the Google Play copy/, 'the page does not say the copy cannot buy the full version')
+    /* The old promise was true only over an earlier copy from this page, and now says so. */
+    assert.ok(!/installs over an earlier one without removing anything/.test(words), 'the page promises it installs over any earlier copy again')
+    assert.match(words, /installs over an earlier copy from this page/, 'the page no longer says when it does install over an earlier copy')
   })
 
   test('the Mac app has a face, and claims only entitlements it uses', () => {

@@ -2014,15 +2014,88 @@ export function run(test) {
     assert.match(app, /paid\.for !== accountId/, 'the unlock page can open on the signed-out answer, before the new account’s is in')
     assert.match(app, /if \(paid\.unlocked\) return\s*setSheet\('settings'\)\s*setSetupPage\('unlock'\)/, 'somebody who has paid is sent to the unlock page after signing in')
 
-    /* The price reaches somebody not signed in; the purchase still does not. */
+    /*
+     * Neither the price nor the purchase reaches somebody not signed in.
+     *
+     * This pinned the opposite until 2 November 2026: the price was asked
+     * for somebody signed out, under a made-up visitor number, so the demo's
+     * bar could show it the moment it opened. That told RevenueCat about
+     * everybody who opened the demo, which the privacy page says the demo
+     * never does (audit RUN-3). The price is asked on the unlock page now,
+     * which is only reached signed in: `the demo and Settings ask RevenueCat
+     * nothing` below holds the rest.
+     */
     const buy = read('src/lib/webPurchase.js')
-    assert.match(buy, /purchasesFor\(accountId \|\| \(await visitorId\(\)\)\)/, 'the demo cannot show the price before a sign-in')
-    assert.match(buy, /generateRevenueCatAnonymousAppUserId\(\)/, 'the visitor id is invented here rather than asked of RevenueCat')
+    assert.ok(!/visitorId|generateRevenueCatAnonymousAppUserId/.test(buy), 'the website makes up a RevenueCat number for somebody not signed in again')
+    assert.match(buy, /export async function webPrice\(accountId\) \{\s*if \(!accountId\) return null/, 'the price is asked for nobody')
     const buyer = buy.slice(buy.indexOf('export async function buyOnWeb'))
-    assert.ok(!/visitorId/.test(buyer), 'a purchase can be filed under an anonymous visitor')
+    assert.match(buyer, /if \(!accountId\) return \{ ok: false/, 'a purchase can be made with no account')
 
     /* And buying in the demo ends it, as on the phone. */
     assert.match(app, /if \(isDemo\(\)\) \{\s*(?:if \(said\) \{[\s\S]{0,300}?\}\s*)?setDemo\(false\)\s*window\.location\.reload\(\)/, 'buying in the browser leaves the person in the demo')
+  })
+
+  /*
+   * THE DEMO AND SETTINGS ASK REVENUECAT NOTHING (audit RUN-3, approved 2
+   * November 2026).
+   *
+   * Opening the demo on the website, or in the computer app's own window,
+   * loaded RevenueCat's web library and asked it for the price under a
+   * made-up number, with the browser's details; so did opening Settings
+   * signed out, and every sign-in did under the account's number. The
+   * privacy page says the demo and the computer app on their own send
+   * nothing anywhere. Now the price is asked only once the unlock page is on
+   * screen for a signed-in account, after UNLOCK or the Unlock row was
+   * pressed, and everything before that reads as it always did before the
+   * answer came.
+   */
+  test('the demo and Settings ask RevenueCat nothing: the price is asked on the unlock page, for a signed-in account', async () => {
+    const { mod, done } = await webPurchase()
+    const asked = []
+    try {
+      globalThis.__webRevenueCat = (who) => {
+        asked.push(who)
+        return {
+          getOfferings: async () => ({
+            current: { availablePackages: [{ webBillingProduct: { identifier: mod.PRODUCT_ID, currentPrice: { formattedPrice: '$9.99' } } }] },
+            all: {}
+          })
+        }
+      }
+      for (const nobody of [null, undefined, '']) {
+        assert.equal(await mod.webPrice(nobody), null, 'a price came back for nobody')
+      }
+      assert.deepEqual(asked, [], 'RevenueCat was set up for somebody not signed in')
+      assert.equal(await mod.webPrice('account-1'), '$9.99', 'a signed-in account is not told the price')
+      assert.deepEqual(asked, ['account-1'], 'the price was not asked under the account')
+    } finally {
+      delete globalThis.__webRevenueCat
+      done()
+    }
+
+    const app = read('src/App.jsx')
+    const code = app.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+    assert.ok(!/webPrice\(null\)/.test(code), 'the browser asks RevenueCat the price for somebody not signed in again')
+    /* One ask in the whole app, and it waits for the unlock page and an account. */
+    assert.equal((code.match(/\bwebPrice\(/g) || []).length, 1, 'the price is asked somewhere besides the unlock page')
+    assert.match(
+      code,
+      /useEffect\(\(\) => \{\s*if \(!unlockOnScreen \|\| !accountId \|\| pricedFor\.current === accountId\) return\s*pricedFor\.current = accountId\s*webPrice\(accountId\)/,
+      'the price is asked before the unlock page is on screen, or with no account'
+    )
+    assert.match(code, /const unlockOnScreen = mustPay \|\| \(sheet === 'settings' && setupPage === 'unlock'\)/, 'the unlock page is not what decides the ask')
+    /* Signed out, UNLOCK and the row still sign somebody in before the unlock page. */
+    assert.match(code, /const openUnlock = \(\) => \{\s*if \(accountId\) \{[\s\S]{0,400}?\}\s*setUnlockAfterSignIn\(true\)/, 'the unlock page can be reached with no account')
+    /* What shows before the answer is what always showed before it. */
+    assert.ok(app.includes("{webPriceText ? `Unlock Full Version — ${webPriceText}` : 'Unlock Full Version'}"), 'Buy says something else before the price is in')
+    assert.ok(app.includes("status={webPriceText ? `Drive a real rig · ${webPriceText}` : 'Drive a real rig'}"), 'the Unlock row says something else before the price is in')
+    assert.match(read('src/components/TopBar.jsx'), /\{canBuy && unlockPrice \? \(/, 'the demo bar draws an empty price pill before the price is in')
+
+    /* And the page that promised it says so. */
+    const privacy = read('public/privacy.html')
+    const policy = privacy.replace(/<!--[\s\S]*?-->/g, ' ').replace(/\s+/g, ' ')
+    assert.match(policy, /the page sends RevenueCat nothing until you open the page that sells the full version: not in the demo, and not signed out/, 'the privacy page does not say the demo asks RevenueCat nothing')
+    assert.match(policy, /Only once the unlock page is open does the page itself ask RevenueCat the price/, 'the privacy page does not say when the website asks RevenueCat')
   })
 
   /**

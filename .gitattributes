@@ -24,6 +24,8 @@
 *.icns binary
 *.p12 binary
 *.hbc binary
+# The web app's own fonts (public/fonts), for the same reason as the PNGs.
+*.woff2 binary
 
 # Windows does not record an executable bit, so git is the only place it is
 # kept. The helper is meant to be run, not sourced.

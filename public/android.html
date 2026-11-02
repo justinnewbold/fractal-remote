@@ -6,7 +6,7 @@
     <title>Fractal Remote for Android</title>
     <meta
       name="description"
-      content="The current Android build of Fractal Remote, and the link to install it."
+      content="Fractal Remote on Google Play, and a copy from outside the store for when an update can't reach a phone."
     />
     <!--
       A page to bookmark, so the link never has to be asked for again.
@@ -29,6 +29,29 @@
       It is plain HTML with no build step and no dependencies, next to the
       privacy and support pages, and it works with nothing installed and nobody
       signed in: the repository is public, so the list is public.
+
+      GOOGLE PLAY IS THE BIG GREEN BUTTON, and the copy from GitHub sits under
+      it, plainly labelled (audit WEB-5, approved 2 November 2026).
+
+      This page began as Justin's own bookmark, from before the app was on
+      Google Play, and its one green button was the APK. Since 4 October 2026
+      the app is on Google Play, and every page's footer says "Get the Android
+      app" and lands here, as does downloads.html for a visitor on Android. So
+      a customer who already had the Play copy saw a big green Download and
+      install, tapped it, and Android refused it: the APK is signed with the
+      React Native template's key (.github/workflows/apk.yml says why), not
+      Google Play's, and Android will not put one over the other. A new
+      customer who took it had a copy that cannot buy the full version either:
+      an app installed outside Google Play has no Google Play billing
+      (mobile/src/lib/purchases.js, "WHETHER THIS PHONE CAN PAY AT ALL").
+
+      And Justin no longer installs from here himself: "No, I don't install
+      direct on Android. I just use the over-the-air updates that you've been
+      doing." (CLAUDE.md.) The APK is still worth having, for the case where
+      an update can't reach a phone, so it stays, below Google Play, saying
+      both of the things above. It used to say it "installs over an earlier
+      one without removing anything", which is only true over an earlier copy
+      from this page, and now says exactly that.
     -->
     <style>
       :root {
@@ -74,6 +97,22 @@
         text-align: center;
         text-decoration: none;
       }
+      /* The copy from outside the store: a button you can find, not the one
+         the page is for. Outlined, so the green one above it is the obvious
+         tap. */
+      .other {
+        display: block;
+        min-height: 48px;
+        padding: 12px 20px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        color: var(--silk);
+        font-size: 16px;
+        font-weight: 600;
+        text-align: center;
+        text-decoration: none;
+      }
+      h2 { font-size: 18px; line-height: 1.3; margin: 40px 0 4px; }
       .note { color: var(--silk-dim); font-size: 14px; margin: 18px 0 0; }
       .bad { color: var(--fault); }
       ol { padding-left: 22px; }
@@ -90,14 +129,12 @@
   <body>
     <main>
       <h1>Fractal Remote for Android</h1>
-      <p class="when">Bookmark this page. It always shows the current build.</p>
+      <p class="when">Get it from Google Play. It keeps itself up to date.</p>
 
       <div class="card">
         <p class="ver">Get it on Google Play</p>
-        <p class="sub">
-          The easiest way, and it keeps itself up to date.
-          <a href="https://play.google.com/store/apps/details?id=cloud.newbold.fractalremote">Open Fractal Remote on Google Play</a>
-        </p>
+        <p class="sub">The easiest way. It is also the copy that can buy the full version.</p>
+        <a class="get" href="https://play.google.com/store/apps/details?id=cloud.newbold.fractalremote">Open Google Play</a>
       </div>
 
       <p class="note">
@@ -105,7 +142,11 @@
         <a href="https://apps.apple.com/app/id6812916461">Get it on the App Store</a>.
       </p>
 
-      <p class="note">Or install it directly from here instead:</p>
+      <h2>A copy from outside Google Play</h2>
+      <p class="note">
+        Only for when an update can&rsquo;t reach a phone. Most people never need it: changes
+        reach the Google Play copy on their own.
+      </p>
 
       <div class="card" id="card">
         <p class="ver" id="ver">Looking for the latest build&hellip;</p>
@@ -113,19 +154,21 @@
       </div>
 
       <p class="note">
+        <strong>It won&rsquo;t install over the Google Play copy.</strong> Android says
+        <em>App not installed</em>, because the two are signed differently. And buying the full
+        version needs the Google Play copy.
+      </p>
+
+      <p class="note">
         Tap the button on the phone itself. Android asks once whether this browser may install
-        apps &mdash; say yes. It installs over an earlier one without removing anything, and your
-        setlists and pairing stay where they are.
+        apps &mdash; say yes. It installs over an earlier copy from this page without removing
+        anything, and your setlists and pairing stay where they are.
       </p>
 
       <p class="note">
-        Most changes reach the app on their own and need none of this. A new build is only needed
-        when something about the app itself changed &mdash; a new phone, or a fresh start.
-      </p>
-
-      <p class="note">
-        Built for 64-bit Android, which is every phone made this decade. If an older handset says
-        <em>App not installed</em>, that is why &mdash; tell me and I will add the older one back.
+        Built for 64-bit Android, which is every phone made this decade. If an older handset with
+        no Google Play copy on it says <em>App not installed</em>, that is why &mdash; tell me and
+        I will add the older one back.
       </p>
 
       <footer>
@@ -161,7 +204,8 @@
         if (!link) return
         const a = document.createElement('a')
         a.id = 'get'
-        a.className = 'get'
+        /* Never the green button: that one is Google Play's, above. */
+        a.className = 'other'
         a.href = link.href
         a.textContent = link.text
         document.getElementById('card').appendChild(a)
@@ -201,7 +245,7 @@
           say(
             'Version ' + String(rel.tag_name).replace(/^apk-v/, ''),
             built ? 'Built ' + built.toLocaleString() : 'Latest Android build',
-            { href: apk.browser_download_url, text: 'Download and install' }
+            { href: apk.browser_download_url, text: 'Download the copy from outside Google Play' }
           )
         })
         .catch((err) => {

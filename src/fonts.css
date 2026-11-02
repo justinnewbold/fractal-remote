@@ -1,0 +1,117 @@
+/* ------------------------------------------------------------------
+   The web app's fonts, carried inside it rather than fetched.
+
+   WHY THESE ARE HERE AND NOT ON GOOGLE'S SERVERS (audit WEB-6, approved
+   2 November 2026). index.html used to load Archivo and DM Mono from
+   fonts.googleapis.com and fonts.gstatic.com on every load. The same page
+   is what the computer app shows in its own window, and what a phone on the
+   same Wi-Fi opens from the computer, so each of those sent the player's
+   address and browser to Google, while public/privacy.html says the
+   computer app alone, or a phone on the same Wi-Fi, sends nothing anywhere.
+   And at a gig with no internet the fonts did not load at all, and the app
+   fell back to the system's.
+
+   Now the files are public/fonts/, which vite copies into dist whole, so
+   they are on the website, inside the computer app (dist is in it), and on
+   the computer's Wi-Fi page, and they work with no internet.
+
+   EXACTLY WHAT GOOGLE SERVED, AND NOTHING MORE. These are the very files
+   that request returned (Archivo v25, DM Mono v16), with the same subsets,
+   the same unicode-range for each, and the same weights, so the app looks
+   as it did:
+
+     Archivo, 400 to 600: one variable file per subset. Google declared it
+       three times, at 400, 500 and 600, over the same file; one face with a
+       range of 400 to 600 is the same thing, and keeps a 700 drawn at 600,
+       as it always was (the file itself goes to 900, which would make every
+       bold heading heavier than it has ever been).
+     DM Mono, 400 and 500: one file per weight per subset.
+
+   No italic: the request asked for none, and Google served none, so an
+   italic has always been the browser's slant on the upright, as now.
+
+   ARCHIVO EXPANDED IS NOT HERE BECAUSE IT NEVER CAME. The request named it
+   (at 600 and 700), and --display in styles.css names it first, but Google
+   Fonts has no family by that name: asked for on its own it answers "400:
+   Font family not found", and in the combined request it was dropped
+   without a word. So every heading has always been drawn in Archivo, the
+   next name in --display, and adding a wide face now would change how the
+   app looks rather than keep it. --display still names it, so a computer
+   with a font of that name installed draws it, as before.
+
+   Both are under the SIL Open Font License 1.1: licences/archivo-OFL-1.1.txt
+   and licences/dm-mono-OFL-1.1.txt, and NOTICES.md (npm run notices).
+   ------------------------------------------------------------------ */
+
+/* Archivo: vietnamese */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/archivo-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+
+/* Archivo: latin-ext */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/archivo-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Archivo: latin */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('/fonts/archivo-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* DM Mono 400: latin-ext */
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/dm-mono-400-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* DM Mono 400: latin */
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/dm-mono-400-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* DM Mono 500: latin-ext */
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/dm-mono-500-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* DM Mono 500: latin */
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/dm-mono-500-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

@@ -2,6 +2,9 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import Boundary from './components/Boundary'
+/* The fonts, from the app's own files rather than Google's (src/fonts.css
+   says why): before styles.css, which names them. */
+import './fonts.css'
 import './styles.css'
 import { apply, getMode } from './lib/theme'
 import { startLooks } from './lib/useLooks'

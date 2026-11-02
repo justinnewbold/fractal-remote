@@ -257,6 +257,59 @@ lines.push(
   ])
 )
 
+/*
+ * THE TWO TYPEFACES THE WEB APP CARRIES, as files of its own since 2 November
+ * 2026 (src/fonts.css, public/fonts), where they used to be fetched from
+ * Google's font servers on every load (audit WEB-6). A font that is fetched is
+ * Google's to license to the page; a font that is copied into the build and
+ * handed out with it, on the website and inside the signed computer app, is
+ * ours to carry, and the SIL Open Font License asks that "each copy contains
+ * the above copyright notice and this license" (condition 2). Neither is an
+ * npm package, so the walk below would never find them: they are named here,
+ * with the licence text from licences/, the way the two vendored projects are.
+ */
+const FONTS = [
+  {
+    name: 'Archivo',
+    what: 'the typeface for the words and headings',
+    home: 'https://github.com/Omnibus-Type/Archivo',
+    licence: 'OFL-1.1',
+    file: 'licences/archivo-OFL-1.1.txt'
+  },
+  {
+    name: 'DM Mono',
+    what: 'the typeface for numbers and readouts',
+    home: 'https://github.com/googlefonts/dm-mono',
+    licence: 'OFL-1.1',
+    file: 'licences/dm-mono-OFL-1.1.txt'
+  }
+]
+
+lines.push(
+  '---',
+  '',
+  '## Fonts inside the web app',
+  '',
+  'The web app, and the page the desktop apps show and serve, carry these two',
+  'typefaces as files of their own, so nothing is fetched to draw them. Both are',
+  'under the SIL Open Font License 1.1, which asks that the copyright notice and',
+  'the licence go with every copy.',
+  '',
+  ...FONTS.flatMap((f) => [
+    `### ${f.name}`,
+    '',
+    `${f.what}.`,
+    '',
+    `- Home: ${f.home}`,
+    `- License: ${f.licence}`,
+    '',
+    '```',
+    read(f.file).trim(),
+    '```',
+    ''
+  ])
+)
+
 let missing = 0
 for (const app of apps) {
   const found = closure(app.manifest, app.modules)

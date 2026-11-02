@@ -32,11 +32,14 @@ export const PRODUCT_ID = 'cloud.newbold.fractalremote.full'
 export const ENTITLEMENT = 'full'
 
 /*
- * Loaded only when there is a price to show — the demo's bar, Settings'
- * Unlock row, the unlock page — never as part of the main bundle. The library brings
- * Stripe's checkout with it, and the main bundle is already past the size Vite
- * warns about; somebody driving a rig they own should not download a payment
- * form.
+ * Loaded only when the unlock page is on screen for a signed-in account, to
+ * ask the price, or when Buy is pressed there — never as part of the main
+ * bundle, and never just because the demo or Settings opened (App.jsx, THE
+ * PRICE). The library brings Stripe's checkout with it, and the main bundle
+ * is already past the size Vite warns about; somebody driving a rig they own
+ * should not download a payment form. And loading it is itself a message to
+ * RevenueCat, with the browser's details, which the privacy page says the
+ * demo and the computer app on their own never send.
  */
 let sdk = null
 let instance = null
@@ -159,41 +162,26 @@ export function askUntilUnlocked(onYes, ask = checkUnlocked) {
   return stop
 }
 
-/*
- * Who asks for the price before anybody has signed in.
+/**
+ * What it costs here, as Stripe will charge it — or null when there is
+ * nothing to sell, or nobody to ask for.
  *
- * "When someone's on the demo, it should always say unlock, and then the
- * price at the top." Most people in the demo are not signed in — the price is
- * part of what makes them want to — and RevenueCat will not quote a price
- * without somebody to quote it to. So a browser that has no account yet asks
- * as an anonymous visitor, the kind RevenueCat makes for exactly this, kept
- * in this browser so every visit is the same visitor rather than a new one.
- *
- * Only ever used to READ the price. The purchase itself still refuses to run
- * without a signed-in account, so a card is never filed under a visitor.
+ * ONLY FOR A SIGNED-IN ACCOUNT, and only from the unlock page (App.jsx, THE
+ * PRICE). It used to ask for somebody signed out too, under a made-up visitor
+ * number kept in the browser, so the demo's bar and Settings could show the
+ * price the moment they opened: "When someone's on the demo, it should always
+ * say unlock, and then the price at the top." That meant RevenueCat heard
+ * from everybody who opened the demo, on the website and in the computer
+ * app, which the privacy page says never happens (audit RUN-3, approved 2
+ * November 2026). The demo still says UNLOCK; the price is on the unlock
+ * page, which is only reached signed in, and the purchase always needed the
+ * account anyway. So no account, no ask: nothing is loaded and nothing is
+ * sent.
  */
-const VISITOR = 'fractal.webVisitor'
-async function visitorId() {
-  try {
-    const kept = window.localStorage.getItem(VISITOR)
-    if (kept) return kept
-  } catch {
-    /* Private window, blocked storage: a fresh visitor for this page is fine. */
-  }
-  const { Purchases } = await load()
-  const made = Purchases.generateRevenueCatAnonymousAppUserId()
-  try {
-    window.localStorage.setItem(VISITOR, made)
-  } catch {
-    /* Same as above. */
-  }
-  return made
-}
-
-/** What it costs here, as Stripe will charge it — or null when there is nothing to sell. */
 export async function webPrice(accountId) {
+  if (!accountId) return null
   try {
-    const p = await purchasesFor(accountId || (await visitorId()))
+    const p = await purchasesFor(accountId)
     const pkg = theUnlockIn(await p.getOfferings())
     return pkg?.webBillingProduct?.currentPrice?.formattedPrice || null
   } catch {
