@@ -58,8 +58,8 @@ import chevronIcon from '../../assets/icons/chevron.png'
  * sequence: this phone cannot reach a Fractal unit on its own. It talks to a
  * computer, and the computer holds the cable. Everything here is either
  * explaining that or getting one of the two ends in place. (On a copy that
- * opens Bluetooth to customers it can, through an adapter, and the two lines
- * that said otherwise say both ways there: see `twoWays`.)
+ * opens Bluetooth to customers it can, through an adapter, and the demo's
+ * last page says both ways there: see `twoWays`.)
  *
  * WHICH IS WHY THE DEMO COMES FIRST AND COSTS NOTHING. Somebody who has just
  * installed this may have no computer running, no code, and no idea a
@@ -76,9 +76,9 @@ import chevronIcon from '../../assets/icons/chevron.png'
  *
  * Not one word is typed here: every string is from lib/onboarding, generated
  * from shared/onboarding.mjs. "Do not change any wording without asking me
- * first." Except two lines on a copy that opens Bluetooth to customers,
- * which say both ways and come from lib/bluetooth-gear (WALKTHROUGH_TWO_WAYS
- * says why); see `twoWays`, below.
+ * first." Except one line on a copy that opens Bluetooth to customers, the
+ * demo's last page, which was mine and says both ways there, from
+ * lib/bluetooth-gear (WALKTHROUGH_TWO_WAYS says why); see `twoWays`, below.
  */
 const face = Platform.select(mono)
 
@@ -101,13 +101,14 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
   /*
    * WHETHER THIS COPY CAN SAY THERE ARE TWO WAYS. "It doesn't require a
    * computer anymore if people are using Bluetooth instead." (Justin, 30
-   * October 2026.) The box before Unlock and the demo's last page said the
-   * computer was the only way until the audit of 2 November 2026. On a copy
-   * that opens Bluetooth to customers, on a device that can do it, they say
-   * both (WALKTHROUGH_TWO_WAYS); anywhere else they say what they always did.
-   * The purchase page's own gate, word for word (Paywall.js): nobody here has
+   * October 2026.) The demo's last page said the computer was the only way
+   * until the audit of 2 November 2026. On a copy that opens Bluetooth to
+   * customers, on a device that can do it, it says both
+   * (WALKTHROUGH_TWO_WAYS); anywhere else it says what it always did. The
+   * purchase page's own gate, word for word (Paywall.js): nobody here has
    * paid yet, so the Settings row's gate, which waits for the purchase, is
-   * not the question.
+   * not the question. The box before Unlock is his own sentence and waits
+   * for his answer (WALKTHROUGH_TWO_WAYS says what was put to him).
    */
   const twoWays = openForCustomersHere() && bluetoothSupported()
 
@@ -409,12 +410,8 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
                 icon slot and widening a component used on every screen for
                 one glyph is the wrong trade — the card's own lock, above
                 right, already says it.
-
-                THE BOX SAYS BOTH WAYS where Bluetooth is open: his sentence
-                said the app "requires a computer", which stopped being true
-                on the copies that open it (see `twoWays`).
             */}
-            <Agree on={agreed} label={twoWays ? WALKTHROUGH_TWO_WAYS.agree : P3.real.agree} onPress={() => setAgreed((v) => !v)} />
+            <Agree on={agreed} label={P3.real.agree} onPress={() => setAgreed((v) => !v)} />
             <Press label={P3.real.go} height={TAP} disabled={!agreed} onPress={() => agreed && onUnlock?.()} />
           </Choice>
 
@@ -556,8 +553,9 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
             The unit's name and "simulated" came off the top: the mockup
             puts the one sentence that matters there instead — this app
             needs a computer with the unit on its USB, or, where Bluetooth is
-            open, either way, the computer first (see `twoWays`). The demo's
-            words, because the demo is the only way here now.
+            open, that there are two ways, the computer first (see
+            `twoWays`). The demo's words, because the demo is the only way
+            here now.
 
             Each card goes into the app, the same as the button; the row at
             the foot goes in and straight to Settings, where the walkthrough

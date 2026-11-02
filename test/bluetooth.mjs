@@ -6867,7 +6867,7 @@ export function run(test) {
     /* The setup email says them in its first email's opening, since 1 November 2026 ("Having trouble getting connected?"), and the Bluetooth paragraph says the cost again: no editing or saving. */
     const email = src('supabase/functions/setup-reminder/index.ts').match(/'(It looks like it hasn’t connected to your Fractal yet[^']*)'/)?.[1] ?? ''
     assert.ok(email.length > 100, 'the setup email’s opening was not found; this check needs telling')
-    /* And the walkthrough's three, on a copy that opens Bluetooth (the next test), since the audit of 2 November 2026. */
+    /* And the walkthrough's two, on a copy that opens Bluetooth (the next test), since the audit of 2 November 2026. */
     const walk = Object.entries(gear.WALKTHROUGH_TWO_WAYS).map(([key, words]) => [`the walkthrough’s ${key}`, words])
     for (const [where, words] of [['the gear file’s sentence', gear.BLUETOOTH_WAYS], ['the no-computer note and Fixes', NO_COMPUTER_BLUETOOTH], ['the setup email', email], ...walk]) {
       assert.match(words, /The computer is (?:still )?the best (?:one|way)|the computer [^.]*, which is the best way/, `${where} does not say the computer is the best way`)
@@ -6876,43 +6876,77 @@ export function run(test) {
     }
   })
 
-  test('the phone’s walkthrough and sign-in screen never say a computer is required on a copy that opens Bluetooth', async () => {
+  test('the phone’s walkthrough and sign-in screen say both ways on a copy that opens Bluetooth, and every line about needing a computer is decided', async () => {
     /*
      * "It doesn't require a computer anymore if people are using Bluetooth
      * instead. So we can drop that now." (Justin, 30 October 2026, of the
      * store listing.) The audit of 2 November 2026 found the phone's first
-     * minute still saying it: the box ticked before Unlock ("I understand
-     * this app requires a computer connected to my Fractal unit via USB
-     * cable"), the demo's last page ("This app works with a computer"), and
-     * Get connected on the sign-in screen, the computer's steps alone. On a
-     * copy that opens Bluetooth to customers each says both ways, the
-     * computer first; the browser, which does need the computer, keeps his
-     * words (test/both-ends.mjs).
+     * minute still saying it: the demo's last page ("This app works with a
+     * computer"), Get connected on the sign-in screen, the computer's steps
+     * alone, and the box ticked before Unlock ("I understand this app
+     * requires a computer connected to my Fractal unit via USB cable"). On a
+     * copy that opens Bluetooth to customers the first two say both ways, the
+     * computer first; the box is his own sentence and waits for his answer;
+     * the browser, which does need the computer, keeps the words it had
+     * (test/both-ends.mjs).
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
     const two = gear.WALKTHROUGH_TWO_WAYS
-    assert.deepEqual(Object.keys(two).sort(), ['agree', 'demoSub', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
+    assert.deepEqual(Object.keys(two).sort(), ['demoSub', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
+    /* Any way of saying the app needs a computer, which is the claim these lines exist to take back. */
+    const NEEDS = /(?:needs?|requires?|works? with|only (?:with|through)) a computer|computer is (?:required|needed)/i
     for (const [key, words] of Object.entries(two)) {
-      assert.ok(!/requires? a computer|computer is required|only (?:with|through) a computer/i.test(words), `the walkthrough’s ${key} says a computer is required`)
+      assert.ok(!NEEDS.test(words), `the walkthrough’s ${key} says a computer is needed`)
       assert.match(words, /Bluetooth/, `the walkthrough’s ${key} does not name Bluetooth`)
+      /*
+       * AND THE BLUETOOTH WAY SAYS IT NEEDS NO COMPUTER, before it names
+       * Bluetooth: "a computer connected by USB, or by Bluetooth" reads as a
+       * computer reaching the unit by Bluetooth, which nothing does, and
+       * still as a computer being needed.
+       */
+      assert.match(words.slice(0, words.indexOf('Bluetooth')), /\bno computer\b/i, `the walkthrough’s ${key} does not say the Bluetooth way needs no computer`)
       assert.match(words, /adapter,? sold separately/, `the walkthrough’s ${key} does not say the adapter is bought separately`)
+      /* docs/app-store.md: never the "free" computer app, "That could confuse people thinking the iOS/android app is free." */
+      assert.ok(!/\bfree\b/i.test(words), `the walkthrough’s ${key} calls the computer app free`)
       /* CLAUDE.md: never "this phone", never Bluetooth as a beta, and nothing a customer reads says what has been tried. */
       assert.ok(!/this phone|beta|\btried\b|tested/i.test(words), `the walkthrough’s ${key} says something a customer is never told`)
     }
-    /* The box keeps his shape, with the free desktop app and the cable, and the other way beside them. */
-    assert.match(two.agree, /^I understand this app needs a computer running the free desktop app, connected to my Fractal unit via USB cable, or a Bluetooth MIDI adapter sold separately\./)
-    assert.match(two.demoSub, /^This app works with a computer connected to your Fractal guitar processor by USB, or by Bluetooth/)
+    assert.match(two.demoSub, /^This app connects to your Fractal guitar processor one of two ways: through a computer connected to it by USB, or with no computer, through a Bluetooth MIDI adapter sold separately\./)
+    assert.match(two.setup, /^No computer\? Sign in here, and the app can connect by Bluetooth instead/)
 
     /*
-     * EVERY LINE OF HIS THAT SAYS A COMPUTER IS NEEDED, found in the words
-     * the phone's walkthrough imports rather than listed by hand, and each
-     * drawn only where Bluetooth is not open. A new one fails here until it
-     * is given a two-ways line of its own, or this check is told why not.
+     * EVERY LINE THE PHONE'S WALKTHROUGH SHOWS THAT SPEAKS OF HAVING A
+     * COMPUTER OR NOT, found in the words it imports rather than listed by
+     * hand, and each one decided. A new one fails here until it is given a
+     * two-ways line of its own, or this list says why not.
      */
+    const DECIDED = {
+      /* Mine ("These two lines are mine"): WALKTHROUGH_TWO_WAYS.demoSub in its place where Bluetooth is open. */
+      'P9.demo.sub': 'demoSub',
+      /*
+       * HELD. His own sentence, dictated word for word, in a file that says
+       * "Do not change any wording without asking me first." It stays on
+       * every copy until he answers; the sentence put to him is in the
+       * comment over WALKTHROUGH_TWO_WAYS. When he says yes, it becomes a
+       * two-ways line like the one above, and this entry names its key.
+       */
+      'P3.real.agree': 'held',
+      /*
+       * LEFT, both about the demo, which needs no computer on every copy:
+       * neither says the real rig needs one. P2.foot is the foot of HOW IT
+       * WORKS, whose three boxes are the computer's way from his mockup; he
+       * had text taken off that screen so its button shows without
+       * scrolling, so no Bluetooth line is added there. The demo's last page
+       * and the purchase page (BLUETOOTH_PAYWALL) say both ways before any
+       * money is taken.
+       */
+      'P2.foot': 'left',
+      'P3.demo.body': 'left'
+    }
     const onboarding = await import('../shared/onboarding.mjs')
     const screen = code('mobile/src/screens/Onboarding.js')
     const imported = (screen.match(/import \{([^}]*)\} from '\.\.\/lib\/onboarding'/)?.[1] ?? '').split(',').map((n) => n.trim()).filter(Boolean)
-    assert.ok(imported.includes('P3') && imported.includes('P9'), 'the walkthrough’s imports were not found; this check needs telling')
+    assert.ok(imported.includes('P2') && imported.includes('P3') && imported.includes('P9'), 'the walkthrough’s imports were not found; this check needs telling')
     const says = []
     const walkWords = (value, path) => {
       if (typeof value === 'string') says.push([path, value])
@@ -6921,15 +6955,22 @@ export function run(test) {
     }
     for (const name of imported) walkWords(onboarding[name], name)
     assert.ok(says.length > 40, 'the walkthrough’s words were not read; this check needs telling')
-    const computerOnly = says.filter(([, words]) => /requires? a computer|works with a computer/i.test(words)).map(([path]) => path)
-    assert.deepEqual(computerOnly.sort(), ['P3.real.agree', 'P9.demo.sub'], 'a line of the phone’s walkthrough says a computer is needed, and nothing says the other way where Bluetooth is open')
+    const aboutTheComputer = says.filter(([, words]) => NEEDS.test(words) || /\bno computer\b/i.test(words)).map(([path]) => path)
+    assert.deepEqual(aboutTheComputer.sort(), Object.keys(DECIDED).sort(), 'a line of the phone’s walkthrough speaks of needing a computer, and nothing here decides what it says where Bluetooth is open')
     const flatScreen = screen.replace(/\s+/g, ' ')
-    for (const [path, key] of [['P3.real.agree', 'agree'], ['P9.demo.sub', 'demoSub']]) {
-      const drawn = flatScreen.split(path).length - 1
-      const gated = flatScreen.split(`twoWays ? WALKTHROUGH_TWO_WAYS.${key} : ${path}`).length - 1
-      assert.ok(drawn >= 1, `the walkthrough no longer draws ${path}; this check follows it`)
-      assert.equal(gated, drawn, `the walkthrough draws ${path} on a copy that opens Bluetooth`)
+    for (const [path, decision] of Object.entries(DECIDED)) {
+      const drawn = flatScreen.split(`{${path}}`).length - 1
+      const swapped = flatScreen.split(` : ${path}}`).length - 1
+      assert.ok(drawn + swapped >= 1, `the walkthrough no longer draws ${path}; this check follows it`)
+      if (decision in two) {
+        assert.equal(drawn, 0, `the walkthrough draws ${path} on a copy that opens Bluetooth`)
+        assert.equal(flatScreen.split(`{twoWays ? WALKTHROUGH_TWO_WAYS.${decision} : ${path}}`).length - 1, swapped, `the walkthrough draws ${path} on a copy that opens Bluetooth, or behind another gate`)
+      } else {
+        assert.equal(swapped, 0, `the walkthrough puts something else in place of ${path}, which this check says is ${decision}`)
+      }
     }
+    /* The held box is drawn as his sentence, on every copy, and Unlock still waits for it. */
+    assert.match(flatScreen, /<Agree on=\{agreed\} label=\{P3\.real\.agree\}/, 'the box before Unlock says something other than his sentence, which waits for his answer')
 
     /* The sign-in screen: the computer's three steps, then the other way, inside the card. */
     const signIn = code('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')

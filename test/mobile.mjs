@@ -6791,15 +6791,12 @@ export function run(test) {
     assert.match(rig, /state\.unit === 'missing' \|\| state\.unit === 'silent' \? MISSING_WATCH_MS : watchEvery\(true\)/, 'the phone waits half a minute to notice an editor was closed')
   })
 
-  test('Unlock waits for the box saying what the app needs to reach the unit', async () => {
+  test('Unlock waits for the box saying a computer and a USB cable are needed', async () => {
     /*
      * "On the unlock part of this can we add a disclaimer question that
      * says… I understand this app requires a computer connected to my
      * Fractal unit via USB cable for the Fractal Remote app to work. With a
      * checkbox that must be selected to select the unlock button?"
-     *
-     * His sentence stays, in the browser (which does need the computer) and
-     * on a phone whose copy does not open Bluetooth to customers.
      */
     const { P3 } = await import('../shared/onboarding.mjs')
     assert.equal(
@@ -6809,15 +6806,7 @@ export function run(test) {
     )
     const phone = read('mobile/src/screens/Onboarding.js').replace(/\s+/g, ' ')
     assert.match(phone, /const \[agreed, setAgreed\] = useState\(false\)/, 'the phone’s box starts ticked, or is not there')
-    /*
-     * CHANGED ON PURPOSE in the audit of 2 November 2026: the phone's box was
-     * held to his sentence alone, which says the app "requires a computer",
-     * and on a copy that opens Bluetooth to customers it does not ("It
-     * doesn't require a computer anymore if people are using Bluetooth
-     * instead", 30 October 2026). There the box says both ways
-     * (test/bluetooth.mjs holds those words and the gate).
-     */
-    assert.match(phone, /<Agree on=\{agreed\} label=\{twoWays \? WALKTHROUGH_TWO_WAYS\.agree : P3\.real\.agree\}/, 'the phone draws no box')
+    assert.match(phone, /<Agree on=\{agreed\} label=\{P3\.real\.agree\}/, 'the phone draws no box')
     assert.match(phone, /<Press label=\{P3\.real\.go\} height=\{TAP\} disabled=\{!agreed\}/, 'the phone’s Unlock presses before the box is ticked')
     assert.match(phone, /accessibilityRole="checkbox"/, 'a screen reader cannot tell the phone’s box is a box')
     const web = read('src/components/PhoneWalkthrough.jsx').replace(/\s+/g, ' ')

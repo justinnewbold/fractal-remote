@@ -245,37 +245,48 @@ export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM
  * "It doesn't require a computer anymore if people are using Bluetooth
  * instead. So we can drop that now." (Justin, 30 October 2026, of the store
  * listing.) The phone's first minute still said the computer was the only
- * way until the audit of 2 November 2026: the box ticked before Unlock read
- * "I understand this app requires a computer connected to my Fractal unit
- * via USB cable", the demo's last page said the app works with a computer,
- * and Get connected on the sign-in screen gave the computer's steps and
- * nothing else. So on a copy that opens Bluetooth to customers, and on a
- * device that can do it (the purchase page's own gate, Paywall.js), the
- * phone says both ways in those three places instead
+ * way until the audit of 2 November 2026: the demo's last page said the app
+ * works with a computer, and Get connected on the sign-in screen gave the
+ * computer's steps and nothing else. So on a copy that opens Bluetooth to
+ * customers, and on a device that can do it (the purchase page's own gate,
+ * Paywall.js), the phone says both ways in those two places instead
  * (mobile/src/screens/Onboarding.js and SignIn.js). On every other copy, and
  * in the browser, which has no Bluetooth to offer and does need the
- * computer, his words in shared/onboarding.mjs are what is shown.
+ * computer, the words in shared/onboarding.mjs are what is shown.
+ *
+ * NOT THE BOX TICKED BEFORE UNLOCK, YET. "I understand this app requires a
+ * computer connected to my Fractal unit via USB cable for the Fractal Remote
+ * app to work" is his own sentence, dictated word for word, and the file it
+ * lives in says "Do not change any wording without asking me first." So it
+ * stays his on every copy until he answers. The sentence put to him for a
+ * copy that opens Bluetooth: "I understand this app connects to my Fractal
+ * unit one of two ways: through a computer running the desktop app,
+ * connected by USB cable, or with no computer, through a Bluetooth MIDI
+ * adapter sold separately. The computer is the best way: Bluetooth has more
+ * lag and fewer features." (test/bluetooth.mjs holds the box as held.)
  *
  * HERE AND NOT IN shared/onboarding.mjs, because the browser draws that file:
  * a line it carries and never shows would still make a new computer app
  * (scripts/computer-fingerprint.mjs hashes every file the web app imports).
  *
- * MY WORDING, from his, and he can change any of it. The box keeps his shape
- * ("I understand this app ... my Fractal unit via USB cable"), with the free
- * desktop app named the way Get connected names it and the other way beside
- * it. An adapter sold separately, because no Fractal unit has Bluetooth of
- * its own; Unlock opens the purchase page next, which names every part
- * (BLUETOOTH_PAYWALL). And each line ends with what Bluetooth costs, one
- * sentence for all three (BEST_WAY): "make it clear that the computer is the
- * preferred method and that Bluetooth will have more lag and not have as
- * many features" (25 October 2026), wherever Bluetooth is offered.
+ * MY WORDING, and he can change any of it. The demo's line was mine already
+ * (P9.demo.sub, "These two lines are mine"); the sign-in line is new, under
+ * his mockup's three steps, which stay as he drew them. Each way gets its
+ * own half, and the Bluetooth half says "no computer" out loud, so neither
+ * reads as a computer reaching the unit by Bluetooth (nothing does that).
+ * Never the "free" desktop app here (docs/app-store.md: "That could confuse
+ * people thinking the iOS/android app is free"). An adapter sold
+ * separately, because no Fractal unit has Bluetooth of its own; the purchase
+ * page names every part (BLUETOOTH_PAYWALL). And each line ends with what
+ * Bluetooth costs, one sentence for both (BEST_WAY): "make it clear that the
+ * computer is the preferred method and that Bluetooth will have more lag and
+ * not have as many features" (25 October 2026), wherever Bluetooth is
+ * offered.
  */
 const BEST_WAY = 'The computer is the best way: Bluetooth has more lag and fewer features.'
 export const WALKTHROUGH_TWO_WAYS = {
-  /* In place of P3.real.agree, the box under Connect my real rig. */
-  agree: `I understand this app needs a computer running the free desktop app, connected to my Fractal unit via USB cable, or a Bluetooth MIDI adapter sold separately. ${BEST_WAY}`,
   /* In place of P9.demo.sub, under Here’s the app at the end of the demo's walkthrough. */
-  demoSub: `This app works with a computer connected to your Fractal guitar processor by USB, or by Bluetooth through an adapter sold separately. ${BEST_WAY}`,
+  demoSub: `This app connects to your Fractal guitar processor one of two ways: through a computer connected to it by USB, or with no computer, through a Bluetooth MIDI adapter sold separately. ${BEST_WAY}`,
   /* Under SETUP.steps, the computer's three, on the sign-in screen. */
   setup: `No computer? Sign in here, and the app can connect by Bluetooth instead, through an adapter sold separately. ${BEST_WAY}`
 }
