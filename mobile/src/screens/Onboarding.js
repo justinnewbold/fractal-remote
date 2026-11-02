@@ -40,6 +40,7 @@ import { sendDownloadLink, DOWNLOADS_URL } from '../lib/downloadLink'
 import CopyAddress from '../components/CopyAddress'
 import Note from '../components/Note'
 import Press from '../components/Press'
+import RestoreAsk from '../components/RestoreAsk'
 import { TipCard } from '../components/Walk'
 import playIcon from '../../assets/icons/play.png'
 import slidersIcon from '../../assets/icons/sliders.png'
@@ -84,6 +85,8 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState(null)
   const [error, setError] = useState(null)
+  /* Restore tapped with nobody signed in: RestoreAsk is up under the footnote. */
+  const [asking, setAsking] = useState(false)
   /* Whether the download help on the "installed?" step is open — see there. */
   const [needsApp, setNeedsApp] = useState(false)
 
@@ -106,6 +109,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
   const go = (next) => {
     setSaid(null)
     setError(null)
+    setAsking(false)
     setAt(next)
   }
 
@@ -145,12 +149,19 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
    * a computer is `onAccount` now — the sign-in screen, which already signs
    * in, makes an account and resets a password, and is the only door.
    */
-  const restore = async (then) => {
+  /*
+   * `here`: the second of RestoreAsk's two ways, with nobody signed in,
+   * which is everybody new here. Without it they are asked first
+   * (purchases.js RESTORE_WHOSE), and nothing is sent to the store.
+   */
+  const restore = async (then, here = false) => {
     setBusy(true)
     setError(null)
-    const out = await restorePurchase()
+    setAsking(false)
+    const out = await restorePurchase({ here })
     setBusy(false)
     if (out.ok) return go(then)
+    if (out.ask) return setAsking(true)
     setSaid(out.message)
   }
 
@@ -402,6 +413,8 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
               { label: P3.signIn, onPress: () => onAccount?.() }
             ]}
           />
+          {/* With nobody signed in: whose the purchase is, and the two ways on. */}
+          {asking ? <RestoreAsk onSignIn={() => onAccount?.()} onHere={() => restore('app', true)} busy={busy} /> : null}
           {said ? <Note>{said}</Note> : null}
         </>
       ) : null}

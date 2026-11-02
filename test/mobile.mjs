@@ -14622,11 +14622,12 @@ export function run(test) {
      * MOVING CLEARS THE LAST SCREEN'S NOTES. `said` and `error` are one pair
      * for the whole walkthrough and most steps draw them, so a failed restore
      * followed you onto the next screen and sat under a heading it had
-     * nothing to do with.
+     * nothing to do with. And, since the 2 November 2026 audit, Restore's
+     * ask with nobody signed in (`asking`, RestoreAsk) goes with them.
      */
     assert.match(
       src.replace(/\s+/g, ' '),
-      /const go = \(next\) => \{ setSaid\(null\) setError\(null\) setAt\(next\) \}/,
+      /const go = \(next\) => \{ setSaid\(null\) setError\(null\) setAsking\(false\) setAt\(next\) \}/,
       'there is no single way between steps, so the last screen’s notes follow you'
     )
     assert.ok(
@@ -14793,8 +14794,10 @@ export function run(test) {
      * is a screen of its own, and the Paywall asks about the purchase.
      */
     assert.ok(!/pairCredentials|<ScanCode|await buyUnlock/.test(onb), 'the walkthrough pairs or sells again')
-    /* Restore stays: somebody who already paid needs it before anything. */
-    assert.match(onb, /await restorePurchase\(\)/, 'there is no way to restore a purchase already made')
+    /* Restore stays: somebody who already paid needs it before anything.
+       With `{ here }` since the 2 November 2026 audit: with nobody signed in
+       it asks first (RestoreAsk), and only its second way restores here. */
+    assert.match(onb, /await restorePurchase\(\{ here \}\)/, 'there is no way to restore a purchase already made')
     /*
      * AND NO PRICE ON THE BUTTON THAT TAKES NO MONEY.
      *
@@ -16909,25 +16912,29 @@ export function run(test) {
     }
 
     /* Signed out, a receipt Restore brings back from another account lands on
-       this phone's nameless id: on this phone alone, and said so. */
+       this phone's nameless id: on this phone alone, and said so. Since the
+       2 November 2026 audit only once the person has chosen Restore to this
+       phone only (`here`): asked plain, it moves nothing (the test below). */
     const rcBack = pretendRevenueCat({ owns: { 'acct-old': 'APP_STORE' } })
     rcBack.receipt = 'acct-old'
     const benchBack = await benchWith(rcBack)
     try {
       assert.equal(benchBack.p.purchaseState().onlyHere, false)
-      const out = await benchBack.p.restorePurchase()
+      const out = await benchBack.p.restorePurchase({ here: true })
       assert.equal(out.ok, true)
       assert.equal(benchBack.p.purchaseState().onlyHere, true, 'a purchase restored with nobody signed in is not said to be on this phone alone')
     } finally {
       benchBack.done()
     }
 
-    /* Nothing anywhere: the words say what was asked, and what works instead. */
+    /* Nothing anywhere: the words say what was asked, and what works instead.
+       Nobody is signed in on this bench, so `here`, the way past the ask
+       since the 2 November 2026 audit. */
     for (const [os, store] of [['ios', 'Apple ID'], ['android', 'Google account']]) {
       const rc3 = pretendRevenueCat()
       const bench3 = await benchWith(rc3, { os })
       try {
-        const out = await bench3.p.restorePurchase()
+        const out = await bench3.p.restorePurchase({ here: true })
         assert.equal(out.ok, false)
         assert.equal(
           out.message,
@@ -16947,6 +16954,104 @@ export function run(test) {
     } finally {
       bench4.done()
     }
+  })
+
+  test('Restore with nobody signed in says whose the purchase is, and moves nothing until told to', async () => {
+    /*
+     * THE 2 NOVEMBER 2026 AUDIT. "revenuecat-webhook: TRANSFER for 1
+     * account(s)", 12:46: a phone with nobody signed in tapped Restore, and
+     * RevenueCat's default (Transfer) moved the purchase off the buyer's
+     * account onto the phone's nameless id, so their computer was refused.
+     * The bench's RevenueCat does what the real one does: Restore carries
+     * the receipt to whoever the phone is now.
+     */
+    const rc = pretendRevenueCat({ owns: { 'acct-buyer': 'APP_STORE' }, aliased: ['acct-buyer'] })
+    rc.receipt = 'acct-buyer'
+    const bench = await benchWith(rc)
+    try {
+      const before = rc.calls.length
+      const asked = await bench.p.restorePurchase()
+      assert.equal(asked.ok, false)
+      assert.equal(asked.ask, true, 'Restore with nobody signed in went to the store without saying whose the purchase is')
+      assert.equal(asked.message, bench.p.RESTORE_WHOSE)
+      assert.ok(!rc.calls.slice(before).includes('restorePurchases'), 'Restore with nobody signed in sent the receipt before anybody chose to')
+      assert.equal(rc.has.get('acct-buyer'), 'APP_STORE', 'the purchase came off the buyer’s account, and their computer with it')
+      assert.equal(rc.has.has(rc.NAMELESS), false)
+      assert.equal(bench.p.purchaseState().unlocked, false)
+      assert.equal(bench.p.purchaseState().onlyHere, false)
+
+      /* Restore to this phone only, chosen: it goes as it always went, and it is on this phone alone. */
+      const here = await bench.p.restorePurchase({ here: true })
+      assert.equal(here.ok, true)
+      assert.ok(rc.calls.includes('restorePurchases'))
+      assert.equal(rc.has.get(rc.NAMELESS), 'APP_STORE')
+      assert.equal(bench.p.purchaseState().onlyHere, true, 'a purchase restored to this phone only is not said to be on it alone')
+
+      /* And signing in on it afterwards sends it back to the account, as the second button says. */
+      bench.who.session = 'acct-buyer'
+      await bench.p.linkAccount()
+      assert.equal(rc.has.get('acct-buyer'), 'APP_STORE', 'signing in here did not send the purchase back to the account')
+      assert.equal(bench.p.purchaseState().onlyHere, false)
+    } finally {
+      bench.done()
+    }
+
+    /* Signed in, nothing changes: no ask, straight to the store, onto the account signed in to. */
+    const rcIn = pretendRevenueCat({ owns: { 'acct-in': 'APP_STORE' } })
+    rcIn.me = 'acct-in'
+    const benchIn = await benchWith(rcIn, { session: 'acct-in' })
+    try {
+      const out = await benchIn.p.restorePurchase()
+      assert.equal(out.ask, undefined, 'somebody signed in was asked whose the purchase is')
+      assert.equal(out.ok, true)
+      assert.ok(rcIn.calls.includes('restorePurchases'))
+    } finally {
+      benchIn.done()
+    }
+    /* And signed in on a sign-in kept on the phone (no signal to renew it) is signed in too. */
+    const rcKept = pretendRevenueCat()
+    const benchKept = await benchWith(rcKept)
+    try {
+      benchKept.who.kept = 'acct-kept'
+      const out = await benchKept.p.restorePurchase()
+      assert.equal(out.ask, undefined, 'a customer on a kept sign-in was asked as if nobody were signed in')
+      assert.ok(rcKept.calls.includes('restorePurchases'))
+      assert.match(out.message, /or on the account you’re signed in to/)
+    } finally {
+      benchKept.done()
+    }
+
+    /* The words: whose it is first, signing in the main way, restoring here the second with its cost. */
+    assert.equal(bench.p.RESTORE_WHOSE, 'Your purchase belongs to the account you bought it with. Sign in to that account and it unlocks on this phone too, and keeps working on your computer.')
+    assert.equal(bench.p.SIGN_IN_TO_IT, 'Sign in to that account')
+    assert.equal(bench.p.RESTORE_HERE, 'Restore to this phone only')
+    assert.equal(bench.p.RESTORE_HERE_COSTS, 'Your computer stops seeing the purchase until you sign in on this phone.')
+    /* The device in hand by name (CLAUDE.md: never "this phone" typed), and nothing a phone app may not say (Apple 3.1.3). */
+    const lib = read('mobile/src/lib/purchases.js')
+    for (const name of ['RESTORE_WHOSE', 'RESTORE_HERE', 'RESTORE_HERE_COSTS']) {
+      const line = lib.split('\n').find((l) => l.startsWith(`export const ${name} =`)) || ''
+      assert.match(line, /this \$\{deviceNoun\(\)\}/, `${name} does not name the device in hand`)
+      assert.ok(!/this phone|website|beta/i.test(line), `${name}: ${line}`)
+    }
+
+    /* The two screens that offer Restore with nobody signed in: the ask is drawn, and only its second way restores. */
+    const pay = withoutComments(read('mobile/src/screens/Paywall.js')).replace(/\s+/g, ' ')
+    assert.match(pay, /const out = await restorePurchase\(\{ here \}\) setBusy\(false\) if \(out\.ok\) return onUnlocked\?\.\(\) if \(out\.ask\) return setAsking\(true\)/)
+    assert.match(pay, /<Press label="Restore a purchase" disabled=\{busy\} onPress=\{\(\) => restore\(\)\} \/> (\{\} )?\{asking \? <RestoreAsk onSignIn=\{onSignIn\} onHere=\{\(\) => restore\(true\)\} busy=\{busy\} \/> : null\}/)
+    /* Never handed the tap itself: a press event would read as `here`. */
+    assert.ok(!/onPress=\{restore\}/.test(pay), 'the paywall’s Restore passes its tap in as the choice to restore here')
+    const onb = withoutComments(read('mobile/src/screens/Onboarding.js')).replace(/\s+/g, ' ')
+    assert.match(onb, /const out = await restorePurchase\(\{ here \}\) setBusy\(false\) if \(out\.ok\) return go\(then\) if \(out\.ask\) return setAsking\(true\)/)
+    assert.match(onb, /\{ label: P3\.restore, onPress: \(\) => restore\('app'\), disabled: busy \}/)
+    assert.match(onb, /\{asking \? <RestoreAsk onSignIn=\{\(\) => onAccount\?\.\(\)\} onHere=\{\(\) => restore\('app', true\)\} busy=\{busy\} \/> : null\}/)
+    assert.match(onb, /const go = \(next\) => \{ setSaid\(null\) setError\(null\) setAsking\(false\) setAt\(next\) \}/, 'the ask follows the walkthrough onto the next screen')
+    const ask = withoutComments(read('mobile/src/components/RestoreAsk.js')).replace(/\s+/g, ' ')
+    assert.match(
+      ask,
+      /<Note tone="warn">\{RESTORE_WHOSE\}<\/Note> \{onSignIn \? <Press label=\{SIGN_IN_TO_IT\} tone="signal" disabled=\{busy\} onPress=\{onSignIn\} \/> : null\} <Press label=\{RESTORE_HERE\} sub=\{RESTORE_HERE_COSTS\} disabled=\{busy\} onPress=\{onHere\} \/>/,
+      'the ask does not say whose it is first, then Sign in, then Restore here with what it costs'
+    )
+    /* OnlyOnThisPhone's Restore is the signed-in line's alone (pinned above), so it needs no ask. */
   })
 
   test('deleting the account says what it costs, by where the full version came from', async () => {
