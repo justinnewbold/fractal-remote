@@ -15,12 +15,13 @@ const face = Platform.select(mono)
  *
  * Which page, and whether there is one at all, is Settings' to say (lib/siri
  * useSiriLinksOpen, and lib/siriPipe siriPresent for the phrases): this only
- * draws what it is handed.
+ * draws what it is handed. `version` is the system's (Platform.Version),
+ * which picks iOS 27's way to turn the app off.
  */
-export default function SiriHelp({ os = Platform.OS, kind = 'phone', native = false, noun = 'phone' }) {
+export default function SiriHelp({ os = Platform.OS, kind = 'phone', native = false, noun = 'phone', version = Platform.Version }) {
   return (
     <View style={{ gap: space.xl }}>
-      {siriPage({ os, kind, native, noun }).map((section) => (
+      {siriPage({ os, kind, native, noun, version }).map((section) => (
         <View key={section.title} style={{ gap: space.md }}>
           <Heading>{section.title}</Heading>
           {section.note ? <Note>{section.note}</Note> : null}

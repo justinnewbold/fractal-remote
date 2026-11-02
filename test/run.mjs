@@ -16749,6 +16749,20 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.ok(!/"(Boost on|Boost off|Amp off)"/.test(pagesCode), 'the watch works out a boost word of its own, a second copy of Play’s rule')
   const tips = bridge.slice(bridge.indexOf('export const WATCH_HOW_OPEN'), bridge.indexOf('export function watchWakes'))
   assert.ok(tips.length > 100 && !/\bhold/i.test(tips), 'the phone’s watch tips promise a hold that a watch from before this build cannot do')
+  /*
+   * And the locked tip promises only what a woken tap does (the 2 November 2026 audit). It said to lock
+   * the iPhone and put it away, while a tap that wakes it is dropped at its deadline, and after the
+   * iPhone has slept most are. So: every tap lands with it unlocked on Play, and locked, the first tap
+   * after a long pause may not go through.
+   */
+  const lockedTip = /export const WATCH_HOW_LOCKED = '([^']*)'/.exec(bridge)?.[1]
+  assert.ok(lockedTip, 'the locked watch tip is not one plain string any more')
+  assert.ok(!/lock your iPhone|put it away|pocket|each tap[^.]*wakes/i.test(lockedTip), 'the watch tip tells somebody to lock the iPhone and put it away, and most taps after it sleeps are dropped')
+  assert.match(lockedTip, /^For every tap on the watch to land, keep your iPhone unlocked with this app on the Play screen\./)
+  assert.match(lockedTip, /With the iPhone locked, the first tap after a long pause may not go through, and the next one usually does\./)
+  assert.ok(!/this (phone|iPhone)/i.test(lockedTip), 'the watch tip says “this phone”')
+  assert.match(bridge, /if \(!up \|\| Date\.now\(\) >= deadline\) \{ logDebug\('watch', `\$\{cmd\.do\} not sent: the phone could not reach the rig in time after waking`\) return undefined \}/, 'a woken tap is no longer dropped at its deadline: the watch tip says it may be, and could say more')
+  assert.match(bridge, /export const watchHow = \(\) => \(watchWakes\(\) \? \[WATCH_HOW_LOCKED, \.\.\.WATCH_HOW\.slice\(1\)\] : WATCH_HOW\)/)
   const wf = readSrc(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')
   for (const step of ['swift test', 'xcodegen generate', '-sdk watchsimulator', 'screens.sh', 'watch-screens']) assert.ok(wf.includes(step), `the watch check has no ${step}`)
 })

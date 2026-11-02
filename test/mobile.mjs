@@ -3673,7 +3673,8 @@ export function run(test) {
     assert.match(flat('mobile/src/screens/Settings.js'), /\{page === 'health' && isAdmin\(account\?\.id\) \?/)
     assert.match(flat('mobile/src/lib/storeVersion.js'), /const platform = Platform\.OS === 'ios' \|\| Platform\.OS === 'android' \? Platform\.OS : null/)
     assert.match(flat('mobile/src/lib/store-rule.js'), /title: `A newer version of Fractal Remote is \$\{STORE_WHERE\[platform\]\}`/)
-    assert.match(flat('mobile/src/lib/siri-help.js'), /export function siriPage\(\{ os = 'ios', kind = 'phone', native = false, noun = 'phone' \} = \{\}\) \{ if \(os === 'android'\) \{ return \[ \{ title: 'Links for Tasker', note: 'There are no voice commands on Android yet\./)
+    /* `version` joined the page's arguments in the 2 November 2026 audit (iOS 27.2's Excluded Apps); the Android page is still picked by os alone. */
+    assert.match(flat('mobile/src/lib/siri-help.js'), /export function siriPage\(\{ os = 'ios', kind = 'phone', native = false, noun = 'phone', version \} = \{\}\) \{ if \(os === 'android'\) \{ return \[ \{ title: 'Links for Tasker', note: 'There are no voice commands on Android yet\./)
     assert.match(flat('mobile/src/screens/Settings.js'), /<SiriHelp os=\{Platform\.OS\} /)
     /* The Developer pages: only their own tools import admin.js and whats-live.js, and Settings draws each tool for Justin's account alone. */
     const settings = flat('mobile/src/screens/Settings.js')
