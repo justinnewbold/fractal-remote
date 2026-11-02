@@ -378,7 +378,7 @@ export const PARTS = {
    */
   masterAdapters: {
     name: 'Two Type-A MIDI to 3.5 mm adapters',
-    does: 'For an AM4 or VP4, between the WIDI Master and the unit: a 5-pin MIDI socket (female) on one end for the WIDI Master’s plug, and a 3.5 mm plug (male) on the other for the unit’s jack. They must be Type A. This is a pack of two (Eldraqth), the ones the WIDI Master was tried with.',
+    does: 'For an AM4 or VP4, between the WIDI Master and the unit: a 5-pin MIDI socket (female) on one end for the WIDI Master’s plug, and a 3.5 mm plug (male) on the other for the unit’s jack. They must be Type A. This is a pack of two (Eldraqth).',
     amazon: 'https://www.amazon.com/dp/B0FJRB9KGV',
     maker: null
   }
@@ -400,10 +400,13 @@ const UNITS = { am4: 'AM4', fm3: 'FM3', fm9: 'FM9', axefx3: 'Axe-Fx III', vp4: '
  * can still pick it: what happened, and what owners report, in the fewest
  * words that say both. Said as their reports, not as a fact about the
  * FM3's hardware, and with no home-made way round it (see the head of this
- * file).
+ * file). What happened, never that it was tried: it said "When we tried the
+ * WIDI Master and the C2MIDI Pro on an FM3" until the 2 November 2026 audit
+ * ("We don't need to mention really whether or not something has been
+ * tested or not", Justin, 31 October 2026).
  */
 export const FM3_WARNING =
-  'On an FM3, use the CME U2MIDI Pro. When we tried the WIDI Master and the C2MIDI Pro on an FM3, both got very hot, and the WIDI Master did not work. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool. FM3 owners report the same heat with other adapters that take power from its MIDI OUT, even on USB power.'
+  'On an FM3, use the CME U2MIDI Pro. The WIDI Master and the C2MIDI Pro both got very hot on an FM3, and the WIDI Master did not work. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool. FM3 owners report the same heat with other adapters that take power from its MIDI OUT, even on USB power.'
 
 /** The units the parts list must not be bought for as it is: none since the FM3 has the U2MIDI Pro (26 October 2026). */
 export const NOT_STRAIGHT_IN = []
@@ -425,9 +428,13 @@ export const NOT_STRAIGHT_IN = []
  * about their adapter. "Can take" power, so an adapter that runs on USB
  * power alone, and never from the jack (the U2MIDI Pro the FM3 plan tries),
  * is not in it.
+ *
+ * And what the U2MIDI Pro does, never that it was tried: "when we tried it,
+ * it worked and stayed cool" until the 2 November 2026 audit, the same rule
+ * as FM3_WARNING's.
  */
 export const FM3_NEVER =
-  'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, and when we tried it, it worked and stayed cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
+  'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, works, and stays cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
 
 /*
  * THE WIDI MASTER ON AN AM4: tried and working (26 October 2026), in place

@@ -10,12 +10,12 @@ Troubleshooting → Feedback in the app or https://fractal.newbold.cloud/support
 never Fractal Audio.
 
 On a VP4, the app turns effects on and off, changes presets, and changes scenes
-once you set one number on the VP4 itself. Changing presets and scenes is new on
-a VP4, and nobody on our side has tried it on one yet. Knobs, the tuner, tap
-tempo, channels and saving don't work on a VP4 from the app yet. The app can't
-show the names of a VP4's presets, except the one it is on, or whether its
-effects are on or off, yet. On a VP4, Previous and Next go through a setlist or
-your starred presets, not slot by slot.
+once you set one number on the VP4 itself. It changes presets and scenes with
+the same MIDI messages a foot controller sends. Knobs, the tuner, tap tempo,
+channels and saving don't work on a VP4 from the app yet. The app can't show the
+names of a VP4's presets, except the one it is on, or whether its effects are on
+or off, yet. On a VP4, Previous and Next go through a setlist or your starred
+presets, not slot by slot.
 
 The AI features this project began with — describing a tone and having a preset
 written, and the Ask screen that took instructions in words — are gone from the

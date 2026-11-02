@@ -8374,7 +8374,14 @@ export function run(test) {
     assert.ok(!/C2MIDI/.test(gear.hookupFor('fm3').join(' ')), 'the FM3’s steps send it the C2MIDI Pro')
     assert.equal(gear.warningFor('fm3'), gear.FM3_WARNING)
     for (const unit of ['am4', 'fm9', 'axefx3', 'vp4']) assert.equal(gear.warningFor(unit), null)
-    assert.match(gear.FM3_WARNING, /^On an FM3, use the CME U2MIDI Pro\. When we tried the WIDI Master and the C2MIDI Pro on an FM3, both got very hot, and the WIDI Master did not work\. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool\./)
+    /*
+     * What happened, never that it was tried. Changed on purpose in the 2
+     * November 2026 audit: this held it to "When we tried the WIDI Master and
+     * the C2MIDI Pro on an FM3". "We don't need to mention really whether or
+     * not something has been tested or not, we just need to keep track of it
+     * ourselves in the developer menu" (Justin, 31 October 2026).
+     */
+    assert.match(gear.FM3_WARNING, /^On an FM3, use the CME U2MIDI Pro\. The WIDI Master and the C2MIDI Pro both got very hot on an FM3, and the WIDI Master did not work\. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool\./)
     assert.ok(!/220|resistor|pin 4|solder/i.test(gear.FM3_WARNING), 'the FM3 warning gives a home-made way round it again')
     assert.match(gear.FM3_WARNING, /FM3 owners report the same heat with other adapters that take power from its MIDI OUT/, 'the FM3 warning does not say what owners report')
     assert.ok(!/nothing to limit it/.test(gear.FM3_WARNING), 'the FM3 warning states a fault in the unit as fact')
@@ -8804,8 +8811,29 @@ export function run(test) {
     const gear = await import('../shared/bluetooth-gear.mjs')
     assert.equal(
       gear.FM3_NEVER,
-      'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, and when we tried it, it worked and stayed cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
+      'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, works, and stays cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
     )
+    /*
+     * NOTHING A CUSTOMER READS SAYS IT WAS TRIED, the FM3's warnings and the
+     * parts included. Changed on purpose in the 2 November 2026 audit: this
+     * held FM3_NEVER to "when we tried it, it worked and stayed cool", and
+     * FM3_WARNING and the WIDI Master's adapters said "When we tried" and
+     * "the ones the WIDI Master was tried with". "We don't need to mention
+     * really whether or not something has been tested or not, we just need
+     * to keep track of it ourselves in the developer menu" (Justin, 31
+     * October 2026): that record is TESTED, TRIED_WAYS and TRIED_NOTES, on
+     * Developer → App health → Tried, and is not read here.
+     */
+    const customerWords = [
+      gear.FM3_NEVER,
+      gear.FM3_WARNING,
+      gear.NOT_FOR_FM3,
+      gear.ALSO_ON_AM4,
+      gear.VP4_OVER_BLUETOOTH,
+      gear.VP4_CANT_HEAR,
+      ...Object.values(gear.PARTS).map((p) => (typeof p.does === 'function' ? p.does('phone') : p.does))
+    ]
+    for (const line of customerWords) assert.doesNotMatch(line, /tried|tested/i, `a customer is told what was tried: ${line}`)
     /* Since 26 October 2026 ("Using the U2midi pro adapter the FM3 works and does not get hot", "The Widi Master did not work on the FM3 and got very hot"): what to use first, then what never to. */
     /* Said as what happened here and what owners report, with no way round it and nothing said as a fact about the unit. */
     assert.ok(!/straight|220|resistor|solder|nothing to limit/i.test(gear.FM3_NEVER))

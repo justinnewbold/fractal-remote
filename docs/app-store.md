@@ -199,8 +199,11 @@ don't, we need to put that in there for now." So SUPPORTED UNITS gives the
 VP4 a line of its own, the purchase page's sentence word for word
 (VP4_SO_FAR in shared/vp4-safety.mjs; test/vp4-safety.mjs holds this file,
 the download page and both purchase pages to it): effects on and off,
-presets, and scenes once one number is set on the VP4, which are new and
-untried by us; knobs, the tuner, tap tempo, channels and saving not yet; and
+presets, and scenes once one number is set on the VP4, by the same MIDI
+messages a foot controller sends (until the 2 November 2026 audit it said
+they were new and untried by us, and what has been tried is ours to keep,
+not the customer's to read); knobs, the tuner, tap tempo, channels and
+saving not yet; and
 what a VP4 owner meets on the first screen, since WHAT IT DOES, just under
 it, promises presets "by name, in slot order": the list shows A1 to Z4, not
 names, the effects say neither on nor off until tapped, and Previous and Next
@@ -223,7 +226,7 @@ Fractal Remote turns your phone into a remote control for your Fractal Audio rig
 
 SUPPORTED UNITS
 FM3, FM9, Axe-Fx III and AM4, and the VP4 in part.
-On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. Changing presets and scenes is new on a VP4, and nobody on our side has tried it on one yet. Knobs, the tuner, tap tempo, channels and saving don't work on a VP4 from the app yet. The app can't show the names of a VP4's presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.
+On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. It changes presets and scenes with the same MIDI messages a foot controller sends. Knobs, the tuner, tap tempo, channels and saving don't work on a VP4 from the app yet. The app can't show the names of a VP4's presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.
 
 TRY THE DEMO, FOR AS LONG AS YOU LIKE
 The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer described at the top.
@@ -1758,7 +1761,7 @@ Fractal Remote turns your phone into a remote control for your Fractal Audio rig
 
 SUPPORTED UNITS
 FM3, FM9, Axe-Fx III and AM4, and the VP4 in part.
-On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. Changing presets and scenes is new on a VP4, and nobody on our side has tried it on one yet. Knobs, the tuner, tap tempo, channels and saving don't work on a VP4 from the app yet. The app can't show the names of a VP4's presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.
+On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. It changes presets and scenes with the same MIDI messages a foot controller sends. Knobs, the tuner, tap tempo, channels and saving don't work on a VP4 from the app yet. The app can't show the names of a VP4's presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.
 
 TRY THE DEMO, FOR AS LONG AS YOU LIKE
 The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer described at the top (or Bluetooth).
