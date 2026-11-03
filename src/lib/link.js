@@ -1271,10 +1271,15 @@ export async function bootLink() {
  * set-up one, the same sign-in the computer's "Sign in to set up the phone
  * remote" makes. Everywhere else it stays plain, the demo included: the
  * website's demo takes the computer's role with no device server behind it,
- * and a sign-in there that went looking for one failed every time. (A
- * sign-in in the demo in the computer's own window ends the demo with a
- * reload, after which Phone & computer offers "Sign in to set up the phone
- * remote" for the device server, as before.)
+ * and a sign-in there that went looking for one failed every time.
+ *
+ * The demo on a computer that has one (the computer app's own window, or a
+ * browser on a computer running it) is the plain sign-in here too, and
+ * reaches the device server all the same: the sign-in ends the demo with a
+ * reload, and App's afterAccount signs the device server in on the way out
+ * (deviceServerAfterDemo, below setUpMac). Not the set-up
+ * itself, because a wrong password must leave the demo running, and the
+ * set-up's writes do nothing while it is.
  */
 export function signInErrand({ asked, role, demo = false } = {}) {
   if (role === 'mac' && !demo) return 'computer'
@@ -1399,28 +1404,94 @@ export async function setUpMac({ email, password }) {
   // A person's own account replaces any pairing this Mac had.
   saveRemoteConfig({ ...config, email: email.trim(), pairCode: null })
   set({ account: await currentAccount() })
-  /*
-   * THE UNLOCK FIRST. The relay lets only an account that has bought the
-   * phone remote onto its channel, and turning the host on for one that has
-   * not ended in "realtime CHANNEL_ERROR" and nothing to do about it. So ask
-   * the server — the same question the phone and the browser ask — and stop
-   * here with the reason if the answer is a plain no. The device server is
-   * still signed in, so buying it later turns the host on without the
-   * password again (App's buyHere). A question that could not be put is not
-   * a no, and goes on as before.
-   */
+  if (!(await deviceServerToo({ email, password }))) {
+    const err = new Error(D4.notUnlocked(email.trim()))
+    err.code = 'not-unlocked'
+    throw err
+  }
+  return state
+}
+
+/*
+ * The device server's half of a sign-in on the computer: signed in with the
+ * same details as the window, and the phone remote turned on, or, for an
+ * account that has not bought it, left off (false). Shared by setUpMac and
+ * deviceServerAfterDemo, so the two ways a computer is signed in cannot come
+ * to disagree about what the device server is told.
+ *
+ * THE UNLOCK FIRST. The relay lets only an account that has bought the
+ * phone remote onto its channel, and turning the host on for one that has
+ * not ended in "realtime CHANNEL_ERROR" and nothing to do about it. So ask
+ * the server — the same question the phone and the browser ask — and stop
+ * here with the reason if the answer is a plain no. The device server is
+ * still signed in, so buying it later turns the host on without the
+ * password again (App's buyHere). A question that could not be put is not
+ * a no, and goes on as before.
+ */
+async function deviceServerToo({ email, password }) {
   /* Looked up when used: the purchase library is the browser's alone. */
   const { checkUnlocked } = await import('./webPurchase.js')
   const { unlocked, unknown } = await checkUnlocked()
   if (!unlocked && !unknown) {
     const { cloudLogin } = await device()
     await cloudLogin(email, password).catch(() => {})
-    const err = new Error(D4.notUnlocked(email.trim()))
-    err.code = 'not-unlocked'
-    throw err
+    return false
   }
   await turnOnMac({ email, password })
-  return state
+  return true
+}
+
+/**
+ * THE DEVICE SERVER TOO, FOR A SIGN-IN MADE IN THE DEMO ON A COMPUTER.
+ *
+ *   deviceServerAfterDemo({ email, password }) → { remote: true | false }
+ *
+ * The demo takes the computer's role everywhere, so its sign-in is the
+ * plain one (signInErrand): on a website there is no device server behind
+ * it. But the demo runs in the computer app's own window too ("Try the
+ * demo" on a computer whose unit is not plugged in), with a real device
+ * server behind it, and there a sign-in from the Account page ended the
+ * demo with the window signed in and the device server not: the audit's
+ * live-1 by another way in, found in review on 2 November 2026, and a phone
+ * on that account found no computer until "Sign in to set up the phone
+ * remote" was used as well.
+ *
+ * So App's afterAccount, on a computer that can host, calls this on its way
+ * out of the demo, and then ends the demo and reloads, as every way out of
+ * it does, whatever this said. The window was signed in already
+ * (signInAccount, which checked the password while the demo was still there
+ * to go back to), so this is the rest of what setUpMac does: the old
+ * pairing let go of, the device server signed in with the same details, and
+ * the phone remote turned on, or left off for an account that has not
+ * bought it (`remote: false`, and App opens the unlock after the reload, as
+ * the set-up does).
+ */
+export async function deviceServerAfterDemo({ email, password }) {
+  const { canReachHelper, setDemo } = await device()
+  /*
+   * Only where a device server answers. App asks this on a computer that
+   * can host (computerEnd), and a phone or a laptop in the website's demo is
+   * told apart from one only once its first look for a device server has
+   * come back (canHost, a moment after the page loads). Asked here as well,
+   * a sign-in quicker than that is neither sent to a device server that is
+   * not there nor sent on to the computer's unlock, and the demo is left to
+   * App's own way out.
+   */
+  if (!(await canReachHelper())) throw new Error('No device server answers here, so only the window was signed in.')
+  /*
+   * THE DEMO ENDS HERE, before the device server is told anything. The
+   * computer's own store is not written at all in the demo (forgefx.js
+   * writeHostDoc), so the phone remote's "wanted" would not be written
+   * down, and a phone remote once turned off would be left off again by
+   * the computer's next start (desktop/lib/host.mjs, "Turned off on
+   * purpose"). Finished by App's reload, which comes straight after this
+   * whatever it says: which end a page is was decided when it loaded.
+   */
+  setDemo(false)
+  const config = loadRemoteConfig() || {}
+  // A person's own account replaces any pairing this computer had, as in setUpMac.
+  saveRemoteConfig({ ...config, pairCode: null })
+  return { remote: await deviceServerToo({ email, password }) }
 }
 
 /** The relay's refusal, in words: it is what an account without the unlock meets. */

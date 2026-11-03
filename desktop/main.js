@@ -1126,7 +1126,8 @@ function openWindow({ hidden = false } = {}) {
  *     app (lib/window.mjs linkVerdict), and anything else goes nowhere;
  *   - the page going somewhere else in its own window is stopped the same
  *     way, and sent to the same place;
- *   - every permission is refused, except the two the app's own page uses,
+ *   - every permission is refused, except the three the app's own page uses
+ *     (the clipboard, the screen kept on, the preset folder a player picks),
  *     for that page alone (PAGE_PERMISSIONS), and no device (a serial port,
  *     a USB or HID device) is ever handed to a page. The device server is
  *     what talks to the unit; the page never needs to.

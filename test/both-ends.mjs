@@ -2152,10 +2152,21 @@ export function run(test) {
     /* Signing in ends the demo, as the phone's onSignedIn does — "make sure
        demos disappear when you're logged in" — and out of the demo a phone
        signed in connects, rather than stopping one tap short. */
-    const after = app.slice(app.indexOf('const afterAccount = async () => {'), app.indexOf('const afterAccount = async () => {') + 700)
-    assert.match(after, /if \(isDemo\(\)\) \{[\s\S]*?setDemo\(false\)\s*window\.location\.reload\(\)/, 'signing in leaves the person in the demo')
+    /*
+     * Changed on purpose, 2 November 2026 (found in review of the audit's
+     * live-1): afterAccount takes the details just signed in with, and in
+     * the demo on a computer signs its device server in between ending the
+     * demo and the reload, so this reads the whole of it rather than its
+     * first 700 characters, and both callers hand it their details. Held in
+     * "a sign-in made in the computer’s window always reaches the device
+     * server", below.
+     */
+    const afterAt = app.indexOf('const afterAccount = async (details = null) => {')
+    const after = app.slice(afterAt, app.indexOf('const openUnlock = () => {', afterAt))
+    assert.ok(afterAt > -1 && after.length > 0, 'afterAccount is not where this looks for it')
+    assert.match(after, /if \(isDemo\(\)\) \{[\s\S]*?setDemo\(false\)\s*window\.location\.reload\(\)\s*return\s*\}/, 'signing in leaves the person in the demo')
     assert.match(after, /if \(linkState\(\)\.role === 'remote'\) await reconnectPhone\(\)/, 'a phone signed in from the unlock stops at “Connect as …”')
-    assert.equal((app.match(/await afterAccount\(\)/g) || []).length, 2, 'signing in and making an account lead to different places')
+    assert.deepEqual(app.match(/await afterAccount\([^)]*\)/g), ['await afterAccount({ email, password })', 'await afterAccount(details)'], 'signing in and making an account lead to different places')
     assert.match(read('mobile/App.js'), /onSignedIn=\{[\s\S]{0,1200}setDemo\(false\)/, 'the phone’s sign-in stopped ending the demo; this check follows it')
   })
 
@@ -2235,7 +2246,7 @@ export function run(test) {
     for (const asked of [true, 'account', false, null, undefined]) {
       assert.equal(signInErrand({ asked, role: 'mac', demo: false }), 'computer', `a sign-in on the computer asked as ${JSON.stringify(asked)} leaves its device server signed out`)
     }
-    // The website's demo takes the computer's role with nothing behind it: the plain sign-in stays plain there.
+    // The website's demo takes the computer's role with nothing behind it: the plain sign-in stays plain there (and a computer's own demo is reached below, by afterAccount).
     assert.equal(signInErrand({ asked: 'account', role: 'mac', demo: true }), 'account', 'the demo’s plain sign-in goes looking for a device server it does not have')
     assert.equal(signInErrand({ asked: true, role: 'mac', demo: true }), 'computer', 'the demo’s own set-up sheet changed what it does')
     // A phone or a browser: as before.
@@ -2254,6 +2265,41 @@ export function run(test) {
     // No other place in App picks the plain sign-in over the computer's: what is left of it only words the sheet.
     assert.deepEqual(app.match(/signIn === 'account'/g), ["signIn === 'account'"], 'App picks the plain sign-in somewhere signInErrand does not see')
     assert.match(app, /account=\{signIn === 'account'\}/)
+
+    /*
+     * AND IN THE DEMO ON A COMPUTER (found in review, 2 November 2026). The
+     * demo runs in the computer app's own window too ("Try the demo" with
+     * no unit plugged in), with a real device server behind it, and its
+     * sign-in is the plain one, which ended the demo with the device server
+     * still signed out: live-1 by another way in. So both of the sheet's
+     * plain sign-ins hand afterAccount the details, and afterAccount, on a
+     * computer that can host, signs the device server in on its way out
+     * (deviceServerAfterDemo, which ends the demo itself before it tells the
+     * device server anything: run on a bench in test/link-now.mjs), and
+     * then ends the demo and reloads, never held back by a failure there. A
+     * phone or a laptop pretending (the website's demo, phoneEnd) is left as
+     * it was.
+     */
+    assert.match(submit, /if \(errand === 'account'\) \{ await signInAccount\(\{ email, password \}\)[\s\S]{0,240}await afterAccount\(\{ email, password \}\) return/, 'a sign-in in the demo on a computer does not hand afterAccount what it signed in with')
+    assert.match(sheet, /=== 'account'\) \{ if \(!isDemo\(\)\) setSignIn\(false\) await afterAccount\(details\) \}/, 'an account made in the demo on a computer does not hand afterAccount what it signed in with')
+    const afterAt = app.indexOf('const afterAccount = async (details = null) => {')
+    const after = app.slice(afterAt, app.indexOf('const openUnlock = () => {', afterAt))
+    assert.match(
+      after,
+      /^const afterAccount = async \(details = null\) => \{ if \(isDemo\(\)\) \{ let unlockNext = unlockAfterSignIn && !phoneEnd if \(details && computerEnd\) \{ try \{ const \{ remote \} = await deviceServerAfterDemo\(details\)/,
+      'a sign-in in the demo on a computer leaves its device server signed out'
+    )
+    assert.match(after, /if \(!remote\) unlockNext = true \} catch \(err\) \{ record\(/, 'a failure signing the device server in stops the reload, or an account without the unlock is not sent to it')
+    assert.ok(after.indexOf('deviceServerAfterDemo(details)') < after.indexOf('setDemo(false) window.location.reload()'), 'the demo’s reload comes before the device server is signed in')
+    // And the step ends the demo itself, first: while it is on, the computer's own store is written nowhere.
+    const linkSrc = read('src/lib/link.js')
+    const leaving = linkSrc.slice(linkSrc.indexOf('export async function deviceServerAfterDemo'), linkSrc.indexOf('/** The relay'))
+    assert.ok(
+      leaving.indexOf('await canReachHelper()') > -1 && leaving.indexOf('await canReachHelper()') < leaving.indexOf('setDemo(false)') && leaving.indexOf('setDemo(false)') < leaving.indexOf('await deviceServerToo('),
+      'the device server is told something while the demo still keeps it, or a phone’s demo is ended before anybody looked for a device server'
+    )
+    assert.match(app, /const computerEnd = link\.role === 'mac' && !phoneEnd/, 'a phone in the demo is taken for a computer with a device server')
+    assert.match(app, /const phoneEnd = link\.role === 'remote' \|\| link\.role === 'wifi' \|\| \(isDemo\(\) && link\.canHost === false\)/)
 
     // And the set-up signs the device server in, with the same details, on both of its outcomes.
     const link = read('src/lib/link.js')

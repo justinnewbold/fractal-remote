@@ -2159,6 +2159,24 @@ export function run(test) {
       }
     }
     const libDir = new URL('../src/lib/', import.meta.url)
+    /*
+     * And one in src/lib, on purpose (2 November 2026, found in review of
+     * the audit's live-1): deviceServerAfterDemo ends the demo before it
+     * signs a computer's device server in, because the demo keeps nothing
+     * the device server is told. Its one caller, App's afterAccount, ends it
+     * again and reloads straight after, whatever it said (held in
+     * test/both-ends.mjs, "a sign-in made in the computer’s window always
+     * reaches the device server"). Any other is a way out of the demo with
+     * no reload.
+     */
+    const libCalls = readdirSync(libDir)
+      .filter((f) => f.endsWith('.js') && f !== 'forgefx.js')
+      .flatMap((f) => [...readFileSync(new URL(f, libDir), 'utf8').matchAll(/setDemo\((?:true|false|!demo)?\)/g)].map(() => f))
+    assert.deepEqual(libCalls, ['link.js'], 'a library leaves or enters the demo with nothing to reload the page after it')
+    const linkLib = readFileSync(new URL('link.js', libDir), 'utf8')
+    const ending = linkLib.slice(linkLib.indexOf('export async function deviceServerAfterDemo'), linkLib.indexOf('/** The relay'))
+    assert.match(ending, /^export async function deviceServerAfterDemo[\s\S]*\n {2}setDemo\(false\)\n/, 'the demo is ended somewhere in src/lib other than on the way to the device server')
+    assert.equal((src.match(/deviceServerAfterDemo\(/g) || []).length, 1, 'the demo is ended from somewhere that does not reload after it')
     const libs = readdirSync(libDir).filter((f) => f.endsWith('.js')).map((f) => readFileSync(new URL(f, libDir), 'utf8'))
     const removals = [src, ...files, ...libs].join('\n').match(/removeItem\('forgefx\.demo'\)/g) || []
     assert.equal(removals.length, 1, 'something other than setDemo drops the demo flag')

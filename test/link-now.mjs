@@ -708,9 +708,12 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
         return { ok: true, meters: !!on }
       }
       export const isDemo = () => bench.demo
+      /* Ending or starting the demo, in the device server's log (\`bench.server\`) so the order can be read. */
+      export const setDemo = (on) => { bench.demo = !!on; (bench.server ||= []).push(['demo', !!on]) }
       export const servedLocally = () => bench.served
       export const localHelperAlive = async () => bench.helper
-      export const canReachHelper = async () => false
+      /* Whether a device server answers this page: \`bench.reach\`, no when unset. */
+      export const canReachHelper = async () => bench.reach ?? false
       export const readHostDoc = async () => null
       /* What the computer's own set-up asks of its device server, in order, as \`bench.server\`. */
       export const writeHostDoc = async (id, data) => { (bench.server ||= []).push(['write', id, data?.wanted ?? data?.name ?? null]) }
@@ -764,7 +767,8 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       export const keptSession = async () => 'u1'
       export const currentAccount = async () => ({ id: 'u1', email: 'player@example.com' })
       export const loadRemoteConfig = () => ({})
-      export const saveRemoteConfig = () => {}
+      /* The last config written, as \`bench.config\`: the computer's sign-ins let an old pairing go. */
+      export const saveRemoteConfig = (config) => { bench.config = config }
       export const setAutoConnect = () => {}
       export const wantsAutoConnect = () => true
       export const hasSavedSession = () => true
@@ -6312,6 +6316,47 @@ export function run(test) {
     t.bench.unlocked = { unlocked: false, unknown: false }
     await assert.rejects(t.link.setUpMac({ email: 'free@example.com', password: 'pw' }), (err) => err.code === 'not-unlocked')
     assert.deepEqual(t.bench.server, [['window', 'free@example.com'], ['login', 'free@example.com', 'pw']], 'an account without the unlock leaves the device server signed out, or switches the remote on to be refused')
+  })
+
+  /*
+   * The same failure by another way in, found in review the same day: the
+   * demo runs in the computer app's own window too ("Try the demo" with no
+   * unit plugged in), and its sign-in is the plain one, which ended the demo
+   * with the device server signed out. App's afterAccount now calls
+   * deviceServerAfterDemo before its reload (held in test/both-ends.mjs);
+   * this runs that on a bench: the demo ended before anything is sent (the
+   * demo keeps nothing it is told), then the device server signed in with
+   * the same details and the phone remote turned on, the window not signed
+   * in a second time, and nothing at all where no device server answers.
+   */
+  test('browser: a sign-in in the demo on a computer ends the demo, then signs its device server in, and a phone’s demo is left alone', async () => {
+    const t = await webLinkOnABench({ role: 'mac', demo: true })
+    t.bench.server = []
+    t.bench.config = null
+    // A phone or a laptop in the website's demo, with no device server behind it: refused, nothing sent, and the demo left to App's own way out.
+    await assert.rejects(t.link.deviceServerAfterDemo({ email: 'demo.buyer@example.com', password: 'pw1' }), /No device server answers here/)
+    assert.deepEqual(t.bench.server, [], 'a phone in the website’s demo went looking for a device server')
+    assert.equal(t.bench.demo, true)
+    assert.equal(t.bench.config, null)
+
+    // On a computer, where one answers: the demo ended first (while it is on, the computer's own store keeps nothing), then the device server.
+    t.bench.reach = true
+    const done = await t.link.deviceServerAfterDemo({ email: 'demo.buyer@example.com', password: 'pw1' })
+    assert.deepEqual(done, { remote: true })
+    assert.deepEqual(
+      t.bench.server.slice(0, 4),
+      [['demo', false], ['login', 'demo.buyer@example.com', 'pw1'], ['remote', true], ['write', 'remote.host', true]],
+      'a sign-in in the demo on a computer leaves its device server signed out or the phone remote off, or tells the device server things while the demo still keeps them'
+    )
+    assert.ok(!t.bench.server.some(([what]) => what === 'window'), 'the window is signed in a second time')
+    assert.equal(t.bench.config?.pairCode, null, 'an old pairing outlives a sign-in with a person’s own account')
+
+    // Not bought: signed in all the same, the remote left off, and App told so (it opens the unlock after the reload).
+    t.bench.demo = true
+    t.bench.server = []
+    t.bench.unlocked = { unlocked: false, unknown: false }
+    assert.deepEqual(await t.link.deviceServerAfterDemo({ email: 'free@example.com', password: 'pw2' }), { remote: false })
+    assert.deepEqual(t.bench.server, [['demo', false], ['login', 'free@example.com', 'pw2']], 'an account without the unlock leaves the device server signed out, or switches the remote on to be refused')
   })
 
   test('browser: the unit is not read twice at launch when every read of the roll call went to the computer it chose', () => {

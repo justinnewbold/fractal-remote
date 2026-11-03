@@ -17,7 +17,7 @@
  *     cable) is yes, without asking anybody.
  *
  * So the web opens in the computer's own browser, where it belongs, and the
- * window stays on the app's page; and the window may use the two things the
+ * window stays on the app's page; and the window may use the three things the
  * page really uses, for the page itself, and nothing else. A newer Electron is
  * the rest of the cure, and a bigger change than this; this is what can go out
  * today with nothing else moved.
@@ -84,14 +84,28 @@ export function linkVerdict(url, local) {
  *     'clipboard-sanitized-write';
  *   - keeping the screen on through a long send (src/lib/awake.js, Screen
  *     Wake Lock), asked as 'screen-wake-lock', and carried on without when
- *     it is refused.
+ *     it is refused;
+ *   - the folder of preset files a player picks under Presets → Saved
+ *     presets (src/lib/localFolder.js: showDirectoryPicker, and asking for
+ *     the folder again after a restart with requestPermission), which
+ *     Electron asks as 'fileSystem', with the folder's path in the details.
+ *     A folder picked in the computer's own folder dialog starts as "ask"
+ *     for reading and for writing, and Electron puts that question to this
+ *     rule, not to anybody at the screen: refused, the pick came to nothing
+ *     with no word said (Chromium drops it, and the page takes that for a
+ *     cancel), and a folder chosen before came back as "That folder is no
+ *     longer available". Missed in the first reading of src/ and found in
+ *     review, the same day, in Electron 33's own source
+ *     (shell/browser/file_system_access). The picker is still the only way
+ *     in: the player chooses the folder, and Chromium's own list of folders
+ *     no page may have (the home folder itself, the system's) still holds.
  *
  * And nothing else: no camera since the QR scanner went, no microphone, no
  * location, no notifications, no MIDI (the device server talks to the unit,
  * never the page), no reading the clipboard, no full screen. A new use is
  * added here, by name, in the change that brings it.
  */
-export const PAGE_PERMISSIONS = Object.freeze(['clipboard-sanitized-write', 'screen-wake-lock'])
+export const PAGE_PERMISSIONS = Object.freeze(['clipboard-sanitized-write', 'screen-wake-lock', 'fileSystem'])
 
 /**
  * Whether a page may have a permission it asked for, or was checked for.

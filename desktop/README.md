@@ -30,7 +30,8 @@ turned on again, because ForgeFX forgets it at every start.
 **The window shows the app's own page and nothing else.** A link to the
 website, a store or GitHub opens in the computer's own browser, an email
 address in its mail app, and anything else nowhere; the page may copy to the
-clipboard and keep the screen on, and every other permission (camera,
+clipboard, keep the screen on, and read and write the preset folder picked
+under Presets → Saved presets, and every other permission (camera,
 microphone, location, MIDI, notifications, a serial or USB device) is
 refused. The rules are in [`lib/window.mjs`](lib/window.mjs).
 

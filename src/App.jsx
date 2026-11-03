@@ -259,6 +259,7 @@ import {
   reconnectPhone,
   disconnectPhone,
   setUpMac,
+  deviceServerAfterDemo,
   signInAccount,
   signInErrand,
   createAccount,
@@ -2394,10 +2395,35 @@ export default function App() {
    *
    * Out of the demo, a phone signed in connects rather than stopping on
    * "Connect as …" and waiting for another tap.
+   *
+   * AND ON A COMPUTER, THE DEVICE SERVER TOO. `details` is the email and
+   * password just signed in with. The demo also runs in the computer app's
+   * own window, with a real device server behind it, and a sign-in there
+   * ended the demo with the window signed in and the device server not, so
+   * a phone on that account found no computer (the audit's live-1 by
+   * another way in, found in review, 2 November 2026). So on a computer
+   * that can host (computerEnd: not a phone or a laptop pretending), the
+   * device server is signed in and the phone remote turned on on the way
+   * out (deviceServerAfterDemo, the same steps as setUpMac's, which ends
+   * the demo itself before it tells the device server anything), and then
+   * the reload; an account that has not bought it comes back to the
+   * unlock, as the computer's own sign-in sends it. A failure there is a
+   * line in the log and never stops the reload: the window is signed in,
+   * and Phone & computer still offers "Sign in to set up the phone remote".
    */
-  const afterAccount = async () => {
+  const afterAccount = async (details = null) => {
     if (isDemo()) {
-      if (unlockAfterSignIn && !phoneEnd) {
+      let unlockNext = unlockAfterSignIn && !phoneEnd
+      if (details && computerEnd) {
+        try {
+          const { remote } = await deviceServerAfterDemo(details)
+          record('remote', remote ? `Phone remote set up for ${details.email}` : `Signed in as ${details.email}; the phone remote needs the unlock`)
+          if (!remote) unlockNext = true
+        } catch (err) {
+          record('remote', `Signed in as ${details.email}, but the device server was not: ${err?.message || err}`)
+        }
+      }
+      if (unlockNext) {
         try {
           sessionStorage.setItem(UNLOCK_NEXT, '1')
         } catch {
@@ -2593,7 +2619,7 @@ export default function App() {
         record('remote', `Signed in as ${email}`)
         /* Not closed first when the demo is about to end — see afterAccount. */
         if (!isDemo()) setSignIn(false)
-        await afterAccount()
+        await afterAccount({ email, password })
         return
       } else if (errand === 'computer') {
         try {
@@ -5359,7 +5385,7 @@ export default function App() {
              the computer's Account page signs its device server in too. */
           if (signInErrand({ asked: signIn, role: linkState().role, demo: isDemo() }) === 'account') {
             if (!isDemo()) setSignIn(false)
-            await afterAccount()
+            await afterAccount(details)
           } else await signInSubmit(details)
           return out
         }}

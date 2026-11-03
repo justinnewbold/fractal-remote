@@ -2170,9 +2170,24 @@ export function run(test) {
     /* An iPhone's hotspot needs its own switch on before a Pi, signed in to no Apple Account, can join it. */
     assert.match(words, /switch on Allow Others to Join, and keep that screen open until the Pi has joined/, 'the gig steps leave out the iPhone switch that lets the Pi join its hotspot')
     assert.match(words, /Maximize Compatibility in Settings → Personal Hotspot \(iPhone 12 or later; older iPhones already use 2\.4 GHz\)/, 'an older iPhone is told to switch on something it does not have')
-    /* The server is only started again by itself once the app runs with no window; during setup a box comes up instead. */
+    /*
+     * A Pi 3 short of memory during setup. Copies of the computer app made
+     * before 2 November 2026 started its server again by itself only with no
+     * window, and put a box up instead while the window was open; copies
+     * since start it again on every computer and say so at the top of the
+     * tray menu, never in a box (desktop/main.js restartServer, the audit's
+     * computer-3). Changed on purpose that day: this pinned the box alone,
+     * and the entry now names both, the way each copy says it, so somebody
+     * on either finds it.
+     */
     assert.match(words, /Once it starts by itself at power-on, if it runs out of memory, the part of the app that talks to your unit starts again by itself\./, 'the Pi 3 note promises a restart the app does not do while its window is open')
-    assert.match(words, /During setup, a box says “The device server stopped”/, 'the box a Pi 3 can show during setup has nowhere to be looked up')
+    assert.match(words, /During setup, a box says “The device server stopped”, or the app’s menu says “The part that talks to your unit stopped”/, 'the box, or the menu line, a Pi 3 can show during setup has nowhere to be looked up')
+    assert.match(words, /An older copy of the app shows that box\. A newer one says it at the top of the menu of the Fractal Remote icon at the top of the screen, and starts that part again by itself/, 'the Pi guide says only the box an older copy shows, or promises a restart an older copy does not do')
+    {
+      // The menu line the guide quotes is the one the computer app writes.
+      const main = readFileSync(new URL('../desktop/main.js', import.meta.url), 'utf8')
+      assert.ok(main.includes('`The part that talks to your unit stopped — starting it again in '), 'the Pi guide quotes a menu line the computer app no longer shows')
+    }
     /* A Pi setting up another Pi is told how to open Imager once it is installed. */
     assert.match(words, /then open Imager from the Raspberry Pi menu → Accessories → Imager/, 'a Pi used to write the card is never told how to open Imager')
     /* Set up at a TV: no Imager wifi to have mistyped, so the Pi's own screen is where to look. */

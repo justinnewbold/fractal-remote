@@ -11098,8 +11098,16 @@ test('the computer’s window: the web opens in the computer’s own browser, an
   }
   assert.equal(windowRules.ownOrigin('http://localhost:5056/some/page?x=1'), 'http://localhost:5056')
 
-  // Permissions: the two the page uses, for the page itself, and nothing else for anybody.
-  assert.deepEqual([...windowRules.PAGE_PERMISSIONS], ['clipboard-sanitized-write', 'screen-wake-lock'], 'the window may use something new: say here what in src/ uses it')
+  // Permissions: the three the page uses, for the page itself, and nothing else for anybody.
+  /*
+   * Changed on purpose, the same day: 'fileSystem' was in the list of what
+   * the window is never given, and this list was two long. Electron asks it
+   * for the preset folder a player picks under Presets → Saved presets
+   * (src/lib/localFolder.js), and refusing it made Choose a folder do
+   * nothing at all (found in review, in Electron 33's own source).
+   */
+  assert.deepEqual([...windowRules.PAGE_PERMISSIONS], ['clipboard-sanitized-write', 'screen-wake-lock', 'fileSystem'], 'the window may use something new: say here what in src/ uses it')
+  assert.match(readSrc(new URL('../src/lib/localFolder.js', import.meta.url), 'utf8'), /window\.showDirectoryPicker\(\{[^}]*mode: 'readwrite'/, 'Saved presets no longer picks a folder: take fileSystem back out of what the window may use')
   for (const permission of windowRules.PAGE_PERMISSIONS) {
     // Electron says the asker as the frame's address, or as its origin with a slash on the end.
     for (const from of ['http://localhost:5056/', 'http://localhost:5056', 'http://localhost:5056/privacy.html']) {
@@ -11110,7 +11118,7 @@ test('the computer’s window: the web opens in the computer’s own browser, an
     }
     assert.equal(windowRules.permitted({ permission, from: 'http://localhost:5056/', local: null }), false, `${permission} is given before the app knows its own address`)
   }
-  const never = ['media', 'geolocation', 'notifications', 'midi', 'midiSysex', 'clipboard-read', 'openExternal', 'fullscreen', 'pointerLock', 'keyboardLock', 'display-capture', 'idle-detection', 'serial', 'hid', 'usb', 'fileSystem', 'window-management', 'storage-access', 'top-level-storage-access', 'mediaKeySystem', 'speaker-selection', 'unknown', '', undefined]
+  const never = ['media', 'geolocation', 'notifications', 'midi', 'midiSysex', 'clipboard-read', 'openExternal', 'fullscreen', 'pointerLock', 'keyboardLock', 'display-capture', 'idle-detection', 'serial', 'hid', 'usb', 'window-management', 'storage-access', 'top-level-storage-access', 'mediaKeySystem', 'speaker-selection', 'unknown', '', undefined]
   for (const permission of never) {
     assert.equal(windowRules.permitted({ permission, from: 'http://localhost:5056/', local }), false, `the window is given ${JSON.stringify(permission)}, which nothing in the app uses`)
   }
@@ -11173,6 +11181,16 @@ test('the computer’s window: main.js holds every page it shows to those rules 
   // Permissions, asked and checked.
   assert.equal(await ask(win, 'clipboard-sanitized-write', 'http://localhost:5056/'), true, 'Copy logs is refused the clipboard')
   assert.equal(await ask(win, 'screen-wake-lock', 'http://localhost:5056/'), true)
+  /*
+   * The preset folder, asked as Electron asks it: once to read and once to
+   * write the folder the player picked, with its path in the details. The
+   * app's own page is given it; another site in the same window never is.
+   */
+  const folder = (requestingUrl, fileAccessType) =>
+    new Promise((resolve) => win.session.requests(win, 'fileSystem', resolve, { requestingUrl, isMainFrame: true, filePath: joinPath('home', 'player', 'Presets'), isDirectory: true, fileAccessType }))
+  assert.equal(await folder('http://localhost:5056/', 'readable'), true, 'Choose a folder under Saved presets is refused the folder it picked')
+  assert.equal(await folder('http://localhost:5056/', 'writable'), true, 'a preset cannot be written into the folder picked under Saved presets')
+  assert.equal(await folder('https://evil.example/', 'writable'), false, 'another site is given a folder on the computer')
   for (const permission of ['media', 'geolocation', 'midiSysex', 'midi', 'notifications', 'openExternal']) {
     assert.equal(await ask(win, permission, 'http://localhost:5056/'), false, `the app’s own page is given ${permission}`)
   }
