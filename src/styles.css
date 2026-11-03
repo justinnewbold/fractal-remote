@@ -2538,9 +2538,11 @@ button.scene.current .scene-num {
 }
 
 /*
- * The one-time hint on Play, and the demo's one-line explanation. Same shape
- * for the same reason: a sentence the app says once, with the button that puts
- * it away, sitting above the screen it is about.
+ * The colours' one-time line on Play (components/ColoursNotice), and the
+ * demo's one-line explanation. Same shape for the same reason: a sentence
+ * the app says once, with the button that puts it away, sitting above the
+ * screen it is about. (The hold tip that shared it is the phone's card over
+ * the pedals now: .coach, below.)
  */
 .play-hint,
 .demo-banner {
@@ -2560,6 +2562,195 @@ button.scene.current .scene-num {
 .play-hint > span,
 .demo-banner > span {
   flex: 1 1 260px;
+}
+
+/*
+ * THE DEMO'S CARD ON PLAY, the phone's (components/UnlockOffer.js): one row
+ * in the signal's wash with its edge, "This is the demo" over what
+ * unlocking gives, the Unlock pill with the price, and a × that puts it
+ * away. In the page's flow, over nothing: Fit counts it as chrome.
+ */
+.demo-card {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  /* The PRESET line under it is a small line: the step between them is the one between the screen's other parts. */
+  margin: var(--s-2) 0 var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--signal);
+  background: var(--signal-wash);
+  border-radius: var(--r-2);
+}
+.demo-card-words {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.demo-card-head {
+  margin: 0;
+  font-size: var(--f-4);
+  font-weight: 600;
+  color: var(--silk);
+}
+.demo-card-body {
+  margin: 2px 0 0;
+  font-size: var(--f-3);
+  color: var(--silk-dim);
+}
+button.demo-card-unlock {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-3);
+  border: 0;
+  background: var(--signal);
+  color: var(--on-signal);
+  font-size: var(--f-3);
+  font-weight: 700;
+  white-space: nowrap;
+}
+button.demo-card-close {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--silk-dim);
+  font-size: var(--f-5);
+  line-height: 1;
+}
+/*
+ * Under 360 wide the pill beside the words squeezed them to five lines and
+ * the card to 151px, every pedal under the bottom buttons. There the words
+ * take the row beside the ×, and Unlock goes under them at its own width.
+ */
+@media (max-width: 359px) {
+  .demo-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--s-2);
+    align-items: start;
+  }
+  .demo-card-words {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  button.demo-card-close {
+    grid-column: 2;
+    grid-row: 1;
+    margin: calc(-1 * var(--s-2)) calc(-1 * var(--s-2)) 0 0;
+  }
+  button.demo-card-unlock {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+  }
+}
+
+/*
+ * THE TIP ABOUT HOLDING A PEDAL, the phone's card (components/Coach.js),
+ * directly over the pedals it is about: QUICK TIP in the signal's colour, the
+ * head, the body, the swatch, its buttons and the foot, on the panel with a
+ * rule round it. No fill on its first button: on the phone tone="signal"
+ * without `on` is a plain button. In the page's flow, over nothing.
+ */
+.coach {
+  /*
+   * A grid rather than the phone's column, for the room: a browser's own
+   * bars take a phone's height, and every row the card spends is a row of
+   * the pedals it is about pushed under the buttons at the bottom. So the
+   * swatch sits beside QUICK TIP on a phone, and on a wider screen the
+   * buttons stand to the right of the words (below). The words and their
+   * order are the phone's.
+   */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--s-3);
+  row-gap: var(--s-2);
+  margin-top: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  border-radius: var(--r-2);
+}
+.coach > * {
+  grid-column: 1 / -1;
+}
+.coach p {
+  margin: 0;
+}
+.coach-count {
+  grid-column: 1;
+  align-self: center;
+  font-size: var(--f-1);
+  letter-spacing: 0.14em;
+  color: var(--signal);
+}
+.coach-head {
+  font-size: var(--f-5);
+  line-height: 1.3;
+  color: var(--silk);
+}
+.coach-body {
+  font-size: var(--f-4);
+  line-height: 1.45;
+  color: var(--silk-dim);
+}
+.coach-hold {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-1);
+  background: var(--signal-wash);
+  color: var(--signal);
+  font-size: var(--f-3);
+}
+/* On paper the amber on its own wash came to 4.26:1, under the floor: a darker amber there (5.5:1). */
+[data-theme='light'] .coach-hold {
+  color: color-mix(in srgb, var(--signal) 85%, black);
+}
+.coach-buttons {
+  display: flex;
+  gap: var(--s-2);
+}
+.coach-buttons button {
+  flex: 1 1 0;
+  min-height: 44px;
+  font-size: var(--f-4);
+  font-weight: 600;
+}
+.coach-foot {
+  font-size: var(--f-1);
+  color: var(--silk-faint);
+}
+/*
+ * Wider than a phone: the words down the left, the swatch under them where
+ * the phone has it, and the buttons to the right at their own width, the
+ * row they took on the phone given back to the pedals.
+ */
+@media (min-width: 621px) {
+  .coach {
+    padding: var(--s-4);
+    column-gap: var(--s-4);
+  }
+  .coach > * {
+    grid-column: 1;
+  }
+  .coach-hold {
+    grid-row: auto;
+    justify-self: start;
+  }
+  .coach > .coach-buttons {
+    grid-column: 2;
+    grid-row: 1 / span 5;
+    align-self: center;
+  }
+  .coach-buttons button {
+    flex: 0 0 auto;
+    min-width: 8rem;
+  }
 }
 
 /*
@@ -2950,20 +3141,34 @@ button.view-tab.current:not(:disabled) {
 }
 
 /*
- * One line: "put the number inline with the name and make the font the same
- * size as the scenes." The slot number sits before the name at the same
- * size, in the mono face and dimmer, so it reads as the tile's index the way
- * a scene's number does — and the name is exactly a scene name's size.
+ * THE PRESET LINE, the phone's: "PRESET 000 A01 OF 104" in small capitals
+ * directly over the button (Stage.js, silkFaint, micro, 1.5 of tracking).
+ * The slot number was inline with the name ("put the number inline with the
+ * name"); it is here now, as on the phone, and is not said twice. The
+ * .gig-preset grid's gap is the phone's 8 between the line and the button.
  */
+.gig-preset-line {
+  margin: 0;
+  font-size: var(--f-1);
+  font-weight: 400;
+  /* The phone's 1.5pt at 11. The words are capitals already. */
+  letter-spacing: 0.14em;
+  line-height: 1.25;
+  color: var(--silk-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /*
- * The line sits in the MIDDLE of the tile, not against its top edge.
+ * The name and the line under it sit in the MIDDLE of the tile, not against
+ * its top edge.
  *
- * Baseline-aligned children of a button pack to the cross start, so with the
- * number and the name aligned directly in a tile that a scene's height makes
- * 62px, the whole line rode high with a band of empty tile under it — "center
- * preset name in button box". The top bar had exactly this bug and exactly
- * this fix: the button centres ONE line, and the line holds the baseline the
- * number and the name share.
+ * Children of a button aligned to a baseline pack to the cross start, so the
+ * name rode high in a tile a scene's height made 62px, with a band of empty
+ * tile under it: "center preset name in button box". The top bar had exactly
+ * this bug and exactly this fix: the button centres one thing, the name with
+ * "Tap for all presets" under it as a pair, and the arrow beside them.
  */
 button.gig-name {
   display: flex;
@@ -2985,7 +3190,8 @@ button.gig-name {
    * off the bottom of the screen comes up onto it.
    */
   min-height: 44px;
-  padding: var(--s-2) var(--s-3);
+  /* Two lines now, the name and "Tap for all presets": a step less above and below, so the pair sits in about 51px rather than 44 and a step more. */
+  padding: var(--s-1) var(--s-4);
   margin: 0;
   background: var(--panel);
   border: 1px solid var(--rule);
@@ -2996,19 +3202,20 @@ button.gig-name {
   line-height: 1.15;
 }
 
-.gig-name-num {
-  flex: 0 0 auto;
-  font-size: var(--f-5);
-  color: var(--silk-faint);
-}
-
-/* The slot, the name and the caret on one line, on one baseline. The button
-   above centres this; nothing in here is aligned against the tile itself. */
+/* The name with "Tap for all presets" under it, centred as a pair: the
+   phone's label and sub. The button above centres this; nothing in here is
+   aligned against the tile itself. No gap (the scale has no 2px step): the
+   line under carries its own 2px, the phone's marginTop. */
 .gig-name-row {
   display: inline-flex;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: var(--s-2);
+  gap: 0;
+  /* Its own width, not the button's: the arrow sits the button's gap after
+     the name and the three are centred together, as the phone's Press row
+     is. A long name still gives way with … before the arrow (min-width). */
+  flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
 }
@@ -3020,15 +3227,30 @@ button.gig-name {
      bigger". It is the one line on Play that says what is loaded. */
   font-size: var(--f-5);
   letter-spacing: 0.02em;
+  /* Cut with … in the pair's width, not past the arrow. */
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.gig-name-caret {
+/* "Tap for all presets", the phone's sub: micro, silkDim, 2 under the name. */
+.gig-name-sub {
+  font-size: var(--f-1);
+  line-height: 1.25;
+  color: var(--silk-dim);
+  margin-top: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The phone's arrow on the right (its 20pt chevron, in the label's colour): the tap opens something. */
+.gig-name-chevron {
+  width: 20px;
+  height: 20px;
   flex: 0 0 auto;
-  font-size: var(--f-3);
-  color: var(--silk-faint);
 }
 
 button.gig-name:active:not(:disabled) {
@@ -3039,7 +3261,9 @@ button.gig-name:disabled {
   opacity: 1;
 }
 
-button.gig-name:disabled .gig-name-caret {
+/* The phone's "no sub-line or arrow when it can't open". */
+button.gig-name:disabled .gig-name-sub,
+button.gig-name:disabled .gig-name-chevron {
   display: none;
 }
 
@@ -3128,9 +3352,21 @@ button.gig-name:disabled .gig-name-caret {
   color: var(--silk-dim);
 }
 
+/*
+ * A chosen setlist lights the button solid amber, the phone's (Stage.js
+ * Press tone="signal" on: a signal fill, its edge, and every word on it in
+ * onSignal): what Previous and Next walk is not the slots, and that is worth
+ * seeing from across a stage. --on-signal on --signal is held at 4.5:1 or
+ * more in both themes (test/styles.mjs).
+ */
 .gig-nav button.gig-nav-source.on {
+  background: var(--signal);
   border-color: var(--signal);
-  color: var(--silk);
+  color: var(--on-signal);
+}
+.gig-nav button.gig-nav-source.on .gig-nav-source-kind,
+.gig-nav button.gig-nav-source.on .gig-nav-source-pos {
+  color: var(--on-signal);
 }
 
 /* "Setlists", small, over the name: what the button is for. */
@@ -3244,6 +3480,100 @@ button.size-step:disabled {
   font-size: var(--f-4);
 }
 
+/*
+ * THE HEADINGS OVER THE SCENES AND THE CHAIN, the phone's Label: small
+ * capitals, silkFaint, 1.5 of tracking, with what is done there on the
+ * right in the same size (Refresh names; Hold to switch channels). The word
+ * on the left gives way with … before the right-hand words do, and nothing
+ * wraps, so nothing under it moves at 320 wide.
+ */
+.gig-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+  min-width: 0;
+}
+/*
+ * The phone's spacing: each heading 8 over its own grid (the grids' own
+ * margin-top), and the step between sections above it. So CHAIN is the
+ * pedals' heading and not a caption under the scenes: the 12 that used to
+ * sit between the scenes and the pedals is above CHAIN now, and one more
+ * step at the larger sizes, where the phone's sections are 16 apart.
+ */
+.gig-head[data-for='chain'] {
+  margin-top: var(--s-4);
+}
+.gig-head-word {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  /* The phone's 6 is not on the scale; 4 is. */
+  gap: var(--s-1);
+  min-width: 0;
+  font: inherit;
+  font-size: var(--f-1);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--silk-faint);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.gig-head-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The chain's picture, the phone's 13pt, in the heading's colour. */
+.gig-head-icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+.gig-head-hint {
+  flex: 0 0 auto;
+  font-size: var(--f-1);
+  line-height: 1.25;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--silk-dim);
+  white-space: nowrap;
+}
+/*
+ * Refresh names: a link the size of its heading, with the touch floor kept
+ * by a margin that takes it back (the phone's hitSlop), so the row is the
+ * heading's height and the target is still 44px. Faint at rest, the plain
+ * colour while it reads and says what it found, the fault colour when it
+ * could not.
+ */
+button.gig-head-action {
+  flex: 0 0 auto;
+  min-height: 44px;
+  margin: calc(-1 * var(--s-3)) calc(-1 * var(--s-2));
+  padding: 0 var(--s-2);
+  background: none;
+  border: 0;
+  border-radius: var(--r-1);
+  font-size: var(--f-1);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--silk-dim);
+  white-space: nowrap;
+}
+button.gig-head-action[data-said='failed'] {
+  color: var(--fault);
+}
+button.gig-head-action[data-said='reading'],
+button.gig-head-action[data-said='found'],
+button.gig-head-action[data-said='none'] {
+  color: var(--silk);
+}
+
 .gig-scenes {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(var(--gig-col, 110px), 1fr));
@@ -3334,9 +3664,31 @@ button.gig-scene.named .gig-scene-name {
   font-family: var(--display);
   font-weight: 700;
   font-size: var(--name-size, var(--f-4));
+  /* As the unit spells it, the phone's: "Clean Double", never "CLEAN DOUBLE". lib/sceneNameFit measures in the case drawn here. */
+  text-transform: none;
   color: var(--silk);
   white-space: normal;
   line-height: 1.15;
+}
+
+/*
+ * THE BAR UNDER THE NAME, the phone's (components/Tile.js `bar`, from his
+ * mockup of the screen): a short rule of the scene's own colour on every
+ * scene, named or not, and the lettering's colour at 80% on the live one,
+ * whose fill is that colour already. Its height comes out of the name's
+ * room in lib/sceneNameFit.
+ */
+.gig-scene-bar {
+  flex: 0 0 auto;
+  width: 52%;
+  height: 3px;
+  /* With the tile's 4px gap, the phone's 5. */
+  margin-top: 1px;
+  border-radius: var(--r-1);
+  background: var(--scene-fill, var(--signal));
+}
+button.gig-scene.current .gig-scene-bar {
+  background: color-mix(in srgb, var(--scene-ink, var(--on-signal)) 80%, transparent);
 }
 
 button.gig-scene.current .gig-scene-name,
@@ -6646,10 +6998,10 @@ button.view-tab.gig-tab::after {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(var(--gig-col-block, 130px), 1fr));
   gap: var(--s-2);
-  /* Was 18px. The scenes and the effects still read as two grids — they are
-     coloured differently and shaped differently — so the gap between them can
-     be a step rather than a gulf. See button.gig-name. */
-  margin-top: var(--s-3);
+  /* Was 18px, then 12 under the scenes. CHAIN is over them now, and they sit
+     8 under it, as the scenes do under SCENES (the phone's space.sm); the
+     step between the two grids is above the heading (.gig-head). */
+  margin-top: var(--s-2);
 }
 
 /* The tile and the menu it can open share a box, so the menu can be placed
@@ -7385,6 +7737,37 @@ button.gig-block:disabled {
   }
 }
 
+/*
+ * ON A PHONE THE PEDALS ARE THE SCENES' HEIGHT LESS 12, as the phone app
+ * draws them (Stage.js `tileH - 12`): never under 56 at the fixed steps,
+ * never under the 44px floor at Smallest or Fit. The same variables the
+ * scenes are sized by, so the two cannot drift apart, only by 12: a scene
+ * and a block still come from the size control together. Keyed on
+ * .gig[data-phone] (Gig, from App's phoneScreen), never on a width alone:
+ * the computer app's own window can be narrowed under 620px and keeps its
+ * own Play.
+ *
+ * At Small the pedal's own content is about 60px with the usual 8px above
+ * and below, taller than the 56 it is asked to be, so on a phone it takes
+ * the compact tile's 4px instead (the picture rises into the corner row as
+ * it does at Smallest, and the corner words give way beside it by
+ * shared/tile-corners.mjs).
+ */
+.gig[data-phone] button.gig-block {
+  min-height: max(56px, calc(var(--gig-tile, 66px) - var(--s-3)));
+  padding-top: var(--s-1);
+  padding-bottom: var(--s-1);
+}
+/* At Smallest or Fit: a stated height, and no floor that can beat it (the compact rule's own min-height: 0, said again so the order of the file cannot undo it). */
+.gig[data-phone][data-compact] button.gig-block {
+  height: max(44px, calc(var(--gig-fit-tile, 56px) - var(--s-3)));
+  min-height: 0;
+}
+/* And where that pedal is under the room a picture and a 15px name take (Gig PEDAL_NAME_ROOM), the name a size down, so it holds both. */
+.gig[data-phone][data-compact][data-fx-tight] .gig-block-name {
+  font-size: var(--f-3);
+}
+
 /* ---------- gig: saying why something isn't there ---------- */
 
 /* An empty row with no explanation is the one thing this screen must not do.
@@ -8103,15 +8486,72 @@ button.gig-scene.current[data-picked='yes'] .gig-scene-name {
  * on a phone the row stood 60px tall over the last row of effects. They are
  * the 44px touch floor now and no more: a strip you press between songs
  * should not take the height of a scene button.
+ *
+ * THE HEIGHT IS ONE SWITCH: Gig.jsx BAR_LOOK. 'short' is this, the floor
+ * with Tap's tempo beside the word (button.gig-tap). 'tall' is the phone
+ * app's, 56 high (48 at Smallest) with the tempo under Tap, written below
+ * under .gig-bar[data-look='tall'] and waiting.
+ *
+ * The phone's faces otherwise: its picture beside each word, the word in
+ * the body face at its size, weight 600, as written ("Tuner", "Edit",
+ * "Tap"), in the plain ink rather than a dim capital.
  */
 button.gig-bar-btn {
   min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-width: 0;
   padding: var(--s-1) var(--s-2);
-  font-size: var(--f-2);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: var(--f-4);
+  font-weight: 600;
   background: var(--panel);
-  color: var(--silk-dim);
+  color: var(--silk);
+}
+
+/* One of the phone's white pictures, in the colour of the words beside it (components/Picture): a mask over currentColor. Its size is its own class's. */
+.picture {
+  display: inline-block;
+  flex: 0 0 auto;
+  background-color: currentColor;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
+/* The phone's 20pt pictures, in the word's colour (components/Picture). */
+.gig-bar-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/*
+ * "Stop tuner" never cut: on the commonest phones the button leaves 58 to
+ * 68px for a word that needs 72, and with the lit colour the words are what
+ * say the tuner is on. Two lines of it, then, inside the same 44px (15px at
+ * 1.1 is 33, with 8 of padding and the border, 43).
+ */
+.gig-bar-word {
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.1;
+  text-align: center;
+}
+
+/* A 320-wide phone: Tap's picture, word and tempo come to about 100px in a 90px button, so the pictures and their gap give a little. */
+@media (max-width: 359px) {
+  button.gig-bar-btn {
+    gap: var(--s-1);
+  }
+
+  .gig-bar-icon {
+    width: 16px;
+    height: 16px;
+  }
 }
 
 /* Tap carries a number, beside the word rather than under it, so the button
@@ -8129,6 +8569,23 @@ button.gig-tap {
   font-size: var(--f-1);
   letter-spacing: 0.06em;
   color: var(--silk-faint);
+}
+
+/* The phone app's taller buttons, for Gig.jsx BAR_LOOK 'tall': 56 high, 48 at Smallest, the tempo under Tap. After the rules above, which they override. */
+.gig-bar[data-look='tall'] button.gig-bar-btn {
+  min-height: 56px;
+}
+.gig[data-compact] .gig-bar[data-look='tall'] button.gig-bar-btn {
+  min-height: 48px;
+}
+.gig-bar[data-look='tall'] button.gig-tap {
+  flex-wrap: wrap;
+  align-content: center;
+  row-gap: 0;
+}
+.gig-bar[data-look='tall'] .gig-tap-bpm {
+  flex-basis: 100%;
+  text-align: center;
 }
 
 /* The Tap button and the box that opens over it. The cell is a grid so the
@@ -9913,7 +10370,8 @@ button.recent-del:focus-visible {
 .gig-blocks-held {
   position: relative;
   overflow: hidden;
-  margin-top: var(--s-3);
+  /* Where the pedals were, to the pixel: their own 8 under CHAIN. */
+  margin-top: var(--s-2);
 }
 
 .gig-blocks-held .chain-wait {
@@ -11239,7 +11697,7 @@ input.feedback-contact {
 }
 
 .gig[data-compact] .gig-blocks {
-  margin-top: var(--s-3);
+  margin-top: var(--s-2);
 }
 
 /*
@@ -11313,6 +11771,31 @@ input.feedback-contact {
   .gig[data-compact] .gig-scene-name {
     -webkit-line-clamp: 1;
   }
+}
+
+/*
+ * The bar under a scene's name at this size: compact tiles have no gap, so
+ * it carries its own 2px. Paid for out of the number over the name, which
+ * drops to its own height (16px of line to 12): a long name keeps the two
+ * lines it had in a 56px tile, bar and all (lib/sceneNameFit measures both).
+ */
+.gig[data-compact] .gig-scene-bar {
+  margin-top: 2px;
+}
+.gig[data-compact] button.gig-scene.named .gig-scene-num {
+  line-height: 1;
+}
+
+/*
+ * The headings a step closer at this size, where the chrome gives way: 12
+ * above each, the phone's tight gap, and their grids 8 under them. 12 also
+ * keeps Refresh names' 44px target (button.gig-head-action takes 12 back
+ * above itself) off the preset button over SCENES: at 8 its top 4px took
+ * taps meant for the presets.
+ */
+.gig[data-compact] .gig-head,
+.gig[data-compact] .gig-head[data-for='chain'] {
+  margin-top: var(--s-3);
 }
 
 .gig[data-compact] button.gig-block {
@@ -14822,8 +15305,8 @@ button.preset-row[data-tag] {
   box-shadow: inset 4px 0 0 var(--tag-drawn), var(--e-2);
 }
 
-/* Beside the name on Play, the height of the name's line. Nothing at all for
-   a preset without a tag, so Play is as it was. */
+/* Beside the name on Play, the height of the name's line, at the left of
+   the pair. Nothing at all for a preset without a tag, so Play is as it was. */
 .gig-name-tag {
   flex: 0 0 auto;
   align-self: center;

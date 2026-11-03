@@ -45,6 +45,7 @@ import desktopIcon from '../../mobile/assets/icons/desktop.png'
 import terminalIcon from '../../mobile/assets/icons/terminal.png'
 import { inDesktopApp, onAPhoneOrTablet } from '../lib/desktop'
 import { deviceNoun } from '../../shared/device-word.mjs'
+import Picture from './Picture'
 
 export default function ConnectScreen({
   link,
@@ -428,15 +429,9 @@ function NoComputerYet({ asked = true }) {
   )
 }
 
-/** One of the phone's white-on-clear pictures, tinted by CSS through a mask. */
+/** One of the phone's white-on-clear pictures, tinted by CSS through a mask (components/Picture), at this page's size. */
 function Pic({ src, className = '' }) {
-  return (
-    <span
-      className={`cc-pic ${className}`}
-      aria-hidden="true"
-      style={{ WebkitMaskImage: `url(${src})`, maskImage: `url(${src})` }}
-    />
-  )
+  return <Picture src={src} className={`cc-pic ${className}`} />
 }
 
 /**

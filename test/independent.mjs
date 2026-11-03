@@ -721,7 +721,9 @@ export function run(test) {
     /* A named condition (test/structure.mjs reads App.jsx as text): the card, then the walkthrough. */
     assert.match(page, /const startupOver = independentDue \|\| walkthrough\n/)
     assert.ok(page.indexOf('const startupOver') > page.indexOf('const [independentDue, setIndependentDue]'), 'startupOver is read before the card’s answer')
-    assert.match(page, /noteAbove=\{startupOver \|\| signInOver \|\| \(!holdNoteSeen && holdOpensChannels\) \|\| \(isDemo\(\) && status === 'live' && !demoNoteSeen\)\}/, 'the colours line is said under the startup card, the walkthrough or the sign-in sheet')
+    assert.match(page, /noteAbove=\{startupOver \|\| signInOver \|\| playNotesUp \|\| holdTipDue\}/, 'the colours line is said under the startup card, the walkthrough or the sign-in sheet')
+    assert.match(page, /const playNotesUp = demoNoteUp \|\| offerWanted\n/, 'the colours line is said under the demo’s line or card')
+    assert.match(page, /const demoNoteUp = isDemo\(\) && status === 'live' && !demoNoteSeen\n/)
     /*
      * Found in review, with a real browser at phone width: a returning demo
      * player through /join pressed OK, Create Account opened over Play, and
@@ -733,8 +735,9 @@ export function run(test) {
      */
     assert.match(page, /\}, \[independentDue\]\)\s+(?:\/\*[\s\S]*?\*\/\s+)?const signInOver = Boolean\(signIn\) \|\| Boolean\(joinOwed\.current\)\n/, 'the colours line is said in the moment the join link opens its sheet')
     assert.match(page, /<SignInSheet\s+open=\{Boolean\(signIn\)\}/, 'the colours line waits for something other than the sign-in sheet')
-    /* And the hold tip still waits for the demo's line: one note at a time under the bar. */
-    assert.match(page, /\{!holdNoteSeen && holdOpensChannels && !\(isDemo\(\) && status === 'live' && !demoNoteSeen\) \? \(/)
+    /* And the hold tip still waits for the demo's line, and the demo's card after it: one note at a time under the bar. */
+    assert.match(page, /const holdTipDue = !holdNoteSeen && holdOpensChannels && !playNotesUp\n/)
+    assert.match(page, /holdTip=\{holdTipDue\}/, 'Play is not told when the hold tip is due')
 
     /* The line itself, run: never said or remembered while it waits; out of the way of a note after it; back when that one goes. */
     const { transformSync } = await import('esbuild')

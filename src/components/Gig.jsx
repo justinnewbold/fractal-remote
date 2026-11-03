@@ -21,7 +21,8 @@ import {
   writeTuner,
   retryChain,
   tapBoost,
-  boostKey
+  boostKey,
+  rereadSceneNames
 } from '../lib/deviceState'
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import {
@@ -76,6 +77,26 @@ import TapTempo from './TapTempo'
 import Sheet from './Sheet'
 import { sizeVars, SIZES, fitTiles, sceneColsFor, sceneOrderFor } from '../lib/gigSize'
 import { deviceNoun } from '../../shared/device-word.mjs'
+import { slotCount, slotLabel, stepSlot } from '../lib/slots'
+/* Play's words, the phone's too (shared/play-words.mjs). */
+import {
+  ALL_PRESETS,
+  CHAIN_EMPTY,
+  CHAIN_OUT_OF_DATE,
+  HOLD_FOR_CHANNELS,
+  REFRESH_NAMES,
+  REFRESH_NAMES_SAID_MS,
+  chainHeading,
+  presetLine
+} from '../../shared/play-words.mjs'
+/* The phone's own pictures for the preset button, the chain's heading and the bar (mobile/assets/icons). */
+import chevronIcon from '../../mobile/assets/icons/chevron.png'
+import chainIcon from '../../mobile/assets/icons/chain.png'
+import tunerIcon from '../../mobile/assets/icons/tuner.png'
+import editIcon from '../../mobile/assets/icons/edit.png'
+import Picture from './Picture'
+import Coach from './Coach'
+import UnlockOffer from './UnlockOffer'
 
 /**
  * The stand, not the bench.
@@ -101,6 +122,27 @@ const ofLastUnit = (s) => s.lastUnit
 const UNNAMED_AFTER_MS = 1500
 /* How long a VP4's refusal stays over Play: its longest sentence, read at an easy pace (see onError). */
 const VP4_SAID_MS = 9000
+/*
+ * THE BOTTOM BUTTONS' LOOK, IN ONE PLACE. 'short' is the website's: "Make
+ * the bottom tab bar buttons smaller", the 44px touch floor with the tempo
+ * beside Tap. 'tall' is the phone app's, 56 high (48 at Smallest) with the
+ * tempo under Tap, written in styles.css and waiting under
+ * .gig-bar[data-look='tall']. This is the one line to change to take it.
+ */
+const BAR_LOOK = 'short'
+/* What the hold tip leaves between the first row of pedals and the buttons at the bottom when it brings that row into sight (the grids' own gap). */
+const TIP_ROW_ROOM = 8
+/*
+ * A PHONE'S PEDAL AT THE COMPACT SIZE is the scenes' height less 12, never
+ * under 44 (styles.css .gig[data-phone][data-compact]: the phone's Stage.js
+ * `tileH - 12`). The scenes are Fit's tile, or 56 at Smallest. Under 49px a
+ * pedal cannot hold its picture and a 15px name (test/styles.mjs adds it up),
+ * so there, and only there, the name goes a size down: on Fit's big pedals
+ * it stays the size the phone draws it.
+ */
+const COMPACT_SCENE = 56
+const PHONE_PEDAL_LESS = 12
+const PEDAL_NAME_ROOM = 49
 
 export default function Gig({
   preset,
@@ -135,6 +177,25 @@ export default function Gig({
   /* Another of Play's one-time notes is up above this screen (App's hold tip,
      the demo's line), so the colours' one waits its turn. */
   noteAbove = false,
+  /*
+   * A browser on a phone, or on a phone-sized screen, and never the computer
+   * app's own window (App phoneScreen): Play drawn as the phone app draws it,
+   * with no LEVEL bar, pedals a little shorter than the scenes and
+   * three-letter names. Everywhere else keeps what it had.
+   */
+  phoneScreen = false,
+  /*
+   * The tip about holding a pedal is due (App holdTipDue: never seen, a unit
+   * whose blocks have channels, and Play's other one-time notes put away).
+   * Drawn here, over the pedals, as the phone's Coach: see tipUp.
+   * onHoldTipSeen remembers it without closing it (Try it, and the hold
+   * itself); onHoldTipClosed puts it away (Skip, Got it).
+   */
+  holdTip = false,
+  onHoldTipSeen,
+  onHoldTipClosed,
+  /* The demo's card at the top of Play (components/UnlockOffer), { price, onUnlock, onPutAway }, while App says it is up (offerShown); null otherwise. */
+  demoCard = null,
   /* Settings → Colors, which the colours' one-time line opens when pressed. */
   onOpenColours,
   onError: raiseInPage,
@@ -169,6 +230,8 @@ export default function Gig({
   /* Smallest, or Fit: both are the trimmed layout. The literal is what the
      meter poll and the tests read. */
   const compact = fit || size === 0
+  /* The LEVEL bar: not at the compact size, and never on a phone, where the phone app's Play has none. The computer keeps it. */
+  const meterShown = !compact && !phoneScreen
   /*
    * How big the buttons are is decided in the tab bar, a row this screen does
    * not own, so the step arrives as a prop. Only the CSS variables are applied
@@ -201,6 +264,17 @@ export default function Gig({
    * the same number. See shared/chain-view.mjs.
    */
   const shown = useChain()
+  /*
+   * WHERE PLAY STANDS: the preset the last press is going to (the store's
+   * chainGoing, set on the tap, which useChain reads as `number`), or with
+   * nothing in the air the one on screen. The phone puts the new slot up on
+   * the tap (rig.loadPreset); this is the same place, so the PRESET line, the
+   * name, Previous and Next all step on from the press, not from the unit's
+   * last answer, and two quick presses of Next are two presets.
+   */
+  const here = Number.isInteger(shown.number) ? shown.number : preset?.number
+  /* A preset on its way, which the unit has not named yet: see nameShown. */
+  const naming = Number.isInteger(here) && here !== preset?.number
 
   // Input, output and looper are not stage controls. The gate is — see STAGE_HIDDEN.
   const blocks = useMemo(
@@ -209,7 +283,6 @@ export default function Gig({
   )
 
   const [meters, setMeters] = useState([])
-  const [working, setWorking] = useState(false)
   const [toggling, setToggling] = useState(null)
   /*
    * Whether readings are actually arriving while the tuner is on.
@@ -233,6 +306,14 @@ export default function Gig({
    * the far side of a stage, where the read travels a relay and can time out.
    */
   const [chain, setChain] = useState('reading')
+  /*
+   * What the CHAIN heading says (shared/play-words chainHeading), the phone's
+   * three: Reading the chain while another preset's is on its way, out of
+   * date where the read for this one failed (the card below says Try again),
+   * and otherwise as this screen's own read goes. By the chain's view, not
+   * by `shown.elsewhere`, which is also true of a read that failed.
+   */
+  const chainSaid = shown.view === 'loading' ? 'reading' : shown.view === 'failed' ? 'failed' : chain
 
   /**
    * What's on and what's off, as the unit currently has it.
@@ -406,8 +487,9 @@ export default function Gig({
   useEffect(() => {
     // Hidden at the smallest size, and a bar nobody can see is not worth a
     // round trip to the unit — let alone one every half second, on the size
-    // step whose whole reason to exist is a rig that has to fit.
-    if (meterEid === null || compact) {
+    // step whose whole reason to exist is a rig that has to fit. Nor on a
+    // phone, which draws none (meterShown).
+    if (meterEid === null || !meterShown) {
       setMeters([])
       return undefined
     }
@@ -428,7 +510,7 @@ export default function Gig({
     return () => {
       stop = true
     }
-  }, [meterEid, size])
+  }, [meterEid, size, meterShown])
 
   /*
    * A DROPPED TAP, SAID OVER THE TILES. "Not sent — not connected", briefly.
@@ -599,6 +681,50 @@ export default function Gig({
    * being changed, so a fourteen-block preset does not mount fourteen.
    */
   const [chanEid, setChanEid] = useState(null)
+  /*
+   * THE TIP ABOUT HOLDING A PEDAL, over the pedals it is about (the phone's
+   * Coach). Only where a hold does something, on this preset's read chain:
+   * the phone's holdDoesSomething (Stage.js), and the hold's own rule
+   * (BlockTile `has`). Declared here, after `chain`, `channels` and
+   * `chanEid`, which it reads.
+   */
+  const holdDoesSomething = chain === 'ok' && blocks.length > 0 && (channels?.length || 0) > 1 && !shown.elsewhere && !shown.outline
+  /*
+   * The words beside CHAIN on the same terms, less the outline (a moment
+   * between two reads, where the words going and coming would flicker): only
+   * over pedals that are drawn and read. Never over the waiting cards or a
+   * read that failed, where a hold does nothing, and where on a phone the
+   * words took the room "Reading the chain…" and "out of date" need.
+   */
+  const holdHint = chain === 'ok' && blocks.length > 0 && (channels?.length || 0) > 1 && !shown.elsewhere
+  /*
+   * And once up, it stays up, as the phone's does (its `coach` is set once):
+   * through every preset change until Skip or Got it. Worked out on every
+   * draw, it went the moment Next was pressed and came back when the chain
+   * was read, and every pedal under it jumped up and back down by its
+   * height, and under Fit was re-sized twice a press.
+   */
+  const [tipOpen, setTipOpen] = useState(false)
+  useEffect(() => {
+    if (!holdTip) setTipOpen(false)
+    else if (holdDoesSomething) setTipOpen(true)
+  }, [holdTip, holdDoesSomething])
+  const tipUp = holdTip && tipOpen
+  /* 'tip', then 'trying' after Try it, then 'done' once a channel sheet opens: the phone's three. */
+  const [tipStage, setTipStage] = useState('tip')
+  /* Try it is remembered at once (the phone's rule: a tip somebody has tried is not offered again), and the card waits for the hold. */
+  const tryTip = () => {
+    onHoldTipSeen?.()
+    setTipStage('trying')
+  }
+  /* A channel sheet opening is the hold having worked (a right-click opens one too): said once, then Got it. */
+  useEffect(() => {
+    if (chanEid !== null && tipUp && tipStage !== 'done') {
+      onHoldTipSeen?.()
+      setTipStage('done')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chanEid, tipUp, tipStage])
   /* The looper's buttons, opened from the Looper button under the tiles. */
   const [looping, setLooping] = useState(false)
   const looperHere = findLooper(allBlocks)
@@ -654,9 +780,19 @@ export default function Gig({
    * neither the buttons say why (VP4_NO_STEP, or on a computer too old for
    * any of it the update words: vp4StepWords) — the phone's rule.
    */
+  /*
+   * And slot by slot, the phone's rule (lib/slots stepSlot): one on or one
+   * back from where Play stands, and nothing past the unit's last slot or
+   * before its first. The AM4 demo used to go on from 103 to a "104
+   * Untitled" that does not exist.
+   */
   const noSlotSteps = vp4Here()
   const landing = (delta) =>
-    !order && noSlotSteps ? null : stepTarget({ source, current: preset?.number, delta, favourites, lists })
+    order
+      ? stepTarget({ source, current: here, delta, favourites, lists })
+      : noSlotSteps
+        ? null
+        : stepSlot(here, delta, capabilities)
 
   /*
    * And the pedals of where each would land, read while nothing else is going
@@ -683,7 +819,15 @@ export default function Gig({
    * slot, is a blank line, never a guess.
    */
   const slotNames = useMemo(() => new Map((slots || []).map((s) => [s.number, s.name])), [slots])
-  const ahead = nextWords({ order, current: preset?.number, next: nextAt, nameOf: (n) => slotNames.get(n) })
+  const ahead = nextWords({ order, current: here, next: nextAt, nameOf: (n) => slotNames.get(n) })
+  /*
+   * THE PRESET'S NAME, as the phone puts it up on the tap (rig.loadPreset):
+   * the preset's own name, or for one on its way the name the preset list
+   * already has for that slot, and "…" only where the list does not know it
+   * yet, never "Untitled" for a preset that is only still loading.
+   */
+  const goingName = naming ? slotNames.get(here) : undefined
+  const nameShown = !naming ? presetLabel(preset) : typeof goingName === 'string' ? presetLabel({ number: here, name: goingName }) : '…'
 
   /*
    * And the line under Previous, by the same rule the other way round: the
@@ -691,7 +835,7 @@ export default function Gig({
    * end. "Can we add that to the previous button as well?" The phone's line
    * (lib/setlists previousWords), asked about `lastAt` and nothing else.
    */
-  const behind = previousWords({ order, current: preset?.number, previous: lastAt, nameOf: (n) => slotNames.get(n) })
+  const behind = previousWords({ order, current: here, previous: lastAt, nameOf: (n) => slotNames.get(n) })
 
   /* Each name drawn smaller rather than cut where its button is too narrow for it (lib/lineFit, shared/line-fit.mjs). */
   const behindLine = useRef(null)
@@ -713,6 +857,26 @@ export default function Gig({
     return true
   }
 
+  /*
+   * TWO QUICK PRESSES ARE TWO PRESETS, as on the phone: the buttons are never
+   * held while a load is answered, and each press steps on from where the
+   * last one is going (`here`), so Next, Next skips a song. Which press is
+   * the newest is counted (the phone's stepsRef): a song pressed past is
+   * never set up on the one after it, and an older press that fails says
+   * nothing over the newer one (the phone's rig.loadPreset: "Only the newest
+   * tap decides what is on screen"). loadPreset already answers null for a
+   * load a newer press took over; this is the second guard, as on the phone.
+   *
+   * And the song's own scene and tempo, when the setlist gives it some: one
+   * tap is the whole change between songs. See songFor. Not on a select the
+   * unit has not said it took (null; see loadPreset), and only for the
+   * newest press.
+   */
+  const stepsRef = useRef(0)
+  /* The bottom row's buttons, and what a screen reader calls the row: the ones drawn, so a unit with no tuner is never told it has one. */
+  const tunerHere = capabilities?.tuner !== false
+  const barParts = [tunerHere ? 'Tuner' : null, onChain ? 'Edit' : null, 'Tap'].filter(Boolean)
+  const barSays = barParts.length > 1 ? `${barParts.slice(0, -1).join(', ')} and ${barParts[barParts.length - 1]}` : barParts[0]
   const step = async (delta) => {
     const next = landing(delta)
     if (next === null) {
@@ -720,7 +884,7 @@ export default function Gig({
       if (!order && noSlotSteps) onError(vp4StepWords(vp4Capabilities()))
       return
     }
-    setWorking(true)
+    const mine = ++stepsRef.current
     const awayAtNext = linkAwayMs(Date.now())
     try {
       /* The select, which preset, which scene, and one chain read once the
@@ -729,10 +893,9 @@ export default function Gig({
          still loading it. */
       const landed = await loadPreset(next)
       onPresetLoaded?.()
-      /* And the song's own scene and tempo, when the setlist gives it some:
-         one tap is the whole change between songs. See songFor. Not on a
-         select the unit has not said it took (null; see loadPreset). */
+      /* And the song's own scene and tempo (see the comment over stepsRef). */
       const song = songFor(source, lists, next)
+      if (mine !== stepsRef.current) return
       if (song && landed !== null) {
         if (songLate(song, awayAtNext)) return
         /* A half never sent is said over the tiles, not in App's notice (applySongSorted). */
@@ -741,10 +904,9 @@ export default function Gig({
         if (refused.length) onError(`The song’s ${refused.join(' and ')} didn’t take. Set it by hand for this one.`)
       }
     } catch (err) {
+      if (mine !== stepsRef.current) return
       if (err?.notSent) sayNotSent(err)
       else onError(err.message)
-    } finally {
-      setWorking(false)
     }
   }
 
@@ -755,7 +917,7 @@ export default function Gig({
    * the first song.
    */
   const sourceName = sourceLabel(source, { favourites, lists })
-  const at = order ? positionIn(order, preset?.number) : 0
+  const at = order ? positionIn(order, here) : 0
   const sourceWhere = order ? (at ? `${at}/${order.length}` : `${order.length}`) : ''
   const sourceAria = order
     ? `Previous and Next step through ${sourceName}${at ? `, song ${at} of ${order.length}` : `, ${order.length} songs`}. Change setlist.`
@@ -781,7 +943,71 @@ export default function Gig({
   const gigRef = useRef(null)
   const scenesRef = useRef(null)
   const blocksRef = useRef(null)
+  /*
+   * AND THE PEDALS IT IS ABOUT, IN SIGHT. The card stands over the pedals,
+   * and in a phone's browser, with its own bars taking their share of the
+   * height, that put the first row of them under the buttons at the bottom:
+   * a tip about holding a block with no block to hold, on a screen that
+   * looked fitted. So when it comes up, and again after Try it, the page is
+   * moved just far enough for that row to stand whole above the buttons,
+   * and never so far that the card's own top goes off the screen. Once the
+   * screen has settled (two frames: Fit measures a frame after a change),
+   * and only ever down, by what is missing.
+   */
+  const footRef = useRef(null)
+  /*
+   * And a card put away from the keyboard (the demo's ×, the tip's Skip or
+   * Got it) took the focus with its button, and the next Tab started again
+   * at the top bar. Once the button has gone the focus goes on, to the
+   * first pedal from the tip (what it is about), and to the preset button,
+   * the first thing on Play after it, from the demo's card.
+   */
+  const keepFocusOnPlay = (e) => {
+    const pressed = e.target?.closest?.('.coach button, .demo-card button')
+    if (!pressed) return
+    const fromTip = !!pressed.closest('.coach')
+    requestAnimationFrame(() => {
+      if (pressed.isConnected || (document.activeElement && document.activeElement !== document.body)) return
+      const next = (fromTip ? gigRef.current?.querySelector('.gig-blocks button') : null) || gigRef.current?.querySelector('button.gig-name')
+      next?.focus()
+    })
+  }
+  useEffect(() => {
+    if (!tipUp || tipStage === 'done') return undefined
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        /* The pedals themselves, not the waiting cards that stand in for them. */
+        const grid = blocksRef.current
+        const row = grid?.classList.contains('gig-blocks') ? grid.firstElementChild : null
+        const card = gigRef.current?.querySelector('.coach')
+        const foot = footRef.current
+        if (!row || !card || !foot) return
+        /* The card's top stays under the top bar where that stays on screen (as the band's floor, below). */
+        const bar = document.querySelector('.topbar')
+        const top = bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0
+        const room = foot.getBoundingClientRect().top - TIP_ROW_ROOM
+        const short = Math.min(row.getBoundingClientRect().bottom - room, card.getBoundingClientRect().top - top - TIP_ROW_ROOM)
+        if (short <= 0) return
+        let still = false
+        try {
+          still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        } catch {
+          still = false
+        }
+        /* Whatever scrolls Play: its own screen where that scrolls, else the page. */
+        let box = gigRef.current.parentElement
+        while (box && !(box.scrollHeight > box.clientHeight && /(auto|scroll)/.test(getComputedStyle(box).overflowY))) box = box.parentElement
+        const scroller = box || window
+        scroller.scrollBy({ top: Math.ceil(short), behavior: still ? 'auto' : 'smooth' })
+      })
+    })
+    return () => cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipUp, tipStage])
   const [fitVars, setFitVars] = useState(null)
+  /* How tall a phone's compact pedal is drawn (styles.css), and whether its name has to go a size down for it. */
+  const phonePedal = Math.max(44, (fitVars ? fitVars.tile : COMPACT_SCENE) - PHONE_PEDAL_LESS)
+  const pedalTight = phoneScreen && compact && phonePedal < PEDAL_NAME_ROOM
   /*
    * Each scene's name as big as its tile has room for (lib/sceneNameFit,
    * shared/name-fit): "the text is bigger on screens that allow it, and if
@@ -951,12 +1177,19 @@ export default function Gig({
     <div
       ref={gigRef}
       className="gig"
+      onClickCapture={keepFocusOnPlay}
       data-compact={compact ? 'yes' : undefined}
       data-fit={fit ? 'yes' : undefined}
       data-scene-layout={sceneLayout !== 'across' ? sceneLayout : undefined}
-      /* Three effects to a row still fits a name; four does not. The switch to
-         three letters rides the column count rather than a width guess. */
-      data-fx-abbr={(fitVars?.fxCols ?? SIZES[fit ? 0 : size].fx) >= 4 ? 'yes' : undefined}
+      /* On a phone, Play as the phone app draws it (phoneScreen): the pedals a little shorter than the scenes, and no LEVEL bar. */
+      data-phone={phoneScreen ? 'yes' : undefined}
+      /* Three letters on a phone at every size, as the phone app ("DRV, AMP");
+         elsewhere, three effects to a row still fits a name and four does not.
+         The switch rides the column count rather than a width guess, and the
+         names swap only under the stylesheet's 620px line either way. */
+      data-fx-abbr={phoneScreen || (fitVars?.fxCols ?? SIZES[fit ? 0 : size].fx) >= 4 ? 'yes' : undefined}
+      /* A phone's compact pedal too short for its picture and a 15px name (PEDAL_NAME_ROOM). */
+      data-fx-tight={pedalTight ? 'yes' : undefined}
       /* NOT CONNECTED: the stylesheet dims the tiles and the buttons that send, by opacity alone. */
       data-link-down={down ? 'yes' : undefined}
       style={{
@@ -966,14 +1199,14 @@ export default function Gig({
           : {})
       }}
     >
+      {/* The first thing on the first screen, as the phone's: where an eye starts. */}
+      {demoCard ? <UnlockOffer price={demoCard.price} onUnlock={demoCard.onUnlock} onPutAway={demoCard.onPutAway} /> : null}
       {card ? <ComputerCard words={card.words} buttons={card.buttons} /> : null}
       {/*
-        The name, big, and only the name.
-        The unit and the slot are in the bar above this, at every moment, on
-        every screen — repeating them here cost 30px on the one screen where
-        vertical space is scenes you have to hit without looking. The name
-        stays large because that is this screen's job: it is the thing you
-        read from arm's length, in the dark, to know where you are.
+        The name, big, with the slot in the small line over it: "PRESET 000
+        OF 104", the phone's. The name stays large because that is this
+        screen's job: it is the thing you read from arm's length, in the dark,
+        to know where you are.
       */}
       {/*
         The biggest word on the screen was the one thing you could not press.
@@ -1013,50 +1246,43 @@ export default function Gig({
 
       <div className="gig-preset">
         {/*
-          A tile, like the scenes under it.
+          A tile, like the scenes under it, under the phone's line.
 
           "Make this button smaller, the same size as the presets, and add
           the preset number to it as well as the name." It was a headline —
           a name at 52px that wrapped to three lines on a phone, with the
-          size steps crammed beside it. Now it is the shape of a scene
-          button: the slot number small on top, the name under it, the height
-          of one tile at whatever size the tiles are. The same tap opens the
-          same preset picker as the bar.
+          size steps crammed beside it. Now it is a tile, the height of one
+          scene at the smallest size, with the name in it and the slot in the
+          line directly above it: "PRESET 000 A01 OF 104", as the phone app
+          says it, from where Play stands (`here`), so a press of Next moves
+          it at once. The number was beside the name ("put the number inline
+          with the name"); it sits over it now, as on the phone, and is not
+          said twice. The same tap opens the same preset picker as the bar,
+          and the line under the name and the arrow say so.
         */}
+        <p className="gig-preset-line">
+          {presetLine(Number.isInteger(here) ? slotLabel(here, capabilities?.presets?.addressing) : null, slotCount(capabilities))}
+        </p>
         <button
           type="button"
           className="gig-name"
           onClick={onPickPreset}
           disabled={!onPickPreset}
-          aria-label={`Preset ${preset?.number ?? '--'} — ${presetLabel(preset)} — choose another preset`}
+          aria-label={`Preset ${Number.isInteger(here) ? here : '--'} — ${nameShown} — choose another preset`}
         >
-          {/* Number beside the name, not over it: "put the number inline
-              with the name". Same size as the name, dimmer, the way a scene
-              tile carries its index.
-
-              Both inside the line, so the line is the one thing the tile has
-              to place: the number and the name share a baseline with each
-              other, and the button centres the line in the box. Aligned
-              straight against the button they sat at its top edge, with the
-              rest of the tile empty under them. */}
+          {/* The preset's colour tag, down its left edge, as it is on its row
+              in the list and in a setlist (lib/colourPage tagFill: the one rule
+              both ends draw the bar by). Nothing at all for a preset without
+              one, so Play is as it was for everybody who never tags one. */}
+          {presetTag(preset?.number) ? (
+            <span className="gig-name-tag" aria-hidden="true" style={{ '--tag': presetTag(preset.number) }} />
+          ) : null}
+          {/* The name and the line under it, centred as a pair; the button centres the pair in the box. */}
           <span className="gig-name-row">
-            {/* The preset's colour tag, beside its name, as it is on its row in
-                the list and in a setlist (lib/colourPage tagFill: the one rule
-                both ends draw the bar by). Nothing at all for a preset without
-                one, so Play is as it was for everybody who never tags one. */}
-            {presetTag(preset?.number) ? (
-              <span className="gig-name-tag" aria-hidden="true" style={{ '--tag': presetTag(preset.number) }} />
-            ) : null}
-            {/* Padded as the preset list pads it: "0 59 Bassguy" read as a typo
-                on the play test — slot 0, a preset called 59 Bassguy. */}
-            <span className="gig-name-num mono">
-              {Number.isInteger(preset?.number) && preset.number >= 0 ? String(preset.number).padStart(3, '0') : '--'}
-            </span>
-            <span className="gig-name-word">{presetLabel(preset)}</span>
-            <span className="gig-name-caret" aria-hidden="true">
-              ⌄
-            </span>
+            <span className="gig-name-word">{nameShown}</span>
+            <span className="gig-name-sub">{ALL_PRESETS}</span>
           </span>
+          <Picture src={chevronIcon} className="gig-name-chevron" />
         </button>
         {/*
           The pencil that stood here — rename this preset or its scenes — is
@@ -1067,13 +1293,15 @@ export default function Gig({
       </div>
 
       {/* Named. A thin coloured line under the preset tile was the one thing on
-          Play that never said what it was. */}
-      <div className="gig-signal" aria-label="Signal level">
-        <span className="gig-signal-word">Level</span>
-        <div className="gig-signal-track">
-          <div className="gig-signal-fill" style={{ width: `${Math.round(peak * 100)}%` }} />
+          Play that never said what it was. Not on a phone (meterShown). */}
+      {meterShown ? (
+        <div className="gig-signal" aria-label="Signal level">
+          <span className="gig-signal-word">Level</span>
+          <div className="gig-signal-track">
+            <div className="gig-signal-fill" style={{ width: `${Math.round(peak * 100)}%` }} />
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {/*
         Two modes, one row.
@@ -1147,9 +1375,21 @@ export default function Gig({
       {/* Scenes lead. A scene is the bigger move and it sets every block state
           below it, so cause sits above effect rather than under it. */}
       {hasScenes ? (
-        /* Named as a group. On screen the grid is obvious enough in context;
-           read aloud it was eight buttons called "1" through "8", between two
-           other grids of buttons, with nothing saying what any of them do. */
+        <>
+        {/*
+          SCENES, with Refresh names beside it, the phone's: "Keep having
+          issues showing the scene names on the AM4. Have a way to refresh
+          them." The size of the heading: a thing reached for now and then,
+          not a control on the stage. A class of its own (gig-head), never one
+          that starts gig-scenes, which the tests find the grid by.
+        */}
+        <div className="gig-head" data-for="scenes">
+          <h2 className="gig-head-word">Scenes</h2>
+          <RefreshNames />
+        </div>
+        {/* Named as a group. On screen the grid is obvious enough in context;
+            read aloud it was eight buttons called "1" through "8", between two
+            other grids of buttons, with nothing saying what any of them do. */}
         <div className="gig-scenes" role="group" aria-label="Scenes" ref={scenesRef}>
           {/* Drawn in the layout's order; each tile is still its own scene —
               "5" says 5, wears 5's colour and picks scene 5 wherever it sits. */}
@@ -1192,9 +1432,12 @@ export default function Gig({
                   fills the row with a word that carries nothing, and makes an
                   unnamed scene look identical to a named one. */}
               {names[i] ? <span className="gig-scene-name">{names[i]}</span> : null}
+              {/* The bar under the name, the phone's (components/Tile.js `bar`), on every scene, named or not: a piece of the scene's own colour where the eye is. */}
+              <span className="gig-scene-bar" aria-hidden="true" />
             </button>
           ))}
         </div>
+        </>
       ) : null}
 
       {/*
@@ -1209,9 +1452,11 @@ export default function Gig({
         tied to the ambiguity rather than to being new: name one scene and it
         goes, for good.
 
-        The remote case has its own note directly below saying the names could
-        not be read, which is a different and more specific thing to say — so
-        these two are mutually exclusive rather than stacked.
+        Not from a remote, where blank names can also be names the unit has
+        and this end could not read: there Refresh names beside SCENES asks
+        the unit again, and says in words what it found ("No names on the
+        unit", "Couldn't read them"). The note that used to say they were not
+        readable from away went when the names started coming over the link.
       */}
       {unnamedSettled && !remoteActive() ? (
         <p className="gig-note">
@@ -1224,15 +1469,45 @@ export default function Gig({
         </p>
       ) : null}
 
-      {/* An AM4 keeps its scene names inside a preset dump, and dumps don't
-          travel the relay. Silence there reads as "this preset has unnamed
-          scenes", which is a different and wrong thing to believe. */}
-      {unnamedSettled && remoteActive() ? (
-        <p className="gig-note">
-          Scene names aren&rsquo;t readable from this {deviceNoun()}. Open this preset once at the
-          computer and they&rsquo;ll show here from then on.
-        </p>
+      {/*
+        CHAIN, with "Hold to switch channels" beside it, the phone's: "Where it
+        says chain above the pedals, also put hold to switch channels. So
+        users know that they can just hold the things to switch between
+        channels, A B C and D." The heading follows the chain's read: Reading
+        the chain while another preset's is on its way, out of date when a
+        read failed. The hold's words only where a hold does something, by
+        the hold's own rule (BlockTile `has`), over pedals read and drawn
+        (holdHint).
+      */}
+      <div className="gig-head" data-for="chain">
+        <h2 className="gig-head-word">
+          <Picture src={chainIcon} className="gig-head-icon" />
+          <span className="gig-head-text">{chainHeading(chainSaid)}</span>
+        </h2>
+        {holdHint ? <span className="gig-head-hint">{HOLD_FOR_CHANNELS}</span> : null}
+      </div>
+
+      {/* What the chain read said, in the phone's sentences, over the tip and the pedals as on the phone. */}
+      {shown.elsewhere ? null : chain === 'failed' ? (
+        <div className="gig-note gig-note-action">
+          {/* The phone's sentence; not its "Pull down to ask again": this page does not pull to refresh (styles.css, overscroll), so its button asks. While the chain is read again only the heading says so. */}
+          <span>{CHAIN_OUT_OF_DATE}</span>
+          <button onClick={() => refreshBlocks()}>Try again</button>
+        </div>
+      ) : chain === 'ok' && !blocks.length ? (
+        <p className="gig-note">{CHAIN_EMPTY}</p>
       ) : null}
+
+      {!shown.elsewhere ? <ChainUpdating chain={shown} /> : null}
+
+      {/*
+        The tip about holding a pedal, directly over the pedals it is about
+        (tipUp): "this tip appears here" is a promise about where. Over the
+        waiting cards too, which stand where the pedals were, so a Next
+        moves neither the card nor what is under it (the phone's Coach is
+        over its grid, and the waiting cards are in the grid).
+      */}
+      {tipUp ? <Coach stage={tipStage} slug={deviceKey} onTry={tryTip} onSkip={onHoldTipClosed} onDone={onHoldTipClosed} /> : null}
 
       {held ? (
         <div className="gig-blocks-held" ref={blocksRef} style={{ height: held.height }}>
@@ -1240,21 +1515,7 @@ export default function Gig({
         </div>
       ) : shown.elsewhere ? (
         <ChainWait chain={shown} className="gig-chain-wait" onRetry={retryHere} />
-      ) : chain === 'failed' ? (
-        <div className="gig-note gig-note-action">
-          <span>
-            Couldn&rsquo;t read the chain{remoteActive() ? ` from this ${deviceNoun()}` : ''}, so
-            there&rsquo;s nothing to switch here yet.
-          </span>
-          <button onClick={() => refreshBlocks()}>Try again</button>
-        </div>
-      ) : chain === 'reading' && !blocks.length ? (
-        <p className="gig-note">Reading the chain&hellip;</p>
-      ) : !blocks.length ? (
-        <p className="gig-note">Nothing switchable in this preset.</p>
       ) : null}
-
-      {!shown.elsewhere ? <ChainUpdating chain={shown} /> : null}
 
       {/* Dimmed a little while they are only the outline: this preset's
           pedals, the chain read still finishing behind them. */}
@@ -1340,7 +1601,9 @@ export default function Gig({
         predating the flag, and unknown still gets to try.
       */}
       {/*
-        The foot of the screen: Previous / Next, then Tuner, Tap and Edit.
+        The foot of the screen: Previous / Next, then Tuner, Edit and Tap,
+        with Tap on the right where the thumb is (the phone's order: "move the
+        edit button to the center and the tap tempo button to the right").
 
         "Move Previous / Next directly above the bottom tap bar." They sat
         between the volume and the scenes, which is where you read, not where
@@ -1348,7 +1611,7 @@ export default function Gig({
         presets is always where the bar is — at the bottom, under the thumb —
         however far the effects have scrolled.
       */}
-      <div className="gig-foot">
+      <div className="gig-foot" ref={footRef}>
       {/*
         Previous, the setlist, Next.
 
@@ -1359,7 +1622,7 @@ export default function Gig({
         the same row so the footer costs the screen nothing more.
       */}
       <div className="gig-nav">
-        <button className="gig-nav-step" onClick={() => step(-1)} disabled={working || (landing(-1) === null && !(noSlotSteps && !order))} aria-label={behind.said}>
+        <button className="gig-nav-step" onClick={() => step(-1)} disabled={landing(-1) === null && !(noSlotSteps && !order)} aria-label={behind.said}>
           ‹ Previous
           {/* What Previous will load, as tall as Next's line so the two words sit level. Always drawn, blank until a name is known. */}
           <span className="gig-nav-ahead" aria-hidden="true" ref={behindLine} style={behindSize ? { fontSize: behindSize } : undefined}>
@@ -1381,7 +1644,7 @@ export default function Gig({
           <span className="gig-nav-source-name">{order ? sourceName : 'All'}</span>
           {sourceWhere ? <span className="gig-nav-source-pos mono">{sourceWhere}</span> : null}
         </button>
-        <button className="gig-nav-step" onClick={() => step(1)} disabled={working || (landing(1) === null && !(noSlotSteps && !order))} aria-label={ahead.said}>
+        <button className="gig-nav-step" onClick={() => step(1)} disabled={landing(1) === null && !(noSlotSteps && !order)} aria-label={ahead.said}>
           Next ›
           {/* What Next will load. Always drawn, blank until a name is known, so nothing moves when one arrives. */}
           <span className="gig-nav-ahead" aria-hidden="true" ref={aheadLine} style={aheadSize ? { fontSize: aheadSize } : undefined}>
@@ -1390,46 +1653,45 @@ export default function Gig({
         </button>
       </div>
 
-      <div className="gig-bar" role="group" aria-label="Tuner and tempo">
-        {capabilities?.tuner !== false ? (
-          <button
-            className={`gig-bar-btn ${tunerOn ? 'on' : ''}`}
-            onClick={toggleTuner}
-            aria-pressed={tunerOn}
-          >
-            Tuner
+      {/*
+        The bar's look is BAR_LOOK's, the one line to change (see its comment).
+
+        Tuner, then Edit: what is actually in the preset, which until now a
+        phone could not see at all. "We need to be able to see what chain was
+        written or what chain is currently on a setting." The tiles above
+        this bar say which blocks are on and off; they do not say what order
+        they are in, what is wired to what, or what any knob is set to. Edit
+        opens the chain itself. Called Edit, because that is the tab it
+        stands in for: a phone has no Play / Edit row, so this button IS the
+        way to the chain and its knobs, and "Chain" did not say so: "EDIT is
+        easy to miss."
+
+        Then Tap, and the tempo on it, on the right where the thumb is. The
+        same button Edit has beside its scene — see TapTempo, which says why
+        there is one of them and not two.
+
+        Each with the phone's picture and word, in the phone's order.
+      */}
+      <div className="gig-bar" data-look={BAR_LOOK} role="group" aria-label={barSays}>
+        {tunerHere ? (
+          /* Not aria-pressed: the words say it is on ("Stop tuner"), and a toggle whose name changes as well was read as Stop, pressed. */
+          <button className={`gig-bar-btn ${tunerOn ? 'on' : ''}`} onClick={toggleTuner}>
+            <Picture src={tunerIcon} className="gig-bar-icon" />
+            {/* The words say it is on, as the phone's do; two lines where the button is narrow, never cut. */}
+            <span className="gig-bar-word">{tunerOn ? 'Stop tuner' : 'Tuner'}</span>
           </button>
         ) : null}
-        {/*
-          Tap, and the tempo on it. The same button Edit has beside its scene —
-          see TapTempo, which says why there is one of them and not two.
-        */}
-        <TapTempo onError={onError} onChanged={onChanged} onDropped={sayNotSent} />
-        {/*
-          And what is actually in the preset, which until now a phone could not
-          see at all.
-
-          "We need to be able to see what chain was written or what chain is
-          currently on a setting." The tiles above this bar say which blocks
-          are on and off; they do not say what order they are in, what is wired
-          to what, or what any knob is set to. This opens the chain itself.
-        */}
-        {/*
-          Called Edit, because that is the tab it stands in for. A phone has no
-          Play / Edit row — Edit is bench work — so this button
-          IS the way to the chain and its knobs, and "Chain" did not say so:
-          "EDIT is easy to miss." The label under the glyph is the same word
-          the tab carries on a wide screen.
-        */}
         {onChain ? (
           <button
             className="gig-bar-btn gig-edit"
             onClick={onChain}
             aria-label="Edit — see the chain and its controls"
           >
+            <Picture src={editIcon} className="gig-bar-icon" />
             <span>Edit</span>
           </button>
         ) : null}
+        <TapTempo onError={onError} onChanged={onChanged} onDropped={sayNotSent} />
       </div>
       </div>
 
@@ -1466,6 +1728,32 @@ export default function Gig({
           )
         : null}
     </div>
+  )
+}
+
+/**
+ * REFRESH NAMES, beside SCENES: the phone's (Stage.js RefreshNames). This
+ * preset's scene names asked of the unit again, past anything kept, and the
+ * answer said in the link's own place for a moment ("Names updated", "No
+ * names on the unit", "Couldn't read them"), then Refresh names again. A
+ * press while it reads does nothing. The words are shared/play-words.mjs's.
+ */
+function RefreshNames() {
+  const [said, setSaid] = useState('idle')
+  const timer = useRef(null)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  const press = async () => {
+    if (said === 'reading') return
+    clearTimeout(timer.current)
+    setSaid('reading')
+    const out = await rereadSceneNames().catch(() => 'failed')
+    setSaid(out)
+    timer.current = setTimeout(() => setSaid('idle'), REFRESH_NAMES_SAID_MS)
+  }
+  return (
+    <button type="button" className="gig-head-action" data-said={said} onClick={press} aria-label="Refresh scene names">
+      {REFRESH_NAMES[said] || REFRESH_NAMES.idle}
+    </button>
   )
 }
 
@@ -1752,9 +2040,8 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
             ? 'Looper — open Record, Play and Stop'
             : [block.name || block.slug, boost ? boostLabel(boost) : unknown ? null : block.bypassed ? 'Off' : 'On', block.channel].filter(Boolean).join(', ')
         }
-        /* The phone says "Hold to switch channels" beside CHAIN; this screen
-           has no heading there to carry it, so the tile says it when a mouse
-           rests on it. */
+        /* The heading says it beside CHAIN ("Hold to switch channels"); a
+           mouse resting on a tile is told too, with right-click. */
         title={boost ? boostTitle(boost, has) : has ? 'Tap to switch on or off. Hold, or right-click, to switch channels.' : undefined}
         {...hold}
       >

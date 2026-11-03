@@ -113,6 +113,7 @@ import {
   SIZES,
   loadSize,
   saveSize,
+  sizeChosen,
   clampSize,
   loadFit,
   saveFit,
@@ -128,7 +129,7 @@ import { editButtonShows } from './lib/playMode'
 import { FIXES, FIRMWARE_NOTE, fixById, fixFor, versionsInSync } from '../shared/troubleshooting.mjs'
 import { osGuess, waysFor, waysWord } from '../shared/ways-in.mjs'
 import { AFFILIATION, SUPPORT_LINE, SUPPORT_URL, WHATS_NEW_URL } from '../shared/affiliation.mjs'
-import { pairTitle } from '../shared/device-word.mjs'
+import { deviceKind, pairTitle } from '../shared/device-word.mjs'
 /* Settings' front list in the phone's words, the same file the phone draws them from. */
 import {
   ACCOUNT_LINE,
@@ -246,7 +247,6 @@ import {
 } from './lib/forgefx'
 import Vp4Setup from './components/Vp4Setup'
 import { MIDI_SETUP_TITLE, VP4_NO_EDITS, VP4_NO_KNOBS, VP4_NO_RENAME, vp4ComputerLacks, vp4SetupStatus } from '../shared/vp4-safety.mjs'
-import { PLAY_HINT_HOLD, playHintTap } from '../shared/am4-boost.mjs'
 /* What a VP4 gets from the app, on the unlock page: the phone paywall's line, word for word. */
 import { VP4_SO_FAR } from '../shared/vp4-safety.mjs'
 import ConnectScreen, { AccountCheck } from './components/ConnectScreen'
@@ -461,6 +461,20 @@ const rememberHoldNote = () => {
  */
 const DEMO_NOTE_KEY = 'fab.demo.note'
 const DEMO_NOTE_KEY_VP4 = 'fab.demo.note.vp4'
+/*
+ * And the demo's card on Play ("This is the demo", Unlock and its price: the
+ * phone's components/UnlockOffer), put away with its ×. Its own key, so the
+ * card comes up after the demo's line above, as the phone's comes after its
+ * VP4 note, and stays away once put away.
+ */
+const OFFER_KEY = 'fab.demo.offer'
+const offerWasPutAway = () => {
+  try {
+    return localStorage.getItem(OFFER_KEY) === 'away'
+  } catch {
+    return false
+  }
+}
 const demoNoteKey = (unit) => (unit === 'vp4' ? DEMO_NOTE_KEY_VP4 : DEMO_NOTE_KEY)
 const demoNoteWasSeen = (unit) => {
   try {
@@ -1455,6 +1469,17 @@ export default function App() {
    * under the bar, where there is a page around it to tap.
    */
   const narrow = useAsks('(max-width: 620px)')
+  /*
+   * PLAY AS A PHONE DRAWS IT: a browser on a phone (the device word's 'phone',
+   * from link.js and the browser's own user agent, so turning it sideways does
+   * not change Play under the player's hands) or on a phone-sized screen (the
+   * 620px line every phone rule in styles.css already uses). Never the
+   * computer app's own window, which keeps its Play at any width
+   * (lib/desktop inDesktopApp). A laptop browser made that narrow counts: it
+   * is a phone-sized screen. It turns Fit on for somebody who never chose,
+   * takes the LEVEL bar away and shortens the pedals, as the phone app's Play.
+   */
+  const phoneScreen = (narrow || deviceKind() === 'phone') && !inDesktopApp()
 
   /*
    * Which screens this viewport reaches.
@@ -1498,8 +1523,19 @@ export default function App() {
   const chainShows = editButtonShows({ status, view })
 
   const [size, setSize] = useState(loadSize)
-  /* Whether Play sizes its tiles from the screen instead of the step. */
-  const [fit, setFit] = useState(loadFit)
+  /*
+   * Whether Play sizes its tiles from the screen instead of the step: as
+   * chosen in this browser, true or false, or null for never chosen (lib/
+   * gigSize loadFit's three states). Never chosen is on for a phone, as the
+   * phone app's Play is out of the box ("Play fills the screen like the
+   * app"), and off everywhere else, as it always was. A choice either way is
+   * kept: the Settings switch is the only thing that writes one. And a size
+   * chosen is a choice of how Play is drawn too: a phone's browser set to
+   * Largest before this keeps Largest, not Fit (gigSize sizeChosen).
+   */
+  const [fitChoice, setFit] = useState(() => loadFit(undefined, null))
+  const [sizePicked, setSizePicked] = useState(() => sizeChosen())
+  const fit = fitChoice ?? (phoneScreen && !sizePicked)
   const [icons, setIcons] = useState(loadIcons)
   /* Where the scenes sit on Play — across, down the two sides, like the
      unit, or in his own dragged order. See gigSize. */
@@ -1585,6 +1621,31 @@ export default function App() {
    */
   const [paid, setPaid] = useState({ checked: false, unlocked: false })
   const [webPriceText, setWebPriceText] = useState(null)
+  /*
+   * PLAY'S ONE-TIME NOTES, ONE AT A TIME, in the phone's order (Stage.js
+   * `wants`): the demo's line (over every screen, its own key per unit),
+   * then the demo's card on Play, then the hold tip over the pedals, then
+   * the colours' line. Named, every one, and declared here, after `paid`
+   * and `holdOpensChannels`, which they read: a const that reads one declared
+   * further down the component throws on the first draw.
+   */
+  const demoNoteUp = isDemo() && status === 'live' && !demoNoteSeen
+  const [offerAway, setOfferAway] = useState(offerWasPutAway)
+  const putOfferAway = () => {
+    setOfferAway(true)
+    try {
+      localStorage.setItem(OFFER_KEY, 'away')
+    } catch {
+      // Private windows throw; the card comes back next time, which is fine.
+    }
+  }
+  /* The card wants Play while the bar's Unlock would show (TopBar's onUnlock: the demo, not paid), and also while the purchase is still being checked, so the hold tip does not come up and go. */
+  const offerWanted = isDemo() && status === 'live' && !paid.unlocked && !offerAway
+  /* Shown once the purchase has been checked, after the demo's line has been put away: never stacked under it. */
+  const offerShown = offerWanted && paid.checked && !demoNoteUp
+  const playNotesUp = demoNoteUp || offerWanted
+  /* The hold tip's card, in its turn: over the pedals, on a unit where a hold opens channels (Gig waits for a preset where it does). */
+  const holdTipDue = !holdNoteSeen && holdOpensChannels && !playNotesUp
   const [buying, setBuying] = useState(false)
   const [buySaid, setBuySaid] = useState(null)
   /* What Buy found, when it took no money: said after the page unlocks and goes. */
@@ -1626,6 +1687,7 @@ export default function App() {
     if (next === size) return
     setSize(next)
     saveSize(next)
+    setSizePicked(true)
   }
 
   /*
@@ -4861,29 +4923,6 @@ export default function App() {
       <Screens view={view} enabled={status === 'live'} order={views} onChange={changeView}>
       {status === 'live' && view === 'play' ? (
         <>
-        {/*
-          Said once, on the screen it is about, and cleared for good.
-
-          Inside the Play view rather than above it on purpose: the strip
-          between the bar and the first screen is held to the bar, the states
-          that mean the app cannot work yet, and the assistant — see the chrome
-          check in test/structure.mjs. A hint belongs with the thing it hints
-          at anyway.
-        */}
-        {/* One note at a time: on the play test the demo's note and this one
-            stood stacked over the scenes and took a third of the screen. This
-            waits until the demo's has been put away. */}
-        {!holdNoteSeen && holdOpensChannels && !(isDemo() && status === 'live' && !demoNoteSeen) ? (
-          <p className="play-hint">
-            {/* On an AM4 the amp's tap is its boost, and the note names the amp: there it says so, and where the amp's own on and off is (shared/am4-boost.mjs). */}
-            <span>
-              {PLAY_HINT_HOLD} {playHintTap(currentDeviceSlug())}
-            </span>
-            <button className="chip" onClick={dismissHoldNote}>
-              Got it
-            </button>
-          </p>
-        ) : null}
         <Gig
           preset={preset}
           device={device}
@@ -4904,8 +4943,28 @@ export default function App() {
            * computer's own window or its wifi page, never the demo.
            */
           down={linkShowsDown}
-          /* The startup card or the walkthrough is over the page, or the sign-in sheet is (the join link opens it the moment OK is pressed, and a sign-in from the demo reloads the page under it), or the hold tip above or the demo's line is up: the colours' one-time line waits for them all. */
-          noteAbove={startupOver || signInOver || (!holdNoteSeen && holdOpensChannels) || (isDemo() && status === 'live' && !demoNoteSeen)}
+          /* The startup card or the walkthrough is over the page, or the sign-in sheet is (the join link opens it the moment OK is pressed, and a sign-in from the demo reloads the page under it), or the demo's line or card is up, or the hold tip is due: the colours' one-time line waits for them all. */
+          noteAbove={startupOver || signInOver || playNotesUp || holdTipDue}
+          /*
+           * THE DEMO'S CARD, the first thing on Play, as the phone's: "This is
+           * the demo", what unlocking gives, and Unlock with its price. Drawn
+           * by Gig (components/UnlockOffer), so Play is still the gig screen
+           * alone, and inside it rather than in the strip between the bar and
+           * the first screen, which is held to the bar, the states that mean
+           * the app cannot work yet, and the assistant (test/structure.mjs).
+           *
+           * One note at a time: on the play test the demo's note and the hold
+           * tip stood stacked over the scenes and took a third of the screen.
+           * So this waits for the demo's line to be put away, and the hold
+           * tip (holdTipDue) waits for this one.
+           */
+          demoCard={offerShown ? { price: webPriceText, onUnlock: openUnlock, onPutAway: putOfferAway } : null}
+          /* A phone, or a phone-sized screen (phoneScreen): the pedals shorter than the scenes, three-letter names and no LEVEL bar, as the phone app's Play. */
+          phoneScreen={phoneScreen}
+          /* The hold tip's card over the pedals (components/Coach): due, remembered on Try it or the hold itself, and put away on Skip or Got it. */
+          holdTip={holdTipDue}
+          onHoldTipSeen={rememberHoldNote}
+          onHoldTipClosed={dismissHoldNote}
           /* The colours' line, pressed: Setup is a sheet, so open it AND land on the page. */
           onOpenColours={() => {
             setSheet('settings')

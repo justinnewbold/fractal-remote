@@ -945,6 +945,56 @@ export async function refreshLoadedSceneNames(number) {
   await refreshSceneNames(number)
 }
 
+/**
+ * REFRESH NAMES on Play: this preset's scene names off the unit again, past
+ * anything kept in this browser or on the computer, and what came of it:
+ * 'found', 'none' (the unit says they are unnamed) or 'failed'. The phone's
+ * rig.rereadSceneNames. The same route a preset change reads them by
+ * (refreshLoadedSceneNames: the computer's copy first, where it is free), so
+ * a press never dumps a slot the copy already answers for. A copy of another
+ * preset is the phone's 'failed' too, with the one more read it owes
+ * (copyWasStale), never a dump of the slot on top of it.
+ *
+ * Not through refreshSceneNames, which puts no names up for a failed read:
+ * a press that could not reach the unit leaves the names on the tiles as
+ * they were, and says so in words.
+ */
+export async function rereadSceneNames() {
+  const number = state.preset?.number
+  if (!Number.isInteger(number)) return 'failed'
+  const era = unitEra
+  const still = () => sameUnit(era) && state.preset?.number === number
+  still.unit = () => sameUnit(era)
+  /* A VP4's come with its chain, off its one record (takeVp4Name). */
+  if (driver?.vp4Here?.()) {
+    const list = await refreshBlocks().catch(() => null)
+    if (!Array.isArray(list) || !still()) return 'failed'
+    return (state.sceneNames || []).some((n) => (n || '').trim()) ? 'found' : 'none'
+  }
+  let found = null
+  if (driver?.presetCopy && hostKeepsCopy() === true) {
+    const copy = await driver.presetCopy().catch(() => null)
+    if (!still()) return 'failed'
+    const here = judgeCopy(copy, state.preset?.name)
+    if (here === 'stale') {
+      copyWasStale(number)
+      return 'failed'
+    }
+    if (Array.isArray(here) && here.length) found = here
+  }
+  if (!found) {
+    if (!driver?.readSceneNames) return 'failed'
+    const shown = () => (state.preset?.number === number ? state.preset?.name : undefined)
+    found = await driver.readSceneNames(number, { shown, still, fresh: true }).catch(() => null)
+  }
+  if (!still() || !Array.isArray(found)) return 'failed'
+  if (!found.some((n) => (n || '').trim())) return 'none'
+  const clean = found.map((n) => (n || '').trim())
+  driver.keepSceneNames?.(number, clean)
+  set({ sceneNames: clean })
+  return 'found'
+}
+
 /*
  * THE COMPUTER ANSWERED WITH THE LAST SONG: its copy of the preset carries no
  * preset number, and a dump of the one just left can land in it after the
@@ -1540,7 +1590,8 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
   /* Refused before anything goes on screen while the link is down: see tapRefused. */
   tapRefused()
   const deadline = tapDeadline(at)
-  const run = ++presetRun
+  /* Not const: a newer press refused while this one is still on its way hands this one the screen (see presetPresses). */
+  let run = ++presetRun
   /* No read owes this tap a name until it lands: see takeVp4Name. */
   vp4Owed = null
   savedOver = null
@@ -1573,6 +1624,22 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
   }
   /* This press among the others of Previous, Next and the list still in the air: see the put-back below. */
   const press = inTheAir.press('preset', left)
+  /* And among the presets still on their way, for a newer press's refusal (see presetPresses). */
+  const landingsThen = presetLandings
+  const onItsWay = {
+    number,
+    state: 'air',
+    landing: 0,
+    sentAt: 0,
+    vp4Code: null,
+    /* The screen handed back under a new run; the select in the air is marked by it from here (vp4Selecting). */
+    adopt: () => {
+      const was = run
+      run = ++presetRun
+      if (vp4Selecting.delete(was)) vp4Selecting.add(run)
+    }
+  }
+  pressPreset(onItsWay)
   if (seen) resetSchemaCache()
   /* From the tap, not from the unit's answer: a tile drawn for the preset
      being left must not switch anything while the select is in the air. */
@@ -1669,6 +1736,12 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
       /* This window put the VP4 there: the next read of its record may name the place (takeVp4Name). */
       if (vp4Landed && run === presetRun) vp4Owed = number
       inTheAir.landed(press)
+      /* Where the unit is now, for a newer press refused while this one was landing (see presetPresses); not a press it may not have taken. */
+      if (unseen || overtaken) onItsWay.state = 'unsure'
+      else {
+        presetLandings += 1
+        Object.assign(onItsWay, { state: 'landed', landing: presetLandings, sentAt, vp4Code: vp4Landed ? vp4Code : null })
+      }
       /*
        * AND THE PLACE IT WAS SENT TO IS NOT PUT UP AS THE PLACE IT IS ON. A
        * preset played here before went up on the tap with its number, and an
@@ -1692,10 +1765,26 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
        */
       const from = inTheAir.failed(press)
       const older = from && from !== press ? from.before : null
+      onItsWay.state = 'failed'
+      /* What the unit is on, if an older press of these has it or may yet: see presetPresses. */
+      const unitHas = run === presetRun ? olderPress(onItsWay, landingsThen) : null
       /* The preset still loaded may be one whose read this tap called off —
          the settled read, or the one more read the computer's copy of
          another preset was owed. */
-      if (run === presetRun) {
+      if (unitHas?.state === 'air') {
+        /* Still on its way: the screen is that press's again, as it was while it was the newest, and its landing puts it up. */
+        set({ ...(before || {}), ...wasKnown, chainGoing: unitHas.number })
+        unitHas.adopt()
+      } else if (unitHas) {
+        /* Landed while this one was in the air: the unit is on it, and it is read there, once the unit has settled. */
+        set({ ...(before || {}), ...wasKnown, chainGoing: unitHas.number })
+        /* A VP4 cannot say which preset it is on: the place the computer saw it land is put up, as for any landing (below). */
+        if (unitHas.vp4Code !== null && state.preset?.number !== unitHas.number) {
+          enterPreset({ number: unitHas.number, name: unitHas.vp4Code || '', empty: false })
+        }
+        if (unitHas.vp4Code !== null) vp4Owed = unitHas.number
+        readPresetSoon(settleFrom(unitHas.sentAt), { preset: unitHas.vp4Code === null, reloaded: true })
+      } else if (run === presetRun) {
         /* What was up before the tap goes back with the preset it belongs to. */
         set(older ? { ...older, chainGoing: null } : { ...(before || {}), ...wasKnown, chainGoing: null })
         if (settleWaiting.length) readPresetSoon(OWN_SETTLE_MS)
@@ -1975,6 +2064,53 @@ function tapRefused() {
 
 /* Every control's presses still in the air, for what a failed one puts back (shared/relay-rules pressesInTheAir). */
 const inTheAir = pressesInTheAir()
+
+/*
+ * THE PRESETS STILL ON THEIR WAY, OLDEST FIRST, FOR THE NEWEST ONE'S REFUSAL.
+ *
+ * Two quick Nexts are two presets, and the second can be refused or dropped
+ * after the first went. What it put back was what was up before it: here a
+ * preset never loaded does not go up on the press, so that was the preset
+ * before BOTH, while the unit was on the first, under live pedals whose taps
+ * went to the unit's real preset by the old one's effect ids. Now the newest
+ * press's refusal asks this list first (olderPress):
+ *
+ *   - an older press still on its way is handed the screen back, as it was
+ *     while it was the newest, under a new run (its `adopt`), so its own
+ *     landing puts its preset up and its own refusal puts back what was
+ *     before it;
+ *   - one that landed while the refused press was in the air is where the
+ *     unit is: its number goes up as the preset going, and the settled read
+ *     asks the unit and reads its chain there.
+ *
+ * Only when neither is so does the refusal put back what was up before it.
+ * Each landing counts (presetLandings), so a press that landed before the
+ * refused one was made is not taken for news. A press the computer could
+ * not say landed (a VP4's unseen, one overtaken elsewhere) is not where the
+ * unit is, and is passed over.
+ */
+let presetPresses = []
+let presetLandings = 0
+
+function pressPreset(record) {
+  /* Nothing older than the last landing matters any more, nor anything that failed or is unsure. */
+  let floor = -1
+  presetPresses.forEach((r, i) => {
+    if (r.state === 'landed') floor = i
+  })
+  presetPresses = presetPresses.filter((r, i) => i >= floor && (r.state === 'air' || r.state === 'landed'))
+  presetPresses.push(record)
+}
+
+/* The newest older press still on its way, or the one that landed since `landingsThen`, or null. */
+function olderPress(record, landingsThen) {
+  for (let i = presetPresses.indexOf(record) - 1; i >= 0; i -= 1) {
+    const r = presetPresses[i]
+    if (r.state === 'air') return r
+    if (r.state === 'landed') return r.landing > landingsThen ? r : null
+  }
+  return null
+}
 
 async function write(field, value, send) {
   const before = state[field]
@@ -2401,6 +2537,7 @@ export function reset() {
   vp4Owed = null
   vp4Selecting.clear()
   vp4Era += 1
+  presetPresses = []
   knownChains.clear()
   knownPresets.clear()
   aheadChains.clear()

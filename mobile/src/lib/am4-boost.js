@@ -125,15 +125,17 @@ export const BOOST_NO_UNIT = 'The unit isn’t answering, so the boost wasn’t 
 export const BOOST_LOADING = 'The preset is still loading, so the boost wasn’t sent. Try it again in a moment.'
 
 /*
- * The one-time note over the browser's Play: the hold, and what a tap does.
- * On an AM4 the amp is the one block the note names whose tap is not an on
- * and off any more, so there it says so, and where the amp's own on and off
- * went. Here so the phone can use the same words if it ever has the note.
+ * The hold tip's card on an AM4 (P5 in shared/onboarding.mjs, drawn by the
+ * browser's components/Coach.jsx through shared/play-words coachWords). The
+ * amp is the one block whose tap is not an on and off: its tap switches the
+ * amp's boost, and the amp itself goes on and off in Edit. These are P5's own
+ * sentences with that said, the way the browser's one-line hold tip said it
+ * before the card. The phone's card can take them too ("the website is right,
+ * so the app gets an ordinary update").
+ * MY WORDING (the joins); Justin can change any of it.
  */
-export const PLAY_HINT_HOLD = 'Hold a block — the amp, the drive, any of them — to bring up its channels and pick the one this scene plays.'
-export const PLAY_HINT_TAP = 'A tap just switches it on and off.'
-export const PLAY_HINT_TAP_AM4 = 'A tap just switches it on and off, except the AM4’s amp: its tap switches the amp’s boost, and the amp itself goes on and off in Edit.'
-export const playHintTap = (slug) => (isAm4(slug) ? PLAY_HINT_TAP_AM4 : PLAY_HINT_TAP)
+export const COACH_BODY_AM4 = 'Tap toggles the block, except the AM4’s amp: its tap switches the amp’s boost, and the amp itself goes on and off in Edit. Press and hold to choose channels A-D.'
+export const COACH_DONE_AM4 = 'Hold any block to pick its channel. A quick tap still switches it on and off, except the AM4’s amp: its tap switches the amp’s boost.'
 
 /** The five things a boost pedal can show: 'other' is an AM4 amp whose boost the app cannot switch. */
 export const BOOST = Object.freeze({ on: 'on', off: 'off', ampOff: 'amp-off', unknown: 'unknown', other: 'other' })

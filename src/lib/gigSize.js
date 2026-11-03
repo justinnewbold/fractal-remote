@@ -115,6 +115,23 @@ export function loadSize(storage) {
   }
 }
 
+/*
+ * Whether a size was ever chosen on this device, whatever it was. Fit comes
+ * on by itself only for somebody who never chose how Play is drawn: a player
+ * who set Largest on a phone's browser before Fit was the phone's default
+ * keeps Largest (App.jsx fit). Unreadable storage is never chosen, as for
+ * loadSize.
+ */
+export function sizeChosen(storage) {
+  try {
+    const store = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null)
+    const raw = store?.getItem(KEY)
+    return raw !== null && raw !== undefined
+  } catch {
+    return false
+  }
+}
+
 /** Remember it. A failure here costs the next reload, not this press. */
 export function saveSize(n, storage) {
   try {
@@ -228,8 +245,10 @@ export function fitTiles({
  * the next launch. So off is written down as '0' and `fallback` decides only
  * what an UNSET value means.
  *
- * The browser passes nothing and therefore keeps the default it has always
- * had. Only the phone asks for true — see mobile/src/screens/Stage.js.
+ * The browser asks with null and decides an unset value by the screen: on
+ * for a phone, off everywhere else, the default it always had (App.jsx
+ * phoneScreen, 3 November 2026). The phone asks for true — see
+ * mobile/src/screens/Stage.js. Called with nothing, it answers false.
  */
 export function loadFit(storage, fallback = false) {
   try {
