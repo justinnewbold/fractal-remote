@@ -55,12 +55,49 @@ const DEFAULT_PROJECT = 'proj827190e9'
  *                        gave this address to reply to (contact)
  *   waiting_grants       an unlock waiting for this address to sign up
  *   download_link_sends  the address the desktop link went to, stored as the
- *                        sha256 of the lower-cased, trimmed address (see
- *                        migrations/20260920_download_link_rate.sql)
+ *                        sha256 of the address: lower-cased and trimmed until
+ *                        2 November 2026 (migrations/20260920_download_link_rate.sql),
+ *                        and since then with its +tag and, on Gmail, its dots
+ *                        taken off too (20261102_email_limits.sql). Both are
+ *                        deleted, so neither kind of row outlives the account.
  *
  * Deleted here with the service role, before the account goes. Best effort:
  * a failure is logged and the account is still deleted.
  */
+
+/**
+ * An address as note_download_link files it since 2 November 2026
+ * (supabase/migrations/20261102_email_limits.sql), rule for rule: lower-cased
+ * and trimmed; then, when it has an @, the part before the last @ loses
+ * everything from its first + (unless the + comes first), and on gmail.com
+ * or googlemail.com its dots, the domain becoming gmail.com; an empty name
+ * leaves the address as it was. test/server.mjs holds the two together.
+ */
+export function downloadLinkAddress(addr: string): string {
+  let norm = String(addr || '').trim().toLowerCase()
+  const m = norm.match(/^(.*)@([^@]*)$/)
+  if (m) {
+    let local = m[1]
+    let domain = m[2]
+    if (local.indexOf('+') > 0) local = local.split('+')[0]
+    if (domain === 'gmail.com' || domain === 'googlemail.com') {
+      local = local.replace(/\./g, '')
+      domain = 'gmail.com'
+    }
+    if (local.length > 0) norm = `${local}@${domain}`
+  }
+  return norm
+}
+
+const sha256 = async (text: string) =>
+  [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('')
+
+/** Every addr_hash a download link to this address may have been filed under: the old way and the new. */
+export async function downloadLinkHashes(email: string): Promise<string[]> {
+  const plain = String(email || '').trim().toLowerCase()
+  return [...new Set([await sha256(plain), await sha256(downloadLinkAddress(plain))])]
+}
+
 async function forgetRows(url: string, service: string, who: Who, by: By) {
   const rest = (path: string) =>
     fetch(`${url}/rest/v1/${path}`, {
@@ -75,9 +112,8 @@ async function forgetRows(url: string, service: string, who: Who, by: By) {
     /* ilike so a reply address typed in another case still matches, with its
        wildcards escaped so "a_b@x" can never match somebody else's "acb@x". */
     const like = encodeURIComponent(who.email.replace(/[\\%_]/g, (c) => `\\${c}`))
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(who.email))
-    const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
-    jobs.push(rest(`feedback?contact=ilike.${like}`), rest(`waiting_grants?email=eq.${at}`), rest(`download_link_sends?addr_hash=eq.${hash}`))
+    const hashes = await downloadLinkHashes(who.email)
+    jobs.push(rest(`feedback?contact=ilike.${like}`), rest(`waiting_grants?email=eq.${at}`), rest(`download_link_sends?addr_hash=in.(${hashes.join(',')})`))
   }
   await Promise.all(jobs)
 }

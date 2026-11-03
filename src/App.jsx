@@ -1527,8 +1527,6 @@ export default function App() {
    */
   const [paid, setPaid] = useState({ checked: false, unlocked: false })
   const [webPriceText, setWebPriceText] = useState(null)
-  /* Whose price was asked for, so the unlock page asks once per account (THE PRICE, below). */
-  const pricedFor = useRef(null)
   const [buying, setBuying] = useState(false)
   const [buySaid, setBuySaid] = useState(null)
   /* What Buy found, when it took no money: said after the page unlocks and goes. */
@@ -2248,12 +2246,11 @@ export default function App() {
    */
   useEffect(() => {
     let live = true
-    /* A price asked for the last account is not this one's: the unlock page
-       asks again for whoever is signed in now (see THE PRICE, below). */
-    setWebPriceText(null)
-    pricedFor.current = null
     if (!accountId) {
       setPaid({ checked: true, unlocked: false, for: null })
+      /* The demo shows the price to somebody not signed in: see TopBar. */
+      if (isDemo()) webPrice(null).then((price) => live && setWebPriceText(price))
+      else setWebPriceText(null)
       return () => {
         live = false
       }
@@ -2264,6 +2261,7 @@ export default function App() {
     checkUnlocked().then(
       (out) => live && setPaid({ checked: true, unlocked: out.unlocked, unknown: out.unknown, for: accountId })
     )
+    webPrice(accountId).then((price) => live && setWebPriceText(price))
     return () => {
       live = false
     }
@@ -2281,13 +2279,21 @@ export default function App() {
    * have — one press from the bar to the checkout, with the sign-in on the
    * way rather than a hunt through Settings for it. Somebody who turns out
    * to have paid already, on a phone, is not shown the unlock page at all.
-   *
-   * The UNLOCK is always there; the price beside it no longer is, until it
-   * has been pressed. Asking for it meant asking RevenueCat the moment the
-   * demo opened, which the privacy page says the demo never does (THE PRICE,
-   * after unlockOnScreen below, and audit RUN-3, approved 2 November 2026).
-   * The unlock page says the price, as it always did.
    */
+  /*
+   * The price on Settings' Unlock row for somebody not signed in, fetched
+   * when Settings opens rather than on every page load — the payment library
+   * is a download nobody who never looks at the row should pay for.
+   */
+  useEffect(() => {
+    if (sheet !== 'settings' || accountId || webPriceText) return undefined
+    let live = true
+    webPrice(null).then((price) => live && setWebPriceText(price))
+    return () => {
+      live = false
+    }
+  }, [sheet, accountId, webPriceText])
+
   /*
    * THE PHONE'S RULES, NAMED ONCE, so the browser on a phone plays by them.
    *
@@ -2326,43 +2332,6 @@ export default function App() {
   /* Either of the two places the unlock is drawn (unlockBody), on screen now.
      A name, so the asking below does not spell out their conditionals. */
   const unlockOnScreen = mustPay || (sheet === 'settings' && setupPage === 'unlock')
-
-  /*
-   * THE PRICE, ASKED ONLY ON THE UNLOCK PAGE, and only for a signed-in
-   * account (audit RUN-3, approved 2 November 2026).
-   *
-   * It was asked much sooner. The demo asked as soon as it opened, on the
-   * website and in the computer app's own window, and Settings asked as soon
-   * as it opened for somebody signed out, both under a made-up visitor
-   * number; and every sign-in asked under the account's. Each ask loads
-   * RevenueCat's web library, which tells RevenueCat it has started and asks
-   * it for the price, with the number and the browser's details: all of
-   * that from somebody who had only opened the demo, while public/
-   * privacy.html says the demo and the computer app on their own send
-   * nothing anywhere.
-   *
-   * So nothing is asked until the unlock is on screen: after UNLOCK in the
-   * demo's bar or the Unlock the full version row was pressed (openUnlock,
-   * which signs somebody in first), or put in front by mustPay. Until the
-   * answer comes everything reads as it always did before one came: UNLOCK
-   * with no price beside it, "Drive a real rig", "Unlock Full Version"; and
-   * once it has come, the row and the bar show it too, for that account.
-   * Nobody signed out is ever asked about (webPurchase.js webPrice), so
-   * there is no made-up visitor number any more: a purchase needed an
-   * account all along, and the unlock page is only reached with one.
-   *
-   * Once per account, kept across leaving the page and coming back; a price
-   * that could not be had (null) is asked again next time the page is up.
-   */
-  useEffect(() => {
-    if (!unlockOnScreen || !accountId || pricedFor.current === accountId) return
-    pricedFor.current = accountId
-    webPrice(accountId).then((price) => {
-      if (pricedFor.current !== accountId) return
-      if (price) setWebPriceText(price)
-      else pricedFor.current = null
-    })
-  }, [unlockOnScreen, accountId])
 
   /* Carried across the reload that ends the demo (see afterAccount), so the
      computer still lands on the unlock page it was heading for. */

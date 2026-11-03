@@ -2028,6 +2028,50 @@ export function run(test) {
   })
 
   /*
+   * A DELETED ACCOUNT LEAVES NO DOWNLOAD-LINK ROW, under either way it was
+   * filed: the address lower-cased (20260920) or, since 2 November 2026,
+   * with its +tag and Gmail's dots off too (20261102_email_limits.sql).
+   */
+  test('deleting an account takes its download-link row whichever way the address was filed', async () => {
+    const { downloadLinkAddress, downloadLinkHashes } = await import('../supabase/functions/_shared/forget-account.ts')
+    /* The SQL's own rules, as run on the live database when they were applied. */
+    for (const [given, filed] of [
+      ['zz.test+1@gmail.com', 'zztest@gmail.com'],
+      ['zztest+2@gmail.com', 'zztest@gmail.com'],
+      ['z.z.t.e.s.t@googlemail.com', 'zztest@gmail.com'],
+      ['zz+1@example.invalid', 'zz@example.invalid'],
+      ['zz@example.invalid', 'zz@example.invalid'],
+      ['+x@example.invalid', '+x@example.invalid'],
+      ['  Name.Here+tag@Example.COM ', 'name.here@example.com'],
+      ['no-at-sign', 'no-at-sign']
+    ]) {
+      assert.equal(downloadLinkAddress(given), filed, given)
+    }
+    const { createHash } = await import('node:crypto')
+    const h = (t) => createHash('sha256').update(t).digest('hex')
+    assert.deepEqual(await downloadLinkHashes('j.smith+x@gmail.com'), [h('j.smith+x@gmail.com'), h('jsmith@gmail.com')])
+    assert.deepEqual(await downloadLinkHashes('plain@example.com'), [h('plain@example.com')], 'a plain address is deleted twice')
+    const shared = read('supabase/functions/_shared/forget-account.ts')
+    assert.match(shared, /const hashes = await downloadLinkHashes\(who\.email\)/)
+    assert.match(shared, /download_link_sends\?addr_hash=in\.\(\$\{hashes\.join\(','\)\}\)/)
+    /* And the SQL still files it that way. */
+    const sql = read('supabase/migrations/20261102_email_limits.sql')
+    assert.match(sql, /split_part\(local_part, '\+', 1\)/)
+    assert.match(sql, /if domain_part in \('gmail\.com', 'googlemail\.com'\) then/)
+  })
+
+  test('a full version from a test purchase is said as one, and only a grant is "given by hand"', async () => {
+    const { accountDeleteAsk } = await import('../shared/admin.mjs')
+    const row = { email: 'tester@example.com', unlocked: true }
+    const test = accountDeleteAsk(row, { email: row.email, paid: { stores: [], byHand: false, test: true } })
+    assert.match(test, /came from a test purchase \(TestFlight or a sandbox\), so nothing real is lost\./)
+    assert.doesNotMatch(test, /you gave them/)
+    const fn = read('supabase/functions/grant-access/index.ts')
+    assert.match(fn, /const byHand = !stores\.length && \(granted \|\| \(found\?\.unlock\?\.active === true && !testOnly\)\)/, 'an unlock from a test purchase is called given by hand')
+    assert.match(fn, /paid: bought \? \{ stores, byHand, test \} : null/)
+  })
+
+  /*
    * DELETE ON EVERYONE WITH AN ACCOUNT, RUN.
    *
    * "How do I remove accounts altogether like the irecon one that's
@@ -2062,7 +2106,7 @@ export function run(test) {
     const look = await asHim({}, { purchases: { [CUSTOMER]: [bought('app_store'), bought('rc_billing', { status: 'refunded' }), bought('play_store', { environment: 'sandbox' })] } })
     assert.equal(look.status, 200, look.said.message)
     assert.deepEqual([look.said.ok, look.said.ask, look.said.id, look.said.email], [true, true, CUSTOMER, 'irecon@gmial.com'])
-    assert.deepEqual(look.said.paid, { stores: ['app_store'], byHand: false }, 'a refunded or test purchase is said to go with the account')
+    assert.deepEqual(look.said.paid, { stores: ['app_store'], byHand: false, test: false }, 'a refunded or test purchase is said to go with the account')
     assert.equal(deleted(look).length, 0, 'looking deleted something')
     assert.ok(!look.calls.some((c) => c.url.includes('/rest/v1/feedback')), 'looking read the account’s reports')
     /* RevenueCat not answering is unknown, never "nothing bought". */
@@ -2070,7 +2114,10 @@ export function run(test) {
     assert.equal(blind.said.paid, null)
     /* A full version given by hand, with no purchase. */
     const given = await asHim({}, { account: { id: CUSTOMER, email: 'irecon@gmial.com', unlock: { active: true, source: 'revenuecat' } } })
-    assert.deepEqual(given.said.paid, { stores: [], byHand: true })
+    assert.deepEqual(given.said.paid, { stores: [], byHand: true, test: false })
+    /* And one whose only purchase was a test one is that, not a full version given by hand. */
+    const tested = await asHim({}, { account: { id: CUSTOMER, email: 'irecon@gmial.com', unlock: { active: true, source: 'revenuecat' } }, purchases: { [CUSTOMER]: [bought('app_store', { environment: 'sandbox' })] } })
+    assert.deepEqual(tested.said.paid, { stores: [], byHand: false, test: true }, 'a TestFlight buyer is told he gave them the full version')
 
     /* Anything but the exact confirm is a look, whatever else it carries. */
     for (const confirm of [undefined, 'yes', true, 'DELETE']) {

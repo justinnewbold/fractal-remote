@@ -846,8 +846,17 @@ async function deleteByHand(found: Record<string, any> | null, email: string, in
     const bought = await purchasesOf(account)
     const kept = (bought || []).filter((p) => !p.refunded && !p.sandbox)
     const stores = [...new Set(kept.filter((p) => p.store !== 'promotional').map((p) => p.store))]
-    const byHand = !stores.length && (kept.some((p) => p.store === 'promotional') || found?.unlock?.active === true)
-    return json({ ok: true, found: true, ask: true, email: address, id: account, paid: bought ? { stores, byHand } : null })
+    /*
+     * Given by hand: a grant, or an unlock with no store purchase behind it.
+     * But an unlock whose only purchase was a test one (TestFlight, a
+     * sandbox) is that test purchase's, and is said as one, never as a full
+     * version he gave them.
+     */
+    const granted = kept.some((p) => p.store === 'promotional')
+    const testOnly = !stores.length && !granted && (bought || []).some((p) => !p.refunded && p.sandbox)
+    const byHand = !stores.length && (granted || (found?.unlock?.active === true && !testOnly))
+    const test = testOnly
+    return json({ ok: true, found: true, ask: true, email: address, id: account, paid: bought ? { stores, byHand, test } : null })
   }
 
   if (String(input.id || '') !== account || email !== address) {

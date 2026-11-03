@@ -838,6 +838,7 @@ export function accountDeleteAsk(row, said) {
       out.push('They paid by card on the website: that goes with the account, and nothing brings it back. Deleting refunds nothing, so refund it in RevenueCat first if they’re owed it.')
     }
     if (paid.byHand === true) out.push('The full version you gave them goes with it. Give it again if they make a new account.')
+    if (paid.test === true) out.push('Their full version came from a test purchase (TestFlight or a sandbox), so nothing real is lost.')
   } else if (row?.unlocked) {
     out.push(
       'They have the full version. Paid on the App Store or Google Play, it stays with them, and Restore a purchase brings it back on a new account. Paid by card on the website, or given by you, it goes with the account for good, and deleting refunds nothing.'

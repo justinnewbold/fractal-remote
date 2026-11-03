@@ -11309,7 +11309,7 @@ test('a device server that stops is started again on every computer, waited for 
 
   // main.js: every stop, with a code or a signal, on every computer, goes to restartServer; never one let go of, never while quitting.
   const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
-  const run = main.slice(main.indexOf('const runServer = () => {'), main.indexOf('const backUp = async (child) => {'))
+  const run = main.slice(main.indexOf('const runServer = (axiom) => {'), main.indexOf('const backUp = async (child) => {'))
   const exit = run.slice(run.indexOf("child.on('exit'"))
   assert.match(exit, /^child\.on\('exit', \(code, signal\) => \{[\s\S]*?if \(server !== child \|\| quitting\) return[\s\S]*?restartServer\(code === null \? signal : `code \$\{code\}`\)\s*\n\s*\}\)/, 'a stop is not started again, or one let go of or on the way out is')
   assert.ok(!/startHidden/.test(run), 'starting a stopped server again depends on whether anybody is there again')

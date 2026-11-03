@@ -55,9 +55,12 @@
         <strong>This app collects as little as it can.</strong> Your phone talks to your
         computer, your computer talks to your unit, and what passes between them is control
         messages — a preset, a scene, a knob — passed along and not written down. The demo, and the
-        computer app on its own, need no account and send nothing about you anywhere — and a phone
-        that opens the computer's own address on the same wifi sends nothing anywhere either:
-        nothing leaves the room.
+        computer app on its own, need no account and send nothing about you anywhere, and a phone
+        that opens the computer's own address on the same wifi sends nothing anywhere about you
+        either. The one thing they ask the internet for is the price of the full version, so the
+        demo can show it: from the payment company, under a made-up number rather than anything
+        about you (see <em>Unlocking the full version</em>). On an iPhone, Safari itself may also
+        ask Apple for the App Store banner at the top of the page.
       </p>
 
       <p>
@@ -115,26 +118,26 @@
         it was in.
       </p>
       <!--
-        THE PAGE ITSELF, ON THE WEBSITE AND IN THE COMPUTER APP, ASKS
-        REVENUECAT NOTHING until the unlock page is open, for an account that
-        is signed in (audit RUN-3, 2 November 2026; src/App.jsx THE PRICE). Before, the demo asked RevenueCat the price the
-        moment it opened, under a made-up number, and Settings did for
-        anybody signed out, which made the lead above untrue. What
-        RevenueCat's web library sends when it does start is its own
-        (node_modules/@revenuecat/purchases-js, the context every event
-        carries): the browser's language and user agent, time zone, screen
-        size, and the page's address, title and referrer. The paragraph
-        below says it in plain words.
+        THE PRICE IN THE DEMO. "When someone's on the demo, it should always
+        say unlock, and then the price at the top" (Justin). So the page asks
+        RevenueCat the price as the demo opens, and as Settings opens for
+        somebody signed out, under a made-up number kept in that browser
+        (src/lib/webPurchase.js visitorId); signed in, under the account's.
+        The audit (RUN-3, 2 November 2026) found the lead above saying the
+        demo sends nothing anywhere, which this made untrue; the price stays,
+        and the page says so. What RevenueCat's web library sends when it
+        starts is its own (node_modules/@revenuecat/purchases-js, the context
+        every event carries): the browser's language and user agent, time
+        zone, screen size, and the page's address, title and referrer.
       -->
       <p>
-        In a browser or the computer app, the page sends RevenueCat nothing until you open the
-        page that sells the full version: not in the demo, and not signed out. Signed in, it asks
-        this app's own server whether the account has the full version, and the server asks
-        RevenueCat under the account's number, never your name or email address. Only once the
-        unlock page is open does the page itself ask RevenueCat the price, under the same number,
-        and RevenueCat then sees which browser it is, its language, time zone and screen size,
-        and the page's address and title and the page you came from. The checkout itself, if you
-        press Buy, is RevenueCat's and Stripe's.
+        In a browser or the computer app, the demo shows the price of the full version beside
+        UNLOCK, and Settings shows it on the Unlock row. To know it, the page asks RevenueCat as the
+        demo opens, or as Settings opens for somebody signed out, under a made-up number kept in that
+        browser, never your name or email address; signed in, it asks under the account's number.
+        RevenueCat then sees which browser it is, its language, time zone and screen size, and the
+        page's address and title and the page you came from. The checkout itself, if you press Buy,
+        is RevenueCat's and Stripe's.
       </p>
       <p>
         <strong>Help getting connected.</strong> The app drives your unit through a free app on

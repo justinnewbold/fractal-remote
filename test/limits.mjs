@@ -5376,7 +5376,10 @@ export function run(test) {
     for (const f of ['index.html', ...shipped('src'), ...shipped('shared')]) {
       assert.ok(!/fonts\.googleapis\.com|fonts\.gstatic\.com/.test(uncommented(read(f))), `${f} asks Google for a font again`)
     }
-    assert.ok(!/<link[^>]+rel="(?:stylesheet|preconnect)"[^>]+https?:/.test(html), 'index.html loads a stylesheet or opens a connection somewhere else again')
+    /* Its attributes in either order: the Google link this replaced had href first. */
+    const outside = /<link\b(?=[^>]*\brel="(?:stylesheet|preconnect|dns-prefetch|preload)")(?=[^>]*\bhref="(?:https?:)?\/\/)[^>]*>/i
+    assert.ok(outside.test('<link href="https://fonts.googleapis.com/css2?family=Archivo" rel="stylesheet">') && outside.test('<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'), 'the check misses a link to another site')
+    assert.ok(!outside.test(html), 'index.html loads a stylesheet or opens a connection somewhere else again')
 
     /* Loaded before the styles that name them, from the bundle's entry. */
     const main = read('src/main.jsx')

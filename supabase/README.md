@@ -562,11 +562,16 @@ The review login is named by the sha256 of its address in all of these
 
 ### Checking it
 
-Developer → Customers → Everyone with an account: the review login's line
-starts "Apple’s review login: keep it", and its sheet has no Delete or Take it
-back. Tap the misspelled account, Delete this account, read the question,
-Delete for good: the sheet closes, the row is gone, and the line at the top
-says it was deleted.
+1. After deploying delete-account: a POST to it with no body answers 400
+   "Not confirmed.", which proves it starts with the new `../_shared` import
+   and deletes nothing.
+2. Developer → Customers → Everyone with an account: the review login's line
+   starts "Apple’s review login: keep it", and its sheet has no Delete or Take
+   it back.
+3. Tap the misspelled account, Delete this account, read the question, Delete
+   for good. In the browser the row closes and the line at the top says it
+   was deleted; on the phone the sheet stays open on the server's words, with
+   nothing left to tap, and the list behind it no longer has the row.
 
 ## What works: the gear notes (opt-in, not linked to anybody)
 
