@@ -1189,7 +1189,8 @@ brackets here are still empty, so the next version needs them again):
   (beta) row under My rig and no Developer section. On Justin's own phone,
   signing out leaves his Bluetooth (beta) off afterwards: it comes back by
   Settings → My rig → Bluetooth (beta) → Connect once he is signed in again.
-  The same account goes in Google's App access.
+  Google's App access had the same account until 3 November 2026; it has
+  its own now (below).
 - **The three video links replace the brackets under Videos,** at the very
   end: the FM3 video (the Hardware paragraph calls it video 1), the presets
   video, and the one of deleting an account (video 3). Each is a Google
@@ -1340,12 +1341,22 @@ under "No location". Declaring it here would contradict that page.
 
 **2. App access** (App content → App access → All or some functionality is
 restricted → the instruction with the review account, or Add instructions).
-Google's reviewer needs the same thing Apple's does: the demo account Apple
-signs in with, which has to have the full version for good, with nothing
-that runs out, or it stops at the purchase page. Its email and password go
-in their own boxes. Replace whatever is in "Any other information" now (the
-1.87.1 note, if it was pasted: it described a first-launch Bluetooth card
-that this build does not have) with this:
+Google's reviewer needs the same thing Apple's does: a review account with
+the full version for good, with nothing that runs out, or it stops at the
+purchase page. Its email and password go in their own boxes.
+
+**Google has its own review account, since 3 November 2026.** It was Apple's
+until then. The new one was made for Google alone: it has the full version
+for good, it is left out of the setup emails, and it is not Justin's, so it
+shows no Developer pages. Its email and password are only in Play Console's
+App access boxes, never here, because this repository is public. Apple's
+stays in App Store Connect → App Review Information. Only Apple's is kept
+from deletion on the Accounts page (REVIEW_LOGINS in grant-access, by its
+digest); Google's is an ordinary account there, so never delete it.
+
+Replace whatever is in "Any other information" now (the 1.87.1 note, if it
+was pasted: it described a first-launch Bluetooth card that this build does
+not have) with this:
 
 ```
 This account has the full version.
