@@ -5832,11 +5832,20 @@ export default function App() {
                 it. Draws nothing unless the computer can do it, which is the
                 Linux app only. */}
             <StartAtBoot />
-            {/* And beside it, the other pedalboard-computer switch: "Also let
-                Axiom use this pedal" (shared/axiom.mjs). His account only, by
-                the window's sign-in or the computer's own, and in the
-                computer app's window only. */}
-            <AxiomSwitch admin={isAdmin(link.account?.id) || isAdmin(link.cloud?.user?.id)} />
+            {/*
+              "Also let Axiom use this pedal" (shared/axiom.mjs), in the
+              computer app's window only, under Developer: "It should be under
+              my developer section, correct? Not in the section where the
+              other users see it?" (3 November 2026). With his account signed
+              in to the window it sits in the Developer section below. Here,
+              for every other case, under a Developer heading of its own: his
+              account signed in to the computer but not the window, and,
+              whoever is signed in, while the switch is on, so one that is on
+              is never out of sight on the computer it is on.
+            */}
+            {!isAdmin(link.account?.id) ? (
+              <AxiomSwitch admin={isAdmin(link.cloud?.user?.id)} heading={<p className="silk-label setup-group axiom-heading">Developer</p>} />
+            ) : null}
 
             {isAdmin(link.account?.id) ? (
               <>
@@ -5855,6 +5864,8 @@ export default function App() {
                     <SetupRow key="am4check" title="AM4 check" status="Read one AM4 setting at a time" onClick={() => setSetupPage('am4check')} />
                   ) : null}
                 </div>
+                {/* "Also let Axiom use this pedal", his account signed in here (see above for every other case). */}
+                <AxiomSwitch admin />
               </>
             ) : null}
             {/* Last: "Move the Play Screen section down to the bottom of the list." */}

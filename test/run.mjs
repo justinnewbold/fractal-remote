@@ -1847,13 +1847,21 @@ test('the device server lets Axiom onto the unit’s own routes only while its s
 
   // Shown to his account only, on the phone and in the computer's window, and only where it can be honoured.
   const settings = readSrc(new URL('../mobile/src/screens/Settings.js', import.meta.url), 'utf8')
-  assert.match(settings, /\{isAdmin\(account\?\.id\) \? \(\s*<AxiomSwitch\b/, 'the phone shows the Axiom switch to customers')
+  /* In his Developer section, never where customers look ("Not in the section where the other users see it?", 3 November 2026). */
+  const developer = settings.slice(settings.indexOf('<Group title="Developer"'), settings.indexOf('</Group>', settings.indexOf('<Group title="Developer"')))
+  assert.match(settings, /\{isAdmin\(account\?\.id\) \? \(\s*<Group title="Developer"/, 'the phone’s Developer section is shown to customers')
+  assert.match(developer, /<AxiomSwitch link=\{link\} demo=\{demo\} throughAdapter=\{throughAdapter\} hostVersion=\{hostVersion\} macName=\{macName\} \/>/, 'the phone’s Axiom switch is not in the Developer section')
+  assert.equal(settings.split('<AxiomSwitch').length - 1, 1, 'the phone draws the Axiom switch somewhere besides the Developer section')
   const phoneSwitch = readSrc(new URL('../mobile/src/components/AxiomSwitch.js', import.meta.url), 'utf8')
   assert.match(phoneSwitch, /const usable = link === 'connected' && !demo && !throughAdapter && axiomComputerCan\(hostVersion, isOlder\)/)
   assert.match(phoneSwitch, /if \(!usable\) return null/)
   assert.match(phoneSwitch, /writeComputerSetting\(AXIOM_ID, axiomData\(next, Date\.now\(\)\)\)/)
   const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
-  assert.match(app, /<AxiomSwitch admin=\{isAdmin\(link\.account\?\.id\) \|\| isAdmin\(link\.cloud\?\.user\?\.id\)\} \/>/)
+  /* The window: in the Developer section with his account signed in to it; otherwise under a Developer heading of its own, and to anybody else only while it is on. */
+  const windowDev = app.slice(app.indexOf('<p className="silk-label setup-group">Developer</p>\n                {/* Its rows'), app.indexOf('<p className="silk-label setup-group">Play screen</p>'))
+  assert.match(windowDev, /<AxiomSwitch admin \/>/, 'the window’s Axiom switch is not in the Developer section')
+  assert.match(app, /\{!isAdmin\(link\.account\?\.id\) \? \(\s*<AxiomSwitch admin=\{isAdmin\(link\.cloud\?\.user\?\.id\)\} heading=\{<p className="silk-label setup-group axiom-heading">Developer<\/p>\} \/>\s*\) : null\}/)
+  assert.equal(app.split('<AxiomSwitch').length - 1, 2)
   const windowSwitch = readSrc(new URL('../src/components/AxiomSwitch.jsx', import.meta.url), 'utf8')
   assert.match(windowSwitch, /const usable = inDesktopApp\(\) && !isDemo\(\)/)
   assert.match(windowSwitch, /if \(!usable \|\| on === null \|\| \(!admin && !on\)\) return null/, 'the window shows the Axiom switch to customers')

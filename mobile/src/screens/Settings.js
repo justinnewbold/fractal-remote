@@ -792,6 +792,16 @@ export default function Settings({
               <SetupRow title="Customers" status="Sales, sign-ups, and giving access" onPress={() => setPage('customers')} />
               <SetupRow title="App health" status="What's live, what works, and what's been tried" onPress={() => setPage('health')} />
               <SetupRow title="Testing" status="View as a new customer, Bluetooth check" onPress={() => setPage('testing')} />
+              {/*
+                "Also let Axiom use this pedal" (shared/axiom.mjs), for the
+                computer this phone is connected to: in his Developer section
+                ("It should be under my developer section, correct? Not in
+                the section where the other users see it?", 3 November 2026),
+                where it had been at the foot of Phone & computer under a
+                Developer heading of its own. His account only, as the whole
+                group is, and drawn only for a computer app that reads it.
+              */}
+              <AxiomSwitch link={link} demo={demo} throughAdapter={throughAdapter} hostVersion={hostVersion} macName={macName} />
             </Group>
           ) : null}
 
@@ -1449,20 +1459,6 @@ export default function Settings({
               {/* How one you don't use comes off this list: at that computer (relay-rules notUsingOne). */}
               <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{notUsingOne('app')}</Text>
             </View>
-          ) : null}
-
-          {/* "Also let Axiom use this pedal" (shared/axiom.mjs), for the
-              computer this page is about: his account only, and drawn only
-              for a computer app that reads it. */}
-          {isAdmin(account?.id) ? (
-            <AxiomSwitch
-              link={link}
-              demo={demo}
-              throughAdapter={throughAdapter}
-              hostVersion={hostVersion}
-              macName={macName}
-              heading={<Section>Developer</Section>}
-            />
           ) : null}
 
           {/* Who this is signed in as moved to its own Account page, off the
