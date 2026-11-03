@@ -9,10 +9,11 @@
  * them directly back to the play screen, no matter how deep they are in the
  * submenus" (Justin, of the phone). So Done leaves Settings from any depth.
  * The way back is one step: "‹ Settings", or the name of the page this one
- * sits under ("‹ Phone & computer"). The sheet's × and a swipe down stay one
- * step back as well, as he asked of this end: "When you go deeper into the
+ * sits under ("‹ Phone & computer"). The sheet's × and a swipe down go back
+ * to the Settings list, as he asked of this end: "When you go deeper into the
  * settings menu have swiping down or clicking the X take you back to the
- * settings menu instead of the home screen."
+ * settings menu instead of the home screen." From a page under Phone &
+ * computer (Demo Unit, the update steps) that is two steps, not one.
  *
  * Two rows rather than three things across one, as on the phone: the page's
  * name gets the width to itself, so "Rename presets and scenes" never has to

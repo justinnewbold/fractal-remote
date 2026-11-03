@@ -48,6 +48,12 @@ export const FEEDBACK_LINE = 'Something broken, or something you want'
 /* Under Show the walkthrough. Not "three-step": the walkthroughs have four steps. */
 export const REPLAY_LINE = 'The setup, from the start'
 export const FOOTSWITCHES_LINE = 'What each switch does'
+/*
+ * On the Footswitches page while the switches cannot be read: the unit gone
+ * while the page was open (the computer asleep, the cable out). This end's
+ * only: the phone's page asks the unit and says what it answered.
+ */
+export const FOOTSWITCHES_AWAY = 'Your unit isn’t connected right now, so its switches can’t be read. They show here once it’s back.'
 /* The version is on the account card above, so this says what is behind the row. */
 export const SMALL_PRINT_LINE = 'Privacy, licenses, who makes this'
 

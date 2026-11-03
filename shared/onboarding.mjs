@@ -157,7 +157,7 @@ export const D3 = {
   note: 'Secure connection through this computer - the phone or tablet never connects directly to the unit.',
   pair: 'Pair my phone or tablet',
   not: 'Not now',
-  foot: 'You can add a phone or tablet later in Settings → Phone & computer.'
+  foot: 'You can add a phone or tablet later in Settings → My rig → Phone & computer.'
 }
 
 /** D4 — the QR code, the pairing code, and the wait. */
@@ -251,7 +251,7 @@ export const D5 = {
     }
   ],
   go: 'Start playing',
-  foot: 'Need this again? Settings → Show the walkthrough.'
+  foot: 'Need this again? Settings → Help → Show the walkthrough.'
 }
 
 /** P1 — the phone's welcome. */

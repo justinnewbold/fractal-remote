@@ -134,6 +134,7 @@ import {
   ACCOUNT_LINE,
   DEVELOPER_HINT_BROWSER,
   FEEDBACK_LINE,
+  FOOTSWITCHES_AWAY,
   FOOTSWITCHES_LINE,
   HELP_HINT,
   PLAY_SCREEN_HINT,
@@ -592,16 +593,21 @@ const HAND_EDIT_KINDS = new Set([
  * read what to try, read what happened, tell somebody — and they were three
  * rows that each looked like a different errand.
  */
+/*
+ * THE PHONE & COMPUTER ROW'S NAME, and its page's: "Phone & computer", or
+ * "iPad & computer" on an iPad and "Browser & computer" in a laptop's
+ * browser, as the phone names its row (shared/device-word.mjs pairTitle).
+ * Read each time it is drawn: the website learns which device it is on once
+ * its role is known, after this file has loaded. The computer app's window
+ * says "Phone & computer", and so does the demo on every device: it plays the
+ * computer app, and its page says "This computer" over "Your phone or
+ * tablet", which under "Browser & computer" read as two different ends.
+ */
+const pairName = () => pairTitle(isDemo() ? 'computer' : undefined)
+
 const SETUP_PAGES = {
-  /*
-   * "Phone & computer", or "iPad & computer" on an iPad and "Browser &
-   * computer" in a laptop's browser, as the phone names its row
-   * (shared/device-word.mjs pairTitle). Read each time it is drawn: the
-   * website learns which device it is on once its role is known, after this
-   * file has loaded. The computer app's window says "Phone & computer".
-   */
   get link() {
-    return pairTitle()
+    return pairName()
   },
   phone: 'Get it on your phone or tablet',
   demo: 'Demo Unit',
@@ -2390,7 +2396,7 @@ export default function App() {
    * IS the computer, so outside the demo it keeps its own words, about the
    * phone remote it serves.
    */
-  const PAIR_TITLE = pairTitle()
+  const PAIR_TITLE = pairName()
   const pairSaid =
     link.role === 'mac' && !isDemo()
       ? [describeLink(link).note || 'Phone remote off', status === 'live' ? `${device?.short || device?.name || 'Unit'} · connected` : 'No unit'].join(' · ')
@@ -5738,6 +5744,15 @@ export default function App() {
           return undefined
         }}
         title="Settings"
+        /*
+          The height of the screen, as the phone's Settings is, and one height
+          whatever is open. A sheet as tall as what it holds grew upwards when a
+          section opened, so the heading left the thumb that opened it and a
+          second tap there, the phone's way to shut it, landed on a row: Help
+          tapped twice started the walkthrough, Play screen tapped twice
+          switched to Light. At this height a section opens downwards.
+        */
+        tall
       >
         {/*
           Setup, as a list.
@@ -5940,7 +5955,7 @@ export default function App() {
               in sight under the heading with the section shut.
             */}
             {isAdmin(link.account?.id) ? (
-              <SetupGroup title="Developer" hint={DEVELOPER_HINT_BROWSER} whileShut={<AxiomSwitch />}>
+              <SetupGroup title="Developer" hint={DEVELOPER_HINT_BROWSER} whileShut={<AxiomSwitch stay />}>
                 <div className="setup-rows">
                   <SetupRow key="access" title="Give someone access" status="Look someone up, or unlock them" onClick={() => setSetupPage('access')} />
                   <SetupRow key="sales" title="Sales at a glance" status="Today, this week, all time" onClick={() => setSetupPage('sales')} />
@@ -6528,7 +6543,7 @@ export default function App() {
               , an independent project not affiliated with Fractal Audio Systems.
             </p>
           </Section>
-<Section key="feedback" title="Feedback" note="Something broken, or something you want">
+<Section key="feedback" title="Feedback" note={FEEDBACK_LINE}>
             {/*
               Where a person looks when the app has annoyed them: behind the
               same door as the checks and the log, because "it's broken" and
@@ -6563,11 +6578,16 @@ export default function App() {
           the Edit sheet's panel, which stays there too. Outside a fold it
           counts as open, so it reads the switches while the page is up, and
           it says first that this is best done between songs.
+
+          The page and its head are drawn whatever the unit is doing, as the
+          phone's are; only the panel waits for switches that can be read. A
+          unit that drops while the page is open (the computer asleep, the
+          cable out) left a sheet with nothing in it but the ×.
         */}
-        {setupPage === 'footswitches' && switchesReadable ? (
+        {setupPage === 'footswitches' ? (
           <div className="setup-page">
             <SetupHead back={upLabel('footswitches')} onBack={() => setSetupPage(upFrom('footswitches'))} onDone={leaveSettings} title={SETUP_PAGES.footswitches} />
-            <Footswitches />
+            {switchesReadable ? <Footswitches /> : <p className="hint">{FOOTSWITCHES_AWAY}</p>}
           </div>
         ) : null}
 

@@ -108,8 +108,9 @@ export default function PhoneApp() {
 
       <h4>Once it is installed</h4>
       <p className="hint">
-        Open <strong>Phone &amp; computer</strong> in Settings here and sign in. Sign in on your
-        phone or tablet with the same account, and that is the pairing done.
+        In Settings here, open <strong>My rig</strong>, then <strong>Phone &amp; computer</strong>,
+        and sign in. Sign in on your phone or tablet with the same account, and that is the
+        pairing done.
       </p>
     </>
   )

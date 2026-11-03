@@ -12,10 +12,10 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-03",
     "day": "3 November 2026",
-    "version": "1.89.29",
+    "version": "1.89.30",
     "lines": [
       {
-        "text": "On the website and the computer app, the top bar now matches the phone app’s: the version on the left, and one button that says Live, your unit, and which computer it’s on.",
+        "text": "On the website and the computer app, the top bar and Settings now match the phone app’s: the version on the left, one button that says Live, your unit and which computer it’s on, and Settings in sections that fold, with Done on every page.",
         "only": null
       },
       {

@@ -3008,7 +3008,7 @@ export function run(test) {
     )
   })
 
-  test('Setup is a short list of doors, not everything at once', () => {
+  test('Setup is a short list of doors, not everything at once', async () => {
     /*
      * "Setup screen needs to be fixed. It's showing rename scenes and not set
      * up like the web app."
@@ -3061,7 +3061,16 @@ export function run(test) {
 
     /* Each row says something true about the state it leads to, which is the
        whole point of the list: it answers most questions without a tap. */
-    assert.match(settings, /const pairStatus = demo\s*\?[\s\S]{0,900}?`\$\{deviceName \|\| 'Unit'\} · connected`/)
+    /* In the words the browser's Settings draws too (shared/settings-words.mjs pairLine), and Bluetooth's own beside them. */
+    assert.match(settings, /const pairStatus = bluetooth && !demo\s*\? bluetoothWord\s*: pairLine\(\{ demo, demoName: DEMO_UNITS\.find\(\(u\) => u\.key === unit\)\?\.name, link, unitState, unit: deviceName \}\)/)
+    const { pairLine } = await import('../mobile/src/lib/settings-words.js')
+    assert.equal(pairLine({ link: 'connected', unitState: 'present', unit: 'AM4' }), 'AM4 · connected')
+    assert.equal(pairLine({ link: 'connected', unitState: 'unknown', unit: null }), 'Unit · connected')
+    assert.equal(pairLine({ link: 'joining' }), 'Finding your computer')
+    assert.equal(pairLine({ link: 'no-answer', unitState: 'present', unit: 'AM4' }), 'Your computer isn’t answering')
+    assert.equal(pairLine({ link: 'signed-out' }), 'Not connected')
+    assert.equal(pairLine({ link: 'off' }), 'Not connected')
+    assert.equal(pairLine({ link: 'connected', unitState: 'missing', unit: 'AM4' }), 'Computer connected · no unit')
     assert.match(settings, /<SetupRow title=\{PAIR_TITLE\} status=\{pairStatus\}/)
     /*
      * AND THE GROUPS START CLOSED (29 October 2026: "Make it so each section
@@ -4966,9 +4975,16 @@ export function run(test) {
     assert.match(account, /title="Unlock the full version"/, 'unlocking or restoring a purchase is not with the account')
 
     const web = read('src/App.jsx').replace(/\s+/g, ' ')
-    const head = web.slice(web.indexOf('className={`setup-account-card'), web.indexOf('<p className="silk-label setup-group">My rig</p>'))
-    assert.match(head, /\{FULL\}/, 'the version left the top of the browser’s Settings')
-    assert.match(head, /signedInHere \? link\.account\.email : isPairAccount\(link\.account\?\.email\) \? 'Paired, no account' : 'Not signed in'/, 'the browser does not say who is signed in, or that nobody is')
+    const head = web.slice(web.indexOf('className={`setup-account-card'), web.indexOf('<SetupGroup title="My rig"'))
+    assert.ok(head.length > 100, 'the browser’s account card moved; this check reads it')
+    /* The phone's card at both ends since 3 November 2026: who, the version, and what is behind it. */
+    assert.match(head, /\{accountWhat\} · v\{VERSION\}/, 'the version left the top of the browser’s Settings')
+    assert.match(head, /<span className="setup-account-who">\{accountWho\}<\/span>/, 'the browser’s card does not say who is signed in')
+    assert.match(web, /const accountWho = signedInHere \? link\.account\.email : isPairAccount\(link\.account\?\.email\) \? 'Paired, no account' : 'Not signed in'/, 'the browser does not say who is signed in, or that nobody is')
+    assert.match(web, /const accountWhat = isDemo\(\) \? 'Demo' : paid\.unlocked \? 'Full version' : 'Not unlocked yet'/, 'the browser’s card does not say Demo, Full version or Not unlocked yet as the phone’s does')
+    assert.match(phone, /const what = demo \? 'Demo' : unlocked \? 'Full version' : 'Not unlocked yet'/, 'the phone’s card says something else now')
+    assert.match(head, /\{signedInHere \? <span className="setup-account-options">\{ACCOUNT_LINE\}<\/span> : null\}/, 'the browser’s card does not say where Delete account is')
+    assert.match(head, /aria-label=\{`Account, \$\{accountWho\}, \$\{accountWhat\}`\}/, 'the browser’s card is said differently from the phone’s')
     assert.match(head, /onClick=\{\(\) => setSetupPage\('account'\)\}/, 'the browser’s account card does not open the account')
   })
 
@@ -12826,7 +12842,7 @@ export function run(test) {
     )
   })
 
-  test('the demo is offered, escapable, and never pretends to be a rig', () => {
+  test('the demo is offered, escapable, and never pretends to be a rig', async () => {
     /*
      * Offered on the sign-in screen, because that is where somebody with no
      * computer is standing, and it is the screen that otherwise asks them for a
@@ -12890,8 +12906,11 @@ export function run(test) {
      * reading Axe-Fx III. That is the exact fault the five demo units were
      * added to end, left behind in a string.
      */
-    assert.match(settings, /`Demo — simulated \$\{DEMO_UNITS\.find\(\(u\) => u\.key === unit\)\?\.name \|\| 'unit'\}`/, 'Setup does not say which unit the demo is')
-    assert.ok(!/'Demo — simulated FM3'/.test(settings), 'Setup calls every demo an FM3 again')
+    assert.match(settings, /pairLine\(\{ demo, demoName: DEMO_UNITS\.find\(\(u\) => u\.key === unit\)\?\.name,/, 'Setup does not say which unit the demo is')
+    const { pairLine } = await import('../shared/settings-words.mjs')
+    assert.equal(pairLine({ demo: true, demoName: 'Axe-Fx III', link: 'connected', unitState: 'present', unit: 'FM3' }), 'Demo — simulated Axe-Fx III', 'Setup does not say which unit the demo is')
+    assert.equal(pairLine({ demo: true }), 'Demo — simulated unit')
+    assert.ok(!/'Demo — simulated FM3'/.test(settings) && !/Demo — simulated FM3/.test(read('shared/settings-words.mjs')), 'Setup calls every demo an FM3 again')
 
     /* The link reads as connected, because from every screen's point of view it
        is: the questions get answered. Otherwise the app refuses to open the
@@ -13018,7 +13037,10 @@ export function run(test) {
     assert.match(rig, /const unit = caps\?\.connected === false \? 'missing' : 'present'/, 'a Mac with no unit is not noticed')
     assert.match(rig, /fresh\?\.number === -1 \? \{ unit: 'silent' \}/, 'a unit that stops answering its name is not noticed')
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
-    assert.match(settings, /unitState === 'silent' \? `Computer connected · \$\{deviceName \|\| 'unit'\} not answering`/, 'Setup still says connected over a silent unit')
+    assert.match(settings, /pairLine\(\{[^}]*\bunitState, unit: deviceName \}\)/, 'Setup does not hand its line the unit’s state')
+    const rowWords = await import('../shared/settings-words.mjs')
+    assert.equal(rowWords.pairLine({ link: 'connected', unitState: 'silent', unit: 'FM3' }), 'Computer connected · FM3 not answering', 'Setup still says connected over a silent unit')
+    assert.equal(rowWords.pairLine({ link: 'connected', unitState: 'silent' }), 'Computer connected · unit not answering')
   })
 
   /*

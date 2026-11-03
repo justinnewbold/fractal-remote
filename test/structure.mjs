@@ -187,6 +187,46 @@ async function coloursOnABench() {
   }
 }
 
+/*
+ * SETTINGS' SECTION AND PAGE HEAD, DRAWN: src/components/SetupGroup.jsx and
+ * SetupHead.jsx, bundled by esbuild with the real React and drawn by React's
+ * own server renderer, as the colours page is above. The first frame only:
+ * what is on the screen before anything is pressed.
+ */
+async function setupOnABench() {
+  const { build } = await import('esbuild')
+  const root = fileURLToPath(new URL('../', import.meta.url))
+  const out = await build({
+    stdin: {
+      contents: `
+        export { renderToStaticMarkup } from 'react-dom/server'
+        export { createElement } from 'react'
+        export { default as SetupGroup } from './src/components/SetupGroup.jsx'
+        export { default as SetupHead } from './src/components/SetupHead.jsx'
+      `,
+      resolveDir: root,
+      loader: 'js'
+    },
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    write: false,
+    jsx: 'automatic',
+    logLevel: 'silent',
+    define: { 'process.env.NODE_ENV': '"production"' }
+  })
+  const dir = mkdtempSync(join(tmpdir(), 'setup-bench-'))
+  const file = join(dir, 'bench.cjs')
+  writeFileSync(file, out.outputFiles[0].text)
+  try {
+    const bench = createRequire(import.meta.url)(file)
+    bench.draw = (component, props) => bench.renderToStaticMarkup(bench.createElement(component, props))
+    return bench
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 export function run(test) {
   test('call sites only pass props the component has', () => {
     // Every component, every caller — including components calling components.
@@ -6232,4 +6272,174 @@ export function run(test) {
     assert.deepEqual(early, [], `read before it is set:\n  ${early.join('\n  ')}`)
   })
 
+
+  /* ------------------------------------------------------------------ */
+  /* Settings' sections and page heads, as the phone's (3 November 2026)  */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * "Is there anything else we need to do to match the apps? Settings
+   * menus?" The phone's Settings folds into sections, each with a green line
+   * under its name while it is shut, and every page inside it has Done beside
+   * "‹ Settings". The browser's had small capital headings over everything at
+   * once, and pages with an orange "‹ Settings" and no Done. These hold the
+   * browser's to the phone's shape.
+   */
+  test('every page inside the browser’s Settings has the way back and Done, and Done goes straight to Play', async () => {
+    const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+    assert.ok(!/className="setup-back"/.test(app), 'a page in Settings still has the old back link, with no Done beside it')
+    assert.ok(!/className="setup-page-title"/.test(app), 'a page in Settings draws its own title instead of the page head')
+    /* Every page of the Settings sheet, read from the sheet itself. */
+    const at = app.indexOf("open={sheet === 'settings'}")
+    assert.notEqual(at, -1, 'the Settings sheet moved; this check reads it')
+    const settings = app.slice(at, app.indexOf('</Sheet>', at))
+    const pages = [...new Set([...settings.matchAll(/\{setupPage === '(\w+)'/g)].map((m) => m[1]))]
+    const named = Object.keys(
+      Function(`return ${app.slice(app.indexOf('const SETUP_PAGES = {') + 'const SETUP_PAGES = '.length, app.indexOf('\n}\n', app.indexOf('const SETUP_PAGES = {')) + 2).replace(/UPDATE_STEPS\.title|MIDI_SETUP_TITLE|pairName\(\)/g, "''")}`)()
+    )
+    assert.deepEqual([...pages].sort(), [...named].sort(), 'a page in SETUP_PAGES has no page in the sheet, or a page has no name')
+    assert.ok(pages.length >= 22, `only ${pages.length} pages found; this check no longer reads them`)
+    for (const key of pages) {
+      const from = settings.indexOf(`{setupPage === '${key}'`)
+      const next = settings.indexOf('{setupPage === ', from + 5)
+      const page = settings.slice(from, next === -1 ? undefined : next)
+      assert.ok(
+        page.includes(`<SetupHead back={upLabel('${key}')} onBack={() => setSetupPage(upFrom('${key}'))} onDone={leaveSettings} title={SETUP_PAGES.${key}} />`),
+        `the ${key} page has no head with the way back one step and Done`
+      )
+    }
+    /* Done is the whole way out: no page, and no sheet. The way back is one step, as before. */
+    assert.match(app, /const leaveSettings = \(\) => \{\s*setSetupPage\(null\)\s*setSheet\(null\)\s*\}/, 'Done does not go straight back to Play')
+    assert.match(app, /const upLabel = \(page\) => `\\u2039 \$\{SETUP_PAGES\[upFrom\(page\)\] \|\| 'Settings'\}`/, 'the way back no longer says where it goes')
+
+    /* And the head itself, drawn: the way back on the left, Done on the right, the name under them, each button wired to its own errand. */
+    const bench = await setupOnABench()
+    const markup = bench.draw(bench.SetupHead, { back: '‹ Settings', onBack: () => {}, onDone: () => {}, title: 'Colors' })
+    assert.match(markup, /<button type="button" class="setup-head-back">‹ Settings<\/button><button type="button" class="setup-head-done">Done<\/button><\/div><h2 class="setup-page-title">Colors<\/h2>/, `the page head is not ‹ Settings, Done, then the title: ${markup}`)
+    const back = () => {}
+    const done = () => {}
+    const tree = bench.SetupHead({ back: '‹ Settings', onBack: back, onDone: done, title: 'Colors' })
+    const buttons = [tree.props.children[0].props.children].flat()
+    assert.equal(buttons.find((b) => b.props.className === 'setup-head-back').props.onClick, back, 'the way back does something else')
+    assert.equal(buttons.find((b) => b.props.className === 'setup-head-done').props.onClick, done, 'Done does something else')
+  })
+
+  test('the sections of Settings start shut at both ends, say what matters while shut, and stay as they were left while the app is open', async () => {
+    /* The browser's, drawn: shut, its hint in its name and under it, its rows not drawn at all. */
+    const bench = await setupOnABench()
+    const shut = bench.draw(bench.SetupGroup, { title: 'Help', hint: 'HINT-LINE', children: bench.createElement('p', null, 'A-ROW') })
+    assert.match(shut, /aria-expanded="false"/, 'a section starts open')
+    assert.match(shut, /aria-label="Help, HINT-LINE"/, 'a shut section does not say what is inside it to a screen reader')
+    assert.match(shut, /<span class="setup-section-hint">HINT-LINE<\/span>/, 'a shut section has no green line under its name')
+    assert.ok(!shut.includes('A-ROW'), 'a shut section still draws its rows')
+    assert.match(shut, /^<section class="setup-section" data-open="no"><h3 class="setup-section-heading"><button/, 'a section’s name is not a heading holding a button')
+    /* What must stay in sight while it is shut is drawn under the heading. */
+    const kept = bench.draw(bench.SetupGroup, { title: 'About', hint: 'v1', whileShut: bench.createElement('p', null, 'A-SWITCH-THAT-IS-ON'), children: bench.createElement('p', null, 'A-ROW') })
+    assert.ok(kept.includes('A-SWITCH-THAT-IS-ON') && !kept.includes('A-ROW'), 'a switch that is on is folded out of sight with its section')
+    /* Open or shut is kept for the page's life, by name, as the phone keeps it for the app's. */
+    const group = readFileSync(new URL('../src/components/SetupGroup.jsx', import.meta.url), 'utf8')
+    assert.match(group, /const \[open, setOpen\] = useState\(\(\) => OPEN\.has\(title\)\)/, 'a section starts open')
+    assert.match(group, /if \(open\) OPEN\.delete\(title\)\s*else OPEN\.add\(title\)\s*setOpen\(!open\)/, 'a section opened a minute ago is shut again')
+    assert.match(group, /\nconst OPEN = new Set\(\)\n/, 'which sections are open is not kept for the page’s life')
+    /* The phone's, the same way (mobile/src/screens/Settings.js Group). */
+    const phone = readFileSync(new URL('../mobile/src/screens/Settings.js', import.meta.url), 'utf8')
+    assert.match(phone, /const \[open, setOpen\] = useState\(\(\) => OPEN_GROUPS\.has\(title\)\)/, 'a phone section starts open')
+    assert.match(phone, /\nconst OPEN_GROUPS = new Set\(\)\n/)
+    assert.match(phone, /accessibilityLabel=\{open \|\| !hint \? title : `\$\{title\}, \$\{hint\}`\}/)
+    /* Every heading on the browser's front list is a section; the one small capital heading left is the Axiom switch's, which never folds. */
+    const front = src.slice(src.indexOf('setup-account-card'), src.indexOf("setupPage === 'appearance' ? ("))
+    assert.deepEqual([...front.matchAll(/<SetupGroup title="([^"]+)"/g)].map((m) => m[1]), ['My rig', 'Help', 'About', 'Developer', 'Play screen'])
+    assert.deepEqual([...front.matchAll(/className="silk-label setup-group([^"]*)"/g)].map((m) => m[1]), [' axiom-heading'], 'a heading on the front list does not fold')
+    /* No unit's name under the word Settings: the phone does not show one. */
+    assert.ok(!/<Sheet\s+open=\{sheet === 'settings'\}[\s\S]{0,900}?\bnote=/.test(src.slice(src.indexOf("open={sheet === 'settings'}") - 40, src.indexOf("open={sheet === 'settings'}") + 900)), 'the unit’s name is back under the word Settings')
+  })
+
+  test('a section opens downwards, under the thumb that opened it, and the Footswitches page keeps its way out', () => {
+    /*
+     * The browser's Settings was a sheet as tall as what it held, so opening a
+     * section made it taller upwards: on a 390-wide phone Help's heading went
+     * up 254 pixels, and a second tap where it had been, the phone's way to
+     * shut it, started the walkthrough. The phone's Settings is the screen,
+     * and so is this one now: one height whatever is open.
+     */
+    const at = src.indexOf("open={sheet === 'settings'}")
+    const tag = src.slice(at, src.indexOf('>', src.indexOf('title="Settings"', at)) + 1)
+    assert.match(tag, /\n\s+tall\n\s*>$/, 'the Settings sheet is as tall as what it holds again, so a section opening moves its heading')
+    /*
+     * The Footswitches page: its head is drawn whatever the unit is doing, as
+     * the phone's is, and only the panel waits for switches that can be read.
+     * Gated whole, a unit dropping while it was open left an empty sheet with
+     * no way back and no Done.
+     */
+    const from = src.indexOf("{setupPage === 'footswitches'")
+    const page = src.slice(from, src.indexOf('{setupPage === ', from + 5))
+    assert.match(page, /^\{setupPage === 'footswitches' \? \(/, 'the Footswitches page, head and all, is drawn only while the switches can be read')
+    assert.match(page, /\{switchesReadable \? <Footswitches \/> : <p className="hint">\{FOOTSWITCHES_AWAY\}<\/p>\}/, 'the Footswitches panel is read from a unit that cannot say')
+  })
+
+  test('a sentence that sends somebody through Settings names the section the row is in, since every section starts shut', async () => {
+    /* Which section each row is in, read off the browser's front list (the computer app's window is the same page). */
+    const front = src.slice(src.indexOf('setup-account-card'), src.indexOf("setupPage === 'appearance' ? ("))
+    const sectionOf = (row) => {
+      for (const m of front.matchAll(/<SetupGroup title="([^"]+)"/g)) {
+        const body = front.slice(m.index, front.indexOf('</SetupGroup>', m.index))
+        if (body.includes(row)) return m[1]
+      }
+      return null
+    }
+    assert.equal(sectionOf('<SetupRow key="link" title={PAIR_TITLE}'), 'My rig')
+    assert.equal(sectionOf('title={REPLAY}'), 'Help')
+    const { D3, D5, REPLAY } = await import('../shared/onboarding.mjs')
+    const { notUsingOne } = await import('../shared/relay-rules.mjs')
+    const { pairTitle } = await import('../shared/device-word.mjs')
+    /* Each is about the computer app's Settings, where the row is Phone & computer whatever device reads the sentence. */
+    for (const [where, said, path] of [
+      ['the computer walkthrough’s pairing step', D3.foot, `Settings → My rig → ${pairTitle('computer')}`],
+      ['the computer walkthrough’s last step', D5.foot, `Settings → Help → ${REPLAY}`],
+      ['Which unit, on the phone', notUsingOne('app'), `Settings → My rig → ${pairTitle('computer')} → Phone remote`],
+      ['Which unit, on the website', notUsingOne('page'), `Settings → My rig → ${pairTitle('computer')} → Phone remote`]
+    ]) {
+      assert.ok(said.includes(path), `${where} does not say ${path}: ${said}`)
+    }
+    /* The computer app's own page about getting the remote: My rig, then Phone & computer. */
+    const phoneApp = readFileSync(new URL('../src/components/PhoneApp.jsx', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+    assert.match(phoneApp, /In Settings here, open <strong>My rig<\/strong>, then <strong>Phone &amp; computer<\/strong>, and sign in\./, 'Get it on your phone or tablet sends people to a row they cannot see on the front of Settings')
+  })
+
+  test('Settings’ green lines and row lines are the phone’s, from the one file, at both ends', async () => {
+    const words = await import('../shared/settings-words.mjs')
+    const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+    const web = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+    const phone = readFileSync(new URL('../mobile/src/screens/Settings.js', import.meta.url), 'utf8')
+    assert.match(web, /from '\.\.\/shared\/settings-words\.mjs'/, 'the browser has its own words for Settings')
+    assert.match(phone, /from '\.\.\/lib\/settings-words'/, 'the phone has its own words for Settings')
+    /* Not one of them typed out at either end any more. */
+    for (const [name, said] of Object.entries(words)) {
+      if (typeof said !== 'string') continue
+      for (const [end, text] of [['browser', web], ['phone', phone]]) assert.ok(!strip(text).includes(`'${said}'`) && !strip(text).includes(`"${said}"`), `the ${end} types ${name} out for itself: ${said}`)
+    }
+    const flatWeb = web.replace(/\s+/g, ' ')
+    const flatPhone = phone.replace(/\s+/g, ' ')
+    for (const [end, text, heads] of [
+      ['browser', flatWeb, ['<SetupGroup title="My rig" hint={pairSaid}>', '<SetupGroup title="Help" hint={HELP_HINT}>', '<SetupGroup title="Developer" hint={DEVELOPER_HINT_BROWSER}', '<SetupGroup title="Play screen" hint={PLAY_SCREEN_HINT}>', 'status={TROUBLE_LINE}', 'status={FEEDBACK_LINE}', 'status={REPLAY_LINE}', 'status={FOOTSWITCHES_LINE}', 'status={SMALL_PRINT_LINE}', '{ACCOUNT_LINE}', '<SetupRow key="link" title={PAIR_TITLE} status={pairSaid}']],
+      ['phone', flatPhone, ['<Group title="My rig" hint={pairStatus}>', '<Group title="Help" hint={HELP_HINT}>', '<Group title="Developer" hint={DEVELOPER_HINT}>', '<Group title="Play screen" hint={PLAY_SCREEN_HINT}>', 'status={TROUBLE_LINE}', 'status={FEEDBACK_LINE}', 'status={REPLAY_LINE}', 'status={FOOTSWITCHES_LINE}', 'status={SMALL_PRINT_LINE}', ': ACCOUNT_LINE}', '<SetupRow title={PAIR_TITLE} status={pairStatus}']]
+    ]) {
+      for (const head of heads) assert.ok(text.includes(head), `the ${end}’s Settings does not draw ${head}`)
+    }
+    /* My rig's line is the same sentence at both ends, from the same function, over the link as the top bar shows it. */
+    assert.match(flatWeb, /const pairSaid = link\.role === 'mac' && !isDemo\(\) \? \[describeLink\(link\)\.note \|\| 'Phone remote off', [^\]]+\]\.join\(' · '\) : pairLine\(\{ demo: isDemo\(\), demoName: isDemo\(\) \? unitByKey\(demoUnit\(\)\)\.name : '', link: shownLink\.link, unitState: unitStateOf\(\{ status, device, reason: faultReason \}\), unit: device\?\.short \|\| device\?\.name \|\| '' \}\)/, 'the browser’s My rig line is not the phone’s, or the computer app lost its own')
+    assert.match(flatPhone, /: pairLine\(\{ demo, demoName: DEMO_UNITS\.find\(\(u\) => u\.key === unit\)\?\.name, link, unitState, unit: deviceName \}\)/, 'the phone’s My rig line is not from the shared file')
+    assert.match(flatWeb, /const PAIR_TITLE = pairName\(\)/, 'the browser’s row is not named for the device it is on')
+    assert.match(web, /get link\(\) \{\s*return pairName\(\)\s*\}/, 'the browser’s page is not named for the device it is on, when it is drawn')
+    /* The device it is on, except in the demo, which plays the computer app on every device: its page says "This computer". */
+    assert.match(web, /const pairName = \(\) => pairTitle\(isDemo\(\) \? 'computer' : undefined\)/, 'the row is not named for the device it is on, or the demo names it for a browser over the computer’s page')
+    /* The phone's copy is the shared file's, generated. */
+    const phoneWords = await import('../mobile/src/lib/settings-words.js')
+    for (const [name, said] of Object.entries(words)) if (typeof said === 'string') assert.equal(phoneWords[name], said, `the phone’s copy of ${name} differs`)
+    /* About's line is the version at both ends, and "three-step" is gone: the walkthroughs have four. */
+    assert.match(flatWeb, /<SetupGroup title="About" hint=\{`v\$\{VERSION\}`\}/)
+    assert.ok(!/three-step/i.test(strip(web)), 'the walkthrough row says three steps again')
+    /* "Get it on your phone or tablet" only at the computer end: a phone in a browser already holds the remote. */
+    assert.match(flatWeb, /\{phoneEnd \? null : \( <SetupRow key="phone-app" title="Get it on your phone or tablet"/, 'a phone in a browser is offered a way to get the app onto a phone')
+  })
 }

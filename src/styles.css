@@ -10982,14 +10982,17 @@ button.view-tab {
   gap: var(--s-2);
 }
 
+/* A box to type in, on the field colour with the rule round it, as every other
+   text field here: on the sheet's own panel colour, with a border drawn in a
+   colour nobody defines, the message box was not there to see. */
 .feedback-text,
 .feedback-contact {
   width: 100%;
   font: inherit;
   font-size: var(--f-3);
   color: var(--silk);
-  background: var(--panel);
-  border: 1px solid var(--hairline);
+  background: var(--chassis);
+  border: 1px solid var(--rule);
   border-radius: var(--r-2);
   padding: var(--s-3);
 }
@@ -10998,6 +11001,22 @@ button.view-tab {
   resize: vertical;
   min-height: 96px;
   line-height: 1.5;
+}
+
+/* The email box is an input[type='text'], and that rule is one step more
+   particular than a class, so it gave the box the preset filter's typewriter
+   face. An element and a class, later in the file, is what wins it back. */
+input.feedback-contact {
+  font-family: var(--body);
+}
+
+/* Under a thumb, 16px, or an iPhone zooms the page on the first tap into the
+   message box: the class above outranks the bare `textarea` in the touch rule
+   that sets it for every other field. (The email box already gets it there.) */
+@media (pointer: coarse) {
+  textarea.feedback-text {
+    font-size: var(--f-input);
+  }
 }
 
 /* The log, and the switch that decides whether it goes.
@@ -13656,11 +13675,18 @@ button.setup-account-card {
   padding: var(--s-3) var(--s-4);
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
-  background: var(--panel);
+  /* The section headings' fill, so the card and the five under it read as one list of doors, as on the phone. */
+  background: var(--panel-hi);
 }
 
 button.setup-account-card:active {
-  background: var(--panel-hi);
+  background: var(--chassis);
+}
+
+/* The headings' chevron, the same size: the card sits right on top of them. */
+button.setup-account-card .setup-row-chevron {
+  font-size: var(--f-5);
+  line-height: 1;
 }
 
 .setup-account-text {
@@ -13786,16 +13812,27 @@ button.setup-section-head:active {
   display: none;
 }
 
+/* A row among a page's folds (Stop the looper, under Troubleshooting) sits on their rule, not in a box of its own. */
+.setup-page > .setup-page-rows {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+}
+
 .setup-inline-theme {
   padding: var(--s-2) 0;
 }
 
 /*
- * LIGHT OR DARK AT PHONE WIDTH: the phone's three buttons. Three equal,
- * full-width, thumb-high buttons in their own words, amber when chosen. The
- * small segmented control stays in the wide window, where a mouse aims at it.
+ * LIGHT OR DARK WHEREVER SETTINGS IS A SHEET FROM THE BOTTOM: the phone's
+ * three buttons. Three equal, full-width, thumb-high buttons in their own
+ * words, amber when chosen: on a phone, and on an iPad or tablet held
+ * upright, as the phone app draws them there. The small segmented control
+ * stays in the wide window, where Settings is the panel down the side
+ * (Sheet's DESK) and a mouse aims at it.
  */
-@media (max-width: 620px) {
+@media not all and (min-width: 1000px) {
   .setup-inline-theme .theme-toggle {
     display: flex;
     width: 100%;

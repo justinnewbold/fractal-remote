@@ -1526,4 +1526,47 @@ export function run(test) {
     /* Never a scene: a scene that is not the live one is not switched off. */
     assert.ok(!/gig-scene[^{]*\[data-off/.test(code), 'a scene tile can go grey')
   })
+
+  test('Settings’ sections and page heads are thumb-high, and light or dark is three full-width buttons wherever Settings is a sheet from the bottom', () => {
+    /* One rule's body, outside any media block, by its exact selector. */
+    const body = (sel) => {
+      const at = code.indexOf(`\n${sel} {`)
+      assert.notEqual(at, -1, `${sel} has no rule`)
+      return code.slice(at, code.indexOf('}', at))
+    }
+    assert.match(body('button.setup-section-head'), /min-height: 60px/, 'a section heading is under the phone’s row height')
+    assert.match(body('.setup-section-hint'), /color: var\(--ok\);[\s\S]*white-space: nowrap/, 'a section’s line is not the rows’ green, on one line')
+    assert.match(body(".setup-section[data-open='yes'] .setup-section-chevron"), /transform: rotate\(90deg\)/, 'an open section’s chevron does not turn down')
+    assert.match(code, /\nbutton\.setup-head-back,\nbutton\.setup-head-done \{[^}]*min-height: 44px/, 'the way back and Done are under the touch floor')
+    assert.match(body('.setup-rows:empty'), /display: none/, 'an empty list draws a bordered line')
+    /* The account card and the headings under it are one list of doors, as on the phone: one fill, one size of chevron. */
+    assert.equal(body('button.setup-account-card').match(/background: ([^;]+);/)?.[1], body('button.setup-section-head').match(/background: ([^;]+);/)?.[1], 'the account card and the section headings are filled differently')
+    assert.equal(body('button.setup-account-card .setup-row-chevron').match(/font-size: ([^;]+);/)?.[1], body('.setup-section-chevron').match(/font-size: ([^;]+);/)?.[1], 'the account card’s chevron is another size from the headings’')
+    /* The Feedback page's message box is a box: an edge in a colour that exists, on the field colour, not the sheet's. */
+    const box = body('.feedback-text,\n.feedback-contact')
+    assert.match(box, /border: 1px solid var\(--rule\);/, 'the message box’s edge is in a colour nobody defines, so it is not drawn')
+    assert.match(box, /background: var\(--chassis\);/, 'the message box is the sheet’s own colour')
+    /* input[type='text'] outranks a class: the email box needs an element and a class to keep the body face. */
+    assert.match(body('input.feedback-contact'), /font-family: var\(--body\);/, 'the email box is in the preset filter’s typewriter face')
+    assert.ok(code.indexOf('\ninput.feedback-contact {') > code.indexOf("\ninput[type='text'] {"), 'the email box’s face comes before the rule it has to beat')
+    /* And under a thumb the message box keeps the 16px that stops an iPhone zooming on the first tap. */
+    assert.match(code, /@media \(pointer: coarse\) \{\s*textarea\.feedback-text \{\s*font-size: var\(--f-input\);/, 'the message box is under 16px on a phone, so the page zooms when it is tapped')
+    /* Wherever Settings is a sheet from the bottom (a phone, an iPad held upright), the phone's three buttons; the wide window, where it is the side panel (Sheet's DESK), keeps the small control. */
+    assert.match(readFileSync(new URL('../src/components/Sheet.jsx', import.meta.url), 'utf8'), /const DESK = '\(min-width: 1000px\)'/, 'the side panel starts at another width; move the three buttons’ query with it')
+    const narrow = [...code.matchAll(/@media not all and \(min-width: 1000px\) \{/g)].map((m) => {
+      let i = m.index + m[0].length
+      let depth = 1
+      const from = i
+      while (i < code.length && depth) {
+        if (code[i] === '{') depth++
+        else if (code[i] === '}') depth--
+        i++
+      }
+      return code.slice(from, i - 1)
+    }).find((b) => b.includes('.setup-inline-theme .theme-toggle button'))
+    assert.ok(narrow, 'light or dark is the small control on a phone or an upright iPad')
+    assert.match(narrow, /\.setup-inline-theme \.theme-toggle \{[^}]*display: flex;[^}]*width: 100%/, 'the three buttons do not run the full width')
+    assert.match(narrow, /\.setup-inline-theme \.theme-toggle button \{[^}]*flex: 1 1 0;[^}]*min-height: 44px;[^}]*text-transform: none/, 'the three buttons are not equal, thumb-high, in their own words')
+    assert.match(narrow, /\.setup-inline-theme \.theme-toggle button\.current \{[^}]*background: var\(--signal\)/, 'the chosen one is not amber')
+  })
 }

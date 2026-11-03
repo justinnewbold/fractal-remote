@@ -31,8 +31,13 @@ import { hostDocOrUnknown, isDemo, writeHostDoc } from '../lib/forgefx'
  * computer does not answer, and "no answer" is never shown as "off". After a
  * change the box is held still until the restart is over (AXIOM_SETTLE_MS),
  * so a second click cannot land in the gap, and then the switch is read again.
+ *
+ * `stay` is for the copy Settings keeps in sight under the shut Developer
+ * heading while the switch is on (components/SetupGroup whileShut): once
+ * shown, it stays for as long as it is drawn, so unticking it does not snatch
+ * it from under the pointer before its "restarting" line is seen.
  */
-export default function AxiomSwitch({ admin = false, heading = null }) {
+export default function AxiomSwitch({ admin = false, heading = null, stay = false }) {
   const usable = inDesktopApp() && !isDemo()
   /* null until the store has said. */
   const [on, setOn] = useState(null)
@@ -42,6 +47,8 @@ export default function AxiomSwitch({ admin = false, heading = null }) {
   /* Bumped to read the switch again. */
   const [asks, setAsks] = useState(0)
   const settle = useRef(null)
+  /* Whether this copy has been on screen yet (`stay`). */
+  const shown = useRef(false)
 
   useEffect(() => {
     if (!usable) return undefined
@@ -66,7 +73,8 @@ export default function AxiomSwitch({ admin = false, heading = null }) {
 
   useEffect(() => () => clearTimeout(settle.current), [])
 
-  if (!usable || on === null || (!admin && !on)) return null
+  if (!usable || on === null || (!admin && !on && !(stay && shown.current))) return null
+  shown.current = true
 
   const change = async (next) => {
     setBusy(true)

@@ -808,7 +808,7 @@ export const NO_NAME_SAID = 'It answered, but didn’t say its name, so it can�
  */
 export function notUsingOne(where) {
   const fresh = where === 'page' ? 'Then reload this page' : 'Then close Fractal Remote here all the way (swipe it away) and open it again'
-  return `Not using one of these? On that computer, open Fractal Remote, go to Settings → Phone & computer → Phone remote and press Turn off, or switch that computer off. ${fresh}: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.`
+  return `Not using one of these? On that computer, open Fractal Remote, go to Settings → My rig → Phone & computer → Phone remote and press Turn off, or switch that computer off. ${fresh}: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.`
 }
 
 /**
