@@ -11116,7 +11116,7 @@ export function run(test) {
     assert.match(logScreen, /const throughAdapter = bluetoothOn\(\) && !isDemo\(\)/)
     assert.match(
       logScreen,
-      /\.\.\.\(throughAdapter \? \{ link: `Bluetooth, \$\{link\.link\}\$\{link\.macName && link\.link !== 'off' \? `, through \$\{link\.macName\}` : ''\}` \} : \{ computer: link\.macName \|\| 'none',/,
+      /\.\.\.\(throughAdapter \? \{ link: `\$\{way\}, \$\{link\.link\}\$\{link\.macName && link\.link !== 'off' \? `, through \$\{link\.macName\}` : ''\}` \} : \{ computer: link\.macName \|\| 'none',/,
       'over Bluetooth the pasted log still names the adapter as a computer'
     )
     const rigLines = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
@@ -11894,7 +11894,7 @@ export function run(test) {
      */
     assert.match(
       flat,
-      /\{link !== 'connected' \? \( <Press label=\{throughAdapter \? 'Look for the adapter again' : 'Look for the computer again'\} sub=\{throughAdapter && opensApplesScreen\(\) \? APPLE_SCREEN_OPENS : undefined\} onPress=\{throughAdapter \? \(\) => lookForAdapterAgain\(onReconnect\) : onReconnect\} \/> \) : null\}/,
+      /\{link !== 'connected' \? \( <Press label=\{throughAdapter \? \(cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\) : 'Look for the computer again'\} sub=\{throughAdapter && opensApplesScreen\(\) \? APPLE_SCREEN_OPENS : undefined\} onPress=\{throughAdapter \? \(\) => lookForAdapterAgain\(onReconnect\) : onReconnect\} \/> \) : null\}/,
       'the reconnect button is shown on a live link'
     )
   })
@@ -13089,7 +13089,8 @@ export function run(test) {
     const app = read('mobile/App.js')
     assert.match(app, /const unitGoes = demo \? 'demo' : link\.hosts\?\.length > 1 && link\.link === 'connected' \? 'which' : 'link'/, 'a pill tapped over a dropped link opens Which unit, with no way to look again')
     assert.match(flat, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes,/, 'the bar is not told where its pill goes')
-    assert.match(flat, /const pillGoes = demo \? 'Change the demo unit' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/, 'a screen reader is told Switch unit for a page with nothing to switch')
+    /* On a USB cable it opens the note that says how it is connected, with its one way back to the computer (lib/cableWords). */
+    assert.match(flat, /const pillGoes = demo \? 'Change the demo unit' : cable \? 'How it’s connected' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/, 'a screen reader is told Switch unit for a page with nothing to switch')
     assert.match(flat, /accessibilityLabel=\{`\$\{\[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)\}\. \$\{pillGoes\}`\}/)
     assert.ok(!/'Switch unit'/.test(bar), 'the pill still says Switch unit')
     /* The demo on a 360-wide phone: Unlock over the price, and the pill's edge at space.sm. */
@@ -13601,7 +13602,7 @@ export function run(test) {
     /* On the phone the name is in the pill since 24 October 2026, and the pill says where it goes: the demo units, Which unit, or Phone & computer (App.js unitGoes). */
     assert.match(
       read('mobile/src/components/TopBar.js').replace(/\s+/g, ' '),
-      /demo \? 'Change the demo unit' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/,
+      /demo \? 'Change the demo unit' : cable \? 'How it’s connected' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/,
       'the phone’s unit name is labelled for a page it does not open'
     )
     assert.ok(!/About this unit/.test(web + read('mobile/src/components/TopBar.js')), 'the unit name still promises a page that is not there')

@@ -63,10 +63,12 @@ import {
   restoreBluetooth,
   setBluetooth,
   useBluetoothOn,
-  useBluetoothTrouble
+  useBluetoothTrouble,
+  useCableNow
 } from './src/lib/bluetooth'
 import { useBluetoothOffered } from './src/lib/useBluetoothOffered'
 import { BLUETOOTH_WAYS_SHORT, REPORT_BUTTON } from './src/lib/bluetooth-gear'
+import { CABLE_LOOK_AGAIN, CABLE_WAITING } from './src/lib/cableWords'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
@@ -1828,6 +1830,9 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
    */
   const bluetooth = useBluetoothOn()
   const trouble = useBluetoothTrouble()
+  /* A unit on a USB cable (lib/bleAdapters isCable): no adapter, no Bluetooth to switch on, so the line and Look again say the cable and the unit. */
+  const cableKept = useCableNow()
+  const cable = bluetooth && cableKept
   const said =
     link.link === 'connected'
       ? 'Asking your unit what it is\u2026'
@@ -1942,7 +1947,9 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
                   ? `${ALLOW_WORDS}.`
                   : trouble === 'restricted'
                     ? `${RESTRICTED_WORDS}.`
-                    : `Check the ${deviceNoun()}’s Bluetooth is on, that the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it.`}
+                    : cable
+                      ? CABLE_WAITING
+                      : `Check the ${deviceNoun()}’s Bluetooth is on, that the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it.`}
             </Note>
           ) : elsewhere ? (
             <Note tone="fault">
@@ -1993,7 +2000,7 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
               nothing connects. */}
           {bluetooth ? (
             <Press
-              label="Look for the adapter again"
+              label={cable ? CABLE_LOOK_AGAIN : 'Look for the adapter again'}
               sub={opensApplesScreen() ? APPLE_SCREEN_OPENS : undefined}
               onPress={() => lookForAdapterAgain(onRetry)}
             />

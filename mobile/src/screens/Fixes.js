@@ -13,6 +13,8 @@ import { vp4Capabilities, vp4Here } from '../lib/device'
 import { vp4ComputerLacks } from '../lib/vp4-safety'
 import { NO_COMPUTER_BLUETOOTH } from '../lib/no-computer'
 import { useBluetoothOffered } from '../lib/useBluetoothOffered'
+import { cableNow } from '../lib/bluetooth'
+import { cableFixesLine } from '../lib/cableWords'
 
 /**
  * What to try when it isn't working.
@@ -134,7 +136,7 @@ export default function Fixes({ onBack, open = null, hostVersion = null }) {
                   <View style={{ gap: space.sm }}>
                     {/* Over Bluetooth (beta) no computer is in use: nothing to compare with. */}
                     {bluetoothOn() && !isDemo() ? (
-                      <Note tone="hint">{`Over Bluetooth the ${deviceNoun()} talks to the unit itself, so no computer app is in use.`}</Note>
+                      <Note tone="hint">{cableNow() ? cableFixesLine(deviceNoun()) : `Over Bluetooth the ${deviceNoun()} talks to the unit itself, so no computer app is in use.`}</Note>
                     ) : (
                       <Note tone={sync.state === 'ok' ? 'hint' : sync.state === 'unknown' ? 'hint' : 'warn'}>
                         {sync.says}

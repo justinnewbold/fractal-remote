@@ -97,3 +97,15 @@ needs, with nothing telling them. It says 1.87.11 for both since 13 October
 | 26 Oct | 1.89.3 | 1 | 1 | The 1.89.0 version for the App Store brought up to date before Justin submits it ("i havent submitted the 1.89.0 build yet so i want it all up to date as of now"): Bluetooth out of beta, the FM3 tried with the U2MIDI Pro, the streamlined Bluetooth page with every way to hook up each unit, Bluetooth from the Live pill. Built in, so its first launch never shows the old beta words. No native change (the fingerprint is 1.89.0's), so 1.89.0 copies keep taking the same updates. Started 17:03 UTC from main f55dac7, mobile.yml run 40365078785 (platform all, profile production, Send ticked: iOS to TestFlight, Android straight to Google Play production). iOS Expo build a6b564e6-a376-422e-b2e9-de4c5c0290d8 (TestFlight build 31, runtime c16f1c0d…, the same as 1.89.0's), to be put in the 1.89.0 version's place for review in App Store Connect by Justin; Android Expo build 18060505-b4c4-4d28-960d-7fbe29ff262c (version code 14, runtime 25ad57fe…) |
 
 **Left this month: 5 iOS, 6 Android.** The count starts again on 1 November.
+
+## November 2026
+
+No build has been started from this project in November: Expo's build
+list, checked 3 November 2026, shows the 1.89.3 pair of 26 October as the
+newest. The next one waiting is Android's cable (docs/pending/README.md,
+android-usb-midi.patch), which moves Android's fingerprint alone.
+
+| Date | Version | iOS | Android | What it was for |
+|---|---|---|---|---|
+
+**Left this month: 15 iOS, 15 Android.**
