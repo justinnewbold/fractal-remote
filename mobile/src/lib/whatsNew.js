@@ -15,6 +15,10 @@ export const WHATS_NEW = [
     "version": "1.89.28",
     "lines": [
       {
+        "text": "The walkthrough’s first page, How it works, shows both ways to connect: Computer, the best way, or Bluetooth, with no computer.",
+        "only": null
+      },
+      {
         "text": "On the computer app, signing in under Settings → Account now turns the phone remote on too, so your phone finds the computer straight away after you switch accounts.",
         "only": null
       },
@@ -23,11 +27,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "If the part of the computer app that talks to your unit stops, it now starts again by itself on every computer, and the phone remote comes back on once it’s running.",
-        "only": null
-      },
-      {
-        "text": "Links in the computer app now open in your normal web browser.",
+        "text": "If the part of the computer app that talks to your unit stops, it now starts again by itself on every computer, and the phone remote comes back on once it’s running. Links in the computer app open in your normal web browser.",
         "only": null
       },
       {

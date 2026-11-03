@@ -6868,12 +6868,45 @@ export function run(test) {
     const email = src('supabase/functions/setup-reminder/index.ts').match(/'(It looks like it hasn’t connected to your Fractal yet[^']*)'/)?.[1] ?? ''
     assert.ok(email.length > 100, 'the setup email’s opening was not found; this check needs telling')
     /* And the walkthrough's two, on a copy that opens Bluetooth (the next test), since the audit of 2 November 2026. */
-    const walk = Object.entries(gear.WALKTHROUGH_TWO_WAYS).map(([key, words]) => [`the walkthrough’s ${key}`, words])
+    const walk = [...Object.entries(gear.WALKTHROUGH_TWO_WAYS).map(([key, words]) => [`the walkthrough’s ${key}`, words]), ['How it works, the Bluetooth way', gear.HOW_TWO_WAYS.foot]]
     for (const [where, words] of [['the gear file’s sentence', gear.BLUETOOTH_WAYS], ['the no-computer note and Fixes', NO_COMPUTER_BLUETOOTH], ['the setup email', email], ...walk]) {
       assert.match(words, /The computer is (?:still )?the best (?:one|way)|the computer [^.]*, which is the best way/, `${where} does not say the computer is the best way`)
       assert.match(words, /more lag/, `${where} does not say Bluetooth has more lag`)
       assert.match(words, /fewer features|does less/, `${where} does not say Bluetooth does less`)
     }
+  })
+
+  /*
+   * HOW IT WORKS, BOTH WAYS (Justin, 3 November 2026: "Needs to say computer
+   * or Bluetooth"). On a copy that opens Bluetooth the walkthrough's first
+   * page offers Computer, picked to start with, and Bluetooth; his three
+   * boxes are the Computer way, untouched, and the Bluetooth way is the unit,
+   * the adapter and the phone. Anywhere else the page is as it was.
+   */
+  test('How it works offers the computer and Bluetooth on a copy that opens Bluetooth, the computer first, and is as it was anywhere else', async () => {
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    const how = gear.HOW_TWO_WAYS
+    assert.deepEqual(how.ways.map((w) => w.key), ['computer', 'bluetooth'], 'the computer is not the first way, or a way was added')
+    assert.deepEqual(how.ways.map((w) => w.label), ['Computer', 'Bluetooth'])
+    assert.match(how.wire, /^BLUETOOTH MIDI ADAPTER$/)
+    assert.match(how.phoneBody, /no computer needed/)
+    assert.match(how.foot, /sold separately/, 'the Bluetooth way does not say the adapter is bought apart')
+    for (const words of [how.wire, how.phoneBody, how.foot, ...how.ways.map((w) => w.label)]) {
+      assert.doesNotMatch(words, /this phone|\bbeta\b|\btried\b|official|free desktop/i, words)
+    }
+    const page = flat('mobile/src/screens/Onboarding.js')
+    assert.match(page, /const \[howWay, setHowWay\] = useState\('computer'\)/, 'How it works starts on Bluetooth')
+    assert.match(page, /const howBluetooth = twoWays && howWay === 'bluetooth'/, 'a copy that does not open Bluetooth can draw the Bluetooth way')
+    assert.match(page, /\{twoWays \? \( <View style=\{\{ flexDirection: 'row', gap: space\.sm \}\}> \{HOW_TWO_WAYS\.ways\.map\(/, 'the two ways are offered on a copy that does not open Bluetooth')
+    /* The computer way is his CHAIN, unchanged; the Bluetooth way is its unit and its phone, with the adapter between. */
+    assert.match(page, /\(howBluetooth \? \[ \{ key: 'unit', phoneTitle: CHAIN\[0\]\.phoneTitle, phoneBody: CHAIN\[0\]\.phoneBody, phoneWire: HOW_TWO_WAYS\.wire \}, \{ key: 'phone', phoneTitle: CHAIN\[2\]\.phoneTitle, phoneBody: HOW_TWO_WAYS\.phoneBody \} \] : CHAIN \)\.map\(/)
+    assert.match(page, /<Note>\{howBluetooth \? HOW_TWO_WAYS\.foot : P2\.foot\}<\/Note>/, 'the demo line is gone from the computer way, or stays on the Bluetooth way')
+    /* His words are where they were, untouched. */
+    const { CHAIN, P2 } = await import('../shared/onboarding.mjs')
+    assert.deepEqual(CHAIN.map((b) => b.phoneWire).filter(Boolean), ['USB CABLE', 'SECURE WIRELESS LINK'])
+    assert.equal(P2.foot, 'No computer yet? Try a simulated unit free, with no time limit.')
+    /* And the browser, which offers no Bluetooth, is not drawn from it. */
+    assert.ok(!/HOW_TWO_WAYS/.test(src('src/App.jsx')) && !/bluetooth-gear/.test(src('shared/onboarding.mjs')), 'the browser carries the Bluetooth way')
   })
 
   test('the phone’s walkthrough and sign-in screen say both ways on a copy that opens Bluetooth, and every line about needing a computer is decided', async () => {
@@ -6932,15 +6965,20 @@ export function run(test) {
        */
       'P3.real.agree': 'held',
       /*
-       * LEFT, both about the demo, which needs no computer on every copy:
-       * neither says the real rig needs one. P2.foot is the foot of HOW IT
-       * WORKS, whose three boxes are the computer's way from his mockup; he
-       * had text taken off that screen so its button shows without
-       * scrolling, so no Bluetooth line is added there. The demo's last page
-       * and the purchase page (BLUETOOTH_PAYWALL) say both ways before any
-       * money is taken.
+       * HOW IT WORKS, BOTH WAYS (3 November 2026, "Needs to say computer or
+       * Bluetooth"): P2.foot stays under his three boxes, the Computer way,
+       * and the Bluetooth way has HOW_TWO_WAYS.foot in its place. It was
+       * left until then, because he had had text taken off that screen so
+       * its button shows without scrolling; the Bluetooth way has one box
+       * fewer, so it takes no more room than the Computer way.
        */
-      'P2.foot': 'left',
+      'P2.foot': 'how',
+      /*
+       * LEFT, about the demo, which needs no computer on every copy: it does
+       * not say the real rig needs one. The demo's last page and the
+       * purchase page (BLUETOOTH_PAYWALL) say both ways before any money is
+       * taken.
+       */
       'P3.demo.body': 'left'
     }
     const onboarding = await import('../shared/onboarding.mjs')
@@ -6962,7 +7000,10 @@ export function run(test) {
       const drawn = flatScreen.split(`{${path}}`).length - 1
       const swapped = flatScreen.split(` : ${path}}`).length - 1
       assert.ok(drawn + swapped >= 1, `the walkthrough no longer draws ${path}; this check follows it`)
-      if (decision in two) {
+      if (decision === 'how') {
+        assert.equal(drawn, 0, `How it works draws ${path} on its Bluetooth way`)
+        assert.equal(flatScreen.split(`{howBluetooth ? HOW_TWO_WAYS.foot : ${path}}`).length - 1, swapped, `How it works draws ${path} on its Bluetooth way, or behind another gate`)
+      } else if (decision in two) {
         assert.equal(drawn, 0, `the walkthrough draws ${path} on a copy that opens Bluetooth`)
         assert.equal(flatScreen.split(`{twoWays ? WALKTHROUGH_TWO_WAYS.${decision} : ${path}}`).length - 1, swapped, `the walkthrough draws ${path} on a copy that opens Bluetooth, or behind another gate`)
       } else {
@@ -6990,7 +7031,7 @@ export function run(test) {
     for (const [file, text] of [['the walkthrough', flatScreen], ['the sign-in screen', signIn]]) {
       assert.ok(text.includes(GATE), `${file} says both ways behind another gate`)
       assert.match(text, /import \{ bluetoothSupported, openForCustomersHere \} from '\.\.\/lib\/bluetooth'/, `${file} reads the gate from somewhere else`)
-      assert.match(text, /import \{ WALKTHROUGH_TWO_WAYS \} from '\.\.\/lib\/bluetooth-gear'/, `${file} types its two-ways words out`)
+      assert.match(text, /import \{ (?:HOW_TWO_WAYS, )?WALKTHROUGH_TWO_WAYS \} from '\.\.\/lib\/bluetooth-gear'/, `${file} types its two-ways words out`)
       assert.ok(!/mayDrive|usePurchase|useBluetoothOffered/.test(text), `${file} waits for a purchase to say both ways`)
     }
     assert.ok(flat('mobile/src/screens/Paywall.js').includes('{openForCustomersHere() && bluetoothSupported() ? ('), 'the purchase page’s gate moved, and the walkthrough’s still says the old one')

@@ -9,7 +9,7 @@ import { setDemo, setDemoUnit } from '../lib/demo'
 import { walkthroughTips } from '../lib/vp4-safety'
 import { tick } from '../lib/feedback'
 import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
-import { WALKTHROUGH_TWO_WAYS } from '../lib/bluetooth-gear'
+import { HOW_TWO_WAYS, WALKTHROUGH_TWO_WAYS } from '../lib/bluetooth-gear'
 /* An ES import rather than require(): Metro resolves both, but require is not
    a name this app has anywhere, and a test is right to refuse it. */
 /*
@@ -111,6 +111,9 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
    * for his answer (WALKTHROUGH_TWO_WAYS says what was put to him).
    */
   const twoWays = openForCustomersHere() && bluetoothSupported()
+  /* Which way How it works draws on such a copy: the computer, the best one, to start with (HOW_TWO_WAYS). */
+  const [howWay, setHowWay] = useState('computer')
+  const howBluetooth = twoWays && howWay === 'bluetooth'
 
   /*
    * ONE WAY BETWEEN STEPS, AND IT CLEARS THE LAST SCREEN'S NOTES.
@@ -339,15 +342,37 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
           */}
           <Steps at={0} of={3} label={P2.count} />
           <Head>{P2.head}</Head>
+          {/* Both ways, on a copy that offers Bluetooth: the computer first, picked (HOW_TWO_WAYS). */}
+          {twoWays ? (
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              {HOW_TWO_WAYS.ways.map((w) => (
+                <Press
+                  key={w.key}
+                  label={w.label}
+                  tone="signal"
+                  on={howWay === w.key}
+                  height={40}
+                  style={{ flex: 1 }}
+                  onPress={() => setHowWay(w.key)}
+                />
+              ))}
+            </View>
+          ) : null}
           <View style={{ gap: 0 }}>
-            {CHAIN.map((box, i) => (
+            {(howBluetooth
+              ? [
+                  { key: 'unit', phoneTitle: CHAIN[0].phoneTitle, phoneBody: CHAIN[0].phoneBody, phoneWire: HOW_TWO_WAYS.wire },
+                  { key: 'phone', phoneTitle: CHAIN[2].phoneTitle, phoneBody: HOW_TWO_WAYS.phoneBody }
+                ]
+              : CHAIN
+            ).map((box, i) => (
               <View key={box.key}>
                 <ChainBox n={i + 1} title={box.phoneTitle} body={box.phoneBody} kind={box.key} />
                 {box.phoneWire ? <Wire label={box.phoneWire} /> : null}
               </View>
             ))}
           </View>
-          <Note>{P2.foot}</Note>
+          <Note>{howBluetooth ? HOW_TWO_WAYS.foot : P2.foot}</Note>
           {/* The line above as something to press, straight to the units. */}
           <Press label={P2.footGo} height={44} onPress={() => go('pick')} />
           <Cta label={P2.go} onPress={() => go('mode')} />

@@ -291,6 +291,32 @@ export const WALKTHROUGH_TWO_WAYS = {
   setup: `No computer? Sign in here, and the app can connect by Bluetooth instead, through an adapter sold separately. ${BEST_WAY}`
 }
 
+/*
+ * HOW IT WORKS, BOTH WAYS. "Has this screen been updated ...? Needs to say
+ * computer or Bluetooth" (Justin, 3 November 2026, of the walkthrough's first
+ * page). His three boxes and their words stay as they are (shared/
+ * onboarding.mjs CHAIN, P2): on a copy that opens Bluetooth they are the
+ * Computer way, picked to start with because it is the best one, and the
+ * Bluetooth way is the other choice above them, drawn the same way with one
+ * box fewer: the unit, the adapter on its MIDI jacks, the phone. No room is
+ * taken from the button at the bottom that the computer way does not
+ * already use. Anywhere Bluetooth is not offered the page is as it was.
+ * Here for the reason the lines above are.
+ */
+export const HOW_TWO_WAYS = {
+  /* The two choices, in this order, the first picked to start with. */
+  ways: [
+    { key: 'computer', label: 'Computer' },
+    { key: 'bluetooth', label: 'Bluetooth' }
+  ],
+  /* The line between the unit and the phone, the Bluetooth way. */
+  wire: 'BLUETOOTH MIDI ADAPTER',
+  /* Under the phone's box, the Bluetooth way. */
+  phoneBody: 'Your remote - no computer needed',
+  /* In place of the demo's line, the Bluetooth way; the button under it still offers the demo. */
+  foot: `The adapter plugs into the unit's MIDI jacks and is sold separately. ${BEST_WAY}`
+}
+
 
 /** The parts, by the name printed on the box, each with what it is for in a line. */
 export const PARTS = {

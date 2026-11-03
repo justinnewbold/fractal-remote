@@ -6,10 +6,10 @@
       "date": "2026-11-03",
       "version": "1.89.28",
       "lines": [
+        "The walkthrough’s first page, How it works, shows both ways to connect: Computer, the best way, or Bluetooth, with no computer.",
         "On the computer app, signing in under Settings → Account now turns the phone remote on too, so your phone finds the computer straight away after you switch accounts.",
         "On a Raspberry Pi set to start by itself, closing the app’s window no longer stops it saving presets you send from your phone.",
-        "If the part of the computer app that talks to your unit stops, it now starts again by itself on every computer, and the phone remote comes back on once it’s running.",
-        "Links in the computer app now open in your normal web browser.",
+        "If the part of the computer app that talks to your unit stops, it now starts again by itself on every computer, and the phone remote comes back on once it’s running. Links in the computer app open in your normal web browser.",
         "The website and the computer app’s window carry their own fonts now, so they work with no internet and nothing is fetched from another site for them.",
         "On the website, the support page now names Feedback’s tick boxes the way the app shows them, and the page for getting the app leads with the store."
       ]
