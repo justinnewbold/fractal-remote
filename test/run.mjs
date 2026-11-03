@@ -2691,11 +2691,26 @@ test('the computer app says which version it is, where the phone already looks',
   assert.equal(host.computerKind({ platform: 'darwin', systemVersion: '15.3.1', arch: 'arm64' }), 'macOS 15.3 (Apple silicon)')
   assert.equal(host.computerKind({ platform: 'darwin', release: '24.3.0', arch: 'x64' }), 'macOS 15')
   assert.equal(host.computerKind({ platform: 'darwin', release: '25.1.0', arch: 'arm64' }), 'macOS 26 (Apple silicon)')
-  assert.equal(host.computerKind({ platform: 'win32', systemVersion: '10.0.22631' }), 'Windows 11')
-  assert.equal(host.computerKind({ platform: 'win32', release: '10.0.19045' }), 'Windows 10')
-  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi 5 Model B Rev 1.0\0', arch: 'arm64' }), 'Raspberry Pi 5')
-  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi 3 Model B Plus Rev 1.3\0', arch: 'arm64' }), 'Raspberry Pi 3')
+  /*
+   * AND WHICH WINDOWS, AND WHICH LINUX (3 November 2026, "Like Windows
+   * versions, Mac versions, raspberry pi's models?"): Windows by its yearly
+   * release, and ARM; a Pi or any Linux by its system, and 32- or 64-bit.
+   */
+  assert.equal(host.computerKind({ platform: 'win32', systemVersion: '10.0.22631', arch: 'x64' }), 'Windows 11 23H2')
+  assert.equal(host.computerKind({ platform: 'win32', systemVersion: '10.0.26100', arch: 'arm64' }), 'Windows 11 24H2 (ARM)')
+  assert.equal(host.computerKind({ platform: 'win32', systemVersion: '10.0.27950', arch: 'x64' }), 'Windows 11 build 27950', 'a build past the table is called a release it is not')
+  assert.equal(host.computerKind({ platform: 'win32', release: '10.0.19045', arch: 'x64' }), 'Windows 10 22H2')
+  assert.equal(host.computerKind({ platform: 'win32', release: '10.0.18363', arch: 'x64' }), 'Windows 10 build 18363')
+  const debian = 'PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"\nNAME="Debian GNU/Linux"\nVERSION_ID="12"\n'
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi 5 Model B Rev 1.0\0', arch: 'arm64', osRelease: debian }), 'Raspberry Pi 5 · Debian 12 (64-bit)')
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi 3 Model B Plus Rev 1.3\0', arch: 'arm', osRelease: 'NAME="Raspbian GNU/Linux"\nVERSION_ID="11"\n' }), 'Raspberry Pi 3 · Raspbian 11 (32-bit)')
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi 5 Model B Rev 1.0\0', arch: 'arm64' }), 'Raspberry Pi 5 (64-bit)')
+  assert.equal(host.computerKind({ platform: 'linux', model: '', arch: 'x64', osRelease: 'NAME="Ubuntu"\nVERSION_ID="24.04"\n' }), 'Ubuntu 24.04 (x64)')
   assert.equal(host.computerKind({ platform: 'linux', model: '', arch: 'x64' }), 'Linux (x64)')
+  assert.equal(host.linuxSystem('NAME=Fedora Linux\nVERSION_ID=41\n'), 'Fedora 41')
+  for (const model of ['Raspberry Pi Compute Module 4 Rev 1.1\0', 'Raspberry Pi Zero 2 W Rev 1.0\0']) {
+    assert.ok(host.computerKind({ platform: 'linux', model, arch: 'arm64', osRelease: 'NAME="Some Very Long Distribution Name GNU/Linux"\nVERSION_ID="2026.11.03"\n' }).length <= 40)
+  }
   for (const p of ['darwin', 'win32', 'linux']) assert.ok(host.computerKind({ platform: p }).length <= 40)
   assert.equal(typeof host.thisComputer(), 'string')
   /* Written beside the name and the version when given, and the doc as before when not. */

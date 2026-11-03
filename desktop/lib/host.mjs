@@ -243,7 +243,43 @@ export function prettyHostname(name = osHostname()) {
  * (/proc/device-tree/model), which is how a Raspberry Pi says which it is.
  * Held to 40 characters, the gear notes' own limit.
  */
-export function computerKind({ platform = process.platform, release = '', systemVersion = '', model = '', arch = process.arch } = {}) {
+/*
+ * WHICH WINDOWS, AND WHICH LINUX (3 November 2026): "Can we get more
+ * information about the computers being used at all? Like Windows versions,
+ * Mac versions, raspberry pi's models?" A Mac already said its macOS and
+ * whether it is Apple silicon, and a Pi its board. Windows said only 10 or
+ * 11, and a Pi or any other Linux nothing of the system on it. Now Windows
+ * says its yearly release, read from its build number (the release a build
+ * belongs to is Microsoft's own table, kept here), and ARM where it is; a
+ * Linux computer says its system from /etc/os-release, and a Pi that, and
+ * whether it is 32- or 64-bit. Still the kind and never the name, and still
+ * no more than the 40 characters a gear note keeps.
+ */
+const WINDOWS_RELEASES = [
+  [26200, '11', '25H2'],
+  [26100, '11', '24H2'],
+  [22631, '11', '23H2'],
+  [22621, '11', '22H2'],
+  [22000, '11', '21H2'],
+  [19045, '10', '22H2'],
+  [19044, '10', '21H2'],
+  [19043, '10', '21H1'],
+  [19042, '10', '20H2'],
+  [19041, '10', '2004']
+]
+
+/** A Linux system's own short name, from /etc/os-release: "Debian 12", "Ubuntu 24.04", "Fedora 41". */
+export function linuxSystem(osRelease = '') {
+  const field = (key) => {
+    const m = String(osRelease || '').match(new RegExp(`^${key}=(.*)$`, 'm'))
+    return m ? m[1].trim().replace(/^(["'])(.*)\1$/, '$2') : ''
+  }
+  const name = field('NAME').replace(/\s*GNU\/Linux\s*/i, ' ').replace(/\s+Linux$/i, '').trim()
+  const version = field('VERSION_ID')
+  return [name, version].filter(Boolean).join(' ').slice(0, 24)
+}
+
+export function computerKind({ platform = process.platform, release = '', systemVersion = '', model = '', arch = process.arch, osRelease: os = '' } = {}) {
   const say = (words) => String(words).slice(0, 40)
   if (platform === 'darwin') {
     let v = String(systemVersion || '').split('.').slice(0, 2).join('.')
@@ -257,12 +293,23 @@ export function computerKind({ platform = process.platform, release = '', system
   }
   if (platform === 'win32') {
     const [major, , build] = String(systemVersion || release).split('.').map(Number)
-    if (major === 10) return build >= 22000 ? 'Windows 11' : 'Windows 10'
-    return say(`Windows${major ? ` ${major}` : ''}`)
+    const onArm = arch === 'arm64' ? ' (ARM)' : ''
+    if (major === 10) {
+      const edition = build >= 22000 ? '11' : '10'
+      /* The newest release at or below this build, of the same Windows: a build past the table says its number. */
+      const known = WINDOWS_RELEASES.find(([from, ed]) => ed === edition && build >= from)
+      const newest = WINDOWS_RELEASES.find(([, ed]) => ed === edition)
+      const which = !Number.isFinite(build) ? '' : known && !(known === newest && build >= newest[0] + 100) ? ` ${known[2]}` : ` build ${build}`
+      return say(`Windows ${edition}${which}${onArm}`)
+    }
+    return say(`Windows${major ? ` ${major}` : ''}${onArm}`)
   }
   if (platform === 'linux') {
     const pi = String(model || '').replace(/\0/g, '').match(/Raspberry Pi (Zero 2 W|Zero W|Zero|Compute Module \d+|\d+|400|500)/)
-    return say(pi ? `Raspberry Pi ${pi[1]}` : `Linux (${arch})`)
+    const system = linuxSystem(os)
+    const bits = arch === 'arm64' || arch === 'x64' ? '64-bit' : arch === 'arm' || arch === 'ia32' ? '32-bit' : ''
+    if (pi) return say(`Raspberry Pi ${pi[1]}${system ? ` · ${system}` : ''}${bits ? ` (${bits})` : ''}`)
+    return say(system ? `${system} (${arch})` : `Linux (${arch})`)
   }
   return say(platform || 'unknown')
 }
@@ -283,7 +330,15 @@ export function thisComputer() {
   } catch {
     systemVersion = ''
   }
-  return computerKind({ release: osRelease(), systemVersion, model })
+  let os = ''
+  if (process.platform === 'linux') {
+    try {
+      os = readFileSync('/etc/os-release', 'utf8')
+    } catch {
+      os = ''
+    }
+  }
+  return computerKind({ release: osRelease(), systemVersion, model, osRelease: os })
 }
 
 /**

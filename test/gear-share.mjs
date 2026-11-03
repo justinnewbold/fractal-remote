@@ -314,10 +314,35 @@ export function run(test) {
     ]
     const sections = r.gearSections({ ok: true, reports }, now)
     assert.deepEqual(sections.map((s) => s.title), ['AM4', 'FM3'], 'the units are not newest first')
-    assert.deepEqual(sections[0].rows.map((x) => x.label), ['Bluetooth · WIDI Uhost', 'Computer'])
-    assert.match(sections[0].rows[0].value, /^1 worked · 1 didn’t answer\nnewest today · iOS, Android$/)
-    assert.match(sections[1].rows[0].value, /^1 worked · 0 didn’t answer\nnewest 2 days ago · firmware 10\.01$/)
+    assert.deepEqual(sections[0].rows.map((x) => x.label), ['Bluetooth · WIDI Uhost', 'Computer · system not said'])
+    assert.equal(sections[0].rows[0].value, '1 worked · 1 didn’t answer\nnewest today\nAndroid, iOS')
+    assert.equal(sections[1].rows[0].value, '1 worked · 0 didn’t answer\nnewest 2 days ago · firmware 10.01')
     assert.equal(sections[1].rows[0].label, 'Computer · macOS')
+    /*
+     * Everything a note carries is on the page (3 November 2026, "Can we get
+     * more information about the computers being used at all?"): the
+     * computer app's version, the phone and its system, the app's version,
+     * newest first and a few at most; and Apple's network session, never an
+     * adapter, is left off.
+     */
+    const full = r.gearSections(
+      {
+        ok: true,
+        reports: [
+          { created_at: '2026-10-26T10:00:00Z', via: 'computer', unit: 'FM3', computer_os: 'Raspberry Pi 3 · Debian 12 (32-bit)', computer_version: '1.89.27', firmware: '13.0', outcome: 'answered', phone_os: 'ios', phone_os_version: '27.2', phone_model: 'iPhone', app_version: '1.89.27' },
+          { created_at: '2026-10-25T10:00:00Z', via: 'computer', unit: 'FM3', computer_os: 'Raspberry Pi 3 · Debian 12 (32-bit)', computer_version: '1.89.9', firmware: '13.0', outcome: 'answered', phone_os: 'android', phone_os_version: '10', phone_model: 'HUAWEI CLT-L29', app_version: '1.89.10' },
+          { created_at: '2026-10-24T10:00:00Z', via: 'computer', unit: 'FM3', computer_os: 'Raspberry Pi 3 · Debian 12 (32-bit)', computer_version: '1.89.22', outcome: 'not answering', phone_os: 'ios', phone_os_version: '27.2', phone_model: 'iPhone', app_version: '1.89.20' },
+          { created_at: '2026-10-23T10:00:00Z', via: 'computer', unit: 'FM3', computer_os: 'Raspberry Pi 3 · Debian 12 (32-bit)', computer_version: '1.88.0', outcome: 'answered', phone_os: 'ios', phone_os_version: '27.2', phone_model: 'iPhone', app_version: '1.89.20' },
+          { created_at: '2026-10-22T10:00:00Z', via: 'bluetooth', unit: 'FM3', adapter: 'Rețea Session 1', outcome: 'not answering', phone_os: 'ios' }
+        ]
+      },
+      now
+    )
+    assert.deepEqual(full.map((x) => x.rows.map((y) => y.label)), [['Computer · Raspberry Pi 3 · Debian 12 (32-bit)']], 'Apple’s network session is on the page as an adapter')
+    assert.equal(
+      full[0].rows[0].value,
+      '3 worked · 1 didn’t answer\nnewest today · firmware 13.0\ncomputer app 1.89.27, 1.89.22, 1.89.9 and 1 older\nHUAWEI CLT-L29 · Android 10, iPhone · iOS 27.2\nFractal Remote 1.89.27, 1.89.20, 1.89.10'
+    )
     assert.match(r.gearSections({ ok: true, reports: [] })[0].rows[0].value, /Nothing has come in yet/)
     assert.deepEqual(r.gearSections({ ok: false }), [])
   })
