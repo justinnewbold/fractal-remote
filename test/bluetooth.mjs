@@ -5840,7 +5840,7 @@ export function run(test) {
      * the cost alone, which read as a row with nothing going for it.
      */
     assert.match(one, /status=\{bluetooth \? `On · the \$\{deviceNoun\(\)\} talks to the unit itself` : BLUETOOTH_ROW_OFF\}/, 'the Settings row does not say what Bluetooth is for and what it costs')
-    assert.match(one, /import \{ BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS \} from '\.\.\/lib\/bluetooth-gear'/)
+    assert.match(one, /import \{ BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS(?:, NO_SIGNAL_BLUETOOTH)? \} from '\.\.\/lib\/bluetooth-gear'/)
     /* The looper row stays away: the looper is left off the chain over Bluetooth. */
     assert.match(one, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) && !onRealVp4 \? \( <SetupRow title="Stop the looper"/)
   })
@@ -5921,7 +5921,7 @@ export function run(test) {
     )
     assert.match(
       app,
-      /useEffect\(\(\) => \{ if \(auth === 'checking'\) return undefined if \(auth === 'out'\) \{ allowBluetooth\(null\) return undefined \} let alive = true haveSession\(\) \.then\(\(id\) => alive && allowBluetooth\(id\)\) \.catch\(\(\) => \{\}\) return \(\) => \{ alive = false \} \}, \[auth, demo\]\)/,
+      /useEffect\(\(\) => \{ if \(auth === 'checking'\) return undefined if \(auth === 'out'\) \{ allowBluetooth\(null\) return undefined \} let alive = true haveSession\(\) \.then\(\(id\) => \{ if \(!alive\) return const open = allowBluetooth\(id\) const back = bluetoothBack\.current bluetoothBack\.current = false if \(open && back\) setBluetooth\(true\) \}\) \.catch\(\(\) => \{\}\) return \(\) => \{ alive = false \} \}, \[auth, demo\]\)/,
       'signing in, signing out, another account or the demo ending does not ask again whose phone this is'
     )
     /*
@@ -5934,10 +5934,11 @@ export function run(test) {
      * Try the Demo and Delete account, and the way to the sign-in form.
      */
     const SIGNED_OUT = 'allowBluetooth\\(null, \\{ signedOut: true \\}\\)'
-    assert.match(app, new RegExp(`const toSignIn = \\(\\) => \\{ setBuying\\(false\\) setScreen\\('stage'\\) setDemo\\(false\\) ${SIGNED_OUT} setAuth\\('out'\\) \\}`), 'the way to the sign-in form does not write Bluetooth’s off down')
+    /* Not while he only views as a new customer, whose sign-in the form keeps (3 November 2026, App.js backToRig). */
+    assert.match(app, new RegExp(`const toSignIn = \\(\\) => \\{ setBuying\\(false\\) setScreen\\('stage'\\) setDemo\\(false\\) if \\(!purchase\\.posing\\) \\{ bluetoothAtForm\\.current = bluetooth ${SIGNED_OUT} \\} setAuth\\('out'\\) \\}`), 'the way to the sign-in form does not write Bluetooth’s off down')
     assert.match(app, new RegExp(`await stopLink\\(\\) await signOut\\(\\) unlinkAccount\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${SIGNED_OUT} setScreen\\('stage'\\) setAuth\\('out'\\)`), 'Sign out in Settings does not write Bluetooth’s off down')
     const UNLINK = 'unlinkAccount\\(\\)\\.catch\\(\\(\\) => \\{\\}\\)'
-    assert.match(app, new RegExp(`setDemo\\(true\\) signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${UNLINK} ${SIGNED_OUT} setAuth\\('in'\\) \\}\\} onBack=\\{\\(\\) => \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${UNLINK} ${SIGNED_OUT} setAuth\\('out'\\) \\}\\} onDeleted=\\{\\(\\) => \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${UNLINK} ${SIGNED_OUT} setAuth\\('out'\\) \\}\\}`), 'the paywall’s sign-outs do not write Bluetooth’s off down, or leave the store on the account just left')
+    assert.match(app, new RegExp(`setDemo\\(true\\) if \\(!purchase\\.posing\\) \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${UNLINK} ${SIGNED_OUT} \\} setAuth\\('in'\\) \\}\\} onBack=\\{\\(\\) => \\{ if \\(!purchase\\.posing\\) \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${UNLINK} ${SIGNED_OUT} \\} setAuth\\('out'\\) \\}\\} onDeleted=\\{ purchase\\.posing \\? undefined : \\(\\) => \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${UNLINK} ${SIGNED_OUT} setAuth\\('out'\\) \\} \\}`), 'the paywall’s sign-outs do not write Bluetooth’s off down, or leave the store on the account just left')
     /* Delete account in Settings signs out through the same onSignOut. */
     assert.match(flat('mobile/src/screens/Settings.js'), /await deleteAccount\(\) setDeleting\(false\) Alert\.alert\([^)]*\) onSignOut\?\.\(\)/)
     assert.equal((app.match(/allowBluetooth\(null, \{ signedOut: true \}\)/g) || []).length, 5, 'a sign-out somebody asked for is missing its flag, or one was added that is not a sign-out')
@@ -6725,8 +6726,14 @@ export function run(test) {
      */
     const GATE = 'mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported()'
     const settings = flat('mobile/src/screens/Settings.js')
-    /* Two ways on Settings: the row, and the button on Phone & computer, which the Live pill opens (26 October 2026), behind the same three as one name. */
-    assert.equal((settings.match(/setPage\('bluetooth'\)/g) || []).length, 2, 'something else on Settings opens the Bluetooth page')
+    /*
+     * Three ways on Settings: the row, the button on Phone & computer, which
+     * the Live pill opens (26 October 2026), and, since 3 November 2026, the
+     * one on Playing with no internet, the last two behind the same three as
+     * one name.
+     */
+    assert.equal((settings.match(/setPage\('bluetooth'\)/g) || []).length, 3, 'something else on Settings opens the Bluetooth page')
+    assert.ok(settings.includes("{bluetoothOffered && !bluetooth ? <Press label={NO_SIGNAL_BLUETOOTH.go} tone=\"signal\" height={TAP} onPress={() => setPage('bluetooth')} /> : null}"), 'Playing with no internet opens the Bluetooth page from behind another gate')
     assert.ok(settings.includes(`const bluetoothOffered = ${GATE}`), 'Phone & computer’s Bluetooth button is behind another gate')
     assert.match(settings, /\{bluetoothOffered && !demo \? \( <Press label=\{bluetooth \? 'Bluetooth' : 'Connect over Bluetooth'\}[^}]*\}[^]*?onPress=\{\(\) => setPage\('bluetooth'\)\}/, 'the button on Phone & computer is not behind the gate')
     for (const sub of ['bt-ways', 'bt-trouble', 'bt-limits']) assert.ok(settings.includes(`{page === '${sub}' && bluetoothOffered ? (`), `the ${sub} page is not behind the gate`)
@@ -6741,8 +6748,13 @@ export function run(test) {
     assert.ok(!/mayDrive\(/.test(code('mobile/src/screens/Bluetooth.js')), 'the Bluetooth page lets a free account connect with the store out of reach')
     /* App.js: one way to the page, handed to the waiting screen only through the same three: the row's gate as one hook. */
     const app = flat('mobile/App.js')
-    /* Two: the waiting screen's, and the Which unit sheet's off the Live pill, both behind bluetoothOffered. */
-    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 2, 'App.js opens the Bluetooth page from somewhere else too')
+    /*
+     * Three: the waiting screen's, the Which unit sheet's off the Live pill,
+     * and, since 3 November 2026, the one after a found purchase's Bluetooth
+     * way has signed in (askedBluetooth), all behind bluetoothOffered.
+     */
+    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 3, 'App.js opens the Bluetooth page from somewhere else too')
+    assert.ok(app.includes("if (auth !== 'in' || !askedBluetooth.current || !bluetoothOffered) return askedBluetooth.current = false openSettings('bluetooth')"), 'the found purchase’s Bluetooth way opens the page from behind another gate')
     assert.ok(app.includes("onBluetooth={bluetoothOffered ? () => (setPickLive(false), openSettings('bluetooth')) : null}"), 'the Which unit sheet’s Bluetooth button is behind another gate')
     assert.ok(app.includes('const bluetoothOffered = useBluetoothOffered()'), 'the waiting screen’s way in is not the Settings row’s gate')
     assert.ok(!/mayDrive|bluetoothSupported\(\)|useBluetoothAllowed\(\)/.test(code('mobile/App.js')), 'App.js writes the Bluetooth gate out again beside the hook')
@@ -6828,8 +6840,17 @@ export function run(test) {
      */
     assert.equal(
       gear.BLUETOOTH_PAYWALL,
-      `${gear.BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
+      `${gear.BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a CME Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank. Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one.`
     )
+    /* Every part each way of the Bluetooth page takes is named in it (3 November 2026: it named the Uhost kit alone for a week after the page put the WIDI Master first). */
+    for (const unit of ['am4', 'vp4', 'fm3', 'fm9', 'axefx3']) {
+      for (const way of gear.waysFor(unit)) {
+        for (const key of way.parts) {
+          const words = { jackTrs: 'TRS-35', jackDin: 'CME WIDI Jack', usbA: 'USB-C to USB-A adapter' }[key] ?? gear.PARTS[key].name
+          assert.ok(gear.BLUETOOTH_PAYWALL.toLowerCase().includes(words.toLowerCase()), `the purchase page’s line leaves out ${gear.PARTS[key].name}, which the ${unit}’s ${way.title} takes`)
+        }
+      }
+    }
     const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
     for (const u of BLE_UNITS) assert.ok(new RegExp(`\\b${u.name}\\b`).test(gear.BLUETOOTH_PAYWALL), `the purchase page’s line leaves out the ${u.name}`)
     assert.deepEqual(gear.partsFor('vp4').map((p) => p.key), gear.partsFor('am4').map((p) => p.key), 'a VP4’s parts are not the AM4’s, and the purchase page says they are')
@@ -6868,12 +6889,60 @@ export function run(test) {
     const email = src('supabase/functions/setup-reminder/index.ts').match(/'(It looks like it hasn’t connected to your Fractal yet[^']*)'/)?.[1] ?? ''
     assert.ok(email.length > 100, 'the setup email’s opening was not found; this check needs telling')
     /* And the walkthrough's two, on a copy that opens Bluetooth (the next test), since the audit of 2 November 2026. */
-    const walk = Object.entries(gear.WALKTHROUGH_TWO_WAYS).map(([key, words]) => [`the walkthrough’s ${key}`, words])
+    const walk = [...Object.entries(gear.WALKTHROUGH_TWO_WAYS).map(([key, words]) => [`the walkthrough’s ${key}`, words]), ['How it works, the Bluetooth way', gear.HOW_TWO_WAYS.foot]]
     for (const [where, words] of [['the gear file’s sentence', gear.BLUETOOTH_WAYS], ['the no-computer note and Fixes', NO_COMPUTER_BLUETOOTH], ['the setup email', email], ...walk]) {
       assert.match(words, /The computer is (?:still )?the best (?:one|way)|the computer [^.]*, which is the best way/, `${where} does not say the computer is the best way`)
       assert.match(words, /more lag/, `${where} does not say Bluetooth has more lag`)
       assert.match(words, /fewer features|does less/, `${where} does not say Bluetooth does less`)
     }
+  })
+
+  /*
+   * HOW IT WORKS, BOTH WAYS (Justin, 3 November 2026: "Needs to say computer
+   * or Bluetooth"). On a copy that opens Bluetooth the walkthrough's first
+   * page offers Computer, picked to start with, and Bluetooth; his three
+   * boxes are the Computer way, untouched, and the Bluetooth way is the unit,
+   * the adapter and the phone. Anywhere else the page is as it was.
+   */
+  test('How it works offers the computer and Bluetooth on a copy that opens Bluetooth, the computer first, and is as it was anywhere else', async () => {
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    const how = gear.HOW_TWO_WAYS
+    assert.deepEqual(how.ways.map((w) => w.key), ['computer', 'bluetooth'], 'the computer is not the first way, or a way was added')
+    assert.deepEqual(how.ways.map((w) => w.label), ['Computer', 'Bluetooth'])
+    assert.match(how.wire, /^BLUETOOTH MIDI ADAPTER$/)
+    assert.match(how.phoneBody, /no computer needed/)
+    assert.match(how.foot, /sold separately/, 'the Bluetooth way does not say the adapter is bought apart')
+    for (const words of [how.wire, how.phoneBody, how.foot, ...how.ways.map((w) => w.label)]) {
+      assert.doesNotMatch(words, /this phone|\bbeta\b|\btried\b|official|free desktop/i, words)
+    }
+    const page = flat('mobile/src/screens/Onboarding.js')
+    assert.match(page, /const \[howWay, setHowWay\] = useState\('computer'\)/, 'How it works starts on Bluetooth')
+    assert.match(page, /const howBluetooth = twoWays && howWay === 'bluetooth'/, 'a copy that does not open Bluetooth can draw the Bluetooth way')
+    assert.match(page, /\{twoWays \? \( <View style=\{\{ flexDirection: 'row', gap: space\.sm, marginTop: -space\.sm \}\}> \{HOW_TWO_WAYS\.ways\.map\(/, 'the two ways are offered on a copy that does not open Bluetooth')
+    /*
+     * The pair is laid out the way every side-by-side pair of Press is, with
+     * `grow` (Press sets its own flexGrow and flexBasis, which beat a style
+     * flex laid on top: the pair came out 26pt wide and wordless). And the
+     * row's room is won back by drawing the boxes and the cable tighter on
+     * the copies that show it, so Got it still shows without scrolling.
+     */
+    const row = page.match(/\{HOW_TWO_WAYS\.ways\.map\(\(w\) => \( <Press ([\s\S]*?)\/> \)\)\}/)
+    assert.ok(row, 'the two ways are not drawn as Press')
+    assert.match(row[1], /\bgrow\b/, 'the two ways are not laid out with grow')
+    assert.match(row[1], /height=\{44\}/, 'the two ways are under the 44pt touch height')
+    assert.doesNotMatch(row[1], /style=/, 'the two ways are laid out with a style over Press’s own')
+    assert.match(page, /<ChainBox n=\{i \+ 1\} title=\{box\.phoneTitle\} body=\{box\.phoneBody\} kind=\{box\.key\} tight=\{twoWays\} \/>/, 'the boxes are not drawn tighter where the row takes room')
+    assert.match(page, /<Wire label=\{box\.phoneWire\} tight=\{twoWays\} \/>/, 'the cable is not drawn tighter where the row takes room')
+    assert.match(page, /padding: tight \? space\.md : space\.lg,/)
+    /* The computer way is his CHAIN, unchanged; the Bluetooth way is its unit and its phone, with the adapter between. */
+    assert.match(page, /\(howBluetooth \? \[ \{ key: 'unit', phoneTitle: CHAIN\[0\]\.phoneTitle, phoneBody: CHAIN\[0\]\.phoneBody, phoneWire: HOW_TWO_WAYS\.wire \}, \{ key: 'phone', phoneTitle: CHAIN\[2\]\.phoneTitle, phoneBody: HOW_TWO_WAYS\.phoneBody \} \] : CHAIN \)\.map\(/)
+    assert.match(page, /<Note>\{howBluetooth \? HOW_TWO_WAYS\.foot : P2\.foot\}<\/Note>/, 'the demo line is gone from the computer way, or stays on the Bluetooth way')
+    /* His words are where they were, untouched. */
+    const { CHAIN, P2 } = await import('../shared/onboarding.mjs')
+    assert.deepEqual(CHAIN.map((b) => b.phoneWire).filter(Boolean), ['USB CABLE', 'SECURE WIRELESS LINK'])
+    assert.equal(P2.foot, 'No computer yet? Try a simulated unit free, with no time limit.')
+    /* And the browser, which offers no Bluetooth, is not drawn from it. */
+    assert.ok(!/HOW_TWO_WAYS/.test(src('src/App.jsx')) && !/bluetooth-gear/.test(src('shared/onboarding.mjs')), 'the browser carries the Bluetooth way')
   })
 
   test('the phone’s walkthrough and sign-in screen say both ways on a copy that opens Bluetooth, and every line about needing a computer is decided', async () => {
@@ -6892,7 +6961,25 @@ export function run(test) {
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
     const two = gear.WALKTHROUGH_TWO_WAYS
-    assert.deepEqual(Object.keys(two).sort(), ['demoSub', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
+    assert.deepEqual(Object.keys(two).sort(), ['agree', 'demoSub', 'restored', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
+    /* The page after Restore finds a purchase offers the Bluetooth way too, to sign-in, on a copy that opens it (the audit of 3 November 2026). */
+    assert.equal(gear.RESTORED_BLUETOOTH_GO, 'No computer - I’ll use Bluetooth')
+    assert.match(flat('mobile/src/screens/Onboarding.js'), /\{twoWays \? \( <> <Press label=\{RESTORED_BLUETOOTH_GO\} height=\{TAP\} onPress=\{\(\) => onAccount\?\.\('bluetooth'\)\} \/> <Note>\{WALKTHROUGH_TWO_WAYS\.restored\}<\/Note> <\/> \) : null\} <Press label=\{P6\.back\}/, 'the page after a found purchase does not offer Bluetooth, or offers it where Bluetooth is not open')
+    /* And Playing with no internet says Bluetooth needs none, where it is offered. */
+    for (const say of [gear.NO_SIGNAL_BLUETOOTH.off('iPad'), gear.NO_SIGNAL_BLUETOOTH.on('tablet')]) {
+      assert.match(say, /needs no internet/)
+      assert.match(say, /The computer is the best way: Bluetooth has more lag and fewer features\./)
+      assert.ok(!/this phone|\bbeta\b|\btried\b|free/i.test(say), say)
+    }
+    assert.match(gear.NO_SIGNAL_BLUETOOTH.off('phone'), /adapter on its MIDI jacks, sold separately/)
+    /* The steps' own lead-in, after the button rather than before it (the review of 3 November 2026). */
+    assert.equal(gear.NO_SIGNAL_BLUETOOTH.browser('iPad'), 'To use the computer with no signal, open its own page in the iPad’s web browser:')
+    assert.match(flat('mobile/src/screens/Settings.js'), /onPress=\{\(\) => setPage\('bluetooth'\)\} \/> : null\} \{bluetoothOffered \? \( <Text[^>]*>\{NO_SIGNAL_BLUETOOTH\.browser\(deviceNoun\(\)\)\}<\/Text> \) : null\}/)
+    /* And the found purchase's Bluetooth way goes on to the Bluetooth page once signed in. */
+    const appFlat = flat('mobile/App.js')
+    assert.match(appFlat, /askedBluetooth\.current = way === 'bluetooth' setAuth\('out'\)/)
+    assert.match(appFlat, /if \(auth !== 'in' \|\| !askedBluetooth\.current \|\| !bluetoothOffered\) return askedBluetooth\.current = false openSettings\('bluetooth'\)/)
+    assert.match(flat('mobile/src/screens/Settings.js'), /\{bluetoothOffered \? NO_SIGNAL_BLUETOOTH\[bluetooth \? 'on' : 'off'\]\(deviceNoun\(\)\) :/, 'Playing with no internet does not say Bluetooth where it is offered')
     /* Any way of saying the app needs a computer, which is the claim these lines exist to take back. */
     const NEEDS = /(?:needs?|requires?|works? with|only (?:with|through)) a computer|computer is (?:required|needed)/i
     for (const [key, words] of Object.entries(two)) {
@@ -6913,6 +7000,8 @@ export function run(test) {
     }
     assert.match(two.demoSub, /^This app connects to your Fractal guitar processor one of two ways: through a computer connected to it by USB, or with no computer, through a Bluetooth MIDI adapter sold separately\./)
     assert.match(two.setup, /^No computer\? Sign in here, and the app can connect by Bluetooth instead/)
+    /* The box before Unlock: the sentence put to him on 3 November 2026, word for word, and said yes to. */
+    assert.equal(two.agree, 'I understand this app connects to my Fractal unit one of two ways: through a computer running the desktop app, connected by USB cable, or with no computer, through a Bluetooth MIDI adapter sold separately. The computer is the best way: Bluetooth has more lag and fewer features.')
 
     /*
      * EVERY LINE THE PHONE'S WALKTHROUGH SHOWS THAT SPEAKS OF HAVING A
@@ -6924,23 +7013,30 @@ export function run(test) {
       /* Mine ("These two lines are mine"): WALKTHROUGH_TWO_WAYS.demoSub in its place where Bluetooth is open. */
       'P9.demo.sub': 'demoSub',
       /*
-       * HELD. His own sentence, dictated word for word, in a file that says
-       * "Do not change any wording without asking me first." It stays on
-       * every copy until he answers; the sentence put to him is in the
-       * comment over WALKTHROUGH_TWO_WAYS. When he says yes, it becomes a
-       * two-ways line like the one above, and this entry names its key.
+       * His own sentence, dictated word for word, in a file that says "Do
+       * not change any wording without asking me first": held until he
+       * answered, and on 3 November 2026 he said to update the walkthrough's
+       * pages with the Bluetooth information. WALKTHROUGH_TWO_WAYS.agree in
+       * its place where Bluetooth is open; his sentence everywhere else.
        */
-      'P3.real.agree': 'held',
+      'P3.real.agree': 'agree',
       /*
-       * LEFT, both about the demo, which needs no computer on every copy:
-       * neither says the real rig needs one. P2.foot is the foot of HOW IT
-       * WORKS, whose three boxes are the computer's way from his mockup; he
-       * had text taken off that screen so its button shows without
-       * scrolling, so no Bluetooth line is added there. The demo's last page
-       * and the purchase page (BLUETOOTH_PAYWALL) say both ways before any
-       * money is taken.
+       * HOW IT WORKS, BOTH WAYS (3 November 2026, "Needs to say computer or
+       * Bluetooth"): P2.foot stays under his three boxes, the Computer way,
+       * and the Bluetooth way has HOW_TWO_WAYS.foot in its place. It was
+       * left until then, because he had had text taken off that screen so
+       * its button shows without scrolling; the choice row's room is won
+       * back by drawing the boxes and the cable tighter on those copies
+       * (Onboarding.js `tight`), so the Computer way ends no lower than the
+       * page did, and the Bluetooth way has one box fewer.
        */
-      'P2.foot': 'left',
+      'P2.foot': 'how',
+      /*
+       * LEFT, about the demo, which needs no computer on every copy: it does
+       * not say the real rig needs one. The demo's last page and the
+       * purchase page (BLUETOOTH_PAYWALL) say both ways before any money is
+       * taken.
+       */
       'P3.demo.body': 'left'
     }
     const onboarding = await import('../shared/onboarding.mjs')
@@ -6962,15 +7058,19 @@ export function run(test) {
       const drawn = flatScreen.split(`{${path}}`).length - 1
       const swapped = flatScreen.split(` : ${path}}`).length - 1
       assert.ok(drawn + swapped >= 1, `the walkthrough no longer draws ${path}; this check follows it`)
-      if (decision in two) {
+      if (decision === 'how') {
+        assert.equal(drawn, 0, `How it works draws ${path} on its Bluetooth way`)
+        assert.equal(flatScreen.split(`{howBluetooth ? HOW_TWO_WAYS.foot : ${path}}`).length - 1, swapped, `How it works draws ${path} on its Bluetooth way, or behind another gate`)
+      } else if (decision in two) {
         assert.equal(drawn, 0, `the walkthrough draws ${path} on a copy that opens Bluetooth`)
         assert.equal(flatScreen.split(`{twoWays ? WALKTHROUGH_TWO_WAYS.${decision} : ${path}}`).length - 1, swapped, `the walkthrough draws ${path} on a copy that opens Bluetooth, or behind another gate`)
       } else {
         assert.equal(swapped, 0, `the walkthrough puts something else in place of ${path}, which this check says is ${decision}`)
       }
     }
-    /* The held box is drawn as his sentence, on every copy, and Unlock still waits for it. */
-    assert.match(flatScreen, /<Agree on=\{agreed\} label=\{P3\.real\.agree\}/, 'the box before Unlock says something other than his sentence, which waits for his answer')
+    /* The box before Unlock says both ways where Bluetooth is open, his sentence anywhere else, and Unlock still waits for it. */
+    assert.match(flatScreen, /<Agree on=\{agreed\} label=\{twoWays \? WALKTHROUGH_TWO_WAYS\.agree : P3\.real\.agree\} onPress=/, 'the box before Unlock does not say both ways on a copy that opens Bluetooth')
+    assert.match(flatScreen, /disabled=\{!agreed\} onPress=\{\(\) => agreed && onUnlock\?\.\(\)\}/, 'Unlock no longer waits for the box')
 
     /* The sign-in screen: the computer's three steps, then the other way, inside the card. */
     const signIn = code('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
@@ -6990,7 +7090,7 @@ export function run(test) {
     for (const [file, text] of [['the walkthrough', flatScreen], ['the sign-in screen', signIn]]) {
       assert.ok(text.includes(GATE), `${file} says both ways behind another gate`)
       assert.match(text, /import \{ bluetoothSupported, openForCustomersHere \} from '\.\.\/lib\/bluetooth'/, `${file} reads the gate from somewhere else`)
-      assert.match(text, /import \{ WALKTHROUGH_TWO_WAYS \} from '\.\.\/lib\/bluetooth-gear'/, `${file} types its two-ways words out`)
+      assert.match(text, /import \{ (?:HOW_TWO_WAYS, )?(?:RESTORED_BLUETOOTH_GO, )?WALKTHROUGH_TWO_WAYS \} from '\.\.\/lib\/bluetooth-gear'/, `${file} types its two-ways words out`)
       assert.ok(!/mayDrive|usePurchase|useBluetoothOffered/.test(text), `${file} waits for a purchase to say both ways`)
     }
     assert.ok(flat('mobile/src/screens/Paywall.js').includes('{openForCustomersHere() && bluetoothSupported() ? ('), 'the purchase page’s gate moved, and the walkthrough’s still says the old one')

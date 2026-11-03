@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { C3, CHAIN, CLOSE, P1, P2, P3, P4, P9 } from '../../shared/onboarding.mjs'
+import { C3, CHAIN, CLOSE, P1, P2, P3, P4, P9, WALK_STEPS } from '../../shared/onboarding.mjs'
 import { walkthroughTips } from '../../shared/vp4-safety.mjs'
 import { WELCOME_NOTICE } from '../../shared/affiliation.mjs'
 import { UNITS } from '../lib/demoUnits'
@@ -162,7 +162,7 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
 
         {at === 'how' ? (
           <>
-            <Steps at={0} of={3} label={P2.count} />
+            <Steps at={0} of={WALK_STEPS} />
             <h1 className="pw-head">{P2.head}</h1>
             <div className="pw-chain">
               {CHAIN.map((box, i) => (
@@ -200,7 +200,7 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
 
         {at === 'mode' ? (
           <>
-            <Steps at={1} of={3} label={P3.count} />
+            <Steps at={1} of={WALK_STEPS} />
             <h1 className="pw-head">{P3.head}</h1>
             <p className="pw-sub">{computer ? C3.sub : P3.sub}</p>
 
@@ -283,7 +283,7 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
 
         {at === 'pick' ? (
           <>
-            <Steps at={1} of={3} label={P3.count} />
+            <Steps at={2} of={WALK_STEPS} />
             <p className="pw-eyebrow">{P4.eyebrow}</p>
             <h1 className="pw-head">{P4.head}</h1>
             <p className="pw-sub">{P4.sub}</p>
@@ -314,7 +314,7 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
                 matters: the app needs a computer with the unit on USB. The
                 foot row says where the walkthrough lives afterwards; the
                 browser reloads into the demo, so it has nowhere to go. */}
-            <Steps at={2} of={3} label={P9.count} />
+            <Steps at={3} of={WALK_STEPS} />
             <h1 className="pw-head">{P9.demo.head}</h1>
             <p className="pw-sub">{P9.demo.sub}</p>
             {/* A VP4 is not shown SAVE: see walkthroughTips. */}

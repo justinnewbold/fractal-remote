@@ -259,7 +259,9 @@ import {
   reconnectPhone,
   disconnectPhone,
   setUpMac,
+  deviceServerAfterDemo,
   signInAccount,
+  signInErrand,
   createAccount,
   isPairAccount,
   setMacRemote,
@@ -2362,10 +2364,35 @@ export default function App() {
    *
    * Out of the demo, a phone signed in connects rather than stopping on
    * "Connect as …" and waiting for another tap.
+   *
+   * AND ON A COMPUTER, THE DEVICE SERVER TOO. `details` is the email and
+   * password just signed in with. The demo also runs in the computer app's
+   * own window, with a real device server behind it, and a sign-in there
+   * ended the demo with the window signed in and the device server not, so
+   * a phone on that account found no computer (the audit's live-1 by
+   * another way in, found in review, 2 November 2026). So on a computer
+   * that can host (computerEnd: not a phone or a laptop pretending), the
+   * device server is signed in and the phone remote turned on on the way
+   * out (deviceServerAfterDemo, the same steps as setUpMac's, which ends
+   * the demo itself before it tells the device server anything), and then
+   * the reload; an account that has not bought it comes back to the
+   * unlock, as the computer's own sign-in sends it. A failure there is a
+   * line in the log and never stops the reload: the window is signed in,
+   * and Phone & computer still offers "Sign in to set up the phone remote".
    */
-  const afterAccount = async () => {
+  const afterAccount = async (details = null) => {
     if (isDemo()) {
-      if (unlockAfterSignIn && !phoneEnd) {
+      let unlockNext = unlockAfterSignIn && !phoneEnd
+      if (details && computerEnd) {
+        try {
+          const { remote } = await deviceServerAfterDemo(details)
+          record('remote', remote ? `Phone remote set up for ${details.email}` : `Signed in as ${details.email}; the phone remote needs the unlock`)
+          if (!remote) unlockNext = true
+        } catch (err) {
+          record('remote', `Signed in as ${details.email}, but the device server was not: ${err?.message || err}`)
+        }
+      }
+      if (unlockNext) {
         try {
           sessionStorage.setItem(UNLOCK_NEXT, '1')
         } catch {
@@ -2522,7 +2549,6 @@ export default function App() {
            * reads as a phone, and bootLink connects a saved sign-in on its own
            * or shows the connect screen to someone who has none.
            */
-          const { setDemo } = await import('./lib/forgefx')
           setDemo(false)
           window.location.reload()
         } else if (kind === 'mac-on') {
@@ -2547,14 +2573,23 @@ export default function App() {
   /** The sign-in sheet's submit: the same form does a different job per role. */
   const signInSubmit = useCallback(
     async ({ email, password }) => {
-      if (signIn === 'account') {
+      /*
+       * Which job, from signInErrand: on the computer itself every sign-in
+       * is the computer's, the plain one on the Account page included, so
+       * the device server is signed in with the window and the phone can
+       * find this computer. It was plain there too, and an account switched
+       * on the Account page left the device server signed out (the audit's
+       * live-1, 2 November 2026).
+       */
+      const errand = signInErrand({ asked: signIn, role: linkState().role, demo: isDemo() })
+      if (errand === 'account') {
         await signInAccount({ email, password })
         record('remote', `Signed in as ${email}`)
         /* Not closed first when the demo is about to end — see afterAccount. */
         if (!isDemo()) setSignIn(false)
-        await afterAccount()
+        await afterAccount({ email, password })
         return
-      } else if (linkState().role === 'mac') {
+      } else if (errand === 'computer') {
         try {
           await setUpMac({ email, password })
         } catch (err) {
@@ -3732,7 +3767,6 @@ export default function App() {
     setBusy(true)
     setError(null)
     try {
-      const { loadPresetBytes } = await import('./lib/forgefx')
       await loadPresetBytes(safety.bytes)
       record('restore', `Loaded the pre-edit copy of "${safety.name}" into the edit buffer`)
       setDirty(true)
@@ -5313,10 +5347,12 @@ export default function App() {
           if (out.needsConfirmation) return out
           record('remote', `Account made for ${details.email}`)
           /* Then the errand the sheet was opened for — connect this phone, or
-             turn the computer's phone remote on — as the sign-in would have. */
-          if (signIn === 'account') {
+             turn the computer's phone remote on — as the sign-in would have.
+             Asked of signInErrand, as the sign-in asks: an account made on
+             the computer's Account page signs its device server in too. */
+          if (signInErrand({ asked: signIn, role: linkState().role, demo: isDemo() }) === 'account') {
             if (!isDemo()) setSignIn(false)
-            await afterAccount()
+            await afterAccount(details)
           } else await signInSubmit(details)
           return out
         }}
@@ -5794,11 +5830,20 @@ export default function App() {
                 it. Draws nothing unless the computer can do it, which is the
                 Linux app only. */}
             <StartAtBoot />
-            {/* And beside it, the other pedalboard-computer switch: "Also let
-                Axiom use this pedal" (shared/axiom.mjs). His account only, by
-                the window's sign-in or the computer's own, and in the
-                computer app's window only. */}
-            <AxiomSwitch admin={isAdmin(link.account?.id) || isAdmin(link.cloud?.user?.id)} />
+            {/*
+              "Also let Axiom use this pedal" (shared/axiom.mjs), in the
+              computer app's window only, under Developer: "It should be under
+              my developer section, correct? Not in the section where the
+              other users see it?" (3 November 2026). With his account signed
+              in to the window it sits in the Developer section below. Here,
+              for every other case, under a Developer heading of its own: his
+              account signed in to the computer but not the window, and,
+              whoever is signed in, while the switch is on, so one that is on
+              is never out of sight on the computer it is on.
+            */}
+            {!isAdmin(link.account?.id) ? (
+              <AxiomSwitch admin={isAdmin(link.cloud?.user?.id)} heading={<p className="silk-label setup-group axiom-heading">Developer</p>} />
+            ) : null}
 
             {isAdmin(link.account?.id) ? (
               <>
@@ -5817,6 +5862,8 @@ export default function App() {
                     <SetupRow key="am4check" title="AM4 check" status="Read one AM4 setting at a time" onClick={() => setSetupPage('am4check')} />
                   ) : null}
                 </div>
+                {/* "Also let Axiom use this pedal", his account signed in here (see above for every other case). */}
+                <AxiomSwitch admin />
               </>
             ) : null}
             {/* Last: "Move the Play Screen section down to the bottom of the list." */}

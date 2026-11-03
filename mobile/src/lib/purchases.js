@@ -1251,6 +1251,8 @@ const fromStore = async (api) => {
  * answered `{ ask: true }` and the store is not asked anything.
  */
 export const restorePurchase = async ({ here = false } = {}) => {
+  /* Viewing as a new customer touches nothing of the store's, as buying does not (buyUnlock). */
+  if (posing) return { ok: false, message: 'Restoring is off while you’re viewing as a new customer.' }
   const api = await load()
   if (!api) return { ok: false, message: 'This build cannot take payments.' }
   /* Who is signed in, the door's way (signedInOnPhone): a sign-in that ran

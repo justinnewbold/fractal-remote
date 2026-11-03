@@ -460,10 +460,73 @@ export default function App() {
     setBuying(false)
     setScreen('stage')
     setDemo(false)
-    /* Heading for the sign-in form is a sign-out for Bluetooth (beta): off, and written down (lib/bluetooth). */
-    allowBluetooth(null, { signedOut: true })
+    /*
+     * Heading for the sign-in form is a sign-out for Bluetooth (beta): off,
+     * and written down (lib/bluetooth). Not while he is viewing as a new
+     * customer, whose sign-in this keeps: the form's way back to his rig
+     * (backToRig) brings Bluetooth back with it.
+     */
+    if (!purchase.posing) {
+      /* Kept, so Back to your own rig can put it back as it was (backToRig): the off written here is for a sign-in as somebody else. */
+      bluetoothAtForm.current = bluetooth
+      allowBluetooth(null, { signedOut: true })
+    }
     setAuth('out')
   }
+  /*
+   * BACK TO HIS OWN RIG, from the sign-in form, for somebody whose sign-in is
+   * still on the phone and who only came to look: "After replaying the new
+   * user sequence and exiting, now I'm not logged in anymore. need to fix
+   * that so I can view that without actually logging me all the way out"
+   * (Justin, 3 November 2026). Signs nothing in or out: it ends the view as
+   * a new customer, if one is on, and the demo, and goes back in on the
+   * sign-in the phone already holds.
+   */
+  const backToRig = () => {
+    poseAsNewCustomer(false)
+    setDemo(false)
+    setSignInSide('in')
+    /* Bluetooth as it was before the form, once the account is in again (the Bluetooth effect below). */
+    bluetoothBack.current = bluetoothAtForm.current
+    bluetoothAtForm.current = false
+    askedBluetooth.current = false
+    setAuth('in')
+  }
+  /* Whether Bluetooth was on when toSignIn wrote it off, and whether Back to your own rig is to put it back on. */
+  const bluetoothAtForm = useRef(false)
+  /* Not `restoreBluetooth`: that name is lib/bluetooth's own pick-up at launch, imported above, and a ref of the same name hid it (the review of 3 November 2026). */
+  const bluetoothBack = useRef(false)
+  /* Left the form any other way than Back to your own rig: what Bluetooth was is nobody's business any more. */
+  useEffect(() => {
+    if (auth !== 'out') bluetoothAtForm.current = false
+  }, [auth])
+  /* Whether the view as a new customer started the demo, so ending it from the banner ends that too (and leaves one he was already in). */
+  const posedInDemo = useRef(true)
+  /*
+   * "No computer - I'll use Bluetooth", on the page after a found purchase:
+   * it goes to sign-in, as Yes does, and once the account is in, straight
+   * on to the Bluetooth page, rather than to Finding your computer…, which
+   * offers Bluetooth only after a long wait (the review of 3 November 2026).
+   */
+  const askedBluetooth = useRef(false)
+  useEffect(() => {
+    if (auth !== 'in' || !askedBluetooth.current || !bluetoothOffered) return
+    askedBluetooth.current = false
+    openSettings('bluetooth')
+  }, [auth, bluetoothOffered])
+  /* Whether a sign-in is on the phone while the form is up: asked each time it comes up (haveSession), for backToRig, and forgotten when it goes. */
+  const [keptForBack, setKeptForBack] = useState(false)
+  useEffect(() => {
+    if (auth !== 'out') return undefined
+    let alive = true
+    haveSession()
+      .then((id) => alive && setKeptForBack(Boolean(id)))
+      .catch(() => {})
+    return () => {
+      alive = false
+      setKeptForBack(false)
+    }
+  }, [auth])
   /*
    * AND WHICH SIDE OF THE FORM IT OPENS ON: Sign in, unless something said
    * otherwise. Create account straight after a purchase with nobody signed
@@ -884,7 +947,14 @@ export default function App() {
     }
     let alive = true
     haveSession()
-      .then((id) => alive && allowBluetooth(id))
+      .then((id) => {
+        if (!alive) return
+        const open = allowBluetooth(id)
+        /* Back to your own rig: on again, as it was before the form (backToRig). Read once, and forgotten. */
+        const back = bluetoothBack.current
+        bluetoothBack.current = false
+        if (open && back) setBluetooth(true)
+      })
       .catch(() => {})
     return () => {
       alive = false
@@ -1119,10 +1189,12 @@ export default function App() {
              * a first-run flow they have just walked out of would read as the
              * app forgetting what they did.
              */
-            onAccount={() => {
+            onAccount={(way) => {
               markWalkthrough()
               setSeenWalk(true)
               setReplaying(false)
+              /* The found purchase's Bluetooth way: on to the Bluetooth page once signed in (askedBluetooth). */
+              askedBluetooth.current = way === 'bluetooth'
               setAuth('out')
             }}
               /*
@@ -1237,6 +1309,8 @@ export default function App() {
               linked.then(() => setAuth('in'))
             }}
             onDemo={() => setAuth('in')}
+            /* Somebody who has paid, or is viewing as a new customer, and only came to look (backToRig). The form draws it only while a sign-in is on the phone. */
+            onBackToRig={keptForBack && (purchase.unlocked || purchase.posing) ? backToRig : undefined}
           />
           {/* No purchase page from here any more: Create account makes an
               account for anybody (see SignIn), and one that has not been
@@ -1253,27 +1327,43 @@ export default function App() {
                  Sign out does. Left on it, a purchase made in the demo went
                  to the account just left, and the one made next got none. */
               setDemo(true)
-              signOut().catch(() => {})
-              unlinkAccount().catch(() => {})
-              allowBluetooth(null, { signedOut: true })
+              /*
+               * NOT WHILE HE IS VIEWING AS A NEW CUSTOMER, which puts this
+               * page in front of an account that has paid, to be looked at:
+               * these two buttons signed him out for real, took the store off
+               * his account and wrote his Bluetooth off (3 November 2026).
+               * Looking at the page keeps all of it; the banner ends the view.
+               */
+              if (!purchase.posing) {
+                signOut().catch(() => {})
+                unlinkAccount().catch(() => {})
+                allowBluetooth(null, { signedOut: true })
+              }
               setAuth('in')
             }}
             onBack={() => {
-              signOut().catch(() => {})
-              unlinkAccount().catch(() => {})
-              allowBluetooth(null, { signedOut: true })
+              if (!purchase.posing) {
+                signOut().catch(() => {})
+                unlinkAccount().catch(() => {})
+                allowBluetooth(null, { signedOut: true })
+              }
               setAuth('out')
             }}
             /* Apple's 5.1.1(v), on the one page an unpaid account can reach:
                the account is gone, so its session goes with it, and the
                store's link to it — a purchase put on a deleted account is
-               one nobody can ever sign in to. */
-            onDeleted={() => {
-              signOut().catch(() => {})
-              unlinkAccount().catch(() => {})
-              allowBluetooth(null, { signedOut: true })
-              setAuth('out')
-            }}
+               one nobody can ever sign in to. Not offered while he is only
+               viewing as a new customer: it would delete his own. */
+            onDeleted={
+              purchase.posing
+                ? undefined
+                : () => {
+                    signOut().catch(() => {})
+                    unlinkAccount().catch(() => {})
+                    allowBluetooth(null, { signedOut: true })
+                    setAuth('out')
+                  }
+            }
           />
         ) : askShare ? (
           /*
@@ -1297,7 +1387,16 @@ export default function App() {
               a page named after pairing a phone.
             */}
             {purchase.posing ? (
-              <Press label="Viewing as a new customer · tap to stop" tone="signal" on onPress={() => poseAsNewCustomer(false)} />
+              <Press
+                label="Viewing as a new customer · tap to stop"
+                tone="signal"
+                on
+                onPress={() => {
+                  /* Straight back to his own rig: the demo goes too if the view started it. */
+                  poseAsNewCustomer(false)
+                  if (!posedInDemo.current) setDemo(false)
+                }}
+              />
             ) : null}
             <TopBar
               link={shownLink}
@@ -1474,6 +1573,8 @@ export default function App() {
                    every screen told this phone has not unlocked, until the
                    banner over the play screen is tapped. See poseAsNewCustomer. */
                 onViewAsCustomer={() => {
+                  /* Where he was when the view began: started again while it is on, the first start's answer stands. */
+                  if (!purchase.posing) posedInDemo.current = demo
                   poseAsNewCustomer(true)
                   setScreen('stage')
                   setReplaying(true)

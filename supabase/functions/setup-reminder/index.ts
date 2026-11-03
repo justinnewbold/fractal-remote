@@ -127,6 +127,24 @@ const AT_MOST = 25
 const GAP_MS = 700
 /* The same strict rule as download-link's: one address, nothing that makes a list. */
 const LOOKS_LIKE_EMAIL = /^[^@\s,;<>"]+@[^@\s,;<>".]+\.[^@\s,;<>"]{2,}$/
+/*
+ * NEVER APPLE'S REVIEW LOGIN. The account Apple signs in with at every
+ * review has the full version and never a computer, so it is "paid but no
+ * computer yet" for good, and its address has no mailbox: every email to it
+ * bounces, and bounces are what get the sending account paused. It was left
+ * out of these by hand on 2 November 2026 (set_setup_left_out), and one tap
+ * on Put back would undo that, so this file skips it too, before it is
+ * claimed, the way it skips an address that is not one. Named by the sha256
+ * of its trimmed, lower-case address, never the address, which this public
+ * repository does not carry (shared/admin.mjs REVIEW_LOGINS is the source; a
+ * test holds this copy to it).
+ */
+const REVIEW_LOGINS = ['132dcf3f4a48ad6cad50a6389e88c02c2f27a09e3ec89f92b67987a1d592acb9']
+
+async function isReviewLogin(address: string): Promise<boolean> {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(address.trim().toLowerCase()))
+  return REVIEW_LOGINS.includes([...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join(''))
+}
 
 const env = (name: string) => Deno.env.get(name) || ''
 
@@ -473,7 +491,7 @@ Deno.serve(async (req: Request) => {
       const kind: Kind | null = row?.kind === 'first' || row?.kind === 'reminder' ? row.kind : null
       const id = String(row?.account_id || '')
       const to = String(row?.email || '').trim()
-      if (!kind || !id || to.length > 254 || !LOOKS_LIKE_EMAIL.test(to)) {
+      if (!kind || !id || to.length > 254 || !LOOKS_LIKE_EMAIL.test(to) || (await isReviewLogin(to))) {
         done.skipped += 1
         continue
       }

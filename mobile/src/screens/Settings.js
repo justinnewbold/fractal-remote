@@ -65,7 +65,7 @@ import { siriRow } from '../lib/siri-help'
 import { siriPresent } from '../lib/siriPipe'
 import SiriHelp from '../components/SiriHelp'
 import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
-import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS } from '../lib/bluetooth-gear'
+import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS, NO_SIGNAL_BLUETOOTH } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage, { BluetoothLimits, BluetoothTools, BluetoothTried, BluetoothTrouble, BluetoothWays } from './Bluetooth'
 import AccessTool from '../components/AccessTool'
@@ -792,6 +792,16 @@ export default function Settings({
               <SetupRow title="Customers" status="Sales, sign-ups, and giving access" onPress={() => setPage('customers')} />
               <SetupRow title="App health" status="What's live, what works, and what's been tried" onPress={() => setPage('health')} />
               <SetupRow title="Testing" status="View as a new customer, Bluetooth check" onPress={() => setPage('testing')} />
+              {/*
+                "Also let Axiom use this pedal" (shared/axiom.mjs), for the
+                computer this phone is connected to: in his Developer section
+                ("It should be under my developer section, correct? Not in
+                the section where the other users see it?", 3 November 2026),
+                where it had been at the foot of Phone & computer under a
+                Developer heading of its own. His account only, as the whole
+                group is, and drawn only for a computer app that reads it.
+              */}
+              <AxiomSwitch link={link} demo={demo} throughAdapter={throughAdapter} hostVersion={hostVersion} macName={macName} />
             </Group>
           ) : null}
 
@@ -1451,20 +1461,6 @@ export default function Settings({
             </View>
           ) : null}
 
-          {/* "Also let Axiom use this pedal" (shared/axiom.mjs), for the
-              computer this page is about: his account only, and drawn only
-              for a computer app that reads it. */}
-          {isAdmin(account?.id) ? (
-            <AxiomSwitch
-              link={link}
-              demo={demo}
-              throughAdapter={throughAdapter}
-              hostVersion={hostVersion}
-              macName={macName}
-              heading={<Section>Developer</Section>}
-            />
-          ) : null}
-
           {/* Who this is signed in as moved to its own Account page, off the
               top of Settings: "change password" under "Phone & computer" was
               somewhere nobody would look. */}
@@ -1623,9 +1619,16 @@ export default function Settings({
       {page === 'offline' && mayDrive(purchase) ? (
         <>
           {head('Playing with no internet', 'back')}
+          {/* Where Bluetooth is offered, it first: it needs no internet at all (NO_SIGNAL_BLUETOOTH). Everywhere else, as it was. */}
           <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>
-            {`No signal? Use the computer’s own page in the ${deviceNoun()}’s web browser instead.`}
+            {bluetoothOffered
+              ? NO_SIGNAL_BLUETOOTH[bluetooth ? 'on' : 'off'](deviceNoun())
+              : `No signal? Use the computer’s own page in the ${deviceNoun()}’s web browser instead.`}
           </Text>
+          {bluetoothOffered && !bluetooth ? <Press label={NO_SIGNAL_BLUETOOTH.go} tone="signal" height={TAP} onPress={() => setPage('bluetooth')} /> : null}
+          {bluetoothOffered ? (
+            <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>{NO_SIGNAL_BLUETOOTH.browser(deviceNoun())}</Text>
+          ) : null}
           <View style={{ gap: space.md }}>
             <TipCard icon={sendIcon} label="1  SAME WIFI" body={`Put the ${deviceNoun()} on the same wifi as the computer.`} />
             <TipCard

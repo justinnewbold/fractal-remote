@@ -20,6 +20,21 @@ should scan — is in [`lib/host.mjs`](lib/host.mjs), shared with
 `npm run serve` at the repository root and covered by the main test suite.
 `main.js` is only the parts that genuinely need Electron.
 
+**A device server that stops is started again, on every computer** (since 2
+November 2026; before, only a start with no window did it, and elsewhere a
+stop put up a box, or nothing at all for a crash): after 2, 5, 15 and 30
+seconds, then once a minute, with a line at the top of the menu meanwhile and
+never a box. Once it answers, however long that takes, the phone remote is
+turned on again, because ForgeFX forgets it at every start.
+
+**The window shows the app's own page and nothing else.** A link to the
+website, a store or GitHub opens in the computer's own browser, an email
+address in its mail app, and anything else nowhere; the page may copy to the
+clipboard, keep the screen on, and read and write the preset folder picked
+under Presets → Saved presets, and every other permission (camera,
+microphone, location, MIDI, notifications, a serial or USB device) is
+refused. The rules are in [`lib/window.mjs`](lib/window.mjs).
+
 **The one place the two platforms differ on purpose** is the tray icon.
 macOS wants a template image — a black-and-transparent silhouette it recolours
 for light and dark menu bars — and drawing that same file on a Windows tray
@@ -141,7 +156,9 @@ on**, or the same item in the tray's menu. Switched on, the app starts by
 itself whenever the computer does, with no window: it serves the phone and
 talks to the unit, and its tray icon is there for anybody who plugs a screen
 in. Clicking the icon, or opening the app again, shows the window; closing
-the window leaves it running; the tray's Quit quits.
+the window only hides it, with the page in it still carrying out what the
+phone sends (saves, restores, renames), however the app was started; the
+tray's Quit quits.
 
 What it does underneath, for whoever has to look:
 
@@ -154,8 +171,8 @@ What it does underneath, for whoever has to look:
 - **It starts the app with `--hidden`.** No window at launch, and no dialog
   ever: a problem is a line in the log and at the top of the tray's menu.
   Something else on port 5056 is asked about again every 30 seconds, a device
-  server that stops is started again (after 2, 5, 15 and 30 seconds, then
-  once a minute), and the phone remote is asked for again every minute for
+  server that stops is started again (as on every computer, above), and the
+  phone remote is asked for again every minute for
   half an hour and then every five, because a Pi often boots before its wifi.
 - **It follows the app.** Every launch writes the entry again with where the
   app is now, and an AppImage update — which moves the file to a new name —

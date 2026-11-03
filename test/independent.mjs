@@ -1248,7 +1248,15 @@ export function run(test) {
     )
     assert.ok(!/Settings → Feedback/.test(words), 'the support page sends people to Settings → Feedback, which is not there')
     assert.ok(!/Settings → Fixes/.test(words), 'the support page sends people to Settings → Fixes, which is not there')
-    assert.match(words, /Settings → Troubleshooting → Feedback → "Problem"/)
+    /* The phone's Feedback is one form with ticks since 29 October 2026, and
+       has no "Problem" to choose (audit WEB-7): this pinned the old
+       Feedback → "Problem", which sent a phone user looking for a button
+       that is not there. The website and the computer app still have it. */
+    assert.ok(!/Feedback → "Problem"/.test(words), 'the support page sends phone users to a Problem choice the phone no longer has')
+    assert.match(words, /Settings → Troubleshooting → Feedback, with "Include the log and what I’m using" ticked/)
+    assert.match(read('mobile/src/screens/Report.js'), /label="Include the log and what I’m using"/, 'the phone’s tick is worded differently from the support page')
+    assert.match(words, /On the website and in the computer app, choose "Problem" there/)
+    assert.match(read('src/components/Feedback.jsx'), /k === 'bug' \? 'Problem' : 'Idea'/, 'the website no longer has Problem, and the support page says it does')
     assert.match(words, /Settings → Troubleshooting → Fixes/)
   })
 

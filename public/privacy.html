@@ -49,23 +49,28 @@
   <body>
     <main>
       <h1>Privacy</h1>
-      <p class="when">Fractal Remote · last updated 1 November 2026</p>
+      <p class="when">Fractal Remote · last updated 3 November 2026</p>
 
       <p class="lead">
         <strong>This app collects as little as it can.</strong> Your phone talks to your
         computer, your computer talks to your unit, and what passes between them is control
         messages — a preset, a scene, a knob — passed along and not written down. The demo, and the
-        computer app on its own, need no account and send nothing about you anywhere — and a phone
-        that opens the computer's own address on the same wifi sends nothing anywhere either:
-        nothing leaves the room.
+        computer app on its own, need no account and send nothing about you anywhere, and a phone
+        that opens the computer's own address on the same wifi sends nothing anywhere about you
+        either. Besides the computer app checking GitHub for its own updates, the one thing they
+        ask the internet for is the price of the full version, so the demo can show it: from the
+        payment company, under a made-up number rather than anything about you (see
+        <em>Unlocking the full version</em>). On an iPhone, Safari itself may also ask Apple for
+        the App Store banner at the top of the page.
       </p>
 
       <p>
         Everything below is about the parts that <em>do</em> use the internet. Each one is
-        something you choose to turn on, except two: the phone app asking whether it is unlocked
-        when it opens, described under <em>Unlocking the full version</em>, and the apps checking
-        for updates, at the end of <em>Where it is kept</em>. Neither carries a name or an email
-        address.
+        something you choose to turn on, except three: the phone app asking whether it is unlocked
+        when it opens, and a browser or the computer app asking the price of the full version as
+        the demo or Settings opens, both described under <em>Unlocking the full version</em>, and
+        the apps checking for updates, at the end of <em>Where it is kept</em>. None of them
+        carries a name or an email address.
       </p>
 
       <h2>What is collected, and only if you ask for it</h2>
@@ -113,6 +118,28 @@
         for that phone. Never your name or email address. So RevenueCat also notes when the app
         last asked, which version of the app and of the phone's system it was, and which country
         it was in.
+      </p>
+      <!--
+        THE PRICE IN THE DEMO. "When someone's on the demo, it should always
+        say unlock, and then the price at the top" (Justin). So the page asks
+        RevenueCat the price as the demo opens, and as Settings opens for
+        somebody signed out, under a made-up number kept in that browser
+        (src/lib/webPurchase.js visitorId); signed in, under the account's.
+        The audit (RUN-3, 2 November 2026) found the lead above saying the
+        demo sends nothing anywhere, which this made untrue; the price stays,
+        and the page says so. What RevenueCat's web library sends when it
+        starts is its own (node_modules/@revenuecat/purchases-js, the context
+        every event carries): the browser's language and user agent, time
+        zone, screen size, and the page's address, title and referrer.
+      -->
+      <p>
+        In a browser or the computer app, the demo shows the price of the full version beside
+        UNLOCK, and Settings shows it on the Unlock row. To know it, the page asks RevenueCat as the
+        demo opens, or as Settings opens for somebody signed out, under a made-up number kept in that
+        browser, never your name or email address; signed in, it asks under the account's number.
+        RevenueCat then sees which browser it is, its language, time zone and screen size, and the
+        page's address and title and the page you came from. The checkout itself, if you press Buy,
+        is RevenueCat's and Stripe's.
       </p>
       <p>
         <strong>Help getting connected.</strong> The app drives your unit through a free app on
@@ -162,7 +189,8 @@
       <p>
         When it is on and your unit connects, the app sends one short note: which unit it is and its
         firmware, whether it is connected through the computer app or through Bluetooth, the
-        kind of computer (such as macOS 15, Windows 11 or Raspberry Pi 5, never its name) and the
+        kind of computer and its system (such as macOS 15, Windows 11 24H2, or a Raspberry Pi 5 running
+        Debian 12, never its name) and the
         computer app&rsquo;s version, or the Bluetooth adapter&rsquo;s name (its name, never its
         Bluetooth address), whether the unit answered, which system your phone or tablet runs and its
         version, its make and model on Android (on an iPhone or iPad, only which of the two), and the
@@ -427,8 +455,9 @@
         <li><strong>The purchase record, and the record of the app's checks</strong>, at RevenueCat
           — those under your account until you delete it, which deletes them there too. Checks
           made while no account is signed in on a phone (before signing in, after signing out, or
-          after deleting the account) are kept under that phone's made-up number, which names
-          nobody, for as long as the app uses RevenueCat.</li>
+          after deleting the account) are kept under that phone's made-up number, and a price
+          asked in a browser or the computer app with no account signed in under that browser's
+          made-up number, which name nobody, for as long as the app uses RevenueCat.</li>
         <li><strong>The update check's install number, and a crash's error message</strong>, at
           Expo — only for as long as is reasonably needed to provide the updates, under Expo's own
           privacy policy.</li>

@@ -2170,9 +2170,24 @@ export function run(test) {
     /* An iPhone's hotspot needs its own switch on before a Pi, signed in to no Apple Account, can join it. */
     assert.match(words, /switch on Allow Others to Join, and keep that screen open until the Pi has joined/, 'the gig steps leave out the iPhone switch that lets the Pi join its hotspot')
     assert.match(words, /Maximize Compatibility in Settings → Personal Hotspot \(iPhone 12 or later; older iPhones already use 2\.4 GHz\)/, 'an older iPhone is told to switch on something it does not have')
-    /* The server is only started again by itself once the app runs with no window; during setup a box comes up instead. */
+    /*
+     * A Pi 3 short of memory during setup. Copies of the computer app made
+     * before 2 November 2026 started its server again by itself only with no
+     * window, and put a box up instead while the window was open; copies
+     * since start it again on every computer and say so at the top of the
+     * tray menu, never in a box (desktop/main.js restartServer, the audit's
+     * computer-3). Changed on purpose that day: this pinned the box alone,
+     * and the entry now names both, the way each copy says it, so somebody
+     * on either finds it.
+     */
     assert.match(words, /Once it starts by itself at power-on, if it runs out of memory, the part of the app that talks to your unit starts again by itself\./, 'the Pi 3 note promises a restart the app does not do while its window is open')
-    assert.match(words, /During setup, a box says “The device server stopped”/, 'the box a Pi 3 can show during setup has nowhere to be looked up')
+    assert.match(words, /During setup, a box says “The device server stopped”, or the app’s menu says “The part that talks to your unit stopped”/, 'the box, or the menu line, a Pi 3 can show during setup has nowhere to be looked up')
+    assert.match(words, /An older copy of the app shows that box\. A newer one says it at the top of the menu of the Fractal Remote icon at the top of the screen, and starts that part again by itself/, 'the Pi guide says only the box an older copy shows, or promises a restart an older copy does not do')
+    {
+      // The menu line the guide quotes is the one the computer app writes.
+      const main = readFileSync(new URL('../desktop/main.js', import.meta.url), 'utf8')
+      assert.ok(main.includes('`The part that talks to your unit stopped — starting it again in '), 'the Pi guide quotes a menu line the computer app no longer shows')
+    }
     /* A Pi setting up another Pi is told how to open Imager once it is installed. */
     assert.match(words, /then open Imager from the Raspberry Pi menu → Accessories → Imager/, 'a Pi used to write the card is never told how to open Imager')
     /* Set up at a TV: no Imager wifi to have mistyped, so the Pi's own screen is where to look. */
@@ -3745,7 +3760,8 @@ export function run(test) {
     assert.match(paywall, /const canDelete = !asked && Boolean\(onDeleted\)/, 'the purchase page offers to delete an account to somebody in the demo')
     assert.match(paywall, /\}, \[canDelete\]\)/, 'the purchase page asks the account server who is signed in on every render')
     const phoneApp = read('mobile/App.js')
-    assert.match(phoneApp, /<Paywall\s+onSignIn=\{toSignIn\}[\s\S]{0,1800}onDeleted=\{\(\) => \{\s*signOut\(\)/, 'the purchase page an unpaid account signs in to cannot delete it')
+    assert.match(phoneApp, /<Paywall\s+onSignIn=\{toSignIn\}[\s\S]{0,3000}onDeleted=\{\s*purchase\.posing\s*\?\s*undefined\s*:\s*\(\) => \{\s*signOut\(\)/, 'the purchase page an unpaid account signs in to cannot delete it')
+    /* And never while he only views it as a new customer (3 November 2026): it would delete his own account. */
 
     /* And the browser and Mac app, for anybody who signed up there. */
     const web = read('src/App.jsx')
@@ -3756,7 +3772,14 @@ export function run(test) {
     const fn = read('supabase/functions/delete-account/index.ts')
     /* Who is deleted comes from the verified session, never the request. */
     assert.match(fn, /\/auth\/v1\/user/, 'the function no longer verifies who is asking')
-    assert.match(fn, /\/auth\/v1\/admin\/users\/\$\{id\}/, 'the function no longer deletes the account it verified')
+    /*
+     * The deletion itself moved on 2 November 2026 into
+     * ../_shared/forget-account.ts, which Developer → Accounts' Delete shares,
+     * so it is read there: handed the account delete-account verified, and
+     * deleting that one.
+     */
+    assert.match(fn, /const who = token \? await accountFrom\(url, anon, token\) : null[\s\S]*?await forgetAccount\(url, service, who, 'delete-account'\)/, 'the function no longer deletes the account it verified')
+    assert.match(read('supabase/functions/_shared/forget-account.ts'), /\/auth\/v1\/admin\/users\/\$\{who\.id\}/, 'the shared deletion no longer deletes the account it was handed')
     assert.ok(!/body\??\.(id|user|account|email)\b/.test(fn), 'the function reads whom to delete from the request body')
     assert.match(fn, /confirm !== 'delete'/, 'a call without the confirmation can delete an account')
 
@@ -3993,7 +4016,9 @@ export function run(test) {
     assert.match(read('desktop/main.js'), /const LATEST_API_URL = 'https:\/\/api\.github\.com\//, 'the desktop app no longer checks GitHub for updates; the policy should stop saying it does')
     assert.match(words, /The desktop apps check for their own updates from GitHub, and the phone app checks for updates from Expo/, 'the policy does not describe the update checks')
     assert.ok(!/except one:/.test(words), 'the opening names one thing that is not turned on, and the page describes two')
-    assert.match(words, /something you choose to turn on, except two: the phone app asking whether it is unlocked[^.]*and the apps checking for updates/, 'the opening does not name both things that happen without being turned on')
+    assert.match(words, /something you choose to turn on, except three: the phone app asking whether it is unlocked[^.]*a browser or the computer app asking the price of the full version as the demo or Settings opens[^.]*and the apps checking for updates/, 'the opening does not name all three things that happen without being turned on (the price, since the demo shows it: review of 3 November 2026)')
+    /* And the lead's "one thing" is one besides the computer app's update check, which it names. */
+    assert.match(words, /Besides the computer app checking GitHub for its own updates, the one thing they ask the internet for is the price of the full version/)
 
     /*
      * And the one thing the phone fetches from this website: the gear pages'
@@ -4145,7 +4170,7 @@ export function run(test) {
     const kept = words.slice(words.indexOf('How long it is kept'), words.indexOf('Deleting your data'))
     assert.match(kept, /The dates kept for the help setting up the computer, and when a computer app first signed in — until you delete the account\./, 'how long the setup emails’ dates are kept is not said')
     /* And what the two partners keep that the page says they are sent (5.1.1(i) asks for retention, not only collection). */
-    assert.match(kept, /The purchase record, and the record of the app's checks , at RevenueCat — those under your account until you delete it, which deletes them there too\. Checks made while no account is signed in on a phone \(before signing in, after signing out, or after deleting the account\) are kept under that phone's made-up number/, 'how long RevenueCat keeps the purchase record and the launch checks is not said, or not for the checks under no account')
+    assert.match(kept, /The purchase record, and the record of the app's checks , at RevenueCat — those under your account until you delete it, which deletes them there too\. Checks made while no account is signed in on a phone \(before signing in, after signing out, or after deleting the account\) are kept under that phone's made-up number, and a price asked in a browser or the computer app with no account signed in under that browser's made-up number/, 'how long RevenueCat keeps the purchase record and the launch checks is not said, or not for the checks under no account, or not for a browser’s price lookups')
     assert.match(kept, /The update check's install number, and a crash's error message , at Expo — only for as long as is reasonably needed to provide the updates/, 'how long Expo keeps the install number and a crash message is not said')
     /* Every count the builder sees is said, Expo's included, and named as what the label calls Analytics. */
     assert.match(words, /these counts are what the App Store's privacy label means by Analytics/, 'the policy does not say which of its counts the label calls Analytics')
@@ -4153,8 +4178,8 @@ export function run(test) {
     for (const t of ['computer_seen', 'unlock_seen', 'setup_reminders']) {
       assert.match(sql, new RegExp(`create table if not exists public\\.${t} \\(\\s*account_id uuid primary key references auth\\.users \\(id\\) on delete cascade`), `${t} is not deleted with the account, and the policy says it is`)
     }
-    /* "Except two" still holds: the setup emails go to people who bought, under Unlocking the full version. */
-    assert.match(words, /something you choose to turn on, except two:/)
+    /* "Except three" still holds: the setup emails go to people who bought, under Unlocking the full version. */
+    assert.match(words, /something you choose to turn on, except three:/)
     const unlocking = words.slice(words.indexOf('Unlocking the full version — a purchase record only if you buy it'), words.indexOf('Your setlists — only if you are signed in'))
     assert.ok(unlocking.includes('Help getting connected.'), 'the setup emails are not described under Unlocking the full version')
     /* And the date moved with the words. */
@@ -5261,7 +5286,10 @@ export function run(test) {
     for (const [file, mustSay] of [
       ['licences/forgefx-MIT.txt', /MIT License/],
       ['licences/forgefx-midi-APACHE-2.0.txt', /Apache License/],
-      ['licences/forgefx-midi-NOTICE.txt', /Apache License, Version 2\.0/]
+      ['licences/forgefx-midi-NOTICE.txt', /Apache License, Version 2\.0/],
+      /* The web app's two fonts, carried as its own files since 2 November 2026 (src/fonts.css). */
+      ['licences/archivo-OFL-1.1.txt', /SIL OPEN FONT LICENSE Version 1\.1/],
+      ['licences/dm-mono-OFL-1.1.txt', /SIL OPEN FONT LICENSE Version 1\.1/]
     ]) {
       const text = read(file)
       assert.ok(text.trim().length > 200, `${file} is empty or a stub`)
@@ -5329,6 +5357,121 @@ export function run(test) {
     /* And it is reachable as a plain URL, which is what a store listing and an
        About screen can both be given. `public/` is served at the site root. */
     assert.ok(read('public/notices.txt').length > 1000, 'there is no plain-text copy to link to')
+  })
+
+  test('the web app’s fonts are its own files, so opening it asks Google for nothing and works with no internet', async () => {
+    /*
+     * index.html loaded Archivo and DM Mono from fonts.googleapis.com and
+     * fonts.gstatic.com on every load (audit WEB-6, approved 2 November
+     * 2026). The same page is the computer app's own window and the page a
+     * phone on the same Wi-Fi opens from the computer, so each of those told
+     * Google the player's address and browser, while the privacy page says
+     * the computer app alone, or a phone on the same Wi-Fi, sends nothing
+     * anywhere; and at a gig with no internet the fonts never came.
+     */
+    const html = read('index.html')
+    const shipped = (dir) =>
+      readdirSync(new URL(`../${dir}/`, import.meta.url), { recursive: true })
+        .filter((f) => /\.(m?js|jsx|css|html)$/.test(f))
+        .map((f) => `${dir}/${f}`)
+    /* Comments out: src/fonts.css says where the fonts used to come from. */
+    const uncommented = (text) => text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ')
+    for (const f of ['index.html', ...shipped('src'), ...shipped('shared')]) {
+      assert.ok(!/fonts\.googleapis\.com|fonts\.gstatic\.com/.test(uncommented(read(f))), `${f} asks Google for a font again`)
+    }
+    /* Its attributes in either order: the Google link this replaced had href first. */
+    const outside = /<link\b(?=[^>]*\brel="(?:stylesheet|preconnect|dns-prefetch|preload)")(?=[^>]*\bhref="(?:https?:)?\/\/)[^>]*>/i
+    assert.ok(outside.test('<link href="https://fonts.googleapis.com/css2?family=Archivo" rel="stylesheet">') && outside.test('<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'), 'the check misses a link to another site')
+    assert.ok(!outside.test(html), 'index.html loads a stylesheet or opens a connection somewhere else again')
+
+    /* Loaded before the styles that name them, from the bundle's entry. */
+    const main = read('src/main.jsx')
+    assert.ok(main.indexOf("import './fonts.css'") !== -1, 'the fonts are not part of the app')
+    assert.ok(main.indexOf("import './fonts.css'") < main.indexOf("import './styles.css'"), 'the fonts come after the styles that use them')
+
+    /* Every face points at a file that is there, and every file is used. */
+    const css = read('src/fonts.css')
+    const faces = [...css.matchAll(/@font-face \{([^}]*)\}/g)].map((m) => ({
+      family: m[1].match(/font-family: '([^']+)'/)?.[1],
+      weight: m[1].match(/font-weight: ([^;]+);/)?.[1],
+      url: m[1].match(/url\('([^']+)'\)/)?.[1],
+      range: m[1].match(/unicode-range: ([^;]+);/)?.[1]
+    }))
+    const files = readdirSync(new URL('../public/fonts/', import.meta.url)).sort()
+    assert.deepEqual([...new Set(faces.map((f) => f.url))].sort(), files.map((f) => `/fonts/${f}`), 'a face points at a missing file, or a file in public/fonts is never used')
+    for (const f of files) {
+      assert.match(f, /\.woff2$/, `${f} is not a woff2`)
+      const bytes = readFileSync(new URL(`../public/fonts/${f}`, import.meta.url))
+      assert.equal(bytes.subarray(0, 4).toString('latin1'), 'wOF2', `public/fonts/${f} is not a font file`)
+    }
+    /* Exactly what Google served, so the app looks as it did: Archivo 400 to
+       600 (the file goes to 900, which would make every bold heading heavier),
+       DM Mono 400 and 500, no italic, and every face limited to its subset. */
+    assert.deepEqual(
+      [...new Set(faces.map((f) => `${f.family} ${f.weight}`))].sort(),
+      ['Archivo 400 600', 'DM Mono 400', 'DM Mono 500'],
+      'the weights are not the ones the app was drawn with'
+    )
+    assert.ok(faces.every((f) => f.range), 'a face has no unicode-range, so every page downloads it')
+    assert.ok(!/font-style: italic/.test(css), 'an italic was added that the app never had')
+    assert.equal(faces.length, (css.match(/font-display: swap;/g) || []).length, 'a face hides the words until its file arrives')
+    /* Archivo Expanded was never served (Google Fonts has no such family), so
+       headings have always been Archivo: no file for it, and --display still
+       falls back to Archivo as it always did. */
+    assert.match(read('src/styles.css'), /--display: 'Archivo Expanded', 'Archivo',/, 'the heading font stack changed')
+
+    /* In the bundle the computer app carries, and on the website. */
+    const fp = await import('../scripts/computer-fingerprint.mjs')
+    const inside = fp.computerInputs()
+    for (const want of ['src/fonts.css', ...files.map((f) => `public/fonts/${f}`)]) {
+      assert.ok(inside.includes(want), `${want} is not in the computer app's fingerprint, so a change to it would not reach a computer`)
+    }
+
+    /* Their licences travel with them: the files, and the notices. */
+    for (const [file, holder] of [
+      ['licences/archivo-OFL-1.1.txt', 'Copyright 2020 The Archivo Project Authors (https://github.com/Omnibus-Type/Archivo)'],
+      ['licences/dm-mono-OFL-1.1.txt', 'Copyright 2020 The DM Mono Project Authors (https://www.github.com/googlefonts/dm-mono)']
+    ]) {
+      assert.ok(read(file).startsWith(`${holder}\n`), `${file} does not start with its copyright line`)
+      for (const notices of ['NOTICES.md', 'public/notices.txt']) {
+        assert.ok(read(notices).includes(holder), `${notices} does not carry ${file}; run npm run notices`)
+      }
+      assert.ok(read('scripts/notices.mjs').includes(`file: '${file}'`), `the notices generator does not carry ${file}`)
+    }
+  })
+
+  test('the Android page leads with Google Play, and says what the copy from outside it cannot do', async () => {
+    /*
+     * Every page's "Get the Android app" lands on /android, and so does
+     * downloads.html for a visitor on Android. Its one big green button was
+     * the APK from GitHub (audit WEB-5, approved 2 November 2026), which is
+     * signed with the React Native template's key (apk.yml), so Android
+     * refuses it over the Google Play copy; and a copy from outside Google
+     * Play has no Google Play billing (mobile/src/lib/purchases.js), so it
+     * could not buy the full version either.
+     */
+    const page = read('public/android.html')
+    const { GOOGLE } = await import('../shared/stores.mjs')
+    const green = [...page.matchAll(/<a class="get" href="([^"]+)"/g)].map((m) => m[1])
+    assert.deepEqual(green, [GOOGLE.url], 'the big green button is not Google Play')
+    assert.match(page, /a\.className = 'other'/, 'the copy from GitHub is drawn as the big green button again')
+    assert.ok(!/className = 'get'/.test(page), 'the script draws a second green button')
+    /* Google Play first, the copy from GitHub under it. */
+    assert.ok(page.indexOf(GOOGLE.url) < page.indexOf('id="card"'), 'the copy from GitHub comes before Google Play')
+    const words = page
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<script[\s\S]*?<\/script>/g, ' ')
+      .replace(/<style[\s\S]*?<\/style>/g, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&rsquo;/g, '’')
+      .replace(/&mdash;/g, '—')
+      .replace(/\s+/g, ' ')
+    assert.match(words, /A copy from outside Google Play/, 'the copy from GitHub is not labelled for what it is')
+    assert.match(words, /It won’t install over the Google Play copy/, 'the page does not say the copy will not install over Google Play’s')
+    assert.match(words, /buying the full version needs the Google Play copy/, 'the page does not say the copy cannot buy the full version')
+    /* The old promise was true only over an earlier copy from this page, and now says so. */
+    assert.ok(!/installs over an earlier one without removing anything/.test(words), 'the page promises it installs over any earlier copy again')
+    assert.match(words, /installs over an earlier copy from this page/, 'the page no longer says when it does install over an earlier copy')
   })
 
   test('the Mac app has a face, and claims only entitlements it uses', () => {

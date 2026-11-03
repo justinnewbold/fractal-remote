@@ -1999,7 +1999,16 @@ export function run(test) {
      * helper a website does not have — it failed every time. "There's
      * actually no place to even sign in anywhere on the web app."
      */
-    assert.match(app, /if \(signIn === 'account'\) \{\s*await signInAccount\(/, 'the unlock’s sign-in sets up a phone remote instead of signing in')
+    /*
+     * Changed on purpose, 2 November 2026 (the audit's live-1). This pinned
+     * `if (signIn === 'account')`: the plain sign-in, whatever end this was.
+     * On the computer itself that left the device server signed out under a
+     * window signed in, so the choice is signInErrand's now, which keeps it
+     * plain everywhere but the computer (the demo included: it takes the
+     * computer's role with no device server behind it). Held below, in "a
+     * sign-in made in the computer's window always reaches the device server".
+     */
+    assert.match(app, /if \(errand === 'account'\) \{\s*await signInAccount\(/, 'the unlock’s sign-in sets up a phone remote instead of signing in')
     const link = read('src/lib/link.js')
     const plain = link.slice(link.indexOf('export async function signInAccount'), link.indexOf('export async function reconnectPhone'))
     assert.ok(plain.length > 0 && !/join\(|turnOnMac|autoConnect/.test(plain), 'the plain sign-in has an errand attached again')
@@ -2070,10 +2079,21 @@ export function run(test) {
     /* Signing in ends the demo, as the phone's onSignedIn does — "make sure
        demos disappear when you're logged in" — and out of the demo a phone
        signed in connects, rather than stopping one tap short. */
-    const after = app.slice(app.indexOf('const afterAccount = async () => {'), app.indexOf('const afterAccount = async () => {') + 700)
-    assert.match(after, /if \(isDemo\(\)\) \{[\s\S]*?setDemo\(false\)\s*window\.location\.reload\(\)/, 'signing in leaves the person in the demo')
+    /*
+     * Changed on purpose, 2 November 2026 (found in review of the audit's
+     * live-1): afterAccount takes the details just signed in with, and in
+     * the demo on a computer signs its device server in between ending the
+     * demo and the reload, so this reads the whole of it rather than its
+     * first 700 characters, and both callers hand it their details. Held in
+     * "a sign-in made in the computer’s window always reaches the device
+     * server", below.
+     */
+    const afterAt = app.indexOf('const afterAccount = async (details = null) => {')
+    const after = app.slice(afterAt, app.indexOf('const openUnlock = () => {', afterAt))
+    assert.ok(afterAt > -1 && after.length > 0, 'afterAccount is not where this looks for it')
+    assert.match(after, /if \(isDemo\(\)\) \{[\s\S]*?setDemo\(false\)\s*window\.location\.reload\(\)\s*return\s*\}/, 'signing in leaves the person in the demo')
     assert.match(after, /if \(linkState\(\)\.role === 'remote'\) await reconnectPhone\(\)/, 'a phone signed in from the unlock stops at “Connect as …”')
-    assert.equal((app.match(/await afterAccount\(\)/g) || []).length, 2, 'signing in and making an account lead to different places')
+    assert.deepEqual(app.match(/await afterAccount\([^)]*\)/g), ['await afterAccount({ email, password })', 'await afterAccount(details)'], 'signing in and making an account lead to different places')
     assert.match(read('mobile/App.js'), /onSignedIn=\{[\s\S]{0,1200}setDemo\(false\)/, 'the phone’s sign-in stopped ending the demo; this check follows it')
   })
 
@@ -2129,6 +2149,93 @@ export function run(test) {
     assert.equal(D4.notUnlocked('a@b.c'), 'a@b.c hasn’t unlocked the phone remote yet. This computer app is free to use on its own; the phone remote is the one-time unlock.')
   })
 
+  /**
+   * A SIGN-IN MADE IN THE COMPUTER'S WINDOW ALWAYS REACHES THE DEVICE SERVER.
+   *
+   * The audit of 2 November 2026 (live-1), from one new buyer's sign-ins
+   * that day: signed in on a Mac with an old account, he made a new one on
+   * the phone, then on the computer signed out under Settings → Account and
+   * signed back in there with "Sign in with an email and password". Sign
+   * out took the window and the device server out together, as it should;
+   * the sign-in put the window back alone. The device server, whose own
+   * sign-in is what a phone finds the computer by, stayed signed out, and
+   * the phone, on the new account, found no computer.
+   *
+   * So on the computer every sign-in sheet runs the computer's own set-up
+   * (setUpMac: the window, the device server with the same details, then
+   * the phone remote on, or the unlock), whichever button opened it; and
+   * everywhere else the plain one stays plain. test/link-now.mjs runs
+   * setUpMac itself on a bench.
+   */
+  test('a sign-in made in the computer’s window always reaches the device server', async () => {
+    const { signInErrand } = await import('../src/lib/link.js')
+    // The computer: every sheet, however it was opened, is the computer's set-up.
+    for (const asked of [true, 'account', false, null, undefined]) {
+      assert.equal(signInErrand({ asked, role: 'mac', demo: false }), 'computer', `a sign-in on the computer asked as ${JSON.stringify(asked)} leaves its device server signed out`)
+    }
+    // The website's demo takes the computer's role with nothing behind it: the plain sign-in stays plain there (and a computer's own demo is reached below, by afterAccount).
+    assert.equal(signInErrand({ asked: 'account', role: 'mac', demo: true }), 'account', 'the demo’s plain sign-in goes looking for a device server it does not have')
+    assert.equal(signInErrand({ asked: true, role: 'mac', demo: true }), 'computer', 'the demo’s own set-up sheet changed what it does')
+    // A phone or a browser: as before.
+    for (const role of ['remote', 'wifi', 'unknown']) {
+      assert.equal(signInErrand({ asked: 'account', role }), 'account', `${role}: the plain sign-in has an errand again`)
+      assert.equal(signInErrand({ asked: true, role }), 'phone', `${role}: the connect sheet stopped connecting`)
+    }
+
+    // Both ways the sheet signs in ask it, and the computer's answer runs the set-up.
+    const app = read('src/App.jsx').replace(/\s+/g, ' ')
+    const submit = app.slice(app.indexOf('const signInSubmit = useCallback('), app.indexOf('/** Do at the Mac what the phone asked for'))
+    assert.match(submit, /const errand = signInErrand\(\{ asked: signIn, role: linkState\(\)\.role, demo: isDemo\(\) \}\) if \(errand === 'account'\) \{/, 'the sheet’s sign-in decides for itself again')
+    assert.match(submit, /\} else if \(errand === 'computer'\) \{ try \{ await setUpMac\(\{ email, password \}\)/, 'the computer’s sign-in does not set the computer up')
+    const sheet = app.slice(app.indexOf('<SignInSheet'), app.indexOf('onSubmit={signInSubmit} />'))
+    assert.match(sheet, /if \(signInErrand\(\{ asked: signIn, role: linkState\(\)\.role, demo: isDemo\(\) \}\) === 'account'\) \{/, 'Create Account on the computer’s Account page leaves its device server signed out')
+    // No other place in App picks the plain sign-in over the computer's: what is left of it only words the sheet.
+    assert.deepEqual(app.match(/signIn === 'account'/g), ["signIn === 'account'"], 'App picks the plain sign-in somewhere signInErrand does not see')
+    assert.match(app, /account=\{signIn === 'account'\}/)
+
+    /*
+     * AND IN THE DEMO ON A COMPUTER (found in review, 2 November 2026). The
+     * demo runs in the computer app's own window too ("Try the demo" with
+     * no unit plugged in), with a real device server behind it, and its
+     * sign-in is the plain one, which ended the demo with the device server
+     * still signed out: live-1 by another way in. So both of the sheet's
+     * plain sign-ins hand afterAccount the details, and afterAccount, on a
+     * computer that can host, signs the device server in on its way out
+     * (deviceServerAfterDemo, which ends the demo itself before it tells the
+     * device server anything: run on a bench in test/link-now.mjs), and
+     * then ends the demo and reloads, never held back by a failure there. A
+     * phone or a laptop pretending (the website's demo, phoneEnd) is left as
+     * it was.
+     */
+    assert.match(submit, /if \(errand === 'account'\) \{ await signInAccount\(\{ email, password \}\)[\s\S]{0,240}await afterAccount\(\{ email, password \}\) return/, 'a sign-in in the demo on a computer does not hand afterAccount what it signed in with')
+    assert.match(sheet, /=== 'account'\) \{ if \(!isDemo\(\)\) setSignIn\(false\) await afterAccount\(details\) \}/, 'an account made in the demo on a computer does not hand afterAccount what it signed in with')
+    const afterAt = app.indexOf('const afterAccount = async (details = null) => {')
+    const after = app.slice(afterAt, app.indexOf('const openUnlock = () => {', afterAt))
+    assert.match(
+      after,
+      /^const afterAccount = async \(details = null\) => \{ if \(isDemo\(\)\) \{ let unlockNext = unlockAfterSignIn && !phoneEnd if \(details && computerEnd\) \{ try \{ const \{ remote \} = await deviceServerAfterDemo\(details\)/,
+      'a sign-in in the demo on a computer leaves its device server signed out'
+    )
+    assert.match(after, /if \(!remote\) unlockNext = true \} catch \(err\) \{ record\(/, 'a failure signing the device server in stops the reload, or an account without the unlock is not sent to it')
+    assert.ok(after.indexOf('deviceServerAfterDemo(details)') < after.indexOf('setDemo(false) window.location.reload()'), 'the demo’s reload comes before the device server is signed in')
+    // And the step ends the demo itself, first: while it is on, the computer's own store is written nowhere.
+    const linkSrc = read('src/lib/link.js')
+    const leaving = linkSrc.slice(linkSrc.indexOf('export async function deviceServerAfterDemo'), linkSrc.indexOf('/** The relay'))
+    assert.ok(
+      leaving.indexOf('await canReachHelper()') > -1 && leaving.indexOf('await canReachHelper()') < leaving.indexOf('setDemo(false)') && leaving.indexOf('setDemo(false)') < leaving.indexOf('await deviceServerToo('),
+      'the device server is told something while the demo still keeps it, or a phone’s demo is ended before anybody looked for a device server'
+    )
+    assert.match(app, /const computerEnd = link\.role === 'mac' && !phoneEnd/, 'a phone in the demo is taken for a computer with a device server')
+    assert.match(app, /const phoneEnd = link\.role === 'remote' \|\| link\.role === 'wifi' \|\| \(isDemo\(\) && link\.canHost === false\)/)
+
+    // And the set-up signs the device server in, with the same details, on both of its outcomes.
+    const link = read('src/lib/link.js')
+    const setUp = link.slice(link.indexOf('export async function setUpMac'), link.indexOf('/** The relay'))
+    assert.match(setUp, /if \(!unlocked && !unknown\) \{\s*const \{ cloudLogin \} = await device\(\)\s*await cloudLogin\(email, password\)/, 'an account without the unlock leaves the device server signed out')
+    assert.match(setUp, /await turnOnMac\(\{ email, password \}\)/)
+    assert.match(link.slice(link.indexOf('async function turnOnMac')), /await cloudLogin\(email, password\)[\s\S]{0,200}await remoteEnable\(true\)/, 'the set-up turns the phone remote on without signing the device server in')
+  })
+
   test('a phone gets the phone’s walkthrough, in the browser too', () => {
     const app = read('src/App.jsx')
     const web = read('src/components/PhoneWalkthrough.jsx')
@@ -2159,11 +2266,13 @@ export function run(test) {
      * (WALKTHROUGH_TWO_WAYS, held in test/bluetooth.mjs). So the phone draws
      * that line only where Bluetooth is not open, and the browser draws it
      * always, with no Bluetooth words to draw instead. The box before Unlock
-     * is his sentence at both ends until he answers.
+     * is the same: both ways on such a phone (he said yes, 3 November 2026),
+     * his sentence in the browser.
      */
     assert.ok(web.includes('{P9.demo.sub}'), 'the browser’s phone walkthrough no longer says P9.demo.sub, which it needs: the browser has no Bluetooth')
     assert.ok(phone.replace(/\s+/g, ' ').includes('{twoWays ? WALKTHROUGH_TWO_WAYS.demoSub : P9.demo.sub}'), 'the phone’s walkthrough says P9.demo.sub on a copy that opens Bluetooth, or no longer says it at all')
-    assert.ok(web.includes('{P3.real.agree}') && phone.includes('label={P3.real.agree}'), 'the box before Unlock says something other than his sentence at one end')
+    assert.ok(web.includes('{P3.real.agree}'), 'the browser’s box before Unlock says something other than his sentence, and the browser does need the computer')
+    assert.ok(phone.includes('label={twoWays ? WALKTHROUGH_TWO_WAYS.agree : P3.real.agree}'), 'the phone’s box before Unlock does not say both ways where Bluetooth is open, or his sentence everywhere else')
     assert.ok(!/bluetooth-gear|WALKTHROUGH_TWO_WAYS|twoWays|Bluetooth/.test(web), 'the browser’s phone walkthrough offers Bluetooth, which a browser does not have')
     /*
      * And the browser's sign-in screen: Get connected is the computer's three
@@ -2496,6 +2605,36 @@ export function run(test) {
    * the phone, wherever it is drawn: Phone & computer at both ends, How it
    * works on the phone and in a phone's browser, and the computer's welcome.
    */
+  /*
+   * "The page numbers on this aren't correct. Page 2 of three are there
+   * twice, but there's actually four pages" (Justin, 3 November 2026, of the
+   * phone's walkthrough). Every page with dots counts out of WALK_STEPS, the
+   * dots write their own words, and the demo's way through (How it works,
+   * Choose how you want to start, Which unit, Here's the app) reads 1 to 4,
+   * on the phone app and on a phone in the browser alike.
+   */
+  test('the phone’s walkthrough counts its four pages 1 to 4, never one number twice on one way through it', async () => {
+    const { WALK_STEPS } = await import('../shared/onboarding.mjs')
+    assert.equal(WALK_STEPS, 4)
+    const want = { how: 0, mode: 1, pick: 2, app: 2, connected: 3 }
+    for (const file of ['mobile/src/screens/Onboarding.js', 'src/components/PhoneWalkthrough.jsx']) {
+      const text = read(file)
+      const pages = {}
+      let page = null
+      for (const line of text.split('\n')) {
+        const opens = line.match(/\{at === '(\w+)' \? \(/)
+        if (opens) page = opens[1]
+        const dots = line.match(/<Steps ([^>]*)\/>/)
+        if (!dots) continue
+        assert.match(dots[1], /^at=\{(\d)\} of=\{WALK_STEPS\} $/, `${file}: a page's dots count out of their own number, or carry their own words (${line.trim()})`)
+        pages[page] = Number(dots[1].match(/at=\{(\d)\}/)[1])
+      }
+      for (const [name, at] of Object.entries(pages)) assert.equal(at, want[name], `${file}: ${name} is page ${at + 1}`)
+      for (const name of ['how', 'mode', 'pick', 'connected']) assert.ok(name in pages, `${file}: ${name} has no dots`)
+      assert.ok(!/count: '\d of \d'/.test(read('shared/onboarding.mjs')), 'a page count is written out by hand again')
+    }
+  })
+
   test('the wire between the computer and the phone says SECURE WIRELESS LINK everywhere it is drawn', async () => {
     const { linkChain } = await import('../shared/link-chain.mjs')
     for (const here of ['phone', 'computer']) {
@@ -2510,7 +2649,7 @@ export function run(test) {
       assert.ok(!read(file).includes("'SECURE LINK'"), `${file} still says SECURE LINK`)
     }
     /* Each end draws the wire from those words rather than its own. */
-    assert.match(read('mobile/src/screens/Onboarding.js'), /\{box\.phoneWire \? <Wire label=\{box\.phoneWire\} \/> : null\}/)
+    assert.match(read('mobile/src/screens/Onboarding.js'), /\{box\.phoneWire \? <Wire label=\{box\.phoneWire\}(?: tight=\{twoWays\})? \/> : null\}/)
     assert.match(read('src/components/PhoneWalkthrough.jsx'), /<span className="pw-wire-label">\{box\.phoneWire\}<\/span>/)
     assert.match(read('src/components/Onboarding.jsx'), /<span className="onb-wire mono">\{box\.wire\}<\/span>/)
     /*
@@ -2701,11 +2840,12 @@ export function run(test) {
     const row = (email) => people.rows.concat(waiting.rows).find((r) => r.email === email)
     assert.equal(row('new@x.com').email, 'new@x.com', 'a row does not say whose it is')
     assert.match(row('new@x.com').value, /^new@x\.com\n/, 'the list reads differently than it did')
-    assert.deepEqual(accountChoices(row('new@x.com')), { give: true, takeBack: false, confirmNow: false })
-    assert.deepEqual(accountChoices(row('paid@x.com')), { give: false, takeBack: true, confirmNow: false })
-    assert.deepEqual(accountChoices(row('me@x.com')), { give: false, takeBack: false, confirmNow: false }, 'the owner can take his own access away')
-    assert.deepEqual(accountChoices(row('soon@x.com')), { give: false, takeBack: true, confirmNow: false })
-    assert.deepEqual(accountChoices({ label: '', value: 'Nobody has made an account yet.' }), { give: false, takeBack: false, confirmNow: false })
+    /* `remove` is Delete this account (2 November 2026): never from an answer that does not say the server can (`deletes`), as this one does not. */
+    assert.deepEqual(accountChoices(row('new@x.com')), { give: true, takeBack: false, confirmNow: false, remove: false })
+    assert.deepEqual(accountChoices(row('paid@x.com')), { give: false, takeBack: true, confirmNow: false, remove: false })
+    assert.deepEqual(accountChoices(row('me@x.com')), { give: false, takeBack: false, confirmNow: false, remove: false }, 'the owner can take his own access away')
+    assert.deepEqual(accountChoices(row('soon@x.com')), { give: false, takeBack: true, confirmNow: false, remove: false })
+    assert.deepEqual(accountChoices({ label: '', value: 'Nobody has made an account yet.' }), { give: false, takeBack: false, confirmNow: false, remove: false })
 
     /* The phone: a tap opens the person in a sheet; the words can be held and copied. */
     const facts = read('mobile/src/components/Facts.js')
@@ -2847,8 +2987,8 @@ export function run(test) {
     const [people, waiting] = accountSections(answer)
     const row = (email) => people.rows.concat(waiting.rows).find((r) => r.email === email)
     /* Paid or not: the buyer whose emails bounce is the one this is for. */
-    assert.deepEqual(accountChoices(row('typo@gmial.com')), { give: false, takeBack: true, confirmNow: true })
-    assert.deepEqual(accountChoices(row('Given@x.com')), { give: true, takeBack: false, confirmNow: true })
+    assert.deepEqual(accountChoices(row('typo@gmial.com')), { give: false, takeBack: true, confirmNow: true, remove: false })
+    assert.deepEqual(accountChoices(row('Given@x.com')), { give: true, takeBack: false, confirmNow: true, remove: false })
     assert.equal(accountChoices(row('fine@x.com')).confirmNow, false, 'an account that confirmed is offered Confirm now again')
     assert.equal(accountChoices(row('me@x.com')).confirmNow, false, 'the owner’s own account is offered Confirm now')
     assert.equal(accountChoices(row('given@x.com')).confirmNow, false, 'a waiting-list address, which has no account, is offered Confirm now')
@@ -2882,6 +3022,106 @@ export function run(test) {
       /* Confirming changes whether they confirmed, never whether they are unlocked. */
       assert.match(tool, /action === 'confirm' \? \{ \.\.\.was, confirmed: true \} : \{ \.\.\.was, unlocked: action === 'grant', waiting: false \}/, `${file}: confirming marks them locked or unlocked`)
     }
+  })
+
+  /*
+   * "How do I remove accounts altogether like the irecon one that's
+   * misspelled?" and "I didn't add the appreview email, I think you did that
+   * so Apple had a login. How do I remove it?" (Justin, 2 November 2026.)
+   * The first is Delete this account, on his page alone. The second must
+   * stay, for Apple's next review, and its row says so. The server's half is
+   * run in test/server.mjs.
+   */
+  test('Delete this account is on Everyone with an account at both ends, never on Apple’s review login or his own, and asks what goes with it first', async () => {
+    const { accountSections, accountChoices, accountDeleteAsk, REVIEW_LOGIN_LINE } = await import('../shared/admin.mjs')
+    const now = Date.now()
+    /* As grant-access sends it now: marked, and saying it can delete. */
+    const answer = {
+      ok: true,
+      total: 5,
+      deletes: true,
+      accounts: [
+        { email: 'irecon@gmial.com', signed_up: now, confirmed: false, last_sign_in: null, unlocked: false },
+        { email: 'paid@x.com', signed_up: now, confirmed: true, last_sign_in: now, unlocked: true, source: 'revenuecat' },
+        { email: 'review@x.test', signed_up: now, confirmed: true, last_sign_in: now, unlocked: true, source: 'revenuecat', review: true },
+        { email: 'justin@x.test', signed_up: now, confirmed: true, last_sign_in: now, unlocked: true, source: 'revenuecat', admin: true },
+        { email: 'me@x.com', signed_up: now, confirmed: true, last_sign_in: now, unlocked: true, source: 'owner' }
+      ],
+      waiting: [{ email: 'soon@x.com', added: now }]
+    }
+    const rows = (a) => accountSections(a, '', now).flatMap((s) => s.rows)
+    const row = (email, a = answer) => rows(a).find((r) => r.email === email)
+    assert.equal(accountChoices(row('irecon@gmial.com')).remove, true, 'a misspelled account cannot be deleted')
+    assert.equal(accountChoices(row('paid@x.com')).remove, true)
+    assert.equal(accountChoices(row('review@x.test')).remove, false, 'Apple’s review login is offered Delete')
+    assert.equal(accountChoices(row('review@x.test')).takeBack, false, 'Apple’s review login can have its full version taken back, which stops the reviewer at the purchase page')
+    assert.equal(accountChoices(row('review@x.test')).give, false, 'it already has it')
+    assert.equal(accountChoices(row('justin@x.test')).remove, false, 'his own account is offered Delete')
+    assert.equal(accountChoices(row('me@x.com')).remove, false, 'an owner account is offered Delete')
+    assert.equal(accountChoices(row('soon@x.com')).remove, false, 'a waiting-list address, which is not an account, is offered Delete')
+    /* A server that cannot delete sends no `deletes` and marks nobody: then no row offers it, the review login's included. */
+    const old = { ...answer, deletes: undefined, accounts: answer.accounts.map(({ review, admin, ...a }) => a) }
+    assert.ok(rows(old).every((r) => !accountChoices(r).remove), 'a server without Delete has it offered')
+    /* And a row's own say is never enough against the review login or his account. */
+    assert.equal(accountChoices({ email: 'x@x.com', canDelete: true, review: true }).remove, false)
+    assert.equal(accountChoices({ email: 'x@x.com', canDelete: true, admin: true }).remove, false)
+
+    /* Apple's review login says so first, on the list and in its sheet; nobody else's does. */
+    assert.equal(REVIEW_LOGIN_LINE, 'Apple’s review login: keep it, Apple signs in with it for every review.')
+    assert.ok(row('review@x.test').line.startsWith(`${REVIEW_LOGIN_LINE} Signed up`), row('review@x.test').line)
+    assert.match(row('review@x.test').value, /^review@x\.test\nApple’s review login: keep it/)
+    assert.ok(rows(answer).filter((r) => r.email && r.email !== 'review@x.test').every((r) => !r.line.includes('review login')))
+    /* Still counted: it is an account, and it is on the list. */
+    assert.equal(accountSections(answer, '', now)[0].title, 'Everyone with an account (5)')
+
+    /* The question, from the server's look, in plain words. */
+    const ask = (paid, r = row('paid@x.com')) => accountDeleteAsk(r, { ok: true, ask: true, id: 'acct-1', email: r.email, paid })
+    const opening =
+      'Delete paid@x.com for good? The account goes straight away, with its sign-in, its setlists and everything else saved under it, and any computer, phone or tablet signed in to it is signed out. It can’t be undone.'
+    const store = ask({ stores: ['app_store'], byHand: false })
+    assert.equal(store, `${opening} They paid on the App Store: that stays with the store account they paid with, and Restore a purchase brings it back if they make a new account.`)
+    assert.match(ask({ stores: ['play_store'], byHand: false }), /They paid on Google Play: that stays with the store account/)
+    const card = ask({ stores: ['rc_billing'], byHand: false })
+    assert.match(card, /They paid by card on the website: that goes with the account, and nothing brings it back\. Deleting refunds nothing, so refund it in RevenueCat first if they’re owed it\.$/)
+    assert.doesNotMatch(card, /Restore/, 'a website purchase is said to come back with Restore')
+    assert.match(ask({ stores: [], byHand: true }), /The full version you gave them goes with it\. Give it again if they make a new account\.$/)
+    /* RevenueCat did not answer: the row's Unlocked, and both ways said. */
+    assert.match(ask(null), /They have the full version\. Paid on the App Store or Google Play, it stays with them, and Restore a purchase brings it back on a new account\. Paid by card on the website, or given by you, it goes with the account for good, and deleting refunds nothing\.$/)
+    /* Nothing bought and not unlocked: the account and its data, and no word about paying. */
+    assert.equal(ask({ stores: [], byHand: false }, row('irecon@gmial.com')), opening.replace('paid@x.com', 'irecon@gmial.com'))
+    assert.equal(ask(null, row('irecon@gmial.com')), opening.replace('paid@x.com', 'irecon@gmial.com'))
+    for (const words of [store, card, ask(null), REVIEW_LOGIN_LINE]) assert.doesNotMatch(words, /this phone|beta|official/i)
+
+    /* Both ends: last in the sheet, behind accountChoices, the look first and then the confirm with the id it gave. */
+    for (const file of ['mobile/src/components/AccountsTool.js', 'src/components/AccountsTool.jsx']) {
+      const tool = read(file)
+      assert.match(tool, /\{choices\.remove \? \(/, `${file}: Delete is not behind accountChoices`)
+      const del = Math.max(tool.indexOf('onClick={lookToDelete}'), tool.indexOf('onPress={lookToDelete}'))
+      assert.ok(tool.indexOf("act('confirm')") > 0 && del > tool.indexOf("act('confirm')"), `${file}: Delete is not under the other three`)
+      /* The look sends no confirm; the confirm sends the look's id. */
+      assert.match(tool, /const lookToDelete = async \(\) => \{[\s\S]*?action: 'delete',\s+email: who\.email\s+\}\)/, `${file}: the look sends more than the address`)
+      assert.match(tool, /extra: \{ id: said\.id, confirm: 'delete' \}/, `${file}: the confirm does not carry the id the server’s look gave`)
+      assert.match(tool, /if \(res\.ok && res\.ask && res\.id\) setAsking\(\{ who, said: res \}\)/, `${file}: the question comes up without the server having looked`)
+      assert.match(tool, /accountDeleteAsk\(open, askingNow\.said\)/, `${file}: the question is not the shared words`)
+      assert.match(tool, /'Deleting…' : 'Delete for good'/)
+      assert.match(tool, /Keep it/)
+      assert.match(tool, /asking && samePerson\(asking\.who, open\) \? asking : null/, `${file}: the question shows on somebody else’s sheet`)
+      /* Gone: the list is read again without them, and what the server said stays on the page. */
+      assert.match(tool, /setGone\(res\)\s+load\(\)/, `${file}: a deleted account stays on the list`)
+      assert.match(tool, /\{gone\.message\}/, `${file}: what the server said is not shown`)
+    }
+    /*
+     * And in sight. The phone's sheet covers the list, so it stays open on the
+     * server's words with nothing left to do; the browser's row has left the
+     * list, so its line at the top is brought into view. Either list can be
+     * long enough for the top to be out of sight.
+     */
+    const phone = read('mobile/src/components/AccountsTool.js')
+    assert.match(phone, /setOpen\(\(was\) => \(samePerson\(was, who\) \? \{ \.\.\.was, deleted: true, line: 'Deleted just now\.' \} : was\)\)\s+setTold\(res\)/, 'the phone’s sheet does not say it was deleted')
+    assert.deepEqual(accountChoices({ email: 'gone@x.com', deleted: true, canDelete: true, unlocked: false, confirmed: false }), { give: false, takeBack: false, confirmNow: false, remove: false }, 'a deleted account is offered something')
+    const web = read('src/components/AccountsTool.jsx')
+    assert.match(web, /if \(samePerson\(openNow\.current, who\)\) setOpen\(null\)\s+setGone\(res\)/, 'the browser keeps a deleted account open')
+    assert.match(web, /goneAt\.current\?\.scrollIntoView\?\.\(\{ block: 'nearest' \}\)/, 'what the browser said is left out of sight')
   })
 
   /*

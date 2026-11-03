@@ -36,6 +36,7 @@
  * refused.
  */
 import { ago } from './admin.js'
+import { sessionName } from './bleAdapters.js'
 import { deviceNoun } from './device-word.js'
 
 /* ------------------------------------------------------------------------ */
@@ -51,7 +52,7 @@ export const SHARE_TITLE = 'Help make Fractal Remote better?'
  * device-word.mjs): this iPad, this tablet.
  */
 export const shareWords = () => [
-  `Share which gear works with Fractal Remote, so we can put together a list of everything that works. When your unit connects, this ${deviceNoun()} sends one short note: which unit and its firmware, whether it went through a computer or Bluetooth, the kind of computer (Mac, Windows or Raspberry Pi) and the computer app’s version, or the Bluetooth adapter’s name, whether the unit answered, the kind of ${deviceNoun()} and its system version, and the app’s version. The same gear is sent once a month at most.`,
+  `Share which gear works with Fractal Remote, so we can put together a list of everything that works. When your unit connects, this ${deviceNoun()} sends one short note: which unit and its firmware, whether it went through a computer or Bluetooth, the kind of computer and its system version (Mac, Windows, Linux or Raspberry Pi) and the computer app’s version, or the Bluetooth adapter’s name, whether the unit answered, the kind of ${deviceNoun()} and its system version, and the app’s version. The same gear is sent once a month at most.`,
   'Never sent: preset or song names, anything you type, where you are, or your account or email. It is not linked to you, there is no advertising, and nothing goes to anyone else.',
   'It stays off unless you tap Yes, share. You can change it any time in Settings → Troubleshooting.'
 ]
@@ -354,13 +355,41 @@ export const wayOf = (r) =>
     ? `Bluetooth · ${r.adapter || 'an adapter with no name'}`
     : r.computer_os
       ? `Computer · ${r.computer_os}`
-      : 'Computer'
+      : /* A computer app from before 29 October 2026 said nothing of its system (desktop/lib/host.mjs computerKind). */
+        'Computer · system not said'
+
+/*
+ * EVERYTHING A NOTE CARRIES, ON THE PAGE (3 November 2026): "Can we get more
+ * information about the computers being used at all? ... Is there anything
+ * else that we can add to this that we're not yet?" The notes had carried
+ * the computer app's version, the phone's system version, an Android's make
+ * and model and the app's own version all along, and the page showed none
+ * of them. Each is a line now, newest versions first, a few at most.
+ */
+const versionOrder = (a, b) => {
+  const pa = String(a).split(/[^\d]+/).map(Number)
+  const pb = String(b).split(/[^\d]+/).map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pb[i] || 0) - (pa[i] || 0)
+    if (d) return d
+  }
+  return String(a).localeCompare(String(b))
+}
+const few = (set, most = 3) => {
+  const all = [...set].filter(Boolean).sort(versionOrder)
+  return all.length > most ? `${all.slice(0, most).join(', ')} and ${all.length - most} older` : all.join(', ')
+}
+/* "iPhone · iOS 27.2", "HUAWEI CLT-L29 · Android 10", or the system alone for a note that named no device. */
+const phoneOf = (r) => {
+  const system = r.phone_os === 'ios' ? 'iOS' : r.phone_os === 'android' ? 'Android' : r.phone_os ? String(r.phone_os) : ''
+  const said = [system, r.phone_os_version].filter(Boolean).join(' ')
+  return [r.phone_model, said].filter(Boolean).join(' · ')
+}
 
 const timeOf = (at) => {
   const t = new Date(at).getTime()
   return Number.isFinite(t) ? t : 0
 }
-const listed = (set) => [...set].filter(Boolean).join(', ')
 
 /**
  * The page: one group per unit, newest first, and in each a row per way it
@@ -374,19 +403,29 @@ export function gearSections(answer, now = Date.now()) {
   if (!reports.length) return [{ title: 'What works', rows: [{ label: '', value: 'Nothing has come in yet.' }] }]
   const units = new Map()
   for (const r of reports) {
+    /*
+     * Not an adapter: Apple's own network session, which an iPhone from
+     * before 30 October 2026 could take for one ("Rețea Session 1",
+     * lib/bleAdapters sessionName). A note about it says nothing about
+     * which gear works.
+     */
+    if (r.via === 'bluetooth' && sessionName(r.adapter)) continue
     const unit = String(r.unit || 'Unknown unit')
     if (!units.has(unit)) units.set(unit, { newest: 0, ways: new Map() })
     const u = units.get(unit)
     const at = timeOf(r.created_at)
     u.newest = Math.max(u.newest, at)
     const way = wayOf(r)
-    if (!u.ways.has(way)) u.ways.set(way, { worked: 0, silent: 0, newest: 0, firmware: new Set(), phones: new Set() })
+    if (!u.ways.has(way)) u.ways.set(way, { worked: 0, silent: 0, newest: 0, firmware: new Set(), phones: new Set(), computerApp: new Set(), app: new Set() })
     const w = u.ways.get(way)
     if (r.outcome === 'answered') w.worked += 1
     else w.silent += 1
     w.newest = Math.max(w.newest, at)
     if (r.firmware) w.firmware.add(r.firmware)
-    if (r.phone_os) w.phones.add(r.phone_os === 'ios' ? 'iOS' : r.phone_os === 'android' ? 'Android' : r.phone_os)
+    const phone = phoneOf(r)
+    if (phone) w.phones.add(phone)
+    if (r.computer_version) w.computerApp.add(r.computer_version)
+    if (r.app_version) w.app.add(r.app_version)
   }
   return [...units.entries()]
     .sort((a, b) => b[1].newest - a[1].newest)
@@ -395,14 +434,14 @@ export function gearSections(answer, now = Date.now()) {
       return {
         title: unit,
         rows: ways.map(([way, w]) => {
-          const extra = [
-            `newest ${ago(w.newest, now)}`,
-            w.firmware.size ? `firmware ${listed(w.firmware)}` : null,
-            w.phones.size ? listed(w.phones) : null
+          const lines = [
+            `${w.worked} worked · ${w.silent} didn’t answer`,
+            [`newest ${ago(w.newest, now)}`, w.firmware.size ? `firmware ${few(w.firmware)}` : null].filter(Boolean).join(' · '),
+            w.computerApp.size ? `computer app ${few(w.computerApp)}` : null,
+            w.phones.size ? [...w.phones].sort().join(', ') : null,
+            w.app.size ? `Fractal Remote ${few(w.app)}` : null
           ]
-            .filter(Boolean)
-            .join(' · ')
-          return { label: way, value: `${w.worked} worked · ${w.silent} didn’t answer\n${extra}` }
+          return { label: way, value: lines.filter(Boolean).join('\n') }
         })
       }
     })

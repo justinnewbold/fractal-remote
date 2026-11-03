@@ -1586,11 +1586,19 @@ test('nothing can stop the app closing', () => {
 
   // A server dying because we just killed it is not news, and a modal box
   // during a quit is a box with no window and no dock icon to belong to.
+  /*
+   * Changed on purpose, 2 November 2026 (the audit's computer-3). This
+   * pinned `if (code && !quitting)` in front of the box a stopped server
+   * put up. There is no box now (a stop is said in the menu and started
+   * again), and a stop during the quit is not even that: the exit handler
+   * lets it go before anything else.
+   */
   assert.match(
     main,
-    /if \(code && !quitting\)/,
-    'a server stopped by the quit still opens a dialog in the middle of it'
+    /child\.on\('exit', \(code, signal\) => \{[\s\S]{0,700}?if \(server !== child \|\| quitting\) return/,
+    'a server stopped by the quit is still taken for one that stopped by itself'
   )
+  assert.ok(!main.includes("dialog.showErrorBox('The device server stopped'"), 'a server stopped by the quit can open a dialog in the middle of it again')
 
   // The dock is not ours to touch on the way out.
   assert.match(main, /if \(quitting \|\| !app\.dock\) return/, 'the dock is still changed while quitting')
@@ -1797,10 +1805,26 @@ test('the device server lets Axiom onto the unit’s own routes only while its s
   assert.ok(run.indexOf("const seen = typeof axiom === 'boolean' ? axiom : axiomNow()") > -1 && run.indexOf('axiomLetIn = seen === null ? axiomLetIn : seen') < run.indexOf('spawn('), 'the switch is not read before the server is started, or not known is taken for off')
   const relook = main.slice(main.indexOf('const relookAxiom = async () => {'), main.indexOf('watchFile(axiomRules.axiomStorePath()'))
   assert.ok(relook.length > 0, 'nothing starts the server again when the switch changes')
-  for (const step of ['quitting', 'first === null || first === axiomLetIn', 'await pause(Math.max(axiomRules.AXIOM_CONFIRM_MS, axiomRestartedAt + axiomRules.AXIOM_GAP_MS - uptime()))', 'want === null || want === axiomLetIn', 'axiomRestartedAt = uptime()', 'server = null', 'await shutdown({ server: old })', 'runServer(want)', 'await waitForServer({ port })', 'if (up) settled()', 'rearm()']) {
+  /*
+   * Changed on purpose, 2 November 2026 (the audit's computer-3 and -4).
+   * This pinned the switch's own wait, `await waitForServer({ port })`, a
+   * minute and then the remote asked for either way. What comes after a
+   * restart is backUp's now, the same for the switch and for a server that
+   * stopped: waited for as long as it takes while it is still the one
+   * wanted, then the menu's line cleared and the phone remote asked for.
+   * "a device server that stops is started again on every computer" holds
+   * backUp itself. And the switch is read twice and kept to its gap (#781's
+   * review), and looked at again once let go of.
+   */
+  for (const step of ['quitting', 'first === null || first === axiomLetIn', 'await pause(Math.max(axiomRules.AXIOM_CONFIRM_MS, axiomRestartedAt + axiomRules.AXIOM_GAP_MS - uptime()))', 'want === null || want === axiomLetIn', 'axiomRestartedAt = uptime()', 'server = null', 'await shutdown({ server: old })', 'runServer(want)', 'started = server', 'await backUp(started)']) {
     assert.ok(relook.includes(step), `starting the server again for the switch leaves out ${step}`)
   }
   assert.ok(relook.indexOf('server = null') < relook.indexOf('await shutdown({ server: old })'), 'the old server’s exit would be taken for a crash')
+  // The switch is let go of before the wait, so a change made while a slow server comes up is not lost behind it.
+  assert.ok(relook.indexOf('axiomRestarting = false') < relook.indexOf('await backUp(started)'), 'the switch is held through the wait for a slow server')
+  assert.ok(relook.indexOf('axiomRestarting = false') < relook.lastIndexOf('relookAxiom()') && relook.lastIndexOf('relookAxiom()') < relook.indexOf('await backUp(started)'), 'a change made while the switch was held is missed')
+  // And it is never a stop: nothing in it counts one.
+  assert.ok(!/serverFailures|restartPlan/.test(relook), 'the switch’s restart is counted as a stop')
   assert.match(main, /watchFile\(axiomRules\.axiomStorePath\(\), \{ interval: 2000, persistent: false \}/)
   // And the terminal launcher reads it too.
   assert.match(readSrc(new URL('../scripts/serve.mjs', import.meta.url), 'utf8'), /serverEnv\(\{ port, dist: join\(root, 'dist'\), axiom: readAxiom\(/)
@@ -1823,13 +1847,21 @@ test('the device server lets Axiom onto the unit’s own routes only while its s
 
   // Shown to his account only, on the phone and in the computer's window, and only where it can be honoured.
   const settings = readSrc(new URL('../mobile/src/screens/Settings.js', import.meta.url), 'utf8')
-  assert.match(settings, /\{isAdmin\(account\?\.id\) \? \(\s*<AxiomSwitch\b/, 'the phone shows the Axiom switch to customers')
+  /* In his Developer section, never where customers look ("Not in the section where the other users see it?", 3 November 2026). */
+  const developer = settings.slice(settings.indexOf('<Group title="Developer"'), settings.indexOf('</Group>', settings.indexOf('<Group title="Developer"')))
+  assert.match(settings, /\{isAdmin\(account\?\.id\) \? \(\s*<Group title="Developer"/, 'the phone’s Developer section is shown to customers')
+  assert.match(developer, /<AxiomSwitch link=\{link\} demo=\{demo\} throughAdapter=\{throughAdapter\} hostVersion=\{hostVersion\} macName=\{macName\} \/>/, 'the phone’s Axiom switch is not in the Developer section')
+  assert.equal(settings.split('<AxiomSwitch').length - 1, 1, 'the phone draws the Axiom switch somewhere besides the Developer section')
   const phoneSwitch = readSrc(new URL('../mobile/src/components/AxiomSwitch.js', import.meta.url), 'utf8')
   assert.match(phoneSwitch, /const usable = link === 'connected' && !demo && !throughAdapter && axiomComputerCan\(hostVersion, isOlder\)/)
   assert.match(phoneSwitch, /if \(!usable\) return null/)
   assert.match(phoneSwitch, /writeComputerSetting\(AXIOM_ID, axiomData\(next, Date\.now\(\)\)\)/)
   const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
-  assert.match(app, /<AxiomSwitch admin=\{isAdmin\(link\.account\?\.id\) \|\| isAdmin\(link\.cloud\?\.user\?\.id\)\} \/>/)
+  /* The window: in the Developer section with his account signed in to it; otherwise under a Developer heading of its own, and to anybody else only while it is on. */
+  const windowDev = app.slice(app.indexOf('<p className="silk-label setup-group">Developer</p>\n                {/* Its rows'), app.indexOf('<p className="silk-label setup-group">Play screen</p>'))
+  assert.match(windowDev, /<AxiomSwitch admin \/>/, 'the window’s Axiom switch is not in the Developer section')
+  assert.match(app, /\{!isAdmin\(link\.account\?\.id\) \? \(\s*<AxiomSwitch admin=\{isAdmin\(link\.cloud\?\.user\?\.id\)\} heading=\{<p className="silk-label setup-group axiom-heading">Developer<\/p>\} \/>\s*\) : null\}/)
+  assert.equal(app.split('<AxiomSwitch').length - 1, 2)
   const windowSwitch = readSrc(new URL('../src/components/AxiomSwitch.jsx', import.meta.url), 'utf8')
   assert.match(windowSwitch, /const usable = inDesktopApp\(\) && !isDemo\(\)/)
   assert.match(windowSwitch, /if \(!usable \|\| on === null \|\| \(!admin && !on\)\) return null/, 'the window shows the Axiom switch to customers')
@@ -2659,11 +2691,26 @@ test('the computer app says which version it is, where the phone already looks',
   assert.equal(host.computerKind({ platform: 'darwin', systemVersion: '15.3.1', arch: 'arm64' }), 'macOS 15.3 (Apple silicon)')
   assert.equal(host.computerKind({ platform: 'darwin', release: '24.3.0', arch: 'x64' }), 'macOS 15')
   assert.equal(host.computerKind({ platform: 'darwin', release: '25.1.0', arch: 'arm64' }), 'macOS 26 (Apple silicon)')
-  assert.equal(host.computerKind({ platform: 'win32', systemVersion: '10.0.22631' }), 'Windows 11')
-  assert.equal(host.computerKind({ platform: 'win32', release: '10.0.19045' }), 'Windows 10')
-  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi 5 Model B Rev 1.0\0', arch: 'arm64' }), 'Raspberry Pi 5')
-  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi 3 Model B Plus Rev 1.3\0', arch: 'arm64' }), 'Raspberry Pi 3')
+  /*
+   * AND WHICH WINDOWS, AND WHICH LINUX (3 November 2026, "Like Windows
+   * versions, Mac versions, raspberry pi's models?"): Windows by its yearly
+   * release, and ARM; a Pi or any Linux by its system, and 32- or 64-bit.
+   */
+  assert.equal(host.computerKind({ platform: 'win32', systemVersion: '10.0.22631', arch: 'x64' }), 'Windows 11 23H2')
+  assert.equal(host.computerKind({ platform: 'win32', systemVersion: '10.0.26100', arch: 'arm64' }), 'Windows 11 24H2 (ARM)')
+  assert.equal(host.computerKind({ platform: 'win32', systemVersion: '10.0.27950', arch: 'x64' }), 'Windows 11 build 27950', 'a build past the table is called a release it is not')
+  assert.equal(host.computerKind({ platform: 'win32', release: '10.0.19045', arch: 'x64' }), 'Windows 10 22H2')
+  assert.equal(host.computerKind({ platform: 'win32', release: '10.0.18363', arch: 'x64' }), 'Windows 10 build 18363')
+  const debian = 'PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"\nNAME="Debian GNU/Linux"\nVERSION_ID="12"\n'
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi 5 Model B Rev 1.0\0', arch: 'arm64', osRelease: debian }), 'Raspberry Pi 5 · Debian 12 (64-bit)')
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi 3 Model B Plus Rev 1.3\0', arch: 'arm', osRelease: 'NAME="Raspbian GNU/Linux"\nVERSION_ID="11"\n' }), 'Raspberry Pi 3 · Raspbian 11 (32-bit)')
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi 5 Model B Rev 1.0\0', arch: 'arm64' }), 'Raspberry Pi 5 (64-bit)')
+  assert.equal(host.computerKind({ platform: 'linux', model: '', arch: 'x64', osRelease: 'NAME="Ubuntu"\nVERSION_ID="24.04"\n' }), 'Ubuntu 24.04 (x64)')
   assert.equal(host.computerKind({ platform: 'linux', model: '', arch: 'x64' }), 'Linux (x64)')
+  assert.equal(host.linuxSystem('NAME=Fedora Linux\nVERSION_ID=41\n'), 'Fedora 41')
+  for (const model of ['Raspberry Pi Compute Module 4 Rev 1.1\0', 'Raspberry Pi Zero 2 W Rev 1.0\0']) {
+    assert.ok(host.computerKind({ platform: 'linux', model, arch: 'arm64', osRelease: 'NAME="Some Very Long Distribution Name GNU/Linux"\nVERSION_ID="2026.11.03"\n' }).length <= 40)
+  }
   for (const p of ['darwin', 'win32', 'linux']) assert.ok(host.computerKind({ platform: p }).length <= 40)
   assert.equal(typeof host.thisComputer(), 'string')
   /* Written beside the name and the version when given, and the doc as before when not. */
@@ -10879,6 +10926,7 @@ function loadDesktopMain({
   const exits = []
   const logs = []
   const timers = []
+  const opened = []
   // What the app listens for from the operating system: the computer waking, its screen unlocked.
   const power = {}
   // And what it asks of it: the computer kept awake, and let go again.
@@ -10888,8 +10936,13 @@ function loadDesktopMain({
       this.options = options
       this.urls = []
       this.visible = true
+      // What the app listens for on the window ('close', 'closed'), so a test can say it happened: see emit.
+      this.heard = {}
       this.webContents = { on() {}, send() {}, getURL: () => this.urls.at(-1) || '' }
       windows.push(this)
+    }
+    emit(event, ...args) {
+      for (const fn of this.heard[event] || []) fn(...args)
     }
     loadURL(url) {
       this.urls.push(url)
@@ -10901,7 +10954,9 @@ function loadDesktopMain({
       this.visible = false
     }
     focus() {}
-    on() {}
+    on(event, fn) {
+      ;(this.heard[event] ||= []).push(fn)
+    }
     isVisible() {
       return this.visible
     }
@@ -10934,7 +10989,8 @@ function loadDesktopMain({
     BrowserWindow,
     Tray,
     Menu: { buildFromTemplate: (template) => template },
-    shell: { openExternal: async () => {} },
+    // What was handed to the computer's own browser.
+    shell: { openExternal: async (url) => void opened.push(url) },
     nativeImage: { createFromPath: () => ({ setTemplateImage() {} }) },
     dialog: {
       showErrorBox: (title) => dialogs.push(title),
@@ -10992,7 +11048,7 @@ function loadDesktopMain({
     'setInterval',
     `${src}\n;return (__code, __given) => eval(__code)`
   )((id) => stand[id] || real(id), '/opt/Fractal Remote/resources/app.asar', proc, quiet, timer, () => {}, timer)
-  return { run, disk, dirs, events, handlers, menus, windows, dialogs, exits, logs, timers, listeners, power, awake, process: proc }
+  return { run, disk, dirs, events, handlers, menus, windows, dialogs, exits, logs, timers, listeners, power, awake, opened, process: proc }
 }
 const ENTRY = '/home/pi/.config/autostart/fractal-remote.desktop'
 
@@ -11025,6 +11081,274 @@ test('only the window’s own page may ask the app anything: not a page it opene
   assert.deepEqual(await ask('updates:state', 'http://localhost:5056'), { kind: 'idle', line: null })
   assert.deepEqual(await ask('host:wifi', 'http://localhost:5056'), { lan: null, mdns: null })
   assert.equal(typeof (await ask('login:get', 'http://localhost:5056')).supported, 'boolean')
+})
+
+/*
+ * "Web links open inside the computer app's own browser, which is Electron
+ * 33 … with every permission granted automatically" (the audit of 2
+ * November 2026, computer-5). What's new, Help with this app, the store
+ * chips and ForgeFX on GitHub opened in a bare window of the app's own, and
+ * any page reached from one was given the camera, the location and MIDI
+ * with SysEx to the unit on the cable without anybody being asked.
+ */
+const windowRules = await import('../desktop/lib/window.mjs')
+
+test('the computer’s window: the web opens in the computer’s own browser, and only the app’s own page stays in it', () => {
+  const local = 'http://localhost:5056'
+  const own = ['http://localhost:5056', 'http://localhost:5056/', 'http://localhost:5056/privacy.html', 'http://localhost:5056/notices.txt', 'http://localhost:5056/?fresh=7#top', 'http://LOCALHOST:5056/', 'blob:http://localhost:5056/0b6c3f2e']
+  for (const url of own) assert.equal(windowRules.linkVerdict(url, local), 'own', `${url} is the app’s own page and was sent away`)
+  const browser = [
+    'https://fractal.newbold.cloud/whats-new.html',
+    'https://fractal.newbold.cloud/support.html',
+    'https://github.com/sKuhLight/ForgeFX',
+    'https://apps.apple.com/app/id0000000000',
+    'https://play.google.com/store/apps/details?id=cloud.newbold.fractal',
+    'mailto:someone@example.com',
+    // The computer's other names for itself are not the window's page, which is always localhost; the tray sends them to the browser too.
+    'http://192.168.1.20:5056',
+    'http://fractal-pi.local:5056',
+    'http://127.0.0.1:5056',
+    'http://localhost:5057',
+    'http://localhost:5173'
+  ]
+  for (const url of browser) assert.equal(windowRules.linkVerdict(url, local), 'browser', `${url} is not handed to the computer’s browser`)
+  const refused = ['file:///etc/passwd', 'javascript:alert(1)', 'data:text/html,<p>hi</p>', 'about:blank', 'x-apple.systempreferences:com.apple.preference.security', 'ms-settings:privacy', 'ftp://example.com/x', 'not an address', '', null, undefined]
+  for (const url of refused) assert.equal(windowRules.linkVerdict(url, local), 'refuse', `${JSON.stringify(url)} is opened somewhere`)
+  // Before the app knows its own address, nothing is its own; the web still goes to the browser.
+  for (const before of [null, undefined, '', 'not an address']) {
+    assert.equal(windowRules.ownOrigin(before), null)
+    assert.equal(windowRules.linkVerdict('http://localhost:5056/', before), 'browser', `${JSON.stringify(before)}: a page is the app’s own before its address is known`)
+  }
+  assert.equal(windowRules.ownOrigin('http://localhost:5056/some/page?x=1'), 'http://localhost:5056')
+
+  // Permissions: the three the page uses, for the page itself, and nothing else for anybody.
+  /*
+   * Changed on purpose, the same day: 'fileSystem' was in the list of what
+   * the window is never given, and this list was two long. Electron asks it
+   * for the preset folder a player picks under Presets → Saved presets
+   * (src/lib/localFolder.js), and refusing it made Choose a folder do
+   * nothing at all (found in review, in Electron 33's own source).
+   */
+  assert.deepEqual([...windowRules.PAGE_PERMISSIONS], ['clipboard-sanitized-write', 'screen-wake-lock', 'fileSystem'], 'the window may use something new: say here what in src/ uses it')
+  assert.match(readSrc(new URL('../src/lib/localFolder.js', import.meta.url), 'utf8'), /window\.showDirectoryPicker\(\{[^}]*mode: 'readwrite'/, 'Saved presets no longer picks a folder: take fileSystem back out of what the window may use')
+  for (const permission of windowRules.PAGE_PERMISSIONS) {
+    // Electron says the asker as the frame's address, or as its origin with a slash on the end.
+    for (const from of ['http://localhost:5056/', 'http://localhost:5056', 'http://localhost:5056/privacy.html']) {
+      assert.equal(windowRules.permitted({ permission, from, local }), true, `the app’s own page is refused ${permission} (asked as ${from})`)
+    }
+    for (const from of ['https://fractal.newbold.cloud', 'https://evil.example/', 'http://192.168.1.20:5056', 'http://localhost:5057', 'null', '', undefined, 'not an address']) {
+      assert.equal(windowRules.permitted({ permission, from, local }), false, `${JSON.stringify(from)} is given ${permission}`)
+    }
+    assert.equal(windowRules.permitted({ permission, from: 'http://localhost:5056/', local: null }), false, `${permission} is given before the app knows its own address`)
+  }
+  const never = ['media', 'geolocation', 'notifications', 'midi', 'midiSysex', 'clipboard-read', 'openExternal', 'fullscreen', 'pointerLock', 'keyboardLock', 'display-capture', 'idle-detection', 'serial', 'hid', 'usb', 'window-management', 'storage-access', 'top-level-storage-access', 'mediaKeySystem', 'speaker-selection', 'unknown', '', undefined]
+  for (const permission of never) {
+    assert.equal(windowRules.permitted({ permission, from: 'http://localhost:5056/', local }), false, `the window is given ${JSON.stringify(permission)}, which nothing in the app uses`)
+  }
+})
+
+test('the computer’s window: main.js holds every page it shows to those rules — new windows, going elsewhere, and permissions', async () => {
+  const main = loadDesktopMain()
+  assert.equal(typeof main.events['web-contents-created'], 'function', 'nothing guards the pages the app shows')
+  // A page as Electron hands it over: what the app sets on it, kept here to be asked.
+  const page = () => {
+    const contents = { heard: {}, session: { checks: null, requests: null, devices: null } }
+    contents.setWindowOpenHandler = (fn) => (contents.openHandler = fn)
+    contents.on = (event, fn) => ((contents.heard[event] ||= []).push(fn))
+    contents.getURL = () => 'http://localhost:5056/'
+    contents.session.setPermissionRequestHandler = (fn) => (contents.session.requests = fn)
+    contents.session.setPermissionCheckHandler = (fn) => (contents.session.checks = fn)
+    contents.session.setDevicePermissionHandler = (fn) => (contents.session.devices = fn)
+    return contents
+  }
+  const go = (contents, url) => {
+    const event = { url, prevented: false, preventDefault() { this.prevented = true } }
+    for (const fn of contents.heard['will-navigate'] || []) fn(event, url)
+    return event.prevented
+  }
+  const ask = (contents, permission, requestingUrl) =>
+    new Promise((resolve) => contents.session.requests(contents, permission, resolve, { requestingUrl }))
+
+  // Before the launch has loaded the rules, nothing opens and nothing goes anywhere.
+  const early = page()
+  main.events['web-contents-created']({}, early)
+  assert.deepEqual(early.openHandler({ url: 'https://fractal.newbold.cloud/whats-new.html' }), { action: 'deny' })
+  assert.equal(go(early, 'https://fractal.newbold.cloud/'), true)
+  assert.equal(await ask(early, 'clipboard-sanitized-write', 'http://localhost:5056/'), false)
+  assert.deepEqual(main.opened, [], 'something was opened before the rules were loaded')
+
+  main.run('windowRules = __given', windowRules)
+  main.run("where = { local: 'http://localhost:5056', lan: 'http://192.168.1.20:5056', mdns: 'http://fractal-pi.local:5056', all: [] }")
+  const win = page()
+  main.events['web-contents-created']({}, win)
+
+  // target=_blank and window.open: the web to the browser, and no window of the app's own.
+  for (const url of ['https://fractal.newbold.cloud/whats-new.html', 'https://github.com/sKuhLight/ForgeFX', 'mailto:someone@example.com']) {
+    assert.deepEqual(win.openHandler({ url }), { action: 'deny' }, `${url} opens a window of the app’s own`)
+  }
+  assert.deepEqual(main.opened, ['https://fractal.newbold.cloud/whats-new.html', 'https://github.com/sKuhLight/ForgeFX', 'mailto:someone@example.com'], 'a web link is not handed to the computer’s own browser')
+  // The app's own pages still open as they did (the privacy page, the notices).
+  assert.deepEqual(win.openHandler({ url: 'http://localhost:5056/privacy.html' }), { action: 'allow' })
+  // And something that is not a web page is opened nowhere.
+  assert.deepEqual(win.openHandler({ url: 'file:///etc/passwd' }), { action: 'deny' })
+  assert.equal(main.opened.length, 3, 'a file on the disk was handed to the browser')
+
+  // Going somewhere else in its own window: stopped, and the web sent to the browser.
+  assert.equal(go(win, 'https://evil.example/'), true, 'the window went off to another site')
+  assert.equal(main.opened.at(-1), 'https://evil.example/')
+  assert.equal(go(win, 'javascript:alert(1)'), true)
+  assert.equal(main.opened.at(-1), 'https://evil.example/', 'a script address was handed to the browser')
+  // Its own page, reloaded with something new on the end (the update notice does), is not stopped.
+  assert.equal(go(win, 'http://localhost:5056/?fresh=1'), false, 'the window is stopped from reloading its own page')
+
+  // Permissions, asked and checked.
+  assert.equal(await ask(win, 'clipboard-sanitized-write', 'http://localhost:5056/'), true, 'Copy logs is refused the clipboard')
+  assert.equal(await ask(win, 'screen-wake-lock', 'http://localhost:5056/'), true)
+  /*
+   * The preset folder, asked as Electron asks it: once to read and once to
+   * write the folder the player picked, with its path in the details. The
+   * app's own page is given it; another site in the same window never is.
+   */
+  const folder = (requestingUrl, fileAccessType) =>
+    new Promise((resolve) => win.session.requests(win, 'fileSystem', resolve, { requestingUrl, isMainFrame: true, filePath: joinPath('home', 'player', 'Presets'), isDirectory: true, fileAccessType }))
+  assert.equal(await folder('http://localhost:5056/', 'readable'), true, 'Choose a folder under Saved presets is refused the folder it picked')
+  assert.equal(await folder('http://localhost:5056/', 'writable'), true, 'a preset cannot be written into the folder picked under Saved presets')
+  assert.equal(await folder('https://evil.example/', 'writable'), false, 'another site is given a folder on the computer')
+  for (const permission of ['media', 'geolocation', 'midiSysex', 'midi', 'notifications', 'openExternal']) {
+    assert.equal(await ask(win, permission, 'http://localhost:5056/'), false, `the app’s own page is given ${permission}`)
+  }
+  assert.equal(await ask(win, 'clipboard-sanitized-write', 'https://evil.example/'), false, 'another site is given the clipboard')
+  assert.equal(win.session.checks(win, 'midiSysex', 'http://localhost:5056/', {}), false, 'a check for MIDI with SysEx says yes')
+  assert.equal(win.session.checks(win, 'clipboard-sanitized-write', 'http://localhost:5056/', {}), true)
+  assert.equal(win.session.devices({ deviceType: 'serial' }), false, 'a page is handed a serial port')
+  // Said in the log, once a permission and page.
+  await ask(win, 'media', 'http://localhost:5056/')
+  assert.equal(main.logs.filter((l) => l === '[window] refused media to http://localhost:5056/').length, 1)
+
+  // A window the page opens of its own (the privacy page) shares the session, and gets the same guards.
+  const child = page()
+  child.session = win.session
+  const kept = win.session.requests
+  main.events['web-contents-created']({}, child)
+  assert.equal(win.session.requests, kept, 'the session’s handlers are set again for every page')
+  assert.deepEqual(child.openHandler({ url: 'https://apps.apple.com/' }), { action: 'deny' })
+  assert.equal(go(child, 'https://www.apple.com/'), true, 'a link in the privacy page leaves the app’s own window')
+
+  // Loaded by the launch before anything can make a window, and the window itself is made as before.
+  const src = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  const launch = src.slice(src.indexOf('app.whenReady()'))
+  assert.ok(launch.indexOf("windowRules = await import('./lib/window.mjs')") > -1 && launch.indexOf("windowRules = await import('./lib/window.mjs')") < launch.indexOf('const answering = await start()'), 'the window’s rules are loaded after the window can open')
+  assert.match(src, /webPreferences: \{\s*\n\s*contextIsolation: true,\s*\n\s*nodeIntegration: false,/, 'the window lost context isolation, or was given Node')
+  // And the Electron line is the one it was: a newer one is its own change.
+  assert.match(readSrc(new URL('../desktop/package.json', import.meta.url), 'utf8'), /"electron": "\^33\.0\.0"/)
+})
+
+/*
+ * "On a Raspberry Pi or Linux computer set to start by itself, if you open
+ * the app by hand and then close its window, it keeps running in the tray
+ * but quietly stops saving presets sent from the phone" (the audit of 2
+ * November 2026, computer-2). The page in the window is what carries out a
+ * save, restore or rename the phone parks, and only a start with no window
+ * kept it when the window was closed.
+ */
+test('closing the window keeps the page wherever the app stays in the tray, and quits as before everywhere else', () => {
+  const close = (main) => {
+    const event = { prevented: false, preventDefault() { this.prevented = true } }
+    main.windows[0].emit('close', event)
+    return event.prevented
+  }
+  const opened = (options, { on = false } = {}) => {
+    const main = loadDesktopMain(options)
+    main.run('boot = __given', autostart)
+    if (on) main.run('setStartAtBoot(true)')
+    main.run("where = { local: 'http://localhost:5056', all: [] }")
+    main.run('openWindow()')
+    return main
+  }
+
+  // A Pi set to start by itself, opened by hand: the window is hidden, and the page in it kept.
+  const pi = opened({}, { on: true })
+  assert.equal(close(pi), true, 'closing the window on a box set to start by itself throws the page away')
+  assert.equal(pi.windows[0].visible, false)
+  assert.equal(pi.run('win'), pi.windows[0], 'the hidden page is forgotten, so the tray’s Open would load a second one')
+  // The tray's Open shows that same page, never a second.
+  pi.run('openWindow()')
+  assert.equal(pi.windows.length, 1)
+  assert.equal(pi.windows[0].visible, true)
+  // The switch read afresh: turned off outside the app, closing closes again.
+  pi.disk.delete(ENTRY)
+  assert.equal(close(pi), false, 'a switch turned off outside the app still keeps the window')
+
+  // A start with no window, as before.
+  assert.equal(close(opened({ argv: ['--hidden'] })), true)
+  assert.equal(close(opened({ platform: 'darwin', argv: ['--hidden'] })), true)
+
+  // Everywhere else closing closes, and the app quits, exactly as it did.
+  for (const options of [{}, { platform: 'darwin' }, { platform: 'win32' }, { platform: 'linux', packaged: false }]) {
+    const main = opened(options)
+    assert.equal(close(main), false, `${JSON.stringify(options)}: closing the window no longer closes it`)
+    main.events['window-all-closed']()
+    assert.deepEqual(main.exits, ['quit'], `${JSON.stringify(options)}: closing the window no longer quits`)
+  }
+  // And nothing keeps a window from closing on the way out.
+  const leaving = opened({}, { on: true })
+  leaving.run('quitting = true')
+  assert.equal(close(leaving), false, 'a quit is held up by the window')
+})
+
+/*
+ * "If the part of the computer app that talks to your unit crashes during a
+ * gig, the app does not restart it, sometimes shows no message, and the
+ * phone gets no answer until somebody quits and reopens the computer app"
+ * (computer-3), and "if the part that talks to the unit restarts and takes
+ * more than a minute to come back, the phone can't find the computer again"
+ * (computer-4), both from the audit of 2 November 2026.
+ */
+test('a device server that stops is started again on every computer, waited for however long it takes, and the phone remote comes back', async () => {
+  // waitForRestart, run: as long as it takes, while it is still the server wanted.
+  let rounds = 0
+  let slow = 0
+  const answersOn = (n) => async () => ++rounds >= n
+  assert.equal(await host.waitForRestart({ port: 5056, wait: answersOn(4), onSlow: () => slow++ }), true, 'a slow server is given up on')
+  assert.deepEqual([rounds, slow], [4, 1], 'the menu is told more than once, or never, that it is still waiting')
+  rounds = 0
+  slow = 0
+  let wanted = true
+  const stopsAfter = async () => {
+    if (++rounds === 2) wanted = false
+    return false
+  }
+  assert.equal(await host.waitForRestart({ port: 5056, still: () => wanted, wait: stopsAfter, onSlow: () => slow++ }), false, 'a server that stopped is still waited for')
+  assert.equal(rounds, 2)
+  // One replaced (the Axiom switch) while it came up is not the one that answered.
+  wanted = true
+  assert.equal(await host.waitForRestart({ still: () => wanted, wait: async () => ((wanted = false), true) }), false, 'a server already replaced is taken for the one that came back')
+  // And none at all on the way out.
+  rounds = 0
+  assert.equal(await host.waitForRestart({ still: () => false, wait: answersOn(1) }), false)
+  assert.equal(rounds, 0, 'a server is waited for on the way out')
+  // The real wait underneath is waitForServer's, a minute a round.
+  assert.match(readSrc(new URL('../desktop/lib/host.mjs', import.meta.url), 'utf8'), /export async function waitForRestart\(\{ port = DEFAULT_PORT, still = \(\) => true, onSlow = \(\) => \{\}, wait = waitForServer \} = \{\}\)/)
+
+  // main.js: every stop, with a code or a signal, on every computer, goes to restartServer; never one let go of, never while quitting.
+  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  const run = main.slice(main.indexOf('const runServer = (axiom) => {'), main.indexOf('const backUp = async (child) => {'))
+  const exit = run.slice(run.indexOf("child.on('exit'"))
+  assert.match(exit, /^child\.on\('exit', \(code, signal\) => \{[\s\S]*?if \(server !== child \|\| quitting\) return[\s\S]*?restartServer\(code === null \? signal : `code \$\{code\}`\)\s*\n\s*\}\)/, 'a stop is not started again, or one let go of or on the way out is')
+  assert.ok(!/startHidden/.test(run), 'starting a stopped server again depends on whether anybody is there again')
+  assert.ok(!/dialog\./.test(run), 'a stopped server puts a box up again')
+  // The menu says so, the phone remote line with it (phone = null reads "starting…"), with the waits from restartPlan.
+  const restartAt = main.indexOf('const restartServer = (how) => {')
+  const restart = main.slice(restartAt, main.indexOf('\n  runServer()\n', restartAt))
+  for (const step of ['server = null', 'phone = null', 'boot.restartPlan({ failures: serverFailures, ranForMs: uptime() - serverSince })', 'unattended(', 'later(async () => {', 'await backUp(server)']) {
+    assert.ok(restart.includes(step), `a stopped server's restart leaves out ${step}`)
+  }
+  // backUp: waited for while it is still the one wanted, then the line cleared and the remote asked for again.
+  const back = main.slice(main.indexOf('const backUp = async (child) => {'), main.indexOf('const restartServer = (how) => {'))
+  assert.match(back, /await waitForRestart\(\{\s*\n\s*port,\s*\n\s*still: \(\) => server === child && !quitting,/, 'a restart is waited for after it stopped, was replaced, or the app is quitting')
+  assert.match(back, /if \(!up\) return false\s*\n\s*settled\(\)\s*\n\s*rearm\(\)/, 'a restarted server leaves the phone remote off')
+  // A menu line for anybody, never a box: unattended() is the one that says it, and it waits for nobody.
+  assert.match(main, /function unattended\(line, detail = ''\) \{\s*\n\s*console\.error\(`\[\$\{startHidden \? 'unattended' : 'menu'\}\] /)
 })
 
 const trayItem = (menu, label) => (menu || []).find((item) => typeof item.label === 'string' && item.label.startsWith(label))
@@ -11263,12 +11587,22 @@ test('a start with --hidden opens no window and never waits on a dialog', () => 
    * in front of each one. A box on a computer with no screen waits for ever.
    * Counted, so a new one has to be added here, with its guard.
    */
-  assert.equal((main.match(/dialog\.show(ErrorBox|MessageBox|MessageBoxSync)\(/g) || []).length, 6, 'a dialog was added or removed: give it a guard for a start with no window, and count it here')
+  /*
+   * Changed on purpose, 2 November 2026 (the audit's computer-3): six boxes
+   * became five. "The device server stopped" was shown only where somebody
+   * was there, and only for a stop with an exit code; a crash or a kill,
+   * which has a signal instead on a Mac or Linux, showed nothing, and
+   * neither was ever started again. A server that stops is started again
+   * on every computer now, and said in the menu, so that box is gone rather
+   * than guarded: see "a device server that stops is started again on every
+   * computer" below.
+   */
+  assert.equal((main.match(/dialog\.show(ErrorBox|MessageBox|MessageBoxSync)\(/g) || []).length, 5, 'a dialog was added or removed: give it a guard for a start with no window, and count it here')
+  assert.ok(!main.includes("'The device server stopped'"), 'a stopped server puts a box up mid-song again')
   const guarded = [
     /if \(!startHidden\) \{\s*\n\s*dialog\.showErrorBox\('ForgeFX is already running'/,
     /if \(!startHidden\) \{\s*\n\s*dialog\.showErrorBox\(\s*\n\s*'Something else is using this port'/,
     /if \(startHidden\) console\.error\('\[unattended\] ForgeFX is not installed\.', MISSING_FORGEFX\)\s*\n\s*else dialog\.showErrorBox\('ForgeFX is not installed', MISSING_FORGEFX\)/,
-    /if \(startHidden && !quitting\) \{\s*\n\s*restartServer\([\s\S]{0,700}?dialog\.showErrorBox\('The device server stopped'/,
     /if \(startHidden\) \{[\s\S]{0,900}?\} else \{[\s\S]{0,400}?dialog\.showErrorBox\(\s*\n\s*'The device server did not start'/,
     /if \(startHidden\) \{\s*\n\s*misplaced = true\s*\n\s*return true\s*\n\s*\}\s*\n\s*const choice = dialog\.showMessageBoxSync/
   ]
@@ -11282,7 +11616,8 @@ test('a start with --hidden opens no window and never waits on a dialog', () => 
      more stop rather than the last: a spawn that throws is caught, and one
      that fails later says so on 'error', with no 'exit' ever coming. */
   assert.match(main, /later\(async \(\) => \{[^\n]*\n(\s*\/\/[^\n]*\n)?\s*try \{\s*\n\s*runServer\(\)\s*\n\s*\} catch \(err\) \{\s*\n\s*restartServer\(/, 'a stopped server is never started again, or one that cannot be spawned ends the restarts')
-  assert.match(main, /if \(startHidden\) \{\s*\n\s*child\.on\('error', \(err\) => \{\s*\n\s*if \(server !== child \|\| quitting\) return/, "a server that cannot be spawned, with nobody there, is an error nobody caught")
+  /* Changed on purpose, 2 November 2026: this pinned the handler to a start with no window (`if (startHidden) {`); it is on every computer now, as the restart is. */
+  assert.match(main, /server = child\n(\s*\/\*[\s\S]*?\*\/\n)?\s*child\.on\('error', \(err\) => \{\s*\n\s*if \(server !== child \|\| quitting\) return/, "a server that cannot be spawned is an error nobody caught")
   /* And an error nobody caught anywhere else in the app is a line in the log,
      not Electron's own box on a screen that is not there. */
   assert.match(main, /if \(startHidden\) \{\s*\n\s*process\.on\('uncaughtException'/, 'an error inside the app puts a box up with nobody there')

@@ -20,6 +20,9 @@
  *   try-again        a refused setup email, by its address, due again
  *   reminder-sample  both setup emails to his own inbox, to read first
  *   handled          a Paid twice (or never confirmed) row on Sales, dealt with
+ *   delete           one account deleted for good, from Everyone with an
+ *                    account: asked once without { confirm } to look, then
+ *                    with it and the id that look gave (deleteByHand, below)
  *
  * All three by email also answer with the Customer lookup: when they signed
  * up, whether they confirmed, what they paid for and where, which devices
@@ -39,6 +42,7 @@
  * is written as well, so the computer link works the same second rather than
  * the next time the customer opens the app.
  */
+import { forgetAccount } from '../_shared/forget-account.ts'
 
 const RC = 'https://api.revenuecat.com/v2'
 const DEFAULT_PROJECT = 'proj827190e9'
@@ -56,6 +60,22 @@ const FOREVER = Date.UTC(2100, 0, 1)
  * differ.
  */
 const ADMINS = ['7dfe6912-e43b-49bf-84e4-b56afbd442b1']
+
+/*
+ * APPLE'S REVIEW LOGIN, by the sha256 of its trimmed, lower-case address:
+ * the account Apple signs in with at every review, which Delete never
+ * touches and the list labels (shared/admin.mjs says why, and is the source;
+ * a test holds this copy to it). The address itself is kept out of this
+ * public repository.
+ */
+const REVIEW_LOGINS = ['132dcf3f4a48ad6cad50a6389e88c02c2f27a09e3ec89f92b67987a1d592acb9']
+
+async function digestOf(address: unknown): Promise<string> {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(address || '').trim().toLowerCase()))
+  return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+const isReviewLogin = async (address: unknown) => Boolean(String(address || '').trim()) && REVIEW_LOGINS.includes(await digestOf(address))
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -740,6 +760,118 @@ async function confirmByHand(found: Record<string, any> | null, email: string): 
   return json({ ok: true, found: true, confirmed: true, email, message: `${email} is confirmed. They can sign in now.` })
 }
 
+/*
+ * EVERYONE WITH AN ACCOUNT, MARKED. The list as owner_accounts gives it, and
+ * three things on top, so the page can keep Delete off the two accounts that
+ * must never go without ever knowing their addresses' rules itself:
+ *
+ *   review   Apple's review login, by its digest (REVIEW_LOGINS above)
+ *   admin    an ADMINS account, his own: its address read from the account
+ *            service by its id, the id being the lock, never the address
+ *   deletes  this server can delete, so the page may offer it at all; an
+ *            older one sends no such word, and no row offers Delete
+ *
+ * Only marks: the server refuses both accounts in deleteByHand whatever the
+ * page sends, and a look that fails here marks nothing and takes nothing
+ * away. The list itself is as it was.
+ */
+async function adminAddresses(): Promise<string[]> {
+  const key = env('SUPABASE_SERVICE_ROLE_KEY')
+  const found = await Promise.all(
+    ADMINS.map(async (id) => {
+      try {
+        const res = await fetch(`${env('SUPABASE_URL')}/auth/v1/admin/users/${encodeURIComponent(id)}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } })
+        if (!res.ok) return ''
+        const user = await res.json()
+        return String(user?.email || '').trim().toLowerCase()
+      } catch {
+        return ''
+      }
+    })
+  )
+  return found.filter(Boolean)
+}
+
+async function markEveryone(list: Record<string, any>) {
+  if (!Array.isArray(list.accounts)) return { ...list, deletes: true }
+  const admins = await adminAddresses()
+  const accounts = await Promise.all(
+    list.accounts.map(async (a: Record<string, any>) => {
+      const at = String(a?.email || '').trim().toLowerCase()
+      return { ...a, ...((await isReviewLogin(at)) ? { review: true } : {}), ...(at && admins.includes(at) ? { admin: true } : {}) }
+    })
+  )
+  return { ...list, accounts, deletes: true }
+}
+
+/*
+ * DELETE AN ACCOUNT FOR GOOD, FROM DEVELOPER → ACCOUNTS.
+ *
+ * "How do I remove accounts altogether like the irecon one that's
+ * misspelled?" (Justin, 2 November 2026.) An account made with a typo in its
+ * address can never be signed in to by its owner, and only the Supabase
+ * dashboard could delete it. Now his page can, the same way a person deleting
+ * their own account in the app does: ../_shared/forget-account.ts is the one
+ * place that says what goes with it (rows, report pictures and videos, the
+ * note about report emails, the account, its RevenueCat customer).
+ *
+ * TWO ACCOUNTS NEVER GO, whatever the page sends, and the page is told so in
+ * words: an ADMINS account, his own (deleting it would take every tool on
+ * both ends with it, shared/admin.mjs ADMINS says why), and Apple's review
+ * login (REVIEW_LOGINS), which Apple signs in with at every review.
+ *
+ * ASKED TWICE. Without { confirm: 'delete' } it deletes nothing: it looks,
+ * and answers with the account's id and what it holds (`paid`), for the
+ * page's question (accountDeleteAsk in shared/admin.mjs). With it, the id
+ * that look gave has to come back, and the id and the address have to be the
+ * account the server finds now: an account deleted and made again under the
+ * same address in between is somebody else, and is not deleted. The list
+ * itself carries no ids.
+ */
+type DeleteInput = { id?: unknown; confirm?: unknown }
+
+async function deleteByHand(found: Record<string, any> | null, email: string, input: DeleteInput): Promise<Response> {
+  const account = found?.id ? String(found.id) : null
+  if (!account) return json({ ok: false, found: false, email, message: `No account uses ${email} any more, so nothing was deleted.` })
+  const address = String(found?.email || '').trim().toLowerCase()
+  if (ADMINS.includes(account)) {
+    return json({ ok: false, found: true, kept: 'admin', email, message: 'That’s your own account, which holds every tool on this page, so it can’t be deleted from here.' }, 403)
+  }
+  if (await isReviewLogin(address)) {
+    return json({ ok: false, found: true, kept: 'review', email, message: 'That’s Apple’s review login. Apple signs in with it for every review, so it stays.' }, 403)
+  }
+
+  if (input.confirm !== 'delete') {
+    /* The look: who it is now, and what goes with it. Unknown is null, never a guess. */
+    const bought = await purchasesOf(account)
+    const kept = (bought || []).filter((p) => !p.refunded && !p.sandbox)
+    const stores = [...new Set(kept.filter((p) => p.store !== 'promotional').map((p) => p.store))]
+    /*
+     * Given by hand: a grant, or an unlock with no store purchase behind it.
+     * But an unlock whose only purchase was a test one (TestFlight, a
+     * sandbox) is that test purchase's, and is said as one, never as a full
+     * version he gave them.
+     */
+    const granted = kept.some((p) => p.store === 'promotional')
+    const testOnly = !stores.length && !granted && (bought || []).some((p) => !p.refunded && p.sandbox)
+    const byHand = !stores.length && (granted || (found?.unlock?.active === true && !testOnly))
+    const test = testOnly
+    return json({ ok: true, found: true, ask: true, email: address, id: account, paid: bought ? { stores, byHand, test } : null })
+  }
+
+  if (String(input.id || '') !== account || email !== address) {
+    return json({ ok: false, found: true, email, message: `${email} isn’t the account the page last looked at any more, so nothing was deleted. Refresh and try again.` }, 409)
+  }
+  const done = await forgetAccount(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), { id: account, email: address }, 'grant-access')
+  /* Logged by the account's id, never the address, as Confirm now is. */
+  if (!done.ok) {
+    console.error(`grant-access: could not delete ${account} (${done.why})`)
+    return json({ ok: false, found: true, email, message: 'The account could not be deleted. Try again in a minute.' }, 502)
+  }
+  console.log(`grant-access: deleted ${account} by hand`)
+  return json({ ok: true, found: true, deleted: true, email, message: `${email} is deleted, with everything saved under it.` })
+}
+
 /** The plain sentence for a RevenueCat refusal. */
 async function refusal(res: Response, doing: string): Promise<string> {
   const said = await res.text().catch(() => '')
@@ -768,7 +900,7 @@ Deno.serve(async (req: Request) => {
   /* The lock. Anybody else gets the same answer as nobody at all. */
   if (!internal && (!me || !ADMINS.includes(me.id))) return json({ ok: false, message: 'Not allowed.' }, 403)
 
-  let input: { action?: string; email?: string; on?: unknown; out?: unknown; kind?: unknown; until?: unknown; count?: unknown; nearCount?: unknown } = {}
+  let input: { action?: string; email?: string; on?: unknown; out?: unknown; kind?: unknown; until?: unknown; count?: unknown; nearCount?: unknown } & DeleteInput = {}
   try {
     input = await req.json()
   } catch {
@@ -776,7 +908,7 @@ Deno.serve(async (req: Request) => {
   }
   const action = String(input.action || 'check')
   const email = String(input.email || '').trim().toLowerCase()
-  const ACTIONS = ['check', 'grant', 'revoke', 'confirm', 'sales', 'accounts', 'usage', 'stuck', 'reminders', 'leave-out', 'try-again', 'reminder-sample', 'handled']
+  const ACTIONS = ['check', 'grant', 'revoke', 'confirm', 'sales', 'accounts', 'usage', 'stuck', 'reminders', 'leave-out', 'try-again', 'reminder-sample', 'handled', 'delete']
   if (internal ? action !== 'claim' : !ACTIONS.includes(action)) {
     return json({ ok: false, message: 'Unknown action.' }, 400)
   }
@@ -786,8 +918,8 @@ Deno.serve(async (req: Request) => {
   try {
     if (action === 'sales') return json(await sales())
     if (action === 'usage') return json(await usage())
-    /* "How do I see a list of who has set up an account?" */
-    if (action === 'accounts') return json({ ok: true, ...((await rpc('owner_accounts', {})) as Record<string, unknown>) })
+    /* "How do I see a list of who has set up an account?" Marked, so Delete stays off the two that must never go (markEveryone above). */
+    if (action === 'accounts') return json(await markEveryone({ ok: true, ...((await rpc('owner_accounts', {})) as Record<string, unknown>) }))
     /* Paid but no computer yet, and the setup emails (see stuck() above). Only exactly true turns them on. */
     if (action === 'stuck') return json(await stuck())
     if (action === 'reminders') return json(await reminderSwitch(input.on === true))
@@ -801,6 +933,8 @@ Deno.serve(async (req: Request) => {
     const account = found?.id ? String(found.id) : null
     /* Before the waiting list: an address with no account has nothing to confirm. */
     if (action === 'confirm') return await confirmByHand(found, email)
+    /* Nor anything to delete; and the waiting list is never touched by asking (see deleteByHand above). */
+    if (action === 'delete') return await deleteByHand(found, email, input)
     if (!account) return json(await noAccountYet(action, email))
 
     /* A claim is only ever for an address Justin put on the list. */

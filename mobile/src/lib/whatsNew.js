@@ -10,6 +10,37 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-03",
+    "day": "3 November 2026",
+    "version": "1.89.28",
+    "lines": [
+      {
+        "text": "The walkthrough shows both ways to connect, Computer (the best way) or Bluetooth, its pages are numbered 1 to 4, and the box before Unlock says both ways. The purchase page lists every Bluetooth adapter, and Playing with no internet says Bluetooth needs none.",
+        "only": null
+      },
+      {
+        "text": "On the computer app, signing in under Settings → Account now turns the phone remote on too, so your phone finds the computer straight away after you switch accounts.",
+        "only": null
+      },
+      {
+        "text": "On a Raspberry Pi set to start by itself, closing the app’s window no longer stops it saving presets you send from your phone.",
+        "only": null
+      },
+      {
+        "text": "If the part of the computer app that talks to your unit stops, it now starts again by itself on every computer, and the phone remote comes back on once it’s running. Links in the computer app open in your normal web browser.",
+        "only": null
+      },
+      {
+        "text": "The website and the computer app’s window carry their own fonts now, so they work with no internet. The support page names Feedback’s tick boxes the way the app shows them, and the page for getting the app leads with the store.",
+        "only": null
+      },
+      {
+        "text": "Show the walkthrough no longer leaves you stuck at the sign-in screen: when you’re already signed in, Back to your own rig at the top takes you straight back.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-02",
     "day": "2 November 2026",
     "version": "1.89.27",

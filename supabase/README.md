@@ -517,6 +517,62 @@ select account_id, kind, paid_until, to_timestamp(paid_until / 1000.0) as newest
 from public.sales_handled order by handled_at desc;
 ```
 
+## Deleting an account from Developer → Accounts
+
+"How do I remove accounts altogether like the irecon one that's misspelled?"
+and, of Apple's review login, "How do I remove it?" (2 November 2026.) Each
+person's sheet on Everyone with an account now ends with Delete this account,
+on his account only: the server looks first and deletes nothing, the sheet
+asks in plain words what goes with it, and Delete for good deletes it exactly
+as the app's own Delete account would. Apple's review login is labelled "keep
+it" and offers no Delete, and neither does his own account; the server refuses
+both whatever is asked. No migration. Four pieces:
+
+- `functions/_shared/forget-account.ts`: what deleting an account does, moved
+  out of delete-account unchanged (the rows the cascade cannot reach, the
+  report pictures and videos, the note about report emails, the account, the
+  RevenueCat customer). A folder starting with an underscore is not a function;
+  `supabase functions deploy <name>` bundles it into each function that
+  imports it. Deploying any other way (the dashboard's editor, the Supabase
+  connector's deploy), send this file too, at `../_shared/forget-account.ts`
+  beside the function's own `index.ts`, or the function will not start.
+- `functions/delete-account/`: the same as before, with that part imported.
+- `functions/grant-access/`: a `delete` action (`{ email }` to look,
+  `{ email, id, confirm: 'delete' }` to delete, where `id` is the look's), and
+  `accounts` now marks Apple's review login (`review`), his own account
+  (`admin`, its address read by the ADMINS id) and that it can delete
+  (`deletes`).
+- `functions/setup-reminder/`: never sends to Apple's review login, before
+  claiming it. It was left out by hand on 2 November 2026; this keeps Put back
+  from undoing that.
+
+The review login is named by the sha256 of its address in all of these
+(shared/admin.mjs `REVIEW_LOGINS`), never by the address.
+
+### Putting it live, in this order
+
+1. **Deploy delete-account**: `supabase functions deploy delete-account`.
+   Nothing anybody sees changes.
+2. **Deploy grant-access**: `supabase functions deploy grant-access`. Until
+   then the page offers no Delete anywhere: the old function sends no
+   `deletes`, and it would answer "Unknown action." anyway.
+3. **Deploy setup-reminder, if wanted**:
+   `supabase functions deploy setup-reminder --no-verify-jwt`, with the flag,
+   or the hourly run is refused (see "Checking it" under the setup emails).
+
+### Checking it
+
+1. After deploying delete-account: a POST to it with no body answers 400
+   "Not confirmed.", which proves it starts with the new `../_shared` import
+   and deletes nothing.
+2. Developer → Customers → Everyone with an account: the review login's line
+   starts "Apple’s review login: keep it", and its sheet has no Delete or Take
+   it back.
+3. Tap the misspelled account, Delete this account, read the question, Delete
+   for good. In the browser the row closes and the line at the top says it
+   was deleted; on the phone the sheet stays open on the server's words, with
+   nothing left to tap, and the list behind it no longer has the row.
+
 ## What works: the gear notes (opt-in, not linked to anybody)
 
 "Build the analytics opt-in, opt out, and whatever needs to be built so that

@@ -708,14 +708,22 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
         return { ok: true, meters: !!on }
       }
       export const isDemo = () => bench.demo
+      /* Ending or starting the demo, in the device server's log (\`bench.server\`) so the order can be read. */
+      export const setDemo = (on) => { bench.demo = !!on; (bench.server ||= []).push(['demo', !!on]) }
       export const servedLocally = () => bench.served
       export const localHelperAlive = async () => bench.helper
-      export const canReachHelper = async () => false
+      /* Whether a device server answers this page: \`bench.reach\`, no when unset. */
+      export const canReachHelper = async () => bench.reach ?? false
       export const readHostDoc = async () => null
-      export const writeHostDoc = async () => {}
+      /* What the computer's own set-up asks of its device server, in order, as \`bench.server\`. */
+      export const writeHostDoc = async (id, data) => { (bench.server ||= []).push(['write', id, data?.wanted ?? data?.name ?? null]) }
       export const cloudStatus = async () => ({ enabled: false, user: null })
       export const remoteStatus = async () => ({ enabled: false, connected: false })
-      export const remoteEnable = async () => ({})
+      export const remoteEnable = async (on) => { (bench.server ||= []).push(['remote', !!on]); return {} }
+      export const cloudLogin = async (email, password) => { (bench.server ||= []).push(['login', email, password]); return { ok: true } }
+      export const cloudLogout = async () => { (bench.server ||= []).push(['logout']); return { ok: true } }
+      /* And whether the account has bought the phone remote, as setUpMac asks it (src/lib/webPurchase.js): \`bench.unlocked\`, yes when unset. */
+      export const checkUnlocked = async () => bench.unlocked || { unlocked: true, unknown: false }
     `,
     /* The relay as link.js hears it, in the order remote.js gives its news. */
     'remote.mjs': `
@@ -759,13 +767,15 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       export const keptSession = async () => 'u1'
       export const currentAccount = async () => ({ id: 'u1', email: 'player@example.com' })
       export const loadRemoteConfig = () => ({})
-      export const saveRemoteConfig = () => {}
+      /* The last config written, as \`bench.config\`: the computer's sign-ins let an old pairing go. */
+      export const saveRemoteConfig = (config) => { bench.config = config }
       export const setAutoConnect = () => {}
       export const wantsAutoConnect = () => true
       export const hasSavedSession = () => true
-      export const remoteSignIn = async () => {}
+      /* The window's own sign-in and sign-out, in the same log as the device server's (\`bench.server\`). */
+      export const remoteSignIn = async ({ email } = {}) => { (bench.server ||= []).push(['window', email]) }
       export const remoteSignUp = async () => {}
-      export const signOut = async () => {}
+      export const signOut = async () => { (bench.server ||= []).push(['window out']) }
       /* Every roll call, with the options it was taken with (\`late\`: at the first answer, link.js countIfDue). */
       export const censusHosts = async (options) => { bench.censuses = (bench.censuses || 0) + 1; (bench.censusOptions = bench.censusOptions || []).push(options ?? null); return [] }
       export const hostConflict = () => null
@@ -797,7 +807,13 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
     ["from '../../shared/editors.mjs'", `from '${shared('editors.mjs')}'`],
     ["from '../../shared/onboarding.mjs'", `from '${shared('onboarding.mjs')}'`],
     ["from '../../shared/device-word.mjs'", `from '${shared('device-word.mjs')}'`],
-    ["import('./forgefx.js')", "import('./forgefx.mjs')"]
+    ["import('./forgefx.js')", "import('./forgefx.mjs')"],
+    /*
+     * setUpMac's purchase check, from the stand-in above. A file of its own
+     * would first be looked for when a test signs in, long after this folder
+     * has gone; this one link.js has already found, when it booted.
+     */
+    ["import('./webPurchase.js')", "import('./forgefx.mjs')"]
   ]
   let src = read('src/lib/link.js')
   for (const [from, to] of swaps) {
@@ -6265,6 +6281,118 @@ export function run(test) {
     /* The same unit still on screen: as before. */
     const here = Object.assign(() => true, { unit: () => true })
     assert.deepEqual((await ffx.readSceneNames(53, { shown: () => 'Recto 1', still: here })).slice(0, 2), ['CLEAN', 'LEAD'])
+  })
+
+  /* ------------------------------------------------------------------ */
+  /* The computer's window: an account switched there, run               */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * The audit's live-1 (2 November 2026), run: the computer's window signs
+   * out under Settings → Account, then signs back in there with another
+   * account. Sign out takes the window and the device server out together;
+   * the sign-in is setUpMac now (signInErrand, held in test/both-ends.mjs),
+   * so the device server is signed back in with the same details and the
+   * phone remote turned on, and a phone on the new account finds the
+   * computer. An account that has not bought the phone remote still has the
+   * device server signed in, so buying it later turns the remote on with no
+   * second password, and is told to buy it rather than shown an error.
+   */
+  test('browser: on the computer, signing out and in with another account signs the device server in with it and turns the phone remote on', async () => {
+    const t = await webLinkOnABench({ role: 'mac' })
+    t.bench.server = []
+    await t.link.signOutHere()
+    assert.deepEqual(t.bench.server, [['window out'], ['remote', false], ['logout']], 'signing out on the computer leaves its device server signed in')
+    t.bench.server = []
+    await t.link.setUpMac({ email: 'new.buyer@example.com', password: 'a new password' })
+    assert.deepEqual(
+      t.bench.server.slice(0, 4),
+      [['window', 'new.buyer@example.com'], ['login', 'new.buyer@example.com', 'a new password'], ['remote', true], ['write', 'remote.host', true]],
+      'the window signed in without the device server, or the phone remote was not turned on'
+    )
+
+    // Not bought yet: the device server is signed in all the same, and the remote is left off, with the reason.
+    t.bench.server = []
+    t.bench.unlocked = { unlocked: false, unknown: false }
+    await assert.rejects(t.link.setUpMac({ email: 'free@example.com', password: 'pw' }), (err) => err.code === 'not-unlocked')
+    assert.deepEqual(t.bench.server, [['window', 'free@example.com'], ['login', 'free@example.com', 'pw']], 'an account without the unlock leaves the device server signed out, or switches the remote on to be refused')
+  })
+
+  /*
+   * The same failure by another way in, found in review the same day: the
+   * demo runs in the computer app's own window too ("Try the demo" with no
+   * unit plugged in), and its sign-in is the plain one, which ended the demo
+   * with the device server signed out. App's afterAccount now calls
+   * deviceServerAfterDemo before its reload (held in test/both-ends.mjs);
+   * this runs that on a bench: the demo ended before anything is sent (the
+   * demo keeps nothing it is told), then the device server signed in with
+   * the same details and the phone remote turned on, the window not signed
+   * in a second time, and nothing at all where no device server answers.
+   */
+  test('browser: a sign-in in the demo on a computer ends the demo, then signs its device server in, and a phone’s demo is left alone', async () => {
+    const t = await webLinkOnABench({ role: 'mac', demo: true })
+    t.bench.server = []
+    t.bench.config = null
+    // A phone or a laptop in the website's demo, with no device server behind it: refused, nothing sent, and the demo left to App's own way out.
+    await assert.rejects(t.link.deviceServerAfterDemo({ email: 'demo.buyer@example.com', password: 'pw1' }), /No device server answers here/)
+    assert.deepEqual(t.bench.server, [], 'a phone in the website’s demo went looking for a device server')
+    assert.equal(t.bench.demo, true)
+    assert.equal(t.bench.config, null)
+
+    // On a computer, where one answers: the demo ended first (while it is on, the computer's own store keeps nothing), then the device server.
+    t.bench.reach = true
+    const done = await t.link.deviceServerAfterDemo({ email: 'demo.buyer@example.com', password: 'pw1' })
+    assert.deepEqual(done, { remote: true })
+    assert.deepEqual(
+      t.bench.server.slice(0, 4),
+      [['demo', false], ['login', 'demo.buyer@example.com', 'pw1'], ['remote', true], ['write', 'remote.host', true]],
+      'a sign-in in the demo on a computer leaves its device server signed out or the phone remote off, or tells the device server things while the demo still keeps them'
+    )
+    assert.ok(!t.bench.server.some(([what]) => what === 'window'), 'the window is signed in a second time')
+    assert.equal(t.bench.config?.pairCode, null, 'an old pairing outlives a sign-in with a person’s own account')
+
+    // Not bought: signed in all the same, the remote left off, and App told so (it opens the unlock after the reload).
+    t.bench.demo = true
+    t.bench.server = []
+    t.bench.unlocked = { unlocked: false, unknown: false }
+    assert.deepEqual(await t.link.deviceServerAfterDemo({ email: 'free@example.com', password: 'pw2' }), { remote: false })
+    assert.deepEqual(t.bench.server, [['demo', false], ['login', 'free@example.com', 'pw2']], 'an account without the unlock leaves the device server signed out, or switches the remote on to be refused')
+  })
+
+  /*
+   * NEVER A PASSWORD ACROSS THE ROOM (review of 3 November 2026). The demo
+   * takes the computer's role on the wifi page too (a phone at
+   * http://<computer>:5056, served by the computer), and a sign-in there
+   * sent the email and password in plain HTTP across the room's network to
+   * the device server. Refused now before anything is sent, by either way
+   * in; the computer's own page, served on loopback, is as it was.
+   */
+  test('browser: a phone on the computer’s wifi page never hands the device server a password, in the demo or the set-up', async () => {
+    const t = await webLinkOnABench({ role: 'mac', demo: true })
+    const was = globalThis.window
+    try {
+      t.bench.served = true
+      t.bench.reach = true
+      t.bench.config = null
+      for (const hostname of ['192.168.1.20', 'studio-mac.local', '10.0.0.7']) {
+        globalThis.window = { location: { hostname } }
+        t.bench.server = []
+        await assert.rejects(t.link.deviceServerAfterDemo({ email: 'demo.buyer@example.com', password: 'pw1' }), /wifi page/)
+        await assert.rejects(t.link.setUpMac({ email: 'demo.buyer@example.com', password: 'pw1' }), /wifi page/)
+        assert.ok(!t.bench.server.some(([what]) => what === 'login'), `a password went to the device server from ${hostname}`)
+        assert.equal(t.bench.demo, true, 'the demo was ended from the wifi page')
+      }
+      /* The computer's own window, served on loopback: signed in as before. */
+      globalThis.window = { location: { hostname: 'localhost' } }
+      t.bench.server = []
+      assert.deepEqual(await t.link.deviceServerAfterDemo({ email: 'demo.buyer@example.com', password: 'pw1' }), { remote: true })
+      assert.deepEqual(t.bench.server.slice(0, 2), [['demo', false], ['login', 'demo.buyer@example.com', 'pw1']])
+    } finally {
+      if (was === undefined) delete globalThis.window
+      else globalThis.window = was
+    }
+    assert.ok(t.link.computersOwnPage(false, '192.168.1.20'), 'a page no computer served is refused')
+    assert.ok(t.link.computersOwnPage(true, '127.0.0.1') && !t.link.computersOwnPage(true, '192.168.1.20'))
   })
 
   test('browser: the unit is not read twice at launch when every read of the roll call went to the computer it chose', () => {

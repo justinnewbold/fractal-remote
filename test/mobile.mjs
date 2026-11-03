@@ -5093,7 +5093,8 @@ export function run(test) {
     const lock = handler.indexOf('ADMINS.includes(me.id)')
     /* And Paid but no computer yet's four (15 October 2026): the list, the switch, leaving somebody out, the sample. */
     /* And Sales at a glance's Handled (15 October 2026). */
-    for (const step of ["rpc('account_details'", 'await sales()', 'await usage()', "rpc('owner_accounts'", 'confirmByHand(', 'await stuck()', 'reminderSwitch(', 'leaveOut(', 'reminderSample(', 'markHandled(']) {
+    /* And Everyone with an account's Delete (2 November 2026). */
+    for (const step of ["rpc('account_details'", 'await sales()', 'await usage()', "rpc('owner_accounts'", 'confirmByHand(', 'await stuck()', 'reminderSwitch(', 'leaveOut(', 'reminderSample(', 'markHandled(', 'deleteByHand(']) {
       assert.ok(lock > 0 && handler.includes(step) && lock < handler.indexOf(step), `the server does ${step} before checking who is asking`)
     }
     /*
@@ -6719,7 +6720,8 @@ export function run(test) {
     const found = accountSections(list, 'PAID', nowAt)
     assert.equal(found[0].rows.length, 1, 'finding an email does not narrow the list')
     assert.equal(accountSections(list, 'nobody', nowAt)[0].rows[0].value, 'Nobody with an account matches that.')
-    assert.match(server, /if \(action === 'accounts'\) return json\(\{ ok: true, \.\.\.\(\(await rpc\('owner_accounts', \{\}\)\)/)
+    /* Marked since 2 November 2026 (Apple's review login, his own account, and whether Delete is here), and the list itself as it was. */
+    assert.match(server, /if \(action === 'accounts'\) return json\(await markEveryone\(\{ ok: true, \.\.\.\(\(await rpc\('owner_accounts', \{\}\)\)/)
     assert.ok(server.indexOf("action === 'accounts'") > server.indexOf('ADMINS.includes(me.id)'), 'the list is read before checking who is asking')
     assert.match(read('supabase/migrations/20260924_owner_accounts.sql'), /revoke all on function public\.owner_accounts\(\) from public, anon, authenticated/, 'a client can read every account')
     assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'customers' && isAdmin\(account\?\.id\) \?[\s\S]*?<AccountsTool \/>/)
@@ -6792,7 +6794,7 @@ export function run(test) {
     assert.match(rig, /state\.unit === 'missing' \|\| state\.unit === 'silent' \? MISSING_WATCH_MS : watchEvery\(true\)/, 'the phone waits half a minute to notice an editor was closed')
   })
 
-  test('Unlock waits for the box saying a computer and a USB cable are needed', async () => {
+  test('Unlock waits for the box: his sentence about the computer, or both ways where Bluetooth is open', async () => {
     /*
      * "On the unlock part of this can we add a disclaimer question that
      * says… I understand this app requires a computer connected to my
@@ -6807,7 +6809,8 @@ export function run(test) {
     )
     const phone = read('mobile/src/screens/Onboarding.js').replace(/\s+/g, ' ')
     assert.match(phone, /const \[agreed, setAgreed\] = useState\(false\)/, 'the phone’s box starts ticked, or is not there')
-    assert.match(phone, /<Agree on=\{agreed\} label=\{P3\.real\.agree\}/, 'the phone draws no box')
+    /* Since 3 November 2026 a copy that opens Bluetooth says both ways in the box (WALKTHROUGH_TWO_WAYS.agree, test/bluetooth.mjs). */
+    assert.match(phone, /<Agree on=\{agreed\} label=\{twoWays \? WALKTHROUGH_TWO_WAYS\.agree : P3\.real\.agree\}/, 'the phone draws no box')
     assert.match(phone, /<Press label=\{P3\.real\.go\} height=\{TAP\} disabled=\{!agreed\}/, 'the phone’s Unlock presses before the box is ticked')
     assert.match(phone, /accessibilityRole="checkbox"/, 'a screen reader cannot tell the phone’s box is a box')
     const web = read('src/components/PhoneWalkthrough.jsx').replace(/\s+/g, ' ')
@@ -8246,7 +8249,7 @@ export function run(test) {
     assert.match(tile, /keep\('top', e\.nativeEvent\.layout\.y, sized\)/, 'the picture’s top is not measured, or not marked with the size it was measured at')
     assert.match(tile, /keep\('width', e\.nativeEvent\.layout\.width, sized\)/, 'the tile’s width is not measured, or not marked with the size it was measured at')
     /* Half a point, so a layout that lands where it was does not draw the tile again. */
-    assert.match(tile, /was\[key\] != null && Math\.abs\(was\[key\] - value\) < 0\.5 && was\.at\?\.\[key\] === at\s*\? was\s*:/, 'every layout sets state, and a tile can draw itself for ever')
+    assert.match(tile, /was\[key\] != null && Math\.abs\(was\[key\] - value\) < 0\.5 && was\.at\?\.\[key\] === size\s*\? was\s*:/, 'every layout sets state, and a tile can draw itself for ever')
 
     /*
      * A tile that changes size on screen. A preset that takes the chain from
@@ -15239,7 +15242,36 @@ export function run(test) {
     assert.match(src, /export const purchaseState = \(\) => shown/, 'screens read the real unlock while posing as a new customer')
     assert.match(src, /export const mayConnect = \(\) => mayDrive\(state\)/, 'posing as a new customer changes what the computer link allows')
     assert.match(src, /shown = posing \? \{ \.\.\.state, unlocked: false, posing: true \} : state/)
-    assert.match(read('mobile/App.js'), /purchase\.posing \?[\s\S]{0,80}Viewing as a new customer · tap to stop[\s\S]{0,60}poseAsNewCustomer\(false\)/, 'there is no way out of viewing as a new customer')
+    assert.match(read('mobile/App.js'), /purchase\.posing \?[\s\S]{0,80}Viewing as a new customer · tap to stop[\s\S]{0,260}poseAsNewCustomer\(false\)\s*if \(!posedInDemo\.current\) setDemo\(false\)/, 'there is no way out of viewing as a new customer, or it leaves him in a demo the view started')
+    /*
+     * AND LOOKING NEVER SIGNS HIM OUT (3 November 2026: "After replaying the
+     * new user sequence and exiting, now I'm not logged in anymore"). The
+     * view put the purchase page in front of his paid account, and its Keep
+     * using the demo and Back signed him out for real, took the store off
+     * his account and wrote his Bluetooth off; it offered Delete account on
+     * his own. While posing: none of that, Restore is held as Buy is, and
+     * the sign-in form leads back to his rig on the sign-in still kept.
+     */
+    const posingApp = read('mobile/App.js').replace(/\s+/g, ' ')
+    const wall = posingApp.slice(posingApp.indexOf("auth === 'paywall' ? ( <Paywall"), posingApp.indexOf(') : askShare ? ('))
+    assert.equal((wall.match(/if \(!purchase\.posing\) \{ signOut\(\)\.catch\(\(\) => \{\}\) unlinkAccount\(\)\.catch\(\(\) => \{\}\) allowBluetooth\(null, \{ signedOut: true \}\) \}/g) || []).length, 2, 'the purchase page’s Keep using the demo or Back signs out an account that is only viewing as a new customer')
+    assert.match(wall, /onDeleted=\{ purchase\.posing \? undefined :/)
+    assert.match(posingApp, /if \(!purchase\.posing\) \{ [^}]*allowBluetooth\(null, \{ signedOut: true \}\) \} setAuth\('out'\) \}/, 'heading for the sign-in form writes his Bluetooth off while he only views as a new customer')
+    assert.match(posingApp, /const backToRig = \(\) => \{ poseAsNewCustomer\(false\) setDemo\(false\) setSignInSide\('in'\) [^}]*bluetoothBack\.current = bluetoothAtForm\.current bluetoothAtForm\.current = false askedBluetooth\.current = false setAuth\('in'\) \}/)
+    /* Bluetooth as it was (the review of 3 November 2026): remembered where toSignIn writes it off, and turned on again once the account is in. */
+    assert.match(posingApp, /if \(!purchase\.posing\) \{ [^}]*bluetoothAtForm\.current = bluetooth allowBluetooth\(null, \{ signedOut: true \}\) \} setAuth\('out'\) \}/)
+    assert.match(posingApp, /const open = allowBluetooth\(id\) [^}]*const back = bluetoothBack\.current bluetoothBack\.current = false if \(open && back\) setBluetooth\(true\)/)
+    /* And what Bluetooth was is forgotten when the form is left any other way (the review of 3 November 2026). */
+    assert.match(posingApp, /useEffect\(\(\) => \{ if \(auth !== 'out'\) bluetoothAtForm\.current = false \}, \[auth\]\)/)
+    /* Started again while it is on, the first start says where he was. */
+    assert.match(posingApp, /if \(!purchase\.posing\) posedInDemo\.current = demo poseAsNewCustomer\(true\)/)
+    /* And the form's answer is forgotten when it goes, so the next form never opens on the last one's. */
+    assert.match(posingApp, /return \(\) => \{ alive = false setKeptForBack\(false\) \} \}, \[auth\]\)/)
+    assert.match(posingApp, /onBackToRig=\{keptForBack && \(purchase\.unlocked \|\| purchase\.posing\) \? backToRig : undefined\}/, 'the sign-in form offers the way back to somebody with no sign-in on the phone, or to an unpaid account')
+    assert.match(posingApp, /if \(auth !== 'out'\) return undefined let alive = true haveSession\(\)/)
+    const signInForm = read('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
+    assert.match(signInForm, /\{onBackToRig \? <Press label="Back to your own rig" tone="signal" on height=\{TAP\} onPress=\{onBackToRig\} \/> : null\} <View style=\{\{ alignItems: 'center'/, 'the way back is not first on the sign-in form')
+    assert.match(src, /export const restorePurchase = async \(\{ here = false \} = \{\}\) => \{\s*\/\*[^*]*\*\/\s*if \(posing\) return \{ ok: false, message: 'Restoring is off while you’re viewing as a new customer\.' \}/, 'Restore reaches the store while he only views as a new customer')
     const fn = src.slice(src.indexOf('export const shouldOffer'), src.indexOf('export const shouldOffer') + 200)
     assert.ok(!/available/.test(fn), 'the offer is gated on the store being ready again')
 
@@ -16746,9 +16778,13 @@ export function run(test) {
      * and the account made got nothing.
      */
     const flatApp = withoutComments(read('mobile/App.js')).replace(/\s+/g, ' ')
-    const page = flatApp.slice(flatApp.indexOf("auth === 'paywall' ? ( <Paywall"), flatApp.indexOf("auth === 'paywall' ? ( <Paywall") + 900)
-    for (const exit of ['onDemo', 'onBack', 'onDeleted']) {
-      const body = page.slice(page.indexOf(`${exit}={() => {`), page.indexOf('}}', page.indexOf(`${exit}={() => {`)))
+    const page = flatApp.slice(flatApp.indexOf("auth === 'paywall' ? ( <Paywall"), flatApp.indexOf(') : askShare ? ('))
+    /* Each exit, up to the next (or the end): for a real account, all three sign the store out; viewing as a new customer, none of them can (test of the pose, above). */
+    const exits = ['onDemo=', 'onBack=', 'onDeleted=']
+    for (const [i, exit] of exits.entries()) {
+      const from = page.indexOf(exit)
+      const body = page.slice(from, i + 1 < exits.length ? page.indexOf(exits[i + 1]) : undefined)
+      assert.ok(from >= 0, `the price page has no ${exit}`)
       assert.match(body, /signOut\(\)\.catch\(\(\) => \{\}\) unlinkAccount\(\)\.catch\(\(\) => \{\}\)/, `the price page’s ${exit} leaves the store on the account`)
     }
 

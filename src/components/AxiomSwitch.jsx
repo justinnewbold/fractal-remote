@@ -32,7 +32,7 @@ import { hostDocOrUnknown, isDemo, writeHostDoc } from '../lib/forgefx'
  * change the box is held still until the restart is over (AXIOM_SETTLE_MS),
  * so a second click cannot land in the gap, and then the switch is read again.
  */
-export default function AxiomSwitch({ admin = false }) {
+export default function AxiomSwitch({ admin = false, heading = null }) {
   const usable = inDesktopApp() && !isDemo()
   /* null until the store has said. */
   const [on, setOn] = useState(null)
@@ -92,6 +92,7 @@ export default function AxiomSwitch({ admin = false }) {
 
   return (
     <div>
+      {heading}
       <label className="rename-choice">
         <input type="checkbox" checked={on} disabled={busy || settling} onChange={(e) => change(e.target.checked)} />
         <span>

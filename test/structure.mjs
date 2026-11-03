@@ -282,6 +282,55 @@ export function run(test) {
     }
   })
 
+  test('no file of the phone app or the browser declares a name it also imports', () => {
+    /*
+     * THE CRASH THAT NEVER SHIPPED (the review of 3 November 2026). A ref
+     * added to App.js was named restoreBluetooth, the name of the function
+     * imported from lib/bluetooth that picks Bluetooth up at launch. Inside
+     * App the ref won, so the launch effect called an object, and every
+     * phone would have thrown on its first frame, for every customer, by
+     * over-the-air update. It is legal JavaScript: expo export bundled it,
+     * and every test that reads App.js as text passed. So this reads the
+     * files as code, scope by scope, and fails on any binding that hides one
+     * of the file's own imports.
+     */
+    const roots = ['../mobile/App.js', '../mobile/src/screens/', '../mobile/src/components/', '../mobile/src/lib/', '../src/', '../src/components/', '../src/lib/']
+    const files = []
+    for (const r of roots) {
+      const url = new URL(r, import.meta.url)
+      if (r.endsWith('.js')) files.push(url)
+      else for (const f of readdirSync(url)) if (/\.(js|jsx|mjs)$/.test(f)) files.push(new URL(f, url))
+    }
+    assert.ok(files.length > 100, 'the app’s files read as empty; this check would pass on nothing')
+    const hidden = []
+    for (const url of files) {
+      let ast
+      try {
+        ast = parse(readFileSync(url, 'utf8'), { sourceType: 'module', plugins: ['jsx'] })
+      } catch {
+        continue
+      }
+      const imported = new Set()
+      traverse(ast, {
+        ImportDeclaration(path) {
+          for (const spec of path.node.specifiers) imported.add(spec.local.name)
+        }
+      })
+      if (!imported.size) continue
+      traverse(ast, {
+        Scope(path) {
+          if (path.isProgram()) return
+          for (const name of Object.keys(path.scope.bindings)) {
+            if (imported.has(name) && path.scope.bindings[name].path.node !== undefined) {
+              hidden.push(`${fileURLToPath(url).split('/fractal-remote/').pop() || fileURLToPath(url)}: ${name} (line ${path.scope.bindings[name].path.node.loc?.start.line})`)
+            }
+          }
+        }
+      })
+    }
+    assert.deepEqual([...new Set(hidden)], [], 'a name declared here hides one this file imports')
+  })
+
   test('no hook watches something declared further down its own function', () => {
     /*
      * The blank page. "The app couldn't draw — Cannot access 'we' before
@@ -2159,6 +2208,24 @@ export function run(test) {
       }
     }
     const libDir = new URL('../src/lib/', import.meta.url)
+    /*
+     * And one in src/lib, on purpose (2 November 2026, found in review of
+     * the audit's live-1): deviceServerAfterDemo ends the demo before it
+     * signs a computer's device server in, because the demo keeps nothing
+     * the device server is told. Its one caller, App's afterAccount, ends it
+     * again and reloads straight after, whatever it said (held in
+     * test/both-ends.mjs, "a sign-in made in the computer’s window always
+     * reaches the device server"). Any other is a way out of the demo with
+     * no reload.
+     */
+    const libCalls = readdirSync(libDir)
+      .filter((f) => f.endsWith('.js') && f !== 'forgefx.js')
+      .flatMap((f) => [...readFileSync(new URL(f, libDir), 'utf8').matchAll(/setDemo\((?:true|false|!demo)?\)/g)].map(() => f))
+    assert.deepEqual(libCalls, ['link.js'], 'a library leaves or enters the demo with nothing to reload the page after it')
+    const linkLib = readFileSync(new URL('link.js', libDir), 'utf8')
+    const ending = linkLib.slice(linkLib.indexOf('export async function deviceServerAfterDemo'), linkLib.indexOf('/** The relay'))
+    assert.match(ending, /^export async function deviceServerAfterDemo[\s\S]*\n {2}setDemo\(false\)\n/, 'the demo is ended somewhere in src/lib other than on the way to the device server')
+    assert.equal((src.match(/deviceServerAfterDemo\(/g) || []).length, 1, 'the demo is ended from somewhere that does not reload after it')
     const libs = readdirSync(libDir).filter((f) => f.endsWith('.js')).map((f) => readFileSync(new URL(f, libDir), 'utf8'))
     const removals = [src, ...files, ...libs].join('\n').match(/removeItem\('forgefx\.demo'\)/g) || []
     assert.equal(removals.length, 1, 'something other than setDemo drops the demo flag')
@@ -5521,7 +5588,7 @@ export function run(test) {
     )
     assert.match(app, /const toSignIn = \(\) => \{/, 'the sign-in route is gone')
     /* Bluetooth is told on the way, with the one brace pair that may sit inside (lib/bluetooth, allowBluetooth). */
-    assert.match(app, /const toSignIn = \(\) => \{(?:[^}]|\{ signedOut: true \})*setAuth\('out'\)/, 'it no longer lands on the sign-in screen')
+    assert.match(app, /const toSignIn = \(\) => \{[\s\S]{0,900}?setAuth\('out'\)\s*\}/, 'it no longer lands on the sign-in screen')
     /* It leaves the demo, because somebody heading for an account is heading
        for a real rig. */
     assert.match(app, /const toSignIn = \(\) => \{[^}]*setDemo\(false\)/, 'the demo keeps answering after leaving for an account')
@@ -5628,7 +5695,7 @@ export function run(test) {
     )
     assert.match(
       app,
-      /onAccount=\{\(\) => \{[^]{0,200}setAuth\('out'\)/,
+      /onAccount=\{\((?:way)?\) => \{[^]{0,400}setAuth\('out'\)/,
       'the account route no longer lands on the sign-in screen'
     )
     /* Marked seen on the way past, like every other exit. Sending somebody
@@ -5636,7 +5703,7 @@ export function run(test) {
        forgetting what they did. */
     assert.match(
       app,
-      /onAccount=\{\(\) => \{\s*markWalkthrough\(\)/,
+      /onAccount=\{\((?:way)?\) => \{\s*markWalkthrough\(\)/,
       'walking out to the account screen does not mark the walkthrough seen'
     )
 

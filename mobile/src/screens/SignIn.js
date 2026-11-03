@@ -48,7 +48,7 @@ import { deviceNoun } from '../lib/device-word'
  * Nothing here mentions a channel, a relay, or the name of the account
  * service — that part has not changed.
  */
-export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = false, madeHere = false, onAccountMade }) {
+export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = false, madeHere = false, onAccountMade, onBackToRig = null }) {
   const [mode, setMode] = useState(start === 'up' ? 'up' : 'in') // 'in' | 'up'
   /* Whether Get connected says Bluetooth is the other way: see under its steps. */
   const twoWays = openForCustomersHere() && bluetoothSupported()
@@ -307,6 +307,14 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
           The words are shared with the browser's version of this screen
           (shared/onboarding.mjs, SETUP), so the two cannot drift again.
         */}
+        {/*
+          BACK TO YOUR OWN RIG, first, for somebody who came here only to
+          look: a paid account that replayed the walkthrough and took its
+          Sign in or Unlock, or his account viewing as a new customer.
+          App.js hands it over only while a sign-in is on the phone
+          (backToRig), so somebody new, with none, never sees it.
+        */}
+        {onBackToRig ? <Press label="Back to your own rig" tone="signal" on height={TAP} onPress={onBackToRig} /> : null}
         <View style={{ alignItems: 'center', gap: space.sm, paddingTop: space.lg }}>
           <Mark />
           <Text style={{ color: color.silk, fontSize: font.hero + 6, fontWeight: '800', textAlign: 'center' }}>

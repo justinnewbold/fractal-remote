@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Dimensions, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 
-import { CHAIN, P1, P2, P3, P4, P6, P7, P9, CLOSE } from '../lib/onboarding'
+import { CHAIN, P1, P2, P3, P4, P6, P7, P9, CLOSE, WALK_STEPS } from '../lib/onboarding'
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
 import { Platform } from 'react-native'
 import { UNITS } from '../lib/demoUnits'
@@ -9,7 +9,7 @@ import { setDemo, setDemoUnit } from '../lib/demo'
 import { walkthroughTips } from '../lib/vp4-safety'
 import { tick } from '../lib/feedback'
 import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
-import { WALKTHROUGH_TWO_WAYS } from '../lib/bluetooth-gear'
+import { HOW_TWO_WAYS, RESTORED_BLUETOOTH_GO, WALKTHROUGH_TWO_WAYS } from '../lib/bluetooth-gear'
 /* An ES import rather than require(): Metro resolves both, but require is not
    a name this app has anywhere, and a test is right to refuse it. */
 /*
@@ -111,6 +111,9 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
    * for his answer (WALKTHROUGH_TWO_WAYS says what was put to him).
    */
   const twoWays = openForCustomersHere() && bluetoothSupported()
+  /* Which way How it works draws on such a copy: the computer, the best one, to start with (HOW_TWO_WAYS). */
+  const [howWay, setHowWay] = useState('computer')
+  const howBluetooth = twoWays && howWay === 'bluetooth'
 
   /*
    * ONE WAY BETWEEN STEPS, AND IT CLEARS THE LAST SCREEN'S NOTES.
@@ -337,17 +340,48 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
             pipeline, nothing native — so a screen that reads like a product
             shot still ships over the air and costs no build.
           */}
-          <Steps at={0} of={3} label={P2.count} />
+          <Steps at={0} of={WALK_STEPS} />
           <Head>{P2.head}</Head>
+          {/*
+            Both ways, on a copy that offers Bluetooth: the computer first,
+            picked (HOW_TWO_WAYS). `grow`, never style flex 1: Press sets its
+            own flexGrow and flexBasis, which beat a flex laid on top, and the
+            pair came out 26pt wide with no words on them. The row costs
+            44 + 16 of height, so on these copies the boxes and the cable are
+            drawn tighter (`tight`) and the row sits 8 closer to the heading:
+            the Computer way, three boxes, ends 4pt higher than the page did
+            before the row, and Got it still shows without scrolling.
+          */}
+          {twoWays ? (
+            <View style={{ flexDirection: 'row', gap: space.sm, marginTop: -space.sm }}>
+              {HOW_TWO_WAYS.ways.map((w) => (
+                <Press
+                  key={w.key}
+                  grow
+                  label={w.label}
+                  tone="signal"
+                  on={howWay === w.key}
+                  height={44}
+                  onPress={() => setHowWay(w.key)}
+                />
+              ))}
+            </View>
+          ) : null}
           <View style={{ gap: 0 }}>
-            {CHAIN.map((box, i) => (
+            {(howBluetooth
+              ? [
+                  { key: 'unit', phoneTitle: CHAIN[0].phoneTitle, phoneBody: CHAIN[0].phoneBody, phoneWire: HOW_TWO_WAYS.wire },
+                  { key: 'phone', phoneTitle: CHAIN[2].phoneTitle, phoneBody: HOW_TWO_WAYS.phoneBody }
+                ]
+              : CHAIN
+            ).map((box, i) => (
               <View key={box.key}>
-                <ChainBox n={i + 1} title={box.phoneTitle} body={box.phoneBody} kind={box.key} />
-                {box.phoneWire ? <Wire label={box.phoneWire} /> : null}
+                <ChainBox n={i + 1} title={box.phoneTitle} body={box.phoneBody} kind={box.key} tight={twoWays} />
+                {box.phoneWire ? <Wire label={box.phoneWire} tight={twoWays} /> : null}
               </View>
             ))}
           </View>
-          <Note>{P2.foot}</Note>
+          <Note>{howBluetooth ? HOW_TWO_WAYS.foot : P2.foot}</Note>
           {/* The line above as something to press, straight to the units. */}
           <Press label={P2.footGo} height={44} onPress={() => go('pick')} />
           <Cta label={P2.go} onPress={() => go('mode')} />
@@ -356,7 +390,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
 
       {at === 'mode' ? (
         <>
-          <Steps at={1} of={3} label={P3.count} />
+          <Steps at={1} of={WALK_STEPS} />
           <Head>{P3.head}</Head>
           <Sub>{P3.sub}</Sub>
 
@@ -411,7 +445,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
                 one glyph is the wrong trade — the card's own lock, above
                 right, already says it.
             */}
-            <Agree on={agreed} label={P3.real.agree} onPress={() => setAgreed((v) => !v)} />
+            <Agree on={agreed} label={twoWays ? WALKTHROUGH_TWO_WAYS.agree : P3.real.agree} onPress={() => setAgreed((v) => !v)} />
             <Press label={P3.real.go} height={TAP} disabled={!agreed} onPress={() => agreed && onUnlock?.()} />
           </Choice>
 
@@ -442,7 +476,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
 
       {at === 'pick' ? (
         <>
-          <Steps at={1} of={3} label={P3.count} />
+          <Steps at={2} of={WALK_STEPS} />
           <Eyebrow>{P4.eyebrow}</Eyebrow>
           <Head>{P4.head}</Head>
           <Sub>{P4.sub}</Sub>
@@ -471,7 +505,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
 
       {at === 'app' ? (
         <>
-          <Steps at={1} of={3} label={P3.count} />
+          <Steps at={2} of={WALK_STEPS} />
           <Head>{P6.head}</Head>
           {/*
             The one way on from here. An account is the only thing that joins
@@ -528,6 +562,18 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
               {error ? <Note tone="fault">{error}</Note> : null}
             </>
           ) : null}
+          {/*
+            THE BLUETOOTH WAY, on a copy that opens it: somebody who has paid
+            and has no computer was asked only whether the computer app is
+            installed, and No told them to download it. Sign-in is their way
+            in too, so this goes where Yes goes (WALKTHROUGH_TWO_WAYS.restored).
+          */}
+          {twoWays ? (
+            <>
+              <Press label={RESTORED_BLUETOOTH_GO} height={TAP} onPress={() => onAccount?.('bluetooth')} />
+              <Note>{WALKTHROUGH_TWO_WAYS.restored}</Note>
+            </>
+          ) : null}
           <Press label={P6.back} height={TAP} onPress={() => go('mode')} />
         </>
       ) : null}
@@ -561,7 +607,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
             the foot goes in and straight to Settings, where the walkthrough
             can be shown again.
           */}
-          <Steps at={2} of={3} label={P9.count} />
+          <Steps at={3} of={WALK_STEPS} />
           <Head>{P9.demo.head}</Head>
           <Sub>{twoWays ? WALKTHROUGH_TWO_WAYS.demoSub : P9.demo.sub}</Sub>
           {/* A VP4 is not shown SAVE: see walkthroughTips. */}
@@ -646,7 +692,7 @@ const Sub = ({ children }) => (
   <Text style={{ color: color.silkDim, fontSize: font.lead, lineHeight: font.lead * 1.4 }}>{children}</Text>
 )
 
-/** Dots joined by lines, the reached ones amber, and "2 of 3" under them. */
+/** Dots joined by lines, the reached ones amber, and "2 of 4" under them. */
 const Steps = ({ at, of, label }) => (
   <View style={{ alignItems: 'center', gap: space.sm, paddingTop: space.sm }}>
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -780,7 +826,7 @@ const UnitShot = () => (
  * bottom edge dropped behind the body, which is the whole trick.
  */
 const Lock = ({ size = 18, faint }) => {
-  const tint = faint ? color.rule : color.silk
+  const lockColour = faint ? color.rule : color.silk
   const w = size * 0.72
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'flex-end' }}>
@@ -792,7 +838,7 @@ const Lock = ({ size = 18, faint }) => {
           borderTopRightRadius: size,
           borderWidth: Math.max(1.5, size * 0.08),
           borderBottomWidth: 0,
-          borderColor: tint,
+          borderColor: lockColour,
           marginBottom: -1
         }}
       />
@@ -802,7 +848,7 @@ const Lock = ({ size = 18, faint }) => {
           height: size * 0.5,
           borderRadius: Math.max(2, size * 0.12),
           borderWidth: Math.max(1.5, size * 0.08),
-          borderColor: tint
+          borderColor: lockColour
         }}
       />
     </View>
@@ -955,14 +1001,18 @@ const Art = ({ kind }) => (
   />
 )
 
-/** One of the three boxes: a number, what it is, and a picture of it. */
-const ChainBox = ({ n, title, body, kind }) => (
+/**
+ * One of the three boxes: a number, what it is, and a picture of it. `tight`
+ * (a copy that offers both ways, whose choice row takes room above them)
+ * pads it 12 rather than 16: 8pt less a box.
+ */
+const ChainBox = ({ n, title, body, kind, tight = false }) => (
   <View
     style={{
       flexDirection: 'row',
       alignItems: 'center',
       gap: space.md,
-      padding: space.lg,
+      padding: tight ? space.md : space.lg,
       borderRadius: radius.lg,
       borderWidth: 1,
       borderColor: color.rule,
@@ -996,15 +1046,16 @@ const ChainBox = ({ n, title, body, kind }) => (
  *
  * The label used to sit on its own between two cards and read as a heading for
  * the card under it. On the line it reads as what it is — the thing joining
- * the box above to the box below.
+ * the box above to the box below. `tight` (see ChainBox) shortens the line
+ * either side to 8 and the pill's padding to 2: 16pt less a cable.
  */
-const Wire = ({ label }) => (
+const Wire = ({ label, tight = false }) => (
   <View style={{ alignItems: 'center' }}>
-    <View style={{ width: 2, height: 14, backgroundColor: color.signal }} />
+    <View style={{ width: 2, height: tight ? 8 : 14, backgroundColor: color.signal }} />
     <View
       style={{
         paddingHorizontal: space.md,
-        paddingVertical: 4,
+        paddingVertical: tight ? 2 : 4,
         borderRadius: 999,
         borderWidth: 1,
         borderColor: color.signal,
@@ -1013,7 +1064,7 @@ const Wire = ({ label }) => (
     >
       <Text style={{ color: color.signal, fontSize: font.micro, letterSpacing: 1.2 }}>{label}</Text>
     </View>
-    <View style={{ width: 2, height: 14, backgroundColor: color.signal }} />
+    <View style={{ width: 2, height: tight ? 8 : 14, backgroundColor: color.signal }} />
   </View>
 )
 

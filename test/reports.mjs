@@ -374,11 +374,12 @@ async function deleteAccount({ reports = [], folder = [], videoFolder = [], rese
     const call = { url: String(url), method: init.method || 'GET', headers: init.headers || {}, body: init.body ? JSON.parse(init.body) : null }
     calls.push(call)
     if (call.url === `${PROJECT}/auth/v1/user`) return answer(200, { id: USER, email })
-    if (call.url.startsWith(`${PROJECT}/rest/v1/feedback?select=id,user_id,context&`)) {
+    if (call.url.startsWith(`${PROJECT}/rest/v1/feedback?select=id,user_id,contact,context&`)) {
       const byId = call.url.includes(`user_id=eq.${USER}`)
       const status = lookupStatus[byId ? 'byId' : 'byAddress'] || 200
       if (status !== 200) return answer(status, { message: 'upstream timeout' })
-      return answer(200, reports.filter((r) => (byId ? r.user_id === USER : r.user_id !== USER)))
+      /* One found by its address gave this account's address to reply to, unless it says another. */
+      return answer(200, reports.filter((r) => (byId ? r.user_id === USER : r.user_id !== USER)).map((r) => (byId ? r : { contact: email, ...r })))
     }
     if (call.url === `${PROJECT}/storage/v1/object/list/report-shots`) return answer(200, folder.map((name) => ({ name })))
     if (call.url === `${PROJECT}/storage/v1/object/list/report-videos`) return answer(200, videoFolder.map((name) => ({ name })))
@@ -1048,7 +1049,8 @@ export function run(test) {
     const r = await import('../shared/report-rules.mjs')
     const plain = (re) => re.source.replace(/\\\//g, '/')
     const shared = plain(r.VIDEO_PATH)
-    for (const f of ['supabase/functions/feedback-email/index.ts', 'supabase/functions/delete-account/index.ts']) {
+    /* Delete account's half lives in _shared/forget-account.ts since 2 November 2026, which Developer → Accounts' Delete shares. */
+    for (const f of ['supabase/functions/feedback-email/index.ts', 'supabase/functions/_shared/forget-account.ts']) {
       const m = read(f).match(/const VIDEO_PATH =\s*\/(.+)\/\n/)
       assert.ok(m, `${f} has no VIDEO_PATH`)
       assert.equal(m[1].replace(/\\\//g, '/'), shared, `${f} takes a different shape of video path from the app`)
@@ -1290,7 +1292,8 @@ export function run(test) {
     const r = await import('../shared/report-rules.mjs')
     const plain = (re) => re.source.replace(/\\\//g, '/')
     const shared = plain(r.SHOT_PATH)
-    for (const f of ['supabase/functions/feedback-email/index.ts', 'supabase/functions/delete-account/index.ts']) {
+    /* Delete account's half lives in _shared/forget-account.ts since 2 November 2026, which Developer → Accounts' Delete shares. */
+    for (const f of ['supabase/functions/feedback-email/index.ts', 'supabase/functions/_shared/forget-account.ts']) {
       const m = read(f).match(/const SHOT_PATH =\s*\/(.+)\/\n/)
       assert.ok(m, `${f} has no SHOT_PATH`)
       assert.equal(m[1].replace(/\\\//g, '/'), shared, `${f} takes a different shape of path from the app`)
@@ -1320,12 +1323,12 @@ export function run(test) {
     const norm = (s) => body(s).replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ').trim()
     assert.equal(norm(sql), norm(read('supabase/migrations/20260905_feedback_email.sql')).replace('timeout_milliseconds := 5000', 'timeout_milliseconds := 60000'))
 
-    /* Delete account takes the pictures before the rows that name them, through Storage's own API. */
-    const del = code(read('supabase/functions/delete-account/index.ts'))
-    assert.ok(del.indexOf('await forgetShots(url, service, who, reports)') > 0 && del.indexOf('await forgetShots(url, service, who, reports)') < del.indexOf('await forgetRows(url, service, who)'), 'the rows go first, and with them where the pictures are')
+    /* Delete account takes the pictures before the rows that name them, through Storage's own API (in the deletion both ways of deleting share). */
+    const del = code(read('supabase/functions/_shared/forget-account.ts'))
+    assert.ok(del.indexOf('await forgetShots(url, service, who, reports, by)') > 0 && del.indexOf('await forgetShots(url, service, who, reports, by)') < del.indexOf('await forgetRows(url, service, who, reports, by)'), 'the rows go first, and with them where the pictures are')
     assert.match(del, /\/storage\/v1\/object\/list\/\$\{SHOT_BUCKET\}/, 'the account’s own folder is not looked through')
     assert.match(del, /\/storage\/v1\/object\/\$\{SHOT_BUCKET\}`, \{ method: 'DELETE', headers, body: JSON\.stringify\(\{ prefixes: \[\.\.\.paths\] \}\) \}/)
-    assert.match(del, /feedback\?select=id,user_id,context&\$\{query\}/)
+    assert.match(del, /feedback\?select=id,user_id,contact,context&\$\{query\}/)
 
     /* Both senders upload before the row, with upsert off (the one thing the bucket's rule allows), and record the places in context. */
     for (const f of ['src/lib/reports.js', 'mobile/src/lib/reports.js']) {
@@ -1736,7 +1739,9 @@ export function run(test) {
     /* Delete account: the rows and stored pictures go at once; the emailed copy is the developer's to delete, and he is told which. */
     assert.match(page, /deleting the account deletes the report, and its screenshots, too\. A copy of each report, with its log and screenshots, is also emailed to the person who builds the app when it is sent, and deleting a report from the database cannot reach that email: deleting the account tells him which reports went, and he deletes those emails too\./)
     assert.match(page, /straight away and for good\. Each of those bug reports was also emailed to the person who builds the app when it was sent, with its log and screenshots, and the app cannot reach his inbox: Delete account sends him a note listing them, and he deletes those emails too\./, 'the page says Delete account removes a report for good and leaves out the emailed copy')
-    assert.match(code(read('supabase/functions/delete-account/index.ts')), /await tellDeveloper\(reports\.map\(\(r\) => r\.id\), id\)/, 'the page promises a note Delete account never sends')
+    /* In the deletion delete-account and Developer → Accounts share (2 November 2026), which delete-account runs. */
+    assert.match(code(read('supabase/functions/_shared/forget-account.ts')), /await tellDeveloper\(reports\.map\(\(r\) => r\.id\), who\.id, by\)/, 'the page promises a note Delete account never sends')
+    assert.match(code(read('supabase/functions/delete-account/index.ts')), /await forgetAccount\(url, service, who, 'delete-account'\)/, 'the page promises a note Delete account never sends')
     /* How long a stored picture stays, the same as the bucket's own tidy. */
     assert.match(page, /They are stored privately for a week/)
     assert.match(page, /Screenshots added to a report — the stored copy is deleted a week after it was sent, or an hour after if its report never arrived\./)
