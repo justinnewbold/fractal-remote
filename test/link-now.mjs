@@ -6368,9 +6368,7 @@ export function run(test) {
     /* The head lives in lib/logHead.js, where Copy Logs and a report both take it from. */
     const log = read('mobile/src/lib/logHead.js')
     const header = log.slice(log.indexOf('const throughAdapter = bluetoothOn() && !isDemo()'), log.indexOf('export const runsBefore'))
-    /* `${way}`: Bluetooth, or USB cable for a unit on one (lib/bleAdapters isCable), since 3 November 2026. */
-    const adapter = header.slice(header.indexOf('? { link: `${way}'), header.indexOf(': {'))
-    assert.ok(adapter.length > 20, 'the Bluetooth half of the header could not be cut out; this read is probably broken')
+    const adapter = header.slice(header.indexOf('? { link: `Bluetooth'), header.indexOf(': {'))
     assert.ok(!/computers/.test(adapter), 'the Bluetooth header names computers')
     assert.match(header, /computers: link\.hosts\?\.length > 1 \? `\$\{link\.hosts\.join\(', '\)\}; driving \$\{link\.chosenHost \|\| 'none of them'\}` : undefined/)
     /* Absent is left out of the header altogether, so one computer's paste is what it was, and a report's head too. */

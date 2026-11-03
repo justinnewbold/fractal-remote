@@ -33,42 +33,20 @@
  * as an adapter whatever its name: an adapter Apple's Bluetooth screen
  * connected, or a unit on a USB cable (an AM4 plugged straight in). The
  * iPhone module reads the driver from CoreMIDI (kMIDIPropertyDriverOwner,
- * FractalBleMidiModule.swift devices()); Android sends none, and its USB
- * entries say what they are by their transport (isCable, below).
+ * FractalBleMidiModule.swift devices()); Android sends none.
  *
- * THE TWO DRIVER NAMES, AS A REAL iPHONE SAYS THEM. Apple does not write
- * them down; Justin's logs did (27 to 29 October 2026, store copy 1.89.3,
- * the device log's "ports after Apple's Bluetooth screen" line). An AM4
- * plugged straight into the iPhone, and a USB-MIDI cable (a C2MIDI Pro)
- * straight into it, are both "com.apple.AppleMIDIUSBDriver". Every adapter
- * Apple's Bluetooth screen connected (a Uhost, a Master) and the iPhone's
- * own "iPhone Bluetooth" port are "com.apple.AppleMIDIBluetoothDriver".
- * Apple's network session reads '' (or its RTP driver). They KEEP a port,
- * never drop one, as before.
+ * THE TWO DRIVER NAMES ARE A GUESS. Apple does not write them down, and no
+ * log from a real iPhone has shown them yet: "AppleMIDIBluetoothDriver" and
+ * "AppleMIDIUSBDriver" came from an earlier test's example, not from a
+ * phone. They are trusted only to KEEP a port, never to drop one, so if they
+ * are wrong nothing breaks: the check never fires and the name decides,
+ * which every real adapter's name passes. The device log's "ports after
+ * Apple's Bluetooth screen" line names each port's driver; once a pasted log
+ * from a real adapter and a USB-cabled unit shows them, put the real strings
+ * here and drop this paragraph.
  */
-export const USB_DRIVER = /AppleMIDIUSBDriver/i
-export const BLUETOOTH_DRIVER = /AppleMIDIBluetoothDriver/i
-const ADAPTER_DRIVER = new RegExp(`${USB_DRIVER.source}|${BLUETOOTH_DRIVER.source}`, 'i')
+const ADAPTER_DRIVER = /AppleMIDI(Bluetooth|USB)Driver/i
 const NETWORK_DRIVER = /RTP/i
-
-/**
- * A UNIT ON A USB CABLE, not a Bluetooth adapter: the phone's end is USB, a
- * unit straight in or a USB-MIDI cable straight into the phone. The two are
- * the same to the phone, and said the same way (lib/cableWords).
- *
- *   - iPhone: a port on Apple's USB MIDI driver (USB_DRIVER, above);
- *   - Android: an entry from the build that lists USB MIDI devices (waiting
- *     as docs/pending/android-usb-midi.patch): { id: 'usb:<vvvv>:<pppp>',
- *     name, transport: 'usb' }. Today's Android builds list Bluetooth scan
- *     results only, { id: <its Bluetooth address>, name, rssi }, which are
- *     never a cable: that is the feature detection, and nothing here fires
- *     on a copy without the new build.
- *
- * Everything else about the link is the same wire with a different cable:
- * every rule the unit is held to over Bluetooth holds over it unchanged.
- */
-export const isCable = (d) =>
-  !!d && (d.transport === 'usb' || USB_DRIVER.test(String(d.driver || '')) || (typeof d.id === 'string' && d.id.startsWith('usb:')))
 
 /* The first word of Apple's network port, in the languages an iPhone can be set to. Lower case; Romanian with both its t's. */
 export const NETWORK_WORDS = Object.freeze([
@@ -114,25 +92,12 @@ export function sessionName(name) {
 
 export const isNetworkSession = (d) => {
   const driver = String(d?.driver || '')
-  if (ADAPTER_DRIVER.test(driver) || isCable(d)) return false
+  if (ADAPTER_DRIVER.test(driver)) return false
   return NETWORK_DRIVER.test(driver) || sessionName(d?.name)
 }
 
 /** Something the page may offer as the adapter. */
 export const isAdapter = (d) => !!d && typeof d.id === 'string' && !isNetworkSession(d)
-
-/** The units on a USB cable in a list, plugged in now (not offline). */
-export const cablesIn = (list) => (Array.isArray(list) ? list : []).filter((d) => isAdapter(d) && isCable(d) && !d.offline)
-
-/**
- * THE CABLE TO USE, when there is no question about it: exactly one unit on
- * a USB cable plugged in now, or null. Connect uses it straight away, with
- * no Bluetooth asked and no Apple's screen (lib/bluetooth findAdapters).
- */
-export function pickCable(list) {
-  const here = cablesIn(list)
-  return here.length === 1 ? here[0] : null
-}
 
 /**
  * THE ONE TO USE, when there is no question about it, or null.

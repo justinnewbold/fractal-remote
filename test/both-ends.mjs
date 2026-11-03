@@ -2357,8 +2357,7 @@ export function run(test) {
     assert.match(phoneApp, /const unitGoes = demo \? 'demo' : link\.hosts\?\.length > 1 && link\.link === 'connected' \? 'which' : 'link'/, 'the phone’s rule for where its pill goes changed; this check follows it')
 
     /* One set of words for the chain, and both pages draw it. */
-    /* Mapped on the phone alone for a unit on a USB cable (onTheCable, lib/cableWords cableChain): the same cards, the adapter's taken out. */
-    assert.match(read('mobile/src/screens/Settings.js'), /<ChainCards\s+cards=\{onTheCable\(linkChain\(\{\s+here: 'phone'/, 'the phone’s Phone & computer does not open on the chain')
+    assert.match(read('mobile/src/screens/Settings.js'), /<ChainCards\s+cards=\{linkChain\(\{\s+here: 'phone'/, 'the phone’s Phone & computer does not open on the chain')
     assert.match(webApp, /<ChainCards cards=\{linkChain\(\{/, 'the browser’s Phone & computer does not open on the chain')
     assert.match(read('mobile/src/lib/link-chain.js'), /Generated from shared\/link-chain\.mjs/, 'the phone words its chain for itself')
     const { linkChain } = await import('../shared/link-chain.mjs')
@@ -2447,13 +2446,13 @@ export function run(test) {
     assert.match(web, /const lampState = pill\.lamp/)
     const note = String.raw`(?: \{\/\*[\s\S]*?\*\/\})?`
     assert.match(web, new RegExp(String.raw`\{pill\.status\} <\/span>${note} \{demo \? null : <span className="lamp" data-state=\{lampState\} \/>\} \{pill\.unit \?`), 'the lamp is not between the pill’s word and the unit, or is drawn in the demo')
-    assert.match(phone, new RegExp(String.raw`\{pill\.status\} <\/Text>${note} \{demo \? null : wireless \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} size=\{8\} \/>\} \{pill\.unit \?`), 'the phone’s pill changed its order; this check follows it')
+    assert.match(phone, new RegExp(String.raw`\{pill\.status\} <\/Text>${note} \{demo \? null : bluetooth \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} size=\{8\} \/>\} \{pill\.unit \?`), 'the phone’s pill changed its order; this check follows it')
 
     /* What a screen reader is told: the pill's words, then where the tap goes, in the phone's words. */
     assert.match(phone, /accessibilityLabel=\{`\$\{\[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)\}\. \$\{pillGoes\}`\}/, 'the phone’s label changed; this check follows it')
     assert.match(web, /const said = \[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)/, 'the browser’s pill is read out in other words than the phone’s')
     assert.match(web, /aria-label=\{`\$\{said\}\. \$\{goes\}`\}/, 'the browser’s pill does not say where it goes, as the phone’s does')
-    assert.match(phone, /const pillGoes = demo \? 'Change the demo unit' : cable \? 'How it’s connected' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/)
+    assert.match(phone, /const pillGoes = demo \? 'Change the demo unit' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/)
     assert.match(web, /const goes = demo \? 'Change the demo unit' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/, 'the browser’s pill names a page it does not open')
     /*
      * And a change is said politely, from the held link, as the phone's bar
@@ -2708,7 +2707,7 @@ export function run(test) {
     const settings = read('mobile/src/screens/Settings.js')
     const flat = settings.replace(/\s+/g, ' ')
     assert.match(settings, /import \{ UPDATE_STEPS \} from '\.\.\/lib\/computer-update'/)
-    assert.match(flat, /<ChainCards cards=\{onTheCable\(linkChain\(\{[\s\S]*?\}\)\)\} onWarn=\{\(\) => setPage\('updating'\)\} \/>/, 'the red line on the phone opens nothing')
+    assert.match(flat, /<ChainCards cards=\{linkChain\(\{[\s\S]*?\}\)\} onWarn=\{\(\) => setPage\('updating'\)\} \/>/, 'the red line on the phone opens nothing')
     assert.match(settings, /const PARENT = \{ offline: 'link', updating: 'link',/, 'back from the steps does not go to Phone & computer')
     const phonePage = settings.slice(settings.indexOf("{page === 'updating' ? ("), settings.indexOf("{page === 'watch' ? ("))
     assert.ok(phonePage.length > 200, 'the phone has no page of steps')

@@ -11,7 +11,6 @@ import {
   RESTRICTED_WORDS,
   adapterAway,
   adapterDevices,
-  cableAway,
   checkSteps,
   chooseAdapter,
   findAdapters,
@@ -60,21 +59,6 @@ import {
   waysFor,
   wrongUnitLine
 } from '../lib/bluetooth-gear'
-import { cablesIn, isCable } from '../lib/bleAdapters'
-import {
-  CABLE_AWAY,
-  CABLE_CLOSE_AND_REOPEN,
-  CABLE_CONNECTING_HINT,
-  CABLE_ROW,
-  CABLE_ROW_AWAY,
-  CABLE_VP4_CANT_HEAR,
-  cableConnectingLine,
-  cableKeptHint,
-  cableListedHint,
-  cableStatus,
-  cableSteps,
-  fm3NoCable
-} from '../lib/cableWords'
 import { deviceNoun } from '../lib/device-word'
 import { probeNow } from '../lib/link'
 import { useRig } from '../lib/rig'
@@ -166,20 +150,6 @@ import Press from '../components/Press'
  * THE DEVICE IN HAND, BY ITS NAME (lib/device-word deviceNoun): an iPad or a
  * tablet reads "this iPad", "the tablet's settings", never "this phone".
  *
- * A UNIT ON A USB CABLE IS SAID AS ONE. "I've already used my iPhone and it
- * does connect. It just says it's a Bluetooth connection and not USB, even
- * though it is USB." (Justin, 3 November 2026.) The page is still the
- * Bluetooth page, and Connect is still the one button, but with a unit
- * plugged in by USB cable (lib/bleAdapters isCable) Connect uses it straight
- * away, with no Apple's screen and nothing about Bluetooth asked
- * (lib/bluetooth findAdapters), and every line that says how it is
- * connected says the cable (lib/cableWords): the big line, the hints, the
- * list and Troubleshooting. No Reconnect for one: plugging it back in is
- * what brings it back. Nothing new is offered: no cable way to buy, no cable
- * steps before one is in use. The FM3 cannot be plugged in by its USB port
- * at all, and says so when it is picked (fm3NoCable), beside its own red
- * warning, which is unchanged.
- *
  * The check, for finding out what a real unit does, is folded away under
  * Testing tools, last.
  *
@@ -240,7 +210,6 @@ const signal = (rssi) => (!Number.isFinite(rssi) ? '' : rssi > -60 ? 'strong sig
  */
 function status(b, unitState) {
   const name = unitName(b.unit)
-  const cable = isCable(b.adapter)
   /* Whatever the switch says: finding the adapter before turning this on is the usual order, and a search that could not start has to say why. */
   if (b.trouble === 'bluetooth-off') return { line: `Turn on Bluetooth in the ${deviceNoun()}’s settings`, tone: 'fault' }
   if (b.trouble === 'permission') return { line: ALLOW_WORDS, tone: 'fault' }
@@ -265,8 +234,6 @@ function status(b, unitState) {
         tone: 'fault'
       }
     }
-    /* A unit on a USB cable: the same lines, saying the cable (lib/cableWords cableStatus), a VP4's still never answering. */
-    if (cable) return cableStatus({ unit: b.unit, name, unitState })
     /* A VP4 never answers over Bluetooth (lib/bleVp4.js): connected is the adapter, and the phone sending. */
     if (b.unit === 'vp4') return { line: VP4_CONNECTED, tone: 'ok' }
     if (unitState === 'present') return { line: `Connected · ${name} answering`, tone: 'ok' }
@@ -274,25 +241,16 @@ function status(b, unitState) {
     if (unitState === 'missing' || unitState === 'silent') return { line: notAnsweringLine(b.unit), tone: 'fault' }
     return { line: `Connected · asking the ${name}…`, tone: 'dim' }
   }
-  if (cable) return { line: cableConnectingLine(b.adapter?.name), tone: 'dim' }
   return { line: `Connecting to ${b.adapter?.name || 'the adapter'}…`, tone: 'dim' }
 }
 
-/*
- * Blue for the unit answering over Bluetooth, as the bar is; green stays the
- * unit answering through a computer, and on a USB cable, which is not
- * Bluetooth (the bar's lamp is the plain one for it too).
- */
+/* Blue for the unit answering over Bluetooth, as the bar is; green stays the unit answering through a computer. */
 const TONES = { ok: () => color.ble, fault: () => color.fault, dim: () => color.silkDim }
-const toneColor = (tone, cable) => (tone === 'ok' && cable ? color.ok : TONES[tone]())
 
 export default function BluetoothPage({ purchase, admin = false, onReport = null, onOpen = null, onConnected = null }) {
   const b = useBluetooth()
   const unitState = useRig((s) => s.unit)
   const said = status(b, unitState)
-  /* A unit on a USB cable, chosen (lib/bleAdapters isCable), and the ones plugged in now, which Connect uses before anything about Bluetooth. */
-  const cable = isCable(b.adapter)
-  const cables = cablesIn(adapterDevices())
   /*
    * REPORT THIS, beside what is wrong: a fault line, except the one with
    * Open Settings under it and the one about unlocking. When the adapter is
@@ -362,23 +320,9 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * the adapter from last time when it is there, Apple's screen (or the
    * search, on Android) when it is not. A different adapter is Troubleshooting's.
    */
-  /*
-   * A UNIT ON A USB CABLE FROM LAST TIME, NOT PLUGGED IN NOW: never Apple's
-   * screen, which cannot bring a cable back. With another cable plugged in
-   * instead, that one, found the way Connect finds one the first time (the
-   * one kept is let go of, so a second cable is asked about in the list);
-   * with none, Bluetooth on, and the link connects the moment it is plugged
-   * back in (bleLink heardDevices).
-   */
-  const cableFromLastTime = () => {
-    if (!cables.length) return setBluetooth(true)
-    forgetAdapter()
-    find()
-  }
   const start = () => {
     if (!canStart) return
     arm()
-    if (b.adapter && cable && offlineHere(b.adapter)) return cableFromLastTime()
     if (b.adapter && ios && offlineHere(b.adapter)) return another()
     if (b.adapter) setBluetooth(true)
     else find()
@@ -434,12 +378,12 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
       <View style={{ gap: space.lg }}>
         {sayIt ? (
           <View style={{ gap: space.sm }}>
-            <Text accessibilityLiveRegion="polite" style={{ color: toneColor(said.tone, cable), fontSize: font.lead, fontWeight: '700', lineHeight: 26 }}>
+            <Text accessibilityLiveRegion="polite" style={{ color: TONES[said.tone](), fontSize: font.lead, fontWeight: '700', lineHeight: 26 }}>
               {said.line}
             </Text>
             {b.trouble === 'permission' ? <OpenSettings /> : null}
             {reportable && !quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
-            {vp4 && connected && !b.answeredAs ? <Hint>{cable ? CABLE_VP4_CANT_HEAR : VP4_CANT_HEAR}</Hint> : null}
+            {vp4 && connected && !b.answeredAs ? <Hint>{VP4_CANT_HEAR}</Hint> : null}
           </View>
         ) : null}
         {/*
@@ -464,17 +408,15 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               Troubleshooting's, one tap away: "It seems like there's too much
               to read everywhere you go" (Justin, 30 October 2026).
             */}
-            {quiet && !cable ? <Hint>{PLUGS_CHECK}</Hint> : null}
+            {quiet ? <Hint>{PLUGS_CHECK}</Hint> : null}
             {/*
               STILL NOTHING AFTER THE ADAPTER WAS UNPLUGGED AND PLUGGED BACK
               IN: the way out that worked for him was closing the app
               completely (shared/bluetooth-gear CLOSE_AND_REOPEN).
             */}
-            {b.phase === 'connecting' || quiet ? <Hint>{cable ? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN}</Hint> : null}
+            {b.phase === 'connecting' || quiet ? <Hint>{CLOSE_AND_REOPEN}</Hint> : null}
             {reportable && quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
-            {/* A unit on a USB cable: unplugged is said as unplugged, and it connects by itself when it is back (lib/bluetooth cableAway). */}
-            {b.phase === 'connecting' && cable ? <Hint>{cableAway() ? CABLE_AWAY : CABLE_CONNECTING_HINT}</Hint> : null}
-            {b.phase === 'connecting' && !cable ? (
+            {b.phase === 'connecting' ? (
               <Hint>
                 {shut
                   ? 'If this stays here, tap Stop, check the adapter is plugged in and lit, then tap Connect.'
@@ -506,8 +448,6 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               <Heading>1 · Pick your unit</Heading>
               <UnitChips units={units} picked={b.unit} disabled={b.on} />
               {b.unit === 'fm3' ? <Note tone="fault">{FM3_NEVER}</Note> : null}
-              {/* And on either phone: its USB port is not MIDI, so it cannot be plugged in by cable. */}
-              {b.unit === 'fm3' ? <Hint>{fm3NoCable(deviceNoun())}</Hint> : null}
             </View>
 
             {/* STEP 2. One button. */}
@@ -520,12 +460,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                   {!b.unit
                     ? 'Pick your unit first.'
                     : b.adapter
-                      ? cable
-                        ? cableKeptHint(b.adapter.name)
-                        : `Uses ${b.adapter.name || 'the adapter'}, from last time.`
-                      : cables.length
-                        ? cableListedHint(cables)
-                        : shut
+                      ? `Uses ${b.adapter.name || 'the adapter'}, from last time.`
+                      : shut
                         ? `On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app. Connect uses an adapter that is already connected to this ${deviceNoun()}.`
                         : ios
                           ? 'In Apple’s screen, tap your adapter, wait until it says Connected, then tap Done.'
@@ -549,9 +485,9 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
         {showList ? (
           <View style={{ gap: space.sm }}>
             {/* Said by how many there are: one row under "More than one is here" read as a mistake. */}
-            <Hint>{b.looking ? 'Found so far. Tap yours:' : b.devices.length > 1 ? 'More than one is here. Tap yours:' : b.devices.some(isCable) ? 'Tap yours:' : 'Tap your adapter:'}</Hint>
+            <Hint>{b.looking ? 'Found so far. Tap yours:' : b.devices.length > 1 ? 'More than one is here. Tap yours:' : 'Tap your adapter:'}</Hint>
             {b.devices.map((d) => {
-              const detail = isCable(d) ? (d.offline ? CABLE_ROW_AWAY : CABLE_ROW) : ios ? (d.offline ? `not connected to this ${deviceNoun()}` : d.fresh ? 'just connected' : '') : signal(d.rssi)
+              const detail = ios ? (d.offline ? `not connected to this ${deviceNoun()}` : d.fresh ? 'just connected' : '') : signal(d.rssi)
               return (
                 <Press
                   key={d.id}
@@ -626,9 +562,6 @@ function UnitChips({ units, picked, disabled }) {
     </View>
   )
 }
-
-/* Troubleshooting's last step, by adapter or by cable. */
-const ANOTHER_UNIT = 'If another unit answered, tap Stop, pick that unit in step 1, and tap Connect again.'
 
 /* The other half of the quiet-unit hint: an adapter that only carries one way. */
 const BOTH_WAYS = 'The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.'
@@ -720,16 +653,7 @@ export function BluetoothTrouble({ onReport = null }) {
   const b = useBluetooth()
   const settings = b.unit ? (hookupFor(b.unit, deviceNoun()) || []).at(-1) : null
   const midi = midiSettingsFor(b.unit, deviceNoun())
-  /* An FM3 picked, on either phone: it cannot be plugged in by its USB port (lib/cableWords fm3NoCable). */
-  const fm3 = b.unit === 'fm3' ? fm3NoCable(deviceNoun()) : null
-  /*
-   * A UNIT ON A USB CABLE CHOSEN: the cable's own steps, and none about an
-   * adapter's plugs, lights or Bluetooth, which are not in its way.
-   */
-  const cable = isCable(b.adapter)
-  const steps = cable
-    ? [...cableSteps(deviceNoun()), fm3, ANOTHER_UNIT].filter(Boolean)
-    : [
+  const steps = [
     TROUBLE_LIT,
     `Check Bluetooth is on, and allowed for Fractal Remote in the ${deviceNoun()}’s Settings.`,
     `${PLUGS_CHECK} ${swapLine(b.unit)}`,
@@ -743,8 +667,7 @@ export function BluetoothTrouble({ onReport = null }) {
       ? `An iPhone or iPad lets an adapter nobody is using go after a few minutes. Tap Reconnect, or Stop and then Connect, and connect it again in Apple’s screen.`
       : `Android needs Nearby devices allowed for Fractal Remote, and on Android 11 and older Location turned on, to find the adapter.`,
     `Stay within about 30 feet of the adapter, with nothing big in between.`,
-    ANOTHER_UNIT,
-    fm3
+    `If another unit answered, tap Stop, pick that unit in step 1, and tap Connect again.`
   ].filter(Boolean)
   return (
     <View style={{ gap: space.lg }}>
@@ -757,11 +680,8 @@ export function BluetoothTrouble({ onReport = null }) {
       <View style={{ gap: space.sm }}>
         <OpenSettings />
         {/* A different adapter: the old one forgotten here, and Connect on the Bluetooth page finds the new one. */}
-        {b.adapter && !b.on && !cable ? (
+        {b.adapter && !b.on ? (
           <Press label="Forget the adapter" sub={`${b.adapter.name || 'The adapter'} from last time. Then tap Connect to pick another.`} height={52} onPress={() => forgetAdapter()} />
-        ) : null}
-        {b.adapter && !b.on && cable ? (
-          <Press label="Forget the USB cable" sub={`${b.adapter.name || 'The unit'} on the USB cable, from last time. Then tap Connect to pick another.`} height={52} onPress={() => forgetAdapter()} />
         ) : null}
         {onReport ? <Press label={REPORT_BUTTON} sub="Still stuck? Send us what happened" height={52} onPress={() => onReport(null)} /> : null}
       </View>

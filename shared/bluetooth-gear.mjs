@@ -130,19 +130,12 @@ export const GUIDE_URL = 'https://fractal.newbold.cloud/bluetooth-guide.html'
  * The FM9 since 1 November 2026: "FM9 has already been tested and works"
  * (Justin); which phone and adapter were not said. The VP4 is the one
  * left.
- *
- * The AM4 by USB cable from an iPhone since 27 October 2026, with no
- * adapter (his reports that day, store copy 1.89.3: its own USB-C straight
- * in, and a C2MIDI Pro plugged straight into the iPhone, both on Apple's
- * USB MIDI driver), and again on 3 November: "I've already used my iPhone
- * and it does connect." A cable is not a way on the page (TRIED_WAYS has
- * none), so it is kept in the AM4's note, and no other unit has run on one.
  */
 export const TESTED = ['am4', 'fm3', 'fm9', 'axefx3']
 
 /** What we know of each try, for the Developer page. */
 export const TRIED_NOTES = {
-  am4: 'From an iPhone and an Android phone, 26 October 2026; the WIDI Jack on 28 October; by USB cable from an iPhone, 27 October 2026 (its own USB-C straight in, and a C2MIDI Pro plugged straight into the iPhone), and again 3 November.',
+  am4: 'From an iPhone and an Android phone, 26 October 2026; the WIDI Jack on 28 October.',
   fm3: 'From an iPhone and an Android phone, 26 October 2026, with the U2MIDI Pro: the WIDI Master and the C2MIDI Pro got very hot on it.',
   fm9: 'Confirmed working, 1 November 2026. Which phone and adapter were not said.',
   axefx3: 'From an iPhone, 31 October 2026: a customer confirmed it works. Which adapter was not said.'

@@ -6,7 +6,7 @@ import { DEFAULT_PROJECT } from './project'
 import { APP_VERSION } from './version'
 import { logDebug } from './debugLog'
 import { getState as rigState, subscribeRig } from './rig'
-import { adapterName, bluetoothFacts, bluetoothPhase, bluetoothSettings, cableNow, subscribeBluetooth, unitName } from './bluetooth'
+import { adapterName, bluetoothFacts, bluetoothPhase, bluetoothSettings, subscribeBluetooth, unitName } from './bluetooth'
 import { linkState, linkVia, subscribeLink } from './link'
 import { deviceFacts } from './thisDevice'
 
@@ -87,14 +87,6 @@ export const useSharing = () => useSyncExternalStore(subscribe, readOn, readOn)
 /* ------------------------------------------------------------------------ */
 
 function factsNow() {
-  /*
-   * NO NOTE FOR A UNIT ON A USB CABLE (lib/bleAdapters isCable). The table
-   * takes 'computer' or 'bluetooth' only (gear_reports.via), and the card
-   * promises "through a computer or Bluetooth": a cable sent as Bluetooth,
-   * with the unit's own port as the adapter, is a wrong note. 'usb' needs the
-   * table and the card changed, which waits for Justin; until then, nothing.
-   */
-  if (linkVia() === 'bluetooth' && cableNow()) return null
   const saved = bluetoothSettings() || {}
   return noteFacts({
     rig: rigState(),

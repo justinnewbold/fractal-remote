@@ -52,14 +52,6 @@ export function logHeader({ deviceName, preset, bluetooth = false } = {}) {
    * and under the Feedback form's Send.
    */
   const aboutBluetooth = throughAdapter || (bluetooth && bluetoothAllowed())
-  const facts = aboutBluetooth ? bluetoothFacts() : null
-  /*
-   * A UNIT ON A USB CABLE is said as one, "link: USB cable, connected,
-   * through AM4": the same wire as an adapter, on a different cable
-   * (lib/bleAdapters isCable), and a log that said Bluetooth for it sent the
-   * reader looking for an adapter that was never there.
-   */
-  const way = facts?.cable ? 'USB cable' : 'Bluetooth'
   return {
     app: `Fractal Remote (phone) v${APP_VERSION}`,
     /*
@@ -87,7 +79,7 @@ export function logHeader({ deviceName, preset, bluetooth = false } = {}) {
     unit: deviceName || 'not detected',
     preset: Number.isInteger(preset?.number) ? `${preset.number} ${preset.name || ''}`.trim() : 'none',
     ...(throughAdapter
-      ? { link: `${way}, ${link.link}${link.macName && link.link !== 'off' ? `, through ${link.macName}` : ''}` }
+      ? { link: `Bluetooth, ${link.link}${link.macName && link.link !== 'off' ? `, through ${link.macName}` : ''}` }
       : {
           computer: link.macName || 'none',
           /*
@@ -107,7 +99,7 @@ export function logHeader({ deviceName, preset, bluetooth = false } = {}) {
            */
           computers: link.hosts?.length > 1 ? `${link.hosts.join(', ')}; driving ${link.chosenHost || 'none of them'}` : undefined
         }),
-    ...(facts ? bluetoothHead(facts) : {})
+    ...(aboutBluetooth ? bluetoothHead(bluetoothFacts()) : {})
   }
 }
 
