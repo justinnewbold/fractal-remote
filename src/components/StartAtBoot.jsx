@@ -17,8 +17,12 @@ import { setStartAtBoot, startAtBootState } from '../lib/desktop'
  * own setting, not this page's: what it shows is read back from the computer
  * after every change, so it cannot claim to be on when the computer could not
  * make it so.
+ *
+ * `onlyOn` draws it only while it is on: what Settings keeps in sight under
+ * the About heading while About is shut, so a switch that is on is never
+ * folded out of sight (components/SetupGroup whileShut).
  */
-export default function StartAtBoot() {
+export default function StartAtBoot({ onlyOn = false } = {}) {
   const [state, setState] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -31,6 +35,7 @@ export default function StartAtBoot() {
   }, [])
 
   if (!state?.supported) return null
+  if (onlyOn && !state.on) return null
 
   const change = async (on) => {
     setBusy(true)

@@ -102,6 +102,19 @@ import SceneArrange from '../components/SceneArrange'
 import EdgeBack from '../components/EdgeBack'
 import Sheet from '../components/Sheet'
 import { deviceKind, deviceNoun, pairTitle } from '../lib/device-word'
+/* The front list's words, shared with the browser's Settings (shared/settings-words.mjs). */
+import {
+  ACCOUNT_LINE,
+  DEVELOPER_HINT,
+  FEEDBACK_LINE,
+  FOOTSWITCHES_LINE,
+  HELP_HINT,
+  PLAY_SCREEN_HINT,
+  REPLAY_LINE,
+  SMALL_PRINT_LINE,
+  TROUBLE_LINE,
+  pairLine
+} from '../lib/settings-words'
 import WhatsNew, { latestLine } from './WhatsNew'
 
 /* "Phone & computer", or "iPad & computer" on an iPad (device-word.mjs). Read
@@ -443,14 +456,6 @@ export default function Settings({
     describeRunning()
   }, [])
 
-  const linkWord =
-    link === 'connected'
-      ? `Connected to ${macName || 'your computer'}`
-      : link === 'joining'
-        ? 'Finding your computer'
-        : link === 'no-answer'
-          ? 'Your computer isn’t answering'
-          : 'Not connected'
   /* Over Bluetooth (beta) the row is about the adapter on the unit, not a computer. */
   const bluetoothWord =
     link === 'connected'
@@ -460,18 +465,11 @@ export default function Settings({
       : link === 'joining'
         ? 'Bluetooth · looking for the adapter'
         : 'Bluetooth · not connected'
-  /* The Phone & computer row's line: how far along the chain gets. My rig's heading says it too while it is closed. */
-  const pairStatus = demo
-    ? `Demo — simulated ${DEMO_UNITS.find((u) => u.key === unit)?.name || 'unit'}`
-    : bluetooth
-      ? bluetoothWord
-      : link !== 'connected'
-        ? linkWord
-        : unitState === 'missing'
-          ? 'Computer connected · no unit'
-          : unitState === 'silent'
-            ? `Computer connected · ${deviceName || 'unit'} not answering`
-            : `${deviceName || 'Unit'} · connected`
+  /* The Phone & computer row's line: how far along the chain gets. My rig's heading says it too while it is closed.
+     The words are the browser's too (shared/settings-words.mjs pairLine); over Bluetooth they are this end's own. */
+  const pairStatus = bluetooth && !demo
+    ? bluetoothWord
+    : pairLine({ demo, demoName: DEMO_UNITS.find((u) => u.key === unit)?.name, link, unitState, unit: deviceName })
 
   /*
    * TWO WAYS OUT OF EVERY PAGE, and they go to different places on purpose.
@@ -636,7 +634,7 @@ export default function Settings({
             {/* What each switch does, read off the unit — the browser's
                 Footswitches panel, here. Only where the switches can be read. */}
             {(link === 'connected' || demo) && switchesReadable ? (
-              <SetupRow title="Footswitches" status="What each switch does" onPress={() => setPage('footswitches')} />
+              <SetupRow title="Footswitches" status={FOOTSWITCHES_LINE} onPress={() => setPage('footswitches')} />
             ) : null}
             {/* "A metronome that plays out loud that can be toggled on and
                 off in settings." On the unit, the phone or both. */}
@@ -653,15 +651,11 @@ export default function Settings({
             ) : null}
           </Group>
 
-          <Group title="Help" hint="Troubleshooting, feedback, and how to use it">
+          <Group title="Help" hint={HELP_HINT}>
             {/* Up from inside About: the page needed most on a bad evening
                 is now one tap from Settings, not two. */}
             {onOpenFixes || onOpenLog || onOpenReport ? (
-              <SetupRow
-                title="Troubleshooting"
-                status="What to try, the log, and telling us"
-                onPress={() => setPage('trouble')}
-              />
+              <SetupRow title="Troubleshooting" status={TROUBLE_LINE} onPress={() => setPage('trouble')} />
             ) : null}
             {/*
               THE FEEDBACK FORM, ONE TAP FROM SETTINGS. "Super easy for all
@@ -673,14 +667,14 @@ export default function Settings({
               is another way in to the same form, not a move.
             */}
             {onOpenReport ? (
-              <SetupRow title="Feedback" status="Something broken, or something you want" onPress={onOpenReport} />
+              <SetupRow title="Feedback" status={FEEDBACK_LINE} onPress={onOpenReport} />
             ) : null}
             {/* What each model on the unit really is — something to look up
                 while playing, so it sits with the help rather than first. */}
             {onOpenGear ? (
               <SetupRow title="Amp & pedal names" status="What each model on your unit really is" onPress={onOpenGear} />
             ) : null}
-            {onReplay ? <SetupRow title={REPLAY} status="The setup, from the start" onPress={onReplay} /> : null}
+            {onReplay ? <SetupRow title={REPLAY} status={REPLAY_LINE} onPress={onReplay} /> : null}
             {/* "Add a watch section to the iOS app so that people know how to
                 use it and how to set it up, and then they know that there is
                 a watch companion app." iPhone only: there is no Android watch,
@@ -779,14 +773,14 @@ export default function Settings({
               onPress={() => Linking.openURL(SUPPORT_URL)}
             />
             {/* What was left on the About page: the version, Fractal Audio's sentence, where help comes from, privacy and licenses. */}
-            <SetupRow title="The small print" status="Privacy, licenses, who makes this" onPress={() => setPage('about')} />
+            <SetupRow title="The small print" status={SMALL_PRINT_LINE} onPress={() => setPage('about')} />
           </Group>
 
           {/* Justin's own tools, on his account only — see lib/admin.js.
               Their rows sit here under the Developer heading (2 November
               2026), rather than behind a Developer row of the same name. */}
           {isAdmin(account?.id) ? (
-            <Group title="Developer" hint="Messages, customers, app health, testing">
+            <Group title="Developer" hint={DEVELOPER_HINT}>
               {/* The four rows themselves (2 November 2026): there was one, Developer, opening a page with these on it. */}
               <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
               <SetupRow title="Customers" status="Sales, sign-ups, and giving access" onPress={() => setPage('customers')} />
@@ -806,7 +800,7 @@ export default function Settings({
           ) : null}
 
           {/* Last: "Move the Play Screen section down to the bottom of the list." */}
-          <Group title="Play screen" hint="Tiles, colors, light or dark">
+          <Group title="Play screen" hint={PLAY_SCREEN_HINT}>
             <SetupRow
               title="Tiles & scenes"
               status="Tile size, effect pictures, scene layout"
@@ -1138,11 +1132,7 @@ export default function Settings({
                 and the log are things to read, this is the thing to send when
                 neither helped. */}
             {onOpenReport ? (
-              <SetupRow
-                title="Feedback"
-                status="Something broken, or something you want"
-                onPress={onOpenReport}
-              />
+              <SetupRow title="Feedback" status={FEEDBACK_LINE} onPress={onOpenReport} />
             ) : null}
           </View>
           {/*
@@ -2235,7 +2225,7 @@ function AccountCard({ asked, email, offline, paired, unlocked, demo, onPress })
             sign-in only the phone vouches for: none of that works offline. */}
         {email ? (
           <Text numberOfLines={offline && asked ? 2 : 1} style={{ color: color.silkDim, fontSize: font.micro }}>
-            {offline ? (asked ? KEPT_OFFLINE : 'Checking…') : 'Password, sign out, delete account'}
+            {offline ? (asked ? KEPT_OFFLINE : 'Checking…') : ACCOUNT_LINE}
           </Text>
         ) : null}
       </View>

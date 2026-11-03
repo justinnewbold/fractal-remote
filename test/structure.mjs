@@ -1566,8 +1566,8 @@ export function run(test) {
      * became "Troubleshooting" in the same pass.
      */
     const setup = sheet('Settings')
-    /* The version is on the account card at the top now, as on the phone. */
-    assert.match(setup, /className=\{`setup-account-card[\s\S]{0,700}\{FULL\}/, 'the version line is not at the top')
+    /* The version is on the account card at the top now, as on the phone: "Full version · v1.89.30" (the build code is on The small print). */
+    assert.match(setup, /className=\{`setup-account-card[\s\S]{0,700}\{accountWhat\} · v\{VERSION\}/, 'the version line is not at the top')
     /*
      * THE FRONT LIST ONLY, and that is the whole point of this check now.
      *
@@ -1590,20 +1590,25 @@ export function run(test) {
     const rowsIn = (block) =>
       [...block.matchAll(/<SetupRow\b[\s\S]*?title=(?:"([^"]+)"|\{([A-Z_]+)\})/g)].map((m) => m[1] || m[2])
     /*
-     * The whole front page now, groups and all: it runs from the account card
-     * to the first page behind it. The phone's groups, the phone's order, with
-     * the browser's one extra row (Get it on your phone) under My rig.
+     * The whole front page now, sections and all: it runs from the account
+     * card to the first page behind it. The phone's sections, the phone's
+     * order, with the browser's one extra row (Get it on your phone) under My
+     * rig, at the computer end only. Each section is a fold (SetupGroup) since
+     * 3 November 2026, as the phone's are.
      */
     const front = setup.slice(setup.indexOf('setup-account-card'), setup.indexOf("setupPage === 'appearance'"))
-    const rows = [...front.matchAll(/setup-group">([^<]+)<|<SetupRow\b[\s\S]*?title=(?:"([^"]+)"|\{([A-Z_]+)\})/g)].map((m) =>
+    const rows = [...front.matchAll(/<SetupGroup title="([^"]+)"|<SetupRow\b[\s\S]*?title=(?:"([^"]+)"|\{([A-Z_]+)\})/g)].map((m) =>
       m[1] ? `# ${m[1]}` : m[2] || m[3]
     )
     assert.deepEqual(
       rows,
       [
         '# My rig',
-        'Phone & computer',
-        'Stop the looper',
+        /* "Phone & computer", or "iPad & computer" on an iPad: the phone's own name for it (shared/device-word.mjs pairTitle). */
+        'PAIR_TITLE',
+        /* What each switch does, where the switches can be read, as on the phone (3 November 2026). */
+        'Footswitches',
+        /* Stop the looper is under Troubleshooting since 3 November 2026, as on the phone since 29 October. */
         'Metronome',
         /* On a real VP4 only: its Scene Select number and MIDI channel, the
            phone's row too (shared/vp4-safety.mjs MIDI_SETUP_TITLE). */
@@ -1614,6 +1619,8 @@ export function run(test) {
         'Get it on your phone or tablet',
         '# Help',
         'Troubleshooting',
+        /* The feedback form one tap from Settings, as on the phone; Troubleshooting keeps it too. */
+        'Feedback',
         'Amp & pedal names',
         'REPLAY',
         /*
@@ -1644,8 +1651,11 @@ export function run(test) {
       ],
       `Settings opens on ${rows.length} rows: ${rows.join(', ')}`
     )
-    /* Light or dark on the front, under Play screen, as on the phone. */
-    assert.match(front, /setup-group">Play screen<[\s\S]{0,800}<Theme \/>/, 'light and dark are not on the front of Settings')
+    /* Light or dark on the front, inside Play screen, as on the phone. */
+    assert.match(front, /<SetupGroup title="Play screen"[\s\S]{0,800}<Theme \/>\s*<\/div>\s*<\/SetupGroup>/, 'light and dark are not inside Play screen on the front of Settings')
+    /* And Stop the looper is with the fixes, under Troubleshooting, after Fixes and before This preset. */
+    const trouble = setup.slice(setup.indexOf("setupPage === 'help' ? ("), setup.indexOf("setupPage === '", setup.indexOf("setupPage === 'help' ? (") + 5))
+    assert.ok(trouble.indexOf('title="Stop the looper"') > trouble.indexOf('key="fixes"') && trouble.indexOf('title="Stop the looper"') < trouble.indexOf('key="preset-check"'), 'Stop the looper is not with the fixes under Troubleshooting')
 
     /* The page behind The small print is the small print alone: the version, Fractal Audio's sentence, where help comes from, Privacy and Licenses, open and not folded. No rows: they are on the front list, under About. */
     const about = setup.slice(setup.indexOf("setupPage === 'about'"), setup.indexOf('</Sheet>', setup.indexOf("setupPage === 'about'")))

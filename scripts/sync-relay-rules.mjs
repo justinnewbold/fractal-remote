@@ -138,6 +138,13 @@ export const FILES = [
    */
   { source: '../shared/device-word.mjs', target: '../mobile/src/lib/device-word.js' },
   /*
+   * Settings' front list in words: the green line under each section's name,
+   * the line under each row, and the Phone & computer row's line. Both lists
+   * draw them (3 November 2026, "Settings menus?"), so the two cannot word
+   * one row two ways.
+   */
+  { source: '../shared/settings-words.mjs', target: '../mobile/src/lib/settings-words.js' },
+  /*
    * The note a connected phone leaves on the computer, so the computer stays
    * awake under it. The phone and the website write the same document on the
    * same rhythm, and the computer app reads it by the same name.
