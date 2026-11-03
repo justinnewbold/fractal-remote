@@ -287,11 +287,22 @@ export const P1 = {
   haveCode: 'I already have an account'
 }
 
+/*
+ * HOW MANY PAGES THE PHONE'S WALKTHROUGH HAS, under the dots, on the phone
+ * app and on a phone in the browser alike: counted on the demo's way
+ * through it, the longest. How it works, Choose how you want to start,
+ * Which unit should we simulate? (or, on the phone, the page that sends
+ * somebody whose purchase was found to sign in), and Here's the app. "The
+ * page numbers on this aren't correct. Page 2 of three are there twice, but
+ * there's actually four pages" (Justin, 3 November 2026): it said 1, 2, 2, 3
+ * of 3. How it works' own Try the demo goes straight to the unit, so that
+ * way reads 1, 3, 4 of 4: a page skipped, never one counted twice. The dots
+ * write the words themselves (Steps), so they cannot disagree.
+ */
+export const WALK_STEPS = 4
+
 /** P2 — the same three boxes, down a phone. */
 export const P2 = {
-  /* Three steps now, from his "Here's the app" mockup: how it works, the
-     choice, and the app. Written the way the mockup writes it. */
-  count: '1 of 3',
   /*
    * HIS WORDS, and only a heading. "On my phone's web browser I can't see the
    * Guide button at the bottom so people might not know they need to scroll.
@@ -343,7 +354,6 @@ export const P2 = {
  * and the way in for somebody with an account.
  */
 export const P3 = {
-  count: '2 of 3',
   /* The flow's own name, in the header his mockups put it in. */
   title: 'Get started',
   /*
@@ -609,8 +619,6 @@ export const P9 = {
   go: 'Open Play',
   /* His mockup: a row with the gear, and this. */
   foot: 'Show walkthrough later in Settings.',
-  /* The last of the three steps, under the dots. */
-  count: '3 of 3',
   /*
    * THE SAME LAST SCREEN, FOR SOMEBODY WHO CHOSE THE DEMO.
    *

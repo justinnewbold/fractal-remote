@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Dimensions, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 
-import { CHAIN, P1, P2, P3, P4, P6, P7, P9, CLOSE } from '../lib/onboarding'
+import { CHAIN, P1, P2, P3, P4, P6, P7, P9, CLOSE, WALK_STEPS } from '../lib/onboarding'
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
 import { Platform } from 'react-native'
 import { UNITS } from '../lib/demoUnits'
@@ -340,7 +340,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
             pipeline, nothing native — so a screen that reads like a product
             shot still ships over the air and costs no build.
           */}
-          <Steps at={0} of={3} label={P2.count} />
+          <Steps at={0} of={WALK_STEPS} />
           <Head>{P2.head}</Head>
           {/*
             Both ways, on a copy that offers Bluetooth: the computer first,
@@ -390,7 +390,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
 
       {at === 'mode' ? (
         <>
-          <Steps at={1} of={3} label={P3.count} />
+          <Steps at={1} of={WALK_STEPS} />
           <Head>{P3.head}</Head>
           <Sub>{P3.sub}</Sub>
 
@@ -476,7 +476,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
 
       {at === 'pick' ? (
         <>
-          <Steps at={1} of={3} label={P3.count} />
+          <Steps at={2} of={WALK_STEPS} />
           <Eyebrow>{P4.eyebrow}</Eyebrow>
           <Head>{P4.head}</Head>
           <Sub>{P4.sub}</Sub>
@@ -505,7 +505,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
 
       {at === 'app' ? (
         <>
-          <Steps at={1} of={3} label={P3.count} />
+          <Steps at={2} of={WALK_STEPS} />
           <Head>{P6.head}</Head>
           {/*
             The one way on from here. An account is the only thing that joins
@@ -595,7 +595,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
             the foot goes in and straight to Settings, where the walkthrough
             can be shown again.
           */}
-          <Steps at={2} of={3} label={P9.count} />
+          <Steps at={3} of={WALK_STEPS} />
           <Head>{P9.demo.head}</Head>
           <Sub>{twoWays ? WALKTHROUGH_TWO_WAYS.demoSub : P9.demo.sub}</Sub>
           {/* A VP4 is not shown SAVE: see walkthroughTips. */}
@@ -680,7 +680,7 @@ const Sub = ({ children }) => (
   <Text style={{ color: color.silkDim, fontSize: font.lead, lineHeight: font.lead * 1.4 }}>{children}</Text>
 )
 
-/** Dots joined by lines, the reached ones amber, and "2 of 3" under them. */
+/** Dots joined by lines, the reached ones amber, and "2 of 4" under them. */
 const Steps = ({ at, of, label }) => (
   <View style={{ alignItems: 'center', gap: space.sm, paddingTop: space.sm }}>
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>

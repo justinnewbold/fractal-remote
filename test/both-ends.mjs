@@ -2603,6 +2603,36 @@ export function run(test) {
    * the phone, wherever it is drawn: Phone & computer at both ends, How it
    * works on the phone and in a phone's browser, and the computer's welcome.
    */
+  /*
+   * "The page numbers on this aren't correct. Page 2 of three are there
+   * twice, but there's actually four pages" (Justin, 3 November 2026, of the
+   * phone's walkthrough). Every page with dots counts out of WALK_STEPS, the
+   * dots write their own words, and the demo's way through (How it works,
+   * Choose how you want to start, Which unit, Here's the app) reads 1 to 4,
+   * on the phone app and on a phone in the browser alike.
+   */
+  test('the phone’s walkthrough counts its four pages 1 to 4, never one number twice on one way through it', async () => {
+    const { WALK_STEPS } = await import('../shared/onboarding.mjs')
+    assert.equal(WALK_STEPS, 4)
+    const want = { how: 0, mode: 1, pick: 2, app: 2, connected: 3 }
+    for (const file of ['mobile/src/screens/Onboarding.js', 'src/components/PhoneWalkthrough.jsx']) {
+      const text = read(file)
+      const pages = {}
+      let page = null
+      for (const line of text.split('\n')) {
+        const opens = line.match(/\{at === '(\w+)' \? \(/)
+        if (opens) page = opens[1]
+        const dots = line.match(/<Steps ([^>]*)\/>/)
+        if (!dots) continue
+        assert.match(dots[1], /^at=\{(\d)\} of=\{WALK_STEPS\} $/, `${file}: a page's dots count out of their own number, or carry their own words (${line.trim()})`)
+        pages[page] = Number(dots[1].match(/at=\{(\d)\}/)[1])
+      }
+      for (const [name, at] of Object.entries(pages)) assert.equal(at, want[name], `${file}: ${name} is page ${at + 1}`)
+      for (const name of ['how', 'mode', 'pick', 'connected']) assert.ok(name in pages, `${file}: ${name} has no dots`)
+      assert.ok(!/count: '\d of \d'/.test(read('shared/onboarding.mjs')), 'a page count is written out by hand again')
+    }
+  })
+
   test('the wire between the computer and the phone says SECURE WIRELESS LINK everywhere it is drawn', async () => {
     const { linkChain } = await import('../shared/link-chain.mjs')
     for (const here of ['phone', 'computer']) {
