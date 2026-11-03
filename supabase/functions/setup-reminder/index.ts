@@ -70,11 +70,12 @@ const DOWNLOADS = 'fractal.newbold.cloud/downloads'
  *
  *   I_HAVE_ONE   the first screen's button (P1.haveCode, shared/onboarding.mjs)
  *   SETTINGS_DOOR  for a computer app already past that screen: the Settings
- *                  sheet behind the gear, its row and the row's button
- *                  (src/App.jsx, src/components/PhoneRemote.jsx)
+ *                  sheet behind the gear, the section the row is in (shut
+ *                  until opened, since 3 November 2026), the row and the
+ *                  row's button (src/App.jsx, src/components/PhoneRemote.jsx)
  */
 const I_HAVE_ONE = 'I already have an account'
-const SETTINGS_DOOR = { row: 'Phone & computer', button: 'Sign in to set up the phone remote' }
+const SETTINGS_DOOR = { section: 'My rig', row: 'Phone & computer', button: 'Sign in to set up the phone remote' }
 /*
  * BLUETOOTH (BETA) IN THESE EMAILS: OFF, AND ONE SWITCH TURNS IT ON.
  *
@@ -216,7 +217,7 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
     'Open Fractal Remote on your phone. It finds the computer by itself.'
   ]
   /* For somebody who opened the computer app before and went past its first screen. */
-  const opened = `Used the computer app before? Click the gear at the top, choose ${SETTINGS_DOOR.row}, then “${SETTINGS_DOOR.button}”, and sign in with ${who}.`
+  const opened = `Used the computer app before? Click the gear at the top, open ${SETTINGS_DOOR.section}, choose ${SETTINGS_DOOR.row}, then “${SETTINGS_DOOR.button}”, and sign in with ${who}.`
   const first = kind === 'first'
   /*
    * TWO WAYS, SINCE 1 NOVEMBER 2026: "Having trouble getting connected?

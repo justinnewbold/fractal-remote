@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { setStartAtBoot, startAtBootState } from '../lib/desktop'
 
 /**
@@ -17,10 +17,18 @@ import { setStartAtBoot, startAtBootState } from '../lib/desktop'
  * own setting, not this page's: what it shows is read back from the computer
  * after every change, so it cannot claim to be on when the computer could not
  * make it so.
+ *
+ * `onlyOn` draws it only while it is on: what Settings keeps in sight under
+ * the About heading while About is shut, so a switch that is on is never
+ * folded out of sight (components/SetupGroup whileShut). Once shown it stays
+ * for as long as it is drawn, so unticking it does not snatch it from under
+ * the pointer.
  */
-export default function StartAtBoot() {
+export default function StartAtBoot({ onlyOn = false } = {}) {
   const [state, setState] = useState(null)
   const [busy, setBusy] = useState(false)
+  /* Whether this copy has been on screen yet (`onlyOn`). */
+  const shown = useRef(false)
 
   useEffect(() => {
     let stop = false
@@ -31,6 +39,8 @@ export default function StartAtBoot() {
   }, [])
 
   if (!state?.supported) return null
+  if (onlyOn && !state.on && !shown.current) return null
+  shown.current = true
 
   const change = async (on) => {
     setBusy(true)

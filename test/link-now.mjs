@@ -2655,14 +2655,14 @@ export function run(test) {
     const page = r.notUsingOne('page')
     assert.equal(
       app,
-      'Not using one of these? On that computer, open Fractal Remote, go to Settings → Phone & computer → Phone remote and press Turn off, or switch that computer off. Then close Fractal Remote here all the way (swipe it away) and open it again: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.'
+      'Not using one of these? On that computer, open Fractal Remote, go to Settings → My rig → Phone & computer → Phone remote and press Turn off, or switch that computer off. Then close Fractal Remote here all the way (swipe it away) and open it again: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.'
     )
     assert.equal(
       page,
-      'Not using one of these? On that computer, open Fractal Remote, go to Settings → Phone & computer → Phone remote and press Turn off, or switch that computer off. Then reload this page: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.'
+      'Not using one of these? On that computer, open Fractal Remote, go to Settings → My rig → Phone & computer → Phone remote and press Turn off, or switch that computer off. Then reload this page: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.'
     )
     for (const words of [app, page]) {
-      for (const must of ['On that computer, open Fractal Remote', 'Settings → Phone & computer → Phone remote', 'press Turn off', 'switch that computer off', 'gone from this list', 'press Forget', 'Turn off lasts until someone presses Turn on there.']) {
+      for (const must of ['On that computer, open Fractal Remote', 'Settings → My rig → Phone & computer → Phone remote', 'press Turn off', 'switch that computer off', 'gone from this list', 'press Forget', 'Turn off lasts until someone presses Turn on there.']) {
         assert.ok(words.includes(must), `the line lost "${must}": ${words}`)
       }
       for (const never of [/this phone/i, /sign out/i, /official/i, /grey/i, /Inc\./]) assert.ok(!never.test(words), `${never} in: ${words}`)
@@ -2671,10 +2671,16 @@ export function run(test) {
     assert.ok(app.includes('close Fractal Remote here all the way (swipe it away) and open it again') && !/reload/i.test(app), app)
     assert.ok(page.includes('Then reload this page:') && !/swipe/i.test(page), page)
 
-    /* The words are the computer's: its Settings sheet, its page, the fold, the button, and Turn off kept through a restart. */
+    /* The words are the computer's: its Settings sheet, the section the page is in, its page, the fold, the button, and Turn off kept through a restart. */
     const web = read('src/App.jsx')
     assert.match(web, /title="Settings"/)
-    assert.match(web, /link: 'Phone & computer',/, 'the computer’s page is not called Phone & computer: say what it is')
+    /* My rig starts shut (components/SetupGroup), so the line names it, and the row is in it. */
+    const myRig = web.slice(web.indexOf('<SetupGroup title="My rig"'), web.indexOf('</SetupGroup>', web.indexOf('<SetupGroup title="My rig"')))
+    assert.match(myRig, /<SetupRow key="link" title=\{PAIR_TITLE\}/, 'Phone & computer is not in My rig, where the line sends people')
+    /* Named for the device it is on, read when it is drawn, and on the computer that is Phone & computer. */
+    assert.match(web, /get link\(\) \{\s*return pairName\(\)\s*\}/, 'the computer’s page is not called Phone & computer: say what it is')
+    assert.match(web, /const pairName = \(\) => pairTitle\(isDemo\(\) \? 'computer' : undefined\)/, 'the computer’s page is not called Phone & computer: say what it is')
+    assert.equal((await import('../shared/device-word.mjs')).pairTitle('computer'), 'Phone & computer', 'the computer’s page is not called Phone & computer: say what it is')
     assert.match(web, /<Section key="phone-remote" title="Phone remote"[\s\S]{0,400}<PhoneRemote /, 'Turn off is not in the Phone remote fold')
     const panel = read('src/components/PhoneRemote.jsx')
     assert.match(panel, /onAction\('mac-off'\)[^>]*>\s*Turn off\s*</)

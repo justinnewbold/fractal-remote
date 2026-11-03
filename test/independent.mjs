@@ -1051,7 +1051,8 @@ export function run(test) {
      * review, where it was also the browser's own link blue on the dark panel.
      */
     const web = read('src/App.jsx')
-    const front = web.slice(web.indexOf('setup-group">About<'))
+    const front = web.slice(web.indexOf('<SetupGroup title="About"'))
+    assert.ok(front.length > 200, 'the About section moved; this check reads it')
     const rows = front.slice(front.indexOf('<div className="setup-rows">'))
     assert.match(rows, /<SetupRow\s+key="help"\s+title="Help with this app"[\s\S]{0,160}onClick=\{\(\) => window\.open\(SUPPORT_URL, '_blank', 'noopener'\)\}/, 'the browser’s About has no Help with this app in sight')
     assert.ok(rows.indexOf('key="help"') < rows.indexOf('<StartAtBoot />'), 'Help with this app is not one of About’s rows')

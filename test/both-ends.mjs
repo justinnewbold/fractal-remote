@@ -1067,20 +1067,18 @@ export function run(test) {
     const ONE_END = {
       'Apple Watch':
         'iPhone only — the watch app comes with the iPhone app and works through it; a browser has no watch, and there is no Android watch app',
-      /* 25 October 2026: "super easy for all users to submit bugs and feedback". */
-      'Feedback':
-        'phone only, for now — a second way in to the phone’s Feedback form, one tap from Settings, which stays under Troubleshooting too (the help sentence in shared/affiliation.mjs names that path). The browser’s Feedback is under its Troubleshooting, and a row for it on the browser’s front list would make a computer release for a link that changes nothing a computer does',
       'Bluetooth':
         'phone only — a browser cannot reach a Bluetooth MIDI adapter; the phone does it through its own native module, and only where it is open: Justin’s account on every copy since 11 October 2026, and a customer’s only on a store copy built to open it (useBluetoothAllowed, mobile/src/lib/bluetooth.js, and the rule in mobile/src/lib/ble-rule.js)',
       /* SIRI_TITLE: "Siri" on an iPhone or iPad, "Links for Tasker" on Android (mobile/src/lib/siri-help.js). */
       SIRI_TITLE:
         'phone only — Siri and the fractalremote:// links are the phone app’s: the phrases are in the iPhone app, the links open the installed app, and a browser has neither. Shown only where the links are open (useSiriLinksOpen, mobile/src/lib/siri.js)',
-      Footswitches:
-        'phone only as a Settings row — the browser shows the same panel, from the same shared/footswitches.mjs, as a section of the Edit sheet, where it has been since it was built',
-      /* 29 October 2026: "Move stop the looper to the troubleshooting menu" (on the phone). */
-      'Stop the looper':
-        'browser only on the front list — on the phone it is under Settings → Troubleshooting, with Fixes, since 29 October 2026; the browser keeps it on its Setup list, where it has been since it was built',
-      'Get it on your phone or tablet': 'browser only — a phone has no use for a way to get itself onto a phone, and it stays on the front page rather than inside About because "somebody who has a rig connected and wants the remote in their pocket is the likeliest buyer there is"'
+      /*
+       * Feedback, Footswitches and Stop the looper were excused here until 3
+       * November 2026 ("Is there anything else we need to do to match the
+       * apps? Settings menus?"): the browser has the two rows now, and Stop
+       * the looper is under its Troubleshooting, as on the phone.
+       */
+      'Get it on your phone or tablet': 'browser only, and only at the computer end (the computer app’s window, and the demo on a computer that could host the rig): a phone or tablet, in the app or in its browser, has no use for a way to get itself onto a phone, and the browser leaves it out there (phoneEnd). At the computer it stays on the front page rather than inside About because "somebody who has a rig connected and wants the remote in their pocket is the likeliest buyer there is"'
       /* 'Unlock the full version' was here as phone-only — "the browser has
          nothing to sell". Web Billing changed that, and the row is at both
          ends now, in the same place. */
@@ -1113,8 +1111,8 @@ export function run(test) {
       return block.slice(0, at) + block.slice(block.indexOf(next, at + from.length))
     }
     const webFrontBlock = webSheet.slice(webSheet.indexOf('setup-account-card'), webSheet.indexOf("setupPage === 'appearance'"))
-    const webFront = rowsIn(withoutDeveloper(webFrontBlock, 'setup-group">Developer<', 'setup-group">'), 'title')
-    const webAbout = rowsIn(webFrontBlock.slice(webFrontBlock.indexOf('setup-group">About<'), webFrontBlock.indexOf('setup-group">Developer<')), 'title')
+    const webFront = rowsIn(withoutDeveloper(webFrontBlock, '<SetupGroup title="Developer"', '<SetupGroup title='), 'title')
+    const webAbout = rowsIn(webFrontBlock.slice(webFrontBlock.indexOf('<SetupGroup title="About"'), webFrontBlock.indexOf('<SetupGroup title="Developer"')), 'title')
 
     /* The phone: the front page is `page === null`, About is `page === 'about'`. */
     const app = read('mobile/src/screens/Settings.js')
@@ -1193,7 +1191,18 @@ export function run(test) {
     for (const row of ['About', 'Developer']) {
       assert.ok(!webFront.includes(row) && !phoneFront.includes(row), `${row} is a row that opens a page of its own again, under a heading of the same name`)
     }
-    assert.match(webFrontBlock, /isAdmin\(link\.account\?\.id\) \? \(\s*<>\s*<p className="silk-label setup-group">Developer<\/p>/, "the browser's Developer rows are not his account's only")
+    assert.match(webFrontBlock, /isAdmin\(link\.account\?\.id\) \? \(\s*<SetupGroup title="Developer"/, "the browser's Developer rows are not his account's only")
+
+    /*
+     * AND THE SECTIONS THEMSELVES ARE ONE LIST: the same headings in the same
+     * order at both ends, each a fold (3 November 2026, "Settings menus?").
+     */
+    const sections = (block, pattern) => [...block.matchAll(pattern)].map((m) => m[1])
+    assert.deepEqual(
+      sections(webFrontBlock, /<SetupGroup title="([^"]+)"/g),
+      sections(phoneFrontBlock, /<Group title="([^"]+)"/g),
+      'the two Settings have different sections, or the same ones in another order'
+    )
     assert.match(phoneFrontBlock, /<Group title="Developer"/, "the phone's Developer rows are not on the front list")
   })
 

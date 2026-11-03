@@ -2070,8 +2070,8 @@ export function run(test) {
       'click Turn on',
       'Create account',
       'Show the walkthrough',
-      /* Under About on the front of Settings since 2 November 2026, where About lists its rows itself. */
-      'and, under About, tick Start when this computer turns on.',
+      /* In About on the front of Settings since 2 November 2026, where About lists its rows itself, and a section to open since 3 November. */
+      'open About and tick Start when this computer turns on.',
       'Plug your unit into one of the Pi’s USB ports',
       'On your phone, open Fractal Remote, signed in to that same account.',
       'Look for the computer again',
@@ -2080,7 +2080,7 @@ export function run(test) {
       assert.ok(app.includes(said), `the app steps no longer say "${said}"`)
     }
     /* What to do if the welcome screen isn't there comes before the button on it. */
-    assert.match(app, /The app opens on its welcome screen\. \(If it doesn’t, open Settings with the gear ⚙ at the top right and choose Show the walkthrough\.\) Choose I already have an account,/, 'a reader whose app opened elsewhere hunts for the welcome screen’s button before he is told how to reach it')
+    assert.match(app, /The app opens on its welcome screen\. \(If it doesn’t, open Settings with the gear ⚙ at the top right, open Help and choose Show the walkthrough\.\) Choose I already have an account,/, 'a reader whose app opened elsewhere hunts for the welcome screen’s button before he is told how to reach it')
     /* In the app's own words, read from the app, so a rename there fails here. */
     const { P1, REPLAY } = await import('../shared/onboarding.mjs')
     assert.equal(P1.haveCode, 'I already have an account', 'the welcome screen’s button was renamed; read the guide against it again')
@@ -2088,8 +2088,13 @@ export function run(test) {
     assert.match(read('src/components/SignInSheet.jsx'), /submitLabel=\{phone \? 'Connect' : 'Turn on'\}/, 'the computer’s sign-in button no longer says Turn on')
     assert.match(read('src/components/SignIn.jsx'), />\s*Create account\s*</, 'the sign-in form no longer offers Create account')
     assert.match(read('src/components/StartAtBoot.jsx'), /Start when this computer turns on/, 'the switch was renamed; read the guide against it again')
-    /* Under About on the front of Settings since 2 November 2026, which is where the guide sends people. */
-    assert.match(read('src/App.jsx'), /setup-group">About<\/p>[\s\S]{0,4000}<StartAtBoot \/>/, 'Settings has no About heading over the switch, which the guide sends people to')
+    /* In About on the front of Settings since 2 November 2026, which is where the guide sends people: a section that folds since 3 November, so the guide says to open it. */
+    assert.match(read('src/App.jsx'), /<SetupGroup title="About"[^>]*>[\s\S]{0,4000}<StartAtBoot \/>\s*<\/SetupGroup>/, 'Settings has no About section holding the switch, which the guide sends people to')
+    /* And the other two sections the guide says to open: Help, holding Show the walkthrough, and My rig, holding Phone & computer. */
+    const front = read('src/App.jsx')
+    const section = (title) => front.slice(front.indexOf(`<SetupGroup title="${title}"`), front.indexOf('</SetupGroup>', front.indexOf(`<SetupGroup title="${title}"`)))
+    assert.match(section('Help'), /title=\{REPLAY\}/, 'Show the walkthrough is not in the Help section, where the guide sends people')
+    assert.match(section('My rig'), /<SetupRow key="link" title=\{PAIR_TITLE\}/, 'Phone & computer is not in the My rig section, where the guide sends people')
     assert.match(read('src/App.jsx'), /\bhelp: 'Troubleshooting',/, 'Settings has no Troubleshooting page, where the guide says Feedback is')
     assert.match(read('src/App.jsx'), /<Section key="feedback" title="Feedback"/, 'the computer app’s Troubleshooting page has no Feedback, as the guide says')
     assert.match(read('mobile/src/screens/Settings.js'), /title="Troubleshooting"[\s\S]*title="Feedback"/, 'the phone’s Troubleshooting has no Feedback, as the guide says')
@@ -2433,7 +2438,7 @@ export function run(test) {
    * things a Pi 5 swap trips on: a card given away still signed in, and
    * Imager filling in the old Pi's Hostname for the new one.
    */
-  test('the Pi guide says how to retire an old Pi, in the computer app’s own words', () => {
+  test('the Pi guide says how to retire an old Pi, in the computer app’s own words', async () => {
     const page = read('public/raspberry-pi.html').replace(/<!--[\s\S]*?-->/g, '')
     const text = (s) =>
       s
@@ -2452,7 +2457,7 @@ export function run(test) {
     for (const said of [
       'still shows under Which unit while it is switched on',
       'open Fractal Remote from Downloads, which brings up its window',
-      'Open Settings (the gear ⚙ at the top right), choose Phone & computer, open Phone remote, and click Turn off.',
+      'Open Settings (the gear ⚙ at the top right), open My rig, choose Phone & computer, open Phone remote, and click Turn off.',
       'It stays off through restarts, until someone clicks Turn on there.',
       'under About, untick Start when this computer turns on',
       'the menu of the Fractal Remote icon',
@@ -2468,9 +2473,12 @@ export function run(test) {
     for (const never of [/this phone/i, /sign out/i, /official/i, /grey/i, /Inc\./]) assert.ok(!never.test(words), `${never} in Retiring an old Pi`)
     /* The words are the computer app's: read from it, so a rename there fails here. */
     const app = read('src/App.jsx')
-    assert.match(app, /link: 'Phone & computer',/)
-    /* The switch is on the front of Settings, under the About heading (2 November 2026), as the guide says. */
-    assert.match(app, /setup-group">About<\/p>[\s\S]{0,4000}<StartAtBoot \/>/)
+    /* The page is named for the device it is on, and on the computer, where the guide is followed, that is Phone & computer. */
+    assert.match(app, /get link\(\) \{\s*return pairName\(\)\s*\}/)
+    assert.match(app, /const pairName = \(\) => pairTitle\(isDemo\(\) \? 'computer' : undefined\)/, 'the page is not named for the device it is on, or the computer in the demo')
+    assert.equal((await import('../shared/device-word.mjs')).pairTitle('computer'), 'Phone & computer')
+    /* The switch is on the front of Settings, in the About section (2 November 2026; it folds since 3 November), as the guide says. */
+    assert.match(app, /<SetupGroup title="About"[^>]*>[\s\S]{0,4000}<StartAtBoot \/>\s*<\/SetupGroup>/)
     assert.match(app, /<Section key="phone-remote" title="Phone remote"/)
     assert.match(read('src/components/PhoneRemote.jsx'), /onAction\('mac-off'\)[^>]*>\s*Turn off\s*</)
     assert.match(read('src/components/PhoneRemote.jsx'), /onAction\('mac-on'\)[^>]*>\s*Turn on\s*</)
@@ -3745,7 +3753,10 @@ export function run(test) {
      */
     const settings = read('mobile/src/screens/Settings.js')
     assert.match(settings, /label="Delete account"/, 'the phone has no Delete account button')
-    assert.match(settings, /Password, sign out, delete account/, 'the first page of Settings no longer says where Delete account is')
+    /* In the words both ends' cards say (shared/settings-words.mjs ACCOUNT_LINE). */
+    assert.match(settings, /\{offline \? \(asked \? KEPT_OFFLINE : 'Checking…'\) : ACCOUNT_LINE\}/, 'the first page of Settings no longer says where Delete account is')
+    assert.match(read('shared/settings-words.mjs'), /export const ACCOUNT_LINE = 'Password, sign out, delete account'/, 'the first page of Settings no longer says where Delete account is')
+    assert.match(read('src/App.jsx'), /\{signedInHere \? <span className="setup-account-options">\{ACCOUNT_LINE\}<\/span> : null\}/, 'the browser’s first page of Settings does not say where Delete account is')
     assert.match(settings, /await deleteAccount\(\)[\s\S]{0,200}onSignOut/, 'a deleted account is not signed out of')
 
     /*

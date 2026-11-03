@@ -40,6 +40,8 @@ import LocalLibrary from './components/LocalLibrary'
 import GearNames from './components/GearNames'
 import PhoneApp from './components/PhoneApp'
 import SetupRow from './components/SetupRow'
+import SetupGroup from './components/SetupGroup'
+import SetupHead from './components/SetupHead'
 import MetronomeSwitch from './components/MetronomeSwitch'
 import Onboarding, { onboarded, markOnboarded } from './components/Onboarding'
 import { ALREADY_UNLOCKED, REPLAY } from '../shared/onboarding.mjs'
@@ -126,6 +128,21 @@ import { editButtonShows } from './lib/playMode'
 import { FIXES, FIRMWARE_NOTE, fixById, fixFor, versionsInSync } from '../shared/troubleshooting.mjs'
 import { osGuess, waysFor, waysWord } from '../shared/ways-in.mjs'
 import { AFFILIATION, SUPPORT_LINE, SUPPORT_URL, WHATS_NEW_URL } from '../shared/affiliation.mjs'
+import { pairTitle } from '../shared/device-word.mjs'
+/* Settings' front list in the phone's words, the same file the phone draws them from. */
+import {
+  ACCOUNT_LINE,
+  DEVELOPER_HINT_BROWSER,
+  FEEDBACK_LINE,
+  FOOTSWITCHES_AWAY,
+  FOOTSWITCHES_LINE,
+  HELP_HINT,
+  PLAY_SCREEN_HINT,
+  REPLAY_LINE,
+  SMALL_PRINT_LINE,
+  TROUBLE_LINE,
+  pairLine
+} from '../shared/settings-words.mjs'
 import { isAdmin } from '../shared/admin.mjs'
 import AccessTool from './components/AccessTool'
 import SalesTool from './components/SalesTool'
@@ -576,8 +593,22 @@ const HAND_EDIT_KINDS = new Set([
  * read what to try, read what happened, tell somebody — and they were three
  * rows that each looked like a different errand.
  */
+/*
+ * THE PHONE & COMPUTER ROW'S NAME, and its page's: "Phone & computer", or
+ * "iPad & computer" on an iPad and "Browser & computer" in a laptop's
+ * browser, as the phone names its row (shared/device-word.mjs pairTitle).
+ * Read each time it is drawn: the website learns which device it is on once
+ * its role is known, after this file has loaded. The computer app's window
+ * says "Phone & computer", and so does the demo on every device: it plays the
+ * computer app, and its page says "This computer" over "Your phone or
+ * tablet", which under "Browser & computer" read as two different ends.
+ */
+const pairName = () => pairTitle(isDemo() ? 'computer' : undefined)
+
 const SETUP_PAGES = {
-  link: 'Phone & computer',
+  get link() {
+    return pairName()
+  },
   phone: 'Get it on your phone or tablet',
   demo: 'Demo Unit',
   /* What the red line on the computer's card opens — see shared/computer-update.mjs. */
@@ -602,7 +633,10 @@ const SETUP_PAGES = {
   /* A VP4's Scene Select number and MIDI channel: shared/vp4-safety.mjs. */
   vp4: MIDI_SETUP_TITLE,
   /* The phone's sheet is titled Unlock; so is this page. */
-  unlock: 'Unlock'
+  unlock: 'Unlock',
+  /* Two rows the phone has on its front list, opening the same panels this end already had (3 November 2026). */
+  feedback: 'Feedback',
+  footswitches: 'Footswitches'
 }
 
 /**
@@ -2345,6 +2379,39 @@ export default function App() {
 
   /* Signed in with a real account — not the hidden one an old pairing code made. */
   const signedInHere = Boolean(link.account?.email && !isPairAccount(link.account.email))
+
+  /*
+   * SETTINGS' FRONT LIST, worded as the phone's (shared/settings-words.mjs).
+   *
+   * The account card at the top, in the phone's AccountCard words: who, then
+   * the full version or not and the version, then what is behind it.
+   */
+  const accountWho = signedInHere ? link.account.email : isPairAccount(link.account?.email) ? 'Paired, no account' : 'Not signed in'
+  const accountWhat = isDemo() ? 'Demo' : paid.unlocked ? 'Full version' : 'Not unlocked yet'
+  /*
+   * The Phone & computer row's name and line, which My rig says too while it
+   * is shut: how far along the chain gets, in the phone's words, over the
+   * link as the top bar shows it (useHeldLink), so the line does not flip
+   * between two words while the computer sleeps. The computer app's window
+   * IS the computer, so outside the demo it keeps its own words, about the
+   * phone remote it serves.
+   */
+  const PAIR_TITLE = pairName()
+  const pairSaid =
+    link.role === 'mac' && !isDemo()
+      ? [describeLink(link).note || 'Phone remote off', status === 'live' ? `${device?.short || device?.name || 'Unit'} · connected` : 'No unit'].join(' · ')
+      : pairLine({
+          demo: isDemo(),
+          demoName: isDemo() ? unitByKey(demoUnit()).name : '',
+          link: shownLink.link,
+          unitState: unitStateOf({ status, device, reason: faultReason }),
+          unit: device?.short || device?.name || ''
+        })
+  /* Done, on every page of Settings: straight back to Play, from any depth (components/SetupHead). */
+  const leaveSettings = () => {
+    setSetupPage(null)
+    setSheet(null)
+  }
 
   const answeredFor = accountId && paid.checked && paid.for === accountId
   const owned = Boolean(answeredFor && paid.unlocked)
@@ -5677,7 +5744,15 @@ export default function App() {
           return undefined
         }}
         title="Settings"
-        note={device?.short || device?.name || null}
+        /*
+          The height of the screen, as the phone's Settings is, and one height
+          whatever is open. A sheet as tall as what it holds grew upwards when a
+          section opened, so the heading left the thumb that opened it and a
+          second tap there, the phone's way to shut it, landed on a row: Help
+          tapped twice started the walkthrough, Play screen tapped twice
+          switched to Light. At this height a section opens downwards.
+        */
+        tall
       >
         {/*
           Setup, as a list.
@@ -5696,190 +5771,191 @@ export default function App() {
           Play screen, and the real amp names got a row of their own.
         */}
         {setupPage === null ? (
-          <>
+          <div className="setup-front">
             {/*
-              WHICH ACCOUNT, BESIDE THE VERSION. "Can we also list the user
-              account if they're signed in and if they're not signed in, have
-              it say not signed in. Then clicking on it will take them to where
-              they can sign in or otherwise show them their account info."
-              It opens Phone & computer, which holds both: the Account section
-              (Sign out, or Sign in) and, on the computer, the phone remote's
-              own sign-in.
-            */}
-            {/*
-              SETTINGS, IN GROUPS — the phone's layout, at this end too.
+              SETTINGS, IN SECTIONS THAT FOLD — the phone's layout, at this end
+              too.
 
               "Think of anything that can be made so that the user has an
               easier time quickly locating settings they wanna check out." The
               account sits on top as a card, and the rest is under headings
-              that say what each group is for. Renaming presets and scenes
-              went to the chain sheet beside the preset; Troubleshooting came
-              up out of About; Justin's three tools became one Developer row.
+              that say what each group is for. Then, on the phone, "Make it so
+              each section under the settings menu is collapsible and collapse
+              by default" (29 October 2026), and here on 3 November 2026: "Is
+              there anything else we need to do to match the apps? Settings
+              menus?" So each heading is a fold, shut until clicked, with a
+              green line saying what matters inside (components/SetupGroup),
+              and the words are the phone's own (shared/settings-words.mjs).
+            */}
+            {/*
+              WHICH ACCOUNT, AT THE TOP. "Can we also list the user account if
+              they're signed in and if they're not signed in, have it say not
+              signed in. Then clicking on it will take them to where they can
+              sign in or otherwise show them their account info." The phone's
+              card: who, then the full version or not and the version (the
+              build code is on The small print), then what is behind it.
             */}
             <button
               type="button"
               className={`setup-account-card${signedInHere ? '' : ' out'}`}
               onClick={() => setSetupPage('account')}
-              aria-label={`Account, ${signedInHere ? link.account.email : 'not signed in'}`}
+              aria-label={`Account, ${accountWho}, ${accountWhat}`}
             >
-              <span className="setup-account-who">
-                {signedInHere
-                  ? link.account.email
-                  : isPairAccount(link.account?.email)
-                    ? 'Paired, no account'
-                    : 'Not signed in'}
+              <span className="setup-account-text">
+                <span className="setup-account-who">{accountWho}</span>
+                <span className="setup-account-what">
+                  {accountWhat} · v{VERSION}
+                </span>
+                {signedInHere ? <span className="setup-account-options">{ACCOUNT_LINE}</span> : null}
               </span>
-              <span className="setup-account-what">
-                {isDemo() ? 'Demo' : paid.unlocked ? 'Full version' : 'Not unlocked yet'} · {FULL}
+              <span className="setup-row-chevron" aria-hidden="true">
+                ›
               </span>
             </button>
 
-            <p className="silk-label setup-group">My rig</p>
-            <div className="setup-rows">
-              <SetupRow key="link" title="Phone & computer" status={[describeLink(link).note || 'Phone remote off', status === 'live' ? `${device?.short || device?.name || 'Unit'} · connected` : 'No unit'].join(' · ')} onClick={() => setSetupPage('link')} />
-              {/* The looper's emergency stop. "There needs to be something in
-                  settings … for when it keeps playing." Not on a real VP4: no
-                  computer app can work its looper (VP4_NO_LOOPER), and the
-                  phone leaves it out there too. */}
-              {status === 'live' && !onRealVp4 ? (
+            <SetupGroup title="My rig" hint={pairSaid}>
+              <div className="setup-rows">
+                {/* One row for the whole chain: this end, the computer, and the unit plugged into it. */}
+                <SetupRow key="link" title={PAIR_TITLE} status={pairSaid} onClick={() => setSetupPage('link')} />
+                {/* What each switch does, read off the unit, as on the phone:
+                    the Edit sheet's Footswitches panel, on a page of its own.
+                    Only where the switches can be read. */}
+                {(status === 'live' || isDemo()) && switchesReadable ? (
+                  <SetupRow key="footswitches" title="Footswitches" status={FOOTSWITCHES_LINE} onClick={() => setSetupPage('footswitches')} />
+                ) : null}
+                {/* "A metronome that plays out loud that can be toggled on and
+                    off in settings." On the unit, this screen or both. */}
                 <SetupRow
-                  key="looper-stop"
-                  title="Stop the looper"
-                  status={looperSaid || 'If a loop keeps playing'}
-                  onClick={async () => {
-                    const looper = findLooper(blocks)
-                    if (!looper) return setLooperSaid('This preset has no looper, so nothing is looping')
-                    setLooperSaid('Stopping…')
-                    try {
-                      await stopLooper(looper.effectId)
-                      setLooperSaid('Stopped')
-                    } catch (e) {
-                      setLooperSaid(`Didn’t stop — ${e?.message || 'the unit did not answer'}`)
-                    }
+                  key="metronome"
+                  title="Metronome"
+                  status={metronomeNote(clickSetting, slugOfUnit(device), rigBpm, { ...clickHere, heard: clickHeard })}
+                  onClick={() => setSetupPage('metronome')}
+                />
+                {/* A real VP4's Scene Select number and MIDI channel, as on the
+                    phone: components/Vp4Setup, the words shared/vp4-safety.mjs's. */}
+                {onRealVp4 ? (
+                  <SetupRow
+                    key="vp4"
+                    title={MIDI_SETUP_TITLE}
+                    status={vp4SetupStatus(vp4Setup(), device?.capabilities)}
+                    onClick={() => setSetupPage('vp4')}
+                  />
+                ) : null}
+                {/* The one row the phone has not got, and only at the computer
+                    end: somebody with a rig on the desk who wants the remote in
+                    their pocket. A phone in a browser is already holding one. */}
+                {phoneEnd ? null : (
+                  <SetupRow
+                    key="phone-app"
+                    title="Get it on your phone or tablet"
+                    status="The remote, for a stage"
+                    onClick={() => setSetupPage('phone')}
+                  />
+                )}
+              </div>
+            </SetupGroup>
+
+            <SetupGroup title="Help" hint={HELP_HINT}>
+              <div className="setup-rows">
+                <SetupRow key="help" title="Troubleshooting" status={TROUBLE_LINE} onClick={() => setSetupPage('help')} />
+                {/*
+                  THE FEEDBACK FORM, ONE TAP FROM SETTINGS, as on the phone:
+                  "super easy for all users to submit bugs and feedback" (25
+                  October 2026). It stays under Troubleshooting too, word for
+                  word, because the fixed help sentence (shared/affiliation.mjs)
+                  names that path; this is another way in to the same form.
+                */}
+                <SetupRow key="feedback" title="Feedback" status={FEEDBACK_LINE} onClick={() => setSetupPage('feedback')} />
+                <SetupRow key="gear-names" title="Amp & pedal names" status="What each model on your unit really is" onClick={() => {
+                    setSheetBack('settings')
+                    setSheet('gear')
+                  }} />
+                <SetupRow
+                  key="walkthrough"
+                  title={REPLAY}
+                  status={REPLAY_LINE}
+                  onClick={() => {
+                    setSheet(null)
+                    setWalkReplay(true)
+                    setComputerSetup(false)
+                    setWalkthrough(true)
                   }}
                 />
-              ) : null}
-              {/* "A metronome that plays out loud that can be toggled on and
-                  off in settings." On the unit, this screen or both. */}
-              <SetupRow
-                key="metronome"
-                title="Metronome"
-                status={metronomeNote(clickSetting, slugOfUnit(device), rigBpm, { ...clickHere, heard: clickHeard })}
-                onClick={() => setSetupPage('metronome')}
-              />
-              {/* A real VP4's Scene Select number and MIDI channel, as on the
-                  phone: components/Vp4Setup, the words shared/vp4-safety.mjs's. */}
-              {onRealVp4 ? (
-                <SetupRow
-                  key="vp4"
-                  title={MIDI_SETUP_TITLE}
-                  status={vp4SetupStatus(vp4Setup(), device?.capabilities)}
-                  onClick={() => setSetupPage('vp4')}
-                />
-              ) : null}
-              {/* The one row the phone has not got: somebody with a rig on the
-                  desk who wants the remote in their pocket. */}
-              <SetupRow
-                key="phone-app"
-                title="Get it on your phone or tablet"
-                status="The remote, for a stage"
-                onClick={() => setSetupPage('phone')}
-              />
-            </div>
+              </div>
+            </SetupGroup>
 
-            <p className="silk-label setup-group">Help</p>
-            <div className="setup-rows">
-              <SetupRow
-                key="help"
-                title="Troubleshooting"
-                status={`${getDebugLog().length} line${getDebugLog().length === 1 ? '' : 's'} in the log`}
-                onClick={() => setSetupPage('help')}
-              />
-              <SetupRow key="gear-names" title="Amp & pedal names" status="What each model on your unit really is" onClick={() => {
-                  setSheetBack('settings')
-                  setSheet('gear')
-                }} />
-              <SetupRow
-                key="walkthrough"
-                title={REPLAY}
-                status="The three-step setup, again"
-                onClick={() => {
-                  setSheet(null)
-                  setWalkReplay(true)
-                  setComputerSetup(false)
-                  setWalkthrough(true)
-                }}
-              />
-            </div>
-
-            <p className="silk-label setup-group">About</p>
             {/*
               THE ROWS THEMSELVES, as on the phone. "Can you make it so that
               when you click on that, it shows the sub menus instead of just
               another button that says the same word?" (Justin, 2 November
               2026, of About and Developer.) There was one row here, About,
               opening a page with these on it.
+
+              The pedalboard computer's switch is in About too, where the
+              Raspberry Pi guide says to tick it: it draws nothing unless the
+              computer can do it, which is the Linux app only. While it is on
+              it stays in sight under the heading with About shut, so a switch
+              that is on is never folded out of sight.
             */}
-            <div className="setup-rows">
-              {inDesktopApp() ? (
-                <SetupRow key="updates" title="Updates" status="This app, not your unit" onClick={() => setSetupPage('updates')} />
-              ) : null}
-              {/*
-                WHAT EACH UPDATE CHANGED, the website's page, as the phone's
-                All updates opens it: the list itself stays out of the web
-                app, so a new line is never a new computer release.
-              */}
-              <SetupRow
-                key="whats-new"
-                title="What’s new"
-                status="What each update changed"
-                onClick={() => window.open(WHATS_NEW_URL, '_blank', 'noopener')}
-              />
-              {/*
-                HELP WITH THIS APP, IN SIGHT. Fractal Audio's letter (18
-                October 2026) asks for support through the developer's own
-                channels, and the way to them sat inside the small print
-                below, which opens closed, as a link in the browser's own
-                blue. The phone has it as a full row on the page; so does
-                this. The website's address, never a local link: the
-                computer window is served from the computer's own copy of
-                the site, and the support page is website-only, so that copy
-                of it is never kept current (WEBSITE_ONLY in
-                scripts/computer-fingerprint.mjs).
-              */}
-              <SetupRow
-                key="help"
-                title="Help with this app"
-                status="Questions, problems, a person"
-                onClick={() => window.open(SUPPORT_URL, '_blank', 'noopener')}
-              />
-              <SetupRow key="about" title="The small print" status={FULL} onClick={() => setSetupPage('about')} />
-            </div>
-            {/* The pedalboard computer's switch, under About because it is
-                about this app rather than the unit, and in the list itself
-                (2 November 2026), where the Raspberry Pi guide says to tick
-                it. Draws nothing unless the computer can do it, which is the
-                Linux app only. */}
-            <StartAtBoot />
+            <SetupGroup title="About" hint={`v${VERSION}`} whileShut={<StartAtBoot onlyOn />}>
+              <div className="setup-rows">
+                {inDesktopApp() ? (
+                  <SetupRow key="updates" title="Updates" status="This app, not your unit" onClick={() => setSetupPage('updates')} />
+                ) : null}
+                {/*
+                  WHAT EACH UPDATE CHANGED, the website's page, as the phone's
+                  All updates opens it: the list itself stays out of the web
+                  app, so a new line is never a new computer release.
+                */}
+                <SetupRow
+                  key="whats-new"
+                  title="What’s new"
+                  status="What each update changed"
+                  onClick={() => window.open(WHATS_NEW_URL, '_blank', 'noopener')}
+                />
+                {/*
+                  HELP WITH THIS APP, IN SIGHT. Fractal Audio's letter (18
+                  October 2026) asks for support through the developer's own
+                  channels. The website's address, never a local link: the
+                  computer window is served from the computer's own copy of
+                  the site, and the support page is website-only, so that copy
+                  of it is never kept current (WEBSITE_ONLY in
+                  scripts/computer-fingerprint.mjs).
+                */}
+                <SetupRow
+                  key="help"
+                  title="Help with this app"
+                  status="Questions, problems, a person"
+                  onClick={() => window.open(SUPPORT_URL, '_blank', 'noopener')}
+                />
+                {/* The version is on the account card, so the line says what is behind the row. */}
+                <SetupRow key="about" title="The small print" status={SMALL_PRINT_LINE} onClick={() => setSetupPage('about')} />
+              </div>
+              <StartAtBoot />
+            </SetupGroup>
             {/*
               "Also let Axiom use this pedal" (shared/axiom.mjs), in the
               computer app's window only, under Developer: "It should be under
               my developer section, correct? Not in the section where the
               other users see it?" (3 November 2026). With his account signed
               in to the window it sits in the Developer section below. Here,
-              for every other case, under a Developer heading of its own: his
-              account signed in to the computer but not the window, and,
-              whoever is signed in, while the switch is on, so one that is on
-              is never out of sight on the computer it is on.
+              for every other case, under a Developer heading of its own that
+              never folds: his account signed in to the computer but not the
+              window, and, whoever is signed in, while the switch is on, so one
+              that is on is never out of sight on the computer it is on.
             */}
             {!isAdmin(link.account?.id) ? (
               <AxiomSwitch admin={isAdmin(link.cloud?.user?.id)} heading={<p className="silk-label setup-group axiom-heading">Developer</p>} />
             ) : null}
 
+            {/*
+              Justin's own tools, on his account only (shared/admin.mjs), every
+              one of them as before, in one section that folds like the
+              phone's. The Axiom switch goes with them; while it is on it stays
+              in sight under the heading with the section shut.
+            */}
             {isAdmin(link.account?.id) ? (
-              <>
-                <p className="silk-label setup-group">Developer</p>
-                {/* Its rows themselves (2 November 2026), as on the phone: there was one, Developer, opening a page with these on it. */}
+              <SetupGroup title="Developer" hint={DEVELOPER_HINT_BROWSER} whileShut={<AxiomSwitch stay />}>
                 <div className="setup-rows">
                   <SetupRow key="access" title="Give someone access" status="Look someone up, or unlock them" onClick={() => setSetupPage('access')} />
                   <SetupRow key="sales" title="Sales at a glance" status="Today, this week, all time" onClick={() => setSetupPage('sales')} />
@@ -5895,29 +5971,27 @@ export default function App() {
                 </div>
                 {/* "Also let Axiom use this pedal", his account signed in here (see above for every other case). */}
                 <AxiomSwitch admin />
-              </>
+              </SetupGroup>
             ) : null}
             {/* Last: "Move the Play Screen section down to the bottom of the list." */}
-            <p className="silk-label setup-group">Play screen</p>
-            <div className="setup-rows">
-              <SetupRow key="appearance" title="Tiles & scenes" status="Tile size, effect pictures, scene layout" onClick={() => setSetupPage('appearance')} />
-              {/* "Let's make the colors match better", and choose your own. */}
-              <SetupRow key="colours" title="Colors" status={coloursStatus({ unitName: device?.short || device?.name || undefined, capabilities: device?.capabilities })} onClick={() => setSetupPage('colours')} />
-            </div>
-            {/* Light or dark right here, as on the phone: one click, not a page. */}
-            <div className="setup-inline-theme">
-              <Theme />
-            </div>
-
-          </>
+            <SetupGroup title="Play screen" hint={PLAY_SCREEN_HINT}>
+              <div className="setup-rows">
+                <SetupRow key="appearance" title="Tiles & scenes" status="Tile size, effect pictures, scene layout" onClick={() => setSetupPage('appearance')} />
+                {/* "Let's make the colors match better", and choose your own. */}
+                <SetupRow key="colours" title="Colors" status={coloursStatus({ unitName: device?.short || device?.name || undefined, capabilities: device?.capabilities })} onClick={() => setSetupPage('colours')} />
+              </div>
+              {/* Light or dark right here, as on the phone: one click, not a
+                  page. The phone's three buttons at phone width (styles.css). */}
+              <div className="setup-inline-theme">
+                <Theme />
+              </div>
+            </SetupGroup>
+          </div>
         ) : null}
 
         {setupPage === 'appearance' ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
-              ‹ Settings
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.appearance}</p>
+            <SetupHead back={upLabel('appearance')} onBack={() => setSetupPage(upFrom('appearance'))} onDone={leaveSettings} title={SETUP_PAGES.appearance} />
             <div className="setup-loose">
               {/*
                 Not <Section>. That is a <details> that starts CLOSED, which is
@@ -6054,24 +6128,24 @@ export default function App() {
 
         {setupPage === 'colours' ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
-              ‹ Settings
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.colours}</p>
+            <SetupHead back={upLabel('colours')} onBack={() => setSetupPage(upFrom('colours'))} onDone={leaveSettings} title={SETUP_PAGES.colours} />
             {/* The loaded preset's effects go first, and the scene tiles carry
                 their names — as many of them as the unit has scenes. */}
             <Colours blocks={blocks} sceneNames={sceneNames} preset={presetHere} capabilities={device?.capabilities} icons={icons} />
           </div>
         ) : null}
 
-        {setupPage === 'phone' ? <PhoneApp /> : null}
+        {/* Its page has the way back and Done like every other: it had neither, and × was the only way off it. */}
+        {setupPage === 'phone' ? (
+          <div className="setup-page">
+            <SetupHead back={upLabel('phone')} onBack={() => setSetupPage(upFrom('phone'))} onDone={leaveSettings} title={SETUP_PAGES.phone} />
+            <PhoneApp />
+          </div>
+        ) : null}
 
         {setupPage === 'demo' ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('demo'))}>
-              {upLabel('demo')}
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.demo}</p>
+            <SetupHead back={upLabel('demo')} onBack={() => setSetupPage(upFrom('demo'))} onDone={leaveSettings} title={SETUP_PAGES.demo} />
             {/*
               Each of these carries its own real factory bank — the preset and
               scene names the unit ships with — so picking one is not a label
@@ -6113,10 +6187,7 @@ export default function App() {
         */}
         {setupPage === 'updating' ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('updating'))}>
-              {upLabel('updating')}
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.updating}</p>
+            <SetupHead back={upLabel('updating')} onBack={() => setSetupPage(upFrom('updating'))} onDone={leaveSettings} title={SETUP_PAGES.updating} />
             <div className="updating">
               <p className="updating-lead">{UPDATE_STEPS.intro}</p>
               {/* The address again under the step that gives it, to copy. Card and box both break it only after the slash. */}
@@ -6139,10 +6210,7 @@ export default function App() {
 
         {setupPage === 'link' ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
-              ‹ Settings
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.link}</p>
+            <SetupHead back={upLabel('link')} onBack={() => setSetupPage(upFrom('link'))} onDone={leaveSettings} title={SETUP_PAGES.link} />
             {/*
               THE CHAIN, AS CARDS, the same three the phone's page opens on.
               "Always make sure you're updating all the platforms." The words
@@ -6363,20 +6431,14 @@ export default function App() {
         */}
         {setupPage === 'updates' ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('updates'))}>
-              {upLabel('updates')}
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.updates}</p>
+            <SetupHead back={upLabel('updates')} onBack={() => setSetupPage(upFrom('updates'))} onDone={leaveSettings} title={SETUP_PAGES.updates} />
             <Updates />
           </div>
         ) : null}
 
         {setupPage === 'help' ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('help'))}>
-              {upLabel('help')}
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.help}</p>
+            <SetupHead back={upLabel('help')} onBack={() => setSetupPage(upFrom('help'))} onDone={leaveSettings} title={SETUP_PAGES.help} />
 <Section
             key="fixes"
             title="Fixes"
@@ -6419,6 +6481,33 @@ export default function App() {
               ))}
             </div>
           </Section>
+            {/*
+              THE LOOPER'S EMERGENCY STOP, with the fixes, as on the phone since
+              29 October 2026 ("Move stop the looper to the troubleshooting
+              menu"). "There needs to be something in settings … for when it
+              keeps playing." Not on a real VP4: no computer app can work its
+              looper (VP4_NO_LOOPER), and the phone leaves it out there too.
+            */}
+            <div className="setup-rows setup-page-rows">
+              {status === 'live' && !onRealVp4 ? (
+                <SetupRow
+                  key="looper-stop"
+                  title="Stop the looper"
+                  status={looperSaid || 'If a loop keeps playing'}
+                  onClick={async () => {
+                    const looper = findLooper(blocks)
+                    if (!looper) return setLooperSaid('This preset has no looper, so nothing is looping')
+                    setLooperSaid('Stopping…')
+                    try {
+                      await stopLooper(looper.effectId)
+                      setLooperSaid('Stopped')
+                    } catch (e) {
+                      setLooperSaid(`Didn’t stop — ${e?.message || 'the unit did not answer'}`)
+                    }
+                  }}
+                />
+              ) : null}
+            </div>
 <Section
             key="preset-check"
             title="This preset"
@@ -6454,7 +6543,7 @@ export default function App() {
               , an independent project not affiliated with Fractal Audio Systems.
             </p>
           </Section>
-<Section key="feedback" title="Feedback" note="Something broken, or something you want">
+<Section key="feedback" title="Feedback" note={FEEDBACK_LINE}>
             {/*
               Where a person looks when the app has annoyed them: behind the
               same door as the checks and the log, because "it's broken" and
@@ -6474,6 +6563,35 @@ export default function App() {
         ) : null}
 
         {/*
+          FEEDBACK, A PAGE OF ITS OWN, opened from its row under Help, as the
+          phone's is: the same form as Troubleshooting's, which keeps it.
+        */}
+        {setupPage === 'feedback' ? (
+          <div className="setup-page">
+            <SetupHead back={upLabel('feedback')} onBack={() => setSetupPage(upFrom('feedback'))} onDone={leaveSettings} title={SETUP_PAGES.feedback} />
+            <Feedback device={device} link={link} platform={platform()} macVersion={link.macVersion} />
+          </div>
+        ) : null}
+
+        {/*
+          WHAT EACH SWITCH DOES, from its row under My rig, as on the phone:
+          the Edit sheet's panel, which stays there too. Outside a fold it
+          counts as open, so it reads the switches while the page is up, and
+          it says first that this is best done between songs.
+
+          The page and its head are drawn whatever the unit is doing, as the
+          phone's are; only the panel waits for switches that can be read. A
+          unit that drops while the page is open (the computer asleep, the
+          cable out) left a sheet with nothing in it but the ×.
+        */}
+        {setupPage === 'footswitches' ? (
+          <div className="setup-page">
+            <SetupHead back={upLabel('footswitches')} onBack={() => setSetupPage(upFrom('footswitches'))} onDone={leaveSettings} title={SETUP_PAGES.footswitches} />
+            {switchesReadable ? <Footswitches /> : <p className="hint">{FOOTSWITCHES_AWAY}</p>}
+          </div>
+        ) : null}
+
+        {/*
           THE UNLOCK PAGE, in the phone paywall's own words.
 
           Every sentence here is copied from mobile/src/screens/Paywall.js, and
@@ -6489,10 +6607,7 @@ export default function App() {
         */}
         {setupPage === 'account' ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
-              ‹ Settings
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.account}</p>
+            <SetupHead back={upLabel('account')} onBack={() => setSetupPage(upFrom('account'))} onDone={leaveSettings} title={SETUP_PAGES.account} />
             {/* Everything about who this is, in one place: signing in and out,
                 and unlocking. It was the bottom of Phone & computer. */}
             <Section
@@ -6601,50 +6716,35 @@ export default function App() {
 
         {setupPage === 'unlock' ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('unlock'))}>
-              {upLabel('unlock')}
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.unlock}</p>
+            <SetupHead back={upLabel('unlock')} onBack={() => setSetupPage(upFrom('unlock'))} onDone={leaveSettings} title={SETUP_PAGES.unlock} />
             {unlockBody}
           </div>
         ) : null}
 
         {setupPage === 'access' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('access'))}>
-              {upLabel('access')}
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.access}</p>
+            <SetupHead back={upLabel('access')} onBack={() => setSetupPage(upFrom('access'))} onDone={leaveSettings} title={SETUP_PAGES.access} />
             <AccessTool />
           </div>
         ) : null}
 
         {setupPage === 'sales' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('sales'))}>
-              {upLabel('sales')}
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.sales}</p>
+            <SetupHead back={upLabel('sales')} onBack={() => setSetupPage(upFrom('sales'))} onDone={leaveSettings} title={SETUP_PAGES.sales} />
             <SalesTool />
           </div>
         ) : null}
 
         {setupPage === 'vp4' && onRealVp4 ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
-              ‹ Settings
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.vp4}</p>
+            <SetupHead back={upLabel('vp4')} onBack={() => setSetupPage(upFrom('vp4'))} onDone={leaveSettings} title={SETUP_PAGES.vp4} />
             <Vp4Setup caps={device?.capabilities} firmware={firmwareOf(device)} />
           </div>
         ) : null}
 
         {setupPage === 'metronome' ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
-              ‹ Settings
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.metronome}</p>
+            <SetupHead back={upLabel('metronome')} onBack={() => setSetupPage(upFrom('metronome'))} onDone={leaveSettings} title={SETUP_PAGES.metronome} />
             <div className="setup-rows">
               <SetupRow
                 key="metronome-on"
@@ -6696,60 +6796,42 @@ export default function App() {
 
         {setupPage === 'am4check' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('am4check'))}>
-              {upLabel('am4check')}
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.am4check}</p>
+            <SetupHead back={upLabel('am4check')} onBack={() => setSetupPage(upFrom('am4check'))} onDone={leaveSettings} title={SETUP_PAGES.am4check} />
             <Am4Check />
           </div>
         ) : null}
 
         {setupPage === 'usage' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('usage'))}>
-              {upLabel('usage')}
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.usage}</p>
+            <SetupHead back={upLabel('usage')} onBack={() => setSetupPage(upFrom('usage'))} onDone={leaveSettings} title={SETUP_PAGES.usage} />
             <UsageTool />
           </div>
         ) : null}
 
         {setupPage === 'live' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('live'))}>
-              {upLabel('live')}
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.live}</p>
+            <SetupHead back={upLabel('live')} onBack={() => setSetupPage(upFrom('live'))} onDone={leaveSettings} title={SETUP_PAGES.live} />
             <LiveTool />
           </div>
         ) : null}
 
         {setupPage === 'messages' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('messages'))}>
-              {upLabel('messages')}
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.messages}</p>
+            <SetupHead back={upLabel('messages')} onBack={() => setSetupPage(upFrom('messages'))} onDone={leaveSettings} title={SETUP_PAGES.messages} />
             <MessagesTool />
           </div>
         ) : null}
 
         {setupPage === 'accounts' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('accounts'))}>
-              {upLabel('accounts')}
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.accounts}</p>
+            <SetupHead back={upLabel('accounts')} onBack={() => setSetupPage(upFrom('accounts'))} onDone={leaveSettings} title={SETUP_PAGES.accounts} />
             <AccountsTool />
           </div>
         ) : null}
 
         {setupPage === 'about' ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
-              ‹ Settings
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.about}</p>
+            <SetupHead back={upLabel('about')} onBack={() => setSetupPage(upFrom('about'))} onDone={leaveSettings} title={SETUP_PAGES.about} />
             <p className="device-meta mono">{FULL} · built {BUILT_AT} UTC</p>
             {/* Reachable from inside the app, which is the point of writing
                 them. Same two links as the phone's small print. Open, not a

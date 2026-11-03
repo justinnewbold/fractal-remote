@@ -1858,13 +1858,24 @@ test('the device server lets Axiom onto the unit’s own routes only while its s
   assert.match(phoneSwitch, /writeComputerSetting\(AXIOM_ID, axiomData\(next, Date\.now\(\)\)\)/)
   const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
   /* The window: in the Developer section with his account signed in to it; otherwise under a Developer heading of its own, and to anybody else only while it is on. */
-  const windowDev = app.slice(app.indexOf('<p className="silk-label setup-group">Developer</p>\n                {/* Its rows'), app.indexOf('<p className="silk-label setup-group">Play screen</p>'))
+  /* The Developer section folds since 3 November 2026, as the phone's does. */
+  const devAt = app.indexOf('<SetupGroup title="Developer"')
+  assert.notEqual(devAt, -1, 'the window has no Developer section')
+  const windowDev = app.slice(devAt, app.indexOf('</SetupGroup>', devAt))
   assert.match(windowDev, /<AxiomSwitch admin \/>/, 'the window’s Axiom switch is not in the Developer section')
+  assert.match(app, /\{isAdmin\(link\.account\?\.id\) \? \(\s*<SetupGroup title="Developer"/, 'the window’s Developer section is shown to customers')
+  /* And a switch that is on is never folded out of sight: with the section shut it is drawn under the heading, while it is on only (no `admin`), and once shown it stays until the front list goes (`stay`), so unticking it does not snatch it from under the pointer. */
+  assert.match(windowDev, /<SetupGroup title="Developer" hint=\{DEVELOPER_HINT_BROWSER\} whileShut=\{<AxiomSwitch stay \/>\}>/, 'the window’s Axiom switch is folded out of sight while it is on')
+  const group = readSrc(new URL('../src/components/SetupGroup.jsx', import.meta.url), 'utf8')
+  assert.match(group, /\{open \? \(\s*<div className="setup-section-body" id=\{body\}>\s*\{children\}\s*<\/div>\s*\) : \(\s*whileShut\s*\)\}/, 'a shut section does not keep its switch in sight')
   assert.match(app, /\{!isAdmin\(link\.account\?\.id\) \? \(\s*<AxiomSwitch admin=\{isAdmin\(link\.cloud\?\.user\?\.id\)\} heading=\{<p className="silk-label setup-group axiom-heading">Developer<\/p>\} \/>\s*\) : null\}/)
-  assert.equal(app.split('<AxiomSwitch').length - 1, 2)
+  /* Three: his section's, the one under its heading while it is shut, and everybody else's. */
+  assert.equal(app.split('<AxiomSwitch').length - 1, 3)
   const windowSwitch = readSrc(new URL('../src/components/AxiomSwitch.jsx', import.meta.url), 'utf8')
   assert.match(windowSwitch, /const usable = inDesktopApp\(\) && !isDemo\(\)/)
-  assert.match(windowSwitch, /if \(!usable \|\| on === null \|\| \(!admin && !on\)\) return null/, 'the window shows the Axiom switch to customers')
+  assert.match(windowSwitch, /if \(!usable \|\| on === null \|\| \(!admin && !on && !\(stay && shown\.current\)\)\) return null\n  shown\.current = true\n/, 'the window shows the Axiom switch to customers')
+  /* `stay` is only the kept-in-sight copy's, in his own section: everybody else's is drawn only while it is on, as before. */
+  assert.equal(app.split('<AxiomSwitch stay').length - 1, 1, 'another Axiom switch stays once it is off')
   assert.match(windowSwitch, /writeHostDoc\(AXIOM_ID, axiomData\(next, Date\.now\(\)\)\)/)
   /* No answer is never shown as off (the restart a change causes is a few seconds without one), and nothing can be clicked until it is over. */
   assert.ok(!/readHostDoc\(/.test(windowSwitch), 'the window takes a computer that did not answer for a switch that is off')
@@ -12536,8 +12547,14 @@ test('the switch is in Settings and the tray, and the page reaches it only throu
   assert.match(main, /label: 'Start when this computer turns on',\s*\n\s*type: 'checkbox',\s*\n\s*checked: bootOn,\s*\n\s*click: \(item\) => setStartAtBoot\(item\.checked\)/, 'the tray item does not call the same function')
   // Under the About heading on the front of Settings, after Updates and before Developer
   // (2 November 2026: About lists its rows itself, with no page of its own to open first).
-  const about = appSrc.slice(appSrc.indexOf('setup-group">About<'))
-  assert.ok(about.indexOf('<StartAtBoot />') !== -1 && about.indexOf('<SetupRow key="updates"') < about.indexOf('<StartAtBoot />') && about.indexOf('<StartAtBoot />') < about.indexOf('setup-group">Developer<'), 'the switch is not under About, after Updates')
+  const about = appSrc.slice(appSrc.indexOf('<SetupGroup title="About"'), appSrc.indexOf('</SetupGroup>', appSrc.indexOf('<SetupGroup title="About"')))
+  assert.ok(about.indexOf('<StartAtBoot />') !== -1 && about.indexOf('<SetupRow key="updates"') < about.indexOf('<StartAtBoot />'), 'the switch is not in About, after Updates')
+  assert.ok(appSrc.indexOf('<SetupGroup title="About"') < appSrc.indexOf('<SetupGroup title="Developer"'), 'About is not before Developer')
+  /* While it is on it stays in sight with About shut (SetupGroup whileShut), drawn only while it is on. */
+  assert.match(about, /<SetupGroup title="About" hint=\{`v\$\{VERSION\}`\} whileShut=\{<StartAtBoot onlyOn \/>\}>/, 'the switch is folded out of sight while it is on')
+  /* Off, it is not drawn, unless this copy was already on screen: then it stays, so unticking it does not snatch it from under the pointer. */
+  assert.match(ui, /if \(onlyOn && !state\.on && !shown\.current\) return null\n  shown\.current = true\n/, 'the switch kept in sight under About is drawn while it is off')
+  assert.match(ui, /const shown = useRef\(false\)/)
   // And the module it needs is packaged: lib/** carries it.
   assert.match(main, /import\('\.\/lib\/autostart\.mjs'\)/)
   assert.match(builder, /^\s*- lib\/\*\*$/m, 'lib/ is not packaged, so the installed app has no autostart module')

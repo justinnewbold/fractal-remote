@@ -921,8 +921,8 @@ export function run(test) {
       assert.match(e.text, /1\. On the computer your Fractal is plugged into, go to fractal\.newbold\.cloud\/downloads and install the Fractal Remote computer app\./, `the ${which} email does not say where to download it`)
       assert.match(e.text, /2\. Open it, choose “I already have an account”, and sign in with fan@example\.com, the same email you use on your phone\./, `the ${which} email does not say which button to choose and to sign in with the same email`)
       assert.match(e.text, /3\. Open Fractal Remote on your phone\. It finds the computer by itself\./, `the ${which} email does not say the phone finds it`)
-      assert.match(e.text, /\nUsed the computer app before\? Click the gear at the top, choose Phone & computer, then “Sign in to set up the phone remote”, and sign in with fan@example\.com\.\n/, `the ${which} email leaves out somebody whose computer app is past its first screen`)
-      assert.ok(e.html.includes('choose “I already have an account”') && e.html.includes('Phone &amp; computer, then “Sign in to set up the phone remote”'), `the ${which} email’s HTML does not name the doors`)
+      assert.match(e.text, /\nUsed the computer app before\? Click the gear at the top, open My rig, choose Phone & computer, then “Sign in to set up the phone remote”, and sign in with fan@example\.com\.\n/, `the ${which} email leaves out somebody whose computer app is past its first screen`)
+      assert.ok(e.html.includes('choose “I already have an account”') && e.html.includes('open My rig, choose Phone &amp; computer, then “Sign in to set up the phone remote”'), `the ${which} email’s HTML does not name the doors`)
       /* "Free" once: the opening says the app is free, and nothing says it twice. */
       assert.equal((e.text.match(/\bfree\b/gi) || []).length, 1, `the ${which} email says free ${(e.text.match(/\bfree\b/gi) || []).length} times`)
       assert.match(e.text, /reply/i, `the ${which} email does not say to reply`)
@@ -1040,7 +1040,10 @@ export function run(test) {
     const first = setupEmail('first', 'fan@example.com', { bluetooth: false })
     const reminder = setupEmail('reminder', 'fan@example.com', { bluetooth: false })
     for (const [which, e] of [['first', first], ['reminder', reminder]]) {
-      assert.ok(!/bluetooth|\bAM4\b|1\.89|My rig|adapter|second way/i.test(e.subject + e.text + e.html), `the ${which} email mentions Bluetooth with the switch off`)
+      assert.ok(!/bluetooth|\bAM4\b|1\.89|Settings → My rig|adapter|second way/i.test(e.subject + e.text + e.html), `the ${which} email mentions Bluetooth with the switch off`)
+      /* My rig once only: the computer app's section the Phone & computer row is in (SETTINGS_DOOR), never the phone's way to Bluetooth. */
+      assert.equal((e.text.match(/My rig/g) || []).length, 1, `the ${which} email names My rig for something besides the computer’s door with the switch off`)
+      assert.ok(e.text.includes('open My rig, choose Phone & computer'), `the ${which} email’s one My rig is not the computer’s door`)
     }
     assert.match(first.text, /\nThanks for getting Fractal Remote! Your phone controls your Fractal through a free app on the computer your unit is plugged into, and no computer has signed in with your account yet\. Setting it up takes about five minutes:\n/, 'the first email’s opening changed with the switch off')
     assert.match(reminder.text, /\nJust checking in\. No computer has signed in to Fractal Remote with fan@example\.com yet, so your phone has nothing to connect to\. The computer app is free, and it’s the same three steps:\n/, 'the reminder’s opening changed with the switch off')
@@ -1303,13 +1306,19 @@ export function run(test) {
     assert.match(welcome, /onClick=\{\(\) => leave\(onAccount\)\}> \{P1\.haveCode\} <\/button>/, 'the first screen no longer has the button the email names')
     const app = read('src/App.jsx').replace(/\s+/g, ' ')
     assert.match(app, /onAccount=\{\(\) => computerEnd \? linkAction\('mac-setup'\)/, 'on a computer that button no longer opens the sign-in')
-    /* And the way in for a computer app already past that screen: the gear's Settings, its row, the row's button. */
-    const door = fn.match(/const SETTINGS_DOOR = \{ row: '([^']+)', button: '([^']+)' \}/)
+    /* And the way in for a computer app already past that screen: the gear's Settings, the section, its row, the row's button. */
+    const door = fn.match(/const SETTINGS_DOOR = \{ section: '([^']+)', row: '([^']+)', button: '([^']+)' \}/)
     assert.ok(door, 'the email’s Settings door moved; this check reads it')
     assert.match(read('src/components/TopBar.jsx'), /className="topbar-gear"\s+onClick=\{onOpenSettings\}/, 'Settings is no longer behind the gear')
     assert.match(app, /title="Settings"/, 'the computer’s Settings is called something else now')
-    assert.ok(app.includes(`<SetupRow key="link" title="${door[1]}"`), `Settings has no row called ${door[1]}`)
-    assert.match(read('src/components/PhoneRemote.jsx').replace(/\s+/g, ' '), new RegExp(`onAction\\('mac-setup'\\)\\} disabled=\\{busy\\}> ${door[2]} </button>`), `${door[1]} has no button called ${door[2]}`)
+    /* The row is in a section that starts shut (components/SetupGroup), so the email names the section first, and it is the one the row is in. */
+    const section = app.slice(app.indexOf(`<SetupGroup title="${door[1]}"`), app.indexOf('</SetupGroup>', app.indexOf(`<SetupGroup title="${door[1]}"`)))
+    assert.ok(app.includes(`<SetupGroup title="${door[1]}"`) && section.includes('<SetupRow key="link" title={PAIR_TITLE}'), `the computer app's Settings has no ${door[2]} row in a section called ${door[1]}`)
+    /* The row is named for the device it is on (shared/device-word.mjs), and on the computer that is "Phone & computer". */
+    assert.ok(app.includes('const PAIR_TITLE = pairName()') && app.includes("const pairName = () => pairTitle(isDemo() ? 'computer' : undefined)"), 'Settings has no Phone & computer row named the way the phone names it')
+    const { pairTitle } = await import('../shared/device-word.mjs')
+    assert.equal(pairTitle('computer'), door[2], `the computer app's Settings has no row called ${door[2]}`)
+    assert.match(read('src/components/PhoneRemote.jsx').replace(/\s+/g, ' '), new RegExp(`onAction\\('mac-setup'\\)\\} disabled=\\{busy\\}> ${door[3]} </button>`), `${door[2]} has no button called ${door[3]}`)
   })
 
   test('the setup emails’ database: only the server reaches it, it starts switched off, and two emails is the most anybody gets', async () => {

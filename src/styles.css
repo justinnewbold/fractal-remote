@@ -10982,14 +10982,17 @@ button.view-tab {
   gap: var(--s-2);
 }
 
+/* A box to type in, on the field colour with the rule round it, as every other
+   text field here: on the sheet's own panel colour, with a border drawn in a
+   colour nobody defines, the message box was not there to see. */
 .feedback-text,
 .feedback-contact {
   width: 100%;
   font: inherit;
   font-size: var(--f-3);
   color: var(--silk);
-  background: var(--panel);
-  border: 1px solid var(--hairline);
+  background: var(--chassis);
+  border: 1px solid var(--rule);
   border-radius: var(--r-2);
   padding: var(--s-3);
 }
@@ -10998,6 +11001,22 @@ button.view-tab {
   resize: vertical;
   min-height: 96px;
   line-height: 1.5;
+}
+
+/* The email box is an input[type='text'], and that rule is one step more
+   particular than a class, so it gave the box the preset filter's typewriter
+   face. An element and a class, later in the file, is what wins it back. */
+input.feedback-contact {
+  font-family: var(--body);
+}
+
+/* Under a thumb, 16px, or an iPhone zooms the page on the first tap into the
+   message box: the class above outranks the bare `textarea` in the touch rule
+   that sets it for every other field. (The email box already gets it there.) */
+@media (pointer: coarse) {
+  textarea.feedback-text {
+    font-size: var(--f-input);
+  }
 }
 
 /* The log, and the switch that decides whether it goes.
@@ -13631,17 +13650,50 @@ button.rows-choice span {
   margin: 0;
 }
 
-/* ---------- Settings, in groups ---------- */
+/* ---------- Settings, in sections that fold (components/SetupGroup) ---------- */
 
+/*
+ * The front of Settings, as the phone's: the account card on top, then five
+ * sections, each a panel-coloured heading that opens on a click. Spaced as
+ * the phone's are, so a list of shut headings reads as a list of doors and
+ * not as one long panel.
+ */
+.setup-front {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+/* The account card: who, then the version, then what is behind it, and the row's own chevron. */
 button.setup-account-card {
-  display: grid;
-  gap: var(--s-1);
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
   width: 100%;
+  min-height: 60px;
   text-align: left;
   padding: var(--s-3) var(--s-4);
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
-  background: var(--panel);
+  /* The section headings' fill, so the card and the five under it read as one list of doors, as on the phone. */
+  background: var(--panel-hi);
+}
+
+button.setup-account-card:active {
+  background: var(--chassis);
+}
+
+/* The headings' chevron, the same size: the card sits right on top of them. */
+button.setup-account-card .setup-row-chevron {
+  font-size: var(--f-5);
+  line-height: 1;
+}
+
+.setup-account-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: var(--s-1);
 }
 
 .setup-account-who {
@@ -13658,16 +13710,203 @@ button.setup-account-card.out .setup-account-who {
 }
 
 .setup-account-what {
-  font-size: var(--f-2);
+  font-size: var(--f-3);
   color: var(--ok);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* "Password, sign out, delete account": said on the first page, so Delete account is found rather than guessed at. */
+.setup-account-options {
+  font-size: var(--f-1);
+  color: var(--silk-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The one small capital heading left: the Axiom switch's, outside his account, which never folds. */
 .silk-label.setup-group {
   margin: var(--s-4) 0 var(--s-1);
 }
 
+/* A section's heading is a heading holding a button, so it is said as both. */
+.setup-section-heading {
+  margin: 0;
+  font: inherit;
+}
+
+button.setup-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 60px;
+  padding: var(--s-3) var(--s-4);
+  text-align: left;
+  /* The phone's panel on a darker screen; the sheet here is the panel itself, so a step up and a rule. */
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--panel-hi);
+  color: var(--silk);
+}
+
+button.setup-section-head:active {
+  background: var(--chassis);
+}
+
+.setup-section-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.setup-section-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: var(--f-4);
+  color: var(--silk);
+}
+
+/* What matters inside, while the section is shut: one line, in the rows' green. */
+.setup-section-hint {
+  font-size: var(--f-3);
+  color: var(--ok);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setup-section-chevron {
+  flex: 0 0 auto;
+  font-size: var(--f-5);
+  line-height: 1;
+  color: var(--silk-faint);
+  transition: transform var(--t-1) var(--ease);
+}
+
+.setup-section[data-open='yes'] .setup-section-chevron {
+  transform: rotate(90deg);
+}
+
+/* The rows, under their heading and a step in from it, as on the phone. */
+.setup-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-top: var(--s-2);
+  padding-left: var(--s-2);
+}
+
+/* A switch that stays in sight while its section is shut (SetupGroup whileShut). */
+.setup-section > div:not(.setup-section-body) {
+  margin-top: var(--s-2);
+  padding-left: var(--s-2);
+}
+
+/* A list with nothing in it draws nothing, not a bordered line. */
+.setup-rows:empty {
+  display: none;
+}
+
+/* A row among a page's folds (Stop the looper, under Troubleshooting) sits on their rule, not in a box of its own. */
+.setup-page > .setup-page-rows {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+}
+
 .setup-inline-theme {
   padding: var(--s-2) 0;
+}
+
+/*
+ * LIGHT OR DARK WHEREVER SETTINGS IS A SHEET FROM THE BOTTOM: the phone's
+ * three buttons. Three equal, full-width, thumb-high buttons in their own
+ * words, amber when chosen: on a phone, and on an iPad or tablet held
+ * upright, as the phone app draws them there. The small segmented control
+ * stays in the wide window, where Settings is the panel down the side
+ * (Sheet's DESK) and a mouse aims at it.
+ */
+@media not all and (min-width: 1000px) {
+  .setup-inline-theme .theme-toggle {
+    display: flex;
+    width: 100%;
+    gap: var(--s-2);
+    padding: 0;
+    background: none;
+    border: 0;
+  }
+
+  .setup-inline-theme .theme-toggle button {
+    flex: 1 1 0;
+    min-height: 44px;
+    padding: var(--s-2) var(--s-3);
+    font-family: var(--body);
+    font-size: var(--f-4);
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--silk);
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-2);
+  }
+
+  .setup-inline-theme .theme-toggle button.current {
+    color: var(--on-signal);
+    background: var(--signal);
+    border-color: var(--signal);
+  }
+}
+
+/*
+ * THE TOP OF EVERY PAGE (components/SetupHead): the way back and Done on one
+ * row, the page's name under them with the width to itself. Both are the
+ * phone's bordered buttons, thumb-high.
+ */
+.setup-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-2);
+}
+
+.setup-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+button.setup-head-back,
+button.setup-head-done {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--s-2) var(--s-4);
+  font-size: var(--f-4);
+  font-weight: 600;
+  color: var(--silk);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+button.setup-head-done {
+  flex: none;
+}
+
+button.setup-head-back:active,
+button.setup-head-done:active {
+  background: var(--panel-hi);
 }
 
 .chain-rename {

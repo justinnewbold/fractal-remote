@@ -5819,7 +5819,10 @@ export function run(test) {
     /* On the front list, after Phone & computer and before the metronome. */
     const front = settings.slice(settings.indexOf('{page === null ? ('), settings.indexOf("{page === 'account' ? ("))
     const row = front.indexOf('title="Bluetooth"')
-    assert.ok(row > front.indexOf('title="Phone & computer"') && row < front.indexOf('title="Metronome"'), 'the row is not on the Settings list beside Phone & computer')
+    /* The row is named by PAIR_TITLE (Phone & computer, or iPad & computer on an iPad): a literal title here was never found, and -1 held nothing. */
+    const pair = front.indexOf('<SetupRow title={PAIR_TITLE}')
+    assert.notEqual(pair, -1, 'the Settings list has no Phone & computer row; this check reads it')
+    assert.ok(row > pair && row < front.indexOf('title="Metronome"'), 'the row is not on the Settings list beside Phone & computer')
     /* Phone & computer, which the Live pill opens, has one button to the page (26 October 2026), behind the row's gate as one name. */
     const link = settings.slice(settings.indexOf("{page === 'link' ? ("), settings.indexOf("{page === 'bluetooth'"))
     assert.equal((link.match(/setPage\('bluetooth'\)/g) || []).length, 1, 'Phone & computer opens Bluetooth from more than one button')
@@ -9467,10 +9470,16 @@ export function run(test) {
     const settings = flat('mobile/src/screens/Settings.js')
     const front = settings.slice(settings.indexOf("{page === null ? ("), settings.indexOf("{page === 'account' ? ("))
     const help = front.slice(front.indexOf('<Group title="Help"'), front.indexOf('<Group title="About"'))
-    assert.match(help, /\{onOpenReport \? \( <SetupRow title="Feedback" status="Something broken, or something you want" onPress=\{onOpenReport\} \/> \) : null\}/)
+    assert.match(help, /\{onOpenReport \? \( <SetupRow title="Feedback" status=\{FEEDBACK_LINE\} onPress=\{onOpenReport\} \/> \) : null\}/)
     /* Troubleshooting still holds Feedback, the path the fixed help sentence names. */
     const trouble = settings.slice(settings.indexOf("{page === 'trouble' ? ("))
-    assert.match(trouble, /<SetupRow title="Feedback" status="Something broken, or something you want" onPress=\{onOpenReport\} \/>/)
+    assert.match(trouble, /<SetupRow title="Feedback" status=\{FEEDBACK_LINE\} onPress=\{onOpenReport\} \/>/)
+    /* The line under both is the one both ends say (shared/settings-words.mjs), and the browser has the same row under Help since 3 November 2026. */
+    const { FEEDBACK_LINE } = await import('../shared/settings-words.mjs')
+    assert.equal(FEEDBACK_LINE, 'Something broken, or something you want')
+    const web = flat('src/App.jsx')
+    const webHelp = web.slice(web.indexOf('<SetupGroup title="Help"'), web.indexOf('<SetupGroup title="About"'))
+    assert.match(webHelp, /<SetupRow key="feedback" title="Feedback" status=\{FEEDBACK_LINE\} onClick=\{\(\) => setSetupPage\('feedback'\)\} \/>/, 'the browser has no Feedback row under Help')
     const { SUPPORT_LINE } = await import('../shared/affiliation.mjs')
     assert.match(SUPPORT_LINE, /Settings → Troubleshooting → Feedback/)
   })
