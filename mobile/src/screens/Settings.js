@@ -65,7 +65,7 @@ import { siriRow } from '../lib/siri-help'
 import { siriPresent } from '../lib/siriPipe'
 import SiriHelp from '../components/SiriHelp'
 import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
-import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS } from '../lib/bluetooth-gear'
+import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS, NO_SIGNAL_BLUETOOTH } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage, { BluetoothLimits, BluetoothTools, BluetoothTried, BluetoothTrouble, BluetoothWays } from './Bluetooth'
 import AccessTool from '../components/AccessTool'
@@ -1619,9 +1619,13 @@ export default function Settings({
       {page === 'offline' && mayDrive(purchase) ? (
         <>
           {head('Playing with no internet', 'back')}
+          {/* Where Bluetooth is offered, it first: it needs no internet at all (NO_SIGNAL_BLUETOOTH). Everywhere else, as it was. */}
           <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>
-            {`No signal? Use the computer’s own page in the ${deviceNoun()}’s web browser instead.`}
+            {bluetoothOffered
+              ? NO_SIGNAL_BLUETOOTH[bluetooth ? 'on' : 'off'](deviceNoun())
+              : `No signal? Use the computer’s own page in the ${deviceNoun()}’s web browser instead.`}
           </Text>
+          {bluetoothOffered && !bluetooth ? <Press label={NO_SIGNAL_BLUETOOTH.go} tone="signal" height={TAP} onPress={() => setPage('bluetooth')} /> : null}
           <View style={{ gap: space.md }}>
             <TipCard icon={sendIcon} label="1  SAME WIFI" body={`Put the ${deviceNoun()} on the same wifi as the computer.`} />
             <TipCard

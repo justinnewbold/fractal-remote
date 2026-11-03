@@ -9,7 +9,7 @@ import { setDemo, setDemoUnit } from '../lib/demo'
 import { walkthroughTips } from '../lib/vp4-safety'
 import { tick } from '../lib/feedback'
 import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
-import { HOW_TWO_WAYS, WALKTHROUGH_TWO_WAYS } from '../lib/bluetooth-gear'
+import { HOW_TWO_WAYS, RESTORED_BLUETOOTH_GO, WALKTHROUGH_TWO_WAYS } from '../lib/bluetooth-gear'
 /* An ES import rather than require(): Metro resolves both, but require is not
    a name this app has anywhere, and a test is right to refuse it. */
 /*
@@ -560,6 +560,18 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
               <Note>{P6.foot}</Note>
               {said ? <Note strong size={font.body}>{said}</Note> : null}
               {error ? <Note tone="fault">{error}</Note> : null}
+            </>
+          ) : null}
+          {/*
+            THE BLUETOOTH WAY, on a copy that opens it: somebody who has paid
+            and has no computer was asked only whether the computer app is
+            installed, and No told them to download it. Sign-in is their way
+            in too, so this goes where Yes goes (WALKTHROUGH_TWO_WAYS.restored).
+          */}
+          {twoWays ? (
+            <>
+              <Press label={RESTORED_BLUETOOTH_GO} height={TAP} onPress={() => onAccount?.()} />
+              <Note>{WALKTHROUGH_TWO_WAYS.restored}</Note>
             </>
           ) : null}
           <Press label={P6.back} height={TAP} onPress={() => go('mode')} />

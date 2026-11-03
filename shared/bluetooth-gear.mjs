@@ -233,7 +233,16 @@ export const NOT_FOR_FM3 = 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI 
  * purchase. So the names are in the line itself, where somebody deciding
  * whether to pay can read them, and look them up.
  */
-export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
+/*
+ * AND THE WAYS THE BLUETOOTH PAGE OFFERS (waysFor), since the audit of 3
+ * November 2026 found this line still listing only the Uhost kit of 25
+ * October: the page has put the WIDI Master first since 26 October (one
+ * piece, powered by the unit, no charger), then the WIDI Jack, then the
+ * Uhost. Never a sentence that says it works on a unit, only what each unit
+ * takes; and the FM3's own list, with the small adapter its U2MIDI Pro needs,
+ * and both parts it is never to have.
+ */
+export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a CME Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank. Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one.`
 
 /*
  * THE WALKTHROUGH AND THE SIGN-IN SCREEN, ON A COPY THAT OPENS BLUETOOTH.
@@ -285,7 +294,31 @@ export const WALKTHROUGH_TWO_WAYS = {
   /* Under SETUP.steps, the computer's three, on the sign-in screen. */
   setup: `No computer? Sign in here, and the app can connect by Bluetooth instead, through an adapter sold separately. ${BEST_WAY}`,
   /* In place of P3.real.agree, the box ticked before Unlock: the sentence put to him, word for word. */
-  agree: `I understand this app connects to my Fractal unit one of two ways: through a computer running the desktop app, connected by USB cable, or with no computer, through a Bluetooth MIDI adapter sold separately. ${BEST_WAY}`
+  agree: `I understand this app connects to my Fractal unit one of two ways: through a computer running the desktop app, connected by USB cable, or with no computer, through a Bluetooth MIDI adapter sold separately. ${BEST_WAY}`,
+  /*
+   * Under the page after Restore finds a purchase (P6), which asked only
+   * whether the computer app is installed: somebody with no computer had to
+   * answer No and was told to download it (the audit of 3 November 2026).
+   * Under the third button, RESTORED_BLUETOOTH_GO.
+   */
+  restored: `No computer? Sign in, and the app can connect by Bluetooth instead, through an adapter sold separately. ${BEST_WAY}`
+}
+
+/* The third button on that page, beside his Yes and No: to sign-in, as Yes goes, for the Bluetooth way. */
+export const RESTORED_BLUETOOTH_GO = 'No computer - I’ll use Bluetooth'
+
+/*
+ * PLAYING WITH NO INTERNET, where Bluetooth is offered (Settings, the page
+ * of that name). It said only "use the computer's own page in the web
+ * browser", and Bluetooth needs no internet at all: the device talks to the
+ * adapter on the unit, and the sign-in and the purchase are kept on it (the
+ * audit of 3 November 2026). A function, for the device word, read when the
+ * page is drawn.
+ */
+export const NO_SIGNAL_BLUETOOTH = {
+  off: (noun) => `No signal? Bluetooth needs no internet: the ${noun} talks to the unit itself, through a Bluetooth MIDI adapter on its MIDI jacks, sold separately. ${BEST_WAY} To keep using the computer with no signal, open its own page in the ${noun}’s web browser:`,
+  on: (noun) => `You’re on Bluetooth, which needs no internet, so there is nothing to change. ${BEST_WAY} To use the computer with no signal, open its own page in the ${noun}’s web browser:`,
+  go: 'Connect over Bluetooth'
 }
 
 /*

@@ -5840,7 +5840,7 @@ export function run(test) {
      * the cost alone, which read as a row with nothing going for it.
      */
     assert.match(one, /status=\{bluetooth \? `On · the \$\{deviceNoun\(\)\} talks to the unit itself` : BLUETOOTH_ROW_OFF\}/, 'the Settings row does not say what Bluetooth is for and what it costs')
-    assert.match(one, /import \{ BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS \} from '\.\.\/lib\/bluetooth-gear'/)
+    assert.match(one, /import \{ BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS(?:, NO_SIGNAL_BLUETOOTH)? \} from '\.\.\/lib\/bluetooth-gear'/)
     /* The looper row stays away: the looper is left off the chain over Bluetooth. */
     assert.match(one, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) && !onRealVp4 \? \( <SetupRow title="Stop the looper"/)
   })
@@ -6725,8 +6725,14 @@ export function run(test) {
      */
     const GATE = 'mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported()'
     const settings = flat('mobile/src/screens/Settings.js')
-    /* Two ways on Settings: the row, and the button on Phone & computer, which the Live pill opens (26 October 2026), behind the same three as one name. */
-    assert.equal((settings.match(/setPage\('bluetooth'\)/g) || []).length, 2, 'something else on Settings opens the Bluetooth page')
+    /*
+     * Three ways on Settings: the row, the button on Phone & computer, which
+     * the Live pill opens (26 October 2026), and, since 3 November 2026, the
+     * one on Playing with no internet, the last two behind the same three as
+     * one name.
+     */
+    assert.equal((settings.match(/setPage\('bluetooth'\)/g) || []).length, 3, 'something else on Settings opens the Bluetooth page')
+    assert.ok(settings.includes("{bluetoothOffered && !bluetooth ? <Press label={NO_SIGNAL_BLUETOOTH.go} tone=\"signal\" height={TAP} onPress={() => setPage('bluetooth')} /> : null}"), 'Playing with no internet opens the Bluetooth page from behind another gate')
     assert.ok(settings.includes(`const bluetoothOffered = ${GATE}`), 'Phone & computer’s Bluetooth button is behind another gate')
     assert.match(settings, /\{bluetoothOffered && !demo \? \( <Press label=\{bluetooth \? 'Bluetooth' : 'Connect over Bluetooth'\}[^}]*\}[^]*?onPress=\{\(\) => setPage\('bluetooth'\)\}/, 'the button on Phone & computer is not behind the gate')
     for (const sub of ['bt-ways', 'bt-trouble', 'bt-limits']) assert.ok(settings.includes(`{page === '${sub}' && bluetoothOffered ? (`), `the ${sub} page is not behind the gate`)
@@ -6828,8 +6834,17 @@ export function run(test) {
      */
     assert.equal(
       gear.BLUETOOTH_PAYWALL,
-      `${gear.BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs parts sold separately: a CME WIDI Uhost (the Bluetooth adapter) and a CME C2MIDI Pro (its MIDI cable), or a CME U2MIDI Pro in its place for an FM3, plus two Type-A MIDI to 3.5 mm adapters for an AM4 or VP4, and a USB charger or power bank. Never the C2MIDI Pro on an FM3: it got very hot on one.`
+      `${gear.BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a CME Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank. Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one.`
     )
+    /* Every part each way of the Bluetooth page takes is named in it (3 November 2026: it named the Uhost kit alone for a week after the page put the WIDI Master first). */
+    for (const unit of ['am4', 'vp4', 'fm3', 'fm9', 'axefx3']) {
+      for (const way of gear.waysFor(unit)) {
+        for (const key of way.parts) {
+          const words = { jackTrs: 'TRS-35', jackDin: 'CME WIDI Jack', usbA: 'USB-C to USB-A adapter' }[key] ?? gear.PARTS[key].name
+          assert.ok(gear.BLUETOOTH_PAYWALL.toLowerCase().includes(words.toLowerCase()), `the purchase page’s line leaves out ${gear.PARTS[key].name}, which the ${unit}’s ${way.title} takes`)
+        }
+      }
+    }
     const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
     for (const u of BLE_UNITS) assert.ok(new RegExp(`\\b${u.name}\\b`).test(gear.BLUETOOTH_PAYWALL), `the purchase page’s line leaves out the ${u.name}`)
     assert.deepEqual(gear.partsFor('vp4').map((p) => p.key), gear.partsFor('am4').map((p) => p.key), 'a VP4’s parts are not the AM4’s, and the purchase page says they are')
@@ -6940,7 +6955,18 @@ export function run(test) {
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
     const two = gear.WALKTHROUGH_TWO_WAYS
-    assert.deepEqual(Object.keys(two).sort(), ['agree', 'demoSub', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
+    assert.deepEqual(Object.keys(two).sort(), ['agree', 'demoSub', 'restored', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
+    /* The page after Restore finds a purchase offers the Bluetooth way too, to sign-in, on a copy that opens it (the audit of 3 November 2026). */
+    assert.equal(gear.RESTORED_BLUETOOTH_GO, 'No computer - I’ll use Bluetooth')
+    assert.match(flat('mobile/src/screens/Onboarding.js'), /\{twoWays \? \( <> <Press label=\{RESTORED_BLUETOOTH_GO\} height=\{TAP\} onPress=\{\(\) => onAccount\?\.\(\)\} \/> <Note>\{WALKTHROUGH_TWO_WAYS\.restored\}<\/Note> <\/> \) : null\} <Press label=\{P6\.back\}/, 'the page after a found purchase does not offer Bluetooth, or offers it where Bluetooth is not open')
+    /* And Playing with no internet says Bluetooth needs none, where it is offered. */
+    for (const say of [gear.NO_SIGNAL_BLUETOOTH.off('iPad'), gear.NO_SIGNAL_BLUETOOTH.on('tablet')]) {
+      assert.match(say, /needs no internet/)
+      assert.match(say, /The computer is the best way: Bluetooth has more lag and fewer features\./)
+      assert.ok(!/this phone|\bbeta\b|\btried\b|free/i.test(say), say)
+    }
+    assert.match(gear.NO_SIGNAL_BLUETOOTH.off('phone'), /adapter on its MIDI jacks, sold separately/)
+    assert.match(flat('mobile/src/screens/Settings.js'), /\{bluetoothOffered \? NO_SIGNAL_BLUETOOTH\[bluetooth \? 'on' : 'off'\]\(deviceNoun\(\)\) :/, 'Playing with no internet does not say Bluetooth where it is offered')
     /* Any way of saying the app needs a computer, which is the claim these lines exist to take back. */
     const NEEDS = /(?:needs?|requires?|works? with|only (?:with|through)) a computer|computer is (?:required|needed)/i
     for (const [key, words] of Object.entries(two)) {
@@ -7051,7 +7077,7 @@ export function run(test) {
     for (const [file, text] of [['the walkthrough', flatScreen], ['the sign-in screen', signIn]]) {
       assert.ok(text.includes(GATE), `${file} says both ways behind another gate`)
       assert.match(text, /import \{ bluetoothSupported, openForCustomersHere \} from '\.\.\/lib\/bluetooth'/, `${file} reads the gate from somewhere else`)
-      assert.match(text, /import \{ (?:HOW_TWO_WAYS, )?WALKTHROUGH_TWO_WAYS \} from '\.\.\/lib\/bluetooth-gear'/, `${file} types its two-ways words out`)
+      assert.match(text, /import \{ (?:HOW_TWO_WAYS, )?(?:RESTORED_BLUETOOTH_GO, )?WALKTHROUGH_TWO_WAYS \} from '\.\.\/lib\/bluetooth-gear'/, `${file} types its two-ways words out`)
       assert.ok(!/mayDrive|usePurchase|useBluetoothOffered/.test(text), `${file} waits for a purchase to say both ways`)
     }
     assert.ok(flat('mobile/src/screens/Paywall.js').includes('{openForCustomersHere() && bluetoothSupported() ? ('), 'the purchase page’s gate moved, and the walkthrough’s still says the old one')

@@ -15,7 +15,7 @@ export const WHATS_NEW = [
     "version": "1.89.28",
     "lines": [
       {
-        "text": "The walkthrough’s first page, How it works, shows both ways to connect: Computer, the best way, or Bluetooth, with no computer. Its pages are numbered 1 to 4, where two of them both said 2 of 3, and the box you tick before Unlock says both ways too.",
+        "text": "The walkthrough shows both ways to connect, Computer (the best way) or Bluetooth, its pages are numbered 1 to 4, and the box before Unlock says both ways. The purchase page lists every Bluetooth adapter, and Playing with no internet says Bluetooth needs none.",
         "only": null
       },
       {
