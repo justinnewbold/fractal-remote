@@ -1034,6 +1034,19 @@ export function run(test) {
     // wrong slot into a feature that never works.
     assert.equal(stepSlot(400, 1, unsaid), 401)
     assert.equal(stepSlot(null, 1, am4), null)
+    /*
+     * And it is ONE function, the browser's: its Play steps the slots by it too
+     * since 3 November 2026 ("Next stops at the unit's last preset"), and the
+     * phone re-exports it from slots.js rather than keeping a second copy
+     * that could be fixed on one side only. Both import paths, every row.
+     */
+    for (const [n, by, caps, want] of [[103, 1, am4, null], [0, -1, am4, null], [12, 1, am4, 13], [400, 1, unsaid, 401], [null, 1, am4, null], [102, 1, am4, 103], [511, 1, { presets: { count: 512 } }, null], [1, -1, am4, 0]]) {
+      assert.equal(stepSlot(n, by, caps), want, `the phone steps ${n} by ${by} to ${stepSlot(n, by, caps)}`)
+      assert.equal(slots.stepSlot(n, by, caps), want, `the browser steps ${n} by ${by} to ${slots.stepSlot(n, by, caps)}`)
+    }
+    /* The phone's is the generated copy of the browser's slots.js (the sync test holds the two to each other), re-exported. */
+    assert.match(read('mobile/src/lib/unit.mjs'), /^export \{ slotCount, slotLabel, isBanked, stepSlot \} from '\.\/slots\.js'$/m)
+    assert.ok(!/export function stepSlot/.test(read('mobile/src/lib/unit.mjs')), 'the phone writes the step rule out again')
   })
 
   test('the four blocks that are not stage controls are hidden on the phone too', async () => {
@@ -2960,7 +2973,7 @@ export function run(test) {
        Justin's mockup draws it beside the word — so this looks for the word. */
     const nav = stage.indexOf('label="Previous"')
     const scenes = stage.indexOf('<Label>Scenes</Label>')
-    const chain = stage.indexOf("chain === 'reading' ?")
+    const chain = stage.indexOf('{chainHeading(chain)}')
     assert.ok(nav > 0 && scenes > 0 && chain > 0, 'the stage screen moved; this check reads it')
     assert.ok(nav > scenes, 'Previous and Next are above the scenes, where you read rather than where your thumb is')
     assert.ok(nav > chain, 'Previous and Next are above the chain')
@@ -4160,8 +4173,13 @@ export function run(test) {
     /* Beside the heading, over Bluetooth on an AM4 too (test/bluetooth.mjs says how). */
     assert.match(stage, /<Label>Scenes<\/Label>\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?(?:\{overBluetooth\(caps\) && device === 'am4' \? null : )?<RefreshNames \/>/, 'Refresh names is not beside the Scenes heading')
     assert.match(stage, /await refreshAll\(\)\s*\/\*[^*]*\*\/\s*if \(!arriving\) await rereadSceneNames\(\)/, 'pulling down does not read the scene names fresh')
-    assert.match(stage, /none: 'No names on the unit'/)
-    assert.match(stage, /failed: "Couldn't read them"/)
+    /* The link's words are shared/play-words.mjs's now, which the browser's Refresh names says too; the phone draws them as before. */
+    const playWords = read('shared/play-words.mjs')
+    assert.match(playWords, /none: 'No names on the unit'/)
+    assert.match(playWords, /failed: "Couldn't read them"/)
+    assert.match(stage, /^import \{[^}]*\bREFRESH_NAMES\b[^}]*\} from '\.\.\/lib\/play-words'$/m, 'the phone’s Refresh names says words of its own')
+    assert.match(stage, /\{REFRESH_NAMES\[said\] \|\| REFRESH_NAMES\.idle\}/, 'the phone’s Refresh names does not say what came of the press')
+    assert.ok(!/export const REFRESH_NAMES/.test(stage), 'the phone keeps a second copy of the link’s words')
     const web = read('src/lib/forgefx.js')
     assert.ok(web.indexOf('request(`/presets/${number}/scenes`)') > -1 && web.indexOf('request(`/presets/${number}/scenes`)') < web.indexOf('const dump = await backupPreset(number)'), 'the browser does not try the relay-safe read before the backup')
     assert.match(read('desktop/forgefx.lock.json'), /\+am4scenes/, 'the computer app does not carry the device server that answers /presets/{n}/scenes')

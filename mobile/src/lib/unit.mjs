@@ -16,14 +16,14 @@
  * copy, and the way those fail is that somebody fixes one of them.
  *
  * What stays written out below is what the phone decides for itself: which
- * blocks are not stage controls, the shape of the scene grid, and how a step
- * lands. See EXCLUDED_BLOCKS — that one is a copy of a copy, and the guardrails
- * file it comes from is synced too.
+ * blocks are not stage controls and the shape of the scene grid. How a step
+ * lands (stepSlot) was here too, until the browser's Play took the same rule
+ * (3 November 2026): it is slots.js's now, re-exported above. See
+ * EXCLUDED_BLOCKS — that one is a copy of a copy, and the guardrails file it
+ * comes from is synced too.
  */
 export { isEmptySlotName, cleanPresetName, presetLabel } from './presetName.js'
-export { slotCount, slotLabel, isBanked } from './slots.js'
-
-import { slotCount } from './slots.js'
+export { slotCount, slotLabel, isBanked, stepSlot } from './slots.js'
 
 /**
  * Input, output, looper and gate are not stage controls.
@@ -58,29 +58,6 @@ export function sceneShape(capabilities) {
   const hasScenes = capabilities?.hasScenes !== false
   const count = Number.isInteger(capabilities?.sceneCount) ? capabilities.sceneCount : 8
   return { hasScenes, count: hasScenes ? count : 0 }
-}
-
-/**
- * The next slot in a direction, or null when there isn't one.
- *
- * Clamped rather than wrapped: on stage, stepping off the end of the list and
- * landing back at slot 0 is worse than the button doing nothing. A unit that
- * never reported a count is given the benefit of the doubt, the same way
- * slotOutside does — refusing every step would turn a rare wrong slot into a
- * feature that never works.
- *
- * This is the fallback, not the rule. What Previous and Next actually walk is
- * decided by `setlists.stepTarget`, which wraps within a setlist because a
- * running order does come back round to the first song. Slot by slot has no
- * such order to come back to, so it stops.
- */
-export function stepSlot(number, by, capabilities) {
-  if (!Number.isInteger(number)) return null
-  const next = number + by
-  if (next < 0) return null
-  const count = slotCount(capabilities)
-  if (count !== null && next >= count) return null
-  return next
 }
 
 /**

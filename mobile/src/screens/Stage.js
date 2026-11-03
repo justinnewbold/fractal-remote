@@ -97,6 +97,8 @@ import { tempoRange } from '../lib/tempo'
 import Tuner from '../components/Tuner'
 import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 import { deviceNoun } from '../lib/device-word'
+/* Play's words, the browser's too (shared/play-words.mjs). */
+import { ALL_PRESETS, CHAIN_EMPTY, CHAIN_OUT_OF_DATE, HOLD_FOR_CHANNELS, REFRESH_NAMES, REFRESH_NAMES_SAID_MS, chainHeading, presetLine } from '../lib/play-words'
 
 /* Hoisted: a selector rebuilt each render re-reads the store on every notify. */
 const ofPreset = (s) => s.preset
@@ -1112,10 +1114,7 @@ export default function Stage({
         <View style={{ gap: space.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>
-              {Number.isInteger(preset?.number)
-                ? `PRESET ${slotLabel(preset.number, caps?.presets?.addressing)}`
-                : 'PRESET —'}
-              {slots ? ` OF ${slots}` : ''}
+              {presetLine(Number.isInteger(preset?.number) ? slotLabel(preset.number, caps?.presets?.addressing) : null, slots)}
             </Text>
             <View style={{ flexDirection: 'row', gap: space.sm }}>
               {/*
@@ -1166,7 +1165,7 @@ export default function Stage({
           {/* And while nothing is read at all (Looking…): no preset is not one named "Untitled". */}
           <Press
             label={(preset?.pending && !preset?.name) || (!preset && unitState === 'unknown') ? '…' : presetLabel(preset)}
-            sub={onOpenPresets ? 'Tap for all presets' : undefined}
+            sub={onOpenPresets ? ALL_PRESETS : undefined}
             /* No list picture on the left any more: "take that off of that
                one", and make the name "a little bit bigger". The chevron on
                the right still says the tap opens something. */
@@ -1277,9 +1276,7 @@ export default function Stage({
             does something: a unit with no channels has nothing to switch.
           */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Label icon={chainIcon}>
-              {chain === 'reading' ? 'Reading the chain…' : chain === 'failed' ? 'Chain — out of date' : 'Chain'}
-            </Label>
+            <Label icon={chainIcon}>{chainHeading(chain)}</Label>
             {channels?.length > 1 && blocks.length ? (
               <Text style={{ color: color.silkDim, fontSize: font.micro, letterSpacing: 1.5, textTransform: 'uppercase' }}>
                 {HOLD_FOR_CHANNELS}
@@ -1288,17 +1285,14 @@ export default function Stage({
           </View>
 
           {chain === 'failed' && !chainNow.elsewhere ? (
-            <Note tone="warn">
-              The unit didn’t say what’s in this preset, so these buttons may be out of date. Pull down to ask
-              again.
-            </Note>
+            <Note tone="warn">{CHAIN_OUT_OF_DATE} Pull down to ask again.</Note>
           ) : null}
 
           <ChainUpdating chain={chainNow} />
 
           {/* A VP4 over Bluetooth is sent presets and scenes and read nothing (lib/bleVp4.js): its chain is empty because it cannot be read, and Play says that, not that the preset is empty. */}
           {blocks.length === 0 && chain === 'ok' && !chainNow.elsewhere ? (
-            <Note>{vp4Here() && overBluetooth(caps) ? VP4_OVER_BLUETOOTH : 'Nothing in this preset but input and output.'}</Note>
+            <Note>{vp4Here() && overBluetooth(caps) ? VP4_OVER_BLUETOOTH : CHAIN_EMPTY}</Note>
           ) : null}
 
           {/*
@@ -1977,17 +1971,9 @@ function ChannelSheet({ block, channels, onClose, onPick }) {
  */
 export const DOWN_DIM = 0.35
 
-/** Beside CHAIN: what holding a block does. */
-export const HOLD_FOR_CHANNELS = 'Hold to switch channels'
-
-/** What the Refresh names link says, before and after a press. */
-export const REFRESH_NAMES = {
-  idle: 'Refresh names',
-  reading: 'Reading…',
-  found: 'Names updated',
-  none: 'No names on the unit',
-  failed: "Couldn't read them"
-}
+/* Beside CHAIN, what holding a block does (HOLD_FOR_CHANNELS), and what the
+   Refresh names link says before and after a press (REFRESH_NAMES), are
+   shared/play-words.mjs's: the browser's Play says them too. */
 
 function RefreshNames() {
   const [said, setSaid] = useState('idle')
@@ -1999,7 +1985,7 @@ function RefreshNames() {
     setSaid('reading')
     const out = await rereadSceneNames().catch(() => 'failed')
     setSaid(out)
-    timer.current = setTimeout(() => setSaid('idle'), 4000)
+    timer.current = setTimeout(() => setSaid('idle'), REFRESH_NAMES_SAID_MS)
   }
   return (
     <Pressable

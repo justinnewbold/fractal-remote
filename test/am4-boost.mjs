@@ -133,7 +133,9 @@ export function run(test) {
     assert.equal(b.boostLabel('unknown'), 'Boost not read yet')
     assert.equal(b.boostLabel('other'), 'Boost can’t be switched yet')
     /* Plain words, US spelling, never "this phone". */
-    for (const w of [b.BOOST_ON, b.BOOST_OFF, b.AMP_OFF, b.AMP_OFF_SAYS, b.BOOST_UNREAD, b.OTHER_AMP_SAYS, b.BOOST_WAIT, b.BOOST_NO_UNIT, b.BOOST_NOT_READ, b.BOOST_CANT, b.PLAY_HINT_TAP_AM4]) {
+    for (const w of [b.BOOST_ON, b.BOOST_OFF, b.AMP_OFF, b.AMP_OFF_SAYS, b.BOOST_UNREAD, b.OTHER_AMP_SAYS, b.BOOST_WAIT, b.BOOST_NO_UNIT, b.BOOST_NOT_READ, b.BOOST_CANT, b.COACH_BODY_AM4, b.COACH_DONE_AM4]) {
+      /* A name that is gone would be tested as the word "undefined" and pass: every one is a sentence. */
+      assert.equal(typeof w, 'string', 'a word in this list is gone, so the check below tests nothing')
       assert.ok(!/this phone|colour|grey|favourite|first amp/i.test(w), w)
     }
     /* One sentence for an amp at another code, at every end: Play's and Bluetooth's guard. */
@@ -904,12 +906,25 @@ export function run(test) {
 
   test('browser: the hold tip says what the amp’s tap does on an AM4, in the shared words', async () => {
     const b = await import('../shared/am4-boost.mjs')
-    assert.equal(b.playHintTap('am4'), b.PLAY_HINT_TAP_AM4)
-    assert.equal(b.playHintTap('fm3'), 'A tap just switches it on and off.')
-    assert.match(b.PLAY_HINT_TAP_AM4, /boost/)
-    assert.match(b.PLAY_HINT_TAP_AM4, /in Edit/)
+    const { coachWords } = await import('../shared/play-words.mjs')
+    const { P5 } = await import('../shared/onboarding.mjs')
+    /* The phone's card (P5, his copy), with the AM4's amp's boost said on an AM4, where P5's "Tap toggles the block" is not true of the amp. */
+    assert.equal(coachWords('tip', 'am4').body, b.COACH_BODY_AM4)
+    assert.match(b.COACH_BODY_AM4, /boost/)
+    assert.match(b.COACH_BODY_AM4, /in Edit/)
+    assert.equal(coachWords('done', 'am4').body, b.COACH_DONE_AM4)
+    assert.match(b.COACH_DONE_AM4, /boost/)
+    assert.equal(coachWords('trying', 'am4').body, P5.trying.body, 'the card while it waits for the hold says something other than P5')
+    /* Every other unit: P5 word for word. */
+    assert.equal(coachWords('tip', 'fm3').body, P5.body)
+    assert.equal(coachWords('done', 'fm3').body, P5.done.body)
+    /* P5's own sentences, with the amp said: its gesture sentence kept whole. */
+    assert.ok(b.COACH_BODY_AM4.endsWith(P5.body.slice(P5.body.indexOf('Press and hold'))), 'the AM4’s card lost P5’s channels sentence')
+    assert.ok(b.COACH_DONE_AM4.startsWith(P5.done.body.slice(0, P5.done.body.indexOf(' A quick tap'))), 'the AM4’s card lost P5’s hold sentence')
+    const gig = flat('src/components/Gig.jsx')
+    assert.match(gig, /<Coach stage=\{tipStage\} slug=\{deviceKey\}/, 'the hold tip promises an AM4 player that a tap on the amp turns it off')
+    assert.match(flat('src/App.jsx'), /deviceKey=\{currentDeviceSlug\(\)\}/, 'Play is not told which unit the tip is about')
     const app = flat('src/App.jsx')
-    assert.match(app, /<p className="play-hint"> \{\/\*[^]*?\*\/\} <span> \{PLAY_HINT_HOLD\} \{playHintTap\(currentDeviceSlug\(\)\)\} <\/span>/, 'the hold tip promises an AM4 player that a tap on the amp turns it off')
     /* And App's own first read of the chain reads the boost after it, or Play opened on an unread amp. */
     assert.match(app, /chainWasRead\(p\?\.number\) \/\*[^]*?\*\/ refreshBoost\(\)\.catch\(\(\) => \{\}\)/)
   })

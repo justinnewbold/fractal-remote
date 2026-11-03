@@ -145,6 +145,21 @@ export const FILES = [
    */
   { source: '../shared/settings-words.mjs', target: '../mobile/src/lib/settings-words.js' },
   /*
+   * Play's words: the PRESET line, Tap for all presets, Refresh names, the
+   * chain's heading and its two sentences, the demo's card and the quick
+   * tip's. Both Plays draw them (3 November 2026, "Is there anything else we
+   * need to do to match the apps?"). It imports two siblings besides the
+   * device word, so it says so here: a copy importing './onboarding.mjs'
+   * would not bundle on the phone, which has only the '.js' copies.
+   */
+  {
+    source: '../shared/play-words.mjs',
+    target: '../mobile/src/lib/play-words.js',
+    render: (text) =>
+      banner('../shared/play-words.mjs') +
+      text.replace("from './onboarding.mjs'", "from './onboarding.js'").replace("from './am4-boost.mjs'", "from './am4-boost.js'")
+  },
+  /*
    * The note a connected phone leaves on the computer, so the computer stays
    * awake under it. The phone and the website write the same document on the
    * same rhythm, and the computer app reads it by the same name.

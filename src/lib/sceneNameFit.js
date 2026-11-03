@@ -88,6 +88,8 @@ export function useSceneNameSizes(gridRef, names, count) {
         const i = Number(button.dataset.scene)
         const nameEl = button.querySelector('.gig-scene-name')
         const numEl = button.querySelector('.gig-scene-num')
+        /* The coloured bar under the name (the phone's Tile `bar`) takes its height from the name, the way the number over it does. */
+        const barEl = button.querySelector('.gig-scene-bar')
         if (!nameEl || !Number.isInteger(i)) continue
         const css = getComputedStyle(button)
         const face = getComputedStyle(nameEl)
@@ -104,7 +106,8 @@ export function useSceneNameSizes(gridRef, names, count) {
             px(css.borderBottomWidth) -
             px(css.paddingTop) -
             px(css.paddingBottom) -
-            (numEl ? numEl.offsetHeight + px(css.rowGap) : 0),
+            (numEl ? numEl.offsetHeight + px(css.rowGap) : 0) -
+            (barEl ? barEl.offsetHeight + px(getComputedStyle(barEl).marginTop) + px(css.rowGap) : 0),
           min: NAME_FLOOR,
           max: NAME_MAX
         })

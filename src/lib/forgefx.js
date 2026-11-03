@@ -2684,8 +2684,15 @@ const traceStep = (step) => sceneNameTrace.push(step)
  * would only be dropped (deviceState refreshSceneNames), and the dump would
  * land on a unit loading the next preset. The phone stops there too
  * (mobile/src/lib/rig.js namesOfLoaded). null then.
+ *
+ * `fresh` is Play's Refresh names (deviceState rereadSceneNames): the unit's
+ * own answer and nothing kept. Past the reads of the unit, it stops: a name
+ * this browser or the computer remembered for the slot is what the press is
+ * asking past, so it is not handed back as if the unit had said it. A unit
+ * that answered with every scene blank says 'none' that way; nothing read
+ * at all is null, 'failed'.
  */
-export async function readSceneNames(number, { shown, still } = {}) {
+export async function readSceneNames(number, { shown, still, fresh = false } = {}) {
   const movedOn = () => typeof still === 'function' && !still()
   /*
    * And the unit it is read for, taken now: names that land after another
@@ -2716,7 +2723,9 @@ export async function readSceneNames(number, { shown, still } = {}) {
     return mock.getScene().names
   }
   sceneNameTrace = []
-  traceStep(`lookup for ${sceneNameKey(number)}`)
+  traceStep(`lookup for ${sceneNameKey(number)}${fresh ? ' (Refresh names: off the unit only)' : ''}`)
+  /* The unit's own "every scene is blank", for a fresh read to say (see `fresh`). */
+  let said = null
 
   if (typeof number === 'number') {
     try {
@@ -2835,6 +2844,7 @@ export async function readSceneNames(number, { shown, still } = {}) {
       traceStep('dump: found names')
       return clean
     }
+    if (!wrongSlot(number, dump?.location) && Array.isArray(names)) said = names.map(() => '')
     traceStep(
       dump?.sceneNames === undefined
         ? `dump: no sceneNames field at all — the decode on the computer gave nothing (crcValid: ${dump?.crcValid ?? 'absent'})`
@@ -2842,6 +2852,12 @@ export async function readSceneNames(number, { shown, still } = {}) {
     )
   } catch (err) {
     traceStep(`dump: refused or failed — ${err.message}`)
+  }
+
+  /* Refresh names asks the unit, not what was kept: its answer, or nothing (see `fresh`). */
+  if (fresh) {
+    traceStep(said ? 'Refresh names: the unit says every scene is unnamed' : 'Refresh names: nothing read off the unit')
+    return said
   }
 
   // Nothing readable from the unit. What did a session that could read them keep?

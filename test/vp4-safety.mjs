@@ -681,9 +681,12 @@ export function run(test) {
     const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
     assert.match(app, /title="Choose a preset"\s+note=\{loadedNote\(preset\)\}/, 'the preset sheet does not take its line from loadedNote')
     assert.match(app, /const holdOpensChannels = \(device\?\.capabilities\?\.channelNames\?\.length \|\| 0\) > 1/, 'the hold tip is not tied to the unit having channels')
-    const tip = app.indexOf('<p className="play-hint">')
-    assert.ok(tip > 0, 'the hold tip is gone from Play')
-    assert.match(app.slice(Math.max(0, tip - 200), tip), /\{!holdNoteSeen && holdOpensChannels && /, 'the hold tip shows on a unit a hold cannot pick a channel on')
+    /* The hold tip is the phone's card over the pedals now (components/Coach), due only on a unit a hold picks a channel on, and drawn only where a hold does something on the preset on screen. */
+    assert.match(app, /const holdTipDue = !holdNoteSeen && holdOpensChannels && !playNotesUp\n/, 'the hold tip shows on a unit a hold cannot pick a channel on')
+    assert.match(app, /holdTip=\{holdTipDue\}/, 'the hold tip is gone from Play')
+    const gigSrc = readFileSync(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
+    assert.match(gigSrc, /const holdDoesSomething = [^\n]*\(channels\?\.length \|\| 0\) > 1/, 'the browser’s tip stopped waiting for a preset whose blocks have channels')
+    assert.match(gigSrc, /\{tipUp \? <Coach stage=\{tipStage\} slug=\{deviceKey\} onTry=\{tryTip\} onSkip=\{onHoldTipClosed\} onDone=\{onHoldTipClosed\} \/> : null\}/, 'the hold tip is drawn on its own say-so')
     const stage = readFileSync(new URL('../mobile/src/screens/Stage.js', import.meta.url), 'utf8')
     assert.match(stage, /const holdDoesSomething = [^\n]*channels\?\.length > 1/, 'the phone’s tip stopped waiting for a unit with channels')
   })
@@ -820,7 +823,8 @@ export function run(test) {
     assert.match(stage, /if \(!order && noSlotSteps\) sayFault\(vp4StepWords\(caps\)\)/, 'the phone does not say why a VP4 cannot step')
     const gig = flat('src/components/Gig.jsx')
     assert.match(gig, /const noSlotSteps = vp4Here\(\)/)
-    assert.match(gig, /const landing = \(delta\) => !order && noSlotSteps \? null : stepTarget\(/, 'the browser steps a VP4 slot by slot')
+    /* The phone's rule, the same shape: a setlist or the stars by lib/setlists, and slot by slot never on a VP4. */
+    assert.match(gig, /const landing = \(delta\) => order \? stepTarget\(\{ source, current: here, delta, favourites, lists \}\) : noSlotSteps \? null : stepSlot\(here, delta, capabilities\)/, 'the browser steps a VP4 slot by slot')
     assert.match(gig, /if \(!order && noSlotSteps\) onError\(vp4StepWords\(vp4Capabilities\(\)\)\)/, 'the browser does not say why a VP4 cannot step')
     /* And where presets are picked, the cost of tapping the one already on. */
     /* (Not behind an old computer app, which cannot send one: test below.) */
@@ -1900,7 +1904,8 @@ export function run(test) {
     assert.match(phone, /if \(vp4PresetOn\(answer\) && run === presetRun\) vp4Owed = number/)
     assert.match(web, /if \(vp4Landed && run === presetRun\) vp4Owed = number/)
     assert.match(phone, /const run = \+\+presetRun \/\*[^*]*\*\/ vp4Owed = null/)
-    assert.match(web, /const run = \+\+presetRun \/\*[^*]*\*\/ vp4Owed = null/)
+    /* A let at the browser's end: a refused newer press can hand an older one still on its way a new run (deviceState presetPresses). */
+    assert.match(web, /let run = \+\+presetRun \/\*[^*]*\*\/ vp4Owed = null/)
     assert.match(phone, /const fresh = vp4ReadFresh\(era\) const named = fresh \? vp4NameFor\(number\) : null/)
     assert.match(web, /if \(!held\) takeVp4Name\(number, era\)/)
     for (const [end, src] of [['phone', phone], ['browser', web]]) {

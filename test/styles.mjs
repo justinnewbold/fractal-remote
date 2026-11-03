@@ -883,7 +883,9 @@ export function run(test) {
      */
     const rule = (sel) => code.slice(code.indexOf(sel + ' {'), code.indexOf('}', code.indexOf(sel + ' {')))
     assert.match(rule('button.gig-name'), /align-items: center/, 'the preset tile packs its line to the top again')
-    assert.match(rule('.gig-name-row'), /align-items: baseline/, 'the slot and the name no longer share a baseline')
+    /* The name and "Tap for all presets" under it, centred as a pair, the phone's label and sub. */
+    assert.match(rule('.gig-name-row'), /flex-direction: column/, 'the name and the line under it are side by side')
+    assert.match(rule('.gig-name-row'), /align-items: center/, 'the name and the line under it are not centred as a pair')
   })
 
   test('a scene and an effect are different objects, not two tiles with a stripe', () => {
@@ -1568,5 +1570,155 @@ export function run(test) {
     assert.match(narrow, /\.setup-inline-theme \.theme-toggle \{[^}]*display: flex;[^}]*width: 100%/, 'the three buttons do not run the full width')
     assert.match(narrow, /\.setup-inline-theme \.theme-toggle button \{[^}]*flex: 1 1 0;[^}]*min-height: 44px;[^}]*text-transform: none/, 'the three buttons are not equal, thumb-high, in their own words')
     assert.match(narrow, /\.setup-inline-theme \.theme-toggle button\.current \{[^}]*background: var\(--signal\)/, 'the chosen one is not amber')
+  })
+
+  /* ------------------------------------------------------------------ */
+  /* Play, made like the phone app's (3 November 2026, pass 3)            */
+  /* ------------------------------------------------------------------ */
+
+  test('a scene’s name is spelled as the unit spells it, with the phone’s bar under it, and its measure follows', () => {
+    const rule = (sel) => code.slice(code.indexOf(sel + ' {'), code.indexOf('}', code.indexOf(sel + ' {')))
+    const named = rule('button.gig-scene.named .gig-scene-name')
+    assert.match(named, /font-size: var\(--name-size, var\(--f-4\)\);\s*text-transform: none;/, 'a named scene is in capitals again: "CLEAN DOUBLE" where the unit has "Clean Double"')
+    /* No later rule puts the capitals back on a named scene. */
+    const after = code.slice(code.indexOf('button.gig-scene.named .gig-scene-name {'))
+    for (const m of after.matchAll(/([^{}]*\.gig-scene-name[^{}]*)\{([^}]*)\}/g)) {
+      if (/\bnamed\b/.test(m[1]) || !/scene-arrange/.test(m[1])) assert.ok(!/text-transform: uppercase/.test(m[2]), `a later rule puts a scene’s name in capitals: ${m[1].trim()}`)
+    }
+    /* The bar: the scene's own colour, 3px, half the tile wide; the lettering's colour at 80% on the live one. */
+    const bar = rule('.gig-scene-bar')
+    assert.match(bar, /background: var\(--scene-fill/, 'the bar is not the scene’s own colour')
+    assert.match(bar, /height: 3px/)
+    assert.match(bar, /width: 52%/)
+    assert.match(code, /button\.gig-scene\.current \.gig-scene-bar \{\s*background: color-mix\(in srgb, var\(--scene-ink, var\(--on-signal\)\) 80%, transparent\);/, 'the live scene’s bar is lost on its own fill')
+    /* At the compact size the number pays for the bar, so a long name keeps its two lines in a 56px tile. */
+    assert.match(code, /\.gig\[data-compact\] button\.gig-scene\.named \.gig-scene-num \{\s*line-height: 1;/, 'the bar takes a long name’s second line at Smallest')
+    /* The measure is the drawing: the letter spacing it measures with is the spacing drawn. */
+    const fit = readFileSync(new URL('../src/lib/sceneNameFit.js', import.meta.url), 'utf8')
+    const track = Number(fit.match(/const TRACK = ([0-9.]+)/)?.[1])
+    const drawn = Number(code.match(/\n\.gig-scene-name \{[^}]*letter-spacing: ([0-9.]+)em/)?.[1])
+    assert.ok(track > 0 && track === drawn, `the name is measured at ${track}em of spacing and drawn at ${drawn}em`)
+    assert.match(fit, /upper: face\.textTransform === 'uppercase'/, 'the name is measured in capitals whatever the case drawn')
+  })
+
+  test('the headings over the scenes and the chain are the phone’s, and Refresh names keeps a thumb’s target in a heading’s height', () => {
+    const rule = (sel) => code.slice(code.indexOf(sel + ' {'), code.indexOf('}', code.indexOf(sel + ' {')))
+    const word = rule('.gig-head-word')
+    assert.match(word, /font-size: var\(--f-1\)/)
+    assert.match(word, /text-transform: uppercase/)
+    assert.match(word, /color: var\(--silk-faint\)/, 'the heading is not the phone’s faint small capitals')
+    assert.match(word, /min-width: 0/, 'the heading pushes the words beside it off the row instead of giving way')
+    assert.match(rule('.gig-head-text'), /text-overflow: ellipsis/, 'a heading too long for the row wraps and moves everything under it')
+    const action = rule('button.gig-head-action')
+    assert.match(action, /min-height: 44px/, 'Refresh names is under the touch floor')
+    assert.match(action, /margin: calc\(-1 \* var\(--s-3\)\) calc\(-1 \* var\(--s-2\)\)/, 'Refresh names makes the heading’s row a button tall')
+    assert.match(code, /button\.gig-head-action\[data-said='failed'\] \{\s*color: var\(--fault\);/, 'a failed read is not said in the fault colour')
+    assert.match(rule('.gig-head-hint'), /white-space: nowrap/, 'Hold to switch channels wraps under the heading')
+    assert.match(rule('.gig-head-icon'), /width: 13px/, 'the chain’s picture is not the phone’s 13pt')
+  })
+
+  test('on a phone the pedals are the scenes’ height less 12, and still hold their picture and name', () => {
+    const rule = (sel) => code.slice(code.indexOf(sel + ' {'), code.indexOf('}', code.indexOf(sel + ' {')))
+    const px = (t) => Number(code.match(new RegExp(`--${t}: ([0-9.]+)px`))[1])
+    /* From the same variables the scenes take, less the phone's 12 (--s-3), with the phone's floors: 56 at the steps, 44 at Smallest and Fit. */
+    const phone = rule('.gig[data-phone] button.gig-block')
+    assert.match(phone, /min-height: max\(56px, calc\(var\(--gig-tile, 66px\) - var\(--s-3\)\)\)/, 'a phone’s pedals are sized apart from its scenes')
+    assert.equal(px('s-3'), 12, 'the pedals are not the phone app’s 12 shorter')
+    assert.match(phone, /padding-top: var\(--s-1\)/)
+    assert.match(phone, /padding-bottom: var\(--s-1\)/)
+    const compact = rule('.gig[data-phone][data-compact] button.gig-block')
+    assert.match(compact, /height: max\(44px, calc\(var\(--gig-fit-tile, 56px\) - var\(--s-3\)\)\)/, 'a phone’s compact pedals are sized apart from its scenes')
+    assert.match(compact, /min-height: 0/, 'the phone’s 56px floor can beat the compact pedal’s stated height')
+    /* Nothing keyed to a phone sizes a scene: a scene and a block still come from the size control together. */
+    for (const m of code.matchAll(/([^{}]*\.gig\[data-phone\][^{}]*)\{([^}]*)\}/g)) {
+      assert.ok(!/gig-scene/.test(m[1]), `a phone rule sizes the scenes: ${m[1].trim()}`)
+    }
+    /* What is inside fits, at both floors: the picture, its gap, the name, the padding and the ring. */
+    const nameSize = (r) => px(r.match(/font-size: var\(--(f-\d)\)/)[1])
+    const lh = Number(rule('.gig-block-name').match(/line-height: ([0-9.]+);/)[1])
+    const gapUnder = Number(rule('.gig-block-icon').match(/margin: 0 auto (\d+)px/)[1])
+    const ring = 2 * 2
+    const content = (picEm, size, pad) => picEm * size + gapUnder + size * lh + 2 * pad + ring
+    const fullPic = Number(rule('.gig-block-icon').match(/height: ([0-9.]+)em/)[1])
+    const smallPic = Number(rule('.gig[data-compact] .gig-block-icon').match(/height: ([0-9.]+)em/)[1])
+    const atSmall = content(fullPic, nameSize(rule('.gig-block-name')), px('s-1'))
+    assert.ok(atSmall <= 56, `a phone’s pedal at Small holds ${atSmall}px of content in 56px`)
+    const tight = rule('.gig[data-phone][data-compact][data-fx-tight] .gig-block-name')
+    const atFloor = content(smallPic, nameSize(tight), px('s-1'))
+    assert.ok(atFloor <= 44, `a phone’s pedal at its 44px floor holds ${atFloor}px of content`)
+    /* And Gig's threshold for the smaller name is where the usual name stops fitting. */
+    const gig = readFileSync(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
+    const room = Number(gig.match(/^const PEDAL_NAME_ROOM = (\d+)$/m)?.[1])
+    const usual = content(smallPic, nameSize(rule('.gig-block-name')), px('s-1'))
+    assert.ok(usual > 44 && usual <= room, `the name goes a size down on pedals that hold it (${usual}px in ${room}px)`)
+  })
+
+  test('the bottom buttons are the phone’s order, pictures and words, the website’s height, and the phone’s height is one line away', () => {
+    const rule = (sel) => code.slice(code.indexOf(sel + ' {'), code.indexOf('}', code.indexOf(sel + ' {')))
+    const btn = rule('button.gig-bar-btn')
+    assert.match(btn, /min-height: 44px/, 'the bar buttons are not the website’s short ones')
+    assert.ok(!/text-transform: uppercase/.test(btn), 'the bar’s words are capitals again, not the phone’s')
+    assert.match(btn, /color: var\(--silk\)/, 'the bar’s words are dim, not the phone’s plain ink')
+    assert.match(btn, /font-size: var\(--f-4\)/, 'the bar’s words are not the phone’s body size')
+    assert.match(rule('.gig-bar-icon'), /width: 20px/, 'the pictures are not the phone’s 20pt')
+    /* "Stop tuner" wraps rather than being cut: with the lit colour the words say the tuner is on. */
+    const word = rule('.gig-bar-word')
+    assert.ok(!/text-overflow: ellipsis/.test(word), '"Stop tuner" is cut to "Stop tun…" on a phone')
+    assert.match(word, /white-space: normal/)
+    assert.match(word, /line-height: 1\.1/, 'two lines of "Stop tuner" do not fit the 44px button')
+    /* The phone app's taller look, written and waiting behind Gig's BAR_LOOK: 56 high, 48 at Smallest, the tempo under Tap. */
+    assert.match(code, /\.gig-bar\[data-look='tall'\] button\.gig-bar-btn \{\s*min-height: 56px;/, 'the phone app’s height is not one line away')
+    assert.match(code, /\.gig\[data-compact\] \.gig-bar\[data-look='tall'\] button\.gig-bar-btn \{\s*min-height: 48px;/)
+    assert.match(code, /\.gig-bar\[data-look='tall'\] \.gig-tap-bpm \{\s*flex-basis: 100%;/, 'the tall look does not put the tempo under Tap')
+    /* Every other height for a bar button is under the tall look: the short one is the one place. */
+    for (const m of code.matchAll(/([^{}]*\bgig-bar-btn\b[^{}]*)\{([^}]*)\}/g)) {
+      if (!/min-height/.test(m[2])) continue
+      const sel = m[1].trim()
+      assert.ok(/^button\.gig-bar-btn$/.test(sel) || /data-look='tall'/.test(sel), `another rule sets the bar’s height: ${sel}`)
+    }
+    /* The base Tap is still one line, which the tall look overrides. */
+    assert.ok(code.indexOf("button.gig-tap {") < code.indexOf(".gig-bar[data-look='tall'] button.gig-tap {"), 'the tall Tap is written before the rule it overrides')
+  })
+
+  test('a chosen setlist lights the Setlists button solid amber, as on the phone', () => {
+    const rule = (sel) => code.slice(code.indexOf(sel + ' {'), code.indexOf('}', code.indexOf(sel + ' {')))
+    const on = rule('.gig-nav button.gig-nav-source.on')
+    assert.match(on, /background: var\(--signal\)/, 'a chosen setlist is only an amber edge')
+    assert.match(on, /border-color: var\(--signal\)/)
+    assert.match(on, /color: var\(--on-signal\)/)
+    assert.match(code, /\.gig-nav button\.gig-nav-source\.on \.gig-nav-source-kind,\s*\.gig-nav button\.gig-nav-source\.on \.gig-nav-source-pos \{\s*color: var\(--on-signal\);/, 'the words on a lit Setlists button are lost on the amber')
+  })
+
+  test('the preset button has the phone’s line over it and under its name, and the demo’s card and the hold tip are the phone’s cards', () => {
+    const rule = (sel) => code.slice(code.indexOf(sel + ' {'), code.indexOf('}', code.indexOf(sel + ' {')))
+    assert.match(rule('.gig-preset-line'), /letter-spacing: 0\.14em/)
+    assert.match(rule('.gig-preset-line'), /text-overflow: ellipsis/, 'a long PRESET line wraps and moves the screen')
+    assert.match(rule('.gig-name-chevron'), /width: 20px/, 'the arrow is not the phone’s 20pt')
+    const card = rule('.demo-card')
+    assert.match(card, /border: 1px solid var\(--signal\)/)
+    assert.match(card, /background: var\(--signal-wash\)/, 'the demo’s card is not the phone’s amber wash')
+    const unlock = rule('button.demo-card-unlock')
+    assert.match(unlock, /background: var\(--signal\)/)
+    assert.match(unlock, /color: var\(--on-signal\)/)
+    assert.match(rule('button.demo-card-close'), /min-width: 44px/, 'the × is not a thumb’s target')
+    const coach = rule('.coach')
+    assert.match(coach, /border: 1px solid var\(--rule\)/)
+    assert.match(coach, /background: var\(--panel\)/, 'the hold tip is not the phone’s card')
+    assert.match(rule('.coach-count'), /color: var\(--signal\)/)
+    assert.match(rule('.coach-buttons button'), /min-height: 44px/)
+    /* In the page's flow, over nothing: neither takes a touch meant for a tile. */
+    for (const sel of ['.demo-card', '.coach']) assert.ok(!/position: (fixed|absolute)/.test(rule(sel)), `${sel} covers the screen`)
+    /*
+     * Shorter than the phone's column, for the pedals under it: the swatch
+     * beside QUICK TIP on a phone, and wider than a phone the buttons to the
+     * right of the words. On paper the swatch's amber is darkened to pass
+     * 4.5:1 on its own wash (it came to 4.26).
+     */
+    assert.match(coach, /display: grid/)
+    assert.match(rule('.coach-hold'), /grid-column: 2;\s*grid-row: 1;/, 'the swatch takes a row of its own on a phone')
+    assert.match(code, /\[data-theme='light'\] \.coach-hold \{\s*color: color-mix\(in srgb, var\(--signal\) 85%, black\);/, 'the swatch is under 4.5:1 on paper')
+    assert.match(code, /@media \(min-width: 621px\) \{\s*\.coach \{[^}]*\}[\s\S]*?\.coach > \.coach-buttons \{\s*grid-column: 2;\s*grid-row: 1 \/ span 5;/, 'the buttons take a row of their own on a wide screen')
+    /* Under 360 wide the demo's Unlock goes under its words, which no longer wrap to five lines beside it. */
+    assert.match(code, /@media \(max-width: 359px\) \{\s*\.demo-card \{\s*display: grid;[\s\S]*?button\.demo-card-unlock \{\s*grid-column: 1 \/ -1;\s*grid-row: 2;/, 'the demo card squeezes its words beside the pill on a narrow phone')
   })
 }

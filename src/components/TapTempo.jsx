@@ -12,6 +12,8 @@ import { useDismiss } from '../lib/dismiss'
 import { boxPresses } from '../lib/boxPress'
 import BpmBox from './BpmBox'
 import MetronomeSwitch from './MetronomeSwitch'
+import Picture from './Picture'
+import tempoIcon from '../../mobile/assets/icons/tempo.png'
 
 /* Hoisted: a selector rebuilt each render re-reads the store on every notify. */
 const ofBpm = (s) => s.bpm
@@ -330,6 +332,8 @@ export default function TapTempo({ onError, onChanged, onDropped, where = 'bar' 
         aria-label={tapLabel}
         {...holdTap}
       >
+        {/* The phone's picture, on Play's bar only: the chip on Edit's row is words. */}
+        {where === 'row' ? null : <Picture src={tempoIcon} className="gig-bar-icon" />}
         {/* "Change the label on the tap tempo button to just say Tap." */}
         <span>Tap</span>
         {/* "A green light dot ... that flashes at the current tempo." The

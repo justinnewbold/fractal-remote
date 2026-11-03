@@ -46,6 +46,32 @@ export function slotCount(capabilities) {
 }
 
 /**
+ * The next slot in a direction, or null when there isn't one.
+ *
+ * Clamped rather than wrapped: on stage, stepping off the end of the list and
+ * landing back at slot 0 is worse than the button doing nothing. A unit that
+ * never reported a count is given the benefit of the doubt, the same way
+ * slotOutside does — refusing every step would turn a rare wrong slot into a
+ * feature that never works.
+ *
+ * This is the fallback, not the rule. What Previous and Next walk in a
+ * setlist is decided by `setlists.stepTarget`, which wraps within a setlist
+ * because a running order does come back round to the first song. Slot by
+ * slot has no such order to come back to, so it stops: at the unit's last
+ * slot, where the AM4 demo used to go on to a "104 Untitled" that does not
+ * exist. Both Plays step the slots by this one function; the phone's
+ * mobile/src/lib/unit.mjs re-exports it rather than keeping a copy.
+ */
+export function stepSlot(number, by, capabilities) {
+  if (!Number.isInteger(number)) return null
+  const next = number + by
+  if (next < 0) return null
+  const count = slotCount(capabilities)
+  if (count !== null && next >= count) return null
+  return next
+}
+
+/**
  * Whether this slot is one the unit has said it does not have.
  *
  * Only ever true when the unit has stated a count. A unit that has not said is

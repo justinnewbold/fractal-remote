@@ -954,7 +954,10 @@ async function tapTempoOnABench() {
       export const useLongPress = () => ({})
       export const useDismiss = () => {}
       export default function BpmBox() { return null }
-    `
+    `,
+    /* The phone's picture on Play's Tap (components/Picture), drawn as nothing here, and the file it is drawn from, by name. */
+    'picture.mjs': `export default function Picture() { return null }`,
+    'tempo-icon.mjs': `export default 'tempo.png'`
   }
   let src = transformSync(read('src/components/TapTempo.jsx'), { loader: 'jsx', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'Frag', format: 'esm' }).code
   const swaps = [
@@ -971,6 +974,8 @@ async function tapTempoOnABench() {
     ['from "./BpmBox"', "from './rest.mjs'"],
     /* The metronome switch in the typed-tempo box: drawn only after a hold, which this bench never makes. */
     ['from "./MetronomeSwitch"', "from './rest.mjs'"],
+    ['from "./Picture"', "from './picture.mjs'"],
+    ['from "../../mobile/assets/icons/tempo.png"', "from './tempo-icon.mjs'"],
     ['from "../../shared/unsupported.mjs"', `from '${repoUrl('shared/unsupported.mjs')}'`],
     ['from "../../shared/vp4-safety.mjs"', `from '${repoUrl('shared/vp4-safety.mjs')}'`],
     ['from "../../shared/tempo.mjs"', `from '${repoUrl('shared/tempo.mjs')}'`]
@@ -3835,6 +3840,227 @@ export function run(test) {
   })
 
   /*
+   * REFRESH NAMES ON THE BROWSER'S PLAY, the phone's rig.rereadSceneNames:
+   * the names off the unit again, past anything kept, and what came of it
+   * in words. Run on the store with a stand-in driver, and on forgefx's own
+   * readSceneNames for the "fresh" half.
+   */
+  test('browser: Refresh names reads the names off the unit again, past anything kept, and says which', async () => {
+    const ds = await import('../src/lib/deviceState.js')
+    const KORN = ['FREAK ON A LEASH', 'BLIND', 'FALLING AWAY', 'GOT THE LIFE']
+    const bench = (driver) => {
+      ds.reset()
+      ds.attachDriver({ keepSceneNames: (n, names) => kept.push([n, names]), ...driver })
+      ds.set({ preset: { number: 53, name: 'Recto 1' }, sceneNames: ['OLD', '', '', ''] })
+    }
+    const kept = []
+    try {
+      /* The computer's copy has this preset's names: found, put on the tiles and kept, with no read of the slot. */
+      let slotReads = 0
+      bench({ hostKeepsCopy: () => true, presetCopy: async () => ({ name: 'Recto 1', scenes: [...KORN] }), readSceneNames: async () => { slotReads++; return null } })
+      assert.equal(await ds.rereadSceneNames(), 'found')
+      assert.deepEqual(ds.getSnapshot().sceneNames, KORN)
+      assert.deepEqual(kept.at(-1), [53, KORN], 'names read off the unit are not kept for the slot')
+      assert.equal(slotReads, 0, 'the slot was read for names the computer’s copy had')
+      /* The copy is another preset (the last song): failed, the names stay, and nothing is dumped on top. */
+      slotReads = 0
+      bench({ hostKeepsCopy: () => true, presetCopy: async () => ({ name: 'Bad Wolf Rising LM', scenes: [...KORN] }), readSceneNames: async () => { slotReads++; return KORN } })
+      assert.equal(await ds.rereadSceneNames(), 'failed', 'the last song’s copy was taken for this one')
+      assert.deepEqual(ds.getSnapshot().sceneNames, ['OLD', '', '', ''])
+      assert.equal(slotReads, 0, 'the slot was dumped on top of a copy of the last song')
+      /* No copy to ask: the unit's own read, asked fresh, past what was kept. */
+      const asked = []
+      bench({ readSceneNames: async (n, opts) => { asked.push(opts); return [...KORN] } })
+      assert.equal(await ds.rereadSceneNames(), 'found')
+      assert.equal(asked[0].fresh, true, 'Refresh names was answered from what this browser or the computer kept')
+      assert.equal(asked[0].still(), true)
+      /* The unit says every scene is blank: none, and the names on the tiles are not replaced by the remembered ones. */
+      bench({ readSceneNames: async () => ['', '', '', ''] })
+      assert.equal(await ds.rereadSceneNames(), 'none', 'unnamed scenes are said as a failed read, or as found')
+      assert.deepEqual(ds.getSnapshot().sceneNames, ['OLD', '', '', ''], 'the remembered names were put up for scenes the unit says are blank')
+      /* The read fails: failed. */
+      bench({ readSceneNames: async () => { throw new Error('timed out') } })
+      assert.equal(await ds.rereadSceneNames(), 'failed')
+      bench({ readSceneNames: async () => null })
+      assert.equal(await ds.rereadSceneNames(), 'failed')
+      /* The preset moves on during the read: failed, and nothing goes on the next song's tiles. */
+      bench({ readSceneNames: async () => { ds.set({ preset: { number: 54, name: 'Next one' }, sceneNames: [] }); return [...KORN] } })
+      assert.equal(await ds.rereadSceneNames(), 'failed', 'names read for the preset left were said as found')
+      assert.deepEqual(ds.getSnapshot().sceneNames, [], 'the last song’s names went on this song’s tiles')
+      /* No preset at all: failed, nothing asked. */
+      bench({ readSceneNames: async () => KORN })
+      ds.set({ preset: null })
+      assert.equal(await ds.rereadSceneNames(), 'failed')
+    } finally {
+      ds.reset()
+    }
+
+    /* forgefx: fresh stops at the unit's own answer, never what was kept. */
+    const { ffx, relay } = await forgefxOnABench()
+    let stored = { number: 53, names: ['', '', '', ''] }
+    relay.answer = async (path) => {
+      if (path === '/device/detect') return { connected: true, name: 'FM3', short: 'FM3', capabilities: { scenes: 8 } }
+      if (path === '/device') return {}
+      if (path === '/presets/53/summary') return { number: 53, scenes: ['', '', '', ''] }
+      if (path === '/presets/53/scenes') return stored
+      if (path.startsWith('/store/config/scene-names')) return { data: ['KEPT ON THE COMPUTER', '', '', ''] }
+      if (path === '/preset/backup') throw Object.assign(new Error('refused'), { status: 403 })
+      return null
+    }
+    await ffx.detect()
+    /* The unit answers with every scene blank: its answer, not what the computer kept. */
+    assert.deepEqual(await ffx.readSceneNames(53, { fresh: true }), ['', '', '', ''], 'Refresh names was answered with names the computer kept')
+    /* Nothing read off the unit: null, which the store says as Couldn't read them. */
+    stored = null
+    assert.equal(await ffx.readSceneNames(53, { fresh: true }), null, 'what the computer kept was said as the unit’s names')
+    assert.ok(!relay.handed.some((h) => h.path.startsWith('/store/config/scene-names') && !h.method), 'Refresh names asked the computer for the names it kept')
+    /* Without fresh, as before: what was kept, when the unit says nothing. */
+    assert.deepEqual((await ffx.readSceneNames(53)).slice(0, 1), ['KEPT ON THE COMPUTER'])
+    /*
+     * A unit whose names come only out of a dump of the slot (no scenes
+     * route): the dump with every scene blank is the unit saying so, 'none'
+     * at the store, never "Couldn't read them" and never what was kept. A
+     * dump of another slot says nothing about this one: null.
+     */
+    let dump = { location: 53, sceneNames: ['', '', '', ''] }
+    relay.answer = async (path) => {
+      if (path === '/device/detect') return { connected: true, name: 'FM3', short: 'FM3', capabilities: { scenes: 8 } }
+      if (path === '/device') return {}
+      if (path === '/presets/53/summary') return null
+      if (path === '/presets/53/scenes') return null
+      if (path.startsWith('/store/config/scene-names')) return { data: ['KEPT ON THE COMPUTER', '', '', ''] }
+      if (path === '/preset/backup') return dump
+      return null
+    }
+    assert.deepEqual(await ffx.readSceneNames(53, { fresh: true }), ['', '', '', ''], 'a dump of the slot with every scene blank was said as nothing read')
+    dump = { location: 52, sceneNames: ['', '', '', ''] }
+    assert.equal(await ffx.readSceneNames(53, { fresh: true }), null, 'another slot’s blank scenes were said as this one’s')
+    dump = { location: 53, sceneNames: ['VERSE', '', 'SOLO', ''] }
+    assert.deepEqual(await ffx.readSceneNames(53, { fresh: true }), ['VERSE', '', 'SOLO', ''], 'names in the dump were not found')
+
+    /*
+     * A VP4's names come with its chain, off its one record (deviceState
+     * takeVp4Name): Refresh names reads the chain again, and says what the
+     * record named, or none, or failed when the chain could not be read.
+     */
+    const vp4 = (record) => {
+      ds.reset()
+      ds.attachDriver({
+        vp4Here: () => true,
+        presetBlocks: async () => {
+          if (record === 'refused') throw Object.assign(new Error('refused'), { status: 502 })
+          return [{ slug: 'drive', name: 'Drive', effectId: 118, bypassed: null, channel: null }]
+        },
+        vp4PresetName: () => 'Edge of Breakup',
+        vp4SceneNames: () => (Array.isArray(record) ? [...record] : null),
+        currentPreset: async () => ({ number: 4, name: 'Edge of Breakup' })
+      })
+      ds.set({ preset: { number: 4, name: 'Edge of Breakup' }, sceneNames: ['', '', '', ''] })
+    }
+    try {
+      vp4(['Verse', 'Chorus', '', ''])
+      assert.equal(await ds.rereadSceneNames(), 'found', 'a VP4’s named scenes were not found off its record')
+      assert.deepEqual(ds.getSnapshot().sceneNames, ['Verse', 'Chorus', '', ''])
+      vp4(['', '', '', ''])
+      assert.equal(await ds.rereadSceneNames(), 'none', 'a VP4 whose record names no scene was said as found or failed')
+      vp4('refused')
+      assert.equal(await ds.rereadSceneNames(), 'failed', 'a VP4 chain that could not be read was said as found or none')
+    } finally {
+      ds.reset()
+    }
+  })
+
+  /*
+   * TWO QUICK NEXTS ON THE BROWSER'S PLAY, the phone's test above run on
+   * Gig's own `step`: never held while a load is answered, only the newest
+   * press's song set up, and an older press that fails says nothing over
+   * the one that landed (the phone's rig.loadPreset: "Only the newest tap
+   * decides what is on screen").
+   */
+  test('browser: two quick steps in a setlist set up only the newest song, an older one says nothing, and one step still sets up its own', async () => {
+    const gig = read('src/components/Gig.jsx')
+    const from = gig.indexOf('const step = async (delta) => {')
+    const end = gig.indexOf('\n  }\n', from)
+    assert.ok(from > 0 && end > from, 'Gig.step is not where this test reads it')
+    const arrow = gig.slice(gig.indexOf('async', from), end + 4)
+    assert.match(gig, /^ {2}const stepsRef = useRef\(0\)$/m, 'the count of presses is not kept for the life of the screen')
+    const loads = []
+    const applied = []
+    const errors = []
+    const dropped = []
+    const env = {
+      landing: (n) => n,
+      order: [11, 12, 13],
+      noSlotSteps: false,
+      vp4StepWords: () => 'no',
+      vp4Capabilities: () => ({}),
+      linkAwayMs: () => 0,
+      loadPreset: (n) => new Promise((landed, refused) => loads.push({ n, landed, refused })),
+      onPresetLoaded: () => {},
+      source: 'set',
+      lists: [],
+      songFor: (source, lists, n) => ({ scene: n - 10, bpm: 100 + n }),
+      songLate: () => false,
+      applySongSorted: async (song) => {
+        applied.push(song.bpm)
+        return { refused: [], unsent: null }
+      },
+      writeScene: () => {},
+      writeTempo: () => {},
+      sayNotSent: (e) => dropped.push(e),
+      onError: (m) => errors.push(m),
+      stepsRef: { current: 0 }
+    }
+    const step = new Function(...Object.keys(env), `return (${arrow})`)(...Object.values(env))
+    const settle = () => new Promise((r) => setImmediate(r))
+    /* Next, Next: both go at once, nothing held; the first lands after the second press. */
+    step(11)
+    step(12)
+    assert.equal(loads.length, 2, 'a second quick Next was held while the first was answered')
+    loads[0].landed({ number: 11 })
+    await settle()
+    loads[1].landed({ number: 12 })
+    await settle()
+    assert.deepEqual(applied, [112], 'the song skipped past was set up on the unit loading the next one')
+    /* The newer landing first changes nothing. */
+    applied.length = 0
+    step(13)
+    step(11)
+    loads[3].landed({ number: 11 })
+    await settle()
+    loads[2].landed({ number: 13 })
+    await settle()
+    assert.deepEqual(applied, [111])
+    /* One step: its song. A load the unit has not said it took (null): none. */
+    applied.length = 0
+    step(12)
+    loads[4].landed({ number: 12 })
+    await settle()
+    assert.deepEqual(applied, [112], 'one step no longer sets up its song')
+    step(13)
+    loads[5].landed(null)
+    await settle()
+    assert.deepEqual(applied, [112])
+    /* An older press refused after a newer one went: nothing said over the newer press. */
+    step(11)
+    step(12)
+    loads[6].refused(Object.assign(new Error('The unit didn’t load that preset.'), { code: 'SELECT_REFUSED' }))
+    await settle()
+    loads[7].landed({ number: 12 })
+    await settle()
+    assert.deepEqual(errors, [], 'an older press’s refusal was said over the press that landed')
+    /* The newest refused: said, as before. And a newest press dropped: said over the tiles. */
+    step(13)
+    loads[8].refused(new Error('The unit didn’t load that preset.'))
+    await settle()
+    assert.deepEqual(errors, ['The unit didn’t load that preset.'], 'the newest press’s refusal was not said')
+    step(11)
+    loads[9].refused(Object.assign(new Error('Not sent'), { notSent: true }))
+    await settle()
+    assert.equal(dropped.length, 1, 'the newest press dropped was not said over the tiles')
+  })
+
+  /*
    * A SETLIST SONG'S SCENE AND TEMPO, NEVER SECONDS AFTER NEXT.
    *
    * They go once the preset has loaded and been read, so they cannot carry
@@ -4376,7 +4602,11 @@ export function run(test) {
     assert.deepEqual(calls, ['false'], 'Play tells the computer to read its levels again, under a phone that just said off')
     assert.match(gig, /useEffect\(\(\) => \{\s*setMetersWanted\(false\)\.catch\(\(\) => \{[\s\S]{0,120}\}\)\s*\}, \[\]\)/, 'Play says it on every chain read, or not when it opens')
     /* The bar is liveMeters — the output block's own monitor — and asks for it whatever the computer's readings are. */
-    assert.match(gig, /if \(meterEid === null \|\| compact\) \{\s*setMeters\(\[\]\)/, 'the bar is hidden for something other than its size or a chain with no output block')
+    assert.match(gig, /if \(meterEid === null \|\| !meterShown\) \{\s*setMeters\(\[\]\)/, 'the bar is hidden for something other than its size, a phone, or a chain with no output block')
+    /* Not at the compact size, and not on a phone, whose app has none; the computer keeps it. Asked only while it is drawn, and drawn only then. */
+    assert.match(gig, /const meterShown = !compact && !phoneScreen\n/, 'the bar is hidden for something other than its size or a phone')
+    assert.match(gig, /\}, \[meterEid, size, meterShown\]\)/, 'turning Fit on or off does not start or stop the bar’s reads')
+    assert.match(gig, /\{meterShown \? \(\s*<div className="gig-signal" aria-label="Signal level">/, 'the bar is drawn where it is not read')
     assert.match(gig, /const data = await liveMeters\(meterEid\)/, 'the bar stopped reading the output block')
     const fx = read('src/lib/forgefx.js')
     assert.match(fx.slice(fx.indexOf('export const liveMeters')), /^export const liveMeters[^\n]*\n[\s\S]{0,300}\/preset\/monitors\/live/, 'the bar no longer reads the block monitor, which never needed the computer’s readings')

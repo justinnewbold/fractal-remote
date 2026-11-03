@@ -299,8 +299,10 @@ export function orderFor(source, { favourites = [], lists = [] } = {}) {
  *
  * `null` means the button has nothing to do and should be disabled: below
  * slot 0 in the slots view, or an empty starred list or setlist. The slots
- * view is open-ended upward — the unit refuses a slot it does not have, and
- * it always did.
+ * view here is open-ended upward, but Play no longer steps the slots by it:
+ * both Plays step them by lib/slots stepSlot, which stops at the unit's last
+ * slot (3 November 2026; the AM4 demo went on to a "104 Untitled" that does
+ * not exist). Play asks this only for a setlist or the stars.
  */
 export function stepTarget({ source, current, delta, favourites, lists }) {
   const order = orderFor(source, { favourites, lists })

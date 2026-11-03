@@ -3872,7 +3872,7 @@ export function run(test) {
     assert.match(list, /if \(needle[^)]*\) return/, 'centring fights the filter being typed')
   })
 
-  test('Previous and Next on Play follow a setlist, and the button between them says which', () => {
+  test('Previous and Next on Play follow a setlist, and the button between them says which', async () => {
     /*
      * "Hitting next or previous cycles through songs on the favorites or
      * setlists." The two buttons stepped the slot number by one, in this
@@ -3888,9 +3888,37 @@ export function run(test) {
     const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ').replace(/\{\s*\}/g, '')
     const g = bare(gig)
 
-    const stepFn = g.slice(g.indexOf('const step = async'), g.indexOf('setWorking(true)', g.indexOf('const step = async')))
+    const stepFn = g.slice(g.indexOf('const step = async'), g.indexOf('const awayAtNext', g.indexOf('const step = async')))
+    assert.ok(stepFn.length > 0 && stepFn.includes('landing(delta)'), 'Gig.step moved; this test reads it')
     assert.ok(!/\(preset\?\.number \?\? 0\) \+ delta/.test(stepFn), 'Next is back to adding one to the slot number')
-    assert.match(g, /stepTarget\(\{ source, current: preset\?\.number, delta, favourites, lists \}\)/, 'the target does not come from lib/setlists')
+    assert.ok(!/\(here \?\? 0\) \+ delta/.test(stepFn), 'Next is back to adding one to the slot number')
+    /*
+     * In a setlist or the stars by lib/setlists, slot by slot by the phone's
+     * own rule (lib/slots stepSlot: nothing past the unit's last slot), and
+     * from where Play stands (`here`: the preset the last press is going to),
+     * so two quick presses of Next are two presets.
+     */
+    assert.match(g, /stepTarget\(\{ source, current: here, delta, favourites, lists \}\)/, 'the target does not come from lib/setlists')
+    assert.match(g, /: noSlotSteps\s*\? null\s*: stepSlot\(here, delta, capabilities\)/, 'the slots are stepped by something other than the phone’s rule, or a VP4 is stepped slot by slot')
+    assert.match(g, /const here = Number\.isInteger\(shown\.number\) \? shown\.number : preset\?\.number\n/, 'Play steps from the last answer rather than from the last press')
+    {
+      const landingSrc = g.slice(g.indexOf('const landing = (delta) =>'), g.indexOf('const nextAt', g.indexOf('const landing = (delta) =>')))
+      const { stepTarget: target } = await import('../src/lib/setlists.js')
+      const { stepSlot } = await import('../src/lib/slots.js')
+      const land = ({ order = null, here, noSlotSteps = false, source = 'all', lists = [], favourites = [], capabilities = { presets: { count: 104 } } }) =>
+        new Function('order', 'here', 'noSlotSteps', 'source', 'lists', 'favourites', 'capabilities', 'stepTarget', 'stepSlot', `${landingSrc}\nreturn landing`)(order, here, noSlotSteps, source, lists, favourites, capabilities, target, stepSlot)
+      assert.equal(land({ here: 103 })(1), null, 'Next goes past the AM4’s last preset')
+      assert.equal(land({ here: 102 })(1), 103)
+      assert.equal(land({ here: 0 })(-1), null, 'Previous goes below slot 0')
+      assert.equal(land({ here: null })(1), null, 'Next guesses a slot when none is known')
+      assert.equal(land({ here: 511, capabilities: {} })(1), 512, 'a unit that never said how many slots it has is not given the benefit of the doubt')
+      assert.equal(land({ here: 3, noSlotSteps: true })(1), null, 'a VP4 is stepped slot by slot')
+      const lists = [{ id: 'set', name: 'Set', presets: [5, 7] }]
+      assert.equal(land({ order: [5, 7], here: 7, source: 'set', lists })(1), 5, 'a setlist no longer comes back round to its first song')
+      assert.equal(land({ order: [5, 7], here: 5, source: 'set', lists, noSlotSteps: true })(1), 7, 'a VP4 in a setlist cannot step')
+    }
+    /* Never held while a load is answered: the lock that ignored a second quick Next is gone. */
+    assert.ok(!/\bsetWorking\b|\[working,/.test(g), 'Previous and Next are held while a load is answered again, so a second quick Next does nothing')
 
     const nav = g.slice(g.indexOf('className="gig-nav"'), g.indexOf('className="gig-bar"'))
     assert.match(nav, /‹ Previous/, 'Previous left the row')
@@ -3903,8 +3931,8 @@ export function run(test) {
     /* Greyed by the rule it steps by. On a real VP4 with no setlist the press
        stays live only to say why it cannot step (shared/vp4-safety.mjs
        VP4_NO_STEP): landing() is still the one rule for where it goes. */
-    assert.match(nav, /disabled=\{working \|\| \(landing\(-1\) === null && !\(noSlotSteps && !order\)\)\}/, 'Previous no longer goes dead where the list ends')
-    assert.match(nav, /disabled=\{working \|\| \(landing\(1\) === null && !\(noSlotSteps && !order\)\)\}/, 'Next no longer goes dead on an empty list')
+    assert.match(nav, /disabled=\{landing\(-1\) === null && !\(noSlotSteps && !order\)\}/, 'Previous no longer goes dead where the list ends')
+    assert.match(nav, /disabled=\{landing\(1\) === null && !\(noSlotSteps && !order\)\}/, 'Next no longer goes dead on an empty list, or past the unit’s last preset')
     assert.match(g, /<Setlists\b/, 'the sheet that builds a setlist is not on Play')
 
     // Three across, in the one row.
@@ -3942,7 +3970,7 @@ export function run(test) {
     assert.match(g, /const nextAt = landing\(1\)\n/)
     const lookup = lift('const slotNames = useMemo(')
     const ahead = lift('const ahead = nextWords(')
-    assert.equal(ahead.trim(), 'const ahead = nextWords({ order, current: preset?.number, next: nextAt, nameOf: (n) => slotNames.get(n) })', 'the line is worked out from something other than where Next lands')
+    assert.equal(ahead.trim(), 'const ahead = nextWords({ order, current: here, next: nextAt, nameOf: (n) => slotNames.get(n) })', 'the line is worked out from something other than where Next lands')
     /* The list Play is handed (App's allSlots, the picker's), looked up by slot number, and nothing else. */
     assert.equal(lookup.trim(), 'const slotNames = useMemo(() => new Map((slots || []).map((s) => [s.number, s.name])), [slots])', 'the line takes its names from somewhere other than the preset list')
     assert.ok(!/\b(lookUpName|rememberedName|learnName|scanNames|presetName|knowsName|importHostNames|cachedPresetNames|storedName)\(/.test(g), 'Play asks for a name to put under Next')
@@ -3952,7 +3980,7 @@ export function run(test) {
     const slots = [{ number: 40, name: 'Opener' }, { number: 7, name: 'Schism' }, { number: 45, name: 'Plexi' }, { number: 46, name: '' }, { number: 47 }]
     const run = (order, current, source, lists) => {
       const nextAt = stepTarget({ source, current, delta: 1, favourites: [], lists })
-      return new Function('slots', 'useMemo', 'order', 'preset', 'nextAt', 'nextWords', `${lookup}\n${ahead}\nreturn ahead`)(slots, (fn) => fn(), order, { number: current }, nextAt, nextWords)
+      return new Function('slots', 'useMemo', 'order', 'preset', 'here', 'nextAt', 'nextWords', `${lookup}\n${ahead}\nreturn ahead`)(slots, (fn) => fn(), order, { number: current }, current, nextAt, nextWords)
     }
     const lists = [{ id: 'sat', name: 'Saturday', presets: [40, 7, 200] }]
     assert.equal(run([40, 7, 200], 40, 'sat', lists).shown, 'Schism')
@@ -3967,11 +3995,11 @@ export function run(test) {
     // And under Previous: the same list, for where Previous lands (landing(-1)), "To the end" on song 1.
     assert.match(g, /const lastAt = landing\(-1\)\n/)
     const behind = lift('const behind = previousWords(')
-    assert.equal(behind.trim(), 'const behind = previousWords({ order, current: preset?.number, previous: lastAt, nameOf: (n) => slotNames.get(n) })', 'the line is worked out from something other than where Previous lands')
+    assert.equal(behind.trim(), 'const behind = previousWords({ order, current: here, previous: lastAt, nameOf: (n) => slotNames.get(n) })', 'the line is worked out from something other than where Previous lands')
     const { previousWords, PREVIOUS_WRAPS } = await import('../src/lib/setlists.js')
     const back = (order, current, source, lists) => {
       const lastAt = stepTarget({ source, current, delta: -1, favourites: [], lists })
-      return new Function('slots', 'useMemo', 'order', 'preset', 'lastAt', 'previousWords', `${lookup}\n${behind}\nreturn behind`)(slots, (fn) => fn(), order, { number: current }, lastAt, previousWords)
+      return new Function('slots', 'useMemo', 'order', 'preset', 'here', 'lastAt', 'previousWords', `${lookup}\n${behind}\nreturn behind`)(slots, (fn) => fn(), order, { number: current }, current, lastAt, previousWords)
     }
     assert.equal(back([40, 7, 200], 200, 'sat', lists).shown, 'Schism')
     assert.equal(back([40, 7, 200], 7, 'sat', lists).shown, 'Opener')
@@ -3994,12 +4022,12 @@ export function run(test) {
     for (const b of [previous, next]) assert.match(b, /className="gig-nav-step"/, 'a step button has no room kept for the line')
     assert.match(previous, /<span className="gig-nav-ahead" aria-hidden="true"[^>]*>\s*\{behind\.shown\}\s*<\/span>/, 'Previous has no line under it, so it and Next do not sit level')
     assert.match(previous, /aria-label=\{behind\.said\}/, 'a screen reader is not told where Previous goes')
-    assert.match(previous, /disabled=\{working \|\| \(landing\(-1\) === null && !\(noSlotSteps && !order\)\)\}/)
+    assert.match(previous, /disabled=\{landing\(-1\) === null && !\(noSlotSteps && !order\)\}/)
     assert.match(previous, /onClick=\{\(\) => step\(-1\)\}/)
     assert.match(next, /<span className="gig-nav-ahead" aria-hidden="true"[^>]*>\s*\{ahead\.shown\}\s*<\/span>/, 'Next has no line under it, or it is drawn only once there are words')
     assert.match(next, /aria-label=\{ahead\.said\}/, 'a screen reader is not told where Next goes')
     /* Greyed by where it lands, except on a real VP4 with no setlist, whose press stays live to say why (the nav test above). */
-    assert.match(next, /disabled=\{working \|\| \(landing\(1\) === null && !\(noSlotSteps && !order\)\)\}/)
+    assert.match(next, /disabled=\{landing\(1\) === null && !\(noSlotSteps && !order\)\}/)
     assert.match(next, /onClick=\{\(\) => step\(1\)\}/)
 
     // The height: the line is paid for out of the padding, to the pixel, at both sizes.
@@ -4040,7 +4068,7 @@ export function run(test) {
 
   
   
-  test('the stage screen is the layout he picked, not the one it grew into', () => {
+  test('the stage screen is the layout he picked, not the one it grew into', async () => {
     /*
      * From a screenshot, with "like this": scenes two across in colour, the
      * effects four across in three letters, tuner and tap in a bar along the
@@ -4061,10 +4089,34 @@ export function run(test) {
     const t = bare(readFileSync(new URL('../src/components/TapTempo.jsx', import.meta.url), 'utf8'))
 
     // The bar, and both things in it.
-    const bar = g.slice(g.indexOf('className="gig-bar"'), g.indexOf('className="gig-bar"') + 900)
-    assert.ok(bar.length > 0, 'the tuner and tap bar is gone')
-    assert.match(bar, /Tuner/, 'the tuner left the bar')
+    /* The bar's own markup, to its closing tag after Tap: never a fixed window that a longer button pushes Tap out of. */
+    const barAt = g.indexOf('className="gig-bar"')
+    const bar = g.slice(barAt, g.indexOf('</div>', g.indexOf('<TapTempo', barAt)))
+    assert.ok(barAt > 0 && bar.length > 0, 'the tuner and tap bar is gone')
+    /* The tuner by its button, not the word: the row's own label says Tuner too. */
+    const tunerAt = bar.indexOf('onClick={toggleTuner}')
+    assert.ok(tunerAt > 0, 'the tuner left the bar')
     assert.match(bar, /<TapTempo\b/, 'tap tempo left the bar')
+    /*
+     * In the phone's order, Tuner, Edit, Tap, with Tap on the right where the
+     * thumb is ("move the edit button to the center and the tap tempo button
+     * to the right", his ask of the phone), each with the phone's own
+     * picture beside its word.
+     */
+    assert.ok(tunerAt < bar.indexOf('className="gig-bar-btn gig-edit"'), 'Edit is before the tuner in the bar')
+    assert.ok(bar.indexOf('className="gig-bar-btn gig-edit"') > 0 && bar.indexOf('className="gig-bar-btn gig-edit"') < bar.indexOf('<TapTempo'), 'Tap is not on the right of the bar')
+    assert.match(bar, /<Picture src=\{tunerIcon\} className="gig-bar-icon" \/>\s*(?:\{\s*\}\s*)*<span className="gig-bar-word">\{tunerOn \? 'Stop tuner' : 'Tuner'\}<\/span>/, 'the tuner lost the phone’s picture or its words')
+    assert.match(bar, /<Picture src=\{editIcon\} className="gig-bar-icon" \/>\s*(?:\{\s*\}\s*)*<span>Edit<\/span>/, 'Edit lost the phone’s picture')
+    assert.match(t, /\{where === 'row' \? null : <Picture src=\{tempoIcon\} className="gig-bar-icon" \/>\}\s*(?:\{\s*\}\s*)*<span>Tap<\/span>/, 'Tap on Play lost the phone’s picture, or Edit’s chip grew one')
+    for (const [name, file, src] of [['tunerIcon', 'tuner', g], ['editIcon', 'edit', g], ['tempoIcon', 'tempo', t], ['chevronIcon', 'chevron', g], ['chainIcon', 'chain', g]]) {
+      assert.match(src, new RegExp(`import ${name} from '\\.\\./\\.\\./mobile/assets/icons/${file}\\.png'`), `${name} is not the phone’s own picture`)
+    }
+    /* The look, the one line to change between the website's short buttons and the phone app's tall ones (styles.css .gig-bar[data-look='tall']). */
+    assert.match(g, /^const BAR_LOOK = 'short'$/m, 'the bar’s look is not one line to change, or it changed without asking')
+    assert.match(g, /<div className="gig-bar" data-look=\{BAR_LOOK\} role="group" aria-label=\{barSays\}>/, 'the bar does not take its look from BAR_LOOK')
+    /* Named by the buttons drawn: Tuner only where the unit has one, Edit only where it opens. */
+    assert.match(g, /const barParts = \[tunerHere \? 'Tuner' : null, onChain \? 'Edit' : null, 'Tap'\]\.filter\(Boolean\)/, 'the row is called Tuner, Edit and Tap whatever is in it')
+    assert.match(g, /\{tunerHere \? \(\s*<button className=\{`gig-bar-btn \$\{tunerOn \? 'on' : ''\}`\} onClick=\{toggleTuner\}>/, 'the tuner is drawn on another condition than the one the row is named by')
     assert.ok(!/className="gig-modes"/.test(g), 'the tuner is back in a row of its own mid-screen')
     /*
      * The button sends a NUMBER, not a tap. Forwarding the presses let the
@@ -4148,14 +4200,49 @@ export function run(test) {
     assert.ok(!/onSize=/.test(bare(app)), 'App still hands Play a size control')
 
     /*
-     * And the preset is a tile the height of a scene, with the number and
-     * the name on one line. "Add the preset number to it as well as the
-     * name", then "put the number inline with the name and make the font the
-     * same size as the scenes."
+     * And the preset is a tile with its name, under the phone's line: "PRESET
+     * 000 A01 OF 104". "Add the preset number to it as well as the name",
+     * then "put the number inline with the name": the number is in the line
+     * directly over the name now, as on the phone, and said once. Worked out
+     * from where Play stands (`here`), so a press of Next moves it at once.
+     * Under the name "Tap for all presets", and the phone's arrow.
      */
-    assert.match(preset, /className="gig-name-num mono">\s*\{Number\.isInteger\(preset\?\.number\)[^}]*padStart\(3, '0'\) : '--'\}/, 'the preset tile has no slot number, padded as the list pads it')
-    assert.match(preset, /className="gig-name-word">\{presetLabel\(preset\)\}/, 'the preset tile has no name')
-    assert.ok(preset.indexOf('gig-name-num') < preset.indexOf('gig-name-word'), 'the number is not before the name')
+    assert.match(preset, /<p className="gig-preset-line">\s*\{presetLine\(Number\.isInteger\(here\) \? slotLabel\(here, capabilities\?\.presets\?\.addressing\) : null, slotCount\(capabilities\)\)\}\s*<\/p>/, 'the preset tile has no slot number over it, in the phone’s words')
+    assert.ok(preset.indexOf('gig-preset-line') < preset.indexOf('className="gig-name"'), 'the PRESET line is not over the button')
+    const tile = preset.slice(preset.indexOf('className="gig-name"'), preset.indexOf('</button>'))
+    assert.match(tile, /className="gig-name-word">\{nameShown\}/, 'the preset tile has no name')
+    assert.match(tile, /className="gig-name-sub">\{ALL_PRESETS\}/, 'the preset tile does not say it opens every preset')
+    assert.match(tile, /<Picture src=\{chevronIcon\} className="gig-name-chevron" \/>/, 'the preset tile has no arrow')
+    assert.ok(tile.indexOf('gig-name-word') < tile.indexOf('gig-name-sub') && tile.indexOf('gig-name-sub') < tile.indexOf('gig-name-chevron'), 'the name, the line under it and the arrow are out of the phone’s order')
+    assert.match(tile, /aria-label=\{`Preset \$\{Number\.isInteger\(here\) \? here : '--'\} — \$\{nameShown\} — choose another preset`\}/, 'a screen reader is told another preset than the one on screen')
+    assert.ok(!/gig-name-num|gig-name-caret/.test(gig), 'the slot number is said twice, beside the name and over it')
+    {
+      const w = await import('../shared/play-words.mjs')
+      const { slotLabel } = await import('../src/lib/slots.js')
+      assert.equal(w.presetLine(slotLabel(0, 'bankLetter'), 104), 'PRESET 000 A01 OF 104', 'a real AM4’s line is not the phone’s')
+      assert.equal(w.presetLine(slotLabel(511), 512), 'PRESET 511 OF 512')
+      assert.equal(w.presetLine(null, 104), 'PRESET — OF 104', 'no slot known is a guess')
+      assert.equal(w.presetLine('000', null), 'PRESET 000', 'a unit that never said its count is given one')
+      assert.equal(w.ALL_PRESETS, 'Tap for all presets')
+    }
+    /*
+     * And the name, as the phone puts it up on the tap (rig.loadPreset): the
+     * preset's own, or for one on its way the preset list's name for that
+     * slot, and "…" only where the list does not know it. Run here.
+     */
+    {
+      const gb = gig.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+      const line = (start) => gb.slice(gb.indexOf(start), gb.indexOf('\n', gb.indexOf(start)))
+      assert.equal(line('const naming = '), 'const naming = Number.isInteger(here) && here !== preset?.number', 'a preset on its way is told apart from the one on screen by something else')
+      const named = new Function('here', 'preset', 'slotNames', 'presetLabel', `${line('const naming = ')}\n${line('const goingName = ')}\n${line('const nameShown = ')}\nreturn nameShown`)
+      const { presetLabel } = await import('../src/lib/presetName.js')
+      const list = new Map([[12, 'Schism'], [13, '']])
+      assert.equal(named(11, { number: 11, name: 'Lead' }, list, presetLabel), 'Lead', 'nothing in the air, and the name is not the preset’s')
+      assert.equal(named(12, { number: 11, name: 'Lead' }, list, presetLabel), 'Schism', 'a preset on its way is not named from the preset list')
+      assert.equal(named(14, { number: 11, name: 'Lead' }, list, presetLabel), '…', 'a preset on its way that the list does not know is given a guess')
+      assert.equal(named(13, { number: 11, name: 'Lead' }, list, presetLabel), presetLabel({ number: 13, name: '' }), 'a slot the list calls empty is not said as the list says it')
+      assert.equal(named(undefined, null, list, presetLabel), presetLabel(null), 'no preset at all is said as something other than before')
+    }
     const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
     const tileCss = css.match(/button\.gig-name \{([^}]*)\}/)?.[1] || ''
     /*
@@ -4177,20 +4264,31 @@ export function run(test) {
     const rule = (sel) => css.match(new RegExp(sel.replace('.', '\\.') + ' \\{([^}]*)\\}'))?.[1] || ''
     assert.match(rule('.gig-signal'), /margin-top: var\(--s-2\)/, 'the meter has its old 10px back')
     assert.match(rule('.gig-scenes'), /margin-top: var\(--s-2\)/, 'the scenes have their old 12px back')
-    assert.match(rule('.gig-blocks'), /margin-top: var\(--s-3\)/, 'the effects have their old 18px back')
+    /* The pedals 8 under CHAIN, as the scenes are under SCENES (the phone's space.sm); the step between the two grids is above the heading now, 16 and 12 at the compact size, the phone's. */
+    assert.match(rule('.gig-blocks'), /margin-top: var\(--s-2\)/, 'the effects have their old 18px back, or CHAIN sits nearer the scenes than its own pedals')
+    assert.match(css, /\n\.gig-head\[data-for='chain'\] \{\s*margin-top: var\(--s-4\);/, 'the step between the scenes and the pedals is not above CHAIN')
+    assert.match(css, /\.gig\[data-compact\] \.gig-head,\s*\.gig\[data-compact\] \.gig-head\[data-for='chain'\] \{\s*margin-top: var\(--s-3\);/, 'the headings at the compact size are not 12 under what is above them')
+    assert.match(css, /\.gig\[data-compact\] \.gig-blocks \{\s*margin-top: var\(--s-2\);/, 'at the compact size CHAIN sits nearer the scenes than its own pedals')
     assert.match(rule('.gig-foot'), /margin-top: var\(--s-2\)/, 'the foot has its old gap back')
-    assert.match(tileCss, /flex-direction: row/, 'the number is stacked over the name again')
-    const numCss = css.match(/\.gig-name-num \{([^}]*)\}/)?.[1] || ''
+    /* The arrow beside the pair, as on the phone: the button's row is the name with its line, then the arrow. */
+    assert.match(tileCss, /flex-direction: row/, 'the arrow is stacked under the name')
+    assert.match(tileCss, /padding: var\(--s-1\) var\(--s-4\)/, 'the two lines in the tile take a step more of padding than they need')
+    const lineCss = css.match(/\.gig-preset-line \{([^}]*)\}/)?.[1] || ''
+    const subCss = css.match(/\.gig-name-sub \{([^}]*)\}/)?.[1] || ''
     const nameCss = css.match(/\.gig-name-word \{([^}]*)\}/)?.[1] || ''
     const sceneCss = css.match(/button\.gig-scene\.named \.gig-scene-name \{([^}]*)\}/)?.[1] || ''
     /* A scene's name grows with its tile since 25 October 2026 ("the text is bigger on screens that allow it"); its floor is the size it had, and that is what the preset name is held one step above. */
     const size = (r) => r.match(/font-size: (?:var\(--name-size, )?(var\(--f-\d\))/)?.[1]
     assert.ok(size(sceneCss), 'a named scene no longer sets its size')
     /* "Make the preset name a little bit bigger": one step above a scene's
-       name, and the slot number beside it the same size as the name. */
+       name. The line over it and the line under it are the phone's micro. */
     const step = (v) => Number(v?.match(/--f-(\d)/)?.[1])
     assert.equal(step(size(nameCss)), step(size(sceneCss)) + 1, 'the preset name is not one step above a scene name')
-    assert.equal(size(numCss), size(nameCss), 'the slot number is not the size of the name beside it')
+    assert.equal(size(lineCss), 'var(--f-1)', 'the PRESET line is not the phone’s small line')
+    assert.equal(size(subCss), 'var(--f-1)', 'the line under the name is not the phone’s small line')
+    assert.match(lineCss, /color: var\(--silk-faint\)/, 'the PRESET line is not the phone’s faint')
+    assert.match(subCss, /color: var\(--silk-dim\)/, 'the line under the name is not the phone’s dim')
+    assert.match(css, /button\.gig-name:disabled \.gig-name-sub,\nbutton\.gig-name:disabled \.gig-name-chevron \{\n  display: none;/, 'a preset tile that cannot open still says it opens every preset')
     assert.ok(!/clamp\(30px, 9vw, 52px\)/.test(css), 'the preset name is a headline again')
 
     /*
@@ -5571,6 +5669,16 @@ export function run(test) {
     assert.equal(c.CHAIN[2].phoneBody, 'Your remote - nearby or away')
     assert.equal(c.P6.yes, 'Yes - sign in to connect', 'the button promises a scanner that does not exist')
     assert.equal(c.P5.body, 'Tap toggles the block. Press and hold to choose channels A-D.')
+    /* And the hold tip's card on an AM4 (shared/am4-boost.mjs), P5's own sentences with the amp's boost said: his plain hyphen kept, no dash brought in, and P5's own sentence kept whole where it keeps one. */
+    {
+      const boost = await import('../shared/am4-boost.mjs')
+      for (const line of [boost.COACH_BODY_AM4, boost.COACH_DONE_AM4]) {
+        assert.equal(typeof line, 'string', 'one of the AM4 card’s sentences is gone')
+        assert.ok(!/[\u2014\u2013]/.test(line), `an em or en dash crept into: ${line}`)
+      }
+      assert.ok(boost.COACH_BODY_AM4.endsWith('Press and hold to choose channels A-D.'), 'the AM4’s card lost P5’s own channels sentence, or its hyphen')
+      assert.ok(boost.COACH_DONE_AM4.startsWith('Hold any block to pick its channel.'), 'the AM4’s card lost P5’s own hold sentence')
+    }
 
     /* Wi-Fi keeps its capital and its hyphen. */
     assert.match(c.D3.why[2].body, /home Wi-Fi$/, 'Wi-Fi was rewritten')
@@ -6212,7 +6320,12 @@ export function run(test) {
     /* On Play, waiting while another one-time note is up. */
     const gig = readFileSync(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
     assert.match(gig, /<ColoursNotice waiting=\{noteAbove\} onOpen=\{onOpenColours\} \/>/, 'Play does not say where Match my unit is')
-    assert.match(src, /noteAbove=\{startupOver \|\| signInOver \|\| \(!holdNoteSeen && holdOpensChannels\) \|\| \(isDemo\(\) && status === 'live' && !demoNoteSeen\)\}/, 'the line stacks on the hold tip or the demo’s, or is said under the startup card, the walkthrough or the sign-in sheet')
+    assert.match(src, /noteAbove=\{startupOver \|\| signInOver \|\| playNotesUp \|\| holdTipDue\}/, 'the line stacks on the hold tip or the demo’s, or is said under the startup card, the walkthrough or the sign-in sheet')
+    /* Play's other notes, named: the demo's line, the demo's card (up, or waiting for the purchase to be checked), and the hold tip due. */
+    assert.match(src, /const demoNoteUp = isDemo\(\) && status === 'live' && !demoNoteSeen\n/, 'the demo’s line is told apart by something else')
+    assert.match(src, /const offerWanted = isDemo\(\) && status === 'live' && !paid\.unlocked && !offerAway\n/, 'the demo’s card is told apart by something else')
+    assert.match(src, /const playNotesUp = demoNoteUp \|\| offerWanted\n/, 'the line does not wait for the demo’s line and card')
+    assert.match(src, /const holdTipDue = !holdNoteSeen && holdOpensChannels && !playNotesUp\n/, 'the line does not wait for the hold tip')
     assert.match(src, /const startupOver = independentDue \|\| walkthrough\n/, 'the line is said under the startup card or the walkthrough')
     /* One row at 320: the cross never wraps under the words, and both are a thumb's size on a touch screen. */
     const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
@@ -6441,5 +6554,127 @@ export function run(test) {
     assert.ok(!/three-step/i.test(strip(web)), 'the walkthrough row says three steps again')
     /* "Get it on your phone or tablet" only at the computer end: a phone in a browser already holds the remote. */
     assert.match(flatWeb, /\{phoneEnd \? null : \( <SetupRow key="phone-app" title="Get it on your phone or tablet"/, 'a phone in a browser is offered a way to get the app onto a phone')
+  })
+
+  /* ------------------------------------------------------------------ */
+  /* Play, made like the phone app's (3 November 2026, pass 3)            */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * "Is there anything else we need to do to match the apps?" On a phone the
+   * browser's Play is drawn as the phone app's: Fit on out of the box for
+   * somebody who never chose, no LEVEL bar, the pedals a little shorter than
+   * the scenes with three-letter names. The computer app's own window and a
+   * laptop keep what they had.
+   */
+  test('Play on a phone is the phone app’s: Fit for somebody who never chose, no LEVEL bar, shorter pedals in three letters', () => {
+    const app = src
+    const gig = readFileSync(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
+    /* How a phone is told: the browser's own device word, or a phone-sized screen, and never the computer app's window. Named, once. */
+    assert.match(app, /const phoneScreen = \(narrow \|\| deviceKind\(\) === 'phone'\) && !inDesktopApp\(\)\n/, 'Play is told it is on a phone by something else, or the computer app’s window is taken for one')
+    assert.match(app, /^import \{[^}]*\bdeviceKind\b[^}]*\} from '\.\.\/shared\/device-word\.mjs'$/m)
+    /* Fit: as chosen, or never chosen, which is on for a phone and off everywhere else. */
+    assert.match(app, /const \[fitChoice, setFit\] = useState\(\(\) => loadFit\(undefined, null\)\)\n/, 'Fit cannot tell never chosen from off')
+    assert.match(app, /const fit = fitChoice \?\? \(phoneScreen && !sizePicked\)\n/, 'a choice made is not kept, or never chosen is not decided by the screen')
+    /* A size chosen is a choice of how Play is drawn too: kept, never overridden by Fit coming on by itself (gigSize sizeChosen). */
+    assert.match(app, /const \[sizePicked, setSizePicked\] = useState\(\(\) => sizeChosen\(\)\)\n/, 'a phone browser that chose a size has it overridden by Fit')
+    assert.match(app, /setSize\(next\)\s*saveSize\(next\)\s*setSizePicked\(true\)/, 'a size chosen now is not counted until the next reload')
+    assert.ok(app.indexOf('const phoneScreen = ') > 0 && app.indexOf('const phoneScreen = ') < app.indexOf('const fit = fitChoice'), 'Fit reads phoneScreen before it is declared, which blanks the page')
+    assert.ok(app.indexOf('const [sizePicked') > 0 && app.indexOf('const [sizePicked') < app.indexOf('const fit = fitChoice'), 'Fit reads sizePicked before it is declared, which blanks the page')
+    assert.ok(app.indexOf('const narrow = useAsks(') < app.indexOf('const phoneScreen = '), 'phoneScreen reads narrow before it is declared')
+    /* The switch in Settings is still the only thing that writes a choice. */
+    assert.equal((app.match(/\bsaveFit\(/g) || []).length, 1, 'something other than the Settings switch writes a Fit choice, so a phone’s never-chosen becomes a choice')
+    assert.match(app, /setFit\(on\)\s*saveFit\(on\)/, 'the Settings switch no longer records a choice')
+    /* Play is told, and draws it off one attribute. */
+    const play = app.slice(app.indexOf('<Gig'), app.indexOf('/>', app.indexOf('<Gig')))
+    assert.match(play, /phoneScreen=\{phoneScreen\}/, 'Play is not told it is on a phone')
+    assert.match(gig, /^ {2}phoneScreen = false,$/m, 'Play takes itself for a phone when nobody says')
+    assert.match(gig, /data-phone=\{phoneScreen \? 'yes' : undefined\}/, 'the stylesheet is not told Play is on a phone')
+    /* Three letters on a phone at every size; elsewhere by the column count, as before. */
+    assert.match(gig, /data-fx-abbr=\{phoneScreen \|\| \(fitVars\?\.fxCols \?\? SIZES\[fit \? 0 : size\]\.fx\) >= 4 \? 'yes' : undefined\}/, 'a phone shows whole names at Medium and up, or a wide screen lost its rule')
+    /* And a phone's compact pedal too short for a 15px name says so (styles.css takes the name a size down there only). */
+    assert.match(gig, /const phonePedal = Math\.max\(44, \(fitVars \? fitVars\.tile : COMPACT_SCENE\) - PHONE_PEDAL_LESS\)/)
+    assert.match(gig, /const pedalTight = phoneScreen && compact && phonePedal < PEDAL_NAME_ROOM/)
+    assert.match(gig, /^const COMPACT_SCENE = 56$/m)
+    assert.match(gig, /^const PHONE_PEDAL_LESS = 12$/m, 'a phone’s pedals are not the phone app’s 12 shorter than its scenes')
+    assert.match(gig, /data-fx-tight=\{pedalTight \? 'yes' : undefined\}/)
+    const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+    assert.match(css, /\.gig\[data-compact\] button\.gig-scene \{[^}]*height: var\(--gig-fit-tile, 56px\)/, 'COMPACT_SCENE is not the stylesheet’s compact scene')
+  })
+
+  test('the scenes wear the phone’s bar under the name, named or not, and the name’s room pays for it', () => {
+    const gig = readFileSync(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
+    const grid = gig.slice(gig.indexOf('<div className="gig-scenes"'), gig.indexOf('</div>', gig.indexOf('<div className="gig-scenes"')))
+    const button = grid.slice(grid.indexOf('<button'), grid.indexOf('</button>'))
+    assert.match(button, /\{names\[i\] \? <span className="gig-scene-name">\{names\[i\]\}<\/span> : null\}\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?<span className="gig-scene-bar" aria-hidden="true" \/>\s*$/, 'the bar is not under the name on every scene, or only a named one has it')
+    const fit = readFileSync(new URL('../src/lib/sceneNameFit.js', import.meta.url), 'utf8')
+    assert.match(fit, /const barEl = button\.querySelector\('\.gig-scene-bar'\)/, 'the name is measured as if the bar took no room')
+    assert.match(fit, /\(barEl \? barEl\.offsetHeight \+ px\(getComputedStyle\(barEl\)\.marginTop\) \+ px\(css\.rowGap\) : 0\)/)
+  })
+
+  test('the note that said scene names are not readable from away is gone, and Refresh names says it in words', () => {
+    const gig = readFileSync(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
+    assert.ok(!/readable from this/.test(gig), 'Play still says names are not readable from away, which stopped being true')
+    assert.ok(!/unnamedSettled && remoteActive\(\)/.test(gig))
+    /* The note for a preset whose scenes are really unnamed stays, on its own condition. */
+    assert.match(gig, /\{unnamedSettled && !remoteActive\(\) \? \(\s*<p className="gig-note">/, 'the note on unnamed scenes went with it')
+    assert.match(gig, /<RefreshNames \/>/)
+  })
+
+  /*
+   * The tip about holding a pedal is the phone's card now (components/Coach),
+   * directly over the pedals, with Try it and Skip; once up it stays put
+   * through preset changes until it is put away.
+   */
+  test('the hold tip is the phone’s card over the pedals, in his words, and stays put once up', () => {
+    const coach = readFileSync(new URL('../src/components/Coach.jsx', import.meta.url), 'utf8')
+    const gig = readFileSync(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
+    const g = gig.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+    /* Not one word typed in the card: his copy, through the shared words. */
+    assert.match(coach, /^import \{ coachWords \} from '\.\.\/\.\.\/shared\/play-words\.mjs'$/m, 'the browser’s card has words of its own')
+    for (const typed of ['Hold a block', 'Try it', 'QUICK TIP', 'Press and hold', 'boost', 'Got it', 'Skip']) {
+      /* As a word, not inside a name such as onSkip. */
+      assert.ok(!new RegExp(`(?<![A-Za-z])${typed}(?![A-Za-z])`).test(coach), `"${typed}" is typed into Coach.jsx, so his wording can drift from the copy file`)
+    }
+    for (const said of ['{w.count}', '{w.head}', '{w.body}', '{w.hold}', '{w.go}', '{w.skip}', '{w.done}', '{w.foot}']) assert.ok(coach.includes(said), `the card does not say ${said}`)
+    /* The phone's three stages: Try it and Skip, then Skip alone, then Got it. */
+    assert.match(coach, /\{stage === 'tip' \? \([\s\S]*?onClick=\{onTry\}[\s\S]*?onClick=\{onSkip\}[\s\S]*?\) : stage === 'trying' \? \([\s\S]*?onClick=\{onSkip\}[\s\S]*?\) : \([\s\S]*?onClick=\{onDone\}/, 'the card’s buttons are not the phone’s three stages')
+    /* Where a hold does something: the phone's holdDoesSomething, on this preset's read chain. */
+    assert.match(g, /const holdDoesSomething = chain === 'ok' && blocks\.length > 0 && \(channels\?\.length \|\| 0\) > 1 && !shown\.elsewhere && !shown\.outline\n/, 'the tip comes up where a hold does nothing')
+    /* Latched, as the phone's coach is set once: not worked out on every draw, which jumped every pedal on every Next. */
+    assert.match(g, /const \[tipOpen, setTipOpen\] = useState\(false\)\s*useEffect\(\(\) => \{\s*if \(!holdTip\) setTipOpen\(false\)\s*else if \(holdDoesSomething\) setTipOpen\(true\)\s*\}, \[holdTip, holdDoesSomething\]\)/, 'the card is not kept up once it is up')
+    assert.match(g, /const tipUp = holdTip && tipOpen\n/, 'the card comes and goes with every preset change')
+    assert.ok(!/const tipUp = [^\n]*holdDoesSomething/.test(g), 'the card is worked out from the chain on every draw, so it jumps on every Next')
+    /*
+     * The card over the pedals AND over the waiting cards that hold their
+     * place while the next preset's chain comes: drawn under them, it sat
+     * below the grey cards on a Next and above the pedals once the chain
+     * landed, and swapped places with them on every press.
+     */
+    const card = g.indexOf('{tipUp ? <Coach')
+    assert.ok(card > 0, 'the card is not drawn on Play')
+    assert.ok(card < g.indexOf('{held ? ('), 'the waiting cards are drawn above the tip, so it moves on every Next')
+    assert.ok(card < g.indexOf('<div className={`gig-blocks '), 'the pedals are drawn above the tip about them')
+    assert.ok(g.lastIndexOf('<ChainWait', card) < g.indexOf('<div className="gig-head" data-for="chain">'), 'a waiting card is drawn between CHAIN and the tip')
+    /* And the pedals it is about in sight: when it comes up and after Try it, the page moves by what the first row is short of the bottom buttons, never past the card's own top. */
+    assert.match(g, /useEffect\(\(\) => \{\s*if \(!tipUp \|\| tipStage === 'done'\) return undefined[\s\S]*?const short = Math\.min\(row\.getBoundingClientRect\(\)\.bottom - room, card\.getBoundingClientRect\(\)\.top - top - TIP_ROW_ROOM\)\s*if \(short <= 0\) return[\s\S]*?scroller\.scrollBy\(\{ top: Math\.ceil\(short\)[\s\S]*?\}, \[tipUp, tipStage\]\)/, 'the tip pushes the pedals it is about under the bottom buttons')
+    assert.match(g, /<div className="gig-foot" ref=\{footRef\}>/)
+    /* A card put away from the keyboard hands the focus on, never to the top of the page. */
+    assert.match(g, /onClickCapture=\{keepFocusOnPlay\}/)
+    assert.match(g, /const keepFocusOnPlay = \(e\) => \{\s*const pressed = e\.target\?\.closest\?\.\('\.coach button, \.demo-card button'\)/)
+    /* After chanEid, chain and channels, which it reads: up beside `here` it would throw on the first draw. */
+    assert.ok(g.indexOf('const holdDoesSomething') > g.indexOf('const [chanEid, setChanEid]'), 'the tip reads chanEid before it is declared')
+    assert.ok(g.indexOf('const holdDoesSomething') > g.indexOf("const [chain, setChain]") && g.indexOf('const holdDoesSomething') > g.indexOf('const channels = '))
+    /* Try it is remembered and waits for the hold; a channel sheet opening is the hold having worked; Skip and Got it put it away. */
+    assert.match(g, /const tryTip = \(\) => \{\s*onHoldTipSeen\?\.\(\)\s*setTipStage\('trying'\)\s*\}/, 'Try it closes the card, or is not remembered')
+    assert.match(g, /if \(chanEid !== null && tipUp && tipStage !== 'done'\) \{\s*onHoldTipSeen\?\.\(\)\s*setTipStage\('done'\)\s*\}/, 'the card does not notice the hold worked')
+    assert.match(g, /<Coach stage=\{tipStage\} slug=\{deviceKey\} onTry=\{tryTip\} onSkip=\{onHoldTipClosed\} onDone=\{onHoldTipClosed\} \/>/)
+    /* Directly over the pedals it is about: after the chain's notes, before the grid. */
+    const at = g.indexOf('<Coach ')
+    assert.ok(at > g.indexOf('<ChainUpdating chain={shown} />') && at < g.indexOf('className={`gig-blocks'), 'the card is not directly over the pedals')
+    /* App: due on a unit a hold picks a channel on, after the demo's notes; remembered on Try it, put away on Skip or Got it, under the old key. */
+    assert.match(src, /holdTip=\{holdTipDue\}\s*onHoldTipSeen=\{rememberHoldNote\}\s*onHoldTipClosed=\{dismissHoldNote\}/)
+    assert.match(src, /const HOLD_NOTE_KEY = 'fab\.play\.hold'/, 'somebody who put the old tip away is shown the card')
+    assert.ok(!/className="play-hint">/.test(src), 'the old one-line tip is still over Play')
   })
 }

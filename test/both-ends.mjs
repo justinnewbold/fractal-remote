@@ -315,10 +315,17 @@ export const AREAS = [
   },
   {
     area: 'the play screen',
-    /* Tap lives in its own file now, because Edit draws the same button. */
-    web: ['src/components/Gig.jsx', 'src/components/TapTempo.jsx'],
-    phone: ['mobile/src/screens/Stage.js'],
+    /* Tap lives in its own file now, because Edit draws the same button. The demo's card and the hold tip's card are Play's too, at both ends. */
+    web: ['src/components/Gig.jsx', 'src/components/TapTempo.jsx', 'src/components/UnlockOffer.jsx', 'src/components/Coach.jsx'],
+    phone: ['mobile/src/screens/Stage.js', 'mobile/src/components/UnlockOffer.js', 'mobile/src/components/Coach.js'],
     buttons: [
+      {
+        does: 'unlock the full version from the demo card on Play',
+        /* Both ends build the word from the price ("Unlock $9.99", or Unlock where there is none): the browser from shared/play-words.mjs unlockWord, the phone in its own Text. Their words are held by the demo card's own test. */
+        web: 'Unlock',
+        phone: 'Unlock',
+        unreadable: ['web', 'phone']
+      },
       { does: 'open the block editor', web: 'Edit', phone: 'Edit' },
       { does: 'tap a tempo in', web: 'Tap', phone: 'Tap' },
       {
@@ -370,8 +377,9 @@ export const AREAS = [
         does: 'show whether a block is bypassed',
         web: 'On',
         also: ['Off'],
-        phone: null,
-        why: 'the phone’s block tile carries the block’s short name and its channel, with no on/off word'
+        /* The phone draws On or Off at the top left of a pedal too, out of a variable the scanner cannot read. */
+        phone: 'On',
+        unreadable: ['phone']
       },
       {
         does: 'ask the unit for its block list again after that read failed',
@@ -3399,13 +3407,15 @@ export function run(test) {
     /* The browser's list in its own shape: a row per slot, the unread ones with no name at all. */
     const slots = Array.from({ length: 256 }, (_, n) => (n in names ? { number: n, name: names[n] } : { number: n }))
     const phoneSays = new Function('order', 'preset', 'nextAt', 'nameOf', 'nextWords', `${phoneAhead}\nreturn ahead`)
-    const webSays = new Function('order', 'preset', 'nextAt', 'slots', 'useMemo', 'nextWords', `${webLookup}\n${webAhead}\nreturn ahead`)
+    /* The browser's place is `here`, the preset the last press is going to: the phone's preset, which its rig moves on the tap. The same press is the same place. */
+    assert.match(gig, /const here = Number\.isInteger\(shown\.number\) \? shown\.number : preset\?\.number\n/, 'the browser’s line is not worked out from the press, as the phone’s is')
+    const webSays = new Function('order', 'preset', 'here', 'nextAt', 'slots', 'useMemo', 'nextWords', `${webLookup}\n${webAhead}\nreturn ahead`)
     for (const order of [null, [40, 7, 200], [7], [], [200, 12, 13, 0]]) {
       for (const current of [undefined, 0, 7, 12, 13, 40, 44, 200]) {
         for (const nextAt of [null, 0, 7, 12, 13, 40, 45, 46, 200, 300]) {
           const preset = current === undefined ? null : { number: current }
           const p = phoneSays(order, preset, nextAt, (n) => names[n], phone.nextWords)
-          const w = webSays(order, preset, nextAt, slots, (fn) => fn(), web.nextWords)
+          const w = webSays(order, preset, preset?.number, nextAt, slots, (fn) => fn(), web.nextWords)
           assert.deepEqual(p, w, `the phone and the browser disagree under Next (${JSON.stringify(order)} on ${current}, Next to ${nextAt})`)
         }
       }
@@ -3439,13 +3449,13 @@ export function run(test) {
     const names = { 0: 'Clean', 7: 'Schism', 12: '<EMPTY>k Album Chug', 13: '', 40: 'Opener', 45: 'Plexi', 200: 'A Very Long Preset Name For A Small Phone' }
     const slots = Array.from({ length: 256 }, (_, n) => (n in names ? { number: n, name: names[n] } : { number: n }))
     const phoneSays = new Function('order', 'preset', 'lastAt', 'nameOf', 'previousWords', `${phoneBehind}\nreturn behind`)
-    const webSays = new Function('order', 'preset', 'lastAt', 'slots', 'useMemo', 'previousWords', `${webLookup}\n${webBehind}\nreturn behind`)
+    const webSays = new Function('order', 'preset', 'here', 'lastAt', 'slots', 'useMemo', 'previousWords', `${webLookup}\n${webBehind}\nreturn behind`)
     for (const order of [null, [40, 7, 200], [7], [], [200, 12, 13, 0]]) {
       for (const current of [undefined, 0, 7, 12, 13, 40, 44, 200]) {
         for (const lastAt of [null, 0, 7, 12, 13, 40, 43, 44, 200, 300]) {
           const preset = current === undefined ? null : { number: current }
           const p = phoneSays(order, preset, lastAt, (n) => names[n], phone.previousWords)
-          const w = webSays(order, preset, lastAt, slots, (fn) => fn(), web.previousWords)
+          const w = webSays(order, preset, preset?.number, lastAt, slots, (fn) => fn(), web.previousWords)
           assert.deepEqual(p, w, `the phone and the browser disagree under Previous (${JSON.stringify(order)} on ${current}, Previous to ${lastAt})`)
         }
       }
@@ -3547,11 +3557,24 @@ export function run(test) {
    */
   test('the chain says a block can be held to switch channels, at both ends', async () => {
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(stage, /export const HOLD_FOR_CHANNELS = 'Hold to switch channels'/)
+    /* The words, once, in shared/play-words.mjs, which both ends draw them from. */
+    const words = await import('../shared/play-words.mjs')
+    assert.equal(words.HOLD_FOR_CHANNELS, 'Hold to switch channels')
+    assert.match(read('shared/play-words.mjs'), /export const HOLD_FOR_CHANNELS = 'Hold to switch channels'/)
+    assert.match(stage, /^import \{[^}]*\bHOLD_FOR_CHANNELS\b[^}]*\} from '\.\.\/lib\/play-words'$/m, 'the phone says the hold in words of its own')
+    assert.ok(!/export const HOLD_FOR_CHANNELS/.test(stage), 'the phone keeps a second copy of the words')
     assert.match(stage, /\{channels\?\.length > 1 && blocks\.length \? \(\s*<Text[^>]*>\s*\{HOLD_FOR_CHANNELS\}/, 'the words are not beside CHAIN, or show on a unit with no channels')
     /* The same condition as the hold itself, so the words never promise a hold that does nothing. */
     assert.match(stage, /onLongPress=\{\s*channels\?\.length > 1/)
     const gig = read('src/components/Gig.jsx')
+    /* And the browser says it beside CHAIN too, on the hold's own condition (BlockTile `has`), from the same file. */
+    assert.match(gig, /^import \{[^}]*\bHOLD_FOR_CHANNELS\b[^}]*\} from '\.\.\/\.\.\/shared\/play-words\.mjs'$/m, 'the browser says the hold in words of its own')
+    assert.match(gig, /\{holdHint \? <span className="gig-head-hint">\{HOLD_FOR_CHANNELS\}<\/span> : null\}/, 'the browser’s words are not beside CHAIN, or show where a hold does nothing')
+    /* The hold's condition, over pedals read and drawn: never over the waiting cards or a failed read, where a hold does nothing. */
+    assert.match(gig, /const holdHint = chain === 'ok' && blocks\.length > 0 && \(channels\?\.length \|\| 0\) > 1 && !shown\.elsewhere\n/, 'the words beside CHAIN promise a hold over tiles that are not there')
+    assert.match(gig, /const has = \(channels\?\.length \|\| 0\) > 1 && !outline && !door/, 'the words and the hold are on different conditions')
+    const head = gig.slice(gig.indexOf('<div className="gig-head" data-for="chain">'), gig.indexOf('{held ? ('))
+    assert.ok(head.includes('{HOLD_FOR_CHANNELS}') && head.includes('<h2 className="gig-head-word">'), 'the hold’s words are not in the CHAIN heading’s row')
     /* An AM4 amp's pedal says it switches the boost (shared/am4-boost.mjs), and can be held the same. */
     assert.match(gig, /title=\{boost \? boostTitle\(boost, has\) : has \? 'Tap to switch on or off\. Hold, or right-click, to switch channels\.' : undefined\}/, 'the browser’s tiles do not say they can be held')
     /* An AM4 amp's tile says its boost, and that it can be held, in the shared words; and the amp's own off words when the amp is off (shared/am4-boost.mjs). */
@@ -4153,4 +4176,155 @@ export function run(test) {
     assert.match(web, /const tall = px\(css\.minHeight\) \|\| button\.offsetHeight/)
   })
 
+  /* ------------------------------------------------------------------ */
+  /* Play, made like the phone app's (3 November 2026, pass 3)            */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * "Is there anything else we need to do to match the apps?" Play's words
+   * live once, in shared/play-words.mjs, for both screens; the phone's are
+   * its own as they were on 1.89.30, character for character, since every
+   * merge reaches every customer's phone as an update.
+   */
+  test('Play’s words are one file at both ends, and the phone draws exactly what it drew', async () => {
+    const w = await import('../shared/play-words.mjs')
+    const { slotLabel } = await import('../src/lib/slots.js')
+    const { setDevice } = await import('../shared/device-word.mjs')
+    assert.equal(w.ALL_PRESETS, 'Tap for all presets')
+    assert.deepEqual({ ...w.REFRESH_NAMES }, { idle: 'Refresh names', reading: 'Reading…', found: 'Names updated', none: 'No names on the unit', failed: "Couldn't read them" })
+    assert.ok(Object.isFrozen(w.REFRESH_NAMES))
+    assert.equal(w.REFRESH_NAMES_SAID_MS, 4000)
+    assert.equal(w.HOLD_FOR_CHANNELS, 'Hold to switch channels')
+    assert.equal(w.CHAIN_EMPTY, 'Nothing in this preset but input and output.')
+    assert.equal(w.DEMO_CARD, 'This is the demo')
+    /* The phone's own composition on 1.89.30, beside the shared one, for every kind of slot. */
+    const old = (number, addressing, slots) => `${Number.isInteger(number) ? `PRESET ${slotLabel(number, addressing)}` : 'PRESET —'}${slots ? ` OF ${slots}` : ''}`
+    for (const [number, addressing, slots] of [[0, 'bankLetter', 104], [103, 'bankLetter', 104], [12, 'bankLetterShort', 104], [511, undefined, 512], [7, undefined, null], [undefined, undefined, 104], [null, 'bankLetter', null]]) {
+      assert.equal(w.presetLine(Number.isInteger(number) ? slotLabel(number, addressing) : null, slots), old(number, addressing, slots), `the phone’s PRESET line changed for ${number} of ${slots}`)
+    }
+    for (const chain of ['reading', 'failed', 'ok', undefined]) {
+      assert.equal(w.chainHeading(chain), chain === 'reading' ? 'Reading the chain…' : chain === 'failed' ? 'Chain — out of date' : 'Chain', `the CHAIN heading changed for ${chain}`)
+    }
+    /* The phone's failed-chain note, whole, is what it was; the shared half says nothing of pulling down, which the website does not do. */
+    assert.equal(`${w.CHAIN_OUT_OF_DATE} Pull down to ask again.`, 'The unit didn’t say what’s in this preset, so these buttons may be out of date. Pull down to ask again.')
+    assert.ok(w.CHAIN_OUT_OF_DATE.endsWith('out of date.') && !/pull/i.test(w.CHAIN_OUT_OF_DATE))
+    /* The phone's screen draws them, and keeps no copy of its own. */
+    const stage = read('mobile/src/screens/Stage.js')
+    const flat = stage.replace(/\s+/g, ' ')
+    assert.match(stage, /^import \{ ALL_PRESETS, CHAIN_EMPTY, CHAIN_OUT_OF_DATE, HOLD_FOR_CHANNELS, REFRESH_NAMES, REFRESH_NAMES_SAID_MS, chainHeading, presetLine \} from '\.\.\/lib\/play-words'$/m)
+    assert.match(flat, /\{presetLine\(Number\.isInteger\(preset\?\.number\) \? slotLabel\(preset\.number, caps\?\.presets\?\.addressing\) : null, slots\)\}/)
+    assert.match(flat, /sub=\{onOpenPresets \? ALL_PRESETS : undefined\}/)
+    assert.match(flat, /<Label icon=\{chainIcon\}>\{chainHeading\(chain\)\}<\/Label>/)
+    assert.match(flat, /<Note tone="warn">\{CHAIN_OUT_OF_DATE\} Pull down to ask again\.<\/Note>/)
+    assert.match(flat, /\? VP4_OVER_BLUETOOTH : CHAIN_EMPTY\}/)
+    assert.match(flat, /setTimeout\(\(\) => setSaid\('idle'\), REFRESH_NAMES_SAID_MS\)/)
+    for (const said of ['Tap for all presets', 'Reading the chain', 'Chain — out of date', 'Nothing in this preset but', 'these buttons may be out of date', "'Refresh names'", 'No names on the unit']) {
+      assert.ok(!stage.includes(said), `the phone spells out "${said}" itself, and the two can drift`)
+    }
+    /* The demo card's line names the device in hand, read when it is shown, and on the computer app's own window what unlocking gives. */
+    assert.equal(w.demoCardBody('phone'), 'Unlock to drive your own rig from this phone.')
+    assert.equal(w.demoCardBody('ipad'), 'Unlock to drive your own rig from this iPad.')
+    assert.equal(w.demoCardBody('browser'), 'Unlock to drive your own rig from this browser.')
+    assert.equal(w.demoCardBody('tablet'), 'Unlock to drive your own rig from this tablet.')
+    assert.equal(w.demoCardBody('computer'), 'Unlock to drive your own rig from a phone or tablet.')
+    setDevice('browser')
+    try {
+      assert.equal(w.demoCardBody(), 'Unlock to drive your own rig from this browser.', 'the card’s line is read when the file loads, before the website knows what it is on')
+    } finally {
+      setDevice('phone')
+    }
+    assert.equal(w.unlockWord('$9.99'), 'Unlock $9.99')
+    assert.equal(w.unlockWord(null), 'Unlock')
+    /* The phone's generated copy bundles: every sibling it imports is a .js the phone has. */
+    const copy = read('mobile/src/lib/play-words.js')
+    assert.ok(!/from '[^']*\.mjs'/.test(copy), 'the phone’s copy imports a .mjs file the phone does not have, so its update would not bundle')
+    for (const dep of ['./device-word.js', './onboarding.js', './am4-boost.js']) assert.ok(copy.includes(`from '${dep}'`), `the phone’s copy does not import ${dep}`)
+    const { FILES } = await import('../scripts/sync-relay-rules.mjs')
+    assert.ok(FILES.some((f) => f.source === '../shared/play-words.mjs' && f.target === '../mobile/src/lib/play-words.js'), 'the phone has no copy of Play’s words')
+  })
+
+  test('Scenes has Refresh names beside it at both ends, in the same words, and it asks the unit again', () => {
+    const gig = read('src/components/Gig.jsx')
+    const stage = read('mobile/src/screens/Stage.js')
+    /* Beside the heading, inside the scenes' own branch, at both ends. */
+    assert.match(gig, /\{hasScenes \? \(\s*<>[\s\S]*?<div className="gig-head" data-for="scenes">\s*<h2 className="gig-head-word">Scenes<\/h2>\s*<RefreshNames \/>\s*<\/div>/, 'the browser’s Scenes has no Refresh names beside it, or shows it with no scenes')
+    assert.match(stage, /<Label>Scenes<\/Label>[\s\S]{0,700}?<RefreshNames \/>/)
+    /* The same words and the same moment, from the one file. */
+    assert.match(gig, /^import \{[^}]*\bREFRESH_NAMES\b[^}]*\bREFRESH_NAMES_SAID_MS\b[^}]*\} from '\.\.\/\.\.\/shared\/play-words\.mjs'$/m)
+    const fn = gig.slice(gig.indexOf('function RefreshNames()'), gig.indexOf('\n}\n', gig.indexOf('function RefreshNames()')))
+    assert.match(fn, /if \(said === 'reading'\) return/, 'a press while it reads asks again')
+    assert.match(fn, /const out = await rereadSceneNames\(\)\.catch\(\(\) => 'failed'\)/, 'Refresh names reads the names some other way than off the unit again')
+    assert.match(fn, /setTimeout\(\(\) => setSaid\('idle'\), REFRESH_NAMES_SAID_MS\)/)
+    assert.match(fn, /aria-label="Refresh scene names"/, 'a screen reader is told something other than the phone says')
+    assert.match(fn, /\{REFRESH_NAMES\[said\] \|\| REFRESH_NAMES\.idle\}/)
+    assert.match(gig, /^ {2}rereadSceneNames$/m, 'the browser’s Refresh names is not the store’s')
+  })
+
+  test('the CHAIN heading says how its read is going, at both ends, and a failed read never reads as reading', () => {
+    const gig = read('src/components/Gig.jsx')
+    const g = gig.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+    assert.match(g, /<h2 className="gig-head-word">\s*<Picture src=\{chainIcon\} className="gig-head-icon" \/>\s*<span className="gig-head-text">\{chainHeading\(chainSaid\)\}<\/span>\s*<\/h2>/, 'the browser’s chain has no heading, or not the phone’s picture beside it')
+    /* By the chain's view: another preset's on its way reads as reading; one that failed, out of date (ChainWait says Try again under it). */
+    const line = g.slice(g.indexOf('const chainSaid = '), g.indexOf('\n', g.indexOf('const chainSaid = ')))
+    assert.equal(line, "const chainSaid = shown.view === 'loading' ? 'reading' : shown.view === 'failed' ? 'failed' : chain")
+    const said = (view, chain) => new Function('shown', 'chain', `${line}\nreturn chainSaid`)({ view }, chain)
+    const words = { reading: 'Reading the chain…', failed: 'Chain — out of date', ok: 'Chain' }
+    const heading = (s) => (s === 'reading' ? words.reading : s === 'failed' ? words.failed : words.ok)
+    assert.equal(heading(said('loading', 'ok')), words.reading, 'another preset’s chain on its way does not say so')
+    assert.equal(heading(said('failed', 'ok')), words.failed, 'a failed read is headed as if it were reading')
+    assert.equal(heading(said('ready', 'ok')), words.ok)
+    assert.equal(heading(said('ready', 'reading')), words.reading)
+    assert.equal(heading(said('ready', 'failed')), words.failed)
+    assert.equal(heading(said('outline', 'ok')), words.ok)
+    /* And the heading is drawn whatever the read did, scenes or not, as the phone's is. */
+    assert.ok(g.indexOf('<div className="gig-head" data-for="chain">') < g.indexOf('{held ? ('), 'the CHAIN heading is not over the chain')
+    assert.match(read('mobile/src/screens/Stage.js'), /<Label icon=\{chainIcon\}>\{chainHeading\(chain\)\}<\/Label>/)
+  })
+
+  test('the chain’s sentences are the phone’s at both ends, and the browser keeps its Try again', () => {
+    const gig = read('src/components/Gig.jsx')
+    const flat = gig.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\s+/g, ' ')
+    /* Only for this preset's own read: another preset's on its way, or one whose read failed, says it under the tip in its waiting cards (ChainWait). */
+    assert.match(flat, /\{shown\.elsewhere \? null : chain === 'failed' \? \( <div className="gig-note gig-note-action"> <span>\{CHAIN_OUT_OF_DATE\}<\/span> <button onClick=\{\(\) => refreshBlocks\(\)\}>Try again<\/button> <\/div>/, 'a failed read is not the phone’s sentence with Try again beside it')
+    /* Nothing but input and output, on the phone's own condition: no looper guard, which would leave a looper-only preset saying nothing at all. */
+    assert.match(flat, /\) : chain === 'ok' && !blocks\.length \? \( <p className="gig-note">\{CHAIN_EMPTY\}<\/p> \) : null\}/, 'an empty chain is not the phone’s sentence, or not on the phone’s condition')
+    for (const gone of ['Couldn’t read the chain', 'Couldn&rsquo;t read the chain', 'Nothing switchable', 'Reading the chain&hellip;']) {
+      assert.ok(!gig.includes(gone), `the browser still says "${gone}"`)
+    }
+    assert.ok(!/Pull down/.test(gig.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')), 'the browser tells somebody to pull down a page that does not pull to refresh')
+  })
+
+  test('the demo card says the phone’s words, with the price, on Play only, after the demo’s own line', () => {
+    const app = read('src/App.jsx')
+    const card = read('src/components/UnlockOffer.jsx')
+    const phone = read('mobile/src/components/UnlockOffer.js')
+    /* The phone's card, untouched: its words are quoted in the App Store review notes. */
+    assert.match(phone, />\s*This is the demo\s*</)
+    assert.match(phone, /Unlock to drive your own rig from this \{deviceNoun\(\)\}\./)
+    assert.match(phone, /\{purchase\.price \? `Unlock \$\{purchase\.price\}` : 'Unlock'\}/)
+    /* The browser's, from the shared words, none typed in. */
+    assert.match(card, /^import \{ DEMO_CARD, demoCardBody, unlockWord \} from '\.\.\/\.\.\/shared\/play-words\.mjs'$/m)
+    for (const said of ['{DEMO_CARD}', '{demoCardBody()}', '{unlockWord(price)}']) assert.ok(card.includes(said), `the card does not say ${said}`)
+    assert.ok(!/This is the demo|Unlock to drive|'Unlock'/.test(card.replace(/\/\*[\s\S]*?\*\//g, '')), 'the browser’s card spells out its words itself')
+    assert.match(card, /aria-label="Unlock the full version"/)
+    assert.match(card, /aria-label="Put this away"/)
+    /* On Play, drawn by Gig, the first thing on the screen. */
+    const gig = read('src/components/Gig.jsx')
+    assert.match(gig, /\{demoCard \? <UnlockOffer price=\{demoCard\.price\} onUnlock=\{demoCard\.onUnlock\} onPutAway=\{demoCard\.onPutAway\} \/> : null\}/)
+    assert.ok(gig.indexOf('<UnlockOffer') < gig.indexOf('<ComputerCard'), 'the demo’s card is not the first thing on Play, as on the phone')
+    assert.match(app, /demoCard=\{offerShown \? \{ price: webPriceText, onUnlock: openUnlock, onPutAway: putOfferAway \} : null\}/, 'the card is drawn on something other than offerShown, or without the price')
+    /* While the bar's Unlock would show (TopBar's own condition), once the purchase is checked, never under the demo's line, and not after its ×. */
+    assert.match(app, /onUnlock=\{isDemo\(\) && paid\.checked && !paid\.unlocked \? openUnlock : null\}/)
+    assert.match(app, /const offerWanted = isDemo\(\) && status === 'live' && !paid\.unlocked && !offerAway\n/)
+    assert.match(app, /const offerShown = offerWanted && paid\.checked && !demoNoteUp\n/, 'the card stands under the demo’s line, or comes up before the purchase is known')
+    assert.match(app, /const OFFER_KEY = 'fab\.demo\.offer'/)
+    assert.match(app, /localStorage\.getItem\(OFFER_KEY\) === 'away'/)
+    assert.match(app, /const putOfferAway = \(\) => \{\s*setOfferAway\(true\)\s*try \{\s*localStorage\.setItem\(OFFER_KEY, 'away'\)/, 'the × does not keep the card away')
+    /* Declared after what they read, or the page throws on its first draw. */
+    for (const name of ['const demoNoteUp', 'const offerWanted', 'const offerShown', 'const playNotesUp', 'const holdTipDue']) {
+      assert.ok(app.indexOf(name) > app.indexOf('const [paid, setPaid]') && app.indexOf(name) > app.indexOf('const holdOpensChannels') && app.indexOf(name) > app.indexOf('const [demoNoteSeen'), `${name} reads something declared after it`)
+    }
+    /* The demo's own line stays, for every unit, in its own words: nothing is taken away. */
+    assert.match(app, /\{isDemo\(\) && status === 'live' && !demoNoteSeen \? \(\s*<p className="demo-banner">\s*<span>\{demoSentence\(demoUnit\(\)\)\}<\/span>/)
+  })
 }

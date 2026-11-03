@@ -3496,6 +3496,33 @@ test('the stage screen is sized by whoever is holding it', () => {
     assert.equal(loadFit(store), true, 'fit did not stick')
     saveFit(false, store)
     assert.equal(loadFit(store), false, 'fit could not be turned off')
+    /* The browser asks with null (App.jsx fitChoice): never chosen is null, which App decides by the screen; a choice either way is that choice. */
+    assert.equal(loadFit(store, null), false, 'a browser that turned fit off has it turned back on by a phone-sized screen')
+    saveFit(true, store)
+    assert.equal(loadFit(store, null), true)
+  }
+  {
+    const kept = new Map()
+    const fresh = { getItem: (k) => (kept.has(k) ? kept.get(k) : null), setItem: (k, v) => kept.set(k, String(v)) }
+    assert.equal(loadFit(fresh, null), null, 'never chosen reads as a choice, so a phone never gets fit out of the box')
+    assert.equal(loadFit(fresh), false, 'called with nothing, never chosen is no longer off')
+    saveFit(false, fresh)
+    assert.equal(loadFit(fresh, null), false, 'turning fit off is not kept')
+  }
+  {
+    /* A size chosen is a choice too (App.jsx fit): any size, the default one included, once written; and unreadable storage is never chosen. */
+    const kept = new Map()
+    const fresh = { getItem: (k) => (kept.has(k) ? kept.get(k) : null), setItem: (k, v) => kept.set(k, String(v)) }
+    assert.equal(gigSize.sizeChosen(fresh), false, 'a browser that never chose a size reads as one that did, so a phone never gets Fit')
+    saveFit(true, fresh)
+    assert.equal(gigSize.sizeChosen(fresh), false, 'a Fit choice reads as a size chosen')
+    saveSize(DEFAULT_SIZE, fresh)
+    assert.equal(gigSize.sizeChosen(fresh), true, 'Smallest chosen by hand is taken for never chosen')
+    kept.clear()
+    saveSize(4, fresh)
+    assert.equal(gigSize.sizeChosen(fresh), true, 'Largest chosen on a phone is overridden by Fit')
+    const blocked = { getItem: () => { throw new Error('blocked') } }
+    assert.equal(gigSize.sizeChosen(blocked), false)
   }
 
   /*
@@ -8397,6 +8424,72 @@ onTheBench('browser: two Nexts in one drop, both dropped, leave the preset the u
   assert.deepEqual([now.chainFor, now.chainKnown], [was.chainFor, was.chainKnown])
 })
 
+/*
+ * TWO QUICK NEXTS, THE NEWER REFUSED (deviceState presetPresses). A preset
+ * never loaded here does not go up on its press, so the second Next's "what
+ * was up before" was the preset before BOTH: put back, live, while the unit
+ * was on the first. In either order the screen ends on the preset the unit
+ * took, with its own chain, and never shows the one before both as current.
+ */
+onTheBench('browser: two quick Nexts, the newer refused, end on the preset the unit took in either order', async () => {
+  for (const order of ['the older lands first', 'the newer is refused first']) {
+    const { clock, unit } = windowOnTheBench()
+    assert.equal(ds.getSnapshot().preset.number, 12)
+    const holds = []
+    unit.selectAnswer = (n) => new Promise((go) => holds.push({ n, go }))
+    const a = ds.loadPreset(13).catch((e) => e)
+    await clock.advance(10)
+    const b = ds.loadPreset(14).catch((e) => e)
+    await clock.advance(10)
+    assert.deepEqual(holds.map((h) => h.n), [13, 14], `${order}: both selects were not in the air`)
+    const lands = async () => {
+      unit.number = 13
+      holds[0].go({ ok: true })
+      await clock.advance(10)
+    }
+    const refused = async () => {
+      unit.number = 13
+      holds[1].go({ ok: false })
+      await clock.advance(10)
+    }
+    if (order === 'the older lands first') {
+      await lands()
+      await refused()
+    } else {
+      await refused()
+      const mid = ds.getSnapshot()
+      assert.equal(mid.chainGoing, 13, `${order}: the screen is not handed back to the Next still on its way`)
+      await lands()
+    }
+    assert.equal((await b).message, ds.SELECT_REFUSED, `${order}: the refused Next was not said`)
+    /* Right after the refusal, before any read: never the preset before both, live. */
+    const now = ds.getSnapshot()
+    assert.ok(now.chainGoing === 13 || now.preset.number === 13, `${order}: the screen went back to preset ${now.preset.number}, live, while the unit is on 13`)
+    await clock.advance(5000)
+    await a
+    const end = ds.getSnapshot()
+    assert.equal(end.preset.number, 13, `${order}: the screen is on preset ${end.preset.number}, not the 13 the unit took`)
+    assert.equal(end.chainGoing, null, `${order}: still waiting on a chain`)
+    assert.equal(end.chainFor, 13, `${order}: the pedals are not 13's own`)
+  }
+})
+
+/* And a Next refused with nothing else on its way still puts back the preset it left, as before. */
+onTheBench('browser: one Next refused puts back the preset it left', async () => {
+  const { clock, unit } = windowOnTheBench()
+  unit.selectAnswer = () => {
+    unit.number = 12
+    return { ok: false }
+  }
+  const one = ds.loadPreset(13).catch((e) => e)
+  await clock.advance(5000)
+  assert.equal((await one).message, ds.SELECT_REFUSED)
+  const end = ds.getSnapshot()
+  assert.equal(end.preset.number, 12)
+  assert.equal(end.chainGoing, null)
+  assert.equal(end.chainFor, 12)
+})
+
 onTheBench('a preset chosen in the Mac window costs one chain read, and Play appearing adds nothing', async () => {
   const { clock, asked, wire } = windowOnTheBench()
   /* What Gig does when it appears or the slot changes. See its preset effect. */
@@ -12955,7 +13048,8 @@ test('the line under Next in the browser says what the preset list says for that
     'currentDeviceSlug', 'cachedPresetNames', 'useRef', 'useLayoutEffect', 'useMemo', 'slots', 'setSlots', 'device', 'preset',
     `${copy}\n${known}\n${all}\nreturn allSlots`
   )
-  const gigLine = new Function('slots', 'useMemo', 'nextWords', 'order', 'preset', 'nextAt', `${lookup}\n${ahead}\nreturn ahead`)
+  /* `here` is where Play stands, the preset on screen with nothing in the air (Gig.jsx). */
+  const gigLine = new Function('slots', 'useMemo', 'nextWords', 'order', 'preset', 'nextAt', 'here', `${lookup}\n${ahead}\nreturn ahead`)
   /* The loaded preset stays put through every change, so nothing else about the screen moves the list along. */
   const preset = { number: 3, name: 'LOADED' }
   const shown = () => {
@@ -12969,7 +13063,7 @@ test('the line under Next in the browser says what the preset list says for that
     }
     throw new Error('App never settled')
   }
-  const lineFrom = (list, current, next, order = null) => gigLine(list, (fn) => fn(), setlists.nextWords, order, { number: current }, next).shown
+  const lineFrom = (list, current, next, order = null) => gigLine(list, (fn) => fn(), setlists.nextWords, order, { number: current }, next, current).shown
   const picker = (list, n) => list.find((s) => s.number === n)?.name
   const check = (where) => {
     const list = shown()
@@ -13007,7 +13101,7 @@ test('the line under Next in the browser says what the preset list says for that
   check('the FM3 again')
   // A setlist on the FM3: the opener's name goes to a screen reader, and the line says the set starts over.
   assert.equal(lineFrom(shown(), 6, 4, [4, 5, 6]), setlists.NEXT_WRAPS)
-  assert.equal(gigLine(shown(), (fn) => fn(), setlists.nextWords, [4, 5, 6], { number: 6 }, 4).said, 'Next, starts over, FM3 FOUR')
+  assert.equal(gigLine(shown(), (fn) => fn(), setlists.nextWords, [4, 5, 6], { number: 6 }, 4, 6).said, 'Next, starts over, FM3 FOUR')
 
   // And never taken at all, then another unit: the list is read as it is, for the unit there now.
   hooks.length = 0
