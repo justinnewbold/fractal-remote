@@ -31,11 +31,11 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "The website and the computer app’s window carry their own fonts now, so they work with no internet and nothing is fetched from another site for them.",
+        "text": "The website and the computer app’s window carry their own fonts now, so they work with no internet. The support page names Feedback’s tick boxes the way the app shows them, and the page for getting the app leads with the store.",
         "only": null
       },
       {
-        "text": "On the website, the support page now names Feedback’s tick boxes the way the app shows them, and the page for getting the app leads with the store.",
+        "text": "Show the walkthrough no longer leaves you stuck at the sign-in screen: when you’re already signed in, Back to your own rig at the top takes you straight back.",
         "only": null
       }
     ]

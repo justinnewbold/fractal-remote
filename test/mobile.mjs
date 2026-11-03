@@ -15242,7 +15242,27 @@ export function run(test) {
     assert.match(src, /export const purchaseState = \(\) => shown/, 'screens read the real unlock while posing as a new customer')
     assert.match(src, /export const mayConnect = \(\) => mayDrive\(state\)/, 'posing as a new customer changes what the computer link allows')
     assert.match(src, /shown = posing \? \{ \.\.\.state, unlocked: false, posing: true \} : state/)
-    assert.match(read('mobile/App.js'), /purchase\.posing \?[\s\S]{0,80}Viewing as a new customer · tap to stop[\s\S]{0,60}poseAsNewCustomer\(false\)/, 'there is no way out of viewing as a new customer')
+    assert.match(read('mobile/App.js'), /purchase\.posing \?[\s\S]{0,80}Viewing as a new customer · tap to stop[\s\S]{0,260}poseAsNewCustomer\(false\)\s*if \(!posedInDemo\.current\) setDemo\(false\)/, 'there is no way out of viewing as a new customer, or it leaves him in a demo the view started')
+    /*
+     * AND LOOKING NEVER SIGNS HIM OUT (3 November 2026: "After replaying the
+     * new user sequence and exiting, now I'm not logged in anymore"). The
+     * view put the purchase page in front of his paid account, and its Keep
+     * using the demo and Back signed him out for real, took the store off
+     * his account and wrote his Bluetooth off; it offered Delete account on
+     * his own. While posing: none of that, Restore is held as Buy is, and
+     * the sign-in form leads back to his rig on the sign-in still kept.
+     */
+    const posingApp = read('mobile/App.js').replace(/\s+/g, ' ')
+    const wall = posingApp.slice(posingApp.indexOf("auth === 'paywall' ? ( <Paywall"), posingApp.indexOf(') : askShare ? ('))
+    assert.equal((wall.match(/if \(!purchase\.posing\) \{ signOut\(\)\.catch\(\(\) => \{\}\) unlinkAccount\(\)\.catch\(\(\) => \{\}\) allowBluetooth\(null, \{ signedOut: true \}\) \}/g) || []).length, 2, 'the purchase page’s Keep using the demo or Back signs out an account that is only viewing as a new customer')
+    assert.match(wall, /onDeleted=\{ purchase\.posing \? undefined :/)
+    assert.match(posingApp, /if \(!purchase\.posing\) allowBluetooth\(null, \{ signedOut: true \}\) setAuth\('out'\) \}/, 'heading for the sign-in form writes his Bluetooth off while he only views as a new customer')
+    assert.match(posingApp, /const backToRig = \(\) => \{ poseAsNewCustomer\(false\) setDemo\(false\) setSignInSide\('in'\) setAuth\('in'\) \}/)
+    assert.match(posingApp, /onBackToRig=\{keptForBack && \(purchase\.unlocked \|\| purchase\.posing\) \? backToRig : undefined\}/, 'the sign-in form offers the way back to somebody with no sign-in on the phone, or to an unpaid account')
+    assert.match(posingApp, /if \(auth !== 'out'\) return undefined let alive = true setKeptForBack\(false\) haveSession\(\)/)
+    const signInForm = read('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
+    assert.match(signInForm, /\{onBackToRig \? <Press label="Back to your own rig" tone="signal" on height=\{TAP\} onPress=\{onBackToRig\} \/> : null\} <View style=\{\{ alignItems: 'center'/, 'the way back is not first on the sign-in form')
+    assert.match(src, /export const restorePurchase = async \(\{ here = false \} = \{\}\) => \{\s*\/\*[^*]*\*\/\s*if \(posing\) return \{ ok: false, message: 'Restoring is off while you’re viewing as a new customer\.' \}/, 'Restore reaches the store while he only views as a new customer')
     const fn = src.slice(src.indexOf('export const shouldOffer'), src.indexOf('export const shouldOffer') + 200)
     assert.ok(!/available/.test(fn), 'the offer is gated on the store being ready again')
 
@@ -16749,9 +16769,13 @@ export function run(test) {
      * and the account made got nothing.
      */
     const flatApp = withoutComments(read('mobile/App.js')).replace(/\s+/g, ' ')
-    const page = flatApp.slice(flatApp.indexOf("auth === 'paywall' ? ( <Paywall"), flatApp.indexOf("auth === 'paywall' ? ( <Paywall") + 900)
-    for (const exit of ['onDemo', 'onBack', 'onDeleted']) {
-      const body = page.slice(page.indexOf(`${exit}={() => {`), page.indexOf('}}', page.indexOf(`${exit}={() => {`)))
+    const page = flatApp.slice(flatApp.indexOf("auth === 'paywall' ? ( <Paywall"), flatApp.indexOf(') : askShare ? ('))
+    /* Each exit, up to the next (or the end): for a real account, all three sign the store out; viewing as a new customer, none of them can (test of the pose, above). */
+    const exits = ['onDemo=', 'onBack=', 'onDeleted=']
+    for (const [i, exit] of exits.entries()) {
+      const from = page.indexOf(exit)
+      const body = page.slice(from, i + 1 < exits.length ? page.indexOf(exits[i + 1]) : undefined)
+      assert.ok(from >= 0, `the price page has no ${exit}`)
       assert.match(body, /signOut\(\)\.catch\(\(\) => \{\}\) unlinkAccount\(\)\.catch\(\(\) => \{\}\)/, `the price page’s ${exit} leaves the store on the account`)
     }
 
