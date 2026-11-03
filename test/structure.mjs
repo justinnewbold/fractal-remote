@@ -5364,7 +5364,8 @@ export function run(test) {
      * and the one thing that is not is the one thing nobody finds.
      */
     /* Under Help on the front of Settings now, beside Troubleshooting — one door, and the one somebody looks behind. */
-    const helpGroup = app.slice(app.indexOf('setup-group">Help<'), app.indexOf('setup-group">About<'))
+    const helpGroup = app.slice(app.indexOf('<SetupGroup title="Help"'), app.indexOf('<SetupGroup title="About"'))
+    assert.ok(helpGroup.length > 200, 'the Help section moved; this check reads it')
     assert.match(helpGroup, /<SetupRow\s*\n?\s*key="walkthrough"\s*\n?\s*title=\{REPLAY\}/, 'the walkthrough is not a row under Help')
     assert.match(helpGroup, /setWalkthrough\(true\)/, 'the row under Help does not open the walkthrough')
     const aboutPage = app.slice(app.indexOf("setupPage === 'about' ? ("))
@@ -5881,7 +5882,8 @@ export function run(test) {
    */
   test('the browser’s Settings has a Colours row under Play screen, and the page it opens', () => {
     const front = src.slice(src.indexOf('setup-account-card'), src.indexOf("setupPage === 'appearance' ? ("))
-    const play = front.slice(front.indexOf('setup-group">Play screen<'))
+    const play = front.slice(front.indexOf('<SetupGroup title="Play screen"'))
+    assert.ok(play.length > 200, 'the Play screen section moved; this check reads it')
     assert.match(
       play,
       /title="Tiles & scenes"[\s\S]*?<SetupRow key="colours" title="Colors" status=\{coloursStatus\(\{ unitName: device\?\.short \|\| device\?\.name \|\| undefined, capabilities: device\?\.capabilities \}\)\} onClick=\{\(\) => setSetupPage\('colours'\)\} \/>[\s\S]*?<Theme \/>/,
@@ -5897,8 +5899,11 @@ export function run(test) {
     const at = src.indexOf("{setupPage === 'colours' ? (")
     assert.ok(at > src.indexOf("{setupPage === 'appearance' ? ("), 'the Colours page is not after Tiles & scenes')
     const page = src.slice(at, src.indexOf("{setupPage === 'phone'", at))
-    assert.match(page, /onClick=\{\(\) => setSetupPage\(null\)\}>\s*‹ Settings/, 'the Colours page has no way back to Settings')
-    assert.match(page, /\{SETUP_PAGES\.colours\}/, 'the Colours page has no title')
+    /* The page head every page has (components/SetupHead): ‹ Settings one step back, Done straight to Play. */
+    assert.match(page, /<SetupHead back=\{upLabel\('colours'\)\} onBack=\{\(\) => setSetupPage\(upFrom\('colours'\)\)\} onDone=\{leaveSettings\}/, 'the Colours page has no way back to Settings, or no Done')
+    assert.match(src, /const SETUP_PARENT = \{[^}]*\}/)
+    assert.ok(!/colours:/.test(src.match(/const SETUP_PARENT = \{[^}]*\}/)[0]), 'the Colours page sits under another page, so its way back does not say ‹ Settings')
+    assert.match(page, /title=\{SETUP_PAGES\.colours\}/, 'the Colours page has no title')
     assert.match(page, /<Colours blocks=\{blocks\} sceneNames=\{sceneNames\} preset=\{presetHere\} capabilities=\{device\?\.capabilities\} icons=\{icons\} \/>/, 'the page is not handed the preset’s effects, the scene names, the preset that is loaded, the unit’s scene count and the pictures setting')
     /* The row's line is redrawn when the look or the unit changes. */
     assert.match(src, /\n  useLooks\(\)\n/, 'the Colours row keeps saying the look it said when Settings opened')
