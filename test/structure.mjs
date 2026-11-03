@@ -282,6 +282,55 @@ export function run(test) {
     }
   })
 
+  test('no file of the phone app or the browser declares a name it also imports', () => {
+    /*
+     * THE CRASH THAT NEVER SHIPPED (the review of 3 November 2026). A ref
+     * added to App.js was named restoreBluetooth, the name of the function
+     * imported from lib/bluetooth that picks Bluetooth up at launch. Inside
+     * App the ref won, so the launch effect called an object, and every
+     * phone would have thrown on its first frame, for every customer, by
+     * over-the-air update. It is legal JavaScript: expo export bundled it,
+     * and every test that reads App.js as text passed. So this reads the
+     * files as code, scope by scope, and fails on any binding that hides one
+     * of the file's own imports.
+     */
+    const roots = ['../mobile/App.js', '../mobile/src/screens/', '../mobile/src/components/', '../mobile/src/lib/', '../src/', '../src/components/', '../src/lib/']
+    const files = []
+    for (const r of roots) {
+      const url = new URL(r, import.meta.url)
+      if (r.endsWith('.js')) files.push(url)
+      else for (const f of readdirSync(url)) if (/\.(js|jsx|mjs)$/.test(f)) files.push(new URL(f, url))
+    }
+    assert.ok(files.length > 100, 'the app’s files read as empty; this check would pass on nothing')
+    const hidden = []
+    for (const url of files) {
+      let ast
+      try {
+        ast = parse(readFileSync(url, 'utf8'), { sourceType: 'module', plugins: ['jsx'] })
+      } catch {
+        continue
+      }
+      const imported = new Set()
+      traverse(ast, {
+        ImportDeclaration(path) {
+          for (const spec of path.node.specifiers) imported.add(spec.local.name)
+        }
+      })
+      if (!imported.size) continue
+      traverse(ast, {
+        Scope(path) {
+          if (path.isProgram()) return
+          for (const name of Object.keys(path.scope.bindings)) {
+            if (imported.has(name) && path.scope.bindings[name].path.node !== undefined) {
+              hidden.push(`${fileURLToPath(url).split('/fractal-remote/').pop() || fileURLToPath(url)}: ${name} (line ${path.scope.bindings[name].path.node.loc?.start.line})`)
+            }
+          }
+        }
+      })
+    }
+    assert.deepEqual([...new Set(hidden)], [], 'a name declared here hides one this file imports')
+  })
+
   test('no hook watches something declared further down its own function', () => {
     /*
      * The blank page. "The app couldn't draw — Cannot access 'we' before

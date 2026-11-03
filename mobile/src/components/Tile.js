@@ -384,11 +384,11 @@ export default function Tile({
    * the accessibility label below, so a screen reader still says it.
    */
   const [laid, setLaid] = useState({})
-  const keep = (key, value, at) =>
+  const keep = (key, value, size) =>
     setLaid((was) =>
-      was[key] != null && Math.abs(was[key] - value) < 0.5 && was.at?.[key] === at
+      was[key] != null && Math.abs(was[key] - value) < 0.5 && was.at?.[key] === size
         ? was
-        : { ...was, [key]: value, at: { ...was.at, [key]: at } }
+        : { ...was, [key]: value, at: { ...was.at, [key]: size } }
     )
   /*
    * AND ONLY AT THE SIZE THEY WERE TAKEN AT.

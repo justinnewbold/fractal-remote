@@ -5921,7 +5921,7 @@ export function run(test) {
     )
     assert.match(
       app,
-      /useEffect\(\(\) => \{ if \(auth === 'checking'\) return undefined if \(auth === 'out'\) \{ allowBluetooth\(null\) return undefined \} let alive = true haveSession\(\) \.then\(\(id\) => \{ if \(!alive\) return const open = allowBluetooth\(id\) if \(open && restoreBluetooth\.current\) setBluetooth\(true\) restoreBluetooth\.current = false \}\) \.catch\(\(\) => \{\}\) return \(\) => \{ alive = false \} \}, \[auth, demo\]\)/,
+      /useEffect\(\(\) => \{ if \(auth === 'checking'\) return undefined if \(auth === 'out'\) \{ allowBluetooth\(null\) return undefined \} let alive = true haveSession\(\) \.then\(\(id\) => \{ if \(!alive\) return const open = allowBluetooth\(id\) const back = bluetoothBack\.current bluetoothBack\.current = false if \(open && back\) setBluetooth\(true\) \}\) \.catch\(\(\) => \{\}\) return \(\) => \{ alive = false \} \}, \[auth, demo\]\)/,
       'signing in, signing out, another account or the demo ending does not ask again whose phone this is'
     )
     /*

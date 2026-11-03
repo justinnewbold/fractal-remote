@@ -8249,7 +8249,7 @@ export function run(test) {
     assert.match(tile, /keep\('top', e\.nativeEvent\.layout\.y, sized\)/, 'the picture’s top is not measured, or not marked with the size it was measured at')
     assert.match(tile, /keep\('width', e\.nativeEvent\.layout\.width, sized\)/, 'the tile’s width is not measured, or not marked with the size it was measured at')
     /* Half a point, so a layout that lands where it was does not draw the tile again. */
-    assert.match(tile, /was\[key\] != null && Math\.abs\(was\[key\] - value\) < 0\.5 && was\.at\?\.\[key\] === at\s*\? was\s*:/, 'every layout sets state, and a tile can draw itself for ever')
+    assert.match(tile, /was\[key\] != null && Math\.abs\(was\[key\] - value\) < 0\.5 && was\.at\?\.\[key\] === size\s*\? was\s*:/, 'every layout sets state, and a tile can draw itself for ever')
 
     /*
      * A tile that changes size on screen. A preset that takes the chain from
@@ -15257,10 +15257,12 @@ export function run(test) {
     assert.equal((wall.match(/if \(!purchase\.posing\) \{ signOut\(\)\.catch\(\(\) => \{\}\) unlinkAccount\(\)\.catch\(\(\) => \{\}\) allowBluetooth\(null, \{ signedOut: true \}\) \}/g) || []).length, 2, 'the purchase page’s Keep using the demo or Back signs out an account that is only viewing as a new customer')
     assert.match(wall, /onDeleted=\{ purchase\.posing \? undefined :/)
     assert.match(posingApp, /if \(!purchase\.posing\) \{ [^}]*allowBluetooth\(null, \{ signedOut: true \}\) \} setAuth\('out'\) \}/, 'heading for the sign-in form writes his Bluetooth off while he only views as a new customer')
-    assert.match(posingApp, /const backToRig = \(\) => \{ poseAsNewCustomer\(false\) setDemo\(false\) setSignInSide\('in'\) [^}]*restoreBluetooth\.current = bluetoothAtForm\.current bluetoothAtForm\.current = false askedBluetooth\.current = false setAuth\('in'\) \}/)
+    assert.match(posingApp, /const backToRig = \(\) => \{ poseAsNewCustomer\(false\) setDemo\(false\) setSignInSide\('in'\) [^}]*bluetoothBack\.current = bluetoothAtForm\.current bluetoothAtForm\.current = false askedBluetooth\.current = false setAuth\('in'\) \}/)
     /* Bluetooth as it was (the review of 3 November 2026): remembered where toSignIn writes it off, and turned on again once the account is in. */
     assert.match(posingApp, /if \(!purchase\.posing\) \{ [^}]*bluetoothAtForm\.current = bluetooth allowBluetooth\(null, \{ signedOut: true \}\) \} setAuth\('out'\) \}/)
-    assert.match(posingApp, /const open = allowBluetooth\(id\) [^}]*if \(open && restoreBluetooth\.current\) setBluetooth\(true\) restoreBluetooth\.current = false/)
+    assert.match(posingApp, /const open = allowBluetooth\(id\) [^}]*const back = bluetoothBack\.current bluetoothBack\.current = false if \(open && back\) setBluetooth\(true\)/)
+    /* And what Bluetooth was is forgotten when the form is left any other way (the review of 3 November 2026). */
+    assert.match(posingApp, /useEffect\(\(\) => \{ if \(auth !== 'out'\) bluetoothAtForm\.current = false \}, \[auth\]\)/)
     /* Started again while it is on, the first start says where he was. */
     assert.match(posingApp, /if \(!purchase\.posing\) posedInDemo\.current = demo poseAsNewCustomer\(true\)/)
     /* And the form's answer is forgotten when it goes, so the next form never opens on the last one's. */

@@ -487,14 +487,19 @@ export default function App() {
     setDemo(false)
     setSignInSide('in')
     /* Bluetooth as it was before the form, once the account is in again (the Bluetooth effect below). */
-    restoreBluetooth.current = bluetoothAtForm.current
+    bluetoothBack.current = bluetoothAtForm.current
     bluetoothAtForm.current = false
     askedBluetooth.current = false
     setAuth('in')
   }
   /* Whether Bluetooth was on when toSignIn wrote it off, and whether Back to your own rig is to put it back on. */
   const bluetoothAtForm = useRef(false)
-  const restoreBluetooth = useRef(false)
+  /* Not `restoreBluetooth`: that name is lib/bluetooth's own pick-up at launch, imported above, and a ref of the same name hid it (the review of 3 November 2026). */
+  const bluetoothBack = useRef(false)
+  /* Left the form any other way than Back to your own rig: what Bluetooth was is nobody's business any more. */
+  useEffect(() => {
+    if (auth !== 'out') bluetoothAtForm.current = false
+  }, [auth])
   /* Whether the view as a new customer started the demo, so ending it from the banner ends that too (and leaves one he was already in). */
   const posedInDemo = useRef(true)
   /*
@@ -945,9 +950,10 @@ export default function App() {
       .then((id) => {
         if (!alive) return
         const open = allowBluetooth(id)
-        /* Back to your own rig: on again, as it was before the form (backToRig). */
-        if (open && restoreBluetooth.current) setBluetooth(true)
-        restoreBluetooth.current = false
+        /* Back to your own rig: on again, as it was before the form (backToRig). Read once, and forgotten. */
+        const back = bluetoothBack.current
+        bluetoothBack.current = false
+        if (open && back) setBluetooth(true)
       })
       .catch(() => {})
     return () => {

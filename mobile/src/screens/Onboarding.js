@@ -826,7 +826,7 @@ const UnitShot = () => (
  * bottom edge dropped behind the body, which is the whole trick.
  */
 const Lock = ({ size = 18, faint }) => {
-  const tint = faint ? color.rule : color.silk
+  const lockColour = faint ? color.rule : color.silk
   const w = size * 0.72
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'flex-end' }}>
@@ -838,7 +838,7 @@ const Lock = ({ size = 18, faint }) => {
           borderTopRightRadius: size,
           borderWidth: Math.max(1.5, size * 0.08),
           borderBottomWidth: 0,
-          borderColor: tint,
+          borderColor: lockColour,
           marginBottom: -1
         }}
       />
@@ -848,7 +848,7 @@ const Lock = ({ size = 18, faint }) => {
           height: size * 0.5,
           borderRadius: Math.max(2, size * 0.12),
           borderWidth: Math.max(1.5, size * 0.08),
-          borderColor: tint
+          borderColor: lockColour
         }}
       />
     </View>

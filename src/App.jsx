@@ -2549,7 +2549,6 @@ export default function App() {
            * reads as a phone, and bootLink connects a saved sign-in on its own
            * or shows the connect screen to someone who has none.
            */
-          const { setDemo } = await import('./lib/forgefx')
           setDemo(false)
           window.location.reload()
         } else if (kind === 'mac-on') {
@@ -3768,7 +3767,6 @@ export default function App() {
     setBusy(true)
     setError(null)
     try {
-      const { loadPresetBytes } = await import('./lib/forgefx')
       await loadPresetBytes(safety.bytes)
       record('restore', `Loaded the pre-edit copy of "${safety.name}" into the edit buffer`)
       setDirty(true)
