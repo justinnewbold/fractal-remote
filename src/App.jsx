@@ -15,7 +15,7 @@ import MetronomeBeat from './components/MetronomeBeat'
 import { setMetronome, useMetronome, useUnitHeardOn, useUnitMetronome, wakeScreenClick } from './lib/metronome'
 import { metronomeNote, placeLit, placesFor, unitClick } from '../shared/metronome.mjs'
 import { deviceSlug as slugOfUnit, stageKey } from '../shared/device-slug.mjs'
-import SaveBar, { SaveLate } from './components/SaveBar'
+import SaveBar, { SaveLate, useSaidSaved } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
 import { overwriteCheck } from './lib/overwrite'
 import { SAVE_CANCELLED, SAVE_FRESH_MS, SAVE_WORKING_WORDS, startSaveWait, stillOnPreset } from '../shared/save-wait.mjs'
@@ -106,6 +106,7 @@ import Colours from './components/Colours'
 import { coloursStatus } from './lib/colourPage'
 import { useLooks } from './lib/useLooks'
 import { useAsks } from './lib/asks'
+import { useHeldLink } from './lib/useHeldLink'
 import {
   SIZES,
   loadSize,
@@ -273,7 +274,8 @@ import {
   watchUnits,
   askUnknownUnits,
   faultCopy,
-  nextDelay
+  nextDelay,
+  unitStateOf
 } from './lib/link'
 import { loadSession, saveSession, interrupted } from './lib/session'
 import { pushEntry, replaceEntry } from './lib/nav'
@@ -1493,6 +1495,28 @@ export default function App() {
   useLooks()
   /* A real VP4 on the computer, not the demo's: it gets the Scene Select card (components/Vp4Setup). Follows each detect through `device`. */
   const onRealVp4 = Boolean(device) && vp4Here()
+  /*
+   * THE TOP BAR, AS THE PHONE'S IS TOLD IT (mobile/App.js).
+   *
+   * The link held through a stretch of looking, so the pill does not flick
+   * between Connecting and Disconnected at every retry while the computer
+   * sleeps (lib/useHeldLink). Only the bar reads it.
+   */
+  const shownLink = useHeldLink(link)
+  /*
+   * Where the pill goes, named once, so the tap and what a screen reader says
+   * it does cannot disagree: the five demo units in the demo; Which unit with
+   * two computers on the account, only while the link is up (over a dropped
+   * link its rows are computers nobody can reach, and Phone & computer has
+   * the retry); and Phone & computer otherwise. The phone's own expression.
+   */
+  const unitGoes = isDemo() ? 'demo' : link.role === 'remote' && link.hosts.length > 1 && link.link === 'connected' ? 'which' : 'link'
+  /*
+   * Whether Save, Saving… or ✓ Saved is in the bar: what SaveBar draws, asked
+   * here too, because on a phone the version gives it the room.
+   */
+  const justSaved = useSaidSaved(savedAt)
+  const saveUp = status === 'live' && !onRealVp4 && (dirty || Boolean(queuedSave) || saving || justSaved)
   /*
    * WHETHER HOLDING A BLOCK ON PLAY DOES WHAT THE TIP SAYS: brings up its
    * channels. Only where the unit has more than one to pick from — the rule
@@ -3263,6 +3287,20 @@ export default function App() {
     if (link.link === 'connected') {
       setEverLinked(true)
       setError(null)
+      /*
+       * A fault that was the computer going quiet is over now it has
+       * answered: the unit is being read again, not refusing to answer.
+       * Left up while that read ran (a few seconds over the relay), the
+       * bar's pill read "Not answering ● AM4" in red, about a unit nobody
+       * had asked yet, and the notice under it said the computer had
+       * stopped. So the screen goes back to looking, as at the first read
+       * and after a mix of computers' answers: "Looking ● AM4" until it
+       * lands. A fault about the unit itself is left for the read to settle.
+       */
+      if (status === 'fault' && faultReason === 'no-answer') {
+        setFaultReason(null)
+        setStatus('idle')
+      }
       resetSchemaCache()
       read()
     }
@@ -4333,20 +4371,16 @@ export default function App() {
         a bar that does not move, and the bar's own inset covers the notch.
       */}
       {/*
-        Saving rides in the bar, and stays off the gig screen: that screen
-        exists to switch sounds with a thumb in the dark, and a slot overwrite
-        is not something to put within reach of a mis-tap mid-song. The bar
-        still says "Unsaved" there, so the state survives even where the button
-        doesn't follow it.
+        Saving rides in the bar, and only while there is something to save
+        (SaveBar), on every screen, Play's included, as on the phone's bar.
+        What marks a preset unsaved here is a change of one of the kinds in
+        UNSAVES_PRESET; a block switched on Play is not one (Gig's toggle
+        writes the bypass and reports nothing), though on the phone it is. It opens the Save sheet rather than writing, so a slot
+        overwrite is still two taps from a mis-tap mid-song. Never on a VP4,
+        which cannot save here.
       */}
       <TopBar
-        onGetPhoneApp={() => {
-              /* Setup is a sheet here, so open the sheet AND land on the page
-                 — opening one without the other shows the wrong screen. */
-              setSheet('settings')
-              setSetupPage('phone')
-            }}
-            status={status}
+        status={status}
         /* In the demo: UNLOCK and the price for somebody who has not paid,
            Exit demo for somebody who has. As on the phone. */
         onUnlock={isDemo() && paid.checked && !paid.unlocked ? openUnlock : null}
@@ -4355,25 +4389,21 @@ export default function App() {
         device={device}
         faultReason={faultReason}
         preset={preset}
-        dirty={dirty}
         presetsOpen={presetMenu}
         /* Not on Play: the preset tile under the bar is the same button. */
         showPreset={view !== 'play'}
         onOpenPresets={() => setPresetMenu((v) => !v)}
         onOpenSettings={() => setSheet('settings')}
+        /* The pill goes where `unitGoes` says, and a screen reader is told the same (TopBar's goes). */
         onOpenUnit={() => {
-          /* Two destinations behind one press — see TopBar's onOpenUnit. The
-             demo's name is a choice and opens the five; a real unit's name is
-             a fact and opens the page that holds the facts about it. */
-          /* And a real name is a choice too once two units are on: an AM4 on
-             one computer, an FM3 on another. See the 'units' sheet. */
-          if (!isDemo() && link.role === 'remote' && link.hosts.length > 1) {
+          if (unitGoes === 'which') {
             setSheet('units')
             return
           }
           setSheet('settings')
-          setSetupPage(isDemo() ? 'demo' : 'link')
+          setSetupPage(unitGoes === 'demo' ? 'demo' : 'link')
         }}
+        unitGoes={unitGoes}
         onOpenVolume={status === 'live' && outputEid !== null ? () => setSheet('volume') : null}
         menu={
           presetMenu && !narrow ? (
@@ -4382,10 +4412,11 @@ export default function App() {
             </div>
           ) : null
         }
-        link={link}
+        link={shownLink}
         onLinkAction={linkAction}
+        saveUp={saveUp}
       >
-        {status === 'live' && view !== 'gig' && !onRealVp4 ? (
+        {status === 'live' && !onRealVp4 ? (
           <SaveBar
             savedAt={savedAt}
             preset={preset}
@@ -6129,7 +6160,8 @@ export default function App() {
                 unit: {
                   name: isDemo() ? unitByKey(demoUnit()).name : device?.short || device?.name || null,
                   firmware: firmwareOf(device),
-                  state: status === 'live' && device ? 'present' : status === 'fault' ? (faultReason === 'no-answer' ? 'silent' : 'missing') : 'unknown'
+                  /* As the top bar's pill says it (link.js unitStateOf), so the bar and the cards agree. */
+                  state: unitStateOf({ status, device, reason: faultReason })
                 },
                 computer:
                   link.role === 'remote'

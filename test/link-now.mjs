@@ -807,6 +807,9 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
     ["from '../../shared/editors.mjs'", `from '${shared('editors.mjs')}'`],
     ["from '../../shared/onboarding.mjs'", `from '${shared('onboarding.mjs')}'`],
     ["from '../../shared/device-word.mjs'", `from '${shared('device-word.mjs')}'`],
+    /* The top bar's pill words (describePill), as they are. */
+    ["from '../../shared/link-word.mjs'", `from '${shared('link-word.mjs')}'`],
+    ["from '../../shared/pill-words.mjs'", `from '${shared('pill-words.mjs')}'`],
     ["import('./forgefx.js')", "import('./forgefx.mjs')"],
     /*
      * setUpMac's purchase check, from the stand-in above. A file of its own
@@ -2732,7 +2735,8 @@ export function run(test) {
     assert.ok(sheetAt !== -1, 'the Which unit sheet moved: say where')
     const sheet = app.slice(sheetAt, app.indexOf('</Sheet>', sheetAt) + '</Sheet>'.length)
     assert.match(sheet, /<\/div>\s*\{\/\*[^*]*\*\/\}\s*\{link\.hosts\.length > 1 \? <p className="hint">\{notUsingOne\('page'\)\}<\/p> : null\}\s*<\/Sheet>$/, 'the sheet off the unit’s name does not end on the line, behind two or more computers')
-    assert.ok(/setSheet\('units'\)/.test(app) && /if \(!isDemo\(\) && link\.role === 'remote' && link\.hosts\.length > 1\) \{\s*setSheet\('units'\)/.test(app), 'the sheet opens with fewer than two computers')
+    /* Off the bar's pill, by the phone's rule (unitGoes): two or more computers, and the link up. */
+    assert.ok(/const unitGoes = isDemo\(\) \? 'demo' : link\.role === 'remote' && link\.hosts\.length > 1 && link\.link === 'connected' \? 'which' : 'link'/.test(app) && /if \(unitGoes === 'which'\) \{\s*setSheet\('units'\)/.test(app), 'the sheet opens with fewer than two computers')
     assert.equal(app.match(/notUsingOne\('page'\)/g)?.length, 2, 'the line is not under both lists, or is somewhere else too')
     assert.ok(!app.includes("notUsingOne('app')"), 'the website tells somebody to swipe a page away')
     assert.equal(app.match(/unitChoices\(link\.hosts, /g)?.length, 2, 'the website has a third Which unit list, or lost one')

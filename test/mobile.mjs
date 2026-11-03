@@ -5246,7 +5246,9 @@ export function run(test) {
     assert.match(sheet, /unitChoices\(hosts, units, chosen, asking\)/)
     assert.match(sheet, /await chooseHost\(row\.name\)[\s\S]{0,160}onClose\(\)/, 'the sheet closes before the new unit is read')
     const web = read('src/App.jsx')
-    assert.match(web, /if \(!isDemo\(\) && link\.role === 'remote' && link\.hosts\.length > 1\) \{\s*setSheet\('units'\)/)
+    /* The browser's pill by the phone's rule since 3 November 2026: Which unit with two computers, only while the link is up. */
+    assert.match(web, /const unitGoes = isDemo\(\) \? 'demo' : link\.role === 'remote' && link\.hosts\.length > 1 && link\.link === 'connected' \? 'which' : 'link'/)
+    assert.match(web, /if \(unitGoes === 'which'\) \{\s*setSheet\('units'\)/)
     assert.match(web, /open=\{sheet === 'units'\}[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost, link\.unitsAsking\)[\s\S]{0,600}await chooseHost\(row\.name\)/)
   })
 
@@ -13008,8 +13010,9 @@ export function run(test) {
     assert.equal(pill.pillWords({ tone: 'good', unitState: 'unknown', unit: '', computer: 'Studio Mac' }).status, 'Looking', 'a unit not yet heard is called Live')
     const phonePill = await import('../mobile/src/lib/pill-words.js')
     assert.equal(phonePill.pillWords({ tone: 'good', unitState: 'silent', unit: 'FM3' }).status, pill.pillWords({ tone: 'good', unitState: 'silent', unit: 'FM3' }).status, 'the two copies disagree about the pill')
-    /* The pill's words are the phone's alone, so the computer's fingerprint does not move for them: nothing the web app imports carries them. */
-    assert.ok(!/pillWords/.test(read('shared/link-word.mjs')), 'the pill moved into a file the computer app serves, and every change to it makes a computer release')
+    /* The pill's words have a file of their own, shared/pill-words.mjs, which both bars import (the browser's through link.js describePill, since 3 November 2026), and link-word.mjs does not carry a second copy of them. */
+    assert.ok(!/pillWords/.test(read('shared/link-word.mjs')), 'the pill’s words moved into link-word.mjs, beside the words for every other spot')
+    assert.match(read('src/lib/link.js'), /import \{ pillWords \} from '\.\.\/\.\.\/shared\/pill-words\.mjs'/, 'the browser’s bar words the pill for itself')
     assert.match(bar, /pill\.mark === 'no' \? color\.fault/, 'a silent unit is not drawn in red')
     const rig = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
     assert.match(rig, /const unit = caps\?\.connected === false \? 'missing' : 'present'/, 'a Mac with no unit is not noticed')
@@ -13545,7 +13548,9 @@ export function run(test) {
     /* And the browser end still does the same thing, because this was asked
        for once about one app that exists twice. */
     const web = read('src/components/TopBar.jsx')
-    assert.match(web, /aria-label=\{demo \? 'Demo Unit' : 'Phone & computer'\}/, 'the browser’s unit name stopped being two destinations')
+    /* The browser's is the phone's pill since 3 November 2026, and says where it goes in the phone's words. */
+    assert.match(web, /const goes = demo \? 'Change the demo unit' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/, 'the browser’s unit name stopped being two destinations')
+    assert.match(web, /aria-label=\{`\$\{said\}\. \$\{goes\}`\}/, 'the browser’s pill is labelled for somewhere other than where it goes')
     /* Each end's name says where it goes. "About this unit" opened Phone &
        computer in the browser and Setup on the phone. */
     /* On the phone the name is in the pill since 24 October 2026, and the pill says where it goes: the demo units, Which unit, or Phone & computer (App.js unitGoes). */

@@ -1968,15 +1968,24 @@ export function run(test) {
     assert.match(phone, /\{canBuy \? \(/, 'the phone bar stopped offering the unlock in the demo')
     assert.match(phone, />Unlock<\/Text>\s*\{purchase\.price \? \(\s*<Text numberOfLines=\{1\}[^>]*>\s*\{purchase\.price\}/, 'the phone bar stopped saying unlock in the demo')
     assert.match(bar, /const canBuy = demo && Boolean\(onUnlock\)/, 'the browser bar offers the unlock outside the demo')
-    assert.match(bar, /\? canBuy\s*\? 'unlock'\s*: 'demo'/, 'the browser bar does not say unlock in the demo')
-
-    /* The word and the pill both go to the unlock, and the pill is the price. */
-    assert.match(bar, /onClick=\{onUnlock\}[\s\S]*?aria-label="Unlock the full version"/, 'UNLOCK does not open the unlock')
-    assert.match(bar, /\{canBuy && unlockPrice \? \(/, 'the price pill is not drawn beside UNLOCK')
-    assert.match(bar, /<span className="topbar-pill-face">\{unlockPrice\}<\/span>/, 'the pill says something other than the price')
+    /*
+     * And one button, as the phone's is since 24 October 2026: Unlock, with
+     * the price under it once it is known. It was the word UNLOCK and a
+     * separate price pill beside it, reading UNLOCK $9.99 across the two.
+     */
+    assert.match(bar, /\{canBuy \? \(/, 'the browser bar stopped offering the unlock in the demo')
+    assert.match(
+      bar,
+      /<span className="topbar-pill-face">\s*<span>Unlock<\/span>\s*\{unlockPrice \? <span className="topbar-pill-price">\{unlockPrice\}<\/span> : null\}/,
+      'the browser bar does not say Unlock over the price in the demo, as the phone does'
+    )
+    assert.match(bar, /onClick=\{onUnlock\}[\s\S]*?aria-label="Unlock the full version"/, 'Unlock does not open the unlock')
+    assert.equal((bar.match(/onClick=\{onUnlock\}/g) || []).length, 1, 'the unlock is two things in the bar again, the word and the price')
+    assert.ok(!/'unlock' : 'demo'|topbar-how/.test(bar), 'the word UNLOCK is back beside the pill')
 
     /* His words for the way out, and only for somebody who has paid. */
     assert.match(bar, /<span className="topbar-pill-face">Exit demo<\/span>/, 'Exit demo is missing from the browser bar')
+    assert.match(bar, /const canLeave = demo && !canBuy && Boolean\(onExitDemo\)/, 'Exit demo shows beside an unlock')
 
     const app = read('src/App.jsx')
     assert.match(
@@ -2325,7 +2334,10 @@ export function run(test) {
     const webApp = read('src/App.jsx').replace(/\s+/g, ' ')
     assert.match(phoneApp, /onOpenUnit=\{\(\) => \(unitGoes === 'demo' \? setPickUnit\(true\) : unitGoes === 'which' \? setPickLive\(true\) : openSettings\('link'\)\)\}\s*unitGoes=\{unitGoes\}/, 'the phone’s unit name no longer opens Phone & computer')
     assert.match(read('mobile/src/screens/Settings.js'), /const \[page, setPage\] = useState\(startPage\)/, 'the phone’s Settings cannot open on a page')
-    assert.match(webApp, /onOpenUnit=\{\(\) => \{.*setSetupPage\(isDemo\(\) \? 'demo' : 'link'\)/, 'the browser’s unit name no longer opens Phone & computer')
+    assert.match(webApp, /onOpenUnit=\{\(\) => \{.*setSetupPage\(unitGoes === 'demo' \? 'demo' : 'link'\)/, 'the browser’s unit name no longer opens Phone & computer')
+    /* And by the phone's own rule for where it goes: Which unit only with two computers and the link up. */
+    assert.match(webApp, /const unitGoes = isDemo\(\) \? 'demo' : link\.role === 'remote' && link\.hosts\.length > 1 && link\.link === 'connected' \? 'which' : 'link'/, 'the browser’s pill opens Which unit over a link that is down')
+    assert.match(phoneApp, /const unitGoes = demo \? 'demo' : link\.hosts\?\.length > 1 && link\.link === 'connected' \? 'which' : 'link'/, 'the phone’s rule for where its pill goes changed; this check follows it')
 
     /* One set of words for the chain, and both pages draw it. */
     assert.match(read('mobile/src/screens/Settings.js'), /<ChainCards\s+cards=\{linkChain\(\{\s+here: 'phone'/, 'the phone’s Phone & computer does not open on the chain')
@@ -2337,17 +2349,197 @@ export function run(test) {
     assert.deepEqual(cards.map((c) => c.lit), [true, true, undefined], 'a wire between two answering ends is not lit')
 
     /*
-     * And the bar says which computer, at both ends: the browser's CONNECTED
-     * in its note, the phone's pill on its second line (since 24 October
-     * 2026, Axiom's "Live ● AM4" over "on Raspberry Pi"), which is pressed
-     * for another unit as the name was.
+     * And the bar says which computer, at both ends, on the pill's second
+     * line (the phone's since 24 October 2026, Axiom's "Live ● AM4" over "on
+     * Raspberry Pi", and the browser's since 3 November 2026), which is
+     * pressed for another unit as the name was. The browser said it in its
+     * CONNECTED word's note until then.
      */
-    assert.match(read('src/components/LinkChip.jsx'), /<p className="hint">\{said\.sentence\}\.<\/p>/, 'the browser’s CONNECTED stopped saying which computer')
     const bar = read('mobile/src/components/TopBar.js')
     assert.match(bar, /computer: link\?\.macName/, 'the phone’s pill does not name the computer')
     const { pillWords } = await import('../shared/pill-words.mjs')
     assert.equal(pillWords({ tone: 'good', unitState: 'present', unit: 'FM3', computer: 'MacBook Pro' }).where, 'on MacBook Pro', 'the phone’s pill does not name the computer')
     assert.match(bar, /;\(onOpenUnit \|\| onOpenSettings\)\?\.\(\)/, 'the phone’s pill is a label')
+    const linkJs = read('src/lib/link.js')
+    assert.match(linkJs, /import \{ pillWords \} from '\.\.\/\.\.\/shared\/pill-words\.mjs'/, 'the browser’s pill words its own link, apart from the phone’s')
+    assert.match(linkJs, /const computer = remote \? macName : role === 'mac' \? 'this computer' : null/, 'the browser’s pill does not name the computer it drives')
+    assert.match(read('src/components/TopBar.jsx'), /macName: link\?\.macName/, 'the browser’s bar does not hand its pill the computer’s name')
+    const { describePill } = await import('../src/lib/link.js')
+    assert.equal(describePill({ role: 'remote', link: 'connected', status: 'live', device: { short: 'FM3' }, macName: 'MacBook Pro' }).where, 'on MacBook Pro', 'the browser’s pill does not name the computer')
+    /* The sentence under the computer's own switch for phones still says which account it is on. */
+    assert.match(read('src/components/LinkChip.jsx'), /<p className="hint">\{said\.sentence\}\.<\/p>/, 'the computer’s switch for phones stopped saying what it is')
+  })
+
+  /*
+   * THE PILL'S LAMP, ITS LABEL AND ITS HELD LINK, THE SAME AT BOTH ENDS.
+   *
+   * "Looks like we need to update the web version top tab bar to match the
+   * apps." (3 November 2026.) The browser's bar draws the phone's pill now,
+   * so what the lamp says and what a screen reader is told have to be the
+   * phone's, worked out from the same link and the same unit, and both bars
+   * are handed the link held through a stretch of looking, so neither flicks
+   * between Connecting and Disconnected while the computer sleeps.
+   */
+  test('the pill’s lamp, what a screen reader hears and the held link are the same at both ends', async () => {
+    const phone = read('mobile/src/components/TopBar.js').replace(/\s+/g, ' ')
+    const web = read('src/components/TopBar.jsx').replace(/\s+/g, ' ')
+    const link = await import('../src/lib/link.js')
+    const { toneOfRemote, unitWord } = await import('../shared/link-word.mjs')
+    const { pillWords } = await import('../shared/pill-words.mjs')
+
+    /* The phone's lamp rule, as it is written there; this check follows it. */
+    assert.match(phone, /const unitLamp = demo \? 'idle' : connected && unitState === 'present' \? 'good' : !connected \|\| unitSaid \? 'fault' : 'idle'/, 'the phone’s lamp rule changed; this check follows it')
+    const phoneLamp = (state, unitState) => {
+      const connected = state === 'connected'
+      const unitSaid = unitWord(toneOfRemote(state), unitState)
+      return connected && unitState === 'present' ? 'good' : !connected || unitSaid ? 'fault' : 'idle'
+    }
+    /* The browser's names for the same three colours (styles.css: .topbar .lamp live is --ok). */
+    const sameAs = { good: 'live', fault: 'fault', idle: 'idle' }
+    const units = {
+      present: { status: 'live', device: { short: 'AM4' } },
+      missing: { status: 'fault', reason: 'no-unit' },
+      silent: { status: 'fault', reason: 'no-answer', device: { short: 'AM4' } },
+      unknown: { status: 'idle' }
+    }
+    for (const state of ['connected', 'joining', 'no-answer', 'off', 'signed-out']) {
+      for (const [unitState, unit] of Object.entries(units)) {
+        const said = link.describePill({ role: 'remote', link: state, macName: 'MacBook Pro', ...unit })
+        /* The one screen the phone never draws a bar on: signed out, the browser's lamp stays grey. */
+        const want = state === 'signed-out' ? 'idle' : sameAs[phoneLamp(state, unitState)]
+        assert.equal(said.lamp, want, `${state}, ${unitState}: the browser’s lamp is not the phone’s`)
+        /* And the words are the phone's, from the one shared file. */
+        const words = pillWords({ tone: toneOfRemote(state), unitState, unit: unit.device?.short || '', computer: 'MacBook Pro' })
+        assert.deepEqual({ ...said, lamp: undefined }, { ...words, lamp: undefined }, `${state}, ${unitState}: the browser words the pill apart from the phone`)
+      }
+    }
+    /*
+     * And which fault it is reaches the pill: Not answering or No unit is
+     * decided by it (unitStateOf), and without it a computer whose unit did
+     * not answer, or a read lost to a busy port, read No unit in red, which
+     * sends somebody to check a cable that was never the problem.
+     */
+    assert.match(web, /reason: faultReason,/, 'the browser’s pill is not told which fault this is')
+    {
+      const app = read('src/App.jsx')
+      const call = app.slice(app.indexOf('<TopBar'), app.indexOf('</TopBar>'))
+      assert.match(call, /faultReason=\{faultReason\}/, 'App does not tell the bar which fault this is')
+    }
+    /* The lamp is drawn from that answer, in the pill, between the word and the unit, and not in the demo, as on the phone. */
+    assert.match(web, /const lampState = pill\.lamp/)
+    const note = String.raw`(?: \{\/\*[\s\S]*?\*\/\})?`
+    assert.match(web, new RegExp(String.raw`\{pill\.status\} <\/span>${note} \{demo \? null : <span className="lamp" data-state=\{lampState\} \/>\} \{pill\.unit \?`), 'the lamp is not between the pill’s word and the unit, or is drawn in the demo')
+    assert.match(phone, new RegExp(String.raw`\{pill\.status\} <\/Text>${note} \{demo \? null : bluetooth \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} size=\{8\} \/>\} \{pill\.unit \?`), 'the phone’s pill changed its order; this check follows it')
+
+    /* What a screen reader is told: the pill's words, then where the tap goes, in the phone's words. */
+    assert.match(phone, /accessibilityLabel=\{`\$\{\[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)\}\. \$\{pillGoes\}`\}/, 'the phone’s label changed; this check follows it')
+    assert.match(web, /const said = \[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)/, 'the browser’s pill is read out in other words than the phone’s')
+    assert.match(web, /aria-label=\{`\$\{said\}\. \$\{goes\}`\}/, 'the browser’s pill does not say where it goes, as the phone’s does')
+    assert.match(phone, /const pillGoes = demo \? 'Change the demo unit' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/)
+    assert.match(web, /const goes = demo \? 'Change the demo unit' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/, 'the browser’s pill names a page it does not open')
+    /*
+     * And a change is said politely, from the held link, as the phone's bar
+     * is a polite live region: the pill's words when they change, and
+     * nothing once they have been said, so a swipe through the bar does not
+     * read the pill twice (useNews).
+     */
+    assert.match(phone, /<BlurView accessibilityLiveRegion="polite"/)
+    assert.match(web, /const heard = useNews\(said\)/, 'the browser’s bar says something other than the pill’s words when it changes')
+    assert.match(web, /<span className="topbar-said" aria-live="polite"> \{heard\} <\/span>/, 'a change of state in the browser’s bar is never heard, or is a second copy of the pill')
+    {
+      const raw = read('src/components/TopBar.jsx')
+      const body = raw.slice(raw.indexOf('const NEWS_MS'))
+      assert.ok(/^const NEWS_MS = \d+\nfunction useNews\(said\) \{/.test(body), 'useNews moved; this check reads it from the end of TopBar.jsx')
+      /* Driven by hand: each draw runs the effects whose dependencies changed, a state set draws again, and the timers are kept to be run. */
+      let state = []
+      let deps = []
+      let timers = []
+      const draw = (said) => {
+        for (let pass = 0; pass < 10; pass++) {
+          let at = 0
+          let effect = 0
+          let changed = false
+          const due = []
+          const useState = (initial) => {
+            const i = at++
+            if (!(i in state)) state[i] = initial
+            return [state[i], (v) => {
+              const next = typeof v === 'function' ? v(state[i]) : v
+              if (next !== state[i]) (state[i] = next), (changed = true)
+            }]
+          }
+          const useEffect = (fn, d) => {
+            const i = effect++
+            if (!deps[i] || d.some((x, k) => x !== deps[i].list[k])) {
+              deps[i]?.cleanup?.()
+              due.push([i, fn])
+            }
+            deps[i] = { list: d, cleanup: deps[i]?.cleanup }
+          }
+          const setTimeout = (fn) => (timers.push(fn), timers.length)
+          const clearTimeout = (id) => (timers[id - 1] = null)
+          const out = new Function('useState', 'useEffect', 'setTimeout', 'clearTimeout', body + '\nreturn useNews')(useState, useEffect, setTimeout, clearTimeout)(said)
+          for (const [i, fn] of due) deps[i].cleanup = fn()
+          if (!changed) return out
+        }
+        throw new Error('useNews never settles')
+      }
+      const fire = () => {
+        const now = timers
+        timers = []
+        for (const fn of now) fn?.()
+      }
+      assert.equal(draw('Live, AM4, on MacBook Pro'), '', 'the bar’s first words are read out as news, on top of the pill’s own label')
+      assert.equal(draw('Disconnected, AM4, on MacBook Pro'), 'Disconnected, AM4, on MacBook Pro', 'a change of state in the browser’s bar is never heard')
+      assert.equal(draw('Disconnected, AM4, on MacBook Pro'), 'Disconnected, AM4, on MacBook Pro', 'the news went before its time')
+      fire()
+      assert.equal(draw('Disconnected, AM4, on MacBook Pro'), '', 'the news stays, a second copy of the pill for anybody swiping through the bar')
+      assert.equal(draw('Live, AM4, on MacBook Pro'), 'Live, AM4, on MacBook Pro', 'the next change is not heard')
+    }
+
+    /* Both bars are handed the held link, never the link as it flips. */
+    assert.match(read('mobile/App.js'), /<TopBar\s+link=\{shownLink\}/, 'the phone’s bar is handed the link as it flips')
+    const app = read('src/App.jsx')
+    assert.match(app, /const shownLink = useHeldLink\(link\)/, 'the browser does not hold the link for its bar')
+    const call = app.slice(app.indexOf('<TopBar'), app.indexOf('</TopBar>'))
+    assert.match(call, /link=\{shownLink\}/, 'the browser’s bar is handed the link as it flips')
+    assert.ok(!/link=\{link\}/.test(call), 'the browser’s bar is handed the link as it flips')
+    assert.match(read('src/lib/useHeldLink.js'), /const held = holdLink\(link, missed\)/, 'the browser’s hold is not the tested step')
+    /* The same hold as the phone's: Disconnected once a stretch of looking has gone unanswered, until the computer is back. */
+    let missed = false
+    const shown = ['joining', 'no-answer', 'joining', 'no-answer', 'joining', 'connected', 'joining'].map((state) => {
+      const step = link.holdLink({ role: 'remote', link: state }, missed)
+      missed = step.missed
+      return step.shown.link
+    })
+    assert.deepEqual(shown, ['joining', 'no-answer', 'no-answer', 'no-answer', 'no-answer', 'connected', 'joining'])
+  })
+
+  /*
+   * ONE GEAR AT BOTH ENDS. The browser drew the ⚙ character, which every
+   * device draws from its own font: Apple's gear on an iPhone, an outline
+   * elsewhere, never the phone app's. The phone's is a picture cut out of his
+   * mockup (mobile/assets/icons/setup.png): eight teeth, a ring, and a dot in
+   * the middle. The browser's is that picture traced, in the bar's ink.
+   */
+  test('the gear is the phone’s gear picture at both ends', () => {
+    const phone = read('mobile/src/components/TopBar.js')
+    assert.match(phone, /import setupIcon from '\.\.\/\.\.\/assets\/icons\/setup\.png'/, 'the phone’s gear is not its picture any more; this check follows it')
+    assert.match(phone, /source=\{setupIcon\}[\s\S]{0,120}style=\{\{ width: 22, height: 22, tintColor: color\.silk \}\}/, 'the phone’s gear changed size or ink; this check follows it')
+    const web = read('src/components/TopBar.jsx')
+    const at = web.indexOf('className="topbar-gear"')
+    const gear = web.slice(at, web.indexOf('</button>', at))
+    assert.ok(!/⚙/.test(gear), 'the browser’s gear is the ⚙ character again, drawn by whatever font the device has')
+    assert.match(gear, /<path\s+fill="currentColor"\s+fillRule="evenodd"/, 'the gear is painted rather than in the bar’s ink, or its ring is painted rather than cut out')
+    const d = gear.match(/\sd="([^"]+)"/)?.[1] || ''
+    /* The outline, the ring cut out of it, and the dot inside the ring: three shapes, as in the picture. */
+    assert.equal((d.match(/M/g) || []).length, 3, 'the gear is not the outline, the ring and the dot')
+    /* Eight teeth, each with two rounded corners. */
+    assert.equal((d.match(/Q/g) || []).length, 16, 'the gear has a different number of teeth from the phone’s eight')
+    const css = read('src/styles.css')
+    assert.match(css, /button\.topbar-gear svg \{\s*width: 22px;\s*height: 22px;/, 'the browser’s gear is not the phone’s 22px')
+    assert.match(css, /button\.topbar-gear \{[^}]*color: var\(--silk\)/, 'the browser’s gear is not the phone’s full ink')
+    assert.match(css, /button\.topbar-gear \{[^}]*min-height: 44px/, 'the gear is under the touch floor')
   })
 
   /*
@@ -2478,7 +2670,8 @@ export function run(test) {
     assert.match(UPDATE_STEPS.steps[1].body, /^Click the icon again \(right-click on Windows\) and choose Check for updates…/, 'step 2 opens the window on Windows, not the menu')
     assert.match(main, /buttons: \['Move to Applications', 'Not now'\]/, 'the Mac does not ask to move itself any more')
     assert.match(read('src/components/Updates.jsx'), /Move to Applications\s*<\/button>/, 'the Updates page has no Move to Applications')
-    assert.match(read('src/components/TopBar.jsx'), /<span aria-hidden="true">⚙<\/span>/, 'the window’s gear is not ⚙')
+    /* The steps say ⚙; the window's gear is the phone's gear picture since 3 November 2026, drawn, which is that same gear. */
+    assert.match(read('src/components/TopBar.jsx'), /className="topbar-gear"\s+onClick=\{onOpenSettings\}\s+aria-label="Connection and setup"\s*>\s*<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">\s*<path\s+fill="currentColor"\s+fillRule="evenodd"/, 'the window’s gear is not the gear the steps name')
     const app = read('src/App.jsx')
     assert.match(app, /<SetupRow key="about" title="The small print"/)
     assert.match(app, /<SetupRow key="updates" title="Updates"/)

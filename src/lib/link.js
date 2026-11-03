@@ -78,6 +78,8 @@ import { PHONE_NOTE_ID, phoneNote, timeToTell } from '../../shared/phone-note.mj
 import { holders } from '../../shared/editors.mjs'
 import { D4 } from '../../shared/onboarding.mjs'
 import { browserDevice, deviceNoun, setDevice } from '../../shared/device-word.mjs'
+import { toneOfRemote } from '../../shared/link-word.mjs'
+import { pillWords } from '../../shared/pill-words.mjs'
 export { isPairAccount, HOSTED_ORIGIN } from '../../shared/pairing.mjs'
 
 /**
@@ -275,55 +277,97 @@ export function describeLink(state) {
 }
 
 /**
- * What the bar says on the left, and what colour the lamp is.
+ * What the unit is doing, in the phone's four words: 'present' (it answers),
+ * 'missing' (the computer has none), 'silent' (it has one that is not
+ * answering), or 'unknown' (nothing has been asked yet). The top bar's pill
+ * and the Phone & computer cards both read it, so the two cannot disagree.
  *
- * Pulled out of TopBar so it can be tested, because it got this wrong in a way
- * a screenshot showed instantly and no test could: a phone read
- * "NOT CONNECTED" beside a chip reading "connected", over a notice explaining
- * that the Mac was connected and no unit was plugged into it. Three labels,
- * one moment, all disagreeing.
- *
- * Each was true about a different thing. The chip is about the link to the
- * Mac; the bar is about the unit. The bar was the wrong one — it treated every
- * remote state that was not live as "not connected", which is exactly right
- * until the link connects and only the unit is missing.
- *
- * The rule now: the bar names the thing that is absent. No link, no Mac —
- * a dash, quietly (it said "Not connected" until the phone's dash won), because a phone that has not connected yet is not
- * broken and the screen behind it is already asking it to connect. Link up and
- * no unit — "No unit", in red, because there is a red notice under it saying
- * the same and a cable the player can go and check.
+ * "No unit" is a claim about the rig, and only one of the three faults is
+ * about the rig. A phone once read "NO UNIT" in red while the computer in the
+ * next room had the AM4 on screen: the question had never come back
+ * ('no-answer'), or the computer answered and the read failed on a busy port
+ * or an editor holding it ('unreadable'). Neither means the cable is out, and
+ * saying "No unit" about them sends somebody to check a cable that was never
+ * the problem. So those two are 'silent' (Not answering), and only the
+ * computer saying it has no unit ('no-unit', 'unit-gone') is 'missing'.
  */
-export function describeUnit({ demo, role, status, device, link, reason = null }) {
-  const remote = role === 'remote'
-  const linkUp = link === 'connected'
-  const named = device?.short || device?.name || 'Connected'
+export function unitStateOf({ status, device, reason = null }) {
+  if (status === 'live' && device) return 'present'
+  if (status === 'fault') return reason === 'no-answer' || reason === 'unreadable' ? 'silent' : 'missing'
+  return 'unknown'
+}
 
-  if (remote && status !== 'live') {
-    /*
-     * "No unit" is a claim about the rig, and the bar was making it about a
-     * question that never got an answer.
-     *
-     * A phone reads "NO UNIT" in red while the Mac in the next room has the
-     * AM4 on screen and says CONNECTED. Both were drawn from the same fault,
-     * and the fault had two quite different causes behind it: the Mac
-     * answering "nothing is plugged in", and the Mac not answering the
-     * question at all. Only the first is about the unit. The second is about
-     * the line to the Mac, and saying "No unit" about it sends someone to
-     * check a cable that was never the problem.
-     */
-    const missing = reason === 'no-answer' ? 'No answer' : reason === 'unreadable' ? 'Can’t read' : 'No unit'
-    /*
-     * A dash, as the phone's bar draws it (mobile/src/components/TopBar.js).
-     * "Not connected" said what the red word at the other end of the same
-     * bar was already saying, and on a phone it was cut to "NOT …" — two
-     * words about one fact, and one of them unreadable.
-     */
-    const unit = linkUp ? (status === 'fault' ? missing : 'Looking…') : '—'
-    return { unit, lamp: demo ? 'demo' : linkUp ? status : 'idle' }
-  }
-  const unit = status === 'live' ? named : status === 'fault' ? 'No device' : 'Looking…'
-  return { unit, lamp: demo ? 'demo' : status }
+/**
+ * THE TOP BAR'S PILL, as the phone draws it: the state in a word, the lamp,
+ * the unit, and the computer under them ("Live ● AM4" over "on MacBook
+ * Pro"). The words are the phone's own, from shared/pill-words.mjs, so the
+ * two bars cannot word one link two ways.
+ *
+ * "Looks like we need to update the web version top tab bar to match the
+ * apps." (3 November 2026, with a picture of the browser's bar on his
+ * iPhone: a lamp, AM4, the version and CONNECTED.) The phone's bar had been
+ * the pill since 24 October; the browser's still had the unit at one end and
+ * the link's word at the other.
+ *
+ * Which computer: over the relay the one being driven, by the name it gives
+ * itself, and "on your computer" until it has said it; at the computer
+ * itself "on this computer"; on the computer's Wi-Fi page "on your
+ * computer". Only over the relay can the computer be out of reach: at the
+ * computer and on its Wi-Fi page the link is the page itself, so it reads as
+ * up. The demo says Demo and "simulated", and has no lamp.
+ *
+ * THE LAMP is the phone's rule (TopBar.js unitLamp): green only while the
+ * computer answers and so does the unit, red when the computer is out of
+ * reach or the unit is missing or silent, grey while nothing has been heard
+ * yet. One exception the phone does not need, because its bar is never drawn
+ * signed out: the browser's sign-in screen keeps a grey lamp. Red over a
+ * screen that is calmly asking somebody to sign in is the loud wrong answer.
+ *
+ * `lamp` is the browser's lamp vocabulary ('live', 'fault', 'idle'), or null
+ * in the demo, where none is drawn.
+ */
+export function describePill({ demo = false, role, link, status, device, reason = null, macName = null, demoName = '' }) {
+  const remote = role === 'remote'
+  const unit = demo ? demoName || '' : device?.short || device?.name || ''
+  const unitState = demo ? 'unknown' : unitStateOf({ status, device, reason })
+  /* Away from the relay the computer is here: the computer's own window, its Wi-Fi page, and the moment before the role is known. */
+  const tone = remote ? toneOfRemote(link) : 'good'
+  const computer = remote ? macName : role === 'mac' ? 'this computer' : null
+  /* No `bluetooth`: a browser cannot reach a Bluetooth MIDI adapter. */
+  const pill = pillWords({ tone, unitState, unit, computer, demo })
+  const up = !remote || link === 'connected'
+  const lamp = demo
+    ? null
+    : remote && link === 'signed-out'
+      ? 'idle'
+      : up && unitState === 'present'
+        ? 'live'
+        : !up || pill.mark === 'no'
+          ? 'fault'
+          : 'idle'
+  return { ...pill, lamp }
+}
+
+/**
+ * The link as the top bar says it, through a stretch of looking: the phone's
+ * useHeldLink (mobile/App.js), as a pure step so it can be tested.
+ *
+ * Once this stretch of looking for the computer has heard nothing back
+ * ('no-answer'), the rejoins in between say so too, rather than amber
+ * Connecting for a second and a half before the next red Disconnected. Each
+ * retry here sets 'joining' and then 'no-answer' again, and the phone's log
+ * on 12 October 2026 swung between the two every six and a half seconds for
+ * minutes, with the computer asleep the whole time. A screen reader hearing
+ * the bar read each flip out is the same fault, out loud.
+ *
+ * `missed` is whether this stretch has already gone unanswered; the step
+ * answers what to show and the new `missed`. Leaving the stretch (connected,
+ * signed out, off, or not the relay at all) starts again from nothing.
+ */
+export function holdLink(link, missed = false) {
+  const looking = link?.role === 'remote' && (link.link === 'joining' || link.link === 'no-answer')
+  const held = Boolean(looking && (missed || link.link === 'no-answer'))
+  return { shown: held && link.link === 'joining' ? { ...link, link: 'no-answer' } : link, missed: held }
 }
 
 /**

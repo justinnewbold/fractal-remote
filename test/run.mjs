@@ -5876,12 +5876,25 @@ test('a question that never came back is not blamed on the unit', () => {
 })
 
 test('the bar names what is missing, not always the unit', () => {
+  /*
+   * "No unit" only when the computer said it has none. A question that never
+   * came back, or a read that failed on a busy port, is the unit not
+   * answering, and "No unit" about it sends somebody to check a cable that
+   * was never the problem. The pill says it in the phone's words.
+   */
   const bar = (reason) =>
-    link.describeUnit({ role: 'remote', link: 'connected', status: 'fault', reason }).unit
-  assert.equal(bar('no-answer'), 'No answer', 'a silent computer reads as an empty rig')
-  assert.equal(bar('unreadable'), 'Can’t read')
+    link.describePill({ role: 'remote', link: 'connected', status: 'fault', reason, device: { short: 'AM4' }, macName: 'Studio Mac' }).status
+  assert.equal(bar('no-answer'), 'Not answering', 'a silent computer reads as an empty rig')
+  assert.equal(bar('unreadable'), 'Not answering', 'a read that failed reads as an empty rig')
   assert.equal(bar('no-unit'), 'No unit')
+  assert.equal(bar('unit-gone'), 'No unit')
   assert.equal(bar(null), 'No unit', 'the old reading stands where no reason was given')
+  /* And the chain cards on Phone & computer are told the same (App's ChainCards). */
+  for (const reason of ['no-answer', 'unreadable']) assert.equal(link.unitStateOf({ status: 'fault', reason }), 'silent', reason)
+  for (const reason of ['no-unit', 'unit-gone', null]) assert.equal(link.unitStateOf({ status: 'fault', reason }), 'missing', String(reason))
+  assert.equal(link.unitStateOf({ status: 'live', device: { short: 'FM3' } }), 'present')
+  assert.equal(link.unitStateOf({ status: 'live', device: null }), 'unknown', 'a unit nobody has described is called present')
+  assert.equal(link.unitStateOf({ status: 'idle' }), 'unknown')
 })
 
 test('a phone restoring its sign-in reads as connecting, never as signed out', () => {
@@ -9914,58 +9927,201 @@ test('nothing was live, so the first answer stands', async () => {
  * different thing, and together they were nonsense.
  */
 test('a computer that answered with no unit on it does not read as not connected', () => {
-  const said = link.describeUnit({
+  const said = link.describePill({
     role: 'remote',
     link: 'connected',
     status: 'fault',
-    device: { connected: false }
+    device: { connected: false },
+    macName: 'Studio Mac'
   })
-  assert.equal(said.unit, 'No unit', 'the bar contradicts the chip beside it')
+  assert.equal(said.status, 'No unit', 'the bar contradicts the chip beside it')
+  assert.equal(said.mark, 'no', 'No unit is not drawn in red')
+  assert.equal(said.where, 'on Studio Mac', 'the computer that answered is not named')
   assert.equal(said.lamp, 'fault', 'a cable the player can go and check is not a quiet state')
 })
 
-test('a phone that has not reached the computer stays quiet about it', () => {
-  // The reason the bar went quiet in the first place: red over a screen that
-  // is calmly asking you to connect is the loud wrong answer.
-  for (const state of ['off', 'joining', 'no-answer']) {
-    const said = link.describeUnit({ role: 'remote', link: state, status: 'fault' })
-    /* A dash, as the phone draws it — the word beside it already says the link is down. */
-    assert.equal(said.unit, '—', state)
-    assert.equal(said.lamp, 'idle', state)
+/*
+ * THE PILL, IN EVERY STATE THE BROWSER CAN BE IN: each link over the relay
+ * against each thing the unit can be doing, the computer's own window and its
+ * Wi-Fi page, and the demo. The words are the phone's (shared/pill-words.mjs)
+ * and so is the lamp, apart from the one screen the phone never draws a bar
+ * on: signed out, where the browser's lamp stays grey.
+ */
+test('the browser’s pill says every link and every unit as the phone does', () => {
+  const units = {
+    present: { status: 'live', device: { short: 'AM4' } },
+    missing: { status: 'fault', reason: 'no-unit', device: { short: 'AM4' } },
+    silent: { status: 'fault', reason: 'no-answer', device: { short: 'AM4' } },
+    unknown: { status: 'idle', device: null }
   }
+  const want = {
+    connected: {
+      present: ['Live', 'ok', 'AM4', 'live'],
+      missing: ['No unit', 'no', '', 'fault'],
+      silent: ['Not answering', 'no', 'AM4', 'fault'],
+      unknown: ['Looking', 'off', '', 'idle']
+    },
+    /* The computer out of reach: red at every unit state, the unit named where the page still holds it. */
+    joining: {
+      present: ['Connecting', 'wait', 'AM4', 'fault'],
+      missing: ['Connecting', 'wait', 'AM4', 'fault'],
+      silent: ['Connecting', 'wait', 'AM4', 'fault'],
+      unknown: ['Connecting', 'wait', '', 'fault']
+    },
+    'no-answer': {
+      present: ['Disconnected', 'no', 'AM4', 'fault'],
+      missing: ['Disconnected', 'no', 'AM4', 'fault'],
+      silent: ['Disconnected', 'no', 'AM4', 'fault'],
+      unknown: ['Disconnected', 'no', '', 'fault']
+    },
+    /* Disconnect was tapped: No computer, and red, as the phone draws it. */
+    off: {
+      present: ['No computer', 'off', '', 'fault'],
+      missing: ['No computer', 'off', '', 'fault'],
+      silent: ['No computer', 'off', '', 'fault'],
+      unknown: ['No computer', 'off', '', 'fault']
+    },
+    /* The browser's own exception: the sign-in screen is calmly asking somebody to sign in, and its lamp stays grey. */
+    'signed-out': {
+      present: ['No computer', 'off', '', 'idle'],
+      missing: ['No computer', 'off', '', 'idle'],
+      silent: ['No computer', 'off', '', 'idle'],
+      unknown: ['No computer', 'off', '', 'idle']
+    }
+  }
+  for (const [state, byUnit] of Object.entries(want)) {
+    for (const [unit, [status, mark, name, lamp]] of Object.entries(byUnit)) {
+      const said = link.describePill({ role: 'remote', link: state, macName: 'MacBook Pro', ...units[unit] })
+      assert.deepEqual([said.status, said.mark, said.unit, said.lamp], [status, mark, name, lamp], `${state}, ${unit}`)
+      assert.equal(said.where, state === 'signed-out' || state === 'off' ? null : 'on MacBook Pro', `${state}, ${unit}: the second line`)
+    }
+  }
+  /* "on your computer" until the computer has said its name. */
+  assert.equal(link.describePill({ role: 'remote', link: 'connected', status: 'live', device: { short: 'FM3' } }).where, 'on your computer')
 })
 
-test('a connected phone still reading the unit says so', () => {
-  const said = link.describeUnit({ role: 'remote', link: 'connected', status: 'idle' })
-  assert.equal(said.unit, 'Looking…')
+test('at the computer and on its Wi-Fi page the pill is about the unit, and says which computer', () => {
+  /* The computer's own window, whatever its switch for phones says: the link there is the page itself. */
+  for (const state of ['connected', 'off', 'signed-out']) {
+    const live = link.describePill({ role: 'mac', link: state, status: 'live', device: { short: 'FM3' } })
+    assert.deepEqual([live.status, live.unit, live.where, live.lamp], ['Live', 'FM3', 'on this computer', 'live'], state)
+    const none = link.describePill({ role: 'mac', link: state, status: 'fault', reason: 'no-unit' })
+    assert.deepEqual([none.status, none.mark, none.where, none.lamp], ['No unit', 'no', 'on this computer', 'fault'], `${state}: NO DEVICE OFFLINE is No unit now`)
+  }
+  const wifi = link.describePill({ role: 'wifi', link: 'connected', status: 'live', device: { short: 'AM4' } })
+  assert.deepEqual([wifi.status, wifi.unit, wifi.where, wifi.lamp], ['Live', 'AM4', 'on your computer', 'live'])
+  const missing = link.describePill({ role: 'wifi', link: 'connected', status: 'fault', reason: 'no-unit' })
+  assert.deepEqual([missing.status, missing.lamp], ['No unit', 'fault'])
+  /* Reading the unit, anywhere: Looking, with no name until the unit has said it, and grey. */
+  for (const role of ['mac', 'wifi']) {
+    const reading = link.describePill({ role, link: 'connected', status: 'idle' })
+    assert.deepEqual([reading.status, reading.unit, reading.lamp], ['Looking', '', 'idle'], role)
+  }
+  /* Names in mixed case, whole: "Axe-Fx III", never "AXE-F…" (the stylesheet does not capitalise it either). */
+  assert.equal(link.describePill({ role: 'mac', link: 'connected', status: 'live', device: { short: 'Axe-Fx III' } }).unit, 'Axe-Fx III')
 })
 
-test('a live unit is named, wherever the app is running', () => {
-  assert.equal(
-    link.describeUnit({ role: 'remote', link: 'connected', status: 'live', device: { short: 'AM4' } })
-      .unit,
-    'AM4'
+test('the demo says Demo and simulated, with no lamp, whatever the unit is doing', () => {
+  for (const role of ['mac', 'remote']) {
+    for (const status of ['live', 'fault', 'idle']) {
+      const said = link.describePill({ demo: true, role, link: 'connected', status, device: { short: 'FM3' }, demoName: 'Axe-Fx III', macName: 'MacBook Pro' })
+      assert.deepEqual(said, { status: 'Demo', mark: 'wait', unit: 'Axe-Fx III', where: 'simulated', lamp: null }, `${role}, ${status}`)
+    }
+  }
+  /* The demo's own unit, never the device left over from before it. */
+  assert.equal(link.describePill({ demo: true, role: 'mac', status: 'idle', device: null, demoName: 'AM4' }).unit, 'AM4')
+})
+
+/*
+ * The bar does not flick between Connecting and Disconnected while the
+ * computer sleeps: once a stretch of looking has gone unanswered, the
+ * rejoins say Disconnected too, until the computer is back. The phone's
+ * useHeldLink, as a step (link.js holdLink, src/lib/useHeldLink.js).
+ */
+test('the bar holds Disconnected through the retries, and lets go when the computer answers', () => {
+  const remote = (state) => ({ role: 'remote', link: state, macName: 'MacBook Pro' })
+  const run = (states) => {
+    let missed = false
+    return states.map((state) => {
+      const step = link.holdLink(remote(state), missed)
+      missed = step.missed
+      return step.shown.link
+    })
+  }
+  /* The first look is Connecting, as it is: nothing has gone unanswered yet. */
+  assert.deepEqual(run(['joining']), ['joining'])
+  /* Then the flip his log showed, every six and a half seconds: held. */
+  assert.deepEqual(run(['joining', 'no-answer', 'joining', 'no-answer', 'joining']), ['joining', 'no-answer', 'no-answer', 'no-answer', 'no-answer'])
+  /* The computer answering ends the stretch; the next drop starts from nothing. */
+  assert.deepEqual(run(['no-answer', 'joining', 'connected', 'joining']), ['no-answer', 'no-answer', 'connected', 'joining'])
+  /* Signing out or tapping Disconnect ends it too. */
+  assert.deepEqual(run(['no-answer', 'signed-out', 'joining']), ['no-answer', 'signed-out', 'joining'])
+  assert.deepEqual(run(['no-answer', 'off', 'joining']), ['no-answer', 'off', 'joining'])
+  /* Only the relay has a link to hold: the computer's window and its Wi-Fi page are handed theirs as they are. */
+  for (const role of ['mac', 'wifi']) {
+    const held = link.holdLink({ role, link: 'joining' }, true)
+    assert.equal(held.shown.link, 'joining', role)
+    assert.equal(held.missed, false, role)
+  }
+  /* Held, the rest of the link is the link: the computer's name, the account. */
+  const held = link.holdLink({ ...remote('joining'), account: { email: 'a@b.c' } }, true).shown
+  assert.deepEqual(held, { role: 'remote', link: 'no-answer', macName: 'MacBook Pro', account: { email: 'a@b.c' } })
+  /* And as it is when nothing is held: the same object, so nothing downstream sees a change. */
+  const as = remote('connected')
+  assert.equal(link.holdLink(as, false).shown, as)
+})
+
+/*
+ * And the hook itself, run: the step only holds if the hook remembers, from
+ * one draw to the next, that this stretch has gone unanswered. React's
+ * useState and useEffect, driven by hand: each draw runs the effects whose
+ * dependencies changed, and a state set by one draws again, as React does.
+ */
+test('useHeldLink remembers an unanswered stretch from one draw to the next', () => {
+  const src = readSrc(new URL('../src/lib/useHeldLink.js', import.meta.url), 'utf8')
+  const body = src
+    .replace("import { useEffect, useState } from 'react'", '')
+    .replace("import { holdLink } from './link'", '')
+    .replace('export function useHeldLink', 'function useHeldLink')
+  assert.ok(!/^import /m.test(body) && !/export /.test(body), 'useHeldLink imports something else now; the hand-driven React here needs it too')
+  let state = []
+  let deps = []
+  const draw = (hook) => {
+    let out
+    for (let pass = 0; pass < 10; pass++) {
+      let at = 0
+      let effect = 0
+      let changed = false
+      const effects = []
+      const useState = (initial) => {
+        const i = at++
+        if (!(i in state)) state[i] = typeof initial === 'function' ? initial() : initial
+        return [state[i], (v) => {
+          const next = typeof v === 'function' ? v(state[i]) : v
+          if (next !== state[i]) (state[i] = next), (changed = true)
+        }]
+      }
+      const useEffect = (fn, d) => {
+        const i = effect++
+        if (!deps[i] || !d || d.some((x, k) => x !== deps[i][k])) effects.push(fn)
+        deps[i] = d
+      }
+      out = hook(useState, useEffect)
+      for (const fn of effects) fn()
+      if (!changed) return out
+    }
+    throw new Error('useHeldLink never settles: it sets its state on every draw')
+  }
+  const makeHook = new Function('useEffect', 'useState', 'holdLink', body + '\nreturn useHeldLink')
+  const shown = ['joining', 'no-answer', 'joining', 'no-answer', 'joining', 'connected', 'joining'].map((said) =>
+    draw((useState, useEffect) => makeHook(useEffect, useState, link.holdLink)({ role: 'remote', link: said, macName: 'MacBook Pro' })).link
   )
-  assert.equal(
-    link.describeUnit({ role: 'mac', link: 'connected', status: 'live', device: { short: 'FM3' } })
-      .unit,
-    'FM3'
-  )
-})
-
-test('at the computer, a missing unit is still a missing device', () => {
-  // Nothing above changes the end with the cable in it.
-  const said = link.describeUnit({ role: 'mac', link: 'connected', status: 'fault' })
-  assert.equal(said.unit, 'No device')
-  assert.equal(said.lamp, 'fault')
-})
-
-test('the demo lamp outranks whatever the unit is doing', () => {
-  assert.equal(link.describeUnit({ demo: true, role: 'mac', status: 'live' }).lamp, 'demo')
-  assert.equal(
-    link.describeUnit({ demo: true, role: 'remote', link: 'connected', status: 'fault' }).lamp,
-    'demo'
-  )
+  assert.deepEqual(shown, ['joining', 'no-answer', 'no-answer', 'no-answer', 'no-answer', 'connected', 'joining'], 'the bar flicks between Connecting and Disconnected at every retry again')
+  state = []
+  deps = []
+  /* The computer's own window is handed its link as it is, retry or not. */
+  const mac = ['joining', 'no-answer', 'joining'].map((said) => draw((useState, useEffect) => makeHook(useEffect, useState, link.holdLink)({ role: 'mac', link: said })).link)
+  assert.deepEqual(mac, ['joining', 'no-answer', 'joining'])
 })
 
 test('connected means the computer answered, never merely that a channel was joined', () => {

@@ -93,12 +93,7 @@ export default function SaveBar({
    * already past it and says nothing. A timer that fires early sets another
    * for what is left; see whenSavedGoes.
    */
-  const [, redraw] = useState(0)
-  const justSaved = saidSaved(savedAt)
-  useEffect(() => {
-    if (!justSaved) return undefined
-    return whenSavedGoes(savedAt, () => redraw((n) => n + 1))
-  }, [justSaved, savedAt])
+  const justSaved = useSaidSaved(savedAt)
 
   // Nothing to save, nothing being saved, nothing just saved: no button.
   if (!queued && !saving && !dirty && !justSaved) return null
@@ -179,6 +174,25 @@ export default function SaveBar({
       </div>
     </div>
   )
+}
+
+/**
+ * Whether "✓ Saved" is up, kept answered until its time is over.
+ *
+ * The timer only exists to re-render when the window closes; the answer is
+ * computed from the clock (lib/savedFor), so a component that mounts long
+ * after a save is already past it. App asks it too: "✓ Saved" sits in the top
+ * bar where Save was, so on a phone the version gives it the room, as it does
+ * for Save, and comes back when the word goes.
+ */
+export function useSaidSaved(savedAt) {
+  const [, redraw] = useState(0)
+  const justSaved = saidSaved(savedAt)
+  useEffect(() => {
+    if (!justSaved) return undefined
+    return whenSavedGoes(savedAt, () => redraw((n) => n + 1))
+  }, [justSaved, savedAt])
+  return justSaved
 }
 
 /**
