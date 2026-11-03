@@ -279,8 +279,9 @@ async function rigOnTheBench(over = {}) {
     `,
     'demo.js': "export const isDemo = () => false\nexport const demoDevice = () => null\nexport const demoUnit = () => 'fm3'\n",
     'demoWire.js': "export const demoRequest = () => { throw new Error('no demo on the bench') }\n",
-    /* Bluetooth off, as it is unless somebody turns it on: every request goes to the pretend computer. */
-    'bleSwitch.js': "export const bluetoothWire = () => null\nexport const bluetoothOn = () => false\nexport const overBluetooth = (caps) => caps?.via === 'bluetooth'\n",
+    /* Bluetooth off, as it is unless somebody turns it on: every request goes to the pretend computer. `__wire` hands it a wire, for a test of the Bluetooth seam. */
+    'bleSwitch.js':
+      "let wire = null\nexport const __wire = (w) => { wire = w }\nexport const bluetoothWire = () => wire\nexport const bluetoothOn = () => wire !== null\nexport const overBluetooth = (caps) => caps?.via === 'bluetooth'\n",
     /* Every line the store writes, kept, so a test can read the log a report would carry. */
     'debugLog.js': "export const lines = []\nexport const logDebug = (source, message, detail) => { lines.push({ at: 0, source: String(source || 'app'), message: String(message ?? ''), detail }) }\n",
     'lineage.js': 'export const withLineage = (x) => x\n',
@@ -408,7 +409,8 @@ async function rigOnTheBench(over = {}) {
     relay.handed.length = 0
     const asked = (line) => relay.wire.filter((l) => (line instanceof RegExp ? line.test(l) : l === line)).length
     const log = (await import(at('debugLog.js'))).lines
-    return { rig, clock, unit, wire: relay.wire, asked, nameOf, relay, heard, gate, device: deviceLayer, log }
+    const ble = await import(at('bleSwitch.js'))
+    return { rig, clock, unit, wire: relay.wire, asked, nameOf, relay, heard, gate, device: deviceLayer, log, ble }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -3580,7 +3582,10 @@ export function run(test) {
     assert.match(load, /const was = state\.preset/, 'nothing remembers the preset to go back to')
     /* With the scene names that belong to it: a refusal left the buttons bare and Play moved (test/mobile.mjs, the VP4's refused preset). */
     assert.match(load, /const wasNames = state\.sceneNames/, 'nothing remembers the scene names to put back')
-    assert.match(load, /set\(\{ \.\.\.faultFrom\(err\), chain: 'ok', preset: was, sceneNames: wasNames \}\)/, 'a refused select leaves the wrong preset on screen, or takes its scene names away')
+    /* Put back by putBack, from what was up before the tap (`left`) or before the oldest press refused with it (presetPresses `back`). */
+    assert.match(load, /const left = \{ preset: was, pedals: wasChain, sceneNames: wasNames, chain: state\.chain \}/, 'nothing remembers the preset and its scene names together')
+    assert.match(load, /set\(\{ \.\.\.faultFrom\(err\), chain, preset: back\.preset, sceneNames: back\.sceneNames \}\)/, 'a refused select leaves the wrong preset on screen, or takes its scene names away')
+    assert.match(load, /putBack\(onItsWay\.back, 'ok'\)/, 'a refused select alone does not put back what was up before it')
 
     /* Neither screen waits on it. */
     for (const file of ['mobile/src/screens/Presets.js', 'mobile/src/screens/Stage.js']) {
@@ -11742,7 +11747,7 @@ export function run(test) {
     const once = withoutComments(rig.slice(rig.indexOf('async function readChainAndNames'), rig.indexOf('let staleTimer'))).replace(/\s+/g, ' ')
     assert.match(once, /read = await refreshBlocks\(\) if \(names && read && state\.preset\?\.number === number\) \{ .*?if \(copy !== 'stale' && !quick\) \{ (?:\/\*[^*]*\*\/ )?if \(bluetoothAm4\(\)\) namesWhenQuiet\(number, copy\) else await refreshSceneNames\(copy\) \}/, 'the slow read still runs when the names were already there, or before the chain, or after a chain read that failed')
     const loading = withoutComments(rig.slice(rig.indexOf('export async function loadPreset'))).replace(/\s+/g, ' ')
-    assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 syncChainBusy\(\) \} await readPresetSoon\(settleFrom\(sentAt\), \{ reloaded: true \}\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
+    assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 syncChainBusy\(\) \} onItsWay\.armed = true await readPresetSoon\(settleFrom\(sentAt\), \{ reloaded: true \}\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
     assert.match(rig, /const kept = await recallSceneNames\(owner, number\)/, 'the disk is not read first')
     assert.match(rig, /held = await device\.storedSceneNames\(slug, number\)/, 'the computer’s copy is never asked for')
     /* Read the slow way, they are kept everywhere. */
@@ -17957,6 +17962,749 @@ export function run(test) {
     holds[2].no(notSentError())
     assert.equal(await c, false)
     assert.equal(rig.getState().preset.number, 12)
+  })
+
+  /*
+   * TWO QUICK NEXTS, THE NEWER REFUSED OR DROPPED (rig.loadPreset
+   * presetPresses; src/lib/deviceState.js has the same). The second Next's
+   * refusal walked the presses in the air back to the first, still on its
+   * way, and put back the preset from before BOTH: 12 on screen, live,
+   * while the unit loaded 13, and the first's landing then put nothing up,
+   * no longer being the newest. On a VP4, which cannot say where it is,
+   * nothing would ever have corrected it. And the other way round, the first
+   * landed and then the second refused, 13 went back up with nothing ever
+   * read for it. In either order the screen ends on the preset the unit
+   * took, with its own name, scene and pedals, and the unit is sent the two
+   * selects and nothing more. The first Next still answers false: a setlist
+   * song is set up for the newest press alone, as before.
+   */
+  test('phone: two quick Nexts, the newer refused, end on the preset the unit took in either order', async () => {
+    const { notSentError } = await import('../shared/relay-rules.mjs')
+    const v = await import('../shared/vp4-safety.mjs')
+    /*
+     * Over the computer, and over Bluetooth, whose wire is under the same
+     * rig.loadPreset (device.js): there a dropped select is the wire still
+     * busy at its deadline (`late`, tapOverBle), and the unit's no is its own.
+     */
+    const ways = {
+      computer: {
+        refused: () => Object.assign(new Error('The unit refused that preset.'), { status: 409 }),
+        dropped: () => notSentError()
+      },
+      bluetooth: {
+        refused: () => Object.assign(new Error('The unit refused that preset.'), { bluetooth: true }),
+        dropped: () => Object.assign(new Error('The Bluetooth adapter was still busy.'), { bluetooth: true, late: true })
+      }
+    }
+    const said = {
+      computer: { refused: ['error', 'The unit refused that preset.'], dropped: ['dropped', notSentError().message] },
+      bluetooth: { refused: ['error', 'The unit refused that preset.'], dropped: ['dropped', notSentError({ late: true }).message] }
+    }
+    for (const via of Object.keys(ways)) {
+      for (const order of ['the older lands first', 'the newer is refused first']) {
+        for (const how of Object.keys(ways[via])) {
+          const at = `${via === 'bluetooth' ? 'over Bluetooth' : 'over the computer'}, ${order}, the newer ${how}`
+          const { rig, clock, unit, wire, relay, ble } = await rigOnTheBench()
+          /* The bench's own answers, through the Bluetooth seam of device.js rather than to the computer. */
+          if (via === 'bluetooth') ble.__wire({ request: (path, options) => relay.remoteRequest(path, options) })
+          assert.equal(rig.getState().preset.number, 12)
+          const holds = []
+          unit.selectAnswer = (body) => new Promise((go, no) => holds.push({ n: body.number, go, no }))
+          const a = rig.loadPreset(13)
+          await clock.advance(10)
+          const b = rig.loadPreset(14)
+          await clock.advance(10)
+          assert.deepEqual(holds.map((h) => h.n), [13, 14], `${at}: both selects were not in the air`)
+          /* The unit took 13, which opens on its own scene, and not 14: the bench moves its slot on the request. */
+          const lands = async () => {
+            unit.number = 13
+            unit.scene = 2
+            holds[0].go({ ok: true })
+            await clock.advance(10)
+          }
+          let then = null
+          const refused = async () => {
+            unit.number = 13
+            holds[1].no(ways[via][how]())
+            await clock.advance(10)
+            then = rig.getState()
+          }
+          if (order === 'the older lands first') {
+            await lands()
+            await refused()
+          } else {
+            await refused()
+            assert.equal(then.preset.number, 13, `${at}: the screen went back to preset ${then.preset.number}, live, while the select of 13 is still on its way`)
+            await lands()
+          }
+          assert.equal(await b, false)
+          assert.equal(then[said[via][how][0]], said[via][how][1], `${at}: the newer Next's ${how} was not said`)
+          /* Right after: never the preset before both. */
+          assert.equal(then.preset.number, 13, `${at}: the screen went back to preset ${then.preset.number}, live, while the unit is on 13`)
+          await clock.advance(5000)
+          assert.equal(await a, false, `${at}: a Next a newer one took over answered landed, and a setlist song would be set up on it`)
+          const end = rig.getState()
+          assert.equal(end.preset.number, 13, `${at}: the screen is on preset ${end.preset.number}, not the 13 the unit took`)
+          assert.equal(end.preset.name, 'SONG 13', `${at}: preset 13 was never named`)
+          assert.equal(end.sceneIndex, 2, `${at}: the scene is the last preset's, not the one 13 opened on`)
+          /* Read off the unit, not only put up from memory (chainKnown). */
+          assert.deepEqual([end.chainFor, end.chainKnown], [13, null], `${at}: the pedals are not 13's own, read off the unit`)
+          assert.equal(rig.chainViewOf(end), 'ready', `${at}: still waiting on a chain`)
+          assert.deepEqual(end.sceneNames, ['VERSE', 'CHORUS', '', '', '', '', '', ''], `${at}: 13's scene names were never read`)
+          /* The computer's own store, where any landing files the scene names it read, is not the unit. */
+          const toUnit = wire.filter((l) => !l.startsWith('GET ') && !l.startsWith('PUT /store/config/'))
+          assert.deepEqual(toUnit, ['POST /preset/select', 'POST /preset/select'], `${at}: something more than the two selects went to the unit`)
+        }
+      }
+    }
+
+    /*
+     * A VP4, which cannot say which preset it is on: the place the computer
+     * saw it land, and the name its record carries — over the name the list
+     * had for it when the VP4 was renamed since, and its place when the
+     * record does not come.
+     */
+    const records = { 13: { name: 'Lead Song', scenes: ['Verse', '', 'Solo', ''] }, 14: { name: 'Fuzz Wall', scenes: ['', '', '', ''] } }
+    const kinds = {
+      'unnamed here': { listed: {}, lost: false, name: 'Lead Song' },
+      'named on the list before a rename': { listed: { 13: 'Lead' }, lost: false, name: 'Lead Song' },
+      'whose record is lost': { listed: {}, lost: true, name: 'D1' }
+    }
+    for (const order of ['the older lands first', 'the newer is refused first']) {
+      for (const [kind, { listed, lost, name }] of Object.entries(kinds)) {
+        const at = `a VP4 ${kind}, ${order}`
+        /* The preset the VP4's record is of: moved only by a Program Change that lands. */
+        const vp4 = { on: null }
+        const { rig, clock, unit, relay } = await rigOnTheBench({
+          presetNames: listed,
+          short: 'VP4',
+          capabilities: { slotModel: 'linear', sceneCount: 4, presets: { count: 104, addressing: 'bankLetterShort' }, plainMidi: { programChange: true, sceneSelect: true } },
+          which: () => {
+            throw Object.assign(new Error('unsupported'), { status: 501 })
+          },
+          copy: () => {
+            if (lost && vp4.on === 13) throw Object.assign(new Error('The VP4 didn’t answer.'), { status: 503 })
+            return {
+              model: 'vp4',
+              ...(records[vp4.on] || { name: 'Big Room', scenes: ['Clean', 'Crunch', '', ''] }),
+              cells: [{ row: 0, col: 0, effectId: 118, name: 'Drive', isShunt: false, slug: 'drive' }]
+            }
+          }
+        })
+        assert.equal(rig.getState().preset?.name, 'Big Room')
+        const holds = []
+        unit.selectAnswer = (body) => new Promise((go, no) => holds.push({ n: body.number, go, no }))
+        const a = rig.loadPreset(13)
+        await clock.advance(10)
+        const b = rig.loadPreset(14)
+        await clock.advance(10)
+        assert.deepEqual(holds.map((h) => h.n), [13, 14], `${at}: both Program Changes were not in the air`)
+        const lands = async () => {
+          vp4.on = 13
+          holds[0].go({ ok: true, landed: true, code: 'D1' })
+          await clock.advance(10)
+        }
+        let then = null
+        /* The computer would have sent the second late, behind a read the VP4 had not answered: not sent. */
+        const refused = async () => {
+          holds[1].no(Object.assign(new Error(v.VP4_LATE), { status: 503 }))
+          await clock.advance(10)
+          then = rig.getState()
+        }
+        if (order === 'the older lands first') {
+          await lands()
+          await refused()
+        } else {
+          await refused()
+          await lands()
+        }
+        assert.equal(await b, false)
+        assert.equal(then.error, v.VP4_LATE, `${at}: the VP4's words for the second were not said`)
+        assert.equal(then.preset?.number, 13, `${at}: the screen went back to the place before both while the VP4 is on 13`)
+        await clock.advance(5000)
+        assert.equal(await a, false, `${at}: a preset a newer one took over answered landed, and a setlist song would be set up on it`)
+        const end = rig.getState()
+        assert.equal(end.preset?.number, 13, `${at}: the screen is on the place ${end.preset?.number}, not the 13 the computer saw the VP4 land on`)
+        assert.equal(end.preset?.name, name, `${at}: 13 is named ${end.preset?.name}`)
+        if (!lost) assert.deepEqual(end.sceneNames, ['Verse', '', 'Solo', ''], `${at}: 13's scene names are not the record's`)
+        const sent = relay.handed.filter((h) => h.line.startsWith('POST ') || h.line.startsWith('PUT '))
+        assert.deepEqual(sent.map((h) => [h.line, JSON.parse(h.body)]), [
+          ['POST /preset/select', { number: 13, midiChannel: 1 }],
+          ['POST /preset/select', { number: 14, midiChannel: 1 }]
+        ], `${at}: the VP4 was sent more than its two Program Changes`)
+      }
+    }
+  })
+
+  /*
+   * THREE QUICK NEXTS, 13 TO 15 (rig.loadPreset presetPresses: `back`,
+   * refusedPress and `whileNewest`). An older press handed the screen gets
+   * it as it was while it was the newest, never the placeholder of a press
+   * between them that was refused; one refused after being handed it puts back what
+   * was up before it, past every press refused before it; and a press
+   * refused while a newer one is still in the air touches nothing, the
+   * newer owning the screen. On a VP4, which cannot say where it is, a wrong
+   * place is never corrected: its record names the place on screen. In
+   * every leg the unit is sent the three selects and nothing more.
+   */
+  test('phone: three quick Nexts, any of them refused in any order, end on the preset the unit took', async () => {
+    const { notSentError } = await import('../shared/relay-rules.mjs')
+    const v = await import('../shared/vp4-safety.mjs')
+    const refusedErr = () => Object.assign(new Error('The unit refused that preset.'), { status: 409 })
+    /* Next to 13, 14 and 15, all three in the air. */
+    const three = async ({ rig, clock, unit }) => {
+      const holds = []
+      unit.selectAnswer = (body) => new Promise((go, no) => holds.push({ n: body.number, go, no }))
+      const answers = [rig.loadPreset(13)]
+      await clock.advance(10)
+      answers.push(rig.loadPreset(14))
+      await clock.advance(10)
+      answers.push(rig.loadPreset(15))
+      await clock.advance(10)
+      assert.deepEqual(holds.map((h) => h.n), [13, 14, 15], 'the three selects were not in the air')
+      return { holds, answers }
+    }
+    const step = async (clock) => clock.advance(10)
+
+    for (const via of ['computer', 'bluetooth']) {
+      const on = via === 'bluetooth' ? 'over Bluetooth' : 'over the computer'
+      const bench = async () => {
+        const b = await rigOnTheBench()
+        if (via === 'bluetooth') b.ble.__wire({ request: (path, options) => b.relay.remoteRequest(path, options) })
+        return b
+      }
+      const selectsOnly = (wire, at) =>
+        assert.deepEqual(wire.filter((l) => !l.startsWith('GET ') && !l.startsWith('PUT /store/config/')), ['POST /preset/select', 'POST /preset/select', 'POST /preset/select'], `${at}: something more than the three selects went to the unit`)
+
+      /* 14 refused while 15 is the newest, then 15: the screen goes to 13, still on its way, and never to 14. */
+      {
+        const at = `${on}, 14 refused, then 15, then 13 lands`
+        const b = await bench()
+        const { holds, answers } = await three(b)
+        b.unit.number = 13
+        holds[1].no(refusedErr())
+        await step(b.clock)
+        assert.equal(b.rig.getState().preset.number, 15, `${at}: a refusal under a newer press changed the screen`)
+        holds[2].no(refusedErr())
+        await step(b.clock)
+        const then = b.rig.getState()
+        assert.equal(then.preset.number, 13, `${at}: the screen is on ${then.preset.number}, while the select of 13 is still on its way`)
+        assert.equal(then.error, 'The unit refused that preset.')
+        b.unit.scene = 2
+        holds[0].go({ ok: true })
+        await b.clock.advance(5000)
+        const end = b.rig.getState()
+        assert.deepEqual([end.preset.number, end.preset.name, end.sceneIndex, end.chainFor], [13, 'SONG 13', 2, 13], `${at}: not 13, read off the unit`)
+        assert.equal(b.rig.chainViewOf(end), 'ready')
+        assert.deepEqual(await Promise.all(answers), [false, false, false])
+        selectsOnly(b.wire, at)
+      }
+
+      /* 13 refused, then 15 (14 is handed the screen), then 14: back to the 12 the unit never left, not 13's blank name. */
+      {
+        const at = `${on}, 13 refused, then 15, then 14`
+        const b = await bench()
+        const was = b.rig.getState()
+        const { holds, answers } = await three(b)
+        b.unit.number = 12
+        holds[0].no(refusedErr())
+        await step(b.clock)
+        holds[2].no(refusedErr())
+        await step(b.clock)
+        assert.equal(b.rig.getState().preset.number, 14, `${at}: 14, still on its way, was not handed the screen`)
+        holds[1].no(refusedErr())
+        await step(b.clock)
+        const then = b.rig.getState()
+        assert.equal(then.preset, was.preset, `${at}: the screen is on ${then.preset?.number}, not the 12 the unit never left`)
+        assert.equal(then.allBlocks, was.allBlocks, `${at}: the pedals put back are not 12's`)
+        assert.deepEqual([then.chainFor, then.sceneNames], [12, was.sceneNames])
+        await b.clock.advance(5000)
+        assert.equal(b.rig.getState().preset.number, 12)
+        assert.equal(b.rig.chainViewOf(b.rig.getState()), 'ready')
+        assert.deepEqual(await Promise.all(answers), [false, false, false])
+        selectsOnly(b.wire, at)
+      }
+
+      /* 15 refused, then 14 (each handing the screen to the one before), then 13 lands. */
+      {
+        const at = `${on}, 15 refused, then 14, then 13 lands`
+        const b = await bench()
+        const { holds, answers } = await three(b)
+        b.unit.number = 13
+        holds[2].no(refusedErr())
+        await step(b.clock)
+        assert.equal(b.rig.getState().preset.number, 14)
+        holds[1].no(refusedErr())
+        await step(b.clock)
+        assert.equal(b.rig.getState().preset.number, 13, `${at}: 13, still on its way, was not handed the screen`)
+        holds[0].go({ ok: true })
+        await b.clock.advance(5000)
+        assert.deepEqual([b.rig.getState().preset.number, b.rig.getState().preset.name, b.rig.getState().chainFor], [13, 'SONG 13', 13])
+        assert.deepEqual(await Promise.all(answers), [false, false, false])
+        selectsOnly(b.wire, at)
+      }
+
+      /* 14 answered as overtaken at the computer (not a landing), before 15 is pressed or after, then 15 refused: 13, still on its way, gets its own screen back, not 14's. */
+      for (const before of [false, true]) {
+        const at = `${on}, 14 overtaken ${before ? 'before 15 is pressed' : 'under 15'}, then 15 refused`
+        const b = await bench()
+        const holds = []
+        b.unit.selectAnswer = (body) => new Promise((go, no) => holds.push({ n: body.number, go, no }))
+        b.rig.loadPreset(13)
+        await step(b.clock)
+        b.rig.loadPreset(14)
+        await step(b.clock)
+        if (before) {
+          holds[1].go({ ok: true, overtaken: true })
+          await step(b.clock)
+        }
+        b.rig.loadPreset(15)
+        await step(b.clock)
+        b.unit.number = 13
+        if (!before) {
+          holds[1].go({ ok: true, overtaken: true })
+          await step(b.clock)
+        }
+        holds[2].no(refusedErr())
+        await step(b.clock)
+        assert.equal(b.rig.getState().preset.number, 13, `${at}: the screen is on ${b.rig.getState().preset.number}, while the select of 13 is still on its way`)
+        holds[0].go({ ok: true })
+        await b.clock.advance(5000)
+        assert.deepEqual([b.rig.getState().preset.number, b.rig.getState().chainFor], [13, 13])
+        selectsOnly(b.wire, at)
+      }
+
+      /*
+       * 13 refused under 15 after 14 was answered as overtaken, then 15 refused:
+       * nothing has the unit for certain, and what goes back is what went
+       * back before presetPresses, 14's: a press the computer answered is
+       * where the walk back stops, as it is for every other control
+       * (relay-rules pressesInTheAir), and 13's refusal does not reach past it.
+       */
+      {
+        const at = `${on}, 14 overtaken, 13 refused, then 15`
+        const b = await bench()
+        const { holds } = await three(b)
+        holds[1].go({ ok: true, overtaken: true })
+        await step(b.clock)
+        holds[0].no(refusedErr())
+        await step(b.clock)
+        holds[2].no(refusedErr())
+        await step(b.clock)
+        assert.equal(b.rig.getState().preset.number, 14, `${at}: the screen is on ${b.rig.getState().preset.number}, not what went back before`)
+        selectsOnly(b.wire, at)
+      }
+
+      /* 14 refused while 13 and 15 are in the air, 13 landing before or after it, and 15 lands: 15 throughout, and its song is set up. */
+      for (const order of ['13 lands first', '13 lands after the refusal']) {
+        const at = `${on}, 14 refused under 15, ${order}`
+        const b = await bench()
+        const { holds, answers } = await three(b)
+        const lands13 = async () => {
+          b.unit.number = 13
+          holds[0].go({ ok: true })
+          await step(b.clock)
+        }
+        if (order === '13 lands first') await lands13()
+        holds[1].no(refusedErr())
+        await step(b.clock)
+        assert.equal(b.rig.getState().preset.number, 15, `${at}: the screen went to ${b.rig.getState().preset.number} under the newer press of 15`)
+        if (order !== '13 lands first') await lands13()
+        b.unit.number = 15
+        holds[2].go({ ok: true })
+        await b.clock.advance(5000)
+        const end = b.rig.getState()
+        assert.deepEqual([end.preset.number, end.preset.name, end.chainFor], [15, 'SONG 15', 15], `${at}: not on 15`)
+        assert.equal(end.error, null, `${at}: the refusal of a press 15 had taken over was said over it`)
+        assert.deepEqual(await Promise.all(answers), [false, false, true], `${at}: the setlist song is not 15's alone`)
+        selectsOnly(b.wire, at)
+      }
+    }
+
+    /* A VP4: the place, the name its record carries, and the three Program Changes alone. */
+    const records = { 13: { name: 'Lead Song', scenes: ['Verse', '', 'Solo', ''] }, 14: { name: 'Fuzz Wall', scenes: ['', '', '', ''] }, 15: { name: 'Third', scenes: ['', '', '', ''] } }
+    const vp4Bench = async () => {
+      const vp4 = { on: null }
+      const b = await rigOnTheBench({
+        short: 'VP4',
+        capabilities: { slotModel: 'linear', sceneCount: 4, presets: { count: 104, addressing: 'bankLetterShort' }, plainMidi: { programChange: true, sceneSelect: true } },
+        which: () => {
+          throw Object.assign(new Error('unsupported'), { status: 501 })
+        },
+        copy: () => ({ model: 'vp4', ...(records[vp4.on] || { name: 'Big Room', scenes: ['Clean', 'Crunch', '', ''] }), cells: [{ row: 0, col: 0, effectId: 118, name: 'Drive', isShunt: false, slug: 'drive' }] })
+      })
+      return { ...b, vp4 }
+    }
+    const late = () => Object.assign(new Error(v.VP4_LATE), { status: 503 })
+    const threePCs = (relay, at) =>
+      assert.deepEqual(
+        relay.handed.filter((h) => h.line.startsWith('POST ') || h.line.startsWith('PUT ')).map((h) => JSON.parse(h.body).number),
+        [13, 14, 15],
+        `${at}: the VP4 was sent more than its three Program Changes`
+      )
+    /* 13 being confirmed, so the computer refuses 14 and 15 as late (or 14 is dropped, overtaken): the natural order on a VP4. */
+    for (const [why, refuse14] of [['late', late], ['overtaken', () => notSentError({ late: true, overtaken: true })]]) {
+      for (const order of ['13 lands last', '13 lands first']) {
+        const at = `a VP4, 14 ${why} and 15 late, ${order}`
+        const b = await vp4Bench()
+        const { holds, answers } = await three(b)
+        const lands = async () => {
+          b.vp4.on = 13
+          holds[0].go({ ok: true, landed: true, code: 'D1' })
+          await step(b.clock)
+        }
+        if (order === '13 lands first') await lands()
+        holds[1].no(refuse14())
+        await step(b.clock)
+        holds[2].no(late())
+        await step(b.clock)
+        const then = b.rig.getState()
+        assert.equal(then.preset?.number, 13, `${at}: the screen is on the place ${then.preset?.number}, a preset the VP4 was never put on`)
+        assert.equal(then.error, v.VP4_LATE)
+        if (order === '13 lands last') await lands()
+        await b.clock.advance(5000)
+        const end = b.rig.getState()
+        assert.deepEqual([end.preset?.number, end.preset?.name], [13, 'Lead Song'], `${at}: the screen ends on ${end.preset?.number} named ${end.preset?.name}`)
+        assert.deepEqual(end.sceneNames, ['Verse', '', 'Solo', ''])
+        assert.deepEqual(await Promise.all(answers), [false, false, false])
+        threePCs(b.relay, at)
+      }
+    }
+    /* All three late, the newest before the middle: the VP4 never moved, and the screen is as it started. */
+    {
+      const at = 'a VP4, 13 late, then 15, then 14'
+      const b = await vp4Bench()
+      const was = b.rig.getState().preset
+      assert.deepEqual([was?.number, was?.name], [null, 'Big Room'])
+      const { holds, answers } = await three(b)
+      holds[0].no(late())
+      await step(b.clock)
+      holds[2].no(late())
+      await step(b.clock)
+      holds[1].no(late())
+      await b.clock.advance(5000)
+      const end = b.rig.getState()
+      assert.equal(end.preset, was, `${at}: the screen is on the place ${end.preset?.number}, named ${end.preset?.name}, over a VP4 that never moved`)
+      assert.deepEqual(end.sceneNames, ['Clean', 'Crunch', '', ''])
+      assert.deepEqual(await Promise.all(answers), [false, false, false])
+      threePCs(b.relay, at)
+    }
+  })
+
+  /*
+   * WHAT A NEXT HANDED THE SCREEN BACK GETS BACK (rig.loadPreset putBack):
+   * its pedals from memory, its scene names and whether its chain is still
+   * being read, as they were while it was the newest, not the refused press's
+   * own. And a Next dropped puts back the card about the link its press
+   * cleared, as every dropped tap does.
+   */
+  test('phone: a Next handed the screen back by a refused one gets its pedals, scene names and chain heading back', async () => {
+    const { notSentError } = await import('../shared/relay-rules.mjs')
+    const { chainHeading } = await import('../shared/play-words.mjs')
+    const refusedErr = () => Object.assign(new Error('The unit refused that preset.'), { status: 409 })
+    const chains = {
+      12: [
+        { slug: 'drive', name: 'Drive 1', effectId: 133, bypassed: true, channel: 'A' },
+        { slug: 'amp', name: 'Amp 1', effectId: 58, bypassed: false, channel: 'A' }
+      ],
+      13: [
+        { slug: 'chorus', name: 'Chorus 1', effectId: 78, bypassed: false, channel: 'A' },
+        { slug: 'amp', name: 'Amp 1', effectId: 58, bypassed: false, channel: 'B' }
+      ],
+      14: [{ slug: 'cab', name: 'Cab', effectId: 62, bypassed: false, channel: 'A' }]
+    }
+    const names = { 13: ['INTRO', 'SOLO', '', '', '', '', '', ''], 14: ['FUZZ', '', '', '', '', '', '', ''] }
+    /* Played once each before, so their pedals are known (knownChain), and their scene names kept on this phone. */
+    {
+      const b = await rigOnTheBench({ keptNames: names })
+      Object.defineProperty(b.unit, 'blocks', { get: () => chains[b.unit.number] || chains[12], set: () => {}, configurable: true })
+      for (const n of [13, 14, 12]) {
+        assert.equal(await Promise.all([b.rig.loadPreset(n), b.clock.advance(5000)]).then(([ok]) => ok), true)
+      }
+      assert.equal(b.rig.getState().preset.number, 12)
+      const holds = []
+      b.unit.selectAnswer = (body) => new Promise((go, no) => holds.push({ n: body.number, go, no }))
+      const a = b.rig.loadPreset(13)
+      await b.clock.advance(10)
+      assert.deepEqual(b.rig.getState().sceneNames, names[13], 'the bench never put 13’s kept names up on its tap')
+      const n = b.rig.loadPreset(14)
+      await b.clock.advance(10)
+      assert.deepEqual([b.rig.getState().chainKnown, b.rig.getState().sceneNames], [14, names[14]], 'the bench never put 14’s pedals and names up on its tap')
+      b.unit.number = 13
+      holds[1].no(refusedErr())
+      await b.clock.advance(10)
+      const then = b.rig.getState()
+      assert.equal(then.preset.number, 13)
+      assert.deepEqual([then.chainFor, then.chainKnown], [13, 13], 'the pedals up are not 13’s, from memory')
+      assert.deepEqual(then.allBlocks.map((x) => x.effectId), [78, 58], 'the pedals of 14, a preset refused, stayed up under 13')
+      assert.deepEqual(then.sceneNames, names[13], 'the scene names of 14 stayed on 13’s scene buttons')
+      assert.equal(await n, false)
+      holds[0].go({ ok: true })
+      await b.clock.advance(5000)
+      assert.equal(await a, false)
+      assert.deepEqual([b.rig.getState().preset.number, b.rig.getState().chainFor], [13, 13])
+    }
+    /* Next to 13, played before, then to 15, never played, both refused: back to 12 with 12's own pedals, not 13's from memory. */
+    {
+      const b = await rigOnTheBench({ keptNames: names })
+      Object.defineProperty(b.unit, 'blocks', { get: () => chains[b.unit.number] || chains[12], set: () => {}, configurable: true })
+      for (const n of [13, 12]) {
+        assert.equal(await Promise.all([b.rig.loadPreset(n), b.clock.advance(5000)]).then(([ok]) => ok), true)
+      }
+      const was = b.rig.getState()
+      const holds = []
+      b.unit.selectAnswer = (body) => new Promise((go, no) => holds.push({ n: body.number, go, no }))
+      b.rig.loadPreset(13)
+      await b.clock.advance(10)
+      assert.equal(b.rig.getState().chainKnown, 13, 'the bench never put 13’s pedals up from memory')
+      b.rig.loadPreset(15)
+      await b.clock.advance(10)
+      b.unit.number = 12
+      holds[0].no(refusedErr())
+      holds[1].no(refusedErr())
+      await b.clock.advance(10)
+      const then = b.rig.getState()
+      assert.equal(then.preset, was.preset)
+      assert.equal(then.allBlocks, was.allBlocks, 'the pedals of 13, which the unit never took, stayed up under 12')
+      assert.deepEqual([then.chainFor, then.chainKnown], [was.chainFor, was.chainKnown])
+    }
+    /* Never played here: 13's chain is still coming when it is handed the screen, and the heading says so. */
+    {
+      const b = await rigOnTheBench()
+      const holds = []
+      b.unit.selectAnswer = (body) => new Promise((go, no) => holds.push({ n: body.number, go, no }))
+      b.rig.loadPreset(13)
+      await b.clock.advance(10)
+      b.rig.loadPreset(14)
+      await b.clock.advance(10)
+      holds[1].no(refusedErr())
+      await b.clock.advance(10)
+      const then = b.rig.getState()
+      assert.equal(then.preset.number, 13)
+      assert.equal(chainHeading(then.chain), 'Reading the chain…', 'the heading says the chain is read while 13’s is still on its way')
+      assert.equal(b.rig.chainViewOf(then), 'loading')
+    }
+    /* A Next dropped with the card about the link up: the card comes back. */
+    {
+      const b = await rigOnTheBench()
+      const LOST = 'The connection dropped before your computer answered.'
+      b.unit.hold = () => {
+        throw Object.assign(new Error(LOST), { aboutLink: true, linkDown: true })
+      }
+      assert.equal(await b.rig.writeScene(4), false)
+      assert.equal(b.rig.getState().errorLink, true, 'the bench never raised the card about the link')
+      b.unit.selectAnswer = () => {
+        throw notSentError()
+      }
+      const one = b.rig.loadPreset(13)
+      await b.clock.advance(10)
+      assert.equal(await one, false)
+      assert.deepEqual([b.rig.getState().error, b.rig.getState().errorLink, b.rig.getState().dropped], [LOST, true, 'Not sent — not connected'], 'the card about the link the Next cleared did not come back')
+    }
+  })
+
+  /*
+   * THE LANDINGS A REFUSAL TAKES FOR NEWS, AND THE ONES IT DOES NOT. A Next
+   * that landed just before the next was pressed, its reads cut short by it,
+   * was never read when that one was then refused: 13 on screen, "…", the
+   * last song's pedals marked out of date, for good. A press the computer
+   * could not say landed (a VP4's unseen Program Change) is not where the
+   * unit is, and its place is never named off the VP4's record. A landing
+   * read once is not read again by the next refusal. A landing on a VP4
+   * whose newer Program Change went and lost its answer is not named as this
+   * phone's own landing, since the VP4 may be on the newer one. And a press
+   * still in the air when the rig is reset belongs to the rig that was.
+   */
+  test('phone: a Next refused after an older one landed reads where the unit is, and only what it may be on', async () => {
+    const v = await import('../shared/vp4-safety.mjs')
+    const refusedErr = () => Object.assign(new Error('The unit refused that preset.'), { status: 409 })
+    /* 13's select answered at once, 14 pressed while 13's reads are still going, then refused. */
+    for (const [gap, slowPreset] of [
+      [50, 0],
+      [5, 200]
+    ]) {
+      const at = `14 pressed ${gap} ms after 13 landed${slowPreset ? ', the unit slow to say its preset' : ''}`
+      const { rig, clock, unit } = await rigOnTheBench()
+      if (slowPreset) unit.lag = (line) => (line === 'GET /preset' ? slowPreset : 0)
+      const holds = []
+      unit.selectAnswer = (body) => (body.number === 13 ? { ok: true } : new Promise((go, no) => holds.push({ go, no })))
+      const a = rig.loadPreset(13)
+      unit.scene = 2
+      await clock.advance(gap)
+      const b = rig.loadPreset(14)
+      await clock.advance(10)
+      unit.number = 13
+      holds[0].no(refusedErr())
+      await clock.advance(8000)
+      assert.deepEqual([await a, await b], [false, false])
+      const end = rig.getState()
+      assert.deepEqual([end.preset.number, end.preset.name, end.sceneIndex], [13, 'SONG 13', 2], `${at}: 13 was never read`)
+      assert.equal(rig.chainViewOf(end), 'ready', `${at}: 13's pedals were never read`)
+      assert.deepEqual(end.sceneNames, ['VERSE', 'CHORUS', '', '', '', '', '', ''], `${at}: 13's scene names were never read`)
+    }
+
+    /* 13 handed the screen back by 14's refusal, then landing, and 15 pressed while its reads are going and refused: what 13's reads put up stays up. */
+    {
+      const { rig, clock, unit } = await rigOnTheBench()
+      const holds = []
+      unit.selectAnswer = (body) => new Promise((go, no) => holds.push({ go, no }))
+      const a = rig.loadPreset(13)
+      await clock.advance(10)
+      rig.loadPreset(14)
+      await clock.advance(10)
+      holds[1].no(refusedErr())
+      await clock.advance(10)
+      unit.number = 13
+      unit.scene = 2
+      holds[0].go({ ok: true })
+      await clock.advance(50)
+      assert.deepEqual([rig.getState().preset.name, rig.getState().sceneIndex], ['SONG 13', 2], 'the bench never read 13 before 15 was pressed')
+      rig.loadPreset(15)
+      await clock.advance(10)
+      unit.number = 13
+      holds[2].no(refusedErr())
+      await clock.advance(10)
+      const then = rig.getState()
+      assert.deepEqual([then.preset.number, then.preset.name, then.sceneIndex], [13, 'SONG 13', 2], `the screen went back to ${then.preset.number} “${then.preset.name}”, not 13 as it was when 15 was pressed`)
+      await clock.advance(5000)
+      assert.equal(await a, false)
+      assert.deepEqual([rig.getState().preset.number, rig.getState().chainFor], [13, 13])
+    }
+
+    /* 13 landed and read to the end, then 14 refused alone: nothing is read again. */
+    {
+      const { rig, clock, unit, asked } = await rigOnTheBench()
+      assert.equal(await Promise.all([rig.loadPreset(13), clock.advance(5000)]).then(([ok]) => ok), true)
+      const reads = asked('GET /preset/blocks')
+      assert.equal(reads, 1, 'the bench never read 13’s chain')
+      unit.refuseSelect = true
+      const b = rig.loadPreset(14)
+      await clock.advance(5000)
+      assert.equal(await b, false)
+      assert.equal(asked('GET /preset/blocks'), reads, 'a refused Next read the chain of a preset read to the end before it was pressed')
+      assert.equal(rig.getState().preset.number, 13)
+    }
+
+    /* Read once, after the refusal of 14: a third Next refused after that read is not one more chain read. */
+    {
+      const { rig, clock, unit, asked } = await rigOnTheBench()
+      const holds = []
+      unit.selectAnswer = (body) => new Promise((go, no) => holds.push({ go, no }))
+      rig.loadPreset(13)
+      await clock.advance(10)
+      rig.loadPreset(14)
+      await clock.advance(10)
+      unit.number = 13
+      holds[0].go({ ok: true })
+      await clock.advance(10)
+      holds[1].no(refusedErr())
+      await clock.advance(5000)
+      assert.equal(rig.getState().chainFor, 13)
+      const reads = asked('GET /preset/blocks')
+      assert.equal(reads, 1, 'the bench never read 13’s chain once')
+      rig.loadPreset(15)
+      await clock.advance(10)
+      unit.number = 13
+      holds[2].no(refusedErr())
+      await clock.advance(5000)
+      assert.equal(asked('GET /preset/blocks'), reads, 'a refusal read the chain of a preset already read once since it landed')
+      assert.deepEqual([rig.getState().preset.number, rig.getState().chainFor], [13, 13])
+    }
+
+    const records = { 13: { name: 'Lead Song', scenes: ['Verse', '', 'Solo', ''] }, 14: { name: 'Fuzz Wall', scenes: ['Rhythm', '', '', ''] } }
+    const vp4Bench = async (over = {}) => {
+      const vp4 = { on: null }
+      const b = await rigOnTheBench({
+        short: 'VP4',
+        capabilities: { slotModel: 'linear', sceneCount: 4, presets: { count: 104, addressing: 'bankLetterShort' }, plainMidi: { programChange: true, sceneSelect: true } },
+        which: () => {
+          throw Object.assign(new Error('unsupported'), { status: 501 })
+        },
+        copy: () => ({ model: 'vp4', ...(records[vp4.on] || { name: 'Big Room', scenes: ['Clean', 'Crunch', '', ''] }), cells: [{ row: 0, col: 0, effectId: 118, name: 'Drive', isShunt: false, slug: 'drive' }] }),
+        ...over
+      })
+      return { ...b, vp4 }
+    }
+    const programChanges = (relay) => relay.handed.filter((h) => h.line.startsWith('POST ') || h.line.startsWith('PUT ')).map((h) => JSON.parse(h.body).number)
+
+    /* A VP4 whose first Program Change went with no sign it changed, the second refused late: never the record's name on place 13. */
+    {
+      const { rig, clock, unit, relay } = await vp4Bench()
+      const holds = []
+      unit.selectAnswer = () => new Promise((go, no) => holds.push({ go, no }))
+      const a = rig.loadPreset(13)
+      await clock.advance(10)
+      const b = rig.loadPreset(14)
+      await clock.advance(10)
+      holds[0].go({ ok: true, landed: false })
+      await clock.advance(10)
+      holds[1].no(Object.assign(new Error(v.VP4_LATE), { status: 503 }))
+      await clock.advance(5000)
+      assert.deepEqual([await a, await b], [false, false])
+      const end = rig.getState().preset
+      assert.ok(!(end?.number === 13 && end?.name === 'Big Room'), 'a Program Change nobody saw land was taken for where the VP4 is, and its record named place 13')
+      assert.deepEqual(programChanges(relay), [13, 14])
+    }
+
+    /* 13 landed, then 14 went and lost its answer: the VP4 may be on 14, so 14's record does not go up as place 13's. */
+    {
+      const { rig, clock, unit, relay, vp4 } = await vp4Bench({ presetNames: { 13: 'Lead' } })
+      const holds = []
+      unit.selectAnswer = () => new Promise((go, no) => holds.push({ go, no }))
+      rig.loadPreset(13)
+      await clock.advance(10)
+      rig.loadPreset(14)
+      await clock.advance(10)
+      vp4.on = 13
+      holds[0].go({ ok: true, landed: true, code: 'D1' })
+      await clock.advance(10)
+      vp4.on = 14
+      holds[1].no(Object.assign(new Error('The connection dropped before your computer answered.'), { aboutLink: true, linkDown: true }))
+      await clock.advance(8000)
+      const end = rig.getState().preset
+      assert.notDeepEqual([end?.number, end?.name], [13, 'Fuzz Wall'], 'place D1 named after the preset the newer Program Change may have put the VP4 on')
+      assert.equal(end?.name, 'Fuzz Wall', 'the record the VP4 is on was never read')
+      assert.deepEqual(programChanges(relay), [13, 14])
+    }
+
+    /* Reset with 13 in the air (a sign-out, the demo): 14 on the rig that is now, refused, is not handed back to it. */
+    {
+      const { rig, clock, unit } = await rigOnTheBench()
+      const holds = []
+      unit.selectAnswer = () => new Promise((go, no) => holds.push({ go, no }))
+      const a = rig.loadPreset(13)
+      await clock.advance(10)
+      rig.reset()
+      const b = rig.loadPreset(14)
+      await clock.advance(10)
+      holds[1].no(refusedErr())
+      await clock.advance(10)
+      const after = rig.getState().preset
+      unit.number = 13
+      holds[0].go({ ok: true })
+      await clock.advance(5000)
+      assert.deepEqual([await a, await b], [false, false])
+      assert.equal(rig.getState().preset, after, 'a press from the rig before the reset put its preset up on the rig after it')
+    }
+  })
+
+  /* And a Next refused with nothing else on its way still puts back the preset it left, as before. */
+  test('phone: one Next refused puts back the preset it left', async () => {
+    const { rig, clock, unit, wire } = await rigOnTheBench()
+    const was = rig.getState()
+    assert.equal(was.chainFor, 12, 'the bench chain was never read, so this proves nothing')
+    unit.refuseSelect = true
+    const one = rig.loadPreset(13)
+    await clock.advance(5000)
+    assert.equal(await one, false)
+    const end = rig.getState()
+    assert.equal(end.preset, was.preset, 'a refused Next did not put back the preset it left')
+    assert.equal(end.allBlocks, was.allBlocks, 'a refused Next did not put back the pedals it left')
+    assert.deepEqual([end.chainFor, end.chainKnown, end.chainOutline], [was.chainFor, was.chainKnown, was.chainOutline])
+    assert.equal(end.sceneNames, was.sceneNames)
+    assert.equal(rig.chainViewOf(end), 'ready')
+    assert.equal(end.error, 'The unit refused that preset.')
+    assert.deepEqual(wire.filter((l) => !l.startsWith('GET ')), ['POST /preset/select'])
   })
 
   /*

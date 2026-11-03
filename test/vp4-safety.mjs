@@ -1903,8 +1903,8 @@ export function run(test) {
     assert.match(web, /const said = vp4RecordNames\(p, number, name, vp4Owed\)/, 'the browser names a VP4’s place by its own rule')
     assert.match(phone, /if \(vp4PresetOn\(answer\) && run === presetRun\) vp4Owed = number/)
     assert.match(web, /if \(vp4Landed && run === presetRun\) vp4Owed = number/)
-    assert.match(phone, /const run = \+\+presetRun \/\*[^*]*\*\/ vp4Owed = null/)
-    /* A let at the browser's end: a refused newer press can hand an older one still on its way a new run (deviceState presetPresses). */
+    /* A let at both ends: a refused newer press can hand an older one still on its way a new run (rig.js and deviceState presetPresses). */
+    assert.match(phone, /let run = \+\+presetRun \/\*[^*]*\*\/ vp4Owed = null/)
     assert.match(web, /let run = \+\+presetRun \/\*[^*]*\*\/ vp4Owed = null/)
     assert.match(phone, /const fresh = vp4ReadFresh\(era\) const named = fresh \? vp4NameFor\(number\) : null/)
     assert.match(web, /if \(!held\) takeVp4Name\(number, era\)/)

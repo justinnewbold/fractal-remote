@@ -286,6 +286,8 @@ export function reset() {
   vp4Owed = null
   vp4Selecting.clear()
   vp4Era += 1
+  /* The presets on their way belong to the rig that was: see presetPresses. */
+  presetPresses = []
   clearTimeout(quietTimer)
   quietTimer = null
   pressedAt = 0
@@ -2440,9 +2442,94 @@ async function optimistic(patch, revert, send, air) {
   }
 }
 
-/* Every control's presses still in the air, for what a failed one puts back: see optimistic. */
+/* Every control's presses still in the air, for what a failed one puts back: see optimistic. The preset's are presetPresses, below. */
 const inTheAir = pressesInTheAir()
 const same = (b) => b
+
+/*
+ * THE PRESETS STILL ON THEIR WAY, OLDEST FIRST, FOR THE NEWEST ONE'S REFUSAL.
+ *
+ * Two quick Nexts are two presets, and the second can be refused or dropped
+ * (the unit's no, a VP4's "Tap it again", a request the relay lost) while
+ * the first is still on its way, or after it landed. The second's put-back
+ * walked the presses in the air (inTheAir) back to the first, which had not
+ * landed yet, and put up the preset from before BOTH: 12 on Play, live,
+ * while the unit loaded 13, and the first's landing then put nothing up, no
+ * longer being the newest. A pedal tapped then went out by 12's effect ids,
+ * and a VP4, which cannot say which preset it is on, never corrected it.
+ * The other way round, the first landed and then the second refused, 13
+ * went back up, but nothing ever read it: its name, its scene and its
+ * pedals stayed unread. Now the newest press's refusal asks this list first
+ * (olderPress):
+ *
+ *   - an older press still on its way is handed the screen back, as it was
+ *     while it was the newest, under a new run (its `adopt`), so its own
+ *     landing puts its preset up and its own refusal puts back what was
+ *     before it;
+ *   - one that landed while the refused press was in the air is where the
+ *     unit is: it goes back up, and the settled read asks the unit and reads
+ *     its name, scene and chain there, as its own landing would have.
+ *
+ * Only when neither is so does the refusal put back what was up before it.
+ * Nothing more is sent: no select again, nothing to the unit at all, only
+ * the reads a landing makes. Each landing counts (presetLandings), so one
+ * that landed before the refused press was made is not taken for news,
+ * unless its own reads were cut short by the next press before they got as
+ * far as the settled read (`armed`): then nothing would ever read it. A
+ * press the computer could not say landed (a VP4's unseen, one overtaken
+ * elsewhere) is not where the unit is, and is passed over. The browser keeps
+ * the same list (src/lib/deviceState.js presetPresses), as yet without
+ * `armed`, `back` or `whileNewest`.
+ *
+ * WHAT GOES BACK UP IS KEPT ON THE LIST TOO (`back`): the screen at the
+ * press's own tap, until an older press just before it is refused, whose
+ * own `back` it takes then (refusedPress), since the unit never left what
+ * was up before that one either. An older press handed the screen gets it
+ * as it was at the tap of the press that took over from it, which is when
+ * it was the newest (`whileNewest`, kept on it at that tap). So three quick
+ * Nexts, 13 to 15: 14 refused, then 15, and the screen is 13's, never 14's,
+ * a preset nothing loaded; and 13, then 15, then 14 refused, and 14 puts
+ * back the 12 from before 13, not 13's blank name. It is the walk
+ * relay-rules pressesInTheAir makes for the other controls, kept here for
+ * the preset because an older press handed the screen has to put back, in
+ * its turn, what was before it.
+ */
+let presetPresses = []
+let presetLandings = 0
+/* The press whose screen is up: the newest, or one handed the screen back since. */
+let newestPress = null
+
+function pressPreset(record) {
+  /* What is up now is that one's screen, as it was while it was the newest: for a refusal that hands it back. */
+  if (newestPress) newestPress.whileNewest = record.back
+  newestPress = record
+  /* Nothing older than the last landing matters any more, nor anything that failed or is unsure: a failed one's `back` is on the press after it already. */
+  let floor = -1
+  presetPresses.forEach((r, i) => {
+    if (r.state === 'landed') floor = i
+  })
+  presetPresses = presetPresses.filter((r, i) => i >= floor && (r.state === 'air' || r.state === 'landed'))
+  presetPresses.push(record)
+}
+
+/* Refused or dropped: the presses after it, up to the first not refused too, put back what it would have. */
+function refusedPress(record) {
+  record.state = 'failed'
+  for (let i = presetPresses.indexOf(record) + 1; i > 0 && i < presetPresses.length; i += 1) {
+    presetPresses[i].back = record.back
+    if (presetPresses[i].state !== 'failed') break
+  }
+}
+
+/* The newest older press still on its way, or the one that landed since `landingsThen` (or that nothing has read), or null. */
+function olderPress(record, landingsThen) {
+  for (let i = presetPresses.indexOf(record) - 1; i >= 0; i -= 1) {
+    const r = presetPresses[i]
+    if (r.state === 'air') return r
+    if (r.state === 'landed') return r.landing > landingsThen || !r.armed ? r : null
+  }
+  return null
+}
 
 /**
  * A rig write for a tool of several steps, which must STOP at a step that
@@ -3392,9 +3479,14 @@ export async function loadPreset(number, at = Date.now()) {
    * stayed blank until the next preset. Kept with the rest of what was up.
    */
   const wasNames = state.sceneNames
+  /*
+   * All of what was up, for a refusal to put back: this press's own `back`
+   * on the list of presets on their way, until an older one refused hands it
+   * its own (see presetPresses). With whether that chain was still being
+   * read, for a refusal that hands this screen back to this press.
+   */
+  const left = { preset: was, pedals: wasChain, sceneNames: wasNames, chain: state.chain }
   const card = linkCard()
-  /* This press among the others of Previous, Next and the list still in the air: see the put-back below. */
-  const press = inTheAir.press('preset', { preset: was, ...wasChain, sceneNames: wasNames })
   set({
     error: null,
     errorLink: false,
@@ -3422,9 +3514,35 @@ export async function loadPreset(number, at = Date.now()) {
       pending: typeof known !== 'string'
     }
   })
-  const run = ++presetRun
+  /* Not const: a newer press refused while this one is still on its way hands this one the screen (see presetPresses). */
+  let run = ++presetRun
   /* No read owes this tap a name until it lands: see vp4NameFor. */
   vp4Owed = null
+  /* Handed it so, it is still a press a newer one took over: no setlist song is set up for it (Stage.step), as before. */
+  let adopted = false
+  /* And among the presets still on their way, for a newer press's refusal (see presetPresses). */
+  const landingsThen = presetLandings
+  const onItsWay = {
+    number,
+    state: 'air',
+    landing: 0,
+    sentAt: 0,
+    vp4Code: null,
+    /* Its own reads got as far as the settled read: see olderPress. */
+    armed: false,
+    back: left,
+    /* The screen as it was while it was the newest, kept at the tap that took over from it. */
+    whileNewest: null,
+    /* The screen handed back under a new run; the select in the air is marked by it from here (vp4Selecting). */
+    adopt: () => {
+      const was = run
+      run = ++presetRun
+      adopted = true
+      newestPress = onItsWay
+      if (vp4Selecting.delete(was)) vp4Selecting.add(run)
+    }
+  }
+  pressPreset(onItsWay)
   namesAtOnce(number, run)
   presetLoads += 1
   /* A read still waiting to go is for a preset this tap has just left. */
@@ -3505,20 +3623,63 @@ export async function loadPreset(number, at = Date.now()) {
        * Two Nexts in one drop, both dropped: this one's `was` is the slot
        * the first put up, which the unit never loaded. What goes back then
        * is what was up before the oldest of them it did not take — that
-       * preset, with its chain (relay-rules pressesInTheAir).
+       * preset, with its chain: the `back` the older one's refusal handed
+       * this one (see presetPresses).
        */
-      const from = inTheAir.failed(press)
-      const older = from && from !== press ? from.before : null
-      /* Only the newest tap decides what is on screen. */
-      if (run === presetRun) {
-        /* The chain that was up goes back with the preset it belongs to —
-           and what it was: up from memory, or only the outline. */
-        set(recall || readFirst ? wasChain : { chainKnown: wasChain.chainKnown, chainOutline: wasChain.chainOutline })
-        set({ ...faultFrom(err), chain: 'ok', preset: was, sceneNames: wasNames })
-        if (older) set(older)
-        /* And the card about the link the press cleared, when the select was only dropped (see linkCard). */
+      refusedPress(onItsWay)
+      /*
+       * A screen put back, with this refusal said over it. The chain goes
+       * back with the preset it belongs to: whole when it is another tap's
+       * screen, and from this tap's own only what this tap changed (up from
+       * memory, or only the outline). And the card about the link the press
+       * cleared, when the select was only dropped (see linkCard).
+       */
+      const putBack = (back, chain) => {
+        set(back !== left || recall || readFirst ? back.pedals : { chainKnown: back.pedals.chainKnown, chainOutline: back.pedals.chainOutline })
+        set({ ...faultFrom(err), chain, preset: back.preset, sceneNames: back.sceneNames })
         const kept = keptOver(err, card)
         if (kept) set(kept)
+      }
+      /* What the unit is on, if an older press of these has it or may yet: see presetPresses. */
+      const unitHas = run === presetRun ? olderPress(onItsWay, landingsThen) : null
+      if (unitHas) {
+        /*
+         * The screen is that press's again, as it was while it was the
+         * newest: its preset, its pedals and its scene names, and whether its
+         * chain was being read. Not this press's `was`, which is that one's
+         * only when nothing was pressed in between (`whileNewest`).
+         */
+        putBack(unitHas.whileNewest, unitHas.whileNewest.chain)
+        if (unitHas.state === 'air') {
+          /* Still on its way: its own landing puts its preset up, and its own refusal what was before it. */
+          unitHas.adopt()
+        } else {
+          /*
+           * Landed while this one was in the air, and read nowhere, being no
+           * longer the newest: the unit is on it, and it is read there once
+           * the unit has settled, as its own landing would have. A VP4
+           * cannot say which preset it is on: the place the computer saw it
+           * land is up (it went up on its tap), and its record names it
+           * (vp4NameFor), or its place does. Named there as this phone's own
+           * landing only when this refusal cannot have moved the VP4 after
+           * it: a Program Change that went and lost its answer may have.
+           */
+          const vp4 = unitHas.vp4Code !== null
+          if (vp4 && !mayHaveLanded(err)) vp4Owed = unitHas.number
+          /* Read once: a refusal after this one leaves it to this read (see olderPress). */
+          unitHas.armed = true
+          const runNow = presetRun
+          readPresetSoon(settleFrom(unitHas.sentAt), { preset: !vp4, scene: true, reloaded: true }).then(() => {
+            /* A VP4 whose record has not named it: its place, not "…" for good (as below). */
+            const p = state.preset
+            if (unitHas.vp4Code && runNow === presetRun && p?.number === unitHas.number && p?.pending && !p?.name) {
+              set({ preset: { ...p, name: unitHas.vp4Code, pending: false } })
+            }
+          })
+        }
+      } else if (run === presetRun) {
+        /* Only the newest tap decides what is on screen. */
+        putBack(onItsWay.back, 'ok')
         /* The preset put back may be one whose read this tap called off —
            the settled read, or the one more read the computer's copy of
            another preset was owed (which puts 'reading' back up). */
@@ -3528,7 +3689,12 @@ export async function loadPreset(number, at = Date.now()) {
       presetAnswered(number, false)
       return false
     }
-    inTheAir.landed(press)
+    /* Where the unit is now, for a newer press refused while this one was landing (see presetPresses); not a press it may not have taken. */
+    if (unseen || overtaken) onItsWay.state = 'unsure'
+    else {
+      presetLandings += 1
+      Object.assign(onItsWay, { state: 'landed', landing: presetLandings, sentAt, vp4Code })
+    }
     restamp(token)
     presetAnswered(number, unseen ? false : overtaken ? null : true, unseen)
     /*
@@ -3610,6 +3776,8 @@ export async function loadPreset(number, at = Date.now()) {
     presetLoads -= 1
     syncChainBusy()
   }
+  /* Read from here, whatever is pressed next: see olderPress. */
+  onItsWay.armed = true
   await readPresetSoon(settleFrom(sentAt), { reloaded: true })
   /* A VP4 whose record has not named it yet (the read failed, or has not come): its place, not "…" for good. */
   if (vp4Code && run === presetRun && state.preset?.number === number && state.preset?.pending && !state.preset?.name) {
@@ -3617,8 +3785,8 @@ export async function loadPreset(number, at = Date.now()) {
   }
   /* Said once the reads are done, so nothing they say is put over it; only for the newest press. */
   if (unseen && run === presetRun) set(faultFrom(new Error(unseen)))
-  /* Not for a load a newer press took over, here or at the computer: that press's song is the one to set up (Stage.step). */
-  return run === presetRun && !unconfirmed && !unseen && !overtaken
+  /* Not for a load a newer press took over, here or at the computer, even one handed the screen back when that press was refused (adopted): that press's song is the one to set up (Stage.step). */
+  return run === presetRun && !adopted && !unconfirmed && !unseen && !overtaken
 }
 
 /*
