@@ -570,7 +570,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
           */}
           {twoWays ? (
             <>
-              <Press label={RESTORED_BLUETOOTH_GO} height={TAP} onPress={() => onAccount?.()} />
+              <Press label={RESTORED_BLUETOOTH_GO} height={TAP} onPress={() => onAccount?.('bluetooth')} />
               <Note>{WALKTHROUGH_TWO_WAYS.restored}</Note>
             </>
           ) : null}

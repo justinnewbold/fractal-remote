@@ -5921,7 +5921,7 @@ export function run(test) {
     )
     assert.match(
       app,
-      /useEffect\(\(\) => \{ if \(auth === 'checking'\) return undefined if \(auth === 'out'\) \{ allowBluetooth\(null\) return undefined \} let alive = true haveSession\(\) \.then\(\(id\) => alive && allowBluetooth\(id\)\) \.catch\(\(\) => \{\}\) return \(\) => \{ alive = false \} \}, \[auth, demo\]\)/,
+      /useEffect\(\(\) => \{ if \(auth === 'checking'\) return undefined if \(auth === 'out'\) \{ allowBluetooth\(null\) return undefined \} let alive = true haveSession\(\) \.then\(\(id\) => \{ if \(!alive\) return const open = allowBluetooth\(id\) if \(open && restoreBluetooth\.current\) setBluetooth\(true\) restoreBluetooth\.current = false \}\) \.catch\(\(\) => \{\}\) return \(\) => \{ alive = false \} \}, \[auth, demo\]\)/,
       'signing in, signing out, another account or the demo ending does not ask again whose phone this is'
     )
     /*
@@ -5935,7 +5935,7 @@ export function run(test) {
      */
     const SIGNED_OUT = 'allowBluetooth\\(null, \\{ signedOut: true \\}\\)'
     /* Not while he only views as a new customer, whose sign-in the form keeps (3 November 2026, App.js backToRig). */
-    assert.match(app, new RegExp(`const toSignIn = \\(\\) => \\{ setBuying\\(false\\) setScreen\\('stage'\\) setDemo\\(false\\) if \\(!purchase\\.posing\\) ${SIGNED_OUT} setAuth\\('out'\\) \\}`), 'the way to the sign-in form does not write Bluetooth’s off down')
+    assert.match(app, new RegExp(`const toSignIn = \\(\\) => \\{ setBuying\\(false\\) setScreen\\('stage'\\) setDemo\\(false\\) if \\(!purchase\\.posing\\) \\{ bluetoothAtForm\\.current = bluetooth ${SIGNED_OUT} \\} setAuth\\('out'\\) \\}`), 'the way to the sign-in form does not write Bluetooth’s off down')
     assert.match(app, new RegExp(`await stopLink\\(\\) await signOut\\(\\) unlinkAccount\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${SIGNED_OUT} setScreen\\('stage'\\) setAuth\\('out'\\)`), 'Sign out in Settings does not write Bluetooth’s off down')
     const UNLINK = 'unlinkAccount\\(\\)\\.catch\\(\\(\\) => \\{\\}\\)'
     assert.match(app, new RegExp(`setDemo\\(true\\) if \\(!purchase\\.posing\\) \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${UNLINK} ${SIGNED_OUT} \\} setAuth\\('in'\\) \\}\\} onBack=\\{\\(\\) => \\{ if \\(!purchase\\.posing\\) \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${UNLINK} ${SIGNED_OUT} \\} setAuth\\('out'\\) \\}\\} onDeleted=\\{ purchase\\.posing \\? undefined : \\(\\) => \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${UNLINK} ${SIGNED_OUT} setAuth\\('out'\\) \\} \\}`), 'the paywall’s sign-outs do not write Bluetooth’s off down, or leave the store on the account just left')
@@ -6748,8 +6748,13 @@ export function run(test) {
     assert.ok(!/mayDrive\(/.test(code('mobile/src/screens/Bluetooth.js')), 'the Bluetooth page lets a free account connect with the store out of reach')
     /* App.js: one way to the page, handed to the waiting screen only through the same three: the row's gate as one hook. */
     const app = flat('mobile/App.js')
-    /* Two: the waiting screen's, and the Which unit sheet's off the Live pill, both behind bluetoothOffered. */
-    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 2, 'App.js opens the Bluetooth page from somewhere else too')
+    /*
+     * Three: the waiting screen's, the Which unit sheet's off the Live pill,
+     * and, since 3 November 2026, the one after a found purchase's Bluetooth
+     * way has signed in (askedBluetooth), all behind bluetoothOffered.
+     */
+    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 3, 'App.js opens the Bluetooth page from somewhere else too')
+    assert.ok(app.includes("if (auth !== 'in' || !askedBluetooth.current || !bluetoothOffered) return askedBluetooth.current = false openSettings('bluetooth')"), 'the found purchase’s Bluetooth way opens the page from behind another gate')
     assert.ok(app.includes("onBluetooth={bluetoothOffered ? () => (setPickLive(false), openSettings('bluetooth')) : null}"), 'the Which unit sheet’s Bluetooth button is behind another gate')
     assert.ok(app.includes('const bluetoothOffered = useBluetoothOffered()'), 'the waiting screen’s way in is not the Settings row’s gate')
     assert.ok(!/mayDrive|bluetoothSupported\(\)|useBluetoothAllowed\(\)/.test(code('mobile/App.js')), 'App.js writes the Bluetooth gate out again beside the hook')
@@ -6959,7 +6964,7 @@ export function run(test) {
     assert.deepEqual(Object.keys(two).sort(), ['agree', 'demoSub', 'restored', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
     /* The page after Restore finds a purchase offers the Bluetooth way too, to sign-in, on a copy that opens it (the audit of 3 November 2026). */
     assert.equal(gear.RESTORED_BLUETOOTH_GO, 'No computer - I’ll use Bluetooth')
-    assert.match(flat('mobile/src/screens/Onboarding.js'), /\{twoWays \? \( <> <Press label=\{RESTORED_BLUETOOTH_GO\} height=\{TAP\} onPress=\{\(\) => onAccount\?\.\(\)\} \/> <Note>\{WALKTHROUGH_TWO_WAYS\.restored\}<\/Note> <\/> \) : null\} <Press label=\{P6\.back\}/, 'the page after a found purchase does not offer Bluetooth, or offers it where Bluetooth is not open')
+    assert.match(flat('mobile/src/screens/Onboarding.js'), /\{twoWays \? \( <> <Press label=\{RESTORED_BLUETOOTH_GO\} height=\{TAP\} onPress=\{\(\) => onAccount\?\.\('bluetooth'\)\} \/> <Note>\{WALKTHROUGH_TWO_WAYS\.restored\}<\/Note> <\/> \) : null\} <Press label=\{P6\.back\}/, 'the page after a found purchase does not offer Bluetooth, or offers it where Bluetooth is not open')
     /* And Playing with no internet says Bluetooth needs none, where it is offered. */
     for (const say of [gear.NO_SIGNAL_BLUETOOTH.off('iPad'), gear.NO_SIGNAL_BLUETOOTH.on('tablet')]) {
       assert.match(say, /needs no internet/)
@@ -6967,6 +6972,13 @@ export function run(test) {
       assert.ok(!/this phone|\bbeta\b|\btried\b|free/i.test(say), say)
     }
     assert.match(gear.NO_SIGNAL_BLUETOOTH.off('phone'), /adapter on its MIDI jacks, sold separately/)
+    /* The steps' own lead-in, after the button rather than before it (the review of 3 November 2026). */
+    assert.equal(gear.NO_SIGNAL_BLUETOOTH.browser('iPad'), 'To use the computer with no signal, open its own page in the iPad’s web browser:')
+    assert.match(flat('mobile/src/screens/Settings.js'), /onPress=\{\(\) => setPage\('bluetooth'\)\} \/> : null\} \{bluetoothOffered \? \( <Text[^>]*>\{NO_SIGNAL_BLUETOOTH\.browser\(deviceNoun\(\)\)\}<\/Text> \) : null\}/)
+    /* And the found purchase's Bluetooth way goes on to the Bluetooth page once signed in. */
+    const appFlat = flat('mobile/App.js')
+    assert.match(appFlat, /askedBluetooth\.current = way === 'bluetooth' setAuth\('out'\)/)
+    assert.match(appFlat, /if \(auth !== 'in' \|\| !askedBluetooth\.current \|\| !bluetoothOffered\) return askedBluetooth\.current = false openSettings\('bluetooth'\)/)
     assert.match(flat('mobile/src/screens/Settings.js'), /\{bluetoothOffered \? NO_SIGNAL_BLUETOOTH\[bluetooth \? 'on' : 'off'\]\(deviceNoun\(\)\) :/, 'Playing with no internet does not say Bluetooth where it is offered')
     /* Any way of saying the app needs a computer, which is the claim these lines exist to take back. */
     const NEEDS = /(?:needs?|requires?|works? with|only (?:with|through)) a computer|computer is (?:required|needed)/i

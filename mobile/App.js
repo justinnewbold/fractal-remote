@@ -466,7 +466,11 @@ export default function App() {
      * customer, whose sign-in this keeps: the form's way back to his rig
      * (backToRig) brings Bluetooth back with it.
      */
-    if (!purchase.posing) allowBluetooth(null, { signedOut: true })
+    if (!purchase.posing) {
+      /* Kept, so Back to your own rig can put it back as it was (backToRig): the off written here is for a sign-in as somebody else. */
+      bluetoothAtForm.current = bluetooth
+      allowBluetooth(null, { signedOut: true })
+    }
     setAuth('out')
   }
   /*
@@ -482,21 +486,40 @@ export default function App() {
     poseAsNewCustomer(false)
     setDemo(false)
     setSignInSide('in')
+    /* Bluetooth as it was before the form, once the account is in again (the Bluetooth effect below). */
+    restoreBluetooth.current = bluetoothAtForm.current
+    bluetoothAtForm.current = false
+    askedBluetooth.current = false
     setAuth('in')
   }
+  /* Whether Bluetooth was on when toSignIn wrote it off, and whether Back to your own rig is to put it back on. */
+  const bluetoothAtForm = useRef(false)
+  const restoreBluetooth = useRef(false)
   /* Whether the view as a new customer started the demo, so ending it from the banner ends that too (and leaves one he was already in). */
   const posedInDemo = useRef(true)
-  /* Whether a sign-in is on the phone while the form is up: asked each time it comes up (haveSession), for backToRig. */
+  /*
+   * "No computer - I'll use Bluetooth", on the page after a found purchase:
+   * it goes to sign-in, as Yes does, and once the account is in, straight
+   * on to the Bluetooth page, rather than to Finding your computer…, which
+   * offers Bluetooth only after a long wait (the review of 3 November 2026).
+   */
+  const askedBluetooth = useRef(false)
+  useEffect(() => {
+    if (auth !== 'in' || !askedBluetooth.current || !bluetoothOffered) return
+    askedBluetooth.current = false
+    openSettings('bluetooth')
+  }, [auth, bluetoothOffered])
+  /* Whether a sign-in is on the phone while the form is up: asked each time it comes up (haveSession), for backToRig, and forgotten when it goes. */
   const [keptForBack, setKeptForBack] = useState(false)
   useEffect(() => {
     if (auth !== 'out') return undefined
     let alive = true
-    setKeptForBack(false)
     haveSession()
       .then((id) => alive && setKeptForBack(Boolean(id)))
       .catch(() => {})
     return () => {
       alive = false
+      setKeptForBack(false)
     }
   }, [auth])
   /*
@@ -919,7 +942,13 @@ export default function App() {
     }
     let alive = true
     haveSession()
-      .then((id) => alive && allowBluetooth(id))
+      .then((id) => {
+        if (!alive) return
+        const open = allowBluetooth(id)
+        /* Back to your own rig: on again, as it was before the form (backToRig). */
+        if (open && restoreBluetooth.current) setBluetooth(true)
+        restoreBluetooth.current = false
+      })
       .catch(() => {})
     return () => {
       alive = false
@@ -1154,10 +1183,12 @@ export default function App() {
              * a first-run flow they have just walked out of would read as the
              * app forgetting what they did.
              */
-            onAccount={() => {
+            onAccount={(way) => {
               markWalkthrough()
               setSeenWalk(true)
               setReplaying(false)
+              /* The found purchase's Bluetooth way: on to the Bluetooth page once signed in (askedBluetooth). */
+              askedBluetooth.current = way === 'bluetooth'
               setAuth('out')
             }}
               /*
@@ -1536,7 +1567,8 @@ export default function App() {
                    every screen told this phone has not unlocked, until the
                    banner over the play screen is tapped. See poseAsNewCustomer. */
                 onViewAsCustomer={() => {
-                  posedInDemo.current = demo
+                  /* Where he was when the view began: started again while it is on, the first start's answer stands. */
+                  if (!purchase.posing) posedInDemo.current = demo
                   poseAsNewCustomer(true)
                   setScreen('stage')
                   setReplaying(true)

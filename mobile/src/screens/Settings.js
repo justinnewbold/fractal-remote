@@ -1626,6 +1626,9 @@ export default function Settings({
               : `No signal? Use the computer’s own page in the ${deviceNoun()}’s web browser instead.`}
           </Text>
           {bluetoothOffered && !bluetooth ? <Press label={NO_SIGNAL_BLUETOOTH.go} tone="signal" height={TAP} onPress={() => setPage('bluetooth')} /> : null}
+          {bluetoothOffered ? (
+            <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>{NO_SIGNAL_BLUETOOTH.browser(deviceNoun())}</Text>
+          ) : null}
           <View style={{ gap: space.md }}>
             <TipCard icon={sendIcon} label="1  SAME WIFI" body={`Put the ${deviceNoun()} on the same wifi as the computer.`} />
             <TipCard

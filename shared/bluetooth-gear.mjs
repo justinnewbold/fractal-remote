@@ -316,9 +316,11 @@ export const RESTORED_BLUETOOTH_GO = 'No computer - I’ll use Bluetooth'
  * page is drawn.
  */
 export const NO_SIGNAL_BLUETOOTH = {
-  off: (noun) => `No signal? Bluetooth needs no internet: the ${noun} talks to the unit itself, through a Bluetooth MIDI adapter on its MIDI jacks, sold separately. ${BEST_WAY} To keep using the computer with no signal, open its own page in the ${noun}’s web browser:`,
-  on: (noun) => `You’re on Bluetooth, which needs no internet, so there is nothing to change. ${BEST_WAY} To use the computer with no signal, open its own page in the ${noun}’s web browser:`,
-  go: 'Connect over Bluetooth'
+  off: (noun) => `No signal? Bluetooth needs no internet: the ${noun} talks to the unit itself, through a Bluetooth MIDI adapter on its MIDI jacks, sold separately. ${BEST_WAY}`,
+  on: () => `You’re on Bluetooth, which needs no internet, so there is nothing to change. ${BEST_WAY}`,
+  go: 'Connect over Bluetooth',
+  /* Under the button, over the steps it leads into: the computer's way with no signal. */
+  browser: (noun) => `To use the computer with no signal, open its own page in the ${noun}’s web browser:`
 }
 
 /*

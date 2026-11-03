@@ -5539,7 +5539,7 @@ export function run(test) {
     )
     assert.match(app, /const toSignIn = \(\) => \{/, 'the sign-in route is gone')
     /* Bluetooth is told on the way, with the one brace pair that may sit inside (lib/bluetooth, allowBluetooth). */
-    assert.match(app, /const toSignIn = \(\) => \{(?:[^}]|\{ signedOut: true \})*setAuth\('out'\)/, 'it no longer lands on the sign-in screen')
+    assert.match(app, /const toSignIn = \(\) => \{[\s\S]{0,900}?setAuth\('out'\)\s*\}/, 'it no longer lands on the sign-in screen')
     /* It leaves the demo, because somebody heading for an account is heading
        for a real rig. */
     assert.match(app, /const toSignIn = \(\) => \{[^}]*setDemo\(false\)/, 'the demo keeps answering after leaving for an account')
@@ -5646,7 +5646,7 @@ export function run(test) {
     )
     assert.match(
       app,
-      /onAccount=\{\(\) => \{[^]{0,200}setAuth\('out'\)/,
+      /onAccount=\{\((?:way)?\) => \{[^]{0,400}setAuth\('out'\)/,
       'the account route no longer lands on the sign-in screen'
     )
     /* Marked seen on the way past, like every other exit. Sending somebody
@@ -5654,7 +5654,7 @@ export function run(test) {
        forgetting what they did. */
     assert.match(
       app,
-      /onAccount=\{\(\) => \{\s*markWalkthrough\(\)/,
+      /onAccount=\{\((?:way)?\) => \{\s*markWalkthrough\(\)/,
       'walking out to the account screen does not mark the walkthrough seen'
     )
 

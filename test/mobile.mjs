@@ -15256,10 +15256,17 @@ export function run(test) {
     const wall = posingApp.slice(posingApp.indexOf("auth === 'paywall' ? ( <Paywall"), posingApp.indexOf(') : askShare ? ('))
     assert.equal((wall.match(/if \(!purchase\.posing\) \{ signOut\(\)\.catch\(\(\) => \{\}\) unlinkAccount\(\)\.catch\(\(\) => \{\}\) allowBluetooth\(null, \{ signedOut: true \}\) \}/g) || []).length, 2, 'the purchase page’s Keep using the demo or Back signs out an account that is only viewing as a new customer')
     assert.match(wall, /onDeleted=\{ purchase\.posing \? undefined :/)
-    assert.match(posingApp, /if \(!purchase\.posing\) allowBluetooth\(null, \{ signedOut: true \}\) setAuth\('out'\) \}/, 'heading for the sign-in form writes his Bluetooth off while he only views as a new customer')
-    assert.match(posingApp, /const backToRig = \(\) => \{ poseAsNewCustomer\(false\) setDemo\(false\) setSignInSide\('in'\) setAuth\('in'\) \}/)
+    assert.match(posingApp, /if \(!purchase\.posing\) \{ [^}]*allowBluetooth\(null, \{ signedOut: true \}\) \} setAuth\('out'\) \}/, 'heading for the sign-in form writes his Bluetooth off while he only views as a new customer')
+    assert.match(posingApp, /const backToRig = \(\) => \{ poseAsNewCustomer\(false\) setDemo\(false\) setSignInSide\('in'\) [^}]*restoreBluetooth\.current = bluetoothAtForm\.current bluetoothAtForm\.current = false askedBluetooth\.current = false setAuth\('in'\) \}/)
+    /* Bluetooth as it was (the review of 3 November 2026): remembered where toSignIn writes it off, and turned on again once the account is in. */
+    assert.match(posingApp, /if \(!purchase\.posing\) \{ [^}]*bluetoothAtForm\.current = bluetooth allowBluetooth\(null, \{ signedOut: true \}\) \} setAuth\('out'\) \}/)
+    assert.match(posingApp, /const open = allowBluetooth\(id\) [^}]*if \(open && restoreBluetooth\.current\) setBluetooth\(true\) restoreBluetooth\.current = false/)
+    /* Started again while it is on, the first start says where he was. */
+    assert.match(posingApp, /if \(!purchase\.posing\) posedInDemo\.current = demo poseAsNewCustomer\(true\)/)
+    /* And the form's answer is forgotten when it goes, so the next form never opens on the last one's. */
+    assert.match(posingApp, /return \(\) => \{ alive = false setKeptForBack\(false\) \} \}, \[auth\]\)/)
     assert.match(posingApp, /onBackToRig=\{keptForBack && \(purchase\.unlocked \|\| purchase\.posing\) \? backToRig : undefined\}/, 'the sign-in form offers the way back to somebody with no sign-in on the phone, or to an unpaid account')
-    assert.match(posingApp, /if \(auth !== 'out'\) return undefined let alive = true setKeptForBack\(false\) haveSession\(\)/)
+    assert.match(posingApp, /if \(auth !== 'out'\) return undefined let alive = true haveSession\(\)/)
     const signInForm = read('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
     assert.match(signInForm, /\{onBackToRig \? <Press label="Back to your own rig" tone="signal" on height=\{TAP\} onPress=\{onBackToRig\} \/> : null\} <View style=\{\{ alignItems: 'center'/, 'the way back is not first on the sign-in form')
     assert.match(src, /export const restorePurchase = async \(\{ here = false \} = \{\}\) => \{\s*\/\*[^*]*\*\/\s*if \(posing\) return \{ ok: false, message: 'Restoring is off while you’re viewing as a new customer\.' \}/, 'Restore reaches the store while he only views as a new customer')
