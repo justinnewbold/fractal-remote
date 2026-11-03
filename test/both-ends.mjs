@@ -2617,7 +2617,7 @@ export function run(test) {
       assert.ok(!read(file).includes("'SECURE LINK'"), `${file} still says SECURE LINK`)
     }
     /* Each end draws the wire from those words rather than its own. */
-    assert.match(read('mobile/src/screens/Onboarding.js'), /\{box\.phoneWire \? <Wire label=\{box\.phoneWire\} \/> : null\}/)
+    assert.match(read('mobile/src/screens/Onboarding.js'), /\{box\.phoneWire \? <Wire label=\{box\.phoneWire\}(?: tight=\{twoWays\})? \/> : null\}/)
     assert.match(read('src/components/PhoneWalkthrough.jsx'), /<span className="pw-wire-label">\{box\.phoneWire\}<\/span>/)
     assert.match(read('src/components/Onboarding.jsx'), /<span className="onb-wire mono">\{box\.wire\}<\/span>/)
     /*

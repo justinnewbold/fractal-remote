@@ -294,10 +294,12 @@ export const WALKTHROUGH_TWO_WAYS = {
  * onboarding.mjs CHAIN, P2): on a copy that opens Bluetooth they are the
  * Computer way, picked to start with because it is the best one, and the
  * Bluetooth way is the other choice above them, drawn the same way with one
- * box fewer: the unit, the adapter on its MIDI jacks, the phone. No room is
- * taken from the button at the bottom that the computer way does not
- * already use. Anywhere Bluetooth is not offered the page is as it was.
- * Here for the reason the lines above are.
+ * box fewer: the unit, the adapter on its MIDI jacks, the phone. The choice
+ * row costs 44 + 16 of height on both ways, so on those copies the boxes and
+ * the cable are drawn tighter (Onboarding.js `tight`) and the Computer way
+ * ends no lower than the page did before it: he had text taken off this
+ * screen so its button shows without scrolling. Anywhere Bluetooth is not
+ * offered the page is as it was. Here for the reason the lines above are.
  */
 export const HOW_TWO_WAYS = {
   /* The two choices, in this order, the first picked to start with. */

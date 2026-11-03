@@ -848,8 +848,19 @@ export function accountDeleteAsk(row, said) {
       'They have the full version. Paid on the App Store or Google Play, it stays with them, and Restore a purchase brings it back on a new account. Paid by card on the website, or given by you, it goes with the account for good, and deleting refunds nothing.'
     )
   }
+  /*
+   * Access given to the address before it signed up waits on the waiting
+   * list until its first sign-in, and the delete takes it with the account
+   * (forget-account.ts, as when somebody deletes their own). Said, since
+   * the stuck, unconfirmed account is the one he deletes so they can start
+   * again (review of 3 November 2026).
+   */
+  if (row?.onWaitingList) out.push(WAITING_GOES)
   return out.join(' ')
 }
+
+/** The line the Delete question adds for an address on the waiting list. */
+export const WAITING_GOES = 'The access you gave this address before they signed up goes too. Give it again if they make a new account.'
 
 /*
  * The line under Confirm now on Everyone with an account. Not the Customer

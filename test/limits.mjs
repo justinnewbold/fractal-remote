@@ -4015,7 +4015,9 @@ export function run(test) {
     assert.match(read('desktop/main.js'), /const LATEST_API_URL = 'https:\/\/api\.github\.com\//, 'the desktop app no longer checks GitHub for updates; the policy should stop saying it does')
     assert.match(words, /The desktop apps check for their own updates from GitHub, and the phone app checks for updates from Expo/, 'the policy does not describe the update checks')
     assert.ok(!/except one:/.test(words), 'the opening names one thing that is not turned on, and the page describes two')
-    assert.match(words, /something you choose to turn on, except two: the phone app asking whether it is unlocked[^.]*and the apps checking for updates/, 'the opening does not name both things that happen without being turned on')
+    assert.match(words, /something you choose to turn on, except three: the phone app asking whether it is unlocked[^.]*a browser or the computer app asking the price of the full version as the demo or Settings opens[^.]*and the apps checking for updates/, 'the opening does not name all three things that happen without being turned on (the price, since the demo shows it: review of 3 November 2026)')
+    /* And the lead's "one thing" is one besides the computer app's update check, which it names. */
+    assert.match(words, /Besides the computer app checking GitHub for its own updates, the one thing they ask the internet for is the price of the full version/)
 
     /*
      * And the one thing the phone fetches from this website: the gear pages'
@@ -4167,7 +4169,7 @@ export function run(test) {
     const kept = words.slice(words.indexOf('How long it is kept'), words.indexOf('Deleting your data'))
     assert.match(kept, /The dates kept for the help setting up the computer, and when a computer app first signed in — until you delete the account\./, 'how long the setup emails’ dates are kept is not said')
     /* And what the two partners keep that the page says they are sent (5.1.1(i) asks for retention, not only collection). */
-    assert.match(kept, /The purchase record, and the record of the app's checks , at RevenueCat — those under your account until you delete it, which deletes them there too\. Checks made while no account is signed in on a phone \(before signing in, after signing out, or after deleting the account\) are kept under that phone's made-up number/, 'how long RevenueCat keeps the purchase record and the launch checks is not said, or not for the checks under no account')
+    assert.match(kept, /The purchase record, and the record of the app's checks , at RevenueCat — those under your account until you delete it, which deletes them there too\. Checks made while no account is signed in on a phone \(before signing in, after signing out, or after deleting the account\) are kept under that phone's made-up number, and a price asked in a browser or the computer app with no account signed in under that browser's made-up number/, 'how long RevenueCat keeps the purchase record and the launch checks is not said, or not for the checks under no account, or not for a browser’s price lookups')
     assert.match(kept, /The update check's install number, and a crash's error message , at Expo — only for as long as is reasonably needed to provide the updates/, 'how long Expo keeps the install number and a crash message is not said')
     /* Every count the builder sees is said, Expo's included, and named as what the label calls Analytics. */
     assert.match(words, /these counts are what the App Store's privacy label means by Analytics/, 'the policy does not say which of its counts the label calls Analytics')
@@ -4175,8 +4177,8 @@ export function run(test) {
     for (const t of ['computer_seen', 'unlock_seen', 'setup_reminders']) {
       assert.match(sql, new RegExp(`create table if not exists public\\.${t} \\(\\s*account_id uuid primary key references auth\\.users \\(id\\) on delete cascade`), `${t} is not deleted with the account, and the policy says it is`)
     }
-    /* "Except two" still holds: the setup emails go to people who bought, under Unlocking the full version. */
-    assert.match(words, /something you choose to turn on, except two:/)
+    /* "Except three" still holds: the setup emails go to people who bought, under Unlocking the full version. */
+    assert.match(words, /something you choose to turn on, except three:/)
     const unlocking = words.slice(words.indexOf('Unlocking the full version — a purchase record only if you buy it'), words.indexOf('Your setlists — only if you are signed in'))
     assert.ok(unlocking.includes('Help getting connected.'), 'the setup emails are not described under Unlocking the full version')
     /* And the date moved with the words. */

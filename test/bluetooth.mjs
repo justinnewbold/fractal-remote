@@ -6897,7 +6897,22 @@ export function run(test) {
     const page = flat('mobile/src/screens/Onboarding.js')
     assert.match(page, /const \[howWay, setHowWay\] = useState\('computer'\)/, 'How it works starts on Bluetooth')
     assert.match(page, /const howBluetooth = twoWays && howWay === 'bluetooth'/, 'a copy that does not open Bluetooth can draw the Bluetooth way')
-    assert.match(page, /\{twoWays \? \( <View style=\{\{ flexDirection: 'row', gap: space\.sm \}\}> \{HOW_TWO_WAYS\.ways\.map\(/, 'the two ways are offered on a copy that does not open Bluetooth')
+    assert.match(page, /\{twoWays \? \( <View style=\{\{ flexDirection: 'row', gap: space\.sm, marginTop: -space\.sm \}\}> \{HOW_TWO_WAYS\.ways\.map\(/, 'the two ways are offered on a copy that does not open Bluetooth')
+    /*
+     * The pair is laid out the way every side-by-side pair of Press is, with
+     * `grow` (Press sets its own flexGrow and flexBasis, which beat a style
+     * flex laid on top: the pair came out 26pt wide and wordless). And the
+     * row's room is won back by drawing the boxes and the cable tighter on
+     * the copies that show it, so Got it still shows without scrolling.
+     */
+    const row = page.match(/\{HOW_TWO_WAYS\.ways\.map\(\(w\) => \( <Press ([\s\S]*?)\/> \)\)\}/)
+    assert.ok(row, 'the two ways are not drawn as Press')
+    assert.match(row[1], /\bgrow\b/, 'the two ways are not laid out with grow')
+    assert.match(row[1], /height=\{44\}/, 'the two ways are under the 44pt touch height')
+    assert.doesNotMatch(row[1], /style=/, 'the two ways are laid out with a style over Press’s own')
+    assert.match(page, /<ChainBox n=\{i \+ 1\} title=\{box\.phoneTitle\} body=\{box\.phoneBody\} kind=\{box\.key\} tight=\{twoWays\} \/>/, 'the boxes are not drawn tighter where the row takes room')
+    assert.match(page, /<Wire label=\{box\.phoneWire\} tight=\{twoWays\} \/>/, 'the cable is not drawn tighter where the row takes room')
+    assert.match(page, /padding: tight \? space\.md : space\.lg,/)
     /* The computer way is his CHAIN, unchanged; the Bluetooth way is its unit and its phone, with the adapter between. */
     assert.match(page, /\(howBluetooth \? \[ \{ key: 'unit', phoneTitle: CHAIN\[0\]\.phoneTitle, phoneBody: CHAIN\[0\]\.phoneBody, phoneWire: HOW_TWO_WAYS\.wire \}, \{ key: 'phone', phoneTitle: CHAIN\[2\]\.phoneTitle, phoneBody: HOW_TWO_WAYS\.phoneBody \} \] : CHAIN \)\.map\(/)
     assert.match(page, /<Note>\{howBluetooth \? HOW_TWO_WAYS\.foot : P2\.foot\}<\/Note>/, 'the demo line is gone from the computer way, or stays on the Bluetooth way')
@@ -6969,8 +6984,10 @@ export function run(test) {
        * Bluetooth"): P2.foot stays under his three boxes, the Computer way,
        * and the Bluetooth way has HOW_TWO_WAYS.foot in its place. It was
        * left until then, because he had had text taken off that screen so
-       * its button shows without scrolling; the Bluetooth way has one box
-       * fewer, so it takes no more room than the Computer way.
+       * its button shows without scrolling; the choice row's room is won
+       * back by drawing the boxes and the cable tighter on those copies
+       * (Onboarding.js `tight`), so the Computer way ends no lower than the
+       * page did, and the Bluetooth way has one box fewer.
        */
       'P2.foot': 'how',
       /*

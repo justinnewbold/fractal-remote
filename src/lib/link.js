@@ -100,6 +100,16 @@ export function detectRole({ demo, served, hostname, helperAlive }) {
 }
 
 /**
+ * Whether a device server may be handed a password from this page: the
+ * computer's own window, or a page no computer served (its device server is
+ * this machine's, on loopback). Never the wifi page, a phone or tablet
+ * reaching the computer across the room's network, demo or not.
+ */
+export function computersOwnPage(served, hostname = typeof window !== 'undefined' ? window.location.hostname : '') {
+  return !served || detectRole({ demo: false, served: true, hostname, helperAlive: true }) === 'mac'
+}
+
+/**
  * What this end calls itself, by its role (shared/device-word.mjs). The
  * computer app talks about the remote, so it says "phone or tablet". A
  * remote is whatever the browser is on: this phone, this iPad, or this
@@ -1429,6 +1439,18 @@ export async function setUpMac({ email, password }) {
  * a no, and goes on as before.
  */
 async function deviceServerToo({ email, password }) {
+  /*
+   * NEVER FROM A PHONE ON THE COMPUTER'S WIFI PAGE (review of 3 November
+   * 2026). The demo takes the computer's role everywhere, the wifi page
+   * included (http://<computer>:5056, served by the computer), and a
+   * sign-in there in the demo sent the email and password in plain HTTP
+   * across the room's network to the device server, which then refused it
+   * as not the computer. Only the computer's own page, or a page not served
+   * by one (whose device server is this machine's own, on loopback), signs
+   * a device server in.
+   */
+  const { servedLocally } = await device()
+  if (!computersOwnPage(servedLocally())) throw new Error('This is a phone or tablet on the computer’s wifi page, so only the window was signed in.')
   /* Looked up when used: the purchase library is the browser's alone. */
   const { checkUnlocked } = await import('./webPurchase.js')
   const { unlocked, unknown } = await checkUnlocked()
@@ -1467,7 +1489,9 @@ async function deviceServerToo({ email, password }) {
  * the set-up does).
  */
 export async function deviceServerAfterDemo({ email, password }) {
-  const { canReachHelper, setDemo } = await device()
+  const { canReachHelper, setDemo, servedLocally } = await device()
+  /* Not from the wifi page, before anything is asked (deviceServerToo says why). */
+  if (!computersOwnPage(servedLocally())) throw new Error('This is a phone or tablet on the computer’s wifi page, so only the window was signed in.')
   /*
    * Only where a device server answers. App asks this on a computer that
    * can host (computerEnd), and a phone or a laptop in the website's demo is

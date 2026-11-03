@@ -342,17 +342,26 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
           */}
           <Steps at={0} of={3} label={P2.count} />
           <Head>{P2.head}</Head>
-          {/* Both ways, on a copy that offers Bluetooth: the computer first, picked (HOW_TWO_WAYS). */}
+          {/*
+            Both ways, on a copy that offers Bluetooth: the computer first,
+            picked (HOW_TWO_WAYS). `grow`, never style flex 1: Press sets its
+            own flexGrow and flexBasis, which beat a flex laid on top, and the
+            pair came out 26pt wide with no words on them. The row costs
+            44 + 16 of height, so on these copies the boxes and the cable are
+            drawn tighter (`tight`) and the row sits 8 closer to the heading:
+            the Computer way, three boxes, ends 4pt higher than the page did
+            before the row, and Got it still shows without scrolling.
+          */}
           {twoWays ? (
-            <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <View style={{ flexDirection: 'row', gap: space.sm, marginTop: -space.sm }}>
               {HOW_TWO_WAYS.ways.map((w) => (
                 <Press
                   key={w.key}
+                  grow
                   label={w.label}
                   tone="signal"
                   on={howWay === w.key}
-                  height={40}
-                  style={{ flex: 1 }}
+                  height={44}
                   onPress={() => setHowWay(w.key)}
                 />
               ))}
@@ -367,8 +376,8 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
               : CHAIN
             ).map((box, i) => (
               <View key={box.key}>
-                <ChainBox n={i + 1} title={box.phoneTitle} body={box.phoneBody} kind={box.key} />
-                {box.phoneWire ? <Wire label={box.phoneWire} /> : null}
+                <ChainBox n={i + 1} title={box.phoneTitle} body={box.phoneBody} kind={box.key} tight={twoWays} />
+                {box.phoneWire ? <Wire label={box.phoneWire} tight={twoWays} /> : null}
               </View>
             ))}
           </View>
@@ -980,14 +989,18 @@ const Art = ({ kind }) => (
   />
 )
 
-/** One of the three boxes: a number, what it is, and a picture of it. */
-const ChainBox = ({ n, title, body, kind }) => (
+/**
+ * One of the three boxes: a number, what it is, and a picture of it. `tight`
+ * (a copy that offers both ways, whose choice row takes room above them)
+ * pads it 12 rather than 16: 8pt less a box.
+ */
+const ChainBox = ({ n, title, body, kind, tight = false }) => (
   <View
     style={{
       flexDirection: 'row',
       alignItems: 'center',
       gap: space.md,
-      padding: space.lg,
+      padding: tight ? space.md : space.lg,
       borderRadius: radius.lg,
       borderWidth: 1,
       borderColor: color.rule,
@@ -1021,15 +1034,16 @@ const ChainBox = ({ n, title, body, kind }) => (
  *
  * The label used to sit on its own between two cards and read as a heading for
  * the card under it. On the line it reads as what it is — the thing joining
- * the box above to the box below.
+ * the box above to the box below. `tight` (see ChainBox) shortens the line
+ * either side to 8 and the pill's padding to 2: 16pt less a cable.
  */
-const Wire = ({ label }) => (
+const Wire = ({ label, tight = false }) => (
   <View style={{ alignItems: 'center' }}>
-    <View style={{ width: 2, height: 14, backgroundColor: color.signal }} />
+    <View style={{ width: 2, height: tight ? 8 : 14, backgroundColor: color.signal }} />
     <View
       style={{
         paddingHorizontal: space.md,
-        paddingVertical: 4,
+        paddingVertical: tight ? 2 : 4,
         borderRadius: 999,
         borderWidth: 1,
         borderColor: color.signal,
@@ -1038,7 +1052,7 @@ const Wire = ({ label }) => (
     >
       <Text style={{ color: color.signal, fontSize: font.micro, letterSpacing: 1.2 }}>{label}</Text>
     </View>
-    <View style={{ width: 2, height: 14, backgroundColor: color.signal }} />
+    <View style={{ width: 2, height: tight ? 8 : 14, backgroundColor: color.signal }} />
   </View>
 )
 

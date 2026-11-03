@@ -6359,6 +6359,42 @@ export function run(test) {
     assert.deepEqual(t.bench.server, [['demo', false], ['login', 'free@example.com', 'pw2']], 'an account without the unlock leaves the device server signed out, or switches the remote on to be refused')
   })
 
+  /*
+   * NEVER A PASSWORD ACROSS THE ROOM (review of 3 November 2026). The demo
+   * takes the computer's role on the wifi page too (a phone at
+   * http://<computer>:5056, served by the computer), and a sign-in there
+   * sent the email and password in plain HTTP across the room's network to
+   * the device server. Refused now before anything is sent, by either way
+   * in; the computer's own page, served on loopback, is as it was.
+   */
+  test('browser: a phone on the computer’s wifi page never hands the device server a password, in the demo or the set-up', async () => {
+    const t = await webLinkOnABench({ role: 'mac', demo: true })
+    const was = globalThis.window
+    try {
+      t.bench.served = true
+      t.bench.reach = true
+      t.bench.config = null
+      for (const hostname of ['192.168.1.20', 'studio-mac.local', '10.0.0.7']) {
+        globalThis.window = { location: { hostname } }
+        t.bench.server = []
+        await assert.rejects(t.link.deviceServerAfterDemo({ email: 'demo.buyer@example.com', password: 'pw1' }), /wifi page/)
+        await assert.rejects(t.link.setUpMac({ email: 'demo.buyer@example.com', password: 'pw1' }), /wifi page/)
+        assert.ok(!t.bench.server.some(([what]) => what === 'login'), `a password went to the device server from ${hostname}`)
+        assert.equal(t.bench.demo, true, 'the demo was ended from the wifi page')
+      }
+      /* The computer's own window, served on loopback: signed in as before. */
+      globalThis.window = { location: { hostname: 'localhost' } }
+      t.bench.server = []
+      assert.deepEqual(await t.link.deviceServerAfterDemo({ email: 'demo.buyer@example.com', password: 'pw1' }), { remote: true })
+      assert.deepEqual(t.bench.server.slice(0, 2), [['demo', false], ['login', 'demo.buyer@example.com', 'pw1']])
+    } finally {
+      if (was === undefined) delete globalThis.window
+      else globalThis.window = was
+    }
+    assert.ok(t.link.computersOwnPage(false, '192.168.1.20'), 'a page no computer served is refused')
+    assert.ok(t.link.computersOwnPage(true, '127.0.0.1') && !t.link.computersOwnPage(true, '192.168.1.20'))
+  })
+
   test('browser: the unit is not read twice at launch when every read of the roll call went to the computer it chose', () => {
     const app = read('src/App.jsx')
     assert.match(

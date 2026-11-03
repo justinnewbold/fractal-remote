@@ -374,11 +374,12 @@ async function deleteAccount({ reports = [], folder = [], videoFolder = [], rese
     const call = { url: String(url), method: init.method || 'GET', headers: init.headers || {}, body: init.body ? JSON.parse(init.body) : null }
     calls.push(call)
     if (call.url === `${PROJECT}/auth/v1/user`) return answer(200, { id: USER, email })
-    if (call.url.startsWith(`${PROJECT}/rest/v1/feedback?select=id,user_id,context&`)) {
+    if (call.url.startsWith(`${PROJECT}/rest/v1/feedback?select=id,user_id,contact,context&`)) {
       const byId = call.url.includes(`user_id=eq.${USER}`)
       const status = lookupStatus[byId ? 'byId' : 'byAddress'] || 200
       if (status !== 200) return answer(status, { message: 'upstream timeout' })
-      return answer(200, reports.filter((r) => (byId ? r.user_id === USER : r.user_id !== USER)))
+      /* One found by its address gave this account's address to reply to, unless it says another. */
+      return answer(200, reports.filter((r) => (byId ? r.user_id === USER : r.user_id !== USER)).map((r) => (byId ? r : { contact: email, ...r })))
     }
     if (call.url === `${PROJECT}/storage/v1/object/list/report-shots`) return answer(200, folder.map((name) => ({ name })))
     if (call.url === `${PROJECT}/storage/v1/object/list/report-videos`) return answer(200, videoFolder.map((name) => ({ name })))
@@ -1324,10 +1325,10 @@ export function run(test) {
 
     /* Delete account takes the pictures before the rows that name them, through Storage's own API (in the deletion both ways of deleting share). */
     const del = code(read('supabase/functions/_shared/forget-account.ts'))
-    assert.ok(del.indexOf('await forgetShots(url, service, who, reports, by)') > 0 && del.indexOf('await forgetShots(url, service, who, reports, by)') < del.indexOf('await forgetRows(url, service, who, by)'), 'the rows go first, and with them where the pictures are')
+    assert.ok(del.indexOf('await forgetShots(url, service, who, reports, by)') > 0 && del.indexOf('await forgetShots(url, service, who, reports, by)') < del.indexOf('await forgetRows(url, service, who, reports, by)'), 'the rows go first, and with them where the pictures are')
     assert.match(del, /\/storage\/v1\/object\/list\/\$\{SHOT_BUCKET\}/, 'the account’s own folder is not looked through')
     assert.match(del, /\/storage\/v1\/object\/\$\{SHOT_BUCKET\}`, \{ method: 'DELETE', headers, body: JSON\.stringify\(\{ prefixes: \[\.\.\.paths\] \}\) \}/)
-    assert.match(del, /feedback\?select=id,user_id,context&\$\{query\}/)
+    assert.match(del, /feedback\?select=id,user_id,contact,context&\$\{query\}/)
 
     /* Both senders upload before the row, with upsert off (the one thing the bucket's rule allows), and record the places in context. */
     for (const f of ['src/lib/reports.js', 'mobile/src/lib/reports.js']) {

@@ -98,7 +98,25 @@ export async function downloadLinkHashes(email: string): Promise<string[]> {
   return [...new Set([await sha256(plain), await sha256(downloadLinkAddress(plain))])]
 }
 
-async function forgetRows(url: string, service: string, who: Who, by: By) {
+/*
+ * THE REPLY-ADDRESS MATCH (review of 3 November 2026). PostgREST turns every
+ * `*` in a like or ilike value into `%`, and has no way to escape one; the
+ * account service takes a `*` before the @. So an account made as
+ * `*@gmail.com`, deleted from Developer → Accounts, matched every report
+ * that gave a Gmail address to reply to. The lookup is now only a search for
+ * candidates, with each `*` sent as `_` (one character, never a run), and
+ * a report is this account's only when its reply address, trimmed and
+ * lower-cased, IS this address (`sameContact`). The reports are then deleted
+ * by their ids, from that checked list, so nothing goes that the developer's
+ * note does not name.
+ */
+export const contactPattern = (email: string): string =>
+  encodeURIComponent(String(email || '').trim().replace(/[\\%_]/g, (c) => `\\${c}`).replace(/\*/g, '_'))
+
+export const sameContact = (contact: unknown, email: string): boolean =>
+  typeof contact === 'string' && contact.trim().toLowerCase() === String(email || '').trim().toLowerCase()
+
+async function forgetRows(url: string, service: string, who: Who, reports: Report[], by: By) {
   const rest = (path: string) =>
     fetch(`${url}/rest/v1/${path}`, {
       method: 'DELETE',
@@ -107,13 +125,13 @@ async function forgetRows(url: string, service: string, who: Who, by: By) {
       .then((r) => (r.ok ? null : console.error(`${by}: ${path.split('?')[0]} answered ${r.status}`)))
       .catch((err) => console.error(`${by}: ${path.split('?')[0]} unreachable (${err})`))
   const jobs = [rest(`feedback?user_id=eq.${who.id}`)]
+  /* Sent signed out, or from another account, giving this address to reply to: by id, the rows checked in reportsOf. */
+  const ids = reports.filter((r) => r.user_id !== who.id).map((r) => encodeURIComponent(String(r.id)))
+  for (let i = 0; i < ids.length; i += 100) jobs.push(rest(`feedback?id=in.(${ids.slice(i, i + 100).join(',')})`))
   if (who.email) {
     const at = encodeURIComponent(who.email)
-    /* ilike so a reply address typed in another case still matches, with its
-       wildcards escaped so "a_b@x" can never match somebody else's "acb@x". */
-    const like = encodeURIComponent(who.email.replace(/[\\%_]/g, (c) => `\\${c}`))
     const hashes = await downloadLinkHashes(who.email)
-    jobs.push(rest(`feedback?contact=ilike.${like}`), rest(`waiting_grants?email=eq.${at}`), rest(`download_link_sends?addr_hash=in.(${hashes.join(',')})`))
+    jobs.push(rest(`waiting_grants?email=eq.${at}`), rest(`download_link_sends?addr_hash=in.(${hashes.join(',')})`))
   }
   await Promise.all(jobs)
 }
@@ -121,26 +139,30 @@ async function forgetRows(url: string, service: string, who: Who, by: By) {
 /*
  * THE REPORTS IT SENT, read before they go: their ids, who sent each, and the
  * screenshots each names. The rows matched are the ones forgetRows deletes:
- * sent while signed in to this account, or giving its address to reply to.
+ * sent while signed in to this account, or giving exactly its address to
+ * reply to (the reply-address match, above); forgetRows takes the second
+ * kind by the ids found here, never by a match of its own.
  *
  * Null when either lookup could not be done, and then nothing is deleted
- * (second review, 23 October 2026): forgetRows deletes by the same match
- * whether or not it was read, so a row it took that no lookup listed was a
+ * (second review, 23 October 2026): a row taken that no lookup listed was a
  * report whose email the developer was never told about.
  */
-type Report = { id: string; user_id: string | null; context: Record<string, unknown> | null }
+type Report = { id: string; user_id: string | null; contact?: string | null; context: Record<string, unknown> | null }
 
 async function reportsOf(url: string, service: string, who: Who, by: By): Promise<Report[] | null> {
   const headers = { apikey: service, Authorization: `Bearer ${service}` }
   const found = new Map<string, Report>()
   const look = async (query: string) => {
     try {
-      const res = await fetch(`${url}/rest/v1/feedback?select=id,user_id,context&${query}`, { headers })
+      const res = await fetch(`${url}/rest/v1/feedback?select=id,user_id,contact,context&${query}`, { headers })
       if (!res.ok) {
         console.error(`${by}: feedback lookup answered ${res.status}`)
         return false
       }
-      for (const report of await res.json()) if (report?.id) found.set(String(report.id), report)
+      /* Its own, or one whose reply address is exactly this one (the reply-address match, above). */
+      for (const report of await res.json()) {
+        if (report?.id && (report.user_id === who.id || sameContact(report.contact, who.email))) found.set(String(report.id), report)
+      }
       return true
     } catch (err) {
       console.error(`${by}: feedback lookup unreachable (${err})`)
@@ -148,10 +170,7 @@ async function reportsOf(url: string, service: string, who: Who, by: By): Promis
     }
   }
   const lookups = [look(`user_id=eq.${who.id}`)]
-  if (who.email) {
-    const like = encodeURIComponent(who.email.replace(/[\\%_]/g, (c) => `\\${c}`))
-    lookups.push(look(`contact=ilike.${like}`))
-  }
+  if (who.email) lookups.push(look(`contact=ilike.${contactPattern(who.email)}`))
   const done = await Promise.all(lookups)
   return done.every(Boolean) ? [...found.values()] : null
 }
@@ -332,7 +351,7 @@ export async function forgetAccount(url: string, service: string, who: Who, by: 
   if (!reports) return { ok: false, why: 'lookup' }
   await forgetShots(url, service, who, reports, by)
   await forgetVideos(url, service, who, reports, by)
-  await forgetRows(url, service, who, by)
+  await forgetRows(url, service, who, reports, by)
   /*
    * The emailed copies of its reports are the developer's to delete; he is
    * told which, as soon as the rows have gone and whatever the account's own

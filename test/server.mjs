@@ -2060,6 +2060,99 @@ export function run(test) {
     assert.match(sql, /if domain_part in \('gmail\.com', 'googlemail\.com'\) then/)
   })
 
+  /*
+   * A `*` IS A WILDCARD TO POSTGREST, in like and ilike, with no escape (review
+   * of 3 November 2026). An account made as `*@gmail.com` and deleted from
+   * Developer → Accounts sent `contact=ilike.*@gmail.com`, which is every
+   * report with a Gmail address to reply to. Run here against a stand-in for
+   * the database that answers a like the way PostgREST does: only the
+   * account's own reports, and one that gave exactly its address, go, by id.
+   */
+  test('deleting an account with a * in its address takes only its own reports, never everybody whose address the * would match', async () => {
+    const { forgetAccount, contactPattern, sameContact } = await import('../supabase/functions/_shared/forget-account.ts')
+    const id = '11111111-2222-4333-8444-555555555555'
+    const other = '99999999-8888-4777-8666-555555555555'
+    const rows = [
+      { id: 'r-own', user_id: id, contact: 'someone@gmail.com', context: null },
+      { id: 'r-exact', user_id: null, contact: '*@GMAIL.com', context: { screenshots: ['anon/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee-1.jpg'] } },
+      { id: 'r-gmail', user_id: null, contact: 'fan@gmail.com', context: { screenshots: ['anon/bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee-1.jpg'] } },
+      { id: 'r-one', user_id: other, contact: 'x@gmail.com', context: null }
+    ]
+    /* PostgREST's like: `*` is `%`, then SQL's like, with \ escaping and _ one character. */
+    const like = (value, pattern) => {
+      let re = ''
+      for (let i = 0; i < pattern.length; i++) {
+        const c = pattern[i]
+        if (c === '\\' && i + 1 < pattern.length) re += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        else if (c === '%' || c === '*') re += '.*'
+        else if (c === '_') re += '.'
+        else re += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      }
+      return new RegExp(`^${re}$`, 'i').test(value)
+    }
+    const pick = (query) => {
+      const q = new URLSearchParams(query)
+      return rows.filter((r) => {
+        for (const [k, v] of q) {
+          if (k === 'select') continue
+          if (v.startsWith('eq.') && String(r[k]) !== v.slice(3)) return false
+          if (v.startsWith('ilike.') && !like(String(r[k] ?? ''), v.slice(6))) return false
+          if (v.startsWith('in.(') && !v.slice(4, -1).split(',').includes(String(r[k]))) return false
+        }
+        return true
+      })
+    }
+    const deleted = new Set()
+    const storage = []
+    const sent = []
+    const was = { fetch: globalThis.fetch, Deno: globalThis.Deno }
+    globalThis.Deno = { env: { get: () => undefined } }
+    globalThis.fetch = async (url, opts = {}) => {
+      const u = new URL(url)
+      sent.push(`${opts.method || 'GET'} ${u.pathname}${u.search}`)
+      const ok = (body = null) => ({ ok: true, status: 200, json: async () => body, text: async () => '' })
+      if (u.pathname === '/rest/v1/feedback' && !opts.method) return ok(pick(u.search.slice(1)))
+      if (u.pathname === '/rest/v1/feedback' && opts.method === 'DELETE') {
+        for (const r of pick(u.search.slice(1))) deleted.add(r.id)
+        return ok()
+      }
+      if (u.pathname.startsWith('/storage/v1/object/list/')) return ok([])
+      if (u.pathname.startsWith('/storage/v1/object/')) {
+        storage.push(...(JSON.parse(opts.body || '{}').prefixes || []))
+        return ok([])
+      }
+      return ok()
+    }
+    try {
+      const done = await forgetAccount('https://db.invalid', 'service', { id, email: '*@gmail.com' }, 'grant-access')
+      assert.deepEqual(done, { ok: true })
+    } finally {
+      globalThis.fetch = was.fetch
+      if (was.Deno === undefined) delete globalThis.Deno
+      else globalThis.Deno = was.Deno
+    }
+    assert.deepEqual([...deleted].sort(), ['r-exact', 'r-own'], 'a report that was not this account\'s went, or one of its own stayed')
+    assert.ok(!storage.includes('anon/bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee-1.jpg'), 'somebody else\'s screenshot was deleted')
+    assert.ok(storage.includes('anon/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee-1.jpg'), 'the screenshot of its own signed-out report stayed')
+    for (const line of sent) {
+      const v = decodeURIComponent(line).match(/contact=ilike\.([^&]*)/)
+      if (v) assert.ok(!v[1].includes('*'), `a * reached a like: ${line}`)
+    }
+    assert.ok(!sent.some((line) => /DELETE \/rest\/v1\/feedback\?contact=/.test(line)), 'reports are still deleted by a match rather than by the ids found')
+    /* The two pieces on their own. */
+    assert.equal(decodeURIComponent(contactPattern('a_b%*@x.com')), 'a\\_b\\%_@x.com')
+    assert.ok(sameContact(' A@X.com ', 'a@x.com') && !sameContact('ab@x.com', 'a_@x.com') && !sameContact(null, 'a@x.com'))
+  })
+
+  test('deleting an address on the waiting list says the access given to it goes too', async () => {
+    const { accountDeleteAsk, WAITING_GOES } = await import('../shared/admin.mjs')
+    const row = { email: 'fan@example.com', onWaitingList: true }
+    assert.ok(accountDeleteAsk(row, { email: row.email, paid: null }).endsWith(WAITING_GOES), 'the waiting-list access goes unsaid')
+    assert.ok(!accountDeleteAsk({ email: row.email }, { email: row.email, paid: null }).includes(WAITING_GOES))
+    /* And it does go: the delete takes the waiting list's row for the address. */
+    assert.match(read('supabase/functions/_shared/forget-account.ts'), /rest\(`waiting_grants\?email=eq\.\$\{at\}`\)/)
+  })
+
   test('a full version from a test purchase is said as one, and only a grant is "given by hand"', async () => {
     const { accountDeleteAsk } = await import('../shared/admin.mjs')
     const row = { email: 'tester@example.com', unlocked: true }
@@ -2291,7 +2384,7 @@ const SHOT_KEY = '22222222-3333-4444-8555-666666666666'
 function deletes({ auth = 200 } = {}) {
   const reply = (status, value) => new Response(JSON.stringify(value), { status })
   return (call) => {
-    if (call.url.startsWith(`${PROJECT}/rest/v1/feedback?select=id,user_id,context&`)) {
+    if (call.url.startsWith(`${PROJECT}/rest/v1/feedback?select=id,user_id,contact,context&`)) {
       return reply(200, call.url.includes(`user_id=eq.${CUSTOMER}`) ? [{ id: 'r1', user_id: CUSTOMER, context: { screenshots: [`${CUSTOMER}/${SHOT_KEY}-1.jpg`] } }] : [])
     }
     if (call.url === `${PROJECT}/storage/v1/object/list/report-shots`) return reply(200, [{ name: `${SHOT_KEY}-2.jpg` }])
