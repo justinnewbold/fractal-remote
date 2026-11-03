@@ -64,7 +64,8 @@ import { useSiriLinksOpen } from '../lib/siri'
 import { siriRow } from '../lib/siri-help'
 import { siriPresent } from '../lib/siriPipe'
 import SiriHelp from '../components/SiriHelp'
-import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
+import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn, useCableNow, useMidiJacks } from '../lib/bluetooth'
+import { CABLE_LOOK_AGAIN, CABLE_NO_SIGNAL, CABLE_PAGE_SUB, CABLE_ROW_ON, cableChain, cableComputerNote, cableRowWord } from '../lib/cableWords'
 import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS, NO_SIGNAL_BLUETOOTH } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage, { BluetoothLimits, BluetoothTools, BluetoothTried, BluetoothTrouble, BluetoothWays } from './Bluetooth'
@@ -336,6 +337,15 @@ export default function Settings({
   /* Bluetooth (beta): whether the phone is talking to the unit itself. */
   const bluetooth = useBluetoothOn()
   /*
+   * And through a USB cable rather than an adapter (lib/bleAdapters isCable):
+   * the same link with no computer, said as the cable wherever these pages
+   * say how it is connected (lib/cableWords).
+   */
+  const cableKept = useCableNow()
+  const cable = bluetooth && cableKept
+  /* A USB MIDI cable on the unit's MIDI jacks, whose plugs can be swapped: the cards keep the plug line (lib/bluetooth midiJacks). */
+  const jacks = useMidiJacks()
+  /*
    * And whether it is open to the account signed in here at all: Justin's on
    * every copy, and anybody else's only on a copy whose built-in store
    * version opens it, which no copy today does (lib/bluetooth.js
@@ -456,9 +466,10 @@ export default function Settings({
     describeRunning()
   }, [])
 
-  /* Over Bluetooth (beta) the row is about the adapter on the unit, not a computer. */
-  const bluetoothWord =
-    link === 'connected'
+  /* Over Bluetooth (beta) the row is about the adapter on the unit, not a computer; on a USB cable, the cable. */
+  const bluetoothWord = cable
+    ? cableRowWord({ link, unitState, unit: deviceName })
+    : link === 'connected'
       ? unitState === 'missing' || unitState === 'silent'
         ? `Bluetooth · ${deviceName || 'unit'} not answering`
         : `${deviceName || 'Unit'} · Bluetooth`
@@ -470,6 +481,8 @@ export default function Settings({
   const pairStatus = bluetooth && !demo
     ? bluetoothWord
     : pairLine({ demo, demoName: DEMO_UNITS.find((u) => u.key === unit)?.name, link, unitState, unit: deviceName })
+  /* Phone & computer's cards on a USB cable: the unit and this device, with the cable between them, and no adapter (lib/cableWords cableChain). */
+  const onTheCable = (cards) => (throughAdapter && cable ? cableChain(cards, { link, unitState, unit: deviceName, jacks }) : cards)
 
   /*
    * TWO WAYS OUT OF EVERY PAGE, and they go to different places on purpose.
@@ -627,7 +640,7 @@ export default function Settings({
             {mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported() ? (
               <SetupRow
                 title="Bluetooth"
-                status={bluetooth ? `On · the ${deviceNoun()} talks to the unit itself` : BLUETOOTH_ROW_OFF}
+                status={cable ? CABLE_ROW_ON : bluetooth ? `On · the ${deviceNoun()} talks to the unit itself` : BLUETOOTH_ROW_OFF}
                 onPress={() => setPage('bluetooth')}
               />
             ) : null}
@@ -1152,7 +1165,9 @@ export default function Settings({
           {/* And the two ways, with the computer the best one: the Bluetooth page's own sentence (BLUETOOTH_WAYS). */}
           {bluetooth && !demo ? (
             <Note tone="warn">
-              {`Bluetooth is on. This ${deviceNoun()} talks to the unit directly, not through the computer. ${BLUETOOTH_WAYS}`}
+              {cable
+                ? cableComputerNote(deviceNoun())
+                : `Bluetooth is on. This ${deviceNoun()} talks to the unit directly, not through the computer. ${BLUETOOTH_WAYS}`}
             </Note>
           ) : null}
           {/*
@@ -1166,7 +1181,7 @@ export default function Settings({
           {bluetoothOffered && !demo ? (
             <Press
               label={bluetooth ? 'Bluetooth' : 'Connect over Bluetooth'}
-              sub={bluetooth ? 'Bluetooth is on: open its page' : 'No computer needed. More lag, fewer features.'}
+              sub={cable ? CABLE_PAGE_SUB : bluetooth ? 'Bluetooth is on: open its page' : 'No computer needed. More lag, fewer features.'}
               tone="live"
               height={52}
               onPress={() => setPage('bluetooth')}
@@ -1190,7 +1205,7 @@ export default function Settings({
               takes the tap and opens page 'updating'.
             */}
             <ChainCards
-              cards={linkChain({
+              cards={onTheCable(linkChain({
                 here: 'phone',
                 demo,
                 via: throughAdapter ? 'bluetooth' : 'computer',
@@ -1207,7 +1222,7 @@ export default function Settings({
                   version: APP_VERSION,
                   email: account?.email && !isPairAccount(account.email) ? account.email : null
                 }
-              })}
+              }))}
               onWarn={() => setPage('updating')}
             />
 
@@ -1404,7 +1419,7 @@ export default function Settings({
                 (APPLE_SCREEN_OPENS), as on the waiting screen. */}
             {link !== 'connected' ? (
               <Press
-                label={throughAdapter ? 'Look for the adapter again' : 'Look for the computer again'}
+                label={throughAdapter ? (cable ? CABLE_LOOK_AGAIN : 'Look for the adapter again') : 'Look for the computer again'}
                 sub={throughAdapter && opensApplesScreen() ? APPLE_SCREEN_OPENS : undefined}
                 onPress={throughAdapter ? () => lookForAdapterAgain(onReconnect) : onReconnect}
               />
@@ -1612,7 +1627,9 @@ export default function Settings({
           {/* Where Bluetooth is offered, it first: it needs no internet at all (NO_SIGNAL_BLUETOOTH). Everywhere else, as it was. */}
           <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>
             {bluetoothOffered
-              ? NO_SIGNAL_BLUETOOTH[bluetooth ? 'on' : 'off'](deviceNoun())
+              ? cable
+                ? CABLE_NO_SIGNAL
+                : NO_SIGNAL_BLUETOOTH[bluetooth ? 'on' : 'off'](deviceNoun())
               : `No signal? Use the computer’s own page in the ${deviceNoun()}’s web browser instead.`}
           </Text>
           {bluetoothOffered && !bluetooth ? <Press label={NO_SIGNAL_BLUETOOTH.go} tone="signal" height={TAP} onPress={() => setPage('bluetooth')} /> : null}

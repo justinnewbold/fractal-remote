@@ -14,7 +14,8 @@ import { shouldOffer, usePurchase } from '../lib/purchases'
 import setupIcon from '../../assets/icons/setup.png'
 import volumeIcon from '../../assets/icons/volume.png'
 import wirelessIcon from '../../assets/icons/wireless.png'
-import { setBluetooth, useBluetoothOn } from '../lib/bluetooth'
+import { setBluetooth, useBluetoothOn, useCableNow } from '../lib/bluetooth'
+import { CABLE_OFF, CABLE_WHERE, cableNote } from '../lib/cableWords'
 import { idOf } from '../lib/device'
 import Lamp from './Lamp'
 import Volume from './Volume'
@@ -104,6 +105,17 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    * (see BluetoothMark below).
    */
   const bluetooth = useBluetoothOn() && !demo
+  /*
+   * AND A UNIT ON A USB CABLE IS NOT BLUETOOTH. "It just says it's a
+   * Bluetooth connection and not USB, even though it is USB." (Justin, 3
+   * November 2026.) The same link with no computer, through a cable
+   * (lib/bleAdapters isCable): the pill says "by USB cable" under the unit,
+   * the lamp is the plain one, green as through a computer, and its note
+   * says the cable, with the same one way back to the computer.
+   */
+  const cableKept = useCableNow()
+  const cable = bluetooth && cableKept
+  const wireless = bluetooth && !cable
   /* The note under the pill is Bluetooth's alone: put away when Bluetooth goes, so it is not open on its own when Bluetooth next comes on. */
   useEffect(() => {
     if (!bluetooth) setSaying(false)
@@ -185,6 +197,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    * said it, since 'FM3' comes back from the unit itself.
    */
   const pill = pillWords({ tone, unitState, unit, computer: link?.macName, demo, bluetooth })
+  if (cable) pill.where = CABLE_WHERE
   /*
    * Blue rather than green over Bluetooth, as the word was. Looking and No
    * computer in silkDim, not the faint grey the word had: on the pill's fill
@@ -192,7 +205,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    * under stage light to see whether the rig is ready.
    */
   const pillHue =
-    pill.mark === 'ok' ? (bluetooth ? color.ble : color.ok) : pill.mark === 'no' ? color.fault : pill.mark === 'wait' ? color.signal : color.silkDim
+    pill.mark === 'ok' ? (wireless ? color.ble : color.ok) : pill.mark === 'no' ? color.fault : pill.mark === 'wait' ? color.signal : color.silkDim
   /*
    * And where the pill goes, in words, for a screen reader: App.js decides it
    * (unitGoes) and the tap goes there, so the two cannot disagree. "Switch
@@ -201,8 +214,10 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    */
   const pillGoes = demo
     ? 'Change the demo unit'
-    : bluetooth
-      ? 'Which adapter'
+    : cable
+      ? 'How it’s connected'
+      : bluetooth
+        ? 'Which adapter'
       : unitGoes === 'which'
         ? 'Which unit'
         : 'Phone and computer'
@@ -359,7 +374,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
             {pill.status}
           </Text>
           {/* Not in the demo: its lamp is always grey there and says nothing, and on a narrow phone its room is the version's. */}
-          {demo ? null : bluetooth ? <BluetoothMark state={unitLamp} /> : <Lamp state={unitLamp} size={8} />}
+          {demo ? null : wireless ? <BluetoothMark state={unitLamp} /> : <Lamp state={unitLamp} size={8} />}
           {pill.unit ? (
             <Text numberOfLines={1} style={{ flexShrink: 1, color: color.silk, fontSize: font.small, fontFamily: face, fontWeight: '700' }}>
               {pill.unit}
@@ -551,7 +566,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
       */}
       <Volume blocks={blocks} open={volume} onClose={() => setVolume(false)} onError={setFailed} />
       {failed ? <Reported said={failed} onClear={() => setFailed(null)} /> : null}
-      {saying && bluetooth ? <Which link={link} onClose={() => setSaying(false)} onReport={onReport} /> : null}
+      {saying && bluetooth ? <Which link={link} cable={cable} onClose={() => setSaying(false)} onReport={onReport} /> : null}
       {saveTo.said && saveHere ? <Saved said={saveTo.said} onClear={saveTo.dismiss} /> : null}
       {/*
         A save from Play runs late the same as one from Edit, and Play has no
@@ -608,14 +623,17 @@ const ofAllBlocks = (s) => s.allBlocks
  * adapter and nothing to switch to, so this note, and the switch back to the
  * computer, stay one tap from the bar.
  */
-function Which({ link, onClose, onReport = null }) {
+function Which({ link, cable = false, onClose, onReport = null }) {
   const adapter = link?.macName || 'the adapter'
-  const said =
-    link?.link === 'connected'
+  /* A unit on a USB cable: the cable's words (lib/cableWords cableNote), and the same one way back to the computer, named for it. */
+  const said = cable
+    ? cableNote(link)
+    : link?.link === 'connected'
       ? `Connected over Bluetooth, through ${adapter}.`
       : link?.link === 'joining'
         ? `Finding ${adapter}…`
         : 'Not connected to the Bluetooth adapter.'
+  const off = cable ? CABLE_OFF : 'Turn off Bluetooth'
   /* The two buttons side by side, wrapping on a narrow screen, each its own element to a screen reader. */
   const button = ({ pressed }) => ({
     alignSelf: 'flex-start',
@@ -660,16 +678,16 @@ function Which({ link, onClose, onReport = null }) {
         */}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Turn off Bluetooth"
+          accessibilityLabel={off}
           accessibilityHint={`The ${deviceNoun()} goes back to using the computer`}
           onPress={() => {
             tick()
-            fire('press Turn off Bluetooth', () => setBluetooth(false))
+            fire(`press ${off}`, () => setBluetooth(false))
             onClose()
           }}
           style={button}
         >
-          <Text style={{ color: color.silk, fontSize: font.body }}>Turn off Bluetooth</Text>
+          <Text style={{ color: color.silk, fontSize: font.body }}>{off}</Text>
         </Pressable>
         {/*
           REPORT A PROBLEM, beside it, in every state of the link: the

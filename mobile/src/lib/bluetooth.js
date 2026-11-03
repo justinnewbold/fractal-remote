@@ -7,7 +7,7 @@ import { BLE_UNITS, CHECK_STEPS, WAYS, createBleWire, settleMethods } from './bl
 import { createJoiner } from './fractal-sysex.mjs'
 import { catalogFor } from './gen3Catalog'
 import { setSwitch } from './bleSwitch'
-import { isAdapter, isNetworkSession, pickAdapter, pairScreenCrashes, pairScreenShutWords } from './bleAdapters'
+import { cablesFirst, isAdapter, isCable, isNetworkSession, onMidiJacks, pickAdapter, pairScreenCrashes, pairScreenShutWords } from './bleAdapters'
 import { logDebug } from './debugLog'
 import { isAdmin } from './admin'
 import { accountId } from './owner-unlock'
@@ -113,19 +113,26 @@ function keep() {
 }
 
 /*
- * THE ADAPTER AS IT IS KEPT: its id and name, and on an iPhone the driver
- * that owns it, so the next launch judges it as the list does
- * (restoreBluetooth, bleAdapters isNetworkSession). Without the driver, a
- * port on what should be Apple's Bluetooth or USB driver whose name looks
- * like the network session would be kept by the list and forgotten at every
- * launch. Those two driver names are a guess until a real log shows them
- * (bleAdapters ADAPTER_DRIVER): if they are wrong, the kept driver changes
- * nothing and the name decides, as it does in the list.
+ * THE ADAPTER AS IT IS KEPT: its id and name, on an iPhone the driver that
+ * owns it, and on Android how it is reached (`transport`, 'usb' for a unit
+ * on a USB cable, from the build that lists them), so the next launch
+ * judges it as the list does (restoreBluetooth, bleAdapters
+ * isNetworkSession and isCable). Without the driver, a port on Apple's
+ * Bluetooth or USB driver whose name looks like the network session would
+ * be kept by the list and forgotten at every launch, and a unit on a USB
+ * cable would be called an adapter at every launch. The two driver names
+ * are the real ones since Justin's logs of 27 to 29 October 2026
+ * (bleAdapters USB_DRIVER and BLUETOOTH_DRIVER).
+ *
+ * An adapter kept before 1.89.27 has its id and name only (his AM4 on its
+ * cable among them): refreshKeptAdapter, below, fills the rest in from the
+ * list the moment it connects.
  */
 const keptAdapter = (a) => ({
   id: a.id,
   name: typeof a.name === 'string' ? a.name : '',
-  ...(typeof a.driver === 'string' && a.driver ? { driver: a.driver } : {})
+  ...(typeof a.driver === 'string' && a.driver ? { driver: a.driver } : {}),
+  ...(typeof a.transport === 'string' && a.transport ? { transport: a.transport } : {})
 })
 
 /** Whatever was on disk, made safe: storage can hold an older shape, or nonsense. */
@@ -614,9 +621,10 @@ export function chooseAdapter(dev) {
   if (!dev || typeof dev.id !== 'string' || !dev.id) return
   /* Never Apple's network session, whoever asks (bleAdapters isNetworkSession). */
   if (!isAdapter(dev)) return
+  letGo.delete(dev.id)
   if (saved.adapter?.id === dev.id) return
   saved = { ...saved, adapter: keptAdapter(dev) }
-  logDebug('ble', `adapter chosen: ${adapterName(dev) || 'an adapter with no name'}`)
+  logDebug('ble', isCable(dev) ? `USB cable chosen: ${adapterName(dev) || 'a unit with no name'}` : `adapter chosen: ${adapterName(dev) || 'an adapter with no name'}`)
   keep()
   /*
    * A note from the search is about the search (it did not start, Apple's
@@ -626,6 +634,68 @@ export function chooseAdapter(dev) {
   if (now.said) noteBluetooth({ said: null })
   else announce()
 }
+
+/**
+ * WHAT THE ADAPTER KEPT IS, FILLED IN FROM THE LIST: its driver (iPhone) and
+ * its transport (Android), copied from the entry with its id, when either
+ * differs. For an adapter kept before 1.89.27 as its id and name alone,
+ * such as his AM4 on its USB cable, which every line then called a
+ * Bluetooth adapter. Asked by bleLink as it connects; the id is the same,
+ * so the link does not take it for another adapter (settingsMoved). True
+ * when it changed anything.
+ */
+export function refreshKeptAdapter() {
+  const a = saved.adapter
+  if (!a) return false
+  const live = adapterDevices().find((d) => d.id === a.id)
+  if (!live) return false
+  const driver = typeof live.driver === 'string' && live.driver ? live.driver : a.driver
+  const transport = typeof live.transport === 'string' && live.transport ? live.transport : a.transport
+  if (driver === a.driver && transport === a.transport) return false
+  saved = { ...saved, adapter: keptAdapter({ ...a, driver, transport }) }
+  if (isCable(saved.adapter)) logDebug('ble', `the ${adapterName(saved.adapter) || 'unit'} kept from last time is on a USB cable`)
+  keep()
+  announce()
+  return true
+}
+
+/** Whether the adapter kept is a unit on a USB cable (bleAdapters isCable), for every line that says how it is connected. */
+export const cableNow = () => !!saved.adapter && isCable(saved.adapter)
+/**
+ * A USB MIDI cable on the unit's MIDI jacks (a C2MIDI Pro straight into the
+ * phone), not the unit itself on its own USB cable: its port is named for no
+ * unit (bleAdapters onMidiJacks). Its MIDI plugs can be swapped, so where a
+ * line is about what to check, it keeps the plug checks.
+ */
+export const midiJacks = (a) => onMidiJacks(a, BLE_UNITS)
+const readJacks = () => !!snapshot.adapter && midiJacks(snapshot.adapter)
+/** The same for the adapter kept, redrawn when it changes: Phone & computer's cards. */
+export const useMidiJacks = () => useSyncExternalStore(subscribeBluetooth, readJacks, readJacks)
+
+/*
+ * WHETHER A UNIT CAN PLUG INTO THIS COPY BY USB CABLE AT ALL. An iPhone or
+ * iPad always could (its module lists every two-way MIDI port). Android only
+ * from the build that carries docs/pending/android-usb-midi.patch, which
+ * says so (listsUsb); until then no cable lists on Android, so nothing on it
+ * says anything about one, the FM3's line included.
+ */
+export function cablesHere() {
+  if (Platform.OS === 'ios') return true
+  try {
+    return ble()?.listsUsb?.() === true
+  } catch {
+    return false
+  }
+}
+
+/* What Connect's cable rule is told: the unit picked, the units there are, and the cables let go of by hand (bleAdapters cablesFirst). */
+const cableRule = () => ({ unit: saved.unit, units: BLE_UNITS, skip: letGo })
+
+/** The cables a tap on Connect would take straight away now, from a list already read (bleAdapters cablesFirst): the page's hint says the same as Connect does. */
+export const cablesConnectTakes = (list) => cablesFirst(list, cableRule())
+const readCable = () => !!snapshot.adapter && isCable(snapshot.adapter)
+/** The same, redrawn when it changes: for the Live pill, Settings and the waiting screen. A true or false, so it redraws only when it changes. */
+export const useCableNow = () => useSyncExternalStore(subscribeBluetooth, readCable, readCable)
 
 /*
  * THE ADAPTER BY ITS NAME, NEVER ITS ADDRESS, in anything the log keeps. On
@@ -649,6 +719,8 @@ export const bluetoothFacts = () => ({
   phase: now.phase,
   trouble: now.trouble,
   adapter: saved.adapter ? adapterName(saved.adapter) || '' : null,
+  /* A unit on a USB cable, not a Bluetooth adapter (bleAdapters isCable): the head says so (lib/logHead, lib/bleReport). */
+  cable: !!saved.adapter && isCable(saved.adapter),
   /*
    * How each command goes to the unit picked: what auto found
    * (methodsFor(unit).learned), any way forced in the testing tools, and the
@@ -671,8 +743,20 @@ function waysFor(unit) {
 }
 
 /** Forget the adapter. bleLink hears it and lets go. */
-export function forgetAdapter() {
+/*
+ * CABLES LET GO OF BY HAND, this session: Troubleshooting's Forget the USB
+ * cable. Connect does not take one of these straight away (bleAdapters
+ * cablesFirst), so with the cable still in, the next Connect opens Apple's
+ * screen (or Android's search) and a Bluetooth adapter can be paired. Chosen
+ * again (a tap in the list, or the only port after Apple's screen), it is
+ * taken off. In memory only: a launch starts with none.
+ */
+const letGo = new Set()
+
+/** `byHand`: the player's own Forget, not the page making room for another (see letGo). */
+export function forgetAdapter({ byHand = false } = {}) {
   if (!saved.adapter) return
+  if (byHand && isCable(saved.adapter)) letGo.add(saved.adapter.id)
   saved = { ...saved, adapter: null }
   logDebug('ble', 'adapter forgotten')
   keep()
@@ -746,6 +830,9 @@ export function pairScreenShut() {
 /**
  * Look for the adapter.
  *
+ * A unit on a USB cable first, on either phone: plugged in now, it is used
+ * with nothing about Bluetooth asked (see A UNIT ON A USB CABLE FIRST).
+ *
  * iPhone: Apple's own Bluetooth MIDI screen, the only way an app can pair
  * one. What is listed after Done that was not there before is the adapter
  * just paired, and goes first. Android: ask for "Nearby devices", then scan
@@ -755,11 +842,42 @@ export function pairScreenShut() {
  * on an iPhone the promise resolves to it; otherwise to nothing, and the list
  * on the page asks.
  */
-export async function findAdapters() {
+export async function findAdapters({ cableFirst = true } = {}) {
   const mod = ble()
   if (!mod) return
   listenForList()
   noteBluetooth({ trouble: null, said: null })
+  /*
+   * A UNIT ON A USB CABLE FIRST, before anything about Bluetooth. "I've
+   * already used my iPhone and it does connect. It just says it's a
+   * Bluetooth connection and not USB, even though it is USB." (Justin, 3
+   * November 2026.) Connect opened Apple's Bluetooth screen for it, with
+   * Bluetooth off, and the AM4 was picked only after Done because it was the
+   * one port there. A cable needs no Bluetooth, no permission and no screen,
+   * so with one plugged in now (bleAdapters cablesIn) none of them is asked:
+   * one is chosen straight away, and two or more are listed for the page to
+   * ask. A Bluetooth permission refused, or Bluetooth switched off, never
+   * stands in its way. With none, everything below goes on as before.
+   *
+   * Only when nothing else could be meant (bleAdapters cablesFirst): not
+   * with a Bluetooth adapter connected to the phone beside it, not a cable
+   * let go of by hand, not one named for another unit than the one picked.
+   * And never when a Bluetooth adapter is what is being looked for
+   * (`cableFirst: false`): the page's Connect for an adapter kept from last
+   * time that has gone, and Look again (lookForAdapterAgain). Then Apple's
+   * screen opens as it always did, and the adapter just connected in it is
+   * taken first (pickAdapter), a cable beside it or not.
+   */
+  const listed = adapterDevices()
+  const cables = cableFirst ? cablesFirst(listed, cableRule()) : []
+  if (cables.length) {
+    fresh = new Set()
+    showList(listed)
+    logDebug('ble', Platform.OS === 'ios' ? 'a unit on a USB cable is plugged in: Bluetooth not asked, Apple’s screen not opened' : 'a unit on a USB cable is plugged in: Bluetooth not asked')
+    if (cables.length > 1) return
+    chooseAdapter(cables[0])
+    return cables[0]
+  }
   if (Platform.OS === 'ios') {
     /*
      * NOT ALLOWED IS SAID, NOT HIDDEN BEHIND APPLE'S SCREEN. Somebody who
@@ -800,7 +918,7 @@ export async function findAdapters() {
       fresh = new Set()
       const list = adapterDevices()
       showList(list)
-      const pick = pickAdapter(list, fresh)
+      const pick = pickAdapter(list, fresh, cableRule())
       if (pick) chooseAdapter(pick)
       else noteBluetooth({ said: pairScreenShutWords(deviceNoun()) })
       return pick
@@ -816,16 +934,15 @@ export async function findAdapters() {
     const list = adapterDevices()
     fresh = new Set(list.map((d) => d.id).filter((id) => !before.has(id)))
     /*
-     * Every port and the driver that owns it, in the log. Which driver is
-     * Apple's Bluetooth one is not written down anywhere reliable. The page
-     * guesses two names (bleAdapters ADAPTER_DRIVER), used only to keep a
-     * port whose name looks like Apple's network session, never to drop one;
-     * a pasted log from a real adapter settles them.
+     * Every port and the driver that owns it, in the log. Apple writes the
+     * driver names down nowhere; this line is where the real ones came from
+     * (bleAdapters USB_DRIVER and BLUETOOTH_DRIVER, from Justin's logs of 27
+     * to 29 October 2026), and where a new one would show.
      */
     logDebug('ble', 'ports after Apple’s Bluetooth screen', list.map((d) => `${d.name || '?'} [${d.driver || 'no driver'}${d.offline ? ', offline' : ''}${fresh.has(d.id) ? ', new' : ''}]`).join('; ') || 'none')
     showList(list)
     /* The one just connected, or the only one: chosen without asking. */
-    const pick = pickAdapter(list, fresh)
+    const pick = pickAdapter(list, fresh, cableRule())
     if (pick) chooseAdapter(pick)
     return pick
   }
@@ -854,7 +971,7 @@ export async function findAdapters() {
   lookTimer = setTimeout(() => {
     noteBluetooth({ looking: false })
     /* One adapter found and none chosen yet: that is the one. Two is a question, and the list asks it. */
-    const pick = saved.adapter ? null : pickAdapter(now.devices)
+    const pick = saved.adapter ? null : pickAdapter(now.devices, new Set(), cableRule())
     if (pick) chooseAdapter(pick)
     /* Nothing at all: said, rather than a search that ends in silence. */
     if (!saved.adapter && !now.devices.length) {
@@ -872,15 +989,28 @@ export async function findAdapters() {
  * ask an offline port (tryConnect), because on an iPhone only Apple's own
  * Bluetooth screen can connect one again, so the loop can only wait for iOS
  * to bring it back by itself, which nothing shows it doing.
+ *
+ * Never a unit on a USB cable (bleAdapters isCable): Apple's screen cannot
+ * bring one back, plugging it in does, and the link connects the moment it
+ * is (bleLink heardDevices). So no Reconnect and no Apple's screen for one
+ * (opensApplesScreen, below); cableAway says it is unplugged instead.
  */
 export function adapterAway() {
-  if (Platform.OS !== 'ios' || !saved.adapter) return false
+  if (Platform.OS !== 'ios' || !saved.adapter || isCable(saved.adapter)) return false
+  return !adapterDevices().some((d) => d.id === saved.adapter.id && !d.offline)
+}
+
+/** The unit on the USB cable chosen is not plugged in now, on either phone: the page says so, and it connects by itself when it is. */
+export function cableAway() {
+  if (!saved.adapter || !isCable(saved.adapter)) return false
   return !adapterDevices().some((d) => d.id === saved.adapter.id && !d.offline)
 }
 
 /**
  * Whether a tap on Look again (lookForAdapterAgain) opens Apple's screen
- * now: an iPhone whose adapter has gone, with that screen not kept shut. The
+ * now: an iPhone whose adapter has gone, with that screen not kept shut.
+ * Never for a unit on a USB cable, which is never away in that sense
+ * (adapterAway), so for one the tap is the link's poke alone. The
  * button says so under itself when it does (APPLE_SCREEN_OPENS), so the one
  * question decides both what the tap does and what the button says.
  */
@@ -918,7 +1048,8 @@ export const APPLE_SCREEN_OPENS = 'Opens Apple’s Bluetooth screen: tap your ad
 export async function lookForAdapterAgain(poke) {
   if (opensApplesScreen()) {
     try {
-      await findAdapters()
+      /* The adapter that went is what is looked for: a cable plugged in meanwhile is not taken in its place (findAdapters). */
+      await findAdapters({ cableFirst: false })
     } catch {
       // The page says what went wrong (findAdapters notes it); the poke still goes.
     }

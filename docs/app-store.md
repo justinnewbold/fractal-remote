@@ -2464,6 +2464,101 @@ is a build like any other, and in its pull request:
   "Editing over Bluetooth for customers", and `EDIT_OPENED_AT` in
   test/ledger.mjs is set to it, in the first pull request after.
 
+## Later: a USB cable (the next store version)
+
+Since 3 November 2026 (1.89.35, an update) the iPhone and iPad say "USB
+cable" wherever they said Bluetooth for a unit plugged straight in: the
+Bluetooth page, the Live pill, Settings and Phone & computer. With a cable
+plugged in and nothing else that could be meant (no Bluetooth adapter
+connected beside it, none kept from last time, and the cable not named for
+another unit than the one picked), Connect uses it and opens no Bluetooth
+screen and asks for no Bluetooth permission; otherwise Apple's screen opens
+as before. The Bluetooth page says the FM3 cannot plug in by its own USB
+port. That is all the update does: it names what the reviewed copies
+already did. **The reviewed 1.89.0 and 1.89.3 iPhone builds already
+connect by cable** (Justin, 27 October 2026, on store copy 1.89.3: an AM4
+on its own USB-C cable, and a C2MIDI Pro from the iPhone to the AM4's MIDI
+jacks), because the Bluetooth module lists every two-way MIDI port; their
+notes simply did not say it, and the update offers no new way to connect
+(no instructions, no store text, no purchase-page line). Its one mention of
+a cable outside the places a cable is in use is What's new's line, iPhone
+and iPad only, in the app and on the website's What's new page: it says
+what the app now calls a cable you have plugged in, and names no unit. Android cannot
+connect by cable at all until the build that carries
+docs/pending/android-usb-midi.patch (docs/pending/README.md).
+
+So the next store version on each phone describes it, the same rules as
+Bluetooth itself (2.3.1(a) on the App Store: every feature in the Notes for
+Review; Google: nothing switched on after review that the review did not
+see). No store-version key is needed: on the iPhone it changes nothing a
+reviewed copy does not already do, and on Android the code exists only in
+the new build. In that version's pull request:
+
+- the Notes for App Review carry the paragraph below, in the version's
+  list of what is new, and its What's New the line below;
+- **only the units that have run by cable by then are named.** Today that
+  is the AM4 alone. The FM9 and Axe-Fx III (USB-C to USB-B) and the VP4
+  (USB-C) have class-compliant MIDI over USB by their manuals, and every
+  rule holds over a cable as over Bluetooth, but no text says a cable works
+  on one of them until it has (shared/bluetooth-gear.mjs, TRIED_NOTES, is
+  the record);
+- **no Android words in Apple's texts** (2.3.10): not the OTG hint, not
+  Google's notes;
+- **a short hardware clip is worth considering** for 2.1: the AM4 plugged
+  into an iPhone, the Bluetooth page saying USB cable, and a scene changed
+  on Play. Filmed on the review account like video 4, shared as Anyone with
+  the link, never public; if it is made, the notes' Videos list gets a
+  fifth line;
+- the website guide (bluetooth-guide.html), /bluetooth, support.html and
+  the purchase page get the cable in the same words (docs/later.md);
+- for the Android build: Google's release notes and the App access
+  paragraph below, in the release's own sitting. **Nothing new in the Data
+  safety form:** the cable asks for no permission and sends nothing
+  anywhere. The manifest is unchanged, so the row still needs MIDI and
+  Bluetooth LE, and Google's reviewer is told so. Before it is pasted,
+  Justin's phone has run the cable from that build, and the block names
+  only what ran.
+
+**Apple: a paragraph for the next Notes for App Review.**
+
+```
+A unit on a USB cable, described for the first time in this version: an AM4 plugged straight into the iPhone or iPad with a USB cable (its own USB-C cable, or a USB MIDI cable from the iPhone or iPad to the AM4's MIDI jacks) connects through the same Bluetooth page, with no computer and no adapter: plug it in, then Settings → My rig → Bluetooth, tap AM4 under "1 · Pick your unit", then Connect. The page, the Live pill and Settings then say USB cable instead of Bluetooth. With a cable plugged in, the app asks for no Bluetooth permission and opens no Bluetooth screen. It has the same features and limits as Bluetooth in this version. The FM3 cannot plug in this way, because its USB port is not a MIDI device, and the page says so when the FM3 is picked. The builds already reviewed (1.89.0 and 1.89.3) connected by cable the same way, and called it Bluetooth.
+```
+
+**Apple: a line for the next What's New.**
+
+```
+• A unit plugged into your iPhone or iPad by USB cable, such as an AM4 on its own USB-C cable, now shows as USB cable instead of Bluetooth, and Connect uses it straight away, with no Bluetooth screen. The FM3 can't plug in this way: its USB port isn't MIDI.
+```
+
+**Google Play: release notes for the Android build** (within Play's 500
+characters with the build's other lines; this one is 380).
+
+```
+• New: plug your unit into the phone by USB cable, with no computer and no Bluetooth adapter, such as an AM4 on its own USB-C cable. Plug it in, then Settings → My rig → Bluetooth → pick the unit → Connect. Nothing is asked for. It has the same features as Bluetooth. Some phones need USB OTG switched on in their settings. The FM3 can't plug in this way: its USB port isn't MIDI.
+```
+
+**Google Play: a paragraph for App access** (App content → App access →
+"Any other information"), after the Bluetooth paragraph of the note in use.
+
+```
+USB cable, new in this version and part of the full version: the phone controls an AM4 plugged straight into its USB port with a USB-C cable, with no computer and no adapter, through Android's own MIDI service. Signed in with this account: plug the unit in, then Settings (the gear, top right) → My rig → Bluetooth → tap AM4 under "1 · Pick your unit" → Connect. Nothing is asked for: no permission, and Bluetooth may be on or off. The row is still there only on a device that has both MIDI and Bluetooth LE. With nothing plugged in, Connect looks for a Bluetooth adapter as before.
+```
+
+**The Description: a proposal for Justin**, who sets the listing himself
+("No don't put any text live on the App Store"), so nothing here is put
+live. His live Description opens "REQUIRES A COMPUTER, RASPBERRY PI, OR
+BLUETOOTH ADAPTER"; this section would go after its Bluetooth section, on
+the App Store with the next iPhone version and on Google Play once the
+Android build has rolled out to everybody (before that it would promise
+Android customers something their copy does not do). It names neither
+platform, since both stores share the text.
+
+```
+USB CABLE
+An AM4 can also plug straight into your phone or tablet with a USB cable: no computer and no adapter, with the same features as Bluetooth. Plug it in, then Settings → My rig → Bluetooth. The FM3 can't plug in this way, because its USB port isn't MIDI.
+```
+
 ## Kept for the record: the 1.87.1 texts (not for pasting)
 
 These were written for the 1.87.1 builds of 10 October 2026, and the 1.87.11
