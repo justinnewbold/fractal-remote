@@ -12,18 +12,18 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-03",
     "day": "3 November 2026",
-    "version": "1.89.28",
+    "version": "1.89.29",
     "lines": [
+      {
+        "text": "On the website and the computer app, the top bar now matches the phone app’s: the version on the left, and one button that says Live, your unit, and which computer it’s on.",
+        "only": null
+      },
       {
         "text": "The walkthrough shows both ways to connect, Computer (the best way) or Bluetooth, its pages are numbered 1 to 4, and the box before Unlock says both ways. The purchase page lists every Bluetooth adapter, and Playing with no internet says Bluetooth needs none.",
         "only": null
       },
       {
-        "text": "On the computer app, signing in under Settings → Account now turns the phone remote on too, so your phone finds the computer straight away after you switch accounts.",
-        "only": null
-      },
-      {
-        "text": "On a Raspberry Pi set to start by itself, closing the app’s window no longer stops it saving presets you send from your phone.",
+        "text": "On the computer app, signing in under Settings → Account now turns the phone remote on too, so your phone finds the computer straight away after you switch accounts. On a Raspberry Pi set to start by itself, closing the app’s window no longer stops it saving presets you send from your phone.",
         "only": null
       },
       {

@@ -661,12 +661,24 @@ export function run(test) {
     assert.match(bar, /onClick=\{onOpenUnit\}/, 'the unit name is a button that does nothing')
 
     const wired = src.replace(/\s+/g, ' ')
+    /*
+     * Where it goes is decided once, by the phone's own expression (mobile/App.js
+     * unitGoes), and the press and the bar's words for a screen reader both
+     * read it: the five in the demo, Which unit with two computers only while
+     * the link is up, and the page of facts otherwise.
+     */
     assert.match(
       wired,
-      /onOpenUnit=\{\(\) => \{.*setSetupPage\(isDemo\(\) \? 'demo' : 'link'\)/,
+      /const unitGoes = isDemo\(\) \? 'demo' : link\.role === 'remote' && link\.hosts\.length > 1 && link\.link === 'connected' \? 'which' : 'link'/,
+      'where the pill goes is not decided in one place, or Which unit opens over a link that is down'
+    )
+    assert.match(
+      wired,
+      /onOpenUnit=\{\(\) => \{.*setSetupPage\(unitGoes === 'demo' \? 'demo' : 'link'\)/,
       'the unit name no longer opens the picker in the demo and the unit page outside it'
     )
     assert.match(wired, /onOpenUnit=\{\(\) => \{ .*setSheet\('settings'\)/, 'it picks a page without opening the sheet it lives in')
+    assert.match(wired, /unitGoes=\{unitGoes\}/, 'the bar is not told where its pill goes, so a screen reader is told something else')
 
     /* And a button has to be styled as one, or it arrives with a browser's
        default chrome in the middle of the bar. A class named in JSX and absent
@@ -2144,6 +2156,18 @@ export function run(test) {
       /if \(showConnect && status === 'live'\) \{\s*\n[^}]*setStatus\('fault'\)/,
       'Play is rendered under the connect screen again'
     )
+    /*
+     * And that fault is over when the computer answers again. Left up while
+     * the unit was read again, the bar said "Not answering ● AM4" in red, a
+     * claim about a unit nobody had asked yet, and the notice under it that
+     * the computer had stopped. So the screen goes back to looking first,
+     * and only a fault about the computer: one about the unit is the read's.
+     */
+    const back = src.slice(src.indexOf("if (link.role !== 'remote') return\n    if (link.link === 'connected') {"))
+    assert.ok(back.length < src.length, 'the read on the computer answering moved; this check follows it')
+    const backBody = back.slice(0, back.indexOf('read()'))
+    assert.match(backBody, /if \(status === 'fault' && faultReason === 'no-answer'\) \{\s*setFaultReason\(null\)\s*setStatus\('idle'\)\s*\}/, 'the pill blames the unit for the computer having been away, until the read lands')
+    assert.ok(!/setStatus\('idle'\)/.test(backBody.replace(/if \(status === 'fault' && faultReason === 'no-answer'\) \{[^}]*\}/, '')), 'the computer answering throws away a fault about the unit, before the read has asked it')
     assert.ok(!/onAnotherDevice/.test(src), 'the user-agent guess is back; the role decides now')
 
     /*
@@ -2355,9 +2379,11 @@ export function run(test) {
 
   test('the bar’s preset line is one span inside the button', () => {
     const bar = readFileSync(new URL('../src/components/TopBar.jsx', import.meta.url), 'utf8')
-    // "500" with no noun, "demo" in mono: the number is announced as a preset, the word is a label.
+    // "500" with no noun: the number is announced as a preset.
     assert.match(bar, /<span className="sr-only">Preset <\/span>/, 'the slot number has no accessible noun')
-    assert.match(bar, /className="topbar-how" data-state/, 'the connection word is back in the mono face')
+    /* The state word is the pill's first word since 3 November 2026, as on the phone, and nowhere else in the bar. */
+    assert.ok(!/topbar-how/.test(bar), 'a state word is back beside the pill, saying what the pill already says')
+    assert.match(bar, /<span className="topbar-unit-state" data-mark=\{pill\.mark\}>/, 'the pill’s word does not take its colour from the phone’s marks')
     const at = bar.indexOf('<span className="topbar-preset-line">')
     assert.notEqual(at, -1, 'the slot and the name are direct children of the button, which packs them to its top edge')
     const line = bar.slice(at, bar.indexOf('</span>\n            </span>', at))
@@ -2450,20 +2476,37 @@ export function run(test) {
     const quiet = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
     assert.match(quiet, /\.phone-word\.off \{\s*color: var\(--silk-faint\)/, 'the quiet word is not grey')
     /*
-     * And it names what it is about while something is wrong. "The phone app
-     * says it has lost the unit, but also says it's connected in the right
-     * hand corner." The left of that bar is the unit and this is the Mac;
-     * neither said so, and two states at opposite ends of one bar read as the
-     * app disagreeing with itself.
+     * And two words about two things never sit at opposite ends of one bar.
+     * "The phone app says it has lost the unit, but also says it's connected
+     * in the right hand corner." The left of that bar was the unit and this
+     * was the computer, and read together they looked like the app
+     * disagreeing with itself; this word said "computer connected" for a
+     * while to tell them apart. Since 3 November 2026 the bar is the phone's
+     * and its pill says both, so over the relay there is no chip at all. It
+     * is drawn only in the computer's own window, outside the demo, where it
+     * is the computer's switch for phones and nothing in the pill says that;
+     * and on a narrow window it steps aside while Save is up, as the version
+     * does, so the unit's name keeps its room.
      */
-    assert.match(chip, /const word = sayMac && mark !== 'off' \? `computer \$\{state\}` : state/, 'the word never says which thing it is about')
     const bar = readFileSync(new URL('../src/components/TopBar.jsx', import.meta.url), 'utf8')
     assert.match(
       bar,
-      /sayMac=\{remote && status !== 'live'\}/,
-      'the computer is named when the unit is answering too, where there is no confusion and no room'
+      /const showSwitch = link\?\.role === 'mac' && !demo\b/,
+      'the link’s word is back over the relay, at the other end of the bar from the pill that already says it'
     )
-    assert.match(chip, /compact \? \(\s*<span className=\{`phone-word \$\{mark\}`\} aria-hidden="true">\s*\{word\}/, 'the bar chip is a mark again, not the word')
+    assert.match(
+      bar,
+      /const showSwitch = link\?\.role === 'mac' && !demo && !\(narrow && saveUp\)\n/,
+      'the switch for phones stays beside Save on a narrow window, and the unit’s name is cut to “Axe-F…” for it'
+    )
+    assert.match(
+      bar,
+      /\{showSwitch \? <LinkChip compact link=\{link\} onAction=\{onLinkAction\} \/> : null\}/,
+      'the computer’s switch for phones is drawn by some other rule than showSwitch'
+    )
+    assert.equal((bar.match(/<LinkChip\b/g) || []).length, 1, 'the chip is drawn in the bar more than once')
+    assert.ok(!/sayMac/.test(bar + chip), 'the chip is told to say “computer” in front of its word again, in a bar where it is only ever about phones')
+    assert.match(chip, /compact \? \(\s*<span className=\{`phone-word \$\{mark\}`\} aria-hidden="true">\s*\{state\}/, 'the bar chip is a mark again, not the word')
     assert.match(chip, /aria-label=\{`\$\{said\.sentence\} — phone remote options`\}/, 'the chip has no sentence for a screen reader')
     const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
     const wordCss = css.slice(css.lastIndexOf('And then a word again'))
@@ -2664,11 +2707,41 @@ export function run(test) {
       /link\.canHost/,
       "the bar offers the computer's setup without asking whether this end could ever be one"
     )
+    /*
+     * And the ways out. The chip offered Connect here once, which left the
+     * demo, to anybody; it is not drawn in the demo since 3 November 2026
+     * (it is the computer's switch for phones, and in the demo no computer
+     * is really there), as on the phone. So from the bar the ways out are
+     * these, as the phone's are: Exit demo for somebody who has paid,
+     * through the same leave-demo; Unlock for somebody who has not, whose
+     * sign-in ends the demo; and the pill, whose Demo Unit page is one step
+     * under Phone & computer and its Use real device, for anybody. The door
+     * from the bar itself is open to somebody who has paid, not to everybody
+     * as the chip's was.
+     */
     assert.match(
-      chip,
-      /'leave-demo'/,
+      src,
+      /onExitDemo=\{isDemo\(\) && paid\.unlocked \? \(\) => linkAction\('leave-demo'\) : null\}/,
       'the bar has no way out of the demo, which is how a phone got stuck wearing the computer’s screen'
     )
+    assert.match(
+      readFileSync(new URL('../src/components/TopBar.jsx', import.meta.url), 'utf8'),
+      /const showSwitch = link\?\.role === 'mac' && !demo\b/,
+      'the computer’s switch for phones is offered in the demo, about a computer that is not there'
+    )
+    /* Unlock's sign-in, the way out for somebody who has not paid: signing in from the demo ends it, and reloads to re-decide which end this is. */
+    assert.match(src, /onUnlock=\{isDemo\(\) && paid\.checked && !paid\.unlocked \? openUnlock : null\}/, 'the bar has no way out of the demo for somebody who has not paid')
+    const signedIn = src.slice(src.indexOf('const afterAccount = async'))
+    assert.match(signedIn.slice(0, 1600), /if \(isDemo\(\)\) \{[\s\S]*setDemo\(false\)\s*\n\s*window\.location\.reload\(\)/, 'signing in from the demo leaves the demo running, so Unlock is no way out of it')
+    /* And the pill's page in the demo is a step under Phone & computer, which has Use real device. */
+    assert.match(src, /setSetupPage\(unitGoes === 'demo' \? 'demo' : 'link'\)/, 'the pill in the demo does not open the Demo Unit page')
+    assert.match(src, /const SETUP_PARENT = \{ demo: 'link'/, 'the Demo Unit page is not a step under Phone & computer, where Use real device is')
+    assert.match(
+      readFileSync(new URL('../src/components/DeviceDetail.jsx', import.meta.url), 'utf8'),
+      /<button onClick=\{toggleDemo\}>\{demo \? 'Use real device' : 'Demo mode'\}<\/button>/,
+      'Phone & computer has no way out of the demo for somebody who has not paid'
+    )
+    assert.ok(!/'leave-demo'/.test(chip), 'the chip offers to leave a demo it is never drawn in')
 
     /*
      * And leaving it is the whole job. A reload is what re-decides which end

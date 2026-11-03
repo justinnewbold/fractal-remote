@@ -1,12 +1,16 @@
 /**
- * Play's pill on the phone, in words: the state, the unit, and the computer.
+ * The top bar's pill, in words: the state, the unit, and the computer.
  *
- * Its own file rather than a few more lines in link-word.mjs, which the web
- * app imports: every byte of a file the computer app serves counts toward the
- * computer's fingerprint (scripts/computer-fingerprint.mjs), and a change to
- * one makes a new computer app at the merge whether or not the computer uses
- * it. Only the phone draws the pill, so only the phone carries this. The day
- * the browser's bar wears it too, it can import it from here.
+ * Both bars draw it: the phone's since 24 October 2026, and the browser's
+ * since 3 November 2026 ("Looks like we need to update the web version top
+ * tab bar to match the apps"), which imports it from here through link.js
+ * describePill. One set of words, so the two cannot word one link two ways.
+ *
+ * Its own file, beside link-word.mjs, because it began as the phone's alone
+ * and was kept out of a file the computer app served. The computer serves
+ * this one too now, so a change to these words counts toward the computer's
+ * fingerprint (scripts/computer-fingerprint.mjs) and makes a new computer app
+ * at the merge, as a change to any of the bar's words does.
  */
 import { unitWord } from './link-word.mjs'
 

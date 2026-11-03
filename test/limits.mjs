@@ -2093,7 +2093,8 @@ export function run(test) {
     assert.match(read('src/App.jsx'), /\bhelp: 'Troubleshooting',/, 'Settings has no Troubleshooting page, where the guide says Feedback is')
     assert.match(read('src/App.jsx'), /<Section key="feedback" title="Feedback"/, 'the computer app’s Troubleshooting page has no Feedback, as the guide says')
     assert.match(read('mobile/src/screens/Settings.js'), /title="Troubleshooting"[\s\S]*title="Feedback"/, 'the phone’s Troubleshooting has no Feedback, as the guide says')
-    assert.match(read('src/components/TopBar.jsx'), /className="topbar-gear"[\s\S]{0,200}⚙/, 'Settings is no longer behind the gear the guide names')
+    /* The guide says ⚙; the bar draws the phone's gear picture since 3 November 2026, which is that gear. */
+    assert.match(read('src/components/TopBar.jsx'), /className="topbar-gear"[\s\S]{0,200}<svg viewBox="0 0 24 24"/, 'Settings is no longer behind the gear the guide names')
     assert.match(downloads, /'Raspberry Pi and other ARM &mdash; AppImage'/, 'the download button the guide names was renamed')
     assert.match(downloads, /return \/-arm64\\\.AppImage\$\/i\.test\(n\)/, 'the Pi’s file no longer ends in arm64.AppImage, as the guide says')
     for (const f of ['mobile/src/screens/Settings.js', 'mobile/src/screens/Stage.js']) {

@@ -4,7 +4,14 @@ import { linkTone, linkWord } from '../../shared/link-word.mjs'
 import { useDismiss } from '../lib/dismiss'
 
 /**
- * The state of the phone remote, in the bar, on every screen.
+ * The computer's switch for phones, in its own window's bar.
+ *
+ * It used to be in every bar, and over the relay it was the link's word:
+ * CONNECTED at one end of the bar, about the computer, and the unit at the
+ * other. Since 3 November 2026 the browser's bar is the phone's, whose pill
+ * says both, so this is drawn only at the computer itself, outside the demo
+ * (TopBar.jsx): CONNECTED or NO REMOTE, about whether a phone can reach this
+ * computer, and the one action under it.
  *
  * Pure: it is handed the link state and draws it. The previous chip read the
  * connection module at render time and polled it on a timer, so it was
@@ -19,20 +26,7 @@ export default function LinkChip({
   link,
   compact,
   onAction,
-  busy,
-  /*
-   * Whether the word needs to name what it is about.
-   *
-   * "The phone app says it has lost the unit, but also says it's connected in
-   * the right hand corner." Both were true and neither said which thing it
-   * meant: the left of the bar is the UNIT, this is the MAC, and read together
-   * at opposite ends of one bar they look like the app contradicting itself.
-   *
-   * Only while something is wrong, which is the only time the two can be read
-   * as disagreeing — and also the only time there is room, because the bar
-   * carries no preset unless the unit is answering.
-   */
-  sayMac
+  busy
 }) {
   const [open, setOpen] = useState(false)
   const wrap = useRef(null)
@@ -60,11 +54,13 @@ export default function LinkChip({
       : link.link === 'connected'
         ? { label: 'Turn off', kind: 'mac-off' }
         : link.link === 'signed-out'
-          ? // A phone in the demo wears this role and can never host: "Set up"
-            // would call a helper on localhost that cannot exist.
+          ? /* Never "Set up" where this end could not host: it would call a
+               helper on localhost that cannot exist. The chip is not drawn in
+               the demo, the one place that was (a phone wearing the computer's
+               role), and the demo's way out is Exit demo, or Phone & computer. */
             link.canHost
             ? { label: 'Set up', kind: 'mac-setup' }
-            : { label: 'Connect', kind: 'leave-demo' }
+            : null
           : { label: 'Turn on', kind: 'mac-on' }
 
   /*
@@ -93,7 +89,6 @@ export default function LinkChip({
    * disconnected (red)". Three states, because a link on its way is neither.
    */
   const state = linkWord(said.tone, link.role)
-  const word = sayMac && mark !== 'off' ? `computer ${state}` : state
 
   return (
     <span className="phone-link" ref={wrap}>
@@ -105,7 +100,7 @@ export default function LinkChip({
       >
         {compact ? (
           <span className={`phone-word ${mark}`} aria-hidden="true">
-            {word}
+            {state}
           </span>
         ) : (
           <>

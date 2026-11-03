@@ -1404,7 +1404,16 @@ export function run(test) {
   test('the browser’s Save is not offered on a VP4, and a refusal stays on the sheet in its words', () => {
     const app = read('src/App.jsx')
     assert.match(flat('src/App.jsx'), /\{onRealVp4 \? null : \( <button className="chip preset-menu-more" onClick=\{\(\) => \{ setPresetMenu\(false\) setSheet\('save'\) \}\} > Save to a slot…/, 'the preset menu offers a VP4 “Save to a slot…”')
-    assert.match(app, /status === 'live' && view !== 'gig' && !onRealVp4 \? \(\s*<SaveBar/, 'the bar offers a VP4 Save')
+    assert.match(app, /\{status === 'live' && !onRealVp4 \? \(\s*<SaveBar/, 'the bar offers a VP4 Save')
+    /* And the version does not give way on a phone for a Save that is never drawn on a VP4. */
+    assert.match(app, /const saveUp = status === 'live' && !onRealVp4 && \(/, 'the bar makes room on a VP4 for a Save it does not draw')
+    /*
+     * And for everything the bar draws in Save's place, ✓ Saved included,
+     * asked of the same clock SaveBar asks: without it the version came back
+     * beside "✓ Saved" for its ten seconds on a phone, and the two overlapped.
+     */
+    assert.match(app, /const justSaved = useSaidSaved\(savedAt\)\n\s*const saveUp = status === 'live' && !onRealVp4 && \(dirty \|\| Boolean\(queuedSave\) \|\| saving \|\| justSaved\)/, 'the bar does not make room for Save, Saving… and ✓ Saved alike')
+    assert.match(read('src/components/SaveBar.jsx'), /const justSaved = useSaidSaved\(savedAt\)\n\s*\n?[\s\S]{0,200}if \(!queued && !saving && !dirty && !justSaved\) return null/, 'SaveBar and the bar ask two clocks whether ✓ Saved is up')
     assert.match(app, /refused=\{onRealVp4 \? VP4_NO_SAVE : null\}/, 'the sheet asks to overwrite a slot on a VP4')
     /* Only a VP4's refusal keeps it open: every other unit's Save closes the sheet after a press, as it always did. */
     assert.equal((app.match(/if \(\(await save\(\)\) \|\| !onRealVp4\) setSheet\(null\)/g) || []).length, 2, 'the sheet closes on a VP4’s refusal, or no longer closes for every other unit')

@@ -426,16 +426,14 @@ export function run(test) {
      * left. AM4, FM3, Axe-Fx."
      *
      * It was there on a desktop and hidden on a phone, along with the word
-     * "connected", to buy room for the preset name — which was being cut to
-     * "D…". Dropping the word is still right: the chip on the right of this same
-     * bar says exactly that, and the lamp says it again in colour.
-     *
-     * The unit's name is not a repeat of anything, and with two Macs and two
-     * units on one account it is the one fact that says WHICH RIG this screen is
+     * "connected", to buy room for the preset name. The word went; the unit's
+     * name is not a repeat of anything, and with two computers and two units
+     * on one account it is the one fact that says WHICH RIG this screen is
      * driving — on the device where you cannot look over and check.
      *
-     * The room came from elsewhere in the end: the separate UNSAVED word is
-     * gone, and Save now appears only when there is something to save.
+     * Since 3 November 2026 it is in the pill, as on the phone, beside the
+     * pill's own state word, and the old word beside the lamp is gone at every
+     * width rather than hidden on a phone.
      */
     // Every narrow block, not the first one that matches: there are three, and
     // the topbar rules are not in the first.
@@ -450,7 +448,7 @@ export function run(test) {
       !/\.topbar-unit/.test(hidden),
       'the unit name is hidden on a phone again, which is the one fact saying which rig this is'
     )
-    assert.ok(/\.topbar-how/.test(hidden), 'the connection word is back, saying what the chip beside it already says')
+    assert.ok(!/\.topbar-how/.test(code), 'the connection word is back beside the pill, saying what the pill already says')
 
     /*
      * And a long one is capped only where the preset is actually sharing the
@@ -464,21 +462,38 @@ export function run(test) {
      * on every screen with no preset in the bar at all, and on a phone that is
      * every screen there is.
      */
-    const bare = narrow.slice(narrow.indexOf('button.topbar-unit {'))
-    assert.ok(
-      !/max-width/.test(bare.slice(0, bare.indexOf('}'))),
-      'the unit name is capped on every phone screen again, including the ones carrying no preset'
-    )
-    assert.match(
-      bare.slice(0, bare.indexOf('}')),
-      /text-overflow: ellipsis/,
-      'a name too long for the bar spills out of it rather than ending in an ellipsis'
-    )
+    /* The name's own rule: the one that opens a rule of its own, not the face it shares with the word, and not the phone block's cap. */
+    const name = code.match(/\}\s*(?:\/\*[\s\S]*?\*\/\s*)?\.topbar-unit-name \{([^}]*)\}/)?.[1] || ''
+    assert.ok(name, 'the unit’s name in the pill has no styling at all')
+    assert.ok(!/max-width/.test(name), 'the unit name is capped on every phone screen again, including the ones carrying no preset')
+    assert.match(name, /text-overflow: ellipsis/, 'a name too long for the bar spills out of it rather than ending in an ellipsis')
+    assert.match(name, /min-width: 0/, 'a long name pushes the speaker and the gear off a narrow phone instead of giving way')
+    /* In the unit's own spelling: "Axe-Fx III", never the capitals that were cut to "AXE-F…". */
+    assert.ok(!/text-transform/.test(name), 'the unit’s name is in capitals again')
     assert.match(
       narrow,
-      /\.topbar\[data-preset='yes'\] \.topbar-unit \{[^}]*max-width/,
+      /\.topbar\[data-preset='yes'\] \.topbar-unit-name \{[^}]*max-width/,
       'a long unit name can eat the preset name when the two share the row'
     )
+    /*
+     * And no phone rule caps it or capitalises it some other way: the rule
+     * above is the base one, so a cap written into a phone block, on the
+     * name, the line or the face, is what this has to catch. Every rule
+     * there that reaches the pill with a cap is the preset's, and none puts
+     * it in capitals.
+     */
+    const bare = narrow.replace(/\/\*[\s\S]*?\*\//g, '')
+    const reach = [...bare.matchAll(/([^{}]*\.topbar-unit[^{}]*)\{([^}]*)\}/g)]
+    assert.ok(reach.length >= 1, 'no phone rule reaches the pill, so this checks nothing')
+    for (const [, sel, body] of reach) {
+      const s = sel.trim()
+      if (/max-width:\s*(?!100%)/.test(body)) assert.match(s, /^\.topbar\[data-preset='yes'\] /, `"${s}" caps the unit’s name on a phone screen with no preset in the bar`)
+      assert.ok(!/text-transform/.test(body), `"${s}" puts the unit’s name in capitals on a phone`)
+    }
+    /* Nor at any width. */
+    for (const [, sel, body] of code.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]*\.topbar-unit[^{}]*)\{([^}]*)\}/g)) {
+      assert.ok(!/text-transform/.test(body), `"${sel.trim()}" puts the unit’s name in capitals`)
+    }
   })
 
   test('the line under a Setup row is green, and readable in both themes', () => {
@@ -1040,9 +1055,17 @@ export function run(test) {
     assert.match(rule('button.fx-power'), /min-height: 44px/, 'the power pill is under 44px with a mouse')
     assert.match(rule('.strip-btn'), /min-height: 44px/, 'the strip buttons are under 44px with a mouse')
     assert.match(rule('.channel-buttons .chip'), /min-width: 44px/, 'the channel chips are narrow targets')
-    const how = rule('.topbar-how')
-    assert.match(how, /font-family: var\(--display\)/, '"demo" is set in the mono face again, where it read as "deno"')
-    assert.match(how, /text-transform: uppercase/)
+    /*
+     * "demo" in the mono face at 10px with no tracking read as "deno". The
+     * pill's word is the phone's since 3 November 2026: the mono face again,
+     * but bold and at 13px, two steps up from the size that read wrong, in
+     * mixed case as the phone draws it ("Demo FM3").
+     */
+    const word = code.slice(code.indexOf('.topbar-unit-state,\n.topbar-unit-name {'), code.indexOf('}', code.indexOf('.topbar-unit-state,\n.topbar-unit-name {')))
+    assert.ok(word, 'the pill’s word and the unit have no face of their own')
+    assert.match(word, /font-family: var\(--mono\)/, 'the pill’s word is not in the phone’s face')
+    assert.match(word, /font-size: var\(--f-3\)/, '"Demo" is back at the size where it read as "deno"')
+    assert.match(word, /font-weight: 700/, 'the pill’s word is not bold, as the phone’s is')
     assert.match(code, /\.topbar-slot::before \{\s*content: 'slot '/, 'the slot number has no noun')
   })
 
@@ -1180,8 +1203,6 @@ export function run(test) {
     assert.ok(block.includes('min-width: 8ch'), 'the phone rules for the bar are not one block')
 
     for (const [what, rule] of [
-      ['the row', /\.topbar-row \{[^}]*gap: var\(--s-1\)/],
-      ['Save', /\.save-cluster button\.save-now \{[^}]*padding: var\(--s-2\) var\(--s-2\)/],
       ['the link chip', /button\.phone-chip\.compact \{[^}]*padding: var\(--s-1\) var\(--s-1\)/],
       ['the preset button', /button\.topbar-preset \{[^}]*padding: var\(--s-1\)/],
       ['the slot and the name', /\.topbar-preset-line \{[^}]*gap: var\(--s-1\)/]
@@ -1193,17 +1214,148 @@ export function run(test) {
     assert.match(block, /letter-spacing: normal/, 'the chip is tracked again, at the name’s expense')
 
     /*
+     * The gaps and Save are the phone's at every width since 3 November 2026
+     * (mobile/src/components/TopBar.js): 12px between things, and Save the
+     * small amber pill. The width a phone is short of comes out of the
+     * version, which gives way first, then the unit's name; no phone block
+     * squeezes the row or Save any more.
+     */
+    let narrow = ''
+    for (const m of code.matchAll(/@media \(max-width: 620px\)/g)) narrow += balanced(code, m.index)
+    assert.ok(!/\.topbar-row \{/.test(narrow), 'the bar’s gaps shrink on a phone again, which the phone’s do not')
+    /* The one narrower row is the computer's own window with its switch for phones in it, which a phone's bar never has. */
+    const squeezed = [...narrow.matchAll(/([^{}]*\.topbar-row[^{}]*)\{[^}]*gap:/g)].map((m) => m[1].trim())
+    assert.deepEqual(squeezed, ['.topbar-row:has(.phone-link)'], 'a phone’s bar has narrower gaps than the phone’s, or the computer’s narrowed window lost its room')
+    const topBar = readFileSync(new URL('../src/components/TopBar.jsx', import.meta.url), 'utf8')
+    assert.match(topBar, /const showSwitch = link\?\.role === 'mac' && !demo\b/, 'the switch for phones can be in a phone’s bar, which the narrower gap would then squeeze')
+    assert.match(topBar, /\{showSwitch \? <LinkChip/, 'the switch for phones is drawn by another rule than showSwitch')
+    const row = code.slice(code.indexOf('.topbar-row {'), code.indexOf('}', code.indexOf('.topbar-row {')))
+    assert.match(row, /gap: var\(--s-3\)/, 'the bar’s gaps are not the phone’s 12px')
+    const version = code.slice(code.indexOf('.topbar-version {'), code.indexOf('}', code.indexOf('.topbar-version {')))
+    /* A basis of nothing, the phone's flex: 1, so it has only the room the rest leaves and gives before the unit's name does. */
+    assert.match(version, /flex: 1 1 0;/, 'the version does not take the slack, so it is not the first thing to give')
+    assert.match(version, /text-overflow: ellipsis/, 'the version spills out of the bar rather than giving way')
+    const save = code.slice(code.indexOf('.topbar .save-cluster button.save-now {'), code.indexOf('}', code.indexOf('.topbar .save-cluster button.save-now {')))
+    assert.match(save, /padding: 0 var\(--s-3\)/, 'Save is not the phone’s pill: its sides are the old box’s')
+    assert.match(save, /font-size: var\(--f-1\)/, 'Save is not the phone’s small type')
+    assert.match(save, /font-weight: 700/)
+    assert.match(code, /\.topbar \.save-cluster button\.save-now::before \{[^}]*background: var\(--signal\)/, 'Save has no amber pill drawn in its box')
+    /* Saving… keeps the green word and the moving dot, with no pill behind them. */
+    assert.match(code, /\.topbar \.save-cluster\[data-working='yes'\] button\.save-now,\s*\n\.topbar \.save-cluster\[data-working='yes'\] button\.save-now:disabled \{[^}]*color: var\(--ok\)/, 'Saving… is not green in the bar')
+    assert.match(code, /\.topbar \.save-cluster\[data-working='yes'\] button\.save-now::before \{[^}]*background: none/, 'Saving… sits on the amber pill, as a button to press again')
+
+    /*
      * And none of it came out of the height. Every height here is set outside
      * the phone block, so a padding change cannot quietly shrink a target —
      * this fails if somebody ever answers "a little bit smaller" with the one
      * dimension that must not move.
      */
-    assert.ok(
-      !/min-height|height:/.test(block.slice(block.indexOf('.topbar-row {'))),
-      'something in the bar got shorter rather than narrower'
-    )
+    assert.ok(!/min-height|height:/.test(block), 'something in the bar got shorter rather than narrower')
     assert.match(code, /\.save-cluster button\.save-now \{[^}]*min-height: 46px/,
       'the Save button lost its floor')
+    assert.ok(!/min-height|height:/.test(save), 'the bar’s Save sets its own height, under the 46px floor')
+    /* And the row is as tall as Save's box, so Save appearing never moves the bar, and Play under it, down. */
+    const rowFloor = Number(row.match(/min-height: (\d+)px/)?.[1])
+    const saveFloor = Number(code.match(/\.save-cluster button\.save-now \{[^}]*min-height: (\d+)px/)?.[1])
+    /* Every box is measured padding and all (box-sizing: border-box), so the room inside is the floor less the row's two steps. */
+    assert.match(code, /\n\* \{\s*box-sizing: border-box;\s*\}/, 'boxes are measured without their padding now: work the bar’s room out again')
+    assert.match(row, /padding: var\(--s-1\) 0/, 'the bar’s row padding changed: work its room out again')
+    const inside = rowFloor - 2 * 4
+    assert.ok(inside >= 44, 'the bar’s row is under the touch floor')
+    assert.ok(inside >= saveFloor, `the bar’s row has ${inside}px inside, under Save’s ${saveFloor}px, so the bar grows when Save appears`)
+    /*
+     * And a docked panel starts where the bar ends: the row and the bar's
+     * 1px rule. It was 45px, a 44px row's, and on a window 1000px or wider
+     * Settings, Demo Unit and the block panels started 10px up inside the
+     * bar, over its rule.
+     */
+    assert.match(code, /\.topbar \{[^}]*border-bottom: 1px solid/, 'the bar’s rule changed: work out where a docked panel starts again')
+    assert.equal(Number(code.match(/--bar-h: (\d+)px/)?.[1]), rowFloor + 1, 'a docked panel starts somewhere other than under the bar')
+
+    /*
+     * When the version steps aside for Save on a phone, nothing takes its
+     * place: an empty spacer was one more thing in the row, and the 12px gap
+     * beside it was what "Axe-Fx III" was short of beside Unlock and Save on
+     * a 390-wide phone. The pill holds the right on its own.
+     */
+    assert.match(topBar, /\{narrow && saveUp \? null : \(\s*<span className="topbar-version mono"/, 'the version is swapped for something that takes a gap of the row')
+    assert.ok(!/topbar-gap/.test(topBar + code), 'the empty spacer is back in the row, spending a gap of the unit’s name')
+    assert.match(code, /button\.topbar-unit \{[^}]*margin-left: auto/, 'with the version stepped aside, the pill and all after it slide to the left of the bar')
+
+    /*
+     * Beside the preset on a wide Edit, the unit's name stays whole and the
+     * preset name gives, as before the pill: from 621px to about 800px the
+     * two shrank together and "Axe-Fx III" was cut to "A…" while the version
+     * kept its width.
+     */
+    assert.match(code, /@media \(min-width: 621px\) \{\s*\.topbar\[data-preset='yes'\] button\.topbar-unit \{\s*flex-shrink: 0;/, 'beside a preset on a wide Edit the unit’s name is cut while the version keeps its room')
+    assert.match(code, /button\.topbar-preset \{[^}]*flex: 1 1 auto;[^}]*min-width: 0/, 'the preset no longer gives way, so a whole pill would push the bar off the window')
+
+    /*
+     * And the bar reaches the shell's edges, no further: the shell's sides
+     * are 16px at every width (the @supports block), and the bar's 24px
+     * reached 8px past the screen from 621px to about 1196px, so the page
+     * could be dragged sideways on an iPad.
+     */
+    assert.match(code, /--s-4: 16px/)
+    assert.match(code, /@supports \(padding: max\(0px\)\) \{\s*\.shell \{\s*padding-left: max\(16px, env\(safe-area-inset-left\)\);\s*padding-right: max\(16px, env\(safe-area-inset-right\)\);/, 'the shell’s sides changed: the bar’s reach has to follow them')
+    const bars = [...code.matchAll(/(?:^|\})\s*(?:\/\*[\s\S]*?\*\/\s*)*\.topbar \{([^}]*)\}/g)].map((m) => m[1])
+    assert.ok(bars.length >= 1, 'the bar has no rule of its own')
+    for (const rule of bars) {
+      const margin = rule.match(/margin:[^;]*/)?.[0]
+      if (margin) assert.equal(margin, 'margin: 0 calc(var(--s-4) * -1)', 'the bar reaches past the shell’s sides, so the page scrolls sideways')
+    }
+    assert.match(bars.join('\n'), /margin: 0 calc\(var\(--s-4\) \* -1\);\s*padding: 0 var\(--s-4\);/, 'the bar’s content no longer lines up with the page under it')
+  })
+
+  /*
+   * The bar's amber buttons under a mouse and a keyboard. The phone has
+   * neither, so these are the browser's own: a mouse over Unlock or Save
+   * rings it and leaves its fill and ink alone (the wash and the amber word
+   * read at under 4.5:1 in the light theme and looked switched off, and is
+   * kept for the press); and the keyboard's ring is on the amber pill, not
+   * round the 46px box it is drawn in.
+   */
+  test('the bar’s amber buttons keep their colours under a mouse, and the keyboard ring is on the pill', () => {
+    const hovers = [...code.matchAll(/@media \(hover: hover\) \{([\s\S]*?)\n\}/g)].map((m) => m[1]).join('\n')
+    const unlock = hovers.match(/\.topbar-pill:hover \.topbar-pill-face \{([^}]*)\}/)?.[1]
+    assert.ok(unlock, 'Unlock has no hover of its own')
+    assert.ok(!/background|color:/.test(unlock), 'a mouse over Unlock changes its fill or its ink')
+    assert.match(unlock, /box-shadow: 0 0 0 /, 'a mouse over Unlock shows nothing')
+    const save = hovers.match(/\.topbar \.save-cluster button\.save-now:hover:not\(:disabled\) \{([^}]*)\}/)?.[1]
+    assert.ok(save, 'the bar’s Save has no hover of its own')
+    assert.match(save, /filter: none/, 'a mouse over the bar’s Save brightens the near-white word on the light theme’s amber')
+    assert.ok(!/color:/.test(save), 'a mouse over the bar’s Save changes its ink')
+    const saveFace = hovers.match(/\.topbar \.save-cluster button\.save-now:hover:not\(:disabled\)::before \{([^}]*)\}/)?.[1]
+    assert.ok(saveFace && !/background/.test(saveFace) && /box-shadow: 0 0 0 /.test(saveFace), 'a mouse over the bar’s Save changes its fill, or shows nothing')
+    /* The wash is the press. */
+    assert.match(code, /\.topbar-pill:active \.topbar-pill-face \{[^}]*background: var\(--signal-wash\)/, 'a press on Unlock shows nothing')
+    assert.match(code, /\.topbar \.save-cluster button\.save-now:active:not\(:disabled\)::before \{[^}]*background: var\(--signal-wash\)/, 'a press on the bar’s Save shows nothing')
+    /* The keyboard's ring, the app's own, on the pill. */
+    assert.match(code, /button:focus-visible \{\s*outline: 2px solid var\(--live\);\s*outline-offset: 2px;/)
+    assert.match(code, /\.topbar \.save-cluster button\.save-now:focus-visible \{\s*outline: none;\s*\}/, 'the keyboard’s ring is round the bar Save’s 46px box, an oval well clear of the pill')
+    assert.match(code, /\.topbar \.save-cluster button\.save-now:focus-visible::before \{\s*outline: 2px solid var\(--live\);\s*outline-offset: 2px;/, 'the bar’s Save has no ring under the keyboard at all')
+  })
+
+  /*
+   * The pill is two lines tall whatever it says, so the bar is one height,
+   * and a lone line sits in the middle of it: on the sign-in screen, the
+   * first a new visitor sees, "No computer" sat at the top over an empty
+   * line. The line under is in the phone's regular weight.
+   */
+  test('the pill is two lines tall whatever it says, and one line sits in the middle', () => {
+    const face = code.slice(code.indexOf('.topbar-unit-face {'), code.indexOf('}', code.indexOf('.topbar-unit-face {')))
+    assert.match(face, /justify-content: center/, 'a lone line sits at the top of the pill')
+    assert.match(face, /min-height: calc\(var\(--f-3\) \* 1\.3 \+ var\(--f-1\) \* 1\.3 \+ var\(--s-1\) \* 2 \+ 2px\)/, 'the pill is not two lines tall whatever it says')
+    /* That height is the two lines, the face's padding and its rule: worked from them. */
+    const lines = code.slice(code.indexOf('.topbar-unit-state,\n.topbar-unit-name {'), code.indexOf('}', code.indexOf('.topbar-unit-state,\n.topbar-unit-name {')))
+    const where = code.slice(code.indexOf('.topbar-unit-where {'), code.indexOf('}', code.indexOf('.topbar-unit-where {')))
+    assert.match(lines, /font-size: var\(--f-3\);[\s\S]*line-height: 1\.3;/)
+    assert.match(where, /font-size: var\(--f-1\);[\s\S]*line-height: 1\.3;/)
+    assert.match(face, /padding: var\(--s-1\) var\(--s-2\);\s*border: 1px solid/, 'the pill’s padding or rule changed: work its height out again')
+    assert.match(where, /font-weight: 400/, 'the computer’s line takes the buttons’ 500, heavier than the phone’s')
+    const bar = readFileSync(new URL('../src/components/TopBar.jsx', import.meta.url), 'utf8')
+    assert.match(bar, /\{pill\.where \? <span className="topbar-unit-where">\{pill\.where\}<\/span> : null\}/, 'an empty line is drawn under a pill with nothing to say about the computer')
   })
 
   /*

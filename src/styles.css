@@ -125,7 +125,7 @@
 
   --row-h: 60px;
 
-  --bar-h: 45px; /* the top bar plus its rule; what a docked rail starts under */
+  --bar-h: 55px; /* the top bar plus its rule (its row's 54px and 1px); what a docked rail starts under */
   --rail-w: 380px;
 
   --display: 'Archivo Expanded', 'Archivo', system-ui, sans-serif;
@@ -279,12 +279,19 @@ button.scene-line:active:not(:disabled) {
    the keyboard slides under it and the page scrolls behind it. Sticky moves
    with the document and needs none of that compensation. */
 
+/*
+ * Out to the shell's edges and no further: its side margin is the shell's
+ * side padding, which is 16px at every width (the @supports block further
+ * down). It was 24px, the shell's figure before that block, and from 621px
+ * to about 1196px the bar reached 8px past the screen, so the whole page
+ * could be dragged sideways on an iPad or a narrowed window.
+ */
 .topbar {
   position: sticky;
   top: 0;
   z-index: var(--z-bar);
-  margin: 0 calc(var(--s-5) * -1);
-  padding: 0 var(--s-5);
+  margin: 0 calc(var(--s-4) * -1);
+  padding: 0 var(--s-4);
   padding-top: env(safe-area-inset-top, 0px);
   background: color-mix(in srgb, var(--chassis) 82%, transparent);
   border-bottom: 1px solid var(--rule);
@@ -317,52 +324,163 @@ button.scene-line:active:not(:disabled) {
   }
 }
 
+/*
+ * The phone's spacing since 3 November 2026 (mobile/src/components/TopBar.js):
+ * 12px between things at every width, and a step above and below the row,
+ * which makes the bar about the phone's 54px now the pill has two lines.
+ *
+ * The row holds Save's 46px box, the tallest thing that comes and goes in
+ * it, inside its padding (54px is 46 and the two 4px steps, as every box
+ * here is measured padding and all), so the bar is one height whether or
+ * not there is something to save: Play does not move down under a thumb
+ * when Save appears. Every height is set here, outside the phone block, so
+ * making the bar narrower can never quietly make a target shorter.
+ */
 .topbar-row {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
-  min-height: 44px;
+  gap: var(--s-3);
+  min-height: 54px;
+  padding: var(--s-1) 0;
 }
 
-/* A button that has to keep reading as the label it was. Same reset as the
-   preset and the gear beside it — no chrome of its own, the bar's own colour,
-   and the 44px floor met by the row rather than by a box drawn around the
-   word, which at this size would be a badge in the middle of the bar. */
+/*
+ * THE PILL: the state in a word, the lamp, the unit, and the computer under
+ * them, as the phone draws it. The button is a transparent 44px target; the
+ * face inside it is what the eye sees, the phone's size, so it can be a pill
+ * without being a badge across the bar.
+ *
+ * It gives way after the version and before the edge of the bar: `min-width:
+ * 0` down the line, and the unit's name ends in an ellipsis rather than
+ * pushing the speaker and the gear off a narrow phone.
+ */
 button.topbar-unit {
-  flex: 0 0 auto;
-  font-size: var(--f-3);
-  padding: var(--s-1) var(--s-2);
-  margin-left: calc(var(--s-2) * -1);
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  /* Nothing while the version is there to take the slack; when it steps aside for Save, this keeps the pill and all after it at the right. */
+  margin-left: auto;
+  padding: 0;
   background: none;
-  border-color: transparent;
+  border: 0;
   border-radius: var(--r-2);
   color: inherit;
-  min-height: 44px;
 }
 
-button.topbar-unit:active:not(:disabled) {
-  background: var(--panel);
+/* The phone's pill: a 1px rule, round corners (the nearest of this app's three to the phone's 14px), the panel at 60%. The text on it reads at 4.5:1 or better in both themes. */
+.topbar-unit-face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Two lines tall whatever is said (13px and 11px at 1.3, its padding and its rule), so the bar is one height; a lone line (No computer) sits in the middle. */
+  justify-content: center;
+  min-height: calc(var(--f-3) * 1.3 + var(--f-1) * 1.3 + var(--s-1) * 2 + 2px);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--s-1) var(--s-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
 }
 
-/* "demo" in the mono face at 10px with no tracking read as "deno". The word
-   is a silkscreen label like the unit's name beside it: the display face,
-   tracked, in capitals. */
-.topbar-how {
-  flex: 0 0 auto;
-  font-family: var(--display);
+/*
+ * Whole beside the preset on a wide Edit, as the unit's name was before the
+ * pill: the preset name is the one that gives (it has its ellipsis). Above
+ * the phone width only: on a phone the preset is never in the row, and the
+ * narrow block caps the name for the one case it could be.
+ */
+@media (min-width: 621px) {
+  .topbar[data-preset='yes'] button.topbar-unit {
+    flex-shrink: 0;
+  }
+}
+
+@media (hover: hover) {
+  button.topbar-unit:hover .topbar-unit-face {
+    border-color: var(--silk-faint);
+  }
+}
+
+button.topbar-unit:active .topbar-unit-face {
+  background: var(--panel-hi);
+}
+
+.topbar-unit-line {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  max-width: 100%;
+}
+
+/*
+ * The state word and the unit in the mono face, bold, at 13px, in mixed
+ * case: "Live ● AM4", never "AXE-F…". The silkscreen capitals the unit wore
+ * spent a ten-character name before the bar ran out.
+ */
+.topbar-unit-state,
+.topbar-unit-name {
+  font-family: var(--mono);
+  font-size: var(--f-3);
   font-weight: 700;
-  font-size: var(--f-1);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* The word's colour is the phone's: Live green, No unit, Not answering and Disconnected red, Connecting and Demo amber, Looking and No computer grey. */
+.topbar-unit-state {
+  flex: 0 0 auto;
   color: var(--silk-dim);
 }
 
-.topbar-how[data-state='live'] {
+.topbar-unit-state[data-mark='ok'] {
   color: var(--ok);
 }
 
-.topbar-how[data-state='fault'] {
+.topbar-unit-state[data-mark='no'] {
   color: var(--fault);
+}
+
+.topbar-unit-state[data-mark='wait'] {
+  color: var(--signal);
+}
+
+.topbar-unit-state[data-mark='off'] {
+  color: var(--silk-dim);
+}
+
+.topbar-unit-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--silk);
+}
+
+/* The computer, on the line under: "on MacBook Pro", "on this computer", "simulated". */
+.topbar-unit-where {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--body);
+  font-size: var(--f-1);
+  /* The phone's regular weight, not the 500 every button's text takes. */
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--silk-dim);
+}
+
+/* What a screen reader hears when the pill changes: there for it, and nowhere on the screen. */
+.topbar-said {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* The preset takes the room that's going: it's the longest fact here and the
@@ -441,10 +559,6 @@ button.topbar-preset:active:not(:disabled) {
   transform: rotate(45deg) translate(-1px, -1px);
 }
 
-.topbar-gap {
-  flex: 1 1 auto;
-}
-
 /*
  * The way into every setting, and it was the smallest thing on the screen —
  * 31px wide on a phone, because it is one glyph and the padding was all it
@@ -481,12 +595,27 @@ button.topbar-preset:active:not(:disabled) {
   align-items: center;
 }
 
-/* The version: present, and never competing with the preset name for room. */
+/*
+ * The version, on the left, taking the slack, as on the phone: it is the one
+ * thing in the row that can give, and the first to. A basis of nothing, as
+ * the phone's `flex: 1` is, so it only ever has the room the rest leaves: on
+ * a 360-wide phone in the demo it is the version that is cut, never
+ * "Axe-Fx III". On a wide Edit the preset takes the slack instead and the
+ * version keeps its own width.
+ */
 .topbar-version {
-  flex: 0 0 auto;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--f-1);
   color: var(--silk-faint);
-  letter-spacing: 0;
+  letter-spacing: 1px;
+}
+
+.topbar[data-preset='yes'] .topbar-version {
+  flex: 0 0 auto;
 }
 
 /*
@@ -511,6 +640,17 @@ button.topbar-volume {
   justify-content: center;
   min-width: 44px;
   min-height: 44px;
+  /*
+   * 44px to a thumb, a 24px picture to the eye: the box reaches into the
+   * gaps either side, so the two pictures sit as close as the phone's.
+   *
+   * Beside the gear the two boxes overlap by 8px, and the gear, drawn later,
+   * takes that strip. The phone's do the same (hitSlop 10 on each across a
+   * 12px gap). Kept on purpose: two 44px boxes that meet put the pictures
+   * 8px further apart than the phone's, and that 8px is the unit's name's
+   * on a 390-wide phone.
+   */
+  margin: 0 -10px;
   padding: 0;
   background: none;
   border: none;
@@ -532,6 +672,7 @@ button.topbar-volume:active:not(:disabled) {
   color: var(--silk);
 }
 
+/* The phone's gear, the full ink and 22px, as the phone tints its own. */
 button.topbar-gear {
   flex: 0 0 auto;
   display: inline-flex;
@@ -539,12 +680,17 @@ button.topbar-gear {
   justify-content: center;
   min-width: 44px;
   min-height: 44px;
-  padding: var(--s-1);
+  margin: 0 -10px;
+  padding: 0;
   background: none;
   border-color: transparent;
-  color: var(--silk-dim);
-  font-size: var(--f-5);
+  color: var(--silk);
   line-height: 1;
+}
+
+button.topbar-gear svg {
+  width: 22px;
+  height: 22px;
 }
 
 button.topbar-gear.open {
@@ -1048,115 +1194,40 @@ input[type='text']:focus-visible {
    * the app is to someone already using it, a save cluster, a row for the theme
    * and the version, the unit and how it's reached, and then the unit again
    * with the preset. Two of those said the same thing twice and one was an
-   * advertisement. What's left is what changes.
+   * advertisement. What's left is what changes. (The bar's sides are the
+   * shell's 16px at every width now, so a phone needs no rule of its own for
+   * them: see .topbar.)
+   *
+   * The unit's name stays, whole where it fits.
+   *
+   * "Please show what device the unit is currently connected to in the top
+   * left. AM4, FM3, Axe-Fx." With two computers and two units on one account
+   * it is the one fact that says WHICH RIG this screen is driving, and a
+   * phone is exactly where you cannot see the unit to check. It is in the
+   * pill now, in mixed case: "AXE-FX III cuts off" was ten silkscreen
+   * capitals at 0.16em meeting a bar with 80px to spend.
+   *
+   * Capped only where the preset really is sharing the row, which is the case
+   * the cap was written for: a wide-enough window on which somebody has
+   * opened Edit, then narrowed it. A long name must not spend the eight
+   * characters the preset name is promised beside it. On Play, the only
+   * screen there is on a phone, nothing is in the row to defend.
    */
-  .topbar {
-    margin: 0 calc(var(--s-4) * -1);
-    padding-left: var(--s-4);
-    padding-right: var(--s-4);
-  }
-
-  .topbar-row {
-    gap: var(--s-1);
-  }
-
-  /*
-   * The connection word goes; the unit's name stays.
-   *
-   * Both used to go. The reasoning was room — the preset name is what the bar
-   * exists to show and it was being cut to "D…" — and the word "connected" is
-   * still the right thing to drop, because the chip on the right of this same
-   * bar says exactly that and the lamp says it again in colour.
-   *
-   * The unit's name is not a repeat of anything. "Please show what device the
-   * unit is currently connected to in the top left. AM4, FM3, Axe-Fx." With two
-   * Macs and two units on one account it is the one fact that says WHICH RIG
-   * this screen is driving, and a phone is exactly where you cannot see the
-   * unit to check.
-   *
-   * The room came from elsewhere in the end: the separate UNSAVED word is gone,
-   * and Save now appears only when there is something to save. `--f-2` and a
-   * cap keep a long one ("Axe-Fx III") from spending the preset's eight
-   * characters, which is the floor set just below.
-   */
-  .topbar[data-status='live'] .topbar-how,
-  .topbar[data-status='demo'] .topbar-how {
-    display: none;
-  }
-
-  /*
-   * Except UNLOCK. In the demo the word is not a repeat of anything: it is
-   * the way to buy, and on a phone is exactly where somebody needs to find
-   * it. "When someone's on the demo, it should always say unlock, and then
-   * the price at the top."
-   */
-  .topbar[data-status='demo'] .topbar-how.is-unlock {
-    display: inline;
-  }
-
-  /*
-   * And the room for it comes from NO PHONE, which in the demo says nothing
-   * worth its width: nothing here is connected to anything, by design. The
-   * phone's bar makes the same trade — in the demo its one word is UNLOCK,
-   * and it does not also say the state of a link. Without it the unit's name
-   * was the thing squeezed, down to a single letter.
-   */
-  .topbar[data-unlock='yes'] .phone-link {
-    display: none;
-  }
-
-  /*
-   * The name gets the room the bar is not using.
-   *
-   * "AXE-FX III cuts off. It looks like there's some room up there." Both
-   * halves right. It is ten characters and it was meeting a nine-character
-   * cap, and the room is real: the filler between the name and the version is
-   * 37px wide on that screen with 21 of them going spare.
-   *
-   * The cap was for the PRESET — a long name spending the eight characters
-   * the preset is guaranteed beside it. That is a real rule and it is kept
-   * below. What it was asking was the wrong question: it read the connection
-   * rather than the bar, so it went on defending room on every screen that
-   * does not carry a preset at all. Play is one, and on a phone Play is the
-   * only screen there is.
-   *
-   * Shrink rather than a fixed cap, so a long name on a narrow handset gives
-   * ground to the icons instead of pushing them off: full where it fits, an
-   * ellipsis where it does not, never over the edge.
-   *
-   * And the room the cap was not the whole of it. On a 360px Android — the
-   * commonest screen there is — the bar has exactly 80px to spend here and the
-   * name wanted 94. What came off is what came off the preset name the last
-   * time this bar ran out: the tracking, and one step of size onto `--f-1`,
-   * which is what the version and the chip beside it are already set in. Ten
-   * characters of a silkscreen face at 0.16em is nineteen pixels of air
-   * between letters; at 0.06em it is seven, and it still reads as the label it
-   * is. AXE-FX III then wants 76 of the 80, whole, with room to spare — and on
-   * a 320px handset, where nothing fits, even FM3 was being clipped.
-   */
-  button.topbar-unit {
-    font-size: var(--f-1);
-    letter-spacing: 0.06em;
-    padding: var(--s-1);
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /*
-   * And capped where the preset really is sharing the row, which is the case
-   * the cap was written for: a wide-enough window on which somebody has opened
-   * Edit, then narrowed it.
-   *
-   * Nine characters of a tracked, capitalised display face is about five
-   * letters, so this is also why the cap cannot be the everywhere rule — it
-   * cut NO UNIT to "NO UN…" and Looking… to "LOOKI…" when it was hung on the
-   * connection, and a half word says nothing at all.
-   */
-  .topbar[data-preset='yes'] .topbar-unit {
+  .topbar[data-preset='yes'] .topbar-unit-name {
     max-width: 9ch;
+  }
+
+  /*
+   * The computer's own window, narrowed (it goes down to 380px): its switch
+   * for phones is one more thing in the row than the phone's bar ever has.
+   * So a row that carries the switch keeps 8px between things instead of the
+   * phone's 12px, which keeps a long state whole ("Not answering ● Axe-Fx
+   * III") and leaves the version some room. While Save is up the switch
+   * steps aside instead (TopBar's showSwitch). Never a phone's bar, which
+   * has no switch in it.
+   */
+  .topbar-row:has(.phone-link) {
+    gap: var(--s-2);
   }
 
   button.save-options.compact {
@@ -8976,15 +9047,12 @@ button.sheet-close:active {
    * None of this is the button getting shorter. Every one of them stays a
    * 44px target: what comes off is horizontal padding and the tracking on a
    * word that does not need it, which is space nobody was aiming at.
+   *
+   * Not the gaps between things, since 3 November 2026: they are the phone's
+   * 12px at every width, and the version gives way first instead. Nor Save,
+   * which is the phone's small pill at every width now (`.topbar
+   * .save-cluster`, below), narrower than the box it used to be here.
    */
-  .topbar-row {
-    gap: var(--s-1);
-  }
-
-  .save-cluster button.save-now {
-    padding: var(--s-2) var(--s-2);
-  }
-
   button.phone-chip,
   button.phone-chip.compact {
     padding: var(--s-1) var(--s-1);
@@ -11979,47 +12047,11 @@ button.setup-back {
 }
 
 /*
- * The DEMO word when it is a way in, not just a label.
- *
- * It has to keep reading as the status word it has always been — same size,
- * same letter-spacing, same colour from data-state — while being obviously
- * pressable. So: no button chrome at all, an underline that says "this goes
- * somewhere", and the pointer. A chip or a box here would put a second
- * competing control next to the unit name in a bar that is mostly lamp.
- */
-.topbar-how.is-button {
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  cursor: pointer;
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-underline-offset: 3px;
-}
-
-/*
- * UNLOCK, as the phone draws it: the status word's own face, in amber, the
- * colour that says "this is the thing to do" everywhere else in the bar. No
- * underline — the price pill right beside it already says this goes
- * somewhere, and the phone's has none.
- */
-.topbar-how.is-unlock {
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: var(--f-1);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: var(--signal);
-}
-
-/*
- * The demo's pill: the price beside UNLOCK, or Exit demo for somebody who
- * has paid. Filled amber, as on the phone — it is the one thing in this bar
- * anybody is being asked to DO, and an outline would read as one more label.
+ * The demo's button, as the phone draws it: Unlock with the price under it
+ * for somebody who has not paid, Exit demo for somebody who has. Filled
+ * amber — in this bar it is the one thing anybody is being asked to DO, and
+ * an outline would read as one more label. Plain bold type at 11px with a
+ * little tracking, not the silkscreen capitals: the phone's face.
  */
 .topbar-pill {
   /* The button is the touch target and keeps the 44px floor on a phone; the
@@ -12028,26 +12060,129 @@ button.setup-back {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
+  min-height: 44px;
   padding: 0;
   border: 0;
   background: none;
   cursor: pointer;
 }
 .topbar-pill-face {
-  padding: var(--s-1) var(--s-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--s-1) var(--s-3);
   border-radius: var(--r-3);
   background: var(--signal);
   color: var(--on-signal);
-  font-family: var(--display);
+  font-family: var(--body);
   font-weight: 700;
   font-size: var(--f-1);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.6px;
+  line-height: 1.25;
   white-space: nowrap;
 }
-.topbar-pill:hover .topbar-pill-face,
+/* Two lines, so corners rather than a capsule, as the phone's are. */
+.topbar-pill.is-unlock .topbar-pill-face {
+  border-radius: var(--r-2);
+}
+/*
+ * A mouse over it rings it in amber and leaves its fill and ink alone. The
+ * wash and the amber word are the press: in the light theme they read at
+ * under 4.5:1, and held under a mouse they looked switched off. Brighter
+ * amber is no better there, with the near-white ink on it. The phone has no
+ * hover at all.
+ */
+@media (hover: hover) {
+  .topbar-pill:hover .topbar-pill-face {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 35%, transparent);
+  }
+}
 .topbar-pill:active .topbar-pill-face {
   background: var(--signal-wash);
   color: var(--signal);
+}
+
+/*
+ * SAVE, IN THE BAR, AS THE PHONE'S SMALL AMBER PILL.
+ *
+ * It was an amber block with square corners, 46px tall, in the display face
+ * at 13px: taller than the row, so the bar grew and Play moved down 2px
+ * whenever there was something to save. The 46px box stays, because these
+ * get pressed in a hurry; the amber is drawn inside it, the phone's pill,
+ * and the bar is tall enough now that the box no longer moves it.
+ *
+ * Scoped to the bar, so another save cluster keeps its own look. Saving…
+ * keeps the green word and the moving dot he asked for ("Saving with a
+ * visual indicator it's working"), with no pill behind it.
+ */
+.topbar .save-cluster button.save-now {
+  position: relative;
+  isolation: isolate;
+  padding: 0 var(--s-3);
+  background: none;
+  border-color: transparent;
+  border-radius: var(--r-3);
+  font-family: var(--body);
+  font-size: var(--f-1);
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--on-signal);
+}
+.topbar .save-cluster button.save-now::before {
+  content: '';
+  position: absolute;
+  inset: 12px 0;
+  z-index: -1;
+  border-radius: var(--r-3);
+  background: var(--signal);
+}
+/* Under a mouse, Unlock's ring (above), not the brighter amber Save takes elsewhere: the fill and the ink stay as they are. */
+@media (hover: hover) {
+  .topbar .save-cluster button.save-now:hover:not(:disabled) {
+    filter: none;
+  }
+  .topbar .save-cluster button.save-now:hover:not(:disabled)::before {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 35%, transparent);
+  }
+}
+/* The keyboard's ring on the amber pill, not round the 46px box it is drawn in, which put an oval well clear of it. */
+.topbar .save-cluster button.save-now:focus-visible {
+  outline: none;
+}
+.topbar .save-cluster button.save-now:focus-visible::before {
+  outline: 2px solid var(--live);
+  outline-offset: 2px;
+}
+.topbar .save-cluster button.save-now:active:not(:disabled) {
+  filter: none;
+  color: var(--signal);
+}
+.topbar .save-cluster button.save-now:active:not(:disabled)::before {
+  background: var(--signal-wash);
+}
+/* Waiting for the app to finish something else: the same pill, greyed, as the cluster's own disabled look. */
+.topbar .save-cluster button.save-now:disabled {
+  color: var(--silk-faint);
+}
+.topbar .save-cluster button.save-now:disabled::before {
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+.topbar .save-cluster[data-working='yes'] button.save-now,
+.topbar .save-cluster[data-working='yes'] button.save-now:disabled {
+  padding: 0 var(--s-1);
+  color: var(--ok);
+}
+.topbar .save-cluster[data-working='yes'] button.save-now::before {
+  background: none;
+  box-shadow: none;
+}
+/* ✓ Saved, where Save was, in the same face, so the bar reads one way. */
+.topbar .save-done {
+  padding: 0 var(--s-1);
+  font-family: var(--body);
+  font-size: var(--f-1);
+  letter-spacing: 0.6px;
 }
 
 /* Where the two store squares sit. Side by side with room, stacking on a
