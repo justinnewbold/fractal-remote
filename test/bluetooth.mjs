@@ -6940,7 +6940,7 @@ export function run(test) {
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
     const two = gear.WALKTHROUGH_TWO_WAYS
-    assert.deepEqual(Object.keys(two).sort(), ['demoSub', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
+    assert.deepEqual(Object.keys(two).sort(), ['agree', 'demoSub', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
     /* Any way of saying the app needs a computer, which is the claim these lines exist to take back. */
     const NEEDS = /(?:needs?|requires?|works? with|only (?:with|through)) a computer|computer is (?:required|needed)/i
     for (const [key, words] of Object.entries(two)) {
@@ -6961,6 +6961,8 @@ export function run(test) {
     }
     assert.match(two.demoSub, /^This app connects to your Fractal guitar processor one of two ways: through a computer connected to it by USB, or with no computer, through a Bluetooth MIDI adapter sold separately\./)
     assert.match(two.setup, /^No computer\? Sign in here, and the app can connect by Bluetooth instead/)
+    /* The box before Unlock: the sentence put to him on 3 November 2026, word for word, and said yes to. */
+    assert.equal(two.agree, 'I understand this app connects to my Fractal unit one of two ways: through a computer running the desktop app, connected by USB cable, or with no computer, through a Bluetooth MIDI adapter sold separately. The computer is the best way: Bluetooth has more lag and fewer features.')
 
     /*
      * EVERY LINE THE PHONE'S WALKTHROUGH SHOWS THAT SPEAKS OF HAVING A
@@ -6972,13 +6974,13 @@ export function run(test) {
       /* Mine ("These two lines are mine"): WALKTHROUGH_TWO_WAYS.demoSub in its place where Bluetooth is open. */
       'P9.demo.sub': 'demoSub',
       /*
-       * HELD. His own sentence, dictated word for word, in a file that says
-       * "Do not change any wording without asking me first." It stays on
-       * every copy until he answers; the sentence put to him is in the
-       * comment over WALKTHROUGH_TWO_WAYS. When he says yes, it becomes a
-       * two-ways line like the one above, and this entry names its key.
+       * His own sentence, dictated word for word, in a file that says "Do
+       * not change any wording without asking me first": held until he
+       * answered, and on 3 November 2026 he said to update the walkthrough's
+       * pages with the Bluetooth information. WALKTHROUGH_TWO_WAYS.agree in
+       * its place where Bluetooth is open; his sentence everywhere else.
        */
-      'P3.real.agree': 'held',
+      'P3.real.agree': 'agree',
       /*
        * HOW IT WORKS, BOTH WAYS (3 November 2026, "Needs to say computer or
        * Bluetooth"): P2.foot stays under his three boxes, the Computer way,
@@ -7027,8 +7029,9 @@ export function run(test) {
         assert.equal(swapped, 0, `the walkthrough puts something else in place of ${path}, which this check says is ${decision}`)
       }
     }
-    /* The held box is drawn as his sentence, on every copy, and Unlock still waits for it. */
-    assert.match(flatScreen, /<Agree on=\{agreed\} label=\{P3\.real\.agree\}/, 'the box before Unlock says something other than his sentence, which waits for his answer')
+    /* The box before Unlock says both ways where Bluetooth is open, his sentence anywhere else, and Unlock still waits for it. */
+    assert.match(flatScreen, /<Agree on=\{agreed\} label=\{twoWays \? WALKTHROUGH_TWO_WAYS\.agree : P3\.real\.agree\} onPress=/, 'the box before Unlock does not say both ways on a copy that opens Bluetooth')
+    assert.match(flatScreen, /disabled=\{!agreed\} onPress=\{\(\) => agreed && onUnlock\?\.\(\)\}/, 'Unlock no longer waits for the box')
 
     /* The sign-in screen: the computer's three steps, then the other way, inside the card. */
     const signIn = code('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')

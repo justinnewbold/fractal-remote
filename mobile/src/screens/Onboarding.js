@@ -445,7 +445,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
                 one glyph is the wrong trade — the card's own lock, above
                 right, already says it.
             */}
-            <Agree on={agreed} label={P3.real.agree} onPress={() => setAgreed((v) => !v)} />
+            <Agree on={agreed} label={twoWays ? WALKTHROUGH_TWO_WAYS.agree : P3.real.agree} onPress={() => setAgreed((v) => !v)} />
             <Press label={P3.real.go} height={TAP} disabled={!agreed} onPress={() => agreed && onUnlock?.()} />
           </Choice>
 

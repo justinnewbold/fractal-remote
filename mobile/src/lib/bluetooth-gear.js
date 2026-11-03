@@ -254,16 +254,15 @@ export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM
  * in the browser, which has no Bluetooth to offer and does need the
  * computer, the words in shared/onboarding.mjs are what is shown.
  *
- * NOT THE BOX TICKED BEFORE UNLOCK, YET. "I understand this app requires a
+ * AND THE BOX TICKED BEFORE UNLOCK. "I understand this app requires a
  * computer connected to my Fractal unit via USB cable for the Fractal Remote
- * app to work" is his own sentence, dictated word for word, and the file it
- * lives in says "Do not change any wording without asking me first." So it
- * stays his on every copy until he answers. The sentence put to him for a
- * copy that opens Bluetooth: "I understand this app connects to my Fractal
- * unit one of two ways: through a computer running the desktop app,
- * connected by USB cable, or with no computer, through a Bluetooth MIDI
- * adapter sold separately. The computer is the best way: Bluetooth has more
- * lag and fewer features." (test/bluetooth.mjs holds the box as held.)
+ * app to work" is his own sentence, dictated word for word, in a file that
+ * says "Do not change any wording without asking me first." So it was held
+ * until he answered. Put to him on 3 November 2026 with the sentence below,
+ * he said "I'll need you to make sure these are updated with the Bluetooth
+ * information correctly" of the walkthrough's pages, the box among them. So
+ * a copy that opens Bluetooth shows `agree`, and the browser, which does
+ * need the computer, keeps his sentence (shared/onboarding.mjs P3.real).
  *
  * HERE AND NOT IN shared/onboarding.mjs, because the browser draws that file:
  * a line it carries and never shows would still make a new computer app
@@ -288,7 +287,9 @@ export const WALKTHROUGH_TWO_WAYS = {
   /* In place of P9.demo.sub, under Here’s the app at the end of the demo's walkthrough. */
   demoSub: `This app connects to your Fractal guitar processor one of two ways: through a computer connected to it by USB, or with no computer, through a Bluetooth MIDI adapter sold separately. ${BEST_WAY}`,
   /* Under SETUP.steps, the computer's three, on the sign-in screen. */
-  setup: `No computer? Sign in here, and the app can connect by Bluetooth instead, through an adapter sold separately. ${BEST_WAY}`
+  setup: `No computer? Sign in here, and the app can connect by Bluetooth instead, through an adapter sold separately. ${BEST_WAY}`,
+  /* In place of P3.real.agree, the box ticked before Unlock: the sentence put to him, word for word. */
+  agree: `I understand this app connects to my Fractal unit one of two ways: through a computer running the desktop app, connected by USB cable, or with no computer, through a Bluetooth MIDI adapter sold separately. ${BEST_WAY}`
 }
 
 /*

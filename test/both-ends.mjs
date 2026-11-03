@@ -2266,11 +2266,13 @@ export function run(test) {
      * (WALKTHROUGH_TWO_WAYS, held in test/bluetooth.mjs). So the phone draws
      * that line only where Bluetooth is not open, and the browser draws it
      * always, with no Bluetooth words to draw instead. The box before Unlock
-     * is his sentence at both ends until he answers.
+     * is the same: both ways on such a phone (he said yes, 3 November 2026),
+     * his sentence in the browser.
      */
     assert.ok(web.includes('{P9.demo.sub}'), 'the browser’s phone walkthrough no longer says P9.demo.sub, which it needs: the browser has no Bluetooth')
     assert.ok(phone.replace(/\s+/g, ' ').includes('{twoWays ? WALKTHROUGH_TWO_WAYS.demoSub : P9.demo.sub}'), 'the phone’s walkthrough says P9.demo.sub on a copy that opens Bluetooth, or no longer says it at all')
-    assert.ok(web.includes('{P3.real.agree}') && phone.includes('label={P3.real.agree}'), 'the box before Unlock says something other than his sentence at one end')
+    assert.ok(web.includes('{P3.real.agree}'), 'the browser’s box before Unlock says something other than his sentence, and the browser does need the computer')
+    assert.ok(phone.includes('label={twoWays ? WALKTHROUGH_TWO_WAYS.agree : P3.real.agree}'), 'the phone’s box before Unlock does not say both ways where Bluetooth is open, or his sentence everywhere else')
     assert.ok(!/bluetooth-gear|WALKTHROUGH_TWO_WAYS|twoWays|Bluetooth/.test(web), 'the browser’s phone walkthrough offers Bluetooth, which a browser does not have')
     /*
      * And the browser's sign-in screen: Get connected is the computer's three
