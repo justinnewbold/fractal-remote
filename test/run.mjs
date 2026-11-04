@@ -6755,13 +6755,14 @@ const { run: gearShare } = await import('./gear-share.mjs')
 gearShare(test)
 
 /*
- * The frosted glass on the phone, in parts: the foundation (glass.mjs), and
- * one file for each group of screens that wears it. Every part is imported
+ * The frosted glass on the phone, in parts: the foundation (glass.mjs), one
+ * file for each group of screens that wears it, and Classic (glass-classic.mjs),
+ * the look without it, held to main as it was. Every part is imported
  * outright, so a file renamed, deleted or left out of a commit fails the run
  * instead of taking its checks away without a word.
  */
 console.log('\nthe frosted glass')
-for (const part of ['glass', 'glass-play', 'glass-popups', 'glass-settings', 'glass-screens']) {
+for (const part of ['glass', 'glass-play', 'glass-popups', 'glass-settings', 'glass-screens', 'glass-classic']) {
   ;(await import(new URL('./' + part + '.mjs', import.meta.url))).run(test)
 }
 

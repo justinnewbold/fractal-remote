@@ -158,11 +158,7 @@ export default function Colours() {
       </View>
 
       {/* ------------------------------------------------------------ style */}
-      <View style={{ gap: space.md }}>
-        <Heading>Style</Heading>
-        <Note>{STYLE_NOTE}</Note>
-        <StyleChoice />
-      </View>
+      <StyleSection />
 
       {/* ---------------------------------------------------------- effects */}
       <View style={{ gap: space.md }}>
@@ -405,6 +401,17 @@ const STYLE_CHOICES = [
   { id: 'classic', label: 'Classic' }
 ]
 const STYLE_NOTE = 'Frosted glass: see-through bars and rounded buttons. Classic: the look the app had before.'
+
+/** Its own heading and line, under the looks. */
+function StyleSection() {
+  return (
+    <View style={{ gap: space.md }}>
+      <Heading>Style</Heading>
+      <Note>{STYLE_NOTE}</Note>
+      <StyleChoice />
+    </View>
+  )
+}
 
 /** The two, side by side like Light and Dark, the chosen one lit. */
 function StyleChoice() {
