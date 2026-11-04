@@ -38,7 +38,34 @@ const DARK = {
   signalWash: 'rgba(240, 167, 60, 0.12)',
   liveHalo: 'rgba(95, 191, 209, 0.2)',
   faultHalo: 'rgba(224, 104, 79, 0.2)',
-  okHalo: 'rgba(99, 198, 140, 0.2)'
+  okHalo: 'rgba(99, 198, 140, 0.2)',
+
+  /* FROSTED GLASS, for the chrome only: buttons, bars, sheets, panes and
+     list groups. The content (tiles, pedals, swatches) keeps its colours.
+     Each fill is chosen to read at 4.5:1 or better with NO credit for
+     blur, because Android draws none (lib/glass says which piece wears
+     which). The shadows are strings React Native reads as box-shadow. */
+  glassFill: 'rgba(21, 24, 29, 0.78)', // over the chassis it draws #13161b
+  glassFillHi: 'rgba(28, 32, 39, 0.5)', // pressed; over the chassis #15181d
+  glassBar: 'rgba(21, 24, 29, 0.55)', // the top bar, as it was
+  glassRim: 'rgba(255, 255, 255, 0.12)',
+  /* For a piece with a 1px border of its own: the light along the top and a soft drop. */
+  glassLift: 'inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 3px 10px rgba(0, 0, 0, 0.45)',
+  /* For a piece with no border: the rim is drawn as a ring inside it, so nothing moves by a point. */
+  glassLiftRing: 'inset 0 0 0 1px rgba(255, 255, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 3px 10px rgba(0, 0, 0, 0.45)',
+  /* Ring and top light with no drop: rows, notes, cards inside a sheet. */
+  glassFlat: 'inset 0 0 0 1px rgba(255, 255, 255, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.16)',
+  glassTop: 'inset 0 1px 0 rgba(255, 255, 255, 0.18)',
+  /* A lit amber, cyan or silk control, and one that already glows. */
+  glassLit: 'inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 3px 10px rgba(0, 0, 0, 0.35)',
+  glassLitTop: 'inset 0 1px 0 rgba(255, 255, 255, 0.45)',
+  /* Only ever over a lit control, whose ink is dark here, so the light half never costs it contrast. */
+  glassSheen: 'linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 45%, rgba(0, 0, 0, 0.1) 100%)',
+  sheetFill: 'rgba(13, 15, 18, 0.93)',
+  sheetLift: 'inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 -6px 24px rgba(0, 0, 0, 0.35)',
+  scrim: 'rgba(13, 15, 18, 0.45)',
+  grabber: 'rgba(255, 255, 255, 0.28)',
+  glassWell: 'rgba(0, 0, 0, 0.35)'
 }
 
 /**
@@ -63,7 +90,10 @@ const LIGHT = {
   rule: '#d5d1c9',
   silk: '#1b1e23',
   silkDim: '#5b626c',
-  silkFaint: '#767d87',
+  /* Darker than it was (3.72:1 on the chassis), for 4.5:1 on light glass
+     and under the edge of a light shadow. The phone's only: the browser's
+     Light faint is darker still. */
+  silkFaint: '#636a74',
 
   signal: '#a8650a',
   live: '#1d6b7a',
@@ -71,13 +101,93 @@ const LIGHT = {
   ok: '#2c7a4b',
   ble: '#1f5fc4',
 
-  onSignal: '#fffaf2',
+  /* Plain white, for 4.5:1 on the amber (the warm white was 4.46). */
+  onSignal: '#ffffff',
   onFault: '#fff6f3',
   signalWash: 'rgba(168, 101, 10, 0.12)',
   liveHalo: 'rgba(29, 107, 122, 0.18)',
   faultHalo: 'rgba(178, 60, 38, 0.18)',
-  okHalo: 'rgba(44, 122, 75, 0.18)'
+  okHalo: 'rgba(44, 122, 75, 0.18)',
+
+  /* The same glass in daylight: white frost, a grey rim, a lighter drop.
+     The rim at 0.22, not lighter: it is the only edge on a text field and an
+     unticked box, and it must not read fainter than the old rule did
+     (#d5d1c9, 1.36:1 on the chassis); the ring is the same rim, inside. */
+  glassFill: 'rgba(255, 255, 255, 0.8)',
+  glassFillHi: 'rgba(233, 230, 224, 0.6)',
+  glassBar: 'rgba(255, 255, 255, 0.55)',
+  glassRim: 'rgba(27, 30, 35, 0.22)',
+  glassLift: 'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 2px 6px rgba(27, 30, 35, 0.1)',
+  glassLiftRing: 'inset 0 0 0 1px rgba(27, 30, 35, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 2px 6px rgba(27, 30, 35, 0.1)',
+  glassFlat: 'inset 0 0 0 1px rgba(27, 30, 35, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
+  glassTop: 'inset 0 1px 0 rgba(255, 255, 255, 0.95)',
+  glassLit: 'inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 6px rgba(27, 30, 35, 0.16)',
+  glassLitTop: 'inset 0 1px 0 rgba(255, 255, 255, 0.35)',
+  /* A shade only, never a light: the ink on the amber is white here, and lightening under it would cost it. */
+  glassSheen: 'linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.1) 100%)',
+  sheetFill: '#ffffff',
+  sheetLift: 'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 -6px 24px rgba(27, 30, 35, 0.14)',
+  scrim: 'rgba(13, 15, 18, 0.45)',
+  grabber: 'rgba(27, 30, 35, 0.22)',
+  glassWell: '#f4f2ee'
 }
+
+/**
+ * The glass made solid: Sunlight, the look for reading in bright light, and
+ * an iPhone set to Reduce Transparency (lib/glass chromeSolid says when).
+ *
+ * Only the five fills change, each to the exact colour it draws on the plain
+ * ground, so on the chassis nothing looks different and nowhere does anything
+ * show through. The shapes, the rims, the top light, the sheen and the
+ * shadows all stay: "keeps the new shapes and light edge but is OPAQUE". The
+ * scrim stays too, because it is a dim behind a sheet, not chrome.
+ */
+const SOLID_DARK = {
+  glassFill: '#13161b',
+  glassFillHi: '#15181d',
+  glassBar: '#111418',
+  sheetFill: '#0d0f12',
+  glassWell: '#080a0c'
+}
+
+const SOLID_LIGHT = {
+  glassFill: '#fdfcfc',
+  glassFillHi: '#edebe6',
+  glassBar: '#faf9f7',
+  sheetFill: '#ffffff',
+  glassWell: '#f4f2ee'
+}
+
+/*
+ * CLASSIC: the phone as it was drawn before the glass, chosen in Settings →
+ * Colors. "In addition to the frosted glass look have an option in settings
+ * where they can change to the classic look" (4 November 2026).
+ *
+ * Laid over the glass's sixteen keys, in place, like a theme, so every piece
+ * that reads them draws what it drew before: the panel and the pressed panel
+ * for the frost, the page's rule for the rim and the grabber, the chassis for
+ * a sheet and a well, and NO shadow, sheen, dim or bar fill at all. Those are
+ * undefined, which React Native draws as nothing, the same as a style that
+ * never had the key. The glass card's corner goes back with them (radius.card
+ * in paint). The few pieces whose shape changed with the glass, or whose old
+ * colour was none of these, ask lib/glass `classic()` themselves.
+ *
+ * Over the Sunlight look and Reduce Transparency too: Classic was opaque.
+ *
+ * The two ink fixes in LIGHT (silkFaint, onSignal) stay in Classic. They are
+ * contrast fixes, not glass: the old faint grey read 3.72:1 on the plain
+ * page and the old ink 4.46:1 on the amber.
+ */
+const CLASSIC_NONE = ['glassBar', 'glassLift', 'glassLiftRing', 'glassFlat', 'glassTop', 'glassLit', 'glassLitTop', 'glassSheen', 'sheetLift', 'scrim']
+const classicOver = (base) => ({
+  ...Object.fromEntries(CLASSIC_NONE.map((key) => [key, undefined])),
+  glassFill: base.panel,
+  glassFillHi: base.panelHi,
+  glassRim: base.rule,
+  sheetFill: base.chassis,
+  grabber: base.rule,
+  glassWell: base.chassis
+})
 
 /**
  * The palette every screen reads, MUTATED IN PLACE when the mode changes.
@@ -98,7 +208,10 @@ export const color = { ...DARK }
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 }
 
-export const radius = { sm: 6, md: 10, lg: 14, pill: 999 }
+/* `card` is the glass's: cards, list groups, text fields and the two-line buttons, whose line under reaches 4pt from the edge (a capsule would cut it). The four before it stay as they were, because the tiles read them. */
+export const radius = { sm: 6, md: 10, lg: 14, pill: 999, card: 18 }
+/* The glass's card corner. In Classic `card` is md, the corner most of the pieces that wear it had before the glass, laid in place by paint like a colour; lib/glass cardCorner gives the others theirs. */
+const GLASS_CARD = radius.card
 
 export const font = {
   micro: 11,
@@ -143,6 +256,10 @@ const DEFAULT = 'dark'
 
 let mode = DEFAULT
 let systemDark = true
+/* Whether the glass is drawn solid (setSolidChrome). */
+let solid = false
+/* Frosted glass or Classic (setGlassStyle). */
+let glassStyle = 'glass'
 const watchers = new Set()
 
 /** Which of the three is chosen. Not which one is being shown — see `isDark`. */
@@ -160,10 +277,79 @@ export const isDark = () => (mode === 'auto' ? systemDark : mode === 'dark')
  * wrong-coloured thing on one screen in one mode.
  */
 function paint() {
-  const next = isDark() ? DARK : LIGHT
+  const dark = isDark()
+  const base = dark ? DARK : LIGHT
+  const classic = glassStyle === 'classic'
+  const next = { ...base, ...(classic ? classicOver(base) : solid ? (dark ? SOLID_DARK : SOLID_LIGHT) : null) }
   for (const key of Object.keys(next)) color[key] = next[key]
+  radius.card = classic ? radius.md : GLASS_CARD
   for (const tell of watchers) tell()
 }
+
+/* ------------------------------------------------------------------ */
+/* Frosted glass, or the classic look                                  */
+/* ------------------------------------------------------------------ */
+
+/** The two ways the buttons, bars and pop-ups are drawn, in the order the buttons show them. Frosted glass first, and the default. */
+export const GLASS_STYLES = ['glass', 'classic']
+
+const STYLE_KEY = 'fractal.glass'
+
+/** Which of the two is chosen. */
+export const getGlassStyle = () => glassStyle
+
+/** Whether the classic look is on: no glass anywhere, every piece as it was drawn before it. */
+export const isClassic = () => glassStyle === 'classic'
+
+/**
+ * Choose one, remembered on this device. It is the material and the shapes
+ * only, so it goes with every look and both modes, and repaints in place
+ * like them: the root redraws, nothing restarts. Choosing what is already
+ * chosen paints nothing and tells nobody.
+ */
+export function setGlassStyle(next, storage) {
+  const was = glassStyle
+  glassStyle = GLASS_STYLES.includes(next) ? next : 'glass'
+  try {
+    storage?.setItem(STYLE_KEY, glassStyle)
+  } catch {
+    /* Costs the next launch, not this press. */
+  }
+  if (glassStyle !== was) paint()
+}
+
+/** What was chosen last time. Nothing chosen, or anything unreadable, is the frosted glass. */
+export function loadGlassStyle(storage) {
+  let saved = null
+  try {
+    saved = storage?.getItem(STYLE_KEY)
+  } catch {
+    saved = null
+  }
+  const next = GLASS_STYLES.includes(saved) ? saved : 'glass'
+  if (next !== glassStyle) {
+    glassStyle = next
+    paint()
+  }
+  return glassStyle
+}
+
+/**
+ * The glass drawn solid, or see-through again: the Sunlight look, or an
+ * iPhone set to Reduce Transparency (lib/glass chromeSolid, asked by
+ * lib/useSolidChrome at the root). Only the five fills change, and in place,
+ * like a theme, so the next render repaints everything. Asking for what is
+ * already so paints nothing and tells nobody.
+ */
+export function setSolidChrome(on) {
+  const next = on === true
+  if (next === solid) return
+  solid = next
+  paint()
+}
+
+/** Whether the glass is drawn solid right now. */
+export const isSolidChrome = () => solid
 
 /** Choose one. Remembered on this phone. */
 export function setMode(next, storage) {

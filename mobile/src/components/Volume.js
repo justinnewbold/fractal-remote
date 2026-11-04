@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { paneRim } from '../lib/glass'
 import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import Note from './Note'
 import { blockParams, idOf, setParam, setParamConfirmed } from '../lib/device'
@@ -339,8 +340,11 @@ export default function Volume({ blocks, open, onClose, onError }) {
               paddingVertical: space.xl,
               paddingHorizontal: space.lg,
               borderRadius: radius.lg * 2,
+              /* A pane of glass (lib/glass): the rim, the light along its top
+                 and a soft shadow, on its own opaque panel. */
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.14)',
+              borderColor: paneRim(),
+              boxShadow: color.glassLift,
               backgroundColor: color.panel
             }}
           >

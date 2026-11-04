@@ -3,6 +3,7 @@ import { FlatList, Modal, Pressable, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
+import { glassField } from '../lib/glass'
 import { ANY_WAY_UP, SAFE_EDGES } from '../lib/screenShape'
 import { slotCount, slotLabel, vp4Here } from '../lib/device'
 import { VP4_NO_NAMES, VP4_UPDATE_COMPUTER, vp4ComputerCan } from '../lib/vp4-safety'
@@ -110,13 +111,12 @@ export default function SongPicker({ open, listName, already = [], onAdd, onClos
             placeholderTextColor={color.silkFaint}
             autoCorrect={false}
             autoCapitalize="none"
+            /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
             style={{
               minHeight: TAP,
               paddingHorizontal: space.md,
-              borderRadius: radius.md,
               borderWidth: 1,
-              borderColor: color.rule,
-              backgroundColor: color.panel,
+              ...glassField(),
               color: color.silk,
               fontSize: font.body
             }}
@@ -177,7 +177,7 @@ export default function SongPicker({ open, listName, already = [], onAdd, onClos
           }
         />
 
-        <View style={{ padding: space.lg, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: color.rule }}>
+        <View style={{ padding: space.lg, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: color.glassRim }}>
           <Press
             label={count ? `Add ${count} song${count === 1 ? '' : 's'}` : 'Tap presets to pick them'}
             tone="signal"
@@ -212,10 +212,12 @@ function Row({ name, slot, inList, order, onPress }) {
         height: ROW,
         marginBottom: GAP,
         paddingHorizontal: space.md,
-        borderRadius: radius.md,
+        /* Flat frosted glass (lib/glass): rounded like a card, the light along its top, no drop in a long list. */
+        borderRadius: radius.card,
         borderWidth: 1,
-        borderColor: on ? color.signal : color.rule,
-        backgroundColor: color.panel,
+        borderColor: on ? color.signal : color.glassRim,
+        backgroundColor: color.glassFill,
+        boxShadow: color.glassTop,
         opacity: inList ? 0.5 : pressed ? 0.7 : 1
       })}
     >

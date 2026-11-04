@@ -5,9 +5,10 @@ import { ActivityIndicator, Alert, AppState, Appearance, BackHandler, Linking, S
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 
-import { color, font, space, isDark, loadMode, setSystemDark, themeVersion, watchTheme } from './src/lib/theme'
+import { color, font, space, isDark, loadGlassStyle, loadMode, setSystemDark, themeVersion, watchTheme } from './src/lib/theme'
 import { SAFE_EDGES } from './src/lib/screenShape'
 import { loadLooks, looksVersion, watchLooks } from './src/lib/looks'
+import { useSolidChrome } from './src/lib/useSolidChrome'
 import { haveSession, linkState, probeNow, startLink, stopLink, subscribeLink } from './src/lib/link'
 import { currentAccount, signOut } from './src/lib/relay'
 import { useComputerElsewhere } from './src/lib/useComputerElsewhere'
@@ -116,6 +117,7 @@ export default function App() {
    * while it renders, so one re-render here repaints them all. See lib/looks.
    */
   useSyncExternalStore(watchLooks, looksVersion, looksVersion)
+  useSolidChrome()
   useEffect(() => {
     setSystemDark(Appearance.getColorScheme() !== 'light')
     const off = Appearance.addChangeListener(({ colorScheme }) => {
@@ -729,6 +731,9 @@ export default function App() {
        that it is Auto, which follows the handset — the right answer to show
        somebody on their first launch anyway. */
     hydrate().then(() => loadMode(sync))
+    /* Frosted glass or the classic look (Settings → Colors → Style), from the
+       same store. Until it lands it is the glass, the default. */
+    hydrate().then(() => loadGlassStyle(sync))
     /* The colours too, from the same store. Until they land, the look and the
        last unit's palette are not known yet, and the default look, Fractal
        Remote, is what is drawn — for a moment, as the theme is Auto. */

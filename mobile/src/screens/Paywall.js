@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Alert, ScrollView, Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
+import { glassCard } from '../lib/glass'
 import Note from '../components/Note'
 import Press from '../components/Press'
 import RestoreAsk from '../components/RestoreAsk'
@@ -165,10 +166,14 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
         </Text>
       </View>
 
+      {/*
+        A card of frosted glass (lib/glass), its rim drawn inside it. Asked
+        for, the page is a sheet, and a card in a sheet is flat: the light
+        and the rim, no drop.
+      */}
       <View
         style={{
-          backgroundColor: color.panel,
-          borderRadius: radius.lg,
+          ...glassCard({ flat: asked, classicCorner: radius.lg }),
           padding: space.lg,
           gap: space.md
         }}

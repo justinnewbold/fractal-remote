@@ -52,8 +52,10 @@ export function TagRow({ words, fill, onPress }) {
         paddingHorizontal: space.md,
         borderRadius: radius.md,
         borderWidth: 1,
-        borderColor: color.rule,
-        backgroundColor: pressed ? color.panelHi : color.panel,
+        /* A button of frosted glass on the page, at the corner a colour bar keeps straight (lib/glass): Press's `bar`. */
+        borderColor: color.glassRim,
+        backgroundColor: pressed ? color.glassFillHi : color.glassFill,
+        boxShadow: color.glassLift,
         ...tagEdge(fill)
       })}
     >
@@ -81,8 +83,10 @@ export function TagPreview({ words, fill }) {
         paddingHorizontal: space.md,
         borderRadius: radius.md,
         borderWidth: 1,
-        borderColor: color.rule,
-        backgroundColor: color.panel,
+        /* Its row in the preset list as that row is drawn: flat glass, the light along its top and no drop, in a sheet (lib/glass). */
+        borderColor: color.glassRim,
+        backgroundColor: color.glassFill,
+        boxShadow: color.glassTop,
         ...tagEdge(fill)
       }}
     >
