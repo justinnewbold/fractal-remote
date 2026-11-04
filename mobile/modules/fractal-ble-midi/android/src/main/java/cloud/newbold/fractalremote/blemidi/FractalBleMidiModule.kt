@@ -13,6 +13,7 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
+import android.hardware.usb.UsbDevice
 import android.media.midi.MidiDevice
 import android.media.midi.MidiDeviceInfo
 import android.media.midi.MidiInputPort
@@ -32,10 +33,11 @@ import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.Closeable
+import java.util.Locale
 import java.util.UUID
 
 /*
- * THE PHONE'S END OF A BLUETOOTH MIDI ADAPTER, ON ANDROID.
+ * THE PHONE'S END OF A BLUETOOTH MIDI ADAPTER, OR OF A USB CABLE, ON ANDROID.
  *
  * The same calls and events as the iPhone's (ios/FractalBleMidiModule.swift),
  * so the JavaScript does not care which phone it is on. Only the finding
@@ -46,21 +48,40 @@ import java.util.UUID
  *   requestPermissions() — Android 12 and newer: "Nearby devices" (scan and
  *                          connect). Older: location, which Android then
  *                          required for any Bluetooth scan. True if granted.
+ *                          Never needed for a USB device.
  *   pair()               — refused (E_UNSUPPORTED): there is no pairing step.
  *   scan(seconds)        — looks for adapters for that long, then stops by
  *                          itself; what it finds goes out through onDevices.
  *                          False when Bluetooth is off, so the page can say so.
- *   devices()            — what the last scan found: id is the adapter's
- *                          Bluetooth address, with its name and signal (rssi).
+ *   devices()            — every unit, or USB MIDI cable, plugged into the
+ *                          phone's USB port now: transport 'usb', and an id
+ *                          that starts "usb:" (usbList), which no Bluetooth
+ *                          address can. Then what the last scan found: id is
+ *                          the adapter's Bluetooth address, with its name,
+ *                          signal (rssi) and transport 'bluetooth'.
  *   connect(id), disconnect()
  *   send(bytes)          — straight to the adapter, which passes them on to
- *                          the unit's MIDI In.
+ *                          the unit's MIDI In; or down the cable.
  *   onBytes { bytes }    — each piece that comes in, exactly as it came.
+ *   onDevices { devices }— the list again: a scan finding something new, or
+ *                          a USB device plugged in or pulled out.
  *   onState { state, id, name, reason? }
  *                        — 'connected' once the phone really has a Bluetooth
  *                          link to the adapter (not merely when Android hands
- *                          the device over: see connect); 'disconnected' when
- *                          Android says our adapter has gone.
+ *                          the device over: see connect), or the USB device's
+ *                          ports are open; 'disconnected' when Android says
+ *                          our adapter or USB device has gone.
+ *
+ * A UNIT ON A USB CABLE IS THE SAME WIRE. Android's own MIDI service holds
+ * anything class-compliant plugged into the phone's USB port (an AM4, FM9,
+ * Axe-Fx III or VP4 on a cable, or a USB MIDI cable on a unit's MIDI jacks)
+ * and hands it to any app that asks: no permission, no Bluetooth, no scan.
+ * It is opened, read and written exactly as an adapter is (adopt, send, the
+ * same listener), so the JavaScript's rules hold over it byte for byte. Only
+ * the finding and the waiting differ: a USB device is listed straight from
+ * Android's MIDI service, and is up the moment its ports open, with no
+ * Bluetooth link to wait for. An FM3 never lists: its USB port is not a MIDI
+ * device.
  *
  * NOTHING HAPPENS UNTIL IT IS ASKED FOR. No scan, no permission prompt and
  * no Bluetooth or MIDI service is touched until the JavaScript calls one of
@@ -78,9 +99,10 @@ import java.util.UUID
  */
 @SuppressLint("MissingPermission")
 class FractalBleMidiModule : Module() {
-  /* One open adapter: the device and both its ports, kept together so they
-     are always closed together. The device has to stay referenced for as long
-     as it is wanted: Android closes a MidiDevice that is garbage collected. */
+  /* One open adapter or USB device: the device and both its ports, kept
+     together so they are always closed together. The device has to stay
+     referenced for as long as it is wanted: Android closes a MidiDevice that
+     is garbage collected. */
   private class Link(
     val id: String,
     val name: String,
@@ -90,7 +112,8 @@ class FractalBleMidiModule : Module() {
     val listener: MidiReceiver
   ) {
     /* False from the moment Android hands the device over until the
-       Bluetooth link under it is up (see connect). Nothing is sent and no
+       Bluetooth link under it is up (see connect); a USB device's is up as
+       soon as its ports open (connectUsb). Nothing is sent and no
        'disconnected' goes out until then. Only touched while holding `lock`. */
     var ready = false
   }
@@ -154,8 +177,19 @@ class FractalBleMidiModule : Module() {
       stopScanning()
     }
 
+    /* This build lists a unit on a USB cable (usbList), and says so: the
+       JavaScript reads it (lib/bluetooth cablesHere) to know a unit can plug
+       in on this copy at all, as the iPhone's pairsOnIOS27 says Apple's fix
+       is in. A build without it has no such function. */
+    Function("listsUsb") {
+      true
+    }
+
+    /* Asked by the page, so from here a cable plugged in or pulled out
+       reaches it as onDevices (watch). */
     Function("devices") {
-      synchronized(lock) { found.values.toList() }
+      watch()
+      listAll()
     }
 
     AsyncFunction("connect") { id: String, promise: Promise ->
@@ -215,6 +249,9 @@ class FractalBleMidiModule : Module() {
      adapter. Android 11 and older also need Location switched on in the
      phone's settings, or the scan quietly finds nothing. */
   private fun scan(seconds: Int, promise: Promise) {
+    /* Before anything about Bluetooth: a cable plugged in while the page
+       looks reaches it whether Bluetooth is on or not. */
+    watch()
     val adapter = bluetooth
     if (!supported() || adapter == null || !adapter.isEnabled) {
       promise.resolve(false)
@@ -229,8 +266,9 @@ class FractalBleMidiModule : Module() {
     synchronized(lock) {
       found.clear()
       /* A connected adapter stops advertising, so it would vanish from the
-         list it was chosen from; it is kept in. */
-      link?.let { found[it.id] = mapOf("id" to it.id, "name" to it.name) }
+         list it was chosen from; it is kept in. A USB device is listed by
+         listAll whatever this holds. */
+      link?.takeIf { !isUsb(it.id) }?.let { found[it.id] = mapOf("id" to it.id, "name" to it.name, "transport" to "bluetooth") }
     }
     val callback = object : ScanCallback() {
       override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -269,13 +307,14 @@ class FractalBleMidiModule : Module() {
   private fun heard(from: ScanCallback, result: ScanResult) {
     val address = result.device?.address ?: return
     val name = result.scanRecord?.deviceName ?: nameOf(result.device) ?: "Bluetooth MIDI"
-    val list = synchronized(lock) {
+    val changed = synchronized(lock) {
       if (scanning !== from) return
       val before = found[address]
-      found[address] = mapOf("id" to address, "name" to name, "rssi" to result.rssi)
-      if (before == null || before["name"] != name) found.values.toList() else null
+      found[address] = mapOf("id" to address, "name" to name, "rssi" to result.rssi, "transport" to "bluetooth")
+      before == null || before["name"] != name
     }
-    if (list != null) sendEvent("onDevices", mapOf("devices" to list))
+    /* Out of the lock: the list asks Android's MIDI service for the USB devices. */
+    if (changed) sendEvent("onDevices", mapOf("devices" to listAll()))
   }
 
   private fun stopScanning() {
@@ -296,6 +335,114 @@ class FractalBleMidiModule : Module() {
     }
   }
 
+  // The list
+
+  /* What devices() and onDevices give: every USB device plugged in now,
+     then what the scan found. Asked of Android's MIDI service each time, so
+     never while holding `lock`. */
+  private fun listAll(): List<Map<String, Any?>> {
+    val usb: List<Map<String, Any?>> = usbList().map { (id, info) -> mapOf("id" to id, "name" to usbName(info), "transport" to "usb") }
+    val ble: List<Map<String, Any?>> = synchronized(lock) { found.values.toList() }
+    val all = LinkedHashMap<String, Map<String, Any?>>()
+    for (d in usb + ble) {
+      val id = d["id"] as? String ?: continue
+      if (!all.containsKey(id)) all[id] = d
+    }
+    return all.values.toList()
+  }
+
+  // USB
+
+  /*
+   * Every USB device Android's MIDI service offers both ways: at least one
+   * port in and one out, as the iPhone lists only a port with a way back.
+   * Only TYPE_USB: a Bluetooth adapter already opened turns up in the same
+   * list as TYPE_BLUETOOTH and is listed by its address instead, and another
+   * app's virtual port is not a cable (the iPhone leaves those out too).
+   *
+   * Each is listed under an id that is the same every time it is plugged in
+   * and after the app starts again, which Android's own device id is not (it
+   * counts up at every plug): "usb:", then its maker's and product's USB
+   * numbers, which every USB device carries and which need no permission to
+   * read. A second device with the same two (two of one unit on a hub) gets
+   * "#2", in the order Android numbered them, so between twins the id is not
+   * kept across a replug: the first one unplugged and plugged back in comes
+   * after the other, and the two swap ids. Never the serial number, which
+   * needs the USB permission from Android 10 and says more than the id
+   * needs to. A Bluetooth address is six pairs of hex digits and colons, so
+   * the two kinds cannot collide.
+   *
+   * Android 13 and newer: getDevicesForTransport with MIDI 1.0's byte stream,
+   * the only kind this module speaks; a USB device that also speaks MIDI 2.0
+   * is listed there once more, as a device of its own, which is left out.
+   * Older: getDevices, which has only the one kind.
+   */
+  @Suppress("DEPRECATION")
+  private fun usbList(): List<Pair<String, MidiDeviceInfo>> {
+    val manager = midi ?: return emptyList()
+    val all: Collection<MidiDeviceInfo> = try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        manager.getDevicesForTransport(MidiManager.TRANSPORT_MIDI_BYTE_STREAM)
+      } else {
+        manager.devices.toList()
+      }
+    } catch (e: RuntimeException) {
+      Log.w(TAG, "MIDI devices: ${e.message}")
+      emptyList()
+    }
+    val seen = HashMap<String, Int>()
+    return all
+      .filter { it.type == MidiDeviceInfo.TYPE_USB && it.inputPortCount > 0 && it.outputPortCount > 0 }
+      .sortedBy { it.id }
+      .map { info ->
+        val base = usbKey(info)
+        val n = (seen[base] ?: 0) + 1
+        seen[base] = n
+        (if (n == 1) base else "$base#$n") to info
+      }
+  }
+
+  private fun isUsb(id: String) = id.startsWith(USB_PREFIX)
+
+  /* "usb:2466:0007", from the USB device Android's MIDI service put in the
+     device's properties; by its name, should a phone ever leave that out. */
+  private fun usbKey(info: MidiDeviceInfo): String {
+    val usb = usbDeviceOf(info)
+    if (usb != null) return USB_PREFIX + String.format(Locale.ROOT, "%04x:%04x", usb.vendorId, usb.productId)
+    return USB_PREFIX + "name:" + usbName(info)
+  }
+
+  /* The typed getParcelable from Android 14: Android 13's has a bug that can
+     throw, which is why AndroidX's own BundleCompat waits for 14 too. */
+  @Suppress("DEPRECATION")
+  private fun usbDeviceOf(info: MidiDeviceInfo): UsbDevice? {
+    val properties = info.properties ?: return null
+    return try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        properties.getParcelable(MidiDeviceInfo.PROPERTY_USB_DEVICE, UsbDevice::class.java)
+      } else {
+        properties.getParcelable<UsbDevice>(MidiDeviceInfo.PROPERTY_USB_DEVICE)
+      }
+    } catch (e: RuntimeException) {
+      null
+    }
+  }
+
+  /* The product's own name ("AM4"), as the iPhone shows it, before
+     Android's "maker product" (MidiDeviceInfo.PROPERTY_NAME). */
+  private fun usbName(info: MidiDeviceInfo): String {
+    val properties = info.properties
+    return listOf(MidiDeviceInfo.PROPERTY_PRODUCT, MidiDeviceInfo.PROPERTY_NAME)
+      .firstNotNullOfOrNull { key -> properties?.getString(key)?.trim()?.takeIf { it.isNotEmpty() } }
+      ?: "USB MIDI"
+  }
+
+  /* Main thread, from the device callback: a USB device came or went, so the
+     page's list goes out again. */
+  private fun usbChanged() {
+    sendEvent("onDevices", mapOf("devices" to listAll()))
+  }
+
   // Connecting
 
   /* Main thread. Android hands the adapter over as a MIDI device of its own
@@ -311,8 +458,16 @@ class FractalBleMidiModule : Module() {
      range, or the unit powering it is off), the attempt gives up after
      OPEN_TIMEOUT_MS, lets go of the device and answers false, and the
      JavaScript's own retry takes it from there. A device that turns up after
-     that is closed rather than used. */
+     that is closed rather than used.
+
+     A USB id goes to connectUsb before anything here asks for Bluetooth: a
+     cable works with Bluetooth off. (The JavaScript still offers the page
+     only where supported() is true, which wants Bluetooth LE too.) */
   private fun connect(id: String, promise: Promise) {
+    if (isUsb(id)) {
+      connectUsb(id, promise)
+      return
+    }
     val adapter = bluetooth
     val manager = midi
     if (adapter == null || manager == null || !adapter.isEnabled || !BluetoothAdapter.checkBluetoothAddress(id)) {
@@ -332,7 +487,7 @@ class FractalBleMidiModule : Module() {
     val target = adapter.getRemoteDevice(id)
     val name = synchronized(lock) { found[id]?.get("name") as? String } ?: nameOf(target) ?: id
     val mine = synchronized(lock) { ++attempt }
-    val opening = Opening(id, name, target, mine, promise)
+    val opening = Opening(id, name, { linkUp(target) }, LINK_SETTLE_MS, mine, promise)
     main.postDelayed(opening.giveUp, OPEN_TIMEOUT_MS)
     try {
       manager.openBluetoothDevice(
@@ -345,6 +500,40 @@ class FractalBleMidiModule : Module() {
     }
   }
 
+  /* Main thread. A unit, or a USB MIDI cable, on the phone's USB port. No
+     permission and no Bluetooth link to wait for: Android's MIDI service
+     already holds the device, so it is up as soon as both ports are open.
+     The same Opening as an adapter's, with nothing to wait for once the
+     device arrives, so cancelling, the time limit and a device that arrives
+     late all go the same way. Not plugged in (yet) answers false, and the
+     JavaScript's own retry asks again. */
+  private fun connectUsb(id: String, promise: Promise) {
+    val current = synchronized(lock) { link?.takeIf { it.ready } }
+    if (current != null && current.id == id) {
+      sendEvent("onState", mapOf("state" to "connected", "id" to id, "name" to current.name))
+      promise.resolve(true)
+      return
+    }
+    val manager = midi
+    val info = usbList().firstOrNull { it.first == id }?.second
+    if (manager == null || info == null) {
+      promise.resolve(false)
+      return
+    }
+    stopScanning()
+    close()
+    val name = usbName(info)
+    val mine = synchronized(lock) { ++attempt }
+    val opening = Opening(id, name, { true }, 0L, mine, promise)
+    main.postDelayed(opening.giveUp, USB_OPEN_TIMEOUT_MS)
+    try {
+      manager.openDevice(info, MidiManager.OnDeviceOpenedListener { opening.opened(it) }, main)
+    } catch (e: RuntimeException) {
+      Log.w(TAG, "USB MIDI open: ${e.message}")
+      opening.fail()
+    }
+  }
+
   /* One call to connect(), from asking Android for the device to the answer.
      Main thread only, like everything that drives it, so `settled` needs no
      lock. `attempt` moving past `mine` means the JavaScript has asked for
@@ -353,12 +542,18 @@ class FractalBleMidiModule : Module() {
   private inner class Opening(
     private val id: String,
     private val name: String,
-    private val target: BluetoothDevice,
+    /* Whether the link under the device is up: the Bluetooth link to an
+       adapter (linkUp, which can throw SecurityException), or always, for a
+       USB device. */
+    private val linked: () -> Boolean,
+    /* How long it has to have been up before 'connected': LINK_SETTLE_MS for
+       an adapter, nothing for a USB device. */
+    private val settleMs: Long,
     private val mine: Int,
     private val promise: Promise
   ) {
     private var settled = false
-    /* When the Bluetooth link was first seen up, or 0 while it is not. */
+    /* When the link was first seen up, or 0 while it is not. */
     private var linkedAt = 0L
 
     val giveUp = Runnable { fail() }
@@ -366,7 +561,7 @@ class FractalBleMidiModule : Module() {
 
     private fun current() = synchronized(lock) { attempt == mine }
 
-    /* Android's answer to openBluetoothDevice: the device, or null. */
+    /* Android's answer to openBluetoothDevice or openDevice: the device, or null. */
     fun opened(device: MidiDevice?) {
       if (settled || device == null || !adopt(device, id, name, mine)) {
         closeQuietly(device)
@@ -376,8 +571,8 @@ class FractalBleMidiModule : Module() {
       poll()
     }
 
-    /* Every POLL_MS, until the link has been up for LINK_SETTLE_MS without a
-       break, or the attempt ends. */
+    /* Every POLL_MS, until the link has been up for settleMs without a
+       break, or the attempt ends. A USB device is ready at the first look. */
     private fun poll() {
       if (settled) return
       if (!current()) {
@@ -385,14 +580,14 @@ class FractalBleMidiModule : Module() {
         return
       }
       val up = try {
-        linkUp(target)
+        linked()
       } catch (e: SecurityException) {
         refuse(e)
         return
       }
       val now = SystemClock.uptimeMillis()
       linkedAt = if (!up) 0L else if (linkedAt == 0L) now else linkedAt
-      if (up && now - linkedAt >= LINK_SETTLE_MS) {
+      if (up && now - linkedAt >= settleMs) {
         ready()
       } else {
         main.postDelayed(check, POLL_MS)
@@ -453,11 +648,13 @@ class FractalBleMidiModule : Module() {
     return manager.getConnectionState(device, BluetoothProfile.GATT) == BluetoothProfile.STATE_CONNECTED
   }
 
-  /* Port 0 both ways: a Bluetooth MIDI adapter has exactly one of each.
-     "Input" is Android's word for the adapter's way in, so it is what we
-     send on; we listen on its output. False if the ports would not open, or
-     if attempt `mine` is no longer the one wanted; either way nothing is kept
-     and the caller closes the device. */
+  /* Port 0 both ways: a Bluetooth MIDI adapter has exactly one of each, and
+     a unit on a USB cable has its own MIDI there (the iPhone, likewise,
+     takes the first source beside a destination). "Input" is Android's word
+     for the device's way in, so it is what we send on; we listen on its
+     output. False if the ports would not open (a USB port another app holds
+     open stays shut to us), or if attempt `mine` is no longer the one
+     wanted; either way nothing is kept and the caller closes the device. */
   private fun adopt(opened: MidiDevice, id: String, name: String, mine: Int): Boolean {
     val toUnit = opened.openInputPort(0)
     val fromUnit = opened.openOutputPort(0)
@@ -497,14 +694,23 @@ class FractalBleMidiModule : Module() {
     return true
   }
 
-  /* Android tells every app when a MIDI device goes away; for ours, that is
-     the adapter dropping out (out of range, switched off, Bluetooth off). */
+  /* Android tells every app when a MIDI device comes or goes. For ours, its
+     going is the adapter dropping out (out of range, switched off,
+     Bluetooth off) or the cable pulled out; and a USB device coming or going
+     changes the list the page shows. Registered the first time the page asks
+     for the list or looks (devices, scan), or a link is made, and kept until
+     the module goes. */
   @Suppress("DEPRECATION")
   private fun watch() {
     val manager = midi ?: return
     val callback = object : MidiManager.DeviceCallback() {
+      override fun onDeviceAdded(device: MidiDeviceInfo) {
+        if (device.type == MidiDeviceInfo.TYPE_USB) usbChanged()
+      }
+
       override fun onDeviceRemoved(device: MidiDeviceInfo) {
         removed(device)
+        if (device.type == MidiDeviceInfo.TYPE_USB) usbChanged()
       }
     }
     val fresh = synchronized(lock) {
@@ -515,8 +721,22 @@ class FractalBleMidiModule : Module() {
         true
       }
     }
-    /* The older form, because the newer one starts at Android 13. */
-    if (fresh) manager.registerDeviceCallback(callback, main)
+    if (!fresh) return
+    /* The older form, because the newer one starts at Android 13. From 13 it
+       reports MIDI 1.0 devices only, which are the only ones listed here.
+       It can throw if Android's MIDI service itself has gone: then nothing is
+       signed up, `watching` is let go so a later call tries again, and
+       devices() still answers its list. */
+    try {
+      manager.registerDeviceCallback(callback, main)
+    } catch (e: RuntimeException) {
+      Log.w(TAG, "MIDI device callback: ${e.message}")
+      synchronized(lock) {
+        if (watching === callback) {
+          watching = null
+        }
+      }
+    }
   }
 
   private fun unwatch() {
@@ -614,11 +834,17 @@ class FractalBleMidiModule : Module() {
     /* The Bluetooth MIDI service, from the MIDI Association's BLE-MIDI specification. */
     private val MIDI_SERVICE: UUID = UUID.fromString("03B80E5A-EDE8-4B33-A751-6CE34EC4C700")
 
+    /* Every USB device's id starts with this (usbList); no Bluetooth address can. */
+    private const val USB_PREFIX = "usb:"
+
     private const val MAX_SCAN_SECONDS = 60
 
     /* The whole of connect(): Android handing the device over, the Bluetooth
        link coming up, and LINK_SETTLE_MS after it. */
     private const val OPEN_TIMEOUT_MS = 15_000L
+
+    /* The whole of connectUsb(): Android opening a device it already holds. */
+    private const val USB_OPEN_TIMEOUT_MS = 5_000L
 
     /* How often connect() asks whether the Bluetooth link is up yet. */
     private const val POLL_MS = 200L
