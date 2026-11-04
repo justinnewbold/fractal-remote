@@ -20,10 +20,12 @@ those must still pass the other.
 
 | Patch | What it does | Moves |
 |---|---|---|
-| `android-usb-midi.patch` | On Android, a unit plugged into the phone's USB port connects by cable, through Android's own MIDI service: an AM4, FM9, Axe-Fx III or VP4 on a USB cable, or a USB MIDI cable (a C2MIDI Pro, a U2MIDI Pro) on a unit's MIDI jacks. Connect takes it straight away when nothing else could be meant (the same rule as the iPhone's, mobile/src/lib/bleAdapters.js `cablesFirst`), and otherwise it is listed beside the Bluetooth adapters the search finds; it asks for no permission, connects with Bluetooth on or off, and is read and written exactly as an adapter is, so every rule holds and nothing new goes to any unit. FractalBleMidiModule.kt only: devices() lists USB MIDI devices too (transport `usb`, id `usb:<vendor>:<product>`, the same across replugs, except between two of one unit on a hub), connect() opens them with MidiManager.openDevice, a plug or a pull reaches the page as onDevices, and a pulled cable as `disconnected`; listsUsb() answers true, which is how the JavaScript knows a unit can plug in on this copy (`cablesHere`: the FM3's "can't plug in by its USB port" line shows on Android from this build). The manifest, supported() and the permissions are untouched. The FM3 never lists: its USB port is serial, not MIDI. | **Android** (the android line of `npm run fingerprint`; the ios line and the watch's stay where they are) |
 
-One patch is waiting: android-usb-midi, for the next Android build (its
-section is the first below). Before it, watch-fill, tablet-turns,
+Nothing is waiting. android-usb-midi was applied on 4 November 2026 in the
+build pull request for the Android build 1.89.36 (an Android build on its
+own, Justin's "You are good to do the android build on expo go as soon as
+it's ready", since it moves the android line alone), and its file deleted
+in the same change. Before it, watch-fill, tablet-turns,
 logbox-android and shrink-resources were applied on 26 October 2026, in that order, in the
 build pull request for the 1.89.0 build pair (the one that opens Bluetooth
 (beta) to customers), and their files deleted in the same change. With
@@ -36,7 +38,7 @@ deleted in the same change. The four before it
 2026 for the build pair after 1.87.52 (1.88.0). What each one carried, and
 what goes with it that was not in it, is in its section below.
 
-**android-usb-midi.patch, and why it waits.** Justin, 3 November 2026:
+**android-usb-midi.patch, and why it waited** (applied for the Android build 1.89.36). Justin, 3 November 2026:
 "let's build out the direct plug to the USB for android. I tried it and it
 doesn't work." And of the iPhone, the same day: "I've already used my
 iPhone and it does connect. It just says it's a Bluetooth connection and
