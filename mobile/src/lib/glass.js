@@ -26,6 +26,15 @@
  * with no shadow at all, and the glass against the page is about what the
  * old panel was. Newer phones, and every iPhone, draw all of it.
  *
+ * OR NONE AT ALL: CLASSIC. "In addition to the frosted glass look have an
+ * option in settings where they can change to the classic look" (4 November
+ * 2026). Settings → Colors → Style chooses it, and lib/theme then lays the
+ * old panel, rule and chassis over every glass colour, with no shadow and no
+ * sheen, and puts the card's corner back to md. A piece whose shape changed
+ * with the glass, or whose old colour was none of those, asks `classic()`
+ * here and draws what it drew before; `cardCorner` and glassCard's
+ * `classicCorner` give back a card's own old corner where it was not md.
+ *
  * SOLID IN SUNLIGHT. Sunlight is the look for reading on a bright stage, and
  * an iPhone set to Reduce Transparency has asked for the same thing: there
  * the glass keeps its shapes and its light edge, and is opaque (lib/theme
@@ -37,7 +46,13 @@
  * `color` when it is called, never once at load, so a change of theme, look
  * or Reduce Transparency repaints it on the next render.
  */
-import { color, radius } from './theme.js'
+import { color, isClassic, radius } from './theme.js'
+
+/** Whether the classic look is chosen: every piece drawn as it was before the glass. */
+export const classic = () => isClassic()
+
+/** The glass card's corner, or in Classic the corner this piece had before the glass (`was`, md when it does not say). */
+export const cardCorner = (was = radius.md) => (isClassic() ? was : radius.card)
 
 /** The look whose chrome is drawn solid. */
 export const SUNLIGHT_LOOK = 'sunlight'
@@ -63,13 +78,15 @@ export function glassControl({ pressed = false, bordered = true } = {}) {
 /**
  * A card or a list group, at the glass's corner. `flat` has no drop shadow:
  * a row, or a card inside a sheet, where a button on it is the second layer
- * of glass and never the third.
+ * of glass and never the third. `classicCorner` is the corner the card had
+ * before the glass, for Classic, where it was not md.
  */
-export function glassCard({ pressed = false, bordered = false, flat = false } = {}) {
+export function glassCard({ pressed = false, bordered = false, flat = false, classicCorner } = {}) {
   const backgroundColor = pressed ? color.glassFillHi : color.glassFill
+  const borderRadius = cardCorner(classicCorner)
   return bordered
-    ? { backgroundColor, borderRadius: radius.card, borderColor: color.glassRim, boxShadow: flat ? color.glassTop : color.glassLift }
-    : { backgroundColor, borderRadius: radius.card, boxShadow: flat ? color.glassFlat : color.glassLiftRing }
+    ? { backgroundColor, borderRadius, borderColor: color.glassRim, boxShadow: flat ? color.glassTop : color.glassLift }
+    : { backgroundColor, borderRadius, boxShadow: flat ? color.glassFlat : color.glassLiftRing }
 }
 
 /** Something floating over the tiles: it keeps its own opaque fill and shadow, and gets the light along its top. */

@@ -158,6 +158,37 @@ const SOLID_LIGHT = {
   glassWell: '#f4f2ee'
 }
 
+/*
+ * CLASSIC: the phone as it was drawn before the glass, chosen in Settings →
+ * Colors. "In addition to the frosted glass look have an option in settings
+ * where they can change to the classic look" (4 November 2026).
+ *
+ * Laid over the glass's sixteen keys, in place, like a theme, so every piece
+ * that reads them draws what it drew before: the panel and the pressed panel
+ * for the frost, the page's rule for the rim and the grabber, the chassis for
+ * a sheet and a well, and NO shadow, sheen, dim or bar fill at all. Those are
+ * undefined, which React Native draws as nothing, the same as a style that
+ * never had the key. The glass card's corner goes back with them (radius.card
+ * in paint). The few pieces whose shape changed with the glass, or whose old
+ * colour was none of these, ask lib/glass `classic()` themselves.
+ *
+ * Over the Sunlight look and Reduce Transparency too: Classic was opaque.
+ *
+ * The two ink fixes in LIGHT (silkFaint, onSignal) stay in Classic. They are
+ * contrast fixes, not glass: the old faint grey read 3.72:1 on the plain
+ * page and the old ink 4.46:1 on the amber.
+ */
+const CLASSIC_NONE = ['glassBar', 'glassLift', 'glassLiftRing', 'glassFlat', 'glassTop', 'glassLit', 'glassLitTop', 'glassSheen', 'sheetLift', 'scrim']
+const classicOver = (base) => ({
+  ...Object.fromEntries(CLASSIC_NONE.map((key) => [key, undefined])),
+  glassFill: base.panel,
+  glassFillHi: base.panelHi,
+  glassRim: base.rule,
+  sheetFill: base.chassis,
+  grabber: base.rule,
+  glassWell: base.chassis
+})
+
 /**
  * The palette every screen reads, MUTATED IN PLACE when the mode changes.
  *
@@ -179,6 +210,8 @@ export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 }
 
 /* `card` is the glass's: cards, list groups, text fields and the two-line buttons, whose line under reaches 4pt from the edge (a capsule would cut it). The four before it stay as they were, because the tiles read them. */
 export const radius = { sm: 6, md: 10, lg: 14, pill: 999, card: 18 }
+/* The glass's card corner. In Classic `card` is md, the corner most of the pieces that wear it had before the glass, laid in place by paint like a colour; lib/glass cardCorner gives the others theirs. */
+const GLASS_CARD = radius.card
 
 export const font = {
   micro: 11,
@@ -225,6 +258,8 @@ let mode = DEFAULT
 let systemDark = true
 /* Whether the glass is drawn solid (setSolidChrome). */
 let solid = false
+/* Frosted glass or Classic (setGlassStyle). */
+let glassStyle = 'glass'
 const watchers = new Set()
 
 /** Which of the three is chosen. Not which one is being shown — see `isDark`. */
@@ -243,9 +278,60 @@ export const isDark = () => (mode === 'auto' ? systemDark : mode === 'dark')
  */
 function paint() {
   const dark = isDark()
-  const next = { ...(dark ? DARK : LIGHT), ...(solid ? (dark ? SOLID_DARK : SOLID_LIGHT) : null) }
+  const base = dark ? DARK : LIGHT
+  const classic = glassStyle === 'classic'
+  const next = { ...base, ...(classic ? classicOver(base) : solid ? (dark ? SOLID_DARK : SOLID_LIGHT) : null) }
   for (const key of Object.keys(next)) color[key] = next[key]
+  radius.card = classic ? radius.md : GLASS_CARD
   for (const tell of watchers) tell()
+}
+
+/* ------------------------------------------------------------------ */
+/* Frosted glass, or the classic look                                  */
+/* ------------------------------------------------------------------ */
+
+/** The two ways the buttons, bars and pop-ups are drawn, in the order the buttons show them. Frosted glass first, and the default. */
+export const GLASS_STYLES = ['glass', 'classic']
+
+const STYLE_KEY = 'fractal.glass'
+
+/** Which of the two is chosen. */
+export const getGlassStyle = () => glassStyle
+
+/** Whether the classic look is on: no glass anywhere, every piece as it was drawn before it. */
+export const isClassic = () => glassStyle === 'classic'
+
+/**
+ * Choose one, remembered on this device. It is the material and the shapes
+ * only, so it goes with every look and both modes, and repaints in place
+ * like them: the root redraws, nothing restarts. Choosing what is already
+ * chosen paints nothing and tells nobody.
+ */
+export function setGlassStyle(next, storage) {
+  const was = glassStyle
+  glassStyle = GLASS_STYLES.includes(next) ? next : 'glass'
+  try {
+    storage?.setItem(STYLE_KEY, glassStyle)
+  } catch {
+    /* Costs the next launch, not this press. */
+  }
+  if (glassStyle !== was) paint()
+}
+
+/** What was chosen last time. Nothing chosen, or anything unreadable, is the frosted glass. */
+export function loadGlassStyle(storage) {
+  let saved = null
+  try {
+    saved = storage?.getItem(STYLE_KEY)
+  } catch {
+    saved = null
+  }
+  const next = GLASS_STYLES.includes(saved) ? saved : 'glass'
+  if (next !== glassStyle) {
+    glassStyle = next
+    paint()
+  }
+  return glassStyle
 }
 
 /**
