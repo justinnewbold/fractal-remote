@@ -1,0 +1,33 @@
+REQUIRES A COMPUTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play. There is also Bluetooth, with more lag: see below.
+
+Fractal Remote is independently developed and is not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC. “Fractal Audio”, “Axe-Fx”, “FM3”, “FM9”, “AM4” and “VP4” are trademarks of Fractal Audio Systems, LLC, used here only to say which hardware this app works with.
+
+Fractal Remote turns your phone into a remote control for your Fractal Audio rig. Switch presets and scenes, turn blocks on and off, change channels, tune up and tap tempo, without walking back to your unit. Build a setlist for tonight and step through it with two big buttons you can hit in the dark.
+
+SUPPORTED UNITS
+FM3, FM9, Axe-Fx III and AM4, and the VP4 in part.
+On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. It changes presets and scenes with the same MIDI messages a foot controller sends. Knobs, the tuner, tap tempo, channels and saving don't work on a VP4 from the app yet. The app can't show the names of a VP4's presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.
+
+TRY THE DEMO, FOR AS LONG AS YOU LIKE
+The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer described at the top (or Bluetooth).
+
+WHAT IT DOES
+• Switch any of your presets, by name, in slot order or from a setlist
+• Scenes, with the names your unit already uses
+• Turn blocks on and off, and pick channels A to D
+• Open a block and change its real parameters on real knobs
+• Tuner, with the note and how far off you are
+• Tap tempo, with the tempo on the button
+• Setlists and starred presets, kept with your account across devices
+• Colors that can match your Fractal unit (Settings → Colors), so you find things by looking
+
+HOW IT WORKS
+A phone needs something between it and your Fractal unit, and the best one is the desktop app. It runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to it. Get it at fractal.newbold.cloud/downloads.
+
+Once the two are paired, the phone works from anywhere: the same room, the far side of the stage, or a different building.
+
+BLUETOOTH
+There are two ways to connect. The computer is the best one. Bluetooth needs no computer, but it has more lag and fewer features. It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4: with a Bluetooth MIDI adapter on the unit's MIDI jacks, your phone controls it directly, with presets, scenes, effects on and off, channels, tempo and the tuner, within about 30 feet (on a VP4, presets and scenes only). No editing or saving, and no looper. It is part of the full version. So far it has been tried on the AM4 and the FM3: on the AM4 with a CME WIDI Master, or a CME WIDI Uhost and C2MIDI Pro cable (each with two Type-A MIDI to 3.5 mm adapters), and on the FM3 with a CME WIDI Uhost and a CME U2MIDI Pro cable. The parts are sold separately, by other companies (CME, LOOTOOLS, Eldraqth and Anker); Fractal Remote has nothing to do with them or with Amazon, and gets nothing from the app's links to them. Never plug the C2MIDI Pro or a WIDI Master into an FM3: both got very hot on one. What to buy and how to plug it in: Settings → My rig → Bluetooth.
+
+ONE PAYMENT, LIFETIME UNLOCK
+Controlling real hardware is a single purchase. It unlocks the full app on every device you own, forever, including every future update, on all supported Fractal units (on a VP4, what SUPPORTED UNITS says). No subscription.

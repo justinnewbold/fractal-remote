@@ -6754,6 +6754,10 @@ console.log('\nwhat works: the gear notes, off unless somebody says yes')
 const { run: gearShare } = await import('./gear-share.mjs')
 gearShare(test)
 
+console.log('\nGoogle Play from GitHub: the listing, its pictures and its crash reports, written only when told to')
+const { run: playText } = await import('./play-text.mjs')
+playText(test)
+
 test('both file kinds are listed and told apart', async () => {
   // A .syx goes back to the unit verbatim; a design re-validates first. Load
   // treating one as the other would either corrupt or silently no-op.

@@ -1,0 +1,73 @@
+# Google Play from GitHub: the listing's words, its pictures, and Google's
+# crash reports.
+#
+# scripts/play-text.mjs does the work; this hands it the GOOGLE_PLAY_KEY robot
+# (fractal-remote-listing). The job only reads and writes the listing's words,
+# and reads its pictures and Google's crash figures. The key can do more on
+# Fractal Remote: Google's "Manage store presence" also changes the price, the
+# in-app products, the countries and the content rating, and "Manage policy
+# declarations" edits Data safety. So it is in one step's environment and
+# nowhere else, and the script takes that robot's key and no other. It cannot
+# touch a release or another app. Started by hand, from main only (the if:
+# below; anyone who can push a branch can still change that, as with every
+# secret here). It builds nothing and spends no build slot.
+#
+# Pick what to do:
+#   listing  what Play's listing says, next to store/google-play/, and what would change
+#   images   the screenshots, the icon and the feature graphic, read only
+#   vitals   crashes and freezes in the last 28 days, read only
+#
+# Leave "Write it" unticked to see what Play says now and what would change.
+# Tick it to change it. The log is public (the repository is), and nothing in
+# it is more than the store page shows, apart from the crash and freeze rates
+# and each problem's headline: never a count of people or reports.
+name: play-text
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: What to do (listing is the words, images the pictures, vitals the crashes and freezes)
+        type: choice
+        options:
+          - listing
+          - images
+          - vitals
+        default: listing
+      apply:
+        description: Write it (unticked only shows what is there and what would change)
+        type: boolean
+        default: false
+      hold:
+        description: With Write it, leave the change in Play Console under Changes not yet sent for review, to send by hand
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-text
+  cancel-in-progress: false
+
+jobs:
+  play:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The key lives in this one step's environment and nowhere else: no file,
+      # and the script reads it from there and never prints it.
+      - name: Google Play
+        env:
+          GOOGLE_PLAY_KEY: ${{ secrets.GOOGLE_PLAY_KEY }}
+          MODE: ${{ inputs.mode }}
+        run: node scripts/play-text.mjs --mode "$MODE" ${{ inputs.apply && '--apply' || '' }} ${{ inputs.hold && '--hold' || '' }}
