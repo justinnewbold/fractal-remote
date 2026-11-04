@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Pressable, Text, View } from 'react-native'
 
-import { color, font, radius, space, TAP } from '../lib/theme'
+import { color, font, getGlassStyle, radius, setGlassStyle, space, TAP, watchTheme } from '../lib/theme'
 import { LOOKS } from '../lib/blockPalettes'
 import { clearYours, lookId, looksVersion, offMode, ownColourCount, resetAll, setLook, setOffMode, watchLooks, yourFamily, yourScene } from '../lib/looks'
 import { blockColor } from '../lib/blockColors'
@@ -155,6 +155,13 @@ export default function Colours() {
             <Press label="Clear them" onPress={() => setAsking('yours')} />
           </View>
         ) : null}
+      </View>
+
+      {/* ------------------------------------------------------------ style */}
+      <View style={{ gap: space.md }}>
+        <Heading>Style</Heading>
+        <Note>{STYLE_NOTE}</Note>
+        <StyleChoice />
       </View>
 
       {/* ---------------------------------------------------------- effects */}
@@ -381,6 +388,33 @@ function OffChoice({ mode, label, sub }) {
         <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>{sub}</Text>
       </View>
     </Pressable>
+  )
+}
+
+/*
+ * FROSTED GLASS OR CLASSIC: how the buttons, bars and pop-ups are drawn, not
+ * their colours. "In addition to the frosted glass look have an option in
+ * settings where they can change to the classic look" (4 November 2026). It
+ * goes with every look above and with Light and Dark, is kept on this device
+ * (lib/theme setGlassStyle, under fractal.glass), and is seen at once: the
+ * theme repaints in place and the root redraws, nothing restarts. Inside the
+ * frosted glass, Sunlight and Reduce Transparency still draw it solid.
+ */
+const STYLE_CHOICES = [
+  { id: 'glass', label: 'Frosted glass' },
+  { id: 'classic', label: 'Classic' }
+]
+const STYLE_NOTE = 'Frosted glass: see-through bars and rounded buttons. Classic: the look the app had before.'
+
+/** The two, side by side like Light and Dark, the chosen one lit. */
+function StyleChoice() {
+  const chosen = useSyncExternalStore(watchTheme, getGlassStyle, getGlassStyle)
+  return (
+    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: space.sm }}>
+      {STYLE_CHOICES.map((s) => (
+        <Press key={s.id} grow label={s.label} tone="signal" on={s.id === chosen} height={TAP} onPress={() => setGlassStyle(s.id, sync)} />
+      ))}
+    </View>
   )
 }
 
