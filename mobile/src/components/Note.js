@@ -73,8 +73,10 @@ export default function Note({ tone = 'hint', onDismiss, onPress, size, strong, 
         gap: space.sm,
         borderLeftWidth: EDGE,
         borderLeftColor: accent,
-        backgroundColor: color.panel,
-        borderRadius: radius.sm,
+        /* Frosted glass, flat (lib/glass): a ring and the light along the top, no drop. */
+        backgroundColor: color.glassFill,
+        borderRadius: radius.md,
+        boxShadow: color.glassFlat,
         paddingVertical: space.md,
         paddingHorizontal: space.md
       }}

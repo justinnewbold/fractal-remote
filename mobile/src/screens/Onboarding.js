@@ -3,6 +3,7 @@ import { Dimensions, Image, Pressable, ScrollView, Text, TextInput, View } from 
 
 import { CHAIN, P1, P2, P3, P4, P6, P7, P9, CLOSE, WALK_STEPS } from '../lib/onboarding'
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { glassCard, glassField } from '../lib/glass'
 import { Platform } from 'react-native'
 import { UNITS } from '../lib/demoUnits'
 import { setDemo, setDemoUnit } from '../lib/demo'
@@ -239,13 +240,12 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
             style={{
               alignItems: 'center',
               padding: space.sm,
+              /* A card of frosted glass (lib/glass): the drawing is on clear,
+                 so it sits on whichever theme is up, where the photograph
+                 needed its own off-white. It keeps its own rounder corner. */
+              ...glassCard({ bordered: true }),
               borderRadius: radius.lg * 1.4,
-              borderWidth: 1,
-              borderColor: color.rule,
-              /* The theme's own panel: the drawing is on clear, so it sits
-                 on whichever theme is up, where the photograph needed its
-                 own off-white. */
-              backgroundColor: color.panel
+              borderWidth: 1
             }}
           >
             <Image
@@ -278,8 +278,10 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
                   style={{
                     width: '100%',
                     aspectRatio: 1,
-                    borderRadius: radius.md,
+                    /* Its amber wash, as glass: the card corner, a rim drawn inside, the light along its top. */
+                    borderRadius: radius.card,
                     backgroundColor: tint(color.signal, 0.1),
+                    boxShadow: color.glassLiftRing,
                     alignItems: 'center',
                     justifyContent: 'center'
                   }}
@@ -738,7 +740,10 @@ const Cta = ({ label, onPress, disabled }) => (
       shadowOpacity: 0.35,
       shadowRadius: 16,
       shadowOffset: { width: 0, height: 4 },
-      elevation: 6
+      elevation: 6,
+      /* Lit glass (lib/glass): the light along its top and the sheen over the amber. Its own glow stays, so no drop of its own. */
+      boxShadow: color.glassLitTop,
+      experimental_backgroundImage: color.glassSheen
     })}
   >
     <Text style={{ color: color.onSignal, fontSize: font.title - 2, fontWeight: '800' }}>{label}</Text>
@@ -780,10 +785,10 @@ const UnitTile = ({ name, on, onPress }) => (
       minHeight: TAP + 16,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: radius.lg,
+      /* A card of frosted glass (lib/glass); the one picked keeps its amber edge and wash. */
+      ...glassCard({ bordered: true, pressed }),
       borderWidth: on ? 2 : 1,
-      borderColor: on ? color.signal : color.rule,
-      backgroundColor: on ? tint(color.signal, 0.14) : pressed ? color.panelHi : color.panel
+      ...(on ? { borderColor: color.signal, backgroundColor: tint(color.signal, 0.14) } : null)
     })}
   >
     <Text style={{ color: on ? color.signal : color.silk, fontSize: font.lead, fontWeight: '800' }}>{name}</Text>
@@ -867,10 +872,10 @@ const Choice = ({ lit, eyebrow, title, body, art, children }) => (
     style={{
       gap: space.sm,
       padding: space.lg,
-      borderRadius: radius.lg,
+      /* A card of frosted glass (lib/glass); the lit one keeps its amber edge and warm wash. */
+      ...glassCard({ bordered: true }),
       borderWidth: 1,
-      borderColor: lit ? color.signal : color.rule,
-      backgroundColor: lit ? color.signalWash : color.panel
+      ...(lit ? { borderColor: color.signal, backgroundColor: color.signalWash } : null)
     }}
   >
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md }}>
@@ -1013,10 +1018,9 @@ const ChainBox = ({ n, title, body, kind, tight = false }) => (
       alignItems: 'center',
       gap: space.md,
       padding: tight ? space.md : space.lg,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: color.rule,
-      backgroundColor: color.panel
+      /* A card of frosted glass (lib/glass), rimmed, with the light along its top. */
+      ...glassCard({ bordered: true }),
+      borderWidth: 1
     }}
   >
     <View
@@ -1082,10 +1086,9 @@ function Field({ mono: isMono, ...rest }) {
         letterSpacing: isMono ? 2 : undefined,
         padding: space.md,
         minHeight: TAP,
-        borderRadius: radius.md,
         borderWidth: 1,
-        borderColor: color.rule,
-        backgroundColor: color.panel
+        /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
+        ...glassField()
       }}
     />
   )

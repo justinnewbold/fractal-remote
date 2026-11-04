@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar'
 import { color, font, space, isDark, loadMode, setSystemDark, themeVersion, watchTheme } from './src/lib/theme'
 import { SAFE_EDGES } from './src/lib/screenShape'
 import { loadLooks, looksVersion, watchLooks } from './src/lib/looks'
+import { useSolidChrome } from './src/lib/useSolidChrome'
 import { haveSession, linkState, probeNow, startLink, stopLink, subscribeLink } from './src/lib/link'
 import { currentAccount, signOut } from './src/lib/relay'
 import { useComputerElsewhere } from './src/lib/useComputerElsewhere'
@@ -116,6 +117,7 @@ export default function App() {
    * while it renders, so one re-render here repaints them all. See lib/looks.
    */
   useSyncExternalStore(watchLooks, looksVersion, looksVersion)
+  useSolidChrome()
   useEffect(() => {
     setSystemDark(Appearance.getColorScheme() !== 'light')
     const off = Appearance.addChangeListener(({ colorScheme }) => {

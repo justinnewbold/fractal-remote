@@ -136,9 +136,13 @@ export default function Tuner({ reading, on, onClose, down = false }) {
               paddingHorizontal: space.lg,
               borderRadius: radius.lg * 2,
               /* A hairline of light along the edge, which is what makes a pane
-                 of glass read as a pane rather than as a stain. */
+                 of glass read as a pane rather than as a stain: the glass's rim,
+                 its light along the top and a soft shadow (lib/glass). The fill
+                 stays the panel's own, opaque, so the reading is never over
+                 anything but the pane. */
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.14)',
+              borderColor: color.glassRim,
+              boxShadow: color.glassLift,
               backgroundColor: color.panel,
               overflow: 'hidden'
             }}

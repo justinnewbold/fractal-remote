@@ -13095,7 +13095,7 @@ export function run(test) {
     assert.ok(!/'Switch unit'/.test(bar), 'the pill still says Switch unit')
     /* The demo on a 360-wide phone: Unlock over the price, and the pill's edge at space.sm. */
     assert.match(bar, />Unlock<\/Text>\s*\{purchase\.price \? \(/, 'Unlock $9.99 on one line takes the demo unit’s name off a narrow phone')
-    assert.match(flat, /paddingHorizontal: space\.sm, paddingVertical: 3, borderRadius: radius\.lg, borderWidth: 1/, 'the pill’s wide edge is paid for by the unit’s name')
+    assert.match(flat, /paddingHorizontal: space\.sm, paddingVertical: 3, borderRadius: radius\.pill, borderWidth: 1/, 'the pill’s wide edge is paid for by the unit’s name, or it is not the glass’s capsule')
   })
 
   test('somebody asks whether the unit is still there, rather than waiting to be told', async () => {

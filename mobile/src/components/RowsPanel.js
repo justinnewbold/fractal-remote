@@ -283,7 +283,7 @@ export default function RowsPanel({ blocks, caps, palette, onError }) {
 
       {/* Asked once, in words, before anything is written. */}
       {confirm ? (
-        <View style={{ gap: space.sm, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.signal, backgroundColor: color.signalWash }}>
+        <View style={{ gap: space.sm, padding: space.md, borderRadius: radius.card, borderWidth: 1, borderColor: color.signal, backgroundColor: color.signalWash }}>
           <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
             {confirm.kind === 'remove'
               ? confirm.plan.losing.length

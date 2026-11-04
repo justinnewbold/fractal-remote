@@ -1117,7 +1117,7 @@ export function BluetoothTried() {
         const ways = waysFor(u.key).filter((w) => w.tried).map((w) => w.title)
         const tried = !untried(u.key)
         return (
-          <View key={u.key} style={{ gap: 2, padding: space.sm, borderRadius: radius.sm, backgroundColor: color.panel }}>
+          <View key={u.key} style={{ gap: 2, padding: space.sm, borderRadius: radius.md, backgroundColor: color.glassFill, boxShadow: color.glassFlat }}>
             <Text style={{ color: tried ? color.ok : color.silkDim, fontSize: font.body, fontWeight: '700' }}>
               {`${u.name} · ${tried ? 'Tried' : 'Not tried yet'}`}
             </Text>
@@ -1165,10 +1165,10 @@ function Fold({ title, sub, open, onToggle, children }) {
   )
 }
 
-/* One question the check asked, with its bytes. */
+/* One question the check asked, with its bytes: a flat panel of glass, its rim a ring inside it (lib/glass), so nothing moves. */
 function Row({ row }) {
   return (
-    <View style={{ gap: 2, padding: space.sm, borderRadius: radius.sm, backgroundColor: color.panel }}>
+    <View style={{ gap: 2, padding: space.sm, borderRadius: radius.md, backgroundColor: color.glassFill, boxShadow: color.glassFlat }}>
       <Text style={{ color: color.silk, fontSize: font.small, fontWeight: '700' }}>{row.asked}</Text>
       <Text selectable style={{ color: color.silkDim, fontSize: font.micro, fontFamily: face }}>
         {`out  ${row.out || '—'}`}

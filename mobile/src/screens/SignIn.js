@@ -9,7 +9,8 @@ import {
   View
 } from 'react-native'
 
-import { color, font, radius, space, TAP } from '../lib/theme'
+import { color, font, space, TAP } from '../lib/theme'
+import { glassCard, glassField } from '../lib/glass'
 import { NOT_IN_INBOX, confirmWithCode, resendConfirmation, sendPasswordReset, sentAgain, signIn, signUp } from '../lib/relay'
 import Note from '../components/Note'
 import Press from '../components/Press'
@@ -323,12 +324,11 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
           <Text style={{ color: color.silkDim, fontSize: font.lead, textAlign: 'center' }}>{SETUP.tagline}</Text>
         </View>
 
+        {/* A card of frosted glass (lib/glass), rimmed, with the light along its top. */}
         <View
           style={{
-            backgroundColor: color.panel,
+            ...glassCard({ bordered: true }),
             borderWidth: 1,
-            borderColor: color.rule,
-            borderRadius: radius.lg,
             padding: space.lg,
             gap: space.md
           }}
@@ -572,14 +572,13 @@ function Field({ icon, children }) {
         flexDirection: 'row',
         alignItems: 'center',
         minHeight: TAP + 8,
-        backgroundColor: color.panel,
         borderWidth: 1,
-        borderColor: color.rule,
-        borderRadius: radius.md
+        /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
+        ...glassField()
       }}
     >
       <Image source={icon} style={{ width: 22, height: 22, marginHorizontal: space.md, tintColor: color.silkDim }} />
-      <View style={{ width: 1, alignSelf: 'stretch', marginVertical: space.sm, backgroundColor: color.rule }} />
+      <View style={{ width: 1, alignSelf: 'stretch', marginVertical: space.sm, backgroundColor: color.glassRim }} />
       {children}
     </View>
   )

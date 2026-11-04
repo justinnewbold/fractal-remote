@@ -339,8 +339,11 @@ export default function Volume({ blocks, open, onClose, onError }) {
               paddingVertical: space.xl,
               paddingHorizontal: space.lg,
               borderRadius: radius.lg * 2,
+              /* A pane of glass (lib/glass): the rim, the light along its top
+                 and a soft shadow, on its own opaque panel. */
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.14)',
+              borderColor: color.glassRim,
+              boxShadow: color.glassLift,
               backgroundColor: color.panel
             }}
           >

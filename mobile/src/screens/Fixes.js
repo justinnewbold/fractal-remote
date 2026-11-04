@@ -77,15 +77,17 @@ export default function Fixes({ onBack, open = null, hostVersion = null }) {
               on={isOpen}
               onPress={() => setShown(isOpen ? null : fix.id)}
             />
+            {/* The steps on a card of frosted glass (lib/glass), its border the glass's rim. */}
             {isOpen ? (
               <View
                 style={{
                   gap: space.md,
                   padding: space.md,
                   borderWidth: 1,
-                  borderColor: color.rule,
-                  borderRadius: radius.md,
-                  backgroundColor: color.panel
+                  borderColor: color.glassRim,
+                  borderRadius: radius.card,
+                  backgroundColor: color.glassFill,
+                  boxShadow: color.glassLift
                 }}
               >
                 {fix.steps.map((step, i) => (

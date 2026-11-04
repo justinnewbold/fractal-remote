@@ -18,6 +18,7 @@ import { setBluetooth, useBluetoothOn, useCableNow } from '../lib/bluetooth'
 import { CABLE_OFF, CABLE_WHERE, cableNote } from '../lib/cableWords'
 import { idOf } from '../lib/device'
 import Lamp from './Lamp'
+import { GlassDisc } from './Glass'
 import Volume from './Volume'
 import { fire } from '../lib/tapped'
 import { useSaveToSlot } from './SaveToSlot'
@@ -253,8 +254,12 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
      * fingerprint. A blur is the one part of that look that cannot be faked
      * with a colour, and it was already paid for.
      *
-     * `experimentalBlurMethod` is what makes it work on Android at all: the
-     * same incantation the sheets use.
+     * `experimentalBlurMethod` is the same incantation the sheets use, and on
+     * Android it buys a tint, not a blur: expo-blur blurs there only through
+     * a native target view, which this app does not use (too costly on an
+     * older phone). So the bar's frosted fill (color.glassBar, lib/glass) is
+     * chosen to read with no blur behind it at all, and in the Sunlight look
+     * or under Reduce Transparency it is solid.
      */
     <BlurView
       accessibilityLiveRegion="polite"
@@ -268,10 +273,12 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
         paddingHorizontal: space.lg,
         paddingVertical: space.sm,
         borderBottomWidth: 1,
-        borderBottomColor: color.rule,
+        /* The glass's soft rim, not the page's rule. No drop shadow under the bar: it does not float, it is the top of the screen. */
+        borderBottomColor: color.glassRim,
         /* Translucent, or the blur has nothing to do: a solid panel in front
-           of it hides the very thing it is blurring. */
-        backgroundColor: at(color.panel, 0.55),
+           of it hides the very thing it is blurring. The panel at 0.55, as it
+           always was, and solid in Sunlight (lib/theme setSolidChrome). */
+        backgroundColor: color.glassBar,
         /*
          * ABOVE THE SCREEN UNDER IT. The bar's notes (Saved, a volume that
          * would not take, a save running late) hang below it, over the top of
@@ -356,16 +363,28 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
           /* space.sm, not md: in the demo on a 360-wide phone the unit's name was what paid for the wider edge. */
           paddingHorizontal: space.sm,
           paddingVertical: 3,
-          borderRadius: radius.lg,
+          borderRadius: radius.pill,
           borderWidth: 1,
-          borderColor: color.rule,
+          /*
+           * A capsule, as the glass's pills are (React Native rounds 999 to half
+           * the pill's height). Its padding stays space.sm: the words' box sits
+           * inside the curve for a pill up to 43pt tall (its two lines at the
+           * usual text size make about 37), and past that only the empty top
+           * corner of a line box meets it. Nothing is clipped either way.
+           *
+           * The glass's rim, with its light along the top and its soft drop
+           * (lib/glass): the pill floats on the bar. Its edge and fill stay as
+           * they were.
+           */
+          borderColor: color.glassRim,
           /*
            * The panel's own colour, which is lighter than the bar in Light
            * mode and darker in Dark: the text on it reads at 4.5:1 or better
            * in both (panelHi under it took Connecting and Demo below that in
            * Light). The border is what draws the pill.
            */
-          backgroundColor: pressed ? color.panelHi : at(color.panel, 0.6)
+          backgroundColor: pressed ? color.panelHi : at(color.panel, 0.6),
+          boxShadow: color.glassLift
         })}
       >
         {/* Held inside the pill on a narrow phone: the unit's name gives way (an ellipsis), never the edge of the pill. */}
@@ -423,12 +442,15 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
              there: in this bar it is the one thing anybody is being asked to
              do, and a quieter treatment would read as another label in a row
              that is already mostly labels. It cannot be mistaken for buying,
-             because it says what it does. */
+             because it says what it does. Lit glass: the light along its
+             top, its soft drop and the sheen (lib/glass glassLit). */
           style={({ pressed }) => ({
             paddingHorizontal: space.md,
             paddingVertical: 4,
             borderRadius: radius.pill,
-            backgroundColor: pressed ? color.signalWash : color.signal
+            backgroundColor: pressed ? color.signalWash : color.signal,
+            boxShadow: color.glassLit,
+            experimental_backgroundImage: color.glassSheen
           })}
         >
           <Text
@@ -456,13 +478,16 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
           hitSlop={8}
           /* FILLED, not outlined. An outline reads as one more piece of
              chrome in a bar that is mostly lamps and labels; this is the only
-             thing on the screen anybody is being asked to DO. */
+             thing on the screen anybody is being asked to DO. Lit glass, as
+             Exit demo is; its corner stays radius.lg, for its two lines. */
           style={({ pressed }) => ({
             alignItems: 'center',
             paddingHorizontal: space.md,
             paddingVertical: 4,
             borderRadius: radius.lg,
-            backgroundColor: pressed ? color.signalWash : color.signal
+            backgroundColor: pressed ? color.signalWash : color.signal,
+            boxShadow: color.glassLit,
+            experimental_backgroundImage: color.glassSheen
           })}
         >
           {/* The price belongs on the button. "Unlock" alone asks somebody
@@ -499,6 +524,9 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
             paddingVertical: 4,
             borderRadius: radius.pill,
             backgroundColor: pressed ? color.signalWash : color.signal,
+            /* Lit glass, as Exit demo and Unlock are. */
+            boxShadow: color.glassLit,
+            experimental_backgroundImage: color.glassSheen,
             opacity: saveTo.saving ? 0.6 : 1
           })}
         >
@@ -515,6 +543,8 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
           hitSlop={10}
           onPress={() => setVolume(true)}
         >
+          {/* A round of glass behind the speaker, drawn first so the speaker sits on it: it takes no room and no touch (components/Glass). 24 and 10 each side is a thumb's 44. */}
+          <GlassDisc size={30} />
           {/* The browser's speaker, drawn the same: "make the mobile app
               volume icon look like the web icon". A colour emoji at this size
               was a smudge that no theme could tint; this takes the bar's grey,
@@ -548,9 +578,18 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Connection and setup"
-        hitSlop={10}
+        /*
+         * A thumb's 44 each way round the 22 of the gear, grown AWAY from the
+         * speaker: the two reaches overlap in the 12 between them, and the
+         * gear, drawn later, wins an overlap on both phones. 8 on its left
+         * leaves the speaker 2pt more than the old 10 did; 14 on its right
+         * stays inside the bar's 16 of side padding.
+         */
+        hitSlop={{ top: 11, bottom: 11, left: 8, right: 14 }}
         onPress={onOpenSettings}
       >
+        {/* The same round of glass behind the gear, drawn first, taking no room and no touch. */}
+        <GlassDisc size={30} />
         <Image
           source={setupIcon}
           accessible={false}
@@ -635,15 +674,17 @@ function Which({ link, cable = false, onClose, onReport = null }) {
         : 'Not connected to the Bluetooth adapter.'
   const off = cable ? CABLE_OFF : 'Turn off Bluetooth'
   /* The two buttons side by side, wrapping on a narrow screen, each its own element to a screen reader. */
+  /* Each a capsule of frosted glass on the opaque strip (lib/glass glassControl): its size, padding and words as they were. */
   const button = ({ pressed }) => ({
     alignSelf: 'flex-start',
     minHeight: 44,
     justifyContent: 'center',
     paddingHorizontal: space.lg,
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: color.rule,
-    backgroundColor: pressed ? color.panel : color.chassis
+    borderColor: color.glassRim,
+    backgroundColor: pressed ? color.glassFillHi : color.glassFill,
+    boxShadow: color.glassLift
   })
   return (
     <Pressable
@@ -662,7 +703,9 @@ function Which({ link, cable = false, onClose, onReport = null }) {
         padding: space.lg,
         borderBottomWidth: 1,
         borderBottomColor: color.rule,
-        backgroundColor: color.panelHi
+        backgroundColor: color.panelHi,
+        /* Opaque, over Play, with the glass's light along its top and its soft drop (lib/glass). */
+        boxShadow: color.glassLift
       }}
     >
       <Text style={{ color: color.silk, fontSize: font.body }}>{said}</Text>
@@ -733,6 +776,7 @@ function Saved({ said, onClear }) {
         borderLeftWidth: 3,
         borderLeftColor: said.tone === 'warn' ? color.fault : color.ok,
         backgroundColor: color.panelHi,
+        boxShadow: color.glassLift,
         paddingVertical: space.sm,
         paddingHorizontal: space.md
       }}
@@ -758,6 +802,7 @@ function Late({ onCancel, picked = false }) {
         borderLeftWidth: 3,
         borderLeftColor: color.ok,
         backgroundColor: color.panelHi,
+        boxShadow: color.glassLift,
         paddingVertical: space.sm,
         paddingHorizontal: space.md
       }}
@@ -771,14 +816,16 @@ function Late({ onCancel, picked = false }) {
           tick()
           onCancel()
         }}
+        /* A capsule of frosted glass on the opaque strip, as Which's buttons are; its size, reach and word as they were. */
         style={({ pressed }) => ({
           minHeight: 36,
           justifyContent: 'center',
           paddingHorizontal: space.md,
-          borderRadius: radius.md,
+          borderRadius: radius.pill,
           borderWidth: 1,
-          borderColor: color.rule,
-          backgroundColor: pressed ? color.panel : color.chassis
+          borderColor: color.glassRim,
+          backgroundColor: pressed ? color.glassFillHi : color.glassFill,
+          boxShadow: color.glassLift
         })}
       >
         <Text style={{ color: color.silk, fontSize: font.small }}>Cancel</Text>
@@ -809,6 +856,7 @@ function Reported({ said, onClear }) {
         borderLeftWidth: 3,
         borderLeftColor: color.fault,
         backgroundColor: color.panelHi,
+        boxShadow: color.glassLift,
         paddingVertical: space.sm,
         paddingHorizontal: space.md
       }}

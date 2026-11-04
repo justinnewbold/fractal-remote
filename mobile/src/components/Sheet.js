@@ -108,7 +108,9 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
           intensity={60}
           tint="dark"
           experimentalBlurMethod="dimezisBlurView"
-          style={{ flex: 1, justifyContent: 'flex-end' }}
+          /* A dim over the screen behind, so the sheet stands out from it on
+             Android too, where the blur draws as a flat tint (lib/glass). */
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: color.scrim }}
         >
           <Pressable
             /* Swallows presses so the sheet does not close under the thing you
@@ -121,18 +123,23 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
                  sheet capped in the middle of a wide screen is already clear. */
               ...(capped ? { width: '100%', maxWidth: SHEET_MAX, alignSelf: 'center', borderLeftWidth: 1, borderRightWidth: 1 } : clearSides({ left, right })),
               maxHeight: highest,
-              backgroundColor: color.chassis,
+              /* Frosted glass (lib/glass): a fill that reads at 4.5:1 with no
+                 help from the blur, a soft rim, a light along the top edge and
+                 a shadow cast up over the screen behind. Opaque in Sunlight
+                 and with Reduce Transparency on (lib/theme setSolidChrome). */
+              backgroundColor: color.sheetFill,
               borderTopLeftRadius: radius.lg * 2,
               borderTopRightRadius: radius.lg * 2,
               borderTopWidth: 1,
-              borderColor: 'rgba(255,255,255,0.14)',
+              borderColor: color.glassRim,
+              boxShadow: color.sheetLift,
               paddingBottom: Math.max(bottom, FOOT_AT_LEAST)
             }}
           >
             {/* The grab handle. It does not drag — it says which way this came
                 from and which way it goes, which is most of what it is for. */}
             <View style={{ alignItems: 'center', paddingTop: space.sm, paddingBottom: space.xs }}>
-              <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: color.rule }} />
+              <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: color.grabber }} />
             </View>
 
             <View
@@ -144,7 +151,7 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
                 paddingHorizontal: space.lg,
                 paddingVertical: space.md,
                 borderBottomWidth: 1,
-                borderBottomColor: color.rule
+                borderBottomColor: color.glassRim
               }}
             >
               <View style={{ flexShrink: 1 }}>
@@ -169,7 +176,9 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
                   borderRadius: 22,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: pressed ? color.panelHi : color.panel
+                  /* A round glass button: its rim a ring inside it, so it is the 44 it was. */
+                  backgroundColor: pressed ? color.glassFillHi : color.glassFill,
+                  boxShadow: color.glassLiftRing
                 })}
               >
                 <Text style={{ color: color.silkDim, fontSize: font.lead }}>✕</Text>

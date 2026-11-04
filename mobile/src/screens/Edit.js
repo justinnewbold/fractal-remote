@@ -3,6 +3,7 @@ import { Alert, Keyboard, PanResponder, Platform, ScrollView, Text, TextInput, V
 import { at as tint } from '../lib/vivid'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { glassField } from '../lib/glass'
 import {
   bindModifier,
   blockCatalog,
@@ -1241,10 +1242,9 @@ function BlockPanel({
                 style={{
                   minHeight: TAP,
                   paddingHorizontal: space.md,
-                  borderRadius: radius.md,
                   borderWidth: 1,
-                  borderColor: color.rule,
-                  backgroundColor: color.panel,
+                  /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
+                  ...glassField(),
                   color: color.silk,
                   fontSize: font.body
                 }}
@@ -1776,10 +1776,9 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
             style={{
               minHeight: TAP,
               paddingHorizontal: space.md,
-              borderRadius: radius.md,
               borderWidth: 1,
-              borderColor: color.rule,
-              backgroundColor: color.panel,
+              /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
+              ...glassField(),
               color: color.silk,
               fontSize: font.body
             }}
@@ -1984,7 +1983,12 @@ function BlockCard({
 }) {
   const hue = blockColor(block.slug)
   return (
-    <View style={{ gap: space.sm }}>
+    /*
+     * On the ground of the page, opaque: the red ✕ of SwipeAway sits behind the
+     * whole card, and the frosted glass of what folds out under it (the
+     * finder, the blocks to add, a note) would let it through.
+     */
+    <View style={{ gap: space.sm, backgroundColor: color.chassis }}>
       <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: space.sm }}>
         <Press
           grow
@@ -1992,6 +1996,7 @@ function BlockCard({
           label={block.name}
           on={lifted}
           tone="signal"
+          bar="solid"
           style={{ borderLeftWidth: 4, borderLeftColor: hue.fill }}
           onPress={onToggleActions}
         />
@@ -2312,10 +2317,9 @@ function FindControl({ blocks, onPick, onError }) {
         style={{
           minHeight: TAP,
           paddingHorizontal: space.md,
-          borderRadius: radius.md,
           borderWidth: 1,
-          borderColor: color.rule,
-          backgroundColor: color.panel,
+          /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
+          ...glassField(),
           color: color.silk,
           fontSize: font.body
         }}
@@ -2400,10 +2404,11 @@ function ValueBox({ param, value, onCommit }) {
         width: '100%',
         minHeight: 32,
         textAlign: 'center',
-        borderRadius: radius.sm,
+        /* Frosted glass (lib/glass), at the small corner it fits under a knob with, and no shadow. */
+        borderRadius: radius.md,
         borderWidth: 1,
-        borderColor: color.rule,
-        backgroundColor: color.panel,
+        borderColor: color.glassRim,
+        backgroundColor: color.glassFill,
         color: color.silk,
         fontSize: font.micro,
         fontFamily: face,

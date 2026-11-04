@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Image, PixelRatio, Pressable, Text, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
+import { capsule } from '../lib/glass'
 import { STEP_LINE_EDGE, STEP_WORD_LEAST, fitStep } from '../lib/line-fit'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
@@ -12,6 +13,8 @@ export const UNDER_LINE = 14
 /* The pictures beside a label (Picture, below), square, and every button's border. */
 const PICTURE = 20
 const BORDER = 1
+/* The least a thumb is given, whatever height a button is drawn at (the Done, Back and Cancel at 40 reach it by hit slop). */
+const THUMB = 44
 
 /*
  * What `fit` has measured, kept for the whole app by what was measured (the
@@ -116,6 +119,19 @@ export default function Press({
    * for the row: two sizes read as two kinds of button).
    */
   fitWith,
+  /*
+   * Where a colour bar goes down the left (PresetTag tagEdge, Edit's chain
+   * cards). Given by the BUTTON, never read off this preset's data: Play's
+   * preset name and the preset list's rows pass it whether or not their
+   * preset has a tag today, so stepping from a tagged preset to an untagged
+   * one changes the bar alone and never the button's shape or glass.
+   *   - true: the small corner that keeps the bar straight, in the glass;
+   *   - 'solid': the same corner on the OPAQUE panel with the light along its
+   *     top, for Edit's chain cards (SwipeAway's red sits behind them).
+   */
+  bar,
+  /* A row in a long list: the light along its top and no drop (lib/glass), lit or not. */
+  flat = false,
   onPress,
   onLongPress,
   tone = 'plain',
@@ -143,8 +159,27 @@ export default function Press({
   accessibilityHint
 }) {
   const accent = tone === 'signal' ? color.signal : tone === 'live' ? color.live : color.silk
-  const background = on ? accent : color.panel
   const ink = on ? color.onSignal : disabled ? color.silkFaint : color.silk
+  /*
+   * FROSTED GLASS (lib/glass). A button floats over the page: a see-through
+   * fill, a soft rim, a thin light along its top and a soft drop; a lit one
+   * is its colour with a sheen over it. Only the material and the corner
+   * changed: the size, the padding, the border's width, the words and what
+   * it does are all as they were.
+   *
+   * The corner, by what kind of button it is:
+   *   - one a colour bar goes down (`bar`) keeps its small corner, so the
+   *     bar stays straight, with a tag or without one;
+   *   - a line under it (`under`) or a word over it (`caption`) takes the
+   *     card's 18, because the line reaches 4pt from the edge and a capsule
+   *     would cut it;
+   *   - everything else is a capsule, half its height.
+   * A corner the caller gives in `style` still wins (Volume's round − and +).
+   */
+  const solid = bar === 'solid'
+  const corner = bar ? radius.md : under !== undefined || caption ? radius.card : capsule(height)
+  const background = on ? accent : solid ? color.panel : color.glassFill
+  const lift = flat ? (on ? color.glassLitTop : color.glassTop) : on ? color.glassLit : solid ? color.glassTop : color.glassLift
 
   /* The button's own width, and how wide the label and the line under it are at their usual sizes, from the unseen copy below. */
   const [box, setBox] = useState(() => (fit ? BOXES.get(label) || 0 : 0))
@@ -224,6 +259,7 @@ export default function Press({
           : undefined
       }
       delayLongPress={450}
+      hitSlop={height < THUMB ? (THUMB - height) / 2 : undefined}
       onLayout={
         fit
           ? (e) => {
@@ -242,10 +278,12 @@ export default function Press({
           justifyContent: 'center',
           paddingHorizontal: space.md,
           paddingVertical: under !== undefined ? space.xs : space.sm,
-          borderRadius: radius.md,
+          borderRadius: corner,
           borderWidth: BORDER,
-          borderColor: on ? accent : color.rule,
+          borderColor: on ? accent : color.glassRim,
           backgroundColor: background,
+          boxShadow: lift,
+          experimental_backgroundImage: on ? color.glassSheen : undefined,
           opacity: disabled ? 0.45 : pressed ? 0.7 : 1
         },
         style

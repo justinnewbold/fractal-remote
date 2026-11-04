@@ -40,6 +40,13 @@ export default function Toast({ open, yields = false, onLayout, children }) {
         left: space.lg,
         right: space.lg,
         zIndex: 2,
+        /*
+         * Frosted glass's light along its top (lib/glass glassFloat). The card
+         * floats over the tiles, so it keeps its OPAQUE fill and its own
+         * shadow and elevation: a card that let a white scene through would
+         * take its words under 4.5:1.
+         */
+        boxShadow: color.glassTop,
         gap: space.xs,
         borderRadius: radius.md,
         backgroundColor: color.chassis,

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { glassField } from '../lib/glass'
 import { Platform } from 'react-native'
 import { slotCount, slotLabel, vp4Here, vp4PresetName } from '../lib/device'
 import { VP4_NO_NAMES, VP4_RELOAD, VP4_UPDATE_COMPUTER, vp4ComputerCan, vp4PresetCode } from '../lib/vp4-safety'
@@ -310,13 +311,12 @@ export default function Presets({ onBack }) {
             placeholderTextColor={color.silkFaint}
             autoCorrect={false}
             autoCapitalize="none"
+            /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
             style={{
               minHeight: TAP,
               paddingHorizontal: space.md,
-              borderRadius: radius.md,
               borderWidth: 1,
-              borderColor: color.rule,
-              backgroundColor: color.panel,
+              ...glassField(),
               color: color.silk,
               fontSize: font.body
             }}
@@ -331,7 +331,8 @@ export default function Presets({ onBack }) {
           style={{ flexDirection: 'row', gap: space.xs, paddingHorizontal: space.lg, paddingBottom: space.sm }}
         >
           {jumps.map((n, i) => (
-            <Press key={n} grow fit fitWith={jumpLabels.filter((_, j) => j !== i)} label={jumpLabels[i]} height={44} onPress={() => jumpTo(n)} />
+            /* The light along the top only: a drop shadow here would sit over the first row of the list. */
+            <Press key={n} grow fit fitWith={jumpLabels.filter((_, j) => j !== i)} label={jumpLabels[i]} height={44} onPress={() => jumpTo(n)} style={{ boxShadow: color.glassTop }} />
           ))}
         </View>
       ) : null}
@@ -434,7 +435,10 @@ export default function Presets({ onBack }) {
                 /* Held, its colour tag — nothing to file one under before a unit has answered (colourPage presetTarget). */
                 onLongPress={target ? () => setPainting(target) : undefined}
                 accessibilityHint={target ? TAG_HOLD.hint : undefined}
-                /* Its colour tag, down the left edge: none for a preset without one. */
+                /* Its colour tag, down the left edge: none for a preset without one.
+                   Every row is the same flat glass at the bar's corner, tagged or not. */
+                bar
+                flat
                 style={tagEdge(tag)}
               />
               <Star
@@ -499,8 +503,10 @@ function Star({ on, label, onPress }) {
         justifyContent: 'center',
         borderRadius: radius.md,
         borderWidth: 1,
-        borderColor: on ? color.signal : color.rule,
-        backgroundColor: color.panel,
+        /* Frosted glass with the light along its top, and no drop: it is a row in a long list. */
+        borderColor: on ? color.signal : color.glassRim,
+        backgroundColor: color.glassFill,
+        boxShadow: color.glassTop,
         opacity: pressed ? 0.7 : 1
       })}
     >

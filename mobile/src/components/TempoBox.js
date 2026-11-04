@@ -163,7 +163,9 @@ export default function TempoBox({ open, bpm, range = ANY_BPM, onSet, onClose })
             flex: 1,
             alignItems: 'center',
             /* Its margin from the phone's own down each side, not under it (lib/screenShape clearSides). */
-            ...clearSides(insets, tight ? space.lg : space.xl)
+            ...clearSides(insets, tight ? space.lg : space.xl),
+            /* A dim over the screen behind, which Android's flat blur does not give (lib/glass). */
+            backgroundColor: color.scrim
           }}
         >
           {/*
@@ -189,9 +191,13 @@ export default function TempoBox({ open, bpm, range = ANY_BPM, onSet, onClose })
                 gap: tight ? space.sm : space.md,
                 padding: tight ? space.md : space.lg,
                 borderRadius: radius.lg * 2,
+                /* A pane of frosted glass (lib/glass): the sheet's own fill, so
+                   its words read in Light as well as Dark, with the rim, the
+                   light along its top and a soft shadow. */
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.14)',
-                backgroundColor: 'rgba(255,255,255,0.04)'
+                borderColor: color.glassRim,
+                backgroundColor: color.sheetFill,
+                boxShadow: color.glassLift
               }}
             >
               <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>TEMPO</Text>
@@ -222,7 +228,7 @@ export default function TempoBox({ open, bpm, range = ANY_BPM, onSet, onClose })
                 onSubmitEditing={commit}
                 style={{
                   minHeight: tight ? TAP + 8 : TAP + 24,
-                  backgroundColor: 'rgba(0,0,0,0.35)',
+                  backgroundColor: color.glassWell,
                   borderWidth: 1,
                   borderColor: error ? color.fault : color.live,
                   borderRadius: radius.md,
@@ -282,7 +288,7 @@ export default function TempoBox({ open, bpm, range = ANY_BPM, onSet, onClose })
                 to two lines, so it never reaches the keys. The whole of the
                 line is in the volume pop-up and Settings → Metronome.
               */}
-              <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)', paddingTop: tight ? space.sm : space.md }}>
+              <View style={{ borderTopWidth: 1, borderTopColor: color.glassRim, paddingTop: tight ? space.sm : space.md }}>
                 <MetronomeSwitch compact lines={tight ? 2 : undefined} />
               </View>
             </Pressable>
