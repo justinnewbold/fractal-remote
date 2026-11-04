@@ -93,6 +93,8 @@ async function kit() {
     space: theme.space,
     TAP: theme.TAP,
     glassCard: glass.glassCard,
+    classic: glass.classic,
+    cardCorner: glass.cardCorner,
     glassControl: glass.glassControl,
     glassField: glass.glassField,
     View: 'View',
@@ -367,7 +369,7 @@ export function run(test) {
   test('glass in Settings: Connect’s pill stays green, its card and the Bluetooth panels are glass, and the cable between the cards takes the rim', async () => {
     const connect = code(FILES.connect)
     assert.match(connect, /borderRadius: radius\.pill, borderWidth: 1, borderColor: color\.ok, backgroundColor: color\.glassFill, boxShadow: color\.glassLift \}\}/, 'Connect’s pill is not a green capsule of glass')
-    assert.match(connect, /padding: space\.lg, gap: space\.lg, borderWidth: 1, \.\.\.glassCard\(\{ bordered: true \}\) \}\}/, 'Connect’s card is not bordered glass')
+    assert.match(connect, /padding: space\.lg, gap: space\.lg, borderWidth: 1, \.\.\.glassCard\(\{ bordered: true, classicCorner: radius\.lg \}\) \}\}/, 'Connect’s card is not bordered glass, at its old corner in Classic')
     assert.match(connect, /width: 64, height: 64, borderRadius: radius\.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: color\.panelHi/, 'Connect’s picture square changed')
     assert.equal((connect.match(/<View style=\{\{ flex: 1, height: 1, backgroundColor: color\.glassRim \}\} \/>/g) || []).length, 2, 'the two rules either side of “or” are not the glass’s rim')
 
@@ -399,7 +401,7 @@ export function run(test) {
   test('glass in Settings: the address box, the model page’s arrows and the pictures’ frames; the tick box keeps the outline that shows it', async () => {
     const copy = code(FILES.copy)
     assert.match(copy, /borderRadius: radius\.card, borderWidth: 1, borderColor: copied \? color\.signal : color\.glassRim, backgroundColor: pressed \? color\.glassFillHi : color\.glassWell \}\)\}/, 'the address box is not a well in the glass, or lost its amber once copied')
-    assert.match(copy, /borderWidth: 1, \.\.\.glassCard\(\{ bordered: true, pressed \}\), borderColor: copied \? color\.signal : color\.glassRim \}\)\}/, 'the address card is not glass, or lost its amber once copied')
+    assert.match(copy, /borderWidth: 1, \.\.\.glassCard\(\{ bordered: true, pressed, classicCorner: radius\.lg \}\), borderColor: copied \? color\.signal : color\.glassRim \}\)\}/, 'the address card is not glass, or lost its amber once copied')
     assert.match(copy, /width: 44, height: 44, borderRadius: radius\.md,/, 'the copy button’s square changed')
 
     const { Arrow } = await bench(FILES.gearCard, ['function Arrow('], { chevronIcon: 1 })
