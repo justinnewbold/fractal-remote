@@ -4,8 +4,9 @@
   "days": [
     {
       "date": "2026-11-04",
-      "version": "1.89.40",
+      "version": "1.89.41",
       "lines": [
+        "The computer app now notices within a couple of seconds when your unit is switched off and on, or its USB cable is unplugged and plugged back in, and reconnects by itself, so you no longer have to restart the computer app.",
         "In the phone app, buttons, bars and pop-ups have a new frosted glass look, with rounder buttons and a soft light along the top. Prefer the old look? Choose Classic under Settings → Colors → Style. Sunlight keeps the glass solid for bright stages, and in Light mode the small gray labels are easier to read.",
         "On the website and the computer app, Tuner, Edit and Tap at the bottom of Play are now the phone app’s taller buttons, with the tempo under Tap.",
         { "text": "On an iPhone or iPad, a unit you’ve plugged in by USB cable is now called USB cable instead of Bluetooth, and Connect uses it without opening Apple’s Bluetooth screen.", "only": "ios" },
