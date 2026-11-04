@@ -1666,7 +1666,7 @@ export function run(test) {
     assert.ok(!/text-overflow: ellipsis/.test(word), '"Stop tuner" is cut to "Stop tun…" on a phone')
     assert.match(word, /white-space: normal/)
     assert.match(word, /line-height: 1\.1/, 'two lines of "Stop tuner" do not fit the 44px button')
-    /* The phone app's taller look, written and waiting behind Gig's BAR_LOOK: 56 high, 48 at Smallest, the tempo under Tap. */
+    /* The phone app's taller look, the one Gig's BAR_LOOK picks: 56 high, 48 at Smallest, the tempo under Tap. */
     assert.match(code, /\.gig-bar\[data-look='tall'\] button\.gig-bar-btn \{\s*min-height: 56px;/, 'the phone app’s height is not one line away')
     assert.match(code, /\.gig\[data-compact\] \.gig-bar\[data-look='tall'\] button\.gig-bar-btn \{\s*min-height: 48px;/)
     assert.match(code, /\.gig-bar\[data-look='tall'\] \.gig-tap-bpm \{\s*flex-basis: 100%;/, 'the tall look does not put the tempo under Tap')

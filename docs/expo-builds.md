@@ -100,15 +100,15 @@ needs, with nothing telling them. It says 1.87.11 for both since 13 October
 
 ## November 2026
 
-No build has been started from this project in November: Expo's build
-list, checked 3 November 2026, shows the 1.89.3 pair of 26 October as the
-newest. The month still starts short: "I actually have 12 iOS builds left
+Before the Android build of 4 November, none had been started from this
+project in November: Expo's build list, checked 3 November 2026, showed the
+1.89.3 pair of 26 October as the newest. The month still started short: "I actually have 12 iOS builds left
 and 13 android builds left. for November" (Justin, 3 November 2026), so 3
 iOS and 2 Android slots went outside this ledger, by his own count. The
-next one waiting is Android's cable (docs/pending/README.md,
-android-usb-midi.patch), which moves Android's fingerprint alone.
+first this month is Android's cable, below.
 
 | Date | Version | iOS | Android | What it was for |
 |---|---|---|---|---|
+| 4 Nov | 1.89.36 | — | 1 | Android plugs into the unit by USB cable: an AM4, FM9, Axe-Fx III or VP4 on its own USB cable, or a USB MIDI cable on a unit's MIDI jacks, opened through Android's own MIDI service (docs/pending/android-usb-midi.patch, applied in #789). An Android build on its own, the one exception CLAUDE.md allows: only the android line of the fingerprint moved (25ad57fe… to 27d15e4d…; iOS c16f1c0d… and the watch unchanged), and Justin asked for it ("You are good to do the android build on expo go as soon as it's ready", 4 November 2026). Started 02:01 UTC from main 4866839, mobile.yml run 41757997891 (platform android, profile production, Send ticked: straight to Google Play production). Android phones on Google Play's 1.89.3 (version code 14) keep the last update made before 4866839 until they take 1.89.36 from Google Play; iPhones keep taking the same updates. Google's release notes and the App access paragraph (docs/app-store.md) go in by hand once Justin has run the cable on this build |
 
-**Left this month: 12 iOS, 13 Android.**
+**Left this month: 12 iOS, 12 Android.**

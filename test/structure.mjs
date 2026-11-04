@@ -4112,7 +4112,7 @@ export function run(test) {
       assert.match(src, new RegExp(`import ${name} from '\\.\\./\\.\\./mobile/assets/icons/${file}\\.png'`), `${name} is not the phone’s own picture`)
     }
     /* The look, the one line to change between the website's short buttons and the phone app's tall ones (styles.css .gig-bar[data-look='tall']). */
-    assert.match(g, /^const BAR_LOOK = 'short'$/m, 'the bar’s look is not one line to change, or it changed without asking')
+    assert.match(g, /^const BAR_LOOK = 'tall'$/m, 'the bar’s look is not one line to change, or it changed without asking (Justin picked the phone app’s tall buttons, 4 November 2026)')
     assert.match(g, /<div className="gig-bar" data-look=\{BAR_LOOK\} role="group" aria-label=\{barSays\}>/, 'the bar does not take its look from BAR_LOOK')
     /* Named by the buttons drawn: Tuner only where the unit has one, Edit only where it opens. */
     assert.match(g, /const barParts = \[tunerHere \? 'Tuner' : null, onChain \? 'Edit' : null, 'Tap'\]\.filter\(Boolean\)/, 'the row is called Tuner, Edit and Tap whatever is in it')
