@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-04",
     "day": "4 November 2026",
-    "version": "1.89.35",
+    "version": "1.89.38",
     "lines": [
+      {
+        "text": "On the website and the computer app, Tuner, Edit and Tap at the bottom of Play are now the phone app’s taller buttons, with the tempo under Tap.",
+        "only": null
+      },
       {
         "text": "On an iPhone or iPad, a unit you’ve plugged in by USB cable is now called USB cable instead of Bluetooth, and Connect uses it without opening Apple’s Bluetooth screen.",
         "only": "ios"

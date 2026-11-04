@@ -8490,7 +8490,7 @@ button.gig-scene.current[data-picked='yes'] .gig-scene-name {
  * THE HEIGHT IS ONE SWITCH: Gig.jsx BAR_LOOK. 'short' is this, the floor
  * with Tap's tempo beside the word (button.gig-tap). 'tall' is the phone
  * app's, 56 high (48 at Smallest) with the tempo under Tap, written below
- * under .gig-bar[data-look='tall'] and waiting.
+ * under .gig-bar[data-look='tall'], and the look in use since 4 November 2026.
  *
  * The phone's faces otherwise: its picture beside each word, the word in
  * the body face at its size, weight 600, as written ("Tuner", "Edit",
