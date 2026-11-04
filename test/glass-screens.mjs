@@ -119,7 +119,7 @@ export function run(test) {
 
     /* The choice of what Previous and Next walk: a card of glass, the chosen one in amber still. */
     const source = flat(named(SETLISTS, 'SourceRow'))
-    assert.match(source, /\.\.\.glassCard\(\{ bordered: true, pressed \}\), borderWidth: on \? 2 : 1, \.\.\.\(on \? \{ borderColor: color\.signal, backgroundColor: color\.signalWash \} : null\),/, 'the chosen source lost its amber edge and wash, or the glass is drawn over them')
+    assert.match(source, /\.\.\.glassCard\(\{ bordered: true, pressed: pressed && !classic\(\) \}\), borderWidth: on \? 2 : 1, \.\.\.\(on \? \{ borderColor: color\.signal, backgroundColor: color\.signalWash \} : null\),/, 'the chosen source lost its amber edge and wash, or the glass is drawn over them')
     assert.match(source, /minHeight: TAP, justifyContent: 'center', paddingHorizontal: space\.md, paddingVertical: space\.sm,/, 'the source row moved')
     const hint = flat(named(SETLISTS, 'SwipeHint'))
     assert.match(hint, /borderRadius: radius\.card, borderWidth: 1, borderColor: color\.signal, backgroundColor: color\.signalWash/, 'the swipe hint is not a card at the glass corner, in amber')
@@ -143,7 +143,7 @@ export function run(test) {
     const stage = flat(read('mobile/src/screens/Stage.js'))
     assert.match(stage, / bar style=\{\[\{ paddingHorizontal: space\.lg \}, tagEdge\(presetTag\(preset\?\.number\)\)\]\}/, 'Play’s preset name changes shape between a tagged preset and an untagged one')
     const press = read('mobile/src/components/Press.js')
-    assert.match(press, /const corner = bar \? radius\.md :/, 'Press rounds a button a colour bar goes down past what keeps the bar straight')
+    assert.match(press, /const corner = bar \|\| classic\(\) \? radius\.md :/, 'Press rounds a button a colour bar goes down past what keeps the bar straight')
 
     /* The jumps: the light along the top only. */
     assert.match(
@@ -191,7 +191,7 @@ export function run(test) {
         const where = `${file}:${f.line}`
         const glass = spreads.includes('glassField()')
         /* ValueBox, the number under a knob, is glass at its small corner (it is 32 tall). */
-        const small = keys.backgroundColor === 'color.glassFill' && keys.borderColor === 'color.glassRim' && keys.borderRadius === 'radius.md'
+        const small = keys.backgroundColor === 'color.glassFill' && keys.borderColor === 'color.glassRim' && keys.borderRadius === 'classic() ? radius.sm : radius.md'
         if ('borderWidth' in keys && !glass && !small) misses.push(`${where}: a boxed field that is not glass`)
         if (glass && 'borderRadius' in keys) misses.push(`${where}: a glass field with a corner of its own`)
         if (glass && keys.borderWidth !== '1') misses.push(`${where}: a glass field whose border is not the 1 it had`)
@@ -202,7 +202,7 @@ export function run(test) {
     assert.deepEqual(misses, [], `fields that are not glass:\n  ${misses.join('\n  ')}`)
 
     /* The number under a knob, in Edit. */
-    assert.match(flat(named(EDIT, 'ValueBox')), /minHeight: 32, textAlign: 'center', borderRadius: radius\.md, borderWidth: 1, borderColor: color\.glassRim, backgroundColor: color\.glassFill,/, 'the value under a knob is not glass at its small corner')
+    assert.match(flat(named(EDIT, 'ValueBox')), /minHeight: 32, textAlign: 'center', borderRadius: classic\(\) \? radius\.sm : radius\.md, borderWidth: 1, borderColor: color\.glassRim, backgroundColor: color\.glassFill,/, 'the value under a knob is not glass at its small corner')
     /* The sign-in field is the box round the picture and the words, as tall as it was, its hairline the glass rim. */
     const signIn = flat(named(SIGN_IN, 'Field'))
     assert.match(signIn, /minHeight: TAP \+ 8, borderWidth: 1, \.\.\.glassField\(\) \}/, 'the sign-in field is not a glass field as tall as it was')
@@ -224,7 +224,7 @@ export function run(test) {
   test('glass screens: the two cards at startup are glass cards at the card corner, still centred by the view that grows with them', () => {
     for (const file of NOTICES) {
       const text = read(file)
-      assert.match(text, /^import \{ glassCard \} from '\.\.\/lib\/glass'$/m, `${file} does not take its card from lib/glass`)
+      assert.match(text, /^import \{ cardCorner, glassCard \} from '\.\.\/lib\/glass'$/m, `${file} does not take its card from lib/glass`)
       let card = null
       let parent = null
       traverse(tree(file), {
@@ -237,7 +237,7 @@ export function run(test) {
       })
       assert.ok(card, `${file} has lost its card, or the card is no longer modal to a screen reader`)
       assert.deepEqual(card.spreads, ['glassCard({ bordered: true })'], `${file}: the card is not a rimmed glass card`)
-      assert.equal(card.keys.borderRadius, 'radius.card', `${file}: the card is not at the card corner`)
+      assert.equal(card.keys.borderRadius, 'cardCorner(radius.lg)', `${file}: the card is not at the card corner, or at its old radius.lg in Classic`)
       assert.equal(card.keys.borderWidth, '1', `${file}: the card border changed its width`)
       assert.equal(card.keys.padding, 'space.xl', `${file}: the card moved its words`)
       assert.ok(!('backgroundColor' in card.keys) && !('borderColor' in card.keys), `${file}: the card paints over its glass`)
@@ -251,7 +251,7 @@ export function run(test) {
   test('glass screens: the chain cards on Edit sit on the page ground over their red ✕, and their colours stay', () => {
     const edit = read(EDIT)
     const card = flat(named(EDIT, 'BlockCard'))
-    assert.match(card, /return \( <View style=\{\{ gap: space\.sm, backgroundColor: color\.chassis \}\}>/, 'what folds out under a chain card is glass over the red ✕ behind it')
+    assert.match(card, /return \( <View style=\{\{ gap: space\.sm, backgroundColor: classic\(\) \? undefined : color\.chassis \}\}>/, 'what folds out under a chain card is glass over the red ✕ behind it')
     /* Its head is a Press with the colour bar, on the opaque panel (`bar="solid"`, the rule held in glass.mjs). */
     assert.match(card, /<Press grow caption=\{at\} label=\{block\.name\} on=\{lifted\} tone="signal" bar="solid" style=\{\{ borderLeftWidth: 4, borderLeftColor: hue\.fill \}\}/, 'the chain card lost its colour bar, or its opaque panel')
     /* Green to add, red to take away: the washes are meaning, and stay. */
@@ -276,14 +276,14 @@ export function run(test) {
   test('glass screens: the cards on the walkthrough, the sign-in and the purchase page are glass, and the chosen ones stay amber', () => {
     /* The sign-in steps: a rimmed card with its light, the amber number rounds as they were. */
     const signIn = flat(read(SIGN_IN))
-    assert.match(signIn, /<View style=\{\{ \.\.\.glassCard\(\{ bordered: true \}\), borderWidth: 1, padding: space\.lg, gap: space\.md \}\} > <Text style=\{\{ color: color\.silk, fontSize: font\.title, fontWeight: '800' \}\}>\{SETUP\.title\}/, 'the sign-in steps are not a glass card')
+    assert.match(signIn, /<View style=\{\{ \.\.\.glassCard\(\{ bordered: true, classicCorner: radius\.lg \}\), borderWidth: 1, padding: space\.lg, gap: space\.md \}\} > <Text style=\{\{ color: color\.silk, fontSize: font\.title, fontWeight: '800' \}\}>\{SETUP\.title\}/, 'the sign-in steps are not a glass card')
     assert.match(signIn, /borderRadius: 15, backgroundColor: color\.signal,/, 'the amber step numbers changed')
     assert.match(signIn, /label=\{SETUP\.howTo\} icon=\{externalIcon\} disabled=\{busy\} onPress=\{\(\) => setHelping\(true\)\} style=\{\{ borderColor: color\.signal \}\}/, 'How to connect lost its amber edge')
 
     const onb = (name) => flat(named(ONBOARDING, name))
-    assert.match(onb('UnitTile'), /\.\.\.glassCard\(\{ bordered: true, pressed \}\), borderWidth: on \? 2 : 1, \.\.\.\(on \? \{ borderColor: color\.signal, backgroundColor: tint\(color\.signal, 0\.14\) \} : null\)/, 'the unit picked is not amber over its glass')
-    assert.match(onb('Choice'), /\.\.\.glassCard\(\{ bordered: true \}\), borderWidth: 1, \.\.\.\(lit \? \{ borderColor: color\.signal, backgroundColor: color\.signalWash \} : null\)/, 'the way to press is not amber over its glass')
-    assert.match(onb('ChainBox'), /padding: tight \? space\.md : space\.lg, \.\.\.glassCard\(\{ bordered: true \}\), borderWidth: 1 \}/, 'the three boxes are not glass cards')
+    assert.match(onb('UnitTile'), /\.\.\.glassCard\(\{ bordered: true, pressed, classicCorner: radius\.lg \}\), borderWidth: on \? 2 : 1, \.\.\.\(on \? \{ borderColor: color\.signal, backgroundColor: tint\(color\.signal, 0\.14\) \} : null\)/, 'the unit picked is not amber over its glass')
+    assert.match(onb('Choice'), /\.\.\.glassCard\(\{ bordered: true, classicCorner: radius\.lg \}\), borderWidth: 1, \.\.\.\(lit \? \{ borderColor: color\.signal, backgroundColor: color\.signalWash \} : null\)/, 'the way to press is not amber over its glass')
+    assert.match(onb('ChainBox'), /padding: tight \? space\.md : space\.lg, \.\.\.glassCard\(\{ bordered: true, classicCorner: radius\.lg \}\), borderWidth: 1 \}/, 'the three boxes are not glass cards')
     /* The cable is the drawing, not chrome: lit amber end to end, its ring included (Walk.js ChainWire's grey ring is an UNLIT cable's). */
     assert.match(onb('Wire'), /borderRadius: 999, borderWidth: 1, borderColor: color\.signal, backgroundColor: color\.chassis \}/, 'the lit cable’s ring is not amber, so it reads half unlit')
     assert.match(onb('Wire'), /<Text style=\{\{ color: color\.signal,/, 'the cable name is no longer lit')
@@ -292,7 +292,7 @@ export function run(test) {
     assert.match(welcome, /borderRadius: radius\.card, backgroundColor: tint\(color\.signal, 0\.1\), boxShadow: color\.glassLiftRing,/, 'the feature squares lost their amber wash, or are not glass')
 
     /* The purchase page: glass on the page, flat in the sheet it is when asked for. */
-    assert.match(flat(read(PAYWALL)), /<View style=\{\{ \.\.\.glassCard\(\{ flat: asked \}\), padding: space\.lg, gap: space\.md \}\} > <Text[^>]*> Presets, scenes, amp &amp; effect blocks/, 'the purchase page list is not a glass card, flat in its sheet')
+    assert.match(flat(read(PAYWALL)), /<View style=\{\{ \.\.\.glassCard\(\{ flat: asked, classicCorner: radius\.lg \}\), padding: space\.lg, gap: space\.md \}\} > <Text[^>]*> Presets, scenes, amp &amp; effect blocks/, 'the purchase page list is not a glass card, flat in its sheet')
     assert.match(read(PAYWALL), /return asked \? \(\s*<Sheet open/, 'the purchase page asked for is no longer the sheet the card is flat in')
   })
 
@@ -302,7 +302,7 @@ export function run(test) {
     assert.match(picker, /height: ROW, marginBottom: GAP, paddingHorizontal: space\.md, borderRadius: radius\.card, borderWidth: 1, borderColor: on \? color\.signal : color\.glassRim, backgroundColor: color\.glassFill, boxShadow: color\.glassTop,/, 'a song picker row is not flat glass at the same height')
     assert.match(read(PICKER), /const ROW = TAP\nconst GAP = 8/)
     assert.match(flat(read(PICKER)), /borderTopWidth: 1, borderTopColor: color\.glassRim/, 'the picker foot rule is not the glass rim')
-    assert.match(flat(read(SONG_SETUP)), /borderRadius: capsule\(TAP\), borderWidth: 1, borderColor: on \? color\.signal : color\.glassRim, backgroundColor: on \? color\.signalWash : pressed \? color\.glassFillHi : color\.glassFill, boxShadow: color\.glassTop,/, 'a song setup choice is not a flat glass capsule')
+    assert.match(flat(read(SONG_SETUP)), /borderRadius: classic\(\) \? radius\.sm : capsule\(TAP\), borderWidth: 1, borderColor: on \? color\.signal : color\.glassRim, backgroundColor: on \? color\.signalWash : pressed && !classic\(\) \? color\.glassFillHi : color\.glassFill, boxShadow: color\.glassTop,/, 'a song setup choice is not a flat glass capsule')
     for (const [file, name] of [[PICKER, 'Row'], [PRESETS, 'Star'], [SETLISTS, 'Song']]) {
       assert.doesNotMatch(named(file, name), /glassLift|glassControl|elevation/, `${file} ${name} casts a drop in a long list`)
     }
