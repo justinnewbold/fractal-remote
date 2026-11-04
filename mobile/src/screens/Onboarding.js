@@ -786,7 +786,7 @@ const UnitTile = ({ name, on, onPress }) => (
       alignItems: 'center',
       justifyContent: 'center',
       /* A card of frosted glass (lib/glass); the one picked keeps its amber edge and wash. */
-      ...glassCard({ bordered: true, pressed }),
+      ...glassCard({ bordered: true, pressed, classicCorner: radius.lg }),
       borderWidth: on ? 2 : 1,
       ...(on ? { borderColor: color.signal, backgroundColor: tint(color.signal, 0.14) } : null)
     })}
@@ -873,7 +873,7 @@ const Choice = ({ lit, eyebrow, title, body, art, children }) => (
       gap: space.sm,
       padding: space.lg,
       /* A card of frosted glass (lib/glass); the lit one keeps its amber edge and warm wash. */
-      ...glassCard({ bordered: true }),
+      ...glassCard({ bordered: true, classicCorner: radius.lg }),
       borderWidth: 1,
       ...(lit ? { borderColor: color.signal, backgroundColor: color.signalWash } : null)
     }}
@@ -1019,7 +1019,7 @@ const ChainBox = ({ n, title, body, kind, tight = false }) => (
       gap: space.md,
       padding: tight ? space.md : space.lg,
       /* A card of frosted glass (lib/glass), rimmed, with the light along its top. */
-      ...glassCard({ bordered: true }),
+      ...glassCard({ bordered: true, classicCorner: radius.lg }),
       borderWidth: 1
     }}
   >

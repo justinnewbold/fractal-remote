@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
+import { paneFill, paneRim, paneWell } from '../lib/glass'
 import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import Note from './Note'
 import Press from './Press'
@@ -66,7 +67,7 @@ export default function PasswordBox({ open, onChange, onClose }) {
 
   const box = (bad) => ({
     minHeight: TAP,
-    backgroundColor: color.glassWell,
+    backgroundColor: paneWell(),
     borderWidth: 1,
     borderColor: bad ? color.fault : color.live,
     borderRadius: radius.md,
@@ -103,8 +104,8 @@ export default function PasswordBox({ open, onChange, onClose }) {
               borderRadius: radius.lg * 2,
               /* A pane of frosted glass, like the tempo box's (lib/glass). */
               borderWidth: 1,
-              borderColor: color.glassRim,
-              backgroundColor: color.sheetFill,
+              borderColor: paneRim(),
+              backgroundColor: paneFill(),
               boxShadow: color.glassLift
             }}
           >

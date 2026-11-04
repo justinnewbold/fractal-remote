@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
+import { classic } from '../lib/glass'
 
 /**
  * Something the app has to say, in the register it deserves.
@@ -75,7 +76,7 @@ export default function Note({ tone = 'hint', onDismiss, onPress, size, strong, 
         borderLeftColor: accent,
         /* Frosted glass, flat (lib/glass): a ring and the light along the top, no drop. */
         backgroundColor: color.glassFill,
-        borderRadius: radius.md,
+        borderRadius: classic() ? radius.sm : radius.md,
         boxShadow: color.glassFlat,
         paddingVertical: space.md,
         paddingHorizontal: space.md

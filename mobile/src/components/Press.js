@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Image, PixelRatio, Pressable, Text, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { capsule } from '../lib/glass'
+import { capsule, classic } from '../lib/glass'
 import { STEP_LINE_EDGE, STEP_WORD_LEAST, fitStep } from '../lib/line-fit'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
@@ -175,9 +175,10 @@ export default function Press({
    *     would cut it;
    *   - everything else is a capsule, half its height.
    * A corner the caller gives in `style` still wins (Volume's round − and +).
+   * In Classic every button is radius.md, as every one was before the glass.
    */
   const solid = bar === 'solid'
-  const corner = bar ? radius.md : under !== undefined || caption ? radius.card : capsule(height)
+  const corner = bar || classic() ? radius.md : under !== undefined || caption ? radius.card : capsule(height)
   const background = on ? accent : solid ? color.panel : color.glassFill
   const lift = flat ? (on ? color.glassLitTop : color.glassTop) : on ? color.glassLit : solid ? color.glassTop : color.glassLift
 

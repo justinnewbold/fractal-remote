@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Alert, ScrollView, Text, View } from 'react-native'
 
-import { color, font, space } from '../lib/theme'
+import { color, font, radius, space } from '../lib/theme'
 import { glassCard } from '../lib/glass'
 import Note from '../components/Note'
 import Press from '../components/Press'
@@ -173,7 +173,7 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
       */}
       <View
         style={{
-          ...glassCard({ flat: asked }),
+          ...glassCard({ flat: asked, classicCorner: radius.lg }),
           padding: space.lg,
           gap: space.md
         }}

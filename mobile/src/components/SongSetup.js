@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
-import { color, font, mono, space, TAP } from '../lib/theme'
-import { capsule, glassField } from '../lib/glass'
+import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { capsule, classic, glassField } from '../lib/glass'
 import { slotLabel } from '../lib/device'
 import { SCENES, SONG_BPM, songIn, songsWith, songWords, updateList } from '../lib/lists'
 import { useRig } from '../lib/rig'
@@ -41,10 +41,10 @@ export default function SongSetup({ device, list, nameOf, addressing }) {
         minHeight: TAP,
         minWidth: TAP,
         paddingHorizontal: space.sm,
-        borderRadius: capsule(TAP),
+        borderRadius: classic() ? radius.sm : capsule(TAP),
         borderWidth: 1,
         borderColor: on ? color.signal : color.glassRim,
-        backgroundColor: on ? color.signalWash : pressed ? color.glassFillHi : color.glassFill,
+        backgroundColor: on ? color.signalWash : pressed && !classic() ? color.glassFillHi : color.glassFill,
         boxShadow: color.glassTop,
         alignItems: 'center',
         justifyContent: 'center',
@@ -99,6 +99,8 @@ export default function SongSetup({ device, list, nameOf, addressing }) {
                   borderWidth: 1,
                   /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
                   ...glassField(),
+                  /* Classic: the box at the small corner on the sheet's own ground, as it was. */
+                  ...(classic() ? { borderRadius: radius.sm, backgroundColor: undefined } : null),
                   color: color.silk,
                   fontSize: font.body
                 }}

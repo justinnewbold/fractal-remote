@@ -111,5 +111,24 @@ export function glassLit(accent, { glowing = false } = {}) {
   }
 }
 
+/*
+ * The pop-up panes' own colours before the glass (the sheets, the tuner, the
+ * volume, the tempo and password boxes), written into them rather than taken
+ * from the theme, the same in Light and Dark. Classic draws them again.
+ */
+const PANE_BEFORE = { rim: 'rgba(255,255,255,0.14)', fill: 'rgba(255,255,255,0.04)', well: 'rgba(0,0,0,0.35)', rule: 'rgba(255,255,255,0.10)' }
+
+/** A pane's rim. */
+export const paneRim = () => (isClassic() ? PANE_BEFORE.rim : color.glassRim)
+
+/** A see-through pane's fill: the tempo and password boxes. */
+export const paneFill = () => (isClassic() ? PANE_BEFORE.fill : color.sheetFill)
+
+/** The field sunk in a pane. */
+export const paneWell = () => (isClassic() ? PANE_BEFORE.well : color.glassWell)
+
+/** The line across a pane. */
+export const paneRule = () => (isClassic() ? PANE_BEFORE.rule : color.glassRim)
+
 /** A text field: frosted, rimmed, at the card's corner, with no shadow. */
 export const glassField = () => ({ backgroundColor: color.glassFill, borderColor: color.glassRim, borderRadius: radius.card })

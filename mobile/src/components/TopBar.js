@@ -19,6 +19,7 @@ import { CABLE_OFF, CABLE_WHERE, cableNote } from '../lib/cableWords'
 import { idOf } from '../lib/device'
 import Lamp from './Lamp'
 import { GlassDisc } from './Glass'
+import { classic } from '../lib/glass'
 import Volume from './Volume'
 import { fire } from '../lib/tapped'
 import { useSaveToSlot } from './SaveToSlot'
@@ -278,7 +279,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
         /* Translucent, or the blur has nothing to do: a solid panel in front
            of it hides the very thing it is blurring. The panel at 0.55, as it
            always was, and solid in Sunlight (lib/theme setSolidChrome). */
-        backgroundColor: color.glassBar,
+        backgroundColor: classic() ? at(color.panel, 0.55) : color.glassBar,
         /*
          * ABOVE THE SCREEN UNDER IT. The bar's notes (Saved, a volume that
          * would not take, a save running late) hang below it, over the top of
@@ -363,7 +364,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
           /* space.sm, not md: in the demo on a 360-wide phone the unit's name was what paid for the wider edge. */
           paddingHorizontal: space.sm,
           paddingVertical: 3,
-          borderRadius: radius.pill,
+          borderRadius: classic() ? radius.lg : radius.pill,
           borderWidth: 1,
           /*
            * A capsule, as the glass's pills are (React Native rounds 999 to half
@@ -680,10 +681,11 @@ function Which({ link, cable = false, onClose, onReport = null }) {
     minHeight: 44,
     justifyContent: 'center',
     paddingHorizontal: space.lg,
-    borderRadius: radius.pill,
+    borderRadius: classic() ? radius.md : radius.pill,
     borderWidth: 1,
     borderColor: color.glassRim,
-    backgroundColor: pressed ? color.glassFillHi : color.glassFill,
+    /* Classic: the chassis on the strip, and the panel pressed, as they were. */
+    backgroundColor: classic() ? (pressed ? color.panel : color.chassis) : pressed ? color.glassFillHi : color.glassFill,
     boxShadow: color.glassLift
   })
   return (
@@ -821,10 +823,10 @@ function Late({ onCancel, picked = false }) {
           minHeight: 36,
           justifyContent: 'center',
           paddingHorizontal: space.md,
-          borderRadius: radius.pill,
+          borderRadius: classic() ? radius.md : radius.pill,
           borderWidth: 1,
           borderColor: color.glassRim,
-          backgroundColor: pressed ? color.glassFillHi : color.glassFill,
+          backgroundColor: classic() ? (pressed ? color.panel : color.chassis) : pressed ? color.glassFillHi : color.glassFill,
           boxShadow: color.glassLift
         })}
       >

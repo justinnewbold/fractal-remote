@@ -9,7 +9,7 @@ import {
   View
 } from 'react-native'
 
-import { color, font, space, TAP } from '../lib/theme'
+import { color, font, radius, space, TAP } from '../lib/theme'
 import { glassCard, glassField } from '../lib/glass'
 import { NOT_IN_INBOX, confirmWithCode, resendConfirmation, sendPasswordReset, sentAgain, signIn, signUp } from '../lib/relay'
 import Note from '../components/Note'
@@ -327,7 +327,7 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
         {/* A card of frosted glass (lib/glass), rimmed, with the light along its top. */}
         <View
           style={{
-            ...glassCard({ bordered: true }),
+            ...glassCard({ bordered: true, classicCorner: radius.lg }),
             borderWidth: 1,
             padding: space.lg,
             gap: space.md

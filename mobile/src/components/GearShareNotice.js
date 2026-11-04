@@ -2,7 +2,7 @@ import { ScrollView, Text, View } from 'react-native'
 
 import { SHARE_NO, SHARE_TITLE, SHARE_YES, shareWords } from '../lib/gear-share-rules'
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { glassCard } from '../lib/glass'
+import { cardCorner, glassCard } from '../lib/glass'
 import Press from './Press'
 
 /**
@@ -38,7 +38,7 @@ export default function GearShareNotice({ onAnswer }) {
             padding: space.xl,
             /* A card of frosted glass (lib/glass), rimmed, with the light along its top. */
             ...glassCard({ bordered: true }),
-            borderRadius: radius.card,
+            borderRadius: cardCorner(radius.lg),
             borderWidth: 1
           }}
         >

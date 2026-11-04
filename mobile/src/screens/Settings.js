@@ -93,7 +93,7 @@ import sendIcon from '../../assets/icons/send.png'
 import setupIcon from '../../assets/icons/setup.png'
 import Note from '../components/Note'
 import { GlassCard } from '../components/Glass'
-import { glassCard } from '../lib/glass'
+import { classic, glassCard } from '../lib/glass'
 import PasswordBox from '../components/PasswordBox'
 import Press from '../components/Press'
 import { stopLooper } from '../components/Looper'
@@ -2148,7 +2148,8 @@ const deleteCosts = (from) => {
  * FROSTED GLASS (lib/glass): the whole group is one card of glass, its
  * heading clear on it and pressed in the glass's own press, so the open rows
  * sit inside the card with it. The card's rim is a ring drawn inside it, so
- * nothing moves, and it cuts the rows to its corner.
+ * nothing moves, and it cuts the rows to its corner. In Classic it is the
+ * plain stack it was (GlassCard `bare`).
  */
 function Group({ title, hint, children }) {
   const [open, setOpen] = useState(() => OPEN_GROUPS.has(title))
@@ -2159,7 +2160,7 @@ function Group({ title, hint, children }) {
     setOpen(!open)
   }
   return (
-    <GlassCard clip>
+    <GlassCard clip bare>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -2173,7 +2174,8 @@ function Group({ title, hint, children }) {
           paddingHorizontal: space.md,
           paddingVertical: space.md,
           borderRadius: radius.card,
-          backgroundColor: pressed ? color.glassFillHi : 'transparent'
+          /* In Classic the heading is the panel it was, the group having no card. */
+          backgroundColor: pressed ? color.glassFillHi : classic() ? color.panel : 'transparent'
         })}
       >
         <View style={{ flex: 1, gap: 2 }}>

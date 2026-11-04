@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AccessibilityInfo, Platform, Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
+import { classic } from '../lib/glass'
 import Press from './Press'
 
 /**
@@ -46,7 +47,7 @@ export default function ComputerCard({ words, buttons = [] }) {
         borderLeftColor: color.signal,
         /* Flat glass, as a Note is (lib/glass): the see-through fill, a ring and the light along its top, no drop. The amber edge stays, at radius.md, the most a card with a colour edge takes. */
         backgroundColor: color.glassFill,
-        borderRadius: radius.md,
+        borderRadius: classic() ? radius.sm : radius.md,
         boxShadow: color.glassFlat,
         padding: space.md
       }}

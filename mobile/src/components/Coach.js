@@ -2,6 +2,7 @@ import { Text, View } from 'react-native'
 
 import { P5 } from '../lib/onboarding'
 import { color, font, radius, space } from '../lib/theme'
+import { cardCorner } from '../lib/glass'
 import Press from './Press'
 
 /**
@@ -37,7 +38,7 @@ export default function Coach({ open, stage = 'tip', onTry, onSkip, onDone }) {
       style={{
         gap: space.sm,
         padding: space.lg,
-        borderRadius: radius.card,
+        borderRadius: cardCorner(radius.lg),
         borderWidth: 1,
         borderColor: color.glassRim,
         backgroundColor: color.glassFill,

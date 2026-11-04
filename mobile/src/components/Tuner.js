@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { at as tint } from '../lib/vivid'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { paneRim } from '../lib/glass'
 import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import Note from './Note'
 import Press from './Press'
@@ -141,7 +142,7 @@ export default function Tuner({ reading, on, onClose, down = false }) {
                  stays the panel's own, opaque, so the reading is never over
                  anything but the pane. */
               borderWidth: 1,
-              borderColor: color.glassRim,
+              borderColor: paneRim(),
               boxShadow: color.glassLift,
               backgroundColor: color.panel,
               overflow: 'hidden'

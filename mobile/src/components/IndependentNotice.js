@@ -3,7 +3,7 @@ import { ScrollView, Text, View } from 'react-native'
 
 import { NOT_AFFILIATED, STARTUP_NOTICE_TITLE, SUPPORT_LINE } from '../lib/affiliation'
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { glassCard } from '../lib/glass'
+import { cardCorner, glassCard } from '../lib/glass'
 import Press from './Press'
 
 /**
@@ -77,7 +77,7 @@ export default function IndependentNotice({ onDone }) {
           padding: space.xl,
           /* A card of frosted glass (lib/glass), rimmed, with the light along its top. */
           ...glassCard({ bordered: true }),
-          borderRadius: radius.card,
+          borderRadius: cardCorner(radius.lg),
           borderWidth: 1
         }}
       >

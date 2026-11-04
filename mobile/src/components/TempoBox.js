@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { paneFill, paneRim, paneRule, paneWell } from '../lib/glass'
 import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import { ANY_BPM, checkBpm } from '../lib/tempo'
 import { freshField, heldSelection, selectedByHand, selectionMoved, shownText, typedInto } from '../lib/tempo-field'
@@ -195,8 +196,8 @@ export default function TempoBox({ open, bpm, range = ANY_BPM, onSet, onClose })
                    its words read in Light as well as Dark, with the rim, the
                    light along its top and a soft shadow. */
                 borderWidth: 1,
-                borderColor: color.glassRim,
-                backgroundColor: color.sheetFill,
+                borderColor: paneRim(),
+                backgroundColor: paneFill(),
                 boxShadow: color.glassLift
               }}
             >
@@ -228,7 +229,7 @@ export default function TempoBox({ open, bpm, range = ANY_BPM, onSet, onClose })
                 onSubmitEditing={commit}
                 style={{
                   minHeight: tight ? TAP + 8 : TAP + 24,
-                  backgroundColor: color.glassWell,
+                  backgroundColor: paneWell(),
                   borderWidth: 1,
                   borderColor: error ? color.fault : color.live,
                   borderRadius: radius.md,
@@ -288,7 +289,7 @@ export default function TempoBox({ open, bpm, range = ANY_BPM, onSet, onClose })
                 to two lines, so it never reaches the keys. The whole of the
                 line is in the volume pop-up and Settings → Metronome.
               */}
-              <View style={{ borderTopWidth: 1, borderTopColor: color.glassRim, paddingTop: tight ? space.sm : space.md }}>
+              <View style={{ borderTopWidth: 1, borderTopColor: paneRule(), paddingTop: tight ? space.sm : space.md }}>
                 <MetronomeSwitch compact lines={tight ? 2 : undefined} />
               </View>
             </Pressable>

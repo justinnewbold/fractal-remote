@@ -138,7 +138,7 @@ export default function Connect({ onBack }) {
           padding: space.lg,
           gap: space.lg,
           borderWidth: 1,
-          ...glassCard({ bordered: true })
+          ...glassCard({ bordered: true, classicCorner: radius.lg })
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg }}>

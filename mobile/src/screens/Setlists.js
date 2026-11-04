@@ -34,7 +34,7 @@ import { landingIndex } from '../lib/laneOrder'
 import SongPicker from '../components/SongPicker'
 import SongSetup from '../components/SongSetup'
 import { tagEdge } from '../components/PresetTag'
-import { glassCard } from '../lib/glass'
+import { classic, glassCard } from '../lib/glass'
 import { presetTag } from '../lib/colourPage'
 
 const face = Platform.select(mono)
@@ -461,13 +461,13 @@ function SourceRow({ on, onPress, name, note, editing = null }) {
         tick()
         onPress()
       }}
-      /* Frosted glass (lib/glass), rounded like a card; the chosen one keeps its amber edge and wash. */
+      /* Frosted glass (lib/glass), rounded like a card; the chosen one keeps its amber edge and wash. Classic had no pressed fill here, only the dimming. */
       style={({ pressed }) => ({
         minHeight: TAP,
         justifyContent: 'center',
         paddingHorizontal: space.md,
         paddingVertical: space.sm,
-        ...glassCard({ bordered: true, pressed }),
+        ...glassCard({ bordered: true, pressed: pressed && !classic() }),
         borderWidth: on ? 2 : 1,
         ...(on ? { borderColor: color.signal, backgroundColor: color.signalWash } : null),
         opacity: pressed ? 0.7 : 1

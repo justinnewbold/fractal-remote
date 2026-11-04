@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, radius, space } from '../lib/theme'
+import { paneRim } from '../lib/glass'
 import { ANY_WAY_UP, clearSides, firstFrame } from '../lib/screenShape'
 import { SHEET_MAX, pageRow, playLines } from '../lib/playShape'
 
@@ -131,7 +132,7 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
               borderTopLeftRadius: radius.lg * 2,
               borderTopRightRadius: radius.lg * 2,
               borderTopWidth: 1,
-              borderColor: color.glassRim,
+              borderColor: paneRim(),
               boxShadow: color.sheetLift,
               paddingBottom: Math.max(bottom, FOOT_AT_LEAST)
             }}

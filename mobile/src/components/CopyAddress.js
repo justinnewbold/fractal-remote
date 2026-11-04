@@ -139,7 +139,7 @@ export default function CopyAddress({ size = font.body, row = false, saidSize = 
         gap: space.sm,
         padding: space.lg,
         borderWidth: 1,
-        ...glassCard({ bordered: true, pressed }),
+        ...glassCard({ bordered: true, pressed, classicCorner: radius.lg }),
         borderColor: copied ? color.signal : color.glassRim
       })}
     >

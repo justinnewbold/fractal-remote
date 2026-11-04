@@ -78,7 +78,7 @@ export function TipCard({ icon, label, body, warn, onWarn, hint, onPress, right,
         gap: space.lg,
         padding: space.lg,
         borderWidth: 1,
-        ...glassCard({ bordered: true, pressed })
+        ...glassCard({ bordered: true, pressed, classicCorner: radius.lg })
       })}
     >
       <Tile icon={icon} size={tile} />
