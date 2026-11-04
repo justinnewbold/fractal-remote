@@ -896,8 +896,11 @@ async function start() {
    * Which app this is, for the phones — written, then read back the way a
    * phone reads it, so the menu can say what they hear. See tellPhonesChecked.
    */
-  /* And what kind of computer this is ("macOS 15.3", "Raspberry Pi 5"), read once: it does not change while the app runs. */
-  const computerOs = thisComputer()
+  /*
+   * And what kind of computer this is ("macOS 15.3", "Raspberry Pi 5"), read once: it does not change while the app runs.
+   * An Intel copy on Apple silicon (or an x64 copy on an ARM Windows) runs translated, and is the processor's kind, not its own.
+   */
+  const computerOs = thisComputer({ arch: app.runningUnderARM64Translation ? 'arm64' : process.arch })
   const tell = async () => {
     if (quitting) return
     told = await tellPhonesChecked({ port, version: app.getVersion(), os: computerOs, log: phoneLog })

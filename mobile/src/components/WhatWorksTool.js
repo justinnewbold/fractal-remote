@@ -14,9 +14,11 @@ import Press from './Press'
  *
  * The notes from everybody who said Yes to "Help make Fractal Remote
  * better?", added up: one group per unit, newest first, and a row for each
- * way it came in (the computer's system, or the Bluetooth adapter's name),
- * with how many said it worked and how many said the unit didn't answer.
- * The server (supabase/functions/gear-reports) decides who may read them.
+ * way it came in (the computer's system, the Bluetooth adapter's name, or
+ * "USB cable" and the cable's name), with how many said it worked and how
+ * many said the unit didn't answer, and how long it took to connect and,
+ * through a computer, how quickly a tap was answered. The server
+ * (supabase/functions/gear-reports) decides who may read them.
  */
 export default function WhatWorksTool() {
   const [busy, setBusy] = useState(false)

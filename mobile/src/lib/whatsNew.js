@@ -12,7 +12,7 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-04",
     "day": "4 November 2026",
-    "version": "1.89.38",
+    "version": "1.89.39",
     "lines": [
       {
         "text": "On the website and the computer app, Tuner, Edit and Tap at the bottom of Play are now the phone app’s taller buttons, with the tempo under Tap.",
@@ -24,6 +24,10 @@ export const WHATS_NEW = [
       },
       {
         "text": "The Bluetooth page now has Use a different adapter, so you can switch adapters even while it’s still trying the one from last time. When that one isn’t answering, it names another adapter it can see, with a button to use it, and Forget the adapter under Troubleshooting works with Bluetooth on too.",
+        "only": null
+      },
+      {
+        "text": "Share what gear works (Settings → Troubleshooting) now notes a unit on a USB cable as a USB cable, how long your unit took to connect and, through a computer, how quickly it answers a tap. If you said yes before, it asks you once more. It’s still off unless you say yes, and never linked to you.",
         "only": null
       }
     ]

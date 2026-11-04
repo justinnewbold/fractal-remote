@@ -32,12 +32,15 @@ import {
   lanAddress,
   npmSpawn,
   publish,
-  serverEnv
+  serverEnv,
+  thisComputer
 } from '../desktop/lib/host.mjs'
 import { readAxiom } from '../desktop/lib/axiom.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const port = Number(process.env.PORT || DEFAULT_PORT)
+/* This copy's version, for the phones, as the computer app says its own (a gear note waits for it). */
+const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const name = advertisedName()
 
 /* npmSpawn is what makes this work on Windows, where npm is a batch file Node
@@ -82,9 +85,11 @@ const server = spawn('npm', ['run', 'dev'], {
  * Turn the phone remote on once the server is up. Not awaited: the QR above
  * is already printed and the server's own output is streaming past, and this
  * says its one line when it knows. Nobody should have to open the app on this
- * Mac just to flip a switch the Mac can flip itself.
+ * Mac just to flip a switch the Mac can flip itself. And it says its version
+ * and kind of computer, as the computer app does: a phone's gear note waits
+ * for the version (mobile/src/lib/gear-share-rules noteFacts).
  */
-armHost({ port, log: (line) => console.log(`\n  ${line}\n`) })
+armHost({ port, version, os: thisComputer(), log: (line) => console.log(`\n  ${line}\n`) })
 
 const shutdown = async (code = 0) => {
   await ad.stop()
