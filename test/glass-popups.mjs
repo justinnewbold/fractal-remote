@@ -89,7 +89,7 @@ export function run(test) {
     const from = sheet.indexOf('onPress={() => {}}')
     const panel = sheet.slice(from, sheet.indexOf('paddingBottom: Math.max(bottom, FOOT_AT_LEAST)', from))
     assert.ok(from > 0 && panel.length > 0, 'the sheet’s panel moved; this check reads it')
-    assert.match(panel, /maxHeight: highest, backgroundColor: color\.sheetFill, borderTopLeftRadius: radius\.lg \* 2, borderTopRightRadius: radius\.lg \* 2, borderTopWidth: 1, borderColor: color\.glassRim, boxShadow: color\.sheetLift, $/, 'the sheet’s panel is not frosted glass, or its corners or edges changed')
+    assert.match(panel, /maxHeight: highest, backgroundColor: color\.sheetFill, borderTopLeftRadius: radius\.lg \* 2, borderTopRightRadius: radius\.lg \* 2, borderTopWidth: 1, borderColor: paneRim\(\), boxShadow: color\.sheetLift, $/, 'the sheet’s panel is not frosted glass, or its corners or edges changed')
     assert.doesNotMatch(sheet, /color\.chassis|rgba\(255,255,255,0\.14\)/, 'the sheet is still drawn in the old opaque chassis and white rim')
     /* The grabber the size it was, in its own colour; the title row's rule the glass's rim. */
     assert.match(sheet, /<View style=\{\{ width: 44, height: 5, borderRadius: 3, backgroundColor: color\.grabber \}\} \/>/, 'the grabber changed size or is not the glass’s')
@@ -110,8 +110,8 @@ export function run(test) {
       assert.doesNotMatch(body, /rgba\(255,255,255,0\.14\)/, `${file} still has the old white rim`)
     }
     /* The panes keep their own opaque panel, corner and border width; the rim and the lift are the glass's. */
-    assert.match(flat(TUNER), /paddingHorizontal: space\.lg, borderRadius: radius\.lg \* 2, borderWidth: 1, borderColor: color\.glassRim, boxShadow: color\.glassLift, backgroundColor: color\.panel, overflow: 'hidden' \}\}/, 'the tuner’s pane is not opaque glass')
-    assert.match(flat(VOLUME), /paddingHorizontal: space\.lg, borderRadius: radius\.lg \* 2, borderWidth: 1, borderColor: color\.glassRim, boxShadow: color\.glassLift, backgroundColor: color\.panel \}\}/, 'the volume’s pane is not opaque glass')
+    assert.match(flat(TUNER), /paddingHorizontal: space\.lg, borderRadius: radius\.lg \* 2, borderWidth: 1, borderColor: paneRim\(\), boxShadow: color\.glassLift, backgroundColor: color\.panel, overflow: 'hidden' \}\}/, 'the tuner’s pane is not opaque glass')
+    assert.match(flat(VOLUME), /paddingHorizontal: space\.lg, borderRadius: radius\.lg \* 2, borderWidth: 1, borderColor: paneRim\(\), boxShadow: color\.glassLift, backgroundColor: color\.panel \}\}/, 'the volume’s pane is not opaque glass')
     /* The meter and the slider are drawn as they were: the needle's bar, and the amber track and white knob. */
     assert.match(flat(TUNER), /height: 22, borderRadius: radius\.pill, backgroundColor: 'rgba\(0,0,0,0\.35\)', borderWidth: 1, borderColor: 'rgba\(255,255,255,0\.12\)', justifyContent: 'center' \}\}/, 'the tuner’s needle bar changed')
     assert.match(flat(VOLUME), /style=\{\{ height: TRACK, borderRadius: TRACK \/ 2, backgroundColor: tint\(color\.silk, 0\.22\) \}\}/, 'the volume’s track changed')
@@ -123,25 +123,26 @@ export function run(test) {
       const src = read(file)
       const body = flat(file)
       assert.equal((src.match(/<BlurView\b/g) || []).length, 1, `${file} has another blur`)
-      /* Nothing near-clear is left: the pane read dark words on a dark ground in Light. */
+      /* Nothing near-clear is left in the glass: the pane read dark words on a dark ground in Light. Classic draws them again, from lib/glass. */
       for (const gone of ['rgba(255,255,255,0.04)', 'rgba(0,0,0,0.35)', 'rgba(255,255,255,0.14)', 'rgba(255,255,255,0.10)']) {
         assert.ok(!src.includes(gone), `${file} still draws ${gone}`)
       }
+      assert.doesNotMatch(body, /color\.(sheetFill|glassWell)\b|borderColor: color\.glassRim/, `${file} draws a pane colour of its own rather than lib/glass’s pane, which Classic follows`)
       /* The backdrop: the same blur, with the dim under it. */
       assert.match(body, /<BlurView intensity=\{70\} tint="dark" experimentalBlurMethod="dimezisBlurView" style=\{\{ flex: 1, alignItems: 'center',/, `${file} lost its blur`)
       /* The pane: the sheet's own fill, the rim and the lift, at its old corner and border width. */
-      assert.match(body, /borderRadius: radius\.lg \* 2, borderWidth: 1, borderColor: color\.glassRim, backgroundColor: color\.sheetFill, boxShadow: color\.glassLift \}\}/, `${file}’s pane is not frosted glass`)
+      assert.match(body, /borderRadius: radius\.lg \* 2, borderWidth: 1, borderColor: paneRim\(\), backgroundColor: paneFill\(\), boxShadow: color\.glassLift \}\}/, `${file}’s pane is not frosted glass`)
     }
     const tempo = flat(TEMPO)
     assert.match(tempo, /\.\.\.clearSides\(insets, tight \? space\.lg : space\.xl\), backgroundColor: color\.scrim \}\}/, 'the tempo box’s backdrop has no dim')
     /* The field: a well, with its live and fault borders as they were. */
-    assert.match(tempo, /minHeight: tight \? TAP \+ 8 : TAP \+ 24, backgroundColor: color\.glassWell, borderWidth: 1, borderColor: error \? color\.fault : color\.live, borderRadius: radius\.md,/, 'the tempo field is not a well, or lost its border')
-    assert.equal((tempo.match(/color\.glassWell/g) || []).length, 1)
-    assert.match(tempo, /<View style=\{\{ borderTopWidth: 1, borderTopColor: color\.glassRim, paddingTop: tight \? space\.sm : space\.md \}\}>/, 'the tempo box’s divider is not the rim')
+    assert.match(tempo, /minHeight: tight \? TAP \+ 8 : TAP \+ 24, backgroundColor: paneWell\(\), borderWidth: 1, borderColor: error \? color\.fault : color\.live, borderRadius: radius\.md,/, 'the tempo field is not a well, or lost its border')
+    assert.equal((tempo.match(/paneWell\(\)/g) || []).length, 1)
+    assert.match(tempo, /<View style=\{\{ borderTopWidth: 1, borderTopColor: paneRule\(\), paddingTop: tight \? space\.sm : space\.md \}\}>/, 'the tempo box’s divider is not the rim')
     const password = flat(PASSWORD)
     assert.match(password, /paddingTop: Math\.max\(space\.xxl, height \* 0\.1\), \.\.\.clearSides\(insets, space\.xl\), backgroundColor: color\.scrim \}\}/, 'the password box’s backdrop has no dim')
     /* Both fields come from one box(), a well with its live and fault borders as they were. */
-    assert.match(password, /const box = \(bad\) => \(\{ minHeight: TAP, backgroundColor: color\.glassWell, borderWidth: 1, borderColor: bad \? color\.fault : color\.live, borderRadius: radius\.md,/, 'the password fields are not wells, or lost their border')
+    assert.match(password, /const box = \(bad\) => \(\{ minHeight: TAP, backgroundColor: paneWell\(\), borderWidth: 1, borderColor: bad \? color\.fault : color\.live, borderRadius: radius\.md,/, 'the password fields are not wells, or lost their border')
     assert.equal((password.match(/style=\{box\(/g) || []).length, 2, 'a password field is drawn some other way')
   })
 

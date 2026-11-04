@@ -94,9 +94,9 @@ export function run(test) {
     assert.equal((raw.match(/<BlurView\b/g) || []).length, 1, 'the top bar has more than one blur, or none')
     assert.match(bar, /<BlurView accessibilityLiveRegion="polite" intensity=\{40\} tint=\{isDark\(\) \? 'dark' : 'light'\} experimentalBlurMethod="dimezisBlurView" style=\{\{/, 'the bar’s blur lost a prop it is pinned to')
     const style = bar.slice(bar.indexOf('<BlurView'), bar.indexOf('}}', bar.indexOf('<BlurView'))).trim()
-    assert.match(style, /borderBottomWidth: 1, borderBottomColor: color\.glassRim, backgroundColor: color\.glassBar, zIndex: 3$/, 'the bar is not the frosted bar over its soft rim, or its zIndex moved')
+    assert.match(style, /borderBottomWidth: 1, borderBottomColor: color\.glassRim, backgroundColor: classic\(\) \? at\(color\.panel, 0\.55\) : color\.glassBar, zIndex: 3$/, 'the bar is not the frosted bar over its soft rim (the panel at 0.55 in Classic, as it was), or its zIndex moved')
     assert.doesNotMatch(style, /boxShadow|elevation|shadow/, 'the bar casts a shadow: it is the top of the screen, not a float')
-    assert.doesNotMatch(style, /at\(color\.panel, 0\.55\)/, 'the bar is drawn from the panel again, so the Sunlight look cannot make it solid')
+    assert.doesNotMatch(style.replace('classic() ? at(color.panel, 0.55) :', ''), /at\(color\.panel, 0\.55\)/, 'the bar is drawn from the panel again outside Classic, so the Sunlight look cannot make it solid')
     /* No new zIndex anywhere in the bar: the bar's 3, Which's 3, and the three strips' 2, all under the metronome's flash (vp4-safety.mjs). */
     assert.deepEqual([...raw.matchAll(/zIndex: (\d+)/g)].map((m) => Number(m[1])), [3, 3, 2, 2, 2], 'a zIndex was added to the bar, or moved')
   })
@@ -105,7 +105,7 @@ export function run(test) {
     const bar = code(FILES.bar)
     assert.ok(bar.indexOf('hitSlop={6} style={({ pressed }) => ({') > 0, 'the pill’s reach or its style moved; this check reads it from there')
     const pill = bar.slice(bar.indexOf('hitSlop={6} style={({ pressed }) => ({'), bar.indexOf('})}', bar.indexOf('hitSlop={6}'))).trim()
-    assert.match(pill, /paddingHorizontal: space\.sm, paddingVertical: 3, borderRadius: radius\.pill, borderWidth: 1, borderColor: color\.glassRim, backgroundColor: pressed \? color\.panelHi : at\(color\.panel, 0\.6\), boxShadow: color\.glassLift$/, 'the pill is not the glass’s capsule, or its edge, padding or fill changed')
+    assert.match(pill, /paddingHorizontal: space\.sm, paddingVertical: 3, borderRadius: classic\(\) \? radius\.lg : radius\.pill, borderWidth: 1, borderColor: color\.glassRim, backgroundColor: pressed \? color\.panelHi : at\(color\.panel, 0\.6\), boxShadow: color\.glassLift$/, 'the pill is not the glass’s capsule, or its edge, padding or fill changed')
   })
 
   test('glass on Play: Exit demo, Unlock and Save are lit glass in amber, and keep their press', () => {
@@ -183,13 +183,13 @@ export function run(test) {
     /* The buttons on the strips are capsules of glass on them: Turn off Bluetooth and Report a problem, and the late save's Cancel. Their sizes as they were. */
     assert.match(
       body(bar, 'function Which('),
-      /const button = \(\{ pressed \}\) => \(\{ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: space\.lg, borderRadius: radius\.pill, borderWidth: 1, borderColor: color\.glassRim, backgroundColor: pressed \? color\.glassFillHi : color\.glassFill, boxShadow: color\.glassLift \}\)/,
+      /const button = \(\{ pressed \}\) => \(\{ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: space\.lg, borderRadius: classic\(\) \? radius\.md : radius\.pill, borderWidth: 1, borderColor: color\.glassRim, backgroundColor: classic\(\) \? \(pressed \? color\.panel : color\.chassis\) : pressed \? color\.glassFillHi : color\.glassFill, boxShadow: color\.glassLift \}\)/,
       'Turn off Bluetooth and Report a problem are not glass capsules, or their size changed'
     )
     assert.equal((body(bar, 'function Which(').match(/style=\{button\}/g) || []).length, 2, 'not both of Which’s buttons wear it')
     assert.match(
       body(bar, 'function Late('),
-      /accessibilityLabel="Cancel the save" hitSlop=\{8\} onPress=\{[^}]*\}\} style=\{\(\{ pressed \}\) => \(\{ minHeight: 36, justifyContent: 'center', paddingHorizontal: space\.md, borderRadius: radius\.pill, borderWidth: 1, borderColor: color\.glassRim, backgroundColor: pressed \? color\.glassFillHi : color\.glassFill, boxShadow: color\.glassLift \}\)\}/,
+      /accessibilityLabel="Cancel the save" hitSlop=\{8\} onPress=\{[^}]*\}\} style=\{\(\{ pressed \}\) => \(\{ minHeight: 36, justifyContent: 'center', paddingHorizontal: space\.md, borderRadius: classic\(\) \? radius\.md : radius\.pill, borderWidth: 1, borderColor: color\.glassRim, backgroundColor: classic\(\) \? \(pressed \? color\.panel : color\.chassis\) : pressed \? color\.glassFillHi : color\.glassFill, boxShadow: color\.glassLift \}\)\}/,
       'the late save’s Cancel is not a glass capsule, or its size or reach changed'
     )
   })
@@ -220,9 +220,9 @@ export function run(test) {
 
   test('glass on Play: the channel tip, which computer, and the demo’s offer are glass cards, the offer still in amber', () => {
     const coach = code(FILES.coach)
-    assert.match(coach, /style=\{\{ gap: space\.sm, padding: space\.lg, borderRadius: radius\.card, borderWidth: 1, borderColor: color\.glassRim, backgroundColor: color\.glassFill, boxShadow: color\.glassLift \}\}/, 'the channel tip is not a glass card, or its size changed')
+    assert.match(coach, /style=\{\{ gap: space\.sm, padding: space\.lg, borderRadius: cardCorner\(radius\.lg\), borderWidth: 1, borderColor: color\.glassRim, backgroundColor: color\.glassFill, boxShadow: color\.glassLift \}\}/, 'the channel tip is not a glass card, or its size changed')
     const card = code(FILES.card)
-    assert.match(card, /style=\{\{ gap: space\.sm, borderLeftWidth: 3, borderLeftColor: color\.signal, backgroundColor: color\.glassFill, borderRadius: radius\.md, boxShadow: color\.glassFlat, padding: space\.md \}\}/, 'which computer is not flat glass with its amber edge')
+    assert.match(card, /style=\{\{ gap: space\.sm, borderLeftWidth: 3, borderLeftColor: color\.signal, backgroundColor: color\.glassFill, borderRadius: classic\(\) \? radius\.sm : radius\.md, boxShadow: color\.glassFlat, padding: space\.md \}\}/, 'which computer is not flat glass with its amber edge')
     const offer = code(FILES.offer)
     assert.match(offer, /padding: space\.md, borderRadius: radius\.card, borderWidth: 1, borderColor: color\.signal, backgroundColor: color\.signalWash, boxShadow: color\.glassLift \}\}/, 'the demo’s offer is not an amber glass card')
     assert.match(offer, /borderRadius: radius\.pill, backgroundColor: pressed \? color\.silkFaint : color\.signal, boxShadow: color\.glassLit, experimental_backgroundImage: color\.glassSheen \}\)\}/, 'the offer’s Unlock is not lit glass, or lost its press')

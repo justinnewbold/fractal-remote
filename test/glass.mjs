@@ -337,10 +337,10 @@ export function run(test) {
      * preset name was a capsule on one preset and a box on the next.
      */
     assert.match(press, /import \{ Image, PixelRatio, Pressable, Text, View \} from 'react-native'/)
-    assert.match(press, /import \{ capsule \} from '\.\.\/lib\/glass'/)
+    assert.match(press, /import \{ capsule, classic \} from '\.\.\/lib\/glass'/)
     assert.doesNotMatch(code('mobile/src/components/Press.js'), /StyleSheet|borderLeftWidth/, 'Press reads its shape off the caller’s style again, so a tag changes the button')
     assert.match(press, /const solid = bar === 'solid'/)
-    assert.match(press, /const corner = bar \? radius\.md : under !== undefined \|\| caption \? radius\.card : capsule\(height\)/, 'the corner is not the bar’s, the line’s or a capsule')
+    assert.match(press, /const corner = bar \|\| classic\(\) \? radius\.md : under !== undefined \|\| caption \? radius\.card : capsule\(height\)/, 'the corner is not the bar’s, the line’s or a capsule, or Classic is not the old radius.md')
     assert.match(press, /const background = on \? accent : solid \? color\.panel : color\.glassFill/, 'Edit’s chain card is see-through over SwipeAway’s red, or a lit one is not its colour')
     assert.match(press, /const lift = flat \? \(on \? color\.glassLitTop : color\.glassTop\) : on \? color\.glassLit : solid \? color\.glassTop : color\.glassLift/, 'a row in a long list casts a drop, or a button lost its lift')
     assert.match(flat, /borderRadius: corner, borderWidth: BORDER, borderColor: on \? accent : color\.glassRim, backgroundColor: background, boxShadow: lift, experimental_backgroundImage: on \? color\.glassSheen : undefined, opacity: disabled \? 0\.45 : pressed \? 0\.7 : 1 \}, style \]/, 'the glass is not the button’s, or a caller’s own corner no longer wins')
@@ -372,10 +372,11 @@ export function run(test) {
     const note = read('mobile/src/components/Note.js')
     assert.match(
       note,
-      /borderLeftWidth: EDGE,\n\s+borderLeftColor: accent,\n[\s\S]{0,140}backgroundColor: color\.glassFill,\n\s+borderRadius: radius\.md,\n\s+boxShadow: color\.glassFlat,\n\s+paddingVertical: space\.md,\n\s+paddingHorizontal: space\.md\n/,
+      /borderLeftWidth: EDGE,\n\s+borderLeftColor: accent,\n[\s\S]{0,140}backgroundColor: color\.glassFill,\n\s+borderRadius: classic\(\) \? radius\.sm : radius\.md,\n\s+boxShadow: color\.glassFlat,\n\s+paddingVertical: space\.md,\n\s+paddingHorizontal: space\.md\n/,
       'the note is not flat glass, or its padding moved off the end'
     )
-    assert.ok(!/color\.panel|radius\.sm/.test(code('mobile/src/components/Note.js')), 'the note is still the old opaque panel')
+    assert.ok(!/color\.panel/.test(code('mobile/src/components/Note.js')), 'the note is still the old opaque panel')
+    assert.equal((code('mobile/src/components/Note.js').match(/radius\.sm/g) || []).length, 1, 'the old small corner is drawn outside Classic')
     assert.ok(!/elevation|0 3px 10px/.test(code('mobile/src/components/Note.js')), 'a note has a drop shadow; notes are flat')
     assert.match(note, /accessibilityLiveRegion=\{tone === 'hint' \? 'none' : 'polite'\}/)
     assert.match(note, /fontWeight: strong \? '700' : undefined/)
@@ -383,7 +384,10 @@ export function run(test) {
 
   test('glass: GlassCard and GlassDisc take no room of their own and read the builders', () => {
     const glass = code('mobile/src/components/Glass.js').replace(/\s+/g, ' ')
-    assert.match(glass, /export function GlassCard\(\{ flat = false, bordered = false, clip = false, pressed = false, style, children, \.\.\.viewProps \}\)/)
+    assert.match(glass, /export function GlassCard\(\{ flat = false, bordered = false, clip = false, pressed = false, bare = false, style, children, \.\.\.viewProps \}\)/)
+    /* Classic: a bare card is the plain View it was, and there is no disc. */
+    assert.match(glass, /if \(bare && classic\(\)\) \{ return \( <View \{\.\.\.viewProps\} style=\{style\}> \{children\} <\/View> \) \}/, 'a bare card is glass in Classic')
+    assert.match(glass, /export function GlassDisc\(\{ size = 30 \}\) \{ if \(classic\(\)\) return null /, 'the disc is drawn in Classic')
     assert.match(glass, /style=\{\[glassCard\(\{ pressed, bordered, flat \}\), clip \? \{ overflow: 'hidden' \} : null, style\]\}/)
     assert.match(glass, /export function GlassDisc\(\{ size = 30 \}\)/)
     assert.match(glass, /pointerEvents="none"/, 'the disc takes the icon’s touch')
