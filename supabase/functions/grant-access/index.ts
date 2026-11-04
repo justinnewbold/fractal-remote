@@ -13,7 +13,10 @@
  *   revoke  take back an unlock given here — a purchase is not touched
  *   confirm mark their email confirmed, for the email that never reaches them
  *   sales   every sale so far, for Sales at a glance
- *   usage   how many people used it lately, for How many people
+ *   usage   how many people used it lately, for How many people, with the
+ *           days kept for Day by day
+ *   usage-day        the night's count for Day by day, asked by the database
+ *                    alone, with its own secret (usageDayHook, below)
  *   stuck   paid but no computer yet, for the list of that name
  *   reminders        the setup emails on or off ({ on: true } is on)
  *   leave-out        one email left out of them ({ out: false } puts it back)
@@ -43,6 +46,7 @@
  * the next time the customer opens the app.
  */
 import { forgetAccount } from '../_shared/forget-account.ts'
+import { dayCounts } from '../_shared/usage-count.mjs'
 
 const RC = 'https://api.revenuecat.com/v2'
 const DEFAULT_PROJECT = 'proj827190e9'
@@ -182,10 +186,27 @@ async function purchasesOf(account: string): Promise<Sale[] | null> {
   }))
 }
 
-/** Where and on what RevenueCat last saw them, for "which app version". */
-async function lastSeen(account: string) {
-  const c = await rcJson(`/customers/${encodeURIComponent(account)}`)
-  if (!c) return null
+/**
+ * Where and on what RevenueCat last saw them, for "which app version".
+ *
+ * Null when RevenueCat has never seen them (404: an account only ever used
+ * on the computer or the website is not one of its customers) and null when
+ * it did not answer. Only the second is a gap in a count, so How many people
+ * passes `onMiss` to be told of each one; the lookup passes nothing.
+ */
+async function lastSeen(account: string, onMiss?: () => void) {
+  let c: any = null
+  try {
+    const res = await rc(`/customers/${encodeURIComponent(account)}`)
+    if (res.status === 404) return null
+    c = res.ok ? await res.json() : null
+  } catch {
+    c = null
+  }
+  if (!c) {
+    onMiss?.()
+    return null
+  }
   return {
     first: c.first_seen_at ?? null,
     last: c.last_seen_at ?? null,
@@ -474,7 +495,9 @@ async function markHandled(found: Record<string, any> | null, email: string, kin
  * signed-in devices last checked in (auth.sessions, through account_details),
  * and the app version RevenueCat last saw. No hours, no screens, nothing
  * recorded while the app is in use: the privacy policy says there is no
- * analytics, and this keeps that true.
+ * analytics kit, and this keeps that true. The one thing kept for it is each
+ * day's totals, numbers that name nobody (usageDay, below), which the
+ * privacy policy says too.
  *
  * The answer names nobody. The phone counts it (usageSections in
  * shared/admin.mjs), in Justin's own time zone.
@@ -482,7 +505,7 @@ async function markHandled(found: Record<string, any> | null, email: string, kin
 const MOST_PEOPLE = 500
 const MONTH = 30 * 86400000
 
-async function usage() {
+async function usage({ history = true } = {}) {
   const all = ((await rpc('owner_accounts', {})) || {}) as { total?: number; accounts?: { email: string }[] }
   /* Not the hidden accounts the old pairing codes stood for: devices, not people. */
   const listed = all.accounts || []
@@ -490,19 +513,109 @@ async function usage() {
   const people = everyone.slice(0, MOST_PEOPLE)
   const found = await eachFew(people, 8, (a) => rpc('account_details', { address: a.email }) as Promise<Record<string, any> | null>)
   const when = (at: unknown) => (at ? new Date(String(at)).getTime() || 0 : 0)
+  /* How many RevenueCat did not answer about (a refusal, a busy minute), so a short night says so instead of looking like a quiet one. */
+  let unanswered = 0
+  const missed = () => {
+    unanswered += 1
+  }
   const out = await eachFew(found, 5, async (d) => {
     if (!d?.id) return null
     const devices = Array.isArray(d.devices) ? d.devices : []
     const latest = Math.max(when(d.last_sign_in), ...devices.map((x: any) => when(x?.last_seen)))
     /* RevenueCat only for anyone about this month: the version is only counted for them. */
-    const seen = Date.now() - latest < MONTH || !latest ? await lastSeen(String(d.id)) : null
+    const seen = Date.now() - latest < MONTH || !latest ? await lastSeen(String(d.id), missed) : null
     return { lastSignIn: d.last_sign_in ?? null, devices, seen }
   })
   return {
     ok: true,
     total: Math.max(people.length, (Number(all.total) || 0) - (listed.length - everyone.length)),
     counted: out.filter(Boolean).length,
-    people: out.filter(Boolean)
+    unanswered,
+    people: out.filter(Boolean),
+    /* The days kept for Day by day (usageDays, below), and People answers whatever happens to them. */
+    ...(history ? await usageDays() : {})
+  }
+}
+
+/*
+ * The days kept for Day by day, newest first: numbers only, naming nobody.
+ * A database without the function answers 404 (PostgREST's PGRST202), and
+ * that alone is `days: null`, which the page words as the database change
+ * not being live yet. Anything else (a busy minute, a timeout, a 500) is
+ * `daysError`, which the page words as "couldn't be read just now": the
+ * days are there, and a Refresh should find them.
+ */
+async function usageDays(): Promise<{ days: unknown; daysError?: true }> {
+  try {
+    return { days: await rpc('owner_usage_days', { most: 31 }) }
+  } catch (err) {
+    const said = String((err as Error)?.message || err)
+    if (said.startsWith('owner_usage_days: 404 ') || said.includes('PGRST202')) return { days: null }
+    console.error(`grant-access: the days kept could not be read (${said.slice(0, 120)})`)
+    return { days: null, daysError: true }
+  }
+}
+
+/*
+ * HOW MANY PEOPLE, DAY BY DAY. "A day-by-day history of how many people use
+ * the app, on your Developer page" (approved 4 November 2026). Each of the
+ * times People counts from keeps only the latest one, so a day can only be
+ * counted on that day: the database asks for it a few minutes before each UTC
+ * midnight (run_usage_day, supabase/migrations/20261104_usage_days.sql),
+ * through the hook below, and this counts exactly what People counts, by the
+ * same rule (dayCounts, ../_shared/usage-count.mjs, a copy of
+ * shared/usage-count.mjs), and hands the totals to record_usage_day, which
+ * keeps only today and only totals. What it answers is totals too.
+ *
+ * About as many RevenueCat questions as opening People once (one per person
+ * about this month, five at a time). Past about 400 people a month that
+ * nears RevenueCat's 480 a minute, and both should move to its customer list
+ * (GET /customers?limit=100, which carries the same last-seen fields).
+ */
+async function usageDay() {
+  const answer = await usage({ history: false })
+  const counts = dayCounts(answer, Date.now())
+  const kept = await rpc('record_usage_day', { d: counts.day, counts })
+  return { ok: true, day: counts.day, kept: kept === true, counted: counts.counted, unanswered: counts.unanswered }
+}
+
+/** The secret the night's call carries, read from where the database keeps it, every time: nothing is held between calls. */
+async function usageDayHookSecret(): Promise<string | null> {
+  try {
+    const value = await rpc('usage_day_hook_secret', {})
+    return typeof value === 'string' && value ? value : null
+  } catch (err) {
+    console.error(`grant-access: could not read the usage-day hook secret (${String((err as Error)?.message || err).slice(0, 80)})`)
+    return null
+  }
+}
+
+/*
+ * THE THIRD CALLER: the database, for the night's count, and for nothing
+ * else. It cannot send Justin's token, and the service key is not where the
+ * database can read it, so it sends a secret it made itself and keeps in its
+ * vault (usage_day_hook_secret, its own, so it opens this one door), with the
+ * project's public key to get past the gateway (verify_jwt stays on). Compared
+ * in full, and both halves must exist; the only action is 'usage-day'.
+ */
+async function usageDayHook(req: Request, given: string): Promise<Response> {
+  const expected = await usageDayHookSecret()
+  if (!expected || !given || given !== expected) return json({ ok: false, message: 'Not allowed.' }, 403)
+  let input: { action?: unknown } = {}
+  try {
+    input = await req.json()
+  } catch {
+    /* an empty body is no action, said below */
+  }
+  if (input?.action !== 'usage-day') return json({ ok: false, message: 'Unknown action.' }, 400)
+  if (!env('REVENUECAT_SECRET')) return json({ ok: false, message: 'The server has no RevenueCat key set.' }, 500)
+  try {
+    const done = await usageDay()
+    console.log(`grant-access: ${done.day} counted (${done.counted} accounts, ${done.unanswered} RevenueCat did not answer about${done.kept ? '' : ', an earlier fuller count kept'})`)
+    return json(done)
+  } catch (err) {
+    console.error(`grant-access: the day could not be counted (${String((err as Error)?.message || err).slice(0, 200)})`)
+    return json({ ok: false, message: 'The day could not be counted.' }, 500)
   }
 }
 
@@ -885,10 +998,14 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ ok: false, message: 'Method not allowed' }, 405)
 
+  /* The night's count for Day by day, by the database's own secret, before any token is read (usageDayHook, above). */
+  const hook = req.headers.get('x-hook-secret')
+  if (hook !== null) return await usageDayHook(req, hook)
+
   const auth = req.headers.get('Authorization') || ''
   const token = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : ''
   /*
-   * Two callers, and only two. Justin, proved by his signed token. And the
+   * Two callers by token, and only two. Justin, proved by his signed token. And the
    * entitlement function beside this one, proved by the service role key that
    * Supabase gives every function here and nothing outside it: that is how a
    * waiting address is claimed when its owner first signs in, and 'claim' is

@@ -53,7 +53,7 @@ let grantHandler = null
  * feedback table and Storage, for Delete): (call) => a Response, or nothing
  * to let the rest answer.
  */
-async function grantAccess({ token, body, account = null, refuse = 0, waiting = false, rpcs = {}, purchases = {}, setup = null, users = null, more = null }) {
+async function grantAccess({ token, body, account = null, refuse = 0, waiting = false, rpcs = {}, purchases = {}, setup = null, users = null, more = null, headers: extraHeaders = {} }) {
   const calls = []
   const logged = []
   const was = { fetch: globalThis.fetch, Deno: globalThis.Deno, log: console.log, error: console.error }
@@ -92,7 +92,7 @@ async function grantAccess({ token, body, account = null, refuse = 0, waiting = 
   console.error = (...a) => logged.push(a.join(' '))
   try {
     if (!grantHandler) await import(new URL('../supabase/functions/grant-access/index.ts', import.meta.url).href)
-    const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+    const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extraHeaders }
     const res = await grantHandler(new Request('https://functions.test/grant-access', { method: 'POST', headers, body: JSON.stringify(body) }))
     return { status: res.status, said: await res.json(), calls, logged }
   } finally {
@@ -1431,6 +1431,153 @@ export function run(test) {
     assert.ok(fn.indexOf("rpc('claim_setup_reminder'") < sends, 'the email is sent before it is claimed')
     /* Yesterday's question stays exactly as it was. */
     assert.ok(!read(SETUP_SQL).includes('account_has_computer()'), 'the setup emails change the phone’s question about a computer')
+  })
+
+  /*
+   * HOW MANY PEOPLE, DAY BY DAY (4 November 2026), run. Three people the
+   * database lists (and a pairing account, which is a device), each found
+   * by account_details; RevenueCat answers the first, is busy (429) about
+   * the second and has never heard of the third (404, a computer-only
+   * account). What the night keeps is handed to record_usage_day.
+   */
+  const DAY_HOOK = 'the-usage-day-secret'
+  const dayPeople = () => {
+    const now = Date.now()
+    const ago = (h) => new Date(now - h * 3600000).toISOString()
+    const found = {
+      /* On now, so she is in today whatever minute of the UTC day this runs at. */
+      'ann@example.com': { id: 'acct-ann', email: 'ann@example.com', last_sign_in: ago(2), devices: [{ kind: 'iphone-app', last_seen: ago(0) }] },
+      'bob@example.com': { id: 'acct-bob', email: 'bob@example.com', last_sign_in: ago(30), devices: [{ kind: 'android-app', last_seen: ago(26) }] },
+      'cy@example.com': { id: 'acct-cy', email: 'cy@example.com', last_sign_in: ago(5 * 24), devices: [{ kind: 'computer', last_seen: ago(5 * 24) }] }
+    }
+    const recorded = []
+    const rpcs = {
+      owner_accounts: { total: 4, accounts: [{ email: 'ann@example.com' }, { email: 'bob@example.com' }, { email: 'cy@example.com' }, { email: 'abc@pair.fractal.newbold.cloud' }] },
+      account_details: (b) => found[b.address] || null,
+      usage_day_hook_secret: DAY_HOOK,
+      record_usage_day: (b) => {
+        recorded.push(b)
+        return true
+      },
+      owner_usage_days: [{ day: '2026-11-03', active_day: 2, active_7: 3, active_30: 3, accounts: 3, counted: 3, unanswered: 0, places: {}, versions: {}, systems: {} }]
+    }
+    const more = (call) => {
+      const who = call.url.startsWith(`${RC_PROJECT}/customers/`) ? decodeURIComponent(call.url.slice(`${RC_PROJECT}/customers/`.length)) : null
+      if (who === 'acct-ann') return new Response(JSON.stringify({ last_seen_at: now, last_seen_app_version: '1.89.37', last_seen_platform: 'iOS', last_seen_platform_version: 'Version 27.1 (Build 25B74)', last_seen_country: 'US' }), { status: 200 })
+      if (who === 'acct-bob') return new Response(JSON.stringify({ message: 'slow down' }), { status: 429 })
+      if (who === 'acct-cy') return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
+      return null
+    }
+    return { rpcs, more, recorded, found }
+  }
+
+  test('Day by day: the database’s nightly call counts today as People does, and keeps totals only', async () => {
+    const { rpcs, more, recorded, found } = dayPeople()
+    const before = new Date().toISOString().slice(0, 10)
+    const { status, said, calls } = await grantAccess({ body: { action: 'usage-day' }, rpcs, more, headers: { 'x-hook-secret': DAY_HOOK, Authorization: 'Bearer the-anon-key' } })
+    const after = new Date().toISOString().slice(0, 10)
+    assert.equal(status, 200, JSON.stringify(said))
+    assert.equal(said.ok, true)
+    assert.ok([before, after].includes(said.day), 'the day counted is not today, by UTC')
+    assert.equal(recorded.length, 1, 'the day was not handed to record_usage_day once')
+    const { d, counts } = recorded[0]
+    assert.equal(d, said.day)
+    /* People's numbers: Ann today, Bob yesterday (in the 7 days), Cy five days ago; the pairing account is not a person. */
+    assert.deepEqual([counts.active_7, counts.active_30, counts.accounts, counts.counted], [3, 3, 3, 3])
+    assert.equal(counts.active_day, 1, 'Bob, a day and more ago, is in today, or Ann is not')
+    /* RevenueCat busy about Bob is a gap, and said; never having heard of Cy is not. */
+    assert.equal(counts.unanswered, 1, 'a 404 is counted as RevenueCat not answering, or a 429 is not')
+    assert.equal(said.unanswered, 1)
+    assert.deepEqual(counts.systems.month, { 'iOS 27.1': 1 })
+    assert.deepEqual(counts.versions.month, { '1.89.37': 1 })
+    /* Totals only, in both directions: nothing about anybody is kept, or answered. */
+    assert.deepEqual(Object.keys(counts).sort(), ['accounts', 'active_30', 'active_7', 'active_day', 'counted', 'day', 'places', 'systems', 'unanswered', 'versions'])
+    const out = JSON.stringify([recorded, said])
+    for (const p of Object.values(found)) {
+      assert.ok(!out.includes(p.email) && !out.includes(p.id), 'the night’s count carries who somebody is')
+    }
+    assert.ok(!/US|lastSignIn|devices/.test(out), 'the night’s count carries more than totals')
+    /* No token is read, and the days are not fetched for it. */
+    assert.ok(!calls.some((c) => c.url.endsWith('/auth/v1/user')), 'the nightly call is checked as if it were somebody signed in')
+    assert.ok(!calls.some((c) => c.url.endsWith('/rpc/owner_usage_days')), 'the night reads the days back for nothing')
+    assert.equal(calls.filter((c) => c.url.endsWith('/rpc/usage_day_hook_secret')).length, 1)
+  })
+
+  test('Day by day: the nightly door opens for the database’s own secret and nothing else, and only to count', async () => {
+    for (const [why, given, secret] of [
+      ['a wrong secret', 'not-the-secret', DAY_HOOK],
+      ['an empty one', '', DAY_HOOK],
+      ['the start of the right one', DAY_HOOK.slice(0, 6), DAY_HOOK],
+      ['the right one and more', `${DAY_HOOK}x`, DAY_HOOK],
+      ['a vault with none', DAY_HOOK, null],
+      ['a vault that cannot be read', DAY_HOOK, 'fail']
+    ]) {
+      const { rpcs, more, recorded } = dayPeople()
+      rpcs.usage_day_hook_secret = secret
+      const failing = (call) => (secret === 'fail' && call.url.endsWith('/rpc/usage_day_hook_secret') ? new Response('{"message":"no"}', { status: 500 }) : more(call))
+      const { status, said, calls } = await grantAccess({ body: { action: 'usage-day' }, rpcs, more: failing, headers: { 'x-hook-secret': given } })
+      assert.equal(status, 403, `${why} was let in`)
+      assert.equal(said.message, 'Not allowed.')
+      assert.equal(recorded.length, 0, `${why} counted a day`)
+      assert.ok(!calls.some((c) => c.url.includes('/rpc/owner_accounts')), `${why} read the accounts`)
+    }
+    /* The right secret opens one action only. */
+    for (const action of ['usage', 'accounts', 'grant', 'claim', 'delete', undefined]) {
+      const { rpcs, more, recorded } = dayPeople()
+      const { status, said, calls } = await grantAccess({ body: { action, email: 'ann@example.com' }, rpcs, more, headers: { 'x-hook-secret': DAY_HOOK } })
+      assert.equal(status, 400, `the nightly secret opens ${action}`)
+      assert.equal(said.message, 'Unknown action.')
+      assert.equal(recorded.length, 0)
+      assert.ok(!calls.some((c) => c.url.includes('/rpc/owner_accounts') || c.url.includes('/rpc/account_details') || c.url.startsWith(RC_PROJECT)), `the nightly secret read something for ${action}`)
+    }
+    /* Without the secret, the lock is as it was: the night's action is nobody's by token, Justin's included. */
+    for (const [who, token, status] of [
+      ['nobody signed in', undefined, 403],
+      ['a stranger', 'a-strangers-token', 403],
+      ['the public key alone', 'the-anon-key', 403],
+      ['Justin', 'his-token', 400]
+    ]) {
+      const { rpcs, more, recorded } = dayPeople()
+      const res = await grantAccess({ token, body: { action: 'usage-day' }, rpcs, more })
+      assert.equal(res.status, status, `${who}: ${JSON.stringify(res.said)}`)
+      assert.equal(recorded.length, 0, `${who} counted a day without the secret`)
+    }
+  })
+
+  test('Day by day: People answers the days kept, and how many RevenueCat did not answer about, and still answers without the table', async () => {
+    const { rpcs, more } = dayPeople()
+    const { status, said } = await grantAccess({ token: 'his-token', body: { action: 'usage' }, rpcs, more })
+    assert.equal(status, 200, JSON.stringify(said))
+    assert.deepEqual(said.days, rpcs.owner_usage_days)
+    assert.equal(said.unanswered, 1)
+    assert.equal(said.people.length, 3)
+    for (const p of said.people) assert.deepEqual(Object.keys(p).sort(), ['devices', 'lastSignIn', 'seen'], 'People’s answer carries more than counts need')
+    /* No table yet (the function is out before the migration): PostgREST answers 404, PGRST202. People still answers, and the page says what is missing. */
+    const { daysProblem } = await import('../shared/admin.mjs')
+    const days = async (status, body) => {
+      const { rpcs: r, more: m } = dayPeople()
+      delete r.owner_usage_days
+      const answering = (call) => (call.url.endsWith('/rest/v1/rpc/owner_usage_days') ? new Response(JSON.stringify(body), { status }) : m(call))
+      return grantAccess({ token: 'his-token', body: { action: 'usage' }, rpcs: r, more: answering })
+    }
+    const old = await days(404, { code: 'PGRST202', message: 'Could not find the function public.owner_usage_days(most) in the schema cache' })
+    assert.equal(old.status, 200)
+    assert.equal(old.said.ok, true)
+    assert.equal(old.said.days, null, 'a database without the table breaks People, or reads as no days yet')
+    assert.ok(!('daysError' in old.said), 'a database without the function is called a passing error')
+    assert.match(daysProblem(old.said), /database change/)
+    /* Any other failure is a passing one: the days are there, and the page says to refresh, never that the change is missing. */
+    for (const [status, body] of [[500, { message: 'canceling statement due to statement timeout' }], [503, { message: 'busy' }], [401, { message: 'JWT expired' }]]) {
+      const busy = await days(status, body)
+      assert.equal(busy.status, 200, `People stops answering when the days give ${status}`)
+      assert.equal(busy.said.daysError, true, `a ${status} reading the days is said as the database change not being live`)
+      assert.equal(busy.said.days, null)
+      assert.equal(daysProblem(busy.said), 'The days kept couldn’t be read just now. Refresh to try again.')
+      assert.ok(busy.logged.some((l) => l.includes('the days kept could not be read')), 'a failed read of the days leaves nothing in the log')
+    }
+    /* The lookup still reads RevenueCat as before, a busy minute and all: nothing counts there. */
+    const server = code(read('supabase/functions/grant-access/index.ts'))
+    assert.match(server, /lastSeen\(account\),/, 'the Customer lookup now counts its own RevenueCat misses')
   })
 
   test('Paid but no computer yet is his alone: no token, a stale one, a stranger’s and the server’s own key are turned away before anything is read', async () => {
