@@ -504,6 +504,21 @@ export const FM3_NEVER =
   'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, works, and stays cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
 
 /*
+ * THE ADAPTERS NEVER OFFERED FOR AN FM3, BY THE NAME A PHONE LISTS THEM BY.
+ * The Bluetooth page offers another adapter it can see when the one kept is
+ * not answering (lib/bluetooth otherAdapterNow, 3 November 2026), and for an
+ * FM3 that is never the WIDI Master or the C2MIDI Pro, which got very hot on
+ * his, nor the other two FM3_NEVER means by "any adapter that can take power
+ * from MIDI OUT": CME's WIDI Jack and Yamaha's MD-BT01 (see NOT THE C2MIDI
+ * PRO OR THE WIDI MASTER ON AN FM3, above). The FM3's one way is the Uhost
+ * (waysFor), which is not among them. By name only, as the phone's list
+ * gives it ("WIDI Master", "WIDI Jack Bluetooth", "C2MIDI Pro"), case and
+ * spaces not counted: a WIDI renamed by its owner is the owner's to know.
+ */
+export const FM3_NEVER_NAMES = Object.freeze([/widi\s*master/i, /widi\s*jack/i, /c2\s*midi/i, /md-?\s*bt01/i])
+export const neverOnFm3 = (name) => FM3_NEVER_NAMES.some((re) => re.test(String(name || '')))
+
+/*
  * THE WIDI MASTER ON AN AM4: tried and working (26 October 2026), in place
  * of the Uhost and the C2MIDI Pro, its two MIDI plugs in the two 3.5 mm
  * adapters. Said under the AM4's parts, with no link (nobody has checked

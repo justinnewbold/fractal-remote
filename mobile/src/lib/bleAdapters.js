@@ -193,6 +193,44 @@ export function pickAdapter(list, fresh = new Set(), { unit = null, units = null
 }
 
 /*
+ * The iPhone's or iPad's own Bluetooth MIDI port ("iPhone Bluetooth" in his
+ * logs, on Apple's Bluetooth driver like an adapter): never another adapter.
+ */
+const OWN_PORT = /\b(iphone|ipad)\b[^]*\bbluetooth\s*$/i
+
+/**
+ * ANOTHER ADAPTER HERE, WHILE THE ONE KEPT IS NOT ANSWERING, or null.
+ *
+ * "It was trying to only let me connect to a Widi master cause that's what I
+ * connected to previously and I had a widi jack hooked up now." (Justin, 3
+ * November 2026, Android.) The link went on trying the WIDI Master for ever,
+ * with the WIDI Jack lit beside it. So the Bluetooth page offers the one it
+ * can see, by name, for a tap (lib/bluetooth otherAdapterNow and
+ * switchAdapter), and never takes it by itself:
+ *
+ *   - never the one kept (`kept`), a unit on a USB cable (isCable: a cable is
+ *     its own, with Forget the USB cable), or Apple's network session;
+ *   - iPhone (`os` 'ios'): a port on Apple's Bluetooth driver that is
+ *     connected now (`offline: false`), never the iPhone's own port;
+ *   - Android: a scan result, seen nearby;
+ *   - none `refused`: for an FM3, the adapters never offered for one
+ *     (shared/bluetooth-gear neverOnFm3), passed in, so this file imports
+ *     nothing.
+ *
+ * Exactly one, or null: two or more is a real question, and Use a different
+ * adapter asks it with the list.
+ */
+export function otherAdapterHere(list, kept, { os = null, refused = null } = {}) {
+  if (!kept || typeof kept.id !== 'string' || isCable(kept)) return null
+  const here = (Array.isArray(list) ? list : []).filter((d) => {
+    if (!isAdapter(d) || isCable(d) || d.id === kept.id || d.offline) return false
+    if (os === 'ios' && (d.offline !== false || !BLUETOOTH_DRIVER.test(String(d.driver || '')) || OWN_PORT.test(String(d.name || '')))) return false
+    return !(typeof refused === 'function' && refused(d.name))
+  })
+  return here.length === 1 ? here[0] : null
+}
+
+/*
  * APPLE'S BLUETOOTH SCREEN CRASHES ON iOS 27, in a build without Apple's fix.
  *
  * "iPhone App crashed when trying to enable Bluetooth." (24 October 2026,

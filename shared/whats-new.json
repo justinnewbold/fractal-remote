@@ -3,15 +3,22 @@
   "shownInApp": 10,
   "days": [
     {
-      "date": "2026-11-03",
+      "date": "2026-11-04",
       "version": "1.89.35",
+      "lines": [
+        { "text": "On an iPhone or iPad, a unit you’ve plugged in by USB cable is now called USB cable instead of Bluetooth, and Connect uses it without opening Apple’s Bluetooth screen.", "only": "ios" },
+        "The Bluetooth page now has Use a different adapter, so you can switch adapters even while it’s still trying the one from last time. When that one isn’t answering, it names another adapter it can see, with a button to use it, and Forget the adapter under Troubleshooting works with Bluetooth on too."
+      ]
+    },
+    {
+      "date": "2026-11-03",
+      "version": "1.89.32",
       "lines": [
         "On the website and the computer app, the top bar, Settings and Play now match the phone app’s: one button that says Live and your unit, Settings in sections that fold with Done on every page, and Play’s headings, Refresh names, scene names as your unit spells them, and Tuner, Edit and Tap at the bottom.",
         "The walkthrough shows both ways to connect, Computer (the best way) or Bluetooth, its pages are numbered 1 to 4, and the box before Unlock says both ways. The purchase page lists every Bluetooth adapter, and Playing with no internet says Bluetooth needs none.",
         "On the computer app, signing in under Settings → Account now turns the phone remote on too, so your phone finds the computer straight away after you switch accounts. On a Raspberry Pi set to start by itself, closing the app’s window no longer stops it saving presets you send from your phone.",
         "The computer app now restarts the part that talks to your unit if it stops, turns the phone remote back on, and opens links in your web browser. It and the website carry their own fonts, so they work offline, the support page names Feedback’s tick boxes as the app does, and the get-the-app page leads with the store.",
-        "Show the walkthrough no longer leaves you stuck at the sign-in screen: when you’re already signed in, Back to your own rig at the top takes you straight back. And when you press Previous or Next quickly a few times and one press doesn’t go through, Play now shows the preset your unit is really on.",
-        { "text": "On an iPhone or iPad, a unit you’ve plugged in by USB cable is now called USB cable instead of Bluetooth, and Connect uses it without opening Apple’s Bluetooth screen.", "only": "ios" }
+        "Show the walkthrough no longer leaves you stuck at the sign-in screen: when you’re already signed in, Back to your own rig at the top takes you straight back. And when you press Previous or Next quickly a few times and one press doesn’t go through, Play now shows the preset your unit is really on."
       ]
     },
     {

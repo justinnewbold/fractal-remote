@@ -10,9 +10,24 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-04",
+    "day": "4 November 2026",
+    "version": "1.89.35",
+    "lines": [
+      {
+        "text": "On an iPhone or iPad, a unit you’ve plugged in by USB cable is now called USB cable instead of Bluetooth, and Connect uses it without opening Apple’s Bluetooth screen.",
+        "only": "ios"
+      },
+      {
+        "text": "The Bluetooth page now has Use a different adapter, so you can switch adapters even while it’s still trying the one from last time. When that one isn’t answering, it names another adapter it can see, with a button to use it, and Forget the adapter under Troubleshooting works with Bluetooth on too.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-03",
     "day": "3 November 2026",
-    "version": "1.89.35",
+    "version": "1.89.32",
     "lines": [
       {
         "text": "On the website and the computer app, the top bar, Settings and Play now match the phone app’s: one button that says Live and your unit, Settings in sections that fold with Done on every page, and Play’s headings, Refresh names, scene names as your unit spells them, and Tuner, Edit and Tap at the bottom.",
@@ -33,10 +48,6 @@ export const WHATS_NEW = [
       {
         "text": "Show the walkthrough no longer leaves you stuck at the sign-in screen: when you’re already signed in, Back to your own rig at the top takes you straight back. And when you press Previous or Next quickly a few times and one press doesn’t go through, Play now shows the preset your unit is really on.",
         "only": null
-      },
-      {
-        "text": "On an iPhone or iPad, a unit you’ve plugged in by USB cable is now called USB cable instead of Bluetooth, and Connect uses it without opening Apple’s Bluetooth screen.",
-        "only": "ios"
       }
     ]
   },

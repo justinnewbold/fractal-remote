@@ -11,6 +11,7 @@ import {
   RESTRICTED_WORDS,
   adapterAway,
   adapterDevices,
+  adapterName,
   cableAway,
   cablesConnectTakes,
   cablesHere,
@@ -18,15 +19,20 @@ import {
   chooseAdapter,
   findAdapters,
   forgetAdapter,
+  glanceForAdapters,
+  letGoOfKeptAdapter,
   lookForAdapterAgain,
   methodsFor,
   midiJacks,
   offeredUnits,
+  otherAdapterNow,
+  otherAdapterWords,
   pairScreenShut,
   runCheck,
   setBluetooth,
   setBluetoothUnit,
   setMethods,
+  switchAdapter,
   unitName,
   useBluetooth,
   useBluetoothAdmin
@@ -315,7 +321,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * this page), and with Android's USB build it is a call into Android's
    * MIDI service; neither is asked again by a page left as it is.
    */
-  const listed = useMemo(() => adapterDevices(), [b.devices, b.adapter?.id, b.on, b.phase])
+  const listed = useMemo(() => adapterDevices(), [b.devices, b.adapter?.id, b.on, b.phase, b.notThere])
   const cables = cablesIn(listed)
   const cable = !!b.adapter && (isCable(b.adapter) || cables.some((d) => d.id === b.adapter.id))
   /* A USB MIDI cable on the unit's MIDI jacks, whose plugs can be swapped (lib/bluetooth midiJacks): the plug checks stay. */
@@ -402,7 +408,25 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * up the connection box allowing it to connect when they hit connect"
    * (Justin, 26 October 2026). So the button says Connect and nothing else:
    * the adapter from last time when it is there, Apple's screen (or the
-   * search, on Android) when it is not. A different adapter is Troubleshooting's.
+   * search, on Android) when it is not.
+   *
+   * A DIFFERENT ADAPTER IS ITS OWN BUTTON, under Connect and under Stop,
+   * since 3 November 2026: "Where is the button to change Bluetooth
+   * adapters. I have a widi jack connected", and "It was trying to only let
+   * me connect to a Widi master cause that's what I connected to previously
+   * and I had a widi jack hooked up now" (Justin, Android). Connect went to
+   * the WIDI Master kept from last time, the link tried it for ever, Stop and
+   * Connect went straight back to it, and a different adapter was only
+   * Troubleshooting's Forget the adapter, drawn with Bluetooth off. Now Use a
+   * different adapter is drawn whenever an adapter is kept and nothing is
+   * connected to it (off, or on and still trying it): Bluetooth off for it,
+   * the one kept forgotten (lib/bluetooth letGoOfKeptAdapter), then what
+   * Connect does the first time, the search's list on Android and Apple's
+   * screen on an iPhone (another, above). And while the link tries one that
+   * is not there, another the phone can see is offered by name, for a tap
+   * (otherAdapterNow, below). Troubleshooting's Forget the adapter does the
+   * same as the button, on or off. A unit on a USB cable keeps its own,
+   * Forget the USB cable.
    */
   /*
    * A UNIT ON A USB CABLE FROM LAST TIME, NOT PLUGGED IN NOW: never Apple's
@@ -432,6 +456,45 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     chooseAdapter(d)
     setWanted(true)
   }
+  /*
+   * USE A DIFFERENT ADAPTER (A DIFFERENT ADAPTER IS ITS OWN BUTTON, above):
+   * drawn while an adapter is kept and nothing is connected to it, never for
+   * a unit on a USB cable. Bluetooth off and the one kept forgotten first,
+   * so the `wanted` promise turns it on with the one chosen, as the first
+   * time; then the same as another(): the search, never a cable in its place.
+   */
+  const keptAdapter = !!b.adapter && !cable
+  const offerDifferent = keptAdapter && canStart && !connected
+  const different = () => {
+    if (!canStart || !letGoOfKeptAdapter()) return
+    arm()
+    find({ cableFirst: false })
+  }
+  /*
+   * ANOTHER ADAPTER HERE, while the link is trying the one kept and it is not
+   * there (bleLink's notThere): the one the phone can see, by name, and Use
+   * it switches to it on the tap, as choosing it in the list does
+   * (lib/bluetooth switchAdapter). Never by itself. To have something to
+   * see, one short look once a visit for each adapter kept (glanceForAdapters:
+   * the iPhone's list read, one short Android search).
+   */
+  const notThere = b.on && b.phase === 'connecting' && !!b.notThere && keptAdapter
+  const glanced = useRef(null)
+  useEffect(() => {
+    if (!notThere || glanced.current === b.adapter?.id) return
+    glanced.current = b.adapter?.id
+    glanceForAdapters()
+  }, [notThere, b.adapter?.id])
+  const other = notThere ? otherAdapterNow(listed) : null
+  const otherWords = other ? otherAdapterWords(b.adapter, other) : null
+  const takeOther = (d) => {
+    if (!canStart) return
+    arm()
+    switchAdapter(d)
+  }
+  const differentButton = offerDifferent ? (
+    <Press label="Use a different adapter" sub={`Instead of ${adapterName(b.adapter) || 'the adapter'}, from last time`} height={52} disabled={b.looking} onPress={different} />
+  ) : null
   /*
    * RECONNECT, ON AN IPHONE WHOSE ADAPTER HAS GONE. An iPhone lets a
    * Bluetooth link nobody is using go after a few minutes (a phone locked
@@ -529,6 +592,14 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               </Hint>
             ) : null}
             {away ? <Press label="Reconnect" tone="live" sub={APPLE_SCREEN_OPENS} onPress={reconnect} /> : null}
+            {/* Another adapter the phone can see while the one kept is not there: said by name, and used only on the tap (otherAdapterNow, switchAdapter). */}
+            {otherWords ? (
+              <View style={{ gap: space.sm }}>
+                <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>{otherWords.line}</Text>
+                <Press label={otherWords.button} tone="live" height={52} disabled={!canStart} onPress={() => takeOther(other)} />
+              </View>
+            ) : null}
+            {differentButton}
             {/* The unit chips are not drawn while it is on: which one was picked, and how to change it. */}
             {b.unit ? <Hint>{`Unit: ${unitName(b.unit)}. Tap Stop to change it.`}</Hint> : null}
             <Press label="Stop using Bluetooth" sub="Goes back to the computer" height={52} onPress={() => setBluetooth(false)} />
@@ -578,6 +649,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                             : `The ${deviceNoun()} looks for the adapter for ten seconds, then connects to it. If Android asks to pair, accept.`}
                 </Hint>
               )}
+              {differentButton}
             </View>
           </View>
         )}
@@ -806,9 +878,20 @@ export function BluetoothTrouble({ onReport = null }) {
       ))}
       <View style={{ gap: space.sm }}>
         <OpenSettings />
-        {/* A different adapter: the old one forgotten here, and Connect on the Bluetooth page finds the new one. */}
-        {b.adapter && !b.on && !cable ? (
-          <Press label="Forget the adapter" sub={`${b.adapter.name || 'The adapter'} from last time. Then tap Connect to pick another.`} height={52} onPress={() => forgetAdapter()} />
+        {/*
+          A different adapter: the old one forgotten here, and Connect on the
+          Bluetooth page finds the new one. On or off since 3 November 2026
+          (the page's Use a different adapter does the same): with Bluetooth
+          on, it goes off for that adapter first, which stops the link trying
+          it (lib/bluetooth letGoOfKeptAdapter).
+        */}
+        {b.adapter && !cable ? (
+          <Press
+            label="Forget the adapter"
+            sub={`${adapterName(b.adapter) || 'The adapter'} from last time. ${b.on ? 'Bluetooth goes off, then tap' : 'Then tap'} Connect to pick another.`}
+            height={52}
+            onPress={() => letGoOfKeptAdapter()}
+          />
         ) : null}
         {b.adapter && !b.on && cable ? (
           <Press label="Forget the USB cable" sub={`${b.adapter.name || 'The unit'} on the USB cable, from last time. Then tap Connect to pick another.`} height={52} onPress={() => forgetAdapter({ byHand: true })} />

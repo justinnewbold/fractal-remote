@@ -92,6 +92,16 @@ let gen3TunerOwed = null
 let letting = null
 /* Stopped at the unlock while wanted: the purchase watched, to start the link the moment it lets this account in (see waitForPurchase). */
 let unlockWait = null
+/*
+ * THE ADAPTER KEPT DID NOT CONNECT on a try since begin() last ran, and the
+ * page has been told (noteBluetooth notThere). "It was trying to only let
+ * me connect to a Widi master cause that's what I connected to previously
+ * and I had a widi jack hooked up now" (Justin, 3 November 2026): the loop
+ * goes on trying it, as it must for an adapter that is only out of range,
+ * and the page offers the one it can see beside it (lib/bluetooth
+ * otherAdapterNow), on a tap. Told once a round, not at every try.
+ */
+let missed = false
 
 const say = (line, detail) => logDebug('ble', line, detail)
 
@@ -190,10 +200,11 @@ function stopWaitingForPurchase() {
 function begin() {
   clearTimer()
   if (!running) return
+  missed = false
   const s = bluetoothSettings()
   if (!s.unit) {
     tell?.({ link: 'off', macName: null, hostVersion: null })
-    noteBluetooth({ phase: 'no-unit' })
+    noteBluetooth({ phase: 'no-unit', notThere: false })
     return
   }
   /* By its name, never its Bluetooth address: the link keeps this as macName, and the log's head prints it (lib/bluetooth adapterName). */
@@ -204,9 +215,9 @@ function begin() {
    * the stage for ever, with a button that looked again for nothing.
    */
   tell?.({ link: held || !s.adapter ? 'off' : 'joining', macName: name, hostVersion: null })
-  if (held) return noteBluetooth({ phase: 'held' })
-  if (!s.adapter) return noteBluetooth({ phase: 'no-adapter' })
-  noteBluetooth({ phase: 'connecting' })
+  if (held) return noteBluetooth({ phase: 'held', notThere: false })
+  if (!s.adapter) return noteBluetooth({ phase: 'no-adapter', notThere: false })
+  noteBluetooth({ phase: 'connecting', notThere: false })
   tryConnect()
 }
 
@@ -249,6 +260,10 @@ async function tryConnect() {
     if (!wire) connected({ id: s.adapter.id, name: s.adapter.name })
     return
   }
+  if (!missed) {
+    missed = true
+    noteBluetooth({ notThere: true })
+  }
   const was = delay
   delay = nextDelay(delay)
   /* Said while the wait grows, then quiet: thirty lines an hour of the same sentence bury the one that matters. */
@@ -285,7 +300,8 @@ async function connected(e) {
   unhear = made.subscribe(handleEvent)
   setSwitch({ on: bluetoothOn(), wire: made })
   const name = adapterName(e) || adapterName(s.adapter) || fallbackName(s.adapter)
-  noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null })
+  missed = false
+  noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null, notThere: false })
   tell?.({ link: 'connected', macName: name, hostVersion: null })
   say(`connected to ${name}${isCable(s.adapter) ? ' by USB cable' : ''}; asking the ${unitName(s.unit)} what it is`)
   /*
@@ -624,6 +640,7 @@ export function stopBluetoothLink() {
     if (touched) releaseAdapter()
     touched = false
     held = false
-    noteBluetooth({ phase: bluetoothOn() ? 'idle' : 'off', connectedTo: null })
+    missed = false
+    noteBluetooth({ phase: bluetoothOn() ? 'idle' : 'off', connectedTo: null, notThere: false })
   })
 }

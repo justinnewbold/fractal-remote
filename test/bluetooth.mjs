@@ -882,6 +882,8 @@ async function linkOnABench(t) {
       listeners: new Map(),
       watchers: [],
       said: [],
+      /* What the link told the page (lib/bluetooth noteBluetooth), in order. */
+      notes: [],
       resets: 0,
       tunerWrites: [],
       app: []
@@ -899,7 +901,7 @@ async function linkOnABench(t) {
       export function closeWire() { const was = bench.current; bench.current = null; was?.close() }
       export function openWire() { closeWire(); bench.current = bench.open(); return bench.current }
       export const connectAdapter = (id) => bench.connect(id)
-      export const noteBluetooth = () => {}
+      export const noteBluetooth = (patch) => { bench.notes.push(patch) }
       export const onAdapter = (name, fn) => { bench.listeners.set(name, fn); return () => bench.listeners.delete(name) }
       export const refreshKeptAdapter = () => { bench.refreshed++; return false }
       export const releaseAdapter = () => {}
@@ -5730,8 +5732,8 @@ export function run(test) {
     assert.match(flat('mobile/src/lib/purchases.js'), /export const subscribePurchase = subscribe\b/, 'the link waits on the purchase through something other than the watch the screens keep')
     /* With no adapter picked nothing is looked for: 'joining' put a spinner on the stage for ever. */
     assert.match(flat('mobile/src/lib/bleLink.js'), /tell\?\.\(\{ link: held \|\| !s\.adapter \? 'off' : 'joining',/, 'no adapter reads as looking for one')
-    /* A new connection starts with no word of the wrong unit from the last one. */
-    assert.match(flat('mobile/src/lib/bleLink.js'), /noteBluetooth\(\{ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null \}\)/)
+    /* A new connection starts with no word of the wrong unit from the last one, nor of the adapter not being there (notThere, since 3 November 2026). */
+    assert.match(flat('mobile/src/lib/bleLink.js'), /noteBluetooth\(\{ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null, notThere: false \}\)/)
   })
 
   test('App.js restarts the link when Bluetooth goes on or off, and keeps Edit and the account warning away from it', () => {
@@ -11200,5 +11202,373 @@ export function run(test) {
     await assert.rejects(drive(damaged.clock, damaged.wire.request('/preset/blocks/58/params', { editing: true })), /came back damaged/)
     const silent = await onTheLine('fm3', { edit: () => true, settings, editSilent: true })
     await assert.rejects(drive(silent.clock, silent.wire.request('/preset/blocks/58/params', { editing: true })), /didn’t send the Amp’s settings/)
+  })
+
+  /* ---------------------------------------------------------------- */
+  /* Another adapter, when the one kept from last time is not there   */
+  /* ---------------------------------------------------------------- */
+
+  /*
+   * Justin's report, 3 November 2026 21:22 UTC (Samsung, Android 36, app
+   * 1.89.32): "Where is the button to change Bluetooth adapters. I have a
+   * widi jack connected", and "It was trying to only let me connect to a Widi
+   * master cause that's what I connected to previously and I had a widi jack
+   * hooked up now." His log: Connect, Bluetooth on, joining the WIDI Master,
+   * "the adapter is not there yet" at 3 s, 6 s, 12 s, for ever; Stop and
+   * Connect went straight back to it. The only way to another adapter was
+   * Troubleshooting's Forget the adapter, drawn with Bluetooth off.
+   */
+  const WIDI_MASTER = { id: 'AA:BB:CC:00:00:01', name: 'WIDI Master' }
+  const WIDI_JACK = { id: 'AA:BB:CC:00:00:02', name: 'WIDI Jack Bluetooth', rssi: -55 }
+  const diskWith = (unit, adapter, on = true) => ({ 'fractal.bluetooth': JSON.stringify({ on, unit, adapter }) })
+
+  test('Use a different adapter: Bluetooth off for the one kept, the one kept forgotten, then the search Connect does the first time, and never for a USB cable', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const androidModule = () => {
+      const asked = []
+      const mod = {
+        supported: () => true,
+        devices: () => [],
+        requestPermissions: async () => (asked.push('permissions'), true),
+        /* Bluetooth off at the scan: the search is asked for, and nothing waits on a timer here. */
+        scan: async (s) => (asked.push(`scan ${s}`), false),
+        send: () => void asked.push('send'),
+        addListener: () => ({ remove() {} })
+      }
+      return { mod, asked }
+    }
+    /* On, trying the WIDI Master: off for it, and it is forgotten, on the phone's storage too. */
+    {
+      const { mod, asked } = androidModule()
+      const bench = await bluetoothOnABench({ os: 'android', version: 36, mod, disk: diskWith('am4', WIDI_MASTER) })
+      try {
+        bench.ble.allowBluetooth(ADMINS[0])
+        assert.equal(await bench.ble.restoreBluetooth(), true)
+        assert.equal(bench.sw.bluetoothOn(), true)
+        assert.equal(bench.ble.letGoOfKeptAdapter(), true)
+        assert.equal(bench.ble.bluetoothSettings().on, false, 'Bluetooth stays on for the adapter let go of, so the link goes on trying it')
+        assert.equal(bench.sw.bluetoothOn(), false)
+        assert.equal(bench.ble.bluetoothSettings().adapter, null, 'the adapter from last time is kept')
+        assert.deepEqual(JSON.parse(bench.disk.get('fractal.bluetooth')), { on: false, unit: 'am4', adapter: null, pcChannel: 1, methods: {} }, 'the next launch goes back to the WIDI Master')
+        assert.ok(bench.log.includes('ble a different adapter is wanted: WIDI Master is let go of'), bench.log.join(' | '))
+        assert.ok(bench.log.includes('ble Bluetooth turned off'))
+        assert.deepEqual(asked, [], 'something was asked of the phone’s Bluetooth, or sent, before the search')
+        /* Then the page's find({ cableFirst: false }): Android's search, as Connect does the first time. */
+        await bench.ble.findAdapters({ cableFirst: false })
+        assert.deepEqual(asked, ['permissions', 'scan 10'], 'the search Connect does the first time was not asked for')
+      } finally {
+        bench.done()
+      }
+    }
+    /* Off with one kept: forgotten, and nothing turned on or off. */
+    {
+      const { mod } = androidModule()
+      const bench = await bluetoothOnABench({ os: 'android', version: 36, mod, disk: diskWith('am4', WIDI_MASTER, false) })
+      try {
+        bench.ble.allowBluetooth(ADMINS[0])
+        await bench.ble.restoreBluetooth()
+        assert.equal(bench.ble.letGoOfKeptAdapter(), true)
+        assert.equal(bench.ble.bluetoothSettings().adapter, null)
+        assert.ok(!bench.log.includes('ble Bluetooth turned off'), 'Bluetooth was turned off when it was already off')
+        /* Nothing kept: nothing to let go of. */
+        assert.equal(bench.ble.letGoOfKeptAdapter(), false)
+      } finally {
+        bench.done()
+      }
+    }
+    /* An iPhone: the same, then Apple's screen. */
+    {
+      const { mod, asked } = iphoneModule('allowedAlways')
+      const kept = { id: 'p-master', name: 'WIDI Master', offline: true, driver: BT_DRIVER_NAME }
+      mod.devices = () => [kept]
+      const bench = await bluetoothOnABench({ mod, disk: diskWith('am4', kept) })
+      try {
+        bench.ble.allowBluetooth(ADMINS[0])
+        await bench.ble.restoreBluetooth()
+        assert.equal(bench.ble.letGoOfKeptAdapter(), true)
+        assert.equal(bench.ble.bluetoothSettings().on, false)
+        await bench.ble.findAdapters({ cableFirst: false })
+        assert.deepEqual(asked, ['pair'], 'Apple’s screen did not open')
+      } finally {
+        bench.done()
+      }
+    }
+    /* A unit on a USB cable kept: not this button's; Forget the USB cable is its own. */
+    {
+      const { mod } = iphoneModule('allowedAlways')
+      mod.devices = () => [AM4_ON_CABLE]
+      const bench = await bluetoothOnABench({ mod, disk: diskWith('am4', AM4_ON_CABLE) })
+      try {
+        bench.ble.allowBluetooth(ADMINS[0])
+        await bench.ble.restoreBluetooth()
+        assert.equal(bench.ble.letGoOfKeptAdapter(), false, 'a cable is let go of as an adapter')
+        assert.equal(bench.ble.bluetoothSettings().adapter.id, AM4_ON_CABLE.id)
+        assert.equal(bench.ble.bluetoothSettings().on, true)
+      } finally {
+        bench.done()
+      }
+    }
+
+    /*
+     * The page: drawn while an adapter is kept and nothing is connected to it
+     * (off, or on and still trying it), never for a cable, both under Connect
+     * and under Stop; it lets the one kept go, then searches as the first
+     * time, never a cable in its place. The comment that sent a different
+     * adapter to Troubleshooting is gone.
+     */
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    assert.match(page, /const keptAdapter = !!b\.adapter && !cable const offerDifferent = keptAdapter && canStart && !connected const different = \(\) => \{ if \(!canStart \|\| !letGoOfKeptAdapter\(\)\) return arm\(\) find\(\{ cableFirst: false \}\) \}/, 'Use a different adapter does not let go of the one kept and search as the first time')
+    assert.match(page, /const connected = b\.on && b\.phase === 'connected'/)
+    assert.match(page, /const differentButton = offerDifferent \? \( <Press label="Use a different adapter" sub=\{`Instead of \$\{adapterName\(b\.adapter\) \|\| 'the adapter'\}, from last time`\} height=\{52\} disabled=\{b\.looking\} onPress=\{different\} \/> \) : null/, 'the button does not name the adapter from last time')
+    const ternary = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('{/* Not under a trouble line'))
+    const cut = ternary.indexOf(') : ( <View style={{ gap: space.lg }}>')
+    assert.ok(cut > 0, 'the on/off ternary could not be split')
+    const [onPart, offPart] = [ternary.slice(0, cut), ternary.slice(cut)]
+    assert.ok(onPart.includes('{differentButton}') && onPart.indexOf('{differentButton}') < onPart.indexOf('<Press label="Stop using Bluetooth"'), 'no Use a different adapter while it is trying the one kept, or it is under Stop')
+    assert.ok(offPart.includes('{differentButton}') && offPart.indexOf('{differentButton}') > offPart.indexOf("label={b.looking ? 'Looking…' : 'Connect'}"), 'no Use a different adapter under Connect')
+    assert.ok(!/A different adapter is Troubleshooting['’]s/.test(page), 'the page still says a different adapter is Troubleshooting’s')
+  })
+
+  test('Troubleshooting’s Forget the adapter is there with Bluetooth on too, and turns it off for that adapter first', () => {
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    const trouble = page.slice(page.indexOf('export function BluetoothTrouble('), page.indexOf('export function BluetoothLimits('))
+    assert.match(trouble, /\{b\.adapter && !cable \? \( <Press label="Forget the adapter" sub=\{`\$\{adapterName\(b\.adapter\) \|\| 'The adapter'\} from last time\. \$\{b\.on \? 'Bluetooth goes off, then tap' : 'Then tap'\} Connect to pick another\.`\} height=\{52\} onPress=\{\(\) => letGoOfKeptAdapter\(\)\} \/> \) : null\}/, 'Forget the adapter is drawn only with Bluetooth off, or forgets it with Bluetooth left on')
+    /* A cable keeps its own, as it was: with Bluetooth off, and let go of by hand. */
+    assert.match(trouble, /\{b\.adapter && !b\.on && cable \? \( <Press label="Forget the USB cable"[^]*?onPress=\{\(\) => forgetAdapter\(\{ byHand: true \}\)\} \/> \) : null\}/)
+  })
+
+  test('which other adapter is here while the one kept is not: one, by name, never the one kept, a cable, the iPhone’s own port, or for an FM3 one it is never offered', async () => {
+    const { otherAdapterHere } = await import('../mobile/src/lib/bleAdapters.js')
+    const { neverOnFm3, FM3_NEVER_NAMES, waysFor, PARTS } = await import('../shared/bluetooth-gear.mjs')
+    /* Android: scan results, seen nearby. */
+    assert.equal(otherAdapterHere([WIDI_JACK], WIDI_MASTER, { os: 'android' }), WIDI_JACK)
+    assert.equal(otherAdapterHere([WIDI_MASTER, WIDI_JACK], WIDI_MASTER, { os: 'android' }), WIDI_JACK, 'the one kept is offered as another')
+    assert.equal(otherAdapterHere([WIDI_MASTER], WIDI_MASTER, { os: 'android' }), null)
+    assert.equal(otherAdapterHere([], WIDI_MASTER, { os: 'android' }), null)
+    assert.equal(otherAdapterHere(null, WIDI_MASTER, { os: 'android' }), null)
+    /* Two others is a real question: Use a different adapter asks it with the list. */
+    const uhost = { id: 'AA:BB:CC:00:00:03', name: 'WIDI Uhost', rssi: -70 }
+    assert.equal(otherAdapterHere([WIDI_JACK, uhost], WIDI_MASTER, { os: 'android' }), null, 'the phone guessed between two adapters')
+    /* Never a unit on a USB cable, beside it or kept. */
+    const androidCable = { id: 'usb:2466:0007', name: 'AM4', transport: 'usb' }
+    assert.equal(otherAdapterHere([androidCable, WIDI_JACK], WIDI_MASTER, { os: 'android' }), WIDI_JACK)
+    assert.equal(otherAdapterHere([androidCable], WIDI_MASTER, { os: 'android' }), null, 'a cable is offered as another adapter')
+    assert.equal(otherAdapterHere([WIDI_JACK], androidCable, { os: 'android' }), null, 'another adapter is offered in a kept cable’s place')
+    assert.equal(otherAdapterHere([WIDI_JACK], null, { os: 'android' }), null)
+    /* An iPhone: Apple's Bluetooth driver, connected now; never offline, a cable, the network session or the iPhone's own port. */
+    const masterI = { id: 'p-master', name: 'WIDI Master', offline: true, driver: BT_DRIVER_NAME }
+    const jackI = { id: 'p-jack', name: 'WIDI Jack Bluetooth', offline: false, driver: BT_DRIVER_NAME }
+    const own = { id: 'p-own', name: 'iPhone Bluetooth', offline: false, driver: BT_DRIVER_NAME }
+    const session = { id: 'p-net', name: 'Network Session 1', offline: false, driver: '' }
+    assert.equal(otherAdapterHere([masterI, jackI, own, session, AM4_ON_CABLE], masterI, { os: 'ios' }), jackI)
+    assert.equal(otherAdapterHere([masterI, { ...jackI, offline: true }], masterI, { os: 'ios' }), null, 'an adapter not connected to the iPhone is offered')
+    assert.equal(otherAdapterHere([masterI, { ...jackI, driver: '' }], masterI, { os: 'ios' }), null, 'a port on no Bluetooth driver is offered')
+    assert.equal(otherAdapterHere([masterI, own, { ...own, id: 'p-pad', name: 'iPad Bluetooth' }], masterI, { os: 'ios' }), null, 'the iPhone’s own port is offered as an adapter')
+    /* For an FM3: never the WIDI Master or the C2MIDI Pro, nor the WIDI Jack or MD-BT01 (FM3_NEVER's "any adapter that can take power from MIDI OUT"). */
+    const fm3 = { os: 'android', refused: neverOnFm3 }
+    assert.equal(otherAdapterHere([WIDI_MASTER], uhost, fm3), null, 'a WIDI Master is offered for an FM3')
+    assert.equal(otherAdapterHere([WIDI_JACK], uhost, fm3), null, 'a WIDI Jack is offered for an FM3')
+    assert.equal(otherAdapterHere([WIDI_MASTER, { ...uhost, id: 'AA:BB:CC:00:00:04' }], uhost, fm3)?.id, 'AA:BB:CC:00:00:04', 'refused adapters are counted as a real choice')
+    for (const name of ['WIDI Master', 'widi master', 'WIDIMaster', 'C2MIDI Pro', 'CME C2MIDI Pro', 'WIDI Jack Bluetooth', 'MD-BT01']) assert.equal(neverOnFm3(name), true, `${name} is offered for an FM3`)
+    for (const name of ['WIDI Uhost', 'WIDI Uhost Bluetooth', '', null, undefined]) assert.equal(neverOnFm3(name), false, `${name} is never offered for an FM3`)
+    assert.ok(Object.isFrozen(FM3_NEVER_NAMES))
+    /* The FM3's own way is never among them, by the names on its parts; the parts never for one always are. */
+    for (const way of waysFor('fm3')) for (const part of way.parts) assert.equal(neverOnFm3(PARTS[part].name), false, `${PARTS[part].name}, the FM3’s own way, is never offered for one`)
+    for (const part of ['master', 'c2midi', 'jackTrs', 'jackDin']) assert.equal(neverOnFm3(PARTS[part].name), true, `${PARTS[part].name} is offered for an FM3`)
+  })
+
+  test('while the link tries an adapter that is not there, the page offers the one the phone can see, by name, and switches only on the tap', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    /* Android, as in Justin's report: the WIDI Master kept and not there, the WIDI Jack lit. */
+    {
+      const asked = []
+      let found = []
+      const heard = {}
+      const mod = {
+        supported: () => true,
+        devices: () => found,
+        requestPermissions: async () => (asked.push('permissions'), true),
+        /* The module's scan empties what it found, and lists what advertises: not the WIDI Master. */
+        scan: async (s) => {
+          asked.push(`scan ${s}`)
+          found = []
+          return true
+        },
+        send: () => void asked.push('send'),
+        addListener: (event, fn) => ((heard[event] = fn), { remove() {} })
+      }
+      const bench = await bluetoothOnABench({ os: 'android', version: 36, mod, disk: diskWith('am4', WIDI_MASTER) })
+      try {
+        bench.ble.allowBluetooth(ADMINS[0])
+        await bench.ble.restoreBluetooth()
+        /* Not while the link is not trying it, nor before a try has missed it. */
+        assert.equal(await bench.ble.glanceForAdapters(), false, 'a look around with the link not trying the adapter')
+        bench.ble.noteBluetooth({ phase: 'connecting', notThere: false })
+        assert.equal(await bench.ble.glanceForAdapters(), false, 'a look around before a try missed the adapter')
+        assert.deepEqual(asked, [])
+        bench.ble.noteBluetooth({ notThere: true })
+        assert.equal(await bench.ble.glanceForAdapters(), true)
+        assert.deepEqual(asked, [`scan ${bench.ble.GLANCE_SECONDS}`], 'the look around asked for Nearby devices, or did not search')
+        assert.ok(bench.ble.GLANCE_SECONDS >= 2 && bench.ble.GLANCE_SECONDS <= 5, 'not a short look')
+        assert.equal(bench.ble.otherAdapterNow(), null, 'an adapter is offered before one is seen')
+        /* The WIDI Jack is heard: the page is given it, and offers it. */
+        found = [WIDI_JACK]
+        heard.onDevices({ devices: found })
+        assert.deepEqual(bench.ble.useBluetooth().devices.map((d) => d.id), [WIDI_JACK.id], 'what the look found is not given to the page')
+        const other = bench.ble.otherAdapterNow()
+        assert.equal(other?.id, WIDI_JACK.id)
+        assert.deepEqual(bench.ble.otherAdapterWords(bench.ble.bluetoothSettings().adapter, other), {
+          line: 'WIDI Master isn’t answering. WIDI Jack Bluetooth is here.',
+          button: 'Use WIDI Jack Bluetooth'
+        })
+        /* Never by itself: still the WIDI Master, here and on the phone's storage, until the tap. */
+        assert.equal(bench.ble.bluetoothSettings().adapter.id, WIDI_MASTER.id, 'the phone switched adapters by itself')
+        assert.equal(JSON.parse(bench.disk.get('fractal.bluetooth')).adapter.id, WIDI_MASTER.id)
+        /* One short look, not one at every redraw. */
+        assert.equal(await bench.ble.glanceForAdapters(), false)
+        assert.equal(asked.length, 1)
+        /* The tap: the WIDI Jack kept in its place, and Bluetooth left on, so the link connects to it. */
+        assert.equal(bench.ble.switchAdapter(other), true)
+        assert.equal(bench.ble.bluetoothSettings().adapter.id, WIDI_JACK.id)
+        assert.equal(bench.ble.bluetoothSettings().on, true)
+        assert.equal(JSON.parse(bench.disk.get('fractal.bluetooth')).adapter.id, WIDI_JACK.id, 'the next launch goes back to the WIDI Master')
+        assert.ok(bench.log.includes('ble switching from WIDI Master to WIDI Jack Bluetooth, as asked'), bench.log.join(' | '))
+        assert.ok(!bench.log.some((l) => l.includes('AA:BB:CC')), 'the log names an adapter by its Bluetooth address')
+        /* Nothing sent to any unit, and nothing else asked of the phone. */
+        assert.deepEqual(asked, [`scan ${bench.ble.GLANCE_SECONDS}`])
+        /* Not the one kept, not a cable, and not with nothing kept. */
+        assert.equal(bench.ble.switchAdapter(WIDI_JACK), false)
+        assert.equal(bench.ble.switchAdapter({ id: 'usb:2466:0007', name: 'AM4', transport: 'usb' }), false, 'a switch to a cable')
+      } finally {
+        bench.done()
+      }
+    }
+    /* An iPhone: its list read, nothing asked of iOS, Apple's screen not opened. */
+    {
+      const masterI = { id: 'p-master', name: 'WIDI Master', offline: true, driver: BT_DRIVER_NAME }
+      const jackI = { id: 'p-jack', name: 'WIDI Jack Bluetooth', offline: false, driver: BT_DRIVER_NAME }
+      const { mod, asked } = iphoneModule('allowedAlways')
+      mod.devices = () => [masterI, jackI, { id: 'p-own', name: 'iPhone Bluetooth', offline: false, driver: BT_DRIVER_NAME }, AM4_ON_CABLE]
+      mod.send = () => void asked.push('send')
+      const bench = await bluetoothOnABench({ mod, disk: diskWith('am4', masterI) })
+      try {
+        bench.ble.allowBluetooth(ADMINS[0])
+        await bench.ble.restoreBluetooth()
+        bench.ble.noteBluetooth({ phase: 'connecting', notThere: true })
+        assert.equal(await bench.ble.glanceForAdapters(), true)
+        assert.equal(bench.ble.otherAdapterNow()?.id, jackI.id)
+        assert.equal(bench.ble.bluetoothSettings().adapter.id, masterI.id, 'the iPhone switched adapters by itself')
+        assert.equal(bench.ble.switchAdapter(jackI), true)
+        assert.equal(bench.ble.bluetoothSettings().adapter.id, jackI.id)
+        assert.deepEqual(asked, [], 'Apple’s screen opened, or something was sent')
+      } finally {
+        bench.done()
+      }
+    }
+    /* An FM3: a WIDI Master it can see is never offered, nor switched to on any tap. */
+    {
+      const uhost = { id: 'AA:BB:CC:00:00:03', name: 'WIDI Uhost' }
+      const mod = { supported: () => true, devices: () => [WIDI_MASTER], scan: async () => true, addListener: () => ({ remove() {} }) }
+      const bench = await bluetoothOnABench({ os: 'android', version: 36, mod, disk: diskWith('fm3', uhost) })
+      try {
+        bench.ble.allowBluetooth(ADMINS[0])
+        await bench.ble.restoreBluetooth()
+        bench.ble.noteBluetooth({ phase: 'connecting', notThere: true })
+        assert.equal(bench.ble.otherAdapterNow(), null, 'a WIDI Master is offered for an FM3')
+        assert.equal(bench.ble.switchAdapter(WIDI_MASTER), false, 'an FM3 is switched to a WIDI Master')
+        assert.equal(bench.ble.bluetoothSettings().adapter.id, uhost.id)
+      } finally {
+        bench.done()
+      }
+    }
+    /* A unit on a USB cable kept: no look around and nothing offered; plugging it in is what brings it back. */
+    {
+      const { mod, asked } = iphoneModule('allowedAlways')
+      mod.devices = () => [{ ...AM4_ON_CABLE, offline: true }, { id: 'p-jack', name: 'WIDI Jack Bluetooth', offline: false, driver: BT_DRIVER_NAME }]
+      const bench = await bluetoothOnABench({ mod, disk: diskWith('am4', AM4_ON_CABLE) })
+      try {
+        bench.ble.allowBluetooth(ADMINS[0])
+        await bench.ble.restoreBluetooth()
+        bench.ble.noteBluetooth({ phase: 'connecting', notThere: true })
+        assert.equal(await bench.ble.glanceForAdapters(), false)
+        assert.equal(bench.ble.otherAdapterNow(), null, 'an adapter is offered in a cable’s place')
+        assert.deepEqual(asked, [])
+      } finally {
+        bench.done()
+      }
+    }
+
+    /*
+     * The page: only while on, trying the adapter kept and a try has missed
+     * it (bleLink notThere), never for a cable; the look around once a visit
+     * for each adapter kept; and the switch only from the button.
+     */
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    assert.match(page, /const notThere = b\.on && b\.phase === 'connecting' && !!b\.notThere && keptAdapter/)
+    assert.match(page, /useEffect\(\(\) => \{ if \(!notThere \|\| glanced\.current === b\.adapter\?\.id\) return glanced\.current = b\.adapter\?\.id glanceForAdapters\(\) \}, \[notThere, b\.adapter\?\.id\]\)/, 'the page looks around at every redraw, or never')
+    assert.match(page, /const other = notThere \? otherAdapterNow\(listed\) : null const otherWords = other \? otherAdapterWords\(b\.adapter, other\) : null const takeOther = \(d\) => \{ if \(!canStart\) return arm\(\) switchAdapter\(d\) \}/)
+    assert.match(page, /\{otherWords \? \( <View style=\{\{ gap: space\.sm \}\}> <Text style=\{\{ color: color\.silk, fontSize: font\.body, lineHeight: 22 \}\}>\{otherWords\.line\}<\/Text> <Press label=\{otherWords\.button\} tone="live" height=\{52\} disabled=\{!canStart\} onPress=\{\(\) => takeOther\(other\)\} \/> <\/View> \) : null\}/)
+    assert.match(page, /const listed = useMemo\(\(\) => adapterDevices\(\), \[b\.devices, b\.adapter\?\.id, b\.on, b\.phase, b\.notThere\]\)/, 'the page does not read the list again when the adapter is missed')
+    /* Called from the button alone: never from a redraw or an effect. */
+    assert.equal((code('mobile/src/screens/Bluetooth.js').match(/switchAdapter\(/g) || []).length, 1, 'the page switches adapters somewhere besides the button')
+    assert.ok(!/switchAdapter|chooseAdapter/.test(code('mobile/src/lib/bleLink.js')), 'the link switches adapters by itself')
+  })
+
+  test('the link tells the page when the adapter kept is not there, once a round, and stops trying it the moment another is chosen or it is forgotten', async () => {
+    const notThere = (b) => b.bench.notes.filter((n) => 'notThere' in n).map((n) => n.notThere)
+    {
+      const t = await onTheLine('am4')
+      const b = await linkOnABench(t)
+      try {
+        b.bench.settings = { unit: 'am4', adapter: WIDI_MASTER }
+        const tried = []
+        b.bench.connect = async (id) => (tried.push(id), id === WIDI_JACK.id)
+        b.link.startBluetoothLink(() => {})
+        await advance(t.clock, 100)
+        assert.deepEqual(tried, [WIDI_MASTER.id])
+        assert.ok(b.said.includes('the adapter is not there yet; trying again in 3 s'), b.said.join(' | '))
+        assert.deepEqual(notThere(b), [false, true], 'the page is not told the adapter kept is not there')
+        /* Tried again, as it must be for one only out of range; told once, not at every try. */
+        await advance(t.clock, 3000 + 6000 + 100)
+        assert.deepEqual(tried, [WIDI_MASTER.id, WIDI_MASTER.id, WIDI_MASTER.id])
+        assert.deepEqual(notThere(b), [false, true])
+        /* The page's Use WIDI Jack Bluetooth: the Jack is tried at once, it connects, and the page hears it is there. */
+        await b.settings({ adapter: WIDI_JACK })
+        await advance(t.clock, 100)
+        assert.deepEqual(tried, [WIDI_MASTER.id, WIDI_MASTER.id, WIDI_MASTER.id, WIDI_JACK.id])
+        assert.ok(b.bench.current, 'not connected to the adapter chosen')
+        assert.equal(notThere(b).at(-1), false, 'the page still says the adapter is not there once it is connected')
+        assert.ok(b.bench.notes.some((n) => n.phase === 'connected' && n.notThere === false))
+        await advance(t.clock, 60000)
+        assert.equal(tried.filter((id) => id === WIDI_MASTER.id).length, 3, 'the adapter let go of is still tried')
+      } finally {
+        b.done()
+      }
+    }
+    /* Forgotten (Use a different adapter, Forget the adapter): no more tries, and no word of it. */
+    {
+      const t = await onTheLine('am4')
+      const b = await linkOnABench(t)
+      try {
+        b.bench.settings = { unit: 'am4', adapter: WIDI_MASTER }
+        const tried = []
+        b.bench.connect = async (id) => (tried.push(id), false)
+        b.link.startBluetoothLink(() => {})
+        await advance(t.clock, 100)
+        assert.deepEqual(notThere(b), [false, true])
+        await b.settings({ adapter: null })
+        await advance(t.clock, 60000)
+        assert.deepEqual(tried, [WIDI_MASTER.id], 'the adapter forgotten is still tried')
+        assert.deepEqual(b.bench.notes.at(-1), { phase: 'no-adapter', notThere: false })
+        assert.ok(b.said.includes('the adapter was forgotten'), b.said.join(' | '))
+        /* The next one chosen and not there either: a new round, and the page is told again. */
+        await b.settings({ adapter: WIDI_JACK })
+        await advance(t.clock, 100)
+        assert.deepEqual(tried, [WIDI_MASTER.id, WIDI_JACK.id])
+        assert.deepEqual(notThere(b), [false, true, false, false, true], 'the page is not told the next adapter is not there either')
+      } finally {
+        b.done()
+      }
+    }
   })
 }
