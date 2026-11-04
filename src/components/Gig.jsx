@@ -123,13 +123,14 @@ const UNNAMED_AFTER_MS = 1500
 /* How long a VP4's refusal stays over Play: its longest sentence, read at an easy pace (see onError). */
 const VP4_SAID_MS = 9000
 /*
- * THE BOTTOM BUTTONS' LOOK, IN ONE PLACE. 'short' is the website's: "Make
- * the bottom tab bar buttons smaller", the 44px touch floor with the tempo
- * beside Tap. 'tall' is the phone app's, 56 high (48 at Smallest) with the
- * tempo under Tap, written in styles.css and waiting under
- * .gig-bar[data-look='tall']. This is the one line to change to take it.
+ * THE BOTTOM BUTTONS' LOOK, IN ONE PLACE. 'tall' is the phone app's, 56 high
+ * (48 at Smallest) with the tempo under Tap, in styles.css under
+ * .gig-bar[data-look='tall']: Justin's pick on 4 November 2026 ("Go with
+ * your picks", the pick being the phone app's taller buttons). 'short' is
+ * the website's old look: "Make the bottom tab bar buttons smaller", the
+ * 44px touch floor with the tempo beside Tap. This is the one line to change.
  */
-const BAR_LOOK = 'short'
+const BAR_LOOK = 'tall'
 /* What the hold tip leaves between the first row of pedals and the buttons at the bottom when it brings that row into sight (the grids' own gap). */
 const TIP_ROW_ROOM = 8
 /*
