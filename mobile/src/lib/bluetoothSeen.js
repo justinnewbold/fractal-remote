@@ -51,7 +51,7 @@ async function look() {
     if (await noteBluetoothConnected()) {
       told.add(account.id)
       await AsyncStorage.setItem(key, 'yes').catch(() => {})
-      logDebug('app', 'bluetooth: the account server knows this account has connected over Bluetooth')
+      logDebug('app', 'bluetooth: the account server knows this account has connected without a computer')
     }
   } finally {
     asking = false

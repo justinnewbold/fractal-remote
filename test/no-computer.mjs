@@ -315,6 +315,8 @@ async function otherWayOnABench() {
       export const useBluetoothAllowed = () => b.allowed
       export const useBluetoothAdmin = () => b.admin
       export function bluetoothSupported() { b.asked++; return b.supported }
+      /* A unit on a USB cable chosen (lib/bleAdapters isCable): Fixes says the cable over Bluetooth's line. */
+      export const cableNow = () => !!b.cable
     `,
     'purchases.mjs': 'const b = globalThis.__otherWayBench\nexport const usePurchase = () => ({ ...b.purchase })\n',
     'bleSwitch.mjs': 'const b = globalThis.__otherWayBench\nexport const bluetoothOn = () => b.on\n',
@@ -365,6 +367,8 @@ async function otherWayOnABench() {
     ["from '../lib/vp4-safety'", "from './vp4-safety.mjs'"],
     ["from '../lib/no-computer'", `from '${repoUrl('mobile/src/lib/no-computer.js')}'`],
     ["from '../lib/useBluetoothOffered'", "from './useBluetoothOffered.mjs'"],
+    ["from '../lib/bluetooth'", "from './bluetooth.mjs'"],
+    ["from '../lib/cableWords'", `from '${repoUrl('mobile/src/lib/cableWords.js')}'`],
     ["from '../lib/device-word'", "from './device-word.mjs'"]
   ])
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
@@ -1278,6 +1282,12 @@ export function run(test) {
     /* Already on Bluetooth: it is not another way, and is not offered as one. */
     b.bench.on = true
     assert.deepEqual(lines('connect'), [], 'the other way is offered to somebody already on it')
+    /* And on a USB cable, Versions says the cable, not Bluetooth (lib/cableWords cableFixesLine). */
+    assert.match(says('versions'), /Over Bluetooth the phone talks to the unit itself, so no computer app is in use\./)
+    b.bench.cable = true
+    assert.match(says('versions'), /Over a USB cable this phone talks to the unit itself, so no computer app is in use\./, 'Fixes calls a USB cable Bluetooth')
+    assert.ok(!/Over Bluetooth/.test(says('versions')))
+    b.bench.cable = false
     b.bench.on = false
     /* A phone that cannot do it. */
     b.bench.supported = false

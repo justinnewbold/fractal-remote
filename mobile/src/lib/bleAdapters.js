@@ -33,20 +33,42 @@
  * as an adapter whatever its name: an adapter Apple's Bluetooth screen
  * connected, or a unit on a USB cable (an AM4 plugged straight in). The
  * iPhone module reads the driver from CoreMIDI (kMIDIPropertyDriverOwner,
- * FractalBleMidiModule.swift devices()); Android sends none.
+ * FractalBleMidiModule.swift devices()); Android sends none, and its USB
+ * entries say what they are by their transport (isCable, below).
  *
- * THE TWO DRIVER NAMES ARE A GUESS. Apple does not write them down, and no
- * log from a real iPhone has shown them yet: "AppleMIDIBluetoothDriver" and
- * "AppleMIDIUSBDriver" came from an earlier test's example, not from a
- * phone. They are trusted only to KEEP a port, never to drop one, so if they
- * are wrong nothing breaks: the check never fires and the name decides,
- * which every real adapter's name passes. The device log's "ports after
- * Apple's Bluetooth screen" line names each port's driver; once a pasted log
- * from a real adapter and a USB-cabled unit shows them, put the real strings
- * here and drop this paragraph.
+ * THE TWO DRIVER NAMES, AS A REAL iPHONE SAYS THEM. Apple does not write
+ * them down; Justin's logs did (27 to 29 October 2026, store copy 1.89.3,
+ * the device log's "ports after Apple's Bluetooth screen" line). An AM4
+ * plugged straight into the iPhone, and a USB-MIDI cable (a C2MIDI Pro)
+ * straight into it, are both "com.apple.AppleMIDIUSBDriver". Every adapter
+ * Apple's Bluetooth screen connected (a Uhost, a Master) and the iPhone's
+ * own "iPhone Bluetooth" port are "com.apple.AppleMIDIBluetoothDriver".
+ * Apple's network session reads '' (or its RTP driver). They KEEP a port,
+ * never drop one, as before.
  */
-const ADAPTER_DRIVER = /AppleMIDI(Bluetooth|USB)Driver/i
+export const USB_DRIVER = /AppleMIDIUSBDriver/i
+export const BLUETOOTH_DRIVER = /AppleMIDIBluetoothDriver/i
+const ADAPTER_DRIVER = new RegExp(`${USB_DRIVER.source}|${BLUETOOTH_DRIVER.source}`, 'i')
 const NETWORK_DRIVER = /RTP/i
+
+/**
+ * A UNIT ON A USB CABLE, not a Bluetooth adapter: the phone's end is USB, a
+ * unit straight in or a USB-MIDI cable straight into the phone. The two are
+ * the same to the phone, and said the same way (lib/cableWords).
+ *
+ *   - iPhone: a port on Apple's USB MIDI driver (USB_DRIVER, above);
+ *   - Android: an entry from the build that lists USB MIDI devices (waiting
+ *     as docs/pending/android-usb-midi.patch): { id: 'usb:<vvvv>:<pppp>',
+ *     name, transport: 'usb' }. Today's Android builds list Bluetooth scan
+ *     results only, { id: <its Bluetooth address>, name, rssi }, which are
+ *     never a cable: that is the feature detection, and nothing here fires
+ *     on a copy without the new build.
+ *
+ * Everything else about the link is the same wire with a different cable:
+ * every rule the unit is held to over Bluetooth holds over it unchanged.
+ */
+export const isCable = (d) =>
+  !!d && (d.transport === 'usb' || USB_DRIVER.test(String(d.driver || '')) || (typeof d.id === 'string' && d.id.startsWith('usb:')))
 
 /* The first word of Apple's network port, in the languages an iPhone can be set to. Lower case; Romanian with both its t's. */
 export const NETWORK_WORDS = Object.freeze([
@@ -92,12 +114,65 @@ export function sessionName(name) {
 
 export const isNetworkSession = (d) => {
   const driver = String(d?.driver || '')
-  if (ADAPTER_DRIVER.test(driver)) return false
+  if (ADAPTER_DRIVER.test(driver) || isCable(d)) return false
   return NETWORK_DRIVER.test(driver) || sessionName(d?.name)
 }
 
 /** Something the page may offer as the adapter. */
 export const isAdapter = (d) => !!d && typeof d.id === 'string' && !isNetworkSession(d)
+
+/** The units on a USB cable in a list, plugged in now (not offline). */
+export const cablesIn = (list) => (Array.isArray(list) ? list : []).filter((d) => isAdapter(d) && isCable(d) && !d.offline)
+
+/*
+ * THE UNIT A CABLE'S PORT IS NAMED FOR, if any: a unit straight in calls its
+ * port by its own name (an AM4 on its USB-C cable is "AM4", on an iPhone and
+ * by Android's product name), a USB MIDI cable on a unit's MIDI jacks by the
+ * cable's (a "C2MIDI Pro"). `units` are the units the page offers, as
+ * bleWire BLE_UNITS lists them ({ key, name }); passed in, so this file
+ * imports nothing. Case, spaces and hyphens do not count ("Axe-Fx III").
+ */
+const squash = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+export function cableUnit(d, units) {
+  const name = squash(d?.name)
+  if (!name) return null
+  return (Array.isArray(units) ? units : []).find((u) => squash(u?.name) && name.startsWith(squash(u.name)))?.key ?? null
+}
+
+/** A USB MIDI cable on the unit's MIDI jacks, not the unit itself on its own USB cable: its MIDI plugs can be swapped, a unit's own USB port cannot. */
+export const onMidiJacks = (d, units) => isCable(d) && !cableUnit(d, units)
+
+/* A cable whose port is named for a unit other than the one picked: an AM4 on its cable, with the FM3 picked. Never taken without a tap. */
+const anotherUnit = (d, { unit = null, units = null } = {}) => {
+  const named = isCable(d) ? cableUnit(d, units) : null
+  return !!named && !!unit && named !== unit
+}
+
+/* A Bluetooth adapter connected to the phone now: only an iPhone's list says so (`offline: false`). An Android scan result is only seen nearby. */
+const bluetoothUp = (d) => isAdapter(d) && !isCable(d) && d.offline === false
+
+/**
+ * THE CABLES CONNECT TAKES WITHOUT A WORD ABOUT BLUETOOTH (lib/bluetooth
+ * findAdapters): one is chosen straight away, two or more are listed for a
+ * tap, and none means Apple's screen, or Android's search, as before. Only
+ * when nothing else could be meant:
+ *
+ *   - no Bluetooth adapter connected to the phone now. A Uhost already
+ *     connected beside a cable is a real choice, and Apple's screen and
+ *     pickAdapter's "the one just connected first" settle it as they always
+ *     did;
+ *   - not a cable let go of by hand (`skip`: Troubleshooting's Forget the
+ *     USB cable), or Connect after it could never pair an adapter while the
+ *     cable is in;
+ *   - not a cable named for another unit than the one picked (`unit`,
+ *     `units`): with the FM3 picked, an AM4 on its cable would be sent the
+ *     FM3's first messages.
+ */
+export function cablesFirst(list, { unit = null, units = null, skip = null } = {}) {
+  const all = Array.isArray(list) ? list : []
+  if (all.some(bluetoothUp)) return []
+  return cablesIn(all).filter((d) => !skip?.has?.(d.id) && !anotherUnit(d, { unit, units }))
+}
 
 /**
  * THE ONE TO USE, when there is no question about it, or null.
@@ -107,13 +182,59 @@ export const isAdapter = (d) => !!d && typeof d.id === 'string' && !isNetworkSes
  * the one just connected in Apple's screen, or else the only one there is.
  * Two or more, and nothing new among them, is a real question, and the page
  * asks it with a list.
+ *
+ * NEVER BY ITSELF ONE `refused` for the unit picked: for an FM3, the WIDI
+ * Master, the C2MIDI Pro and the other adapters never offered for one
+ * (shared/bluetooth-gear neverOnFm3, passed in by lib/bluetooth pickRule).
+ * It is still listed, and still counts as one of the choices, so the
+ * question is the same; only the answer is left to a tap, under the red
+ * FM3 note. A cable is not refused here: it is the unit itself.
  */
-export function pickAdapter(list, fresh = new Set()) {
-  const here = (Array.isArray(list) ? list : []).filter((d) => isAdapter(d) && !d.offline)
+export function pickAdapter(list, fresh = new Set(), { unit = null, units = null, refused = null } = {}) {
+  /* A cable named for another unit than the one picked is listed, never chosen for the player (anotherUnit, above). */
+  const here = (Array.isArray(list) ? list : []).filter((d) => isAdapter(d) && !d.offline && !anotherUnit(d, { unit, units }))
   const just = here.filter((d) => fresh.has(d.id))
-  if (just.length === 1) return just[0]
-  if (!just.length && here.length === 1) return here[0]
-  return null
+  const pick = just.length === 1 ? just[0] : !just.length && here.length === 1 ? here[0] : null
+  if (pick && !isCable(pick) && typeof refused === 'function' && refused(pick.name)) return null
+  return pick
+}
+
+/*
+ * The iPhone's or iPad's own Bluetooth MIDI port ("iPhone Bluetooth" in his
+ * logs, on Apple's Bluetooth driver like an adapter): never another adapter.
+ */
+const OWN_PORT = /\b(iphone|ipad)\b[^]*\bbluetooth\s*$/i
+
+/**
+ * ANOTHER ADAPTER HERE, WHILE THE ONE KEPT IS NOT ANSWERING, or null.
+ *
+ * "It was trying to only let me connect to a Widi master cause that's what I
+ * connected to previously and I had a widi jack hooked up now." (Justin, 3
+ * November 2026, Android.) The link went on trying the WIDI Master for ever,
+ * with the WIDI Jack lit beside it. So the Bluetooth page offers the one it
+ * can see, by name, for a tap (lib/bluetooth otherAdapterNow and
+ * switchAdapter), and never takes it by itself:
+ *
+ *   - never the one kept (`kept`), a unit on a USB cable (isCable: a cable is
+ *     its own, with Forget the USB cable), or Apple's network session;
+ *   - iPhone (`os` 'ios'): a port on Apple's Bluetooth driver that is
+ *     connected now (`offline: false`), never the iPhone's own port;
+ *   - Android: a scan result, seen nearby;
+ *   - none `refused`: for an FM3, the adapters never offered for one
+ *     (shared/bluetooth-gear neverOnFm3), passed in, so this file imports
+ *     nothing.
+ *
+ * Exactly one, or null: two or more is a real question, and Use a different
+ * adapter asks it with the list.
+ */
+export function otherAdapterHere(list, kept, { os = null, refused = null } = {}) {
+  if (!kept || typeof kept.id !== 'string' || isCable(kept)) return null
+  const here = (Array.isArray(list) ? list : []).filter((d) => {
+    if (!isAdapter(d) || isCable(d) || d.id === kept.id || d.offline) return false
+    if (os === 'ios' && (d.offline !== false || !BLUETOOTH_DRIVER.test(String(d.driver || '')) || OWN_PORT.test(String(d.name || '')))) return false
+    return !(typeof refused === 'function' && refused(d.name))
+  })
+  return here.length === 1 ? here[0] : null
 }
 
 /*

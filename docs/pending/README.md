@@ -20,9 +20,11 @@ those must still pass the other.
 
 | Patch | What it does | Moves |
 |---|---|---|
+| `android-usb-midi.patch` | On Android, a unit plugged into the phone's USB port connects by cable, through Android's own MIDI service: an AM4, FM9, Axe-Fx III or VP4 on a USB cable, or a USB MIDI cable (a C2MIDI Pro, a U2MIDI Pro) on a unit's MIDI jacks. Connect takes it straight away when nothing else could be meant (the same rule as the iPhone's, mobile/src/lib/bleAdapters.js `cablesFirst`), and otherwise it is listed beside the Bluetooth adapters the search finds; it asks for no permission, connects with Bluetooth on or off, and is read and written exactly as an adapter is, so every rule holds and nothing new goes to any unit. FractalBleMidiModule.kt only: devices() lists USB MIDI devices too (transport `usb`, id `usb:<vendor>:<product>`, the same across replugs, except between two of one unit on a hub), connect() opens them with MidiManager.openDevice, a plug or a pull reaches the page as onDevices, and a pulled cable as `disconnected`; listsUsb() answers true, which is how the JavaScript knows a unit can plug in on this copy (`cablesHere`: the FM3's "can't plug in by its USB port" line shows on Android from this build). The manifest, supported() and the permissions are untouched. The FM3 never lists: its USB port is serial, not MIDI. | **Android** (the android line of `npm run fingerprint`; the ios line and the watch's stay where they are) |
 
-Nothing is waiting. watch-fill, tablet-turns, logbox-android and
-shrink-resources were applied on 26 October 2026, in that order, in the
+One patch is waiting: android-usb-midi, for the next Android build (its
+section is the first below). Before it, watch-fill, tablet-turns,
+logbox-android and shrink-resources were applied on 26 October 2026, in that order, in the
 build pull request for the 1.89.0 build pair (the one that opens Bluetooth
 (beta) to customers), and their files deleted in the same change. With
 tablet-turns and shrink-resources in, 1.89.0 moves the android and ios
@@ -33,6 +35,79 @@ deleted in the same change. The four before it
 (watch-name, r8, watch-channels and photo-picker) were applied on 23 October
 2026 for the build pair after 1.87.52 (1.88.0). What each one carried, and
 what goes with it that was not in it, is in its section below.
+
+**android-usb-midi.patch, and why it waits.** Justin, 3 November 2026:
+"let's build out the direct plug to the USB for android. I tried it and it
+doesn't work." And of the iPhone, the same day: "I've already used my
+iPhone and it does connect. It just says it's a Bluetooth connection and
+not USB, even though it is USB." The two phones are not the same here. The
+iPhone's half of the module has always listed every two-way MIDI port,
+cable or Bluetooth, and since 1.87.32 it says which driver each one is on
+(Apple's USB MIDI driver for the AM4's own USB-C and for a C2MIDI Pro
+plugged straight into the iPhone, in his reports of 27 October 2026), so
+the iPhone needs no build: an update (1.89.35) names a cable for what it
+is, and Connect no longer opens Apple's Bluetooth screen when one is
+plugged in and nothing else could be meant. Android's half opens Bluetooth MIDI devices only, found by a
+scan, so a cable never lists, and listing it is native code: a build.
+
+**What it moves, and what that costs.** FractalBleMidiModule.kt only, so
+only the android line of `npm run fingerprint` moves; the iPhone and the
+watch take the same updates before and after (`npm run fingerprint` with
+the patch applied is the check: the android line alone). From the merge that applies it
+on, an update made on main is made for the new Android build: Android
+phones on Google Play's 1.89.3 (version code 14) keep the last update made
+before that merge until they take the new build from Google Play. Because
+only Android moves, it can ride the next build pair, or be an Android build
+alone if Justin asks for one (the way 1.88.3 was an iPhone build alone);
+it gives an iPhone build nothing.
+
+**What the JavaScript expects of it, and why today's builds ignore it.** A
+USB entry in the list is `{ id: 'usb:<vvvv>:<pppp>', name, transport:
+'usb' }` (the vendor and product numbers in four lowercase hex digits,
+with `#2`, `#3` for twins, in the order Android numbered them, so two of
+one unit can swap ids after one is replugged; and `usb:name:<product>`
+when Android gives no numbers; never Android's own device number, which
+changes at every replug), and every Bluetooth entry gains `transport:
+'bluetooth'`. `listsUsb()` answers true (the module's way of saying it
+lists cables, as `pairsOnIOS27()` says Apple's fix is in); today's builds
+have no such function, so `cablesHere()` in mobile/src/lib/bluetooth.js is
+false on them and nothing on an Android copy mentions a cable.
+`connect('usb:…')` opens the device with no Bluetooth check and no
+permission, and says `connected` once its first port is open both ways;
+pulling the cable says `disconnected` with reason `removed`, and a plug or
+a pull sends the whole list again. Today's Android builds send `{ id:
+<Bluetooth address>, name, rssi }`, with no transport and no `usb:` id, so
+`isCable` in mobile/src/lib/bleAdapters.js never fires on them: the
+JavaScript that uses the patch is on main from 1.89.35 and does nothing on
+a copy without it.
+
+**What was checked for free.** android-minified.yml runs on any pull
+request that touches docs/pending/**: it applies every waiting patch in
+this table's order and compiles a real minified Android build (R8 on), then
+starts it on emulators, so the Kotlin is compiled at no Expo cost. web.yml
+runs the whole suite a second time with the patch in, and test/mobile.mjs
+tries it against the tree on every change. An emulator cannot plug a unit
+in, so the cable itself first runs on Justin's phone, from the build.
+
+**What goes with it in the build pull request, outside the patch:**
+
+- the Android words, which an iPhone never shows: "or plug the unit in by
+  USB cable" on No adapter found, and a hint for phones that need USB OTG
+  switched on in their settings, both behind `Platform.OS` and on
+  test/mobile.mjs's KNOWN list (no store text or screen an iPhone reads
+  may name Android);
+- Google's release notes and App access note (docs/app-store.md, *Later: a
+  USB cable*), with nothing new in the Data safety form: no permission and
+  no data;
+- a What's new line with `only: 'android'`;
+- and, if a cable has run on an FM9, Axe-Fx III or VP4 by then, that
+  unit's line in shared/bluetooth-gear.mjs's TRIED_NOTES. No text names a
+  unit as working by cable before it has.
+
+No store-version key: the code exists only in the new build, so no update
+can open it on an older copy. The FM3 stays out of it: its USB port is
+serial (FM3-Edit's kind), not MIDI, so Android's MIDI service never lists
+it, and a serial driver for Android is a project of its own (docs/later.md).
 
 **watch-fill.patch, and why it waited** (applied for 1.89.0). Justin, 25 October 2026, with a
 photo of the watch on an AM4: "On the VP4 and the AM4, can we make the watch

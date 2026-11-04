@@ -66,41 +66,81 @@ a real one yet — a friend of Justin's is the first tester. After that:
 
 ## Plugging the phone straight into the unit, with no computer
 
-Researched 15 October 2026. **On hold:** "hold off on all the direct USB
-connections until I can test it like you said when I get home." Nothing is
-built for it.
+Researched 15 October 2026 and held ("hold off on all the direct USB
+connections until I can test it like you said when I get home"). Then run
+on the iPhone: Justin, 27 October 2026, with Bluetooth switched off, the
+AM4's own USB-C cable straight into the iPhone, and a CME C2MIDI Pro
+plugged straight into the iPhone with its MIDI plugs on the AM4; and again
+on 3 November: "I've already used my iPhone and it does connect. It just
+says it's a Bluetooth connection and not USB, even though it is USB." And
+Android, the same day: "let's build out the direct plug to the USB for
+android. I tried it and it doesn't work."
+
+Where it stands, 3 November 2026:
 
 | Unit | iPhone | Android |
 |---|---|---|
-| AM4 (USB-C to USB-C) | Probably works already, through the hidden Bluetooth (beta) page. Untried. | Needs new Android code, so a build |
-| FM9 (USB-C to USB-B) | Probably works already, the same way. The manual: "The FM9 is a USB MIDI Device." | Needs a build |
-| Axe-Fx III (USB-C to USB-B) | Probably works already. The manual calls it class-compliant MIDI over USB. | Needs a build |
-| FM3 (USB-C to USB-B) | Never. The manual: "The FM3 is NOT a USB MIDI Device. It uses COM ports over USB". Apple (developer forums thread 834899, June 2026): an iPhone app cannot reach a USB serial device; DriverKit is iPad and Mac only. | Maybe, unproven: Android's USB host API can open the FM3's serial port, with an "Allow access" pop-up |
-| VP4 (USB-C to USB-C) | Not until the phone can drive a VP4 at all | The same |
+| AM4 (USB-C to USB-C) | Works, through the Bluetooth page. From 1.89.35, by update, the app says USB cable where it said Bluetooth, and Connect no longer opens Apple's Bluetooth screen when a cable is in and nothing else could be meant (no Bluetooth adapter connected or kept, not a cable named for another unit) | Built, waiting for a build: docs/pending/android-usb-midi.patch |
+| FM9 (USB-C to USB-B) | Not run yet. The manual: "The FM9 is a USB MIDI Device." | In the same patch; not run yet |
+| Axe-Fx III (USB-C to USB-B) | Not run yet. The manual calls it class-compliant MIDI over USB. | In the same patch; not run yet |
+| VP4 (USB-C to USB-C) | Not run yet. Presets and scenes only, by the same rules as over Bluetooth | In the same patch; not run yet |
+| FM3 (USB-C to USB-B) | Never. The manual: "The FM3 is NOT a USB MIDI Device. It uses COM ports over USB". Apple (developer forums thread 834899, June 2026): an iPhone app cannot reach a USB serial device; DriverKit is iPad and Mac only. From 1.89.35 the Bluetooth page says so when the FM3 is picked | Never by this patch: Android's MIDI service does not list a serial port. Android's USB host API could open it, with an "Allow access" pop-up, but that is a serial driver of its own, and out of scope |
 
-Why the iPhone may already work: the iPhone half of the Bluetooth module
+A USB MIDI cable (a C2MIDI Pro, a U2MIDI Pro) plugged straight into the
+phone, with its MIDI plugs on a unit's MIDI jacks, is the same thing to the
+phone as a unit on its own cable: the phone's end is USB. Both are named
+"USB cable".
+
+Why the iPhone already worked: the iPhone half of the Bluetooth module
 (mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift, devices())
 lists every two-way CoreMIDI port with an entity, cable or Bluetooth alike,
-and bleAdapters.js isAdapter() only leaves out Apple's network sessions. The
-Android half opens Bluetooth devices only (openBluetoothDevice, a scan
-filtered to the BLE-MIDI service), so Android needs MidiManager.openDevice for
-USB, which is native code and a build.
+and since 1.87.32 says which driver each one is on. His reports of 27
+October give the real names: `com.apple.AppleMIDIUSBDriver` for the AM4
+straight in and for the C2MIDI Pro straight in, and
+`com.apple.AppleMIDIBluetoothDriver` for the WIDI Uhost, the WIDI Master and
+"iPhone Bluetooth" (mobile/src/lib/bleAdapters.js, `isCable`). Until 1.89.35
+nothing read the driver, so a cable was called Bluetooth everywhere, and
+Connect opened Apple's Bluetooth screen before it used the cable. The
+Android half opens Bluetooth devices only (openBluetoothDevice, after a scan
+filtered to the BLE-MIDI service), so Android needs MidiManager.openDevice
+for USB: native code, and a build.
 
-**The first step is Justin's own try, when he is home:** AM4 out of the
-computer, WIDI off; unlock the iPhone, then plug the AM4 in with a data
-USB-C cable; Settings → Bluetooth (beta) → Connect (or "Use a different
-adapter" if it offers the WIDI); tap Done on Apple's Bluetooth screen; Play
-should show the preset with no computer. "Stop using Bluetooth" goes back.
+Every rule holds over a cable exactly as over Bluetooth, because it is the
+same wire with a different plug: what each unit may be sent (AM4_ALLOWED,
+the VP4's Program Change and Scene Select with not one byte of SysEx,
+Edit's checks), the purchase, and the store versions that open Bluetooth,
+each unit, and Edit. The FM3's heat warning is its own and is about
+adapters on its MIDI jacks; a cable has none.
 
-If it works, in order: a proper "Plugged into this phone" choice on the
-iPhone for his account only (JavaScript, an update, about 2-3 days); Android
-by cable (a build); the FM3 on Android (the largest and riskiest piece);
-customers only in a new store version whose review notes say so, the same
-rule as Bluetooth. At a gig: the phone cannot charge while the unit is in,
-unless a USB-C hub with a charging port (plug the charger in first); phone
-sounds may come out of the unit (Do Not Disturb); a cable plugged into a
-locked iPhone does nothing until it is unlocked (iOS 26's Wired Accessories
-setting).
+Still to do:
+
+- **"What works" notes send nothing for a cable** (mobile/src/lib/gearShare.js)
+  until Justin decides on a `usb` kind: that is a database change
+  (gear_reports.via allows only `computer` and `bluetooth`) and new words on
+  the card, which promises "through a computer or Bluetooth". Before
+  1.89.35 a cable would have gone out as Bluetooth, with the port's name as
+  the adapter; none did, since the cable tries (27 October) came before the
+  notes began (29 October).
+- The wire's fault words still say the adapter (mobile/src/lib/bleWire.js,
+  bleVp4.js, bleSwitch.js).
+- BluetoothLimits' heading "What's different from USB" means the
+  computer's cable, and reads oddly to somebody on a cable.
+- The website guide (bluetooth-guide.html), /bluetooth, support.html and
+  the purchase page get cable words with the next store version, with its
+  notes (docs/app-store.md, *Later: a USB cable*). Until then the app only
+  names a cable where one is in use, and offers no new way to connect. The
+  one exception is What's new's line (iPhone and iPad only, in the app and
+  on the website's What's new page), which says what the app now calls a
+  cable you have plugged in, and names no unit.
+- Not checked: on an iPhone an AM4 on USB is also a sound card, so the
+  phone's own sounds (the metronome's click, notifications) may come out of
+  the AM4.
+
+At a gig: the phone cannot charge while the unit is in, unless through a
+USB-C hub with a charging port (plug the charger in first; not run yet,
+and the page's cable steps say no hub); phone sounds may come out of the
+unit (Do Not Disturb); a cable plugged into a locked iPhone does nothing
+until it is unlocked (iOS 26's Wired Accessories setting).
 
 ## Siri, the Action button and Back Tap
 
