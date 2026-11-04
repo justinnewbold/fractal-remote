@@ -75,18 +75,20 @@ export function waysLine(ways) {
  * the unit picked (waysLine). `adapter` is the name lib/bluetooth
  * adapterName gave (never its id, which on Android can be the adapter's
  * Bluetooth address), '' for an adapter chosen that has no name, and null
- * for none chosen.
+ * for none chosen. `cable` is a unit on a USB cable rather than an adapter
+ * (lib/bleAdapters isCable): its line says so, "AM4 (USB cable)".
  *
  * A line with nothing to say is left out (shared/report-rules headLines
  * drops it), so a report with no wrong unit answering says nothing about one.
  */
-export function bluetoothHead({ unit = null, answeredAs = null, phase = 'off', trouble = null, adapter = null, ways = null } = {}) {
+export function bluetoothHead({ unit = null, answeredAs = null, phase = 'off', trouble = null, adapter = null, ways = null, cable = false } = {}) {
   const state = PHASES[phase] || String(phase || 'off')
+  const named = adapter === null || adapter === undefined ? 'none chosen' : adapter || 'one with no name'
   return {
     'bluetooth unit': unit || 'none picked',
     'bluetooth link': TROUBLES[trouble] ? `${state} · ${TROUBLES[trouble]}` : state,
     'answered as': answeredAs || undefined,
-    adapter: adapter === null || adapter === undefined ? 'none chosen' : adapter || 'one with no name',
+    adapter: cable && adapter !== null && adapter !== undefined ? `${adapter || 'a unit with no name'} (USB cable)` : named,
     'bluetooth ways': waysLine(ways)
   }
 }

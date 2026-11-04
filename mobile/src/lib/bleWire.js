@@ -573,7 +573,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * gen-3 units have no freezes on record.
    */
   const unheard = () =>
-    failure(`The ${spec.name} has not answered yet, so nothing is sent to it. Check the unit picked on the Bluetooth page, and the adapter's plugs.`, 504, { unheard: true })
+    failure(`The ${spec.name} has not answered yet, so nothing is sent to it. Check the unit picked on the Bluetooth page, and how it is plugged in.`, 504, { unheard: true })
 
   /*
    * A TAP'S DEADLINE, ON ITS WAY FROM request() TO THE FIRST MESSAGE IT SENDS.

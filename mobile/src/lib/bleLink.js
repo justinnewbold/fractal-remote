@@ -12,10 +12,12 @@ import {
   noteBluetooth,
   onAdapter,
   openWire,
+  refreshKeptAdapter,
   releaseAdapter,
   subscribeBluetooth,
   unitName
 } from './bluetooth'
+import { isCable } from './bleAdapters'
 import { getState, handleEvent, refreshAll, reset as resetRig, stopWatching, watchUnit, writeTuner } from './rig'
 import { mayConnectBluetooth, subscribePurchase } from './purchases'
 import { logDebug } from './debugLog'
@@ -90,8 +92,28 @@ let gen3TunerOwed = null
 let letting = null
 /* Stopped at the unlock while wanted: the purchase watched, to start the link the moment it lets this account in (see waitForPurchase). */
 let unlockWait = null
+/*
+ * THE ADAPTER KEPT DID NOT CONNECT on a try since begin() last ran, and the
+ * page has been told (noteBluetooth notThere). "It was trying to only let
+ * me connect to a Widi master cause that's what I connected to previously
+ * and I had a widi jack hooked up now" (Justin, 3 November 2026): the loop
+ * goes on trying it, as it must for an adapter that is only out of range,
+ * and the page offers the one it can see beside it (lib/bluetooth
+ * otherAdapterNow), on a tap. Told once a round, not at every try.
+ */
+let missed = false
 
 const say = (line, detail) => logDebug('ble', line, detail)
+
+/*
+ * A UNIT ON A USB CABLE (bleAdapters isCable) is the same wire as an
+ * adapter, on a different cable: everything here goes as it does for an
+ * adapter, and the log and the link's name say the cable. On Android it is
+ * asked of the list, as an iPhone's port is: a cable that is not plugged in
+ * cannot connect, and its plugging in is what the loop waits for.
+ */
+const onCable = () => isCable(bluetoothSettings().adapter)
+const fallbackName = (a) => (isCable(a) ? 'the USB cable' : 'the Bluetooth adapter')
 
 function clearTimer() {
   if (timer) clearTimeout(timer)
@@ -178,23 +200,24 @@ function stopWaitingForPurchase() {
 function begin() {
   clearTimer()
   if (!running) return
+  missed = false
   const s = bluetoothSettings()
   if (!s.unit) {
     tell?.({ link: 'off', macName: null, hostVersion: null })
-    noteBluetooth({ phase: 'no-unit' })
+    noteBluetooth({ phase: 'no-unit', notThere: false })
     return
   }
   /* By its name, never its Bluetooth address: the link keeps this as macName, and the log's head prints it (lib/bluetooth adapterName). */
-  const name = adapterName(s.adapter) || 'the Bluetooth adapter'
+  const name = adapterName(s.adapter) || fallbackName(s.adapter)
   /*
    * With no adapter picked nothing is being looked for, so the link is 'off'
    * as it is for no unit: 'joining' put "Finding the Bluetooth adapter" on
    * the stage for ever, with a button that looked again for nothing.
    */
   tell?.({ link: held || !s.adapter ? 'off' : 'joining', macName: name, hostVersion: null })
-  if (held) return noteBluetooth({ phase: 'held' })
-  if (!s.adapter) return noteBluetooth({ phase: 'no-adapter' })
-  noteBluetooth({ phase: 'connecting' })
+  if (held) return noteBluetooth({ phase: 'held', notThere: false })
+  if (!s.adapter) return noteBluetooth({ phase: 'no-adapter', notThere: false })
+  noteBluetooth({ phase: 'connecting', notThere: false })
   tryConnect()
 }
 
@@ -211,9 +234,10 @@ async function tryConnect() {
      * On an iPhone the adapter is a port that CoreMIDI lists for as long as
      * Apple's Bluetooth keeps it connected. An offline one is not asked:
      * it would "connect" to nothing, and the next change to the list (see
-     * heardDevices) is the moment to try again.
+     * heardDevices) is the moment to try again. The same for a unit on a
+     * USB cable on either phone: one not plugged in is not asked.
      */
-    const here = Platform.OS !== 'ios' || adapterDevices().some((d) => d.id === s.adapter.id && !d.offline)
+    const here = (Platform.OS !== 'ios' && !isCable(s.adapter)) || adapterDevices().some((d) => d.id === s.adapter.id && !d.offline)
     if (here) {
       touched = true
       ok = await connectAdapter(s.adapter.id)
@@ -236,10 +260,14 @@ async function tryConnect() {
     if (!wire) connected({ id: s.adapter.id, name: s.adapter.name })
     return
   }
+  if (!missed) {
+    missed = true
+    noteBluetooth({ notThere: true })
+  }
   const was = delay
   delay = nextDelay(delay)
   /* Said while the wait grows, then quiet: thirty lines an hour of the same sentence bury the one that matters. */
-  if (delay !== was) say(`the adapter is not there yet; trying again in ${delay / 1000} s`)
+  if (delay !== was) say(`${isCable(s.adapter) ? 'the USB cable is not plugged in yet' : 'the adapter is not there yet'}; trying again in ${delay / 1000} s`)
   later(tryConnect, delay)
 }
 
@@ -250,6 +278,8 @@ async function tryConnect() {
  */
 async function connected(e) {
   if (!running || wire || held || letting) return
+  /* An adapter kept as its id and name alone (before 1.89.27) learns its driver now, so a unit on a USB cable is called one from here on. */
+  refreshKeptAdapter()
   const s = bluetoothSettings()
   clearTimer()
   delay = 0
@@ -269,10 +299,11 @@ async function connected(e) {
   }
   unhear = made.subscribe(handleEvent)
   setSwitch({ on: bluetoothOn(), wire: made })
-  const name = adapterName(e) || adapterName(s.adapter) || 'the Bluetooth adapter'
-  noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null })
+  const name = adapterName(e) || adapterName(s.adapter) || fallbackName(s.adapter)
+  missed = false
+  noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null, notThere: false })
   tell?.({ link: 'connected', macName: name, hostVersion: null })
-  say(`connected to ${name}; asking the ${unitName(s.unit)} what it is`)
+  say(`connected to ${name}${isCable(s.adapter) ? ' by USB cable' : ''}; asking the ${unitName(s.unit)} what it is`)
   /*
    * ONE QUESTION TO WAKE THE LINK, ITS ANSWER NOT USED. On the AM4 test the
    * first question after connecting went unanswered, and the same question a
@@ -463,14 +494,19 @@ function dropped(reason) {
   letGoOfWire()
   stopWatching()
   if (!running || held) return
-  say(had ? 'the adapter went away' : 'the adapter did not stay connected', reason || undefined)
+  const cable = onCable()
+  say(had ? (cable ? 'the USB cable was unplugged' : 'the adapter went away') : cable ? 'the USB cable did not stay connected' : 'the adapter did not stay connected', reason || undefined)
   delay = 0
   begin()
 }
 
-/* iPhone: the adapter came back online in CoreMIDI's list, so try now rather than at the next turn. */
+/*
+ * iPhone: the adapter came back online in CoreMIDI's list, so try now rather
+ * than at the next turn. And a unit on a USB cable, on either phone: plugged
+ * back in, it connects at once.
+ */
 function heardDevices(e) {
-  if (!running || held || wire || Platform.OS !== 'ios') return
+  if (!running || held || wire || (Platform.OS !== 'ios' && !onCable())) return
   const id = bluetoothSettings().adapter?.id
   const list = Array.isArray(e?.devices) ? e.devices : []
   if (id && list.some((d) => d?.id === id && !d.offline)) {
@@ -506,7 +542,7 @@ function settingsMoved(s) {
     }
     if (!running) return
     if (adapterMoved) {
-      say(adapter ? 'a different adapter was chosen' : 'the adapter was forgotten')
+      say(adapter ? (isCable(s.adapter) ? 'a unit on a USB cable was chosen' : 'a different adapter was chosen') : 'the adapter was forgotten')
       if (touched) releaseAdapter()
       held = false
       delay = 0
@@ -577,7 +613,7 @@ export function holdBluetooth() {
   stopWatching()
   return letGoOfWireInTurn(() => {
     if (touched) releaseAdapter()
-    say('disconnected from the adapter, as asked')
+    say(onCable() ? 'disconnected from the USB cable, as asked' : 'disconnected from the adapter, as asked')
     begin()
   })
 }
@@ -604,6 +640,7 @@ export function stopBluetoothLink() {
     if (touched) releaseAdapter()
     touched = false
     held = false
-    noteBluetooth({ phase: bluetoothOn() ? 'idle' : 'off', connectedTo: null })
+    missed = false
+    noteBluetooth({ phase: bluetoothOn() ? 'idle' : 'off', connectedTo: null, notThere: false })
   })
 }

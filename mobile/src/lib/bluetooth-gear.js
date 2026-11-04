@@ -134,12 +134,19 @@ export const GUIDE_URL = 'https://fractal.newbold.cloud/bluetooth-guide.html'
  * The FM9 since 1 November 2026: "FM9 has already been tested and works"
  * (Justin); which phone and adapter were not said. The VP4 is the one
  * left.
+ *
+ * The AM4 by USB cable from an iPhone since 27 October 2026, with no
+ * adapter (his reports that day, store copy 1.89.3: its own USB-C straight
+ * in, and a C2MIDI Pro plugged straight into the iPhone, both on Apple's
+ * USB MIDI driver), and again on 3 November: "I've already used my iPhone
+ * and it does connect." A cable is not a way on the page (TRIED_WAYS has
+ * none), so it is kept in the AM4's note, and no other unit has run on one.
  */
 export const TESTED = ['am4', 'fm3', 'fm9', 'axefx3']
 
 /** What we know of each try, for the Developer page. */
 export const TRIED_NOTES = {
-  am4: 'From an iPhone and an Android phone, 26 October 2026; the WIDI Jack on 28 October.',
+  am4: 'From an iPhone and an Android phone, 26 October 2026; the WIDI Jack on 28 October; by USB cable from an iPhone, 27 October 2026 (its own USB-C straight in, and a C2MIDI Pro plugged straight into the iPhone), and again 3 November.',
   fm3: 'From an iPhone and an Android phone, 26 October 2026, with the U2MIDI Pro: the WIDI Master and the C2MIDI Pro got very hot on it.',
   fm9: 'Confirmed working, 1 November 2026. Which phone and adapter were not said.',
   axefx3: 'From an iPhone, 31 October 2026: a customer confirmed it works. Which adapter was not said.'
@@ -499,6 +506,33 @@ export const NOT_STRAIGHT_IN = []
  */
 export const FM3_NEVER =
   'On an FM3, use the CME U2MIDI Pro: it runs on USB power only, works, and stays cool. Never the WIDI Master or the C2MIDI Pro: on an FM3 both got very hot, and the WIDI Master didn’t work. Nor any adapter that can take power from MIDI OUT, even on USB power: FM3 owners report the same.'
+
+/*
+ * THE ADAPTERS NEVER OFFERED FOR AN FM3, BY THE NAME A PHONE LISTS THEM BY.
+ * The Bluetooth page offers another adapter it can see when the one kept is
+ * not answering (lib/bluetooth otherAdapterNow, 3 November 2026), and for an
+ * FM3 that is never the WIDI Master or the C2MIDI Pro, which got very hot on
+ * his, nor the other two FM3_NEVER means by "any adapter that can take power
+ * from MIDI OUT": CME's WIDI Jack and Yamaha's MD-BT01 (see NOT THE C2MIDI
+ * PRO OR THE WIDI MASTER ON AN FM3, above). The FM3's one way is the Uhost
+ * (waysFor), which is not among them. By name only, as the phone's list
+ * gives it ("WIDI Master", "WIDI Jack Bluetooth", "C2MIDI Pro"), case and
+ * spaces not counted: a WIDI renamed by its owner is the owner's to know.
+ */
+export const FM3_NEVER_NAMES = Object.freeze([/widi\s*master/i, /widi\s*jack/i, /c2\s*midi/i, /md-?\s*bt01/i])
+export const neverOnFm3 = (name) => FM3_NEVER_NAMES.some((re) => re.test(String(name || '')))
+
+/*
+ * AND THE ONLY ADAPTER NAMED FOR AN FM3 BY THE APP ITSELF: the FM3's own
+ * way's, the WIDI Uhost (waysFor('fm3')). FM3_NEVER also refuses "any
+ * adapter that can take power from MIDI OUT", and an adapter the app has no
+ * name for could be one, so the four names above are not enough for the
+ * page's "… is here. Use …" (lib/bluetooth otherAdapterNow, switchAdapter).
+ * Any other adapter is still in the search's list, under the red FM3_NEVER,
+ * for its owner to choose with a tap; it is just never named for one.
+ */
+export const FM3_OWN_NAMES = Object.freeze([/widi\s*uhost/i])
+export const namedForFm3 = (name) => !neverOnFm3(name) && FM3_OWN_NAMES.some((re) => re.test(String(name || '')))
 
 /*
  * THE WIDI MASTER ON AN AM4: tried and working (26 October 2026), in place
