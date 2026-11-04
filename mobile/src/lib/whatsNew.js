@@ -15,7 +15,7 @@ export const WHATS_NEW = [
     "version": "1.89.40",
     "lines": [
       {
-        "text": "Buttons, bars and pop-ups have a new frosted glass look, with rounder buttons and a soft light along the top. Prefer the old look? Choose Classic under Settings → Colors → Style. The Sunlight look keeps the glass solid for bright stages, and in Light mode the small gray labels are a little darker and easier to read.",
+        "text": "In the phone app, buttons, bars and pop-ups have a new frosted glass look, with rounder buttons and a soft light along the top. Prefer the old look? Choose Classic under Settings → Colors → Style. Sunlight keeps the glass solid for bright stages, and in Light mode the small gray labels are easier to read.",
         "only": null
       },
       {

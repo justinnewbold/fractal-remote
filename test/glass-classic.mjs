@@ -310,7 +310,13 @@ function freeOf(snippet) {
   return out
 }
 
-/* The free names' trials: each false, true and a stand-in, and every literal it is compared with. */
+/*
+ * The free names' trials: each false, true, left out (undefined, which is
+ * what a prop nobody passed is) and a stand-in, and every literal it is
+ * compared with, alone and over a base of all false and of all left out.
+ * Left out matters: Press's corner is a capsule only when `under` was never
+ * passed, and without it no trial reaches that branch.
+ */
 function trials(src, free) {
   const names = [...free]
   const literals = new Map(names.map((n) => [n, new Set()]))
@@ -318,11 +324,13 @@ function trials(src, free) {
     for (const m of s.matchAll(/\b([A-Za-z_$][\w$]*) [!=]== ('[^']*'|\d+)/g)) literals.get(m[1])?.add(m[2].startsWith("'") ? m[2].slice(1, -1) : Number(m[2]))
   }
   const STAND = Symbol('stand-in')
-  const out = [{}, Object.fromEntries(names.map((n) => [n, false])), Object.fromEntries(names.map((n) => [n, true]))]
+  const all = (v) => Object.fromEntries(names.map((n) => [n, v]))
+  const out = [{}, all(false), all(true), all(undefined)]
   for (const n of names) {
-    for (const v of [false, true, STAND, ...literals.get(n)]) {
+    for (const v of [false, true, undefined, STAND, ...literals.get(n)]) {
       out.push({ [n]: v })
-      out.push({ ...Object.fromEntries(names.map((m) => [m, false])), [n]: v })
+      out.push({ ...all(false), [n]: v })
+      out.push({ ...all(undefined), [n]: v })
     }
   }
   return out.map((t) => Object.fromEntries(Object.entries(t).filter(([, v]) => v !== STAND)))
@@ -586,6 +594,25 @@ export function run(test) {
     assert.match(app, /hydrate\(\)\.then\(\(\) => loadGlassStyle\(sync\)\)/, 'the style is not read at launch')
     assert.match(app, /useSyncExternalStore\(watchTheme, themeVersion, themeVersion\)/, 'nothing repaints when the style changes')
     assert.match(read('mobile/src/lib/theme.js'), /const STYLE_KEY = 'fractal\.glass'\n/, 'the key is not under fractal., which lib/store carries')
+    /*
+     * And painted before the first real screen, so a Classic player never sees
+     * a frame of glass. That holds by order alone, so the order is held: the
+     * spinner (no glass on it) stays up until the session effect's
+     * restoreDemo() has answered; restoreDemo first waits on lib/store's one
+     * landing promise; and the theme's reads wait on that same promise from an
+     * effect declared above it, so they run first. Light and Dark the same.
+     */
+    const appCode = code(app)
+    const top = appCode.indexOf('export default function App() {')
+    const session = appCode.indexOf('restoreDemo() .then((on) => (on ? true : haveSession()))')
+    assert.ok(top >= 0 && session > top, 'the session effect is not where this check looks for it')
+    for (const load of ['loadMode', 'loadGlassStyle', 'loadLooks']) {
+      const at = appCode.indexOf(`hydrate().then(() => ${load}(sync))`)
+      assert.ok(at > top && at < session, `${load} is not read from the store ahead of the session effect: the first screen can be drawn before it lands`)
+    }
+    assert.match(appCode, /\{auth === 'checking' \|\| seenWalk === null \? \(/, 'the spinner does not hold the first screen until the session effect has answered')
+    assert.match(code(read('mobile/src/lib/demo.js')), /export async function restoreDemo\(\) \{ try \{ await hydrate\(\) /, 'restoreDemo does not wait on the store first, so the session can answer before the style has landed')
+    assert.match(code(read('mobile/src/lib/store.js')), /export function hydrate\(\) \{ if \(loaded\) return Promise\.resolve\(\) if \(loading\) return loading /, 'hydrate is not one shared landing, so what waits on it is not run in order')
   })
 
   test('classic: Settings → Colors offers Frosted glass and Classic under the looks, said in one plain line, and switches it live', async () => {
@@ -624,7 +651,8 @@ export function run(test) {
     try {
       t.setGlassStyle('glass')
       const row = bench.StyleChoice()
-      assert.equal(row.props.accessibilityRole, 'radiogroup')
+      /* Two of the app's buttons, read as Light and Dark are ("Classic, button, selected"): no radio group around buttons that are not radios. */
+      assert.equal(row.props.accessibilityRole, undefined, 'the two buttons sit in a radio group, which a screen reader announces as radios they are not')
       assert.deepEqual(row.props.style, { flexDirection: 'row', gap: t.space.sm }, 'the two are not side by side, as Light and Dark are')
       const buttons = row.children
       assert.deepEqual(buttons.map((b) => [b.type, b.props.label, b.props.on, b.props.tone, b.props.grow, b.props.height]), [
@@ -720,7 +748,7 @@ export function run(test) {
   test('classic: GlassCard and GlassDisc, drawn by their real source, are the plain View and nothing in Classic', async () => {
     const { GlassCard, GlassDisc } = await glassComponents()
     const t = await import('../mobile/src/lib/theme.js')
-    const was = t.getGlassStyle()
+    const was = { mode: t.getMode(), style: t.getGlassStyle() }
     try {
       t.setGlassStyle('classic')
       for (const mode of ['dark', 'light']) {
@@ -735,8 +763,8 @@ export function run(test) {
       assert.ok(GlassDisc({ size: 30 }), 'the disc is gone from the glass')
       assert.equal(GlassCard({ bare: true, children: [] }).props.style[0].borderRadius, 18, 'a bare card is not glass in the glass')
     } finally {
-      t.setGlassStyle(was)
-      t.setMode('dark')
+      t.setGlassStyle(was.style)
+      t.setMode(was.mode)
     }
   })
 }

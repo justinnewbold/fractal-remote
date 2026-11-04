@@ -417,7 +417,7 @@ function StyleSection() {
 function StyleChoice() {
   const chosen = useSyncExternalStore(watchTheme, getGlassStyle, getGlassStyle)
   return (
-    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: space.sm }}>
+    <View style={{ flexDirection: 'row', gap: space.sm }}>
       {STYLE_CHOICES.map((s) => (
         <Press key={s.id} grow label={s.label} tone="signal" on={s.id === chosen} height={TAP} onPress={() => setGlassStyle(s.id, sync)} />
       ))}
