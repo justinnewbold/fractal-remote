@@ -79,10 +79,12 @@ export default function UnlockOffer({ onUnlock, waiting = false, onWant }) {
         alignItems: 'center',
         gap: space.md,
         padding: space.md,
-        borderRadius: radius.md,
+        /* A glass card (lib/glass), in amber still: the wash and the amber edge say what it is; the corner, the light along its top and the soft drop are the glass's. */
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: color.signal,
-        backgroundColor: color.signalWash
+        backgroundColor: color.signalWash,
+        boxShadow: color.glassLift
       }}
     >
       <View style={{ flex: 1 }}>
@@ -105,7 +107,10 @@ export default function UnlockOffer({ onUnlock, waiting = false, onWant }) {
           paddingHorizontal: space.md,
           paddingVertical: space.sm,
           borderRadius: radius.pill,
-          backgroundColor: pressed ? color.silkFaint : color.signal
+          backgroundColor: pressed ? color.silkFaint : color.signal,
+          /* Lit glass, as the bar's Unlock is. */
+          boxShadow: color.glassLit,
+          experimental_backgroundImage: color.glassSheen
         })}
       >
         <Text style={{ color: color.onSignal, fontSize: font.small, fontWeight: '700' }}>

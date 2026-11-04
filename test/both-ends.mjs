@@ -661,6 +661,14 @@ export const AREAS = [
         unreadable: ['web']
       },
       { does: 'draw switched-off effects grey, as the unit does', web: 'Gray when off', phone: 'Gray when off', unreadable: ['web'] },
+      {
+        does: 'draw the buttons, bars and pop-ups as frosted glass, or as the classic look they had before',
+        web: null,
+        phone: 'Frosted glass',
+        also: ['Classic'],
+        unreadable: ['phone'],
+        why: 'the frosted glass is the phone app’s own (4 November 2026); the browser never had it, so it has nothing to switch back from'
+      },
       { does: 'change your mind about putting the colours back', web: 'Keep mine', phone: 'Keep mine' },
       { does: 'put the colours back, once asked', web: 'Put back', phone: 'Put back' },
       { does: 'wear the look you had before, a moment after a new one went on', web: 'Undo', phone: 'Undo' },
@@ -1243,7 +1251,12 @@ export function run(test) {
       'Scene {}{}{}': 'what a screen reader says for a scene tile, its name and "your colour" with it; the phone’s Tile says its own caption and label'
     }
     const PHONE_ONLY = {
-      'Your colors are kept on this {}. The computer’s screen keeps its own.': 'the same sentence as the browser’s, which names the device by onThis() rather than "on this" and deviceNoun()'
+      'Your colors are kept on this {}. The computer’s screen keeps its own.': 'the same sentence as the browser’s, which names the device by onThis() rather than "on this" and deviceNoun()',
+      /* "In addition to the frosted glass look have an option in settings where they can change to the classic look" (4 November 2026). */
+      Style: 'the heading over Frosted glass and Classic: the frosted glass is the phone app’s own, so only the phone has the two to choose between',
+      'Frosted glass': 'one of the phone’s two styles; the browser never had the glass',
+      Classic: 'the phone’s other style, the look it had before the glass; the browser has only ever had its own',
+      'Frosted glass: see-through bars and rounded buttons. Classic: the look the app had before.': 'the line under the phone’s Style heading'
     }
     const KEYS = new Set(['Escape', 'Enter', 'Tab', 'ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'])
     const shown = (files) => {

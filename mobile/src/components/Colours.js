@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Pressable, Text, View } from 'react-native'
 
-import { color, font, radius, space, TAP } from '../lib/theme'
+import { color, font, getGlassStyle, radius, setGlassStyle, space, TAP, watchTheme } from '../lib/theme'
 import { LOOKS } from '../lib/blockPalettes'
 import { clearYours, lookId, looksVersion, offMode, ownColourCount, resetAll, setLook, setOffMode, watchLooks, yourFamily, yourScene } from '../lib/looks'
 import { blockColor } from '../lib/blockColors'
@@ -157,6 +157,9 @@ export default function Colours() {
         ) : null}
       </View>
 
+      {/* ------------------------------------------------------------ style */}
+      <StyleSection />
+
       {/* ---------------------------------------------------------- effects */}
       <View style={{ gap: space.md }}>
         <Heading>Effects</Heading>
@@ -296,6 +299,9 @@ export default function Colours() {
  * Drive, Amp, Delay, Reverb and scene 1 — drawn by Play's own Tile in the
  * look's colours on this unit. The whole card is the button; the tiles in it
  * are pictures, so a tap anywhere on it lands on the card.
+ *
+ * The card is frosted glass (lib/glass), the one worn still in amber; the
+ * tiles on it are content, and keep the look's own colours.
  */
 function LookCard({ look, on, onPress }) {
   const tiles = lookCard(look.id)
@@ -312,10 +318,11 @@ function LookCard({ look, on, onPress }) {
         minHeight: 64,
         gap: space.sm,
         padding: space.md,
-        borderRadius: radius.md,
+        borderRadius: radius.card,
         borderWidth: on ? 2 : 1,
-        borderColor: on ? color.signal : color.rule,
-        backgroundColor: pressed ? color.panelHi : color.panel
+        borderColor: on ? color.signal : color.glassRim,
+        backgroundColor: pressed ? color.glassFillHi : color.glassFill,
+        boxShadow: color.glassLift
       })}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
@@ -362,10 +369,11 @@ function OffChoice({ mode, label, sub }) {
         alignItems: 'center',
         gap: space.md,
         padding: space.md,
-        borderRadius: radius.md,
+        borderRadius: radius.card,
         borderWidth: on ? 2 : 1,
-        borderColor: on ? color.signal : color.rule,
-        backgroundColor: pressed ? color.panelHi : color.panel
+        borderColor: on ? color.signal : color.glassRim,
+        backgroundColor: pressed ? color.glassFillHi : color.glassFill,
+        boxShadow: color.glassLift
       })}
     >
       <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -376,6 +384,44 @@ function OffChoice({ mode, label, sub }) {
         <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>{sub}</Text>
       </View>
     </Pressable>
+  )
+}
+
+/*
+ * FROSTED GLASS OR CLASSIC: how the buttons, bars and pop-ups are drawn, not
+ * their colours. "In addition to the frosted glass look have an option in
+ * settings where they can change to the classic look" (4 November 2026). It
+ * goes with every look above and with Light and Dark, is kept on this device
+ * (lib/theme setGlassStyle, under fractal.glass), and is seen at once: the
+ * theme repaints in place and the root redraws, nothing restarts. Inside the
+ * frosted glass, Sunlight and Reduce Transparency still draw it solid.
+ */
+const STYLE_CHOICES = [
+  { id: 'glass', label: 'Frosted glass' },
+  { id: 'classic', label: 'Classic' }
+]
+const STYLE_NOTE = 'Frosted glass: see-through bars and rounded buttons. Classic: the look the app had before.'
+
+/** Its own heading and line, under the looks. */
+function StyleSection() {
+  return (
+    <View style={{ gap: space.md }}>
+      <Heading>Style</Heading>
+      <Note>{STYLE_NOTE}</Note>
+      <StyleChoice />
+    </View>
+  )
+}
+
+/** The two, side by side like Light and Dark, the chosen one lit. */
+function StyleChoice() {
+  const chosen = useSyncExternalStore(watchTheme, getGlassStyle, getGlassStyle)
+  return (
+    <View style={{ flexDirection: 'row', gap: space.sm }}>
+      {STYLE_CHOICES.map((s) => (
+        <Press key={s.id} grow label={s.label} tone="signal" on={s.id === chosen} height={TAP} onPress={() => setGlassStyle(s.id, sync)} />
+      ))}
+    </View>
   )
 }
 
@@ -418,6 +464,9 @@ const undoNow = () => undo
  * landed on the wrong card is one more tap from being as it was. With a
  * screen reader on it stays until it is answered (Toast's useStillNews): an
  * offer that goes before it is heard has not been made.
+ *
+ * It floats over the cards, so it keeps its solid fill and its shadow, and
+ * has the glass's corner, rim and the light along its top (lib/glass).
  */
 export function LookUndo() {
   const offer = useSyncExternalStore(watchUndo, undoNow, undoNow)
@@ -437,15 +486,16 @@ export function LookUndo() {
         gap: space.md,
         padding: space.sm,
         paddingLeft: space.md,
-        borderRadius: radius.md,
+        borderRadius: radius.card,
         borderWidth: 1,
-        borderColor: color.rule,
+        borderColor: color.glassRim,
         backgroundColor: color.chassis,
         shadowColor: '#000',
         shadowOpacity: 0.35,
         shadowRadius: 8,
         shadowOffset: { width: 0, height: 2 },
-        elevation: 6
+        elevation: 6,
+        boxShadow: color.glassTop
       }}
     >
       <Text style={{ flex: 1, color: color.silk, fontSize: font.body }}>{`Now: ${now}`}</Text>

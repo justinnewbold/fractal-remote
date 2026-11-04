@@ -34,6 +34,7 @@ import { landingIndex } from '../lib/laneOrder'
 import SongPicker from '../components/SongPicker'
 import SongSetup from '../components/SongSetup'
 import { tagEdge } from '../components/PresetTag'
+import { classic, glassCard } from '../lib/glass'
 import { presetTag } from '../lib/colourPage'
 
 const face = Platform.select(mono)
@@ -460,15 +461,15 @@ function SourceRow({ on, onPress, name, note, editing = null }) {
         tick()
         onPress()
       }}
+      /* Frosted glass (lib/glass), rounded like a card; the chosen one keeps its amber edge and wash. Classic had no pressed fill here, only the dimming. */
       style={({ pressed }) => ({
         minHeight: TAP,
         justifyContent: 'center',
         paddingHorizontal: space.md,
         paddingVertical: space.sm,
-        borderRadius: radius.md,
+        ...glassCard({ bordered: true, pressed: pressed && !classic() }),
         borderWidth: on ? 2 : 1,
-        borderColor: on ? color.signal : color.rule,
-        backgroundColor: on ? color.signalWash : color.panel,
+        ...(on ? { borderColor: color.signal, backgroundColor: color.signalWash } : null),
         opacity: pressed ? 0.7 : 1
       })}
     >
@@ -540,7 +541,9 @@ function Song({ position, slot, name, playing, tag, alone, lifted, onPlay, onDra
           borderRadius: radius.md,
           borderWidth: playing || lifted ? 2 : 1,
           borderColor: lifted ? color.silk : playing ? color.signal : color.rule,
-          backgroundColor: lifted ? color.panelHi : color.panel
+          /* Opaque, never glass: the red ✕ of SwipeAway sits behind the row. The light along its top only, no drop in a list. */
+          backgroundColor: lifted ? color.panelHi : color.panel,
+          boxShadow: color.glassTop
         },
         /* The preset's colour tag, the bar its row in the preset list wears (components/PresetTag). */
         tagEdge(tag)
@@ -602,7 +605,7 @@ function SwipeHint({ onOk }) {
       style={{
         gap: space.sm,
         padding: space.md,
-        borderRadius: radius.md,
+        borderRadius: radius.card,
         borderWidth: 1,
         borderColor: color.signal,
         backgroundColor: color.signalWash

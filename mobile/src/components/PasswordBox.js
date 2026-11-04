@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
+import { paneFill, paneRim, paneWell } from '../lib/glass'
 import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import Note from './Note'
 import Press from './Press'
@@ -66,7 +67,7 @@ export default function PasswordBox({ open, onChange, onClose }) {
 
   const box = (bad) => ({
     minHeight: TAP,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: paneWell(),
     borderWidth: 1,
     borderColor: bad ? color.fault : color.live,
     borderRadius: radius.md,
@@ -88,7 +89,9 @@ export default function PasswordBox({ open, onChange, onClose }) {
             /* High, so the keyboard cannot reach it. See components/TempoBox. */
             paddingTop: Math.max(space.xxl, height * 0.1),
             /* Its margin from the phone's own down each side, not under it (lib/screenShape clearSides). */
-            ...clearSides(insets, space.xl)
+            ...clearSides(insets, space.xl),
+            /* A dim over the screen behind, which Android's flat blur does not give (lib/glass). */
+            backgroundColor: color.scrim
           }}
         >
           <Pressable
@@ -99,9 +102,11 @@ export default function PasswordBox({ open, onChange, onClose }) {
               gap: space.md,
               padding: space.lg,
               borderRadius: radius.lg * 2,
+              /* A pane of frosted glass, like the tempo box's (lib/glass). */
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.14)',
-              backgroundColor: 'rgba(255,255,255,0.04)'
+              borderColor: paneRim(),
+              backgroundColor: paneFill(),
+              boxShadow: color.glassLift
             }}
           >
             <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>NEW PASSWORD</Text>

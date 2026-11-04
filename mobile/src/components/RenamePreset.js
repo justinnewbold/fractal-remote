@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
 
 import { color, font, isDark, radius, space, TAP } from '../lib/theme'
+import { glassField } from '../lib/glass'
 import { notePresetName, noteSceneName, useRig } from '../lib/rig'
 import { presetLabel, sceneShape, setPresetName, setSceneName, slotLabel } from '../lib/device'
 import { sceneColor } from '../lib/sceneColors'
@@ -175,10 +176,9 @@ function NameField({ label, value, onDone, colour = null }) {
           style={{
             minHeight: TAP,
             paddingHorizontal: space.md,
-            borderRadius: radius.md,
             borderWidth: 1,
-            borderColor: color.rule,
-            backgroundColor: color.panel,
+            /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
+            ...glassField(),
             color: color.silk,
             fontSize: font.body,
             flex: 1

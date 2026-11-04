@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FlatList, Platform, Pressable, Text, TextInput, View } from 'react-native'
 
-import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { color, font, mono, space, TAP } from '../lib/theme'
+import { glassCard, glassField } from '../lib/glass'
 import { GEAR_FAMILIES, GEAR_GROUPS, gearTotal, groupsFor, searchAll } from '../lib/gearCatalog'
 import { blockTypes } from '../lib/device'
 import { useRig } from '../lib/rig'
@@ -151,10 +152,8 @@ export default function Gear({ onBack }) {
           style={{
             minHeight: TAP,
             paddingHorizontal: space.md,
-            borderRadius: radius.md,
             borderWidth: 1,
-            borderColor: color.rule,
-            backgroundColor: color.panel,
+            ...glassField(),
             color: color.silk,
             fontSize: font.body
           }}
@@ -189,13 +188,12 @@ export default function Gear({ onBack }) {
             accessibilityRole="button"
             accessibilityLabel={`${item.name}${item.gear ? `, ${item.gear}` : ''}`}
             onPress={() => setOpen(item)}
+            /* A flat card of glass: a long list is never lifted (lib/glass). */
             style={({ pressed }) => ({
               paddingVertical: space.sm,
               paddingHorizontal: space.md,
-              borderRadius: radius.md,
               borderWidth: 1,
-              borderColor: color.rule,
-              backgroundColor: pressed ? color.panelHi : color.panel
+              ...glassCard({ bordered: true, flat: true, pressed })
             })}
           >
             <Text style={{ color: color.silk, fontSize: font.body, fontFamily: face }}>{item.name}</Text>

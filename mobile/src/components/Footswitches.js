@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
-import { color, font, radius, space } from '../lib/theme'
+import { color, font, space } from '../lib/theme'
+import { glassCard } from '../lib/glass'
 import { fcModel, fcSwitch } from '../lib/device'
 import { FC_BUSY_WARNING, FC_NOT_YET, describeSwitch, fcGeometry, layoutName, lightWords, readView } from '../lib/footswitches'
 import Note from './Note'
@@ -98,8 +99,9 @@ export default function Footswitches() {
 
       {(shown?.states || []).map((state, i) => {
         const sw = describeSwitch(state, model)
+        /* One flat card of glass a switch (lib/glass): a list of up to twelve is never lifted. */
         return (
-          <View key={i} style={{ gap: space.xs, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.rule, backgroundColor: color.panel }}>
+          <View key={i} style={{ gap: space.xs, padding: space.md, borderWidth: 1, ...glassCard({ bordered: true, flat: true }) }}>
             <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '700' }}>{`Switch ${sw.number ?? i + 1}`}</Text>
             {sw.unread ? (
               <Text style={small}>The unit didn’t answer for this one.</Text>

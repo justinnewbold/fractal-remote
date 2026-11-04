@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-04",
     "day": "4 November 2026",
-    "version": "1.89.38",
+    "version": "1.89.40",
     "lines": [
+      {
+        "text": "In the phone app, buttons, bars and pop-ups have a new frosted glass look, with rounder buttons and a soft light along the top. Prefer the old look? Choose Classic under Settings → Colors → Style. Sunlight keeps the glass solid for bright stages, and in Light mode the small gray labels are easier to read.",
+        "only": null
+      },
       {
         "text": "On the website and the computer app, Tuner, Edit and Tap at the bottom of Play are now the phone app’s taller buttons, with the tempo under Tap.",
         "only": null
