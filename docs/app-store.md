@@ -272,6 +272,9 @@ change Google has passed also waits under Changes ready to publish until
   the App Store, and the headings in the full description (SUPPORTED UNITS and
   the rest) have been on Play since launch.
 
+Both can also go from GitHub, from store/google-play/: *Google Play from
+GitHub (play-text)*, after the short description.
+
 ### Google Play: short description (80)
 
 The line right under the app's name on Play. It said "Control your Fractal
@@ -286,6 +289,89 @@ description.
 ```
 Through a computer, or by Bluetooth. Not made or supported by Fractal Audio.
 ```
+
+### Google Play from GitHub (play-text)
+
+Since 4 November 2026 the listing jobs in Play Console can be done from
+GitHub, with nothing pasted anywhere: **Actions → play-text → Run workflow**,
+from main. Its robot is fractal-remote-listing (the GOOGLE_PLAY_KEY
+secret). The job only reads and changes the listing's three texts, and
+reads its pictures and Google's crash figures. The key can do more than the
+job does: on Fractal Remote, Google's Manage store presence also changes the
+price, the in-app products, the countries and the content rating, and
+Manage policy declarations, which Google adds with it, edits Data safety.
+It cannot touch a release or another app. So the key is in one step's
+environment and nowhere else, masked in the log, and the job takes that
+robot's key and no other, so a key that can send a build is never handed
+to it. "From main" is the workflow file's own rule: it stops a run from
+another branch by mistake, not on purpose, since anyone who can push a
+branch can change the file there, as with every other secret this repo has.
+scripts/play-text.mjs does the work.
+
+Pick one of three:
+
+- **listing** (the default): what Play's listing says now, language by
+  language, next to the copy in store/google-play/ (a folder per language,
+  a file each for the title, the short description and the full
+  description, one paragraph a line), and what would change, line by line.
+  The run's summary has Play's three texts in full, to copy in exactly.
+- **images**: the screenshots, the icon and the feature graphic for each
+  language, with a link to each. Only read. Chromebook screenshots are not
+  in Google's interface for this; Play Console shows them.
+- **vitals**: how often the app crashed and froze in the last 28 days,
+  against Google's lines (1.09% of people for crashes, 0.47% for freezes),
+  and the ten problems that came up most, most first, each with its link in
+  Play Console. Only read. Google's interface does not say whether its rates
+  are fractions or percentages, so each rate line prints Google's own figure
+  beside it: check the first run against Play Console → Android vitals. The
+  first run may also answer that the Google Play Developer Reporting API is
+  switched off: that one is separate from the API that was already on, and
+  is switched on in Google Cloud → fractal-remote → APIs & Services →
+  Library.
+
+**Nothing goes live without Write it.** Unticked, the job opens a draft in
+Play Console, reads it, and throws it away. Ticked, it changes only the
+languages that differ from the repo, never adds one, sends the change to
+Google's review, and reads it back; the second box, hold, leaves it in Play
+Console under Changes not yet sent for review instead, to send by hand
+(Google sometimes says this change cannot go to review by itself, or that
+it cannot be held back; the job then says which boxes to run it with). If
+the answer to a send is lost on the way back, the job says to check
+Publishing overview before running it again, since Google may have taken
+it. Write it is ticked only when Justin has asked for that change on Google
+Play.
+
+Before anything is sent, Write it is refused for a title over 30
+characters, a short description over 80 or a full description over 4000; a
+title that is not Fractal Remote; a full description without Fractal
+Audio's sentence and the trademark line, word for word
+(shared/affiliation.mjs); any of the words the app is never called, or
+"officially" and the rest of official's family (test/independent.mjs has
+the list, and a character nobody sees inside a word does not hide it);
+"beta" anywhere in a text about Bluetooth, apart from Edit (Beta); anything
+that says what has been tried; the desktop app called free ("hands-free" is
+not "free"); and capitals for emphasis in the short description (MIDI and
+WIDI are names, not emphasis). And while Google is reviewing anything
+else for the app, such as a new Android build, the job tells Google to say
+no rather than cancel that review, so nothing is sent until it is over.
+
+**store/google-play/en-US was filled from this file, not read from Play**
+(4 November 2026): the Name, the short description above, and *Description,
+from 1.89.0*, the last full description this file says went onto Play
+(*Submission day*, step 17). Its UNCHECKED.txt keeps Write it refused until
+Play's live text has been copied in from a run without it and the marker
+deleted, in one pull request; if Play's short description differs from the
+block above, the block changes with it. The seed could not go live as it
+is anyway: its BLUETOOTH paragraph says what has been tried. From then on
+test/play-text.mjs holds the repo's copy to every rule above.
+
+**The log is public**, as the repository is: the listing and the pictures
+are public anyway, and vitals prints rates and each problem's kind, place,
+version codes and last day, never a count of reports or people (they would
+say how many people use the app; Play Console has them behind each link),
+and never a crash report, which can carry what a player typed. Run
+Write it when no build is being sent to Google from mobile.yml: committing a
+change closes any other draft open in Play Console.
 
 ### URLs
 

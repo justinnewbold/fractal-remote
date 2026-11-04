@@ -409,12 +409,14 @@ export function run(test) {
      * listing says may read as either, and the disclaimer's own "endorsed
      * by" is the one use of the word, taken out before reading.
      */
-    const words = /\b(official|certified|approved|endorsed|authori[sz]ed)\b/i
+    const words = /\b(official\w*|certified|approved|endorsed|authori[sz]ed)\b/i
     const disclaimer = /not affiliated with, endorsed by, or\s+supported by/gi
+    /* A character nobody sees inside a word would hide it from the list (scripts/play-text.mjs reads the same way). */
+    const unseen = (t) => String(t ?? '').replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '')
 
     /* The app's own words, all of them: strings in the code, comments out. */
     for (const f of shippedFiles().filter((p) => /\.(m?js|jsx|cjs)$/.test(p) && !/affiliation\.m?js$/.test(p))) {
-      const m = code(readFileSync(f, 'utf8')).replace(disclaimer, '').match(words)
+      const m = unseen(code(readFileSync(f, 'utf8'))).replace(disclaimer, '').match(words)
       assert.ok(!m, `${rel(f)} says “${m?.[0]}” on a screen`)
     }
 
@@ -429,13 +431,13 @@ export function run(test) {
       ['keywords', fenced(store, '### Keywords (100, commas, no spaces after them)')],
       ['subtitle', subtitle]
     ]) {
-      const m = String(text).replace(disclaimer, '').match(words)
+      const m = unseen(text).replace(disclaimer, '').match(words)
       assert.ok(!m, `the ${where} says “${m?.[0]}”`)
     }
 
     /* The website: no sentence that names Fractal or a unit also calls anything official. Raspberry Pi's official power supply is Raspberry Pi's. */
     for (const page of readdirSync(join(root, 'public')).filter((f) => f.endsWith('.html'))) {
-      for (const sentence of pageText(read(`public/${page}`)).replace(disclaimer, '').split(/(?<=[.!?])\s+/)) {
+      for (const sentence of unseen(pageText(read(`public/${page}`))).replace(disclaimer, '').split(/(?<=[.!?])\s+/)) {
         if (!/Fractal|Axe-Fx|\bFM3\b|\bFM9\b|\bAM4\b|\bVP4\b/.test(sentence)) continue
         assert.ok(!words.test(sentence), `public/${page}: “${sentence}”`)
       }

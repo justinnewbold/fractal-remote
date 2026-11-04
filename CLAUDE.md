@@ -409,6 +409,12 @@ the build refused), and an update hides it from everybody but him:
   nothing puts text live on the App Store: "No don't put any text live on
   the App Store. I already updated it the way I want it." He sets the
   listing himself, so the store-text workflow is never run with Write it.
+  Google Play has its own job, play-text (4 November 2026, the listing-only
+  robot fractal-remote-listing and its GOOGLE_PLAY_KEY): it may be run
+  unticked any time, to read the listing, its pictures or Android's crash
+  numbers, and is run with Write it only when Justin has asked for that
+  change on Google Play. Its key never goes to the other robot,
+  fractal-remote-play, which holds the purchase and upload permissions.
 
 **It is switched on for customers only in a new store version whose review
 notes say so, never by an over-the-air update.** Apple's guideline 2.5.19
