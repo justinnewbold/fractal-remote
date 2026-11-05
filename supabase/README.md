@@ -584,17 +584,25 @@ Settings → Troubleshooting changes it. Off unless Yes. Three pieces:
 
 - `migrations/20261026_gear_reports.sql` — one table, `gear_reports`: the
   unit, its firmware, computer or Bluetooth, the adapter's name or the
-  computer app's version, whether the unit answered, the phone's system,
-  version and model, the app's version. No account, no install number, no
+  computer's kind and its app's version, whether the unit answered, the
+  phone's system, version and model, the app's version. No account, no install number, no
   address. Anybody may insert (each field length-checked, the column grant
   limited to those fields so a row cannot pick its own date); nobody may
   read one through the API. `sweep_gear_reports()`, service_role only,
   deletes anything over two years old.
 - `migrations/20261026_gear_reports_sweep.sql` — the daily sweep, needing
   pg_cron, in a file of its own as the screenshots' sweep is.
+- `migrations/20261104_gear_reports_usb_and_times.sql` — two changes Justin
+  agreed on 4 November 2026: `via` takes `'usb'` too, for a unit on a USB
+  cable (the cable's name in `adapter`), and two integer columns,
+  `connect_ms` (from the link starting to try to the unit's first answer,
+  rounded to 100) and `tap_ms` (through a computer, the middle of the
+  player's own taps in that connection, rounded to 10; none over Bluetooth
+  or a cable), each checked between 0 and 600000 and added to the insert
+  grant. Still no account, no install number, no address.
 - `functions/gear-reports/` — `list`, after the same ADMINS lock as
   owner-messages: sweeps, then answers the newest 5000 notes for Settings →
-  Developer → What works.
+  Developer → What works, with `connect_ms` and `tap_ms` beside the rest.
 
 ### Putting it live, in this order
 
@@ -610,11 +618,20 @@ Settings → Troubleshooting changes it. Off unless Yes. Three pieces:
    Data safety get their rows** (docs/app-store.md, *What works: the gear
    notes*). The update starts collecting on every copy where somebody taps
    Yes, so the label has to say so first.
+5. **Apply `20261104_gear_reports_usb_and_times.sql` and deploy gear-reports
+   before the update that sends a USB cable and the two times is merged.**
+   Before it, every note from that update is refused (the table does not
+   know `connect_ms`, `tap_ms` or `'usb'`), logged, and tried again no
+   sooner than five minutes on, and What works would not show the times.
+   The label's Performance Data row (docs/app-store.md) is published by
+   Justin before the update is merged, as in step 4: nothing in CI can see
+   App Store Connect, so the merge waits for his word that it is.
 
 ### Checking it
 
 ```sql
-select unit, via, coalesce(adapter, computer_os, 'computer') as way, outcome, count(*), max(created_at)
+select unit, via, coalesce(adapter, computer_os, 'computer') as way, outcome, count(*), max(created_at),
+  percentile_cont(0.5) within group (order by connect_ms) as connect_ms, percentile_cont(0.5) within group (order by tap_ms) as tap_ms
 from public.gear_reports group by 1, 2, 3, 4 order by max(created_at) desc;
 ```
 
@@ -649,3 +666,89 @@ Accounts made before are never asked, and have none.
    older account's says "None given."
 3. Developer → Customers → Everyone with an account: the name is under the
    address, and typing part of it in the find box finds the row.
+
+## How many people, day by day (counts only, naming nobody)
+
+"A day-by-day history of how many people use the app, on your Developer
+page" (approved 4 November 2026). Developer → Customers → People counts
+who used the app from each account's latest sign-in, device check-in and
+RevenueCat sighting, and each of those keeps only the latest time, so a day
+can only be counted on that day. So the database asks for the day's count a
+few minutes before each UTC midnight, and keeps the totals. People gains a
+Day by day chart of the last 30 days, and a System versions list read from
+what RevenueCat already keeps (no history needed for that one). Nothing new
+is collected from anybody. Four pieces:
+
+- `migrations/20261104_usage_days.sql` — one table, `usage_days`: one row
+  a UTC day, how many people that day, in the 7 and the 30 days to it, how
+  many accounts were counted and how many RevenueCat did not answer about,
+  and the same day's and month's totals by place, app version and phone
+  system. No account, no id, no address; the table refuses a breakdown that
+  is not labels and whole numbers (`usage_breakdown_ok`). Row level
+  security on, no policy, nothing granted to anon or authenticated.
+  `record_usage_day(d, counts)` keeps only today (UTC): a count made
+  before 23:43 UTC (by hand) is a first look that the night's replaces,
+  and between the night's two the later is kept when it saw more people or
+  RevenueCat missed no more of them. `owner_usage_days(most)` reads the
+  days back; `usage_day_hook_secret()` and `run_usage_day()` are the
+  nightly call. All service_role only. An app version is kept only as a
+  version number (anything else is counted as Other). `run_usage_day()`
+  deletes the days over two years old first, at every firing, before it
+  asks for anything, so the privacy page's "kept two years, then deleted"
+  holds even on a night the count fails. **If the `usage-days` job is ever
+  taken off the schedule, empty or drop `public.usage_days` in the same
+  change**, or nothing deletes the old days and the privacy page stops
+  being true.
+- `migrations/20261104_usage_days_schedule.sql` — the job alone, twice a
+  night, 23:43 and 23:53 UTC (4:43 and 4:53 pm Mountain time in winter).
+- `functions/grant-access/` — a third caller beside Justin and the
+  entitlement function: a request carrying `x-hook-secret` is checked
+  against `usage_day_hook_secret()`, in full, before any token is read, and
+  may ask `usage-day` and nothing else. It counts exactly what People counts
+  and hands the totals to `record_usage_day`. `usage` (People) also answers
+  the last 31 days as `days` (null until the table exists, so People still
+  works; a passing error reading them is `daysError`, which the page words
+  as "couldn't be read just now", not as a missing change) and
+  `unanswered`. `verify_jwt` stays on: the database sends the
+  project's public key to get past the gateway, and the function's own lock
+  is what keeps everybody else out.
+- `functions/_shared/usage-count.mjs` — the counting rule itself, a copy of
+  `shared/usage-count.mjs` made by `npm run sync:rules` (never edited by
+  hand). grant-access imports it as `../_shared/usage-count.mjs`, so
+  deploying grant-access sends three files: `grant-access/index.ts`,
+  `_shared/forget-account.ts` and `_shared/usage-count.mjs`.
+  `supabase functions deploy grant-access` bundles all three; any other
+  way, send each at its path beside the function, or it will not start.
+
+### Putting it live, in this order
+
+1. **Apply `20261104_usage_days.sql`.** Nothing anybody sees changes: the
+   grant-access that is live never asks for the days.
+2. **Merge the app change, with every check green**, as an update: the
+   phone's fingerprint does not move, and there is no What's new line (his
+   account only). Until grant-access is deployed, Day by day says it needs
+   the server update, and People works as before.
+3. **Deploy grant-access from the merged commit's files** (with verify_jwt
+   on, as it is): `supabase functions deploy grant-access`, which sends
+   `grant-access/index.ts`, `_shared/forget-account.ts` and
+   `_shared/usage-count.mjs` as they are on main, so what runs is what is on
+   GitHub. People now answers `days: []`, and the page says the first day is
+   counted at 4:53 pm.
+4. **Count today once, by hand**: `select public.run_usage_day();`, then a
+   few seconds later check that the call answered 200 and the row is there
+   (below). A 403 means the function is the old one, or the secret did not
+   match; a 500 says why in the function's log; a null status with
+   `timed_out` or `error_msg` means the call never got an answer. This
+   count is only a first look at the day: the page keeps showing today as
+   "so far", and the night's count replaces it whatever it found.
+5. **Apply `20261104_usage_days_schedule.sql`.** From then on, every night.
+
+### Checking it
+
+```sql
+select id, status_code, timed_out, error_msg, left(content, 200), created
+from net._http_response order by id desc limit 3;
+select day, active_day, active_7, active_30, counted, unanswered, computed_at
+from public.usage_days order by day desc limit 7;
+select jobname, schedule, active from cron.job where jobname = 'usage-days';
+```

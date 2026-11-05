@@ -441,6 +441,7 @@ Tracking Transparency entirely.
 | Diagnostics → **Other Diagnostic Data** | Yes | Yes | The debug log, and only when somebody presses Send on a bug report |
 | Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices. App Functionality and **Analytics**: RevenueCat's App Privacy page says "All RevenueCat users must select these two options", because its dashboard charts the purchases. Analytics added 25 October 2026: on the live label since 1 November 2026 |
 | Identifiers → **Device ID** | Yes | No | The random number Expo's update check carries for that install, made up the first time the app runs, so Expo can tell one install from another. The app itself never reads it. App Functionality and **Analytics**: Expo's dashboard counts the installs that took each update and the ones that crashed, by this number, which is measuring audience size in Apple's words. Play's Data safety declares it too (*Device or other IDs*, below), and the privacy page describes it and its counts. Added 25 October 2026: on the live label since 1 November 2026 |
+| Diagnostics → **Performance Data** | Yes | No | How long the unit took to connect and, through a computer, how quickly it answered a tap, rounded, in a What works gear note, sent only after somebody said Yes, share. **Analytics** only, not tracking. Added 4 November 2026: on the live label since 5 November 2026, Justin published it (*What works: the gear notes*, below) |
 | Diagnostics → **Crash Data** | Yes | No | After a launch that crashed, the phone's update check sends Expo the error message the app stopped on, so a broken update can be found and taken back. The privacy page says so. Added 11 October 2026, and on the live label by 24 October 2026 (apps.apple.com shows Crash Data under Not Linked) |
 
 Do **not** declare location, contacts, audio, search history, browsing
@@ -464,7 +465,8 @@ Videos and Customer Support (App Functionality, linked); User ID, Purchase
 History and Other Diagnostic Data (App Functionality and Analytics,
 linked); Product Interaction (App Functionality, linked); Device ID (App
 Functionality and Analytics, not linked); Crash Data (App Functionality,
-not linked). Everything asked of the label below is done. Google Play's
+not linked). Everything asked of the label below is done, but for the
+Performance Data row of 4 November 2026 (*What works: the gear notes*). Google Play's
 Data safety is done too, the same day (Justin: "Google play is done also
 with the updates like Apple"), to the table under *Google Play's Data
 safety, the whole list*.
@@ -511,7 +513,28 @@ what the live app collects:
   functionality** and **Account management**.
 
 Both are published by Justin before the pull request that adds the name
-fields is merged; nothing here says they are done until he has.
+fields is merged. Done 5 November 2026 (Justin: Apple, then Google).
+
+**4 November 2026: one tick needed, for How many people.** Developer →
+Customers → People counts how many people used the app (today, the last 7
+and the last 30 days, where, on which app version, and since today on which
+phone system), and from today the server keeps each UTC day's totals so the
+page can draw them day by day (supabase/migrations/20261104_usage_days.sql).
+Nothing new is collected from anybody: it is counted from the sign-in and
+check-in times and what RevenueCat already notes when the app opens, and
+what is kept is numbers that name nobody. But counting app opens to see how
+many people use the app is what Apple's label calls Analytics ("measure
+audience size"), and the privacy page already says these counts are what
+the label means by Analytics, while the live label has Product Interaction
+for App Functionality only. So the label says less than the privacy page,
+and has since People began on 2 November; keeping the totals for two years
+widens that. For Justin, in plain words: in App Store Connect → App Privacy
+→ Usage Data → Product Interaction, tick **Analytics** next to App
+Functionality (still linked to the user, still not tracking), then
+Publish. The privacy page already calls these counts analytics, so the
+label should match. No build needed. Google Play needs nothing: its App
+interactions row already lists Analytics (the 1 November table below).
+Done 5 November 2026 (Justin).
 
 **Google Play's Data safety, the whole list as it should stand (1 November
 2026, with the name added 5 November 2026).** Written for Justin to hand to his browser assistant, and the one
@@ -546,12 +569,23 @@ to point at a policy that explains it is the strong position.
 "Help make Fractal Remote better?" asks once, Yes, share or No thanks, and is
 off unless Yes (Settings → Troubleshooting → Share what gear works changes it).
 When on, a phone or tablet sends one short note when a unit connects: the
-unit and its firmware, computer or Bluetooth, the computer app's version or
-the adapter's name, whether the unit answered, the phone's system, version
-and model (on an iPhone only "iPhone" or "iPad"), and the app's version. No
-account, no install number, no email, nothing typed, no location, sent
-signed out. The privacy page says so under *Which gear works*. It is not
-Apple's tracking prompt and needs none: nothing is tracking.
+unit, and its firmware when it connects through a computer (none can be read
+over Bluetooth or a USB cable), whether it went through a computer, Bluetooth
+or a USB cable (4 November 2026), the kind of computer and its system
+(Apple silicon, ARM, 32- or 64-bit; never its name) and the computer app's
+version, or the Bluetooth adapter's or the cable's name (an owner's name
+taken off), whether the unit answered, how long it took to connect and,
+through a computer, how quickly the unit answers a tap (4 November 2026,
+timed from the player's own taps, nothing new asked of a unit, rounded to a
+tenth and a hundredth of a second), the phone's system, version and model
+(on an iPhone only "iPhone" or "iPad"), and the app's version. The same gear
+on the same versions goes once in 30 days, at a random moment a little after
+it connects. A VP4 over Bluetooth or a cable sends none (the phone cannot
+hear one). A Yes given before 4 November 2026 is asked once more, and sends
+only what the card said then until it is answered. No account, no install
+number, no email, nothing typed, no location, sent signed out. The privacy
+page says so under *Which gear works*. It is not Apple's tracking prompt and
+needs none: nothing is tracking.
 
 It comes by update, not a build, so **these go on the label and in Data
 safety before the update that asks the question is merged** (any day: both
@@ -565,12 +599,23 @@ publish at once and need no version):
   the safe side. Used for tracking: **No**. Nothing else changes: the note
   carries no Device ID (the Device ID row stays as it is, for Expo), no User
   ID, no location.
+- **App Store Connect → App Privacy → Diagnostics → Performance Data**
+  (4 November 2026, for the two times, connect_ms and tap_ms): a new row,
+  published before the update that sends them is merged.
+  Collected **Yes**, used for **Analytics**, Linked to the user **No** (the
+  note carries no account and is sent signed out), used for tracking **No**.
+  Apple's own words for it are "launch time, hang rate, or energy use", and
+  how long a unit took to connect and a tap took to answer is that kind of
+  measure. Done 5 November 2026 (Justin).
 - **Play Console → App content → Data safety → App info and performance →
   Diagnostics**: Collected **yes**, Shared **no**, processed ephemerally
   **no**, **optional** (users can choose), purpose **Analytics** (beside the
   App functionality it already has for the log). **Device or other IDs:
   no change** for this: the note carries none (the row stays only for Expo's
-  update check).
+  update check). The two times need **no change** on Play: Google's
+  Diagnostics already means performance measures like these.
+- **A USB cable** (4 November 2026) needs no change on either: it is the
+  same note, with the cable's name where an adapter's goes.
 
 Not touched: the 1.89.0 review notes. The question is on screen for anybody
 signed in, and the Developer page that reads the notes is his account's

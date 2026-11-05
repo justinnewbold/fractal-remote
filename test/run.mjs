@@ -2722,13 +2722,45 @@ test('the computer app says which version it is, where the phone already looks',
   for (const model of ['Raspberry Pi Compute Module 4 Rev 1.1\0', 'Raspberry Pi Zero 2 W Rev 1.0\0']) {
     assert.ok(host.computerKind({ platform: 'linux', model, arch: 'arm64', osRelease: 'NAME="Some Very Long Distribution Name GNU/Linux"\nVERSION_ID="2026.11.03"\n' }).length <= 40)
   }
+  /*
+   * NEVER CUT MID-NUMBER (4 November 2026): a Compute Module 4 on Debian 12
+   * came out "Raspberry Pi Compute Module 4 · Debian 1", a Zero 2 W "…
+   * (64-bi", and openSUSE's 20241104 "2024". A Compute Module is "CM4", and
+   * whole parts come off the end, the bits and then the system.
+   */
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi Compute Module 4 Rev 1.1\0', arch: 'arm64', osRelease: debian }), 'Raspberry Pi CM4 · Debian 12 (64-bit)')
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi Zero 2 W Rev 1.0\0', arch: 'arm64', osRelease: debian }), 'Raspberry Pi Zero 2 W · Debian 12')
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi Compute Module 5 Rev 1.0\0', arch: 'arm64', osRelease: 'NAME="Ubuntu"\nVERSION_ID="24.04"\n' }), 'Raspberry Pi CM5 · Ubuntu 24.04 (64-bit)')
+  assert.match(host.linuxSystem('NAME="openSUSE Tumbleweed"\nVERSION_ID="20241104"'), /20241104$/, 'a long version is cut mid-number')
+  assert.equal(host.linuxSystem('NAME="openSUSE Tumbleweed"\nVERSION_ID="20241104"'), 'openSUSE 20241104')
+  assert.equal(host.linuxSystem('NAME="Some Very Long Distribution Name"\n'), 'Some Very Long')
+  assert.equal(host.linuxSystem('VERSION_ID="12345678901234567890123456789"\n').length, 24)
+  for (const board of ['Zero 2 W', 'Zero W', 'Zero', 'Compute Module 3', 'Compute Module 3+', 'Compute Module 4', 'Compute Module 5', '1', '2', '3', '4', '5', '400', '500']) {
+    for (const osRelease of [debian, 'NAME="Raspbian GNU/Linux"\nVERSION_ID="11"\n', 'NAME="Ubuntu"\nVERSION_ID="24.04"\n', 'NAME="openSUSE Tumbleweed"\nVERSION_ID="20241104"\n', '']) {
+      for (const arch of ['arm64', 'arm']) {
+        const said = host.computerKind({ platform: 'linux', model: `Raspberry Pi ${board} Rev 1.0\0`, arch, osRelease })
+        assert.ok(said.length <= 40, said)
+        assert.ok(!/Debian 1$|Debian 1 |\(\d\d-bi$|\(\d\d-bit?$|2024$| · $/.test(said), `cut mid-word: ${said}`)
+        assert.ok(said.startsWith(`Raspberry Pi ${board.replace(/^Compute Module /, 'CM')}`), said)
+      }
+    }
+  }
   for (const p of ['darwin', 'win32', 'linux']) assert.ok(host.computerKind({ platform: p }).length <= 40)
   assert.equal(typeof host.thisComputer(), 'string')
+  /* An Intel copy on Apple silicon says Apple silicon: the processor's kind, told by main.js, not the copy's own build. */
+  assert.match(readSrc(new URL('../desktop/lib/host.mjs', import.meta.url), 'utf8'), /export function thisComputer\(\{ arch = process\.arch \} = \{\}\) \{[\s\S]*?return computerKind\(\{ release: osRelease\(\), systemVersion, model, arch, osRelease: os \}\)/, 'thisComputer throws away the arch it is told')
+  assert.equal(typeof host.thisComputer({ arch: 'arm64' }), 'string')
+  if (process.platform === 'darwin') assert.match(host.thisComputer({ arch: 'arm64' }), /\(Apple silicon\)$/)
+  if (process.platform === 'linux') assert.match(host.thisComputer({ arch: 'arm64' }), /arm64|64-bit/)
   /* Written beside the name and the version when given, and the doc as before when not. */
   const kind = fakeForgeFX()
   assert.equal(await host.tellPhones({ port: 5056, fetch: kind.fetch, hostname: 'Studio computer', version: '1.89.8', os: 'Raspberry Pi 5' }), true)
   assert.deepEqual(kind.calls, ['PUT /store/config/host.name {"data":{"name":"Studio computer","version":"1.89.8","os":"Raspberry Pi 5"},"origin":"fractal"}'])
-  assert.match(main, /const computerOs = thisComputer\(\)/, 'the computer app never says what kind of computer it is')
+  assert.match(main, /const computerOs = thisComputer\(\{ arch: app\.runningUnderARM64Translation \? 'arm64' : process\.arch \}\)/, 'the computer app never says what kind of computer it is, or an Intel copy on Apple silicon says Intel')
+  /* And the terminal launcher (npm run serve) says its version and kind too: a gear note waits for the version. */
+  const serve = readSrc(new URL('../scripts/serve.mjs', import.meta.url), 'utf8')
+  assert.match(serve, /armHost\(\{ port, version[^}]*os: thisComputer\(\)/, 'npm run serve tells the phones no version or kind, so they send no gear note through it')
+  assert.match(serve, /const \{ version \} = JSON\.parse\(readFileSync\(join\(root, 'package\.json'\), 'utf8'\)\)/)
   /* The phone keeps it, and puts it in a gear note and a report's log. */
   const phoneLink = readSrc(new URL('../mobile/src/lib/link.js', import.meta.url), 'utf8')
   assert.match(phoneLink, /hostOs: data\?\.os \? String\(data\.os\)\.slice\(0, 40\) : null/, 'the phone throws away what kind of computer it is')
@@ -6721,6 +6753,10 @@ independent(test)
 console.log('\nthe server')
 const { run: server } = await import('./server.mjs')
 server(test)
+
+console.log('\nhow many people, day by day')
+const { run: usageDays } = await import('./usage-days.mjs')
+usageDays(test)
 
 console.log('\non an AM4 the amp’s pedal is its boost')
 const { run: am4Boost } = await import('./am4-boost.mjs')

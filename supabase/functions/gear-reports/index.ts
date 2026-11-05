@@ -3,7 +3,9 @@
  *
  * Every note a phone sends after its owner said Yes to "Help make Fractal
  * Remote better?" lands in public.gear_reports
- * (migrations/20261026_gear_reports.sql), which no client may read back.
+ * (migrations/20261026_gear_reports.sql, with a USB cable's 'usb' and the two
+ * times, connect_ms and tap_ms, from 20261104_gear_reports_usb_and_times.sql),
+ * which no client may read back.
  * This reads it with the service role, for one caller: the owner's account,
  * proved by a token Supabase has signed. The same lock as owner-messages and
  * grant-access, on the same account id: test/gear-share.mjs holds this copy
@@ -73,7 +75,7 @@ async function sweep(): Promise<void> {
 }
 
 const LIST =
-  'select=created_at,via,unit,firmware,adapter,outcome,computer_os,computer_version,phone_os,phone_os_version,phone_model,app_version&order=created_at.desc&limit=5000'
+  'select=created_at,via,unit,firmware,adapter,outcome,computer_os,computer_version,phone_os,phone_os_version,phone_model,app_version,connect_ms,tap_ms&order=created_at.desc&limit=5000'
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })

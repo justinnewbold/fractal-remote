@@ -300,7 +300,7 @@ async function rigOnTheBench(over = {}) {
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
   /* The gate a tap asks while the link is down, and the rules its deadline and its words come from: both real, as they are. */
   /* And the colours, which rig.js tells which unit answered (lib/looks), with the colour sums the palettes use (lib/ink). */
-  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js', 'am4-boost.js', 'axiom.js']) {
+  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'tapTimes.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js', 'am4-boost.js', 'axiom.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -3656,6 +3656,8 @@ export function run(test) {
       ['src/lib/cloudSetlists.js', /^Android$/, 'deviceName: iPhone on an iPhone'],
       /* Sales at a glance names Google Play in Paid twice, as it names Android in Where they bought. */
       ['src/lib/admin.js', /Android|Google Play/, 'Justin’s Developer pages only'],
+      /* How many people's four places and its phone systems, counted for People and Day by day (4 November 2026): imported by admin.js alone. */
+      ['src/lib/usage-count.js', /Android/, 'Justin’s Developer pages only, through admin.js'],
       /* What works adds the gear notes up, and says which phones they came from (26 October 2026). */
       ['src/lib/gear-share-rules.js', /^Android$/, 'gearSections: What works, a Developer page, Justin’s only'],
       ['src/lib/whats-live.js', /^Android build$/, 'What is live, a Developer page, Justin’s only'],
@@ -6515,7 +6517,8 @@ export function run(test) {
 
     /* The answer carries no address: the server never puts one in it. */
     const server = read('supabase/functions/grant-access/index.ts')
-    const body = server.slice(server.indexOf('async function usage()'), server.indexOf('Deno.serve('))
+    const body = server.slice(server.indexOf('async function usage('), server.indexOf('Deno.serve('))
+    assert.ok(server.indexOf('async function usage(') > 0, 'the usage answer moved; this test reads it')
     assert.match(body, /return \{ lastSignIn: d\.last_sign_in \?\? null, devices, seen \}/, 'the usage answer carries more than counts need')
 
     /* Both ends draw it only for him, from the Developer page. */

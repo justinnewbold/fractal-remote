@@ -12,10 +12,14 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-05",
     "day": "5 November 2026",
-    "version": "1.89.44",
+    "version": "1.89.45",
     "lines": [
       {
         "text": "Creating an account now asks for your first and last name, so we know who we’re helping when you write to us. If you already have an account, nothing changes and you won’t be asked.",
+        "only": null
+      },
+      {
+        "text": "Share what gear works (Settings → Troubleshooting) now notes a unit on a USB cable as a USB cable, how long your unit took to connect and, through a computer, how quickly it answers a tap. If you said yes before, it asks you once more. It’s still off unless you say yes, and never linked to you.",
         "only": null
       }
     ]

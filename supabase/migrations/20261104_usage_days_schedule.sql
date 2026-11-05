@@ -1,0 +1,27 @@
+-- THE NIGHTLY COUNT FOR HOW MANY PEOPLE, DAY BY DAY.
+--
+-- In a file of its own, after 20261104_usage_days.sql, as the other
+-- schedules are. Apply it only AFTER grant-access is deployed with the
+-- usage-day hook: the grant-access before it reads the call as a stranger's
+-- and answers 403, so nothing would be kept (harmless, but every night would
+-- be a gap). Check by hand first, once:
+--
+--   select public.run_usage_day();
+--
+-- then, a few seconds later, that net._http_response has a 200 for it and
+-- public.usage_days has today's row.
+--
+-- pg_cron is already on here, with its grants (20261015_setup_reminders_schedule.sql):
+-- granting again fails with "dependent privileges exist", so only the job is added.
+--
+-- Twice, at 23:43 and 23:53 UTC (4:43 and 4:53 pm Mountain time in winter), a few
+-- minutes before the UTC day ends and away from the hour and the setup
+-- emails' :23. The later count covers more of the day and normally replaces
+-- the earlier one; if either fails, the other is still kept. A day can only
+-- be counted on that day, so a night both miss is a gap on the page, said as
+-- one. shared/usage-count.mjs holds the same times, for the page's words.
+--
+-- Scheduling under the same name again replaces the job rather than adding a
+-- second one.
+
+select cron.schedule('usage-days', '43,53 23 * * *', $$select public.run_usage_day()$$);

@@ -93,17 +93,20 @@ export const SIRI_SAYS = Object.freeze({
  * starting (its two stored answers loading, or an account being checked
  * after a sign-in) can Play come by itself, and only then does a command
  * wait for it inside its tap rule. Everywhere else it will not: the startup
- * card, the walkthrough, the sign-in and the paywall each wait for a tap,
- * and so do the app's own other screens. Before this, the first four waited
- * the second and a half and answered "Not sent, it would have landed late",
- * which was a reason nothing had.
+ * card, the walkthrough, the sign-in, the paywall and "Help make Fractal
+ * Remote better?" (the sharing card, drawn in Play's place until it is
+ * answered: `shareCard`) each wait for a tap, and so do the app's own other
+ * screens. Before this, the first four waited the second and a half and
+ * answered "Not sent, it would have landed late", which was a reason nothing
+ * had.
  *
- * Play's place, signed in and past the card, is Play, and is not elsewhere
+ * Play's place, signed in and past the cards, is Play, and is not elsewhere
  * even while the waiting screen stands in for it (Finding your computer):
  * that one can turn into Play by itself.
  */
-export function playElsewhereOf({ auth = 'checking', seenWalk = null, independentDue = false, screen = 'stage' } = {}) {
+export function playElsewhereOf({ auth = 'checking', seenWalk = null, independentDue = false, screen = 'stage', shareCard = false } = {}) {
   if (auth === 'checking' || seenWalk === null || seenWalk === undefined) return false
+  if (shareCard === true) return true
   return !(auth === 'in' && seenWalk === true && independentDue !== true && screen === 'stage')
 }
 

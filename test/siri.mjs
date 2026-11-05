@@ -237,7 +237,7 @@ async function siriOnTheBench({ os = 'ios', device = 'phone', vp4 = false, names
     'presetNames.js': `const listed = ${JSON.stringify(names)}\nexport const nameOf = (n) => listed[n]\n`,
     ...extra
   }
-  for (const f of ['siri-rule.js', 'versions.js', 'admin.js', 'owner-unlock.js', 'am4-boost.js', 'chain-view.js', 'device-word.js', 'relay-rules.js', 'tempo.js', 'unit.mjs', 'presetName.js', 'slots.js', 'vp4-safety.js']) {
+  for (const f of ['siri-rule.js', 'versions.js', 'admin.js', 'owner-unlock.js', 'usage-count.js', 'am4-boost.js', 'chain-view.js', 'device-word.js', 'relay-rules.js', 'tempo.js', 'unit.mjs', 'presetName.js', 'slots.js', 'vp4-safety.js']) {
     if (!(f in files)) files[f] = read(`${LIB}/${f}`)
   }
   files['siriPipe.js'] = clocked(esm(read(`${LIB}/siriPipe.js`)))
@@ -348,7 +348,7 @@ async function demoOnTheBench(unit = 'fm3') {
       'export const forgetSceneNames = () => true\nexport const recallSceneNames = async () => []\nexport const rememberSceneNames = () => true\nexport const sceneNamesKnown = async () => false\n',
     'blockCatalog.js': `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
   }
-  for (const f of ['demoUnits.js', 'scale.js', 'sceneState.js', 'demoMemory.js', 'tunerStream.js', 'own-echo.js', 'chain-outline.js', 'firmware.js', 'fault-rule.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'param-fixes.js', 'metronome-rules.js', 'unsupported.js', 'tapGate.js', 'looks.js', 'blockPalettes.js', 'ink.js']) {
+  for (const f of ['demoUnits.js', 'scale.js', 'sceneState.js', 'demoMemory.js', 'tunerStream.js', 'own-echo.js', 'chain-outline.js', 'firmware.js', 'fault-rule.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'param-fixes.js', 'metronome-rules.js', 'unsupported.js', 'tapGate.js', 'tapTimes.js', 'looks.js', 'blockPalettes.js', 'ink.js']) {
     extra[f] = esm(lib(f))
   }
   extra['device.js'] = clocked(esm(lib('device.js')))
@@ -439,6 +439,7 @@ export function run(test) {
       ['the walkthrough, shown again', { auth: 'in', seenWalk: false, independentDue: false, screen: 'stage' }],
       ['the sign-in', { auth: 'out', seenWalk: true, independentDue: false, screen: 'stage' }],
       ['the paywall', { auth: 'paywall', seenWalk: true, independentDue: false, screen: 'stage' }],
+      ['the sharing card', { auth: 'in', seenWalk: true, independentDue: false, screen: 'stage', shareCard: true }],
       ['Settings', { auth: 'in', seenWalk: true, independentDue: false, screen: 'settings' }],
       ['Setlists', { auth: 'in', seenWalk: true, independentDue: false, screen: 'setlists' }]
     ]) {
@@ -1319,7 +1320,7 @@ export function run(test) {
     assert.match(app, /import \{ (allowSiriLinks, )?siriElsewhere, startSiri \} from '\.\/src\/lib\/siri'/)
     assert.match(app, /useEffect\(\(\) => startSiri\(\), \[\]\)/, 'Siri is not listened for from the start, so Tuner off works only on Play')
     assert.match(app, /import \{ playElsewhereOf \} from '\.\/src\/lib\/siri-rule'/)
-    assert.match(app, /const playElsewhere = playElsewhereOf\(\{ auth, seenWalk, independentDue, screen \}\)/)
+    assert.match(app, /const playElsewhere = playElsewhereOf\(\{ auth, seenWalk, independentDue, screen, shareCard: askShare \}\)/, 'Siri takes the sharing card for Play')
     assert.match(app, /useEffect\(\(\) => siriElsewhere\(playElsewhere\), \[playElsewhere\]\)/)
     const siri = withoutComments(read(`${LIB}/siri.js`))
     assert.ok(!/isDemo|from '\.\/demo'/.test(siri), 'Siri takes another road in the demo than on a rig, so the reviewer would try something customers do not have')

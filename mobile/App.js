@@ -167,9 +167,11 @@ export default function App() {
   const [independentDue, setIndependentDue] = useState(false)
   /*
    * WHETHER "HELP MAKE FRACTAL REMOTE BETTER?" IS STILL OWED (components/
-   * GearShareNotice, 26 October 2026): never answered on this device. Read
-   * with the other two, so it is known before anything is drawn, but shown
-   * only after all of them (see `askShare`, below).
+   * GearShareNotice, 26 October 2026): never answered on this device
+   * ('first'), or a Yes given to its words before 4 November 2026, which
+   * said less ('again'). Read with the other two, so it is known before
+   * anything is drawn, but shown only after all of them (see `askShare`,
+   * below).
    */
   const [shareDue, setShareDue] = useState(false)
   useEffect(() => {
@@ -602,9 +604,9 @@ export default function App() {
    * AND ANOTHER SCREEN IS UP IN ITS PLACE, for Siri (lib/siri): a command
    * said there is answered with "Open Play" at once, while one said as the
    * app is still starting waits for Play inside its tap rule. The startup
-   * card, the walkthrough, the sign-in and the paywall are elsewhere too:
-   * Play does not come by itself from any of them (lib/siri-rule
-   * playElsewhereOf says which is which).
+   * card, the walkthrough, the sign-in, the paywall and the sharing card
+   * (askShare, below) are elsewhere too: Play does not come by itself from
+   * any of them (lib/siri-rule playElsewhereOf says which is which).
    */
   /*
    * THE SHARING QUESTION'S MOMENT: signed in and past the purchase page
@@ -614,7 +616,7 @@ export default function App() {
    * it. A name, rather than the condition written out where it is drawn.
    */
   const askShare = shareDue && auth === 'in' && !demo
-  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen })
+  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen, shareCard: askShare })
   useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
   /*
    * And the new-version note only floats over it while the phone is off the
@@ -1378,6 +1380,7 @@ export default function App() {
            * button is the answer, and Play comes up as it would have.
            */
           <GearShareNotice
+            again={shareDue === 'again'}
             onAnswer={(yes) => {
               setSharing(yes)
               setShareDue(false)

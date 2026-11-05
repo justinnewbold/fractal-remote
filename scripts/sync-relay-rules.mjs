@@ -264,11 +264,24 @@ export const FILES = [
    */
   /* How to get a computer on the other end, so the browser and the phone
      offer the same four routes with the same honest status on each. */
+  /*
+   * How many people used the app, counted one way: the rule the Developer
+   * page's People counts by, and the one the server's nightly count for Day
+   * by day uses (4 November 2026). It has no imports, so it is copied as it
+   * is, and twice: to the phone, beside admin.js, which imports it, and
+   * beside the server's functions, where grant-access imports it as
+   * ../_shared/usage-count.mjs. Two copies of the rule written separately
+   * would be two head counts for one day.
+   */
+  { source: '../shared/usage-count.mjs', target: '../mobile/src/lib/usage-count.js' },
+  { source: '../shared/usage-count.mjs', target: '../supabase/functions/_shared/usage-count.mjs' },
   /* Justin's own tools, and the one account they are for. */
   {
     source: '../shared/admin.mjs',
     target: '../mobile/src/lib/admin.js',
-    render: (text) => banner('../shared/admin.mjs') + text.replace("from './owner-unlock.mjs'", "from './owner-unlock.js'")
+    render: (text) =>
+      banner('../shared/admin.mjs') +
+      text.replace("from './owner-unlock.mjs'", "from './owner-unlock.js'").replace("from './usage-count.mjs'", "from './usage-count.js'")
   },
   /*
    * What to buy for Bluetooth (beta), how it plugs in, and the address of the

@@ -188,25 +188,42 @@
         &rarr; Share what gear works. The computer app and the website never send it.
       </p>
       <p>
-        When it is on and your unit connects, the app sends one short note: which unit it is and its
-        firmware, whether it is connected through the computer app or through Bluetooth, the
-        kind of computer and its system (such as macOS 15, Windows 11 24H2, or a Raspberry Pi 5 running
-        Debian 12, never its name) and the
-        computer app&rsquo;s version, or the Bluetooth adapter&rsquo;s name (its name, never its
-        Bluetooth address), whether the unit answered, which system your phone or tablet runs and its
-        version, its make and model on Android (on an iPhone or iPad, only which of the two), and the
-        app&rsquo;s version. The same combination of gear is sent at most once every 30 days; the
-        app keeps a list of what it has sent, and when, on your device, and that list is never sent.
+        When it is on and your unit connects, the app sends one short note: which unit it is, and its
+        firmware when it connects through the computer app (it cannot be read over Bluetooth or a USB
+        cable), whether it is connected through the computer app, Bluetooth or a USB cable, the
+        kind of computer, its system and whether it is Apple silicon, ARM, 32- or 64-bit (such as
+        macOS 15 on Apple silicon, Windows 11 24H2, or a Raspberry Pi 5 running Debian 12, 64-bit;
+        never its name) and the computer app&rsquo;s version, or the Bluetooth adapter&rsquo;s or the
+        cable&rsquo;s name (the name it gives itself, never its Bluetooth address; where that name
+        carries an owner&rsquo;s, such as &ldquo;Justin&rsquo;s WIDI Jack&rdquo; or &ldquo;Maria&rsquo;s
+        iPad&rdquo;, the app takes the owner&rsquo;s name off, but a name somebody made up for an
+        adapter cannot be told from a maker&rsquo;s and is sent as it is), whether the unit answered,
+        how long it took to connect, and how quickly the unit answers a tap when it connects through
+        the computer app (rounded, to a tenth of a second and a hundredth of a second, and timed from
+        the presets, scenes and effects you tap anyway: nothing extra is asked of your unit), which
+        system your phone or tablet runs and its version, its make and model on Android (on an iPhone
+        or iPad, only which of the two), and the app&rsquo;s version. The same combination of gear and
+        versions is sent at most once every 30 days, a little while after the unit connects, at a
+        moment picked at random; the app keeps a list of what it has sent, and when, on your device,
+        and that list is never sent. A VP4 over Bluetooth or a USB cable sends no note: the app
+        cannot hear a VP4, so it cannot say whether it answered. If you said yes before 4 November
+        2026, when the note said nothing of a USB cable or of how long things take, the app asks you
+        once more, and until you answer it sends only what it did before.
       </p>
       <p>
         <strong>It is not linked to you.</strong> The note has no account, no email address, no name
         you gave your device and no install number, and it is sent without signing in, so nothing in
-        it or with it says whose it was, and the internet address it came from is not stored with it. It
-        carries no preset or song names, nothing you have typed, and nothing about where you are. It
+        it or with it says whose it was, and the internet address it came from is not stored with it.
+        Supabase, which stores the notes, keeps its own record of every request it receives, with the
+        internet address it came from, for a limited time, for running the service, as it does for
+        everything the app sends; nothing joins that record to the notes, and it is never used to find
+        whose note was whose. It carries no preset or song names, nothing you have typed, and nothing
+        about where you are. It
         is used only to make the list of gear that works and to find what does not; it is never used
-        for advertising and never given or sold to anyone. Turning it off stops any more notes;
-        because a note cannot be told apart from anybody else&rsquo;s, the ones already sent cannot be
-        picked out to delete, and they go at the end of their two years like the rest.
+        for advertising and never given or sold to anyone, and never put beside a bug report to find
+        whose it was. Turning it off stops any more notes; because nothing in a note says whose it
+        was, the ones already sent cannot be picked out to delete, and they go at the end of their two
+        years like the rest.
       </p>
 
       <h3>Bug reports and suggestions — only when you press Send</h3>
@@ -318,9 +335,11 @@
           report. What is counted names nobody, and these counts are what the App Store's privacy
           label means by Analytics. The builder's own pages, described below, count how many
           accounts there are and how many were made lately, and how many were used lately, on
-          which kinds of device and app versions, from the sign-in and check-in times and the time,
-          app version and phone system RevenueCat last saw, which are kept anyway; and they add up
-          the sales. RevenueCat's own dashboard shows the builder the purchase records described
+          which kinds of device, app versions and versions of the phone's system, from the sign-in
+          and check-in times and the time, app version and phone system RevenueCat last saw, which
+          are kept anyway; and they add up the sales. Once a day, a few minutes before the day
+          ends (UTC), that day's totals are kept, as numbers that name nobody, so he can see them
+          day by day. RevenueCat's own dashboard shows the builder the purchase records described
           above as sales totals and charts, and how many phones and accounts opened the app, and how
           many were new, in the last 28 days, from the check the app makes each time it opens. And
           Expo's own dashboard shows him how many installs took each update, how many launches
@@ -376,8 +395,9 @@
           when it signs in) and when each last checked in; and the app version and phone system
           RevenueCat last saw.</li>
         <li><strong>How many people</strong> — how many accounts were used today, in the last 7
-          days and in the last 30, on which kinds of device, and on which app versions. A count,
-          naming nobody.</li>
+          days and in the last 30, on which kinds of device, on which app versions and on which
+          versions of the phone's system; and the same totals for each day, kept once a day.
+          Counts, naming nobody.</li>
         <li><strong>Sales</strong> — each purchase: when, through which store, for how much, and
           by which account; and anybody who has paid twice, or paid on an account whose email was
           never confirmed, so he can put it right. Once he has, he can mark it handled. Then the
@@ -387,8 +407,9 @@
         <li><strong>Messages</strong> — the bug reports and suggestions described above, with their
           screenshots, and a link to a report&rsquo;s video for its week, in his email.</li>
         <li><strong>What works</strong> — the notes about gear described under <em>Which gear
-          works</em>, added up by unit, by computer system or Bluetooth adapter, and by whether the unit
-          answered. Nothing in them names anybody.</li>
+          works</em>, added up by unit, by computer system, Bluetooth adapter or USB cable, and by
+          whether the unit answered, with how long it took to connect and, through a computer, how
+          quickly a tap was answered. Nothing in them names anybody.</li>
         <li><strong>Paid but no computer yet</strong> — each account with the full version that no
           computer app has signed in with: its email address and whether it is confirmed, how and
           when it got the full version (which store, a test purchase, or given by hand), and which
@@ -399,7 +420,8 @@
         All of it is read from what the account service and RevenueCat already keep in order to
         sign you in and to know whether you have paid, apart from the dates kept for the help
         setting up the computer, under <em>An account</em> and <em>Unlocking the full version</em>,
-        and the marks on Sales described above. Nothing else new is
+        the marks on Sales described above, and each day's totals on How many people, which are
+        numbers that name nobody. Nothing else new is
         recorded for these pages: no screens, no buttons, no time spent in the app. What works is the one page that reads something new: the notes about
         gear that only people who said yes send, described under <em>Which gear works</em>. To help somebody who cannot sign in, he can
         also send their address a new confirmation or password-reset email, or mark the address as
@@ -443,6 +465,8 @@
           first signed in</strong> — until you delete the account.</li>
         <li><strong>A sale marked handled</strong> — the mark is kept until you delete the
           account.</li>
+        <li><strong>Each day's totals on How many people</strong> — numbers only, naming nobody,
+          kept two years, then deleted.</li>
         <li><strong>Bug reports</strong> — until the problem is fixed and long enough afterward to
           be sure, then deleted, and the email of each with them.</li>
         <li><strong>The notes about which gear works</strong> — two years from when each was sent,

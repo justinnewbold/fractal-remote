@@ -4166,7 +4166,7 @@ export function run(test) {
     assert.match(words, /that is the only time, apart from the help setting up the computer described under Unlocking the full version ?\./)
     assert.ok(!/Nothing new is recorded for these pages/.test(words), 'the Developer pages still “record nothing new”, and the setup emails keep dates')
     assert.ok(!/three dates/.test(words), 'the policy still says three dates, and more are kept')
-    assert.match(words, /apart from the dates kept for the help setting up the computer, under An account and Unlocking the full version ?, and the marks on Sales described above\. Nothing else new is recorded for these pages/)
+    assert.match(words, /apart from the dates kept for the help setting up the computer, under An account and Unlocking the full version ?, the marks on Sales described above, and each day's totals on How many people, which are numbers that name nobody\. Nothing else new is recorded for these pages/)
     assert.match(words, /Paid but no computer yet — each account with the full version that no computer app has signed in with: its email address and whether it is confirmed, how and when it got the full version \(which store, a test purchase, or given by hand\), and which of the emails about setting up the computer have gone to it or been refused\. He can leave an account out of those emails\./, 'the Developer pages do not list Paid but no computer yet, or leave out what it shows')
     /* What that list shows, read off the words that draw it. */
     const admin = read('shared/admin.mjs')
@@ -4217,7 +4217,7 @@ export function run(test) {
       /Sales — each purchase: when, through which store, for how much, and by which account; and anybody who has paid twice, or paid on an account whose email was never confirmed, so he can put it right\. Once he has, he can mark it handled\. Then the account, which of those two it was, when he marked it, the time of the newest purchase it was about, and how many purchases it counted \(with any card sale beside it\) are kept, so it is not shown again unless they pay again\./,
       'the Developer pages do not say what marking a sale handled keeps'
     )
-    assert.match(words, /and the marks on Sales described above\. Nothing else new is recorded for these pages/, 'the Developer pages still say nothing new is kept for them')
+    assert.match(words, /the marks on Sales described above, and each day's totals on How many people, which are numbers that name nobody\. Nothing else new is recorded for these pages/, 'the Developer pages still say nothing new is kept for them')
     const kept = words.slice(words.indexOf('How long it is kept'), words.indexOf('Deleting your data'))
     assert.match(kept, /A sale marked handled — the mark is kept until you delete the account\./, 'how long a handled mark is kept is not said')
     assert.match(body, /^create table if not exists public\.sales_handled \(\s*account_id uuid not null references auth\.users \(id\) on delete cascade,/, 'a handled mark outlives the account, and the policy says it does not')
