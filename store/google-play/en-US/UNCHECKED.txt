@@ -1,0 +1,12 @@
+This folder was filled from docs/app-store.md on 4 November 2026, not read from Google Play.
+
+title.txt is the Name in the listing table, short_description.txt is the block under
+"Google Play: short description", and full_description.txt is the block under
+"Description, from 1.89.0 (App Store and Google Play)", which Submission day step 17
+says went onto Play on Android's 100% day. Justin may have changed any of them in
+Play Console since, and Play's live listing is the one that counts.
+
+So while this file is here, the play-text job will not write anything ("Write it" is
+refused). To clear it: run play-text with "Write it" unticked, copy the three texts
+from that run's summary into these files exactly, and delete this file in the same
+pull request.

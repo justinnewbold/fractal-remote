@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { capsule, classic, glassField } from '../lib/glass'
 import { slotLabel } from '../lib/device'
 import { SCENES, SONG_BPM, songIn, songsWith, songWords, updateList } from '../lib/lists'
 import { useRig } from '../lib/rig'
@@ -31,14 +32,20 @@ export default function SongSetup({ device, list, nameOf, addressing }) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: on }}
+      /*
+       * Each choice its own capsule of frosted glass (lib/glass), the gaps
+       * between them kept; the chosen one keeps its amber edge and wash. The
+       * light along the top only, no drop: there are nine on every song.
+       */
       style={({ pressed }) => ({
         minHeight: TAP,
         minWidth: TAP,
         paddingHorizontal: space.sm,
-        borderRadius: radius.sm,
+        borderRadius: classic() ? radius.sm : capsule(TAP),
         borderWidth: 1,
-        borderColor: on ? color.signal : color.rule,
-        backgroundColor: on ? color.signalWash : color.panel,
+        borderColor: on ? color.signal : color.glassRim,
+        backgroundColor: on ? color.signalWash : pressed && !classic() ? color.glassFillHi : color.glassFill,
+        boxShadow: color.glassTop,
         alignItems: 'center',
         justifyContent: 'center',
         opacity: pressed ? 0.7 : 1
@@ -63,7 +70,7 @@ export default function SongSetup({ device, list, nameOf, addressing }) {
           if (bpm === null || (bpm >= SONG_BPM.min && bpm <= SONG_BPM.max)) save(n, { bpm })
         }
         return (
-          <View key={n} style={{ gap: space.sm, paddingVertical: space.sm, borderTopWidth: 1, borderTopColor: color.rule }}>
+          <View key={n} style={{ gap: space.sm, paddingVertical: space.sm, borderTopWidth: 1, borderTopColor: color.glassRim }}>
             <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '600' }}>
               {`${i + 1}. `}
               <Text style={{ fontFamily: mono }}>{slotLabel(n, addressing)}</Text>
@@ -89,9 +96,11 @@ export default function SongSetup({ device, list, nameOf, addressing }) {
                   flex: 1,
                   minHeight: TAP,
                   paddingHorizontal: space.md,
-                  borderRadius: radius.sm,
                   borderWidth: 1,
-                  borderColor: color.rule,
+                  /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
+                  ...glassField(),
+                  /* Classic: the box at the small corner on the sheet's own ground, as it was. */
+                  ...(classic() ? { borderRadius: radius.sm, backgroundColor: undefined } : null),
                   color: color.silk,
                   fontSize: font.body
                 }}

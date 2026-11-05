@@ -73,7 +73,8 @@ export default function Attach({ shots = [], onShots, video = null, onVideo, dis
     }
   }
 
-  const tile = { borderRadius: radius.sm, borderWidth: 1, borderColor: color.rule, backgroundColor: color.panel }
+  /* A picture's frame: the picture is content, and only its hairline is the glass's rim. */
+  const tile = { borderRadius: radius.sm, borderWidth: 1, borderColor: color.glassRim, backgroundColor: color.panel }
 
   return (
     <View style={{ gap: space.sm }}>

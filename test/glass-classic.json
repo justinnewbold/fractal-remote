@@ -1,0 +1,670 @@
+{
+ "about": "Every style the frosted glass changed in the phone app, as main drew it at 52678044, and where it is now. Made by node test/glass-classic.mjs --write; test/glass-classic.mjs draws each pair under Classic and holds them equal.",
+ "ref": "52678044",
+ "newHere": {
+  "mobile/src/components/Colours.js": [
+   "StyleSection",
+   "StyleChoice"
+  ]
+ },
+ "files": {
+  "mobile/src/components/Attach.js": [
+   {
+    "decl": "Attach",
+    "main": "\nreturn ({ borderRadius: radius.sm, borderWidth: 1, borderColor: color.rule, backgroundColor: color.panel })",
+    "now": "{ borderRadius: radius.sm, borderWidth: 1, borderColor: color.glassRim, backgroundColor: color.panel }"
+   },
+   {
+    "decl": "Attach",
+    "main": "const tile = { borderRadius: radius.sm, borderWidth: 1, borderColor: color.rule, backgroundColor: color.panel };\nreturn ({ ...thumbSize(shot.width, shot.height, 64), ...tile })",
+    "now": "{ ...thumbSize(shot.width, shot.height, 64), ...tile }"
+   },
+   {
+    "decl": "Attach",
+    "main": "const tile = { borderRadius: radius.sm, borderWidth: 1, borderColor: color.rule, backgroundColor: color.panel };\nreturn ({ width: 64, height: 96, ...tile, alignItems: 'center', justifyContent: 'center', gap: space.xs })",
+    "now": "{ width: 64, height: 96, ...tile, alignItems: 'center', justifyContent: 'center', gap: space.xs }"
+   }
+  ],
+  "mobile/src/components/Coach.js": [
+   {
+    "decl": "Coach",
+    "main": "\nreturn ({\n        gap: space.sm,\n        padding: space.lg,\n        borderRadius: radius.lg,\n        borderWidth: 1,\n        borderColor: color.rule,\n        backgroundColor: color.panel\n      })",
+    "now": "{ gap: space.sm, padding: space.lg, borderRadius: cardCorner(radius.lg), borderWidth: 1, borderColor: color.glassRim, backgroundColor: color.glassFill, boxShadow: color.glassLift }"
+   }
+  ],
+  "mobile/src/components/Colours.js": [
+   {
+    "decl": "LookCard",
+    "main": "\nreturn ({\n        minHeight: 64,\n        gap: space.sm,\n        padding: space.md,\n        borderRadius: radius.md,\n        borderWidth: on ? 2 : 1,\n        borderColor: on ? color.signal : color.rule,\n        backgroundColor: pressed ? color.panelHi : color.panel\n      })",
+    "now": "{ minHeight: 64, gap: space.sm, padding: space.md, borderRadius: radius.card, borderWidth: on ? 2 : 1, borderColor: on ? color.signal : color.glassRim, backgroundColor: pressed ? color.glassFillHi : color.glassFill, boxShadow: color.glassLift }"
+   },
+   {
+    "decl": "OffChoice",
+    "main": "const on = offMode() === mode;\nreturn ({\n        flexDirection: 'row',\n        alignItems: 'center',\n        gap: space.md,\n        padding: space.md,\n        borderRadius: radius.md,\n        borderWidth: on ? 2 : 1,\n        borderColor: on ? color.signal : color.rule,\n        backgroundColor: pressed ? color.panelHi : color.panel\n      })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.card, borderWidth: on ? 2 : 1, borderColor: on ? color.signal : color.glassRim, backgroundColor: pressed ? color.glassFillHi : color.glassFill, boxShadow: color.glassLift }"
+   },
+   {
+    "decl": "LookUndo",
+    "main": "\nreturn ({\n        position: 'absolute',\n        left: space.lg,\n        right: space.lg,\n        bottom: space.lg,\n        flexDirection: 'row',\n        alignItems: 'center',\n        gap: space.md,\n        padding: space.sm,\n        paddingLeft: space.md,\n        borderRadius: radius.md,\n        borderWidth: 1,\n        borderColor: color.rule,\n        backgroundColor: color.chassis,\n        shadowColor: '#000',\n        shadowOpacity: 0.35,\n        shadowRadius: 8,\n        shadowOffset: { width: 0, height: 2 },\n        elevation: 6\n      })",
+    "now": "{ position: 'absolute', left: space.lg, right: space.lg, bottom: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.sm, paddingLeft: space.md, borderRadius: radius.card, borderWidth: 1, borderColor: color.glassRim, backgroundColor: color.chassis, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 6, boxShadow: color.glassTop }"
+   }
+  ],
+  "mobile/src/components/ComputerCard.js": [
+   {
+    "decl": "ComputerCard",
+    "main": "\nreturn ({\n        gap: space.sm,\n        borderLeftWidth: 3,\n        borderLeftColor: color.signal,\n        backgroundColor: color.panel,\n        borderRadius: radius.sm,\n        padding: space.md\n      })",
+    "now": "{ gap: space.sm, borderLeftWidth: 3, borderLeftColor: color.signal, backgroundColor: color.glassFill, borderRadius: classic() ? radius.sm : radius.md, boxShadow: color.glassFlat, padding: space.md }"
+   }
+  ],
+  "mobile/src/components/CopyAddress.js": [
+   {
+    "decl": "CopyAddress",
+    "main": "\nreturn ({\n            flexDirection: 'row',\n            alignItems: 'center',\n            gap: space.sm,\n            paddingLeft: space.md,\n            paddingRight: space.sm,\n            paddingVertical: space.sm,\n            borderRadius: radius.md,\n            borderWidth: 1,\n            borderColor: copied ? color.signal : color.rule,\n            backgroundColor: pressed ? color.panelHi : color.chassis\n          })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.md, paddingRight: space.sm, paddingVertical: space.sm, borderRadius: radius.card, borderWidth: 1, borderColor: copied ? color.signal : color.glassRim, backgroundColor: pressed ? color.glassFillHi : color.glassWell }"
+   },
+   {
+    "decl": "CopyAddress",
+    "main": "\nreturn ({\n        gap: space.sm,\n        padding: space.lg,\n        borderRadius: radius.lg,\n        borderWidth: 1,\n        borderColor: copied ? color.signal : color.rule,\n        backgroundColor: pressed ? color.panelHi : color.panel\n      })",
+    "now": "{ gap: space.sm, padding: space.lg, borderWidth: 1, ...glassCard({ bordered: true, pressed, classicCorner: radius.lg }), borderColor: copied ? color.signal : color.glassRim }"
+   }
+  ],
+  "mobile/src/components/Facts.js": [
+   {
+    "decl": "look",
+    "main": "\nreturn ({\n  flexDirection: 'row',\n  alignItems: 'center',\n  gap: space.md,\n  paddingVertical: space.sm,\n  borderTopWidth: i ? 1 : 0,\n  borderTopColor: color.rule,\n  opacity: pressed ? 0.6 : 1\n})",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm, borderTopWidth: i ? 1 : 0, borderTopColor: color.glassRim, opacity: pressed ? 0.6 : 1 }"
+   },
+   {
+    "decl": "Facts",
+    "main": "\nreturn ({ borderRadius: radius.md, backgroundColor: color.panel, paddingHorizontal: space.md })",
+    "now": "__GlassCard({ flat: true, style: { paddingHorizontal: space.md } })"
+   },
+   {
+    "decl": "Facts",
+    "main": "\nreturn ({ borderTopWidth: i ? 1 : 0, borderTopColor: color.rule, paddingBottom: space.md })",
+    "now": "{ borderTopWidth: i ? 1 : 0, borderTopColor: color.glassRim, paddingBottom: space.md }"
+   }
+  ],
+  "mobile/src/components/Footswitches.js": [
+   {
+    "decl": "Footswitches",
+    "main": "\nreturn ({ gap: space.xs, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.rule, backgroundColor: color.panel })",
+    "now": "{ gap: space.xs, padding: space.md, borderWidth: 1, ...glassCard({ bordered: true, flat: true }) }"
+   }
+  ],
+  "mobile/src/components/GearCard.js": [
+   {
+    "decl": "Arrow",
+    "main": "\nreturn ({\n        position: 'absolute',\n        top: 120,\n        [side]: space.xs,\n        width: 44,\n        height: 44,\n        borderRadius: 22,\n        alignItems: 'center',\n        justifyContent: 'center',\n        borderWidth: 1,\n        borderColor: color.rule,\n        backgroundColor: pressed ? color.panelHi : color.panel\n      })",
+    "now": "{ position: 'absolute', top: 120, [side]: space.xs, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1, ...glassControl({ pressed }) }"
+   }
+  ],
+  "mobile/src/components/GearShareNotice.js": [
+   {
+    "decl": "GearShareNotice",
+    "main": "\nreturn ({\n            gap: space.lg,\n            padding: space.xl,\n            borderRadius: radius.lg,\n            borderWidth: 1,\n            borderColor: color.rule,\n            backgroundColor: color.panel\n          })",
+    "now": "{ gap: space.lg, padding: space.xl, ...glassCard({ bordered: true }), borderRadius: cardCorner(radius.lg), borderWidth: 1 }"
+   }
+  ],
+  "mobile/src/components/IndependentNotice.js": [
+   {
+    "decl": "IndependentNotice",
+    "main": "\nreturn ({\n          gap: space.lg,\n          padding: space.xl,\n          borderRadius: radius.lg,\n          borderWidth: 1,\n          borderColor: color.rule,\n          backgroundColor: color.panel\n        })",
+    "now": "{ gap: space.lg, padding: space.xl, ...glassCard({ bordered: true }), borderRadius: cardCorner(radius.lg), borderWidth: 1 }"
+   }
+  ],
+  "mobile/src/components/IrPicker.js": [
+   {
+    "decl": "IrPicker",
+    "main": "\nreturn ({\n              minHeight: TAP,\n              paddingHorizontal: space.md,\n              borderRadius: radius.md,\n              borderWidth: 1,\n              borderColor: color.rule,\n              backgroundColor: color.panel,\n              color: color.silk,\n              fontSize: font.body\n            })",
+    "now": "{ minHeight: TAP, paddingHorizontal: space.md, borderWidth: 1, ...glassField(), color: color.silk, fontSize: font.body }"
+   }
+  ],
+  "mobile/src/components/Looper.js": [
+   {
+    "decl": "LooperPanel",
+    "main": "\nreturn ({\n        gap: space.sm,\n        padding: space.md,\n        borderRadius: radius.md,\n        borderWidth: 1,\n        borderColor: color.rule,\n        backgroundColor: color.panel\n      })",
+    "now": "{ gap: space.sm, padding: space.md, borderRadius: radius.card, borderWidth: 1, borderColor: color.glassRim, backgroundColor: color.glassFill, boxShadow: color.glassTop }"
+   }
+  ],
+  "mobile/src/components/Note.js": [
+   {
+    "decl": "Note",
+    "main": "const EDGE = 3;\nconst accent = tone === 'fault' ? color.fault : tone === 'warn' ? color.signal : color.rule;\nreturn ({\n        flexDirection: 'row',\n        alignItems: 'flex-start',\n        gap: space.sm,\n        borderLeftWidth: EDGE,\n        borderLeftColor: accent,\n        backgroundColor: color.panel,\n        borderRadius: radius.sm,\n        paddingVertical: space.md,\n        paddingHorizontal: space.md\n      })",
+    "now": "{ flexDirection: 'row', alignItems: 'flex-start', gap: space.sm, borderLeftWidth: EDGE, borderLeftColor: accent, backgroundColor: color.glassFill, borderRadius: classic() ? radius.sm : radius.md, boxShadow: color.glassFlat, paddingVertical: space.md, paddingHorizontal: space.md }"
+   }
+  ],
+  "mobile/src/components/PasswordBox.js": [
+   {
+    "decl": "PasswordBox",
+    "main": "\nreturn ({\n    minHeight: TAP,\n    backgroundColor: 'rgba(0,0,0,0.35)',\n    borderWidth: 1,\n    borderColor: bad ? color.fault : color.live,\n    borderRadius: radius.md,\n    paddingHorizontal: space.md,\n    color: color.silk,\n    fontSize: font.lead\n  })",
+    "now": "{ minHeight: TAP, backgroundColor: paneWell(), borderWidth: 1, borderColor: bad ? color.fault : color.live, borderRadius: radius.md, paddingHorizontal: space.md, color: color.silk, fontSize: font.lead }"
+   },
+   {
+    "decl": "PasswordBox",
+    "main": "const insets = useSafeAreaInsets();\nreturn ({\n            flex: 1,\n            alignItems: 'center',\n            /* High, so the keyboard cannot reach it. See components/TempoBox. */\n            paddingTop: Math.max(space.xxl, height * 0.1),\n            /* Its margin from the phone's own down each side, not under it (lib/screenShape clearSides). */\n            ...clearSides(insets, space.xl)\n          })",
+    "now": "{ flex: 1, alignItems: 'center', paddingTop: Math.max(space.xxl, height * 0.1), ...clearSides(insets, space.xl), backgroundColor: color.scrim }"
+   },
+   {
+    "decl": "PasswordBox",
+    "main": "\nreturn ({\n              width: '100%',\n              maxWidth: 420,\n              gap: space.md,\n              padding: space.lg,\n              borderRadius: radius.lg * 2,\n              borderWidth: 1,\n              borderColor: 'rgba(255,255,255,0.14)',\n              backgroundColor: 'rgba(255,255,255,0.04)'\n            })",
+    "now": "{ width: '100%', maxWidth: 420, gap: space.md, padding: space.lg, borderRadius: radius.lg * 2, borderWidth: 1, borderColor: paneRim(), backgroundColor: paneFill(), boxShadow: color.glassLift }"
+   }
+  ],
+  "mobile/src/components/PresetTag.js": [
+   {
+    "decl": "TagRow",
+    "main": "\nreturn ({\n        flexDirection: 'row',\n        alignItems: 'center',\n        gap: space.md,\n        minHeight: TAP,\n        paddingHorizontal: space.md,\n        borderRadius: radius.md,\n        borderWidth: 1,\n        borderColor: color.rule,\n        backgroundColor: pressed ? color.panelHi : color.panel,\n        ...tagEdge(fill)\n      })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: TAP, paddingHorizontal: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.glassRim, backgroundColor: pressed ? color.glassFillHi : color.glassFill, boxShadow: color.glassLift, ...tagEdge(fill) }"
+   },
+   {
+    "decl": "TagPreview",
+    "main": "\nreturn ({\n        flex: 1,\n        minHeight: TAP,\n        justifyContent: 'center',\n        paddingHorizontal: space.md,\n        borderRadius: radius.md,\n        borderWidth: 1,\n        borderColor: color.rule,\n        backgroundColor: color.panel,\n        ...tagEdge(fill)\n      })",
+    "now": "{ flex: 1, minHeight: TAP, justifyContent: 'center', paddingHorizontal: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.glassRim, backgroundColor: color.glassFill, boxShadow: color.glassTop, ...tagEdge(fill) }"
+   }
+  ],
+  "mobile/src/components/Press.js": [
+   {
+    "decl": "Press",
+    "main": "const BORDER = 1;\nconst accent = tone === 'signal' ? color.signal : tone === 'live' ? color.live : color.silk;\nconst background = on ? accent : color.panel;\nreturn ({\n          minHeight: height,\n          flexGrow: grow ? 1 : 0,\n          flexBasis: grow ? 0 : 'auto',\n          alignItems: 'center',\n          justifyContent: 'center',\n          paddingHorizontal: space.md,\n          paddingVertical: under !== undefined ? space.xs : space.sm,\n          borderRadius: radius.md,\n          borderWidth: BORDER,\n          borderColor: on ? accent : color.rule,\n          backgroundColor: background,\n          opacity: disabled ? 0.45 : pressed ? 0.7 : 1\n        })",
+    "now": "{ minHeight: height, flexGrow: grow ? 1 : 0, flexBasis: grow ? 0 : 'auto', alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.md, paddingVertical: under !== undefined ? space.xs : space.sm, borderRadius: corner, borderWidth: BORDER, borderColor: on ? accent : color.glassRim, backgroundColor: background, boxShadow: lift, experimental_backgroundImage: on ? color.glassSheen : undefined, opacity: disabled ? 0.45 : pressed ? 0.7 : 1 }"
+   }
+  ],
+  "mobile/src/components/RenamePreset.js": [
+   {
+    "decl": "NameField",
+    "main": "\nreturn ({\n            minHeight: TAP,\n            paddingHorizontal: space.md,\n            borderRadius: radius.md,\n            borderWidth: 1,\n            borderColor: color.rule,\n            backgroundColor: color.panel,\n            color: color.silk,\n            fontSize: font.body,\n            flex: 1\n          })",
+    "now": "{ minHeight: TAP, paddingHorizontal: space.md, borderWidth: 1, ...glassField(), color: color.silk, fontSize: font.body, flex: 1 }"
+   }
+  ],
+  "mobile/src/components/RowsPanel.js": [
+   {
+    "decl": "RowsPanel",
+    "main": "\nreturn ({ gap: space.sm, padding: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: color.signal, backgroundColor: color.signalWash })",
+    "now": "{ gap: space.sm, padding: space.md, borderRadius: radius.card, borderWidth: 1, borderColor: color.signal, backgroundColor: color.signalWash }"
+   }
+  ],
+  "mobile/src/components/Sheet.js": [
+   {
+    "decl": "Sheet",
+    "main": "\nreturn ({ flex: 1, justifyContent: 'flex-end' })",
+    "now": "{ flex: 1, justifyContent: 'flex-end', backgroundColor: color.scrim }"
+   },
+   {
+    "decl": "Sheet",
+    "main": "const frame = firstFrame(across, [seen, lastFrame]).width;\nconst linesWere = useRef(null);\nconst lines = playLines(pageRow(frame, space.lg), linesWere.current);\nconst capped = lines.opens;\nconst STATUS_AT_LEAST = 20;\nconst GLASS = 8;\nconst highest = tall ? Math.max(height * 0.8, height - Math.max(top, STATUS_AT_LEAST) - GLASS) : height * 0.8;\nconst FOOT_AT_LEAST = space.xxl;\nreturn ({\n              /* Its sides edged like its top, since it no longer meets the screen's;\n                 or, edge to edge, everything on it kept clear of the phone's own\n                 down its sides (lib/screenShape clearSides: the Duo's strip). A\n                 sheet capped in the middle of a wide screen is already clear. */\n              ...(capped ? { width: '100%', maxWidth: SHEET_MAX, alignSelf: 'center', borderLeftWidth: 1, borderRightWidth: 1 } : clearSides({ left, right })),\n              maxHeight: highest,\n              backgroundColor: color.chassis,\n              borderTopLeftRadius: radius.lg * 2,\n              borderTopRightRadius: radius.lg * 2,\n              borderTopWidth: 1,\n              borderColor: 'rgba(255,255,255,0.14)',\n              paddingBottom: Math.max(bottom, FOOT_AT_LEAST)\n            })",
+    "now": "{ ...(capped ? { width: '100%', maxWidth: SHEET_MAX, alignSelf: 'center', borderLeftWidth: 1, borderRightWidth: 1 } : clearSides({ left, right })), maxHeight: highest, backgroundColor: color.sheetFill, borderTopLeftRadius: radius.lg * 2, borderTopRightRadius: radius.lg * 2, borderTopWidth: 1, borderColor: paneRim(), boxShadow: color.sheetLift, paddingBottom: Math.max(bottom, FOOT_AT_LEAST) }"
+   },
+   {
+    "decl": "Sheet",
+    "main": "\nreturn ({ width: 44, height: 5, borderRadius: 3, backgroundColor: color.rule })",
+    "now": "{ width: 44, height: 5, borderRadius: 3, backgroundColor: color.grabber }"
+   },
+   {
+    "decl": "Sheet",
+    "main": "\nreturn ({\n                flexDirection: 'row',\n                alignItems: 'center',\n                justifyContent: 'space-between',\n                gap: space.md,\n                paddingHorizontal: space.lg,\n                paddingVertical: space.md,\n                borderBottomWidth: 1,\n                borderBottomColor: color.rule\n              })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: color.glassRim }"
+   },
+   {
+    "decl": "Sheet",
+    "main": "\nreturn ({\n                  width: 44,\n                  height: 44,\n                  borderRadius: 22,\n                  alignItems: 'center',\n                  justifyContent: 'center',\n                  backgroundColor: pressed ? color.panelHi : color.panel\n                })",
+    "now": "{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? color.glassFillHi : color.glassFill, boxShadow: color.glassLiftRing }"
+   }
+  ],
+  "mobile/src/components/Shots.js": [
+   {
+    "decl": "Shots",
+    "main": "\nreturn ({\n                  ...thumbSize(shot.width, shot.height, 64),\n                  borderRadius: radius.sm,\n                  borderWidth: 1,\n                  borderColor: color.rule,\n                  backgroundColor: color.panel\n                })",
+    "now": "{ ...thumbSize(shot.width, shot.height, 64), borderRadius: radius.sm, borderWidth: 1, borderColor: color.glassRim, backgroundColor: color.panel }"
+   }
+  ],
+  "mobile/src/components/SongPicker.js": [
+   {
+    "decl": "SongPicker",
+    "main": "\nreturn ({\n              minHeight: TAP,\n              paddingHorizontal: space.md,\n              borderRadius: radius.md,\n              borderWidth: 1,\n              borderColor: color.rule,\n              backgroundColor: color.panel,\n              color: color.silk,\n              fontSize: font.body\n            })",
+    "now": "{ minHeight: TAP, paddingHorizontal: space.md, borderWidth: 1, ...glassField(), color: color.silk, fontSize: font.body }"
+   },
+   {
+    "decl": "SongPicker",
+    "main": "\nreturn ({ padding: space.lg, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: color.rule })",
+    "now": "{ padding: space.lg, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: color.glassRim }"
+   },
+   {
+    "decl": "Row",
+    "main": "const ROW = TAP;\nconst GAP = 8;\nconst on = order > 0;\nreturn ({\n        flexDirection: 'row',\n        alignItems: 'center',\n        gap: space.md,\n        height: ROW,\n        marginBottom: GAP,\n        paddingHorizontal: space.md,\n        borderRadius: radius.md,\n        borderWidth: 1,\n        borderColor: on ? color.signal : color.rule,\n        backgroundColor: color.panel,\n        opacity: inList ? 0.5 : pressed ? 0.7 : 1\n      })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.md, height: ROW, marginBottom: GAP, paddingHorizontal: space.md, borderRadius: radius.card, borderWidth: 1, borderColor: on ? color.signal : color.glassRim, backgroundColor: color.glassFill, boxShadow: color.glassTop, opacity: inList ? 0.5 : pressed ? 0.7 : 1 }"
+   }
+  ],
+  "mobile/src/components/SongSetup.js": [
+   {
+    "decl": "SongSetup",
+    "main": "\nreturn ({\n        minHeight: TAP,\n        minWidth: TAP,\n        paddingHorizontal: space.sm,\n        borderRadius: radius.sm,\n        borderWidth: 1,\n        borderColor: on ? color.signal : color.rule,\n        backgroundColor: on ? color.signalWash : color.panel,\n        alignItems: 'center',\n        justifyContent: 'center',\n        opacity: pressed ? 0.7 : 1\n      })",
+    "now": "{ minHeight: TAP, minWidth: TAP, paddingHorizontal: space.sm, borderRadius: classic() ? radius.sm : capsule(TAP), borderWidth: 1, borderColor: on ? color.signal : color.glassRim, backgroundColor: on ? color.signalWash : pressed && !classic() ? color.glassFillHi : color.glassFill, boxShadow: color.glassTop, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.7 : 1 }"
+   },
+   {
+    "decl": "SongSetup",
+    "main": "\nreturn ({ gap: space.sm, paddingVertical: space.sm, borderTopWidth: 1, borderTopColor: color.rule })",
+    "now": "{ gap: space.sm, paddingVertical: space.sm, borderTopWidth: 1, borderTopColor: color.glassRim }"
+   },
+   {
+    "decl": "SongSetup",
+    "main": "\nreturn ({\n                  flex: 1,\n                  minHeight: TAP,\n                  paddingHorizontal: space.md,\n                  borderRadius: radius.sm,\n                  borderWidth: 1,\n                  borderColor: color.rule,\n                  color: color.silk,\n                  fontSize: font.body\n                })",
+    "now": "{ flex: 1, minHeight: TAP, paddingHorizontal: space.md, borderWidth: 1, ...glassField(), ...(classic() ? { borderRadius: radius.sm, backgroundColor: undefined } : null), color: color.silk, fontSize: font.body }"
+   }
+  ],
+  "mobile/src/components/TempoBox.js": [
+   {
+    "decl": "TempoBox",
+    "main": "const insets = useSafeAreaInsets();\nconst tight = height <= 640;\nreturn ({\n            flex: 1,\n            alignItems: 'center',\n            /* Its margin from the phone's own down each side, not under it (lib/screenShape clearSides). */\n            ...clearSides(insets, tight ? space.lg : space.xl)\n          })",
+    "now": "{ flex: 1, alignItems: 'center', ...clearSides(insets, tight ? space.lg : space.xl), backgroundColor: color.scrim }"
+   },
+   {
+    "decl": "TempoBox",
+    "main": "const tight = height <= 640;\nreturn ({\n                width: '100%',\n                maxWidth: 420,\n                flexShrink: 0,\n                gap: tight ? space.sm : space.md,\n                padding: tight ? space.md : space.lg,\n                borderRadius: radius.lg * 2,\n                borderWidth: 1,\n                borderColor: 'rgba(255,255,255,0.14)',\n                backgroundColor: 'rgba(255,255,255,0.04)'\n              })",
+    "now": "{ width: '100%', maxWidth: 420, flexShrink: 0, gap: tight ? space.sm : space.md, padding: tight ? space.md : space.lg, borderRadius: radius.lg * 2, borderWidth: 1, borderColor: paneRim(), backgroundColor: paneFill(), boxShadow: color.glassLift }"
+   },
+   {
+    "decl": "TempoBox",
+    "main": "const tight = height <= 640;\nconst face = Platform.select(mono);\nreturn ({\n                  minHeight: tight ? TAP + 8 : TAP + 24,\n                  backgroundColor: 'rgba(0,0,0,0.35)',\n                  borderWidth: 1,\n                  borderColor: error ? color.fault : color.live,\n                  borderRadius: radius.md,\n                  paddingHorizontal: space.md,\n                  color: color.silk,\n                  fontSize: font.display,\n                  fontFamily: face,\n                  textAlign: 'center'\n                })",
+    "now": "{ minHeight: tight ? TAP + 8 : TAP + 24, backgroundColor: paneWell(), borderWidth: 1, borderColor: error ? color.fault : color.live, borderRadius: radius.md, paddingHorizontal: space.md, color: color.silk, fontSize: font.display, fontFamily: face, textAlign: 'center' }"
+   },
+   {
+    "decl": "TempoBox",
+    "main": "const tight = height <= 640;\nreturn ({ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)', paddingTop: tight ? space.sm : space.md })",
+    "now": "{ borderTopWidth: 1, borderTopColor: paneRule(), paddingTop: tight ? space.sm : space.md }"
+   }
+  ],
+  "mobile/src/components/Toast.js": [
+   {
+    "decl": "Toast",
+    "main": "\nreturn ({\n        position: 'absolute',\n        top: space.sm,\n        left: space.lg,\n        right: space.lg,\n        zIndex: 2,\n        gap: space.xs,\n        borderRadius: radius.md,\n        backgroundColor: color.chassis,\n        shadowColor: '#000',\n        shadowOpacity: 0.35,\n        shadowRadius: 8,\n        shadowOffset: { width: 0, height: 2 },\n        /* Above a tile's own 3, so the card is never drawn under a scene. */\n        elevation: 6\n      })",
+    "now": "{ position: 'absolute', top: space.sm, left: space.lg, right: space.lg, zIndex: 2, boxShadow: color.glassTop, gap: space.xs, borderRadius: radius.md, backgroundColor: color.chassis, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 6 }"
+   }
+  ],
+  "mobile/src/components/TopBar.js": [
+   {
+    "decl": "TopBar",
+    "main": "\nreturn ({\n        flexDirection: 'row',\n        alignItems: 'center',\n        gap: space.md,\n        paddingHorizontal: space.lg,\n        paddingVertical: space.sm,\n        borderBottomWidth: 1,\n        borderBottomColor: color.rule,\n        /* Translucent, or the blur has nothing to do: a solid panel in front\n           of it hides the very thing it is blurring. */\n        backgroundColor: at(color.panel, 0.55),\n        /*\n         * ABOVE THE SCREEN UNDER IT. The bar's notes (Saved, a volume that\n         * would not take, a save running late) hang below it, over the top of\n         * the screen, by design. Drawn before that screen, they were drawn\n         * UNDER it: \"The app can't save…\" came out with PRESET 004 B1 OF 104\n         * printed through the middle of it. So the whole bar is lifted, notes\n         * and all, over the screens drawn after it — and only over those: the\n         * metronome's flash, which is over everything, sits higher still\n         * (MetronomeBeat's zIndex), and a sheet is a Modal of its own.\n         */\n        zIndex: 3\n      })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: color.glassRim, backgroundColor: classic() ? at(color.panel, 0.55) : color.glassBar, zIndex: 3 }"
+   },
+   {
+    "decl": "TopBar",
+    "main": "\nreturn ({\n          flexShrink: 1,\n          minWidth: 0,\n          alignItems: 'center',\n          /* space.sm, not md: in the demo on a 360-wide phone the unit's name was what paid for the wider edge. */\n          paddingHorizontal: space.sm,\n          paddingVertical: 3,\n          borderRadius: radius.lg,\n          borderWidth: 1,\n          borderColor: color.rule,\n          /*\n           * The panel's own colour, which is lighter than the bar in Light\n           * mode and darker in Dark: the text on it reads at 4.5:1 or better\n           * in both (panelHi under it took Connecting and Demo below that in\n           * Light). The border is what draws the pill.\n           */\n          backgroundColor: pressed ? color.panelHi : at(color.panel, 0.6)\n        })",
+    "now": "{ flexShrink: 1, minWidth: 0, alignItems: 'center', paddingHorizontal: space.sm, paddingVertical: 3, borderRadius: classic() ? radius.lg : radius.pill, borderWidth: 1, borderColor: color.glassRim, backgroundColor: pressed ? color.panelHi : at(color.panel, 0.6), boxShadow: color.glassLift }"
+   },
+   {
+    "decl": "TopBar",
+    "main": "\nreturn ({\n            paddingHorizontal: space.md,\n            paddingVertical: 4,\n            borderRadius: radius.pill,\n            backgroundColor: pressed ? color.signalWash : color.signal\n          })",
+    "now": "{ paddingHorizontal: space.md, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: pressed ? color.signalWash : color.signal, boxShadow: color.glassLit, experimental_backgroundImage: color.glassSheen }"
+   },
+   {
+    "decl": "TopBar",
+    "main": "\nreturn ({\n            alignItems: 'center',\n            paddingHorizontal: space.md,\n            paddingVertical: 4,\n            borderRadius: radius.lg,\n            backgroundColor: pressed ? color.signalWash : color.signal\n          })",
+    "now": "{ alignItems: 'center', paddingHorizontal: space.md, paddingVertical: 4, borderRadius: radius.lg, backgroundColor: pressed ? color.signalWash : color.signal, boxShadow: color.glassLit, experimental_backgroundImage: color.glassSheen }"
+   },
+   {
+    "decl": "TopBar",
+    "main": "const saveTo = useSaveToSlot();\nreturn ({\n            paddingHorizontal: space.md,\n            paddingVertical: 4,\n            borderRadius: radius.pill,\n            backgroundColor: pressed ? color.signalWash : color.signal,\n            opacity: saveTo.saving ? 0.6 : 1\n          })",
+    "now": "{ paddingHorizontal: space.md, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: pressed ? color.signalWash : color.signal, boxShadow: color.glassLit, experimental_backgroundImage: color.glassSheen, opacity: saveTo.saving ? 0.6 : 1 }"
+   },
+   {
+    "decl": "TopBar",
+    "main": null,
+    "now": "__GlassDisc({ size: 30 })"
+   },
+   {
+    "decl": "TopBar",
+    "main": null,
+    "now": "__GlassDisc({ size: 30 })"
+   },
+   {
+    "decl": "Which",
+    "main": "\nreturn ({\n    alignSelf: 'flex-start',\n    minHeight: 44,\n    justifyContent: 'center',\n    paddingHorizontal: space.lg,\n    borderRadius: radius.md,\n    borderWidth: 1,\n    borderColor: color.rule,\n    backgroundColor: pressed ? color.panel : color.chassis\n  })",
+    "now": "{ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: space.lg, borderRadius: classic() ? radius.md : radius.pill, borderWidth: 1, borderColor: color.glassRim, backgroundColor: classic() ? (pressed ? color.panel : color.chassis) : pressed ? color.glassFillHi : color.glassFill, boxShadow: color.glassLift }"
+   },
+   {
+    "decl": "Which",
+    "main": "\nreturn ({\n        position: 'absolute',\n        left: 0,\n        right: 0,\n        top: '100%',\n        zIndex: 3,\n        gap: space.md,\n        padding: space.lg,\n        borderBottomWidth: 1,\n        borderBottomColor: color.rule,\n        backgroundColor: color.panelHi\n      })",
+    "now": "{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 3, gap: space.md, padding: space.lg, borderBottomWidth: 1, borderBottomColor: color.rule, backgroundColor: color.panelHi, boxShadow: color.glassLift }"
+   },
+   {
+    "decl": "Saved",
+    "main": "\nreturn ({\n        position: 'absolute',\n        left: space.lg,\n        right: space.lg,\n        top: '100%',\n        zIndex: 2,\n        borderLeftWidth: 3,\n        borderLeftColor: said.tone === 'warn' ? color.fault : color.ok,\n        backgroundColor: color.panelHi,\n        paddingVertical: space.sm,\n        paddingHorizontal: space.md\n      })",
+    "now": "{ position: 'absolute', left: space.lg, right: space.lg, top: '100%', zIndex: 2, borderLeftWidth: 3, borderLeftColor: said.tone === 'warn' ? color.fault : color.ok, backgroundColor: color.panelHi, boxShadow: color.glassLift, paddingVertical: space.sm, paddingHorizontal: space.md }"
+   },
+   {
+    "decl": "Late",
+    "main": "\nreturn ({\n        position: 'absolute',\n        left: space.lg,\n        right: space.lg,\n        top: '100%',\n        zIndex: 2,\n        flexDirection: 'row',\n        alignItems: 'center',\n        gap: space.md,\n        borderLeftWidth: 3,\n        borderLeftColor: color.ok,\n        backgroundColor: color.panelHi,\n        paddingVertical: space.sm,\n        paddingHorizontal: space.md\n      })",
+    "now": "{ position: 'absolute', left: space.lg, right: space.lg, top: '100%', zIndex: 2, flexDirection: 'row', alignItems: 'center', gap: space.md, borderLeftWidth: 3, borderLeftColor: color.ok, backgroundColor: color.panelHi, boxShadow: color.glassLift, paddingVertical: space.sm, paddingHorizontal: space.md }"
+   },
+   {
+    "decl": "Late",
+    "main": "\nreturn ({\n          minHeight: 36,\n          justifyContent: 'center',\n          paddingHorizontal: space.md,\n          borderRadius: radius.md,\n          borderWidth: 1,\n          borderColor: color.rule,\n          backgroundColor: pressed ? color.panel : color.chassis\n        })",
+    "now": "{ minHeight: 36, justifyContent: 'center', paddingHorizontal: space.md, borderRadius: classic() ? radius.md : radius.pill, borderWidth: 1, borderColor: color.glassRim, backgroundColor: classic() ? (pressed ? color.panel : color.chassis) : pressed ? color.glassFillHi : color.glassFill, boxShadow: color.glassLift }"
+   },
+   {
+    "decl": "Reported",
+    "main": "\nreturn ({\n        position: 'absolute',\n        left: space.lg,\n        right: space.lg,\n        top: '100%',\n        zIndex: 2,\n        borderLeftWidth: 3,\n        borderLeftColor: color.fault,\n        backgroundColor: color.panelHi,\n        paddingVertical: space.sm,\n        paddingHorizontal: space.md\n      })",
+    "now": "{ position: 'absolute', left: space.lg, right: space.lg, top: '100%', zIndex: 2, borderLeftWidth: 3, borderLeftColor: color.fault, backgroundColor: color.panelHi, boxShadow: color.glassLift, paddingVertical: space.sm, paddingHorizontal: space.md }"
+   }
+  ],
+  "mobile/src/components/Tuner.js": [
+   {
+    "decl": "Tuner",
+    "main": "const insets = useSafeAreaInsets();\nconst sides = clearSides(insets, space.xl);\nconst dial = Math.min(width - sides.paddingLeft - sides.paddingRight, 420);\nreturn ({\n              width: dial,\n              alignItems: 'center',\n              gap: space.lg,\n              paddingVertical: space.xl,\n              paddingHorizontal: space.lg,\n              borderRadius: radius.lg * 2,\n              /* A hairline of light along the edge, which is what makes a pane\n                 of glass read as a pane rather than as a stain. */\n              borderWidth: 1,\n              borderColor: 'rgba(255,255,255,0.14)',\n              backgroundColor: color.panel,\n              overflow: 'hidden'\n            })",
+    "now": "{ width: dial, alignItems: 'center', gap: space.lg, paddingVertical: space.xl, paddingHorizontal: space.lg, borderRadius: radius.lg * 2, borderWidth: 1, borderColor: paneRim(), boxShadow: color.glassLift, backgroundColor: color.panel, overflow: 'hidden' }"
+   }
+  ],
+  "mobile/src/components/UnlockOffer.js": [
+   {
+    "decl": "UnlockOffer",
+    "main": "\nreturn ({\n        flexDirection: 'row',\n        alignItems: 'center',\n        gap: space.md,\n        padding: space.md,\n        borderRadius: radius.md,\n        borderWidth: 1,\n        borderColor: color.signal,\n        backgroundColor: color.signalWash\n      })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.card, borderWidth: 1, borderColor: color.signal, backgroundColor: color.signalWash, boxShadow: color.glassLift }"
+   },
+   {
+    "decl": "UnlockOffer",
+    "main": "\nreturn ({\n          paddingHorizontal: space.md,\n          paddingVertical: space.sm,\n          borderRadius: radius.pill,\n          backgroundColor: pressed ? color.silkFaint : color.signal\n        })",
+    "now": "{ paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.pill, backgroundColor: pressed ? color.silkFaint : color.signal, boxShadow: color.glassLit, experimental_backgroundImage: color.glassSheen }"
+   }
+  ],
+  "mobile/src/components/Volume.js": [
+   {
+    "decl": "Volume",
+    "main": "const insets = useSafeAreaInsets();\nconst sides = clearSides(insets, space.xl);\nconst panel = Math.min(width0 - sides.paddingLeft - sides.paddingRight, 460);\nreturn ({\n              width: panel,\n              gap: space.lg,\n              paddingVertical: space.xl,\n              paddingHorizontal: space.lg,\n              borderRadius: radius.lg * 2,\n              borderWidth: 1,\n              borderColor: 'rgba(255,255,255,0.14)',\n              backgroundColor: color.panel\n            })",
+    "now": "{ width: panel, gap: space.lg, paddingVertical: space.xl, paddingHorizontal: space.lg, borderRadius: radius.lg * 2, borderWidth: 1, borderColor: paneRim(), boxShadow: color.glassLift, backgroundColor: color.panel }"
+   }
+  ],
+  "mobile/src/components/Vp4Setup.js": [
+   {
+    "decl": "Vp4Setup",
+    "main": "\nreturn ({\n    minHeight: TAP,\n    paddingHorizontal: space.md,\n    borderRadius: radius.md,\n    borderWidth: 1,\n    borderColor: color.rule,\n    backgroundColor: color.panel,\n    color: color.silk,\n    fontSize: font.body\n  })",
+    "now": "{ minHeight: TAP, paddingHorizontal: space.md, borderWidth: 1, ...glassField(), color: color.silk, fontSize: font.body }"
+   }
+  ],
+  "mobile/src/components/Walk.js": [
+   {
+    "decl": "TipCard",
+    "main": "\nreturn ({\n        flexDirection: 'row',\n        alignItems: 'center',\n        gap: space.lg,\n        padding: space.lg,\n        borderRadius: radius.lg,\n        borderWidth: 1,\n        borderColor: color.rule,\n        backgroundColor: pressed ? color.panelHi : color.panel\n      })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.lg, padding: space.lg, borderWidth: 1, ...glassCard({ bordered: true, pressed, classicCorner: radius.lg }) }"
+   },
+   {
+    "decl": "ChainWire",
+    "main": "const ink = lit ? color.signal : color.rule;\nreturn ({ width: 2, height: 10, backgroundColor: ink })",
+    "now": "{ width: 2, height: 10, backgroundColor: ink }"
+   },
+   {
+    "decl": "ChainWire",
+    "main": "const ink = lit ? color.signal : color.rule;\nreturn ({\n          paddingHorizontal: space.md,\n          paddingVertical: 3,\n          borderRadius: radius.pill,\n          borderWidth: 1,\n          borderColor: ink,\n          backgroundColor: color.chassis\n        })",
+    "now": "{ paddingHorizontal: space.md, paddingVertical: 3, borderRadius: radius.pill, borderWidth: 1, borderColor: ink, backgroundColor: color.chassis }"
+   },
+   {
+    "decl": "ChainWire",
+    "main": "const ink = lit ? color.signal : color.rule;\nreturn ({ width: 2, height: 10, backgroundColor: ink })",
+    "now": "{ width: 2, height: 10, backgroundColor: ink }"
+   }
+  ],
+  "mobile/src/screens/Bluetooth.js": [
+   {
+    "decl": "BluetoothTried",
+    "main": "\nreturn ({ gap: 2, padding: space.sm, borderRadius: radius.sm, backgroundColor: color.panel })",
+    "now": "{ gap: 2, padding: space.sm, borderRadius: classic() ? radius.sm : radius.md, backgroundColor: color.glassFill, boxShadow: color.glassFlat }"
+   },
+   {
+    "decl": "Row",
+    "main": "\nreturn ({ gap: 2, padding: space.sm, borderRadius: radius.sm, backgroundColor: color.panel })",
+    "now": "{ gap: 2, padding: space.sm, borderRadius: classic() ? radius.sm : radius.md, backgroundColor: color.glassFill, boxShadow: color.glassFlat }"
+   }
+  ],
+  "mobile/src/screens/Connect.js": [
+   {
+    "decl": "Connect",
+    "main": "\nreturn ({\n          alignSelf: 'flex-start',\n          flexDirection: 'row',\n          alignItems: 'center',\n          gap: space.sm,\n          paddingHorizontal: space.md,\n          paddingVertical: space.sm,\n          borderRadius: radius.pill,\n          borderWidth: 1,\n          borderColor: color.ok,\n          backgroundColor: color.panel\n        })",
+    "now": "{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: color.ok, backgroundColor: color.glassFill, boxShadow: color.glassLift }"
+   },
+   {
+    "decl": "Connect",
+    "main": "\nreturn ({\n          padding: space.lg,\n          gap: space.lg,\n          borderRadius: radius.lg,\n          borderWidth: 1,\n          borderColor: color.rule,\n          backgroundColor: color.panel\n        })",
+    "now": "{ padding: space.lg, gap: space.lg, borderWidth: 1, ...glassCard({ bordered: true, classicCorner: radius.lg }) }"
+   },
+   {
+    "decl": "Connect",
+    "main": "\nreturn ({ flex: 1, height: 1, backgroundColor: color.rule })",
+    "now": "{ flex: 1, height: 1, backgroundColor: color.glassRim }"
+   },
+   {
+    "decl": "Connect",
+    "main": "\nreturn ({ flex: 1, height: 1, backgroundColor: color.rule })",
+    "now": "{ flex: 1, height: 1, backgroundColor: color.glassRim }"
+   },
+   {
+    "decl": "Connect",
+    "main": "\nreturn ({\n          flexDirection: 'row',\n          alignItems: 'center',\n          minHeight: TAP + 8,\n          borderRadius: radius.md,\n          borderWidth: 1,\n          borderColor: color.rule,\n          backgroundColor: color.panel\n        })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', minHeight: TAP + 8, borderWidth: 1, ...glassField() }"
+   },
+   {
+    "decl": "Connect",
+    "main": "\nreturn ({ width: 1, alignSelf: 'stretch', marginVertical: space.sm, backgroundColor: color.rule })",
+    "now": "{ width: 1, alignSelf: 'stretch', marginVertical: space.sm, backgroundColor: color.glassRim }"
+   }
+  ],
+  "mobile/src/screens/Edit.js": [
+   {
+    "decl": "BlockPanel",
+    "main": "\nreturn ({\n                  minHeight: TAP,\n                  paddingHorizontal: space.md,\n                  borderRadius: radius.md,\n                  borderWidth: 1,\n                  borderColor: color.rule,\n                  backgroundColor: color.panel,\n                  color: color.silk,\n                  fontSize: font.body\n                })",
+    "now": "{ minHeight: TAP, paddingHorizontal: space.md, borderWidth: 1, ...glassField(), color: color.silk, fontSize: font.body }"
+   },
+   {
+    "decl": "ChainEditor",
+    "main": "\nreturn ({\n              minHeight: TAP,\n              paddingHorizontal: space.md,\n              borderRadius: radius.md,\n              borderWidth: 1,\n              borderColor: color.rule,\n              backgroundColor: color.panel,\n              color: color.silk,\n              fontSize: font.body\n            })",
+    "now": "{ minHeight: TAP, paddingHorizontal: space.md, borderWidth: 1, ...glassField(), color: color.silk, fontSize: font.body }"
+   },
+   {
+    "decl": "BlockCard",
+    "main": "\nreturn ({ gap: space.sm })",
+    "now": "{ gap: space.sm, backgroundColor: classic() ? undefined : color.chassis }"
+   },
+   {
+    "decl": "FindControl",
+    "main": "\nreturn ({\n          minHeight: TAP,\n          paddingHorizontal: space.md,\n          borderRadius: radius.md,\n          borderWidth: 1,\n          borderColor: color.rule,\n          backgroundColor: color.panel,\n          color: color.silk,\n          fontSize: font.body\n        })",
+    "now": "{ minHeight: TAP, paddingHorizontal: space.md, borderWidth: 1, ...glassField(), color: color.silk, fontSize: font.body }"
+   },
+   {
+    "decl": "ValueBox",
+    "main": "const face = Platform.select(mono);\nreturn ({\n        width: '100%',\n        minHeight: 32,\n        textAlign: 'center',\n        borderRadius: radius.sm,\n        borderWidth: 1,\n        borderColor: color.rule,\n        backgroundColor: color.panel,\n        color: color.silk,\n        fontSize: font.micro,\n        fontFamily: face,\n        paddingHorizontal: 2,\n        paddingVertical: 2\n      })",
+    "now": "{ width: '100%', minHeight: 32, textAlign: 'center', borderRadius: classic() ? radius.sm : radius.md, borderWidth: 1, borderColor: color.glassRim, backgroundColor: color.glassFill, color: color.silk, fontSize: font.micro, fontFamily: face, paddingHorizontal: 2, paddingVertical: 2 }"
+   }
+  ],
+  "mobile/src/screens/Fixes.js": [
+   {
+    "decl": "Fixes",
+    "main": "\nreturn ({\n                  gap: space.md,\n                  padding: space.md,\n                  borderWidth: 1,\n                  borderColor: color.rule,\n                  borderRadius: radius.md,\n                  backgroundColor: color.panel\n                })",
+    "now": "{ gap: space.md, padding: space.md, borderWidth: 1, borderColor: color.glassRim, borderRadius: radius.card, backgroundColor: color.glassFill, boxShadow: color.glassLift }"
+   }
+  ],
+  "mobile/src/screens/Gear.js": [
+   {
+    "decl": "Gear",
+    "main": "\nreturn ({\n            minHeight: TAP,\n            paddingHorizontal: space.md,\n            borderRadius: radius.md,\n            borderWidth: 1,\n            borderColor: color.rule,\n            backgroundColor: color.panel,\n            color: color.silk,\n            fontSize: font.body\n          })",
+    "now": "{ minHeight: TAP, paddingHorizontal: space.md, borderWidth: 1, ...glassField(), color: color.silk, fontSize: font.body }"
+   },
+   {
+    "decl": "Gear",
+    "main": "\nreturn ({\n              paddingVertical: space.sm,\n              paddingHorizontal: space.md,\n              borderRadius: radius.md,\n              borderWidth: 1,\n              borderColor: color.rule,\n              backgroundColor: pressed ? color.panelHi : color.panel\n            })",
+    "now": "{ paddingVertical: space.sm, paddingHorizontal: space.md, borderWidth: 1, ...glassCard({ bordered: true, flat: true, pressed }) }"
+   }
+  ],
+  "mobile/src/screens/Log.js": [
+   {
+    "decl": "Line",
+    "main": "const face = Platform.select(mono);\nreturn ({\n        color: hot ? color.fault : color.silkDim,\n        fontSize: font.micro,\n        fontFamily: face,\n        lineHeight: 16,\n        paddingVertical: 2,\n        paddingHorizontal: space.sm,\n        borderRadius: radius.sm,\n        backgroundColor: color.panel\n      })",
+    "now": "{ color: hot ? color.fault : color.silkDim, fontSize: font.micro, fontFamily: face, lineHeight: 16, paddingVertical: 2, paddingHorizontal: space.sm, borderRadius: radius.sm, backgroundColor: color.glassFill }"
+   },
+   {
+    "decl": "Log",
+    "main": "\nreturn ({\n                color: color.silk,\n                fontSize: font.body,\n                backgroundColor: color.panel,\n                borderWidth: 1,\n                borderColor: color.rule,\n                borderRadius: radius.md,\n                padding: space.md,\n                minHeight: 64,\n                lineHeight: 22\n              })",
+    "now": "{ color: color.silk, fontSize: font.body, borderWidth: 1, ...glassField(), padding: space.md, minHeight: 64, lineHeight: 22 }"
+   }
+  ],
+  "mobile/src/screens/Onboarding.js": [
+   {
+    "decl": "Onboarding",
+    "main": "\nreturn ({\n              alignItems: 'center',\n              padding: space.sm,\n              borderRadius: radius.lg * 1.4,\n              borderWidth: 1,\n              borderColor: color.rule,\n              /* The theme's own panel: the drawing is on clear, so it sits\n                 on whichever theme is up, where the photograph needed its\n                 own off-white. */\n              backgroundColor: color.panel\n            })",
+    "now": "{ alignItems: 'center', padding: space.sm, ...glassCard({ bordered: true }), borderRadius: radius.lg * 1.4, borderWidth: 1 }"
+   },
+   {
+    "decl": "Onboarding",
+    "main": "\nreturn ({\n                    width: '100%',\n                    aspectRatio: 1,\n                    borderRadius: radius.md,\n                    backgroundColor: tint(color.signal, 0.1),\n                    alignItems: 'center',\n                    justifyContent: 'center'\n                  })",
+    "now": "{ width: '100%', aspectRatio: 1, borderRadius: radius.card, backgroundColor: tint(color.signal, 0.1), boxShadow: color.glassLiftRing, alignItems: 'center', justifyContent: 'center' }"
+   },
+   {
+    "decl": "Cta",
+    "main": "\nreturn ({\n      flexDirection: 'row',\n      alignItems: 'center',\n      justifyContent: 'space-between',\n      minHeight: TAP + 16,\n      paddingHorizontal: space.xl,\n      borderRadius: radius.lg,\n      backgroundColor: color.signal,\n      opacity: disabled ? 0.45 : pressed ? 0.8 : 1,\n      shadowColor: color.signal,\n      shadowOpacity: 0.35,\n      shadowRadius: 16,\n      shadowOffset: { width: 0, height: 4 },\n      elevation: 6\n    })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: TAP + 16, paddingHorizontal: space.xl, borderRadius: radius.lg, backgroundColor: color.signal, opacity: disabled ? 0.45 : pressed ? 0.8 : 1, shadowColor: color.signal, shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 6, boxShadow: color.glassLitTop, experimental_backgroundImage: color.glassSheen }"
+   },
+   {
+    "decl": "UnitTile",
+    "main": "\nreturn ({\n      width: '47%',\n      flexGrow: 1,\n      minHeight: TAP + 16,\n      alignItems: 'center',\n      justifyContent: 'center',\n      borderRadius: radius.lg,\n      borderWidth: on ? 2 : 1,\n      borderColor: on ? color.signal : color.rule,\n      backgroundColor: on ? tint(color.signal, 0.14) : pressed ? color.panelHi : color.panel\n    })",
+    "now": "{ width: '47%', flexGrow: 1, minHeight: TAP + 16, alignItems: 'center', justifyContent: 'center', ...glassCard({ bordered: true, pressed, classicCorner: radius.lg }), borderWidth: on ? 2 : 1, ...(on ? { borderColor: color.signal, backgroundColor: tint(color.signal, 0.14) } : null) }"
+   },
+   {
+    "decl": "Choice",
+    "main": "\nreturn ({\n      gap: space.sm,\n      padding: space.lg,\n      borderRadius: radius.lg,\n      borderWidth: 1,\n      borderColor: lit ? color.signal : color.rule,\n      backgroundColor: lit ? color.signalWash : color.panel\n    })",
+    "now": "{ gap: space.sm, padding: space.lg, ...glassCard({ bordered: true, classicCorner: radius.lg }), borderWidth: 1, ...(lit ? { borderColor: color.signal, backgroundColor: color.signalWash } : null) }"
+   },
+   {
+    "decl": "ChainBox",
+    "main": "\nreturn ({\n      flexDirection: 'row',\n      alignItems: 'center',\n      gap: space.md,\n      padding: tight ? space.md : space.lg,\n      borderRadius: radius.lg,\n      borderWidth: 1,\n      borderColor: color.rule,\n      backgroundColor: color.panel\n    })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: tight ? space.md : space.lg, ...glassCard({ bordered: true, classicCorner: radius.lg }), borderWidth: 1 }"
+   },
+   {
+    "decl": "Field",
+    "main": "const face = Platform.select(mono);\nreturn ({\n        color: color.silk,\n        fontSize: font.body,\n        fontFamily: isMono ? face : undefined,\n        letterSpacing: isMono ? 2 : undefined,\n        padding: space.md,\n        minHeight: TAP,\n        borderRadius: radius.md,\n        borderWidth: 1,\n        borderColor: color.rule,\n        backgroundColor: color.panel\n      })",
+    "now": "{ color: color.silk, fontSize: font.body, fontFamily: isMono ? face : undefined, letterSpacing: isMono ? 2 : undefined, padding: space.md, minHeight: TAP, borderWidth: 1, ...glassField() }"
+   }
+  ],
+  "mobile/src/screens/Paywall.js": [
+   {
+    "decl": "Paywall",
+    "main": "\nreturn ({\n          backgroundColor: color.panel,\n          borderRadius: radius.lg,\n          padding: space.lg,\n          gap: space.md\n        })",
+    "now": "{ ...glassCard({ flat: asked, classicCorner: radius.lg }), padding: space.lg, gap: space.md }"
+   }
+  ],
+  "mobile/src/screens/Presets.js": [
+   {
+    "decl": "Presets",
+    "main": "\nreturn ({\n              minHeight: TAP,\n              paddingHorizontal: space.md,\n              borderRadius: radius.md,\n              borderWidth: 1,\n              borderColor: color.rule,\n              backgroundColor: color.panel,\n              color: color.silk,\n              fontSize: font.body\n            })",
+    "now": "{ minHeight: TAP, paddingHorizontal: space.md, borderWidth: 1, ...glassField(), color: color.silk, fontSize: font.body }"
+   },
+   {
+    "decl": "Presets",
+    "main": null,
+    "now": "{ boxShadow: color.glassTop }"
+   },
+   {
+    "decl": "Star",
+    "main": "\nreturn ({\n        width: TAP,\n        minHeight: TAP,\n        alignItems: 'center',\n        justifyContent: 'center',\n        borderRadius: radius.md,\n        borderWidth: 1,\n        borderColor: on ? color.signal : color.rule,\n        backgroundColor: color.panel,\n        opacity: pressed ? 0.7 : 1\n      })",
+    "now": "{ width: TAP, minHeight: TAP, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: on ? color.signal : color.glassRim, backgroundColor: color.glassFill, boxShadow: color.glassTop, opacity: pressed ? 0.7 : 1 }"
+   }
+  ],
+  "mobile/src/screens/Report.js": [
+   {
+    "decl": "Report",
+    "main": "\nreturn ({\n    color: color.silk,\n    fontSize: font.body,\n    backgroundColor: color.panel,\n    borderWidth: 1,\n    borderColor: color.rule,\n    borderRadius: radius.md,\n    padding: space.md\n  })",
+    "now": "{ color: color.silk, fontSize: font.body, borderWidth: 1, ...glassField(), padding: space.md }"
+   },
+   {
+    "decl": "Report",
+    "main": "const box = {\n    color: color.silk,\n    fontSize: font.body,\n    backgroundColor: color.panel,\n    borderWidth: 1,\n    borderColor: color.rule,\n    borderRadius: radius.md,\n    padding: space.md\n  };\nreturn ({ ...box, minHeight: 140, lineHeight: 22 })",
+    "now": "{ ...box, minHeight: 140, lineHeight: 22 }"
+   },
+   {
+    "decl": "Report",
+    "main": "\nreturn ({ gap: space.xs, padding: space.md, borderWidth: 1, borderColor: color.rule, borderRadius: radius.md, backgroundColor: color.panel })",
+    "now": "{ gap: space.xs, padding: space.md, borderWidth: 1, ...glassCard({ bordered: true }) }"
+   },
+   {
+    "decl": "Report",
+    "main": "\nreturn ({ maxHeight: 220, backgroundColor: color.chassis, borderRadius: radius.sm })",
+    "now": "{ maxHeight: 220, backgroundColor: color.glassWell, borderRadius: radius.sm }"
+   }
+  ],
+  "mobile/src/screens/Setlists.js": [
+   {
+    "decl": "SourceRow",
+    "main": "\nreturn ({\n        minHeight: TAP,\n        justifyContent: 'center',\n        paddingHorizontal: space.md,\n        paddingVertical: space.sm,\n        borderRadius: radius.md,\n        borderWidth: on ? 2 : 1,\n        borderColor: on ? color.signal : color.rule,\n        backgroundColor: on ? color.signalWash : color.panel,\n        opacity: pressed ? 0.7 : 1\n      })",
+    "now": "{ minHeight: TAP, justifyContent: 'center', paddingHorizontal: space.md, paddingVertical: space.sm, ...glassCard({ bordered: true, pressed: pressed && !classic() }), borderWidth: on ? 2 : 1, ...(on ? { borderColor: color.signal, backgroundColor: color.signalWash } : null), opacity: pressed ? 0.7 : 1 }"
+   },
+   {
+    "decl": "Song",
+    "main": "\nreturn ({\n          flexDirection: 'row',\n          alignItems: 'center',\n          gap: space.sm,\n          paddingHorizontal: space.sm,\n          paddingVertical: space.sm,\n          borderRadius: radius.md,\n          borderWidth: playing || lifted ? 2 : 1,\n          borderColor: lifted ? color.silk : playing ? color.signal : color.rule,\n          backgroundColor: lifted ? color.panelHi : color.panel\n        })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.sm, paddingVertical: space.sm, borderRadius: radius.md, borderWidth: playing || lifted ? 2 : 1, borderColor: lifted ? color.silk : playing ? color.signal : color.rule, backgroundColor: lifted ? color.panelHi : color.panel, boxShadow: color.glassTop }"
+   },
+   {
+    "decl": "SwipeHint",
+    "main": "\nreturn ({\n        gap: space.sm,\n        padding: space.md,\n        borderRadius: radius.md,\n        borderWidth: 1,\n        borderColor: color.signal,\n        backgroundColor: color.signalWash\n      })",
+    "now": "{ gap: space.sm, padding: space.md, borderRadius: radius.card, borderWidth: 1, borderColor: color.signal, backgroundColor: color.signalWash }"
+   }
+  ],
+  "mobile/src/screens/Settings.js": [
+   {
+    "decl": "SetupRow",
+    "main": "\nreturn ({\n        flexDirection: 'row',\n        alignItems: 'center',\n        gap: space.md,\n        minHeight: TAP + 8,\n        paddingHorizontal: space.md,\n        paddingVertical: space.md,\n        borderBottomWidth: 1,\n        borderBottomColor: color.rule,\n        backgroundColor: pressed ? color.panelHi : 'transparent'\n      })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: TAP + 8, paddingHorizontal: space.md, paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: color.glassRim, backgroundColor: pressed ? color.glassFillHi : 'transparent' }"
+   },
+   {
+    "decl": "Choice",
+    "main": "\nreturn ({\n          width: 28,\n          height: 28,\n          borderRadius: radius.sm,\n          borderWidth: on ? 0 : 1,\n          borderColor: color.rule,\n          backgroundColor: on ? color.signal : color.panel,\n          alignItems: 'center',\n          justifyContent: 'center'\n        })",
+    "now": "{ width: 28, height: 28, borderRadius: radius.sm, borderWidth: on ? 0 : 1, borderColor: color.glassRim, backgroundColor: on ? color.signal : color.panel, alignItems: 'center', justifyContent: 'center' }"
+   },
+   {
+    "decl": "Group",
+    "main": "\nreturn ({\n          flexDirection: 'row',\n          alignItems: 'center',\n          gap: space.md,\n          minHeight: TAP + 8,\n          paddingHorizontal: space.md,\n          paddingVertical: space.md,\n          borderRadius: radius.md,\n          backgroundColor: pressed ? color.panelHi : color.panel\n        })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: TAP + 8, paddingHorizontal: space.md, paddingVertical: space.md, borderRadius: radius.card, backgroundColor: pressed ? color.glassFillHi : classic() ? color.panel : 'transparent' }"
+   },
+   {
+    "decl": "Group",
+    "main": null,
+    "now": "__GlassCard({ clip: true, bare: true })"
+   },
+   {
+    "decl": "AccountCard",
+    "main": "\nreturn ({\n        flexDirection: 'row',\n        alignItems: 'center',\n        gap: space.md,\n        padding: space.md,\n        borderRadius: radius.md,\n        borderWidth: 1,\n        borderColor: color.rule,\n        backgroundColor: pressed ? color.panelHi : color.panel\n      })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderWidth: 1, ...glassCard({ bordered: true, pressed }) }"
+   }
+  ],
+  "mobile/src/screens/SignIn.js": [
+   {
+    "decl": "SignIn",
+    "main": "\nreturn ({\n            backgroundColor: color.panel,\n            borderWidth: 1,\n            borderColor: color.rule,\n            borderRadius: radius.lg,\n            padding: space.lg,\n            gap: space.md\n          })",
+    "now": "{ ...glassCard({ bordered: true, classicCorner: radius.lg }), borderWidth: 1, padding: space.lg, gap: space.md }"
+   },
+   {
+    "decl": "Field",
+    "main": "\nreturn ({\n        flexDirection: 'row',\n        alignItems: 'center',\n        minHeight: TAP + 8,\n        backgroundColor: color.panel,\n        borderWidth: 1,\n        borderColor: color.rule,\n        borderRadius: radius.md\n      })",
+    "now": "{ flexDirection: 'row', alignItems: 'center', minHeight: TAP + 8, borderWidth: 1, ...glassField() }"
+   },
+   {
+    "decl": "Field",
+    "main": "\nreturn ({ width: 1, alignSelf: 'stretch', marginVertical: space.sm, backgroundColor: color.rule })",
+    "now": "{ width: 1, alignSelf: 'stretch', marginVertical: space.sm, backgroundColor: color.glassRim }"
+   }
+  ],
+  "mobile/src/screens/Stage.js": [
+   {
+    "decl": "Stage",
+    "main": "const size = SIZES[loadSize(sync)] || SIZES[1];\nconst tight = size === SIZES[0];\nreturn ({\n            borderTopWidth: StyleSheet.hairlineWidth,\n            borderTopColor: color.rule,\n            paddingTop: space.sm,\n            paddingBottom: tight ? space.lg : space.xxl\n          })",
+    "now": "{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.glassRim, backgroundColor: color.glassBar, boxShadow: color.glassTop, paddingTop: space.sm, paddingBottom: tight ? space.lg : space.xxl }"
+   },
+   {
+    "decl": "Stage",
+    "main": "\nreturn ({\n                paddingHorizontal: space.lg,\n                paddingVertical: space.sm,\n                borderRadius: radius.pill,\n                borderWidth: 1,\n                borderColor: color.fault,\n                backgroundColor: color.chassis\n              })",
+    "now": "{ paddingHorizontal: space.lg, paddingVertical: space.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: color.fault, backgroundColor: color.chassis, boxShadow: color.glassTop }"
+   },
+   {
+    "decl": "Stage",
+    "main": "\nreturn ({ paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.md, backgroundColor: color.panel })",
+    "now": "{ paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.md, backgroundColor: color.panel, boxShadow: color.glassTop }"
+   }
+  ]
+ }
+}

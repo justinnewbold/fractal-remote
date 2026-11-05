@@ -1177,7 +1177,10 @@ export default function Stage({
             /* The preset's colour tag, as a bar down the left of its button —
                the bar its row in the list wears, by the same rule
                (lib/colourPage tagFill). None for a preset without one, so
-               Play is as it was for everybody who never tags one. */
+               Play is as it was for everybody who never tags one; `bar`
+               keeps the button's own corner and glass either way, so only
+               the bar comes and goes from one preset to the next. */
+            bar
             style={[{ paddingHorizontal: space.lg }, tagEdge(presetTag(preset?.number))]}
           />
 
@@ -1488,7 +1491,10 @@ export default function Stage({
         <View
           style={{
             borderTopWidth: StyleSheet.hairlineWidth,
-            borderTopColor: color.rule,
+            /* The bottom bar of glass: the top bar's frosted fill and the light along its top, under its soft rim. No blur: nothing scrolls under it. */
+            borderTopColor: color.glassRim,
+            backgroundColor: color.glassBar,
+            boxShadow: color.glassTop,
             paddingTop: space.sm,
             paddingBottom: tight ? space.lg : space.xxl
           }}
@@ -1605,7 +1611,9 @@ export default function Stage({
                 borderRadius: radius.pill,
                 borderWidth: 1,
                 borderColor: color.fault,
-                backgroundColor: color.chassis
+                backgroundColor: color.chassis,
+                /* Opaque over the tiles, and the glass's light along its top (lib/glass glassFloat). */
+                boxShadow: color.glassTop
               }}
             >
               <Text style={{ color: color.fault, fontSize: font.small, fontWeight: '700', letterSpacing: 2 }}>{NOT_CONNECTED}</Text>
@@ -1613,7 +1621,7 @@ export default function Stage({
           ) : null}
           {/* And a tap that went nowhere, for its few seconds: under the word while the link is down, on its own when it was dropped as late with the link up. */}
           {droppedNote ? (
-            <View style={{ paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.md, backgroundColor: color.panel }}>
+            <View style={{ paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.md, backgroundColor: color.panel, boxShadow: color.glassTop }}>
               <Text style={{ color: color.silk, fontSize: font.small, textAlign: 'center' }}>{droppedNote}</Text>
             </View>
           ) : null}

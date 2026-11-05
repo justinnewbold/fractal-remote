@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Image, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
+import { glassCard, glassField } from '../lib/glass'
 import { CONNECT, P6 } from '../lib/onboarding'
 import laptopIcon from '../../assets/icons/laptop.png'
 import mailIcon from '../../assets/icons/mail.png'
@@ -98,7 +99,8 @@ export default function Connect({ onBack }) {
         HIS MOCKUP, IN THE APP'S OWN COLOURS. "Can we update this screen to
         look like this? You could change the colors a little bit to match the
         rest of the app." The purple of the picture is the app's amber here,
-        and the words are shared/onboarding.mjs's CONNECT.
+        and the words are shared/onboarding.mjs's CONNECT. The pill, the card
+        and the email box are frosted glass (lib/glass), the pill still green.
       */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md }}>
         <View style={{ flex: 1, gap: space.sm }}>
@@ -121,7 +123,8 @@ export default function Connect({ onBack }) {
           borderRadius: radius.pill,
           borderWidth: 1,
           borderColor: color.ok,
-          backgroundColor: color.panel
+          backgroundColor: color.glassFill,
+          boxShadow: color.glassLift
         }}
       >
         <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color.ok }} />
@@ -134,10 +137,8 @@ export default function Connect({ onBack }) {
         style={{
           padding: space.lg,
           gap: space.lg,
-          borderRadius: radius.lg,
           borderWidth: 1,
-          borderColor: color.rule,
-          backgroundColor: color.panel
+          ...glassCard({ bordered: true, classicCorner: radius.lg })
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg }}>
@@ -162,9 +163,9 @@ export default function Connect({ onBack }) {
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-        <View style={{ flex: 1, height: 1, backgroundColor: color.rule }} />
+        <View style={{ flex: 1, height: 1, backgroundColor: color.glassRim }} />
         <Text style={{ color: color.silkDim, fontSize: font.small, letterSpacing: 1.2 }}>{CONNECT.or}</Text>
-        <View style={{ flex: 1, height: 1, backgroundColor: color.rule }} />
+        <View style={{ flex: 1, height: 1, backgroundColor: color.glassRim }} />
       </View>
 
       <View
@@ -172,14 +173,12 @@ export default function Connect({ onBack }) {
           flexDirection: 'row',
           alignItems: 'center',
           minHeight: TAP + 8,
-          borderRadius: radius.md,
           borderWidth: 1,
-          borderColor: color.rule,
-          backgroundColor: color.panel
+          ...glassField()
         }}
       >
         <Image source={mailIcon} style={{ width: 22, height: 22, marginHorizontal: space.md, tintColor: color.silkDim }} />
-        <View style={{ width: 1, alignSelf: 'stretch', marginVertical: space.sm, backgroundColor: color.rule }} />
+        <View style={{ width: 1, alignSelf: 'stretch', marginVertical: space.sm, backgroundColor: color.glassRim }} />
         <TextInput
           value={email}
           onChangeText={setEmail}

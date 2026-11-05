@@ -14,6 +14,7 @@ import {
 } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
+import { glassControl } from '../lib/glass'
 import { photoFor } from '../lib/gearPhotos'
 import { descriptionFor, paragraphsOf, specsFor } from '../lib/lineage'
 import { HOSTED_ORIGIN } from '../lib/pairing'
@@ -293,7 +294,11 @@ export default function GearCard({ entry, entries = [], onGo, onBack }) {
   )
 }
 
-/** A round arrow at the side of the page, held still while the page slides. */
+/**
+ * A round arrow at the side of the page, held still while the page slides: a
+ * round of frosted glass (lib/glass). It sits in the page's own margin, clear
+ * of the words, so nothing reads through it.
+ */
 function Arrow({ side, onPress, label }) {
   return (
     <Pressable
@@ -314,8 +319,7 @@ function Arrow({ side, onPress, label }) {
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: color.rule,
-        backgroundColor: pressed ? color.panelHi : color.panel
+        ...glassControl({ pressed })
       })}
     >
       <Image

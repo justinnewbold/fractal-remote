@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Text, TextInput, View } from 'react-native'
 
-import { color, font, radius, space, TAP } from '../lib/theme'
+import { color, font, space, TAP } from '../lib/theme'
+import { glassField } from '../lib/glass'
 import { IR_HINT, USER_IRS_NOTE, findIrs } from '../lib/cab-pick'
 import Note from './Note'
 import Press from './Press'
@@ -76,10 +77,9 @@ export default function IrPicker({ banks, now, onPick, disabled }) {
             style={{
               minHeight: TAP,
               paddingHorizontal: space.md,
-              borderRadius: radius.md,
               borderWidth: 1,
-              borderColor: color.rule,
-              backgroundColor: color.panel,
+              /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
+              ...glassField(),
               color: color.silk,
               fontSize: font.body
             }}

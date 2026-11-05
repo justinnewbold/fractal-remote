@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, BackHandler, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native'
 
 import { color, font, mono, radius, space } from '../lib/theme'
+import { glassCard, glassField } from '../lib/glass'
 import { MAX_MESSAGE, SENT_WORDS, context, logPreview, sendReport, shotsLostWords, videoLostWords } from '../lib/reports'
 import { formMessage, headLines } from '../lib/report-rules'
 import { logHeader, runsBefore } from '../lib/logHead'
@@ -189,13 +190,12 @@ export default function Report({ onBack, bluetooth = false, said = null }) {
     return () => sub.remove()
   }, [])
 
+  /* A field of frosted glass (lib/glass): its rim, and the card's corner, a rounded box and never a capsule. */
   const box = {
     color: color.silk,
     fontSize: font.body,
-    backgroundColor: color.panel,
     borderWidth: 1,
-    borderColor: color.rule,
-    borderRadius: radius.md,
+    ...glassField(),
     padding: space.md
   }
 
@@ -250,7 +250,7 @@ export default function Report({ onBack, bluetooth = false, said = null }) {
 
             <Attach shots={shots} onShots={setShots} video={video} onVideo={setVideo} disabled={busy} />
 
-            <View style={{ gap: space.xs, padding: space.md, borderWidth: 1, borderColor: color.rule, borderRadius: radius.md, backgroundColor: color.panel }}>
+            <View style={{ gap: space.xs, padding: space.md, borderWidth: 1, ...glassCard({ bordered: true }) }}>
               {account ? (
                 <TickBox
                   on={includeMe}
@@ -305,7 +305,7 @@ export default function Report({ onBack, bluetooth = false, said = null }) {
                 /* Its own scroller, capped: the log is long by design and a
                    screen that grew by two hundred lines would put the rest
                    off the bottom of the phone. */
-                <ScrollView nestedScrollEnabled style={{ maxHeight: 220, backgroundColor: color.chassis, borderRadius: radius.sm }} contentContainerStyle={{ padding: space.sm }}>
+                <ScrollView nestedScrollEnabled style={{ maxHeight: 220, backgroundColor: color.glassWell, borderRadius: radius.sm }} contentContainerStyle={{ padding: space.sm }}>
                   <Text selectable style={{ color: color.silkDim, fontSize: font.micro, fontFamily: face, lineHeight: 16 }}>
                     {preview || '(nothing has been logged yet this session)'}
                   </Text>

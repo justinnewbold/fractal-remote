@@ -3,6 +3,7 @@ import { Image, Platform, Pressable, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
 import { color, font, mono, radius, space } from '../lib/theme'
+import { glassCard } from '../lib/glass'
 import { P6 } from '../lib/onboarding'
 import { tick } from '../lib/feedback'
 import { DOWNLOADS_URL } from '../lib/downloadLink'
@@ -63,6 +64,10 @@ export const breakableAddress = (text) =>
  * own rather than a place the phone may choose, because a phone that cannot
  * fit the first line breaks it wherever the line runs out and calls two
  * lines a fit, while a line end leaves it only the one way to fit: smaller.
+ *
+ * Frosted glass (lib/glass): the row is a box sunk in the glass's well, at the
+ * card's corner, and the card version a card of glass; either one's border is
+ * amber once it has copied, as it was.
  */
 export default function CopyAddress({ size = font.body, row = false, saidSize = font.small, split = false }) {
   const [copied, setCopied] = useState(false)
@@ -89,10 +94,10 @@ export default function CopyAddress({ size = font.body, row = false, saidSize = 
             paddingLeft: space.md,
             paddingRight: space.sm,
             paddingVertical: space.sm,
-            borderRadius: radius.md,
+            borderRadius: radius.card,
             borderWidth: 1,
-            borderColor: copied ? color.signal : color.rule,
-            backgroundColor: pressed ? color.panelHi : color.chassis
+            borderColor: copied ? color.signal : color.glassRim,
+            backgroundColor: pressed ? color.glassFillHi : color.glassWell
           })}
         >
           <Text
@@ -133,10 +138,9 @@ export default function CopyAddress({ size = font.body, row = false, saidSize = 
       style={({ pressed }) => ({
         gap: space.sm,
         padding: space.lg,
-        borderRadius: radius.lg,
         borderWidth: 1,
-        borderColor: copied ? color.signal : color.rule,
-        backgroundColor: pressed ? color.panelHi : color.panel
+        ...glassCard({ bordered: true, pressed, classicCorner: radius.lg }),
+        borderColor: copied ? color.signal : color.glassRim
       })}
     >
       {/* One line, shrunk to fit: it used to break as "download / s". */}
