@@ -1,14 +1,17 @@
 import { useSyncExternalStore } from 'react'
+import { AppState } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-import { SETTLE_MS, createGearSharer, gearKey, gearRecord, noteFacts, sharing } from './gear-share-rules'
+import { NOTE_AFTER_MS, RETRY_MS, SETTLE_MS, createGearClock, createGearSharer, gearKey, gearRecord, noteDue, noteFacts, sendDelay, sharing } from './gear-share-rules'
 import { DEFAULT_PROJECT } from './project'
 import { APP_VERSION } from './version'
 import { logDebug } from './debugLog'
-import { getState as rigState, subscribeRig } from './rig'
+import { notForever } from './notForever'
+import { getState as rigState, subscribeRig, unitReadSince } from './rig'
 import { adapterName, bluetoothFacts, bluetoothPhase, bluetoothSettings, cableNow, subscribeBluetooth, unitName } from './bluetooth'
 import { linkState, linkVia, subscribeLink } from './link'
 import { deviceFacts } from './thisDevice'
+import { onTapTime } from './tapTimes'
 
 /**
  * WHAT WORKS, ON THE PHONE: the question's answer kept on this device, and
@@ -25,8 +28,8 @@ import { deviceFacts } from './thisDevice'
  * on this device.
  *
  * Nothing new is installed for it: AsyncStorage, supabase-js and React
- * Native's own Platform were already in the app, so it rides an update and
- * not a store build.
+ * Native's own Platform and AppState were already in the app, so it rides an
+ * update and not a store build.
  */
 
 let client = null
@@ -34,7 +37,9 @@ async function insert(record) {
   if (!client) {
     const { createClient } = await import('@supabase/supabase-js')
     client = createClient(DEFAULT_PROJECT.url, DEFAULT_PROJECT.anonKey, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      /* Twelve seconds and cut off (lib/notForever): a send that never answers must not hold every note after it. */
+      global: { fetch: notForever }
     })
   }
   /* Insert only, and nothing read back: the table lets nobody read it with this key. */
@@ -62,9 +67,14 @@ sharer.answer().then((a) => {
   tell()
 })
 
-/** Whether the card is still owed on this device: never answered. Storage that will not answer owes it, and the answer stays off. */
+/**
+ * Whether the card is still owed on this device: 'first' for never answered,
+ * 'again' for a Yes given to the words before 4 November 2026 (lib/gear-share-
+ * rules SHARE_KEY_BEFORE), false for neither. Storage that will not answer
+ * owes it, and the answer stays off.
+ */
 export async function shareQuestionDue() {
-  return (await sharer.answer()) === null
+  return sharer.owed()
 }
 
 /** Yes (true) or No thanks (false), from the card or the Settings row. */
@@ -86,19 +96,30 @@ export const useSharing = () => useSyncExternalStore(subscribe, readOn, readOn)
 /* Listening for gear                                                        */
 /* ------------------------------------------------------------------------ */
 
+/*
+ * HOW LONG IT TOOK TO CONNECT, AND HOW QUICKLY A TAP IS ANSWERED (lib/
+ * gear-share-rules createGearClock). The clock is told every change of the
+ * link and the unit, and each of the player's own taps as it comes back
+ * (lib/device through lib/tapTimes), whether or not sharing is on, so the
+ * times are there the moment somebody says Yes. Kept in memory only, and it
+ * sends nothing: only a note, below, ever carries them.
+ */
+const clock = createGearClock()
+const stepClock = () => clock.step({ link: linkState().link, unit: rigState().unit, readSince: unitReadSince })
+
 function factsNow() {
   /*
-   * NO NOTE FOR A UNIT ON A USB CABLE (lib/bleAdapters isCable). The table
-   * takes 'computer' or 'bluetooth' only (gear_reports.via), and the card
-   * promises "through a computer or Bluetooth": a cable sent as Bluetooth,
-   * with the unit's own port as the adapter, is a wrong note. 'usb' needs the
-   * table and the card changed, which waits for Justin; until then, nothing.
+   * A UNIT ON A USB CABLE IS ITS OWN KIND, 'usb' (4 November 2026, Justin:
+   * "Yes, add the cable connection server change"). It goes over the same
+   * wire as Bluetooth (linkVia says 'bluetooth'), and lib/bleAdapters
+   * isCable tells it apart; its name is the cable's port's ("AM4", "C2MIDI
+   * Pro"), kept where an adapter's name is.
    */
-  if (linkVia() === 'bluetooth' && cableNow()) return null
+  const via = linkVia() === 'bluetooth' && cableNow() ? 'usb' : linkVia()
   const saved = bluetoothSettings() || {}
   return noteFacts({
     rig: rigState(),
-    via: linkVia(),
+    via,
     link: linkState(),
     bluetooth: {
       phase: bluetoothPhase(),
@@ -108,7 +129,8 @@ function factsNow() {
       answeredAs: bluetoothFacts().answeredAs
     },
     phone: deviceFacts(),
-    appVersion: APP_VERSION
+    appVersion: APP_VERSION,
+    times: clock.times()
   })
 }
 
@@ -116,23 +138,96 @@ function factsNow() {
  * A combination has to hold for SETTLE_MS before it is a note: the moments
  * of starting up (a unit 'missing' for the second before it answers) are not
  * results. Every change starts the wait again for whatever is true then.
+ *
+ * Then a unit that answered through a computer waits a little longer for its
+ * tap time (noteDue): the third tap, two minutes from when the gear first
+ * held, or the app going to the background, whichever comes first. While it
+ * waits it is HELD, never dropped: it keeps up with the taps while its gear
+ * holds, and gear that changes or goes (another computer, the unit
+ * unplugged, the link down) sends it as it was. A note that
+ * is due goes a while later, at a random moment of its own (sendDelay), and
+ * never from inside a tap. A note the server did not take is tried again
+ * once, five minutes on, as the gear is then if it is the same and as it was
+ * if not; the sharer itself sends no combination again within those five
+ * minutes, however often the gear settles.
  */
 let waiting = null
 let waitingKey = null
+let heldSince = 0
+/* The held note: { key, facts }, or null. */
+let held = null
+let heldTimer = null
+const retries = new Map()
+
+const keyOf = (facts) => gearKey(gearRecord(facts))
+
+function post(facts, again = false) {
+  const key = keyOf(facts)
+  if (!key) return
+  setTimeout(() => {
+    sharer.report(facts).then((said) => {
+      if (again || said?.why !== 'not sent' || retries.has(key)) return
+      retries.set(
+        key,
+        setTimeout(() => {
+          retries.delete(key)
+          if (!sharing(answer)) return
+          const latest = factsNow()
+          post(keyOf(latest) === key ? latest : facts, true)
+        }, RETRY_MS)
+      )
+    })
+  }, sendDelay())
+}
+
+/* The held note goes: with the times as they are while its gear holds, and as they were when it does not. */
+function release() {
+  if (!held) return
+  const note = held
+  held = null
+  if (heldTimer) clearTimeout(heldTimer)
+  heldTimer = null
+  if (!sharing(answer)) return
+  const latest = factsNow()
+  post(keyOf(latest) === note.key ? latest : note.facts)
+}
+
+const dueNow = (record) => noteDue({ outcome: record?.outcome, via: record?.via, taps: clock.tapCount(), waited: Date.now() - heldSince })
+
 function look() {
   if (!sharing(answer)) return
-  const key = gearKey(gearRecord(factsNow()))
+  const key = keyOf(factsNow())
+  if (held && key === held.key) return
+  /* Other gear, or none: the held note goes as it was, rather than being lost. */
+  release()
   if (key === waitingKey) return
   if (waiting) clearTimeout(waiting)
   waiting = null
   waitingKey = key
   if (!key) return
+  heldSince = Date.now()
   waiting = setTimeout(() => {
     waiting = null
     waitingKey = null
     const facts = factsNow()
-    if (gearKey(gearRecord(facts)) === key) sharer.report(facts)
+    const record = gearRecord(facts)
+    if (gearKey(record) !== key) return
+    if (dueNow(record)) {
+      post(facts)
+      return
+    }
+    held = { key, facts }
+    heldTimer = setTimeout(release, Math.max(0, NOTE_AFTER_MS - (Date.now() - heldSince)))
   }, SETTLE_MS)
+}
+
+/* A tap, timed: into the clock, into the held note while its gear holds, and the note goes once it has its taps. */
+function tapped(ms) {
+  clock.tap(ms)
+  if (!held) return
+  const latest = factsNow()
+  if (keyOf(latest) === held.key) held.facts = latest
+  if (dueNow(gearRecord(held.facts))) release()
 }
 
 let started = false
@@ -140,7 +235,20 @@ let started = false
 export function startGearShare() {
   if (started) return
   started = true
+  /* The clock first, so a note looked at on the same change has the times as they are now. */
+  subscribeRig(stepClock)
+  subscribeLink(stepClock)
+  stepClock()
+  onTapTime(tapped)
   subscribeRig(look)
   subscribeBluetooth(look)
   subscribeLink(look)
+  /*
+   * Put in the background (it may not come back): a held note goes with
+   * what it has. Not 'inactive', which is Control Center pulled down or the
+   * app switcher, with the app still there.
+   */
+  AppState.addEventListener('change', (status) => {
+    if (status === 'background') release()
+  })
 }

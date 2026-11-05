@@ -3,6 +3,13 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-05",
+      "version": "1.89.43",
+      "lines": [
+        "Share what gear works (Settings → Troubleshooting) now notes a unit on a USB cable as a USB cable, how long your unit took to connect and, through a computer, how quickly it answers a tap. If you said yes before, it asks you once more. It’s still off unless you say yes, and never linked to you."
+      ]
+    },
+    {
       "date": "2026-11-04",
       "version": "1.89.41",
       "lines": [

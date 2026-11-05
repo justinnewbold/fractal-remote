@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-05",
+    "day": "5 November 2026",
+    "version": "1.89.43",
+    "lines": [
+      {
+        "text": "Share what gear works (Settings → Troubleshooting) now notes a unit on a USB cable as a USB cable, how long your unit took to connect and, through a computer, how quickly it answers a tap. If you said yes before, it asks you once more. It’s still off unless you say yes, and never linked to you.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-04",
     "day": "4 November 2026",
     "version": "1.89.41",

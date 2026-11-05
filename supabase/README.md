@@ -584,17 +584,25 @@ Settings → Troubleshooting changes it. Off unless Yes. Three pieces:
 
 - `migrations/20261026_gear_reports.sql` — one table, `gear_reports`: the
   unit, its firmware, computer or Bluetooth, the adapter's name or the
-  computer app's version, whether the unit answered, the phone's system,
-  version and model, the app's version. No account, no install number, no
+  computer's kind and its app's version, whether the unit answered, the
+  phone's system, version and model, the app's version. No account, no install number, no
   address. Anybody may insert (each field length-checked, the column grant
   limited to those fields so a row cannot pick its own date); nobody may
   read one through the API. `sweep_gear_reports()`, service_role only,
   deletes anything over two years old.
 - `migrations/20261026_gear_reports_sweep.sql` — the daily sweep, needing
   pg_cron, in a file of its own as the screenshots' sweep is.
+- `migrations/20261104_gear_reports_usb_and_times.sql` — two changes Justin
+  agreed on 4 November 2026: `via` takes `'usb'` too, for a unit on a USB
+  cable (the cable's name in `adapter`), and two integer columns,
+  `connect_ms` (from the link starting to try to the unit's first answer,
+  rounded to 100) and `tap_ms` (through a computer, the middle of the
+  player's own taps in that connection, rounded to 10; none over Bluetooth
+  or a cable), each checked between 0 and 600000 and added to the insert
+  grant. Still no account, no install number, no address.
 - `functions/gear-reports/` — `list`, after the same ADMINS lock as
   owner-messages: sweeps, then answers the newest 5000 notes for Settings →
-  Developer → What works.
+  Developer → What works, with `connect_ms` and `tap_ms` beside the rest.
 
 ### Putting it live, in this order
 
@@ -610,10 +618,19 @@ Settings → Troubleshooting changes it. Off unless Yes. Three pieces:
    Data safety get their rows** (docs/app-store.md, *What works: the gear
    notes*). The update starts collecting on every copy where somebody taps
    Yes, so the label has to say so first.
+5. **Apply `20261104_gear_reports_usb_and_times.sql` and deploy gear-reports
+   before the update that sends a USB cable and the two times is merged.**
+   Before it, every note from that update is refused (the table does not
+   know `connect_ms`, `tap_ms` or `'usb'`), logged, and tried again no
+   sooner than five minutes on, and What works would not show the times.
+   The label's Performance Data row (docs/app-store.md) is published by
+   Justin before the update is merged, as in step 4: nothing in CI can see
+   App Store Connect, so the merge waits for his word that it is.
 
 ### Checking it
 
 ```sql
-select unit, via, coalesce(adapter, computer_os, 'computer') as way, outcome, count(*), max(created_at)
+select unit, via, coalesce(adapter, computer_os, 'computer') as way, outcome, count(*), max(created_at),
+  percentile_cont(0.5) within group (order by connect_ms) as connect_ms, percentile_cont(0.5) within group (order by tap_ms) as tap_ms
 from public.gear_reports group by 1, 2, 3, 4 order by max(created_at) desc;
 ```
