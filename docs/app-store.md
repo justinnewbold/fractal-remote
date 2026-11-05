@@ -515,7 +515,7 @@ Functionality (still linked to the user, still not tracking), then
 Publish. The privacy page already calls these counts analytics, so the
 label should match. No build needed. Google Play needs nothing: its App
 interactions row already lists Analytics (the 1 November table below).
-Nothing here says it is done until he has.
+Done 5 November 2026 (Justin).
 
 **Google Play's Data safety, the whole list as it should stand (1 November
 2026).** Written for Justin to hand to his browser assistant, and the one

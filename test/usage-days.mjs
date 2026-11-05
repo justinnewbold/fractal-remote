@@ -523,7 +523,7 @@ export function run(test) {
     assert.ok(at > 0, 'docs/app-store.md does not put the Analytics tick to Justin')
     const note = store.slice(at, at + 2000).replace(/\s+/g, ' ')
     assert.match(note, /in App Store Connect → App Privacy → Usage Data → Product Interaction, tick \*\*Analytics\*\* next to App Functionality \(still linked to the user, still not tracking\)/)
-    assert.match(note, /Nothing here says it is done until he has\./)
+    assert.match(note, /Done 5 November 2026 \(Justin\)\./)
     assert.doesNotMatch(note, /to consider|Justin's call/, 'the tick is still put to him as optional, and the label says less than the privacy page')
   })
 }
