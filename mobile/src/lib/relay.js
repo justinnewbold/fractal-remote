@@ -55,6 +55,7 @@ import {
 } from './relay-rules'
 import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, CONFIRMED_SIGN_IN, cleanCode, codeRefused } from './confirm-code'
 import { deviceNoun } from './device-word'
+import { nameData } from './account-name'
 
 export { DEFAULT_PROJECT, RELAY_GRACE, forbiddenRemotely, explainAuth, NOT_IN_INBOX, sentAgain }
 
@@ -198,10 +199,17 @@ export async function signIn({ email, password }) {
   return userId
 }
 
-/** Create the account, when there isn't one yet. Same project, same policies. */
-export async function signUp({ email, password }) {
+/**
+ * Create the account, when there isn't one yet. Same project, same policies.
+ *
+ * With the first and last name Create account asks for, kept on the account
+ * itself (shared/account-name.mjs): refused here, before anything is asked,
+ * if either will not do, so no account is made without them.
+ */
+export async function signUp({ email, password, firstName, lastName }) {
+  const name = nameData({ first: firstName, last: lastName })
   await afterSignOut()
-  const { data, error } = await supabase().auth.signUp({ email, password })
+  const { data, error } = await supabase().auth.signUp({ email, password, options: { data: name } })
   if (error) throw new Error(explainAuth(error.message))
   /*
    * An address that already has an account is not an error to the account

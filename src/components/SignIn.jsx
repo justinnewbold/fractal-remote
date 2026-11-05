@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { confirmWithCode, loadRemoteConfig, NOT_IN_INBOX, resendConfirmation, sendPasswordReset, sentAgain } from '../lib/remote'
 import { CONFIRMED_SIGN_IN } from '../../shared/confirm-code.mjs'
+import { NAME_LABELS, NAME_MAX, nameProblem } from '../../shared/account-name.mjs'
 
 /**
  * The one sign-in form.
@@ -54,6 +55,15 @@ export default function SignIn({
   useEffect(() => {
     onMode?.(mode)
   }, [mode, onMode])
+  /*
+   * THE NAME, on Create account only, as on the phone: "when they create an
+   * account have them put in their first name and last name and email
+   * address" (Justin, 5 November 2026). Both needed, 50 characters each,
+   * over the email; Sign in never asks. shared/account-name.mjs holds the
+   * rule and its words for both ends.
+   */
+  const [first, setFirst] = useState('')
+  const [last, setLast] = useState('')
   const [email, setEmail] = useState(initial)
   const [password, setPassword] = useState('')
   const [working, setWorking] = useState(false)
@@ -86,6 +96,8 @@ export default function SignIn({
     setNote(null)
     setUnconfirmed(null)
     const address = email.trim()
+    const nameFault = mode === 'up' ? nameProblem({ first, last }) : null
+    if (nameFault) return setProblem(nameFault)
     if (!address) return setProblem('Enter your email.')
     if (mode !== 'forgot' && password.length < 6) return setProblem('Your password is at least 6 characters.')
     setWorking(true)
@@ -93,7 +105,7 @@ export default function SignIn({
       if (mode === 'in') {
         await onSubmit({ email: address, password })
       } else if (mode === 'up') {
-        const { needsConfirmation } = await onCreate({ email: address, password })
+        const { needsConfirmation } = await onCreate({ email: address, password, firstName: first, lastName: last })
         /*
          * THE EMAIL, AS A SCREEN OF ITS OWN. "When I did sign up and I clicked
          * create account, it didn't give me any confirmation that I need to
@@ -255,13 +267,46 @@ export default function SignIn({
   if (stage) {
     return (
       <form className="signin signin-stage" onSubmit={go}>
+        {mode === 'up' ? (
+          <>
+            <label className="signin-iconfield">
+              <FieldIcon kind="person" />
+              <input
+                type="text"
+                autoComplete="given-name"
+                autoCapitalize="words"
+                maxLength={NAME_MAX}
+                autoFocus={autoFocus}
+                value={first}
+                onChange={(e) => setFirst(e.target.value)}
+                disabled={off}
+                placeholder={NAME_LABELS.first}
+                aria-label={NAME_LABELS.first}
+              />
+            </label>
+            <label className="signin-iconfield">
+              <FieldIcon kind="person" />
+              <input
+                type="text"
+                autoComplete="family-name"
+                autoCapitalize="words"
+                maxLength={NAME_MAX}
+                value={last}
+                onChange={(e) => setLast(e.target.value)}
+                disabled={off}
+                placeholder={NAME_LABELS.last}
+                aria-label={NAME_LABELS.last}
+              />
+            </label>
+          </>
+        ) : null}
         <label className="signin-iconfield">
           <FieldIcon kind="mail" />
           <input
             type="email"
             inputMode="email"
             autoComplete="email"
-            autoFocus={autoFocus}
+            autoFocus={autoFocus && mode !== 'up'}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={off}
@@ -324,13 +369,42 @@ export default function SignIn({
 
   return (
     <form className="signin" onSubmit={go}>
+      {mode === 'up' ? (
+        <>
+          <label className="signin-field">
+            <span>{NAME_LABELS.first}</span>
+            <input
+              type="text"
+              autoComplete="given-name"
+              autoCapitalize="words"
+              maxLength={NAME_MAX}
+              autoFocus={autoFocus}
+              value={first}
+              onChange={(e) => setFirst(e.target.value)}
+              disabled={off}
+            />
+          </label>
+          <label className="signin-field">
+            <span>{NAME_LABELS.last}</span>
+            <input
+              type="text"
+              autoComplete="family-name"
+              autoCapitalize="words"
+              maxLength={NAME_MAX}
+              value={last}
+              onChange={(e) => setLast(e.target.value)}
+              disabled={off}
+            />
+          </label>
+        </>
+      ) : null}
       <label className="signin-field">
         <span>Email</span>
         <input
           type="email"
           inputMode="email"
           autoComplete="email"
-          autoFocus={autoFocus}
+          autoFocus={autoFocus && mode !== 'up'}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           disabled={off}
@@ -400,7 +474,7 @@ export default function SignIn({
   )
 }
 
-/** The envelope and the padlock in the mockup's fields, drawn in the field's own ink. */
+/** The envelope and the padlock in the mockup's fields, and the person in the name fields, drawn in the field's own ink. */
 function FieldIcon({ kind }) {
   return (
     <svg
@@ -419,6 +493,11 @@ function FieldIcon({ kind }) {
         <>
           <rect x="3" y="5" width="18" height="14" rx="2" />
           <path d="m3 7 9 6 9-6" />
+        </>
+      ) : kind === 'person' ? (
+        <>
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 21a8 8 0 0 1 16 0" />
         </>
       ) : (
         <>

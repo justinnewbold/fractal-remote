@@ -264,6 +264,12 @@ export default function AccountsTool() {
           <Text selectable style={{ color: color.silk, fontSize: font.body, fontWeight: '700' }}>
             {open?.email}
           </Text>
+          {/* The name it was made with, from 5 November 2026 (shared/admin.mjs accountSections). */}
+          {open?.name ? (
+            <Text selectable style={{ color: color.silk, fontSize: font.body }}>
+              {open.name}
+            </Text>
+          ) : null}
           <Text selectable style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>
             {open?.line}
           </Text>

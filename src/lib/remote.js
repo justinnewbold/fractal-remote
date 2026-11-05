@@ -103,6 +103,7 @@ import {
 } from '../../shared/relay-rules.mjs'
 import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, cleanCode, codeRefused } from '../../shared/confirm-code.mjs'
 import { deviceNoun } from '../../shared/device-word.mjs'
+import { nameData } from '../../shared/account-name.mjs'
 import { logDebug } from './debugLog.js'
 
 export const loadRemoteConfig = () => {
@@ -1279,11 +1280,18 @@ export function canReuseChannel(channel, session, client) {
   return !!channel && !!client && session?.client === client && isJoined(channel)
 }
 
-/** Create the account, when there isn't one yet. Same project, same policies. */
-export async function remoteSignUp({ url, anonKey, email, password }) {
+/**
+ * Create the account, when there isn't one yet. Same project, same policies.
+ *
+ * With the first and last name Create account asks for, kept on the account
+ * itself (shared/account-name.mjs), as the phone does: refused here, before
+ * anything is asked, if either will not do.
+ */
+export async function remoteSignUp({ url, anonKey, email, password, firstName, lastName }) {
+  const name = nameData({ first: firstName, last: lastName })
   const { createClient } = await import('@supabase/supabase-js')
   const c = createClient(url || DEFAULT_PROJECT.url, anonKey || DEFAULT_PROJECT.anonKey)
-  const { data, error } = await c.auth.signUp({ email, password })
+  const { data, error } = await c.auth.signUp({ email, password, options: { data: name } })
   if (error) throw new Error(explainAuth(error.message))
   /*
    * An address that already has an account is not an error to the account

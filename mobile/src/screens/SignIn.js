@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Image,
   KeyboardAvoidingView,
@@ -25,6 +25,7 @@ import lockIcon from '../../assets/icons/lock.png'
 import checkIcon from '../../assets/icons/check.png'
 import externalIcon from '../../assets/icons/external.png'
 import { deviceNoun } from '../lib/device-word'
+import { NAME_LABELS, NAME_MAX, nameProblem } from '../lib/account-name'
 
 /**
  * One account, two ends.
@@ -108,6 +109,17 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
      existed: most likely there is no account with that email yet. */
   const [noAccount, setNoAccount] = useState(false)
   const [helping, setHelping] = useState(false)
+  /*
+   * THE NAME, on Create account only. "When they create an account have them
+   * put in their first name and last name and email address." (Justin, 5
+   * November 2026.) Both needed, 50 characters each, before the email and in
+   * that order; Sign in never asks, and nor is an account made before this.
+   * The rule and its words are shared with the website (shared/account-name.mjs).
+   */
+  const [first, setFirst] = useState('')
+  const [last, setLast] = useState('')
+  const lastBox = useRef(null)
+  const emailBox = useRef(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -134,15 +146,17 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
   const [code, setCode] = useState('')
   const [confirming, setConfirming] = useState(false)
 
-  const ready = email.includes('@') && password.length >= 6
+  const nameFault = mode === 'up' ? nameProblem({ first, last }) : null
+  const ready = !nameFault && email.includes('@') && password.length >= 6
 
   const go = async () => {
     setUnconfirmed(null)
     if (!ready) {
       setError(
-        email.includes('@')
-          ? 'Your password is at least 6 characters.'
-          : 'Type your email address and password.'
+        nameFault ||
+          (email.includes('@')
+            ? 'Your password is at least 6 characters.'
+            : 'Type your email address and password.')
       )
       return
     }
@@ -152,7 +166,7 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
     setNoAccount(false)
     try {
       if (mode === 'up') {
-        const { needsConfirmation, userId } = await signUp({ email: email.trim(), password })
+        const { needsConfirmation, userId } = await signUp({ email: email.trim(), password, firstName: first, lastName: last })
         if (needsConfirmation) {
           /* And the purchase goes onto it now, before the email is opened
              anywhere (purchases.js, linkNewAccount). */
@@ -386,8 +400,51 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
         ) : null}
 
         <View style={{ gap: space.md }}>
+          {/* First name, then Last name, over the email: Create account's alone (see THE NAME above). */}
+          {mode === 'up' ? (
+            <>
+              <Field glyph={<Person />}>
+                <TextInput
+                  style={fieldText}
+                  value={first}
+                  onChangeText={setFirst}
+                  placeholder={NAME_LABELS.first}
+                  placeholderTextColor={color.silkFaint}
+                  accessibilityLabel={NAME_LABELS.first}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  autoComplete="given-name"
+                  textContentType="givenName"
+                  maxLength={NAME_MAX}
+                  returnKeyType="next"
+                  submitBehavior="submit"
+                  onSubmitEditing={() => lastBox.current?.focus()}
+                />
+              </Field>
+              <Field glyph={<Person />}>
+                <TextInput
+                  ref={lastBox}
+                  style={fieldText}
+                  value={last}
+                  onChangeText={setLast}
+                  placeholder={NAME_LABELS.last}
+                  placeholderTextColor={color.silkFaint}
+                  accessibilityLabel={NAME_LABELS.last}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  autoComplete="family-name"
+                  textContentType="familyName"
+                  maxLength={NAME_MAX}
+                  returnKeyType="next"
+                  submitBehavior="submit"
+                  onSubmitEditing={() => emailBox.current?.focus()}
+                />
+              </Field>
+            </>
+          ) : null}
           <Field icon={mailIcon}>
             <TextInput
+              ref={emailBox}
               style={fieldText}
               value={email}
               onChangeText={setEmail}
@@ -564,8 +621,11 @@ function Mark() {
   )
 }
 
-/** A field with its picture on the left and a hairline between them, as drawn. */
-function Field({ icon, children }) {
+/**
+ * A field with its picture on the left and a hairline between them, as drawn.
+ * `glyph` stands in for the picture where there is none to draw (the name).
+ */
+function Field({ icon, glyph = null, children }) {
   return (
     <View
       style={{
@@ -577,9 +637,37 @@ function Field({ icon, children }) {
         ...glassField()
       }}
     >
-      <Image source={icon} style={{ width: 22, height: 22, marginHorizontal: space.md, tintColor: color.silkDim }} />
+      {glyph || <Image source={icon} style={{ width: 22, height: 22, marginHorizontal: space.md, tintColor: color.silkDim }} />}
       <View style={{ width: 1, alignSelf: 'stretch', marginVertical: space.sm, backgroundColor: color.glassRim }} />
       {children}
+    </View>
+  )
+}
+
+/**
+ * The picture in the two name fields: a head over a pair of shoulders, drawn
+ * in Views in the field pictures' own ink and size, as the mark over the name
+ * is, so the name needed no new picture file.
+ */
+function Person() {
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={{ width: 22, height: 22, marginHorizontal: space.md, alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}
+    >
+      <View style={{ width: 9, height: 9, borderRadius: 5, borderWidth: 1.8, borderColor: color.silkDim }} />
+      <View
+        style={{
+          width: 16,
+          height: 8,
+          borderTopLeftRadius: 8,
+          borderTopRightRadius: 8,
+          borderWidth: 1.8,
+          borderBottomWidth: 0,
+          borderColor: color.silkDim
+        }}
+      />
     </View>
   )
 }

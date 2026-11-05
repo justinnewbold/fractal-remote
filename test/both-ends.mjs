@@ -3818,14 +3818,24 @@ export function run(test) {
       'package.json': '{ "type": "module" }',
       'service.mjs': `export const made = []
         export const asked = []
-        export const said = { answer: () => ({ data: {}, error: { message: 'the bench was not told what to say' } }) }
+        export const signups = []
+        export const said = {
+          answer: () => ({ data: {}, error: { message: 'the bench was not told what to say' } }),
+          signUp: () => ({ data: { user: { id: 'new-1', identities: [{ provider: 'email' }] }, session: null }, error: null })
+        }
         export const isAuthRetryableFetchError = () => false
         export const createClient = (url, key, options) => {
           made.push({ url, key, options })
-          return { auth: { verifyOtp: async (params) => { asked.push(params); return said.answer(params) } } }
+          return {
+            auth: {
+              verifyOtp: async (params) => { asked.push(params); return said.answer(params) },
+              signUp: async (params) => { signups.push(params); return said.signUp(params) }
+            }
+          }
         }`,
       'nothing.mjs': 'export const logDebug = () => {}\nexport const decode = () => null\nexport const withRetry = (fn) => fn()\nexport const notForever = (...a) => fetch(...a)\nexport default {}\n',
       'confirm-code.mjs': read('shared/confirm-code.mjs'),
+      'account-name.mjs': read('shared/account-name.mjs'),
       'relay-rules.mjs': read('shared/relay-rules.mjs'),
       'device-word.mjs': read('shared/device-word.mjs'),
       'project.mjs': end === 'phone' ? read('mobile/src/lib/project.js') : read('desktop/lib/project.mjs')
@@ -3842,12 +3852,14 @@ export function run(test) {
             ["from './notForever'", "from './nothing.mjs'"],
             ["from './relay-rules'", "from './relay-rules.mjs'"],
             ["from './confirm-code'", "from './confirm-code.mjs'"],
+            ["from './account-name'", "from './account-name.mjs'"],
             ["from './device-word'", "from './device-word.mjs'"]
           ]
         : [
             ["from '../../desktop/lib/project.mjs'", "from './project.mjs'"],
             ["from '../../shared/relay-rules.mjs'", "from './relay-rules.mjs'"],
             ["from '../../shared/confirm-code.mjs'", "from './confirm-code.mjs'"],
+            ["from '../../shared/account-name.mjs'", "from './account-name.mjs'"],
             ["from '../../shared/device-word.mjs'", "from './device-word.mjs'"],
             ["from './debugLog.js'", "from './nothing.mjs'"],
             ["import('@supabase/supabase-js')", "import('./service.mjs')"]
@@ -3934,6 +3946,186 @@ export function run(test) {
     }
   })
 
+  /*
+   * THE NAME ON A NEW ACCOUNT. "When they create an account have them put in
+   * their first name and last name and email address." (Justin, 5 November
+   * 2026.) Create account asks for both, at both ends, and nothing else does;
+   * they go onto the account as its metadata, trimmed and 50 characters at
+   * most, and an account made before is never asked. shared/account-name.mjs.
+   */
+  test('a name will do when it has something in it and is 50 characters at most, and is kept trimmed', async () => {
+    const n = await import('../shared/account-name.mjs')
+    assert.equal(n.NAME_MAX, 50)
+    assert.deepEqual(n.NAME_KEYS, { first: 'first_name', last: 'last_name' })
+    assert.deepEqual(n.NAME_LABELS, { first: 'First name', last: 'Last name' })
+    assert.equal(n.cleanName('  Jane  '), 'Jane')
+    assert.equal(n.cleanName(' Mary \t Ann '), 'Mary Ann', 'a run of spaces inside a name is kept as it was typed')
+    assert.equal(n.cleanName(null), '')
+    assert.equal(n.nameProblem({ first: '', last: 'Smith' }), 'Type your first name.')
+    assert.equal(n.nameProblem({ first: '   ', last: 'Smith' }), 'Type your first name.', 'a first name of spaces will do')
+    assert.equal(n.nameProblem({ first: 'Jane', last: ' ' }), 'Type your last name.')
+    assert.equal(n.nameProblem({}), 'Type your first name.', 'nothing at all is asked about the last name first')
+    assert.equal(n.nameProblem({ first: 'x'.repeat(51), last: 'Smith' }), 'Your first name can be 50 characters at most.')
+    assert.equal(n.nameProblem({ first: 'Jane', last: 'y'.repeat(51) }), 'Your last name can be 50 characters at most.')
+    assert.equal(n.nameProblem({ first: ` ${'x'.repeat(50)} `, last: 'y'.repeat(50) }), null, '50 characters, once trimmed, is refused')
+    assert.deepEqual(n.nameData({ first: ' Jane ', last: ' van  der Berg ' }), { first_name: 'Jane', last_name: 'van der Berg' })
+    assert.throws(() => n.nameData({ first: 'Jane', last: '' }), { message: 'Type your last name.' })
+    assert.equal(n.nameOn({ first_name: 'Jane', last_name: 'Smith' }), 'Jane Smith')
+    assert.equal(n.nameOn({ first_name: ' Jane ' }), 'Jane')
+    assert.equal(n.nameOn({}), '', 'an account made before names were asked has one')
+    assert.equal(n.nameOn(null), '')
+    /* The phone's copy is a plain copy, made by npm run sync:rules. */
+    const { FILES } = await import('../scripts/sync-relay-rules.mjs')
+    assert.ok(
+      FILES.some((f) => f.source === '../shared/account-name.mjs' && f.target === '../mobile/src/lib/account-name.js' && !f.render),
+      'the phone has no copy of the name rule'
+    )
+    assert.match(read('mobile/src/lib/relay.js'), /^import \{ nameData \} from '\.\/account-name'$/m)
+    assert.match(read('src/lib/remote.js'), /^import \{ nameData \} from '\.\.\/\.\.\/shared\/account-name\.mjs'$/m)
+  })
+
+  test('each end makes the account with its first and last name as its metadata, and makes none without them', async () => {
+    for (const end of ['phone', 'web']) {
+      const { mod, service, done } = await confirmBench(end)
+      try {
+        const make = (details) => (end === 'phone' ? mod.signUp(details) : mod.remoteSignUp(details))
+        const email = 'player@example.com'
+        const password = 'secret-1'
+        for (const [names, message] of [
+          [{}, 'Type your first name.'],
+          [{ firstName: 'Jane' }, 'Type your last name.'],
+          [{ firstName: '  ', lastName: 'Smith' }, 'Type your first name.'],
+          [{ firstName: 'x'.repeat(51), lastName: 'Smith' }, 'Your first name can be 50 characters at most.'],
+          [{ firstName: 'Jane', lastName: 'y'.repeat(51) }, 'Your last name can be 50 characters at most.']
+        ]) {
+          await assert.rejects(make({ email, password, ...names }), { message }, `${end}: ${JSON.stringify(names)} made an account`)
+        }
+        assert.equal(service.signups.length, 0, `${end}: an account was asked for without a name`)
+        const out = await make({ email, password, firstName: '  Jane ', lastName: ' van  der Berg ' })
+        assert.equal(out.needsConfirmation, true)
+        assert.deepEqual(
+          service.signups,
+          [{ email, password, options: { data: { first_name: 'Jane', last_name: 'van der Berg' } } }],
+          `${end}: the name did not go onto the account, trimmed, as its metadata`
+        )
+        await make({ email, password, firstName: 'x'.repeat(50), lastName: 'y'.repeat(50) })
+        assert.equal(service.signups.length, 2, `${end}: a 50-character name is refused`)
+      } finally {
+        done()
+      }
+    }
+  })
+
+  test('Create account asks for a first and last name over the email, at both ends, and Sign in never does', () => {
+    const flat = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' ')
+
+    /* The phone. */
+    const phone = flat(read('mobile/src/screens/SignIn.js'))
+    assert.match(phone, /import \{ NAME_LABELS, NAME_MAX, nameProblem \} from '\.\.\/lib\/account-name'/)
+    const opens = phone.indexOf("{mode === 'up' ? ( <> <Field glyph={<Person />}>")
+    const email = phone.indexOf('placeholder="Email"')
+    assert.ok(opens > 0 && opens < email, 'the phone’s name fields are not on Create account alone, over the email')
+    const box = phone.slice(opens, email)
+    for (const [key, hint, fill] of [['first', 'givenName', 'given-name'], ['last', 'familyName', 'family-name']]) {
+      for (const needed of [
+        `placeholder={NAME_LABELS.${key}}`,
+        `accessibilityLabel={NAME_LABELS.${key}}`,
+        `textContentType="${hint}"`,
+        `autoComplete="${fill}"`,
+        'maxLength={NAME_MAX}',
+        'autoCapitalize="words"',
+        'returnKeyType="next"'
+      ]) {
+        assert.ok(box.includes(needed), `the phone’s ${key} name field lost ${needed}`)
+      }
+    }
+    /* In order: First name, Last name, then the email. */
+    assert.match(box, /onSubmitEditing=\{\(\) => lastBox\.current\?\.focus\(\)\}[\s\S]*ref=\{lastBox\}[\s\S]*onSubmitEditing=\{\(\) => emailBox\.current\?\.focus\(\)\}/, 'Next on the phone’s name fields does not go first, last, then email')
+    assert.match(phone, /<TextInput ref=\{emailBox\} style=\{fieldText\} value=\{email\}/)
+    /* The same glass field as the email's, with a person drawn in for its picture. */
+    assert.equal(box.split('<Field glyph={<Person />}>').length - 1, 2)
+    assert.match(phone, /\{glyph \|\| <Image source=\{icon\}/)
+    /* Asked of Create account only, first, and sent with it alone. */
+    assert.match(phone, /const nameFault = mode === 'up' \? nameProblem\(\{ first, last \}\) : null const ready = !nameFault && email\.includes\('@'\) && password\.length >= 6/)
+    assert.match(phone, /setError\( nameFault \|\| \(email\.includes\('@'\)/)
+    assert.match(phone, /await signUp\(\{ email: email\.trim\(\), password, firstName: first, lastName: last \}\)/)
+    assert.match(phone, /await signIn\(\{ email: email\.trim\(\), password \}\)/, 'Sign in on the phone sends a name')
+
+    /* The website and the computer app: both of its forms. */
+    const web = flat(read('src/components/SignIn.jsx'))
+    assert.match(web, /import \{ NAME_LABELS, NAME_MAX, nameProblem \} from '\.\.\/\.\.\/shared\/account-name\.mjs'/)
+    for (const [form, start, end] of [
+      ['the stage form', '<form className="signin signin-stage" onSubmit={go}>', '<FieldIcon kind="mail" />'],
+      ['the sheet’s form', '<form className="signin" onSubmit={go}>', '<span>Email</span>']
+    ]) {
+      const at = web.indexOf(start)
+      const names = web.slice(at, web.indexOf(end, at))
+      assert.ok(at > 0 && names.startsWith(`${start} {mode === 'up' ? ( <>`), `${form}: the name fields are not on Create account alone, over the email`)
+      for (const [key, fill] of [['first', 'given-name'], ['last', 'family-name']]) {
+        assert.ok(names.includes(`autoComplete="${fill}"`), `${form}: the ${key} name lost autoComplete="${fill}"`)
+        assert.ok(names.includes(key === 'first' ? 'onChange={(e) => setFirst(e.target.value)}' : 'onChange={(e) => setLast(e.target.value)}'), `${form}: the ${key} name is not typed into its own box`)
+      }
+      assert.equal(names.split('maxLength={NAME_MAX}').length - 1, 2, `${form}: a name field takes more than 50 characters`)
+      if (form === 'the stage form') {
+        assert.ok(names.includes('aria-label={NAME_LABELS.first}') && names.includes('aria-label={NAME_LABELS.last}'), `${form}: a name field has no label for a screen reader`)
+        assert.equal(names.split('<FieldIcon kind="person" />').length - 1, 2)
+      } else assert.ok(names.includes('<span>{NAME_LABELS.first}</span>') && names.includes('<span>{NAME_LABELS.last}</span>'), `${form}: a name field has no label`)
+    }
+    assert.match(web, /const nameFault = mode === 'up' \? nameProblem\(\{ first, last \}\) : null if \(nameFault\) return setProblem\(nameFault\) if \(!address\) return setProblem\('Enter your email\.'\)/)
+    assert.match(web, /await onCreate\(\{ email: address, password, firstName: first, lastName: last \}\)/)
+    assert.match(web, /await onSubmit\(\{ email: address, password \}\)/, 'Sign in on the website sends a name')
+    assert.match(read('src/lib/link.js'), /export async function createAccount\(\{ email, password, firstName, lastName \}\) \{[\s\S]{0,120}remoteSignUp\(\{ url: config\.url, anonKey: config\.anonKey, email, password, firstName, lastName \}\)/)
+  })
+
+  test('Developer’s lookups say the name an account was made with, and an account made before says it has none', async () => {
+    const { lookupRows, accountSections, accountFilterButtons, NO_NAME } = await import('../shared/admin.mjs')
+    const details = { signedUp: '2026-11-05T10:00:00Z', confirmed: '2026-11-05T10:05:00Z', lastSignIn: null, devices: [], purchases: [] }
+    const row = (rows, label) => rows.find((r) => r.label === label)?.value
+    const named = lookupRows({ found: true, unlocked: false, details: { ...details, name: 'Jane Smith' } })
+    assert.equal(named[0].label, 'Name', 'the name is not the first thing the lookup says')
+    assert.equal(row(named, 'Name'), 'Jane Smith')
+    assert.equal(row(lookupRows({ found: true, details: { ...details, name: '' } }), 'Name'), NO_NAME)
+    assert.match(NO_NAME, /made before Create account asked for a name/)
+    assert.match(row(lookupRows({ found: true, details: { ...details, name: null } }), 'Name'), /^Could not be read just now/)
+    assert.equal(row(lookupRows({ found: true, details }), 'Name'), undefined, 'a server too old to send the name is said to have none')
+
+    const answer = {
+      ok: true,
+      total: 2,
+      accounts: [
+        { email: 'jane@example.com', name: 'Jane Smith', signed_up: '2026-11-05T10:00:00Z', confirmed: true, last_sign_in: null, unlocked: false },
+        { email: 'old@example.com', signed_up: '2026-10-01T10:00:00Z', confirmed: true, last_sign_in: null, unlocked: false }
+      ]
+    }
+    const rows = accountSections(answer, '', Date.parse('2026-11-05T12:00:00Z'))[0].rows
+    assert.match(rows[0].value, /^jane@example\.com\nJane Smith\nSigned up /, 'Everyone with an account does not say the name under the address')
+    assert.equal(rows[0].name, 'Jane Smith')
+    assert.match(rows[1].value, /^old@example\.com\nSigned up /, 'an account with no name gains a blank line')
+    assert.deepEqual(accountSections(answer, 'smith')[0].rows.map((r) => r.email), ['jane@example.com'], 'the find box does not find a name')
+    assert.equal(accountFilterButtons(answer, 'smith')[0].count, 1)
+    assert.match(read('mobile/src/components/AccountsTool.js'), /\{open\?\.name \? \(/, 'the phone’s sheet for an account does not say its name')
+
+    /* The server reads it off the account, by the keys the forms write, and sends '' for none. */
+    const fn = read('supabase/functions/grant-access/index.ts')
+    const { NAME_KEYS } = await import('../shared/account-name.mjs')
+    assert.ok(fn.includes(`const NAME_KEYS = { first: '${NAME_KEYS.first}', last: '${NAME_KEYS.last}' }`), 'grant-access reads the name under other keys than the forms write')
+    assert.match(fn, /const details = \{\s*name,/)
+    assert.match(fn, /nameOf\(account\)\s*\]\)/)
+    assert.match(fn, /\.\.\.\(names\.has\(at\) \? \{ name: names\.get\(at\) \} : \{\}\)/)
+
+    /* Deleting the account deletes the name: it is the account's own, and the account is deleted outright. */
+    assert.match(read('supabase/functions/_shared/forget-account.ts'), /fetch\(`\$\{url\}\/auth\/v1\/admin\/users\/\$\{who\.id\}`, \{\s*method: 'DELETE'/)
+    assert.doesNotMatch(read('supabase/functions/_shared/forget-account.ts'), /should_soft_delete/, 'an account is only hidden, and its name kept')
+
+    /* And the privacy page and the store labels say so. */
+    const policy = read('public/privacy.html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+    assert.match(policy, /Your first and last name Asked for when you make an account/)
+    assert.match(policy, /deleted with it/)
+    const store = read('docs/app-store.md')
+    assert.match(store, /\| Contact Info → \*\*Name\*\* \| Yes \| Yes \|/)
+    assert.match(store, /\| Personal info → Name \| Required \| App functionality, Account management \|/)
+  })
+
   test('the box for the code shows wherever an account waits on its email, at both ends, and a good code goes the way Sign in goes', () => {
     const flat = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ').replace(/\s+/g, ' ')
 
@@ -4000,7 +4192,8 @@ export function run(test) {
     const web = read('src/lib/remote.js')
     for (const [end, src, client] of [['phone', phone, 'supabase()'], ['website', web, 'c']]) {
       /* The email is the same email: made by the same sign-up, sent again the same way. */
-      assert.ok(src.includes(`await ${client}.auth.signUp({ email, password })`), `${end}: the sign-up that sends the email changed`)
+      /* With the name Create account asks for as the account's metadata (5 November 2026), and nothing else beside it. */
+      assert.ok(src.includes(`await ${client}.auth.signUp({ email, password, options: { data: name } })`), `${end}: the sign-up that sends the email changed`)
       assert.ok(src.includes(`await ${client}.auth.resend({ type: 'signup', email })`), `${end}: Send it again sends something other than the confirmation email`)
       /* And the code is the only thing checked in the app: one verifyOtp, in confirmWithCode, never the link's token. */
       assert.equal(src.split('.verifyOtp(').length - 1, 1, `${end}: the code is checked in more than one place`)
