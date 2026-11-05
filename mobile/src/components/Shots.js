@@ -118,7 +118,7 @@ export default function Shots({ shots = [], onChange, disabled = false, say }) {
                   ...thumbSize(shot.width, shot.height, 64),
                   borderRadius: radius.sm,
                   borderWidth: 1,
-                  borderColor: color.rule,
+                  borderColor: color.glassRim,
                   backgroundColor: color.panel
                 }}
               />

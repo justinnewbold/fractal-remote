@@ -1,6 +1,7 @@
 import { Image, Pressable, Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
+import { glassCard } from '../lib/glass'
 import { at as tint } from '../lib/vivid'
 import { tick } from '../lib/feedback'
 import Lamp from './Lamp'
@@ -51,6 +52,9 @@ export function Tile({ icon, size = 64 }) {
  * thing to press. Only while there is a red line: a card without one is not
  * pressable at all, exactly as before. `hint` is what VoiceOver and TalkBack
  * say it does.
+ *
+ * A card of frosted glass (lib/glass), its border the glass's rim; the amber
+ * picture tile it leads with is the card's own, and stays.
  */
 export function TipCard({ icon, label, body, warn, onWarn, hint, onPress, right, tile = 64 }) {
   const warnLink = Boolean(warn && onWarn)
@@ -73,10 +77,8 @@ export function TipCard({ icon, label, body, warn, onWarn, hint, onPress, right,
         alignItems: 'center',
         gap: space.lg,
         padding: space.lg,
-        borderRadius: radius.lg,
         borderWidth: 1,
-        borderColor: color.rule,
-        backgroundColor: pressed ? color.panelHi : color.panel
+        ...glassCard({ bordered: true, pressed, classicCorner: radius.lg })
       })}
     >
       <Tile icon={icon} size={tile} />
@@ -125,9 +127,9 @@ export function ChainCards({ cards, onWarn }) {
   )
 }
 
-/** The cable between two cards: lit amber when both ends answer. */
+/** The cable between two cards: lit amber when both ends answer, and the glass's rim when not. */
 function ChainWire({ label, lit }) {
-  const ink = lit ? color.signal : color.rule
+  const ink = lit ? color.signal : color.glassRim
   return (
     <View style={{ alignItems: 'center' }}>
       <View style={{ width: 2, height: 10, backgroundColor: ink }} />

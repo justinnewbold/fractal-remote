@@ -268,7 +268,14 @@ const WINDOWS_RELEASES = [
   [19041, '10', '2004']
 ]
 
-/** A Linux system's own short name, from /etc/os-release: "Debian 12", "Ubuntu 24.04", "Fedora 41". */
+/**
+ * A Linux system's own short name, from /etc/os-release: "Debian 12", "Ubuntu 24.04", "Fedora 41".
+ *
+ * Never more than 24 characters, and never a version cut in half (4 November
+ * 2026: openSUSE's VERSION_ID 20241104 came out "2024"): whole words come
+ * off the end of the name until the name and the whole version fit, and a
+ * version alone is cut only when it is longer than that by itself.
+ */
 export function linuxSystem(osRelease = '') {
   const field = (key) => {
     const m = String(osRelease || '').match(new RegExp(`^${key}=(.*)$`, 'm'))
@@ -276,7 +283,10 @@ export function linuxSystem(osRelease = '') {
   }
   const name = field('NAME').replace(/\s*GNU\/Linux\s*/i, ' ').replace(/\s+Linux$/i, '').trim()
   const version = field('VERSION_ID')
-  return [name, version].filter(Boolean).join(' ').slice(0, 24)
+  const words = name.split(/\s+/).filter(Boolean)
+  const said = () => [words.join(' '), version].filter(Boolean).join(' ')
+  while (words.length > (version ? 0 : 1) && said().length > 24) words.pop()
+  return said().slice(0, 24)
 }
 
 export function computerKind({ platform = process.platform, release = '', systemVersion = '', model = '', arch = process.arch, osRelease: os = '' } = {}) {
@@ -305,17 +315,35 @@ export function computerKind({ platform = process.platform, release = '', system
     return say(`Windows${major ? ` ${major}` : ''}${onArm}`)
   }
   if (platform === 'linux') {
-    const pi = String(model || '').replace(/\0/g, '').match(/Raspberry Pi (Zero 2 W|Zero W|Zero|Compute Module \d+|\d+|400|500)/)
+    const pi = String(model || '').replace(/\0/g, '').match(/Raspberry Pi (Zero 2 W|Zero W|Zero|Compute Module \d+\+?|\d+\+?|400|500)/)
     const system = linuxSystem(os)
     const bits = arch === 'arm64' || arch === 'x64' ? '64-bit' : arch === 'arm' || arch === 'ia32' ? '32-bit' : ''
-    if (pi) return say(`Raspberry Pi ${pi[1]}${system ? ` · ${system}` : ''}${bits ? ` (${bits})` : ''}`)
+    if (pi) {
+      /*
+       * A Compute Module by its own short name ("CM4"), and whole parts off
+       * the end, the bits and then the system, until it fits the 40: never
+       * "Debian 1" or "(64-bi" (4 November 2026, a CM4 and a Zero 2 W ran
+       * past it and were cut mid-number).
+       */
+      const board = pi[1].replace(/^Compute Module /, 'CM')
+      const parts = [`Raspberry Pi ${board}`, system ? ` · ${system}` : '', bits ? ` (${bits})` : ''].filter(Boolean)
+      while (parts.length > 1 && parts.join('').length > 40) parts.pop()
+      return say(parts.join(''))
+    }
     return say(system ? `${system} (${arch})` : `Linux (${arch})`)
   }
   return say(platform || 'unknown')
 }
 
-/** This computer's kind, read from where it is kept here. Never throws. */
-export function thisComputer() {
+/**
+ * This computer's kind, read from where it is kept here. Never throws.
+ *
+ * `arch` is the processor's, when the caller knows better than this copy's
+ * own build: an Intel copy of the Mac app on Apple silicon runs as x64 under
+ * Rosetta, and says Apple silicon only when told (desktop/main.js asks
+ * Electron's app.runningUnderARM64Translation).
+ */
+export function thisComputer({ arch = process.arch } = {}) {
   let model = ''
   if (process.platform === 'linux') {
     try {
@@ -338,7 +366,7 @@ export function thisComputer() {
       os = ''
     }
   }
-  return computerKind({ release: osRelease(), systemVersion, model, osRelease: os })
+  return computerKind({ release: osRelease(), systemVersion, model, arch, osRelease: os })
 }
 
 /**

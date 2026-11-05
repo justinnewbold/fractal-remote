@@ -92,6 +92,8 @@ import phoneIcon from '../../assets/icons/phone.png'
 import sendIcon from '../../assets/icons/send.png'
 import setupIcon from '../../assets/icons/setup.png'
 import Note from '../components/Note'
+import { GlassCard } from '../components/Glass'
+import { classic, glassCard } from '../lib/glass'
 import PasswordBox from '../components/PasswordBox'
 import Press from '../components/Press'
 import { stopLooper } from '../components/Looper'
@@ -1888,8 +1890,8 @@ function SetupRow({ title, status, onPress }) {
         paddingHorizontal: space.md,
         paddingVertical: space.md,
         borderBottomWidth: 1,
-        borderBottomColor: color.rule,
-        backgroundColor: pressed ? color.panelHi : 'transparent'
+        borderBottomColor: color.glassRim,
+        backgroundColor: pressed ? color.glassFillHi : 'transparent'
       })}
     >
       <View style={{ flex: 1, gap: 2 }}>
@@ -2032,6 +2034,14 @@ function ArrangeScenes({ onScrollLock }) {
   )
 }
 
+/*
+ * A tick box row's least height is its label and one line of its sentence
+ * under it: about 42 on an iPhone at the usual text size, under a thumb's 44.
+ * Two points more above and below reach it, and never the row beside it,
+ * which is 12 away.
+ */
+const CHOICE_SLOP = { top: 2, bottom: 2 }
+
 /**
  * A tick box with a sentence under it.
  *
@@ -2044,6 +2054,7 @@ function Choice({ on, label, sub, onPress, role = 'checkbox' }) {
   return (
     <Pressable
       accessibilityRole={role}
+      hitSlop={CHOICE_SLOP}
       accessibilityState={{ checked: !!on }}
       accessibilityLabel={label}
       onPress={() => {
@@ -2058,7 +2069,7 @@ function Choice({ on, label, sub, onPress, role = 'checkbox' }) {
           height: 28,
           borderRadius: radius.sm,
           borderWidth: on ? 0 : 1,
-          borderColor: color.rule,
+          borderColor: color.glassRim,
           backgroundColor: on ? color.signal : color.panel,
           alignItems: 'center',
           justifyContent: 'center'
@@ -2133,6 +2144,12 @@ const deleteCosts = (from) => {
  * version, or that an update is ready, so nothing that wants seeing is
  * folded away unseen. Tapping a heading opens it; tapping it again closes
  * it. Said open or closed to a screen reader.
+ *
+ * FROSTED GLASS (lib/glass): the whole group is one card of glass, its
+ * heading clear on it and pressed in the glass's own press, so the open rows
+ * sit inside the card with it. The card's rim is a ring drawn inside it, so
+ * nothing moves, and it cuts the rows to its corner. In Classic it is the
+ * plain stack it was (GlassCard `bare`).
  */
 function Group({ title, hint, children }) {
   const [open, setOpen] = useState(() => OPEN_GROUPS.has(title))
@@ -2143,7 +2160,7 @@ function Group({ title, hint, children }) {
     setOpen(!open)
   }
   return (
-    <View>
+    <GlassCard clip bare>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -2156,8 +2173,9 @@ function Group({ title, hint, children }) {
           minHeight: TAP + 8,
           paddingHorizontal: space.md,
           paddingVertical: space.md,
-          borderRadius: radius.md,
-          backgroundColor: pressed ? color.panelHi : color.panel
+          borderRadius: radius.card,
+          /* In Classic the heading is the panel it was, the group having no card. */
+          backgroundColor: pressed ? color.glassFillHi : classic() ? color.panel : 'transparent'
         })}
       >
         <View style={{ flex: 1, gap: 2 }}>
@@ -2174,7 +2192,7 @@ function Group({ title, hint, children }) {
         <Text style={{ color: color.silkFaint, fontSize: font.lead, transform: [{ rotate: open ? '90deg' : '0deg' }] }}>›</Text>
       </Pressable>
       {open ? <View style={{ gap: 0, paddingLeft: space.sm }}>{children}</View> : null}
-    </View>
+    </GlassCard>
   )
 }
 
@@ -2206,7 +2224,7 @@ const KEPT_OFFLINE = 'Can’t reach your account now. Password and account optio
  * `email` is the account service's, or the one kept on the phone while it
  * has not vouched for it (`offline`), which is up at once rather than after
  * "Checking…": with no signal the service takes up to twenty-five seconds to
- * say nothing.
+ * say nothing. A card of glass on the page, its border the glass's rim.
  */
 function AccountCard({ asked, email, offline, paired, unlocked, demo, onPress }) {
   const who = email || (!asked ? 'Checking…' : paired ? 'Paired, no account' : 'Not signed in')
@@ -2224,10 +2242,8 @@ function AccountCard({ asked, email, offline, paired, unlocked, demo, onPress })
         alignItems: 'center',
         gap: space.md,
         padding: space.md,
-        borderRadius: radius.md,
         borderWidth: 1,
-        borderColor: color.rule,
-        backgroundColor: pressed ? color.panelHi : color.panel
+        ...glassCard({ bordered: true, pressed })
       })}
     >
       <View style={{ flex: 1, gap: 2 }}>

@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
 
-import { color, font, radius, space } from '../lib/theme'
+import { color, font, space } from '../lib/theme'
+import { GlassCard } from './Glass'
 
 /**
  * A few labelled facts, one to a line — the answers on Justin's own tools
@@ -15,6 +16,12 @@ import { color, font, radius, space } from '../lib/theme'
  * `detail(row)` draws whatever belongs under a row, as the browser's
  * src/components/Facts.jsx does: on Sales at a glance, the Handled button
  * under each Paid twice row. A row it gives nothing for is drawn as before.
+ *
+ * The rows sit on one card of FLAT frosted glass (lib/glass): the rim and the
+ * light along its top, and no drop shadow, because a list of rows is never
+ * lifted, and because Messages from users draws one inside its sheet, where a
+ * card is the second layer of glass and a button on it never the third. The
+ * lines between rows are the glass's rim.
  */
 const look = (i, pressed) => ({
   flexDirection: 'row',
@@ -22,7 +29,7 @@ const look = (i, pressed) => ({
   gap: space.md,
   paddingVertical: space.sm,
   borderTopWidth: i ? 1 : 0,
-  borderTopColor: color.rule,
+  borderTopColor: color.glassRim,
   opacity: pressed ? 0.6 : 1
 })
 
@@ -33,7 +40,7 @@ export default function Facts({ title, rows, onRow, detail }) {
       {title ? (
         <Text style={{ color: color.silkDim, fontSize: font.micro, letterSpacing: 1, textTransform: 'uppercase' }}>{title}</Text>
       ) : null}
-      <View style={{ borderRadius: radius.md, backgroundColor: color.panel, paddingHorizontal: space.md }}>
+      <GlassCard flat style={{ paddingHorizontal: space.md }}>
         {rows.map((row, i) => {
           const tappable = !!(onRow && (row.email || row.id))
           const Row = tappable ? Pressable : View
@@ -64,13 +71,13 @@ export default function Facts({ title, rows, onRow, detail }) {
           )
           if (!below) return line
           return (
-            <View key={`${row.label}-${i}`} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: color.rule, paddingBottom: space.md }}>
+            <View key={`${row.label}-${i}`} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: color.glassRim, paddingBottom: space.md }}>
               {line}
               {below}
             </View>
           )
         })}
-      </View>
+      </GlassCard>
     </View>
   )
 }

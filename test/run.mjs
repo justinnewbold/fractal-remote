@@ -2722,13 +2722,45 @@ test('the computer app says which version it is, where the phone already looks',
   for (const model of ['Raspberry Pi Compute Module 4 Rev 1.1\0', 'Raspberry Pi Zero 2 W Rev 1.0\0']) {
     assert.ok(host.computerKind({ platform: 'linux', model, arch: 'arm64', osRelease: 'NAME="Some Very Long Distribution Name GNU/Linux"\nVERSION_ID="2026.11.03"\n' }).length <= 40)
   }
+  /*
+   * NEVER CUT MID-NUMBER (4 November 2026): a Compute Module 4 on Debian 12
+   * came out "Raspberry Pi Compute Module 4 · Debian 1", a Zero 2 W "…
+   * (64-bi", and openSUSE's 20241104 "2024". A Compute Module is "CM4", and
+   * whole parts come off the end, the bits and then the system.
+   */
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi Compute Module 4 Rev 1.1\0', arch: 'arm64', osRelease: debian }), 'Raspberry Pi CM4 · Debian 12 (64-bit)')
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi Zero 2 W Rev 1.0\0', arch: 'arm64', osRelease: debian }), 'Raspberry Pi Zero 2 W · Debian 12')
+  assert.equal(host.computerKind({ platform: 'linux', model: 'Raspberry Pi Compute Module 5 Rev 1.0\0', arch: 'arm64', osRelease: 'NAME="Ubuntu"\nVERSION_ID="24.04"\n' }), 'Raspberry Pi CM5 · Ubuntu 24.04 (64-bit)')
+  assert.match(host.linuxSystem('NAME="openSUSE Tumbleweed"\nVERSION_ID="20241104"'), /20241104$/, 'a long version is cut mid-number')
+  assert.equal(host.linuxSystem('NAME="openSUSE Tumbleweed"\nVERSION_ID="20241104"'), 'openSUSE 20241104')
+  assert.equal(host.linuxSystem('NAME="Some Very Long Distribution Name"\n'), 'Some Very Long')
+  assert.equal(host.linuxSystem('VERSION_ID="12345678901234567890123456789"\n').length, 24)
+  for (const board of ['Zero 2 W', 'Zero W', 'Zero', 'Compute Module 3', 'Compute Module 3+', 'Compute Module 4', 'Compute Module 5', '1', '2', '3', '4', '5', '400', '500']) {
+    for (const osRelease of [debian, 'NAME="Raspbian GNU/Linux"\nVERSION_ID="11"\n', 'NAME="Ubuntu"\nVERSION_ID="24.04"\n', 'NAME="openSUSE Tumbleweed"\nVERSION_ID="20241104"\n', '']) {
+      for (const arch of ['arm64', 'arm']) {
+        const said = host.computerKind({ platform: 'linux', model: `Raspberry Pi ${board} Rev 1.0\0`, arch, osRelease })
+        assert.ok(said.length <= 40, said)
+        assert.ok(!/Debian 1$|Debian 1 |\(\d\d-bi$|\(\d\d-bit?$|2024$| · $/.test(said), `cut mid-word: ${said}`)
+        assert.ok(said.startsWith(`Raspberry Pi ${board.replace(/^Compute Module /, 'CM')}`), said)
+      }
+    }
+  }
   for (const p of ['darwin', 'win32', 'linux']) assert.ok(host.computerKind({ platform: p }).length <= 40)
   assert.equal(typeof host.thisComputer(), 'string')
+  /* An Intel copy on Apple silicon says Apple silicon: the processor's kind, told by main.js, not the copy's own build. */
+  assert.match(readSrc(new URL('../desktop/lib/host.mjs', import.meta.url), 'utf8'), /export function thisComputer\(\{ arch = process\.arch \} = \{\}\) \{[\s\S]*?return computerKind\(\{ release: osRelease\(\), systemVersion, model, arch, osRelease: os \}\)/, 'thisComputer throws away the arch it is told')
+  assert.equal(typeof host.thisComputer({ arch: 'arm64' }), 'string')
+  if (process.platform === 'darwin') assert.match(host.thisComputer({ arch: 'arm64' }), /\(Apple silicon\)$/)
+  if (process.platform === 'linux') assert.match(host.thisComputer({ arch: 'arm64' }), /arm64|64-bit/)
   /* Written beside the name and the version when given, and the doc as before when not. */
   const kind = fakeForgeFX()
   assert.equal(await host.tellPhones({ port: 5056, fetch: kind.fetch, hostname: 'Studio computer', version: '1.89.8', os: 'Raspberry Pi 5' }), true)
   assert.deepEqual(kind.calls, ['PUT /store/config/host.name {"data":{"name":"Studio computer","version":"1.89.8","os":"Raspberry Pi 5"},"origin":"fractal"}'])
-  assert.match(main, /const computerOs = thisComputer\(\)/, 'the computer app never says what kind of computer it is')
+  assert.match(main, /const computerOs = thisComputer\(\{ arch: app\.runningUnderARM64Translation \? 'arm64' : process\.arch \}\)/, 'the computer app never says what kind of computer it is, or an Intel copy on Apple silicon says Intel')
+  /* And the terminal launcher (npm run serve) says its version and kind too: a gear note waits for the version. */
+  const serve = readSrc(new URL('../scripts/serve.mjs', import.meta.url), 'utf8')
+  assert.match(serve, /armHost\(\{ port, version[^}]*os: thisComputer\(\)/, 'npm run serve tells the phones no version or kind, so they send no gear note through it')
+  assert.match(serve, /const \{ version \} = JSON\.parse\(readFileSync\(join\(root, 'package\.json'\), 'utf8'\)\)/)
   /* The phone keeps it, and puts it in a gear note and a report's log. */
   const phoneLink = readSrc(new URL('../mobile/src/lib/link.js', import.meta.url), 'utf8')
   assert.match(phoneLink, /hostOs: data\?\.os \? String\(data\.os\)\.slice\(0, 40\) : null/, 'the phone throws away what kind of computer it is')
@@ -6757,6 +6789,22 @@ duo(test)
 console.log('\nwhat works: the gear notes, off unless somebody says yes')
 const { run: gearShare } = await import('./gear-share.mjs')
 gearShare(test)
+
+/*
+ * The frosted glass on the phone, in parts: the foundation (glass.mjs), one
+ * file for each group of screens that wears it, and Classic (glass-classic.mjs),
+ * the look without it, held to main as it was. Every part is imported
+ * outright, so a file renamed, deleted or left out of a commit fails the run
+ * instead of taking its checks away without a word.
+ */
+console.log('\nthe frosted glass')
+for (const part of ['glass', 'glass-play', 'glass-popups', 'glass-settings', 'glass-screens', 'glass-classic']) {
+  ;(await import(new URL('./' + part + '.mjs', import.meta.url))).run(test)
+}
+
+console.log('\nGoogle Play from GitHub: the listing, its pictures and its crash reports, written only when told to')
+const { run: playText } = await import('./play-text.mjs')
+playText(test)
 
 test('both file kinds are listed and told apart', async () => {
   // A .syx goes back to the unit verbatim; a design re-validates first. Load
@@ -16992,8 +17040,8 @@ test('the computer app carries the server that keeps the AM4’s own tuner scree
 test('the computer app carries the device server that answers only its own callers', () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+am4tunerlease\+serverguard(\+|$)/, 'the computer app carries a device server any web page can sign out')
-  /* Pinned at 93c1530, or at a later commit of the same branch that carries it (Axiom's own list, c7b4d3c, sits on top). */
-  assert.ok(['93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170'].includes(lock.forgefx.commit), 'the pin moved off the guard')
+  /* Pinned at 93c1530, or at a later commit of the same branch that carries it (Axiom's own list, c7b4d3c, and the replug watch, e2030f4, sit on top). */
+  assert.ok(['93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337'].includes(lock.forgefx.commit), 'the pin moved off the guard')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /93c1530/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17015,8 +17063,9 @@ test('the computer app carries the device server that answers only its own calle
  */
 test('the computer app carries the device server that can let Axiom onto the unit’s own routes only', () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
-  assert.match(lock.forgefx.tag, /\+serverguard\+deviceorigins$/, 'the computer app carries a device server with no way to let Axiom in')
-  assert.equal(lock.forgefx.commit, 'c7b4d3c7caa44247dcf56f051204ce5679b28170')
+  assert.match(lock.forgefx.tag, /\+serverguard\+deviceorigins(\+|$)/, 'the computer app carries a device server with no way to let Axiom in')
+  /* Pinned at c7b4d3c, or at a later commit of the same branch that carries it (the replug watch, e2030f4, sits on top). */
+  assert.ok(['c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337'].includes(lock.forgefx.commit), 'the pin moved off FORGEFX_DEVICE_ORIGINS')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /c7b4d3c/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17025,6 +17074,28 @@ test('the computer app carries the device server that can let Axiom onto the uni
   }
   const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
   assert.ok(mods.includes('| Let a page named in `FORGEFX_DEVICE_ORIGINS` onto the open routes only'), 'licences/MODIFICATIONS.md has no row for FORGEFX_DEVICE_ORIGINS')
+})
+
+/*
+ * And a unit unplugged, plugged back in or swapped is found again by itself
+ * (ForgeFX e2030f4, on top of Axiom's list): on a Raspberry Pi 5 the AM4's
+ * USB came back under the very name it had, the server went on sending
+ * into a connection nobody was subscribed to, and only quitting the app
+ * cured it. The transport watches its own port, sending nothing, and the
+ * registry identifies what is there again before it drives it.
+ */
+test('the computer app carries the device server that finds a unit unplugged and plugged back in by itself', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+deviceorigins\+replug$/, 'the computer app carries a device server that never notices its unit was replugged')
+  assert.equal(lock.forgefx.commit, 'e2030f420a2d18f01234fad3c85dc25d52ada337')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  const why = lock._why.find((w) => /e2030f4/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/AM4:AM4 MIDI 1 24:0/, /every 2 s, sending nothing/, /usbbus/, /onLost/, /a VP4, and a link never answered, are left alone/, /identifies what is there now/, /backing off to 5 minutes/, /Nothing new is sent to a unit/, /COMPUTER_NEEDED stays/, /two commits on top of c7b4d3c/]) {
+    assert.match(why, said, `the lock's reason leaves out ${said}`)
+  }
+  const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
+  assert.ok(mods.includes("| Watch the unit's MIDI port every 2 seconds, sending nothing"), 'licences/MODIFICATIONS.md has no row for the port watch')
 })
 
 /*
@@ -17040,7 +17111,7 @@ test('the computer app carries the server whose keep of the AM4’s own tuner en
   assert.match(lock.forgefx.tag, /\+am4tunerkeep\+am4tunerlease(\+|$)/, 'the computer app carries a keep that only a Close can end')
   /* Pinned at 41a0c1b, or at a later commit of the same branch that carries it (the device server's guard, 93c1530, sits on top). */
   assert.ok(
-    ['41a0c1b05d6172b057223c70565eec364dff4d67', '93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170'].includes(lock.forgefx.commit),
+    ['41a0c1b05d6172b057223c70565eec364dff4d67', '93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337'].includes(lock.forgefx.commit),
     'the pin moved off the tuner lease'
   )
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')

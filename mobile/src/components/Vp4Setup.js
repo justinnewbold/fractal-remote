@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Text, TextInput, View } from 'react-native'
 
-import { color, font, radius, space, TAP } from '../lib/theme'
+import { color, font, space, TAP } from '../lib/theme'
+import { glassField } from '../lib/glass'
 import { sync, useStored } from '../lib/store'
 import {
   VP4_SETUP,
@@ -60,13 +61,12 @@ export default function Vp4Setup({ caps, firmware }) {
     setSaid(VP4_SETUP.cleared)
   }
 
+  /* A field of frosted glass (lib/glass), at the card's corner. */
   const box = {
     minHeight: TAP,
     paddingHorizontal: space.md,
-    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: color.rule,
-    backgroundColor: color.panel,
+    ...glassField(),
     color: color.silk,
     fontSize: font.body
   }

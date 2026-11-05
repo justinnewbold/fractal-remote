@@ -1,7 +1,8 @@
 import { ScrollView, Text, View } from 'react-native'
 
-import { SHARE_NO, SHARE_TITLE, SHARE_YES, shareWords } from '../lib/gear-share-rules'
+import { SHARE_AGAIN, SHARE_NO, SHARE_TITLE, SHARE_YES, shareWords } from '../lib/gear-share-rules'
 import { color, font, radius, space, TAP } from '../lib/theme'
+import { cardCorner, glassCard } from '../lib/glass'
 import Press from './Press'
 
 /**
@@ -23,8 +24,14 @@ import Press from './Press'
  * No Yes is assumed: "No thanks" and leaving the app without answering both
  * leave it off. The words say exactly what goes and what never does, and a
  * test holds them to what the note really carries.
+ *
+ * ONCE MORE FOR A YES TO LESS (`again`): somebody who said Yes before 4
+ * November 2026 said it to words with no USB cable and no times in them, so
+ * the card comes back once, saying so first (SHARE_AGAIN), and until it is
+ * answered their notes carry only what those words did (lib/gear-share-rules
+ * createGearSharer).
  */
-export default function GearShareNotice({ onAnswer }) {
+export default function GearShareNotice({ onAnswer, again = false }) {
   const [what, never, change] = shareWords()
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, padding: space.xl }}>
@@ -35,15 +42,16 @@ export default function GearShareNotice({ onAnswer }) {
           style={{
             gap: space.lg,
             padding: space.xl,
-            borderRadius: radius.lg,
-            borderWidth: 1,
-            borderColor: color.rule,
-            backgroundColor: color.panel
+            /* A card of frosted glass (lib/glass), rimmed, with the light along its top. */
+            ...glassCard({ bordered: true }),
+            borderRadius: cardCorner(radius.lg),
+            borderWidth: 1
           }}
         >
           <Text accessibilityRole="header" style={{ color: color.silk, fontSize: font.title, fontWeight: '800' }}>
             {SHARE_TITLE}
           </Text>
+          {again ? <Text style={{ color: color.silk, fontSize: font.body, lineHeight: Math.round(font.body * 1.45), fontWeight: '600' }}>{SHARE_AGAIN}</Text> : null}
           <Text style={{ color: color.silk, fontSize: font.body, lineHeight: Math.round(font.body * 1.45) }}>{what}</Text>
           <Text style={{ color: color.silk, fontSize: font.body, lineHeight: Math.round(font.body * 1.45), fontWeight: '600' }}>{never}</Text>
           <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: Math.round(font.small * 1.45) }}>{change}</Text>

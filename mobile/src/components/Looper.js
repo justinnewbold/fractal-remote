@@ -113,10 +113,15 @@ function LooperPanel({ block }) {
       style={{
         gap: space.sm,
         padding: space.md,
-        borderRadius: radius.md,
+        /* Flat frosted glass (lib/glass): the rim, the light along its top
+           and no shadow of its own, since it sits in the Looper's sheet on
+           Play, where its buttons are the glass that floats. No side bar, so
+           the card's corner. */
+        borderRadius: radius.card,
         borderWidth: 1,
-        borderColor: color.rule,
-        backgroundColor: color.panel
+        borderColor: color.glassRim,
+        backgroundColor: color.glassFill,
+        boxShadow: color.glassTop
       }}
     >
       <Text

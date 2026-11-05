@@ -2,6 +2,7 @@ import { Text, View } from 'react-native'
 
 import { P5 } from '../lib/onboarding'
 import { color, font, radius, space } from '../lib/theme'
+import { cardCorner } from '../lib/glass'
 import Press from './Press'
 
 /**
@@ -33,13 +34,15 @@ export default function Coach({ open, stage = 'tip', onTry, onSkip, onDone }) {
   return (
     <View
       accessibilityLiveRegion="polite"
+      /* A card of frosted glass on the page (lib/glass glassCard): the see-through fill, the rim in its own 1px border, the light along its top and a soft drop. Its size and padding are as they were. */
       style={{
         gap: space.sm,
         padding: space.lg,
-        borderRadius: radius.lg,
+        borderRadius: cardCorner(radius.lg),
         borderWidth: 1,
-        borderColor: color.rule,
-        backgroundColor: color.panel
+        borderColor: color.glassRim,
+        backgroundColor: color.glassFill,
+        boxShadow: color.glassLift
       }}
     >
       <Text style={{ color: color.signal, fontSize: font.micro, letterSpacing: 1.5 }}>

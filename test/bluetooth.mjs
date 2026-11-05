@@ -5337,7 +5337,7 @@ export function run(test) {
       'debugLog.js': 'export const logDebug = () => {}\n',
       'lineage.js': 'export const withLineage = (slug, x) => x\n'
     }
-    for (const f of ['bleSwitch.js', 'tapGate.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js', 'bleVp4.js', 'fractal-sysex.mjs']) {
+    for (const f of ['bleSwitch.js', 'tapGate.js', 'tapTimes.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js', 'bleVp4.js', 'fractal-sysex.mjs']) {
       files[f] = esm(lib(f))
     }
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
@@ -10982,7 +10982,7 @@ export function run(test) {
     assert.match(link, /if \(!id \|\| \(e\?\.id && e\.id !== id\)\) return/)
   })
 
-  test('the log’s head and a report say a USB cable as one, and no What works note goes for one', async () => {
+  test('the log’s head and a report say a USB cable as one, and a What works note says a USB cable too', async () => {
     const r = await import(pathToFileURL(fileURLToPath(new URL('../mobile/src/lib/bleReport.js', import.meta.url))).href)
     assert.equal(r.bluetoothHead({ unit: 'AM4', phase: 'connected', adapter: 'AM4', cable: true }).adapter, 'AM4 (USB cable)')
     assert.equal(r.bluetoothHead({ unit: 'AM4', phase: 'connected', adapter: '', cable: true }).adapter, 'a unit with no name (USB cable)')
@@ -11035,17 +11035,19 @@ export function run(test) {
       rmSync(dir, { recursive: true, force: true })
     }
     /*
-     * NO WHAT WORKS NOTE FOR A CABLE. gear_reports.via takes 'computer' or
-     * 'bluetooth' only, and the card promises "through a computer or
-     * Bluetooth": a cable sent as Bluetooth, the unit's port as its adapter,
-     * was a wrong note. Nothing goes until the table and the card say a
-     * cable, which waits for Justin. A null is no note: no record, no key,
-     * so look() starts no wait and report() is never called.
+     * A WHAT WORKS NOTE FOR A CABLE SAYS A CABLE (4 November 2026, Justin:
+     * "Yes, add the cable connection server change"). Before, a cable sent
+     * no note at all, rather than one that called it Bluetooth with the
+     * unit's port as its adapter. Now it is 'usb', which the table and the
+     * card say (test/gear-share.mjs), and never 'bluetooth'.
      */
     const glue = code('mobile/src/lib/gearShare.js')
     const facts = glue.slice(glue.indexOf('function factsNow() {'), glue.indexOf('return noteFacts({'))
-    assert.match(facts, /if \(linkVia\(\) === 'bluetooth' && cableNow\(\)\) return null/, 'a USB cable is sent as a Bluetooth note')
+    assert.match(facts, /const via = linkVia\(\) === 'bluetooth' && cableNow\(\) \? 'usb' : linkVia\(\)/, 'a USB cable is sent as a Bluetooth note')
+    assert.ok(!/cableNow\(\)\) return null/.test(glue), 'a USB cable still sends no note')
+    assert.match(glue.slice(glue.indexOf('return noteFacts({')), /^\s*via,$/m, 'the note is not told the cable')
     const rules = await import('../mobile/src/lib/gear-share-rules.js')
+    assert.equal(rules.gearRecord(rules.noteFacts({ via: 'usb', rig: { unit: 'present', deviceName: 'AM4' }, bluetooth: { phase: 'connected', unit: 'AM4', adapter: 'AM4' }, phone: {}, appVersion: '1.89.38' })).via, 'usb')
     assert.equal(rules.gearRecord(null), null)
     assert.equal(rules.gearKey(rules.gearRecord(null)), null)
     assert.match(glue, /if \(!key\) return/, 'a combination with no key is waited on')

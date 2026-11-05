@@ -3,6 +3,7 @@ import { AccessibilityInfo, FlatList, KeyboardAvoidingView, Platform, ScrollView
 import * as Clipboard from 'expo-clipboard'
 
 import { color, font, mono, radius, space } from '../lib/theme'
+import { glassField } from '../lib/glass'
 import { clearDebugLog, formatDebugLog, formatLine, getDebugLog, onDebugLog } from '../lib/debugLog'
 import { pastRuns } from '../lib/logKeep'
 import { ended, logHeader, runsBefore } from '../lib/logHead'
@@ -18,7 +19,11 @@ const face = Platform.select(mono)
 const ofDeviceName = (s) => s.deviceName
 const ofPreset = (s) => s.preset
 
-/** One line of the log, this run's or a kept one's. Red when it is the bad kind. */
+/**
+ * One line of the log, this run's or a kept one's. Red when it is the bad
+ * kind. On the glass's fill and nothing more: a list of hundreds of lines is
+ * never lifted (lib/glass), and a line is text, which takes no shadow.
+ */
 function Line({ text, hot }) {
   return (
     <Text
@@ -31,7 +36,7 @@ function Line({ text, hot }) {
         paddingVertical: 2,
         paddingHorizontal: space.sm,
         borderRadius: radius.sm,
-        backgroundColor: color.panel
+        backgroundColor: color.glassFill
       }}
     >
       {text}
@@ -323,10 +328,8 @@ export default function Log({ onBack }) {
               style={{
                 color: color.silk,
                 fontSize: font.body,
-                backgroundColor: color.panel,
                 borderWidth: 1,
-                borderColor: color.rule,
-                borderRadius: radius.md,
+                ...glassField(),
                 padding: space.md,
                 minHeight: 64,
                 lineHeight: 22

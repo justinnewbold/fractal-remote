@@ -25,6 +25,7 @@ import { bluetoothWire } from './bleSwitch'
 import { linkIsDown } from './tapGate'
 import { notSentError } from './relay-rules'
 import { logDebug } from './debugLog'
+import { tapTime } from './tapTimes'
 
 /**
  * Every question this app asks a unit, and the one place the demo answers.
@@ -233,6 +234,29 @@ const post = (path, body, tap) =>
  * button let go) goes exactly as it always went.
  */
 const tapOf = (opts) => (Number.isFinite(opts?.deadline) ? { deadline: opts.deadline } : undefined)
+
+/*
+ * AND HOW LONG THE TAP TOOK, for What works (lib/tapTimes, lib/gearShare):
+ * a preset, a scene, an effect's on and off or its channel the player
+ * pressed (a deadline), from the request to an answer that took. Never in
+ * the demo, where nothing real answered, nor on a VP4, which is only sent
+ * to, so its answers say nothing about how quickly it answers, nor over
+ * Bluetooth or a cable, where an accepted write has no answer at all: the
+ * wire calls it taken when no refusal came in its short watch (bleWire
+ * fire), so the time would be the phone's own wait. A refusal, an error or
+ * a tap not sent is not counted. The request is the one it always was: this
+ * only holds a stopwatch beside it.
+ */
+const timedTap = (opts, send) => {
+  if (Number.isFinite(opts?.deadline) && !onVp4 && !demoDevice() && !bluetoothWire()) {
+    const began = Date.now()
+    return send().then((r) => {
+      if (r?.ok !== false) tapTime(Date.now() - began)
+      return r
+    })
+  }
+  return send()
+}
 
 const put = (path, body, opts) => remoteRequest(path, { method: 'PUT', body: JSON.stringify(body), ...(opts || {}) })
 
@@ -527,7 +551,8 @@ async function readParamValue(eid, paramId) {
 /* ---------------------------------------------------------------- */
 
 /** Load a stored slot into the edit buffer. Nothing is committed by doing this. */
-export const selectPreset = (number, opts) => told(`select preset ${number}`, onVp4 ? vp4Preset(number, opts) : post('/preset/select', { number }, tapOf(opts)))
+export const selectPreset = (number, opts) =>
+  told(`select preset ${number}`, timedTap(opts, () => (onVp4 ? vp4Preset(number, opts) : post('/preset/select', { number }, tapOf(opts)))))
 
 /*
  * A VP4'S PRESET, BY PROGRAM CHANGE (lib/vp4-safety). The channel the player
@@ -714,7 +739,7 @@ export function writeComputerSetting(id, data) {
 export const nameOwner = (slug) => (slug ? (demoDevice() ? `${slug}:demo` : slug) : null)
 
 /** Switch scenes. */
-export const setScene = (index, opts) => told(`scene ${index + 1}`, onVp4 ? vp4Scene(index, opts) : post('/scene', { index }, tapOf(opts)))
+export const setScene = (index, opts) => told(`scene ${index + 1}`, timedTap(opts, () => (onVp4 ? vp4Scene(index, opts) : post('/scene', { index }, tapOf(opts)))))
 
 /*
  * A VP4'S SCENE, ON THE NUMBER THE PLAYER SET ON IT (lib/vp4-safety). Nothing
@@ -745,11 +770,11 @@ async function vp4Scene(index, opts) {
 
 /** Engage or bypass a block. The live scene is what remembers it. */
 export const setBypass = (eid, bypassed, opts) =>
-  told(`block ${eid} ${bypassed ? 'off' : 'on'}`, post(`/preset/blocks/${eid}/bypass`, { bypassed }, tapOf(opts)))
+  told(`block ${eid} ${bypassed ? 'off' : 'on'}`, timedTap(opts, () => post(`/preset/blocks/${eid}/bypass`, { bypassed }, tapOf(opts))))
 
 /** Switch a block's channel. Channels are A–D and hold independent settings. */
 export const setChannel = (eid, channel, opts) =>
-  told(`block ${eid} channel ${channel}`, post(`/preset/blocks/${eid}/channel`, { channel }, tapOf(opts)))
+  told(`block ${eid} channel ${channel}`, timedTap(opts, () => post(`/preset/blocks/${eid}/channel`, { channel }, tapOf(opts))))
 
 /** Set the tempo outright. */
 export const setTempo = (bpm, opts) => told(`tempo ${bpm}`, post('/tempo', { bpm }, tapOf(opts)))

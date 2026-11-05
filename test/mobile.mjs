@@ -300,7 +300,7 @@ async function rigOnTheBench(over = {}) {
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
   /* The gate a tap asks while the link is down, and the rules its deadline and its words come from: both real, as they are. */
   /* And the colours, which rig.js tells which unit answered (lib/looks), with the colour sums the palettes use (lib/ink). */
-  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js', 'am4-boost.js', 'axiom.js']) {
+  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'tapTimes.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js', 'am4-boost.js', 'axiom.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -13098,7 +13098,7 @@ export function run(test) {
     assert.ok(!/'Switch unit'/.test(bar), 'the pill still says Switch unit')
     /* The demo on a 360-wide phone: Unlock over the price, and the pill's edge at space.sm. */
     assert.match(bar, />Unlock<\/Text>\s*\{purchase\.price \? \(/, 'Unlock $9.99 on one line takes the demo unit’s name off a narrow phone')
-    assert.match(flat, /paddingHorizontal: space\.sm, paddingVertical: 3, borderRadius: radius\.lg, borderWidth: 1/, 'the pill’s wide edge is paid for by the unit’s name')
+    assert.match(flat, /paddingHorizontal: space\.sm, paddingVertical: 3, borderRadius: classic\(\) \? radius\.lg : radius\.pill, borderWidth: 1/, 'the pill’s wide edge is paid for by the unit’s name, or it is not the glass’s capsule (radius.lg in Classic, as it was)')
   })
 
   test('somebody asks whether the unit is still there, rather than waiting to be told', async () => {

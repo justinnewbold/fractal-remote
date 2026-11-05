@@ -187,25 +187,42 @@
         &rarr; Share what gear works. The computer app and the website never send it.
       </p>
       <p>
-        When it is on and your unit connects, the app sends one short note: which unit it is and its
-        firmware, whether it is connected through the computer app or through Bluetooth, the
-        kind of computer and its system (such as macOS 15, Windows 11 24H2, or a Raspberry Pi 5 running
-        Debian 12, never its name) and the
-        computer app&rsquo;s version, or the Bluetooth adapter&rsquo;s name (its name, never its
-        Bluetooth address), whether the unit answered, which system your phone or tablet runs and its
-        version, its make and model on Android (on an iPhone or iPad, only which of the two), and the
-        app&rsquo;s version. The same combination of gear is sent at most once every 30 days; the
-        app keeps a list of what it has sent, and when, on your device, and that list is never sent.
+        When it is on and your unit connects, the app sends one short note: which unit it is, and its
+        firmware when it connects through the computer app (it cannot be read over Bluetooth or a USB
+        cable), whether it is connected through the computer app, Bluetooth or a USB cable, the
+        kind of computer, its system and whether it is Apple silicon, ARM, 32- or 64-bit (such as
+        macOS 15 on Apple silicon, Windows 11 24H2, or a Raspberry Pi 5 running Debian 12, 64-bit;
+        never its name) and the computer app&rsquo;s version, or the Bluetooth adapter&rsquo;s or the
+        cable&rsquo;s name (the name it gives itself, never its Bluetooth address; where that name
+        carries an owner&rsquo;s, such as &ldquo;Justin&rsquo;s WIDI Jack&rdquo; or &ldquo;Maria&rsquo;s
+        iPad&rdquo;, the app takes the owner&rsquo;s name off, but a name somebody made up for an
+        adapter cannot be told from a maker&rsquo;s and is sent as it is), whether the unit answered,
+        how long it took to connect, and how quickly the unit answers a tap when it connects through
+        the computer app (rounded, to a tenth of a second and a hundredth of a second, and timed from
+        the presets, scenes and effects you tap anyway: nothing extra is asked of your unit), which
+        system your phone or tablet runs and its version, its make and model on Android (on an iPhone
+        or iPad, only which of the two), and the app&rsquo;s version. The same combination of gear and
+        versions is sent at most once every 30 days, a little while after the unit connects, at a
+        moment picked at random; the app keeps a list of what it has sent, and when, on your device,
+        and that list is never sent. A VP4 over Bluetooth or a USB cable sends no note: the app
+        cannot hear a VP4, so it cannot say whether it answered. If you said yes before 4 November
+        2026, when the note said nothing of a USB cable or of how long things take, the app asks you
+        once more, and until you answer it sends only what it did before.
       </p>
       <p>
         <strong>It is not linked to you.</strong> The note has no account, no email address, no name
         you gave your device and no install number, and it is sent without signing in, so nothing in
-        it or with it says whose it was, and the internet address it came from is not stored with it. It
-        carries no preset or song names, nothing you have typed, and nothing about where you are. It
+        it or with it says whose it was, and the internet address it came from is not stored with it.
+        Supabase, which stores the notes, keeps its own record of every request it receives, with the
+        internet address it came from, for a limited time, for running the service, as it does for
+        everything the app sends; nothing joins that record to the notes, and it is never used to find
+        whose note was whose. It carries no preset or song names, nothing you have typed, and nothing
+        about where you are. It
         is used only to make the list of gear that works and to find what does not; it is never used
-        for advertising and never given or sold to anyone. Turning it off stops any more notes;
-        because a note cannot be told apart from anybody else&rsquo;s, the ones already sent cannot be
-        picked out to delete, and they go at the end of their two years like the rest.
+        for advertising and never given or sold to anyone, and never put beside a bug report to find
+        whose it was. Turning it off stops any more notes; because nothing in a note says whose it
+        was, the ones already sent cannot be picked out to delete, and they go at the end of their two
+        years like the rest.
       </p>
 
       <h3>Bug reports and suggestions — only when you press Send</h3>
@@ -389,8 +406,9 @@
         <li><strong>Messages</strong> — the bug reports and suggestions described above, with their
           screenshots, and a link to a report&rsquo;s video for its week, in his email.</li>
         <li><strong>What works</strong> — the notes about gear described under <em>Which gear
-          works</em>, added up by unit, by computer system or Bluetooth adapter, and by whether the unit
-          answered. Nothing in them names anybody.</li>
+          works</em>, added up by unit, by computer system, Bluetooth adapter or USB cable, and by
+          whether the unit answered, with how long it took to connect and, through a computer, how
+          quickly a tap was answered. Nothing in them names anybody.</li>
         <li><strong>Paid but no computer yet</strong> — each account with the full version that no
           computer app has signed in with: its email address and whether it is confirmed, how and
           when it got the full version (which store, a test purchase, or given by hand), and which
