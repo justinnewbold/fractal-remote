@@ -754,17 +754,45 @@ export function nextToWarning(t, pick, { chain = [], spelt = {}, colourOf, only 
 /* The looks, and Undo                                                  */
 /* ------------------------------------------------------------------ */
 
-/** How long "Now: Sunlight · Undo" stays, after one tap put a whole look on. */
-export const UNDO_MS = 8000
+/**
+ * How long "Now: Sunlight · Undo" stays on Play, after Apply put a whole look
+ * on: "have the undo card pop-up for two seconds before it disappears" (5
+ * November 2026). With a screen reader on it stays until it is answered.
+ */
+export const UNDO_MS = 2000
 
 /**
  * Wear a look, and say what to go back to. One tap repaints the whole app,
- * which is the point and also the danger — so the page keeps `was` for
- * UNDO_MS and Undo wears it again. Null for a look there is no such thing as.
+ * which is the point and also the danger — so Play keeps `was` for UNDO_MS
+ * and Undo wears it again. Null for a look there is no such thing as.
  */
 export function wearLook(id, storage) {
   const was = lookId()
   return setLook(id, storage) ? { was, now: id } : null
+}
+
+/**
+ * PICK, THEN APPLY. "On this screen, instead of saying undo, say apply, and
+ * that's how they make the change. Also, after they hit apply, go back to the
+ * home gig screen, and then have the undo card pop-up for two seconds before
+ * it disappears." (5 November 2026.)
+ *
+ * So a card on the page PICKS a look and changes nothing; Apply wears it.
+ * The pick is a look other than the one worn, or nothing: picking the worn
+ * one, or a look there is no such thing as, is no pick, and no Apply.
+ */
+export function pickLook(id, wearing = lookId()) {
+  return typeof id === 'string' && id !== wearing && LOOKS.some((l) => l.id === id) ? id : null
+}
+
+/**
+ * Apply: the pick worn and kept, and the offer Play shows for UNDO_MS from
+ * `at` ({ was, now, at }), or null when nothing was picked or nothing changed.
+ */
+export function applyLook(id, storage, at = Date.now()) {
+  if (!pickLook(id)) return null
+  const done = wearLook(id, storage)
+  return done && done.was !== done.now ? { ...done, at } : null
 }
 
 /**

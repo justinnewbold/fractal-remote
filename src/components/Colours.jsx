@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 
 import { FRACTAL_REMOTE_LOOK, LOOKS } from '../lib/blockPalettes'
 import { LIGHT_INK, inkOn } from '../lib/ink'
@@ -11,12 +11,14 @@ import {
   PUT_BACK_WORDS,
   TAG_HOLD,
   UNDO_MS,
+  applyLook,
   chooseScenes,
   familyTarget,
   lookCard,
   lookWhy,
   pageColour,
   pageSceneCount,
+  pickLook,
   presetFamilies,
   presetSpelling,
   presetTag,
@@ -25,8 +27,7 @@ import {
   scenesAllRed,
   tagButtonWords,
   tagSaid,
-  unitFamilies,
-  wearLook
+  unitFamilies
 } from '../lib/colourPage'
 import { useLooks } from '../lib/useLooks'
 import { blockIcon } from '../lib/blockIcons'
@@ -45,9 +46,9 @@ import ColourSheet, { ColourPanel } from './ColourSheet'
  * The phone's page, at this end: the same sections in the same order, the
  * same words, and the same choices, because what the page offers is decided
  * once in lib/colourPage and both ends draw from it. Top to bottom, in the
- * order somebody arrives with: a whole look in one click (and Undo for a
- * moment after, because one click repaints the whole app), then one effect at
- * a time, then the scenes, then a preset's own colour, then how a
+ * order somebody arrives with: a whole look, picked with a click and put on
+ * with Apply (which closes Settings onto Play, with Undo there for a moment,
+ * because one Apply repaints the whole app), then one effect at a time, then the scenes, then a preset's own colour, then how a
  * switched-off effect is drawn, and last the button that puts everything
  * back.
  *
@@ -66,7 +67,7 @@ import ColourSheet, { ColourPanel } from './ColourSheet'
  * Kept in this browser, as everything here is (lib/looks, localStorage): the
  * phone app keeps its own.
  */
-export default function Colours({ blocks = [], sceneNames = [], preset, capabilities, icons = true }) {
+export default function Colours({ blocks = [], sceneNames = [], preset, capabilities, icons = true, onApplied }) {
   /* Repaint on any change to the colours, from here or from the unit answering. */
   useLooks()
   /* The loaded preset's tag, as the colour sheet is handed it: none before a unit has answered. */
@@ -80,16 +81,25 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
   const [more, setMore] = useState(false)
   /* 'all' for Put every colour back, 'yours' for Clear them: both cost something, so both ask. */
   const [asking, setAsking] = useState(null)
-  /* "Now: Sunlight · Undo", and what Undo puts back. Belongs to this page: leaving it takes the offer with it. */
-  const [undo, setUndo] = useState(null)
+  /* The look picked and not yet applied (colourPage pickLook). Belongs to this page: leaving it takes the pick with it. */
+  const [chosen, setChosen] = useState(null)
+  const picked = pickLook(chosen, wearing)
   /* As many scene tiles as the unit has (an AM4 has four), and the count and the choice are of those. */
   const sceneCount = pageSceneCount(capabilities)
   const own = ownColourCount({ scenes: sceneCount })
   const allRed = scenesAllRed(sceneCount)
 
-  const wear = (id) => {
-    const done = wearLook(id)
-    if (done && done.was !== done.now) setUndo({ ...done, at: Date.now() })
+  /* Coming to the page ends an Undo still up over Play: this is where a look is changed now. */
+  useEffect(() => offerUndo(null), [])
+
+  /* A click picks, and changes nothing; the worn one again is no pick. Apply, at the foot, wears it. */
+  const pick = (id) => setChosen(pickLook(id, wearing))
+  /* Apply: worn and kept, Settings closed onto Play, and Undo there for a moment. */
+  const apply = () => {
+    const offer = applyLook(picked)
+    setChosen(null)
+    if (offer) offerUndo(offer)
+    onApplied?.()
   }
 
   const rest = unitFamilies().filter((f) => !chain.includes(f))
@@ -133,10 +143,18 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
         <h3 className="silk-label setup-open-title" id="colours-looks">
           Looks
         </h3>
-        <p className="hint">One tap puts a whole look on every tile. Your own colors stay on top of it.</p>
+        <p className="hint">Tap a look to pick it, then Apply to put it on every tile. Your own colors stay on top of it.</p>
+        {/* The ring on the pick, or on the one worn while nothing is picked; the worn one says so either way. */}
         <div className="colours-looks" role="radiogroup" aria-labelledby="colours-looks">
           {LOOKS.map((look) => (
-            <LookCard key={look.id} look={look} on={look.id === wearing} onWear={() => wear(look.id)} />
+            <LookCard
+              key={look.id}
+              look={look}
+              on={look.id === (picked || wearing)}
+              wearing={look.id === wearing}
+              picked={look.id === picked}
+              onPick={() => pick(look.id)}
+            />
           ))}
         </div>
         {own ? (
@@ -261,7 +279,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
         <p className="hint">{kept}</p>
       </section>
 
-      {undo ? <LookUndo offer={undo} onUndo={() => setLook(undo.was)} onGone={() => setUndo(null)} /> : null}
+      {picked ? <LookApply id={picked} onApply={apply} /> : null}
 
       <ColourSheet target={painting} chain={chain} spelt={spelt} icons={icons} onClose={() => setPainting(null)} />
 
@@ -315,9 +333,13 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
  * between any radio buttons. The tiles sit beside the label rather than in
  * it — a button inside a label is not allowed — and take no clicks.
  *
+ * Checked (`on`, the amber ring) is the pick, or the one worn while nothing
+ * is picked. "Picked" on the pick, "✓ Wearing" on the one worn, so both are
+ * said while Apply waits.
+ *
  * Fractal Remote keeps the white letters it always had (lib/blockColors).
  */
-function LookCard({ look, on, onWear }) {
+function LookCard({ look, on, wearing = on, picked = false, onPick }) {
   const tiles = lookCard(look.id)
   const ink = (fill) => (look.id === FRACTAL_REMOTE_LOOK ? LIGHT_INK : inkOn(fill))
   return (
@@ -330,12 +352,12 @@ function LookCard({ look, on, onWear }) {
           checked={on}
           onChange={() => {
             tick()
-            onWear()
+            onPick()
           }}
         />
         <span className="colours-look-head">
           <span className="colours-look-name">{look.name}</span>
-          {on ? <span className="colours-look-on">✓ Wearing</span> : null}
+          {picked ? <span className="colours-look-on">Picked</span> : wearing ? <span className="colours-look-on">✓ Wearing</span> : null}
         </span>
         <span className="colours-look-why">{lookWhy(look)}</span>
       </label>
@@ -399,32 +421,69 @@ function OffChoice({ mode, label, sub }) {
 }
 
 /**
- * "Now: Sunlight · Undo", for UNDO_MS after a look goes on, and Undo puts the
- * last one back on. One click repaints every tile in the app, so a click that
- * landed on the wrong card is one more click from being as it was.
- *
- * At the foot of the page and held there as it scrolls (styles.css
- * .colours-undo), below everything else, so its arriving moves nothing that
- * was under the pointer. And it waits while the pointer or the keyboard is
- * on it: an offer that goes while somebody is reaching for it has not been
- * made. The phone keeps it up for a screen reader the same way.
+ * "Footswitch lights · Apply", held at the foot of the page while it scrolls
+ * (styles.css .colours-apply), below everything else, so its arriving moves
+ * nothing that was under the pointer. Apply wears the pick, keeps it, and
+ * closes Settings onto Play, where Undo waits a moment.
  */
-function LookUndo({ offer, onUndo, onGone }) {
+function LookApply({ id, onApply }) {
+  const name = LOOKS.find((l) => l.id === id)?.name
+  if (!name) return null
+  return (
+    <div className="colours-apply" role="status">
+      <span>{name}</span>
+      <button type="button" className="primary" onClick={onApply}>
+        Apply
+      </button>
+    </div>
+  )
+}
+
+/*
+ * The offer lives outside the page because it is drawn outside it: over
+ * Play, which Apply closes Settings onto (App draws LookUndo there).
+ */
+let undo = null
+const undoWatchers = new Set()
+const offerUndo = (next) => {
+  undo = next
+  for (const fn of undoWatchers) fn()
+}
+const watchUndo = (fn) => {
+  undoWatchers.add(fn)
+  return () => undoWatchers.delete(fn)
+}
+const undoNow = () => undo
+
+/**
+ * "Now: Sunlight · Undo", over Play for UNDO_MS after Apply, and then gone
+ * by itself; Undo puts the last look back on and goes with it. One Apply
+ * repaints every tile in the app, so a look that was not what it seemed on
+ * its card is one more click from being as it was.
+ *
+ * Floating under the top bar (styles.css .colours-undo), away from the tiles.
+ * And it waits while the pointer or the keyboard is on it: an offer that
+ * goes while somebody is reaching for it has not been made. The phone keeps
+ * it up for a screen reader the same way. `hidden` while Settings is open.
+ */
+export function LookUndo({ hidden = false }) {
+  const offer = useSyncExternalStore(watchUndo, undoNow, undoNow)
   const [held, setHeld] = useState(false)
-  const [from, setFrom] = useState(offer.at)
-  /* A new look worn while the last offer was up starts the clock again. */
-  useEffect(() => setFrom(offer.at), [offer])
+  /* When the pointer or the keyboard last let go of it: the clock starts again from there. */
+  const [letGo, setLetGo] = useState(0)
+  /* From the Apply, or from letting go, whichever was later: a new offer starts the clock again. */
+  const from = offer ? Math.max(offer.at, letGo) : 0
   useEffect(() => {
-    if (held) return undefined
-    const id = setTimeout(onGone, Math.max(0, from + UNDO_MS - Date.now()))
+    if (!offer || held) return undefined
+    const id = setTimeout(() => offerUndo(null), Math.max(0, from + UNDO_MS - Date.now()))
     return () => clearTimeout(id)
-  }, [held, from, onGone])
-  const now = LOOKS.find((l) => l.id === offer.now)?.name
-  if (!now) return null
+  }, [offer, held, from])
+  const now = offer ? LOOKS.find((l) => l.id === offer.now)?.name : null
+  if (!now || hidden) return null
   /* Let go of, it gives the whole time again rather than vanishing under the pointer as it leaves. */
   const release = () => {
     setHeld(false)
-    setFrom(Date.now())
+    setLetGo(Date.now())
   }
   return (
     <div
@@ -439,8 +498,8 @@ function LookUndo({ offer, onUndo, onGone }) {
       <button
         type="button"
         onClick={() => {
-          onUndo()
-          onGone()
+          setLook(offer.was)
+          offerUndo(null)
         }}
       >
         Undo

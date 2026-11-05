@@ -21,6 +21,7 @@ import SendLinkButton from './src/components/SendLinkButton'
 import TopBar from './src/components/TopBar'
 import WrongAccount from './src/components/WrongAccount'
 import UpdateReady from './src/components/UpdateReady'
+import { LookUndo } from './src/components/Colours'
 import { watchForUpdates } from './src/lib/updates'
 import { watchStoreVersion } from './src/lib/storeVersion'
 import DemoUnit from './src/components/DemoUnit'
@@ -1699,6 +1700,9 @@ export default function App() {
             {/* Over the play screen and never in it, where the fault floats,
                 and out of the way while the fault or the advice is up. */}
             {readyOverPlay ? <UpdateReady over /> : null}
+            {/* A look just applied in Settings → Colors: "Now: Sunlight · Undo" for a
+                moment over Play, which Apply comes back to (components/Colours). */}
+            {playOnScreen ? <LookUndo /> : null}
             </EdgeBack>
           </>
         )}

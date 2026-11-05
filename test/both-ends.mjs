@@ -671,6 +671,7 @@ export const AREAS = [
       },
       { does: 'change your mind about putting the colours back', web: 'Keep mine', phone: 'Keep mine' },
       { does: 'put the colours back, once asked', web: 'Put back', phone: 'Put back' },
+      { does: 'put the look picked on, and go back to Play', web: 'Apply', phone: 'Apply' },
       { does: 'wear the look you had before, a moment after a new one went on', web: 'Undo', phone: 'Undo' },
       { does: 'close the colour sheet without painting anything', web: 'Cancel', phone: 'Cancel' },
       { does: 'paint the tile in the colour picked', web: 'Use it', phone: 'Use it' },
@@ -1247,7 +1248,6 @@ export function run(test) {
       'Any color…': 'the browser’s free colour picker, which the phone cannot have without a build (AREAS above)',
       'Pick any color': 'the label on that picker',
       'Or type its color code': 'the label on the box beside it',
-      Dismiss: 'what the browser’s cross on the colours’ one-time line says to a screen reader; the phone’s Note says the same from its own file (components/Note)',
       'Scene {}{}{}': 'what a screen reader says for a scene tile, its name and "your colour" with it; the phone’s Tile says its own caption and label'
     }
     const PHONE_ONLY = {
@@ -1300,7 +1300,7 @@ export function run(test) {
     /* The same looks, in the same order, each card in its own look's colours. */
     for (const f of ['src/components/Colours.jsx', 'mobile/src/components/Colours.js']) {
       const page = read(f)
-      assert.match(page, /\{LOOKS\.map\(\(look\) => \(\s*<LookCard key=\{look\.id\}/, `${f} does not offer every look, in order`)
+      assert.match(page, /\{LOOKS\.map\(\(look\) => \(\s*<LookCard\s+key=\{look\.id\}/, `${f} does not offer every look, in order`)
       assert.match(page, /const tiles = lookCard\(look\.id\)/, `${f} draws a look’s card from something other than lib/colourPage`)
       assert.match(page, /const rest = unitFamilies\(\)\.filter\(\(f\) => !chain\.includes\(f\)\)/, `${f} offers effects of its own choosing`)
       assert.match(page, /const chain = presetFamilies\(blocks\)/, `${f} does not put the loaded preset’s effects first`)

@@ -14859,10 +14859,12 @@ button.colours-putback {
 }
 
 /*
- * "Now: Sunlight · Undo", held at the foot of the page while it scrolls, and
- * drawn below everything else on it: arriving, it moves nothing that was
- * under the pointer.
+ * "Footswitch lights · Apply", held at the foot of the page while it scrolls,
+ * and drawn below everything else on it: arriving, it moves nothing that was
+ * under the pointer. "Now: Sunlight · Undo" is the same card, floated over
+ * Play under the top bar for a moment after Apply.
  */
+.colours-apply,
 .colours-undo {
   position: sticky;
   bottom: var(--s-2);
@@ -14879,13 +14881,28 @@ button.colours-putback {
   box-shadow: var(--e-2);
 }
 
+.colours-undo {
+  position: fixed;
+  top: calc(var(--bar-h) + var(--s-2));
+  bottom: auto;
+  left: 50%;
+  z-index: var(--z-toast);
+  width: min(28rem, calc(100% - 2 * var(--s-4)));
+  transform: translateX(-50%);
+}
+
+.colours-apply > span,
 .colours-undo > span {
   flex: 1 1 auto;
   min-width: 0;
 }
 
+.colours-apply button,
 .colours-undo button {
   min-height: 44px;
+}
+
+.colours-undo button {
   color: var(--signal);
 }
 

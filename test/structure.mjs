@@ -140,6 +140,7 @@ async function coloursOnABench() {
         export { default as ColourSheet } from './src/components/ColourSheet.jsx'
         export * as looks from './src/lib/looks.js'
         export * as page from './src/lib/colourPage.js'
+        export { LOOKS } from './src/lib/blockPalettes.js'
         export { setDevice } from './shared/device-word.mjs'
       `,
       resolveDir: root,
@@ -6052,20 +6053,39 @@ export function run(test) {
     assert.match(src, /const SETUP_PARENT = \{[^}]*\}/)
     assert.ok(!/colours:/.test(src.match(/const SETUP_PARENT = \{[^}]*\}/)[0]), 'the Colours page sits under another page, so its way back does not say ‹ Settings')
     assert.match(page, /title=\{SETUP_PAGES\.colours\}/, 'the Colours page has no title')
-    assert.match(page, /<Colours blocks=\{blocks\} sceneNames=\{sceneNames\} preset=\{presetHere\} capabilities=\{device\?\.capabilities\} icons=\{icons\} \/>/, 'the page is not handed the preset’s effects, the scene names, the preset that is loaded, the unit’s scene count and the pictures setting')
+    assert.match(page, /<Colours blocks=\{blocks\} sceneNames=\{sceneNames\} preset=\{presetHere\} capabilities=\{device\?\.capabilities\} icons=\{icons\} onApplied=\{leaveSettings\} \/>/, 'the page is not handed the preset’s effects, the scene names, the preset that is loaded, the unit’s scene count and the pictures setting')
     /* The row's line is redrawn when the look or the unit changes. */
     assert.match(src, /\n  useLooks\(\)\n/, 'the Colours row keeps saying the look it said when Settings opened')
   })
 
-  test('the browser’s Colours page wears a look in one click, offers Undo for a moment, and asks before putting colours back', () => {
+  test('the browser’s Colours page picks a look in one click, puts it on with Apply and closes onto Play with Undo for a moment, and asks before putting colours back', () => {
     const page = readFileSync(new URL('../src/components/Colours.jsx', import.meta.url), 'utf8')
-    assert.match(page, /const done = wearLook\(id\)\s+if \(done && done\.was !== done\.now\) setUndo\(\{ \.\.\.done, at: Date\.now\(\) \}\)/, 'a look card does not offer Undo')
-    assert.match(page, /Math\.max\(0, from \+ UNDO_MS - Date\.now\(\)\)/, 'Undo does not go after UNDO_MS')
-    assert.match(page, /onUndo=\{\(\) => setLook\(undo\.was\)\}/, 'Undo does not put the last look back on')
+    /* "Instead of saying undo, say apply, and that's how they make the change" (5 November 2026): a click picks, and changes nothing. */
+    const body = page.slice(page.indexOf('export default function Colours('), page.indexOf('\nfunction LookCard('))
+    assert.match(body, /const pick = \(id\) => setChosen\(pickLook\(id, wearing\)\)/, 'a look card does not pick')
+    assert.match(body, /const picked = pickLook\(chosen, wearing\)/, 'the look worn can stay picked')
+    assert.equal(body.split('applyLook(').length, 2, 'a look is put on somewhere other than Apply')
+    assert.doesNotMatch(body, /wearLook\(|setLook\(/, 'the page puts a look on before Apply')
+    /* Apply: worn and kept, the pick gone, Settings closed onto Play, and Undo there. */
+    assert.match(body, /const apply = \(\) => \{\s+const offer = applyLook\(picked\)\s+setChosen\(null\)\s+if \(offer\) offerUndo\(offer\)\s+onApplied\?\.\(\)\s+\}/, 'Apply does not put the look on, offer Undo and close Settings')
+    assert.match(body, /\{picked \? <LookApply id=\{picked\} onApply=\{apply\} \/> : null\}/, 'the Apply bar is not there while a look is picked')
+    assert.match(page, /<button type="button" className="primary" onClick=\{onApply\}>\s*Apply\s*<\/button>/)
+    assert.match(body, /useEffect\(\(\) => offerUndo\(null\), \[\]\)/, 'coming back to the page leaves an old Undo up over Play')
     /* Below everything else on the page, so its arriving moves nothing under the pointer. */
-    assert.ok(page.indexOf('<LookUndo') > page.indexOf('Put every color back'), 'the Undo bar is drawn above part of the page')
-    /* Each card a radio button, the whole card its label. */
-    assert.match(page, /\{LOOKS\.map\(\(look\) => \(\s*<LookCard key=\{look\.id\} look=\{look\} on=\{look\.id === wearing\} onWear=\{\(\) => wear\(look\.id\)\} \/>/)
+    assert.ok(page.indexOf('<LookApply') > page.indexOf('Put every color back'), 'the Apply bar is drawn above part of the page')
+    /* Undo over Play for UNDO_MS, two seconds, held while the pointer is on it, and Undo wears the last look again. */
+    const undo = page.slice(page.indexOf('export function LookUndo('))
+    assert.match(undo, /const from = offer \? Math\.max\(offer\.at, letGo\) : 0/)
+    assert.match(undo, /setTimeout\(\(\) => offerUndo\(null\), Math\.max\(0, from \+ UNDO_MS - Date\.now\(\)\)\)/, 'Undo does not go after UNDO_MS')
+    assert.match(undo, /if \(!offer \|\| held\) return undefined/, 'Undo goes from under the pointer')
+    assert.match(undo, /setLook\(offer\.was\)\s+offerUndo\(null\)/, 'Undo does not put the last look back on, or stays after')
+    assert.match(readFileSync(new URL('../src/lib/colourPage.js', import.meta.url), 'utf8'), /\nexport const UNDO_MS = 2000\n/, '"have the undo card pop-up for two seconds"')
+    /* Drawn by App over Play, out of sight while Settings is open; Apply closes Settings as Done does. */
+    assert.match(src, /<LookUndo hidden=\{sheet !== null\} \/>/, 'the Undo card is not over Play, or not only over Play')
+    assert.match(src, /<Colours [^>]*onApplied=\{leaveSettings\} \/>/, 'Apply does not close Settings onto Play')
+    /* Each card a radio button, the whole card its label; checked is the pick, or the one worn while nothing is picked. */
+    assert.match(page, /\{LOOKS\.map\(\(look\) => \(\s*<LookCard\s+key=\{look\.id\}\s+look=\{look\}\s+on=\{look\.id === \(picked \|\| wearing\)\}\s+wearing=\{look\.id === wearing\}\s+picked=\{look\.id === picked\}\s+onPick=\{\(\) => pick\(look\.id\)\}\s+\/>/)
+    assert.match(page, /\{picked \? <span className="colours-look-on">Picked<\/span> : wearing \? <span className="colours-look-on">✓ Wearing<\/span> : null\}/, 'the cards do not say which is picked and which is worn')
     assert.match(page, /<input\s+type="radio"\s+name="colours-look"/, 'a look card is not a radio button')
     /* Putting colours back is never one click from the page. */
     assert.equal(page.split('resetAll()').length, 2, 'Put every colour back happens somewhere other than its confirm')
@@ -6088,6 +6108,120 @@ export function run(test) {
     assert.match(page, /<OffChoice mode="grey" label="Gray when off"/)
     assert.match(page, /data-off=\{mode === 'grey' \? 'grey' : undefined\}/)
     assert.match(page, /setOffMode\(mode\)/)
+  })
+
+  test('the browser’s looks, run: a click only picks, Apply puts it on and closes Settings, and Undo over Play is up two seconds and puts the last look back', async () => {
+    const c = await coloursOnABench()
+    const page = readFileSync(new URL('../src/components/Colours.jsx', import.meta.url), 'utf8')
+    const { transformSync } = await import('esbuild')
+    const h = (type, props, ...children) => ({ type: typeof type === 'function' ? type.name : type, props: props || {}, children: children.flat() })
+    const words = (el) => (el == null || typeof el === 'boolean' ? '' : typeof el !== 'object' ? String(el) : el.children.map(words).join(' '))
+    const find = (el, is) => (el && typeof el === 'object' ? (is(el) ? el : el.children.map((x) => find(x, is)).find(Boolean)) : null)
+    const js = (text) => transformSync(text, { loader: 'jsx', jsx: 'transform', jsxFactory: 'h' }).code
+    c.looks.setLook('fractalremote')
+
+    /* The page's own pick and Apply, by their real source: a click picks and changes nothing; Apply wears, keeps, offers Undo and closes. */
+    const body = page.slice(page.indexOf('export default function Colours('), page.indexOf('\nfunction LookCard('))
+    const handlers = body.slice(body.indexOf('  const pick = (id) =>'), body.indexOf('\n  }\n', body.indexOf('  const apply = () =>')) + 4)
+    assert.ok(handlers.includes('const apply = () =>'), 'the page’s pick and Apply moved; this check reads them')
+    const offered = []
+    let closed = 0
+    let chosen = null
+    const run = (wearing) =>
+      new Function('h', 'pickLook', 'applyLook', 'offerUndo', 'onApplied', 'wearing', 'setChosen', 'picked', `${js(handlers)}\nreturn { pick, apply }`)(
+        h, c.page.pickLook, c.page.applyLook, (o) => offered.push(o), () => closed++, wearing, (v) => (chosen = v), c.page.pickLook(chosen, wearing)
+      )
+    run(c.looks.lookId()).pick('sunlight')
+    assert.equal(chosen, 'sunlight', 'a click does not pick the look')
+    assert.equal(c.looks.lookId(), 'fractalremote', 'a click put the look on before Apply')
+    assert.deepEqual([offered.length, closed], [0, 0], 'a click offered Undo or closed Settings')
+    run(c.looks.lookId()).pick('fractalremote')
+    assert.equal(chosen, null, 'the look already worn stays picked, and Apply would change nothing')
+    run(c.looks.lookId()).pick('sunlight')
+    run(c.looks.lookId()).apply()
+    assert.equal(c.looks.lookId(), 'sunlight', 'Apply did not put the look on')
+    assert.equal(chosen, null, 'the pick is still up after Apply')
+    assert.equal(closed, 1, 'Apply does not close Settings onto Play')
+    assert.deepEqual([offered.length, offered[0]?.was, offered[0]?.now], [1, 'fractalremote', 'sunlight'], 'Apply does not offer Undo over Play')
+
+    /* The first frame of the page: no Apply bar with nothing picked, and the look worn says so. */
+    const drawn = c.draw(c.Colours, {})
+    assert.ok(!drawn.includes('colours-apply'), 'the Apply bar is up with nothing picked')
+    assert.match(drawn, /Sunlight<\/span><span class="colours-look-on">✓ Wearing/, 'the look worn does not say so')
+
+    /* Undo over Play, by its real source, with its own hooks and a clock that only moves when told. */
+    const clock = { t: 0, timers: [] }
+    const tick = (to) => {
+      clock.t = to
+      for (const t of clock.timers.filter((x) => x.at <= to && !x.gone)) {
+        t.gone = true
+        t.fn()
+      }
+    }
+    const slots = []
+    const effects = []
+    let s = 0
+    let e = 0
+    const pending = []
+    const hooks = {
+      useState: (first) => {
+        const k = s++
+        if (!(k in slots)) slots[k] = first
+        return [slots[k], (v) => (slots[k] = typeof v === 'function' ? v(slots[k]) : v)]
+      },
+      useEffect: (fn, deps) => {
+        const k = e++
+        const was = effects[k]
+        if (!was || deps.some((d, j) => !Object.is(d, was.deps[j]))) pending.push(() => {
+          was?.cleanup?.()
+          effects[k] = { deps, cleanup: fn() }
+        })
+      },
+      useSyncExternalStore: (watch, get) => get()
+    }
+    const undoText = page.slice(page.indexOf('let undo = null'))
+    const b = new Function(
+      'h', 'useState', 'useEffect', 'useSyncExternalStore', 'LOOKS', 'UNDO_MS', 'setLook', 'setTimeout', 'clearTimeout', 'Date',
+      `${js(undoText.replace(/^export function /gm, 'function '))}\nreturn { LookUndo, offerUndo }`
+    )(
+      h, hooks.useState, hooks.useEffect, hooks.useSyncExternalStore, c.LOOKS, c.page.UNDO_MS, c.looks.setLook,
+      (fn, ms) => {
+        const t = { fn, at: clock.t + ms }
+        clock.timers.push(t)
+        return t
+      },
+      (t) => t && (t.gone = true),
+      { now: () => clock.t }
+    )
+    const draw = (props = {}) => {
+      s = 0
+      e = 0
+      const out = b.LookUndo(props)
+      pending.splice(0).forEach((f) => f())
+      return out
+    }
+    assert.equal(c.page.UNDO_MS, 2000, '"have the undo card pop-up for two seconds"')
+    assert.equal(draw(), null, 'Undo is over Play before anything was applied')
+    clock.t = 5000
+    b.offerUndo({ was: 'fractalremote', now: 'sunlight', at: 5000 })
+    assert.equal(draw({ hidden: true }), null, 'Undo shows under a sheet, or over Settings')
+    const card = draw()
+    assert.match(words(card), /Now: Sunlight/, 'no Undo over Play after Apply')
+    tick(6999)
+    assert.ok(draw(), 'Undo went before its two seconds')
+    tick(7000)
+    assert.equal(draw(), null, 'Undo is still up after two seconds')
+    /* Undo puts the last look back on, and goes. */
+    c.looks.setLook('stompbox')
+    clock.t = 9000
+    b.offerUndo({ was: 'sunlight', now: 'stompbox', at: 9000 })
+    find(draw(), (el) => el.type === 'button').props.onClick()
+    assert.equal(c.looks.lookId(), 'sunlight', 'Undo did not put the last look back on')
+    assert.equal(draw(), null, 'the Undo card stays after Undo')
+    /* And its timer goes with it: nothing left to fire into a page that has moved on. */
+    for (const fx of effects) fx?.cleanup?.()
+    assert.ok(clock.timers.every((t) => t.gone), 'a timer of the Undo card outlives it')
+    c.looks.setLook('fractalremote')
   })
 
   test('the browser’s colour sheet: the arrows move between the swatches, Enter uses one, Escape is only Cancel', () => {
