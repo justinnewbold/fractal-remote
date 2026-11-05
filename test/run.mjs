@@ -6754,6 +6754,10 @@ console.log('\nthe server')
 const { run: server } = await import('./server.mjs')
 server(test)
 
+console.log('\nhow many people, day by day')
+const { run: usageDays } = await import('./usage-days.mjs')
+usageDays(test)
+
 console.log('\non an AM4 the amp’s pedal is its boost')
 const { run: am4Boost } = await import('./am4-boost.mjs')
 am4Boost(test)

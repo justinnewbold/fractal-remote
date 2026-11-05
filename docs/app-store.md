@@ -496,6 +496,27 @@ App interactions, collected, not shared, for App functionality. Neither
 needs a build. The privacy page says it under *Help getting connected*.
 Justin makes these; nothing here says they are done until he has.
 
+**4 November 2026: one tick needed, for How many people.** Developer →
+Customers → People counts how many people used the app (today, the last 7
+and the last 30 days, where, on which app version, and since today on which
+phone system), and from today the server keeps each UTC day's totals so the
+page can draw them day by day (supabase/migrations/20261104_usage_days.sql).
+Nothing new is collected from anybody: it is counted from the sign-in and
+check-in times and what RevenueCat already notes when the app opens, and
+what is kept is numbers that name nobody. But counting app opens to see how
+many people use the app is what Apple's label calls Analytics ("measure
+audience size"), and the privacy page already says these counts are what
+the label means by Analytics, while the live label has Product Interaction
+for App Functionality only. So the label says less than the privacy page,
+and has since People began on 2 November; keeping the totals for two years
+widens that. For Justin, in plain words: in App Store Connect → App Privacy
+→ Usage Data → Product Interaction, tick **Analytics** next to App
+Functionality (still linked to the user, still not tracking), then
+Publish. The privacy page already calls these counts analytics, so the
+label should match. No build needed. Google Play needs nothing: its App
+interactions row already lists Analytics (the 1 November table below).
+Done 5 November 2026 (Justin).
+
 **Google Play's Data safety, the whole list as it should stand (1 November
 2026).** Written for Justin to hand to his browser assistant, and the one
 place it is all together: everything in the notes above and below, with the

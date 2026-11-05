@@ -237,7 +237,7 @@ async function siriOnTheBench({ os = 'ios', device = 'phone', vp4 = false, names
     'presetNames.js': `const listed = ${JSON.stringify(names)}\nexport const nameOf = (n) => listed[n]\n`,
     ...extra
   }
-  for (const f of ['siri-rule.js', 'versions.js', 'admin.js', 'owner-unlock.js', 'am4-boost.js', 'chain-view.js', 'device-word.js', 'relay-rules.js', 'tempo.js', 'unit.mjs', 'presetName.js', 'slots.js', 'vp4-safety.js']) {
+  for (const f of ['siri-rule.js', 'versions.js', 'admin.js', 'owner-unlock.js', 'usage-count.js', 'am4-boost.js', 'chain-view.js', 'device-word.js', 'relay-rules.js', 'tempo.js', 'unit.mjs', 'presetName.js', 'slots.js', 'vp4-safety.js']) {
     if (!(f in files)) files[f] = read(`${LIB}/${f}`)
   }
   files['siriPipe.js'] = clocked(esm(read(`${LIB}/siriPipe.js`)))

@@ -30,6 +30,7 @@
  * that would have opened every customer's details to whoever made it.
  */
 import { accountId } from './owner-unlock.js'
+import { COUNT_HOUR_UTC, COUNT_MINUTES_UTC, PLACES, byVersion, bySystem, countsAt, nightEnds, nightStarts, utcDay, utcDayStart } from './usage-count.js'
 
 /**
  * His account's id. Copied into grant-access and owner-messages; a test holds
@@ -461,32 +462,6 @@ export function handledProblem(answer) {
   return said || 'Something went wrong, and nothing was marked.'
 }
 
-/** Where somebody used it, in four plain places: the kinds above folded together. */
-const PLACES = ['iPhone app', 'Android app', 'Computer app', 'Website']
-const placeOf = (kind) => {
-  if (kind === 'iphone-app') return 'iPhone app'
-  if (kind === 'android-app') return 'Android app'
-  if (kind === 'computer') return 'Computer app'
-  if (String(kind || '').startsWith('web-')) return 'Website'
-  return null
-}
-/** RevenueCat's platform ("iOS", "Android", …) as one of the same places. */
-const placeOfPlatform = (platform) => {
-  if (/ios|iphone|ipad/i.test(String(platform || ''))) return 'iPhone app'
-  if (/android/i.test(String(platform || ''))) return 'Android app'
-  return null
-}
-/** Newest first by version number, so 1.86.62 sits above 1.86.9. */
-const byVersion = (a, b) => {
-  const pa = String(a).split('.').map(Number)
-  const pb = String(b).split('.').map(Number)
-  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
-    const d = (pb[i] || 0) - (pa[i] || 0)
-    if (d) return d
-  }
-  return 0
-}
-
 /**
  * HOW MANY PEOPLE, as sections of facts.
  *
@@ -495,67 +470,277 @@ const byVersion = (a, b) => {
  * with when they last signed in, when each signed-in device last checked in,
  * and what RevenueCat last saw. Somebody counts as using it on the newest of
  * those. "Today" is the start of this device's day, so it is Justin's today.
+ * The counting itself is shared/usage-count.mjs, which the night's count
+ * for Day by day uses too, so the two can never count one day two ways.
  *
  * Nothing in here was recorded for this: no hours, no screens. A phone left
  * open and signed in checks in about once an hour, which is as fine-grained as
  * it gets — and the note at the bottom says so, so nobody reads more into it.
  */
+const headCount = (n) => `${n} ${n === 1 ? 'person' : 'people'}`
+
+/** The phone systems' section, and what it is read from. */
+export const SYSTEMS_TITLE = 'System versions, last 30 days'
+export const SYSTEMS_NOTE =
+  'From the phone app only: the system RevenueCat last saw on each person’s phone or tablet. iPhones and iPads both show as iOS. The computer app and the website don’t say.'
+
 export function usageSections(answer, now = Date.now()) {
   if (!answer?.ok) return []
   const people = Array.isArray(answer.people) ? answer.people : []
-  const at = (x) => dateOf(x)?.getTime() || 0
-  const today = dayStart(new Date(now))
-  const week = now - 7 * 86400000
-  const month = now - 30 * 86400000
-
-  const latest = people.map((p) => {
-    const devices = Array.isArray(p?.devices) ? p.devices : []
-    return Math.max(at(p?.lastSignIn), at(p?.seen?.last), ...devices.map((d) => at(d?.last_seen)))
-  })
-  const since = (t) => latest.filter((l) => l >= t).length
+  const counts = countsAt(answer, { dayStart: dayStart(new Date(now)), now })
 
   const used = [
-    { label: 'Today', value: String(since(today)) },
-    { label: 'Last 7 days', value: String(since(week)) },
-    { label: 'Last 30 days', value: String(since(month)) },
+    { label: 'Today', value: String(counts.active_day) },
+    { label: 'Last 7 days', value: String(counts.active_7) },
+    { label: 'Last 30 days', value: String(counts.active_30) },
     { label: 'Everyone with an account', value: String(answer.total || people.length) }
   ]
 
-  /* Each person once per place, however many sessions they have there. */
-  const places = Object.fromEntries(PLACES.map((p) => [p, 0]))
-  const versions = {}
-  for (const p of people) {
-    const here = new Set()
-    for (const d of Array.isArray(p?.devices) ? p.devices : []) {
-      const place = placeOf(d?.kind)
-      if (place && at(d?.last_seen) >= month) here.add(place)
-    }
-    if (at(p?.seen?.last) >= month) {
-      const place = placeOfPlatform(p.seen.platform)
-      if (place) here.add(place)
-      if (p.seen.version) versions[p.seen.version] = (versions[p.seen.version] || 0) + 1
-    }
-    for (const place of here) places[place] += 1
-  }
-
   const sections = [
     { title: 'People who used it', rows: used },
-    { title: 'Where, in the last 30 days', rows: PLACES.map((p) => ({ label: p, value: String(places[p]) })) }
+    { title: 'Where, in the last 30 days', rows: PLACES.map((p) => ({ label: p, value: String(counts.places.month[p] || 0) })) }
   ]
+  const versions = counts.versions.month
   const list = Object.keys(versions).sort(byVersion)
   if (list.length) {
     sections.push({
       title: 'Phone app versions, last 30 days',
-      rows: list.map((v) => ({ label: v, value: `${versions[v]} ${versions[v] === 1 ? 'person' : 'people'}` }))
+      rows: list.map((v) => ({ label: v, value: headCount(versions[v]) }))
+    })
+  }
+  /* "How do I tell which iPhone and iPad system versions people run?" (3 November 2026.) From what RevenueCat already keeps, so it is there from the first day. */
+  const systems = counts.systems.month
+  const kinds = Object.keys(systems).sort(bySystem)
+  if (kinds.length) {
+    sections.push({
+      title: SYSTEMS_TITLE,
+      rows: [...kinds.map((k) => ({ label: k, value: headCount(systems[k]) })), { label: '', value: SYSTEMS_NOTE }]
     })
   }
   const notes = [
-    'Counted from when each account last signed in or last opened the app. Nothing new is recorded for this, so there are no hours or screens to show.',
+    'Counted from when each account last signed in or last opened the app. Nothing new is recorded about anybody for this: once a day only that day’s totals are kept, so there are no hours or screens to show.',
     'Somebody using two phones is still one person. Somebody using the website without signing in is not counted.'
   ]
   if ((answer.total || 0) > people.length) notes.push(`Only the newest ${people.length} of ${answer.total} accounts were counted.`)
+  if (counts.unanswered) notes.push(`RevenueCat didn’t answer about ${headCount(counts.unanswered)} just now, so these may be a little low. Refresh to ask again.`)
   sections.push({ title: 'Note', rows: notes.map((n) => ({ label: '', value: n })) })
   return sections
+}
+
+/* ------------------------------------------------------------------------ */
+/* Day by day                                                                */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * HOW MANY PEOPLE, DAY BY DAY. "A day-by-day history of how many people use
+ * the app, on your Developer page" (approved 4 November 2026). The server
+ * writes each UTC day's totals down a few minutes before the day ends
+ * (supabase/migrations/20261104_usage_days.sql), and 'usage' hands back the
+ * last 31 as `days`, newest first. These are the rules the page draws them
+ * by: the last 30 days as bars, today on the right; a day from before the
+ * counting began is "no record yet", never a zero; a day the count missed
+ * says so; and today, until the night's count has kept it, is the live count
+ * so far (a count asked for by hand during the day is only a first look).
+ *
+ * The days are UTC days, as the server keeps them, so a day is labelled by
+ * the UTC calendar ("Nov 4"), never by this device's: west of Greenwich the
+ * local date of midnight UTC is the day before. The note under the bars says
+ * when that midnight is here.
+ */
+export const DAY_BY_DAY = 'Day by day'
+export const SHOWN_DAYS = 30
+/** The chart's height, and the hollow stub a day with no number gets, so it never reads as a zero. */
+export const CHART_HEIGHT = 120
+export const STUB_HEIGHT = 8
+
+/** "Nov 4", for the UTC day "2026-11-04". */
+export const utcDayLabel = (day) => {
+  const m = String(day || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}` : 'unknown'
+}
+
+/** How many minutes this device's clock is ahead of UTC at `now` (Denver in winter is -420). */
+export const offsetHere = (now = Date.now()) => -new Date(now).getTimezoneOffset()
+
+/** A time of the UTC day, as the time here: "4:53 pm", "5 pm", "midnight", "noon". */
+export const hereAt = (hour, minute, offset) => {
+  const all = (((hour * 60 + minute + Math.round(Number(offset) || 0)) % 1440) + 1440) % 1440
+  const h = Math.floor(all / 60)
+  const m = all % 60
+  if (!m && h === 0) return 'midnight'
+  if (!m && h === 12) return 'noon'
+  return `${((h + 11) % 12) + 1}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`
+}
+
+/** When a day's number is kept for good: the later of the night's two counts, as the time here. */
+const keptAt = (offset) => hereAt(COUNT_HOUR_UTC, Math.max(...COUNT_MINUTES_UTC), offset)
+
+/** The time a row was counted, as the time here ("9:38 pm"), or null. */
+const countedAt = (row, offset) => {
+  const t = Date.parse(String(row?.computed_at || ''))
+  if (!Number.isFinite(t)) return null
+  const d = new Date(t)
+  return hereAt(d.getUTCHours(), d.getUTCMinutes(), offset)
+}
+
+/**
+ * Whether a kept row is the night's count of its day, not a first look made
+ * during it. A row that does not say when it was counted is taken as the
+ * night's: the server always says, and nothing is second-guessed without it.
+ */
+const byNight = (row, day) => {
+  const t = Date.parse(String(row?.computed_at || ''))
+  return !Number.isFinite(t) || t >= nightStarts(day)
+}
+
+const whole = (x) => Math.max(0, Math.round(Number(x) || 0))
+
+/**
+ * Why there is no history to draw yet, in plain words, or null. An answer
+ * with no `days` at all came from a server without this part; `daysError`
+ * from one that could not read them just then (they are there); `days: null`
+ * from one whose database has nowhere to keep them; an empty list from one
+ * that has not reached its first night.
+ */
+export function daysProblem(answer, now = Date.now(), offset = offsetHere(now)) {
+  if (!answer?.ok) return null
+  if (answer.days === undefined) return 'Day by day needs the server update that goes with it, which hasn’t been put live.'
+  if (answer.daysError) return 'The days kept couldn’t be read just now. Refresh to try again.'
+  if (answer.days === null) return 'Day by day needs the database change that goes with it, which hasn’t been put live.'
+  if (Array.isArray(answer.days) && !answer.days.length) return `Nothing has been kept yet. The first day is counted at ${keptAt(offset)} here.`
+  return null
+}
+
+/**
+ * THE BARS, oldest first and today last. Each is { day, label, kind, value,
+ * height, row }:
+ *
+ *   counted  a day the server kept; value is how many people used it that day
+ *   so-far   today, not kept by the night's count yet; value is the live
+ *            count since midnight UTC, or a first look made by hand earlier
+ *            today if that found more (`row` is then that first look)
+ *   none     before the first day kept: no number, "no record yet"
+ *   missed   after counting began, a day with nothing kept: no number either
+ *   unread   the server could not read the days just now: no number, and
+ *            never "no record yet", because the records are there
+ *
+ * A past day kept only by a first look (both of its night's counts failed)
+ * is counted, with `early` set, and its line says when it was counted.
+ * Today's bar has `over` set once the night's counts are over without
+ * keeping it, so its line stops promising a count that has been and gone.
+ *
+ * `height` is the value against the most in any one day shown (0 to 1), and
+ * nothing for a day with no number. `most` is that most, for the scale.
+ */
+export function dayBars(answer, now = Date.now(), count = SHOWN_DAYS) {
+  const today = utcDay(now)
+  const kept = new Map()
+  for (const r of Array.isArray(answer?.days) ? answer.days : []) {
+    const day = String(r?.day || '').slice(0, 10)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day) && day <= today) kept.set(day, r)
+  }
+  const first = [...kept.keys()].sort()[0] || null
+  const soFar = countsAt(answer, { dayStart: utcDayStart(now), now }).active_day
+  const unread = Boolean(answer?.daysError)
+  const bars = []
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const day = utcDay(utcDayStart(now) - i * DAY_MS)
+    const row = kept.get(day) || null
+    const bar = { day, label: utcDayLabel(day), kind: 'missed', value: null, row }
+    if (day === today && !(row && byNight(row, day))) {
+      bar.kind = 'so-far'
+      bar.value = Math.max(soFar, row ? whole(row.active_day) : 0)
+      bar.over = now >= nightEnds(day)
+    } else if (row) {
+      bar.kind = 'counted'
+      bar.value = whole(row.active_day)
+      if (!byNight(row, day)) bar.early = true
+    } else if (unread) {
+      bar.kind = 'unread'
+    } else if (!first || day < first) {
+      bar.kind = 'none'
+    }
+    bars.push(bar)
+  }
+  const most = Math.max(0, ...bars.map((b) => b.value ?? 0))
+  for (const b of bars) b.height = b.value === null ? null : b.value / Math.max(1, most)
+  return { bars, most, first }
+}
+
+/** The floor line a real zero is drawn as, and the least a day with anybody is drawn as, so 1 never looks like nobody. */
+export const ZERO_HEIGHT = 2
+export const LEAST_HEIGHT = 4
+
+/** How tall a bar is drawn, in points: a real zero is a thin line, a day with no number the hollow stub. */
+export const barPoints = (bar, frame = CHART_HEIGHT) => {
+  if (bar?.height === null || bar?.height === undefined) return STUB_HEIGHT
+  if (!(bar.value > 0)) return ZERO_HEIGHT
+  return Math.max(LEAST_HEIGHT, Math.round(bar.height * frame))
+}
+
+/** Which bar a touch at `x` across a chart `width` wide lands on. */
+export const barAt = (x, width, count) => {
+  if (!(width > 0) || !(count > 0)) return Math.max(0, count - 1)
+  return Math.min(count - 1, Math.max(0, Math.floor((Number(x) / width) * count)))
+}
+
+/** What a screen reader says for a bar. */
+export function barLabel(bar) {
+  if (!bar) return ''
+  if (bar.kind === 'counted') return `${bar.label}, ${headCount(bar.value)}`
+  if (bar.kind === 'so-far') return `${bar.label} so far, ${headCount(bar.value)}`
+  if (bar.kind === 'none') return `${bar.label}, no record yet`
+  if (bar.kind === 'unread') return `${bar.label}, couldn’t be read`
+  return `${bar.label}, not counted`
+}
+
+/**
+ * The lines above the bars, for the one picked (the rightmost to begin with):
+ * how many that day and in the 7 and 30 days up to it, where they were, and
+ * whether RevenueCat failed to answer about some of them when it was counted.
+ */
+export function dayLine(bar, { first = null, offset = offsetHere() } = {}) {
+  if (!bar) return []
+  if (bar.kind === 'so-far') {
+    const so = `${bar.label} so far: ${headCount(bar.value)}.`
+    if (!bar.over) return [`${so} The day is kept at ${keptAt(offset)} here.`]
+    const at = bar.row ? countedAt(bar.row, offset) : null
+    return [at ? `${so} The day’s count didn’t come through, so the day keeps the one made at ${at} here.` : `${so} The day’s count didn’t come through, so this day won’t be kept.`]
+  }
+  if (bar.kind === 'none') return [first ? `${bar.label}: no record yet. Counting began ${utcDayLabel(first)}.` : `${bar.label}: no record yet.`]
+  if (bar.kind === 'unread') return [`${bar.label}: couldn’t be read just now.`]
+  if (bar.kind === 'missed') return [`${bar.label}: not counted that day.`]
+  const row = bar.row || {}
+  const lines = [`${bar.label}: ${headCount(whole(row.active_day))} that day, ${whole(row.active_7)} in the 7 days to then, ${whole(row.active_30)} in the 30 days to then.`]
+  const where = row.places?.day && typeof row.places.day === 'object' ? row.places.day : {}
+  const places = PLACES.filter((p) => whole(where[p]) > 0).map((p) => `${p} ${whole(where[p])}`)
+  if (places.length) lines.push(`That day: ${places.join(', ')}.`)
+  const early = bar.early ? countedAt(row, offset) : null
+  if (early) lines.push(`Counted at ${early} here, before the day was over, so it may be low.`)
+  const missed = whole(row.unanswered)
+  /* A quarter or more of the people about that month (roughly who RevenueCat is asked about) is not "a little". */
+  if (missed && missed * 4 >= Math.max(1, whole(row.active_30))) {
+    lines.push(`RevenueCat didn’t answer about ${headCount(missed)} when the day was counted, so that day’s numbers are low, maybe by a lot.`)
+  } else if (missed) {
+    lines.push(`RevenueCat didn’t answer about ${headCount(missed)} when the day was counted, so the numbers may be a little low.`)
+  }
+  return lines
+}
+
+/** The scale, above the bars. */
+export const scaleLine = (most) => `Most in one day: ${whole(most)}`
+
+/** The three dates under the bars: the first, the middle and the last. */
+export const axisLabels = (bars) => (bars?.length ? [bars[0].label, bars[Math.floor((bars.length - 1) / 2)].label, bars[bars.length - 1].label] : [])
+
+/** When a day starts and is counted, in this device’s own time. */
+export function utcNote(now = Date.now(), offset = offsetHere(now)) {
+  const kept = keptAt(offset)
+  if (!Math.round(Number(offset) || 0)) {
+    return `Each day runs midnight to midnight UTC, the same as here, and is counted at ${kept}, a few minutes before it ends.`
+  }
+  const starts = hereAt(0, 0, offset)
+  return `Each day runs midnight to midnight UTC, which is ${starts} to ${starts} here, and is counted at ${kept}, a few minutes before it ends, so it won’t always match Today above.`
 }
 
 /**

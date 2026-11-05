@@ -3656,6 +3656,8 @@ export function run(test) {
       ['src/lib/cloudSetlists.js', /^Android$/, 'deviceName: iPhone on an iPhone'],
       /* Sales at a glance names Google Play in Paid twice, as it names Android in Where they bought. */
       ['src/lib/admin.js', /Android|Google Play/, 'Justin’s Developer pages only'],
+      /* How many people's four places and its phone systems, counted for People and Day by day (4 November 2026): imported by admin.js alone. */
+      ['src/lib/usage-count.js', /Android/, 'Justin’s Developer pages only, through admin.js'],
       /* What works adds the gear notes up, and says which phones they came from (26 October 2026). */
       ['src/lib/gear-share-rules.js', /^Android$/, 'gearSections: What works, a Developer page, Justin’s only'],
       ['src/lib/whats-live.js', /^Android build$/, 'What is live, a Developer page, Justin’s only'],
@@ -6515,7 +6517,8 @@ export function run(test) {
 
     /* The answer carries no address: the server never puts one in it. */
     const server = read('supabase/functions/grant-access/index.ts')
-    const body = server.slice(server.indexOf('async function usage()'), server.indexOf('Deno.serve('))
+    const body = server.slice(server.indexOf('async function usage('), server.indexOf('Deno.serve('))
+    assert.ok(server.indexOf('async function usage(') > 0, 'the usage answer moved; this test reads it')
     assert.match(body, /return \{ lastSignIn: d\.last_sign_in \?\? null, devices, seen \}/, 'the usage answer carries more than counts need')
 
     /* Both ends draw it only for him, from the Developer page. */
