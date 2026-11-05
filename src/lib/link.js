@@ -1388,9 +1388,9 @@ export async function signInAccount({ email, password }) {
  * session. Then there is nothing to sign in with yet, and the form says so
  * in the phone's words rather than pretending it worked.
  */
-export async function createAccount({ email, password }) {
+export async function createAccount({ email, password, firstName, lastName }) {
   const config = loadRemoteConfig() || {}
-  const { needsConfirmation, existing } = await remoteSignUp({ url: config.url, anonKey: config.anonKey, email, password })
+  const { needsConfirmation, existing } = await remoteSignUp({ url: config.url, anonKey: config.anonKey, email, password, firstName, lastName })
   /*
    * Create Account, pressed by somebody who already has one — which is what
    * a big Create Account button invites. Their details are the sign-in they

@@ -177,6 +177,9 @@ export const DEVICES = {
 
 const money = (n) => `$${n.toFixed(2)}`
 
+/** The lookup's Name row for an account made before Create account asked for one. */
+export const NO_NAME = 'None given. The account was made before Create account asked for a name.'
+
 /**
  * CUSTOMER LOOKUP: the rows under the answer to Check, Give access or Take it
  * back. `answer` is what accessAction returned; an answer without details
@@ -202,6 +205,14 @@ export function lookupRows(answer, now = Date.now()) {
   if (!bought && !d.owner) unlock += '. RevenueCat did not say what they bought.'
 
   const rows = [
+    /*
+     * Their name first, from 5 November 2026, when Create account began
+     * asking (shared/account-name.mjs). A server too old to send it sends no
+     * `name`, and then there is no row; an account made before then has ''.
+     */
+    ...(typeof d.name === 'string' || d.name === null
+      ? [{ label: 'Name', value: d.name ? d.name : d.name === '' ? NO_NAME : 'Could not be read just now. Check again.' }]
+      : []),
     { label: 'Unlock', value: unlock },
     { label: 'Signed up', value: dayOf(d.signedUp) },
     {
@@ -637,8 +648,8 @@ export const samePerson = (a, b) =>
  */
 export function accountFilterButtons(answer, find = '', now = Date.now()) {
   const want = String(find || '').trim().toLowerCase()
-  const match = (email) => !want || String(email || '').toLowerCase().includes(want)
-  const people = peopleIn(answer).filter((a) => match(a.email))
+  const match = (email, name = '') => !want || String(email || '').toLowerCase().includes(want) || String(name || '').toLowerCase().includes(want)
+  const people = peopleIn(answer).filter((a) => match(a.email, a.name))
   const waiting = (Array.isArray(answer?.waiting) ? answer.waiting : []).filter((w) => match(w.email))
   return ACCOUNT_FILTERS.map((f) => {
     const count = f.key === 'waiting' ? waiting.length : people.filter((a) => f.keep(a, now)).length
@@ -656,7 +667,8 @@ export function accountFilterButtons(answer, find = '', now = Date.now()) {
 export function accountSections(answer, filter = '', now = Date.now(), show = 'all', keep = null) {
   if (!answer?.ok) return []
   const want = String(filter || '').trim().toLowerCase()
-  const match = (email) => !want || String(email || '').toLowerCase().includes(want)
+  /* By address, or by the name on the account (from 5 November 2026; see lookupRows). */
+  const match = (email, name = '') => !want || String(email || '').toLowerCase().includes(want) || String(name || '').toLowerCase().includes(want)
   const picked = filterOf(show)
   const keptEmail = String(keep?.email || '').trim().toLowerCase()
   const kept = (email, waitingRow) => !!keptEmail && String(email || '').trim().toLowerCase() === keptEmail && !!keep?.waiting === waitingRow
@@ -668,8 +680,8 @@ export function accountSections(answer, filter = '', now = Date.now(), show = 'a
    */
   const everyone = Array.isArray(answer.accounts) ? answer.accounts : []
   const devices = everyone.length - peopleIn(answer).length
-  const people = peopleIn(answer).filter((a) => (match(a.email) && picked.keep(a, now)) || kept(a.email, false))
-  const held = people.filter((a) => match(a.email) && picked.keep(a, now)).length
+  const people = peopleIn(answer).filter((a) => (match(a.email, a.name) && picked.keep(a, now)) || kept(a.email, false))
+  const held = people.filter((a) => match(a.email, a.name) && picked.keep(a, now)).length
   const allWaiting = (Array.isArray(answer.waiting) ? answer.waiting : []).filter((w) => match(w.email))
   /* The waiting list is shown under Everyone and Waiting to sign up; under any other button only an open row of it stays. */
   const waitingShown = picked.key === 'all' || picked.key === 'waiting'
@@ -713,8 +725,9 @@ export function accountSections(answer, filter = '', now = Date.now(), show = 'a
       rows: people.length
         ? people.map((a) => ({
             label: '',
-            value: `${a.email}\n${line(a)}`,
+            value: a.name ? `${a.email}\n${a.name}\n${line(a)}` : `${a.email}\n${line(a)}`,
             email: a.email,
+            ...(a.name ? { name: a.name } : {}),
             line: line(a),
             unlocked: !!a.unlocked,
             owner: a.source === 'owner',

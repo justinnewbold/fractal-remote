@@ -24,7 +24,8 @@
  *                    account: asked once without { confirm } to look, then
  *                    with it and the id that look gave (deleteByHand, below)
  *
- * All three by email also answer with the Customer lookup: when they signed
+ * All three by email also answer with the Customer lookup: their name (from
+ * 5 November 2026, nameOf below), when they signed
  * up, whether they confirmed, what they paid for and where, which devices
  * they have signed in on, and the app version they were last on. "Do number
  * one and five for now."
@@ -792,13 +793,69 @@ async function adminAddresses(): Promise<string[]> {
   return found.filter(Boolean)
 }
 
+/*
+ * THE NAME ON AN ACCOUNT, for the Customer lookup and Everyone with an
+ * account. Create account asks for a first and a last name since 5 November
+ * 2026 and keeps them on the account itself, as the account service's
+ * user_metadata (shared/account-name.mjs, the source of the two keys and of
+ * how they are put together; a test holds this copy to it). Read from the
+ * account service here, so no database function changes: an account made
+ * before then has none, and says '' rather than nothing, so the page can
+ * tell "no name" from a server too old to have asked.
+ */
+const NAME_KEYS = { first: 'first_name', last: 'last_name' }
+const cleanName = (typed: unknown) => String(typed ?? '').replace(/\s+/g, ' ').trim()
+const nameOn = (meta: Record<string, unknown> | null | undefined) =>
+  meta && typeof meta === 'object' ? [meta[NAME_KEYS.first], meta[NAME_KEYS.last]].map(cleanName).filter(Boolean).join(' ') : ''
+
+/* One account's name, by its id; null when it could not be asked, which is not "none". */
+async function nameOf(id: string): Promise<string | null> {
+  const key = env('SUPABASE_SERVICE_ROLE_KEY')
+  try {
+    const res = await fetch(`${env('SUPABASE_URL')}/auth/v1/admin/users/${encodeURIComponent(id)}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } })
+    if (!res.ok) return null
+    return nameOn((await res.json())?.user_metadata)
+  } catch {
+    return null
+  }
+}
+
+/* Every account's name, by its lower-case address, read page by page as unconfirmedAccounts reads them. Empty if it could not be asked. */
+async function namesByEmail(): Promise<Map<string, string>> {
+  const key = env('SUPABASE_SERVICE_ROLE_KEY')
+  const names = new Map<string, string>()
+  try {
+    for (let page = 1; page <= 10; page++) {
+      const res = await fetch(`${env('SUPABASE_URL')}/auth/v1/admin/users?page=${page}&per_page=${PAGE}`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` }
+      })
+      if (!res.ok) break
+      const users = ((await res.json())?.users || []) as { email?: string; user_metadata?: Record<string, unknown> }[]
+      for (const u of users) {
+        const at = String(u?.email || '').trim().toLowerCase()
+        const name = nameOn(u?.user_metadata)
+        if (at && name) names.set(at, name)
+      }
+      if (users.length < PAGE) break
+    }
+  } catch {
+    /* Not asked is not none: the list still stands, without names. */
+  }
+  return names
+}
+
 async function markEveryone(list: Record<string, any>) {
   if (!Array.isArray(list.accounts)) return { ...list, deletes: true }
-  const admins = await adminAddresses()
+  const [admins, names] = await Promise.all([adminAddresses(), namesByEmail()])
   const accounts = await Promise.all(
     list.accounts.map(async (a: Record<string, any>) => {
       const at = String(a?.email || '').trim().toLowerCase()
-      return { ...a, ...((await isReviewLogin(at)) ? { review: true } : {}), ...(at && admins.includes(at) ? { admin: true } : {}) }
+      return {
+        ...a,
+        ...(names.has(at) ? { name: names.get(at) } : {}),
+        ...((await isReviewLogin(at)) ? { review: true } : {}),
+        ...(at && admins.includes(at) ? { admin: true } : {})
+      }
     })
   )
   return { ...list, accounts, deletes: true }
@@ -983,7 +1040,7 @@ Deno.serve(async (req: Request) => {
     if (action === 'claim') return json({ ok: true, unlocked: has, emailed: told === true })
 
     /* The Customer lookup. Asked after the change, so it shows the result. */
-    const [bought, seen, waiting] = await Promise.all([
+    const [bought, seen, waiting, name] = await Promise.all([
       purchasesOf(account),
       lastSeen(account),
       /*
@@ -994,9 +1051,12 @@ Deno.serve(async (req: Request) => {
        * page says so before he taps it. Unknown is not a reason to fail the
        * lookup.
        */
-      found?.confirmed ? false : rpc('is_waiting_grant', { address: email }).then(Boolean, () => null)
+      found?.confirmed ? false : rpc('is_waiting_grant', { address: email }).then(Boolean, () => null),
+      /* The first and last name it was made with, '' for an account made before names were asked (nameOf above). */
+      nameOf(account)
     ])
     const details = {
+      name,
       signedUp: found?.signed_up ?? null,
       confirmed: found?.confirmed ?? null,
       lastSignIn: found?.last_sign_in ?? null,

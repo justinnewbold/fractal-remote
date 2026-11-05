@@ -238,6 +238,7 @@ async function relayOnABench(end, { picked = null, many = null, legacy = false, 
     /* On the bench's clock too: its deadlines are counted in the bench's time. */
     'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
     'confirm-code.mjs': read('shared/confirm-code.mjs'),
+    'account-name.mjs': read('shared/account-name.mjs'),
     'device-word.mjs': read('shared/device-word.mjs'),
     'project.mjs': end === 'phone' ? read('mobile/src/lib/project.js') : read('desktop/lib/project.mjs')
   }
@@ -253,12 +254,14 @@ async function relayOnABench(end, { picked = null, many = null, legacy = false, 
           ["from './notForever'", "from './nothing.mjs'"],
           ["from './relay-rules'", "from './relay-rules.mjs'"],
           ["from './confirm-code'", "from './confirm-code.mjs'"],
+          ["from './account-name'", "from './account-name.mjs'"],
           ["from './device-word'", "from './device-word.mjs'"]
         ]
       : [
           ["from '../../desktop/lib/project.mjs'", "from './project.mjs'"],
           ["from '../../shared/relay-rules.mjs'", "from './relay-rules.mjs'"],
           ["from '../../shared/confirm-code.mjs'", "from './confirm-code.mjs'"],
+          ["from '../../shared/account-name.mjs'", "from './account-name.mjs'"],
           ["from '../../shared/device-word.mjs'", "from './device-word.mjs'"],
           ["from './debugLog.js'", "from './nothing.mjs'"],
           ["import('@supabase/supabase-js')", "import('./service.mjs')"],

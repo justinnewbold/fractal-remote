@@ -184,6 +184,7 @@ async function relayOnABench({ disk = {}, mode = 'offline' } = {}) {
     'nothing.mjs': 'export const logDebug = () => {}\nexport const decode = async (p) => p.body\nexport const withRetry = (fn) => fn()\n',
     'relay-rules.mjs': read('shared/relay-rules.mjs'),
     'confirm-code.mjs': read('shared/confirm-code.mjs'),
+    'account-name.mjs': read('shared/account-name.mjs'),
     'device-word.mjs': read('shared/device-word.mjs'),
     'project.mjs': read('mobile/src/lib/project.js')
   }
@@ -197,6 +198,7 @@ async function relayOnABench({ disk = {}, mode = 'offline' } = {}) {
     ["from './notForever'", "from './net.mjs'"],
     ["from './relay-rules'", "from './relay-rules.mjs'"],
     ["from './confirm-code'", "from './confirm-code.mjs'"],
+    ["from './account-name'", "from './account-name.mjs'"],
     ["from './device-word'", "from './device-word.mjs'"]
   ]
   let src = read('mobile/src/lib/relay.js')

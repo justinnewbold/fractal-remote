@@ -617,3 +617,35 @@ Settings → Troubleshooting changes it. Off unless Yes. Three pieces:
 select unit, via, coalesce(adapter, computer_os, 'computer') as way, outcome, count(*), max(created_at)
 from public.gear_reports group by 1, 2, 3, 4 order by max(created_at) desc;
 ```
+
+## The name on an account (5 November 2026)
+
+Create account asks for a first name and a last name, on the phones, the
+website and the computer app (shared/account-name.mjs). They go onto the
+account itself, as the account service's `user_metadata` (`first_name`,
+`last_name`), from the sign-up: no table, no migration. Deleting the account
+deletes them with it (`_shared/forget-account.ts` deletes the auth user).
+Accounts made before are never asked, and have none.
+
+- `functions/grant-access/`: the Customer lookup's answer gains
+  `details.name` (the name, `''` for none, `null` if the account service
+  could not be asked), read by id from the admin users API; `accounts` gains
+  `name` on each row that has one, read page by page from the same API.
+
+### Putting it live, in this order
+
+1. **Publish the store labels** (docs/app-store.md, App Privacy, *5 November
+   2026: the name*) **before the app update that asks for the name is
+   merged**: the update collects it on every copy that makes an account.
+2. **Deploy grant-access**: `supabase functions deploy grant-access`. Until
+   then the names are kept, but Developer shows none: the old function sends
+   no `name`, and the lookup draws no Name row. Either order works.
+
+### Checking it
+
+1. Make an account in the app with a name; `select raw_user_meta_data from
+   auth.users where email = '…'` shows `first_name` and `last_name`, trimmed.
+2. Developer → Give access → Check that address: the first row is Name. An
+   older account's says "None given."
+3. Developer → Customers → Everyone with an account: the name is under the
+   address, and typing part of it in the find box finds the row.

@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-05",
+    "day": "5 November 2026",
+    "version": "1.89.44",
+    "lines": [
+      {
+        "text": "Creating an account now asks for your first and last name, so we know who we’re helping when you write to us. If you already have an account, nothing changes and you won’t be asked.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-04",
     "day": "4 November 2026",
     "version": "1.89.41",
