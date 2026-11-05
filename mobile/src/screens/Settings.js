@@ -33,7 +33,7 @@ import { setFlashTiming, setMetronome, useFlashTiming, useMetronome, useUnitHear
 import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, nudgeFloor, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
-import Colours, { LookUndo } from '../components/Colours'
+import Colours, { LookApply } from '../components/Colours'
 import { coloursStatus } from '../lib/colourPage'
 import {
   SIZES,
@@ -1813,9 +1813,10 @@ export default function Settings({
         </>
       ) : null}
     </ScrollView>
-    {/* The Colours page's Undo, floating over the bottom of the screen for a
-        moment after a look goes on (components/Colours). Nothing otherwise. */}
-    <LookUndo />
+    {/* The Colours page's Apply, floating over the bottom of the screen while
+        a look is picked, and back to Play once it is on, where its Undo
+        waits a moment (components/Colours). Nothing otherwise. */}
+    <LookApply onApplied={onBack} />
     </EdgeBack>
   )
 }

@@ -87,7 +87,8 @@ function useSlot(claim) {
   return useSyncExternalStore(watchSlot, slotTaken, slotTaken)
 }
 
-function useScreenReader() {
+/** Whether a screen reader is on now, and redrawn when that changes. */
+export function useScreenReader() {
   const [on, setOn] = useState(false)
   useEffect(() => {
     let live = true

@@ -20930,8 +20930,8 @@ export function run(test) {
     const pageText = settings.slice(settings.indexOf("{page === 'colours' ? ("), settings.indexOf("{page === 'trouble' ? ("))
     assert.match(pageText, /head\('Colors', 'back'\)/, 'the Colours page has no title or way back')
     assert.match(pageText, /<Colours \/>/, 'the Colours page is empty')
-    /* Undo floats over the screen, outside the scroll, so it never moves the cards. */
-    assert.match(settings, /<\/ScrollView>\s*\{\/\*[\s\S]*?\*\/\}\s*<LookUndo \/>\s*<\/EdgeBack>/, 'the look Undo is inside the scrolling page, or missing')
+    /* Apply floats over the screen, outside the scroll, so it never moves the cards. */
+    assert.match(settings, /<\/ScrollView>\s*\{\/\*[\s\S]*?\*\/\}\s*<LookApply onApplied=\{onBack\} \/>\s*<\/EdgeBack>/, 'the look’s Apply is inside the scrolling page, or missing')
   })
 
   test('the Settings row names the look, and the unit when the look is the unit’s', async () => {
@@ -20947,31 +20947,135 @@ export function run(test) {
     c.setColourUnit(null)
   })
 
-  test('a look goes on in one tap, and Undo puts the last one back', async () => {
+  test('a look is picked with a tap, put on with Apply, and Undo puts the last one back', async () => {
     const c = await coloursOnTheBench({ look: 'unit' })
     c.setColourUnit('am4')
     assert.equal(c.blockColor('drive').fill, c.PALETTES.am4.drive, 'Match my unit is not the AM4’s colours on an AM4')
-    const done = c.wearLook('sunlight', c.storage)
-    assert.deepEqual(done, { was: 'unit', now: 'sunlight' })
-    assert.equal(c.blockColor('drive').fill, c.LOOKS.find((l) => l.id === 'sunlight').families.drive, 'the look did not repaint the drive')
+    /* A pick is a look other than the one worn, or nothing. */
+    assert.equal(c.pickLook('sunlight'), 'sunlight')
+    assert.equal(c.pickLook('unit'), null, 'the look already worn can be picked, and Apply would change nothing')
+    assert.equal(c.pickLook('nonsense'), null, 'a look that does not exist was picked')
+    assert.equal(c.pickLook(null), null)
+    assert.equal(c.lookId(), 'unit', 'picking changed the look')
+    /* Apply wears it, keeps it, and hands Play its Undo. */
+    const done = c.applyLook('sunlight', c.storage, 1000)
+    assert.deepEqual(done, { was: 'unit', now: 'sunlight', at: 1000 })
+    assert.equal(c.blockColor('drive').fill, c.LOOKS.find((l) => l.id === 'sunlight').families.drive, 'Apply did not repaint the drive')
     assert.equal(JSON.parse(c.storage.kept['fractal.colours']).theme.id, 'sunlight', 'the look is not kept for the next launch')
+    assert.equal(c.applyLook('sunlight', c.storage), null, 'applying the look already worn offers an Undo to nothing')
+    assert.equal(c.applyLook('nonsense', c.storage), null, 'a look that does not exist was applied')
     /* Undo is wearing `was` again. */
     c.setLook(done.was, c.storage)
     assert.equal(c.blockColor('drive').fill, c.PALETTES.am4.drive, 'Undo did not put the AM4’s drive back')
     assert.equal(c.wearLook('nonsense', c.storage), null, 'a look that does not exist was worn')
-    assert.equal(c.UNDO_MS, 8000, '"Undo for 8 seconds"')
-    c.setColourUnit(null)
+    assert.equal(c.UNDO_MS, 2000, '"have the undo card pop-up for two seconds before it disappears"')
 
-    /* The page: one tap on a card wears it and offers Undo; Undo wears the last one. */
+    /* The page: a card picks, and nothing on it wears a look; leaving takes the pick, arriving ends an Undo still up. */
     const page = read('mobile/src/components/Colours.js')
-    assert.match(page, /const done = wearLook\(id, sync\)\s+if \(done && done\.was !== done\.now\) offerUndo\(\{ \.\.\.done, at: Date\.now\(\) \}\)/, 'a look card does not offer Undo')
-    assert.match(page, /Math\.max\(0, offer\.at \+ UNDO_MS - Date\.now\(\)\)/, 'Undo does not go after UNDO_MS')
-    assert.match(page, /setLook\(offer\.was, sync\)/, 'Undo does not put the last look back on')
-    assert.match(page, /useEffect\(\(\) => \(\) => offerUndo\(null\), \[\]\)/, 'leaving the page leaves the Undo offer up over the next one')
+    const body = page.slice(page.indexOf('export default function Colours('), page.indexOf('\nfunction LookCard('))
+    assert.match(body, /const pick = \(id\) => offerPick\(pickLook\(id, wearing\)\)/, 'a look card does not pick')
+    assert.match(body, /onPress=\{\(\) => pick\(look\.id\)\}/, 'a look card does something other than pick')
+    assert.doesNotMatch(body, /wearLook\(|applyLook\(|setLook\(/, 'the page puts a look on before Apply')
+    assert.match(body, /useEffect\(\(\) => \{\s+offerUndo\(null\)\s+return \(\) => offerPick\(null\)\s+\}, \[\]\)/, 'leaving the page leaves the pick, or coming to it leaves an old Undo up')
+    /* The ring is on the pick, or on the one worn while nothing is picked; the worn one keeps "✓ Wearing". */
+    assert.match(body, /on=\{look\.id === \(picked \|\| wearing\)\}\s+wearing=\{look\.id === wearing\}\s+picked=\{look\.id === picked\}/)
+    assert.match(page, /const said = picked \? 'Picked' : wearing \? '✓ Wearing' : null/, 'the cards do not say which is picked and which is worn')
     /* Every look is a card, Fractal Remote, the default, first and Match my unit second, and each card is drawn in its own look. */
-    assert.match(page, /\{LOOKS\.map\(\(look\) => \(\s*<LookCard key=\{look\.id\}/)
+    assert.match(page, /\{LOOKS\.map\(\(look\) => \(\s*<LookCard\s+key=\{look\.id\}/)
     assert.deepEqual(c.LOOK_ORDER.slice(0, 2), ['fractalremote', 'unit'], 'Fractal Remote, the default, is not first, with Match my unit straight after it')
     assert.match(page, /asLook=\{look\.id\}/, 'a look’s card is drawn in the look being worn rather than its own')
+
+    /* Apply in Settings, and Undo over Play: the bar and the card on a bench, by their real source, on the real colours. */
+    const { transformSync } = await import('esbuild')
+    const from = page.indexOf('let pick = null')
+    const text = page.slice(from).replace(/^export function /gm, 'function ')
+    const out = transformSync(text, { loader: 'jsx', jsx: 'transform', jsxFactory: 'h' }).code
+    const h = (type, props, ...children) => ({ type: typeof type === 'function' ? type.name : type, props: props || {}, children: children.flat() })
+    const words = (el) => (el == null || typeof el === 'boolean' ? '' : typeof el !== 'object' ? String(el) : el.children.map(words).join(' '))
+    const find = (el, is) => (el && typeof el === 'object' ? (is(el) ? el : el.children.map((x) => find(x, is)).find(Boolean)) : null)
+    function Toast() {}
+    const clock = { t: 0 }
+    const sync = c.storage
+    /* Toast's own rule with no screen reader on: news while there is time left (components/Toast useStillNews). */
+    assert.match(read('mobile/src/components/Toast.js'), /const wait = reader \? Infinity : left[\s\S]*return Boolean\(said\) && wait > 0\n/)
+    const reader = { on: false }
+    const useStillNews = (said, stamp, left) => Boolean(said) && (reader.on || left > 0)
+    const scope = {
+      h, View: 'View', Text: 'Text', Press: 'Press', Toast,
+      useSyncExternalStore: (watch, get) => get(),
+      useStillNews, useScreenReader: () => reader.on, useEffect: (fn) => fn(), Pressable: 'Pressable',
+      watchLooks: c.watchLooks, looksVersion: c.looksVersion,
+      LOOKS: c.LOOKS, pickLook: c.pickLook, applyLook: (id, s) => c.applyLook(id, s, clock.t), setLook: c.setLook, UNDO_MS: c.UNDO_MS,
+      sync, space: { lg: 16, md: 12, sm: 8 }, color: {}, font: {}, radius: {},
+      Date: { now: () => clock.t }
+    }
+    const b = new Function(...Object.keys(scope), `${out}\nreturn { LookApply, LookUndo, offerPick, offerUndo }`)(...Object.values(scope))
+    const shown = (card) => card.type === 'Toast' && card.props.open === true
+    assert.equal(b.LookApply({ onApplied: () => {} }), null, 'Apply is up with nothing picked')
+    b.offerPick('unit')
+    assert.equal(b.LookApply({ onApplied: () => {} }), null, 'Apply is up for the look already worn')
+    b.offerPick('sunlight')
+    const bar = b.LookApply({ onApplied: () => {} })
+    assert.equal(words(bar).trim(), 'Sunlight', 'the bar does not name the look picked')
+    const apply = find(bar, (el) => el.type === 'Press')
+    assert.deepEqual([apply.props.label, apply.props.tone, apply.props.on], ['Apply', 'signal', true], 'the bar’s button is not a lit Apply')
+    assert.equal(c.lookId(), 'unit', 'picking put the look on')
+    assert.equal(shown(b.LookUndo()), false, 'Undo is over Play before anything was applied')
+    let back = 0
+    clock.t = 5000
+    find(b.LookApply({ onApplied: () => back++ }), (el) => el.type === 'Press').props.onPress()
+    assert.equal(c.lookId(), 'sunlight', 'Apply did not put the look on')
+    assert.equal(JSON.parse(c.storage.kept['fractal.colours']).theme.id, 'sunlight', 'Apply did not keep the look')
+    assert.equal(back, 1, 'Apply does not go back to Play')
+    assert.equal(b.LookApply({ onApplied: () => {} }), null, 'the pick is still up after Apply')
+    /* Over Play: "Now: Sunlight · Undo" for two seconds, then gone by itself. */
+    const card = b.LookUndo()
+    assert.equal(shown(card), true, 'no Undo over Play after Apply')
+    assert.equal(card.props.yields, true, 'the Undo card is drawn over a fault rather than standing aside for it')
+    assert.match(words(card), /Now: Sunlight/)
+    clock.t = 5000 + 1999
+    assert.equal(shown(b.LookUndo()), true, 'Undo went before its two seconds')
+    clock.t = 5000 + 2000
+    assert.equal(shown(b.LookUndo()), false, 'Undo is still up after two seconds')
+    /* Undo puts the last one back, and goes. */
+    b.offerPick('stompbox')
+    clock.t = 9000
+    find(b.LookApply({ onApplied: () => {} }), (el) => el.type === 'Press').props.onPress()
+    assert.equal(c.lookId(), 'stompbox')
+    const undo = find(b.LookUndo(), (el) => el.type === 'Press')
+    assert.equal(undo.props.label, 'Undo')
+    undo.props.onPress()
+    assert.equal(c.lookId(), 'sunlight', 'Undo did not put the last look back on')
+    assert.equal(shown(b.LookUndo()), false, 'the Undo card stays after Undo')
+    /* Its time up, it is gone for good: a screen reader turned on later does not bring an old Undo back. */
+    b.offerPick('stompbox')
+    clock.t = 20000
+    find(b.LookApply({ onApplied: () => {} }), (el) => el.type === 'Press').props.onPress()
+    assert.ok(!find(b.LookUndo(), (el) => el.type === 'Pressable'), 'a ✕ on the two-second card with no screen reader on')
+    clock.t = 22000
+    assert.equal(shown(b.LookUndo()), false)
+    reader.on = true
+    assert.equal(shown(b.LookUndo()), false, 'an Undo whose time was up came back over Play')
+    /* With a screen reader it stays until answered, and can be put away with its ✕ without undoing. */
+    b.offerPick('sunlight')
+    clock.t = 30000
+    find(b.LookApply({ onApplied: () => {} }), (el) => el.type === 'Press').props.onPress()
+    clock.t = 90000
+    const heard = b.LookUndo()
+    assert.equal(shown(heard), true, 'Undo went on a timer with a screen reader on')
+    find(heard, (el) => el.type === 'Pressable').props.onPress()
+    assert.equal(shown(b.LookUndo()), false, 'the ✕ does not put the Undo card away')
+    assert.equal(c.lookId(), 'sunlight', 'the ✕ undid the look')
+    reader.on = false
+    c.setColourUnit(null)
+
+    /* Where they are drawn: Apply over the bottom of Settings, going back as Done does; Undo over Play only. */
+    const settings = read('mobile/src/screens/Settings.js')
+    assert.match(settings, /<\/ScrollView>\s*\{\/\*[\s\S]*?\*\/\}\s*<LookApply onApplied=\{onBack\} \/>\s*<\/EdgeBack>/, 'Apply is inside the scrolling page, missing, or does not go back to Play')
+    assert.match(settings, /<Press label="Done" height=\{40\} onPress=\{onBack\} \/>/, 'Apply’s way back is not Done’s')
+    const app = read('mobile/App.js')
+    assert.match(app, /screen === 'settings' \? \(\s*<Settings[\s\S]*?onBack=\{\(\) => setScreen\('stage'\)\}/, 'Settings’ Done does not go back to Play')
+    assert.match(app, /\{playOnScreen \? <LookUndo \/> : null\}/, 'the Undo card is not over Play, or not only over Play')
   })
 
   test('putting every colour back leaves a reset with a time, not a hole, and asks first', async () => {

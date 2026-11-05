@@ -44,7 +44,7 @@
     "now": "{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.card, borderWidth: on ? 2 : 1, borderColor: on ? color.signal : color.glassRim, backgroundColor: pressed ? color.glassFillHi : color.glassFill, boxShadow: color.glassLift }"
    },
    {
-    "decl": "LookUndo",
+    "decl": "LookApply",
     "main": "\nreturn ({\n        position: 'absolute',\n        left: space.lg,\n        right: space.lg,\n        bottom: space.lg,\n        flexDirection: 'row',\n        alignItems: 'center',\n        gap: space.md,\n        padding: space.sm,\n        paddingLeft: space.md,\n        borderRadius: radius.md,\n        borderWidth: 1,\n        borderColor: color.rule,\n        backgroundColor: color.chassis,\n        shadowColor: '#000',\n        shadowOpacity: 0.35,\n        shadowRadius: 8,\n        shadowOffset: { width: 0, height: 2 },\n        elevation: 6\n      })",
     "now": "{ position: 'absolute', left: space.lg, right: space.lg, bottom: space.lg, flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.sm, paddingLeft: space.md, borderRadius: radius.card, borderWidth: 1, borderColor: color.glassRim, backgroundColor: color.chassis, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 6, boxShadow: color.glassTop }"
    }

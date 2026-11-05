@@ -104,7 +104,7 @@ import { findLooper } from '../shared/looper.mjs'
 import { useChain } from './components/ChainWait'
 import Screens, { viewsFor } from './components/Screens'
 import SceneArrange from './components/SceneArrange'
-import Colours from './components/Colours'
+import Colours, { LookUndo } from './components/Colours'
 import { coloursStatus } from './lib/colourPage'
 import { useLooks } from './lib/useLooks'
 import { useAsks } from './lib/asks'
@@ -5478,6 +5478,11 @@ export default function App() {
         paid={answeredFor && !paid.unknown ? paid.unlocked : null}
         onUnlock={openUnlock}
       />
+      {/* A look just applied in Settings → Colors: "Now: Sunlight · Undo" for a
+          moment over Play, which Apply closes Settings onto, and out of sight
+          under any sheet (components/Colours). */}
+      <LookUndo hidden={sheet !== null} />
+
       {/*
         "AN INDEPENDENT APP", ONCE, OVER EVERYTHING ABOVE (Fractal Audio's
         letter, 18 October 2026). Opaque and over the walkthrough, which waits
@@ -6190,7 +6195,7 @@ export default function App() {
             <SetupHead back={upLabel('colours')} onBack={() => setSetupPage(upFrom('colours'))} onDone={leaveSettings} title={SETUP_PAGES.colours} />
             {/* The loaded preset's effects go first, and the scene tiles carry
                 their names — as many of them as the unit has scenes. */}
-            <Colours blocks={blocks} sceneNames={sceneNames} preset={presetHere} capabilities={device?.capabilities} icons={icons} />
+            <Colours blocks={blocks} sceneNames={sceneNames} preset={presetHere} capabilities={device?.capabilities} icons={icons} onApplied={leaveSettings} />
           </div>
         ) : null}
 

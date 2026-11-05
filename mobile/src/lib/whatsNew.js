@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-05",
     "day": "5 November 2026",
-    "version": "1.89.45",
+    "version": "1.89.46",
     "lines": [
+      {
+        "text": "Settings → Colors: tap a look to pick it, then Apply. You’re taken back to Play, with Undo there for a couple of seconds if you change your mind.",
+        "only": null
+      },
       {
         "text": "Creating an account now asks for your first and last name, so we know who we’re helping when you write to us. If you already have an account, nothing changes and you won’t be asked.",
         "only": null

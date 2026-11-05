@@ -11,6 +11,7 @@ import {
   PUT_BACK_WORDS,
   TAG_HOLD,
   UNDO_MS,
+  applyLook,
   chooseScenes,
   familyTarget,
   lookCard,
@@ -18,14 +19,14 @@ import {
   OFF_WORDS,
   pageColour,
   pageSceneCount,
+  pickLook,
   presetFamilies,
   presetSpelling,
   presetTag,
   presetTarget,
   sceneTarget,
   scenesAllRed,
-  unitFamilies,
-  wearLook
+  unitFamilies
 } from '../lib/colourPage'
 import { blockIcon } from '../lib/blockIcons'
 import { loadIcons } from '../lib/gigSize'
@@ -41,7 +42,7 @@ import Press from './Press'
 import Sheet from './Sheet'
 import Tile from './Tile'
 import { TagRow } from './PresetTag'
-import { useStillNews } from './Toast'
+import Toast, { useScreenReader, useStillNews } from './Toast'
 
 /**
  * SETTINGS → COLOURS: the looks, the effects, the scenes, and the way back.
@@ -50,9 +51,10 @@ import { useStillNews } from './Toast'
  * the blocks/presets and effects. Let's figure out the best way to implement
  * that as well. Maybe even make some preset themes?"
  *
- * Top to bottom, in the order somebody arrives with: a whole look in one tap
- * (and Undo for a moment after, because one tap repaints the whole app), then
- * one effect at a time, then the scenes, then a preset's own colour, then how
+ * Top to bottom, in the order somebody arrives with: a whole look, picked
+ * with a tap and put on with Apply (which goes back to Play, with Undo there
+ * for a moment, because one Apply repaints the whole app), then one effect at
+ * a time, then the scenes, then a preset's own colour, then how
  * a switched-off effect is drawn, and last the button that puts everything
  * back.
  *
@@ -95,13 +97,20 @@ export default function Colours() {
   const own = ownColourCount({ scenes: sceneCount })
   const allRed = scenesAllRed(sceneCount)
 
-  /* Undo belongs to this page: leaving it takes the offer with it. */
-  useEffect(() => () => offerUndo(null), [])
+  /* The look picked and not yet applied: none, or one other than the one worn (colourPage pickLook). */
+  const picked = pickLook(useSyncExternalStore(watchPick, pickNow, pickNow), wearing)
+  /*
+   * The pick belongs to this page: leaving it, by Apply or any other way,
+   * takes it with it. And coming to it ends an Undo still up on Play: this
+   * is where a look is changed now.
+   */
+  useEffect(() => {
+    offerUndo(null)
+    return () => offerPick(null)
+  }, [])
 
-  const wear = (id) => {
-    const done = wearLook(id, sync)
-    if (done && done.was !== done.now) offerUndo({ ...done, at: Date.now() })
-  }
+  /* A tap picks, and changes nothing; the worn one again is no pick. Apply, in the bar, wears it. */
+  const pick = (id) => offerPick(pickLook(id, wearing))
 
   /* Two across at TAP height, and four across for the scenes, as Play lays them out. */
   const half = wide ? Math.floor((wide - space.sm) / 2) : undefined
@@ -141,10 +150,18 @@ export default function Colours() {
       {/* ------------------------------------------------------------ looks */}
       <View style={{ gap: space.md }}>
         <Heading>Looks</Heading>
-        <Note>One tap puts a whole look on every tile. Your own colors stay on top of it.</Note>
+        <Note>Tap a look to pick it, then Apply to put it on every tile. Your own colors stay on top of it.</Note>
+        {/* The ring on the pick, or on the one worn while nothing is picked; the worn one says so either way. */}
         <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
           {LOOKS.map((look) => (
-            <LookCard key={look.id} look={look} on={look.id === wearing} onPress={() => wear(look.id)} />
+            <LookCard
+              key={look.id}
+              look={look}
+              on={look.id === (picked || wearing)}
+              wearing={look.id === wearing}
+              picked={look.id === picked}
+              onPress={() => pick(look.id)}
+            />
           ))}
         </View>
         {own ? (
@@ -255,6 +272,8 @@ export default function Colours() {
         <Press label="Put every color back" sub={PUT_BACK_WORDS} onPress={() => setAsking('all')} />
         <Note>{`Your colors are kept on this ${deviceNoun()}. The computer’s screen keeps its own.`}</Note>
       </View>
+      {/* Room under the last line for the Apply bar while a look is picked: added at the foot, so nothing above it moves. */}
+      {picked ? <View style={{ height: TAP }} /> : null}
 
       <ColourSheet target={painting} chain={chain} spelt={spelt} onClose={() => setPainting(null)} />
 
@@ -300,16 +319,19 @@ export default function Colours() {
  * look's colours on this unit. The whole card is the button; the tiles in it
  * are pictures, so a tap anywhere on it lands on the card.
  *
- * The card is frosted glass (lib/glass), the one worn still in amber; the
- * tiles on it are content, and keep the look's own colours.
+ * The card is frosted glass (lib/glass), the one ringed in amber (`on`) the
+ * pick, or the one worn while nothing is picked; the tiles on it are content,
+ * and keep the look's own colours. "Picked" on the pick, "✓ Wearing" on the
+ * one worn, so both are said while Apply waits.
  */
-function LookCard({ look, on, onPress }) {
+function LookCard({ look, on, wearing = on, picked = false, onPress }) {
   const tiles = lookCard(look.id)
+  const said = picked ? 'Picked' : wearing ? '✓ Wearing' : null
   return (
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ checked: on }}
-      accessibilityLabel={`${look.name}. ${lookWhy(look)}`}
+      accessibilityLabel={`${look.name}${wearing ? ', wearing now' : ''}. ${lookWhy(look)}`}
       onPress={() => {
         tick()
         onPress()
@@ -327,7 +349,7 @@ function LookCard({ look, on, onPress }) {
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
         <Text style={{ flexShrink: 1, color: color.silk, fontSize: font.lead, fontWeight: '700' }}>{look.name}</Text>
-        {on ? <Text style={{ color: color.signal, fontSize: font.small, fontWeight: '700' }}>✓ Wearing</Text> : null}
+        {said ? <Text style={{ color: color.signal, fontSize: font.small, fontWeight: '700' }}>{said}</Text> : null}
       </View>
       <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>{lookWhy(look)}</Text>
       <View
@@ -437,15 +459,28 @@ function Heading({ children }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Undo, for a moment after a look goes on                              */
+/* Apply, under the page, and Undo, over Play for a moment after         */
 /* ------------------------------------------------------------------ */
 
 /*
- * The offer lives outside the page because it is drawn outside it: over the
- * bottom of the screen, where it cannot push the cards up or down under a
- * thumb, while the page scrolls underneath. Settings puts it there, and it
- * only ever has something to say while this page is open.
+ * The pick and the offer live outside the page because they are drawn
+ * outside it: Apply over the bottom of Settings, where it cannot push the
+ * cards up or down under a thumb while the page scrolls underneath, and Undo
+ * over Play, which Apply goes back to.
  */
+let pick = null
+const pickWatchers = new Set()
+const offerPick = (next) => {
+  if (pick === next) return
+  pick = next
+  for (const fn of pickWatchers) fn()
+}
+const watchPick = (fn) => {
+  pickWatchers.add(fn)
+  return () => pickWatchers.delete(fn)
+}
+const pickNow = () => pick
+
 let undo = null
 const undoWatchers = new Set()
 const offerUndo = (next) => {
@@ -459,21 +494,20 @@ const watchUndo = (fn) => {
 const undoNow = () => undo
 
 /**
- * "Now: Sunlight · Undo", for UNDO_MS after a look goes on, and Undo puts the
- * last one back on. One tap repaints every tile in the app, so a tap that
- * landed on the wrong card is one more tap from being as it was. With a
- * screen reader on it stays until it is answered (Toast's useStillNews): an
- * offer that goes before it is heard has not been made.
+ * "Footswitch lights · Apply", while a look other than the one worn is
+ * picked, and nothing otherwise. Apply wears it and keeps it, as one tap on
+ * a card used to, and goes straight back to Play (`onApplied`, Settings'
+ * Done), where Undo waits for UNDO_MS.
  *
  * It floats over the cards, so it keeps its solid fill and its shadow, and
  * has the glass's corner, rim and the light along its top (lib/glass).
  */
-export function LookUndo() {
-  const offer = useSyncExternalStore(watchUndo, undoNow, undoNow)
-  const left = offer ? Math.max(0, offer.at + UNDO_MS - Date.now()) : 0
-  const now = offer ? LOOKS.find((l) => l.id === offer.now)?.name : null
-  const showing = useStillNews(now ? `Now: ${now}` : null, offer?.at, left)
-  if (!offer || !showing) return null
+export function LookApply({ onApplied }) {
+  /* Redrawn when the look worn changes too: a pick that became the worn one is no pick. */
+  useSyncExternalStore(watchLooks, looksVersion, looksVersion)
+  const picked = pickLook(useSyncExternalStore(watchPick, pickNow, pickNow))
+  const name = picked ? LOOKS.find((l) => l.id === picked)?.name : null
+  if (!name) return null
   return (
     <View
       style={{
@@ -498,14 +532,66 @@ export function LookUndo() {
         boxShadow: color.glassTop
       }}
     >
-      <Text style={{ flex: 1, color: color.silk, fontSize: font.body }}>{`Now: ${now}`}</Text>
+      <Text style={{ flex: 1, color: color.silk, fontSize: font.body }}>{name}</Text>
       <Press
-        label="Undo"
+        label="Apply"
+        tone="signal"
+        on
         onPress={() => {
-          setLook(offer.was, sync)
-          offerUndo(null)
+          const offer = applyLook(picked, sync)
+          offerPick(null)
+          if (offer) offerUndo(offer)
+          onApplied?.()
         }}
       />
     </View>
+  )
+}
+
+/**
+ * "Now: Sunlight · Undo", over Play for UNDO_MS after Apply, and then gone
+ * by itself; Undo puts the last look back on and goes with it. One Apply
+ * repaints every tile in the app, so a look that was not what it seemed on
+ * its card is one tap from being as it was. With a screen reader on it stays
+ * until it is answered (Toast's useStillNews): an offer that goes before it
+ * is heard has not been made.
+ *
+ * A Toast, where Play's faults float, at the top and away from the tiles
+ * under a thumb, and one card at a time: it stands aside while a fault is up.
+ */
+export function LookUndo() {
+  const offer = useSyncExternalStore(watchUndo, undoNow, undoNow)
+  const left = offer ? Math.max(0, offer.at + UNDO_MS - Date.now()) : 0
+  const now = offer ? LOOKS.find((l) => l.id === offer.now)?.name : null
+  const showing = useStillNews(now ? `Now: ${now}` : null, offer?.at, left)
+  const reader = useScreenReader()
+  /*
+   * Its time up, the offer goes for good, not only out of sight: Play left
+   * and come back to, or a screen reader turned on later, never brings an
+   * old Undo back. And the timer is useStillNews's own, cleared with Play.
+   */
+  const spent = Boolean(offer) && !showing
+  useEffect(() => {
+    if (spent) offerUndo(null)
+  }, [spent])
+  return (
+    <Toast open={Boolean(offer && now && showing)} yields>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.sm, paddingLeft: space.md }}>
+        <Text style={{ flex: 1, color: color.silk, fontSize: font.body }}>{`Now: ${now}`}</Text>
+        <Press
+          label="Undo"
+          onPress={() => {
+            setLook(offer.was, sync)
+            offerUndo(null)
+          }}
+        />
+        {/* With a screen reader on it stays until answered, so it can be put away as well as answered. */}
+        {reader ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Dismiss" hitSlop={12} onPress={() => offerUndo(null)} style={{ paddingHorizontal: space.xs }}>
+            <Text style={{ color: color.silkFaint, fontSize: font.body }}>✕</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </Toast>
   )
 }

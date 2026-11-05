@@ -251,32 +251,34 @@ export function run(test) {
     assert.match(tile, /borderColor: tint\(color\.signal, 0\.35\),\s+backgroundColor: tint\(color\.signal, 0\.14\)/, 'the tip card’s amber picture tile changed')
   })
 
-  test('glass in Settings: Undo floats over the cards, solid, with its own shadow and elevation and the light along its top', async () => {
-    const offer = { at: Date.now(), now: 'sunlight', was: 'fractal' }
-    const { LookUndo } = await bench(FILES.colours, ['function LookUndo('], {
+  test('glass in Settings: Apply floats over the cards, solid, with its own shadow and elevation and the light along its top', async () => {
+    /* The bar that was Undo's, saying Apply now (5 November 2026): drawn the same. */
+    const { LookApply } = await bench(FILES.colours, ['function LookApply('], {
       useSyncExternalStore: (watch, get) => get(),
-      watchUndo: () => () => {},
-      undoNow: () => offer,
+      watchLooks: () => () => {},
+      looksVersion: () => 0,
+      watchPick: () => () => {},
+      pickNow: () => 'sunlight',
+      pickLook: (id) => id,
       LOOKS: [{ id: 'sunlight', name: 'Sunlight' }],
-      UNDO_MS: 5000,
-      useStillNews: () => true,
       Press: 'Press',
-      setLook: () => {},
+      applyLook: () => null,
+      offerPick: () => {},
       offerUndo: () => {},
       sync: {}
     })
     await eachPalette((name, color) => {
-      const bar = LookUndo()
-      assert.equal(bar.type, 'View', `${name}: the Undo bar is gone`)
+      const bar = LookApply({ onApplied: () => {} })
+      assert.equal(bar.type, 'View', `${name}: the Apply bar is gone`)
       const s = bar.props.style
-      assert.equal(s.backgroundColor, color.chassis, `${name}: the Undo bar lets the cards through: it floats over them, and keeps its solid fill`)
-      assert.equal(s.elevation, 6, `${name}: the Undo bar lost its elevation`)
-      assert.deepEqual([s.shadowColor, s.shadowOpacity, s.shadowRadius, s.shadowOffset], ['#000', 0.35, 8, { width: 0, height: 2 }], `${name}: the Undo bar lost its shadow`)
-      assert.equal(s.boxShadow, color.glassTop, `${name}: the Undo bar has not the light along its top`)
-      assert.equal(s.borderColor, color.glassRim, `${name}: the Undo bar’s border is not the glass’s rim`)
+      assert.equal(s.backgroundColor, color.chassis, `${name}: the Apply bar lets the cards through: it floats over them, and keeps its solid fill`)
+      assert.equal(s.elevation, 6, `${name}: the Apply bar lost its elevation`)
+      assert.deepEqual([s.shadowColor, s.shadowOpacity, s.shadowRadius, s.shadowOffset], ['#000', 0.35, 8, { width: 0, height: 2 }], `${name}: the Apply bar lost its shadow`)
+      assert.equal(s.boxShadow, color.glassTop, `${name}: the Apply bar has not the light along its top`)
+      assert.equal(s.borderColor, color.glassRim, `${name}: the Apply bar’s border is not the glass’s rim`)
       assert.equal(s.borderWidth, 1)
-      assert.equal(s.borderRadius, 18, `${name}: the Undo bar is not at the card’s corner`)
-      assert.deepEqual([s.position, s.left, s.right, s.bottom, s.padding, s.paddingLeft], ['absolute', 16, 16, 16, 8, 12], `${name}: the Undo bar moved`)
+      assert.equal(s.borderRadius, 18, `${name}: the Apply bar is not at the card’s corner`)
+      assert.deepEqual([s.position, s.left, s.right, s.bottom, s.padding, s.paddingLeft], ['absolute', 16, 16, 16, 8, 12], `${name}: the Apply bar moved`)
     })
   })
 
