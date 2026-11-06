@@ -19,7 +19,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "The Help make Fractal Remote better? card is much shorter and fits on one screen, with a link to the privacy page for exactly what’s sent.",
+        "text": "The Help make Fractal Remote better? card is now three short lines, with a link to the privacy page for exactly what’s sent.",
         "only": null
       }
     ]

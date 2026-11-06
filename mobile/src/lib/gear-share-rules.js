@@ -61,16 +61,19 @@ export const SHARE_TITLE = 'Help make Fractal Remote better?'
  * device-word.mjs): this iPad, this tablet.
  */
 export const shareWords = () => [
-  `When your unit connects, this ${deviceNoun()} sends a short note: which unit and its firmware, how it connected (computer, Bluetooth adapter or USB cable, by name and version), whether it answered and how quickly, and which app and system versions you have. Once a month at most.`,
-  'Never your presets, songs, anything you type, where you are, or your account. It is not linked to you, and nothing goes to anyone else.',
+  `When your unit connects, this ${deviceNoun()} shares which gear it is and how well it connected, so we can build a list of what works.`,
+  'Never your presets, anything you type, where you are, or who you are.',
   'Off unless you tap Yes, share. Change it any time in Settings → Troubleshooting.'
 ]
 
 /*
  * THE WHOLE OF IT, ON THE WEBSITE. "We need to shorten this a lot. That's a
  * massive amount of text ... we could provide a link to the full text on the
- * website" (Justin, 6 November 2026). So the card says it in three short
- * lines that fit on a phone's screen, and this link opens the privacy page
+ * website" (Justin, 6 November 2026), and then "just make it very simple
+ * ... whatever is absolutely necessary for them to know, the rest they could
+ * read on the website". So the card says only that: what it is for, what
+ * never goes, and that it is off unless they say yes. This link opens the
+ * privacy page
  * at the section that lists every field, word for word.
  */
 export const SHARE_DETAILS = 'See exactly what’s sent'
@@ -82,7 +85,7 @@ export const SHARE_DETAILS_URL = 'https://fractal.newbold.cloud/privacy.html#whi
  * card's own words, and until it is answered the phone sends only what those
  * words promised (createGearSharer `given`).
  */
-export const SHARE_AGAIN = 'The note now also says when you used a USB cable, how long your unit took to connect and how quickly it answers a tap. Until you answer, it sends only what it did before.'
+export const SHARE_AGAIN = 'It now also shares when you use a USB cable and how fast your unit answers. Until you answer, nothing new is sent.'
 
 export const SHARE_YES = 'Yes, share'
 export const SHARE_NO = 'No thanks'
