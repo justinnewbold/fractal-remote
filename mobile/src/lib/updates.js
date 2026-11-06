@@ -51,8 +51,11 @@ let state = {
   /** The ready banner was put away with its ✕ — until the next launch. */
   dismissed: false,
   /** The version the downloaded update was made at, from its manifest, or null: What's new shows its lines up to it (lib/whats-new-rule.js). */
-  waitingVersion: null
+  waitingVersion: null,
+  /** When a check last said there is nothing new (ms), for "checked 9:41" under Updates. */
+  checkedAt: null
 }
+
 
 /* The version in an update's manifest (app.json's, carried in expoClient). Here rather than imported, so this file keeps its few imports. */
 const versionIn = (manifest) => {
@@ -121,7 +124,7 @@ export const checkNow = async () => {
   try {
     const found = await api.checkForUpdateAsync()
     if (!found?.isAvailable) {
-      set({ phase: 'current' })
+      set({ phase: 'current', checkedAt: Date.now() })
       return 'current'
     }
     set({ phase: 'downloading' })

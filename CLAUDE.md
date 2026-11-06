@@ -615,6 +615,20 @@ not suggest renaming. Everything else is held, and is not to regress:
 
 ## Things that cost real time to learn here
 
+**A squash merge carries every commit message on the branch, and one
+`[skip ci]` in them stops everything on main.** On 6 November 2026 four
+merges (#800 to #803) went to main and nothing ran: no update to the
+phones, no computer release. The work-in-progress saves were pushed with
+`[skip ci]` so they would not email Justin a failure each, and because the
+branch keeps its history with `merge -s ours`, those saves stay among the
+pull request's commits; GitHub's squash message lists them all, and GitHub
+skips every workflow for a push whose message holds `[skip ci]` anywhere.
+So every squash merge passes its own `commit_title` and `commit_message`
+(the pull request's title and a short summary), never GitHub's default
+body. After a merge, check that main's runs started (the Actions list for
+the merge commit is not empty); if one ever did not, `mobile.yml` run by
+hand with `update` ticked publishes the phones' update without a build.
+
 **Every change needs a new version number.** The `version` job in
 `.github/workflows/web.yml` compares this branch's `package.json` against the
 base branch and fails if they match. `desktop/package.json` has to move with

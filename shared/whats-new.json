@@ -4,8 +4,9 @@
   "days": [
     {
       "date": "2026-11-06",
-      "version": "1.89.51",
+      "version": "1.89.52",
       "lines": [
+        "Settings → About → Updates now shows Checking… while it looks, then the time it last checked.",
         "Which unit (tap your unit’s name on Play) is now one card per unit, showing the computer it’s on, whether it’s connected, and the preset and scene it’s on.",
         "When a new version is ready, its card now has What’s new, which takes you straight to the list of what changed.",
         "Blocks newer than the app, like the Axe-Fx III’s new NAM block, are now left alone in Edit: they show as New block, their spot is never shown as free, and nothing can be put over them.",

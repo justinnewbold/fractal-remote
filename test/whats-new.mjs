@@ -212,4 +212,13 @@ export function run(test) {
     for (const m of [null, {}, { extra: {} }, { extra: { expoClient: { version: 'v2' } } }, { extra: { expoClient: { version: 7 } } }]) assert.equal(versionIn(m), null)
     assert.match(updates, /const got = await api\.fetchUpdateAsync\(\)\s+set\(\{ phase: 'ready', waitingVersion: versionIn\(got\?\.manifest\) \|\| versionIn\(found\?\.manifest\) \}\)/)
   })
+
+  test('Check for updates shows Checking… for a moment however quick the answer, then when it last checked', async () => {
+    const settings = read('mobile/src/screens/Settings.js')
+    assert.match(settings, /const CHECK_SHOWN_MS = 1200/)
+    assert.match(settings, /updates\.phase === 'checking' \|\| checkShown\s*\? 'Checking…'/, 'a quick answer leaves nothing on screen to show a check was made')
+    assert.match(settings, /showCheck\(\)\s*return checkNow\(\)/)
+    assert.match(settings, /up to date\$\{updates\.checkedAt \? ` · checked /)
+    assert.match(read('mobile/src/lib/updates.js'), /set\(\{ phase: 'current', checkedAt: Date\.now\(\) \}\)/)
+  })
 }
