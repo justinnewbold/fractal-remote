@@ -307,12 +307,14 @@ import {
   loadRemoteConfig,
   sendPasswordReset,
   subscribeRemoteState,
-  unitChoices,
+  unitCards,
+  readOthersPlaying,
+  playingOf,
   missingPickCard,
   missingPickRow,
-  unitElsewhereCard,
-  notUsingOne
+  unitElsewhereCard
 } from './lib/remote'
+import UnitCard, { NotUsingOne } from './components/UnitCard'
 import { CardButtons, MissingRow } from './components/ComputerCard'
 import { newEntry, append } from './lib/log'
 import { watchEvery, probeUnit, countQuiet, unitGone } from '../shared/unit-watch.mjs'
@@ -1561,6 +1563,22 @@ export default function App() {
   useEffect(() => {
     if (whichUnitShown) askUnknownUnits()
   }, [whichUnitShown])
+  /* And what the other computers' units are on, once each time Which unit is shown: reads only (remote.js readOthersPlaying). */
+  const [othersPlaying, setOthersPlaying] = useState({})
+  const [switchingTo, setSwitchingTo] = useState(null)
+  useEffect(() => {
+    if (!whichUnitShown) return undefined
+    let alive = true
+    setOthersPlaying({})
+    readOthersPlaying()
+      .then((found) => {
+        if (alive) setOthersPlaying(found || {})
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [whichUnitShown])
   /* The Colours row's line names the look and the unit's colours, so it is
      redrawn when either changes (lib/useLooks). */
   useLooks()
@@ -1709,6 +1727,16 @@ export default function App() {
   const [scanning, setScanning] = useState(false)
   const scene = useDevice(ofScene)
   const sceneNames = useDevice(ofSceneNames)
+  /*
+   * What Which unit's cards say beside the computers: the one in use is on
+   * what Play shows (while its unit answers), the others what they said
+   * when the list was shown, and the tags only while the link is up.
+   */
+  const whichUnitFacts = {
+    here: unitStateOf({ status, device, reason: faultReason }) === 'present' ? playingOf(preset, scene, sceneNames) : null,
+    others: othersPlaying,
+    connected: link.link === 'connected'
+  }
   // How many scenes this unit actually has. Eight is the gen-3 answer and the
   // safe fallback, but it is a capability, not a constant.
     // Which channels a block can be put on. A scene remembers one per block, so
@@ -5194,19 +5222,22 @@ export default function App() {
         it does on the demo version?" The same buttons as Phone & computer →
         Which unit; picking one reads the new unit and closes.
       */}
-      <Sheet open={sheet === 'units'} onClose={() => setSheet(null)} title="Which unit" note="Each computer on this account">
-        <div className="setup-rows">
-          {unitChoices(link.hosts, link.units, link.chosenHost, link.unitsAsking).map((row) => (
-            <SetupRow
-              key={row.key}
-              title={row.on ? `${row.label} ✓` : row.label}
-              status={row.detail}
+      <Sheet open={sheet === 'units'} onClose={() => setSheet(null)} title="Which unit" note="Tap one to switch">
+        <div className="unit-cards">
+          {unitCards(link.hosts, link.units, link.chosenHost, link.unitsAsking, whichUnitFacts).map((card) => (
+            <UnitCard
+              key={card.key}
+              card={card}
+              busy={switchingTo === card.name}
+              disabled={switchingTo !== null}
               onClick={async () => {
                 setBusy(true)
+                setSwitchingTo(card.name)
                 try {
-                  await chooseHost(row.name)
+                  await chooseHost(card.name)
                 } finally {
                   setBusy(false)
+                  setSwitchingTo(null)
                 }
                 setSheet(null)
               }}
@@ -5214,8 +5245,8 @@ export default function App() {
           ))}
           {missingRow ? <MissingRow row={missingRow} onForget={() => forgetMissing()} /> : null}
         </div>
-        {/* How one you don't use comes off this list: at that computer (shared/relay-rules.mjs notUsingOne). Only with two or more listed, as on the page. */}
-        {link.hosts.length > 1 ? <p className="hint">{notUsingOne('page')}</p> : null}
+        {/* How one you don't use comes off this list: at that computer (shared/relay-rules.mjs notUsingOne), a link that opens to the words. Only with two or more listed, as on the page. */}
+        {link.hosts.length > 1 ? <NotUsingOne /> : null}
       </Sheet>
 
       <Sheet
@@ -6326,26 +6357,29 @@ export default function App() {
             */}
             {link.role === 'remote' && link.hosts.length > 1 ? (
               <Section key="which-unit" title="Which unit" note="Each computer on this account, by the unit plugged into it">
-                <div className="setup-rows">
-                  {unitChoices(link.hosts, link.units, link.chosenHost, link.unitsAsking).map((row) => (
-                    <SetupRow
-                      key={row.key}
-                      title={row.on ? `${row.label} ✓` : row.label}
-                      status={row.detail}
+                <div className="unit-cards">
+                  {unitCards(link.hosts, link.units, link.chosenHost, link.unitsAsking, whichUnitFacts).map((card) => (
+                    <UnitCard
+                      key={card.key}
+                      card={card}
+                      busy={switchingTo === card.name}
+                      disabled={switchingTo !== null}
                       onClick={async () => {
                         setBusy(true)
+                        setSwitchingTo(card.name)
                         try {
-                          await chooseHost(row.name)
+                          await chooseHost(card.name)
                         } finally {
                           setBusy(false)
+                          setSwitchingTo(null)
                         }
                       }}
                     />
                   ))}
                   {missingRow ? <MissingRow row={missingRow} onForget={() => forgetMissing()} /> : null}
                 </div>
-                {/* How one you don't use comes off this list, at that computer: the phone's line, with a reload for a fresh roll call. */}
-                <p className="hint">{notUsingOne('page')}</p>
+                {/* How one you don't use comes off this list, at that computer: the phone's link, with a reload for a fresh roll call. */}
+                <NotUsingOne />
               </Section>
             ) : null}
             {/*

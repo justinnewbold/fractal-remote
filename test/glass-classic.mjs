@@ -47,6 +47,13 @@ const read = (p) => readFileSync(new URL(p, ROOT), 'utf8')
 const MECHANISM = ['mobile/src/lib/theme.js', 'mobile/src/lib/glass.js', 'mobile/src/components/Glass.js', 'mobile/src/lib/useSolidChrome.js']
 /* New with the choice, and drawn the same in both looks: the choice itself. */
 const NEW_HERE = { 'mobile/src/components/Colours.js': ['StyleSection', 'StyleChoice'] }
+/*
+ * New since the record's commit, so there is no main to hold them to: Which
+ * unit's cards (6 November 2026). Each still asks classic() for its corner,
+ * and draws its shadow and its sheen only outside Classic, which the
+ * coverage test below holds by reading them.
+ */
+const NEW_FILES = ['mobile/src/components/UnitCard.js']
 
 /* The keys that make an object a style. Over-collecting is harmless: an object drawn the same compares the same. */
 const STYLE_KEYS = new Set(
@@ -737,8 +744,16 @@ export function run(test) {
     /* Every file that reads a glass colour, the card corner, a builder or the components is in the record, or is the mechanism. */
     const READS = /\bcolor\.(glass[A-Z]\w*|sheetFill|sheetLift|scrim|grabber)\b|\bradius\.card\b|\bglass(Card|Field|Control|Float|Sheet|Pane|Lit)\(|\bpane(Rim|Fill|Well|Rule)\(|<Glass(Card|Disc)\b|\bcapsule\(|\bclassic\(\)|\bcardCorner\(/
     const all = phoneFiles()
-    const outside = all.filter((f) => READS.test(code(read(f))) && !covered.has(f) && !MECHANISM.includes(f))
+    const outside = all.filter((f) => READS.test(code(read(f))) && !covered.has(f) && !MECHANISM.includes(f) && !NEW_FILES.includes(f))
     assert.deepEqual(outside, [], `these read the glass and are not held to main in Classic: ${outside.join(', ')}`)
+    /* A file new since the record draws no shadow and no sheen in Classic, and takes the card's corner from cardCorner. */
+    for (const f of NEW_FILES) {
+      const body = code(read(f))
+      const shadows = [...body.matchAll(/\b(boxShadow|experimental_backgroundImage): ([^,\n]+)/g)].map((m) => m[2])
+      assert.ok(shadows.length > 0 && shadows.every((v) => /^glow \?/.test(v)), `${f} draws a shadow or a sheen that Classic does not take away: ${shadows.join(' | ')}`)
+      assert.match(body, /const glow = lit && !classic\(\)/, `${f}: the glow is not off in Classic`)
+      assert.ok(!/\bradius\.card\b/.test(body) && /borderRadius: cardCorner\(\)/.test(body), `${f} sets the glass's corner itself rather than through cardCorner`)
+    }
     /* Not drawing, so not Classic's: three reaches the glass made a thumb's 44, kept in both. */
     assert.match(read('mobile/src/components/Press.js'), /hitSlop=\{height < THUMB \? \(THUMB - height\) \/ 2 : undefined\}/)
     assert.match(read('mobile/src/components/TopBar.js'), /hitSlop=\{\{ top: 11, bottom: 11, left: 8, right: 14 \}\}/)

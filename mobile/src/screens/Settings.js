@@ -22,12 +22,14 @@ import {
   remoteHosts,
   remoteMissingPick,
   remoteUnits,
+  readOthersPlaying,
   sendPasswordReset,
-  unitChoices
+  unitCards
 } from '../lib/relay'
 import { askUnknownUnits, chooseHost, forgetMissing } from '../lib/link'
 import MissingPick from '../components/MissingPick'
-import { notUsingOne } from '../lib/relay-rules'
+import { playingOf } from '../lib/relay-rules'
+import UnitCard, { NotUsingOne } from '../components/UnitCard'
 import { useRig } from '../lib/rig'
 import { setFlashTiming, setMetronome, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
 import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, nudgeFloor, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
@@ -133,6 +135,9 @@ const ofDeviceName = (s) => s.deviceName
 const ofFirmware = (s) => s.firmware
 
 const ofUnitState = (s) => s.unit
+const ofRigPreset = (s) => s.preset
+const ofRigScene = (s) => s.sceneIndex
+const ofRigSceneNames = (s) => s.sceneNames
 const ofAllBlocks = (s) => s.allBlocks
 const ofCapabilities = (s) => s.capabilities
 
@@ -177,6 +182,10 @@ export default function Settings({
   const deviceName = useRig(ofDeviceName)
   const firmware = useRig(ofFirmware)
   const unitState = useRig(ofUnitState)
+  /* What the unit in use is on, for its card under Which unit: Play's own reads. */
+  const rigPreset = useRig(ofRigPreset)
+  const rigScene = useRig(ofRigScene)
+  const rigSceneNames = useRig(ofRigSceneNames)
   const [account, setAccount] = useState(null)
   /* A computer on this wifi signed into another account — the likeliest
      reason nothing answers, and until now one nothing on this page could see. */
@@ -227,6 +236,9 @@ export default function Settings({
   /* While a computer that has not said its unit is asked again (link.js askUnknownUnits). */
   const [unitsAsking, setUnitsAsking] = useState(false)
   const [missing, setMissing] = useState(remoteMissingPick())
+  /* Which unit's cards: the one tapped while it is switched to, and what the other computers' units are on (relay.js readOthersPlaying). */
+  const [switching, setSwitching] = useState(null)
+  const [others, setOthers] = useState({})
   /*
    * The account line opens a small sheet of the things done about once —
    * change the password, or have a reset link sent. "Change it to where the
@@ -313,6 +325,19 @@ export default function Settings({
       setUnitsAsking(false)
       setUnits(remoteUnits())
     })
+    return () => {
+      alive = false
+    }
+  }, [link, page])
+  /* And what the other computers' units are on, asked once when the page opens: reads only. */
+  useEffect(() => {
+    if (page !== 'link' || remoteHosts().length < 2) return undefined
+    let alive = true
+    readOthersPlaying()
+      .then((found) => {
+        if (alive) setOthers(found || {})
+      })
+      .catch(() => {})
     return () => {
       alive = false
     }
@@ -1433,27 +1458,36 @@ export default function Settings({
             "Instead of which computer, have it say which unit, and list the
             units online." The unit leads and its computer is the line under
             it; each phone remembers its own, so one phone can run the FM3
-            while another runs the AM4. See unitChoices in relay-rules.
+            while another runs the AM4. See unitChoices in relay-rules. One card per
+            computer since 6 November 2026, as the sheet off the unit's name has
+            them (components/UnitCard, relay-rules unitCards).
           */}
           {hosts.length > 1 ? (
             <View style={{ gap: space.md }}>
               <Section>Which unit</Section>
               {conflict ? <Note tone="fault">{conflict}</Note> : null}
-              {unitChoices(hosts, units, chosen, unitsAsking).map((row) => (
-                <View key={row.key} style={{ gap: space.xs }}>
-                  <Press
-                    label={row.label}
-                    tone="live"
-                    on={row.on}
-                    onPress={async () => {
-                      await chooseHost(row.name)
-                      setChosen(remoteChosenHost())
-                      setUnits(remoteUnits())
-                      setMissing(remoteMissingPick())
-                    }}
-                  />
-                  <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{row.detail}</Text>
-                </View>
+              {unitCards(hosts, units, chosen, unitsAsking, {
+                here: unitState === 'present' ? playingOf(rigPreset, rigScene, rigSceneNames) : null,
+                others,
+                connected: link === 'connected' && !bluetooth
+              }).map((card) => (
+                <UnitCard
+                  key={card.key}
+                  card={card}
+                  busy={switching === card.name}
+                  disabled={switching !== null}
+                  onPress={async () => {
+                    setSwitching(card.name)
+                    try {
+                      await chooseHost(card.name)
+                    } finally {
+                      setSwitching(null)
+                    }
+                    setChosen(remoteChosenHost())
+                    setUnits(remoteUnits())
+                    setMissing(remoteMissingPick())
+                  }}
+                />
               ))}
               {/* The pick that does not answer, grayed, with Forget. */}
               <MissingPick
@@ -1463,8 +1497,8 @@ export default function Settings({
                   setMissing(remoteMissingPick())
                 }}
               />
-              {/* How one you don't use comes off this list: at that computer (relay-rules notUsingOne). */}
-              <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{notUsingOne('app')}</Text>
+              {/* How one you don't use comes off this list: at that computer (relay-rules notUsingOne), a link that opens to the words. */}
+              <NotUsingOne />
             </View>
           ) : null}
 

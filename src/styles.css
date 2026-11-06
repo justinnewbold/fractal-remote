@@ -15573,3 +15573,150 @@ button.chip.scene-colour {
   line-height: 1.15;
   -webkit-line-clamp: 2;
 }
+
+/*
+ * WHICH UNIT AS CARDS (6 November 2026, the phone's components/UnitCard):
+ * one card per computer, the whole card one button. The one in use is a
+ * little greener, with a faint green ring and a soft green glow; the others
+ * a plain card with a rule round it. Every colour is a theme's own, so the
+ * paper theme draws its own green.
+ */
+.unit-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+button.unit-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  width: 100%;
+  padding: var(--s-3);
+  text-align: left;
+  color: var(--silk);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  cursor: pointer;
+}
+
+button.unit-card.unit-card-on {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ok) 9%, var(--panel)) 0%, color-mix(in srgb, var(--ok) 3%, var(--panel)) 100%);
+  border-color: color-mix(in srgb, var(--ok) 25%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ok) 35%, transparent);
+}
+
+button.unit-card:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+button.unit-card.unit-card-on:disabled {
+  opacity: 1;
+}
+
+.unit-card-top {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.unit-card-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--silk-faint);
+}
+
+.unit-card-plugged .unit-card-dot {
+  background: color-mix(in srgb, var(--ok) 55%, transparent);
+}
+
+.unit-card-on .unit-card-dot {
+  background: var(--ok);
+}
+
+.unit-card-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.unit-card-unit {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: var(--f-5);
+}
+
+.unit-card-where {
+  font-size: var(--f-4);
+  color: var(--silk-dim);
+}
+
+.unit-card-tag,
+.unit-card-busy {
+  flex: 0 0 auto;
+  font-size: var(--f-1);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.unit-card-tag {
+  padding: 0 var(--s-2);
+  border-radius: var(--r-3);
+  color: var(--ok);
+  border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent);
+}
+
+.unit-card-on .unit-card-tag {
+  color: var(--chassis);
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.unit-card-busy {
+  color: var(--silk-dim);
+}
+
+.unit-card-note,
+.unit-card-line {
+  padding-left: var(--s-4);
+  font-size: var(--f-3);
+}
+
+.unit-card-note {
+  color: var(--silk-dim);
+}
+
+.unit-card-line {
+  display: flex;
+}
+
+.unit-card-label {
+  flex: 0 0 56px;
+  color: var(--silk-dim);
+}
+
+.unit-card-value {
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unit-card-how {
+  margin-top: var(--s-3);
+}
+
+button.unit-card-how-link {
+  padding: 0;
+  font: inherit;
+  font-size: var(--f-2);
+  font-weight: 600;
+  color: var(--live);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}

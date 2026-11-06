@@ -2709,24 +2709,29 @@ export function run(test) {
    * the page's. And it keeps nothing: no storage, no new key.
    */
   test('phone: how to take a computer off the list is under Which unit, in Settings and the sheet, only with two or more', () => {
-    const detail = "<Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>"
-    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const settings = read('mobile/src/screens/Settings.js')
     /* The live one: the demo has a Which unit of its own, for its five pretend units. */
     const open = settings.indexOf('{hosts.length > 1 ? (')
     const at = settings.indexOf('<Section>Which unit</Section>', open)
     assert.ok(open !== -1 && at !== -1 && at - open < 120, 'Which unit is not inside its two-or-more check')
     const block = settings.slice(open, settings.indexOf(') : null}', at))
-    assert.ok(block.includes(`${detail}{row.detail}</Text>`), 'each button’s own line changed its look: say how')
-    assert.match(block, new RegExp(`<MissingPick[\\s\\S]*?/>\\s*\\{/\\*[^*]*\\*/\\}\\s*${esc(detail)}\\{notUsingOne\\('app'\\)\\}</Text>\\s*</View>\\s*$`), 'the line is not last under Which unit, after the pick that does not answer, dim as a button’s line')
-    assert.match(settings, /import \{ notUsingOne \} from '\.\.\/lib\/relay-rules'/)
+    /* Each computer a card (components/UnitCard), its words from unitCards. */
+    assert.ok(block.includes('<UnitCard'), 'Which unit in Settings is not the cards the sheet has')
+    assert.match(block, /<MissingPick[\s\S]*?\/>\s*\{\/\*[^*]*\*\/\}\s*<NotUsingOne \/>\s*<\/View>\s*$/, 'the link is not last under Which unit, after the pick that does not answer')
+    assert.match(settings, /import UnitCard, \{ NotUsingOne \} from '\.\.\/components\/UnitCard'/)
     const sheet = read('mobile/src/components/LiveUnit.js')
-    assert.match(sheet, new RegExp(`<MissingPick name=\\{missing\\} onForget=\\{\\(\\) => forgetMissing\\(\\)\\} />\\s*\\{/\\*[^*]*\\*/\\}\\s*\\{hosts\\.length > 1 \\? ${esc(detail)}\\{notUsingOne\\('app'\\)\\}</Text> : null\\}\\s*</View>\\s*</Sheet>`), 'the sheet off the unit’s name does not end on the line, behind two or more computers')
+    assert.match(sheet, /<MissingPick name=\{missing\} onForget=\{\(\) => forgetMissing\(\)\} \/>\s*\{\/\*[^*]*\*\/\}\s*\{hosts\.length > 1 \? <NotUsingOne \/> : null\}\s*<\/View>\s*<\/Sheet>/, 'the sheet off the unit’s name does not end on the link, behind two or more computers')
     for (const [src, where] of [[settings, 'Settings'], [sheet, 'the sheet']]) {
-      assert.equal(src.match(/notUsingOne\(/g)?.length, 1, `${where} says it more than once, or not at all`)
-      assert.ok(!src.includes("notUsingOne('page')"), `${where} tells a phone to reload a page`)
+      assert.equal(src.match(/<NotUsingOne \/>/g)?.length, 1, `${where} says it more than once, or not at all`)
+      assert.ok(!/notUsingOne\(/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')), `${where} spells the words out again instead of the link`)
     }
-    for (const src of [block, sheet]) assert.ok(!/AsyncStorage|setItem|localStorage/.test(src), 'Which unit keeps something now')
+    /* The link: the question, and the app's words (never the page's) only once it is tapped. */
+    const card = read('mobile/src/components/UnitCard.js')
+    assert.match(card, /export function NotUsingOne\(\) \{\s*const \[shown, setShown\] = useState\(false\)/)
+    assert.match(card, />\{NOT_USING_ONE\}<\/Text>/)
+    assert.match(card, /\{shown \? <Text[^>]*>\{notUsingOneHow\('app'\)\}<\/Text> : null\}/)
+    assert.ok(!card.includes("notUsingOneHow('page')"), 'the phone tells somebody to reload a page')
+    for (const src of [block, sheet, card]) assert.ok(!/AsyncStorage|setItem|localStorage/.test(src), 'Which unit keeps something now')
   })
 
   /*
@@ -2738,24 +2743,101 @@ export function run(test) {
    */
   test('browser: how to take a computer off the list is under both Which unit lists, only with two or more', () => {
     const app = read('src/App.jsx')
-    const line = `<p className="hint">{notUsingOne('page')}</p>`
+    const line = '<NotUsingOne />'
     const opening = "{link.role === 'remote' && link.hosts.length > 1 ? ("
     assert.equal(app.split(opening).length - 1, 1, 'the Which unit section’s opening is written twice in App.jsx')
     const at = app.indexOf(opening)
     const section = app.slice(at, app.indexOf('</Section>', at) + '</Section>'.length)
     assert.match(section, /^\{link\.role === 'remote' && link\.hosts\.length > 1 \? \(\s*<Section key="which-unit" title="Which unit"/, 'Which unit is not inside its two-or-more check')
-    assert.ok(section.endsWith(`</div>\n                {/* How one you don't use comes off this list, at that computer: the phone's line, with a reload for a fresh roll call. */}\n                ${line}\n              </Section>`), `the line is not last in the Which unit section, after its rows:\n${section.slice(-400)}`)
+    assert.ok(section.endsWith(`</div>\n                {/* How one you don't use comes off this list, at that computer: the phone's link, with a reload for a fresh roll call. */}\n                ${line}\n              </Section>`), `the link is not last in the Which unit section, after its rows:\n${section.slice(-400)}`)
     const sheetAt = app.indexOf("<Sheet open={sheet === 'units'}")
     assert.ok(sheetAt !== -1, 'the Which unit sheet moved: say where')
     const sheet = app.slice(sheetAt, app.indexOf('</Sheet>', sheetAt) + '</Sheet>'.length)
-    assert.match(sheet, /<\/div>\s*\{\/\*[^*]*\*\/\}\s*\{link\.hosts\.length > 1 \? <p className="hint">\{notUsingOne\('page'\)\}<\/p> : null\}\s*<\/Sheet>$/, 'the sheet off the unit’s name does not end on the line, behind two or more computers')
+    assert.match(sheet, /<\/div>\s*\{\/\*[^*]*\*\/\}\s*\{link\.hosts\.length > 1 \? <NotUsingOne \/> : null\}\s*<\/Sheet>$/, 'the sheet off the unit’s name does not end on the link, behind two or more computers')
     /* Off the bar's pill, by the phone's rule (unitGoes): two or more computers, and the link up. */
     assert.ok(/const unitGoes = isDemo\(\) \? 'demo' : link\.role === 'remote' && link\.hosts\.length > 1 && link\.link === 'connected' \? 'which' : 'link'/.test(app) && /if \(unitGoes === 'which'\) \{\s*setSheet\('units'\)/.test(app), 'the sheet opens with fewer than two computers')
-    assert.equal(app.match(/notUsingOne\('page'\)/g)?.length, 2, 'the line is not under both lists, or is somewhere else too')
-    assert.ok(!app.includes("notUsingOne('app')"), 'the website tells somebody to swipe a page away')
-    assert.equal(app.match(/unitChoices\(link\.hosts, /g)?.length, 2, 'the website has a third Which unit list, or lost one')
+    assert.equal(app.match(/<NotUsingOne \/>/g)?.length, 2, 'the link is not under both lists, or is somewhere else too')
+    const card = read('src/components/UnitCard.jsx')
+    assert.match(card, /\{shown \? <p className="hint">\{notUsingOneHow\('page'\)\}<\/p> : null\}/)
+    assert.ok(!card.includes("notUsingOneHow('app')") && !app.includes("notUsingOne('app')"), 'the website tells somebody to swipe a page away')
+    assert.equal(app.match(/unitCards\(link\.hosts, /g)?.length, 2, 'the website has a third Which unit list, or lost one')
     assert.match(read('src/lib/remote.js'), /\n  notUsingOne\n\} from '\.\.\/\.\.\/shared\/relay-rules\.mjs'/)
-    for (const src of [section, sheet]) assert.ok(!/localStorage|sessionStorage|setItem/.test(src), 'Which unit keeps something now')
+    for (const src of [section, sheet, card]) assert.ok(!/localStorage|sessionStorage|setItem/.test(src), 'Which unit keeps something now')
+  })
+
+  /*
+   * WHICH UNIT AS CARDS (6 November 2026): one card per computer, the unit
+   * and the computer it is on, CONNECTED for the one driven and ONLINE for
+   * the others, and the preset and scene each unit is on when known. The
+   * words are unitChoices' own, unchanged; the cards only add to them.
+   */
+  test('Which unit’s cards: the computer beside the unit, CONNECTED and ONLINE, and the preset and scene each is on', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const hosts = ['raspberry pi 5', 'MacBook Pro SG 566', 'raspberry pi 3']
+    const units = { 'raspberry pi 5': { model: 'AM4', plugged: true }, 'MacBook Pro SG 566': { model: 'FM3', plugged: true }, 'raspberry pi 3': { model: 'FM3', plugged: false } }
+    const here = r.playingOf({ number: 100, name: '3 Days Grace ' }, 1, ['Clean', 'Chorus'])
+    assert.deepEqual(here, { number: 100, name: '3 Days Grace', empty: false, scene: 1, sceneName: 'Chorus' })
+    const others = { 'MacBook Pro SG 566': r.playingOf({ number: 3, name: 'Lead' }, 0, []) }
+    const cards = r.unitCards(hosts, units, 'raspberry pi 5', false, { here, others })
+    assert.deepEqual(
+      cards.map((c) => [c.label, c.where, c.note, c.tag, c.lines.map((l) => `${l.label} ${l.value}`)]),
+      [
+        ['AM4', 'on raspberry pi 5', null, 'CONNECTED', ['Preset 100 · 3 Days Grace', 'Scene 2 · Chorus']],
+        ['FM3', 'on MacBook Pro SG 566', null, 'ONLINE', ['Preset 003 · Lead', 'Scene 1']],
+        /* Nothing plugged in keeps today's words, and has no preset lines. */
+        ['No unit plugged in', 'on raspberry pi 3', null, 'ONLINE', []]
+      ]
+    )
+    assert.equal(cards[0].said, 'AM4, on raspberry pi 5, connected, Preset 100 · 3 Days Grace, Scene 2 · Chorus')
+    /* The rows underneath are unitChoices' own, untouched. */
+    for (const [i, row] of r.unitChoices(hosts, units, 'raspberry pi 5').entries()) for (const k of Object.keys(row)) assert.deepEqual(cards[i][k], row[k], k)
+    /* Not known is left out, never a placeholder: no preset, a silent unit (-1), a preset with no scene. */
+    const none = r.unitCards(hosts, units, 'raspberry pi 5', false, { here: null, others: { 'MacBook Pro SG 566': r.playingOf({ number: -1, name: '' }, 2) } })
+    assert.deepEqual(none.map((c) => c.lines), [[], [], []])
+    assert.deepEqual(r.playingLines(r.playingOf({ number: 7, name: '<EMPTY>' }, null)), [{ label: 'Preset', value: '007 · Empty' }])
+    assert.deepEqual(r.playingLines(r.playingOf({ number: 12 }, 3, ['', '', '', ''])), [{ label: 'Preset', value: '012' }, { label: 'Scene', value: '4' }])
+    /* A computer that has not said, or a name two share: their long line stays a line of its own, with nothing beside the name. */
+    const shared = r.unitCards(['raspberrypi', 'raspberrypi', 'MacBook Pro'], { 'MacBook Pro': { model: 'FM3', plugged: true } }, 'MacBook Pro', true)
+    assert.deepEqual(shared.map((c) => [c.label, c.where, c.note === null ? null : c.note.slice(0, 22), c.tag]), [
+      ['FM3', 'on MacBook Pro', null, 'CONNECTED'],
+      ['raspberrypi', null, 'Two computers are call', 'ONLINE'],
+      ['raspberrypi', null, 'Two computers are call', 'ONLINE']
+    ])
+    /* With the link down the tags are the last roll call's, so neither is said. */
+    assert.deepEqual(r.unitCards(hosts, units, 'raspberry pi 5', false, { connected: false }).map((c) => c.tag), [null, null, null])
+    assert.equal(r.SWITCHING, 'Switching…')
+    /* The link under the cards and the words it opens to are the whole sentence, split where the question ends. */
+    for (const where of ['app', 'page']) assert.equal(`${r.NOT_USING_ONE} ${r.notUsingOneHow(where)}`, r.notUsingOne(where))
+    assert.equal(r.NOT_USING_ONE, 'Not using one of these?')
+    for (const c of cards) for (const never of [/this phone/i, /official/i, /beta/i]) assert.ok(!never.test(c.said), `${never} in: ${c.said}`)
+  })
+
+  /*
+   * What the other computers are on is asked with two reads, and only of
+   * computers with a unit and a name of their own that are not the one
+   * driven; a VP4, which cannot say its preset, is never asked. Only an
+   * answer that came back alone, with no error, is believed.
+   */
+  test('Which unit asks the other computers only reads the computer allows, and believes an answer only when it came alone', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    assert.deepEqual([...r.OTHERS_READ], ['/preset', '/scene'])
+    for (const path of r.OTHERS_READ) {
+      assert.equal(r.hostAllows('GET', path), true, `${path} is not a read the computer allows over the relay`)
+      assert.equal(r.forbiddenRemotely('GET', path), null)
+      assert.ok(!/^\/presets?\/(\d|blocks|grid|summary)/.test(path), `${path} could make a unit dump a preset`)
+    }
+    const units = { A: { model: 'FM3', plugged: true }, B: { model: 'AM4', plugged: true }, C: { model: 'FM3', plugged: false }, D: { model: 'VP4', plugged: true } }
+    assert.deepEqual(r.othersToAsk(['A', 'B', 'C', 'D', 'E', 'E'], units, 'A'), ['B'])
+    assert.deepEqual(r.othersToAsk(['A'], units, null), ['A'], 'one computer: the screen asks nothing (readOthersPlaying needs two)')
+    const raw = async (p) => p.body
+    const said = (body, status = 200) => ({ status, body: JSON.stringify(body) })
+    assert.deepEqual(await r.playingFrom([said({ number: 100, name: 'Lead' })], [said({ index: 1, names: ['A', 'Chorus'] })], raw), { number: 100, name: 'Lead', empty: false, scene: 1, sceneName: 'Chorus' })
+    assert.deepEqual(await r.playingFrom([said({ number: 5, name: 'X' })], [said(2)], raw), { number: 5, name: 'X', empty: false, scene: 2, sceneName: '' })
+    assert.deepEqual(await r.playingFrom([said({ number: 5, name: 'X' })], [], raw), { number: 5, name: 'X', empty: false })
+    assert.equal(await r.playingFrom([said({ number: 5 }), said({ number: 9 })], [], raw), null, 'two answers believed: whose is whose cannot be said')
+    assert.equal(await r.playingFrom([said({ message: 'unsupported' }, 501)], [], raw), null)
+    assert.equal(await r.playingFrom([], [], raw), null)
+    assert.equal(await r.playingFrom([{ status: 200, body: 'not json' }], [], raw), null)
   })
 
   /*
@@ -2849,7 +2931,7 @@ export function run(test) {
     assert.match(settings, /if \(page !== 'link' \|\| remoteHosts\(\)\.length < 2\) return undefined[\s\S]{0,300}askUnknownUnits\(\)\.finally\(/)
     const app = read('src/App.jsx')
     assert.match(app, /const whichUnitShown = sheet === 'units' \|\| \(sheet === 'settings' && setupPage === 'link'\)\s*useEffect\(\(\) => \{\s*if \(whichUnitShown\) askUnknownUnits\(\)\s*\}, \[whichUnitShown\]\)/)
-    assert.equal(app.match(/unitChoices\(link\.hosts, link\.units, link\.chosenHost, link\.unitsAsking\)/g)?.length, 2, 'a Which unit list on the website does not say it is asking')
+    assert.equal(app.match(/unitCards\(link\.hosts, link\.units, link\.chosenHost, link\.unitsAsking, whichUnitFacts\)/g)?.length, 2, 'a Which unit list on the website does not say it is asking')
   })
 
   /*
@@ -5612,6 +5694,49 @@ export function run(test) {
       one.bench.sent.length = 0
       await one.relay.refreshUnits()
       assert.equal(one.bench.sent.length, 0, 'one computer was asked which unit it has')
+    })
+
+    test(`${end}: Which unit asks the other computers what they are on with two reads by name, never the one driven, and nothing else`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch } = t
+      const on = (c, preset, scene) => {
+        const answers = c.reply
+        c.reply = (p) => (p.path === '/preset' ? preset : p.path === '/scene' ? scene : answers(p))
+        return c
+      }
+      bench.computers = [on(PI5(), { number: 100, name: '3 Days Grace' }, { index: 1, names: ['Clean', 'Chorus'] }), on(PI3(), { number: 7, name: 'AM4 lead' }, { index: 0 })]
+      counted(t)
+      await clock.advance(9000)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+      bench.sent.length = 0
+      const asked = watch(relay.readOthersPlaying({ sleep: (ms) => new Promise((go) => clock.setTimeout(go, ms)) }))
+      await clock.advance(3000)
+      assert.equal(asked.done, true, asked.error?.message)
+      assert.deepEqual(asked.value, { fractalpi: { number: 100, name: '3 Days Grace', empty: false, scene: 1, sceneName: 'Chorus' } })
+      assert.deepEqual(
+        bench.sent.map((x) => `${x.msg.payload.method} ${x.msg.payload.path} ${x.msg.payload.host}`).sort(),
+        ['GET /preset fractalpi', 'GET /scene fractalpi'],
+        'the one driven was asked, something else was, or it was asked of nobody in particular'
+      )
+      assert.deepEqual(writes(bench), [], 'a write went while the other computers were asked what they are on')
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', 'asking the others moved which computer is driven')
+      /* With nothing plugged into the other computer, nothing is asked. */
+      bench.computers[0] = PI5({ plugged: false })
+      counted(t)
+      await clock.advance(9000)
+      bench.sent.length = 0
+      const none = watch(relay.readOthersPlaying({ sleep: (ms) => new Promise((go) => clock.setTimeout(go, ms)) }))
+      await clock.advance(3000)
+      assert.deepEqual(none.value, {})
+      assert.equal(bench.sent.length, 0, 'a computer with no unit was asked what it is on')
+      /* One computer: nothing asked. */
+      const one = await relayOnABench(end)
+      one.bench.computers = [computer('Studio', 'FM3')]
+      counted(one)
+      await one.clock.advance(3000)
+      one.bench.sent.length = 0
+      assert.deepEqual(await one.relay.readOthersPlaying(), {})
+      assert.equal(one.bench.sent.length, 0, 'one computer was asked what it is on')
     })
 
     /*
