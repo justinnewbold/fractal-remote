@@ -17,6 +17,14 @@ export const WHATS_NEW = [
       {
         "text": "Blocks newer than the app, like the Axe-Fx III’s new NAM block, are now left alone in Edit: they show as New block, their spot is never shown as free, and nothing can be put over them.",
         "only": null
+      },
+      {
+        "text": "Plug your unit in by USB cable while you’re connected another way and the app notices: from a Bluetooth adapter it switches to the cable by itself, and through the computer it asks first, with Use USB cable or Not now.",
+        "only": null
+      },
+      {
+        "text": "The Help make Fractal Remote better? card is now three short lines, with a link to the privacy page for exactly what’s sent.",
+        "only": null
       }
     ]
   },

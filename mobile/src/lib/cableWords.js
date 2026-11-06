@@ -194,3 +194,16 @@ export function cableChain(cards, { link, unitState, unit, jacks = false } = {})
   })
   return mapped.map((card, i, all) => ({ ...card, lit: card.wire ? card.tone === 'good' && all[i + 1]?.tone === 'good' : undefined }))
 }
+
+/*
+ * PLUGGED IN WHILE CONNECTED ANOTHER WAY (lib/cablePlugIn, bleAdapters
+ * cablePlugIn): Play's card. From a Bluetooth adapter the app switches by
+ * itself, and says so; through the computer it asks, since the computer is
+ * still the best way, and Not now puts the card away until the cable is
+ * plugged in again. `name` is the unit's name as the page writes it.
+ */
+export const CABLE_SWITCHED = 'Switched to the USB cable.'
+export const cablePluggedIn = (name) => `${name || 'Your unit'} plugged in by USB cable.`
+export const CABLE_OFFER_NOTE = 'The computer is still the best way, and some things only work through it.'
+export const CABLE_USE = 'Use USB cable'
+export const CABLE_NOT_NOW = 'Not now'

@@ -11111,6 +11111,273 @@ export function run(test) {
     }
   })
 
+  /*
+   * "Is it set up to automatically detect when the USB cord has been plugged
+   * in and switch to that connection? Or at least add that as an option to
+   * switch to once it's plugged in?" (Justin, 6 November 2026.) bleAdapters
+   * cablePlugIn says what a cable plugged in means; lib/cablePlugIn watches
+   * for it; Play draws the card (components/CablePlugIn).
+   */
+  test('a unit plugged in by USB cable: switched to from a Bluetooth adapter, offered through the computer, and never a cable nobody chose', async () => {
+    const A = await import('../mobile/src/lib/bleAdapters.js')
+    const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
+    const USB = 'com.apple.AppleMIDIUSBDriver'
+    const AM4 = { id: '11:12', name: 'AM4', offline: false, driver: USB }
+    const FM9 = { id: 'usb:2466:0011', name: 'FM9', transport: 'usb' }
+    const KEYS = { id: '31:32', name: 'USB MIDI Keyboard', offline: false, driver: USB }
+    const C2 = { id: '41:42', name: 'C2MIDI Pro', offline: false, driver: USB }
+    const UHOST = { id: '21:22', name: 'WIDI Uhost', offline: false, driver: 'com.apple.AppleMIDIBluetoothDriver' }
+    const all = new Set(BLE_UNITS.map((u) => u.key))
+    const rule = (patch = {}) => ({ open: true, mode: 'computer', kept: null, unit: 'am4', units: BLE_UNITS, offered: (k) => all.has(k), skip: new Set(), dismissed: new Set(), ...patch })
+    /* Through the computer: offered, never taken. */
+    assert.deepEqual(A.cablePlugIn([AM4], rule()), { act: 'offer', cable: AM4, unit: 'am4' })
+    /* From a Bluetooth adapter, the same unit: taken by itself. */
+    assert.deepEqual(A.cablePlugIn([UHOST, AM4], rule({ mode: 'adapter', kept: UHOST })), { act: 'switch', cable: AM4, unit: 'am4' })
+    /* From a Bluetooth adapter, a cable to ANOTHER unit than the one picked: asked, never swapped in. */
+    assert.deepEqual(A.cablePlugIn([UHOST, FM9], rule({ mode: 'adapter', kept: UHOST })), { act: 'offer', cable: FM9, unit: 'fm9' })
+    assert.deepEqual(A.cablePlugIn([FM9], rule({ unit: null })), { act: 'offer', cable: FM9, unit: 'fm9' }, 'a cable named for a unit is not offered with no unit picked yet')
+    /* A USB MIDI interface named for no unit, that nobody chose: never (a keyboard). */
+    assert.equal(A.cablePlugIn([KEYS], rule()), null, 'a USB MIDI keyboard is offered as the unit')
+    assert.equal(A.cablePlugIn([KEYS], rule({ mode: 'adapter', kept: UHOST })), null, 'a USB MIDI keyboard is switched to')
+    assert.equal(A.cablePlugIn([C2], rule()), null, 'a USB MIDI cable nobody chose is offered')
+    /* ...but the one kept from last time is, for the unit picked then. */
+    assert.deepEqual(A.cablePlugIn([C2], rule({ kept: C2, unit: 'axefx3' })), { act: 'offer', cable: C2, unit: 'axefx3' })
+    assert.equal(A.cablePlugIn([C2], rule({ kept: C2, unit: null })), null, 'a cable kept with no unit picked is offered for nothing')
+    /* A generic one beside a unit's own cable does not make it a question. */
+    assert.deepEqual(A.cablePlugIn([KEYS, AM4], rule()), { act: 'offer', cable: AM4, unit: 'am4' })
+    /* Let go of by hand (Forget the USB cable), or Not now: never. */
+    assert.equal(A.cablePlugIn([AM4], rule({ skip: new Set([AM4.id]) })), null, 'a cable let go of by hand is offered')
+    assert.equal(A.cablePlugIn([UHOST, AM4], rule({ mode: 'adapter', kept: UHOST, skip: new Set([AM4.id]) })), null, 'a cable let go of by hand is switched to')
+    assert.equal(A.cablePlugIn([AM4], rule({ dismissed: new Set([AM4.id]) })), null, 'Not now is offered again with the cable still in')
+    /* Already on that cable, or on any cable: nothing. */
+    assert.equal(A.cablePlugIn([AM4], rule({ mode: 'cable', kept: AM4 })), null)
+    assert.equal(A.cablePlugIn([AM4, FM9], rule({ mode: 'cable', kept: AM4 })), null, 'a second cable is taken over the one in use')
+    assert.equal(A.cablePlugIn([AM4], rule({ mode: 'adapter', kept: AM4 })), null, 'the cable in use is switched to')
+    /* Two that could be meant: which one is the Bluetooth page's question. */
+    assert.equal(A.cablePlugIn([AM4, FM9], rule()), null, 'two cables, and one is offered')
+    assert.equal(A.cablePlugIn([UHOST, AM4, FM9], rule({ mode: 'adapter', kept: UHOST })), null, 'two cables, and one is switched to')
+    assert.deepEqual(A.cablePlugIn([AM4, FM9], rule({ dismissed: new Set([FM9.id]) })), { act: 'offer', cable: AM4, unit: 'am4' })
+    /* Not open to this account on this copy, or a unit it is not offered: nothing. */
+    assert.equal(A.cablePlugIn([AM4], rule({ open: false })), null, 'a cable is offered where Bluetooth is not open')
+    assert.equal(A.cablePlugIn([UHOST, AM4], rule({ open: false, mode: 'adapter', kept: UHOST })), null)
+    assert.equal(A.cablePlugIn([AM4], rule({ offered: (k) => k !== 'am4' })), null, 'a unit this account is not offered is offered by cable')
+    assert.equal(A.cablePlugIn([AM4], rule({ offered: null })), null)
+    /* Any other mode, a cable not plugged in, or nothing at all: nothing. */
+    for (const mode of ['off', 'cable', null, 'demo']) assert.equal(A.cablePlugIn([AM4], rule({ mode })), null, `${mode}: a cable is offered`)
+    assert.equal(A.cablePlugIn([UHOST, AM4], rule({ mode: 'adapter', kept: null })), null, 'switched to with no adapter in use')
+    assert.equal(A.cablePlugIn([{ ...AM4, offline: true }], rule()), null, 'a cable listed offline is offered')
+    assert.equal(A.cablePlugIn([UHOST], rule()), null, 'a Bluetooth adapter is offered as a cable')
+    for (const nothing of [null, undefined, [], [{}]]) assert.equal(A.cablePlugIn(nothing, rule()), null)
+    assert.equal(A.cablePlugIn([AM4]), null, 'with nothing said, a cable is offered')
+  })
+
+  test('the USB cable watch: switches from an adapter, offers through the computer, Not now until replugged, and never touches Bluetooth', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cable-plug-'))
+    const real = (f) => new URL(`../mobile/src/lib/${f}`, import.meta.url).href
+    let lib = src('mobile/src/lib/cablePlugIn.js')
+    for (const [from, to] of [
+      ["from 'react'", "from './react.js'"],
+      ["from './bleWire'", `from '${real('bleWire.js')}'`],
+      ["from './bleAdapters'", `from '${real('bleAdapters.js')}'`],
+      ["from './bluetooth'", "from './bluetooth.js'"],
+      ["from './debugLog'", "from './debugLog.js'"]
+    ]) {
+      assert.ok(lib.includes(from), `lib/cablePlugIn no longer imports ${from}: the bench needs telling`)
+      lib = lib.replace(from, to)
+    }
+    const files = {
+      'package.json': '{ "type": "module" }',
+      'cablePlugIn.js': lib,
+      'react.js': 'export const useSyncExternalStore = (subscribe, read) => read()\n',
+      'debugLog.js': 'export const lines = []\nexport const logDebug = (...parts) => { lines.push(parts.join(" ")) }\n',
+      /* lib/bluetooth as the watch sees it: the settings, the list, and what it was asked. */
+      'bluetooth.js': [
+        "export const st = { list: [], settings: { on: false, unit: 'am4', adapter: null }, phase: 'off', letGo: new Set(), offered: new Set(['am4', 'fm3', 'fm9', 'axefx3', 'vp4']), here: true, taken: [], asked: 0 }",
+        'const heard = new Set()',
+        'const subs = new Set()',
+        'const ring = () => { for (const f of [...subs]) f() }',
+        'export const adapterDevices = () => { st.asked++; return st.list }',
+        "export const adapterName = (a) => (a && a.name) || null",
+        'export const bluetoothPhase = () => st.phase',
+        'export const bluetoothSettings = () => st.settings',
+        'export const cableLetGo = (id) => st.letGo.has(id)',
+        'export const cablesHere = () => st.here',
+        "export const onAdapter = (event, fn) => { if (event !== 'onDevices') throw new Error(event); heard.add(fn); return () => heard.delete(fn) }",
+        'export const subscribeBluetooth = (fn) => { subs.add(fn); return () => subs.delete(fn) }',
+        "export const takeCable = (dev, unit) => { st.taken.push([dev.id, unit]); st.settings = { ...st.settings, on: true, unit, adapter: dev }; st.phase = 'connecting'; ring(); return true }",
+        'export const unitName = (k) => String(k).toUpperCase()',
+        'export const unitOfferedNow = (k) => st.offered.has(k)',
+        'export const plug = (list) => { st.list = list; for (const f of [...heard]) f({ devices: list }) }',
+        'export const move = (patch) => { Object.assign(st, patch); ring() }',
+        'export const listening = () => heard.size + subs.size'
+      ].join('\n')
+    }
+    for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+    const at = (f) => pathToFileURL(join(dir, f)).href
+    try {
+      const W = await import(at('cablePlugIn.js'))
+      const B = await import(at('bluetooth.js'))
+      const log = (await import(at('debugLog.js'))).lines
+      const USB = 'com.apple.AppleMIDIUSBDriver'
+      const AM4 = { id: '11:12', name: 'AM4', offline: false, driver: USB }
+      const KEYS = { id: '31:32', name: 'USB MIDI Keyboard', offline: false, driver: USB }
+      const UHOST = { id: '21:22', name: 'WIDI Uhost', offline: false, driver: 'com.apple.AppleMIDIBluetoothDriver' }
+      const card = () => W.useCablePlugIn()
+
+      /* A copy no unit can plug into is never watched, nor asked for its list. */
+      B.st.here = false
+      W.watchCables(true)
+      assert.equal(B.listening(), 0)
+      assert.equal(B.st.asked, 0, 'the list was asked of a copy no unit can plug into')
+      B.st.here = true
+      /* Not open (App.js's gate false): nothing listens. */
+      W.watchCables(false)
+      assert.equal(B.listening(), 0)
+
+      /* Through the computer: a keyboard is nothing, the AM4 is offered, and Not now holds until it is plugged in again. */
+      W.watchCables(true)
+      assert.equal(B.st.asked, 1, 'the list is not read as the watch starts')
+      B.plug([KEYS])
+      assert.equal(card().offer, null, 'a USB MIDI keyboard is offered')
+      B.plug([KEYS, AM4])
+      assert.equal(card().offer?.cable.id, AM4.id)
+      assert.equal(card().offer.name, 'AM4')
+      assert.equal(card().offer.mode, 'computer')
+      assert.deepEqual(B.st.taken, [], 'the computer was swapped for the cable without a tap')
+      assert.ok(log.some((l) => l === 'ble USB cable seen: AM4'), 'the cable seen is not logged')
+      assert.ok(log.some((l) => /^ble USB cable plugged in: AM4 offered for the AM4, over the computer$/.test(l)), 'the offer is not logged')
+      W.notNowCable()
+      assert.equal(card().offer, null)
+      assert.ok(log.some((l) => /^ble Not now tapped: AM4/.test(l)), 'Not now is not logged')
+      B.plug([KEYS, AM4])
+      assert.equal(card().offer, null, 'Not now came back with the cable still in')
+      B.plug([KEYS])
+      B.plug([KEYS, AM4])
+      assert.equal(card().offer?.cable.id, AM4.id, 'not offered again once plugged in again')
+      /* Use USB cable: the cable, its unit and Bluetooth on (lib/bluetooth takeCable), and the card goes. */
+      assert.equal(W.acceptCable(), true)
+      assert.deepEqual(B.st.taken, [[AM4.id, 'am4']])
+      assert.equal(card().offer, null)
+      assert.ok(log.some((l) => /^ble Use USB cable tapped: AM4, for the AM4$/.test(l)), 'Use USB cable is not logged')
+      /* On the cable now: nothing more. Back to the computer with it still in is a Not now. */
+      B.plug([KEYS, AM4])
+      assert.equal(card().offer, null, 'the cable in use is offered')
+      B.move({ settings: { ...B.st.settings, on: false }, phase: 'off' })
+      assert.equal(card().offer, null, 'going back to the computer offers the cable just left')
+      B.plug([KEYS])
+      B.plug([KEYS, AM4])
+      assert.equal(card().offer?.cable.id, AM4.id)
+      /* Pulled out before it was answered: the card goes, and Use USB cable then does nothing. */
+      B.plug([])
+      assert.equal(card().offer, null, 'the card stayed with the cable pulled out')
+
+      /* On a Bluetooth adapter: the cable to the same unit is switched to by itself, and Play says so. */
+      B.move({ settings: { on: true, unit: 'am4', adapter: UHOST }, phase: 'connected' })
+      const before = B.st.taken.length
+      B.plug([UHOST, AM4])
+      assert.deepEqual(B.st.taken.slice(before), [[AM4.id, 'am4']], 'not switched to the cable from the adapter')
+      assert.ok(card().switched, 'the switch is not said')
+      assert.equal(card().offer, null)
+      assert.ok(log.some((l) => /^ble USB cable plugged in: switched from the Bluetooth adapter to AM4, for the AM4$/.test(l)), 'the switch is not logged')
+      W.sawSwitched()
+      assert.ok(card().switched.shownAt, 'the switch’s time is not counted from when it is drawn')
+      W.doneSwitched()
+      assert.equal(card().switched, null)
+      /* After Disconnect, or a cable let go of by hand: nothing. */
+      B.plug([UHOST])
+      B.move({ settings: { on: true, unit: 'am4', adapter: UHOST }, phase: 'held' })
+      B.plug([UHOST, AM4])
+      assert.equal(B.st.taken.length, before + 1, 'switched to a cable after Disconnect')
+      B.move({ phase: 'connected', letGo: new Set([AM4.id]) })
+      B.plug([UHOST])
+      B.plug([UHOST, AM4])
+      assert.equal(B.st.taken.length, before + 1, 'switched to a cable let go of by hand')
+      assert.equal(card().offer, null)
+      /* A unit this account is not offered: nothing. */
+      B.move({ letGo: new Set(), offered: new Set(), settings: { on: false, unit: 'am4', adapter: null }, phase: 'off' })
+      B.plug([])
+      B.plug([AM4])
+      assert.equal(card().offer, null, 'a unit this account is not offered is offered by cable')
+      /* Stopped: nothing listens, and the card goes. */
+      W.watchCables(false)
+      assert.equal(B.listening(), 0)
+      assert.deepEqual(card(), { offer: null, switched: null })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    /* Nothing in the watch reaches Bluetooth: no search, no Apple's screen, no permission, no connect of its own. */
+    const watch = code('mobile/src/lib/cablePlugIn.js')
+    for (const word of ['findAdapters', 'pair(', 'scan(', 'requestPermissions', 'connectAdapter', 'glanceForAdapters', 'lookForAdapterAgain', 'openWire']) {
+      assert.ok(!watch.includes(word), `the cable watch calls ${word}`)
+    }
+  })
+
+  test('the USB cable watch runs behind the Bluetooth row’s gate, and Play draws its card; Use USB cable is Connect with the cable in', async () => {
+    const app = flat('mobile/App.js')
+    assert.match(app, /const watchingCables = auth === 'in' && !demo && bluetoothOffered useEffect\(\(\) => \{ watchCables\(watchingCables\) \}, \[watchingCables\]\)/, 'the cable watch is not behind the Bluetooth row’s gate')
+    assert.match(app, /useEffect\(\(\) => \(\) => watchCables\(false\), \[\]\)/)
+    assert.match(app, /\{playOnScreen \? <CablePlugIn \/> : null\}/, 'Play does not draw the cable card')
+    /* The row's gate is the one hook App.js names bluetoothOffered (test/no-computer.mjs holds it to the row). */
+    assert.match(app, /const bluetoothOffered = useBluetoothOffered\(\)/)
+    /* A copy a unit can plug into at all (lib/bluetooth cablesHere). */
+    assert.match(flat('mobile/src/lib/cablePlugIn.js'), /const want = on === true && cablesHere\(\)/)
+    /* Use USB cable: the unit, the cable and Bluetooth on, never a cable let go of by hand. */
+    const lib = flat('mobile/src/lib/bluetooth.js')
+    const take = lib.slice(lib.indexOf('export function takeCable('), lib.indexOf('/* What auto learned'))
+    assert.match(take, /letGo\.has\(dev\.id\)\) return false/)
+    assert.match(take, /chooseAdapter\(dev\) return setBluetooth\(true\)/)
+    /* The card's words, from lib/cableWords, and a screen reader's ✕ as Undo's. */
+    const W = await import('../mobile/src/lib/cableWords.js')
+    assert.equal(W.CABLE_SWITCHED, 'Switched to the USB cable.')
+    assert.equal(W.cablePluggedIn('AM4'), 'AM4 plugged in by USB cable.')
+    assert.equal(W.CABLE_USE, 'Use USB cable')
+    assert.equal(W.CABLE_NOT_NOW, 'Not now')
+    assert.match(W.CABLE_OFFER_NOTE, /The computer is still the best way/)
+    const card = flat('mobile/src/components/CablePlugIn.js')
+    assert.match(card, /<Press label=\{CABLE_USE\} tone="live" height=\{44\} onPress=\{\(\) => acceptCable\(\)\} \/>/)
+    assert.match(card, /<Press label=\{CABLE_NOT_NOW\} height=\{44\} onPress=\{\(\) => notNowCable\(\)\} \/>/)
+    assert.match(card, /accessibilityLabel="Dismiss"/)
+    assert.match(card, /\{offer\.mode === 'computer' \? <Text[^>]*>\{CABLE_OFFER_NOTE\}<\/Text> : null\}/, 'the computer’s note is said on an adapter')
+    assert.ok(!/this phone|heat|\bhot\b/i.test(src('mobile/src/components/CablePlugIn.js').replace(/\/\*[\s\S]*?\*\//g, '')))
+  })
+
+  test('Use USB cable, run: the unit it is for, the cable and Bluetooth on, never a cable let go of by hand, and nothing for an account it is not open to', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const USB = 'com.apple.AppleMIDIUSBDriver'
+    const AM4 = { id: '11:12', name: 'AM4', offline: false, driver: USB }
+    const FM9 = { id: '13:14', name: 'FM9', offline: false, driver: USB }
+    const mod = { supported: () => true, devices: () => [AM4, FM9], addListener: () => ({ remove() {} }) }
+    const his = await bluetoothOnABench({ mod, disk: { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: null }) } })
+    try {
+      his.ble.allowBluetooth(ADMINS[0])
+      await his.ble.restoreBluetooth()
+      assert.equal(his.ble.unitOfferedNow('fm9'), true)
+      assert.equal(his.ble.takeCable(FM9, 'fm9'), true, 'Use USB cable did not turn Bluetooth on')
+      const s = his.ble.bluetoothSettings()
+      assert.equal(s.on, true)
+      assert.equal(s.unit, 'fm9', 'the unit the cable is for is not picked')
+      assert.equal(s.adapter.id, FM9.id)
+      /* Let go of by hand: never taken here. */
+      his.ble.forgetAdapter({ byHand: true })
+      assert.equal(his.ble.cableLetGo(FM9.id), true)
+      assert.equal(his.ble.takeCable(FM9, 'fm9'), false, 'a cable let go of by hand is taken')
+      assert.equal(his.ble.takeCable({ id: '21:22', name: 'WIDI Uhost', driver: 'com.apple.AppleMIDIBluetoothDriver' }, 'am4'), false, 'a Bluetooth adapter is taken as a cable')
+    } finally {
+      his.done()
+    }
+    /* A customer on a copy that does not open Bluetooth: nothing offered, nothing taken. */
+    const theirs = await bluetoothOnABench({ mod, installed: '1.88.4', disk: { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: null }) } })
+    try {
+      theirs.ble.allowBluetooth('11111111-2222-4333-8444-555555555555')
+      await theirs.ble.restoreBluetooth()
+      assert.equal(theirs.ble.unitOfferedNow('am4'), false, 'a unit is offered where Bluetooth is not open')
+      assert.equal(theirs.ble.takeCable(AM4, 'am4'), false, 'a cable is taken where Bluetooth is not open')
+      assert.equal(theirs.ble.bluetoothSettings().on, false)
+    } finally {
+      theirs.done()
+    }
+  })
+
   test('the FM3 says it cannot plug in by its USB port, on the page and in Troubleshooting, where a unit can plug in at all, and its heat warning is untouched', async () => {
     const page = flat('mobile/src/screens/Bluetooth.js')
     const step1 = page.slice(page.indexOf('<Heading>1 · Pick your unit</Heading>'), page.indexOf('<Heading>2 · Connect</Heading>'))
