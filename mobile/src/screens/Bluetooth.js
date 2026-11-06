@@ -11,7 +11,9 @@ import {
   APPLE_SCREEN_OPENS,
   RESTRICTED_WORDS,
   adapterAway,
+  adapterBeforeCable,
   adapterDevices,
+  adapterInsteadOfCable,
   adapterName,
   cableAway,
   cablesConnectTakes,
@@ -77,14 +79,18 @@ import {
   CABLE_CONNECTING_HINT,
   CABLE_ROW,
   CABLE_ROW_AWAY,
+  CABLE_TO_ADAPTER,
+  CABLE_TO_ADAPTER_SUB,
   CABLE_VP4_CANT_HEAR,
   CABLE_VP4_CANT_HEAR_JACKS,
+  cableAwayHint,
   cableConnectingLine,
   cableKeptHint,
   cableListedHint,
   cableStatus,
   cableSteps,
-  fm3NoCable
+  fm3NoCable,
+  leaveWords
 } from '../lib/cableWords'
 import { deviceNoun } from '../lib/device-word'
 import { probeNow } from '../lib/link'
@@ -92,6 +98,7 @@ import { useRig } from '../lib/rig'
 import { mayDriveBluetooth } from '../lib/unlock-rule'
 import Note from '../components/Note'
 import Press from '../components/Press'
+import wirelessIcon from '../../assets/icons/wireless.png'
 
 /**
  * Settings → Bluetooth.
@@ -441,9 +448,25 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * (bleLink heardDevices).
    */
   const cableFromLastTime = () => {
-    if (!cablesConnectTakes(adapterDevices()).length) return setBluetooth(true)
-    forgetAdapter()
-    find()
+    if (cablesConnectTakes(adapterDevices()).length) {
+      forgetAdapter()
+      return find()
+    }
+    /*
+     * NO CABLE PLUGGED IN AT ALL: a Bluetooth adapter, never a wait for the
+     * cable. "I also got stuck where I couldn't reconnect a Bluetooth device
+     * again after connecting the USB cable" (Justin, 6 November 2026,
+     * Android): Connect turned Bluetooth on for the unplugged cable, the
+     * link said "the USB cable is not plugged in yet" for ever, and no
+     * adapter could be connected. So the adapter kept before the cable,
+     * as Connect uses an adapter from last time, or, with none, the search
+     * (lib/bluetooth adapterInsteadOfCable). The cable is not let go of:
+     * plugged in later, it is offered as before (lib/cablePlugIn).
+     */
+    const back = adapterInsteadOfCable()
+    if (!back) return find({ cableFirst: false })
+    if (ios && offlineHere(back)) return another()
+    setBluetooth(true)
   }
   const start = () => {
     if (!canStart) return
@@ -502,6 +525,23 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     arm()
     switchAdapter(d)
   }
+  /*
+   * A BLUETOOTH ADAPTER INSTEAD OF THE USB CABLE, with Bluetooth off and a
+   * cable kept: the adapter from before the cable, or the search, the cable
+   * let go of as Forget the USB cable does, so Connect never takes it back
+   * while it is in (lib/bluetooth adapterInsteadOfCable). "Use computer
+   * instead should say use Bluetooth or computer instead" (Justin, 6
+   * November 2026): a cable is never the only way the page offers.
+   */
+  const offerAdapterInstead = !!b.adapter && cable && canStart && !b.on
+  const adapterInstead = () => {
+    if (!canStart) return
+    arm()
+    const back = adapterInsteadOfCable({ byHand: true })
+    if (!back) return find({ cableFirst: false })
+    if (ios && offlineHere(back)) return another()
+    setBluetooth(true)
+  }
   const differentButton = offerDifferent ? (
     <Press label="Use a different adapter" sub={b.on ? `Instead of ${adapterName(b.adapter) || 'the adapter'}` : `Instead of ${adapterName(b.adapter) || 'the adapter'}, from last time`} height={52} disabled={b.looking} onPress={different} />
   ) : null
@@ -532,6 +572,12 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     asked.current = false
     onConnected?.()
   }, [said.tone, b.answeredAs])
+
+  /* The page's way off, for what is connected now (lib/cableWords leaveWords). */
+  const stop = leaveWords({ cable, connected })
+  /* The adapter kept before a cable that isn't plugged in now, which Connect then uses (cableFromLastTime). */
+  const cableOut = !!b.adapter && cable && offlineInList(b.adapter) && !takes.length
+  const before = cableOut ? adapterBeforeCable() : null
 
   /* The list is only for a real choice: no adapter chosen yet, and some to choose from. */
   const showList = !b.on && !b.adapter && b.devices.length > 0
@@ -612,7 +658,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
             {differentButton}
             {/* The unit chips are not drawn while it is on: which one was picked, and how to change it. */}
             {b.unit ? <Hint>{`Unit: ${unitName(b.unit)}. Tap Stop to change it.`}</Hint> : null}
-            <Press label="Stop using Bluetooth" sub="Goes back to the computer" height={52} onPress={() => setBluetooth(false)} />
+            {/* Said for what is connected now (lib/cableWords leaveWords): never "Stop using" a cable that isn't plugged in, or an adapter that isn't there. */}
+            <Press label={stop.label} sub={stop.sub} height={52} onPress={() => setBluetooth(false)} />
           </View>
         ) : (
           <View style={{ gap: space.lg }}>
@@ -637,7 +684,16 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
             {/* STEP 2. One button. */}
             <View style={{ gap: space.sm }}>
               <Heading>2 · Connect</Heading>
-              <Press label={b.looking ? 'Looking…' : 'Connect'} tone="live" disabled={!canStart || b.looking} onPress={start} />
+              {/*
+                BIGGER, WITH ITS MARK, IN BLUETOOTH'S BLUE. "Make the connect
+                under Bluetooth menu button bigger and show the Bluetooth
+                symbol and change the text color to blue." (Justin, 6 November
+                2026.) The mark is the app's own aerial (icons/wireless.png),
+                the one the top bar wears over Bluetooth: the Bluetooth
+                symbol itself, the Runic B, is the Bluetooth group's, for its
+                members only (test/independent.mjs keeps it out).
+              */}
+              <Press label={b.looking ? 'Looking…' : 'Connect'} icon={wirelessIcon} inkColor={color.ble} labelSize={font.lead} height={64} tone="live" disabled={!canStart || b.looking} onPress={start} />
               {/* Not on iOS 27 once Connect has been tapped: the note under it then says the same, and says it louder. */}
               {shut && b.said ? null : (
                 <Hint>
@@ -648,7 +704,9 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                       ? cable
                         ? takes.length && offlineInList(b.adapter)
                           ? cableListedHint(takes)
-                          : cableKeptHint(b.adapter.name)
+                          : cableOut
+                            ? cableAwayHint(before ? adapterName(before) || 'the Bluetooth adapter' : null)
+                            : cableKeptHint(b.adapter.name)
                         : `Uses ${b.adapter.name || 'the adapter'}, from last time.`
                       : takes.length
                         ? cableListedHint(takes)
@@ -660,6 +718,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                 </Hint>
               )}
               {differentButton}
+              {offerAdapterInstead ? <Press label={CABLE_TO_ADAPTER} sub={CABLE_TO_ADAPTER_SUB} height={52} disabled={b.looking} onPress={adapterInstead} /> : null}
             </View>
           </View>
         )}

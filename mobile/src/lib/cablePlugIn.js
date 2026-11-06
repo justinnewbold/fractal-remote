@@ -9,6 +9,7 @@ import {
   bluetoothSettings,
   cableLetGo,
   cablesHere,
+  leaveCable,
   onAdapter,
   subscribeBluetooth,
   takeCable,
@@ -16,6 +17,7 @@ import {
   unitOfferedNow
 } from './bluetooth'
 import { logDebug } from './debugLog'
+import { cableLeftWords } from './cableWords'
 
 /**
  * A UNIT PLUGGED IN BY USB CABLE WHILE THE APP IS CONNECTED ANOTHER WAY.
@@ -52,6 +54,30 @@ import { logDebug } from './debugLog'
  * And a cable left in when somebody went back to the computer from it is
  * taken as Not now: they chose the computer over it.
  */
+
+/*
+ * UNPLUGGED, AND BACK THE WAY IT WAS. "When unplugging the USB cable, it
+ * should automatically reconnect to the last connected device, if no other
+ * device is currently connected, it should pull up that screen. It shows
+ * that nothing's connected" (Justin, 6 November 2026, Android, his log:
+ * "the USB cable was unplugged", then "the USB cable is not plugged in yet;
+ * trying again in 3 s … 6 s … 12 s … 24 s" under "Finding AM4…" for as
+ * long as the app was open). On a cable that has gone from the list and has
+ * not come back within CABLE_GONE_MS (a plug wiggled back in, as his log
+ * shows once, a second later, is not a leaving), the app goes back the way
+ * it was connected before the cable (lib/bluetooth leaveCable): the
+ * Bluetooth adapter it switched from, or the computer, whose waiting screen
+ * offers every way there is when it is not there either. Play says so.
+ * Plugged back in, that cable is switched to again by itself (`back`): it was
+ * the one in use, and only its being pulled out took the app off it.
+ */
+export const CABLE_GONE_MS = 5000
+let goneTimer = null
+let back = null
+function clearGone() {
+  if (goneTimer) clearTimeout(goneTimer)
+  goneTimer = null
+}
 
 /* Play's card: an offer waiting for a tap, and a switch made by itself, to be said. Never kept: none of it is true after a restart. */
 let state = { offer: null, switched: null }
@@ -114,6 +140,8 @@ export function watchCables(on) {
     last = []
     known = new Set()
     wasMode = null
+    clearGone()
+    back = null
     if (state.offer || state.switched) tell({ offer: null, switched: null })
     return
   }
@@ -124,13 +152,38 @@ export function watchCables(on) {
 /* A new list from the module: the cables plugged in noted (and a Not now let go once its cable is out), then judged. */
 function heard(list) {
   if (!open) return
+  note(list)
+  judge()
+}
+
+function note(list) {
   last = Array.isArray(list) ? list : []
   const cables = cablesIn(last)
   const now = new Set(cables.map((d) => d.id))
   for (const id of [...dismissed]) if (!now.has(id)) dismissed.delete(id)
   for (const d of cables) if (!known.has(d.id)) logDebug('ble', `USB cable seen: ${cableName(d)}`)
   known = now
-  judge()
+}
+
+/*
+ * The cable's time to come back is up (UNPLUGGED, AND BACK THE WAY IT WAS):
+ * still on it, still not connected, and not in the module's list as it is
+ * now (read afresh: the list bleLink's own try reads, which said "not
+ * plugged in"), so it is gone, and the app goes back the way it was.
+ */
+function cableGone() {
+  goneTimer = null
+  if (!open) return
+  const s = bluetoothSettings()
+  if (modeNow(s) !== 'cable' || bluetoothPhase() !== 'connecting') return
+  note(adapterDevices())
+  if (known.has(s.adapter.id)) return
+  const cable = s.adapter
+  const unit = s.unit
+  const went = leaveCable()
+  if (!went) return
+  back = { id: cable.id, unit }
+  tell({ offer: null, switched: { at: Date.now(), shownAt: null, words: cableLeftWords(went) } })
 }
 
 function judge() {
@@ -156,6 +209,10 @@ function decide() {
   /* Back to the computer from a cable still plugged in: they chose the computer over it, so it is not offered until it is plugged in again. */
   if (wasMode === 'cable' && mode === 'computer' && s.adapter && isCable(s.adapter) && known.has(s.adapter.id)) dismissed.add(s.adapter.id)
   wasMode = mode
+  /* On a cable that is not connected: its time to come back starts (cableGone); connected, or off it, the clock goes. */
+  if (mode === 'cable' && bluetoothPhase() === 'connecting') {
+    if (!goneTimer) goneTimer = setTimeout(cableGone, CABLE_GONE_MS)
+  } else clearGone()
   const d = cablePlugIn(last, {
     open: true,
     mode,
@@ -164,7 +221,8 @@ function decide() {
     units: BLE_UNITS,
     offered: unitOfferedNow,
     skip: { has: cableLetGo },
-    dismissed
+    dismissed,
+    back
   })
   if (!d) {
     if (state.offer) tell({ offer: null })
@@ -172,8 +230,15 @@ function decide() {
   }
   if (d.act === 'switch') {
     if (state.offer) tell({ offer: null })
+    const again = back?.id === d.cable.id
     if (takeCable(d.cable, d.unit)) {
-      logDebug('ble', `USB cable plugged in: switched from the Bluetooth adapter to ${cableName(d.cable)}, for the ${unitName(d.unit)}`)
+      back = null
+      logDebug(
+        'ble',
+        again
+          ? `USB cable plugged back in: switched back to ${cableName(d.cable)}, for the ${unitName(d.unit)}`
+          : `USB cable plugged in: switched from the Bluetooth adapter to ${cableName(d.cable)}, for the ${unitName(d.unit)}`
+      )
       tell({ switched: { at: Date.now(), shownAt: null } })
     }
     return

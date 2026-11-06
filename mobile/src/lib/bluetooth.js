@@ -117,6 +117,48 @@ function keep() {
 }
 
 /*
+ * WHAT A USB CABLE TOOK OVER FROM, kept under its own key so the settings
+ * above keep their shape on the disk.
+ *
+ * "When unplugging the USB cable, it should automatically reconnect to the
+ * last connected device" and "I also got stuck where I couldn't reconnect a
+ * Bluetooth device again after connecting the USB cable" (Justin, 6
+ * November 2026, Android). A cable chosen took the adapter's place, and the
+ * Bluetooth adapter kept before it was gone for good: unplugged, the link
+ * waited for the cable for ever ("Finding AM4…"), and the page's Connect
+ * went back to waiting for it too, so no Bluetooth adapter could be
+ * connected again. So when a cable takes over, what it took over from is
+ * noted here:
+ *
+ *   - `adapter` and `unit`: the Bluetooth adapter kept before it, and the
+ *     unit it was for (never a cable, never Apple's network session);
+ *   - `from`: how the app was connected the moment the cable came in,
+ *     'adapter' (Bluetooth on through that adapter) or 'computer'.
+ *
+ * lib/cablePlugIn goes back to it when the cable stays unplugged
+ * (leaveCable), and the page's Connect and "Use a Bluetooth adapter
+ * instead" use the adapter (adapterInsteadOfCable). Forgotten the moment a
+ * Bluetooth adapter is chosen: it is the one kept then.
+ */
+const CABLE_KEY = 'fractal.bluetooth.cable'
+const NO_CABLE_MEMO = { adapter: null, unit: null, from: null }
+let beforeCable = { ...NO_CABLE_MEMO }
+function keepBeforeCable() {
+  AsyncStorage.setItem(CABLE_KEY, JSON.stringify(beforeCable)).catch(() => {
+    /* Costs the next launch the way back, and nothing else. */
+  })
+}
+function settleBeforeCable(raw) {
+  const s = raw && typeof raw === 'object' ? raw : {}
+  const ok = s.adapter && typeof s.adapter.id === 'string' && s.adapter.id && isAdapter(s.adapter) && !isCable(s.adapter)
+  return {
+    adapter: ok ? keptAdapter(s.adapter) : null,
+    unit: ok && UNIT_KEYS.includes(s.unit) ? s.unit : null,
+    from: s.from === 'adapter' || s.from === 'computer' ? s.from : null
+  }
+}
+
+/*
  * THE ADAPTER AS IT IS KEPT: its id and name, on an iPhone the driver that
  * owns it, and on Android how it is reached (`transport`, 'usb' for a unit
  * on a USB cable, from the build that lists them), so the next launch
@@ -544,6 +586,12 @@ export async function restoreBluetooth() {
   let dropped = null
   let session = null
   try {
+    const memo = await AsyncStorage.getItem(CABLE_KEY)
+    beforeCable = settleBeforeCable(memo ? JSON.parse(memo) : null)
+  } catch {
+    beforeCable = { ...NO_CABLE_MEMO }
+  }
+  try {
     const raw = await AsyncStorage.getItem(KEY)
     const was = settle(raw ? JSON.parse(raw) : null)
     /* A unit this account is not offered, with Bluetooth already open to it: let go of, and the disk told (see allowBluetooth). */
@@ -603,6 +651,11 @@ export function setBluetooth(on) {
     }
   }
   if (want === saved.on) return saved.on
+  /* On with a cable kept: it took over from the computer (WHAT A USB CABLE TOOK OVER FROM). */
+  if (want && saved.adapter && isCable(saved.adapter) && beforeCable.from !== 'computer') {
+    beforeCable = { ...beforeCable, from: 'computer' }
+    keepBeforeCable()
+  }
   saved = { ...saved, on: want }
   setSwitch({ on: want })
   now = { ...now, phase: want ? 'idle' : 'off' }
@@ -629,6 +682,7 @@ export function chooseAdapter(dev) {
   if (!isAdapter(dev)) return
   letGo.delete(dev.id)
   if (saved.adapter?.id === dev.id) return
+  noteBeforeCable(dev)
   saved = { ...saved, adapter: keptAdapter(dev) }
   logDebug('ble', isCable(dev) ? `USB cable chosen: ${adapterName(dev) || 'a unit with no name'}` : `adapter chosen: ${adapterName(dev) || 'an adapter with no name'}`)
   keep()
@@ -639,6 +693,90 @@ export function chooseAdapter(dev) {
    */
   if (now.said) noteBluetooth({ said: null })
   else announce()
+}
+
+/*
+ * A CABLE TAKING THE ADAPTER'S PLACE notes what it took over from (WHAT A
+ * USB CABLE TOOK OVER FROM): the Bluetooth adapter kept before it, and
+ * whether Bluetooth was on through it or off (the computer). A cable after
+ * a cable keeps the adapter from before the first. A Bluetooth adapter
+ * chosen is the one kept now, and the note goes.
+ */
+function noteBeforeCable(dev) {
+  const was = saved.adapter
+  let next
+  if (!isCable(dev)) next = { ...NO_CABLE_MEMO }
+  else if (was && !isCable(was)) next = { adapter: keptAdapter(was), unit: saved.unit, from: saved.on ? 'adapter' : 'computer' }
+  else next = { ...beforeCable, from: saved.on && was ? beforeCable.from || 'computer' : 'computer' }
+  if (JSON.stringify(next) === JSON.stringify(beforeCable)) return
+  beforeCable = next
+  keepBeforeCable()
+}
+
+/**
+ * THE BLUETOOTH ADAPTER KEPT BEFORE THE USB CABLE, for the unit picked now,
+ * or null: never for another unit (an adapter on the FM3 is not the AM4's
+ * way back), nor one this account is not offered.
+ */
+export function adapterBeforeCable() {
+  const a = beforeCable.adapter
+  if (!a || !saved.unit || beforeCable.unit !== saved.unit || !offered(saved.unit)) return null
+  return a
+}
+
+/**
+ * THE USB CABLE STAYED UNPLUGGED (lib/cablePlugIn, after a few seconds):
+ * back the way it was connected before the cable took over. Through a
+ * Bluetooth adapter, that adapter, with Bluetooth left on (bleLink hears it
+ * and connects); through the computer, or with nothing noted, Bluetooth off,
+ * and App.js starts looking for the computer, whose waiting screen offers
+ * every way there is when it is not there. The cable stays kept while it is
+ * the computer, so plugging it back in is offered or taken again
+ * (lib/cablePlugIn). Null when it is not on a cable now.
+ */
+export function leaveCable() {
+  const a = saved.adapter
+  if (!saved.on || !a || !isCable(a)) return null
+  const back = beforeCable.from === 'adapter' ? adapterBeforeCable() : null
+  if (back) {
+    logDebug('ble', `the USB cable stayed unplugged: back to ${adapterName(back) || 'the Bluetooth adapter'}, as it was connected before the cable`)
+    chooseAdapter(back)
+    return { to: 'adapter', name: adapterName(back) }
+  }
+  logDebug('ble', 'the USB cable stayed unplugged: back to the computer, as it was connected before the cable')
+  setBluetooth(false)
+  return { to: 'computer', name: null }
+}
+
+/**
+ * A BLUETOOTH ADAPTER INSTEAD OF THE USB CABLE KEPT: the page's Connect with
+ * the cable not plugged in, its "Use a Bluetooth adapter instead", and the
+ * same button in the Live pill's note and on the waiting screen.
+ *
+ * The adapter kept before the cable, when there is one for this unit, is
+ * chosen again (Bluetooth left as it is: on, the link moves to it; off, the
+ * caller turns it on). With none, the cable is forgotten and Bluetooth goes
+ * off, so the page's Connect looks for an adapter as it does the first time
+ * (findAdapters). `byHand`: asked for in so many words, with the cable maybe
+ * still in, so it is let go of as Forget the USB cable lets go of one (Connect
+ * and lib/cablePlugIn leave it alone this session); Connect with the cable
+ * unplugged does not, so plugging it in is still offered. Returns the adapter
+ * chosen, or null.
+ */
+export function adapterInsteadOfCable({ byHand = false } = {}) {
+  const a = saved.adapter
+  if (!a || !isCable(a)) return null
+  if (byHand) letGo.add(a.id)
+  const back = adapterBeforeCable()
+  if (back) {
+    logDebug('ble', `a Bluetooth adapter instead of the USB cable: ${adapterName(back) || 'the adapter'}, from before the cable`)
+    chooseAdapter(back)
+    return back
+  }
+  logDebug('ble', 'a Bluetooth adapter instead of the USB cable: none from before, so Connect looks for one')
+  if (saved.on) setBluetooth(false)
+  forgetAdapter()
+  return null
 }
 
 /**

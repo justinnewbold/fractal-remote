@@ -7375,6 +7375,49 @@ export function run(test) {
     assert.ok(!/bluetooth && onSetlists|!bluetooth && onSetlists/.test(waking), 'Setlists are offered for one link and not the other')
   })
 
+  test('a computer that says it has no unit is an answer: Play stays, and the waiting screen never flips with it', () => {
+    /*
+     * "After unplugging [the USB cable] and then selecting to switch to a
+     * different computer or Bluetooth device. The screen starts tripping out
+     * until the USB is plugged back into the computer. Just screen alternates
+     * between these two screenshots about every 0.25 seconds" (Justin, 6
+     * November 2026, Android, 1.89.52). His log, twice a second: GET
+     * /preset/blocks, /preset, /tempo and /scene failed, "No Fractal device
+     * found", with the computer saying "the computer has no unit". The gate
+     * took the error alone as the unit's answer: Play came up on a failed
+     * read, Play's arrival read the unit again (Stage reload, refreshAll),
+     * the computer's answer of no unit cleared the error, the waiting screen
+     * took Play's place, the next read failed, and round again.
+     *
+     * The gate and its selector, lifted out of App.js as they are, run over
+     * that loop: the rig as each step of it leaves the store.
+     */
+    const app = read('mobile/App.js')
+    const looking = app.match(/^ {2}const looking = (.+)$/m)
+    const settling = app.match(/^ {2}const settling = (.+)$/m)
+    const selector = app.match(/^const ofReadEnded = (.+)$/m)
+    assert.ok(looking && settling && selector, 'the gate is not where this looks')
+    assert.match(app, /^ {2}const readFailed = useRig\(ofReadEnded\)$/m, 'the gate does not read the unit’s answer through the selector')
+    const ofReadEnded = new Function(`return ${selector[1]}`)()
+    const gate = new Function('auth', 'demo', 'caps', 'link', 'readFailed', 'bluetooth', `const looking = ${looking[1]}\nreturn ${settling[1]}`)
+    const waits = (rig) => gate('in', false, rig.capabilities, { link: 'connected' }, ofReadEnded(rig), false)
+    const failed = 'No Fractal device found on any serial or MIDI port.'
+    /* The loop as it ran: a read fails, the detect on Play's arrival answers no unit and clears it, the next read fails. */
+    const loop = [
+      { capabilities: null, unit: 'missing', error: failed },
+      { capabilities: null, unit: 'missing', error: null },
+      { capabilities: null, unit: 'missing', error: failed },
+      { capabilities: null, unit: 'missing', error: null }
+    ]
+    assert.deepEqual(loop.map(waits), loop.map(() => false), 'the waiting screen and Play take turns while the computer says it has no unit')
+    /* Still waited for: the computer has answered and the unit has not been asked yet, or is being asked. */
+    assert.equal(waits({ capabilities: null, unit: 'unknown', error: null }), true, 'the unit is not waited for before it has said anything')
+    assert.equal(waits({ capabilities: null, unit: 'unknown', error: failed }), false)
+    assert.equal(waits({ capabilities: { model: 'AM4' }, unit: 'present', error: null }), false)
+    /* Out looking for the computer, nothing read: the waiting screen, as before. */
+    assert.equal(gate('in', false, null, { link: 'joining' }, ofReadEnded({ unit: 'missing', error: null }), false), true)
+  })
+
   test('the fifteen seconds count from when looking began, through the flip, and not in a pocket', () => {
     /*
      * The clock behind the waiting screen's advice, run rather than read:

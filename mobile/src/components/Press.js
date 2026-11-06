@@ -156,10 +156,17 @@ export default function Press({
    */
   accessibilityLabel,
   /* What a hold does, where a button has one nobody can see: "Hold to give it a colour". */
-  accessibilityHint
+  accessibilityHint,
+  /*
+   * The words and the picture in a colour of their own, while the button is
+   * neither lit nor disabled: the Bluetooth page's Connect, in Bluetooth's
+   * blue (color.ble). Lit or disabled, the ink is the button's as always.
+   */
+  inkColor = null
 }) {
   const accent = tone === 'signal' ? color.signal : tone === 'live' ? color.live : color.silk
   const ink = on ? color.onSignal : disabled ? color.silkFaint : color.silk
+  const wordInk = inkColor && !on && !disabled ? inkColor : ink
   /*
    * FROSTED GLASS (lib/glass). A button floats over the page: a see-through
    * fill, a soft rim, a thin light along its top and a soft drop; a lit one
@@ -292,7 +299,7 @@ export default function Press({
     >
       {/* As tall as a picture even when the pictures give way, so a fitted Previous sits level with Next. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: rowTall }}>
-        {icon && !bare ? <Picture source={icon} tint={ink} flip={flip} /> : null}
+        {icon && !bare ? <Picture source={icon} tint={wordInk} flip={flip} /> : null}
         <View style={{ alignItems: 'center', flexShrink: 1 }}>
           {/*
             A word ABOVE the label, for the one button whose name does not say
@@ -319,7 +326,7 @@ export default function Press({
             adjustsFontSizeToFit={fit || undefined}
             minimumFontScale={fit ? Math.min(1, STEP_WORD_LEAST / word.size) : undefined}
             style={{
-              color: ink,
+              color: wordInk,
               fontSize: word.size,
               fontWeight: labelSize > font.body ? '700' : '600',
               textAlign: 'center'

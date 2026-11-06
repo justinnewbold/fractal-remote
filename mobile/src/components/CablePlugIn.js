@@ -33,7 +33,9 @@ export function CablePlugIn() {
   /* The offer waits for its answer, so it never runs out; on an iPhone it is read out when it comes. */
   const offered = useStillNews(said, offer?.at, Infinity)
   const left = switched ? (switched.shownAt ? Math.max(0, switched.shownAt + SWITCHED_MS - Date.now()) : SWITCHED_MS) : 0
-  const showing = useStillNews(switched && !offer ? CABLE_SWITCHED : null, switched?.at, left)
+  /* Switched to the cable, or back off it once it was unplugged (its own words, lib/cablePlugIn). */
+  const switchedSaid = switched?.words || CABLE_SWITCHED
+  const showing = useStillNews(switched && !offer ? switchedSaid : null, switched?.at, left)
   useEffect(() => {
     if (switched && !switched.shownAt) sawSwitched()
   }, [switched])
@@ -63,7 +65,7 @@ export function CablePlugIn() {
   return (
     <Toast open={Boolean(switched && showing)} yields>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.sm, paddingLeft: space.md }} accessibilityLiveRegion="polite">
-        <Text style={{ flex: 1, color: color.silk, fontSize: font.body }}>{CABLE_SWITCHED}</Text>
+        <Text style={{ flex: 1, color: color.silk, fontSize: font.body }}>{switchedSaid}</Text>
         {/* With a screen reader on it stays until answered, so it can be put away. */}
         {reader ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Dismiss" hitSlop={12} onPress={() => doneSwitched()} style={{ paddingHorizontal: space.xs }}>

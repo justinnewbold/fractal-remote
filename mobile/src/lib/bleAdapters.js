@@ -300,12 +300,19 @@ export const pairScreenShutWords = (noun) =>
  *   - two or more that could be meant: which one is a real question, and the
  *     Bluetooth page asks it with its list.
  *
+ * And `back`, { id, unit }: the cable the app was on until it was pulled out
+ * and the app went back the way it was before it (lib/cablePlugIn
+ * UNPLUGGED, AND BACK THE WAY IT WAS). Plugged back in, it is switched to by
+ * itself, through the computer too, for the unit it was on: it was the one
+ * in use, and only being pulled out took the app off it. A cable let go of
+ * by hand or put off with Not now since is still never taken.
+ *
  * `units` are bleWire BLE_UNITS ({ key, name }), passed in so this file
  * imports nothing. Nothing here touches Bluetooth: the list is CoreMIDI's
  * ports on an iPhone and Android's USB MIDI devices, which need no
  * permission and open no screen.
  */
-export function cablePlugIn(list, { open = false, mode = null, kept = null, unit = null, units = null, offered = null, skip = null, dismissed = null } = {}) {
+export function cablePlugIn(list, { open = false, mode = null, kept = null, unit = null, units = null, offered = null, skip = null, dismissed = null, back = null } = {}) {
   if (open !== true || (mode !== 'computer' && mode !== 'adapter')) return null
   if (mode === 'adapter' && (!kept || isCable(kept))) return null
   const keptCable = kept && isCable(kept) ? kept.id : null
@@ -314,10 +321,11 @@ export function cablePlugIn(list, { open = false, mode = null, kept = null, unit
   for (const d of cablesIn(list)) {
     if (skip?.has?.(d.id) || dismissed?.has?.(d.id)) continue
     const named = cableUnit(d, units)
-    const key = named || (d.id === keptCable ? unit : null)
-    if (may(key)) here.push({ cable: d, unit: key })
+    const again = !!back && d.id === back.id
+    const key = again && back.unit ? back.unit : named || (d.id === keptCable ? unit : null)
+    if (may(key)) here.push({ cable: d, unit: key, again })
   }
   if (here.length !== 1) return null
-  const [{ cable, unit: key }] = here
-  return { act: mode === 'adapter' && key === unit ? 'switch' : 'offer', cable, unit: key }
+  const [{ cable, unit: key, again }] = here
+  return { act: again || (mode === 'adapter' && key === unit) ? 'switch' : 'offer', cable, unit: key }
 }

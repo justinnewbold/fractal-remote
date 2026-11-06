@@ -61,6 +61,7 @@ import {
   ALLOW_WORDS,
   APPLE_SCREEN_OPENS,
   RESTRICTED_WORDS,
+  adapterInsteadOfCable,
   allowBluetooth,
   editOverBluetooth,
   lookForAdapterAgain,
@@ -73,7 +74,7 @@ import {
 } from './src/lib/bluetooth'
 import { useBluetoothOffered } from './src/lib/useBluetoothOffered'
 import { BLUETOOTH_WAYS_SHORT, REPORT_BUTTON } from './src/lib/bluetooth-gear'
-import { CABLE_LOOK_AGAIN, CABLE_WAITING } from './src/lib/cableWords'
+import { CABLE_LOOK_AGAIN, CABLE_TO_ADAPTER, CABLE_TO_ADAPTER_SUB, CABLE_WAITING } from './src/lib/cableWords'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
@@ -589,7 +590,20 @@ export default function App() {
    */
 
   const caps = useRig(ofCaps)
-  const readFailed = useRig(ofError)
+  /*
+   * A read that failed, or the computer saying it has NO UNIT: either way
+   * the unit has said all it is going to, so Play is drawn, never the
+   * waiting screen. "The screen starts tripping out until the USB is plugged
+   * back into the computer. Just screen alternates between these two
+   * screenshots about every 0.25 seconds" (Justin, 6 November 2026, the
+   * AM4's cable moved from the computer to the phone and out again). The
+   * error alone was the gate: Play came up on a failed read, its arrival
+   * read the unit again (Stage reload, refreshAll), the computer's answer
+   * of no unit cleared the error, the waiting screen took Play's place, the
+   * next read failed, and round again, twice a second. A computer that has
+   * said no unit is an answer, and stays one until it says otherwise.
+   */
+  const readFailed = useRig(ofReadEnded)
   /* The metronome: the unit in front of us is told whenever it changes, and
      the phone keeps time at its tempo. See lib/metronome. */
   const rigSlug = useRig((s) => s.deviceSlug)
@@ -1436,6 +1450,8 @@ export default function App() {
               onOpenSettings={() => openSettings()}
               /* The note under the pill, over Bluetooth: back to the screen it was opened over; never over the form (typingReport). */
               onReport={reportBluetooth && !typingReport ? (said) => reportBluetooth(screen, said) : null}
+              /* On a USB cable, its note's Use a Bluetooth adapter instead, behind the Bluetooth row's own gate. */
+              onBluetoothPage={bluetoothOffered ? () => openSettings('bluetooth') : null}
               onUnlock={() => setBuying(true)}
               onOpenUnit={() => (unitGoes === 'demo' ? setPickUnit(true) : unitGoes === 'which' ? setPickLive(true) : openSettings('link'))}
               unitGoes={unitGoes}
@@ -1761,7 +1777,8 @@ function Arrived({ picked }) {
 }
 
 const ofCaps = (s) => s.capabilities
-const ofError = (s) => s.error
+/* The gate's answer from the unit (readFailed, above): a failed read, or the computer saying it has no unit. */
+const ofReadEnded = (s) => s.error || (s.unit === 'missing' ? 'no unit' : null)
 
 /**
  * The link as the top bar and Setup say it, through a stretch of looking.
@@ -1971,6 +1988,10 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
       {bluetooth ? (
         <View style={{ alignSelf: 'stretch' }}>
           <Press label="Use the computer instead" onPress={() => setBluetooth(false)} />
+          {/* On a USB cable, a Bluetooth adapter too (lib/cableWords CABLE_TO_ADAPTER): the one from before the cable, or the page to connect one. */}
+          {cable && onBluetooth ? (
+            <Press label={CABLE_TO_ADAPTER} sub={CABLE_TO_ADAPTER_SUB} style={{ marginTop: space.sm }} onPress={() => adapterInsteadOfCable({ byHand: true }) || onBluetooth()} />
+          ) : null}
         </View>
       ) : null}
       {long && link.link !== 'connected' ? (
