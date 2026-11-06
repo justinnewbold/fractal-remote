@@ -1,10 +1,13 @@
+import { useEffect } from 'react'
 import { View } from 'react-native'
 
 import { applyNow, dismissReady, useUpdates } from '../lib/updates'
+import { askWaiting } from '../lib/whatsNewWaiting'
 import { space } from '../lib/theme'
 import Note from './Note'
 import Press from './Press'
 import Toast from './Toast'
+import WhatsNewLink from './WhatsNewLink'
 
 /**
  * A NEW VERSION IS READY, said under the bar the way the browser says it.
@@ -34,20 +37,40 @@ import Toast from './Toast'
  * than the fault reaches, and a tap meant for a scene would have restarted
  * the app. Two lines fit in any font at that width, so the floating one says
  * only what it must; the column, with room to spare, keeps the longer one.
+ *
+ * WITH WHAT'S NEW BESIDE RESTART NOW. "On the card that says a new version
+ * of the app is available. Can you have a link that says what's new?"
+ * (Justin, 6 November 2026.) `onWhatsNew` opens Settings → About → What's
+ * new (App.js openWhatsNew). In the button row, beside Restart now, so the
+ * floating card is no taller than it was and the sentence keeps its two
+ * lines. The list on the phone does not have the waiting update's lines yet
+ * (they arrive with it), so the moment the card is shown the website's copy
+ * is asked for them (lib/whatsNewWaiting.js), and the page puts them on top.
+ * Not drawn while What's new is already on screen (App passes null).
  */
 /** What the floating note says. Kept to two lines at 320 wide in a wide font: see above. */
 const FLOATING = 'A new version is ready. Restart to use it.'
 
-export default function UpdateReady({ over = false }) {
+/** Restart now and What's new, side by side. */
+const ROW = { flexDirection: 'row', alignItems: 'center', gap: space.sm }
+
+export default function UpdateReady({ over = false, onWhatsNew = null }) {
   const updates = useUpdates()
   const open = updates.phase === 'ready' && !updates.dismissed
+  /* The waiting update's lines, asked for while the card is up, so What's new has them when it opens. */
+  useEffect(() => {
+    if (open) askWaiting(updates.waitingVersion)
+  }, [open, updates.waitingVersion])
   if (over) {
     return (
       <Toast open={open} yields>
         <Note tone="warn" onDismiss={dismissReady}>
           {FLOATING}
         </Note>
-        <Press label="Restart now" tone="signal" height={44} onPress={() => applyNow()} />
+        <View style={ROW}>
+          <Press label="Restart now" tone="signal" height={44} grow onPress={() => applyNow()} />
+          {onWhatsNew ? <WhatsNewLink onPress={onWhatsNew} /> : null}
+        </View>
       </Toast>
     )
   }
@@ -57,7 +80,10 @@ export default function UpdateReady({ over = false }) {
       <Note tone="warn" onDismiss={dismissReady}>
         A new version of the app is ready. Restart to use it — it takes a second.
       </Note>
-      <Press label="Restart now" tone="signal" onPress={() => applyNow()} />
+      <View style={ROW}>
+        <Press label="Restart now" tone="signal" grow onPress={() => applyNow()} />
+        {onWhatsNew ? <WhatsNewLink onPress={onWhatsNew} /> : null}
+      </View>
     </View>
   )
 }

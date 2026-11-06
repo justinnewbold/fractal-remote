@@ -1,7 +1,12 @@
+import { useEffect } from 'react'
 import { Linking, Platform, Text, View } from 'react-native'
 import { color, font, space } from '../lib/theme'
 import { WHATS_NEW_URL } from '../lib/affiliation'
 import { SHOWN_IN_APP, daysFor } from '../lib/whatsNew'
+import { daysFromFile, withWaiting } from '../lib/whats-new-rule'
+import { askWaiting, useWaitingList } from '../lib/whatsNewWaiting'
+import { useUpdates } from '../lib/updates'
+import { useStoreNote } from '../lib/storeVersion'
 import Press from '../components/Press'
 
 /**
@@ -22,8 +27,28 @@ export const latestLine = () => {
   return newest ? `Latest: ${newest.day}` : 'What each update changed'
 }
 
+/*
+ * AND WHAT IS NOT ON THE PHONE YET. The list above travels inside each
+ * update, so it is one short while a downloaded update waits for a restart
+ * (the card's What's new opens this page then: components/UpdateReady), and
+ * an old store copy stops getting updates altogether (components/
+ * NewerInStore). In either case the website's copy is read
+ * (lib/whatsNewWaiting.js) and its newer days go on top, in the same layout
+ * (lib/whats-new-rule.js withWaiting): up to the waiting update's version,
+ * or all of them for the newer store version. With no signal, the phone's
+ * own list, as before.
+ */
 export default function WhatsNew() {
-  const days = daysHere()
+  const updates = useUpdates()
+  const store = useStoreNote()
+  const waiting = updates.phase === 'ready'
+  const behind = waiting || Boolean(store.note)
+  const upTo = store.note ? null : updates.waitingVersion
+  const fetched = useWaitingList()
+  useEffect(() => {
+    if (behind) askWaiting(upTo)
+  }, [behind, upTo])
+  const days = behind && fetched.file ? withWaiting(daysHere(), daysFromFile(fetched.file, Platform.OS), { upTo }).slice(0, SHOWN_IN_APP) : daysHere()
   return (
     <View style={{ gap: space.xl }}>
       {days.map((d) => (

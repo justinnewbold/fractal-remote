@@ -11,7 +11,8 @@
  * (mobile/src/lib/whatsNew.js, which Settings → About → What's new draws,
  * the newest `shownInApp` days) and the website's page
  * (public/whats-new.html, every day there is, which the phone's All updates
- * and the browser's What's new row open). npm test renders both again and
+ * and the browser's What's new row open), and a short copy for the phone to
+ * read from the website (public/whats-new.json, websiteList below). npm test renders both again and
  * fails on any difference, as it does for every copy.
  *
  * The browser and the computer window never import the list, only the
@@ -61,6 +62,19 @@ export const WHATS_NEW = ${JSON.stringify(days, null, 2)}
 export const daysFor = (os) =>
   WHATS_NEW.map((d) => ({ ...d, lines: d.lines.filter((l) => !l.only || l.only === os).map((l) => l.text) })).filter((d) => d.lines.length)
 `
+}
+
+/**
+ * The website's copy for the phone to read: the newest `shownInApp` days, as
+ * JSON, at public/whats-new.json. A downloaded update that is waiting for a
+ * restart brings its own lines with it, so until the restart the phone's
+ * bundled list is one update short; What's new reads this file to show the
+ * waiting update's lines too (mobile/src/lib/whatsNewWaiting.js). No comment
+ * on its front: a JSON file with one is not JSON.
+ */
+export function websiteList(text) {
+  const { shownInApp, days } = readList(text)
+  return `${JSON.stringify({ days: days.slice(0, shownInApp) }, null, 2)}\n`
 }
 
 const escape = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
