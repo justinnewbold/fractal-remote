@@ -7849,9 +7849,9 @@ export function run(test) {
      * "Can we change the connected thing to be blue when it's on a Bluetooth
      * connection instead of green? And instead of a green dot next to the unit
      * name have a Bluetooth icon when it's connected via Bluetooth."
-     * The picture is a plain aerial drawn for the app, not the Bluetooth
-     * symbol, which the Bluetooth group lets only its members use
-     * (test/independent.mjs holds that one away).
+     * The picture is the Bluetooth symbol, allowed by Justin's decision of
+     * 6 November 2026 (test/independent.mjs; it was a plain aerial from 25
+     * October).
      */
     const bar = flat('mobile/src/components/TopBar.js')
     assert.match(bar, /const bluetooth = useBluetoothOn\(\) && !demo/, 'the demo would wear the Bluetooth look')
@@ -7864,14 +7864,14 @@ export function run(test) {
      * the pill says "by USB cable" (lib/cableWords CABLE_WHERE).
      */
     assert.match(bar, /const cableKept = useCableNow\(\) const cable = bluetooth && cableKept const wireless = bluetooth && !cable/)
-    assert.match(bar, /\{demo \? null : wireless \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} size=\{8\} \/>\}/, 'the lamp is not the wireless mark over Bluetooth')
+    assert.match(bar, /\{demo \? null : wireless \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} size=\{8\} \/>\}/, 'the lamp is not the Bluetooth symbol over Bluetooth')
     assert.match(bar, /pill\.mark === 'ok' \? \(wireless \? color\.ble : color\.ok\)/, 'Live is not blue over Bluetooth')
     assert.match(bar, /const pill = pillWords\(\{ tone, unitState, unit, computer: link\?\.macName, demo, bluetooth \}\) if \(cable\) pill\.where = CABLE_WHERE/, 'the pill says Bluetooth for a unit on a USB cable')
     assert.equal((await import('../mobile/src/lib/cableWords.js')).CABLE_WHERE, 'by USB cable')
     /* The mark is lit the way the lamp is: blue answering, red not, dim not yet asked. */
     assert.match(bar, /const tint = state === 'good' \? color\.ble : state === 'fault' \? color\.fault : color\.silkFaint/, 'the mark stays blue over a unit that stopped answering')
-    assert.match(bar, /source=\{wirelessIcon\}/)
-    assert.match(bar, /import wirelessIcon from '\.\.\/\.\.\/assets\/icons\/wireless\.png'/)
+    assert.match(bar, /source=\{bluetoothIcon\}/)
+    assert.match(bar, /import bluetoothIcon from '\.\.\/\.\.\/assets\/icons\/bluetooth\.png'/)
     /* No computer to be missing over Bluetooth, the pill's second line says Bluetooth, and so does a screen reader. */
     const { pillWords } = await import('../shared/pill-words.mjs')
     assert.equal(pillWords({ tone: 'dim', bluetooth: true }).status, 'Not connected', 'the bar says No computer over Bluetooth')
@@ -7898,10 +7898,10 @@ export function run(test) {
       }
     }
     /* And the picture is there, the same size and kind as the bar's others. */
-    const png = readFileSync(new URL('../mobile/assets/icons/wireless.png', import.meta.url))
+    const png = readFileSync(new URL('../mobile/assets/icons/bluetooth.png', import.meta.url))
     assert.equal(png.toString('ascii', 1, 4), 'PNG')
-    assert.equal(png.readUInt32BE(16), 96, 'the wireless mark is not 96 wide like the other icons')
-    assert.equal(png.readUInt32BE(20), 96, 'the wireless mark is not 96 high like the other icons')
+    assert.equal(png.readUInt32BE(16), 96, 'the Bluetooth symbol is not 96 wide like the other icons')
+    assert.equal(png.readUInt32BE(20), 96, 'the Bluetooth symbol is not 96 high like the other icons')
   })
 
   test('over Bluetooth, CONNECTED opens a note with Turn off Bluetooth, which does what Stop does', async () => {
@@ -11086,11 +11086,12 @@ export function run(test) {
     /*
      * CONNECT, BIGGER, WITH ITS MARK, IN BLUETOOTH'S BLUE: "Make the connect
      * under Bluetooth menu button bigger and show the Bluetooth symbol and
-     * change the text color to blue." The mark is the app's own aerial, as
-     * the top bar's: the Runic B is the Bluetooth group's (test/independent.mjs).
+     * change the text color to blue." The mark is the Bluetooth symbol, as
+     * the top bar's (test/independent.mjs), and none when Connect reaches the
+     * unit by USB cable.
      */
-    assert.match(page, /<Press label=\{b\.looking \? 'Looking…' : 'Connect'\} icon=\{wirelessIcon\} inkColor=\{color\.ble\} labelSize=\{font\.lead\} height=\{64\} tone="live" disabled=\{!canStart \|\| b\.looking\} onPress=\{start\} \/>/)
-    assert.match(src('mobile/src/screens/Bluetooth.js'), /import wirelessIcon from '\.\.\/\.\.\/assets\/icons\/wireless\.png'/)
+    assert.match(page, /<Press label=\{b\.looking \? 'Looking…' : 'Connect'\} icon=\{cable \|\| takes\.length \? null : bluetoothIcon\} inkColor=\{color\.ble\} labelSize=\{font\.lead\} height=\{64\} tone="live" disabled=\{!canStart \|\| b\.looking\} onPress=\{start\} \/>/)
+    assert.match(src('mobile/src/screens/Bluetooth.js'), /import bluetoothIcon from '\.\.\/\.\.\/assets\/icons\/bluetooth\.png'/)
     const press = flat('mobile/src/components/Press.js')
     assert.match(press, /const wordInk = inkColor && !on && !disabled \? inkColor : ink/, 'Press’s own colour is not kept for lit or disabled')
     assert.match(press, /\{icon && !bare \? <Picture source=\{icon\} tint=\{wordInk\} flip=\{flip\} \/> : null\}/)

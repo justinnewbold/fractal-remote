@@ -8293,7 +8293,15 @@ export function run(test) {
     sources.push(read('mobile/App.js'))
     const all = sources.join('\n')
 
-    const unused = files.filter((f) => !all.includes(`assets/icons/${f}`))
+    /*
+     * One file is kept on purpose with nothing drawing it: the plain aerial,
+     * wireless.png, which stood in for the Bluetooth symbol from 25 October
+     * to 6 November 2026 and is kept so the symbol can come out again by
+     * update (CLAUDE.md, "The Bluetooth symbol is allowed"). Only while the
+     * symbol is what is drawn.
+     */
+    const SPARE = all.includes('assets/icons/bluetooth.png') ? ['wireless.png'] : []
+    const unused = files.filter((f) => !all.includes(`assets/icons/${f}`) && !SPARE.includes(f))
     assert.deepEqual(unused, [], `a picture nothing draws: ${unused.join(', ')}`)
 
     const missing = []

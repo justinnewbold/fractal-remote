@@ -98,7 +98,7 @@ import { useRig } from '../lib/rig'
 import { mayDriveBluetooth } from '../lib/unlock-rule'
 import Note from '../components/Note'
 import Press from '../components/Press'
-import wirelessIcon from '../../assets/icons/wireless.png'
+import bluetoothIcon from '../../assets/icons/bluetooth.png'
 
 /**
  * Settings → Bluetooth.
@@ -688,12 +688,14 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                 BIGGER, WITH ITS MARK, IN BLUETOOTH'S BLUE. "Make the connect
                 under Bluetooth menu button bigger and show the Bluetooth
                 symbol and change the text color to blue." (Justin, 6 November
-                2026.) The mark is the app's own aerial (icons/wireless.png),
-                the one the top bar wears over Bluetooth: the Bluetooth
-                symbol itself, the Runic B, is the Bluetooth group's, for its
-                members only (test/independent.mjs keeps it out).
+                2026.) The mark is the Bluetooth symbol (icons/bluetooth.png),
+                the one the top bar wears over Bluetooth, allowed by his
+                decision the same day (TopBar BluetoothMark). Not when Connect
+                reaches the unit by USB cable (the one chosen is a cable, or
+                one plugged in now is what Connect takes): no picture then,
+                since a cable is not Bluetooth.
               */}
-              <Press label={b.looking ? 'Looking…' : 'Connect'} icon={wirelessIcon} inkColor={color.ble} labelSize={font.lead} height={64} tone="live" disabled={!canStart || b.looking} onPress={start} />
+              <Press label={b.looking ? 'Looking…' : 'Connect'} icon={cable || takes.length ? null : bluetoothIcon} inkColor={color.ble} labelSize={font.lead} height={64} tone="live" disabled={!canStart || b.looking} onPress={start} />
               {/* Not on iOS 27 once Connect has been tapped: the note under it then says the same, and says it louder. */}
               {shut && b.said ? null : (
                 <Hint>
