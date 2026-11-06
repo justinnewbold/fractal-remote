@@ -12,18 +12,18 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-06",
     "day": "6 November 2026",
-    "version": "1.89.52",
+    "version": "1.89.53",
     "lines": [
       {
-        "text": "Settings → About → Updates now shows Checking… while it looks, then the time it last checked.",
+        "text": "On a tablet or a foldable opened up, Play now uses the whole screen: your scenes on the left and your chain on the right, lined up row for row, with the preset across the top and Previous and Next at the two ends of the bottom row. Setlists is at the end of the preset bar.",
+        "only": null
+      },
+      {
+        "text": "Settings → About → Updates now shows Checking… while it looks, then the time it last checked. And when a new version is ready, its card now has What’s new, which takes you straight to the list of what changed.",
         "only": null
       },
       {
         "text": "Which unit (tap your unit’s name on Play) is now one card per unit, showing the computer it’s on, whether it’s connected, and the preset and scene it’s on.",
-        "only": null
-      },
-      {
-        "text": "When a new version is ready, its card now has What’s new, which takes you straight to the list of what changed.",
         "only": null
       },
       {

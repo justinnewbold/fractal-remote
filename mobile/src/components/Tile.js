@@ -209,6 +209,14 @@ export default function Tile({
    * it was: nothing about it is measured or drawn.
    */
   full,
+  /*
+   * THE NAME'S SIZE ON A BIG TILE: a pedal on Play lined up (lib/linedPlay
+   * linedName), where a tile can be a quarter of an iPad. The name, whole or
+   * three letters, is drawn at it, and the whole name's twin measured at it,
+   * and the picture may grow to 40. Left out, as it is everywhere else, the
+   * tile is exactly what it was.
+   */
+  nameSize,
   fill,
   ink,
   on = false,
@@ -231,7 +239,7 @@ export default function Tile({
    * before still waits for its own twin.
    */
   const [whole, setWhole] = useState(null)
-  const wholeAt = full ? `${full}|${StyleSheet.flatten(style)?.width}` : null
+  const wholeAt = full ? `${full}|${StyleSheet.flatten(style)?.width}${nameSize ? `|${nameSize}` : ''}` : null
   const wholeKey = full ? `${wholeAt}|${PixelRatio.getFontScale()}` : null
   const wholeFits = whole?.at === wholeAt ? whole.fits : WHOLE.get(wholeKey)
   const named = !!full && wholeFits === true
@@ -365,7 +373,7 @@ export default function Tile({
    * does not turn into a billboard. With On/Off and the channel moved up
    * into the corners, the 44pt tile of a squeezed chain has room for both.
    */
-  const picture = icon ? Math.max(14, Math.min(28, Math.round(height * 0.32))) : 0
+  const picture = icon ? Math.max(14, Math.min(nameSize ? 40 : 28, Math.round(height * 0.32))) : 0
   const cornered = !!(topLeft || topRight)
 
   /*
@@ -703,7 +711,7 @@ export default function Tile({
             right: space.sm,
             top: 0,
             opacity: 0,
-            fontSize: font.small,
+            fontSize: nameSize || font.small,
             fontWeight: '700',
             letterSpacing: 0.5,
             textAlign: 'center'
@@ -743,7 +751,7 @@ export default function Tile({
           numberOfLines={drawnAt ? 2 : wrap ? 2 : 1}
           style={{
             color: foreground,
-            fontSize: drawnAt || (wrap ? font.small : font.body),
+            fontSize: drawnAt || nameSize || (wrap ? font.small : font.body),
             /* The measured line already has the phone's text size in it, and both phones scale a line height by it
                again, so it is taken back out; rounded down, so a line is never taller than the room it was fitted to. */
             ...(drawnAt ? { lineHeight: Math.floor((measure.line * drawnAt) / NAME_REF / PixelRatio.getFontScale()) } : null),
