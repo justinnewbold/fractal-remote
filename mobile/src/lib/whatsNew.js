@@ -10,6 +10,21 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-06",
+    "day": "6 November 2026",
+    "version": "1.89.47",
+    "lines": [
+      {
+        "text": "Plug your unit in by USB cable while you’re connected another way and the app notices: from a Bluetooth adapter it switches to the cable by itself, and through the computer it asks first, with Use USB cable or Not now.",
+        "only": null
+      },
+      {
+        "text": "The Help make Fractal Remote better? card is much shorter and fits on one screen, with a link to the privacy page for exactly what’s sent.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-05",
     "day": "5 November 2026",
     "version": "1.89.46",

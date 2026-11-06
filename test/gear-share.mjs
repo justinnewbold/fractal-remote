@@ -429,13 +429,18 @@ export function run(test) {
     assert.equal(r.SHARE_YES, 'Yes, share')
     assert.equal(r.SHARE_NO, 'No thanks')
     const [what, never, change] = r.shareWords()
-    for (const want of ['which unit, and its firmware when it connects through a computer', 'a computer, Bluetooth or a USB cable', 'computer app’s version', 'the Bluetooth adapter’s or the cable’s name', 'whether the unit answered', 'how long it took to connect, and how quickly the unit answers a tap when it connects through a computer', 'system version', 'app’s version', 'on the same versions', 'once a month at most']) {
+    for (const want of ['which unit and its firmware', 'computer, Bluetooth adapter or USB cable', 'by name and version', 'whether it answered and how quickly', 'app and system versions', 'Once a month at most']) {
       assert.ok(what.includes(want), `the card does not say it sends ${want}`)
     }
-    for (const want of ['preset or song names', 'anything you type', 'where you are', 'your account or email', 'not linked to you', 'no advertising', 'nothing goes to anyone else']) {
+    /* Short enough to fit on a phone's screen with both buttons (Justin, 6 November 2026), the rest one tap away. */
+    assert.ok([what, never, change].join(' ').length <= 520, 'the card has grown long again: the full list belongs on the privacy page')
+    assert.equal(r.SHARE_DETAILS_URL, 'https://fractal.newbold.cloud/privacy.html#which-gear')
+    assert.match(read('public/privacy.html'), /<h3 id="which-gear">Which gear works/, 'the card’s link lands nowhere on the privacy page')
+    assert.match(read('mobile/src/components/GearShareNotice.js'), /Linking\.openURL\(SHARE_DETAILS_URL\)[\s\S]*\{SHARE_DETAILS\}/, 'the card does not link to the whole list')
+    for (const want of ['presets, songs', 'anything you type', 'where you are', 'your account', 'not linked to you', 'nothing goes to anyone else']) {
       assert.ok(never.includes(want), `the card does not say ${want}`)
     }
-    assert.match(change, /off unless you tap Yes, share/)
+    assert.match(change, /Off unless you tap Yes, share/)
     assert.match(change, /Settings → Troubleshooting/)
     /* And the row in Settings says the three ways, and how quickly. */
     assert.ok(r.shareRowLine(true).includes('a computer, Bluetooth or a USB cable'), 'the Settings row leaves out a way a note can come in')

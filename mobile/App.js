@@ -22,6 +22,8 @@ import TopBar from './src/components/TopBar'
 import WrongAccount from './src/components/WrongAccount'
 import UpdateReady from './src/components/UpdateReady'
 import { LookUndo } from './src/components/Colours'
+import { CablePlugIn } from './src/components/CablePlugIn'
+import { watchCables } from './src/lib/cablePlugIn'
 import { watchForUpdates } from './src/lib/updates'
 import { watchStoreVersion } from './src/lib/storeVersion'
 import DemoUnit from './src/components/DemoUnit'
@@ -413,6 +415,17 @@ export default function App() {
    * gets the way in or nothing (`onBluetooth`).
    */
   const bluetoothOffered = useBluetoothOffered()
+  /*
+   * A UNIT PLUGGED IN BY USB CABLE while connected another way (lib/cablePlugIn):
+   * watched through the same gate as the Bluetooth row, signed in and not in
+   * the demo, so nobody the page is not drawn for is offered a cable. Play says
+   * what it found (components/CablePlugIn).
+   */
+  const watchingCables = auth === 'in' && !demo && bluetoothOffered
+  useEffect(() => {
+    watchCables(watchingCables)
+  }, [watchingCables])
+  useEffect(() => () => watchCables(false), [])
   /*
    * REPORT A BLUETOOTH PROBLEM, from wherever one is met: the Bluetooth page,
    * the note under Play's pill, a fault on Play while over Bluetooth, and the
@@ -1703,6 +1716,8 @@ export default function App() {
             {/* A look just applied in Settings → Colors: "Now: Sunlight · Undo" for a
                 moment over Play, which Apply comes back to (components/Colours). */}
             {playOnScreen ? <LookUndo /> : null}
+            {/* A unit just plugged in by USB cable: the offer to use it, or the switch made by itself (components/CablePlugIn). */}
+            {playOnScreen ? <CablePlugIn /> : null}
             </EdgeBack>
           </>
         )}

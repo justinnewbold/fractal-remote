@@ -61,10 +61,20 @@ export const SHARE_TITLE = 'Help make Fractal Remote better?'
  * device-word.mjs): this iPad, this tablet.
  */
 export const shareWords = () => [
-  `Share which gear works with Fractal Remote, so we can put together a list of everything that works. When your unit connects, this ${deviceNoun()} sends one short note: which unit, and its firmware when it connects through a computer, whether it went through a computer, Bluetooth or a USB cable, the kind of computer and its system version (Mac, Windows, Linux or Raspberry Pi) and the computer app’s version, or the Bluetooth adapter’s or the cable’s name, whether the unit answered, the kind of ${deviceNoun()} and its system version, and the app’s version. It also says how long it took to connect, and how quickly the unit answers a tap when it connects through a computer. The same gear, on the same versions, is sent once a month at most.`,
-  'Never sent: preset or song names, anything you type, where you are, or your account or email. It is not linked to you, there is no advertising, and nothing goes to anyone else.',
-  'It stays off unless you tap Yes, share. You can change it any time in Settings → Troubleshooting.'
+  `When your unit connects, this ${deviceNoun()} sends a short note: which unit and its firmware, how it connected (computer, Bluetooth adapter or USB cable, by name and version), whether it answered and how quickly, and which app and system versions you have. Once a month at most.`,
+  'Never your presets, songs, anything you type, where you are, or your account. It is not linked to you, and nothing goes to anyone else.',
+  'Off unless you tap Yes, share. Change it any time in Settings → Troubleshooting.'
 ]
+
+/*
+ * THE WHOLE OF IT, ON THE WEBSITE. "We need to shorten this a lot. That's a
+ * massive amount of text ... we could provide a link to the full text on the
+ * website" (Justin, 6 November 2026). So the card says it in three short
+ * lines that fit on a phone's screen, and this link opens the privacy page
+ * at the section that lists every field, word for word.
+ */
+export const SHARE_DETAILS = 'See exactly what’s sent'
+export const SHARE_DETAILS_URL = 'https://fractal.newbold.cloud/privacy.html#which-gear'
 
 /*
  * THE CARD AGAIN, FOR A YES GIVEN TO THE WORDS BEFORE 4 NOVEMBER 2026, which
@@ -72,7 +82,7 @@ export const shareWords = () => [
  * card's own words, and until it is answered the phone sends only what those
  * words promised (createGearSharer `given`).
  */
-export const SHARE_AGAIN = 'The note now says a little more than when you said yes: a USB cable as a USB cable, how long your unit took to connect and, through a computer, how quickly it answers a tap. Until you answer again, it sends only what it did before.'
+export const SHARE_AGAIN = 'The note now also says when you used a USB cable, how long your unit took to connect and how quickly it answers a tap. Until you answer, it sends only what it did before.'
 
 export const SHARE_YES = 'Yes, share'
 export const SHARE_NO = 'No thanks'

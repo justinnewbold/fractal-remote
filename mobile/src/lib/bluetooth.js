@@ -824,6 +824,29 @@ export function switchAdapter(dev) {
   return true
 }
 
+/** Whether this cable was let go of by hand this session (see CABLES LET GO OF BY HAND): lib/cablePlugIn never offers or takes one. */
+export const cableLetGo = (id) => letGo.has(id)
+
+/** Whether this account may use this unit over Bluetooth on this copy now: open to it, and the unit offered (ble-rule unitOffered). For lib/cablePlugIn. */
+export const unitOfferedNow = (key) => allowed === true && offered(key)
+
+/**
+ * USE THE USB CABLE JUST PLUGGED IN (lib/cablePlugIn): Play's Use USB cable,
+ * and the switch it makes by itself from a Bluetooth adapter. The same end
+ * as Settings → Bluetooth → Connect with the cable in: the unit it is for
+ * picked (setBluetoothUnit, only one this account is offered), the cable
+ * chosen (chooseAdapter), and Bluetooth on (setBluetooth). bleLink hears it
+ * and connects; App.js restarts the link if Bluetooth was off. A cable let go
+ * of by hand is never taken here. True when Bluetooth is on with it.
+ */
+export function takeCable(dev, unit) {
+  if (!dev || !isCable(dev) || !isAdapter(dev) || letGo.has(dev.id)) return false
+  if (unit && unit !== saved.unit && setBluetoothUnit(unit) !== unit) return false
+  if (!saved.unit || !offered(saved.unit)) return false
+  chooseAdapter(dev)
+  return setBluetooth(true)
+}
+
 /* What auto learned, kept for the unit it was learned on. */
 function rememberMethods(unit, m) {
   if (!UNIT_KEYS.includes(unit)) return
