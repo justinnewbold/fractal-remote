@@ -15,9 +15,11 @@ import {
   gridShape,
   isSplitChain,
   laneItems,
+  laneUsed,
   lanesShown,
   rowLabel
 } from '../../shared/grid-plan.mjs'
+import { NEW_BLOCK_NAME, NEW_BLOCK_NOTE, isNewBlock } from '../../shared/new-block.mjs'
 
 /**
  * A workable starting chain, by block family rather than by number.
@@ -402,7 +404,8 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
   }
 
   /* Nothing but the ends of the chain: where a starter chain is worth offering. */
-  const bareChain = !(blocks || []).some((b) => b.slug && b.slug !== 'input' && b.slug !== 'output')
+  /* A block newer than the app counts as something: a starter chain is never written round it. */
+  const bareChain = !(blocks || []).some((b) => isNewBlock(b) || (b.slug !== 'input' && b.slug !== 'output'))
 
   const buildStarter = async () => {
     setWorking('starter')
@@ -497,7 +500,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
         <div className="chain-lane" data-linear={linear ? 'yes' : undefined} key={lane.row}>
           {rows > 1 ? (
             <p className="silk-label chain-lane-head">
-              {lane.blocks.length ? `Row ${rowLabel(lane.row)}` : `Row ${rowLabel(lane.row)} — empty`}
+              {laneUsed(lane) ? `Row ${rowLabel(lane.row)}` : `Row ${rowLabel(lane.row)} — empty`}
             </p>
           ) : null}
 
@@ -552,6 +555,24 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
                       {issue ? <p className="chain-issue">{issue}</p> : null}
                     </div>
                   ) : null}
+                </div>
+              )
+            }
+
+            /*
+             * A block newer than the app (shared/new-block.mjs): where it is,
+             * in words, and nothing to press. Its cell is not a gap, so
+             * nothing is moved or added onto it, and a drag deals the other
+             * blocks round it.
+             */
+            if (item.kind === 'held') {
+              return (
+                <div className="chain-slot" key={at} ref={slotRef} style={slotStyle}>
+                  <div className="chain-block chain-held" aria-label={`${NEW_BLOCK_NAME}, ${label(item.col)}. ${NEW_BLOCK_NOTE}`}>
+                    <span className="chain-col mono">{label(item.col)}</span>
+                    <span className="chain-block-name">{NEW_BLOCK_NAME}</span>
+                  </div>
+                  <p className="hint">{NEW_BLOCK_NOTE}</p>
                 </div>
               )
             }

@@ -15,6 +15,7 @@ import MetronomeBeat from './components/MetronomeBeat'
 import { setMetronome, useMetronome, useUnitHeardOn, useUnitMetronome, wakeScreenClick } from './lib/metronome'
 import { metronomeNote, placeLit, placesFor, unitClick } from '../shared/metronome.mjs'
 import { deviceSlug as slugOfUnit, stageKey } from '../shared/device-slug.mjs'
+import { NEW_BLOCK_NAME, isNewBlock } from '../shared/new-block.mjs'
 import SaveBar, { SaveLate, useSaidSaved } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
 import { overwriteCheck } from './lib/overwrite'
@@ -5331,7 +5332,7 @@ export default function App() {
           setSheet(sheetBack)
           setSheetBack(null)
         }}
-        title={openBlock?.name || 'Block'}
+        title={isNewBlock(openBlock) ? NEW_BLOCK_NAME : openBlock?.name || 'Block'}
         alert={sheetAlert}
         /* Where these knobs land. A block's settings are per-scene, so an
            editor that doesn't name the scene is an editor you have to

@@ -300,7 +300,7 @@ async function rigOnTheBench(over = {}) {
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
   /* The gate a tap asks while the link is down, and the rules its deadline and its words come from: both real, as they are. */
   /* And the colours, which rig.js tells which unit answered (lib/looks), with the colour sums the palettes use (lib/ink). */
-  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'tapTimes.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js', 'am4-boost.js', 'axiom.js']) {
+  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'new-block.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'tapTimes.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js', 'am4-boost.js', 'axiom.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -2392,6 +2392,134 @@ export function run(test) {
     }
   })
 
+  test('a block newer than the app keeps its cell in Edit: never free, never moved, never written over', async () => {
+    /*
+     * Axe-Fx III firmware 33 brought the NAM block, whose effect id no catalog
+     * here knows. The phone dropped every block with no slug, so its cell in
+     * Edit looked empty and a block put there went over the NAM block on the
+     * unit. Both ends draw the lanes from one file: the cell is `held`.
+     */
+    const caps = { grid: { rows: 4, cols: 12 } }
+    /* 201: nobody's id. 79: inside a known family's window, which the computer can only call eid_79. */
+    const chain = [
+      { slug: 'input', name: 'Input 1', effectId: 37, row: 1, col: 0 },
+      { slug: 'drive', name: 'Drive 1', effectId: 133, row: 1, col: 1 },
+      { slug: '', name: 'eid_201', effectId: 201, row: 1, col: 2, bypassed: false },
+      { slug: 'amp', name: 'Amp 1', effectId: 58, row: 1, col: 3 },
+      { slug: null, name: 'eid_79', effectId: 79, row: 1, col: 4, bypassed: true },
+      { slug: 'output', name: 'Output 1', effectId: 42, row: 1, col: 11 }
+    ]
+    const phoneGrid = await import('../mobile/src/lib/grid-plan.js')
+    const webGrid = await import('../shared/grid-plan.mjs')
+    const phoneOrder = await import('../mobile/src/lib/laneOrder.js')
+    const webOrder = await import('../shared/lane-order.mjs')
+    for (const [end, grid, order] of [['phone', phoneGrid, phoneOrder], ['browser', webGrid, webOrder]]) {
+      const lane = grid.lanesShown(chain, caps).find((l) => l.row === 1)
+      assert.ok(!lane.gaps.includes(2) && !lane.gaps.includes(4), `${end}: a new block’s cell is offered as free`)
+      assert.deepEqual(lane.held.map((b) => b.effectId), [201, 79], `${end}: the new blocks are not held where they are`)
+      assert.deepEqual(lane.blocks.map((b) => b.slug), ['input', 'drive', 'amp', 'output'], `${end}: a new block is one of the lane’s movable blocks`)
+      const items = grid.laneItems(lane)
+      assert.deepEqual(items.filter((it) => it.kind === 'held').map((it) => it.col), [2, 4], `${end}: a new block is not drawn where it sits`)
+      assert.ok(!items.some((it) => it.kind === 'gap' && it.col <= 4 && it.last >= 2), `${end}: a run of free cells reaches over a new block`)
+      /* A drag of every block to every place: no move lands on, or lifts, a new block. */
+      for (let from = 0; from < items.length; from++) {
+        for (let to = 0; to < items.length; to++) {
+          const pos = order.blockPositions(items, from, to)
+          if (!pos) continue
+          const moves = order.reorderPlan(items.filter((it) => it.kind === 'block').map((it) => ({ col: it.col, block: it.block })), pos.from, pos.to)
+          for (const m of moves) {
+            assert.ok(![2, 4].includes(m.to) && ![2, 4].includes(m.from), `${end}: a drag writes over a new block’s cell`)
+            assert.ok(m.block.slug, `${end}: a drag moves a new block`)
+          }
+        }
+      }
+      /* A held block on a row by itself is a row in use: a split, and not the spare row. */
+      const alone = [...chain, { slug: '', name: 'eid_202', effectId: 202, row: 2, col: 5 }]
+      assert.equal(grid.isSplitChain(alone, caps), true, `${end}: a row holding only a new block is taken for empty`)
+      const shown = grid.lanesShown(alone, caps)
+      assert.ok(shown.find((l) => l.row === 2)?.held.length === 1, `${end}: a row holding only a new block is not drawn`)
+      assert.notEqual(shown[shown.length - 1].row, 2, `${end}: a row holding a new block is offered as the empty row`)
+    }
+
+    /* The grid read's map: a cell the computer called eid_N is taken, and nothing is laid out round it. */
+    for (const path of ['../mobile/src/lib/split-chain.js', '../shared/split-chain.mjs']) {
+      const split = await import(path)
+      const cells = [
+        { effectId: 37, row: 1, col: 0 },
+        { effectId: 133, row: 1, col: 1, fromRows: [1] },
+        { effectId: 201, row: 1, col: 2, name: 'eid_201', fromRows: [1] },
+        { effectId: 58, row: 1, col: 3, fromRows: [1] }
+      ]
+      const known = chain.filter((b) => b.slug)
+      const map = split.gridMap(cells, known, { rows: 4, cols: 12 })
+      const nam = map.at(1, 2)
+      assert.ok(nam && nam.kind === split.CELL.block && nam.unknown, `${path}: the grid read’s eid_201 is not a block newer than the app`)
+      assert.deepEqual(split.layoutsAround(map, nam, []), [], `${path}: a layout is offered round a new block`)
+      assert.equal(split.gridMap([], chain, { rows: 4, cols: 12 }).at(1, 4)?.unknown, true, `${path}: a chain-read new block is not marked`)
+      const looper = split.planLooper(map, [{ slug: 'looper', name: 'Looper', page: 160 }])
+      assert.ok(!looper.steps?.some((s) => s.kind === 'place' && s.row === 1 && s.col === 2), `${path}: the looper is put over a new block`)
+    }
+
+    /* The words: one place, the same at both ends, and never "??". */
+    const phoneWords = await import('../mobile/src/lib/new-block.js')
+    const webWords = await import('../shared/new-block.mjs')
+    for (const w of [phoneWords, webWords]) {
+      assert.equal(w.NEW_BLOCK_NAME, 'New block')
+      assert.equal(w.NEW_BLOCK_SHORT, 'New')
+      assert.equal(w.NEW_BLOCK_NOTE, 'This block is newer than the app. It’s left as it is.')
+    }
+    for (const path of ['../mobile/src/lib/shortName.js', '../src/lib/shortName.js']) {
+      const { shortName, shortBlock } = await import(path)
+      assert.equal(shortName(''), 'New', `${path}: a new block is not called New`)
+      assert.equal(shortName(null), 'New', `${path}: a new block from a summary is not called New`)
+      assert.equal(shortBlock({ slug: '', name: 'eid_201' }), 'New', `${path}: a new block’s short label carries its id`)
+      assert.equal(shortName('amp'), 'AMP')
+    }
+    const consoleSrc = read('src/components/Console.jsx')
+    assert.ok(!/'\?\?'/.test(consoleSrc), 'the browser’s chain still calls a new block ??')
+    assert.match(consoleSrc, /if \(isNewBlock\(props\.block\)\) \{[\s\S]{0,200}\{NEW_BLOCK_NOTE\}/, 'a new block opens to an empty panel in the browser')
+    assert.match(read('src/components/GridEditor.jsx'), /if \(item\.kind === 'held'\) \{[\s\S]{0,600}\{NEW_BLOCK_NAME\}[\s\S]{0,200}\{NEW_BLOCK_NOTE\}/, 'the browser’s chain editor does not draw a new block in words')
+    const edit = read('mobile/src/screens/Edit.js')
+    assert.match(edit, /item\.kind === 'held' \? \([\s\S]{0,600}label=\{NEW_BLOCK_NAME\} disabled[\s\S]{0,200}\{NEW_BLOCK_NOTE\}/, 'the phone’s chain editor does not draw a new block in words, with nothing to press')
+    assert.match(edit, /const blocks = useMemo\(\(\) => knownBlocks\(chainAll\), \[chainAll\]\)/, 'the phone’s Edit opens and turns blocks it has no name for')
+  })
+
+  test('the phone keeps a block newer than the app, marked, and Play still leaves it out', async () => {
+    const { rig, device } = await rigOnTheBench({
+      blocks: [
+        { slug: 'drive', name: 'Drive 1', effectId: 133, bypassed: true, channel: 'A', row: 1, col: 1 },
+        { slug: '', name: 'eid_201', effectId: 201, bypassed: false, channel: 'A', row: 1, col: 2 },
+        { slug: 'amp', name: 'Amp 1', effectId: 58, bypassed: false, channel: 'A', row: 1, col: 3 }
+      ]
+    })
+    const s = rig.getState()
+    const nam = s.allBlocks.find((b) => b.effectId === 201)
+    assert.ok(nam, 'the chain read dropped the new block, so its cell looks empty in Edit')
+    assert.equal(nam.unknown, true, 'the new block is not marked')
+    assert.deepEqual(s.blocks.map((b) => b.effectId), [133, 58], 'Play draws a block it has no name for')
+    assert.deepEqual(device.knobBlocks(s.allBlocks).map((b) => b.effectId), [133, 58], 'the knob search reads a block it has no name for')
+    /* And Edit's lanes, fed the whole chain, hold its cell. */
+    const { lanesFor } = await import('../mobile/src/lib/grid-plan.js')
+    const lane = lanesFor(s.allBlocks, { grid: { rows: 4, cols: 12 } }).find((l) => l.row === 1)
+    assert.ok(!lane.gaps.includes(2), 'the phone offers the new block’s cell as free')
+  })
+
+  test('the preset report never says every block is off over a new block that is on', async () => {
+    const { silenceFaults, formatPresetReport } = await import('../src/lib/presetReport.js')
+    const blocks = [
+      { slug: 'input', name: 'Input 1', effectId: 37, col: 0 },
+      { slug: 'drive', name: 'Drive 1', effectId: 133, col: 1, bypassed: true },
+      { slug: '', name: 'eid_201', effectId: 201, col: 2, bypassed: false },
+      { slug: 'output', name: 'Output 1', effectId: 42, col: 3 }
+    ]
+    assert.ok(!silenceFaults({ blocks }).some((f) => /Every block is off/.test(f)), 'a new block that is on was ignored')
+    const off = blocks.map((b) => (b.effectId === 201 ? { ...b, bypassed: true } : b))
+    assert.ok(silenceFaults({ blocks: off }).some((f) => /Every block is off/.test(f)), 'every block off is no longer said when it is true')
+    assert.deepEqual(silenceFaults({ blocks: [{ slug: '', name: 'eid_201', effectId: 201, bypassed: false }] }), [], 'a preset holding only a new block is called empty')
+    const text = formatPresetReport({ blocks, faults: [] })
+    assert.match(text, /New block \(eid_201\) \| — \| on/, 'the report leaves out the new block')
+  })
+
   test('the demo is twelve presets a player would recognise, and the seed cannot lie', async () => {
     /*
      * "The demo currently shows empty presets, empty scenes, and empty chains."
@@ -4136,7 +4264,7 @@ export function run(test) {
        but what it filters is checked against the real list above. */
     assert.match(
       device,
-      /export const stageBlocks = \(blocks\) =>\s*\(blocks \|\| \[\]\)\.filter\(\(b\) => !STAGE_HIDDEN\.includes\(b\.slug\)\)/,
+      /export const stageBlocks = \(blocks\) =>\s*\(blocks \|\| \[\]\)\.filter\(\(b\) => b && !isNewBlock\(b\) && !STAGE_HIDDEN\.includes\(b\.slug\)\)/,
       'the stage list is no longer the chain less the three you never kick'
     )
 
@@ -4192,7 +4320,7 @@ export function run(test) {
     assert.match(read('desktop/forgefx.lock.json'), /\+am4scenes/, 'the computer app does not carry the device server that answers /presets/{n}/scenes')
     assert.match(
       device,
-      /export async function presetBlocks\(\) \{[\s\S]*?return list\.filter\(\(b\) => b\?\.slug\)\s*\}/,
+      /export async function presetBlocks\(\) \{[\s\S]*?return markNewBlocks\(list\)\s*\}/,
       'the read itself is filtering again, so the edit screen cannot see the ends of the chain'
     )
 
@@ -12065,7 +12193,7 @@ export function run(test) {
     assert.match(editor, /<Grip label=\{`Drag \$\{block\.name\}`\}/, 'there is no grip to drag a card by')
     assert.match(read('mobile/src/components/Grip.js'), /onPanResponderTerminationRequest: \(\) => false/, 'the grip hands the touch back to the page')
     assert.match(editor, /const dragStart = \(row, index\) => \{ onScrollLock\?\.\(true\)/, 'the page can scroll under a drag')
-    assert.match(editor, /<ChainEditor blocks=\{blocks\} caps=\{caps\} onError=\{setError\} onScrollLock=\{setHeld\} \/>/, 'the chain editor is not wired to the scroll lock')
+    assert.match(editor, /<ChainEditor blocks=\{chainAll\} caps=\{caps\} onError=\{setError\} onScrollLock=\{setHeld\} \/>/, 'the chain editor is not wired to the scroll lock')
     assert.match(editor, /const free = \(lane\.gaps \|\| \[\]\)\.filter\(\(c\) => c > col\)/, 'Add does not put the new block after the card it was pressed on')
   })
 

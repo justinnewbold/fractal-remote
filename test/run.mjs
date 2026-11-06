@@ -1231,7 +1231,8 @@ test('the block panel calls every hook before it can return early', () => {
    * React throws on that and the editor goes blank.
    */
   const src = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
-  const start = src.indexOf('export function BlockPanel(')
+  /* The panel for a block the app knows; one newer than the app has its own sentence and no hooks (shared/new-block.mjs). */
+  const start = src.indexOf('function KnownBlockPanel(')
   const rest = src.slice(start + 1)
   const body = src.slice(start, start + 1 + rest.search(/\n(?:export )?function /))
   const early = body.indexOf('  if (!block) {')

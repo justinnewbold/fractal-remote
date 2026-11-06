@@ -6,6 +6,7 @@ import { clearCell, gridCells, placeBlock, setCable } from '../lib/device'
 import { beginChainWrite, endChainWrite, refreshBlocks } from '../lib/rig'
 import { blockColor, quietEnd } from '../lib/blockColors'
 import { shortBlock } from '../lib/shortName'
+import { NEW_BLOCK_SHORT } from '../lib/new-block'
 import { logDebug } from '../lib/debugLog'
 import { tick } from '../lib/feedback'
 import { gridShape, doubtfulWrite } from '../lib/grid-plan'
@@ -218,7 +219,7 @@ export default function RowsPanel({ blocks, caps, palette, onError }) {
                   }}
                 >
                   <Text numberOfLines={1} style={{ color: quiet ? color.silkDim : hue.ink, fontSize: font.small, fontWeight: '700' }}>
-                    {c.block ? shortBlock(c.block) : (c.name || '?').slice(0, 4).toUpperCase()}
+                    {c.unknown ? NEW_BLOCK_SHORT : c.block ? shortBlock(c.block) : (c.name || '?').slice(0, 4).toUpperCase()}
                   </Text>
                 </Pressable>
               )

@@ -348,7 +348,7 @@ async function demoOnTheBench(unit = 'fm3') {
       'export const forgetSceneNames = () => true\nexport const recallSceneNames = async () => []\nexport const rememberSceneNames = () => true\nexport const sceneNamesKnown = async () => false\n',
     'blockCatalog.js': `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
   }
-  for (const f of ['demoUnits.js', 'scale.js', 'sceneState.js', 'demoMemory.js', 'tunerStream.js', 'own-echo.js', 'chain-outline.js', 'firmware.js', 'fault-rule.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'param-fixes.js', 'metronome-rules.js', 'unsupported.js', 'tapGate.js', 'tapTimes.js', 'looks.js', 'blockPalettes.js', 'ink.js']) {
+  for (const f of ['demoUnits.js', 'scale.js', 'sceneState.js', 'demoMemory.js', 'tunerStream.js', 'own-echo.js', 'chain-outline.js', 'firmware.js', 'fault-rule.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'new-block.js', 'encoding.js', 'param-fixes.js', 'metronome-rules.js', 'unsupported.js', 'tapGate.js', 'tapTimes.js', 'looks.js', 'blockPalettes.js', 'ink.js']) {
     extra[f] = esm(lib(f))
   }
   extra['device.js'] = clocked(esm(lib('device.js')))

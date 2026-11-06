@@ -5337,7 +5337,7 @@ export function run(test) {
       'debugLog.js': 'export const logDebug = () => {}\n',
       'lineage.js': 'export const withLineage = (slug, x) => x\n'
     }
-    for (const f of ['bleSwitch.js', 'tapGate.js', 'tapTimes.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js', 'bleVp4.js', 'fractal-sysex.mjs']) {
+    for (const f of ['bleSwitch.js', 'tapGate.js', 'tapTimes.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'new-block.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js', 'bleVp4.js', 'fractal-sysex.mjs']) {
       files[f] = esm(lib(f))
     }
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)

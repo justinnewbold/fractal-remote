@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useDevice, writeBypass, refreshSceneState, getSnapshot, bufferReloaded } from '../lib/deviceState'
 import { copyChannel } from '../../shared/copy-tools.mjs'
+import { NEW_BLOCK_NAME, NEW_BLOCK_NOTE, NEW_BLOCK_SHORT, isNewBlock } from '../../shared/new-block.mjs'
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import { blockColor } from '../lib/blockColors'
 import { LIGHT_INK } from '../lib/ink'
@@ -45,7 +46,8 @@ const SHORT = {
   output: 'OUT'
 }
 
-const shortName = (slug) => SHORT[slug] || (slug || '??').slice(0, 3).toUpperCase()
+/* No slug is a block newer than the app: "New", never "??" (shared/new-block.mjs). */
+const shortName = (slug) => SHORT[slug] || (slug ? slug.slice(0, 3).toUpperCase() : NEW_BLOCK_SHORT)
 
 /*
  * One palette for the whole app. This file used to carry its own, which meant
@@ -377,9 +379,9 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
               /* Grey when off (Settings → Colours): a bypassed block as the unit draws one. */
               data-off={offMode() === 'grey' ? 'grey' : undefined}
               onClick={() => tap(block)}
-              title={block.name}
+              title={isNewBlock(block) ? `${NEW_BLOCK_NAME}. ${NEW_BLOCK_NOTE}` : block.name}
             >
-              <span className="fx-abbr">{shortName(block.slug)}</span>
+              <span className="fx-abbr">{isNewBlock(block) ? NEW_BLOCK_SHORT : shortName(block.slug)}</span>
               {/* A VP4's channel is not read, and "A" would be a guess (shared/vp4-safety.mjs). */}
               <span className="fx-chan">{block.channel || (vp4Here() ? '' : 'A')}</span>
             </button>
@@ -1032,7 +1034,23 @@ function BlockColour({ slug }) {
  * deliberate exception to this app's stage-then-send rule, which still governs
  * everything the generator produces.
  */
-export function BlockPanel({ block, channels, onError, onChanged, busy, focus }) {
+export function BlockPanel(props) {
+  /*
+   * A block newer than the app (the Axe-Fx III's NAM block): nothing to read
+   * and nothing to turn, so the sentence instead of an empty panel. Its on/off
+   * on the chain strip still works; the unit takes that for any block.
+   */
+  if (isNewBlock(props.block)) {
+    return (
+      <div className="block-panel">
+        <p className="hint">{NEW_BLOCK_NOTE}</p>
+      </div>
+    )
+  }
+  return <KnownBlockPanel {...props} />
+}
+
+function KnownBlockPanel({ block, channels, onError, onChanged, busy, focus }) {
   const [params, setParams] = useState([])
   // The editor's own pages for this block, as the unit sent them.
   const [layout, setLayout] = useState(null)
