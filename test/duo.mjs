@@ -783,12 +783,13 @@ export function run(test) {
     const stage = code(read('mobile/src/screens/Stage.js'))
     assert.match(stage, /<View style=\{\{ width: '100%', height: held\?\.height \|\| undefined, overflow: 'hidden' \}\}>\s*<ChainWait/, 'a kept count with no height is clipped to nothing, or the old height is held')
     const wait = stage.slice(stage.indexOf('<ChainWait'), stage.indexOf('/>', stage.indexOf('<ChainWait')))
-    assert.match(wait, /height=\{Math\.max\(tight \|\| fitted \? 44 : TAP, tileH - 12\)\}/)
+    assert.match(wait, /height=\{pedalTall\}/)
     assert.match(wait, /cards=\{held \? held\.count : 4\}/)
-    assert.match(wait, /width=\{held \? tileWidth\(row, fxCols\) : 84\}/)
+    assert.match(wait, /width=\{held \? tileWidth\(laneRow, pedalsAcross\) : 84\}/)
     assert.match(wait, /overlay=\{!!held\}/)
     /* The cards are the pedals' own height, so their rows are the chain's. */
-    assert.ok(stage.split('height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}').length - 1 >= 2, 'the grey cards are not the pedals’ height')
+    assert.ok(stage.split('height={pedalTall}').length - 1 >= 2, 'the grey cards are not the pedals’ height')
+    assert.match(stage, /const pedalTall = lined \? cell : Math\.max\(tight \|\| fitted \? 44 : TAP, tileH - 12\)\n/)
     assert.match(stage, /const fitBlocks = held \? held\.count : tiles\n/)
   })
 
@@ -1251,7 +1252,10 @@ export function run(test) {
     const drawn = foot.slice(foot.indexOf('return oneRow ? (')).replace(/\s+/g, ' ')
     assert.match(drawn, /^return oneRow \? \( <View style=\{FOOT_ONE_ROW\}> <View style=\{FOOT_HALF\}> \{previous\} \{setlists\} \{tuner\} <\/View> <View style=\{FOOT_HALF\}> \{edit\} \{tap\} \{next\} <\/View> <\/View> \)/, 'the spread layout does not put Previous and Next at its two ends')
     assert.match(drawn, /: \( <View style=\{\{ gap: space\.sm \}\}> <View style=\{FOOT_ROW\}> \{previous\} \{setlists\} \{next\} <\/View> <View style=\{FOOT_ROW\}> \{tuner\} \{edit\} \{tap\} <\/View> <\/View> \)/, 'under the line the six buttons are not Previous, Setlists, Next over Tuner, Edit, Tap')
-    for (const [name, label] of [['previous', 'label="Previous"'], ['setlists', 'caption="Setlists"'], ['next', 'label="Next"'], ['tap', 'label="Tap"']]) assert.match(foot, new RegExp(`const ${name} = \\(\\s*<Press\\s+grow\\s+(/\\*[^*]*\\*/\\s+)?${label.replace(/[{}()?]/g, '\\$&')}`), `${name} is not the ${label} button`)
+    /* Setlists is one button in two places (the foot, and lined up the preset's row): SetlistsPress. */
+    assert.match(foot, /const setlists = <SetlistsPress grow /, 'setlists is not the Setlists button')
+    assert.match(stage, /function SetlistsPress\([^)]*\) \{\s*return \(\s*<Press\s+grow=\{grow\}\s+caption="Setlists"/, 'setlists is not the caption="Setlists" button')
+    for (const [name, label] of [['previous', 'label="Previous"'], ['next', 'label="Next"'], ['tap', 'label="Tap"']]) assert.match(foot, new RegExp(`const ${name} = \\(\\s*<Press\\s+grow\\s+(/\\*[^*]*\\*/\\s+)?${label.replace(/[{}()?]/g, '\\$&')}`), `${name} is not the ${label} button`)
     assert.match(stage, /const FOOT_ROW = \{ flexDirection: 'row', gap: space\.sm \}/)
     assert.match(stage, /const FOOT_ONE_ROW = \{ flexDirection: 'row', gap: space\.sm \}/)
     assert.match(stage, /const FOOT_HALF = \{ flex: 1, flexDirection: 'row', gap: space\.sm \}/)
@@ -1453,9 +1457,9 @@ export function run(test) {
       tile,
       /const wholeKey = full \? `\$\{wholeAt\}\|\$\{PixelRatio\.getFontScale\(\)\}` : null\n\s*const wholeFits = whole\?\.at === wholeAt \? whole\.fits : WHOLE\.get\(wholeKey\)\n\s*const named = !!full && wholeFits === true\n\s*const label = named \? full : given\n\s*const wrap = wraps \|\| named\n/
     )
-    assert.match(tile, /const wholeAt = full \? `\$\{full\}\|\$\{StyleSheet\.flatten\(style\)\?\.width\}` : null/, 'a whole name measured at one width is shown at another')
+    assert.match(tile, /const wholeAt = full \? `\$\{full\}\|\$\{StyleSheet\.flatten\(style\)\?\.width\}\$\{nameSize \? `\|\$\{nameSize\}` : ''\}` : null/, 'a whole name measured at one width is shown at another')
     assert.match(tile, /\{full \? \(\s*<Text[\s\S]{0,400}onTextLayout=\{\(e\) => \{\s*const fits = laidWhole\(full, e\.nativeEvent\.lines\)/, 'the whole name is not measured, or is measured when there is none')
-    assert.match(tile, /opacity: 0,\s*fontSize: font\.small,\s*fontWeight: '700',\s*letterSpacing: 0\.5,\s*textAlign: 'center'/, 'the twin is not laid out in the face the name is drawn in')
+    assert.match(tile, /opacity: 0,\s*fontSize: nameSize \|\| font\.small,\s*fontWeight: '700',\s*letterSpacing: 0\.5,\s*textAlign: 'center'/, 'the twin is not laid out in the face the name is drawn in')
     /* A pedal is never fitted (scene names are, lib/name-fit), so for it this is still wrap ? 2 : 1. */
     assert.match(tile, /numberOfLines=\{drawnAt \? 2 : wrap \? 2 : 1\}/)
   })
@@ -1491,7 +1495,7 @@ export function run(test) {
       'StyleSheet',
       'PixelRatio',
       'laidWhole',
-      `${kept}\nreturn (useState, { label: given, full, style, wrap: wraps = false }) => {\n${src.slice(start, end + to.length)}\nreturn { label, named, wrap, onTextLayout: ${twin} }\n}`
+      `${kept}\nreturn (useState, { label: given, full, style, nameSize, wrap: wraps = false }) => {\n${src.slice(start, end + to.length)}\nreturn { label, named, wrap, onTextLayout: ${twin} }\n}`
     )
     const lines = tileModule({ flatten: (s) => s }, { getFontScale: () => scale }, laidWhole)
     /* One tile, from nothing: its first frame, and a frame after each time its twin lays the name out. */

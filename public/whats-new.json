@@ -6,7 +6,11 @@
       "version": "1.89.54",
       "lines": [
         {
-          "text": "Settings → About → Updates now shows Checking… while it looks, then the time it last checked, and when a new version is ready, its card has What’s new, which takes you straight to the list of what changed.",
+          "text": "On a tablet or a foldable opened up, Play now uses the whole screen: your scenes on the left and your chain on the right, lined up row for row, with the preset across the top and Previous and Next at the two ends of the bottom row. Setlists is at the end of the preset bar.",
+          "only": null
+        },
+        {
+          "text": "Settings → About → Updates now shows Checking… while it looks, then the time it last checked, and when a new version is ready, its card has What’s new, which takes you straight to the list of what changed. The Help make Fractal Remote better? card is now three short lines, with a link to exactly what’s sent.",
           "only": null
         },
         {
@@ -23,10 +27,6 @@
         },
         {
           "text": "After using a USB cable, the Bluetooth page’s Connect gets your Bluetooth adapter back instead of waiting for the cable, and Use a Bluetooth adapter instead sits beside Use the computer instead. Connect is bigger and blue, and Stop is only offered for what’s really connected.",
-          "only": null
-        },
-        {
-          "text": "The Help make Fractal Remote better? card is now three short lines, with a link to the privacy page for exactly what’s sent.",
           "only": null
         }
       ]

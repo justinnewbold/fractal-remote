@@ -4347,7 +4347,8 @@ export function run(test) {
     assert.match(tile, /import \{ NAME_REF, NAME_TRACK, fitName \} from '\.\.\/lib\/name-fit'/)
     assert.match(tile, /\[\.\.\.wordsOf\(label\), 'n n', 'nn'\]\.join\('\\n'\)/, 'the phone does not measure each word and a space')
     assert.match(tile, /min: font\.small \}\) : null/, 'the phone’s fitted name can be drawn smaller than it was')
-    assert.match(tile, /fontSize: drawnAt \|\| \(wrap \? font\.small : font\.body\)/)
+    /* `nameSize` is a pedal's on Play lined up (lib/linedPlay), never a scene's, which is fitted. */
+    assert.match(tile, /fontSize: drawnAt \|\| nameSize \|\| \(wrap \? font\.small : font\.body\)/)
     /* Drawn fitted only where it fits and the grid has its one size; said up to the grid, with the name it is about, before the screen is drawn. */
     assert.match(tile, /const drawnAt = fitsAt && fitCap > 0 \? Math\.min\(fitsAt, fitCap\) : null/)
     assert.match(tile, /useLayoutEffect\(\(\) => \{ if \(fit\) onFit\?\.\(told, label\) \}, \[fit, told, label\]\)/)

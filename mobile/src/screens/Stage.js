@@ -28,6 +28,7 @@ import { sync, useStored } from '../lib/store'
 import { nameOf, useNamesHeard } from '../lib/presetNames'
 import { SIZES, loadFit, loadIcons, loadSceneLayout, loadSceneOrder, loadSize, sceneOrderFor } from '../lib/gigSize'
 import { PAGE_MAX, fitWide, foldInset, pageRow, playShape } from '../lib/playShape'
+import { linedName, linedOn, linedPlan, linedRowsTall, linedTile } from '../lib/linedPlay'
 import {
   arrivedCurrent,
   clearError,
@@ -134,6 +135,12 @@ const ofUnit = (s) => s.unit
 let lastPlay = null
 /* No extra padding on either side: every shape but the spread one. */
 const NO_FOLD = { left: 0, right: 0 }
+/* Lined up (lib/linedPlay): each half's heading is this tall, so the two grids start level. */
+const LANE_HEAD = 18
+/* The two halves side by side, the fold's gap between them; and each half, its heading over its grid. */
+const LANES = { flexDirection: 'row', gap: space.xl, alignItems: 'flex-start' }
+const LANE = { flex: 1, gap: space.sm }
+const LANE_HEADING = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: LANE_HEAD }
 /* The raw words a computer with nothing plugged in answers every unit read with (ForgeFX, registryCore). */
 const NO_DEVICE = /no fractal device found/i
 /* The fault for the card at the top, but not those words while Play says where the unit is instead. */
@@ -581,6 +588,41 @@ export default function Stage({
   const tileH = fitted ? fitted.tile : size.tile
   const fxCols = fitted ? fitted.fxCols : shape.fxCols
   /*
+   * PLAY LINED UP (lib/linedPlay), Justin's "A1": on a screen big both ways
+   * (Play opened up, and at least LINED_TALL of its own height), the scenes
+   * on the left half and the chain on the right, in the same number of rows
+   * so each row of scenes is level with a row of pedals, every tile the same
+   * height, and the tiles as big as the room under the preset allows. The
+   * same tiles, doing the same things, as every other shape of Play: only
+   * their counts and sizes come from here. Everywhere else every number
+   * below is the one Play has always drawn with.
+   */
+  const linedWas = useRef(false)
+  const lined = linedOn({ wide: shape.wide, tall: viewport }, linedWas.current)
+  linedWas.current = lined
+  const plan = linedPlan({ scenes: scenes.hasScenes ? scenes.count : 0, pedals: fitBlocks })
+  /* Where the two halves start down the page: everything above them (the notes, the preset) does not change with the tiles, so their room does not either. */
+  const [lanesAt, setLanesAt] = useState(0)
+  const laneRoom = lanesAt > 0 ? viewport - lanesAt - LANE_HEAD - space.sm - (tight ? space.md : space.lg) : viewport / 2
+  const cell = linedTile({ room: laneRoom, rows: plan.rows, gap: space.sm })
+  /** What the scenes and the pedals are drawn with: the lined-up cell, or Play's own numbers as they always were. */
+  const sceneTall = lined ? cell : tileH
+  const pedalTall = lined ? cell : Math.max(tight || fitted ? 44 : TAP, tileH - 12)
+  const sceneAcross = lined ? plan.sceneCols : sceneCols
+  const pedalsAcross = lined ? plan.chainCols : fxCols
+  /* The chain's frame: a scroll the scenes' height when the chain has more rows than they do, lined up; a plain box otherwise. */
+  const chainScrolls = lined && plan.scrolls
+  const ChainFrame = chainScrolls ? ScrollView : View
+  const chainFrame = chainScrolls
+    ? { style: { height: linedRowsTall(plan.rows, cell, space.sm) }, nestedScrollEnabled: true, contentContainerStyle: { paddingBottom: 0 } }
+    : {}
+  /* And Play centered on the screen, so the Duo's fold runs down the gap between the halves. */
+  const centre = lined ? foldInset(insets.left, insets.right) : fold
+  /* The row each half's tiles share, lined up: half the page less the gap between the halves, worked out rather than measured, so the first frame after a switch is already the right width. */
+  const laneRow = lined ? Math.max(0, (pageRow(playWidth, space.lg) - centre.left - centre.right - space.xl) / 2) : row
+  /* A pedal's name a size up on a big tile, lined up only. */
+  const pedalWords = lined ? linedName({ height: cell, width: tileWidth(laneRow, pedalsAcross) }) : undefined
+  /*
    * ONE SIZE FOR EVERY SCENE'S NAME (lib/name-fit `together`): each tile says
    * the biggest size its name fits at, and every tile draws the smallest of
    * them, so a short name is not drawn twice the size of a long one beside it.
@@ -966,6 +1008,7 @@ export default function Stage({
   /* Everything the six buttons show and do, for PlayFoot in whichever place this shape draws it. */
   const footing = {
     oneRow: shape.footRow,
+    lined,
     foot,
     dimmed,
     behind,
@@ -1068,8 +1111,8 @@ export default function Stage({
                 maxWidth: PAGE_MAX,
                 alignSelf: 'center',
                 paddingTop: space.lg,
-                paddingLeft: space.lg + fold.left,
-                paddingRight: space.lg + fold.right,
+                paddingLeft: space.lg + centre.left,
+                paddingRight: space.lg + centre.right,
                 gap: tight ? space.md : space.lg,
                 paddingBottom: tight ? space.md : space.lg
               }
@@ -1163,7 +1206,10 @@ export default function Stage({
             the line above, so nothing here is a guess. See rig.loadPreset.
           */}
           {/* And while nothing is read at all (Looking…): no preset is not one named "Untitled". */}
+          {/* Lined up, the preset runs the whole width with Setlists at its right-hand end: the one row the halves do not split, and Setlists stays in reach without a seventh button in the bottom row. */}
+          <View style={lined ? PRESET_ROW : undefined}>
           <Press
+            grow={lined}
             label={(preset?.pending && !preset?.name) || (!preset && unitState === 'unknown') ? '…' : presetLabel(preset)}
             sub={onOpenPresets ? ALL_PRESETS : undefined}
             /* No list picture on the left any more: "take that off of that
@@ -1183,8 +1229,16 @@ export default function Stage({
             bar
             style={[{ paddingHorizontal: space.lg }, tagEdge(presetTag(preset?.number))]}
           />
+          {lined ? <SetlistsPress {...footing} height={tight ? TAP : TAP + 12} style={SETLISTS_BESIDE} /> : null}
+          </View>
 
         </View>
+
+        {/* The scenes and the chain: one under the other, as always, or lined up side by side (`lined`). */}
+        <View
+          onLayout={(e) => setLanesAt(e.nativeEvent.layout.y)}
+          style={lined ? LANES : { gap: tight ? space.md : space.lg }}
+        >
 
         {/* ---------------------------------------------------------- scenes */}
         {/*
@@ -1201,13 +1255,13 @@ export default function Stage({
           scene and what a setlist written on paper says.
         */}
         {scenes.hasScenes ? (
-          <View style={{ gap: space.sm }}>
+          <View style={lined ? LANE : { gap: space.sm }}>
             {/*
               "Keep having issues showing the scene names on the AM4. Have a way to
               refresh them." Beside the heading, the size of the heading: a thing
               reached for now and then, not a control on the stage.
             */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={lined ? LANE_HEADING : { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Label>Scenes</Label>
               {/*
                 On an AM4 over Bluetooth too, now. "It does say refresh names
@@ -1245,7 +1299,7 @@ export default function Stage({
                     ink={hue.ink}
                     picked={hue.picked}
                     on={i === scene}
-                    height={tileH}
+                    height={sceneTall}
                     haptic={thud}
                     onPress={() => writeScene(i)}
                     /* Amber round the live one, as in the browser: every scene
@@ -1261,7 +1315,7 @@ export default function Stage({
                     fit
                     fitCap={sceneNameSize}
                     onFit={(size, name) => noteSceneFit(i, size, name)}
-                    style={{ width: tileWidth(row, sceneCols) }}
+                    style={{ width: tileWidth(laneRow, sceneAcross) }}
                   />
                 )
               })}
@@ -1270,7 +1324,9 @@ export default function Stage({
         ) : null}
 
         {/* ---------------------------------------------------------- blocks */}
-        <View style={{ gap: space.sm }}>
+        {/* Lined up with no scenes, the chain keeps its own half. */}
+        {lined && !scenes.hasScenes ? <View style={LANE} /> : null}
+        <View style={lined ? LANE : { gap: space.sm }}>
           {/*
             "Where it says chain above the pedals, also put hold to switch
             channels. So users know that they can just hold the things to switch
@@ -1278,7 +1334,7 @@ export default function Stage({
             own size, the way Refresh names sits beside Scenes. Only when a hold
             does something: a unit with no channels has nothing to switch.
           */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={lined ? LANE_HEADING : { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Label icon={chainIcon}>{chainHeading(chain)}</Label>
             {channels?.length > 1 && blocks.length ? (
               <Text style={{ color: color.silkDim, fontSize: font.micro, letterSpacing: 1.5, textTransform: 'uppercase' }}>
@@ -1328,6 +1384,8 @@ export default function Stage({
             and onto a hold, because a separate square per block doubled the
             number of targets on the busiest part of the screen.
           */}
+          {/* Lined up with more rows of pedals than the scenes have (a chain of more than sixteen), the chain's half scrolls inside itself rather than every tile shrinking: the frame is the scenes' height. Otherwise the frame is a plain box and changes nothing. */}
+          <ChainFrame {...chainFrame}>
           <View
             /* Both grids measure, because a unit that reports no scenes never
                draws the other one and these tiles would have no width. */
@@ -1343,9 +1401,9 @@ export default function Stage({
               <View style={{ width: '100%', height: held?.height || undefined, overflow: 'hidden' }}>
                 <ChainWait
                   chain={chainNow}
-                  height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
+                  height={pedalTall}
                   cards={held ? held.count : 4}
-                  width={held ? tileWidth(row, fxCols) : 84}
+                  width={held ? tileWidth(laneRow, pedalsAcross) : 84}
                   overlay={!!held}
                 />
               </View>
@@ -1377,6 +1435,7 @@ export default function Stage({
                   label={shortBlock(block)}
                   /* The whole name from 621 points of row, where it fits; the three letters otherwise, as always. */
                   full={shape.names ? pedalName(block) : undefined}
+                  nameSize={pedalWords}
                   icon={showIcons ? blockIcon(block.slug) : undefined}
                   topLeft={state}
                   topRight={block.channel || undefined}
@@ -1389,7 +1448,7 @@ export default function Stage({
                   on={engaged}
                   /* A switch: grey when off, if that is the choice in Settings → Colours. */
                   effect
-                  height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
+                  height={pedalTall}
                   /* A pedal read ahead of the switch, whose on or off the unit
                      has not said yet: a tap would be a guess, so it waits. */
                   onPress={() => {
@@ -1403,7 +1462,7 @@ export default function Stage({
                       ? () => setPicking(picking === idOf(block) ? null : idOf(block))
                       : undefined
                   }
-                  style={{ width: tileWidth(row, fxCols) }}
+                  style={{ width: tileWidth(laneRow, pedalsAcross) }}
                 />
               )
             })}
@@ -1434,21 +1493,24 @@ export default function Stage({
                 picked={looperHue.picked}
                 on={vp4Looper ? looperHere.bypassed === false : !looperHere.bypassed}
                 effect
-                height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
+                height={pedalTall}
                 onPress={() => setLooping(true)}
                 onLongPress={() => setLooping(true)}
                 /* "Looper" from 621 points of row, as the other pedals spell theirs. */
                 full={shape.names ? pedalName(looperHere) : undefined}
-                style={{ width: tileWidth(row, fxCols) }}
+                nameSize={pedalWords}
+                style={{ width: tileWidth(laneRow, pedalsAcross) }}
               />
             ) : null}
           </View>
+          </ChainFrame>
           {/* Why a real VP4's pedals say nothing until tapped. Always there on
               a VP4, so nothing moves when it would go; the browser says the same. */}
           {vp4Here() && blocks.length && !chainNow.elsewhere ? (
             <Text style={{ color: color.silkDim, fontSize: font.small }}>{VP4_ON_OFF_UNKNOWN}</Text>
           ) : null}
 
+        </View>
         </View>
 
         {/* ------------------------------------------------------------ foot */}
@@ -1504,8 +1566,8 @@ export default function Stage({
               width: '100%',
               maxWidth: PAGE_MAX,
               alignSelf: 'center',
-              paddingLeft: space.lg + fold.left,
-              paddingRight: space.lg + fold.right
+              paddingLeft: space.lg + centre.left,
+              paddingRight: space.lg + centre.right
             }}
           >
             <PlayFoot {...footing} />
@@ -1757,6 +1819,7 @@ const tileWidth = (width, n) => tileWidthIn(width, n, space.sm, PixelRatio.get()
  */
 function PlayFoot({
   oneRow,
+  lined = false,
   foot,
   dimmed,
   behind,
@@ -1794,19 +1857,7 @@ function PlayFoot({
       style={dimmed}
     />
   )
-  const setlists = (
-    <Press
-      grow
-      caption="Setlists"
-      label={order ? sourceLabel(source, { favourites, lists }) : 'All'}
-      sub={where || undefined}
-      tone="signal"
-      on={Boolean(order)}
-      height={foot}
-      disabled={!onOpenSetlists}
-      onPress={onOpenSetlists}
-    />
-  )
+  const setlists = <SetlistsPress grow order={order} source={source} favourites={favourites} lists={lists} where={where} onOpenSetlists={onOpenSetlists} height={foot} />
   const next = (
     <Press
       grow
@@ -1897,6 +1948,22 @@ function PlayFoot({
    * Under the line it stays today's two rows of three, whose own ends are
    * Previous and Next already.
    */
+  /*
+   * LINED UP, ONE ROW OF FIVE (lib/linedPlay): Previous at the far left,
+   * Tuner, Edit and Tap in the middle, Next at the far right, Justin's A1.
+   * Setlists is at the end of the preset's row there, so it is not here.
+   */
+  if (lined) {
+    return (
+      <View style={FOOT_ROW}>
+        {previous}
+        {tuner}
+        {edit}
+        {tap}
+        {next}
+      </View>
+    )
+  }
   return oneRow ? (
     <View style={FOOT_ONE_ROW}>
       <View style={FOOT_HALF}>
@@ -1925,6 +1992,32 @@ function PlayFoot({
     </View>
   )
 }
+
+/**
+ * SETLISTS: what Previous and Next walk, and where you are in it. Among the
+ * six buttons at the foot, or lined up at the end of the preset's row; the
+ * same button in both places.
+ */
+function SetlistsPress({ grow = false, order, source, favourites, lists, where, onOpenSetlists, height, style }) {
+  return (
+    <Press
+      grow={grow}
+      caption="Setlists"
+      label={order ? sourceLabel(source, { favourites, lists }) : 'All'}
+      sub={where || undefined}
+      tone="signal"
+      on={Boolean(order)}
+      height={height}
+      disabled={!onOpenSetlists}
+      onPress={onOpenSetlists}
+      style={style}
+    />
+  )
+}
+
+/* Lined up, the preset's row: the preset growing to fill it, Setlists at its end. */
+const PRESET_ROW = { flexDirection: 'row', gap: space.sm }
+const SETLISTS_BESIDE = { minWidth: 150 }
 
 /* The spread layout's one row of buttons, in two halves with the gap between them in the middle. */
 const FOOT_ONE_ROW = { flexDirection: 'row', gap: space.sm }

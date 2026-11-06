@@ -2908,19 +2908,22 @@ export function run(test) {
     /* `tileH` is the size setting OR the measured fit — see the fit test
        below for which wins and when. Either way it is read, not ignored. */
     assert.match(stage, /const tileH = fitted \? fitted\.tile : size\.tile/, 'the tile height is no longer the chosen size')
-    assert.match(stage, /height=\{tileH\}/, 'the scene tiles ignore the size setting')
+    /* Through `sceneTall`, which is tileH itself on every Play but the lined-up one (lib/linedPlay). */
+    assert.match(stage, /const sceneTall = lined \? cell : tileH\n/, 'the scene tiles ignore the size setting')
+    assert.match(stage, /height=\{sceneTall\}/, 'the scene tiles ignore the size setting')
     /* The tiles are measured rather than given a percentage now — a percentage
        cannot pay for the gaps, and the last tile of a short row stretched the
        width of the screen. The rule being checked is the same: how many go
        across comes from the setting. */
-    assert.match(stage, /width: tileWidth\(row, sceneCols\)/, 'the scenes are a fixed number across whatever the setting says')
+    assert.match(stage, /width: tileWidth\(laneRow, sceneAcross\)/, 'the scenes are a fixed number across whatever the setting says')
     /* Blocks take their column count from `fxCols`, which is the setting's
        own `fx` until fit is measuring — fit widens the rows rather than let a
        tile drop under a thumb. Either way it comes from the setting. */
     /* Play's shape's, which is the setting's own `fx` under 621 points of row (lib/playShape; test/duo.mjs holds it). */
     assert.match(stage, /const fxCols = fitted \? fitted\.fxCols : shape\.fxCols/, 'the chain column count is no longer the chosen one')
     assert.match(stage, /fxCols: shape\.fxCols,/, 'Fit starts the chain from something other than the chosen count')
-    assert.match(stage, /width: tileWidth\(row, fxCols\)/, 'the chain is a fixed number across whatever the setting says')
+    assert.match(stage, /width: tileWidth\(laneRow, pedalsAcross\)/, 'the chain is a fixed number across whatever the setting says')
+    assert.match(stage, /const pedalsAcross = lined \? plan\.chainCols : fxCols\n/, 'the chain is a fixed number across whatever the setting says')
     /*
      * And `row` is not the raw measurement, which is zero on the first frame of
      * every mount. "After going to setlists and going back it shows this screen
@@ -8628,7 +8631,10 @@ export function run(test) {
     assert.match(stage, /const sceneLayout = loadSceneLayout\(sync\)\n[\s\S]{0,1200}const shape = playShape\(pageRow\(playWidth, space\.lg\), SIZES\.indexOf\(size\), sceneLayout, shapeWas\.current\)\n[\s\S]{0,600}const sceneCols = shape\.sceneCols\n/, 'the phone ignores the choice')
     assert.match(stage, /sceneOrderFor\(sceneLayout, scenes\.count, loadSceneOrder\(sync\)\)\.map\(\(i\) => \{/, 'the phone draws the scenes in their own order whatever was chosen')
     assert.match(stage, /caption=\{String\(i \+ 1\)\}[\s\S]{0,600}onPress=\{\(\) => writeScene\(i\)\}/, 'a moved tile no longer picks its own scene')
-    assert.match(stage, /tileWidth\(row, sceneCols\)/, 'the phone draws scenes at the size step’s width regardless')
+    /* Through `sceneAcross` and `laneRow`, which are sceneCols and row themselves on every Play but the lined-up one. */
+    assert.match(stage, /const sceneAcross = lined \? plan\.sceneCols : sceneCols\n/, 'the phone draws scenes at the size step’s width regardless')
+    assert.match(stage, /const laneRow = lined \? [^\n]* : row\n/, 'the phone draws scenes at the size step’s width regardless')
+    assert.match(stage, /tileWidth\(laneRow, sceneAcross\)/, 'the phone draws scenes at the size step’s width regardless')
     assert.match(stage, /\n\s+sceneCols,\n/, 'Fit on the phone still counts two across')
     const settings = read('mobile/src/screens/Settings.js')
     assert.match(settings, /<Section>Scene layout<\/Section>\s*\{SCENE_LAYOUTS\.map\(\(l\) => \([\s\S]{0,200}role="radio"[\s\S]{0,200}onPress=\{\(\) => saveSceneLayout\(l\.id, sync\)\}/, 'the phone has no way to choose it')
@@ -12041,7 +12047,8 @@ export function run(test) {
     /* `|| fitted` for the same reason `tight` is there: when the screen is
        being asked to fit, a chain tile held at 56 beside scene tiles of 48 is
        the thing that stops it fitting. */
-    assert.match(stage, /height=\{Math\.max\(tight \|\| fitted \? 44 : TAP, tileH - 12\)\}/, 'a chain tile is held at 56 beside scene tiles of 48')
+    assert.match(stage, /const pedalTall = lined \? cell : Math\.max\(tight \|\| fitted \? 44 : TAP, tileH - 12\) /, 'a chain tile is held at 56 beside scene tiles of 48')
+    assert.equal(stage.split('height={pedalTall}').length - 1, 3, 'a chain tile is held at 56 beside scene tiles of 48')
     assert.match(stage, /const foot = tight \? 48 : TAP/, 'the foot does not give at the smallest size')
     /* Six: Previous, Setlists, Next, Tuner, Tap Tempo and Edit — the last of
        which joined the bar when it came down off the preset row, "exactly like
@@ -19864,7 +19871,7 @@ export function run(test) {
     assert.match(stage, /if \(!chainNow\.elsewhere && tiles > 0 && blockGrid > 0\) heldGrid\.current = \{ count: tiles, height: blockGrid \}/, 'the pedals’ room is not remembered')
     assert.match(stage, /const fitBlocks = held \? held\.count : tiles/, 'the fit works the screen out again for a chain of no blocks while the next one loads')
     assert.match(stage, /blocks: fitBlocks,/, 'the fit does not use the held count')
-    assert.match(stage, /cards=\{held \? held\.count : 4\}\s*width=\{held \? tileWidth\(row, fxCols\) : 84\}\s*overlay=\{!!held\}/, 'the grey cards are not the tiles’ size, so the screen shrinks while a preset loads')
+    assert.match(stage, /cards=\{held \? held\.count : 4\}\s*width=\{held \? tileWidth\(laneRow, pedalsAcross\) : 84\}\s*overlay=\{!!held\}/, 'the grey cards are not the tiles’ size, so the screen shrinks while a preset loads')
     assert.match(stage, /block=\{chainNow\.elsewhere(?: \|\| chainNow\.outline)? \? null : blocks\.find/, 'a channel sheet opened on the last song stays up over this one')
     assert.match(stage, /useEffect\(\(\) => \{\s*if \(chainNow\.elsewhere\) setPicking\(null\)/, 'the channel sheet comes back by itself over the new song’s tiles')
     const edit = read('mobile/src/screens/Edit.js')
@@ -20261,7 +20268,8 @@ export function run(test) {
     const tile = bare(read('mobile/src/components/Tile.js'))
     /* A fitted scene name (lib/name-fit, 25 October 2026) takes two lines too, at the size its tile has room for, never under the small size. */
     assert.match(tile, /numberOfLines=\{drawnAt \? 2 : wrap \? 2 : 1\}/, 'a tile’s name cannot take a second line')
-    assert.match(tile, /fontSize: drawnAt \|\| \(wrap \? font\.small : font\.body\)/, 'a two-line name is drawn at the size that only fits one')
+    /* `nameSize` only on Play lined up (lib/linedPlay), and only on a pedal, which is never fitted. */
+    assert.match(tile, /fontSize: drawnAt \|\| nameSize \|\| \(wrap \? font\.small : font\.body\)/, 'a two-line name is drawn at the size that only fits one')
 
     const stage = bare(read('mobile/src/screens/Stage.js'))
     const scene = stage.slice(stage.indexOf('caption={String(i + 1)}'), stage.indexOf('/>', stage.indexOf('caption={String(i + 1)}')))

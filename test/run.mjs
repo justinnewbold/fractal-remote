@@ -6787,6 +6787,10 @@ console.log('\nPlay on a screen of any shape: the groundwork, and a phone held u
 const { run: duo } = await import('./duo.mjs')
 duo(test)
 
+console.log('\nPlay lined up on a tablet or the Duo opened: scenes left, chain right, row for row')
+const { run: linedPlay } = await import('./lined-play.mjs')
+linedPlay(test)
+
 console.log('\nwhat works: the gear notes, off unless somebody says yes')
 const { run: gearShare } = await import('./gear-share.mjs')
 gearShare(test)
