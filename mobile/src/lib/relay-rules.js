@@ -811,8 +811,20 @@ export const NO_NAME_SAID = 'It answered, but didn’t say its name, so it can�
  * caller and never read off the device kind: Safari on an iPad is the page.
  */
 export function notUsingOne(where) {
+  return `${NOT_USING_ONE} ${notUsingOneHow(where)}`
+}
+
+/*
+ * IN TWO HALVES, for the phone's Which unit cards (6 November 2026): the
+ * question alone as a small link under the cards, and the rest shown only
+ * when it is tapped. The long paragraph under every list was the most words
+ * on the sheet, about the thing done least. The same sentence, split where
+ * the question ends: notUsingOne is still the whole of it.
+ */
+export const NOT_USING_ONE = 'Not using one of these?'
+export function notUsingOneHow(where) {
   const fresh = where === 'page' ? 'Then reload this page' : 'Then close Fractal Remote here all the way (swipe it away) and open it again'
-  return `Not using one of these? On that computer, open Fractal Remote, go to Settings → My rig → Phone & computer → Phone remote and press Turn off, or switch that computer off. ${fresh}: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.`
+  return `On that computer, open Fractal Remote, go to Settings → My rig → Phone & computer → Phone remote and press Turn off, or switch that computer off. ${fresh}: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.`
 }
 
 /**
@@ -840,6 +852,119 @@ export function unitChoices(hostNames = [], units = {}, chosen = null, asking = 
     }
   })
   return [...rows.filter((r) => r.plugged), ...rows.filter((r) => !r.plugged)]
+}
+
+/*
+ * WHICH UNIT AS CARDS (Justin's mockup, 6 November 2026): one card per
+ * computer, the whole card one button. The unit's name and the computer it
+ * is on in one line, a tag saying which is CONNECTED (the one driven) and
+ * which are ONLINE (answered the roll call), and under a unit, the preset
+ * and the scene it is on:
+ *
+ *   ● AM4  on raspberry pi 5                    CONNECTED
+ *     Preset  100 · 3 Days Grace
+ *     Scene   2 · Chorus
+ *
+ * Built on unitChoices, whose rows and words are unchanged: the cards only
+ * add to them. `here` is what the one driven is on, from the screen's own
+ * reads (playingOf); `others` what each other computer said when Which unit
+ * opened (readOthersPlaying, below), by name. A line not known is left out,
+ * never a placeholder. `connected` is whether the link is up: the tags are
+ * the last roll call's, and with the link down neither is true now.
+ */
+export const CONNECTED_TAG = 'CONNECTED'
+export const ONLINE_TAG = 'ONLINE'
+export const SWITCHING = 'Switching…'
+
+/** What a unit is on, in the shape the cards read: the loaded preset, the live scene and its name. Null with no preset known. */
+export function playingOf(preset, sceneIndex = null, sceneNames = []) {
+  const number = preset?.number
+  if (!Number.isInteger(number) || number < 0) return null
+  const raw = typeof preset?.name === 'string' ? preset.name : ''
+  const empty = Boolean(preset?.empty) || EMPTY_SLOT.test(raw)
+  const out = { number, name: empty ? '' : raw.trim(), empty }
+  if (Number.isInteger(sceneIndex) && sceneIndex >= 0) {
+    const said = Array.isArray(sceneNames) ? sceneNames[sceneIndex] : null
+    out.scene = sceneIndex
+    out.sceneName = typeof said === 'string' ? said.trim() : ''
+  }
+  return out
+}
+
+/* How a gen-3 unit says a slot is empty (the phone's and the browser's presetName.js MARKER, here without an import). */
+const EMPTY_SLOT = /^\s*<\s*empty\s*>/i
+
+/**
+ * The lines under a card: "Preset" with the number as Play pads it and the
+ * name ("Empty" for a slot with nothing in it, as Play says), and "Scene"
+ * with its number and its name when it has one. None with no preset known,
+ * and no scene line without a preset: a scene of an unknown preset is not
+ * worth a line.
+ */
+export function playingLines(now) {
+  if (!now || !Number.isInteger(now.number) || now.number < 0) return []
+  const slot = String(now.number).padStart(3, '0')
+  const name = now.empty ? 'Empty' : now.name
+  const lines = [{ label: 'Preset', value: name ? `${slot} · ${name}` : slot }]
+  if (Number.isInteger(now.scene) && now.scene >= 0) {
+    lines.push({ label: 'Scene', value: now.sceneName ? `${now.scene + 1} · ${now.sceneName}` : String(now.scene + 1) })
+  }
+  return lines
+}
+
+export function unitCards(hostNames = [], units = {}, chosen = null, asking = false, { here = null, others = {}, connected = true } = {}) {
+  const once = onceNames(hostNames)
+  return unitChoices(hostNames, units, chosen, asking).map((row) => {
+    /* "on raspberry pi 5" beside the unit, when that is what the line under it said; anything longer stays a line of its own. */
+    const where = once.includes(row.name) && units?.[row.name] ? row.detail : null
+    const tag = connected ? (row.on ? CONNECTED_TAG : ONLINE_TAG) : null
+    const lines = row.plugged ? playingLines(row.on ? here : others?.[row.name]) : []
+    const heard = [row.label, where, tag ? tag.toLowerCase() : null, ...lines.map((l) => `${l.label} ${l.value}`)].filter(Boolean)
+    return { ...row, where, note: where ? null : row.detail, tag, lines, said: heard.join(', ') }
+  })
+}
+
+/*
+ * WHAT THE OTHER COMPUTERS' UNITS ARE ON, asked once when Which unit opens.
+ *
+ * Two reads, both the ones Play asks of the computer it drives every few
+ * seconds (GET /preset, GET /scene), addressed by name to each computer that
+ * is not the one driven, has a unit plugged in, and has a name of its own:
+ * a name two answer to cannot be asked of one (onceNames). Never a write,
+ * and nothing that makes a unit dump a preset. Never a VP4, which cannot
+ * say which preset it is on (vp4-safety VP4_NO_WHICH_PRESET). Both are
+ * reads the computer allows over the relay (hostAllows), and a test holds
+ * them to that.
+ */
+export const OTHERS_READ = Object.freeze(['/preset', '/scene'])
+/** How long each other computer is given to say, once: a busy Pi 3 takes nearly two seconds (UNIT_ASK_MS). */
+export const PLAYING_ASK_MS = 2500
+
+/** Which computers are asked what they are on: see OTHERS_READ. */
+export function othersToAsk(hostNames = [], units = {}, chosen = null) {
+  return onceNames(hostNames).filter((name) => name !== chosen && units?.[name]?.plugged === true && !/^\s*vp4\b/i.test(String(units[name].model || '')))
+}
+
+/**
+ * One computer's answers to OTHERS_READ, as playingOf has it. Only an answer
+ * that came back alone is believed (unitFrom says why), and one with an
+ * error status says nothing. Null with no preset said.
+ */
+export async function playingFrom(presetAnswers, sceneAnswers, read) {
+  const body = async (list) => {
+    if (!Array.isArray(list) || list.length !== 1 || Number(list[0]?.status) >= 400) return null
+    try {
+      const b = JSON.parse(await read(list[0]))
+      return b?.data && typeof b.data === 'object' ? b.data : b
+    } catch {
+      return null
+    }
+  }
+  const preset = await body(presetAnswers)
+  if (!preset || typeof preset !== 'object') return null
+  const scene = await body(sceneAnswers)
+  const index = typeof scene === 'number' ? scene : scene?.index
+  return playingOf(preset, Number.isInteger(index) ? index : null, Array.isArray(scene?.names) ? scene.names : [])
 }
 
 /**

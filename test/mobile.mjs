@@ -5402,23 +5402,23 @@ export function run(test) {
     const link = read('mobile/src/lib/link.js')
     assert.match(link, /export async function chooseHost\(name\) \{\s*const ok = await pickHost\(name\)[\s\S]{0,900}await refreshAll\(\)/, 'the phone switches unit but keeps the old one on screen')
     const settings = read('mobile/src/screens/Settings.js')
-    assert.match(settings, /<Section>Which unit<\/Section>[\s\S]{0,300}unitChoices\(hosts, units, chosen, unitsAsking\)/)
+    assert.match(settings, /<Section>Which unit<\/Section>[\s\S]{0,300}unitCards\(hosts, units, chosen, unitsAsking, \{/)
     assert.ok(!settings.includes('<Section>Which computer</Section>'), 'the phone still says Which computer')
     const app = read('src/App.jsx')
-    assert.match(app, /title="Which unit"[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost, link\.unitsAsking\)[\s\S]{0,500}await chooseHost\(row\.name\)/, 'the website switches unit but does not read the new one')
+    assert.match(app, /title="Which unit"[\s\S]{0,400}unitCards\(link\.hosts, link\.units, link\.chosenHost, link\.unitsAsking, whichUnitFacts\)[\s\S]{0,700}await chooseHost\(card\.name\)/, 'the website switches unit but does not read the new one')
   })
 
   test('a live unit name opens Which unit when two units are on, like the demo', () => {
     const app = read('mobile/App.js')
     assert.match(app, /<LiveUnit\s+open=\{pickLive && !demo\}[\s\S]{0,200}hosts=\{link\.hosts\}\s+units=\{link\.units\}\s+chosen=\{link\.chosenHost\}/)
     const sheet = read('mobile/src/components/LiveUnit.js')
-    assert.match(sheet, /unitChoices\(hosts, units, chosen, asking\)/)
-    assert.match(sheet, /await chooseHost\(row\.name\)[\s\S]{0,160}onClose\(\)/, 'the sheet closes before the new unit is read')
+    assert.match(sheet, /unitCards\(hosts, units, chosen, asking, \{ here, others \}\)/)
+    assert.match(sheet, /await chooseHost\(card\.name\)[\s\S]{0,160}onClose\(\)/, 'the sheet closes before the new unit is read')
     const web = read('src/App.jsx')
     /* The browser's pill by the phone's rule since 3 November 2026: Which unit with two computers, only while the link is up. */
     assert.match(web, /const unitGoes = isDemo\(\) \? 'demo' : link\.role === 'remote' && link\.hosts\.length > 1 && link\.link === 'connected' \? 'which' : 'link'/)
     assert.match(web, /if \(unitGoes === 'which'\) \{\s*setSheet\('units'\)/)
-    assert.match(web, /open=\{sheet === 'units'\}[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost, link\.unitsAsking\)[\s\S]{0,600}await chooseHost\(row\.name\)/)
+    assert.match(web, /open=\{sheet === 'units'\}[\s\S]{0,400}unitCards\(link\.hosts, link\.units, link\.chosenHost, link\.unitsAsking, whichUnitFacts\)[\s\S]{0,700}await chooseHost\(card\.name\)/)
   })
 
   /*

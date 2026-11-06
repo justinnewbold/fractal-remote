@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-06",
     "day": "6 November 2026",
-    "version": "1.89.50",
+    "version": "1.89.51",
     "lines": [
+      {
+        "text": "Which unit (tap your unit’s name on Play) is now one card per unit, showing the computer it’s on, whether it’s connected, and the preset and scene it’s on.",
+        "only": null
+      },
       {
         "text": "When a new version is ready, its card now has What’s new, which takes you straight to the list of what changed.",
         "only": null

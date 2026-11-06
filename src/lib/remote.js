@@ -74,6 +74,11 @@ export {
   missingPickCard,
   missingPickRow,
   unitElsewhereCard,
+  /* And Which unit's cards: what a unit is on, in their shape, and their words. */
+  playingOf,
+  SWITCHING,
+  NOT_USING_ONE,
+  notUsingOneHow,
   /* And how a computer you don't use comes off Which unit, at that computer. */
   notUsingOne
 } from '../../shared/relay-rules.mjs'
@@ -90,7 +95,12 @@ import {
   onceNames,
   rollCallLine,
   unitChoices,
+  unitCards,
   unitFrom,
+  OTHERS_READ,
+  PLAYING_ASK_MS,
+  othersToAsk,
+  playingFrom,
   notSentError,
   pastDeadline,
   newestPresses,
@@ -235,7 +245,7 @@ export const remoteHosts = () => hosts
 /** Which unit each answering computer has, by its name: { model, plugged }. */
 export const remoteUnits = () => units
 
-export { unitChoices }
+export { unitChoices, unitCards }
 
 /*
  * Who is answering, as it changes.
@@ -784,6 +794,33 @@ export async function refreshUnits({ windowMs = 1500, sleep = (ms) => new Promis
   /* The same object while nothing changed, so nobody redraws for it. */
   if (JSON.stringify(next) !== JSON.stringify(units)) units = next
   return units
+}
+
+/**
+ * WHAT EACH OTHER COMPUTER'S UNIT IS ON, for Which unit's cards (shared
+ * relay-rules OTHERS_READ): GET /preset and GET /scene, asked by name of each
+ * computer that is not the one driven and has a unit plugged in, once, when
+ * Which unit opens. Reads only, shouted the way the roll call's are (always
+ * GET), so nothing can change which computer is driven or what any unit is
+ * doing. No tap waits for them, and not while a roll call or a proof is
+ * running. Only with two or more computers. A computer that does not answer
+ * in PLAYING_ASK_MS, or answers with another (two answers), is left out: its
+ * card has no preset line. What the one driven is on is the screen's own.
+ */
+export async function readOthersPlaying({ windowMs = PLAYING_ASK_MS, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  if (hosts.length < 2 || !channel || !isJoined(channel) || counting) return {}
+  const names = othersToAsk(hosts, units, chosen)
+  if (!names.length) return {}
+  const link = session
+  const asked = hosts
+  const found = await Promise.all(
+    names.map(async (name) => {
+      const [preset, scene] = await Promise.all(OTHERS_READ.map((path) => collectAnswers({ path, host: name, windowMs, sleep })))
+      return [name, await playingFrom(preset, scene, decode)]
+    })
+  )
+  if (session !== link || hosts !== asked) return {}
+  return Object.fromEntries(found.filter(([, now]) => now))
 }
 
 /**
