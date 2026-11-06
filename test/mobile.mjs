@@ -10259,12 +10259,12 @@ export function run(test) {
     const app = read('mobile/App.js')
     assert.match(app, /useEffect\(\(\) => watchForUpdates\(\), \[\]\)/, 'nothing starts the background check')
     assert.match(app, /const playOnScreen = screen === 'stage' && !settling/)
-    assert.match(app, /\{playOnScreen \? null : <UpdateReady \/>\}/, 'the note still pushes the play screen down, or is drawn nowhere else')
+    assert.match(app, /\{playOnScreen \? null : <UpdateReady onWhatsNew=\{openWhatsNew\} \/>\}/, 'the note still pushes the play screen down, or is drawn nowhere else')
     const inside = app.slice(app.indexOf('<EdgeBack onBack={backFrom}>'), app.indexOf('</EdgeBack>'))
-    assert.match(inside, /\{readyOverPlay \? <UpdateReady over \/> : null\}/, 'the note does not float over the play screen')
+    assert.match(inside, /\{readyOverPlay \? <UpdateReady over onWhatsNew=\{openWhatsNew\} \/> : null\}/, 'the note does not float over the play screen')
     /* Never over a connected rig, where a download can land mid-song and Restart now would come up under a thumb. */
     assert.match(app, /const readyOverPlay = playOnScreen && link\.link !== 'connected'\n/, 'the note floats over the play screen while it is steering a rig')
-    assert.ok(inside.indexOf('<UpdateReady over />') > inside.indexOf('<Stage'), 'the note is drawn under the play screen rather than over it')
+    assert.ok(inside.indexOf('<UpdateReady over ') > inside.indexOf('<Stage'), 'the note is drawn under the play screen rather than over it')
 
     /* One card at a time: the yielding toast stands aside while the fault or the advice is up. */
     const toast = read('mobile/src/components/Toast.js')
@@ -10865,7 +10865,7 @@ export function run(test) {
 
     /* Where it is said: the top of Settings and under Updates, never on Play. */
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
-    assert.match(settings, /\{head\('Settings'\)\} \{\/\*[^*]*\*\/\} <NewerInStore \/>/, 'the card is not at the top of Settings')
+    assert.match(settings, /\{head\('Settings'\)\} \{\/\*[^*]*\*\/\} <NewerInStore onWhatsNew=\{\(\) => setPage\(WHATS_NEW_PAGE\)\} \/>/, 'the card is not at the top of Settings')
     const about = settings.slice(settings.indexOf('title="Updates"'), settings.indexOf('The small print'))
     assert.match(about, /\{newer\.note \? <SetupRow title=\{newer\.note\.row\} status=\{newer\.note\.line\} onPress=\{\(\) => openStore\(newer\.note\)\} \/> : null\}/, 'the quiet line is not under Updates')
     for (const f of ['mobile/src/screens/Stage.js', 'mobile/App.js', 'mobile/src/components/Toast.js']) {

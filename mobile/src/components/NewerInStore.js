@@ -6,6 +6,7 @@ import { useUpdates } from '../lib/updates'
 import { space } from '../lib/theme'
 import Note from './Note'
 import Press from './Press'
+import WhatsNewLink from './WhatsNewLink'
 
 /**
  * A NEWER VERSION IS IN THE STORE, said once, at the top of Settings.
@@ -25,8 +26,16 @@ import Press from './Press'
  * copy on the phone, not the account — and somebody who has just installed
  * the app has the newest copy and never sees it, so in practice it reaches
  * only the old copies it is for.
+ *
+ * With What's new beside the store button (Justin, 6 November 2026: "a link
+ * that takes them straight to the part of the app that shows them what's
+ * new"). `onWhatsNew` is Settings' own page change, so the card goes the way
+ * leaving the front of Settings always puts it away, and Back from the list
+ * comes up to Settings. An old copy stops getting updates, so the page reads
+ * the website's list as well, for what the newer version has
+ * (screens/WhatsNew.js).
  */
-export default function NewerInStore() {
+export default function NewerInStore({ onWhatsNew = null }) {
   const { note, card } = useStoreNote()
   /*
    * Not while the new-version note is up, just above it. Two cards in nearly
@@ -51,6 +60,8 @@ export default function NewerInStore() {
         {`${note.title}. ${note.why}`}
       </Note>
       <Press label={note.button} onPress={() => openStore(note)} />
+      {/* Under the store button rather than beside it: "Open the App Store" in Larger Text takes a 320-wide row to itself. */}
+      {onWhatsNew ? <WhatsNewLink onPress={onWhatsNew} /> : null}
     </View>
   )
 }
