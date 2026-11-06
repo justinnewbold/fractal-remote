@@ -1,6 +1,6 @@
-import { ScrollView, Text, View } from 'react-native'
+import { Linking, ScrollView, Text, View } from 'react-native'
 
-import { SHARE_AGAIN, SHARE_NO, SHARE_TITLE, SHARE_YES, shareWords } from '../lib/gear-share-rules'
+import { SHARE_AGAIN, SHARE_DETAILS, SHARE_DETAILS_URL, SHARE_NO, SHARE_TITLE, SHARE_YES, shareWords } from '../lib/gear-share-rules'
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { cardCorner, glassCard } from '../lib/glass'
 import Press from './Press'
@@ -55,6 +55,14 @@ export default function GearShareNotice({ onAnswer, again = false }) {
           <Text style={{ color: color.silk, fontSize: font.body, lineHeight: Math.round(font.body * 1.45) }}>{what}</Text>
           <Text style={{ color: color.silk, fontSize: font.body, lineHeight: Math.round(font.body * 1.45), fontWeight: '600' }}>{never}</Text>
           <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: Math.round(font.small * 1.45) }}>{change}</Text>
+          {/* Every field, word for word, on the privacy page: the card says it short (lib/gear-share-rules SHARE_DETAILS). */}
+          <Text
+            accessibilityRole="link"
+            onPress={() => Linking.openURL(SHARE_DETAILS_URL).catch(() => {})}
+            style={{ color: color.signal, fontSize: font.small, fontWeight: '600', textDecorationLine: 'underline' }}
+          >
+            {SHARE_DETAILS}
+          </Text>
           <Press label={SHARE_YES} tone="signal" on height={TAP} onPress={() => onAnswer?.(true)} />
           <Press label={SHARE_NO} height={TAP} onPress={() => onAnswer?.(false)} />
         </View>

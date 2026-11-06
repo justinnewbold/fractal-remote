@@ -262,3 +262,62 @@ export function pairScreenCrashes({ os, version, fixed } = {}) {
  */
 export const pairScreenShutWords = (noun) =>
   `Apple’s Bluetooth screen crashes on iOS 27, so it stays closed until the next build of the app, which has Apple’s fix. Until then, Connect can only use an adapter that is already connected to this ${noun}.`
+
+/**
+ * A UNIT PLUGGED IN BY USB CABLE WHILE CONNECTED ANOTHER WAY: what to do
+ * about it, or null.
+ *
+ * "Is it set up to automatically detect when the USB cord has been plugged
+ * in and switch to that connection? Or at least add that as an option to
+ * switch to once it's plugged in?" (Justin, 6 November 2026.) It was not:
+ * through the computer, or through a Bluetooth adapter, a unit plugged in
+ * by cable did nothing until Settings → Bluetooth → Connect. So
+ * lib/cablePlugIn watches the module's list while the app runs, and asks
+ * this what the list means:
+ *
+ *   - `{ act: 'switch' }` on a Bluetooth ADAPTER (`mode` 'adapter'), for a
+ *     cable to the unit already picked: the same unit and the same features,
+ *     one wire fewer, so it is taken by itself and Play says so;
+ *   - `{ act: 'offer' }` on the COMPUTER (`mode` 'computer'), which does
+ *     more than the phone alone, so never by itself: Play asks, with Use USB
+ *     cable and Not now. The same on an adapter for a cable to ANOTHER unit
+ *     than the one picked: a different rig is never swapped in unasked.
+ *
+ * Never anything for:
+ *
+ *   - an account or a copy Bluetooth is not open to (`open` false: the
+ *     Bluetooth row's own gate, and a copy a unit can plug into at all);
+ *   - any other mode: already on a cable ('cable'), Bluetooth on with
+ *     nothing kept or after Disconnect ('off'), the demo;
+ *   - a cable let go of by hand this session (`skip`: Troubleshooting's
+ *     Forget the USB cable), or put off with Not now until it is unplugged
+ *     (`dismissed`);
+ *   - a USB MIDI interface nobody chose: a port named for no unit (a
+ *     keyboard, a C2MIDI Pro bought for something else) is taken only when it
+ *     is the cable kept from last time (`kept`), for the unit picked then;
+ *   - a cable for a unit this account is not offered (`offered`, lib/ble-rule
+ *     unitOffered as lib/bluetooth asks it);
+ *   - two or more that could be meant: which one is a real question, and the
+ *     Bluetooth page asks it with its list.
+ *
+ * `units` are bleWire BLE_UNITS ({ key, name }), passed in so this file
+ * imports nothing. Nothing here touches Bluetooth: the list is CoreMIDI's
+ * ports on an iPhone and Android's USB MIDI devices, which need no
+ * permission and open no screen.
+ */
+export function cablePlugIn(list, { open = false, mode = null, kept = null, unit = null, units = null, offered = null, skip = null, dismissed = null } = {}) {
+  if (open !== true || (mode !== 'computer' && mode !== 'adapter')) return null
+  if (mode === 'adapter' && (!kept || isCable(kept))) return null
+  const keptCable = kept && isCable(kept) ? kept.id : null
+  const may = (key) => !!key && typeof offered === 'function' && offered(key) === true
+  const here = []
+  for (const d of cablesIn(list)) {
+    if (skip?.has?.(d.id) || dismissed?.has?.(d.id)) continue
+    const named = cableUnit(d, units)
+    const key = named || (d.id === keptCable ? unit : null)
+    if (may(key)) here.push({ cable: d, unit: key })
+  }
+  if (here.length !== 1) return null
+  const [{ cable, unit: key }] = here
+  return { act: mode === 'adapter' && key === unit ? 'switch' : 'offer', cable, unit: key }
+}
