@@ -11,6 +11,8 @@
  * because a block this table has not heard of is still better identified by
  * the start of its name than by "???".
  */
+import { NEW_BLOCK_SHORT } from '../../shared/new-block.mjs'
+
 const SHORT = {
   wah: 'WAH',
   drive: 'DRV',
@@ -51,7 +53,8 @@ const SHORT = {
   output: 'OUT'
 }
 
-export const shortName = (slug) => SHORT[slug] || (slug || '??').slice(0, 3).toUpperCase()
+/* No slug at all is a block newer than the app (shared/new-block.mjs): "New", never "??". */
+export const shortName = (slug) => SHORT[slug] || (slug ? slug.slice(0, 3).toUpperCase() : NEW_BLOCK_SHORT)
 
 /**
  * The same, with the instance number kept when there is one.
@@ -65,6 +68,8 @@ export const shortName = (slug) => SHORT[slug] || (slug || '??').slice(0, 3).toU
  * Delay 1 at all.
  */
 export const shortBlock = (block) => {
+  /* A block newer than the app: "New", never "New 201" off the computer's eid_201. */
+  if (!block?.slug) return NEW_BLOCK_SHORT
   const abbr = shortName(block?.slug)
   const n = /(\d+)\s*$/.exec(block?.name || '')
   return n && n[1] !== '1' ? `${abbr} ${n[1]}` : abbr

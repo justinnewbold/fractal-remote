@@ -179,6 +179,7 @@ export const vp4SceneNames = () => (onVp4 && vp4Scenes ? [...vp4Scenes] : null)
 export const refusedAlready = (method, path) => !demoDevice() && refused.known(method, path)
 import { withLineage } from './lineage'
 import { cableColumns, toWireCable, toWireCell } from './grid-plan'
+import { isNewBlock, markNewBlocks } from './new-block'
 import { cleanPresetName, isEmptySlotName } from './unit.mjs'
 import { preferredEncoding, rememberEncoding } from './encoding'
 import { toNormalized } from './scale'
@@ -356,7 +357,15 @@ export async function currentPreset() {
 export async function presetBlocks() {
   const list = await remoteRequest('/preset/blocks')
   if (!Array.isArray(list)) return []
-  return list.filter((b) => b?.slug)
+  /*
+   * AND A BLOCK NEWER THAN THE APP IS KEPT, MARKED `unknown` (lib/new-block).
+   * Every block with no slug used to be dropped here, so the Axe-Fx III's NAM
+   * block (firmware 33) was missing from the chain the Edit screen draws, its
+   * cell looked empty, and a block put there went over it on the unit. Kept,
+   * its cell is taken; the screens that switch or turn blocks still leave it
+   * out (stageBlocks, knobBlocks, Edit's own list).
+   */
+  return markNewBlocks(list)
 }
 
 /**
@@ -394,11 +403,11 @@ export const freshSceneNames = () => bluetoothWire()?.forgetSceneNames?.()
 
 /** The ones that belong on a stage: everything but the three you never kick. The gate is one you do. */
 export const stageBlocks = (blocks) =>
-  (blocks || []).filter((b) => !STAGE_HIDDEN.includes(b.slug))
+  (blocks || []).filter((b) => b && !isNewBlock(b) && !STAGE_HIDDEN.includes(b.slug))
 
 /** The ones whose controls may be searched and turned: not the gate's threshold. See EXCLUDED_BLOCKS. */
 export const knobBlocks = (blocks) =>
-  (blocks || []).filter((b) => !EXCLUDED_BLOCKS.includes(b.slug))
+  (blocks || []).filter((b) => b && !isNewBlock(b) && !EXCLUDED_BLOCKS.includes(b.slug))
 
 /**
  * What this preset's scenes are called.

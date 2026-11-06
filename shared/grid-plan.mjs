@@ -21,6 +21,7 @@
  * Nothing here talks to a unit. It is all arithmetic about a grid, which is
  * what makes it testable without hardware.
  */
+import { isNewBlock } from './new-block.mjs'
 
 /**
  * The cell as the write routes want it.
@@ -129,13 +130,21 @@ export function lanesFor(blocks, capabilities) {
   /* Rows count from zero, like columns: a chain on the top row is row 0,
      and it used to be drawn nowhere at all. */
   for (let row = 0; row < Math.max(rows, lastRow + 1); row++) {
-    const inRow = here
-      .filter((b) => b.row === row && typeof b.col === 'number')
+    const placed = here
+      .filter((b) => b && b.row === row && typeof b.col === 'number')
       .sort((a, b) => a.col - b.col)
-    const taken = new Set(inRow.map((b) => b.col))
+    /*
+     * A BLOCK NEWER THAN THE APP HOLDS ITS CELL (shared/new-block.mjs). It is
+     * `held`, not one of the lane's `blocks`: never a gap, so nothing is put
+     * on top of it, and never dealt a column in a drag, which only ever moves
+     * the lane's `blocks` between their own columns.
+     */
+    const inRow = placed.filter((b) => !isNewBlock(b))
+    const held = placed.filter(isNewBlock)
+    const taken = new Set(placed.map((b) => b.col))
     const gaps = []
     for (let col = 0; col < Math.max(cols, lastCol + 1); col++) if (!taken.has(col)) gaps.push(col)
-    lanes.push({ row, blocks: inRow, gaps })
+    lanes.push({ row, blocks: inRow, held, gaps })
   }
   return lanes
 }
@@ -150,7 +159,10 @@ export function lanesFor(blocks, capabilities) {
  * though they were one chain, or as though they were unrelated.
  */
 export const isSplitChain = (blocks, capabilities) =>
-  lanesFor(blocks, capabilities).filter((l) => l.blocks.length).length > 1
+  lanesFor(blocks, capabilities).filter(laneUsed).length > 1
+
+/** Whether a lane has anything in it: a block, or a block newer than the app. */
+export const laneUsed = (lane) => !!(lane?.blocks?.length || lane?.held?.length)
 
 /**
  * The lanes worth drawing: the ones holding something, then the first empty
@@ -164,9 +176,9 @@ export const isSplitChain = (blocks, capabilities) =>
  */
 export function lanesShown(blocks, capabilities) {
   const lanes = lanesFor(blocks, capabilities)
-  const held = lanes.filter((l) => l.blocks.length)
-  const spare = lanes.find((l) => !l.blocks.length)
-  return spare ? [...held, spare] : held
+  const used = lanes.filter(laneUsed)
+  const spare = lanes.find((l) => !laneUsed(l))
+  return spare ? [...used, spare] : used
 }
 
 /**
@@ -178,12 +190,21 @@ export function lanesShown(blocks, capabilities) {
  * so the chain somebody came to edit was a long scroll away. A block put
  * into a run goes in its first column, next to what is before it.
  */
+/*
+ * A block newer than the app is its own kind, 'held': drawn where it sits,
+ * in words, with nothing to tap on it (NEW_BLOCK_NOTE). Every drag and every
+ * plan counts only the 'block' items, so it keeps its column whatever moves
+ * around it.
+ */
 export function laneItems(lane) {
-  const out = (lane?.blocks || []).map((b) => ({ kind: 'block', col: b.col, block: b }))
+  const out = [
+    ...(lane?.blocks || []).map((b) => ({ kind: 'block', col: b.col, block: b })),
+    ...(lane?.held || []).map((b) => ({ kind: 'held', col: b.col, block: b }))
+  ]
   const gaps = [...(lane?.gaps || [])].sort((a, b) => a - b)
   for (const col of gaps) {
     const run = out.find((it) => it.kind === 'gap' && it.last === col - 1)
-    if (run && !out.some((it) => it.kind === 'block' && it.col === col - 1)) run.last = col
+    if (run && !out.some((it) => it.kind !== 'gap' && it.col === col - 1)) run.last = col
     else out.push({ kind: 'gap', col, last: col })
   }
   return out.sort((a, b) => a.col - b.col)

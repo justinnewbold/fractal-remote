@@ -16,6 +16,7 @@
  * words a player would use. The reading is in components/PresetReport.jsx.
  */
 import { isLevelParam } from './guardrails.js'
+import { NEW_BLOCK_NAME, isNewBlock } from '../../shared/new-block.mjs'
 
 /** Blocks that are structure rather than sound. */
 const PLUMBING = ['input', 'output']
@@ -46,7 +47,13 @@ export function atMinimum(param) {
  */
 export function silenceFaults({ blocks = [], params = {}, sceneName = '' } = {}) {
   const list = (Array.isArray(blocks) ? blocks : []).filter((b) => b && b.slug)
-  if (!list.length) return ['There are no blocks in this preset at all.']
+  /*
+   * Blocks newer than the app (the Axe-Fx III's NAM block) are in the preset
+   * and this cannot judge them: a preset holding one is not empty, and one
+   * that is on means every block is NOT off, whatever the rest are doing.
+   */
+  const newer = (Array.isArray(blocks) ? blocks : []).filter(isNewBlock)
+  if (!list.length) return newer.length ? [] : ['There are no blocks in this preset at all.']
 
   const faults = []
   const where = sceneName ? ` in ${sceneName}` : ' in this scene'
@@ -96,7 +103,8 @@ export function silenceFaults({ blocks = [], params = {}, sceneName = '' } = {})
   }
 
   const playable = list.filter((b) => !PLUMBING.includes(b.slug))
-  if (playable.length && playable.every((b) => b.bypassed)) {
+  const newerOn = newer.some((b) => b.bypassed !== true)
+  if (playable.length && playable.every((b) => b.bypassed) && !newerOn) {
     faults.push(`Every block is off${where}.`)
   } else {
     const amp = playable.find((b) => b.slug === 'amp' && b.bypassed)
@@ -157,6 +165,8 @@ export function formatPresetReport({
   faults = []
 } = {}) {
   const list = (Array.isArray(blocks) ? blocks : []).filter((b) => b && b.slug)
+  /* Listed too, by what the app calls them: the report is of the whole preset. */
+  const newer = (Array.isArray(blocks) ? blocks : []).filter(isNewBlock)
   const lines = []
 
   for (const [key, text] of Object.entries(header)) {
@@ -184,6 +194,11 @@ export function formatPresetReport({
   for (const b of list) {
     lines.push(
       `${b.name || b.slug} | ${cell(b)} | ${b.bypassed ? 'off' : 'on'} | ${b.channel || '—'} | ${fed(b)}`
+    )
+  }
+  for (const b of newer) {
+    lines.push(
+      `${NEW_BLOCK_NAME} (${b.name || `id ${b.effectId}`}) | ${cell(b)} | ${b.bypassed ? 'off' : 'on'} | ${b.channel || '—'} | ${fed(b)}`
     )
   }
   lines.push('')

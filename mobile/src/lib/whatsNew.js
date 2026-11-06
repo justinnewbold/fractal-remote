@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-06",
+    "day": "6 November 2026",
+    "version": "1.89.48",
+    "lines": [
+      {
+        "text": "Blocks newer than the app, like the Axe-Fx III’s new NAM block, are now left alone in Edit: they show as New block, their spot is never shown as free, and nothing can be put over them.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-05",
     "day": "5 November 2026",
     "version": "1.89.46",

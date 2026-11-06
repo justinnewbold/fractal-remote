@@ -79,7 +79,11 @@ export const FILES = [
   /* "Swipe left to remove a song": the words, and where a swipe lands. */
   { source: '../shared/swipe-hint.mjs', target: '../mobile/src/lib/swipe-hint.js' },
   /* More than one row: the joins between them, and the writes that add or take away a parallel path. */
-  { source: '../shared/split-chain.mjs', target: '../mobile/src/lib/split-chain.js' },
+  {
+    source: '../shared/split-chain.mjs',
+    target: '../mobile/src/lib/split-chain.js',
+    render: (text) => banner('../shared/split-chain.mjs') + text.replace("from './new-block.mjs'", "from './new-block.js'")
+  },
   /*
    * Copy a scene onto another, and a block's channel onto another. Two ends
    * copying differently would build two different scenes from the same tap.
@@ -437,7 +441,11 @@ export const FILES = [
    * screens, and the rule that keeps the instance number only when it is not 1
    * is not one anybody would reinvent identically.
    */
-  { source: '../src/lib/shortName.js', target: '../mobile/src/lib/shortName.js' },
+  {
+    source: '../src/lib/shortName.js',
+    target: '../mobile/src/lib/shortName.js',
+    render: (text) => banner('../src/lib/shortName.js') + text.replace("from '../../shared/new-block.mjs'", "from './new-block.js'")
+  },
   /*
    * What Previous and Next step through, and which presets are starred.
    *
@@ -599,7 +607,18 @@ export const FILES = [
    * It also carries the rule that `ok:false` is not a failure on this hardware,
    * which the browser learned by rolling back moves that had worked.
    */
-  { source: '../shared/grid-plan.mjs', target: '../mobile/src/lib/grid-plan.js' },
+  /*
+   * A block newer than the app (the Axe-Fx III's NAM block, November 2026):
+   * how one is known, what its tile says, and that its cell is never free.
+   * Both chain editors keep it where it is; one that offered its cell would
+   * put a block over the top of it in the preset on the unit.
+   */
+  { source: '../shared/new-block.mjs', target: '../mobile/src/lib/new-block.js' },
+  {
+    source: '../shared/grid-plan.mjs',
+    target: '../mobile/src/lib/grid-plan.js',
+    render: (text) => banner('../shared/grid-plan.mjs') + text.replace("from './new-block.mjs'", "from './new-block.js'")
+  },
   /* Dragging a block up or down a lane, as grid cells: one copy of the maths, so the
      browser's chain editor and the phone's move the same block to the same column. */
   { source: '../shared/lane-order.mjs', target: '../mobile/src/lib/laneOrder.js' },

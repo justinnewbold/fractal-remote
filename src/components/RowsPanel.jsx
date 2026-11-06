@@ -4,6 +4,7 @@ import { logDebug } from '../lib/debugLog'
 import { blockColor, quietEnd } from '../lib/blockColors'
 import { useLooks } from '../lib/useLooks'
 import { shortBlock } from '../lib/shortName'
+import { NEW_BLOCK_SHORT } from '../../shared/new-block.mjs'
 import { doubtfulWrite, gridShape } from '../../shared/grid-plan.mjs'
 import {
   CELL,
@@ -181,7 +182,7 @@ export default function RowsPanel({ blocks, capabilities, palette, busy, onChang
                     setPicked(chosen ? null : { row: c.row, col: c.col })
                   }}
                 >
-                  {c.block ? shortBlock(c.block) : (c.name || '?').slice(0, 4).toUpperCase()}
+                  {c.unknown ? NEW_BLOCK_SHORT : c.block ? shortBlock(c.block) : (c.name || '?').slice(0, 4).toUpperCase()}
                 </button>
               )
             })}

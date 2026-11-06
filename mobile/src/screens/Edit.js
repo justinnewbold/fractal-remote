@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Keyboard, PanResponder, Platform, ScrollView, Text, TextInput, View } from 'react-native'
 import { at as tint } from '../lib/vivid'
 
@@ -48,6 +48,7 @@ import {
 import { MODEL_HINT, modelSnapshot, restoreModel, undoOffer, undoProgress, undoResult } from '../lib/model-undo'
 import { copyChannel } from '../lib/copy-tools'
 import { colLabel, doubtfulWrite, gapCols, gridShape, isSplitChain, laneItems, lanesShown, rowLabel } from '../lib/grid-plan'
+import { NEW_BLOCK_NAME, NEW_BLOCK_NOTE, knownBlocks } from '../lib/new-block'
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
 import { isSilencingParam } from '../lib/guardrails'
 import { editPages, pageFor, pageHolding } from '../lib/editPages'
@@ -168,7 +169,13 @@ export default function Edit({ onBack, onOpenGear }) {
      screen to lock — which suspended the app mid-write. The stage screen
      already stays awake; so does this one. */
   useKeepAwake()
-  const blocks = useRig(ofBlocks)
+  /*
+   * The whole chain, blocks newer than the app among them (lib/new-block),
+   * for the chain editor, where their cells must read as taken; and the
+   * blocks the app knows, for everything here that opens, turns or names one.
+   */
+  const chainAll = useRig(ofBlocks)
+  const blocks = useMemo(() => knownBlocks(chainAll), [chainAll])
   const scene = useRig(ofScene)
   /* The preset loaded again: same block, channel and scene, other values. */
   const bufferRev = useRig(ofBufferRev)
@@ -402,7 +409,7 @@ export default function Edit({ onBack, onOpenGear }) {
         </Note>
       ) : null}
 
-      {chain === 'reading' && !blocks.length && !chainNow.elsewhere ? (
+      {chain === 'reading' && !chainAll.length && !chainNow.elsewhere ? (
         <Note>Reading what’s in this preset…</Note>
       ) : null}
       {chain === 'failed' && !chainNow.elsewhere ? (
@@ -411,7 +418,7 @@ export default function Edit({ onBack, onOpenGear }) {
           told us.
         </Note>
       ) : null}
-      {!blocks.length && chain === 'ok' && !chainNow.elsewhere ? <Note>This preset is empty.</Note> : null}
+      {!chainAll.length && chain === 'ok' && !chainNow.elsewhere ? <Note>This preset is empty.</Note> : null}
 
       {/*
         NOT ON A VP4, whose knobs the app cannot read. The box offered "gain,
@@ -567,7 +574,7 @@ export default function Edit({ onBack, onOpenGear }) {
         <Note tone="hint">{BLE_NO_CHAIN}</Note>
       ) : (
         <>
-          {chainNow.elsewhere ? null : <ChainEditor blocks={blocks} caps={caps} onError={setError} onScrollLock={setHeld} />}
+          {chainNow.elsewhere ? null : <ChainEditor blocks={chainAll} caps={caps} onError={setError} onScrollLock={setHeld} />}
 
           <Modifiers blocks={blocks} onError={setError} />
         </>
@@ -1880,7 +1887,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
               }
               return (
                 <View
-                  key={item.kind === 'block' ? `b${item.col}` : `g${item.col}`}
+                  key={item.kind === 'block' ? `b${item.col}` : item.kind === 'held' ? `h${item.col}` : `g${item.col}`}
                   onLayout={(e) => {
                     const h = heights.current[lane.row] || (heights.current[lane.row] = [])
                     h[index] = e.nativeEvent.layout.height
@@ -1931,6 +1938,17 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
                       }
                     />
                     </Swipeable>
+                  ) : item.kind === 'held' ? (
+                    /*
+                     * A block newer than the app (lib/new-block): where it is,
+                     * in words, and nothing to press. Its cell is not a gap,
+                     * so nothing is put on it, and a drag deals the other
+                     * blocks round it.
+                     */
+                    <View style={{ gap: space.xs }}>
+                      <Press caption={where(lane.row, item.col)} label={NEW_BLOCK_NAME} disabled height={48} onPress={() => {}} />
+                      <Text style={{ color: color.silkDim, fontSize: font.micro }}>{NEW_BLOCK_NOTE}</Text>
+                    </View>
                   ) : (
                     <Press
                       caption={whereGap(lane.row, item)}

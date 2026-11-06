@@ -4025,6 +4025,21 @@ button.chain-gap {
   border: 1px dashed var(--rule);
 }
 
+/* A block newer than the app: where it is, in words, quiet, and nothing to press. */
+.chain-block.chain-held {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--s-2) var(--s-3);
+  background: var(--panel-hi);
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--rule);
+  border-radius: var(--r-1);
+  color: var(--silk-dim, var(--silk));
+}
+
 button.chain-block.open,
 button.chain-gap.open {
   border-color: var(--live);

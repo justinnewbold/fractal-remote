@@ -26,6 +26,8 @@
  * always run a wire down a row, and how a hand-built preset looks.
  */
 
+import { NEW_BLOCK_NAME, isNewBlock } from './new-block.mjs'
+
 /** A cell is a block, a shunt (a bare wire through the cell), or nothing. */
 export const CELL = { block: 'block', shunt: 'shunt' }
 
@@ -52,6 +54,12 @@ export function gridMap(cells, blocks, shape = {}) {
       effectId: c?.effectId ?? null,
       slug: block?.slug ?? null,
       name: block?.name || c?.name || '',
+      /*
+       * A block newer than the app (shared/new-block.mjs): one the chain read
+       * has with no slug, or a grid cell the computer could only call eid_N.
+       * Its cell is taken like any other; nothing is laid out around it.
+       */
+      unknown: !shunt && (block ? isNewBlock(block) : /^eid_\d+$/.test(c?.name || '')),
       block: block || null,
       fromRows: Array.isArray(c?.fromRows) ? c.fromRows.filter(Number.isInteger) : null
     })
@@ -63,6 +71,7 @@ export function gridMap(cells, blocks, shape = {}) {
       effectId: b.effectId ?? null,
       slug: b.slug ?? null,
       name: b.name || '',
+      unknown: isNewBlock(b),
       block: b,
       fromRows: Array.isArray(b.fromRows) ? b.fromRows.filter(Number.isInteger) : null
     })
@@ -230,7 +239,7 @@ export function planRemoveBranch(map, row) {
     if (c.col < path.end) steps.push(cable(row, c.col, row, false))
   }
   for (const c of rowCells(map, row)) steps.push(clear(row, c.col, c.name))
-  return { ok: true, steps, losing: path.blocks.map((b) => b.name || b.slug || 'a block') }
+  return { ok: true, steps, losing: path.blocks.map((b) => (b.unknown ? NEW_BLOCK_NAME : b.name || b.slug || 'a block')) }
 }
 
 /* ---------------------------------------------------------------- */
@@ -262,7 +271,8 @@ const NOT_AROUND = ['input', 'output', 'looper']
  */
 export function layoutsAround(map, cell, catalog) {
   const main = mainRow(map)
-  if (!cell || cell.row !== main || cell.kind !== CELL.block || NOT_AROUND.includes(cell.slug)) return []
+  /* Nothing around a block newer than the app: it is left as it is. */
+  if (!cell || cell.row !== main || cell.kind !== CELL.block || cell.unknown || NOT_AROUND.includes(cell.slug)) return []
   const out = []
   const family = cell.block?.slug || cell.slug
   /* A dry signal alongside it: the effect on one path, the plain guitar on the other. */
