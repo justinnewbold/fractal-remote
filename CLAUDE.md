@@ -516,6 +516,24 @@ purchase page, which shows its line only on a copy that opens Bluetooth to
 customers (`openForCustomersHere()`), since somebody who has not paid is not
 past the row's gate.
 
+**The Bluetooth symbol is allowed.**
+
+> "Well, we're connecting official Bluetooth devices to our app, so I think
+> it would be fine. So please make a note that we are allowed to use the
+> Bluetooth icon, or I guess me telling you to use it." (6 November 2026)
+
+So the Bluetooth symbol (the Runic B, mobile/assets/icons/bluetooth.png) is
+back, after it was taken out on 25 October 2026 because the Bluetooth group's
+brand guide gives its marks to members only. It is on the top bar's lamp over
+Bluetooth, the Bluetooth adapter's card, Connect over Bluetooth on Phone &
+computer, and the Bluetooth page's Connect, and never on a unit on a USB
+cable, which is not Bluetooth (test/independent.mjs holds both). Justin made
+this call knowing the brand guide; do not raise it again. If the Bluetooth
+group or Apple ever asks, it comes out by update: the plain aerial
+(icons/wireless.png) is kept for that. This is about Bluetooth's mark only;
+the rules about Fractal's logos, and Apple's, Microsoft's and Linux's, are
+unchanged.
+
 **Edit over Bluetooth: the AM4 and the FM3, his account until a store
 version opens each.**
 

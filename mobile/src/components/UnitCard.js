@@ -6,7 +6,7 @@ import { color, font, space } from '../lib/theme'
 import { cardCorner, classic } from '../lib/glass'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
-import wirelessIcon from '../../assets/icons/wireless.png'
+import bluetoothIcon from '../../assets/icons/bluetooth.png'
 
 /* The dot before the unit's name, and how far the lines under it sit in, so they line up with the name. */
 const DOT = 8
@@ -106,8 +106,8 @@ function Tag({ word, lit }) {
 /**
  * The other way, under the cards: Bluetooth, for whoever is offered its
  * page. A dashed edge, since it is not a computer on this list, and the
- * aerial (icons/wireless.png) in Bluetooth's blue: never the Bluetooth
- * symbol itself (TopBar BluetoothMark says why).
+ * Bluetooth symbol (icons/bluetooth.png) in Bluetooth's blue (TopBar
+ * BluetoothMark says why it is allowed).
  */
 export function BluetoothCard({ label, sub, onPress }) {
   return (
@@ -131,7 +131,7 @@ export function BluetoothCard({ label, sub, onPress }) {
         opacity: pressed ? 0.7 : 1
       })}
     >
-      <Image source={wirelessIcon} accessible={false} resizeMode="contain" style={{ width: 18, height: 18, tintColor: color.ble }} />
+      <Image source={bluetoothIcon} accessible={false} resizeMode="contain" style={{ width: 18, height: 18, tintColor: color.ble }} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '600' }}>{label}</Text>
         {sub ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{sub}</Text> : null}

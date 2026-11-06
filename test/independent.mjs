@@ -1105,34 +1105,52 @@ export function run(test) {
    * purpose, for identification, under the trademark note in
    * docs/gear-illustrations.md, and this test does not look at them.
    *
-   * And the Bluetooth symbol, the Runic B, which was the top bar's lamp and
-   * the adapter's picture while the app is on Bluetooth. The Bluetooth
-   * group's brand guide: "Only Members of Bluetooth SIG, Inc. ... are
-   * licensed to use the Bluetooth word mark, figure mark, and combination
-   * mark", and of the Runic B on its own, "Use of the Runic B standing alone
-   * may not be used in any other circumstance." The app's maker is not a
-   * member, and from the store version that opens Bluetooth to customers
-   * every customer and Apple's reviewer would see it. It is a plain aerial
-   * now (icons/wireless.png, TopBar.js says why); the word Bluetooth, said
-   * in words, stays.
+   * The Bluetooth symbol, the Runic B, is the one mark let back in. It was
+   * taken out on 25 October 2026 (the Bluetooth group's brand guide gives
+   * its marks to members only, and the app's maker is not one) and is
+   * allowed again since 6 November 2026, by Justin's decision: "Well, we're
+   * connecting official Bluetooth devices to our app, so I think it would be
+   * fine. So please make a note that we are allowed to use the Bluetooth
+   * icon, or I guess me telling you to use it." (CLAUDE.md, "The Bluetooth
+   * symbol is allowed".) So it is held the other way now: the top bar's
+   * Bluetooth lamp, the Bluetooth adapter's card and the Bluetooth page's
+   * Connect wear icons/bluetooth.png, and a unit on a USB cable never does,
+   * since a cable is not Bluetooth. The aerial (icons/wireless.png) stays in
+   * the repository, for the day the symbol has to come out again by update.
    *
    * Pixels cannot be read for a logo here, so what is held is what can drift
    * back: the old files, anything asking for them, and the drawings that
    * took their place.
    */
-  test('no other company’s logo in the app’s own drawings either (gear photographs aside): the laptop shows the app, the computers are plain drawings, and Bluetooth is an aerial', () => {
-    for (const f of ['mobile/assets/icons/apple.png', 'mobile/assets/icons/windows.png', 'mobile/assets/icons/linux.png', 'mobile/assets/icons/bluetooth.png']) {
+  test('no other company’s logo in the app’s own drawings either (gear photographs aside): the laptop shows the app, the computers are plain drawings, and Bluetooth wears its own symbol only on Bluetooth', () => {
+    for (const f of ['mobile/assets/icons/apple.png', 'mobile/assets/icons/windows.png', 'mobile/assets/icons/linux.png']) {
       assert.ok(!existsSync(join(root, f)), `${f} is back`)
     }
     for (const f of shippedFiles()) {
       const text = readFileSync(f, 'utf8')
-      for (const name of ['icons/apple', 'icons/windows', 'icons/linux', 'icons/bluetooth', 'appleIcon', 'windowsIcon', 'linuxIcon', 'bluetoothIcon']) {
+      for (const name of ['icons/apple', 'icons/windows', 'icons/linux', 'appleIcon', 'windowsIcon', 'linuxIcon']) {
         assert.ok(!text.includes(name), `${rel(f)} still asks for ${name}`)
       }
     }
-    /* Over Bluetooth, the top bar's lamp and the adapter's card are the aerial. */
-    assert.match(read('mobile/src/components/TopBar.js'), /import wirelessIcon from '\.\.\/\.\.\/assets\/icons\/wireless\.png'/, 'the top bar’s Bluetooth lamp is not the plain aerial')
-    assert.match(read('mobile/src/components/Walk.js'), /adapter: wirelessIcon,/, 'the Bluetooth adapter’s card is not the plain aerial')
+    /* The symbol is there, 96 square like the other icons, and the aerial is kept to put back. */
+    const png = readFileSync(join(root, 'mobile/assets/icons/bluetooth.png'))
+    assert.equal(png.toString('ascii', 1, 4), 'PNG')
+    assert.equal(png.readUInt32BE(16), 96, 'the Bluetooth symbol is not 96 wide like the other icons')
+    assert.equal(png.readUInt32BE(20), 96, 'the Bluetooth symbol is not 96 high like the other icons')
+    assert.ok(existsSync(join(root, 'mobile/assets/icons/wireless.png')), 'the aerial, kept to take the symbol out again, is gone')
+    /* Over Bluetooth, the top bar's lamp, the adapter's card and Connect are the Bluetooth symbol. */
+    const bar = read('mobile/src/components/TopBar.js').replace(/\s+/g, ' ')
+    assert.match(bar, /import bluetoothIcon from '\.\.\/\.\.\/assets\/icons\/bluetooth\.png'/, 'the top bar’s Bluetooth lamp is not the Bluetooth symbol')
+    assert.match(bar, /function BluetoothMark\(\{ state \}\) \{[^}]*source=\{bluetoothIcon\}/, 'the top bar’s Bluetooth lamp is not the Bluetooth symbol')
+    assert.match(read('mobile/src/components/Walk.js'), /adapter: bluetoothIcon,/, 'the Bluetooth adapter’s card is not the Bluetooth symbol')
+    const page = read('mobile/src/screens/Bluetooth.js')
+    assert.match(page, /icon=\{cable \|\| takes\.length \? null : bluetoothIcon\}/, 'Connect is not the Bluetooth symbol, or wears it for a USB cable')
+    assert.match(read('mobile/src/components/UnitCard.js'), /<Image source=\{bluetoothIcon\}/, 'Connect over Bluetooth on Phone & computer is not the Bluetooth symbol')
+    /* And never on a USB cable: the bar's mark is the wireless way's only, and a cable's chain has no adapter card. */
+    assert.match(bar, /const wireless = bluetooth && !cable/)
+    assert.match(bar, /\{demo \? null : wireless \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} size=\{8\} \/>\}/, 'a unit on a USB cable wears the Bluetooth symbol in the top bar')
+    assert.equal((bar.match(/bluetoothIcon/g) || []).length, 2, 'the top bar shows the Bluetooth symbol somewhere other than its Bluetooth lamp')
+    assert.match(read('mobile/src/lib/cableWords.js'), /\.filter\(\(c\) => c && c\.key !== 'adapter'\)/, 'a USB cable’s chain keeps the Bluetooth adapter’s card, and its symbol')
     /* Mac, Windows, Linux: a laptop, a screen on a stand, a command prompt, in that order, at both ends. */
     const phone = read('mobile/src/screens/Connect.js')
     assert.match(phone, /import desktopIcon from '\.\.\/\.\.\/assets\/icons\/desktop\.png'/)

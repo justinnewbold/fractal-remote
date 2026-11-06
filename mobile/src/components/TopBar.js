@@ -13,7 +13,7 @@ import { setDemo, useDemo } from '../lib/demo'
 import { shouldOffer, usePurchase } from '../lib/purchases'
 import setupIcon from '../../assets/icons/setup.png'
 import volumeIcon from '../../assets/icons/volume.png'
-import wirelessIcon from '../../assets/icons/wireless.png'
+import bluetoothIcon from '../../assets/icons/bluetooth.png'
 import { adapterInsteadOfCable, setBluetooth, useBluetoothOn, useCableNow } from '../lib/bluetooth'
 import { CABLE_OFF, CABLE_TO_ADAPTER, CABLE_WHERE, cableNote } from '../lib/cableWords'
 import { idOf } from '../lib/device'
@@ -99,12 +99,11 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    * OVER BLUETOOTH, THE BAR SAYS SO. "Can we change the connected thing to be
    * blue when it's on a Bluetooth connection instead of green? And instead of
    * a green dot next to the unit name have a Bluetooth icon when it's
-   * connected via Bluetooth." So the word goes blue and the lamp becomes a
-   * wireless mark: what an eye lands on before a song now says which way the
-   * phone is reaching the unit, not only that it is. Never in the demo, which
-   * is reaching nothing. The mark is a plain aerial drawn for the app, not
-   * the Bluetooth symbol, which the Bluetooth group lets only its members use
-   * (see BluetoothMark below).
+   * connected via Bluetooth." So the word goes blue and the lamp becomes the
+   * Bluetooth symbol: what an eye lands on before a song now says which way
+   * the phone is reaching the unit, not only that it is. Never in the demo,
+   * which is reaching nothing, and never on a USB cable (below), which is not
+   * Bluetooth. BluetoothMark below says why it is the real symbol again.
    */
   const bluetooth = useBluetoothOn() && !demo
   /*
@@ -618,28 +617,30 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
 }
 
 /**
- * The lamp, over Bluetooth: a wireless mark in the lamp's place, lit the way
- * the lamp would be. Blue, not green, while the unit answers, to match the
- * blue CONNECTED beside it; red while it does not, as the lamp is; dim while
- * it has not been asked yet. A mark that stayed blue over a unit that had
- * stopped answering would be the bar saying all is well in the one place
+ * The lamp, over Bluetooth: the Bluetooth symbol in the lamp's place, lit the
+ * way the lamp would be. Blue, not green, while the unit answers, to match
+ * the blue CONNECTED beside it; red while it does not, as the lamp is; dim
+ * while it has not been asked yet. A mark that stayed blue over a unit that
+ * had stopped answering would be the bar saying all is well in the one place
  * that exists to say when it is not.
  *
- * The picture is an aerial with its waves (icons/wireless.png), drawn in the
- * icon set's own hand, since 25 October 2026. It was the Bluetooth symbol,
- * the Runic B, and the Bluetooth group's brand guide says only its members
- * may use it, and "Use of the Runic B standing alone may not be used in any
- * other circumstance". The word beside it and the screen reader still say
- * Bluetooth (test/independent.mjs holds the old picture away).
+ * The picture is the Bluetooth symbol, the Runic B (icons/bluetooth.png),
+ * again since 6 November 2026, by Justin's decision: "Well, we're connecting
+ * official Bluetooth devices to our app, so I think it would be fine. So
+ * please make a note that we are allowed to use the Bluetooth icon." From 25
+ * October to then it was a plain aerial (icons/wireless.png), which is kept
+ * so the symbol can come out again by update if the Bluetooth group or Apple
+ * ever asks (CLAUDE.md, "The Bluetooth symbol is allowed"). Only on the
+ * wireless way: a unit on a USB cable keeps the plain lamp.
  */
 function BluetoothMark({ state }) {
   const tint = state === 'good' ? color.ble : state === 'fault' ? color.fault : color.silkFaint
   return (
     <Image
-      source={wirelessIcon}
+      source={bluetoothIcon}
       accessible={false}
       resizeMode="contain"
-      /* 14 high to read as the mark, and in the dot's 10 of width (the drawing itself is
+      /* 14 high to read as the mark, and in the dot's 10 of width (the symbol itself is
          about 8 wide), so the unit's name does not jump sideways when Bluetooth comes on. */
       style={{ width: 14, height: 14, marginHorizontal: -2, tintColor: tint }}
     />

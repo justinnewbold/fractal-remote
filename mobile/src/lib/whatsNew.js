@@ -12,7 +12,7 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-06",
     "day": "6 November 2026",
-    "version": "1.89.54",
+    "version": "1.89.55",
     "lines": [
       {
         "text": "On a tablet or a foldable opened up, Play now uses the whole screen: your scenes on the left and your chain on the right, lined up row for row, with the preset across the top and Previous and Next at the two ends of the bottom row. Setlists is at the end of the preset bar.",
@@ -35,7 +35,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "After using a USB cable, the Bluetooth page’s Connect gets your Bluetooth adapter back instead of waiting for the cable, and Use a Bluetooth adapter instead sits beside Use the computer instead. Connect is bigger and blue, and Stop is only offered for what’s really connected.",
+        "text": "After using a USB cable, the Bluetooth page’s Connect gets your Bluetooth adapter back instead of waiting for the cable, and Use a Bluetooth adapter instead sits beside Use the computer instead. Connect is bigger and blue, with the Bluetooth symbol, and Stop is only offered for what’s really connected.",
         "only": null
       }
     ]
