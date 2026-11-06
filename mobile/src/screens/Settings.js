@@ -10,6 +10,9 @@ import { getDebugLog } from '../lib/debugLog'
 import { tick } from '../lib/feedback'
 import { NOT_ACROSS, NOT_ACROSS_SIGNED_OUT, ONLY_HERE, unlockedFrom, usePurchase } from '../lib/purchases'
 import { applyNow, checkNow, describeRunning, useUpdates } from '../lib/updates'
+
+/** How long Checking… stays up after a tap on Updates, however quick the answer. */
+const CHECK_SHOWN_MS = 1200
 import { openStore, useStoreNote } from '../lib/storeVersion'
 import NewerInStore from '../components/NewerInStore'
 import {
@@ -486,6 +489,21 @@ export default function Settings({
     scroller.current?.scrollTo({ y: up ? offsets.current[page ?? ''] || 0 : 0, animated: false })
   }, [page])
   const updates = useUpdates()
+  /*
+   * A CHECK THAT CAN BE SEEN. "It also doesn't act like it's actually checking
+   * anything when I push that button" (Justin, 6 November 2026). The answer
+   * often comes back in a fraction of a second, so the row went from "up to
+   * date" to "up to date" with nothing between. Checking… stays up at least
+   * CHECK_SHOWN_MS after the tap, and the answer says when it was checked.
+   */
+  const [checkShown, setCheckShown] = useState(false)
+  const checkTimer = useRef(null)
+  const showCheck = () => {
+    setCheckShown(true)
+    clearTimeout(checkTimer.current)
+    checkTimer.current = setTimeout(() => setCheckShown(false), CHECK_SHOWN_MS)
+  }
+  useEffect(() => () => clearTimeout(checkTimer.current), [])
   /* This phone's copy older than the store's: the card at the top, once, and the line under Updates. See lib/store-rule.js. */
   const newer = useStoreNote()
   /* Which bundle is running, asked once when Setup opens. It settles "did an
@@ -772,17 +790,21 @@ export default function Settings({
                   ? 'Ready — tap to restart into it'
                   : updates.phase === 'downloading'
                     ? 'Downloading…'
-                    : updates.phase === 'checking'
+                    : updates.phase === 'checking' || checkShown
                       ? 'Checking…'
                       : updates.phase === 'current'
-                        ? `v${APP_VERSION} · up to date`
+                        ? `v${APP_VERSION} · up to date${updates.checkedAt ? ` · checked ${new Date(updates.checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}`
                         : updates.phase === 'off'
                           ? 'Not available in this build'
                           : updates.error
                             ? 'Could not check — tap to try again'
                             : `v${APP_VERSION} · running ${updates.source === 'update' ? 'an update' : 'the installed build'} · tap to check`
               }
-              onPress={() => (updates.phase === 'ready' ? applyNow() : checkNow())}
+              onPress={() => {
+                if (updates.phase === 'ready') return applyNow()
+                showCheck()
+                return checkNow()
+              }}
             />
             {/*
               AND WHEN THE COPY ITSELF IS OLD. An update changes what the app
