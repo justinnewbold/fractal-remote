@@ -119,6 +119,7 @@ import {
   pairLine
 } from '../lib/settings-words'
 import WhatsNew, { latestLine } from './WhatsNew'
+import { WHATS_NEW_PAGE } from '../lib/whats-new-rule'
 
 /* "Phone & computer", or "iPad & computer" on an iPad (device-word.mjs). Read
    once: App.js says which device this is before this file is loaded. */
@@ -570,8 +571,8 @@ export default function Settings({
       {page === null ? (
         <>
           {head('Settings')}
-          {/* A newer version in the store, said once for each store version. Here, never on Play. */}
-          <NewerInStore />
+          {/* A newer version in the store, said once for each store version. Here, never on Play. With What's new, one page in. */}
+          <NewerInStore onWhatsNew={() => setPage(WHATS_NEW_PAGE)} />
           {/*
             SETTINGS, IN GROUPS.
 

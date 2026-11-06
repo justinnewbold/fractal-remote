@@ -21,6 +21,7 @@ import SendLinkButton from './src/components/SendLinkButton'
 import TopBar from './src/components/TopBar'
 import WrongAccount from './src/components/WrongAccount'
 import UpdateReady from './src/components/UpdateReady'
+import { WHATS_NEW_PAGE } from './src/lib/whats-new-rule'
 import { LookUndo } from './src/components/Colours'
 import { CablePlugIn } from './src/components/CablePlugIn'
 import { watchCables } from './src/lib/cablePlugIn'
@@ -220,6 +221,14 @@ export default function App() {
     setSettingsVisit((n) => n + 1)
     setScreen('settings')
   }
+  /*
+   * Settings → About → What's new, from a new-version card's What's new
+   * (components/UpdateReady). Back from it comes up to the Settings list, as
+   * from the About row. Null, so the card draws no link, while that page is
+   * already the one on screen.
+   */
+  const whatsNewOpen = screen === 'settings' && settingsAt === WHATS_NEW_PAGE
+  const openWhatsNew = whatsNewOpen ? null : () => openSettings(WHATS_NEW_PAGE)
   /* Which fix the guide opens on, and which screen Done goes back to. */
   const [fixOpen, setFixOpen] = useState(null)
   const [fixFrom, setFixFrom] = useState('settings')
@@ -1460,7 +1469,7 @@ export default function App() {
             {/* A downloaded update, offered as a restart. Here, in the column,
                 on every screen but Play; on Play it floats (below). When the
                 app takes it by itself instead, see lib/update-rule.js. */}
-            {playOnScreen ? null : <UpdateReady />}
+            {playOnScreen ? null : <UpdateReady onWhatsNew={openWhatsNew} />}
             {/* A computer on another account, said on the stage too and not
                 only in Setup — Waking says it for itself while it is up.
                 Not over Bluetooth, where no computer is being looked for. */}
@@ -1712,7 +1721,7 @@ export default function App() {
             )}
             {/* Over the play screen and never in it, where the fault floats,
                 and out of the way while the fault or the advice is up. */}
-            {readyOverPlay ? <UpdateReady over /> : null}
+            {readyOverPlay ? <UpdateReady over onWhatsNew={openWhatsNew} /> : null}
             {/* A look just applied in Settings → Colors: "Now: Sunlight · Undo" for a
                 moment over Play, which Apply comes back to (components/Colours). */}
             {playOnScreen ? <LookUndo /> : null}

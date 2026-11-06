@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-06",
     "day": "6 November 2026",
-    "version": "1.89.48",
+    "version": "1.89.50",
     "lines": [
+      {
+        "text": "When a new version is ready, its card now has What’s new, which takes you straight to the list of what changed.",
+        "only": null
+      },
       {
         "text": "Blocks newer than the app, like the Axe-Fx III’s new NAM block, are now left alone in Edit: they show as New block, their spot is never shown as free, and nothing can be put over them.",
         "only": null

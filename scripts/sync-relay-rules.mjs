@@ -22,7 +22,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { phoneModule, websitePage } from './whats-new.mjs'
+import { phoneModule, websiteList, websitePage } from './whats-new.mjs'
 
 /**
  * Every file the phone carries a copy of, and where it came from.
@@ -685,6 +685,8 @@ export const FILES = [
    */
   { source: '../shared/whats-new.json', target: '../mobile/src/lib/whatsNew.js', render: (text) => phoneModule(text) },
   { source: '../shared/whats-new.json', target: '../public/whats-new.html', raw: true, render: (text) => websitePage(text) },
+  /* And the newest days as JSON, which What's new reads for the lines of an update waiting for a restart. */
+  { source: '../shared/whats-new.json', target: '../public/whats-new.json', raw: true, render: (text) => websiteList(text) },
   /*
    * What this build of the phone app is.
    *

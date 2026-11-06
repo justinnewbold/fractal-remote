@@ -49,7 +49,15 @@ let state = {
   /** When the running bundle was published, if it was. */
   publishedAt: null,
   /** The ready banner was put away with its ✕ — until the next launch. */
-  dismissed: false
+  dismissed: false,
+  /** The version the downloaded update was made at, from its manifest, or null: What's new shows its lines up to it (lib/whats-new-rule.js). */
+  waitingVersion: null
+}
+
+/* The version in an update's manifest (app.json's, carried in expoClient). Here rather than imported, so this file keeps its few imports. */
+const versionIn = (manifest) => {
+  const v = manifest?.extra?.expoClient?.version
+  return typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v) ? v : null
 }
 
 const watchers = new Set()
@@ -117,8 +125,8 @@ export const checkNow = async () => {
       return 'current'
     }
     set({ phase: 'downloading' })
-    await api.fetchUpdateAsync()
-    set({ phase: 'ready' })
+    const got = await api.fetchUpdateAsync()
+    set({ phase: 'ready', waitingVersion: versionIn(got?.manifest) || versionIn(found?.manifest) })
     return 'ready'
   } catch (err) {
     /*
