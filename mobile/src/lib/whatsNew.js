@@ -12,18 +12,14 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-06",
     "day": "6 November 2026",
-    "version": "1.89.52",
+    "version": "1.89.54",
     "lines": [
       {
-        "text": "Settings → About → Updates now shows Checking… while it looks, then the time it last checked.",
+        "text": "Settings → About → Updates now shows Checking… while it looks, then the time it last checked, and when a new version is ready, its card has What’s new, which takes you straight to the list of what changed.",
         "only": null
       },
       {
-        "text": "Which unit (tap your unit’s name on Play) is now one card per unit, showing the computer it’s on, whether it’s connected, and the preset and scene it’s on.",
-        "only": null
-      },
-      {
-        "text": "When a new version is ready, its card now has What’s new, which takes you straight to the list of what changed.",
+        "text": "Which unit (tap your unit’s name on Play) is now one card per unit, showing the computer it’s on, whether it’s connected, and the preset and scene it’s on. And switching to a computer with no unit plugged in no longer makes the screen flicker back and forth.",
         "only": null
       },
       {
@@ -31,7 +27,11 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "Plug your unit in by USB cable while you’re connected another way and the app notices: from a Bluetooth adapter it switches to the cable by itself, and through the computer it asks first, with Use USB cable or Not now.",
+        "text": "Plug your unit in by USB cable while connected another way and the app notices: from a Bluetooth adapter it switches by itself, through the computer it asks first. Unplug the cable and, after a few seconds, it goes back the way it was connected before, and back to the cable when it’s plugged in again.",
+        "only": null
+      },
+      {
+        "text": "After using a USB cable, the Bluetooth page’s Connect gets your Bluetooth adapter back instead of waiting for the cable, and Use a Bluetooth adapter instead sits beside Use the computer instead. Connect is bigger and blue, and Stop is only offered for what’s really connected.",
         "only": null
       },
       {

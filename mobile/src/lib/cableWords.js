@@ -52,11 +52,38 @@ export const CABLE_ROW_AWAY = 'USB cable · not plugged in'
 /* The waiting screen's, the Phone & computer page's and the pill note's one way out, and Look again. */
 export const CABLE_LOOK_AGAIN = 'Look for the unit again'
 export const CABLE_OFF = 'Use the computer instead'
+/*
+ * And the other way off a cable, beside it: "Use computer instead should say
+ * use Bluetooth or computer instead" (Justin, 6 November 2026). The adapter
+ * kept before the cable when there is one, or the Bluetooth page's Connect
+ * (lib/bluetooth adapterInsteadOfCable).
+ */
+export const CABLE_TO_ADAPTER = 'Use a Bluetooth adapter instead'
+export const CABLE_TO_ADAPTER_SUB = 'Instead of the USB cable'
+
+/**
+ * THE BLUETOOTH PAGE'S WAY OFF, WHILE IT IS ON, said for what is connected
+ * now. "It says stop using Bluetooth when it was last connected with USB.
+ * Nothing should say stop using a device that's not plugged in." (Justin, 6
+ * November 2026.) So: Stop using the USB cable, or Stop using Bluetooth,
+ * only while that one is connected; while it is not (unplugged, or an
+ * adapter not there), the way it goes instead, the computer. The same
+ * switch either way (setBluetooth(false)).
+ */
+export function leaveWords({ cable = false, connected = false } = {}) {
+  if (!connected) return { label: 'Use the computer instead', sub: cable ? 'The USB cable isn’t plugged in' : 'Goes back to the computer' }
+  return { label: cable ? 'Stop using the USB cable' : 'Stop using Bluetooth', sub: 'Goes back to the computer' }
+}
 
 /* The page, while it connects. */
 export const CABLE_CONNECTING_HINT = 'If this stays here, check the USB cable is in at both ends and the unit is switched on.'
 /* A cable chosen that is not plugged in now: it connects by itself when it is (bleLink heardDevices). */
 export const CABLE_AWAY = 'The USB cable isn’t plugged in. Plug it back in and it connects by itself.'
+/* The page's Connect hint, off, with the cable kept not plugged in: Connect uses a Bluetooth adapter then (lib/bluetooth adapterInsteadOfCable). */
+export const cableAwayHint = (adapter) =>
+  adapter
+    ? `The USB cable isn’t plugged in. Plug it in to use it, or tap Connect to use ${adapter} again.`
+    : 'The USB cable isn’t plugged in. Plug it in to use it, or tap Connect to find a Bluetooth adapter.'
 /* The waiting screen, after fifteen seconds. */
 export const CABLE_WAITING = 'Check the USB cable is in at both ends, and the unit is switched on.'
 /* Still nothing after a replug: what worked for the adapter (shared/bluetooth-gear CLOSE_AND_REOPEN), for the cable. */
@@ -203,6 +230,9 @@ export function cableChain(cards, { link, unitState, unit, jacks = false } = {})
  * plugged in again. `name` is the unit's name as the page writes it.
  */
 export const CABLE_SWITCHED = 'Switched to the USB cable.'
+/* And unplugged, back the way it was before the cable (lib/cablePlugIn, lib/bluetooth leaveCable): `to` 'adapter' or 'computer', `name` the adapter's. */
+export const cableLeftWords = ({ to, name } = {}) =>
+  to === 'adapter' ? `USB cable unplugged. Back to ${name || 'the Bluetooth adapter'}.` : 'USB cable unplugged. Back to the computer.'
 export const cablePluggedIn = (name) => `${name || 'Your unit'} plugged in by USB cable.`
 export const CABLE_OFFER_NOTE = 'The computer is still the best way, and some things only work through it.'
 export const CABLE_USE = 'Use USB cable'

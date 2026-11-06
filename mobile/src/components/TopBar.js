@@ -14,8 +14,8 @@ import { shouldOffer, usePurchase } from '../lib/purchases'
 import setupIcon from '../../assets/icons/setup.png'
 import volumeIcon from '../../assets/icons/volume.png'
 import wirelessIcon from '../../assets/icons/wireless.png'
-import { setBluetooth, useBluetoothOn, useCableNow } from '../lib/bluetooth'
-import { CABLE_OFF, CABLE_WHERE, cableNote } from '../lib/cableWords'
+import { adapterInsteadOfCable, setBluetooth, useBluetoothOn, useCableNow } from '../lib/bluetooth'
+import { CABLE_OFF, CABLE_TO_ADAPTER, CABLE_WHERE, cableNote } from '../lib/cableWords'
 import { idOf } from '../lib/device'
 import Lamp from './Lamp'
 import { GlassDisc } from './Glass'
@@ -52,7 +52,7 @@ const face = Platform.select(mono)
  * The words come from shared/link-word.mjs rather than from here, so the two
  * apps cannot drift into saying different things about the same link.
  */
-export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, saveHere: saveWanted = true }) {
+export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, saveHere: saveWanted = true }) {
   const unit = useRig(ofDeviceName)
   const unitState = useRig(ofUnitState)
   const blocks = useRig(ofAllBlocks)
@@ -606,7 +606,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
       */}
       <Volume blocks={blocks} open={volume} onClose={() => setVolume(false)} onError={setFailed} />
       {failed ? <Reported said={failed} onClear={() => setFailed(null)} /> : null}
-      {saying && bluetooth ? <Which link={link} cable={cable} onClose={() => setSaying(false)} onReport={onReport} /> : null}
+      {saying && bluetooth ? <Which link={link} cable={cable} onClose={() => setSaying(false)} onReport={onReport} onBluetoothPage={onBluetoothPage} /> : null}
       {saveTo.said && saveHere ? <Saved said={saveTo.said} onClear={saveTo.dismiss} /> : null}
       {/*
         A save from Play runs late the same as one from Edit, and Play has no
@@ -663,7 +663,7 @@ const ofAllBlocks = (s) => s.allBlocks
  * adapter and nothing to switch to, so this note, and the switch back to the
  * computer, stay one tap from the bar.
  */
-function Which({ link, cable = false, onClose, onReport = null }) {
+function Which({ link, cable = false, onClose, onReport = null, onBluetoothPage = null }) {
   const adapter = link?.macName || 'the adapter'
   /* A unit on a USB cable: the cable's words (lib/cableWords cableNote), and the same one way back to the computer, named for it. */
   const said = cable
@@ -734,6 +734,31 @@ function Which({ link, cable = false, onClose, onReport = null }) {
         >
           <Text style={{ color: color.silk, fontSize: font.body }}>{off}</Text>
         </Pressable>
+        {/*
+          ON A USB CABLE, THE OTHER WAY OFF IT TOO: "Use computer instead
+          should say use Bluetooth or computer instead" (Justin, 6 November
+          2026). The Bluetooth adapter kept before the cable, straight away,
+          or, with none, the Bluetooth page to connect one (lib/bluetooth
+          adapterInsteadOfCable), only where that page is drawn for this
+          account (App's onBluetoothPage, the row's own gate).
+        */}
+        {cable && onBluetoothPage ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={CABLE_TO_ADAPTER}
+            accessibilityHint="Connects through a Bluetooth adapter instead of the USB cable"
+            onPress={() => {
+              tick()
+              fire(`press ${CABLE_TO_ADAPTER}`, () => {
+                if (!adapterInsteadOfCable({ byHand: true })) onBluetoothPage()
+              })
+              onClose()
+            }}
+            style={button}
+          >
+            <Text style={{ color: color.silk, fontSize: font.body }}>{CABLE_TO_ADAPTER}</Text>
+          </Pressable>
+        ) : null}
         {/*
           REPORT A PROBLEM, beside it, in every state of the link: the
           one-tap Bluetooth report, with what this note says going with it,

@@ -186,7 +186,8 @@ export function run(test) {
       /const button = \(\{ pressed \}\) => \(\{ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingHorizontal: space\.lg, borderRadius: classic\(\) \? radius\.md : radius\.pill, borderWidth: 1, borderColor: color\.glassRim, backgroundColor: classic\(\) \? \(pressed \? color\.panel : color\.chassis\) : pressed \? color\.glassFillHi : color\.glassFill, boxShadow: color\.glassLift \}\)/,
       'Turn off Bluetooth and Report a problem are not glass capsules, or their size changed'
     )
-    assert.equal((body(bar, 'function Which(').match(/style=\{button\}/g) || []).length, 2, 'not both of Which’s buttons wear it')
+    /* Three since 6 November 2026: on a USB cable, Use a Bluetooth adapter instead beside them. */
+    assert.equal((body(bar, 'function Which(').match(/style=\{button\}/g) || []).length, 3, 'not all of Which’s buttons wear it')
     assert.match(
       body(bar, 'function Late('),
       /accessibilityLabel="Cancel the save" hitSlop=\{8\} onPress=\{[^}]*\}\} style=\{\(\{ pressed \}\) => \(\{ minHeight: 36, justifyContent: 'center', paddingHorizontal: space\.md, borderRadius: classic\(\) \? radius\.md : radius\.pill, borderWidth: 1, borderColor: color\.glassRim, backgroundColor: classic\(\) \? \(pressed \? color\.panel : color\.chassis\) : pressed \? color\.glassFillHi : color\.glassFill, boxShadow: color\.glassLift \}\)\}/,

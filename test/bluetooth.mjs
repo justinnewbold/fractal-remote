@@ -5777,7 +5777,7 @@ export function run(test) {
      */
     assert.match(waking, /\{bluetooth \? \( <View style=\{\{ alignSelf: 'stretch' \}\}> <Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/, 'the Bluetooth waiting screen has no way back to the computer')
     assert.ok(waking.indexOf('Use the computer instead') < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way back to the computer waits fifteen seconds')
-    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, allowBluetooth, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
+    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, adapterInsteadOfCable, allowBluetooth, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     /* Handed only through the Settings row's own gate: test 'every way onto the Bluetooth page' holds it. */
     assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
@@ -6765,8 +6765,11 @@ export function run(test) {
      * Three: the waiting screen's, the Which unit sheet's off the Live pill,
      * and, since 3 November 2026, the one after a found purchase's Bluetooth
      * way has signed in (askedBluetooth), all behind bluetoothOffered.
+     * Four since 6 November 2026: the Live pill's note on a USB cable, Use a
+     * Bluetooth adapter instead (TopBar onBluetoothPage), behind it too.
      */
-    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 3, 'App.js opens the Bluetooth page from somewhere else too')
+    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 4, 'App.js opens the Bluetooth page from somewhere else too')
+    assert.ok(app.includes("onBluetoothPage={bluetoothOffered ? () => openSettings('bluetooth') : null}"), 'the pill note’s Bluetooth adapter button is behind another gate')
     assert.ok(app.includes("if (auth !== 'in' || !askedBluetooth.current || !bluetoothOffered) return askedBluetooth.current = false openSettings('bluetooth')"), 'the found purchase’s Bluetooth way opens the page from behind another gate')
     assert.ok(app.includes("onBluetooth={bluetoothOffered ? () => (setPickLive(false), openSettings('bluetooth')) : null}"), 'the Which unit sheet’s Bluetooth button is behind another gate')
     assert.ok(app.includes('const bluetoothOffered = useBluetoothOffered()'), 'the waiting screen’s way in is not the Settings row’s gate')
@@ -6778,7 +6781,9 @@ export function run(test) {
     const waking = app.slice(app.indexOf('function Waking('))
     const uses = [...waking.matchAll(/onPress=\{onBluetooth\}/g)].length
     assert.equal(uses, 2, 'the waiting screen opens the Bluetooth page from more or fewer than its two buttons')
-    assert.equal((waking.match(/&& onBluetooth (?:&& !elsewhere )?\? (?:\( )?<Press/g) || []).length, 2, 'a waiting-screen button opens the Bluetooth page without the gate')
+    /* Three since 6 November 2026: on a USB cable, Use a Bluetooth adapter instead, whose page is the same gate's (cable && onBluetooth). */
+    assert.equal((waking.match(/&& onBluetooth (?:&& !elsewhere )?\? (?:\( )?<Press/g) || []).length, 3, 'a waiting-screen button opens the Bluetooth page without the gate')
+    assert.match(waking, /\{cable && onBluetooth \? \( <Press label=\{CABLE_TO_ADAPTER\} sub=\{CABLE_TO_ADAPTER_SUB\} style=\{\{ marginTop: space\.sm \}\} onPress=\{\(\) => adapterInsteadOfCable\(\{ byHand: true \}\) \|\| onBluetooth\(\)\} \/> \) : null\}/, 'the waiting screen’s cable has no Bluetooth adapter way, or it skips the gate')
     /*
      * THE NEW WAY IN: "No computer? Use Bluetooth", while it is off,
      * with what it costs against the computer under it (and, to a customer,
@@ -7244,7 +7249,7 @@ export function run(test) {
     assert.match(page, /const reconnect = \(\) => lookForAdapterAgain\(probeNow\)/)
     assert.match(page, /\{away \? <Press label="Reconnect" tone="live" sub=\{APPLE_SCREEN_OPENS\} onPress=\{reconnect\} \/> : null\}/)
     const onHalf = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf(') : ( <View style={{ gap: space.lg }}>'))
-    assert.ok(onHalf.indexOf('label="Reconnect"') > 0 && onHalf.indexOf('label="Reconnect"') < onHalf.indexOf('label="Stop using Bluetooth"'), 'Reconnect is not over Stop while it is on')
+    assert.ok(onHalf.indexOf('label="Reconnect"') > 0 && onHalf.indexOf('label="Reconnect"') < onHalf.indexOf('label={stop.label}'), 'Reconnect is not over Stop while it is on')
     /* And the hint over it says to check the adapter first: a power bank that switched itself off leaves Apple's screen empty on every tap. */
     assert.match(page, /: away \? `The adapter isn’t connected to this \$\{deviceNoun\(\)\} now\. Check it is plugged in and lit, then tap Reconnect\.`/)
     /* The waiting screen's Look again, and Phone & computer's. */
@@ -7379,7 +7384,7 @@ export function run(test) {
     const cut = ternary.indexOf(') : ( <View style={{ gap: space.lg }}>')
     assert.ok(cut > 0, 'the on/off ternary could not be split; this read is probably broken')
     const [onPart, offPart] = [ternary.slice(0, cut), ternary.slice(cut)]
-    assert.ok(onPart.includes('<Press label="Stop using Bluetooth"'), 'Stop is not in the on half')
+    assert.ok(onPart.includes('<Press label={stop.label}'), 'Stop is not in the on half')
     assert.ok(!onPart.includes('<UnitChips '), 'the units are drawn while it is on')
     assert.ok(offPart.includes('<UnitChips '), 'the units are not drawn while it is off')
     assert.equal((page.match(/units\.map\(/g) || []).length, 1, 'the unit chips are drawn in more than one place')
@@ -7657,7 +7662,7 @@ export function run(test) {
     /* Except on an iPhone it is not connected to: Apple's screen is the only way back, so Connect opens it. */
     assert.match(page, /if \(b\.adapter && ios && offlineHere\(b\.adapter\)\) return another\(\)/, 'Connect on an iPhone waits for an offline adapter instead of opening Apple’s screen')
     assert.match(page, /const seen = adapterDevices\(\)\.find\(\(d\) => d\.id === a\.id\) return !seen \|\| !!seen\.offline/)
-    assert.match(page, /<Press label="Stop using Bluetooth" sub="Goes back to the computer" height=\{52\} onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
+    assert.match(page, /<Press label=\{stop\.label\} sub=\{stop\.sub\} height=\{52\} onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
     /* The old buttons are gone from the way through. */
     const drawn = code('mobile/src/screens/Bluetooth.js')
     for (const gone of ['Use Bluetooth: on', 'Use Bluetooth: off', 'Forget this adapter', 'Use this one', '"Disconnect"']) {
@@ -7902,7 +7907,7 @@ export function run(test) {
   test('over Bluetooth, CONNECTED opens a note with Turn off Bluetooth, which does what Stop does', async () => {
     /* "Make it so you can click the connected button at the top of the screen and have a button that pop up that says turn off Bluetooth." */
     const bar = flat('mobile/src/components/TopBar.js')
-    assert.match(bar, /import \{ setBluetooth, useBluetoothOn, useCableNow \} from '\.\.\/lib\/bluetooth'/, 'the bar cannot turn Bluetooth off')
+    assert.match(bar, /import \{ adapterInsteadOfCable, setBluetooth, useBluetoothOn, useCableNow \} from '\.\.\/lib\/bluetooth'/, 'the bar cannot turn Bluetooth off')
     /*
      * The word CONNECTED is the pill since 24 October 2026 (Axiom's "Live ●
      * AM4" over "on Raspberry Pi"), and over Bluetooth, in every state of the
@@ -7910,7 +7915,7 @@ export function run(test) {
      */
     assert.match(bar, /onPress=\{\(\) => \{ tick\(\) if \(bluetooth\) \{ setSaying\(\(open\) => !open\) return \}/, 'the pill does not open the note over Bluetooth')
     /* With Report a problem beside Turn off Bluetooth since 25 October 2026 (onReport, App's, through the page's gate). */
-    assert.match(bar, /\{saying && bluetooth \? <Which link=\{link\} cable=\{cable\} onClose=\{\(\) => setSaying\(false\)\} onReport=\{onReport\} \/> : null\}/)
+    assert.match(bar, /\{saying && bluetooth \? <Which link=\{link\} cable=\{cable\} onClose=\{\(\) => setSaying\(false\)\} onReport=\{onReport\} onBluetoothPage=\{onBluetoothPage\} \/> : null\}/)
     assert.match(bar, /useEffect\(\(\) => \{ if \(!bluetooth\) setSaying\(false\) \}, \[bluetooth\]\)/, 'the note is left open, to come back by itself when Bluetooth next comes on')
     const ble = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
     assert.ok(ble.length > 0 && ble.includes('Connected over Bluetooth, through'), 'the Bluetooth note is not where this looks')
@@ -7925,7 +7930,7 @@ export function run(test) {
       /onPress=\{\(\) => \{ tick\(\) fire\(`press \$\{off\}`, \(\) => setBluetooth\(false\)\) onClose\(\) \}\}/,
       'Turn off Bluetooth does something other than Stop'
     )
-    assert.match(flat('mobile/src/screens/Bluetooth.js'), /<Press label="Stop using Bluetooth" sub="Goes back to the computer" height=\{52\} onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /<Press label=\{stop\.label\} sub=\{stop\.sub\} height=\{52\} onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
     assert.match(flat('mobile/App.js'), /<Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
     assert.match(ble, /accessible=\{false\} onPress=\{onClose\}/, 'VoiceOver cannot reach Turn off Bluetooth inside the note')
     /* On a bench: off, kept off, unit and adapter kept, said in the log. */
@@ -8771,7 +8776,7 @@ export function run(test) {
     /* The list's heading says how many there are: one row is not "More than one". */
     assert.match(page, /b\.looking \? 'Found so far\. Tap yours:' : b\.devices\.length > 1 \? 'More than one is here\. Tap yours:' : b\.devices\.some\(isCable\) \? 'Tap yours:' : 'Tap your adapter:'/, 'a single row is headed More than one is here')
     /* While it is on the unit chips are gone: a line over Stop says which, and how to change it. */
-    const onHalf = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('<Press label="Stop using Bluetooth"'))
+    const onHalf = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('<Press label={stop.label}'))
     assert.match(onHalf, /\{b\.unit \? <Hint>\{`Unit: \$\{unitName\(b\.unit\)\}\. Tap Stop to change it\.`\}<\/Hint> : null\}/, 'nothing names the unit while it is on')
 
     /* A row is a Press like every other button, so it is in the tap log and has the haptic; and it says what a tap does. */
@@ -9464,9 +9469,10 @@ export function run(test) {
 
   test('the note under Play’s pill has Report a problem beside Turn off Bluetooth, each its own button, and says the device in hand', () => {
     const bar = flat('mobile/src/components/TopBar.js')
-    assert.match(bar, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, saveHere: saveWanted = true \}\)/)
+    /* And, since 6 November 2026, the Bluetooth page for a USB cable's Use a Bluetooth adapter instead (onBluetoothPage, App's gate). */
+    assert.match(bar, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, saveHere: saveWanted = true \}\)/)
     const ble = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
-    assert.match(ble, /function Which\(\{ link, cable = false, onClose, onReport = null \}\)/)
+    assert.match(ble, /function Which\(\{ link, cable = false, onClose, onReport = null, onBluetoothPage = null \}\)/)
     /* Two buttons, each its own element to VoiceOver inside a note that is not one. */
     assert.match(ble, /accessible=\{false\} onPress=\{onClose\}/)
     assert.match(ble, /accessibilityRole="button" accessibilityLabel=\{off\} accessibilityHint=\{`The \$\{deviceNoun\(\)\} goes back to using the computer`\}/)
@@ -10922,7 +10928,16 @@ export function run(test) {
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.match(page, /const away = b\.on && b\.phase === 'connecting' && ios && !shut && adapterAway\(\)/)
     assert.match(page, /if \(b\.adapter && cable && offlineHere\(b\.adapter\)\) return cableFromLastTime\(\) if \(b\.adapter && ios && offlineHere\(b\.adapter\)\) return another\(\)/, 'Connect sends a cable kept from last time to Apple’s screen')
-    assert.match(page, /const cableFromLastTime = \(\) => \{ if \(!cablesConnectTakes\(adapterDevices\(\)\)\.length\) return setBluetooth\(true\) forgetAdapter\(\) find\(\) \}/)
+    /*
+     * Changed on purpose on 6 November 2026: with no cable plugged in at all,
+     * Connect no longer turns Bluetooth on to wait for the cable ("I couldn't
+     * reconnect a Bluetooth device again after connecting the USB cable"),
+     * but uses the Bluetooth adapter from before the cable, or looks for one
+     * (lib/bluetooth adapterInsteadOfCable); another cable plugged in is
+     * still found as before.
+     */
+    assert.match(page, /const cableFromLastTime = \(\) => \{ if \(cablesConnectTakes\(adapterDevices\(\)\)\.length\) \{ forgetAdapter\(\) return find\(\) \}/)
+    assert.match(page, /const back = adapterInsteadOfCable\(\) if \(!back\) return find\(\{ cableFirst: false \}\) if \(ios && offlineHere\(back\)\) return another\(\) setBluetooth\(true\) \}/, 'Connect with the cable unplugged waits for the cable instead of a Bluetooth adapter')
     /* Another adapter, for one kept from last time and gone: Apple's screen, never a cable in its place. */
     assert.match(page, /const another = \(\) => \{ if \(!canStart\) return forgetAdapter\(\) find\(\{ cableFirst: false \}\) \}/, 'Connect for an adapter that went can take a cable in its place')
     assert.match(page, /onPress=\{\(\) => forgetAdapter\(\{ byHand: true \}\)\} \/>/, 'Forget the USB cable does not let the cable go for Connect')
@@ -10930,6 +10945,160 @@ export function run(test) {
     assert.match(page, /const takes = cablesConnectTakes\(listed\)/)
     assert.match(page, /: takes\.length \? cableListedHint\(takes\)/)
     assert.match(page, /\{b\.phase === 'connecting' && cable \? <Hint>\{cableAway\(\) \? CABLE_AWAY : CABLE_CONNECTING_HINT\}<\/Hint> : null\} \{b\.phase === 'connecting' && !cable \? \(/, 'the page sends a cable to Apple’s screen while it connects')
+  })
+
+  /*
+   * "I also got stuck where I couldn't reconnect a Bluetooth device again
+   * after connecting the USB cable on the android. Could be an issue with
+   * the iPhone as well." And "When unplugging the USB cable, it should
+   * automatically reconnect to the last connected device" (Justin, 6
+   * November 2026). His log: Connect over Bluetooth, then "Bluetooth turned
+   * on, for the AM4" and "the USB cable is not plugged in yet; trying again
+   * in 3 s … 6 s … 12 s … 24 s … 30 s": the cable had taken the adapter's
+   * place, and Connect could only wait for it. lib/bluetooth notes what a
+   * cable took over from, goes back to it (leaveCable), and Connect and Use
+   * a Bluetooth adapter instead use it (adapterInsteadOfCable).
+   */
+  test('a USB cable remembers what it took over from: back to it when unplugged, and a Bluetooth adapter can always be connected again after it', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    for (const os of ['ios', 'android']) {
+      const AM4 = os === 'ios' ? AM4_ON_CABLE : { id: 'usb:2466:0006', name: 'AM4', transport: 'usb' }
+      const ADAPTER = os === 'ios' ? UHOST : { id: 'AA:BB:CC:00:11:22', name: 'WIDI Jack', rssi: -50 }
+      let list = [ADAPTER, AM4]
+      const mod = { supported: () => true, devices: () => list, authorization: () => 'allowedAlways', addListener: () => ({ remove() {} }) }
+      const bench = await bluetoothOnABench({ os, mod, disk: { 'fractal.bluetooth': JSON.stringify({ on: true, unit: 'am4', adapter: ADAPTER }) } })
+      let disk = null
+      try {
+        const b = bench.ble
+        b.allowBluetooth(ADMINS[0])
+        assert.equal(await b.restoreBluetooth(), true)
+        assert.equal(b.adapterBeforeCable(), null, `${os}: an adapter is noted before any cable`)
+        /* Through the adapter, the cable plugged in and switched to (lib/cablePlugIn takeCable): the adapter and the way are noted. */
+        assert.equal(b.takeCable(AM4, 'am4'), true)
+        assert.equal(b.bluetoothSettings().adapter.id, AM4.id)
+        assert.equal(b.adapterBeforeCable()?.id, ADAPTER.id, `${os}: the adapter the cable took over from is forgotten`)
+        assert.deepEqual(JSON.parse(bench.disk.get('fractal.bluetooth.cable')), { adapter: { id: ADAPTER.id, name: ADAPTER.name, ...(ADAPTER.driver ? { driver: ADAPTER.driver } : {}) }, unit: 'am4', from: 'adapter' })
+        /* The settings keep their shape on the disk: the note is under its own key. */
+        assert.deepEqual(Object.keys(JSON.parse(bench.disk.get('fractal.bluetooth'))).sort(), ['adapter', 'methods', 'on', 'pcChannel', 'unit'])
+        /* Unplugged and gone: back to that adapter, Bluetooth left on. */
+        list = [ADAPTER]
+        assert.deepEqual(b.leaveCable(), { to: 'adapter', name: ADAPTER.name })
+        assert.equal(b.bluetoothSettings().adapter.id, ADAPTER.id, `${os}: unplugged, it stays on the cable`)
+        assert.equal(b.bluetoothSettings().on, true)
+        assert.ok(bench.log.some((l) => /^ble the USB cable stayed unplugged: back to /.test(l)), 'going back is not logged')
+        assert.equal(b.leaveCable(), null, 'left a cable it is not on')
+        /* A Bluetooth adapter chosen is the one kept: nothing is noted any more. */
+        assert.equal(b.adapterBeforeCable(), null)
+
+        /* From the computer: Bluetooth off, the cable taken (Use USB cable), then unplugged: back to the computer, the cable still kept for its replug. */
+        b.setBluetooth(false)
+        list = [ADAPTER, AM4]
+        assert.equal(b.takeCable(AM4, 'am4'), true)
+        assert.equal(JSON.parse(bench.disk.get('fractal.bluetooth.cable')).from, 'computer')
+        list = []
+        assert.deepEqual(b.leaveCable(), { to: 'computer', name: null })
+        assert.equal(b.bluetoothSettings().on, false, `${os}: unplugged from the computer’s place, it does not go back to the computer`)
+        assert.equal(b.bluetoothSettings().adapter.id, AM4.id, 'the cable is forgotten, so plugging it back in cannot be offered')
+
+        /* The spoken one: the cable kept and unplugged, Connect (or Use a Bluetooth adapter instead) gets the Bluetooth adapter back. */
+        assert.equal(b.adapterBeforeCable()?.id, ADAPTER.id)
+        assert.equal(b.adapterInsteadOfCable()?.id, ADAPTER.id, `${os}: no Bluetooth adapter can be connected again after the cable`)
+        assert.equal(b.bluetoothSettings().adapter.id, ADAPTER.id)
+        assert.equal(b.cableLetGo(AM4.id), false, 'Connect with the cable unplugged let it go for good')
+        assert.equal(b.setBluetooth(true), true)
+        assert.equal(b.adapterInsteadOfCable(), null, 'a Bluetooth adapter is put in its own place')
+        disk = Object.fromEntries(bench.disk)
+      } finally {
+        bench.done()
+      }
+
+      /* With no adapter from before (or one for another unit): the cable let go of by hand, Bluetooth off, and Connect searches. */
+      list = [AM4]
+      const fresh = await bluetoothOnABench({ os, mod, disk: { 'fractal.bluetooth': JSON.stringify({ on: true, unit: 'am4', adapter: AM4 }), 'fractal.bluetooth.cable': JSON.stringify({ adapter: ADAPTER, unit: 'fm3', from: 'adapter' }) } })
+      try {
+        const b = fresh.ble
+        b.allowBluetooth(ADMINS[0])
+        assert.equal(await b.restoreBluetooth(), true)
+        assert.equal(b.adapterBeforeCable(), null, `${os}: another unit’s adapter is the AM4’s way back`)
+        assert.equal(b.adapterInsteadOfCable({ byHand: true }), null)
+        assert.equal(b.bluetoothSettings().on, false)
+        assert.equal(b.bluetoothSettings().adapter, null)
+        assert.equal(b.cableLetGo(AM4.id), true, 'asked for by hand with the cable in, Connect takes the cable straight back')
+        assert.deepEqual(b.cablesConnectTakes(list), [], 'Connect takes the cable instead of looking for an adapter')
+        /* From the computer with nothing noted: leaving goes to the computer. */
+        list = [AM4]
+        b.chooseAdapter(AM4)
+        b.setBluetooth(true)
+        list = []
+        assert.equal(b.leaveCable().to, 'computer')
+      } finally {
+        fresh.done()
+      }
+
+      /* And what was noted is there after a restart. */
+      const again = await bluetoothOnABench({ os, mod, disk: { ...disk, 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: AM4 }), 'fractal.bluetooth.cable': JSON.stringify({ adapter: ADAPTER, unit: 'am4', from: 'adapter' }) } })
+      try {
+        again.ble.allowBluetooth(ADMINS[0])
+        await again.ble.restoreBluetooth()
+        assert.equal(again.ble.adapterBeforeCable()?.id, ADAPTER.id, `${os}: the adapter from before the cable is forgotten at a restart`)
+      } finally {
+        again.done()
+      }
+      /* Nonsense on the disk is nothing: never Apple's network session, never a cable. */
+      const junk = await bluetoothOnABench({ os, mod, disk: { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: AM4 }), 'fractal.bluetooth.cable': JSON.stringify({ adapter: AM4, unit: 'am4', from: 'sideways' }) } })
+      try {
+        junk.ble.allowBluetooth(ADMINS[0])
+        await junk.ble.restoreBluetooth()
+        assert.equal(junk.ble.adapterBeforeCable(), null, 'a cable is kept as the adapter from before a cable')
+      } finally {
+        junk.done()
+      }
+    }
+  })
+
+  test('the Bluetooth page with a USB cable: Connect uses a Bluetooth adapter when the cable is out, a Bluetooth adapter is always offered, and nothing says stop using what is not plugged in', async () => {
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    /* Off, with a cable kept: Use a Bluetooth adapter instead, under Connect. */
+    assert.match(page, /const offerAdapterInstead = !!b\.adapter && cable && canStart && !b\.on/)
+    assert.match(page, /\{offerAdapterInstead \? <Press label=\{CABLE_TO_ADAPTER\} sub=\{CABLE_TO_ADAPTER_SUB\} height=\{52\} disabled=\{b\.looking\} onPress=\{adapterInstead\} \/> : null\}/)
+    assert.match(page, /const back = adapterInsteadOfCable\(\{ byHand: true \}\) if \(!back\) return find\(\{ cableFirst: false \}\)/, 'the page’s Use a Bluetooth adapter instead can take the cable back')
+    /* The hint under Connect says what it does with the cable out. */
+    assert.match(page, /: cableOut \? cableAwayHint\(before \? adapterName\(before\) \|\| 'the Bluetooth adapter' : null\)/)
+    /* On: the way off is said for what is connected (lib/cableWords leaveWords). */
+    assert.match(page, /const stop = leaveWords\(\{ cable, connected \}\)/)
+    const W = await import('../mobile/src/lib/cableWords.js')
+    assert.deepEqual(W.leaveWords({ cable: true, connected: true }), { label: 'Stop using the USB cable', sub: 'Goes back to the computer' })
+    assert.deepEqual(W.leaveWords({ cable: false, connected: true }), { label: 'Stop using Bluetooth', sub: 'Goes back to the computer' })
+    for (const cable of [true, false]) {
+      const off = W.leaveWords({ cable, connected: false })
+      assert.ok(!/^Stop using/.test(off.label), `“${off.label}” for ${cable ? 'a cable' : 'an adapter'} that is not connected`)
+      assert.equal(off.label, 'Use the computer instead')
+    }
+    assert.equal(W.leaveWords({ cable: true, connected: false }).sub, 'The USB cable isn’t plugged in')
+    assert.equal(W.CABLE_TO_ADAPTER, 'Use a Bluetooth adapter instead')
+    assert.match(W.cableAwayHint('WIDI Jack'), /Plug it in to use it, or tap Connect to use WIDI Jack again\.$/)
+    assert.match(W.cableAwayHint(null), /tap Connect to find a Bluetooth adapter\.$/)
+    assert.equal(W.cableLeftWords({ to: 'adapter', name: 'WIDI Jack' }), 'USB cable unplugged. Back to WIDI Jack.')
+    assert.equal(W.cableLeftWords({ to: 'computer' }), 'USB cable unplugged. Back to the computer.')
+    for (const words of [W.CABLE_TO_ADAPTER, W.CABLE_TO_ADAPTER_SUB, W.cableAwayHint('X'), W.cableAwayHint(null), W.cableLeftWords({}), ...[true, false].flatMap((c) => [true, false].map((n) => W.leaveWords({ cable: c, connected: n }).label))]) {
+      assert.ok(!/this phone|beta/i.test(words), `“${words}”`)
+    }
+    /*
+     * CONNECT, BIGGER, WITH ITS MARK, IN BLUETOOTH'S BLUE: "Make the connect
+     * under Bluetooth menu button bigger and show the Bluetooth symbol and
+     * change the text color to blue." The mark is the app's own aerial, as
+     * the top bar's: the Runic B is the Bluetooth group's (test/independent.mjs).
+     */
+    assert.match(page, /<Press label=\{b\.looking \? 'Looking…' : 'Connect'\} icon=\{wirelessIcon\} inkColor=\{color\.ble\} labelSize=\{font\.lead\} height=\{64\} tone="live" disabled=\{!canStart \|\| b\.looking\} onPress=\{start\} \/>/)
+    assert.match(src('mobile/src/screens/Bluetooth.js'), /import wirelessIcon from '\.\.\/\.\.\/assets\/icons\/wireless\.png'/)
+    const press = flat('mobile/src/components/Press.js')
+    assert.match(press, /const wordInk = inkColor && !on && !disabled \? inkColor : ink/, 'Press’s own colour is not kept for lit or disabled')
+    assert.match(press, /\{icon && !bare \? <Picture source=\{icon\} tint=\{wordInk\} flip=\{flip\} \/> : null\}/)
+    assert.match(press, /color: wordInk, fontSize: word\.size/)
+    /* And the pill's note on a cable offers both ways. */
+    const bar = flat('mobile/src/components/TopBar.js')
+    assert.match(bar, /\{cable && onBluetoothPage \? \( <Pressable accessibilityRole="button" accessibilityLabel=\{CABLE_TO_ADAPTER\}/)
+    assert.match(bar, /fire\(`press \$\{CABLE_TO_ADAPTER\}`, \(\) => \{ if \(!adapterInsteadOfCable\(\{ byHand: true \}\)\) onBluetoothPage\(\) \}\)/)
   })
 
   test('the link over a USB cable: on Android it is asked of the list, connects the moment it is plugged in, and the log says the cable', async () => {
@@ -11180,7 +11349,8 @@ export function run(test) {
       ["from './bleWire'", `from '${real('bleWire.js')}'`],
       ["from './bleAdapters'", `from '${real('bleAdapters.js')}'`],
       ["from './bluetooth'", "from './bluetooth.js'"],
-      ["from './debugLog'", "from './debugLog.js'"]
+      ["from './debugLog'", "from './debugLog.js'"],
+      ["from './cableWords'", `from '${real('cableWords.js')}'`]
     ]) {
       assert.ok(lib.includes(from), `lib/cablePlugIn no longer imports ${from}: the bench needs telling`)
       lib = lib.replace(from, to)
@@ -11205,6 +11375,7 @@ export function run(test) {
         "export const onAdapter = (event, fn) => { if (event !== 'onDevices') throw new Error(event); heard.add(fn); return () => heard.delete(fn) }",
         'export const subscribeBluetooth = (fn) => { subs.add(fn); return () => subs.delete(fn) }',
         "export const takeCable = (dev, unit) => { st.taken.push([dev.id, unit]); st.settings = { ...st.settings, on: true, unit, adapter: dev }; st.phase = 'connecting'; ring(); return true }",
+        "export const leaveCable = () => { st.left = (st.left || 0) + 1; st.settings = { ...st.settings, on: false }; st.phase = 'off'; ring(); return { to: 'computer', name: null } }",
         'export const unitName = (k) => String(k).toUpperCase()',
         'export const unitOfferedNow = (k) => st.offered.has(k)',
         'export const plug = (list) => { st.list = list; for (const f of [...heard]) f({ devices: list }) }',
@@ -11309,6 +11480,155 @@ export function run(test) {
     const watch = code('mobile/src/lib/cablePlugIn.js')
     for (const word of ['findAdapters', 'pair(', 'scan(', 'requestPermissions', 'connectAdapter', 'glanceForAdapters', 'lookForAdapterAgain', 'openWire']) {
       assert.ok(!watch.includes(word), `the cable watch calls ${word}`)
+    }
+  })
+
+  /*
+   * "When unplugging the USB cable, it should automatically reconnect to the
+   * last connected device, if no other device is currently connected, it
+   * should pull up that screen. It shows that nothing's connected" (Justin,
+   * 6 November 2026, Android: "the USB cable was unplugged", then "the USB
+   * cable is not plugged in yet; trying again in 3 s … 24 s" under "Finding
+   * AM4…"). lib/cablePlugIn gives a pulled cable CABLE_GONE_MS to come back,
+   * then goes back the way it was (lib/bluetooth leaveCable), says so, and
+   * takes the cable again when it is plugged back in (bleAdapters cablePlugIn
+   * `back`).
+   */
+  test('a USB cable unplugged: a moment to come back, then back the way it was, said on Play, and taken again when plugged back in', async () => {
+    const A = await import('../mobile/src/lib/bleAdapters.js')
+    const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
+    const all = new Set(BLE_UNITS.map((u) => u.key))
+    const USB = 'com.apple.AppleMIDIUSBDriver'
+    const AM4 = { id: '11:12', name: 'AM4', offline: false, driver: USB }
+    const C2 = { id: '41:42', name: 'C2MIDI Pro', offline: false, driver: USB }
+    const UHOST = { id: '21:22', name: 'WIDI Uhost', offline: false, driver: 'com.apple.AppleMIDIBluetoothDriver' }
+    const rule = (patch = {}) => ({ open: true, mode: 'computer', kept: null, unit: 'am4', units: BLE_UNITS, offered: (k) => all.has(k), skip: new Set(), dismissed: new Set(), ...patch })
+    /* The pure rule: the cable it was on is switched back to, through the computer too, and a cable named for no unit for the unit it was on. */
+    assert.deepEqual(A.cablePlugIn([AM4], rule({ kept: AM4, back: { id: AM4.id, unit: 'am4' } })), { act: 'switch', cable: AM4, unit: 'am4' })
+    assert.deepEqual(A.cablePlugIn([UHOST, C2], rule({ mode: 'adapter', kept: UHOST, unit: 'axefx3', back: { id: C2.id, unit: 'axefx3' } })), { act: 'switch', cable: C2, unit: 'axefx3' })
+    /* Still never one let go of by hand, put off with Not now, or a unit not offered. */
+    assert.equal(A.cablePlugIn([AM4], rule({ back: { id: AM4.id, unit: 'am4' }, skip: new Set([AM4.id]) })), null)
+    assert.equal(A.cablePlugIn([AM4], rule({ back: { id: AM4.id, unit: 'am4' }, dismissed: new Set([AM4.id]) })), null)
+    assert.equal(A.cablePlugIn([AM4], rule({ back: { id: AM4.id, unit: 'am4' }, offered: () => false })), null)
+    /* Another cable than the one it was on is offered as before. */
+    assert.deepEqual(A.cablePlugIn([AM4], rule({ back: { id: 'usb:other', unit: 'am4' } })), { act: 'offer', cable: AM4, unit: 'am4' })
+
+    /* The watch, on a bench with a clock this test turns. */
+    const dir = mkdtempSync(join(tmpdir(), 'cable-gone-'))
+    const real = (f) => new URL(`../mobile/src/lib/${f}`, import.meta.url).href
+    let lib = src('mobile/src/lib/cablePlugIn.js')
+    for (const [from, to] of [
+      ["from 'react'", "from './react.js'"],
+      ["from './bleWire'", `from '${real('bleWire.js')}'`],
+      ["from './bleAdapters'", `from '${real('bleAdapters.js')}'`],
+      ["from './bluetooth'", "from './bluetooth.js'"],
+      ["from './debugLog'", "from './debugLog.js'"],
+      ["from './cableWords'", `from '${real('cableWords.js')}'`]
+    ]) {
+      assert.ok(lib.includes(from), `lib/cablePlugIn no longer imports ${from}: the bench needs telling`)
+      lib = lib.replace(from, to)
+    }
+    assert.match(lib, /export const CABLE_GONE_MS = 5000\n/, 'the cable’s moment to come back moved: say why')
+    lib = "import { clock } from './bluetooth.js'\n" + lib.replace(/\bsetTimeout\(/g, 'clock.setTimeout(').replace(/\bclearTimeout\(/g, 'clock.clearTimeout(')
+    const files = {
+      'package.json': '{ "type": "module" }',
+      'cablePlugIn.js': lib,
+      'react.js': 'export const useSyncExternalStore = (subscribe, read) => read()\n',
+      'debugLog.js': 'export const lines = []\nexport const logDebug = (...parts) => { lines.push(parts.join(" ")) }\n',
+      'bluetooth.js': [
+        'export const clock = { now: 0, timers: [], setTimeout(fn, ms) { const t = { fn, at: clock.now + ms }; clock.timers.push(t); return t }, clearTimeout(t) { clock.timers = clock.timers.filter((x) => x !== t) }, run(ms) { clock.now += ms; for (const t of clock.timers.filter((x) => x.at <= clock.now)) { clock.timers = clock.timers.filter((x) => x !== t); t.fn() } } }',
+        "export const st = { list: [], settings: { on: true, unit: 'am4', adapter: null }, phase: 'connected', offered: new Set(['am4', 'fm3', 'fm9', 'axefx3', 'vp4']), taken: [], left: [], back: null }",
+        'const heard = new Set()',
+        'const subs = new Set()',
+        'const ring = () => { for (const f of [...subs]) f() }',
+        'export const adapterDevices = () => st.list',
+        "export const adapterName = (a) => (a && a.name) || null",
+        'export const bluetoothPhase = () => st.phase',
+        'export const bluetoothSettings = () => st.settings',
+        'export const cableLetGo = () => false',
+        'export const cablesHere = () => true',
+        "export const onAdapter = (event, fn) => { heard.add(fn); return () => heard.delete(fn) }",
+        'export const subscribeBluetooth = (fn) => { subs.add(fn); return () => subs.delete(fn) }',
+        "export const takeCable = (dev, unit) => { st.taken.push([dev.id, unit]); st.settings = { ...st.settings, on: true, unit, adapter: dev }; st.phase = 'connecting'; ring(); return true }",
+        /* As lib/bluetooth's: back to the adapter noted, or the computer. */
+        "export const leaveCable = () => { const to = st.back ? 'adapter' : 'computer'; st.left.push(to); st.settings = to === 'adapter' ? { ...st.settings, adapter: st.back } : { ...st.settings, on: false }; st.phase = to === 'adapter' ? 'connecting' : 'off'; ring(); return { to, name: st.back ? st.back.name : null } }",
+        'export const unitName = (k) => String(k).toUpperCase()',
+        'export const unitOfferedNow = (k) => st.offered.has(k)',
+        'export const plug = (list) => { st.list = list; for (const f of [...heard]) f({ devices: list }) }',
+        'export const move = (patch) => { Object.assign(st, patch); ring() }'
+      ].join('\n')
+    }
+    for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+    const at = (f) => pathToFileURL(join(dir, f)).href
+    try {
+      const W = await import(at('cablePlugIn.js'))
+      const B = await import(at('bluetooth.js'))
+      const log = (await import(at('debugLog.js'))).lines
+      const card = () => W.useCablePlugIn()
+      const GONE = W.CABLE_GONE_MS
+
+      /* On the cable, taken from the computer, connected. */
+      W.watchCables(true)
+      B.move({ settings: { on: true, unit: 'am4', adapter: AM4 }, phase: 'connected' })
+      B.plug([AM4])
+      /* Pulled out and back in a second later (his log: unplugged at :37.2, seen again at :38.3): nothing. */
+      B.plug([])
+      B.move({ phase: 'connecting' })
+      B.clock.run(1000)
+      B.plug([AM4])
+      B.move({ phase: 'connected' })
+      B.clock.run(GONE)
+      assert.deepEqual(B.st.left, [], 'a plug wiggled back in is taken for a leaving')
+      /* Still in, only slow to connect: never left for being slow. */
+      B.move({ phase: 'connecting' })
+      B.clock.run(GONE * 3)
+      assert.deepEqual(B.st.left, [], 'a cable still plugged in was left for being slow to connect')
+      B.move({ phase: 'connected' })
+      /* Pulled out and left out: after its moment, back to the computer, and Play says so. */
+      B.plug([])
+      B.move({ phase: 'connecting' })
+      B.clock.run(GONE - 1)
+      assert.deepEqual(B.st.left, [], 'left before the cable had its moment to come back')
+      B.clock.run(1)
+      assert.deepEqual(B.st.left, ['computer'], 'unplugged, the app stays on the cable that is gone (“Finding AM4…” for ever)')
+      assert.equal(card().switched?.words, 'USB cable unplugged. Back to the computer.')
+      assert.equal(card().offer, null)
+      W.doneSwitched()
+      /* Plugged back in through the computer: switched to again by itself, not asked about. */
+      B.plug([AM4])
+      assert.deepEqual(B.st.taken, [[AM4.id, 'am4']], 'the cable it was on is offered, not taken, when plugged back in')
+      assert.ok(log.some((l) => l === 'ble USB cable plugged back in: switched back to AM4, for the AM4'), 'the switch back is not logged')
+      assert.equal(card().switched?.words, undefined, 'the switch back to the cable says the leaving’s words')
+      W.doneSwitched()
+      /* Only once: left by hand for the computer now (it is still in), it is not taken again. */
+      B.move({ settings: { ...B.st.settings, on: false }, phase: 'off' })
+      B.plug([])
+      B.plug([AM4])
+      assert.equal(B.st.taken.length, 1, 'a cable is taken back again and again')
+      assert.equal(card().offer?.cable.id, AM4.id)
+      W.notNowCable()
+
+      /* Taken from a Bluetooth adapter: unplugged, back to that adapter. */
+      B.move({ settings: { on: true, unit: 'am4', adapter: AM4 }, phase: 'connected', back: UHOST })
+      B.plug([UHOST, AM4])
+      B.plug([UHOST])
+      B.move({ phase: 'connecting' })
+      B.clock.run(GONE)
+      assert.deepEqual(B.st.left, ['computer', 'adapter'])
+      assert.equal(card().switched?.words, 'USB cable unplugged. Back to WIDI Uhost.')
+      assert.equal(B.st.settings.adapter.id, UHOST.id)
+      /* Stopped while a cable's moment runs: nothing is left. */
+      W.doneSwitched()
+      B.move({ settings: { on: true, unit: 'am4', adapter: AM4 }, phase: 'connected', back: null })
+      B.plug([AM4])
+      B.plug([])
+      B.move({ phase: 'connecting' })
+      W.watchCables(false)
+      B.clock.run(GONE * 2)
+      assert.deepEqual(B.st.left, ['computer', 'adapter'], 'a cable was left with the watch stopped')
+      assert.deepEqual(B.clock.timers, [], 'a timer is left running with the watch stopped')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 
@@ -11618,7 +11938,7 @@ export function run(test) {
     const cut = ternary.indexOf(') : ( <View style={{ gap: space.lg }}>')
     assert.ok(cut > 0, 'the on/off ternary could not be split')
     const [onPart, offPart] = [ternary.slice(0, cut), ternary.slice(cut)]
-    assert.ok(onPart.includes('{differentButton}') && onPart.indexOf('{differentButton}') < onPart.indexOf('<Press label="Stop using Bluetooth"'), 'no Use a different adapter while it is trying the one kept, or it is under Stop')
+    assert.ok(onPart.includes('{differentButton}') && onPart.indexOf('{differentButton}') < onPart.indexOf('<Press label={stop.label}'), 'no Use a different adapter while it is trying the one kept, or it is under Stop')
     assert.ok(offPart.includes('{differentButton}') && offPart.indexOf('{differentButton}') > offPart.indexOf("label={b.looking ? 'Looking…' : 'Connect'}"), 'no Use a different adapter under Connect')
     assert.ok(!/A different adapter is Troubleshooting['’]s/.test(page), 'the page still says a different adapter is Troubleshooting’s')
   })
