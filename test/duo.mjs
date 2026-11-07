@@ -1250,8 +1250,8 @@ export function run(test) {
      */
     const foot = stage.slice(stage.indexOf('function PlayFoot('), stage.indexOf('const FOOT_HALF'))
     const drawn = foot.slice(foot.indexOf('return oneRow ? (')).replace(/\s+/g, ' ')
-    assert.match(drawn, /^return oneRow \? \( <View style=\{FOOT_ONE_ROW\}> <View style=\{FOOT_HALF\}> \{previous\} \{setlists\} \{tuner\} <\/View> <View style=\{FOOT_HALF\}> \{edit\} \{tap\} \{next\} <\/View> <\/View> \)/, 'the spread layout does not put Previous and Next at its two ends')
-    assert.match(drawn, /: \( <View style=\{\{ gap: space\.sm \}\}> <View style=\{FOOT_ROW\}> \{previous\} \{setlists\} \{next\} <\/View> <View style=\{FOOT_ROW\}> \{tuner\} \{edit\} \{tap\} <\/View> <\/View> \)/, 'under the line the six buttons are not Previous, Setlists, Next over Tuner, Edit, Tap')
+    assert.match(drawn, /^return oneRow \? \( <View key="one-row" style=\{FOOT_ONE_ROW\}> <View style=\{FOOT_HALF\}> \{previous\} \{setlists\} \{tuner\} <\/View> <View style=\{FOOT_HALF\}> \{edit\} \{tap\} \{next\} <\/View> <\/View> \)/, 'the spread layout does not put Previous and Next at its two ends')
+    assert.match(drawn, /: \( <View key="two-rows" style=\{\{ gap: space\.sm \}\}> <View style=\{FOOT_ROW\}> \{previous\} \{setlists\} \{next\} <\/View> <View style=\{FOOT_ROW\}> \{tuner\} \{edit\} \{tap\} <\/View> <\/View> \)/, 'under the line the six buttons are not Previous, Setlists, Next over Tuner, Edit, Tap')
     /* Setlists is one button in two places (the foot, and lined up the preset's row): SetlistsPress. */
     assert.match(foot, /const setlists = <SetlistsPress grow /, 'setlists is not the Setlists button')
     assert.match(stage, /function SetlistsPress\([^)]*\) \{\s*return \(\s*<Press\s+grow=\{grow\}\s+caption="Setlists"/, 'setlists is not the caption="Setlists" button')
