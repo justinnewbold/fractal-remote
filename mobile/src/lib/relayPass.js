@@ -25,6 +25,52 @@ import { logDebug } from './debugLog'
  */
 const GIVE_UP_MS = 8000
 
+/*
+ * WHO IS TOLD WHAT THE SERVER SAID ABOUT THE FREE TRIAL: purchases.js, which
+ * keeps the end it heard for the account signed in (shared/trial-rule.mjs
+ * keptTrial). Set rather than imported, so this file does not import the
+ * one that imports it.
+ */
+let trialHeard = null
+export const hearTrial = (fn) => {
+  trialHeard = fn
+}
+
+/**
+ * ASK THE SERVER TO START THE FREE TRIAL (supabase/functions/trial), for the
+ * account signed in. `device` is this install's number, `platform` 'ios' or
+ * 'android'. On an iPhone the App Store's free item has been bought first;
+ * the server checks that itself.
+ *
+ * Never throws: { ok, why, trial }, and `why` 'offline' when it could not be
+ * asked at all.
+ */
+export async function askForTrial({ device, platform }) {
+  const controller = new AbortController()
+  const stop = setTimeout(() => controller.abort(), GIVE_UP_MS * 2)
+  try {
+    const { data } = await supabaseClient().auth.getSession()
+    const token = data?.session?.access_token
+    if (!token) return { ok: false, why: 'signed-out', trial: null }
+    const res = await fetch(`${DEFAULT_PROJECT.url}/functions/v1/trial`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: DEFAULT_PROJECT.anonKey, Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: 'start', device, platform }),
+      signal: controller.signal
+    })
+    const body = await res.json().catch(() => null)
+    logDebug(`trial: ${res.status} ${body?.ok ? 'started' : `not started (${body?.why || 'no answer'})`}`)
+    if (!body || typeof body.ok !== 'boolean') return { ok: false, why: 'offline', trial: null }
+    if (body.trial) trialHeard?.(data?.session?.user?.id || null, body.trial)
+    return { ok: body.ok, why: body.why || null, trial: body.trial || null }
+  } catch (err) {
+    logDebug(`trial: could not ask (${err?.message || err})`)
+    return { ok: false, why: 'offline', trial: null }
+  } finally {
+    clearTimeout(stop)
+  }
+}
+
 export async function claimRelay() {
   const controller = new AbortController()
   const stop = setTimeout(() => controller.abort(), GIVE_UP_MS)
@@ -47,6 +93,9 @@ export async function claimRelay() {
     })
     const body = await res.json().catch(() => ({}))
     logDebug(`relay pass: ${res.status} ${body?.unlocked ? 'paid' : 'not paid'}${body?.unknown ? ' (store unreachable)' : ''}`)
+    /* And the free trial beside it, when the server says (a definite answer
+       from a server new enough to know): purchases.js keeps its end. */
+    if (res.ok && body && 'trial' in body) trialHeard?.(data?.session?.user?.id || null, body.trial)
     return Boolean(body?.unlocked)
   } catch (err) {
     logDebug(`relay pass: could not ask (${err?.message || err})`)

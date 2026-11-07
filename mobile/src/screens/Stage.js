@@ -73,6 +73,8 @@ import { useWatchBridge, watchHow, watchPaired } from '../lib/watchBridge'
 import { useSiriPlay } from '../lib/siri'
 import { findLooper } from '../lib/looper'
 import UnlockOffer from '../components/UnlockOffer'
+import TrialLine from '../components/TrialLine'
+import DemoTrialNudge from '../components/DemoTrialNudge'
 import Vp4DemoNote from '../components/Vp4DemoNote'
 import OnlyOnThisPhone from '../components/OnlyOnThisPhone'
 import ColoursNotice from '../components/ColoursNotice'
@@ -1130,6 +1132,8 @@ export default function Stage({
             an eye starts. A fault is not in here any more: it floats over the
             screen (the Toast at the end), so it never moves what is under it. */}
         {/* One at a time, each in its turn (`wants`, above). */}
+        {/* The free trial's days left, tappable to buy; and the demo's one card about the trial (7 November 2026). */}
+        <TrialLine onUnlock={onUnlock} />
         <UnlockOffer onUnlock={onUnlock} waiting={noteBefore('offer')} onWant={says.offer} />
         {/* The demo's VP4 says what a real one doesn't do from the app yet, once, as the browser's banner does. */}
         <Vp4DemoNote waiting={noteBefore('vp4')} onWant={says.vp4} />
@@ -1137,6 +1141,8 @@ export default function Stage({
         <OnlyOnThisPhone onAccount={onAccount} onWant={says.only} />
         {/* "Match your unit’s colors in Settings", once: last, after every other note. Pressed, it opens Settings → Colors. */}
         <ColoursNotice waiting={notesUp || coach || watchTip} unanswered={coachPending || watchPending} onOpen={onOpenColours} />
+        {/* The demo's one card about the free trial, after a few minutes, once every note before it is away. */}
+        <DemoTrialNudge onUnlock={onUnlock} waiting={notesUp || coach || watchTip} />
         {conflict ? <Note tone="fault">{conflict}</Note> : null}
         {missingCard ? (
           <ComputerCard

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native'
 
 import { color, font, mono, radius, space, TAP, MODES, getMode, setMode } from '../lib/theme'
+import { trialAccountWord } from '../lib/trial-words'
 import { APP_VERSION } from '../lib/version'
 import { AFFILIATION, SUPPORT_LINE, SUPPORT_URL } from '../lib/affiliation'
 import { setDemo, useDemo, useDemoUnit, setDemoUnit } from '../lib/demo'
@@ -638,6 +639,7 @@ export default function Settings({
             offline={Boolean(keptEmail)}
             paired={isPairAccount((account || kept)?.email)}
             unlocked={purchase.unlocked}
+            trialWord={trialAccountWord(purchase.trialEndsAt)}
             demo={demo}
             onPress={() => {
               setNote(null)
@@ -2284,9 +2286,11 @@ const KEPT_OFFLINE = 'Can’t reach your account now. Password and account optio
  * "Checking…": with no signal the service takes up to twenty-five seconds to
  * say nothing. A card of glass on the page, its border the glass's rim.
  */
-function AccountCard({ asked, email, offline, paired, unlocked, demo, onPress }) {
+function AccountCard({ asked, email, offline, paired, unlocked, trialWord = null, demo, onPress }) {
   const who = email || (!asked ? 'Checking…' : paired ? 'Paired, no account' : 'Not signed in')
-  const what = demo ? 'Demo' : unlocked ? 'Full version' : 'Not unlocked yet'
+  const said = demo ? 'Demo' : unlocked ? 'Full version' : 'Not unlocked yet'
+  /* A free trial running says its days (shared/trial-words.mjs), where it would say Not unlocked yet. */
+  const what = !demo && !unlocked && trialWord ? trialWord : said
   return (
     <Pressable
       accessibilityRole="button"

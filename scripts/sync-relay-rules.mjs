@@ -279,6 +279,19 @@ export const FILES = [
    */
   { source: '../shared/usage-count.mjs', target: '../mobile/src/lib/usage-count.js' },
   { source: '../shared/usage-count.mjs', target: '../supabase/functions/_shared/usage-count.mjs' },
+  /*
+   * The free trial (7 November 2026): its length and when it ends, once, for
+   * the phone and the server alike (no imports, so copied as it is, twice),
+   * and its words for the phone. A phone counting seven days and a server
+   * counting eight would be a customer told one thing and given another.
+   */
+  { source: '../shared/trial-rule.mjs', target: '../mobile/src/lib/trial-rule.js' },
+  { source: '../shared/trial-rule.mjs', target: '../supabase/functions/_shared/trial-rule.mjs' },
+  {
+    source: '../shared/trial-words.mjs',
+    target: '../mobile/src/lib/trial-words.js',
+    render: (text) => banner('../shared/trial-words.mjs') + text.replace("from './trial-rule.mjs'", "from './trial-rule.js'")
+  },
   /* Justin's own tools, and the one account they are for. */
   {
     source: '../shared/admin.mjs',

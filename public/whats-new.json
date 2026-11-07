@@ -1,6 +1,17 @@
 {
   "days": [
     {
+      "date": "2026-11-07",
+      "day": "7 November 2026",
+      "version": "1.89.56",
+      "lines": [
+        {
+          "text": "Try the full version free for 7 days with your own rig: tap Start 7-day free trial on the purchase page. While it runs, Play shows how many days are left, and when it ends everything you set up is kept. The demo is still free and unlimited.",
+          "only": null
+        }
+      ]
+    },
+    {
       "date": "2026-11-06",
       "day": "6 November 2026",
       "version": "1.89.55",
@@ -211,21 +222,6 @@
         },
         {
           "text": "After Bluetooth connects and the unit answers, the app goes straight back to Play.",
-          "only": null
-        }
-      ]
-    },
-    {
-      "date": "2026-10-26",
-      "day": "26 October 2026",
-      "version": "1.89.3",
-      "lines": [
-        {
-          "text": "The Bluetooth page starts with two steps: pick your unit, then Connect. How to connect, Troubleshooting and What Bluetooth can’t do each have a page of their own, with every way to hook up each unit and what to buy.",
-          "only": null
-        },
-        {
-          "text": "If Bluetooth won’t connect after you plug the adapter back in, close the app completely and open it again.",
           "only": null
         }
       ]

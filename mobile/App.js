@@ -333,7 +333,7 @@ export default function App() {
       setScreen(BACK_TO[screen] || 'stage')
       return true
     }
-    if (demo && purchase.unlocked) {
+    if (demo && purchase.unlocked || (demo && purchase.trialEndsAt)) {
       Alert.alert('Exit demo?', 'Back to your own rig.', [
         { text: 'Stay', style: 'cancel' },
         { text: 'Exit demo', onPress: () => setDemo(false) }
@@ -849,7 +849,8 @@ export default function App() {
    */
   useEffect(() => {
     if (shouldAskToPay({ inApp: auth === 'in', demo, ...purchase })) setAuth('paywall')
-  }, [auth, demo, purchase.checking, purchase.available, purchase.unlocked])
+    /* And on day 8: the free trial's end (null once it has passed) is the trial's say in it (lib/unlock-rule). */
+  }, [auth, demo, purchase.checking, purchase.available, purchase.unlocked, purchase.trialEndsAt])
 
   /*
    * Keep the end of this run on disk from the first frame.

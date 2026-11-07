@@ -43,6 +43,8 @@ export default function TopBar({
      costs. Null when there is nothing to sell them. */
   onUnlock = null,
   unlockPrice = null,
+  /* "Try it on your rig free for 7 days", over Unlock, where the free trial is offered; null elsewhere. */
+  unlockTrial = null,
   /* In the demo, for somebody who HAS paid: the way back to their own rig. */
   onExitDemo = null,
   /* Which kind of fault this is, so the pill says Not answering or No unit
@@ -213,6 +215,7 @@ export default function TopBar({
         {canBuy ? (
           <button className="topbar-pill is-unlock" onClick={onUnlock} aria-label="Unlock the full version" title={demoSentence(demoUnit())}>
             <span className="topbar-pill-face">
+              {unlockTrial ? <span className="topbar-pill-trial">{unlockTrial}</span> : null}
               <span>Unlock</span>
               {unlockPrice ? <span className="topbar-pill-price">{unlockPrice}</span> : null}
             </span>

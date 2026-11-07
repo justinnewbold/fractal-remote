@@ -347,6 +347,8 @@ export function salesSections(answer, now = Date.now()) {
   if (recent.length) sections.push({ title: 'Latest sales', rows: recent })
   if (paidTwice.length) sections.push({ title: 'Paid twice', rows: paidTwice })
   if (quiet.length) sections.push({ title: 'Paid, account never confirmed', rows: quiet })
+  /* The free trials (7 November 2026), when the server sends them. */
+  sections.push(...trialSections(answer, now))
 
   const notes = []
   if (answer.unanswered) notes.push(`RevenueCat did not answer for ${answer.unanswered} of them, so the numbers may be short.`)
@@ -358,6 +360,39 @@ export function salesSections(answer, now = Date.now()) {
     if (n > 0) notes.push(`${title}: ${n} handled earlier.`)
   }
   if (notes.length) sections.push({ title: 'Note', rows: notes.map((n) => ({ label: '', value: n })) })
+  return sections
+}
+
+/**
+ * THE FREE TRIALS ON SALES: how many started, how many are running, how many
+ * bought afterwards, and the latest, each with when it started and ends and
+ * whether that account has bought since. "So Justin can see how trials do."
+ * An older server sends no list, and then there is no section.
+ */
+export const TRIALS_TITLE = 'Free trials'
+export function trialSections(answer, now = Date.now()) {
+  if (!Array.isArray(answer?.trials)) return []
+  const all = answer.trials
+  const at = (t) => dateOf(t)?.getTime() ?? null
+  const running = all.filter((t) => (at(t.ends_at) ?? 0) > now)
+  const bought = all.filter((t) => t.converted)
+  const over = all.filter((t) => (at(t.ends_at) ?? 0) <= now)
+  const rate = over.length ? `${Math.round((over.filter((t) => t.converted).length / over.length) * 100)}% of the trials that have ended` : 'none has ended yet'
+  const where = { ios: 'iPhone', android: 'Android', web: 'Website', computer: 'Computer app' }
+  const rows = [
+    { label: 'Started, all time', value: String(all.length) },
+    { label: 'Running now', value: String(running.length) },
+    { label: 'Bought after a trial', value: `${bought.length}, ${rate}` }
+  ]
+  const latest = all.slice(0, 15).map((t) => {
+    const live = (at(t.ends_at) ?? 0) > now
+    return {
+      label: t.email || 'An account',
+      value: `${where[t.platform] || 'Somewhere else'}, started ${dayOf(t.started_at)}, ${live ? 'ends' : 'ended'} ${dayOf(t.ends_at)}. ${t.converted ? 'Bought.' : live ? 'Not bought yet.' : 'Didn’t buy.'}`
+    }
+  })
+  const sections = [{ title: TRIALS_TITLE, rows }]
+  if (latest.length) sections.push({ title: 'Latest free trials', rows: latest })
   return sections
 }
 

@@ -59,10 +59,11 @@ async function purchasesFor(accountId) {
 
 /** The package that sells the unlock — by product id, with first-wins only as a fallback, as on the phone. */
 function theUnlockIn(offerings) {
+  /* Never the App Store's free trial item, should an offering ever carry it. */
   const every = [
     ...(offerings?.current?.availablePackages || []),
     ...Object.values(offerings?.all || {}).flatMap((o) => o?.availablePackages || [])
-  ]
+  ].filter((p) => p?.webBillingProduct?.identifier !== 'trial_7day')
   return every.find((p) => p?.webBillingProduct?.identifier === PRODUCT_ID) || every[0] || null
 }
 
@@ -96,7 +97,8 @@ export async function checkUnlocked() {
     })
     const body = res.ok ? await res.json().catch(() => null) : null
     if (typeof body?.unlocked !== 'boolean') return { unlocked: false, unknown: true }
-    return { unlocked: body.unlocked, unknown: Boolean(body.unknown) }
+    /* And the free trial, when the server says: { startedAt, endsAt, live } or null. Left out when it did not. */
+    return { unlocked: body.unlocked, unknown: Boolean(body.unknown), ...('trial' in body ? { trial: body.trial } : {}) }
   } catch {
     return { unlocked: false, unknown: true }
   }
@@ -188,6 +190,33 @@ async function visitorId() {
     /* Same as above. */
   }
   return made
+}
+
+/**
+ * START THE FREE TRIAL from a browser or the computer app
+ * (supabase/functions/trial): one per account, and one per browser, by the
+ * made-up number this browser already keeps for the price (visitorId). No
+ * store item: the server starts it. `platform` 'web' or 'computer'.
+ *
+ * Resolves, never rejects: { ok, why, trial }.
+ */
+export async function startTrialOnWeb(platform = 'web') {
+  try {
+    const { data } = (await supabaseClient()?.auth.getSession()) || {}
+    const token = data?.session?.access_token
+    if (!token) return { ok: false, why: 'signed-out', trial: null }
+    const device = await visitorId()
+    const res = await fetch(`${DEFAULT_PROJECT.url}/functions/v1/trial`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: DEFAULT_PROJECT.anonKey, Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: 'start', device, platform })
+    })
+    const body = await res.json().catch(() => null)
+    if (!body || typeof body.ok !== 'boolean') return { ok: false, why: 'offline', trial: null }
+    return { ok: body.ok, why: body.why || null, trial: body.trial || null }
+  } catch {
+    return { ok: false, why: 'offline', trial: null }
+  }
 }
 
 /** What it costs here, as Stripe will charge it — or null when there is nothing to sell. */
