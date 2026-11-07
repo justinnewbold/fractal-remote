@@ -220,7 +220,7 @@ export function lookupRows(answer, now = Date.now()) {
       label: 'Email confirmed',
       value: d.confirmed
         ? 'Yes'
-        : 'Not yet. They have not tapped the link in the email we sent. It may be in their Spam, Junk or Promotions folder.'
+        : 'Not yet. They have not typed the code from the email we sent. It may be in their Spam, Junk or Promotions folder.'
     },
     { label: 'Last signed in', value: d.lastSignIn ? ago(d.lastSignIn, now) : 'Never' }
   ]
@@ -1404,6 +1404,6 @@ export function signInHelpWords(kind, email, error) {
   }
   if (error) return { ok: false, message: `It did not send: ${error}` }
   return kind === 'confirm'
-    ? { ok: true, message: `A new "confirm your email" link is on its way to ${email}.` }
+    ? { ok: true, message: `A new confirmation code is on its way to ${email}.` }
     : { ok: true, message: `A link to set a new password is on its way to ${email}.` }
 }

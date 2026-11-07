@@ -192,7 +192,7 @@ async function reportsOf(url: string, service: string, who: Who, by: By): Promis
  */
 const SHOT_BUCKET = 'report-shots'
 const SHOT_PATH =
-  /^(anon|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[1-3]\.jpg$/
+  /^(anon|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[1-5]\.jpg$/
 
 /** The pictures a report names that this account may delete. */
 export function ownShots(report: Report, id: string): string[] {
