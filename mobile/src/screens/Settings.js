@@ -103,6 +103,9 @@ import { GlassCard } from '../components/Glass'
 import { classic, glassCard } from '../lib/glass'
 import PasswordBox from '../components/PasswordBox'
 import NameBox from '../components/NameBox'
+import Avatar from '../components/Avatar'
+import { choosePhoto, removePhoto, showPhotoFor, useProfilePhoto } from '../lib/accountPhoto'
+import { PHOTO_WORDS } from '../lib/profile-photo'
 import { askAgainHere } from '../lib/howConnect'
 import Press from '../components/Press'
 import { stopLooper } from '../components/Looper'
@@ -185,7 +188,10 @@ export default function Settings({
   /* The page to open on, and who to tell when it changes — see App.js's
      openSettings. */
   startPage = null,
-  onPage
+  onPage,
+  /* Opened from the top bar's photo: Your account's sheet comes up on its own, once (App's openAccount), and App is told it has. */
+  openAccountSheet = false,
+  onAccountSheet
 }) {
   const deviceName = useRig(ofDeviceName)
   const firmware = useRig(ofFirmware)
@@ -255,12 +261,18 @@ export default function Settings({
    */
   const [accountMenu, setAccountMenu] = useState(false)
   const [naming, setNaming] = useState(false)
+  /* The account's photo (lib/accountPhoto), and while it is being saved or removed, and what that came to, said in the sheet. */
+  const photo = useProfilePhoto()
+  const [photoBusy, setPhotoBusy] = useState(null)
+  const [photoSaid, setPhotoSaid] = useState(null)
   /* A scene being dragged on the Appearance page holds the page still — see
      components/SceneArrange. */
   const [held, setHeld] = useState(false)
   /* The account's email, when there is a real one: a pairing code's account
      is not somebody's email and is not called one. */
   const signedInAs = account?.email && !isPairAccount(account.email) ? account.email : null
+  /* The photo rows, for the account the service vouched for and the top bar draws. */
+  const photoHere = Boolean(signedInAs && photo.id && photo.id === account?.id)
   const [changing, setChanging] = useState(false)
   /* Delete account: Apple's 5.1.1(v). A sheet that says what goes, then one
      more tap — never one tap from the page. */
@@ -313,6 +325,29 @@ export default function Settings({
    * every screen to this now.
    */
   const [page, setPage] = useState(startPage)
+
+  /* An account the service has vouched for is the top bar's photo's (lib/accountPhoto; nothing to do when App has said so already). */
+  useEffect(() => {
+    if (account) showPhotoFor(account)
+  }, [account])
+
+  /*
+   * FROM THE TOP BAR'S PHOTO, Your account's sheet, with Add a photo in it,
+   * as soon as the account service has answered: "if they tap that, it will
+   * take them to their profile to edit it" (Justin, 7 November 2026). Once:
+   * App is told at that answer, whatever it was, so coming back to this page
+   * later does not open it again. Not for a sign-in the service has not
+   * vouched for, which has no sheet to open.
+   */
+  useEffect(() => {
+    if (!openAccountSheet || !asked) return
+    onAccountSheet?.()
+    if (page !== 'account' || !signedInAs) return
+    setNote(null)
+    setError(null)
+    setPhotoSaid(null)
+    setAccountMenu(true)
+  }, [openAccountSheet, asked])
 
   /* Again on opening a page: the roll call finishes a few seconds after the
      link does, so the list can arrive while nothing about the link changes. */
@@ -899,10 +934,11 @@ export default function Settings({
               <TipCard
                 icon={mailIcon}
                 label="SIGNED IN"
-                body={`${account.email}\nTap for your name and password`}
+                body={`${account.email}\nTap for your name, photo and password`}
                 onPress={() => {
                   setNote(null)
                   setError(null)
+                  setPhotoSaid(null)
                   setAccountMenu(true)
                 }}
               />
@@ -1034,7 +1070,60 @@ export default function Settings({
             )}
           </View>
 
-          <Sheet open={accountMenu} onClose={() => setAccountMenu(false)} title="Your account" note={account?.email || ''}>
+          <Sheet open={accountMenu} onClose={() => (photoBusy ? null : setAccountMenu(false))} title="Your account" note={account?.email || ''}>
+            {/*
+              THE PHOTO, as the top bar draws it, bigger: Add a photo, or
+              Change photo and Remove photo once there is one (lib/accountPhoto).
+              The phone's own picker opens over this sheet, crops the picture
+              square, and the sheet stays up to show what it came to. Only once
+              the top bar's photo is this account's (App, or this page, said
+              so), so a photo is never saved to an account the sheet is not
+              about.
+            */}
+            {photoHere ? (
+              <>
+                <View style={{ alignItems: 'center', paddingVertical: space.sm }}>
+                  <Avatar uri={photo.uri} size={72} />
+                </View>
+                {photoSaid ? <Note tone={photoSaid.ok ? 'hint' : 'fault'}>{photoSaid.text}</Note> : null}
+                <Press
+                  label={photoBusy === 'saving' ? PHOTO_WORDS.saving : photo.uri ? PHOTO_WORDS.change : PHOTO_WORDS.add}
+                  sub={photo.uri ? PHOTO_WORDS.changeSub : PHOTO_WORDS.addSub}
+                  disabled={Boolean(photoBusy)}
+                  onPress={async () => {
+                    setPhotoSaid(null)
+                    /* Held while the picker is up, and Saving… only once a picture is picked. */
+                    setPhotoBusy('picking')
+                    try {
+                      if (await choosePhoto({ onPicked: () => setPhotoBusy('saving') })) setPhotoSaid({ ok: true, text: PHOTO_WORDS.saved })
+                    } catch (err) {
+                      setPhotoSaid({ ok: false, text: err.message })
+                    } finally {
+                      setPhotoBusy(null)
+                    }
+                  }}
+                />
+                {photo.uri ? (
+                  <Press
+                    label={photoBusy === 'removing' ? PHOTO_WORDS.removing : PHOTO_WORDS.remove}
+                    sub={PHOTO_WORDS.removeSub}
+                    disabled={Boolean(photoBusy)}
+                    onPress={async () => {
+                      setPhotoSaid(null)
+                      setPhotoBusy('removing')
+                      try {
+                        await removePhoto()
+                        setPhotoSaid({ ok: true, text: PHOTO_WORDS.removed })
+                      } catch (err) {
+                        setPhotoSaid({ ok: false, text: err.message })
+                      } finally {
+                        setPhotoBusy(null)
+                      }
+                    }}
+                  />
+                ) : null}
+              </>
+            ) : null}
             <Press
               label={account?.first || account?.last ? `${account.first} ${account.last}`.trim() : 'Add your name'}
               sub={account?.first || account?.last ? 'Change your name' : 'Your first and last name'}

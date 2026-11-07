@@ -3,7 +3,7 @@
     {
       "date": "2026-11-07",
       "day": "7 November 2026",
-      "version": "1.89.65",
+      "version": "1.89.66",
       "lines": [
         {
           "text": "Bluetooth connects more reliably: if your adapter connects but your unit stays silent, the app reconnects once by itself (or tap Connect again), each unit remembers its own adapter, the app tells you when an adapter is plugged into a different unit, and no computer warnings show while you're on Bluetooth.",
@@ -14,7 +14,7 @@
           "only": null
         },
         {
-          "text": "When you report a problem, you can now add up to five pictures instead of three, plus one video. And in the phone app, an account made before names were asked can add one: Settings → your account → tap your email → Add your name.",
+          "text": "Reports now take up to five pictures plus one video. And in the phone app, Settings → your account → tap your email lets you add your name and a profile photo. The photo shows in a little circle beside Live at the top, and tapping the circle takes you straight there.",
           "only": null
         },
         {

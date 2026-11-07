@@ -4,11 +4,11 @@
   "days": [
     {
       "date": "2026-11-07",
-      "version": "1.89.65",
+      "version": "1.89.66",
       "lines": [
         "Bluetooth connects more reliably: if your adapter connects but your unit stays silent, the app reconnects once by itself (or tap Connect again), each unit remembers its own adapter, the app tells you when an adapter is plugged into a different unit, and no computer warnings show while you're on Bluetooth.",
         "Getting started is quicker: after you sign up, start the trial or buy, one card asks how you connect, Bluetooth adapter first or a computer. Connect over Bluetooth shows while the app looks for your computer, with far less to read. The website's welcome now says Bluetooth is in the phone and tablet apps.",
-        "When you report a problem, you can now add up to five pictures instead of three, plus one video. And in the phone app, an account made before names were asked can add one: Settings → your account → tap your email → Add your name.",
+        "Reports now take up to five pictures plus one video. And in the phone app, Settings → your account → tap your email lets you add your name and a profile photo. The photo shows in a little circle beside Live at the top, and tapping the circle takes you straight there.",
         { "text": "Start 7-day free trial on an iPhone or iPad whose Apple ID already bought the full version now says so: the full version moves to the account you're signed in to, and no trial starts.", "only": "ios" },
         "Tablets: held upright, Play is the phone's own layout, just bigger; on its side, your scenes sit on the left with the pedals two across beside them, row for row. Smaller tablets now get this too.",
         "Try the full version free for 7 days with your own rig: tap Start 7-day free trial on the purchase page. While it runs, Play shows how many days are left, and when it ends everything you set up is kept. The demo is still free and unlimited."

@@ -90,6 +90,7 @@
       <table>
         <tr><th>What</th><th>Why</th></tr>
         <tr><td>Your first and last name</td><td>Asked for when you make an account (from 5 November 2026), so we know who an account belongs to and who we are helping when you write to us. Kept with the account, never shared or sold, and deleted with it. An account made before then has none until you add one in the phone app (Settings, your account), where any account’s name can also be changed.</td></tr>
+        <tr><td>A profile photo, only if you add one</td><td>Optional, from 7 November 2026: one picture you choose in the phone app (Settings, your account, Add a photo), picked in the phone&rsquo;s own photo picker, made small and square, and shown in the little circle at the top of the app. Kept with the account in private storage that, through the app, only your account can reach, with a copy on that phone or tablet so it still shows with no signal. Never shared or sold. Remove photo deletes it at any time, and it is deleted with the account.</td></tr>
         <tr><td>Your email address</td><td>To sign you in, to reset a password, and for the help setting up the computer described under <em>Unlocking the full version</em></td></tr>
         <tr><td>Your password</td><td>Stored as a hash. It is never readable, by us or anyone.</td></tr>
         <tr><td>When a computer app first signed in with it</td><td>Kept for every account, bought or not, so that nobody who has already set up the computer is told how to</td></tr>
@@ -259,7 +260,7 @@
         <tr><td>Which account sent it, if you are signed in</td><td>yes, unless you untick Include my email, which sends it anonymously</td><td>yes</td><td>yes</td></tr>
         <tr><td>App version, your unit, your OS, screen size, the computer app&rsquo;s version and how the app is connected</td><td>yes, and which phone or tablet (the maker and model on Android, iPhone or iPad on Apple&rsquo;s, never the name you gave it)</td><td>yes</td><td>yes</td></tr>
         <tr><td>The last fault the screen showed</td><td>with the log only</td><td>with the log only</td><td><strong>never</strong></td></tr>
-        <tr><td>Screenshots and photos, only the ones you add</td><td>up to 3, optional</td><td>up to 3, optional</td><td>up to 3, optional</td></tr>
+        <tr><td>Screenshots and photos, only the ones you add</td><td>up to 5, optional</td><td>up to 5, optional</td><td>up to 5, optional</td></tr>
         <tr><td>A video, only one you add</td><td>one, optional</td><td>no</td><td>no</td></tr>
         <tr><td><strong>The debug log</strong></td><td>yes, untick it to leave it out</td><td>yes, and you can turn it off</td><td><strong>never</strong></td></tr>
       </table>
@@ -381,7 +382,8 @@
           The country RevenueCat notes, under <em>Unlocking the full version</em>, is worked out by
           RevenueCat from the internet connection, not from the phone's location.</li>
         <li><strong>No contacts, camera or microphone, and nothing read from your photos.</strong>
-          None of them are used. The only pictures the app ever sees or sends are the screenshots
+          None of them are used. The only pictures the app ever sees or sends are the profile photo
+          you may choose for your account, and the screenshots
           and photos you choose to add to a report, described above, and the one video you may add with them:
           the phone&rsquo;s photo picker shows your photos and videos to you, not to the app.</li>
         <li><strong>No audio.</strong> This app sends control messages to your unit. It does not
@@ -392,9 +394,10 @@
 
       <h2>Where it is kept, and who can see it</h2>
       <p>
-        Purchase records are kept by RevenueCat. Accounts, setlists and reports are stored with
+        Purchase records are kept by RevenueCat. Accounts, profile photos, setlists and reports are stored with
         <a href="https://supabase.com/privacy" rel="noreferrer">Supabase</a>, on servers in the
-        United States. Every row is behind rules that tie it to the account that made it. Bug
+        United States. Every row is behind rules that tie it to the account that made it, and a
+        profile photo can be put in, read or removed through the app only by its own account. Bug
         reports, and the screenshots added to them, can be written by anybody and read back by
         nobody through the app — only by the person who builds it.
       </p>
@@ -473,8 +476,9 @@
 
       <h2>How long it is kept</h2>
       <ul>
-        <li><strong>Your account, the name on it, and setlists</strong> — until you delete the account, or ask for it
-          to be deleted.</li>
+        <li><strong>Your account, the name and photo on it, and setlists</strong> — until you delete the account, or ask for it
+          to be deleted. A photo is also gone as soon as you tap Remove photo, and the copy on a
+          phone or tablet when you sign out there.</li>
         <li><strong>An address the desktop download link was sent to</strong> — kept only as a
           one-way scrambled fingerprint, to stop the link being sent to it over and over.</li>
         <li><strong>An address on the testers' waiting list</strong> — until somebody first signs
@@ -511,7 +515,7 @@
       <h2>Deleting your data</h2>
       <p>
         <strong>In the app:</strong> Settings → your account → <strong>Delete account</strong>. It
-        deletes your account and the name on it, your setlists, bug reports sent from that account and their
+        deletes your account and the name and photo on it, your setlists, bug reports sent from that account and their
         screenshots, and every other
         record kept under it, straight away and for good. Each of those bug reports was also emailed
         to the person who builds the app when it was sent, with its log and screenshots, and the

@@ -1134,6 +1134,78 @@ export function run(test) {
     assert.deepEqual([...del.videosRemoved].sort(), [anon, mine, `${USER}/${KEY}-video.mp4`].sort(), 'Delete account left a video of the account’s, or took somebody else’s')
   })
 
+  /*
+   * THE PROFILE PHOTO'S BUCKET (7 November 2026), beside the reports' because
+   * Delete account reaches all three: one place per account, the same in the
+   * app, the bucket's rules and Delete account; private, JPEG only, a little
+   * over the app's own cap; four rules, every one for a signed-in account and
+   * its own photo only, and nothing for anybody signed out.
+   */
+  test('a profile photo has one place in its own bucket, the same in the app, its rules and Delete account, and only its own account reaches it', async () => {
+    const p = await import('../shared/profile-photo.mjs')
+    const SQL = 'supabase/migrations/20261107_user_profile_photos.sql'
+    assert.deepEqual(migrationsSaying("insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types) values ('profile-photos'"), [SQL.split('/').pop()], 'the photo bucket is made by a migration this test does not read')
+    const q = sqlCode(SQL)
+    assert.match(q, new RegExp(`insert into storage\\.buckets \\(id, name, public, file_size_limit, allowed_mime_types\\) values \\('${p.PHOTO_BUCKET}', '${p.PHOTO_BUCKET}', false, ${p.PHOTO_BUCKET_BYTES}, array\\['image\\/jpeg'\\]\\)`), 'the bucket is public, takes more than JPEGs, or has another cap')
+    assert.ok(p.PHOTO_BYTES < p.PHOTO_BUCKET_BYTES, 'the bucket turns away a photo the app lets through')
+    /* The four rules: exactly the account's own place, to signed-in accounts only. */
+    const own = `bucket_id = '${p.PHOTO_BUCKET}' and name = (select auth.uid())::text || '/${p.PHOTO_NAME}'`
+    for (const [what, clause] of [
+      ['put in by its own account', `for insert to authenticated with check ( ${own} and public.profile_photos_room() )`],
+      ['replaced by its own account', `for update to authenticated using ( ${own} ) with check ( ${own} )`],
+      ['read by its own account', `for select to authenticated using ( ${own} )`],
+      ['removed by its own account', `for delete to authenticated using ( ${own} )`]
+    ]) {
+      const name = `"a profile photo, ${what}"`
+      assert.ok(q.includes(`drop policy if exists ${name} on storage.objects;`), `${name} is made again without the old one going first`)
+      assert.ok(q.includes(`create policy ${name} on storage.objects ${clause};`), `${name} reaches more than the account’s own photo`)
+    }
+    assert.equal((q.match(/create policy/g) || []).length, 4, 'the bucket has a rule for something besides the account’s own photo')
+    assert.doesNotMatch(q, /\bto (anon|public)\b|\bfor all\b/, 'somebody signed out can reach a photo')
+    /* The room: a sum over the bucket alone, answering only yes or no, run by whoever puts a photo in and nobody signed out. */
+    assert.match(q, /create or replace function public\.profile_photos_room\(\) returns boolean language sql stable security definer set search_path = '' as \$\$ select coalesce\(sum\(\(o\.metadata ->> 'size'\)::bigint\), 0\) < 250 \* 1024 \* 1024 from storage\.objects o where o\.bucket_id = 'profile-photos'; \$\$;/)
+    assert.match(q, /revoke all on function public\.profile_photos_room\(\) from public, anon; grant execute on function public\.profile_photos_room\(\) to authenticated;/)
+    /* The app's place is the rule's: the account's id, then photo.jpg, and nothing else. */
+    assert.equal(p.photoPath(USER), `${USER}/${p.PHOTO_NAME}`)
+    assert.ok(p.PHOTO_PATH.test(p.photoPath(USER)) && !p.PHOTO_PATH.test(`${USER}/${KEY}-1.jpg`) && !p.PHOTO_PATH.test(`anon/${p.PHOTO_NAME}`))
+    /* Delete account's copy of the place is the app's. */
+    const forget = read('supabase/functions/_shared/forget-account.ts')
+    assert.match(forget, new RegExp(`const PHOTO_BUCKET = '${p.PHOTO_BUCKET}'`))
+    const m = forget.match(/const PHOTO_PATH =\s*\/(.+)\/\n/)
+    assert.ok(m, 'Delete account has no PHOTO_PATH')
+    assert.equal(m[1].replace(/\\\//g, '/'), p.PHOTO_PATH.source.replace(/\\\//g, '/'), 'Delete account takes a different place for the photo from the app')
+
+    /* Delete account, run: the account's own photo goes, through Storage's API, before the account itself. */
+    const del = await deleteAccount({ reports: [] })
+    assert.equal(del.status, 200)
+    const at = del.calls.findIndex((c) => c.url === `${PROJECT}/storage/v1/object/${p.PHOTO_BUCKET}` && c.method === 'DELETE')
+    assert.ok(at >= 0, 'Delete account leaves the profile photo')
+    assert.deepEqual(del.calls[at].body, { prefixes: [`${USER}/${p.PHOTO_NAME}`] }, 'Delete account deletes another photo, or more than the account’s own')
+    assert.equal(del.calls[at].headers.Authorization, `Bearer ${SERVICE}`)
+    assert.ok(at < del.calls.findIndex((c) => c.url === `${PROJECT}/auth/v1/admin/users/${USER}` && c.method === 'DELETE'), 'the account goes before its photo')
+    assert.equal(del.calls.filter((c) => c.url.includes(`/${p.PHOTO_BUCKET}`)).length, 1, 'Delete account asks the photo bucket for something besides deleting the photo')
+    /* And a lookup that could not be done stops it, as it stops everything else. */
+    const stopped = await deleteAccount({ lookupStatus: { byId: 503 } })
+    assert.ok(!stopped.calls.some((c) => c.url.includes(`/${p.PHOTO_BUCKET}`)), 'a photo was deleted when the account could not be')
+
+    /* The README says how it goes live, in order, with every function that carries the deletion. */
+    const readme = read('supabase/README.md')
+    const from = readme.indexOf('## A profile photo on an account (7 November 2026)')
+    assert.ok(from > 0, 'the README does not say how the photo goes live')
+    const part = readme.slice(from, readme.indexOf('\n## ', from + 1))
+    const steps = ['**Apply `20261107_user_profile_photos.sql`.**', '**Deploy delete-account**: `supabase functions deploy delete-account`', '**Deploy grant-access**: `supabase functions deploy grant-access`', '**Merge the app**']
+    for (let i = 0; i < steps.length; i++) {
+      assert.ok(part.indexOf(steps[i]) > 0, `the README's steps leave out ${steps[i]}`)
+      if (i) assert.ok(part.indexOf(steps[i - 1]) < part.indexOf(steps[i]), `the README puts ${steps[i]} before ${steps[i - 1]}`)
+    }
+
+    /* The privacy page says it: optional, kept with the account, never shared, and deleted with it. */
+    const page = read('public/privacy.html').replace(/<[^>]+>/g, ' ').replace(/&rsquo;/g, '’').replace(/\s+/g, ' ')
+    assert.match(page, /A profile photo, only if you add one Optional, from 7 November 2026: .* Never shared or sold\. Remove photo deletes it at any time, and it is deleted with the account\./)
+    assert.match(page, /deletes your account and the name and photo on it,/)
+    assert.match(page, /The only pictures the app ever sees or sends are the profile photo you may choose for your account, and the screenshots/)
+  })
+
   test('the email links the video, signed for its week, once, and only the sender’s own', async () => {
     const path = `${USER}/${KEY}-video.mp4`
     const row = { id: '21be6661-e330-415e-b6e6-7bbae82da811', kind: 'bug', message: 'Watch this', contact: null, user_id: USER, context: { unit: 'AM4', video: path }, log: '' }

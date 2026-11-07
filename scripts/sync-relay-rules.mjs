@@ -190,6 +190,14 @@ export const FILES = [
    */
   { source: '../shared/account-name.mjs', target: '../mobile/src/lib/account-name.js' },
   /*
+   * The account's profile photo: its bucket and its one place there, how
+   * small it is made, how the copy kept on the phone is read back, and when
+   * the top bar draws its circle. The phone's alone to draw; shared so the
+   * server's tests hold the bucket's rules and Delete account to the same
+   * place.
+   */
+  { source: '../shared/profile-photo.mjs', target: '../mobile/src/lib/profile-photo.js' },
+  /*
    * "No computer is signed in with this account yet": the words, and the rule
    * for when the account server may be asked and what counts as a no. The
    * phone and the website say it to the same people at the same moment, and

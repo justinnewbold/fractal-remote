@@ -269,6 +269,39 @@ async function forgetVideos(url: string, service: string, who: Who, reports: Rep
 }
 
 /*
+ * AND THE ACCOUNT'S PROFILE PHOTO (7 November 2026), in the private bucket
+ * `profile-photos` (migrations/20261107_user_profile_photos.sql). An account
+ * has one place there, `<account id>/photo.jpg`, and the bucket's rules let
+ * nothing else in, so that one file is deleted, through Storage's own API,
+ * before the account goes. Asked whether or not there is one: a delete of
+ * a file that is not there answers 200 and an empty list. Best effort, like
+ * the reports' pictures.
+ */
+const PHOTO_BUCKET = 'profile-photos'
+const PHOTO_PATH = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/photo\.jpg$/
+
+/** The account's own photo's place, or null for an id that is not one. */
+export function ownPhoto(id: string): string | null {
+  const path = `${String(id || '').toLowerCase()}/photo.jpg`
+  return PHOTO_PATH.test(path) ? path : null
+}
+
+async function forgetPhoto(url: string, service: string, who: Who, by: By) {
+  const path = ownPhoto(who.id)
+  if (!path) return
+  try {
+    const res = await fetch(`${url}/storage/v1/object/${PHOTO_BUCKET}`, {
+      method: 'DELETE',
+      headers: { apikey: service, Authorization: `Bearer ${service}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefixes: [path] })
+    })
+    if (!res.ok) console.error(`${by}: profile photo answered ${res.status}`)
+  } catch (err) {
+    console.error(`${by}: profile photo unreachable (${err})`)
+  }
+}
+
+/*
  * AND THE EMAILS OF THEM (review, 23 October 2026). Every report was emailed
  * to the developer when it came in (functions/feedback-email), with its log
  * and its screenshots, and deleting a row cannot reach an inbox. So the
@@ -351,6 +384,7 @@ export async function forgetAccount(url: string, service: string, who: Who, by: 
   if (!reports) return { ok: false, why: 'lookup' }
   await forgetShots(url, service, who, reports, by)
   await forgetVideos(url, service, who, reports, by)
+  await forgetPhoto(url, service, who, by)
   await forgetRows(url, service, who, reports, by)
   /*
    * The emailed copies of its reports are the developer's to delete; he is

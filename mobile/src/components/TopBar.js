@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Alert, Image, Platform, Pressable, Text, View } from 'react-native'
+import { Alert, Image, Platform, Pressable, Text, View, useWindowDimensions } from 'react-native'
 import { BlurView } from 'expo-blur'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, mono, radius, space, isDark } from '../lib/theme'
 import { at } from '../lib/vivid'
@@ -29,6 +30,9 @@ import { fire } from '../lib/tapped'
 import { useSaveToSlot } from './SaveToSlot'
 import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS } from '../lib/save-wait'
 import { deviceNoun } from '../lib/device-word'
+import Avatar from './Avatar'
+import { useProfilePhoto } from '../lib/accountPhoto'
+import { avatarShown } from '../lib/profile-photo'
 
 const face = Platform.select(mono)
 
@@ -56,7 +60,7 @@ const face = Platform.select(mono)
  * The words come from shared/link-word.mjs rather than from here, so the two
  * apps cannot drift into saying different things about the same link.
  */
-export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true }) {
+export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true, onOpenAccount = null }) {
   const unit = useRig(ofDeviceName)
   const unitState = useRig(ofUnitState)
   const blocks = useRig(ofAllBlocks)
@@ -269,6 +273,36 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    */
   const hasOutput = connected && Number.isInteger(idOf((blocks || []).find((b) => b?.slug === 'output')))
 
+  /*
+   * THE ACCOUNT'S PHOTO, beside the pill, or a silhouette where there is
+   * none, and a tap on it opens Settings → your account (Justin, 7 November
+   * 2026). Only for somebody signed in to an account on this device, never
+   * in the demo (shared/profile-photo avatarShown), and out of the way while
+   * Save needs the room, as the version is: beside Save, a 320-point phone
+   * has no room left for it without cutting into the pill.
+   *
+   * And out of the way while the pill's own words need its room: the photo
+   * and its gap are 36 points, and on a 360-wide phone "Not answering ●
+   * Axe-Fx III" beside the speaker, or on a 320 "Disconnected ● Axe-Fx III",
+   * fit without it and not with it. So the pill's first line is measured as
+   * it is drawn (mono, 0.602 of a letter, at the phone's text size; its
+   * border, its padding, and the lamp or the Bluetooth mark's 10 with their
+   * gaps) against what the row leaves it beside the photo (the side padding,
+   * three gaps, the photo and the gear, and the speaker with its gap when it
+   * shows). Beside Live it fits on every phone; a longer word moves it aside
+   * until the word is gone.
+   */
+  const photo = useProfilePhoto()
+  const { width: across, fontScale = 1 } = useWindowDimensions()
+  /* The bar is the window less the side strips App's SafeAreaView keeps clear of (the Duo closed, a tablet with its camera down one side): 0 on a phone held upright. */
+  const { left: stripLeft = 0, right: stripRight = 0 } = useSafeAreaInsets()
+  const letter = 0.602 * font.small * (fontScale || 1)
+  const pillNeeds = 2 + 2 * space.sm + (String(pill.status || '').length + String(pill.unit || '').length) * letter + (demo ? 0 : 2 * space.sm + 10)
+  /* And its second line, where the computer is ("on Justins MacBook Pro"), in the system font at micro: 0.56 of a letter errs wide, so a long name moves the photo aside rather than being cut by it. */
+  const whereNeeds = 2 + 2 * space.sm + String(pill.where || '').length * 0.56 * font.micro * (fontScale || 1)
+  const besidePhoto = across - stripLeft - stripRight - 2 * space.lg - 3 * space.md - 24 - 22 - (hasOutput ? space.md + 24 : 0)
+  const showPhoto = Boolean(onOpenAccount) && avatarShown({ demo, account: photo }) && !canSave && Math.max(pillNeeds, whereNeeds) <= besidePhoto
+
   return (
     /*
      * GLASS, AND IT COSTS NOTHING TO ADD.
@@ -348,6 +382,22 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
           {`v${APP_VERSION}`}
         </Text>
       )}
+
+      {/* A thumb's 44 each way round its 24: the version beside it takes no touch, and the pill, drawn after, has the 12 between them. */}
+      {showPhoto ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Your account"
+          accessibilityHint="Your name, photo and password"
+          hitSlop={{ top: 10, bottom: 10, left: 14, right: 6 }}
+          onPress={() => {
+            tick()
+            onOpenAccount()
+          }}
+        >
+          <Avatar uri={photo.uri} size={24} />
+        </Pressable>
+      ) : null}
 
       {/*
         THE PILL: WHICH UNIT, ON WHICH COMPUTER, AND THE WAY TO ANOTHER.
