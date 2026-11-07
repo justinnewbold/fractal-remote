@@ -1228,6 +1228,7 @@ export async function findAdapters({ cableFirst = true } = {}) {
   /* A new Connect: a wait for Bluetooth from the last one ends, and this one says afresh what it finds. */
   stopWaitingForBluetooth()
   afterScreen = null
+  offAtConnect = null
   noteBluetooth({ trouble: null, said: null })
   /*
    * A UNIT ON A USB CABLE FIRST, before anything about Bluetooth. "I've
@@ -1365,8 +1366,9 @@ export async function findAdapters({ cableFirst = true } = {}) {
      * one adapter it finds as ever.
      */
     logDebug('ble', `Connect: Bluetooth is off on this ${deviceNoun()}, so the search did not start`)
+    offAtConnect = Date.now()
     noteBluetooth({ trouble: 'bluetooth-off' })
-    waitForBluetoothOn(look)
+    waitForBluetoothOn(look, offAtConnect + WAIT_ON_MS)
     return
   }
   look()
@@ -1414,21 +1416,39 @@ function look() {
  */
 export const WAIT_ON_MS = 120000
 const WAIT_TICK_MS = 1000
+/*
+ * WHEN THE PAGE'S CONNECT FOUND BLUETOOTH OFF (findAdapters). Its promise,
+ * the look that starts once Bluetooth is on and chooses the one adapter it
+ * hears, and the page's `wanted` that then switches Bluetooth on, holds for
+ * WAIT_ON_MS from that tap and no longer: "Bluetooth is off" from a Connect
+ * hours ago, the app kept alive by Android, let a later visit to the page
+ * search by itself and take a customer off the computer with no tap
+ * (review, 7 November 2026). Cleared by the next Connect.
+ */
+let offAtConnect = null
+/** The end of the page's Connect promise (the time), while Bluetooth is still said to be off and not on in the app; null when nothing is owed. */
+export function connectOwedUntil() {
+  if (now.trouble !== 'bluetooth-off' || saved.on || offAtConnect === null) return null
+  const until = offAtConnect + WAIT_ON_MS
+  return Date.now() < until ? until : null
+}
 let waitTimer = null
 let waitRound = 0
 let waiting = false
 /* Whose wait it is: the page's (its `then` is the look, ended when the page closes: stopPageWait) or the link's (none, for an adapter kept, ended when the link stops: endLinkWait). */
 let waitThen = null
-function waitForBluetoothOn(then = null) {
+function waitForBluetoothOn(then = null, until = Date.now() + WAIT_ON_MS) {
   const mod = ble()
   if (Platform.OS !== 'android' || typeof mod?.scan !== 'function') return
+  /* The page's look only ever inside its Connect's two minutes (connectOwedUntil). */
+  if (then && !(until > Date.now())) return
   stopWaitingForBluetooth()
   const mine = waitRound
-  const until = Date.now() + WAIT_ON_MS
   waiting = true
   waitThen = then
   noteBluetooth({ waitingOn: true })
-  logDebug('ble', `waiting for Bluetooth to come on, for up to ${WAIT_ON_MS / 60000} minutes`)
+  const left = until - Date.now()
+  logDebug('ble', left >= WAIT_ON_MS ? `waiting for Bluetooth to come on, for up to ${WAIT_ON_MS / 60000} minutes` : `waiting for Bluetooth to come on again, for the ${Math.ceil(left / 1000)} s left of the Connect’s ${WAIT_ON_MS / 60000} minutes`)
   const again = () => {
     waitTimer = setTimeout(tick, WAIT_TICK_MS)
     /* Never what keeps the app (or a test run) alive. */
@@ -1559,7 +1579,11 @@ async function askAndroidForBluetooth() {
 export async function turnOnBluetooth() {
   if (Platform.OS !== 'android' || !ble()) return false
   const asked = await askAndroidForBluetooth()
-  if (!waiting && now.trouble === 'bluetooth-off') waitForBluetoothOn(saved.on ? null : look)
+  /* The look only inside the Connect's two minutes; after them, Android is asked and the line says to tap Connect again. */
+  if (!waiting && now.trouble === 'bluetooth-off') {
+    if (saved.on) waitForBluetoothOn(null)
+    else if (connectOwedUntil() !== null) waitForBluetoothOn(look, connectOwedUntil())
+  }
   return asked
 }
 
@@ -1652,11 +1676,13 @@ export function adapterBackUnderNewId() {
  * settings, Control Center). On an iPhone the list is read as it is now and
  * the adapter kept found under a new id (adapterBackUnderNewId); on Android,
  * with Bluetooth said to be off, the wait for it is started again if it had
- * ended (the page closed, one of its own pages opened, the two minutes up),
- * so a Bluetooth turned on elsewhere is noticed within a second, and the
- * line under "Bluetooth is off" stays true. Bluetooth is said to be off only
- * after a Connect, or the link trying the adapter kept, so this touches
- * nothing before one.
+ * ended: the link's, for an adapter kept and Bluetooth on in the app; the
+ * page's look only within two minutes of the Connect that found it off
+ * (connectOwedUntil), after the page closed or one of its own pages opened,
+ * so the line under "Bluetooth is off" stays true. Past them the line goes,
+ * and nothing is looked for. Bluetooth is said to be off only after a
+ * Connect, or the link trying the adapter kept, so this touches nothing
+ * before one.
  */
 export function refreshAdapters() {
   if (!ble()) return
@@ -1665,7 +1691,17 @@ export function refreshAdapters() {
     if (listing || now.devices.length) showList(adapterDevices())
     return
   }
-  if (now.trouble === 'bluetooth-off' && !waiting) waitForBluetoothOn(saved.on ? null : look)
+  if (now.trouble !== 'bluetooth-off' || waiting) return
+  if (saved.on) return waitForBluetoothOn(null)
+  const until = connectOwedUntil()
+  if (until !== null) return waitForBluetoothOn(look, until)
+  /*
+   * A CONNECT LONG GONE: its "Bluetooth is off" is not said again nor
+   * waited on, and nothing is looked for. Connect asks afresh, so nothing
+   * switches anybody to Bluetooth without a tap.
+   */
+  logDebug('ble', 'Bluetooth was said to be off at a Connect more than 2 minutes ago: no longer said, nothing looked for')
+  noteBluetooth({ trouble: null })
 }
 
 /** For the Bluetooth page while it is open: what the phone can see, read again each time the app is back on screen (refreshAdapters). A remover. */

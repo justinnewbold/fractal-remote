@@ -22,6 +22,7 @@ import {
   cablesHere,
   checkSteps,
   chooseAdapter,
+  connectOwedUntil,
   findAdapters,
   forgetAdapter,
   forgetAdapterFor,
@@ -401,12 +402,18 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * until an adapter arrives.
    */
   /*
-   * And from the start when the page opens on Bluetooth off with nothing
-   * kept (a Connect on an earlier visit found it off): the look that starts
-   * once it is on chooses the adapter, and this turns Bluetooth on with it,
-   * as that Connect would have.
+   * The promise is the tap's, for the unit it was tapped for (`wanted` is
+   * that unit): another unit picked meanwhile, whose own adapter arrives
+   * with it (each unit keeps its own), turns nothing on.
+   *
+   * And from the start when the page opens within two minutes of a Connect
+   * on an earlier visit that found Bluetooth off, with nothing kept
+   * (lib/bluetooth connectOwedUntil): the look that starts once it is on
+   * chooses the adapter, and this turns Bluetooth on with it, as that
+   * Connect would have. Never for a Connect older than that, so nothing
+   * switches anybody off the computer without a tap.
    */
-  const [wanted, setWanted] = useState(() => b.trouble === 'bluetooth-off' && !b.adapter && !b.on)
+  const [wanted, setWanted] = useState(() => (connectOwedUntil() !== null && !b.adapter ? b.unit : null))
   /* Apple's screen closed with no adapter connected in it. */
   const [missed, setMissed] = useState(false)
   /* The full version as Bluetooth reads it: the purchase itself for a customer, never "the store cannot be reached" (unlock-rule mayDriveBluetooth). */
@@ -414,8 +421,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   const paid = mayDriveBluetooth(purchase, his)
   useEffect(() => {
     if (!wanted || !b.adapter || !b.unit || b.on) return
-    setWanted(false)
-    if (paid) setBluetooth(true)
+    setWanted(null)
+    if (paid && wanted === b.unit) setBluetooth(true)
   }, [wanted, b.adapter?.id, b.unit, b.on, paid])
 
   const canStart = !!b.unit && paid
@@ -424,7 +431,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   /* `cableFirst: false` when a Bluetooth adapter is what is looked for (another, below): Apple's screen, never a cable in its place (lib/bluetooth findAdapters). */
   const find = async ({ cableFirst = true } = {}) => {
     setMissed(false)
-    setWanted(true)
+    setWanted(b.unit)
     const pick = await findAdapters({ cableFirst })
     if (ios && !pick && !adapterDevices().some((d) => !d.offline)) setMissed(true)
   }
@@ -523,7 +530,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   const choose = (d) => {
     arm()
     chooseAdapter(d)
-    setWanted(true)
+    setWanted(b.unit)
   }
   /* An iPhone's row for an adapter not connected to it: Apple's screen, and whatever is connected there is taken, as by Connect. */
   const connectInApplesScreen = () => {

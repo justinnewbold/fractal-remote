@@ -561,6 +561,17 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const heldFor = (job) => (am4 || !job.opts.match || job.opts.fn === undefined || job.opts.fn === FN.PARAM ? 0 : lateFor(job.opts.fn))
 
   const isEcho = (bytes, now) => now - lastSent.at <= ECHO_MS && lastSent.messages.some((m) => sameBytes(m, bytes))
+  /*
+   * EVERY OTHER UNIT'S QUESTION askAround SENT ON THIS CONNECTION. A frame
+   * identical to one is the phone's own coming back, however late: the
+   * echo guard holds for ECHO_MS, and a slower echo of the AM4's question (a
+   * busy link resending, a THRU plug) was read as an AM4 answering. No unit
+   * answers with another unit's question, byte for byte (an AM4's answer is
+   * its STRUCTURE_FRAME, a Gen 3 scene answer carries 0 to 7, not 7F), so
+   * no answer is lost to it.
+   */
+  const askedAround = []
+  const askedAroundEcho = (bytes) => askedAround.some((m) => sameBytes(m, bytes))
 
   const wrongUnitError = () => failure(`An AM4 answered, not the ${spec.name}. Pick AM4 on the Bluetooth page in Settings.`, 409)
 
@@ -802,8 +813,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * loops, read as an AM4 answering. That named an AM4 on the adapter and
      * stopped the connection. The phone's own message coming back is never
      * another unit.
+     *
+     * And askAround's own questions however late (askedAround), on their own
+     * test, never under allowEcho: a slow echo of the AM4's question never
+     * names an AM4, nor stops a connection whose unit has since answered.
      */
-    if (isEcho(f, now) && !(job && job.opts.allowEcho)) {
+    const ownEcho = isEcho(f, now) && !(job && job.opts.allowEcho)
+    if (ownEcho || (f[4] !== model && askedAroundEcho(f))) {
       echoes++
       if (echoes >= 3 && !thruTold) {
         thruTold = true
@@ -1009,6 +1025,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (closed || wrongUnit || answered || foreignTold) break
       /* The AM4's own question, held to the AM4's own list as everything an AM4 is sent is. */
       if (o.am4 && !am4Allowed(o.frame)) continue
+      askedAround.push(o.frame)
       await ex(o.frame, { probe: true, match: () => null, ms: WAIT.detect, what: `the ${o.name}’s own question, to see whether ${MODEL_NAMES[o.frame[4]] || 'another unit'} is on this adapter` }).catch(() => null)
     }
     const who = foreignTold && foreign ? modelName(foreign.model) : null

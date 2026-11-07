@@ -6770,7 +6770,8 @@ export function run(test) {
     /* And the page's own Connect, by the same purchase rule: never mayDrive, whose "store out of reach" is a yes. */
     const bluetoothPage = flat('mobile/src/screens/Bluetooth.js')
     assert.match(bluetoothPage, /const his = useBluetoothAdmin\(\) const paid = mayDriveBluetooth\(purchase, his\)/, 'Connect reads the full version some other way than the row')
-    assert.match(bluetoothPage, /if \(paid\) setBluetooth\(true\)/)
+    /* The promise kept only for the unit it was made for, since 7 November 2026 (review), and still only with the purchase. */
+    assert.match(bluetoothPage, /if \(paid && wanted === b\.unit\) setBluetooth\(true\)/)
     assert.match(bluetoothPage, /const canStart = !!b\.unit && paid/)
     assert.ok(!/mayDrive\(/.test(code('mobile/src/screens/Bluetooth.js')), 'the Bluetooth page lets a free account connect with the store out of reach')
     /* App.js: one way to the page, handed to the waiting screen only through the same three: the row's gate as one hook. */
@@ -7691,7 +7692,8 @@ export function run(test) {
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.ok(page.indexOf('1 · Pick your unit') < page.indexOf('2 · Connect'), 'the steps are out of order')
     assert.match(page, /const showList = !b\.on && !b\.adapter && b\.devices\.length > 0/, 'the list shows when there is nothing to choose')
-    assert.match(page, /if \(!wanted \|\| !b\.adapter \|\| !b\.unit \|\| b\.on\) return setWanted\(false\) if \(paid\) setBluetooth\(true\)/, 'choosing the adapter does not turn Bluetooth on')
+    /* Changed on purpose, 7 November 2026 (review): the promise is the unit's the tap was for, so another unit's own adapter, arriving with it, turns nothing on. */
+    assert.match(page, /if \(!wanted \|\| !b\.adapter \|\| !b\.unit \|\| b\.on\) return setWanted\(null\) if \(paid && wanted === b\.unit\) setBluetooth\(true\)/, 'choosing the adapter does not turn Bluetooth on')
     assert.match(page, /if \(b\.adapter\) setBluetooth\(true\) else find\(\)/, 'Connect with an adapter from last time goes looking again')
     /* Except on an iPhone it is not connected to: Apple's screen is the only way back, so Connect opens it. */
     assert.match(page, /if \(b\.adapter && ios && offlineHere\(b\.adapter\)\) return another\(\)/, 'Connect on an iPhone waits for an offline adapter instead of opening Apple’s screen')
@@ -12404,8 +12406,8 @@ export function run(test) {
           if (line.gone) return false
           sent.push([...b])
           if (unit && b[4] === model) unit.hear([...b])
-          /* `loop`: every frame comes straight back, as a white plug in a THRU jack, or an adapter that loops, hands it back. */
-          if (loop) say([...b], 5)
+          /* `loop`: every frame comes straight back, as a white plug in a THRU jack, or an adapter that loops, hands it back; a number is how late, in ms. */
+          if (loop) say([...b], loop === true ? 5 : loop)
           return true
         }
       })
@@ -12949,7 +12951,10 @@ export function run(test) {
     /* The list is read again as the page opens and each time the app comes back, and the wait for Bluetooth ends with the page. */
     /* The page's own wait only ends with it (stopPageWait), and opening it again resumes a wait a Connect began; `wanted` too, so the look's adapter is switched on. */
     assert.match(page, /useEffect\(\(\) => \{ refreshAdapters\(\) const off = refreshOnScreen\(\) return \(\) => \{ off\(\) stopPageWait\(\) \} \}, \[\]\)/)
-    assert.match(page, /const \[wanted, setWanted\] = useState\(\(\) => b\.trouble === 'bluetooth-off' && !b\.adapter && !b\.on\)/)
+    /* Changed on purpose, 7 November 2026 (second review): only within two minutes of the Connect that found Bluetooth off (connectOwedUntil), never from an older "Bluetooth is off". */
+    assert.match(page, /const \[wanted, setWanted\] = useState\(\(\) => \(connectOwedUntil\(\) !== null && !b\.adapter \? b\.unit : null\)\)/)
+    assert.equal((page.match(/setWanted\(b\.unit\)/g) || []).length, 2, 'a Connect or a row tapped no longer makes the promise for its unit')
+    assert.ok(!/setWanted\(true\)/.test(page), 'a promise made for no unit in particular')
     assert.ok(!/stopWaitingForBluetooth/.test(page), 'the page ends the link’s own wait for Bluetooth')
     /* Troubleshooting: each other unit's adapter with its Forget, and on an iPhone how to take one off Apple's list. */
     const trouble = page.slice(page.indexOf('export function BluetoothTrouble('))
@@ -13025,6 +13030,33 @@ export function run(test) {
     const wire = flat('mobile/src/lib/bleWire.js')
     const heard = wire.slice(wire.indexOf('function heard(f) {'), wire.indexOf('heardAgain()', wire.indexOf('function heard(f) {')))
     assert.ok(heard.indexOf('if (isEcho(f, now)') > 0 && heard.indexOf('if (isEcho(f, now)') < heard.indexOf('if (f[4] !== model) {'), 'another unit is heard before the echo guard')
+  })
+
+  test('the phone’s own questions to other units coming back late (600 ms, 1.3 s, 3 s) are still never another unit answering', async () => {
+    for (const late of [600, 1300, 3000]) {
+      for (const picked of ['axefx3', 'fm3', 'fm9']) {
+        const t = await wrongLine(picked, null, { loop: late })
+        assert.equal((await t.get('/device/detect')).connected, false)
+        assert.equal((await t.get('/device/detect')).connected, false)
+        assert.equal(await drive(t.clock, t.wire.askAround()), null, `${picked}, ${late} ms: its own AM4 question, echoed late, was taken for an AM4`)
+        /* Every late echo heard, the last of them too. */
+        await advance(t.clock, late + 500)
+        assert.deepEqual(t.foreign, [], `${picked}, ${late} ms: a unit was named for the phone’s own echo`)
+        assert.ok(t.logs.includes('no other unit answered on this adapter either'), `${picked}, ${late} ms: ${t.logs.join(' | ')}`)
+        /* The connection is not stopped: it goes on asking its own unit, with no 409. */
+        assert.deepEqual(await t.get('/preset'), { number: -1, name: '' }, `${picked}, ${late} ms: the connection was stopped by its own echo`)
+        /* And the echo is said, as it always was. */
+        assert.ok(t.logs.includes(picked === 'axefx3' ? 'the unit is echoing what it receives: the white plug may be in the Axe-Fx III’s MIDI THRU, not OUT' : 'the unit is echoing what it receives: MIDI Thru is on'), `${picked}, ${late} ms: ${t.logs.join(' | ')}`)
+      }
+    }
+    /* A real AM4 on the adapter, behind a slow loop, is still named. */
+    const a = await wrongLine('fm3', 'am4', { loop: 600 })
+    await a.get('/device/detect')
+    assert.equal(await drive(a.clock, a.wire.askAround()), 'AM4')
+    /* In the file: kept for this connection only, as each is sent, and apart from allowEcho. */
+    const wire = flat('mobile/src/lib/bleWire.js')
+    assert.match(wire, /if \(o\.am4 && !am4Allowed\(o\.frame\)\) continue askedAround\.push\(o\.frame\)/)
+    assert.match(wire, /const ownEcho = isEcho\(f, now\) && !\(job && job\.opts\.allowEcho\) if \(ownEcho \|\| \(f\[4\] !== model && askedAroundEcho\(f\)\)\) \{/)
   })
 
   test('the FM3 rule: Switch to FM3 is never offered, nor carried, on an adapter the app does not name for an FM3', async () => {
@@ -13190,17 +13222,29 @@ export function run(test) {
         assert.equal(b.useBluetoothTrouble(), 'bluetooth-off')
         b.stopPageWait()
         assert.equal(b.useWaitingForBluetooth(), false)
-        /* After two minutes it stops by itself, and says so. */
+        /* Opened again within the Connect's two minutes: taken up again, for what is left of them. */
+        await advance(clock, 30000)
         b.refreshAdapters()
         assert.equal(b.useWaitingForBluetooth(), true)
-        await advance(clock, b.WAIT_ON_MS + 2000)
-        assert.equal(b.useWaitingForBluetooth(), false, 'the wait never ran out')
-        assert.ok(bench.log.includes('ble Bluetooth did not come on within 2 minutes: no longer waiting for it'), bench.log.join(' | '))
-        /* The shade closing (Android's focus) takes it up again. */
+        assert.ok(bench.log.includes('ble waiting for Bluetooth to come on again, for the 90 s left of the Connect’s 2 minutes'), bench.log.join(' | '))
+        /* The shade closing (Android's focus) within them takes it up again too. */
+        b.stopPageWait()
         const off = b.refreshOnScreen()
         assert.equal(bench.rn.AppState.listeners.length, 2, 'Android’s focus is not listened to')
         for (const fn of [...bench.rn.AppState.listeners]) fn('active')
         assert.equal(b.useWaitingForBluetooth(), true)
+        /* Two minutes from the Connect it stops by itself, and says so. */
+        await advance(clock, b.WAIT_ON_MS - 30000 + 2000)
+        assert.equal(b.useWaitingForBluetooth(), false, 'the wait outlived its Connect')
+        assert.ok(bench.log.includes('ble Bluetooth did not come on within 2 minutes: no longer waiting for it'), bench.log.join(' | '))
+        /*
+         * Changed on purpose, 7 November 2026 (second review): after them the
+         * shade closing takes nothing up. "Bluetooth is off" goes, and the
+         * page asks for a Connect again.
+         */
+        for (const fn of [...bench.rn.AppState.listeners]) fn('active')
+        assert.equal(b.useWaitingForBluetooth(), false, 'a Connect more than two minutes old was waited on again')
+        assert.equal(b.useBluetoothTrouble(), null)
         off()
         assert.equal(bench.rn.AppState.listeners.length, 0)
       } finally {
@@ -13226,6 +13270,109 @@ export function run(test) {
     } finally {
       k.done()
     }
+  })
+
+  /*
+   * A "BLUETOOTH IS OFF" FROM A CONNECT LONG AGO. Android keeps the app
+   * alive, so the trouble a Connect left (the tablet's Bluetooth off, the
+   * page closed without turning it on) was still there hours later, with
+   * Bluetooth on for headphones and the WIDI powered: opening the page just
+   * to look started the wait, its search found the one adapter, and the
+   * page's promise switched a customer off the computer with no tap
+   * (second review, 7 November 2026). Now the promise holds for two minutes
+   * from the Connect and no more.
+   */
+  test('an old “Bluetooth is off” never starts a search or switches anybody to Bluetooth: only a Connect within two minutes does', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const JACK = { id: 'AA:BB:CC:00:00:09', name: 'WIDI Jack', rssi: -55 }
+    const make = async () => {
+      const clock = fakeClock()
+      const state = { on: false, list: [], scans: [] }
+      const mod = { supported: () => true, devices: () => state.list, requestPermissions: async () => true, scan: async (secs) => (state.scans.push(secs), state.on), stopScan: () => {}, addListener: () => ({ remove() {} }) }
+      const bench = await bluetoothOnABench({ os: 'android', version: 34, mod, clock })
+      bench.ble.allowBluetooth(ADMINS[0])
+      bench.ble.setBluetoothUnit('am4')
+      return { clock, state, bench, b: bench.ble }
+    }
+    /* Connect with Bluetooth off, the page closed, three hours later Bluetooth on and the WIDI Jack about. */
+    {
+      const { clock, state, bench, b } = await make()
+      try {
+        await b.findAdapters()
+        assert.equal(b.useBluetoothTrouble(), 'bluetooth-off')
+        assert.notEqual(b.connectOwedUntil(), null)
+        b.stopPageWait()
+        await advance(clock, 3 * 3600 * 1000)
+        assert.equal(b.connectOwedUntil(), null, 'a Connect three hours old is still owed')
+        state.on = true
+        state.list = [JACK]
+        const asked = state.scans.length
+        /* The page opened, the app back on screen, Turn on Bluetooth: nothing searches, nothing is chosen. */
+        b.refreshAdapters()
+        await advance(clock, 15000)
+        assert.equal(state.scans.length, asked, 'the page opening searched for an adapter with no Connect')
+        assert.equal(b.useBluetoothTrouble(), null, 'the old “Bluetooth is off” is still said')
+        assert.equal(b.useWaitingForBluetooth(), false)
+        assert.equal(b.bluetoothSettings().adapter, null, 'an adapter was chosen with no tap')
+        assert.equal(b.bluetoothSettings().on, false)
+        assert.ok(bench.log.includes('ble Bluetooth was said to be off at a Connect more than 2 minutes ago: no longer said, nothing looked for'), bench.log.join(' | '))
+      } finally {
+        bench.done()
+      }
+    }
+    /* Turn on Bluetooth after the two minutes, the page left open: Android is asked, and nothing is looked for by itself. */
+    {
+      const { clock, state, bench, b } = await make()
+      try {
+        await b.findAdapters()
+        await advance(clock, b.WAIT_ON_MS + 5000)
+        assert.equal(b.useWaitingForBluetooth(), false)
+        const asked = state.scans.length
+        state.on = true
+        state.list = [JACK]
+        assert.equal(await b.turnOnBluetooth(), true)
+        await advance(clock, 15000)
+        assert.equal(state.scans.length, asked, 'Turn on Bluetooth searched for a Connect more than two minutes old')
+        assert.equal(b.bluetoothSettings().adapter, null)
+      } finally {
+        bench.done()
+      }
+    }
+    /* Within them: Bluetooth on in Android's settings, the page opened again, and the look chooses the one adapter, as the Connect would have. */
+    {
+      const { clock, state, bench, b } = await make()
+      try {
+        await b.findAdapters()
+        b.stopPageWait()
+        await advance(clock, 60000)
+        state.on = true
+        state.list = [JACK]
+        b.refreshAdapters()
+        await advance(clock, 13000)
+        assert.equal(b.bluetoothSettings().adapter?.id, JACK.id, 'a Connect a minute old was not kept')
+      } finally {
+        bench.done()
+      }
+    }
+    /* A new Connect clears the old one's time: found on, nothing is owed. */
+    {
+      const { bench, b, state } = await make()
+      try {
+        await b.findAdapters()
+        state.on = true
+        await b.findAdapters()
+        assert.equal(b.connectOwedUntil(), null)
+      } finally {
+        bench.done()
+      }
+    }
+    /* In the file: the time is set where Connect finds Bluetooth off, and cleared at the top of every Connect. */
+    const lib = flat('mobile/src/lib/bluetooth.js')
+    const find = lib.slice(lib.indexOf('export async function findAdapters('), lib.indexOf('function look() {'))
+    assert.ok(find.indexOf('offAtConnect = null') >= 0 && find.indexOf('offAtConnect = null') < find.indexOf('offAtConnect = Date.now()'), 'the time of the Connect is not cleared at its top')
+    assert.match(find, /offAtConnect = Date\.now\(\) noteBluetooth\(\{ trouble: 'bluetooth-off' \}\) waitForBluetoothOn\(look, offAtConnect \+ WAIT_ON_MS\)/)
+    assert.equal((lib.match(/waitForBluetoothOn\(look\b/g) || []).length, 3, 'the page’s look waited on somewhere new')
+    assert.equal((lib.match(/waitForBluetoothOn\(look, (offAtConnect \+ WAIT_ON_MS|connectOwedUntil\(\)|until)\)/g) || []).length, 3, 'the page’s look waited on past its Connect')
   })
 
   test('the wait for Bluetooth ends when the search fails rather than answering off, instead of failing every second for two minutes', async () => {
