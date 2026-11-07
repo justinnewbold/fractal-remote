@@ -13,8 +13,9 @@
  *   one row of buttons: Previous at the far left, Tuner, Edit and Tap in the
  *     middle, Next at the far right
  *
- * WHEN. Only where Play has room both ways, measured on Play itself and never
- * the kind of device or which way up it is held:
+ * WHEN. Only where Play has room both ways and is at least as wide as it is
+ * tall, measured on Play itself and never the kind of device or which way up
+ * it is held:
  *
  *   wide  Play has already opened up (lib/playShape `wide`: a row of tiles at
  *         least 621 points, Play about 653 wide). The same line, so the
@@ -23,12 +24,20 @@
  *   tall  Play's own height (the room between the top bar and that strip) at
  *         least LINED_TALL points, and it goes off LINED_LETS_GO under that,
  *         so a Fold set down half-open does not flip Play between two shapes.
+ *   across Play's own width at least that height, so Play is a landscape
+ *         page. "The iPad portrait view was already fine back before a few
+ *         updates ago. It should basically look just like the phone does
+ *         portrait view, just bigger" (Justin, 7 November 2026): A1 was
+ *         chosen for a tablet on its side and the Duo opened, never for a
+ *         tablet held upright. Off LINED_LETS_GO under, like the height.
  *
  * Every phone held upright is narrower than the wide line, so it is today's
  * Play exactly; a phone on its side (the few Android phones that turn) is far
- * too short. An iPad, upright or on its side, the iPhone Duo opened and a
- * tablet are both. An iPad sharing the screen with another app takes this
- * when its half is still wide enough, and today's Play when it is not.
+ * too short. A tablet on its side, the iPhone Duo opened and a Fold opened
+ * (nearly square, so their Play is wider than it is tall) are all three. A
+ * tablet held upright is taller than wide, so it is the phone's own Play,
+ * bigger, as it was before A1. An iPad sharing the screen with another app
+ * takes this when its part is still wide enough, and today's Play when not.
  *
  * Nothing here imports anything, so the tests run it as it is.
  */
@@ -55,13 +64,16 @@ export const LINED_NAME_MAX = 22
 
 /**
  * Whether Play lines up. `wide` is lib/playShape's own answer for Play's
- * width, `tall` Play's own height in points, `was` this function's last
- * answer (for the height's memory).
+ * width, `tall` Play's own height and `across` its own width in points,
+ * `was` this function's last answer (for the lines' memory). No width, no
+ * lining up: a Play that has not measured itself is drawn as a phone's.
  */
-export function linedOn({ wide, tall } = {}, was = false) {
+export function linedOn({ wide, tall, across } = {}, was = false) {
   if (!wide) return false
   const h = Number(tall) > 0 ? Number(tall) : 0
-  return h >= (was ? LINED_TALL - LINED_LETS_GO : LINED_TALL)
+  const w = Number(across) > 0 ? Number(across) : 0
+  const give = was ? LINED_LETS_GO : 0
+  return h >= LINED_TALL - give && w >= h - give
 }
 
 /**

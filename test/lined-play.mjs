@@ -44,12 +44,12 @@ async function rules() {
 const CHROME = 200
 function playOn(g, width, height, was = null) {
   const shape = g.playShape(g.pageRow(width), 0, 'across', was?.shape)
-  const lined = g.linedOn({ wide: shape.wide, tall: height - CHROME }, was?.lined)
+  const lined = g.linedOn({ wide: shape.wide, tall: height - CHROME, across: width }, was?.lined)
   return { shape, lined }
 }
 
 export function run(test) {
-  test('Play lines up only where it has room both ways: an iPad either way up and the Duo opened, never a phone', async () => {
+  test('Play lines up only where it has room both ways and is wider than tall: a tablet on its side, the Duo and a Fold opened, never a phone or a tablet upright', async () => {
     const g = await rules()
     /* Phones held upright, at every width they come in: today's Play. */
     for (const [w, h] of [
@@ -65,29 +65,50 @@ export function run(test) {
     assert.equal(playOn(g, 844, 390).lined, false, 'an iPhone on its side lined up')
     assert.equal(playOn(g, 932, 430).lined, false, 'a big iPhone on its side lined up')
     assert.equal(playOn(g, 915, 412).lined, false, 'an Android phone on its side lined up')
-    /* An iPad upright and on its side, a small one too, the Duo opened, a tablet and a Fold opened. */
+    /* A tablet on its side, a small one too, the Duo and a Fold opened (nearly square, so Play is wider than tall). */
     for (const [w, h, what] of [
-      [820, 1180, 'an iPad upright'],
       [1180, 820, 'an iPad on its side'],
-      [744, 1133, 'an iPad mini upright'],
+      [1194, 834, 'an iPad Pro 11 on its side'],
       [1133, 744, 'an iPad mini on its side'],
-      [1024, 1366, 'an iPad Pro upright'],
+      [1366, 1024, 'an iPad Pro 13 on its side'],
       [700, 830, 'the iPhone Duo opened'],
-      [800, 1280, 'an Android tablet upright'],
       [1280, 800, 'an Android tablet on its side'],
       [673, 841, 'a Galaxy Fold opened']
     ]) assert.equal(playOn(g, w, h).lined, true, `${what} (${w} by ${h}) did not line up`)
+    /*
+     * A tablet held upright: the phone's own Play, bigger, as before A1. "The
+     * iPad portrait view was already fine back before a few updates ago. It
+     * should basically look just like the phone does portrait view, just
+     * bigger" (7 November 2026, on an iPad Pro held upright).
+     */
+    for (const [w, h, what] of [
+      [820, 1180, 'an iPad upright'],
+      [834, 1194, 'an iPad Pro 11 upright'],
+      [744, 1133, 'an iPad mini upright'],
+      [1024, 1366, 'an iPad Pro upright'],
+      [800, 1280, 'an Android tablet upright']
+    ]) {
+      const p = playOn(g, w, h)
+      assert.equal(p.lined, false, `${what} (${w} by ${h}) lined up, where it should be the phone's Play, bigger`)
+      assert.equal(p.shape.wide, true, `${what} lost the opened-up Play it had before A1`)
+    }
     /* An iPad sharing the screen: lined up while its half is wide enough, today's Play when it is a slim third. */
     assert.equal(playOn(g, 320, 1180).lined, false, 'an iPad’s slim third lined up')
     assert.equal(playOn(g, 507, 820).lined, false, 'half an iPad mini lined up')
     /* The height's line goes off 40 under where it came on. */
     const on = g.LINED_TALL
-    assert.equal(g.linedOn({ wide: true, tall: on - 1 }), false)
-    assert.equal(g.linedOn({ wide: true, tall: on }), true)
-    assert.equal(g.linedOn({ wide: true, tall: on - 20 }, true), true, 'a screen a little shorter flips straight back')
-    assert.equal(g.linedOn({ wide: true, tall: on - g.LINED_LETS_GO - 1 }, true), false)
-    /* Never without Play's own width line, however tall. */
-    assert.equal(g.linedOn({ wide: false, tall: 2000 }), false)
+    assert.equal(g.linedOn({ wide: true, tall: on - 1, across: 1200 }), false)
+    assert.equal(g.linedOn({ wide: true, tall: on, across: 1200 }), true)
+    assert.equal(g.linedOn({ wide: true, tall: on - 20, across: 1200 }, true), true, 'a screen a little shorter flips straight back')
+    assert.equal(g.linedOn({ wide: true, tall: on - g.LINED_LETS_GO - 1, across: 1200 }, true), false)
+    /* And Play's width against its height: on at least as wide as tall, off 40 narrower than that. */
+    assert.equal(g.linedOn({ wide: true, tall: 700, across: 699 }), false)
+    assert.equal(g.linedOn({ wide: true, tall: 700, across: 700 }), true)
+    assert.equal(g.linedOn({ wide: true, tall: 700, across: 670 }, true), true, 'a split-view drag a little narrower flips straight back')
+    assert.equal(g.linedOn({ wide: true, tall: 700, across: 700 - g.LINED_LETS_GO - 1 }, true), false)
+    /* Never without Play's own width line, however tall, nor before Play has measured its width. */
+    assert.equal(g.linedOn({ wide: false, tall: 2000, across: 3000 }), false)
+    assert.equal(g.linedOn({ wide: true, tall: on }), false, 'a Play with no width lined up')
     assert.equal(g.linedOn({}), false)
   })
 
@@ -142,7 +163,7 @@ export function run(test) {
     assert.match(stage, /const sceneAcross = lined \? plan\.sceneCols : sceneCols\n/)
     assert.match(stage, /const pedalsAcross = lined \? plan\.chainCols : fxCols\n/)
     assert.match(stage, /const pedalWords = lined \? linedName\([^\n]*\) : undefined\n/)
-    assert.match(stage, /const lined = linedOn\(\{ wide: shape\.wide, tall: viewport \}, linedWas\.current\)\n/, 'lined up is decided by something other than Play’s own size')
+    assert.match(stage, /const lined = linedOn\(\{ wide: shape\.wide, tall: viewport, across: playWidth \}, linedWas\.current\)\n/, 'lined up is decided by something other than Play’s own size')
     assert.match(stage, /const plan = linedPlan\(\{ scenes: scenes\.hasScenes \? scenes\.count : 0, pedals: fitBlocks \}\)\n/, 'the rows do not count the looper, or the cards while a preset loads')
     /* Both halves start level: each heading the same height. */
     assert.equal(stage.match(/style=\{lined \? LANE_HEADING : /g).length, 2, 'the two headings are not one height lined up')
