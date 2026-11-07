@@ -617,7 +617,7 @@ export default function Stage({
    * below is the one Play has always drawn with.
    */
   const linedWas = useRef(false)
-  const lined = linedOn({ wide: shape.wide, tall: viewport }, linedWas.current)
+  const lined = linedOn({ wide: shape.wide, tall: viewport, across: playWidth }, linedWas.current)
   linedWas.current = lined
   const plan = linedPlan({ scenes: scenes.hasScenes ? scenes.count : 0, pedals: fitBlocks })
   /* Where the two halves start down the page: everything above them (the notes, the preset) does not change with the tiles, so their room does not either. */
