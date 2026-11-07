@@ -70,6 +70,7 @@ import {
   opensApplesScreen,
   restoreBluetooth,
   setBluetooth,
+  turnOnBluetooth,
   useBluetoothOn,
   useBluetoothTrouble,
   useCableNow
@@ -2193,6 +2194,8 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
               Open the Fractal Remote app on the computer, and check the computer is awake.
             </Note>
           )}
+          {/* Android's own question to turn it on (lib/bluetooth turnOnBluetooth), under the note that says it is off: the link connects the moment it is on. */}
+          {bluetooth && trouble === 'bluetooth-off' ? <Press label="Turn on Bluetooth" tone="live" onPress={() => turnOnBluetooth()} /> : null}
           {/*
             AND THE LINK, TO THEIR INBOX, right under the words that say no
             computer was ever set up. "Add a 'Send me the download link'

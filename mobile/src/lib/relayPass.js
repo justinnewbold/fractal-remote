@@ -92,7 +92,16 @@ export async function claimRelay() {
       signal: controller.signal
     })
     const body = await res.json().catch(() => ({}))
-    logDebug(`relay pass: ${res.status} ${body?.unlocked ? 'paid' : 'not paid'}${body?.unknown ? ' (store unreachable)' : ''}`)
+    /*
+     * `unlocked` is bought, and a free trial rides beside it (supabase/
+     * functions/entitlement): "relay pass: 200 not paid" half a second after
+     * "trial: 200 started" read as a trial that had failed (7 November 2026).
+     * It had not: the relay's own question (is_entitled, 20261107_trials.sql)
+     * says yes to a trial still running, and purchases.js keeps its end. So
+     * the line says the trial too.
+     */
+    const trial = body && !body.unlocked && body.trial ? (body.trial.live ? ' · free trial running' : ' · free trial over') : ''
+    logDebug(`relay pass: ${res.status} ${body?.unlocked ? 'paid' : 'not paid'}${trial}${body?.unknown ? ' (store unreachable)' : ''}`)
     /* And the free trial beside it, when the server says (a definite answer
        from a server new enough to know): purchases.js keeps its end. */
     if (res.ok && body && 'trial' in body) trialHeard?.(data?.session?.user?.id || null, body.trial)

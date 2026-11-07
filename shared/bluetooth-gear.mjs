@@ -1051,3 +1051,55 @@ export function wrongUnitLine({ answered, picked, pickable = false, forWhich = '
   if (pickable) return `${head} Tap Stop, pick ${answered} in step 1, then tap Connect.`
   return `${head} ${forWhich ? `${forWhich} ` : ''}Tap Stop, and use the computer for the ${answered}.`
 }
+
+/**
+ * THE ADAPTER IS ON ANOTHER UNIT, said by the adapter's name, when the unit
+ * that answered is one this account can pick: "The WIDI Jack is on an AM4,
+ * not your FM3." (Justin's iPhone, 7 November 2026: the FM3 picked, the WIDI
+ * Jack on his AM4, and the page said only that the FM3 was not answering.)
+ * The page's button under it switches to that unit in one tap, on the same
+ * connection (SWITCH_TO). `adapter` is the adapter's name as the phone lists
+ * it ("WIDI Jack Bluetooth" on an iPhone is said "WIDI Jack"); with no name,
+ * wrongUnitLine says it instead.
+ */
+export const adapterSaid = (name) => String(name || '').replace(/\s+bluetooth\s*$/i, '').trim()
+export function wrongAdapterLine({ adapter, answered, picked }) {
+  return `The ${adapterSaid(adapter)} is on ${withArticle(answered)}, not your ${picked}.`
+}
+export const SWITCH_TO = (answered) => `Switch to ${answered}`
+export const SWITCH_TO_SUB = (adapter, answered) => `Uses the ${adapterSaid(adapter) || 'adapter'} for the ${answered}`
+
+/*
+ * CONNECT AGAIN: the adapter connected and the unit saying nothing, where
+ * the cure on 7 November 2026 was Turn off Bluetooth and then Connect, a
+ * fresh connection to the same adapter (bleLink connectBluetoothAgain). On
+ * the Bluetooth page and in Play's Bluetooth note.
+ */
+export const CONNECT_AGAIN = 'Connect again'
+export const CONNECT_AGAIN_SUB = 'A fresh connection to the adapter'
+
+/*
+ * BLUETOOTH OFF ON AN ANDROID PHONE OR TABLET: said, with Turn on Bluetooth
+ * under it (Android's own question), and what happens next, so nobody taps
+ * Connect again for nothing. `noun` is the device in hand (lib/device-word
+ * deviceNoun). `kept`: an adapter is kept, which the link connects to by
+ * itself whenever it next tries. Otherwise the page's search starts by
+ * itself only while the app is waiting for Bluetooth (`waiting`); once that
+ * wait has run out, the line says what to do instead.
+ */
+export const TURN_ON_BLUETOOTH = 'Turn on Bluetooth'
+export const bluetoothOffLine = (noun) => `Bluetooth is off on this ${noun}`
+export const bluetoothOffHint = (kept, waiting = true) =>
+  kept ? 'Once it is on, the adapter connects by itself.' : waiting ? 'Once it is on, the search starts by itself.' : 'Turn it on, then tap Connect again.'
+
+/*
+ * AN ADAPTER THAT WILL NOT LEAVE APPLE'S LIST (iPhone or iPad): Forget in
+ * Apple's Bluetooth MIDI screen did nothing for a WIDI Master still connected
+ * to the iPhone (7 November 2026). The app cannot change Apple's screen, so
+ * the way that works is said once, on Troubleshooting.
+ */
+export const appleListForget = (noun) =>
+  `To take an adapter off Apple’s Bluetooth list, switch the adapter off first, or in the ${noun}’s Settings → Bluetooth, tap ⓘ beside it, then Forget This Device.`
+
+/* Another unit's adapter in the page's list, and Troubleshooting's Forget for it: whose it is, by the unit's name. */
+export const adapterOfUnit = (unit) => `the ${UNITS[unit] || 'other unit'}’s adapter`

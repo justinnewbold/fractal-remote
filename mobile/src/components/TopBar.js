@@ -16,7 +16,9 @@ import { DEMO_TRIAL_PILL } from '../lib/trial-words'
 import setupIcon from '../../assets/icons/setup.png'
 import volumeIcon from '../../assets/icons/volume.png'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
-import { adapterInsteadOfCable, setBluetooth, useBluetoothOn, useCableNow } from '../lib/bluetooth'
+import { adapterInsteadOfCable, setBluetooth, useBluetoothAnsweredAs, useBluetoothOn, useBluetoothUnit, useCableNow } from '../lib/bluetooth'
+import { connectBluetoothAgain } from '../lib/bleLink'
+import { CONNECT_AGAIN } from '../lib/bluetooth-gear'
 import { CABLE_OFF, CABLE_TO_ADAPTER, CABLE_WHERE, cableNote } from '../lib/cableWords'
 import { idOf } from '../lib/device'
 import Lamp from './Lamp'
@@ -119,6 +121,10 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
   const cableKept = useCableNow()
   const cable = bluetooth && cableKept
   const wireless = bluetooth && !cable
+  /* The unit picked on the Bluetooth page: a VP4 never answers over it, so its silence is not offered Connect again. */
+  const bleUnit = useBluetoothUnit()
+  /* Another unit answered on the adapter: a fresh connection would only hear it again, so no Connect again (the Bluetooth page offers Switch to). */
+  const bleAnswered = useBluetoothAnsweredAs()
   /* The note under the pill is Bluetooth's alone: put away when Bluetooth goes, so it is not open on its own when Bluetooth next comes on. */
   useEffect(() => {
     if (!bluetooth) setSaying(false)
@@ -635,7 +641,17 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
       */}
       <Volume blocks={blocks} open={volume} onClose={() => setVolume(false)} onError={setFailed} />
       {failed ? <Reported said={failed} onClear={() => setFailed(null)} /> : null}
-      {saying && bluetooth ? <Which link={link} cable={cable} onClose={() => setSaying(false)} onReport={onReport} onBluetoothPage={onBluetoothPage} /> : null}
+      {saying && bluetooth ? (
+        <Which
+          link={link}
+          cable={cable}
+          /* The adapter connected and the unit silent: Connect again beside Turn off Bluetooth (not a VP4, which never answers, nor a cable). */
+          quiet={!cable && bleUnit !== 'vp4' && !bleAnswered && link?.link === 'connected' && (unitState === 'missing' || unitState === 'silent')}
+          onClose={() => setSaying(false)}
+          onReport={onReport}
+          onBluetoothPage={onBluetoothPage}
+        />
+      ) : null}
       {saveTo.said && saveHere ? <Saved said={saveTo.said} onClear={saveTo.dismiss} /> : null}
       {/*
         A save from Play runs late the same as one from Edit, and Play has no
@@ -694,7 +710,7 @@ const ofAllBlocks = (s) => s.allBlocks
  * adapter and nothing to switch to, so this note, and the switch back to the
  * computer, stay one tap from the bar.
  */
-function Which({ link, cable = false, onClose, onReport = null, onBluetoothPage = null }) {
+function Which({ link, cable = false, quiet = false, onClose, onReport = null, onBluetoothPage = null }) {
   const adapter = link?.macName || 'the adapter'
   /* A unit on a USB cable: the cable's words (lib/cableWords cableNote), and the same one way back to the computer, named for it. */
   const said = cable
@@ -765,6 +781,28 @@ function Which({ link, cable = false, onClose, onReport = null, onBluetoothPage 
         >
           <Text style={{ color: color.silk, fontSize: font.body }}>{off}</Text>
         </Pressable>
+        {/*
+          CONNECT AGAIN, with the adapter connected and the unit saying
+          nothing: a fresh connection to the same adapter, the cure that took
+          Turn off Bluetooth and two taps on the Bluetooth page on 7 November
+          2026 (lib/bleLink connectBluetoothAgain). Its own element to
+          VoiceOver, as Turn off Bluetooth is.
+        */}
+        {quiet ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={CONNECT_AGAIN}
+            accessibilityHint="Makes a fresh connection to the Bluetooth adapter"
+            onPress={() => {
+              tick()
+              fire(`press ${CONNECT_AGAIN}`, () => connectBluetoothAgain())
+              onClose()
+            }}
+            style={button}
+          >
+            <Text style={{ color: color.silk, fontSize: font.body }}>{CONNECT_AGAIN}</Text>
+          </Pressable>
+        ) : null}
         {/*
           ON A USB CABLE, THE OTHER WAY OFF IT TOO: "Use computer instead
           should say use Bluetooth or computer instead" (Justin, 6 November

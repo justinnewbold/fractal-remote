@@ -14,14 +14,18 @@ import {
   adapterBeforeCable,
   adapterDevices,
   adapterInsteadOfCable,
+  adapterKeptFor,
   adapterName,
+  adaptersForOtherUnits,
   cableAway,
   cablesConnectTakes,
   cablesHere,
   checkSteps,
   chooseAdapter,
+  connectOwedUntil,
   findAdapters,
   forgetAdapter,
+  forgetAdapterFor,
   glanceForAdapters,
   letGoOfKeptAdapter,
   lookForAdapterAgain,
@@ -31,18 +35,26 @@ import {
   otherAdapterNow,
   otherAdapterWords,
   pairScreenShut,
+  refreshAdapters,
+  refreshOnScreen,
   runCheck,
   setBluetooth,
   setBluetoothUnit,
   setMethods,
+  stopPageWait,
   switchAdapter,
+  turnOnBluetooth,
   unitName,
   useBluetooth,
-  useBluetoothAdmin
+  useBluetoothAdmin,
+  useWaitingForBluetooth
 } from '../lib/bluetooth'
+import { connectBluetoothAgain } from '../lib/bleLink'
 import {
   BLUETOOTH_WAYS,
   CLOSE_AND_REOPEN,
+  CONNECT_AGAIN,
+  CONNECT_AGAIN_SUB,
   FIRST_TIME,
   FIRST_TIME_ADAPTER,
   FM3_NEVER,
@@ -55,21 +67,30 @@ import {
   REPORT_BUTTON,
   SELLERS_LINE,
   REPORT_NOTE,
+  SWITCH_TO,
+  SWITCH_TO_SUB,
   TROUBLE_LIT,
   TRIED_NOTES,
+  TURN_ON_BLUETOOTH,
   VP4_CANT_HEAR,
   VP4_CONNECTED,
   VP4_OVER_BLUETOOTH,
+  adapterOfUnit,
+  appleListForget,
+  bluetoothOffHint,
+  bluetoothOffLine,
   firmwareLineFor,
   hookupFor,
   midiSettingsFor,
   missingBlocksLine,
+  namedForFm3,
   notAnsweringLine,
   untried,
   unitForReport,
   warningFor,
   swapLine,
   waysFor,
+  wrongAdapterLine,
   wrongUnitLine
 } from '../lib/bluetooth-gear'
 import { cablesIn, isCable } from '../lib/bleAdapters'
@@ -139,12 +160,12 @@ import bluetoothIcon from '../../assets/icons/bluetooth.png'
  * Settings draws this page for nobody else (useBluetoothAllowed,
  * lib/bluetooth.js).
  *
- * TWO WAYS TO CONNECT, AND THE COMPUTER IS THE BEST. "Make it clear that
- * there's multiple ways to connect the device, but also make it clear that
- * the computer is the preferred method and that Bluetooth will have more lag
- * and not have as many features." (25 October 2026.) Said first, in one
- * line over the steps (BLUETOOTH_WAYS, the same words as the Settings row,
- * the waiting screen and the purchase page), before anybody taps Connect.
+ * TWO WAYS TO CONNECT, BLUETOOTH FIRST. Since 7 November 2026 ("make sure
+ * it's Bluetooth first as far as connection options go"), with no ranking:
+ * Bluetooth needs no computer, and a computer has less lag and more
+ * features (BLUETOOTH_WAYS in shared/bluetooth-gear.mjs, and CLAUDE.md "How
+ * it is presented"). It replaced his 25 October rule that the computer was
+ * the preferred way.
  *
  * EVERY UNIT, AND NOTHING OF WHICH HAVE BEEN TRIED. Step 1 offers what
  * lib/bluetooth says this account may pick (offeredUnits): all five on a
@@ -267,7 +288,8 @@ function status(b, unitState) {
   /* A USB MIDI cable on the unit's MIDI jacks: not answering is its plugs first, as for an adapter (lib/bluetooth midiJacks). */
   const jacks = cable && midiJacks(b.adapter)
   /* Whatever the switch says: finding the adapter before turning this on is the usual order, and a search that could not start has to say why. */
-  if (b.trouble === 'bluetooth-off') return { line: `Turn on Bluetooth in the ${deviceNoun()}’s settings`, tone: 'fault' }
+  /* Android only (nothing sets it on an iPhone), with Turn on Bluetooth under it (bluetoothOffLine, TURN_ON_BLUETOOTH). */
+  if (b.trouble === 'bluetooth-off') return { line: bluetoothOffLine(deviceNoun()), tone: 'fault' }
   if (b.trouble === 'permission') return { line: ALLOW_WORDS, tone: 'fault' }
   if (b.trouble === 'restricted') return { line: RESTRICTED_WORDS, tone: 'fault' }
   if (!b.on) return { line: 'Not connected', tone: 'dim' }
@@ -285,10 +307,15 @@ function status(b, unitState) {
      */
     if (b.answeredAs) {
       const units = offeredUnits()
-      return {
-        line: wrongUnitLine({ answered: b.answeredAs, picked: name, pickable: units.some((u) => u.name === b.answeredAs) }),
-        tone: 'fault'
-      }
+      const pickable = units.some((u) => u.name === b.answeredAs)
+      /*
+       * By the adapter's name, when the unit that answered can be picked
+       * here: "The WIDI Jack is on an AM4, not your FM3", with Switch to
+       * under it, one tap on the same connection (switchUnit, below). Not
+       * for a unit on a USB cable, which is the unit itself.
+       */
+      if (pickable && !cable && adapterName(b.adapter) && carriesTo(b.answeredAs, b.adapter)) return { line: wrongAdapterLine({ adapter: adapterName(b.adapter), answered: b.answeredAs, picked: name }), tone: 'fault' }
+      return { line: wrongUnitLine({ answered: b.answeredAs, picked: name, pickable }), tone: 'fault' }
     }
     /* A unit on a USB cable: the same lines, saying the cable (lib/cableWords cableStatus), a VP4's still never answering. */
     if (cable) return cableStatus({ unit: b.unit, name, unitState, jacks })
@@ -302,6 +329,16 @@ function status(b, unitState) {
   if (cable) return { line: cableConnectingLine(b.adapter?.name), tone: 'dim' }
   return { line: `Connecting to ${b.adapter?.name || 'the adapter'}…`, tone: 'dim' }
 }
+
+/*
+ * WHETHER THE PAGE MAY OFFER THE UNIT THAT ANSWERED ITS ADAPTER (Switch to):
+ * any unit, but an FM3 only on an adapter the app names for one, the WIDI
+ * Uhost (shared/bluetooth-gear namedForFm3). The FM3 rule: the WIDI Master
+ * and the C2MIDI Pro are never offered for an FM3. With any other on an
+ * FM3, the page says so with wrongUnitLine's Stop, pick and Connect, under
+ * the red FM3 warning, and Connect lists the adapter for its owner's tap.
+ */
+const carriesTo = (answered, a) => answered !== 'FM3' || namedForFm3(adapterName(a))
 
 /*
  * Blue for the unit answering over Bluetooth, as the bar is; green stays the
@@ -348,7 +385,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * why, rather than between the line and its hint.
    */
   const quiet = b.on && b.phase === 'connected' && !b.answeredAs && (unitState === 'missing' || unitState === 'silent')
-  const reportable = said.tone === 'fault' && b.trouble !== 'permission' && b.phase !== 'locked' && !!onReport
+  /* Not beside Bluetooth off either, which has Turn on Bluetooth under it: it is not a fault in the app. */
+  const reportable = said.tone === 'fault' && b.trouble !== 'permission' && b.trouble !== 'bluetooth-off' && b.phase !== 'locked' && !!onReport
   const connected = b.on && b.phase === 'connected'
   /* The units step 1 offers this account (lib/bluetooth offeredUnits). */
   const units = offeredUnits()
@@ -363,7 +401,19 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * in the list when there is a real choice. `wanted` is that promise, kept
    * until an adapter arrives.
    */
-  const [wanted, setWanted] = useState(false)
+  /*
+   * The promise is the tap's, for the unit it was tapped for (`wanted` is
+   * that unit): another unit picked meanwhile, whose own adapter arrives
+   * with it (each unit keeps its own), turns nothing on.
+   *
+   * And from the start when the page opens within two minutes of a Connect
+   * on an earlier visit that found Bluetooth off, with nothing kept
+   * (lib/bluetooth connectOwedUntil): the look that starts once it is on
+   * chooses the adapter, and this turns Bluetooth on with it, as that
+   * Connect would have. Never for a Connect older than that, so nothing
+   * switches anybody off the computer without a tap.
+   */
+  const [wanted, setWanted] = useState(() => (connectOwedUntil() !== null && !b.adapter ? b.unit : null))
   /* Apple's screen closed with no adapter connected in it. */
   const [missed, setMissed] = useState(false)
   /* The full version as Bluetooth reads it: the purchase itself for a customer, never "the store cannot be reached" (unlock-rule mayDriveBluetooth). */
@@ -371,8 +421,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   const paid = mayDriveBluetooth(purchase, his)
   useEffect(() => {
     if (!wanted || !b.adapter || !b.unit || b.on) return
-    setWanted(false)
-    if (paid) setBluetooth(true)
+    setWanted(null)
+    if (paid && wanted === b.unit) setBluetooth(true)
   }, [wanted, b.adapter?.id, b.unit, b.on, paid])
 
   const canStart = !!b.unit && paid
@@ -381,7 +431,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   /* `cableFirst: false` when a Bluetooth adapter is what is looked for (another, below): Apple's screen, never a cable in its place (lib/bluetooth findAdapters). */
   const find = async ({ cableFirst = true } = {}) => {
     setMissed(false)
-    setWanted(true)
+    setWanted(b.unit)
     const pick = await findAdapters({ cableFirst })
     if (ios && !pick && !adapterDevices().some((d) => !d.offline)) setMissed(true)
   }
@@ -480,7 +530,13 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   const choose = (d) => {
     arm()
     chooseAdapter(d)
-    setWanted(true)
+    setWanted(b.unit)
+  }
+  /* An iPhone's row for an adapter not connected to it: Apple's screen, and whatever is connected there is taken, as by Connect. */
+  const connectInApplesScreen = () => {
+    if (!canStart) return
+    arm()
+    find({ cableFirst: false })
   }
   /*
    * ON AND TRYING AN ADAPTER THAT IS NOT THERE: a Bluetooth adapter kept, the
@@ -557,6 +613,63 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   const reconnect = () => lookForAdapterAgain(probeNow)
 
   /*
+   * SWITCH TO THE UNIT THAT ANSWERED, when another unit is on the adapter and
+   * this account can pick it: one tap, on the same connection, the adapter
+   * going with it as that unit's own (lib/bluetooth setBluetoothUnit
+   * `carry`). Its answer is the proof of what is on the other end, so the
+   * step 1 rule (no other unit picked while on) has nothing to guard here.
+   */
+  const answeredKey = connected && b.answeredAs ? units.find((u) => u.name === b.answeredAs)?.key || null : null
+  const offerSwitch = !!answeredKey && !cable && canStart && carriesTo(b.answeredAs, b.adapter)
+  const switchUnit = () => {
+    if (!offerSwitch) return
+    arm()
+    setBluetoothUnit(answeredKey, { carry: true })
+  }
+  /*
+   * CONNECT AGAIN, while the adapter is connected and the unit says nothing:
+   * a fresh connection to it, exactly what Turn off Bluetooth and Connect
+   * did for him on 7 November 2026 (lib/bleLink connectBluetoothAgain). Not
+   * for a VP4, which never answers, nor a unit on a USB cable.
+   */
+  const offerAgain = quiet && !vp4 && !cable
+  const again = () => {
+    arm()
+    connectBluetoothAgain()
+  }
+  /*
+   * TURN ON BLUETOOTH, under the line that says it is off: Android's own
+   * question (lib/bluetooth turnOnBluetooth), and the search, or the adapter
+   * kept, goes on by itself once it is on. Only after Connect, or the link,
+   * has found it off: nothing sets that trouble on an iPhone.
+   */
+  const offOnAndroid = b.trouble === 'bluetooth-off' && !ios
+  /* Whether the app is waiting for it to come on: the hint promises the search, or the connection, only while it is (lib/bluetooth useWaitingForBluetooth). */
+  const waitingOn = useWaitingForBluetooth()
+  const turnOn = () => {
+    arm()
+    turnOnBluetooth()
+  }
+  /*
+   * WHAT THE PHONE CAN SEE, READ AGAIN as the page opens and each time the
+   * app is back on screen (lib/bluetooth refreshAdapters): an adapter kept
+   * that Apple's screen connected again under a new id is found, and on
+   * Android, with Bluetooth still said to be off (only ever after a
+   * Connect), the wait for it starts again, so "once it is on, the search
+   * starts by itself" holds after a visit to one of the page's own pages
+   * too. The page's own wait ends with the page (stopPageWait); the link's,
+   * for an adapter kept, goes on.
+   */
+  useEffect(() => {
+    refreshAdapters()
+    const off = refreshOnScreen()
+    return () => {
+      off()
+      stopPageWait()
+    }
+  }, [])
+
+  /*
    * STRAIGHT TO PLAY ONCE IT ANSWERS. "Immediately after connecting
    * Bluetooth, let's have it go to the gig screen again instead of having to
    * select done" (Justin, 27 October 2026). Only after Connect was tapped
@@ -600,6 +713,9 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               {said.line}
             </Text>
             {b.trouble === 'permission' ? <OpenSettings /> : null}
+            {offOnAndroid ? <Press label={TURN_ON_BLUETOOTH} tone="live" height={52} onPress={turnOn} /> : null}
+            {offOnAndroid ? <Hint>{bluetoothOffHint(b.on && !!b.adapter, waitingOn)}</Hint> : null}
+            {offerSwitch ? <Press label={SWITCH_TO(b.answeredAs)} sub={SWITCH_TO_SUB(adapterName(b.adapter), b.answeredAs)} tone="live" height={52} onPress={switchUnit} /> : null}
             {reportable && !quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
             {vp4 && connected && !b.answeredAs ? <Hint>{cable ? (jacks ? CABLE_VP4_CANT_HEAR_JACKS : CABLE_VP4_CANT_HEAR) : VP4_CANT_HEAR}</Hint> : null}
           </View>
@@ -626,6 +742,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               Troubleshooting's, one tap away: "It seems like there's too much
               to read everywhere you go" (Justin, 30 October 2026).
             */}
+            {/* The cure that worked first, before the plugs: a fresh connection (offerAgain). */}
+            {offerAgain ? <Press label={CONNECT_AGAIN} sub={CONNECT_AGAIN_SUB} tone="live" height={52} onPress={again} /> : null}
             {quiet && (!cable || jacks) ? <Hint>{PLUGS_CHECK}</Hint> : null}
             {/*
               STILL NOTHING AFTER THE ADAPTER WAS UNPLUGGED AND PLUGGED BACK
@@ -709,7 +827,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                           : cableOut
                             ? cableAwayHint(before ? adapterName(before) || 'the Bluetooth adapter' : null)
                             : cableKeptHint(b.adapter.name)
-                        : `Uses ${b.adapter.name || 'the adapter'}, from last time.`
+                        : `Uses ${b.adapter.name || 'the adapter'}, the ${unitName(b.unit)}’s adapter from last time.`
                       : takes.length
                         ? cableListedHint(takes)
                         : shut
@@ -741,13 +859,22 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
             <Hint>{b.looking ? 'Found so far. Tap yours:' : b.devices.length > 1 ? 'More than one is here. Tap yours:' : b.devices.some(isCable) ? 'Tap yours:' : 'Tap your adapter:'}</Hint>
             {b.devices.map((d) => {
               const detail = isCable(d) ? (d.offline ? CABLE_ROW_AWAY : CABLE_ROW) : ios ? (d.offline ? `not connected to this ${deviceNoun()}` : d.fresh ? 'just connected' : '') : signal(d.rssi)
+              /* Another unit's adapter says whose it is (lib/bluetooth adapterKeptFor): it is on that unit, and never chosen for this one by itself. */
+              const whose = adapterKeptFor(d.id)
+              /*
+               * An iPhone's row for an adapter not connected to it opens Apple's
+               * screen, the only way to connect one: chosen as it was, it could
+               * only wait for iOS, under a line saying it was not connected.
+               */
+              const viaApple = ios && d.offline && !isCable(d) && !shut
               return (
                 <Press
                   key={d.id}
-                  label={`${d.name || 'An adapter with no name'}${detail ? ` · ${detail}` : ''}`}
+                  label={`${d.name || 'An adapter with no name'}${detail ? ` · ${detail}` : ''}${whose ? ` · ${adapterOfUnit(whose)}` : ''}`}
+                  sub={viaApple ? APPLE_SCREEN_OPENS : undefined}
                   height={52}
                   disabled={!canStart}
-                  onPress={() => choose(d)}
+                  onPress={() => (viaApple ? connectInApplesScreen() : choose(d))}
                 />
               )
             })}
@@ -784,9 +911,9 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
 
       {/*
         THE TWO WAYS, AND THE BUTTON, at the foot of the page rather than
-        over the steps: the computer is the best one, and this one is slower
-        and does less (BLUETOOTH_WAYS, the one sentence every way onto this
-        page says), and where to say something is not working (REPORT_NOTE).
+        over the steps: Bluetooth needs no computer, and a computer has less
+        lag and more features (BLUETOOTH_WAYS, no ranking), and where to say
+        something is not working (REPORT_NOTE).
       */}
       <View style={{ gap: space.sm }}>
         <Hint>{BLUETOOTH_WAYS}</Hint>
@@ -935,6 +1062,8 @@ export function BluetoothTrouble({ onReport = null }) {
         ios
           ? `An iPhone or iPad lets an adapter nobody is using go after a few minutes. Tap Reconnect, or Stop and then Connect, and connect it again in Apple’s screen.`
           : `Android needs Nearby devices allowed for Fractal Remote, and on Android 11 and older Location turned on, to find the adapter.`,
+        /* Forget in Apple's Bluetooth MIDI screen does nothing for an adapter still connected to the device (7 November 2026): the way that does. */
+        ios ? appleListForget(deviceNoun()) : null,
         `Stay within about 30 feet of the adapter, with nothing big in between.`,
         ANOTHER_UNIT,
         fm3
@@ -967,6 +1096,20 @@ export function BluetoothTrouble({ onReport = null }) {
         {b.adapter && !b.on && cable ? (
           <Press label="Forget the USB cable" sub={`${b.adapter.name || 'The unit'} on the USB cable, from last time. Then tap Connect to pick another.`} height={52} onPress={() => forgetAdapter({ byHand: true })} />
         ) : null}
+        {/*
+          THE ADAPTERS KEPT FOR THE OTHER UNITS (lib/bluetooth: each unit keeps
+          its own), each with its Forget, so the app's own list never holds
+          one for good. The unit picked keeps its Forget above.
+        */}
+        {adaptersForOtherUnits().map(({ unit, adapter }) => (
+          <Press
+            key={unit}
+            label={`Forget ${adapterName(adapter) || 'the adapter'}`}
+            sub={`${isCable(adapter) ? 'The USB cable' : 'The adapter'} kept for the ${unitName(unit)}`}
+            height={52}
+            onPress={() => forgetAdapterFor(unit)}
+          />
+        ))}
         {onReport ? <Press label={REPORT_BUTTON} sub="Still stuck? Send us what happened" height={52} onPress={() => onReport(null)} /> : null}
       </View>
     </View>
