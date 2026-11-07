@@ -440,7 +440,7 @@ Tracking Transparency entirely.
 | Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you, and the number RevenueCat files purchases under. App Functionality and **Analytics** (RevenueCat's own guidance: say how the id is used, as for Purchase History). Analytics added 25 October 2026: on the live label since 1 November 2026 |
 | Diagnostics → **Other Diagnostic Data** | Yes | Yes | The debug log, and only when somebody presses Send on a bug report |
 | Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices. App Functionality and **Analytics**: RevenueCat's App Privacy page says "All RevenueCat users must select these two options", because its dashboard charts the purchases. Analytics added 25 October 2026: on the live label since 1 November 2026 |
-| Identifiers → **Device ID** | Yes | No | The random number Expo's update check carries for that install, made up the first time the app runs, so Expo can tell one install from another. The app itself never reads it. App Functionality and **Analytics**: Expo's dashboard counts the installs that took each update and the ones that crashed, by this number, which is measuring audience size in Apple's words. Play's Data safety declares it too (*Device or other IDs*, below), and the privacy page describes it and its counts. Added 25 October 2026: on the live label since 1 November 2026 |
+| Identifiers → **Device ID** | Yes | Yes | The random number Expo's update check carries for that install, made up the first time the app runs, so Expo can tell one install from another. App Functionality and **Analytics**: Expo's dashboard counts the installs that took each update and the ones that crashed, by this number, which is measuring audience size in Apple's words. **Linked since 7 November 2026**: the free trial reads that same number and sends it, with the signed-in account, to the `trial` function, which keeps a salted hash of it beside the account's trial (one trial per device). Play's Data safety declares it too (*Device or other IDs*, below), and the privacy page describes it, its counts and the trial. Added 25 October 2026, on the live label since 1 November 2026; Linked published by Justin on 7 November 2026, on App Store Connect and Play's Data safety |
 | Diagnostics → **Performance Data** | Yes | No | How long the unit took to connect and, through a computer, how quickly it answered a tap, rounded, in a What works gear note, sent only after somebody said Yes, share. **Analytics** only, not tracking. Added 4 November 2026: on the live label since 5 November 2026, Justin published it (*What works: the gear notes*, below) |
 | Diagnostics → **Crash Data** | Yes | No | After a launch that crashed, the phone's update check sends Expo the error message the app stopped on, so a broken update can be found and taken back. The privacy page says so. Added 11 October 2026, and on the live label by 24 October 2026 (apps.apple.com shows Crash Data under Not Linked) |
 
@@ -2618,32 +2618,47 @@ and `EDIT_FROM_STORE` gate exactly as they did (test/trial.mjs holds it).
   function starts it on request. Google Play allows a free trial of a
   one-time unlock done in the app.
 
-### App Store Connect: the free item (Justin, or by the App Store Connect API)
+### App Store Connect: the free item
 
-My apps → Fractal Remote → Monetization → In-App Purchases → +
+Made by GitHub, with the App Store Connect key the builds already use:
+Actions → **iap-trial** → Run workflow. Unticked, it only reads and says
+what it would make. **Make it** ticked makes every part below that is
+missing (the item, its English words, the Free price, its countries and the
+review picture) and leaves what is there alone, so running it twice changes
+nothing. **Send for review** ticked also sends it to Apple, once it is
+complete (scripts/iap-trial.mjs, which reads this table and the notes
+under it, so the two cannot disagree). By hand it is My apps → Fractal
+Remote → Monetization → In-App Purchases → +, with the same values.
 
 | Field | Value |
 | --- | --- |
 | Type | **Non-Consumable** |
-| Reference Name | `7-Day Trial` |
+| Reference Name | `7-day Trial` |
 | Product ID | `trial_7day` (exactly; it is `TRIAL_PRODUCT_ID` in shared/trial-rule.mjs) |
 | Price | **Free** (price tier 0), all countries |
 | Availability | all countries the app is sold in |
 | Family Sharing | off |
-| Localization (English (U.S.)) Display Name | `7-Day Trial` |
-| Localization Description | `Try the full version free for 7 days with your own rig. No charge.` |
-| Review screenshot | the purchase page showing "Start 7-day free trial" and the words under it |
+| Localization (English (U.S.)) Display Name | `7-day Trial` (3.1.1's own naming, "XX-day Trial"; Apple takes 30 characters) |
+| Localization Description | `Try the full version free for 7 days.` (Apple takes 45 characters) |
+| Review screenshot | `docs/iap/trial-7day-review.png`: the purchase page showing "Start 7-day free trial" and the words under it, 1290×2796 (an iPhone screenshot size, no transparency) |
 | Review notes | below |
 
 Review notes for the item:
 
 ```
-A free 7-day trial of the full version, offered under guideline 3.1.1 as a Non-Consumable at price tier 0. Before it starts, the purchase page says how long it lasts (7 days), what stops when it ends (connecting to the player's own rig, until they unlock the full version), and what the full version costs after ($9.99, one-time, nothing charged automatically). One trial per account and one per device. To see it: sign in with a NEW account (not the review account, which has the full version) and tap "Start 7-day free trial" on the purchase page.
+A free 7-day trial of the full version, offered under guideline 3.1.1 as a Non-Consumable at price tier 0. Before it starts, the purchase page says how long it lasts (7 days), what stops when it ends (connecting to the player's own rig, until they unlock the full version), and what the full version costs after ($9.99, one-time, nothing charged automatically). One trial per account and one per device. The trial reached version 1.89.3 in the app's update, so on a fresh install the very first launch can open without the button while the update downloads: if the purchase page has no "Start 7-day free trial", tap Restart now on the "A new version is ready" note, or close the app fully and open it again. To see it: sign in with a NEW account (not the review account, which has the full version) and tap "Start 7-day free trial" on the purchase page.
 ```
 
-Then attach it to the next version for review (the version page →
-In-App Purchases and Subscriptions → select `7-Day Trial`), or submit it on
-its own if App Store Connect offers that for this app.
+It can be sent on its own, with no new app version: Apple takes a second
+Non-Consumable alone once one has been approved and the app has an approved
+version (App Store Connect Help, "Submit an In-App Purchase"), and the full
+version's item is both. Send for review checks that before it sends. The
+other way is to attach it to the next version for review (the version page
+→ In-App Purchases and Subscriptions → select `7-day Trial`), which puts the
+trial inside a reviewed build but needs that build. Either way, send it only
+once the App Privacy label's Device ID row says Linked (below), and an hour
+or more after Make it, the time Apple says a new item can take to reach the
+store a reviewer's copy asks.
 
 ### RevenueCat
 
@@ -2661,6 +2676,14 @@ its own if App Store Connect offers that for this app.
 
 ### Supabase (in this order)
 
+Done on 7 November 2026, before #808 was merged: the migration applied, and
+`trial`, `entitlement` and `grant-access` deployed from the branch. The
+salt secret was not set then; until it is, `trial` hashes with its built-in
+salt, which works the same (the install numbers it hashes are random, so a
+known salt gives nobody a way back to one). Set it before the first trial
+is started, or never: changing it later lets every device that has had a
+trial take another.
+
 1. Apply `supabase/migrations/20261107_trials.sql` (the trials tables,
    `start_trial`, `trial_of`, `owner_trials`, and `is_entitled` with a
    running trial in it, so the relay opens for one).
@@ -2676,7 +2699,7 @@ computer buttons ask `trial` from the moment the update lands.
 ### Notes for App Review: the paragraph for the next submission
 
 ```
-New: a free 7-day trial of the full version (guideline 3.1.1: a Non-Consumable in-app purchase at price tier 0, "7-Day Trial", product trial_7day). On the purchase page, "Start 7-day free trial" sits above "Unlock Full Version"; the words under it say how long it lasts, what stops when it ends (connecting to the player's own rig) and what the full version costs after, before anything is tapped. It is one per account and one per device. While it runs, Play shows "Trial: 3 days left · Unlock", which opens the purchase page. On day 8 the purchase page comes back, with everything the player set up kept. The demo is unchanged: free, unlimited, no account. To try the trial, make a NEW account (the review account already has the full version).
+New: a free 7-day trial of the full version (guideline 3.1.1: a Non-Consumable in-app purchase at price tier 0, "7-day Trial", product trial_7day). On the purchase page, "Start 7-day free trial" sits above "Unlock Full Version"; the words under it say how long it lasts, what stops when it ends (connecting to the player's own rig) and what the full version costs after, before anything is tapped. It is one per account and one per device. While it runs, Play shows "Trial: 3 days left · Unlock", which opens the purchase page. On day 8 the purchase page comes back, with everything the player set up kept. The demo is unchanged: free, unlimited, no account. To try the trial, make a NEW account (the review account already has the full version).
 ```
 
 ### What's New line

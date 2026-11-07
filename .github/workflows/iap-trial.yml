@@ -1,0 +1,64 @@
+# Make the App Store's free "7-Day Trial" item, from docs/app-store.md.
+#
+# Apple's guideline 3.1.1 lets an app that is not a subscription offer a free
+# trial only as a Non-Consumable in-app purchase at the free price. The
+# iPhone's trial button buys it, and stays hidden until the store can sell
+# it. scripts/iap-trial.mjs does the work; this hands it the App Store
+# Connect key the builds already use (ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8).
+# Started by hand. It builds nothing and spends no build slot.
+#
+# Leave both boxes unticked to see what is there and what it would make.
+# "Make it" makes what is missing and leaves the rest alone; "Send for
+# review" also sends the item to Apple once it is complete.
+name: iap-trial
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Make it (unticked only shows what is there and what it would make)
+        type: boolean
+        default: false
+      submit:
+        description: Send for review (makes what is missing first)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  item:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: The Apple key, as a file only this job can read
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          umask 077
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
+          grep -q 'BEGIN PRIVATE KEY' "$RUNNER_TEMP/asc.p8" || { echo "::error::ASC_KEY_P8 is not a .p8 key"; exit 1; }
+
+      - name: The free trial item
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc.p8
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          SUBMIT: ${{ inputs.submit }}
+          APPLY: ${{ inputs.apply }}
+        run: |
+          if [ "$SUBMIT" = "true" ]; then node scripts/iap-trial.mjs --submit
+          elif [ "$APPLY" = "true" ]; then node scripts/iap-trial.mjs --apply
+          else node scripts/iap-trial.mjs
+          fi
+
+      - name: The key is gone
+        if: always()
+        run: rm -f "$RUNNER_TEMP/asc.p8"

@@ -455,8 +455,8 @@ export function run(test) {
   test('trial: the free item is never sold as the unlock, and never counted as a sale', () => {
     const phonePicker = read('mobile/src/lib/purchases.js')
     const picker = phonePicker.slice(phonePicker.indexOf('const theUnlockIn'), phonePicker.indexOf('const loadPrice'))
-    assert.match(picker, /\.filter\(\(p\) => p\?\.product\?\.identifier !== '([^']+)'\)/)
-    assert.equal(picker.match(/!== '([^']+)'/)[1], TRIAL_PRODUCT_ID)
+    /* By the one constant, never a copy of its letters that could drift from it. */
+    assert.match(picker, /\.filter\(\(p\) => p\?\.product\?\.identifier !== TRIAL_PRODUCT_ID\)/)
     const web = read('src/lib/webPurchase.js')
     assert.equal(web.match(/webBillingProduct\?\.identifier !== '([^']+)'/)[1], TRIAL_PRODUCT_ID)
     const grant = code(read('supabase/functions/grant-access/index.ts'))
@@ -521,5 +521,272 @@ export function run(test) {
     assert.match(latest.rows[2].value, /^Website, .* Didn’t buy\.$/)
     assert.ok(salesSections(answer, now).some((s) => s.title === 'Free trials'))
     assert.deepEqual(trialSections({ ok: true }, now), [], 'an older server’s answer grows a trials section')
+  })
+  test('trial: the App Store item is made from the notes, within Apple’s limits, and its picture is one Apple takes', async () => {
+    const { trialItem, freePoint, pngSize, reviewPicture, LIMITS, SCREENSHOT } = await import('../scripts/iap-trial.mjs')
+    const md = read('docs/app-store.md')
+    const item = trialItem(md)
+    assert.equal(item.productId, TRIAL_PRODUCT_ID, 'the item the store sells is not the one the iPhone buys')
+    assert.equal(item.type, 'NON_CONSUMABLE', 'guideline 3.1.1 allows a free trial only as a Non-Consumable')
+    assert.equal(item.familySharable, false)
+    assert.equal(item.displayName, `${TRIAL_DAYS}-day Trial`, 'the name is not 3.1.1’s own "XX-day Trial"')
+    /* App Store Connect Help, "In-App Purchase information": 64, 30, 45 and 4000, never the marketing page's 35 and 55. */
+    assert.deepEqual(LIMITS, { referenceName: 64, displayName: 30, description: 45, reviewNote: 4000 })
+    for (const [key, most] of Object.entries(LIMITS)) assert.ok([...item[key]].length <= most, `${key} is longer than App Store Connect takes`)
+    assert.ok(item.reviewNote.includes(TRIAL_BUTTON), 'the review notes name a button the page does not have')
+    assert.match(item.reviewNote, /Restart now/, 'the review notes do not say how to get the button on a fresh install’s first launch')
+    /* Refused where Apple would refuse it, before anything is sent. */
+    const row = '| Localization Description | `Try the full version free for 7 days.`'
+    assert.ok(md.includes(row))
+    assert.throws(() => trialItem(md.replace(row, '| Localization Description | `The full version free for 7 days, with your own rig.`')), /description is 52 characters; App Store Connect takes 45/)
+    assert.throws(() => trialItem(md.replace('| Product ID | `trial_7day`', '| Product ID | `trial_week`')), /the app buys trial_7day/)
+    assert.throws(() => trialItem(md.replace('Display Name | `7-day Trial`', 'Display Name | `Free Trial`')), /not "7-day Trial"/)
+    assert.equal(freePoint([{ id: 'a', attributes: { customerPrice: '0.99' } }, { id: 'b', attributes: { customerPrice: '0.0' } }]).id, 'b')
+    assert.equal(freePoint([{ id: 'a', attributes: { customerPrice: '0.99' } }]), null)
+    const bytes = readFileSync(new URL(`../${SCREENSHOT}`, import.meta.url))
+    assert.deepEqual(pngSize(bytes), { width: 1290, height: 2796, alpha: false })
+    assert.equal(reviewPicture(bytes).fileName, 'trial-7day-review.png')
+    const odd = Buffer.from(bytes)
+    odd.writeUInt32BE(1000, 16)
+    assert.throws(() => reviewPicture(odd), /not one of the iPhone screenshot sizes Apple takes/)
+    const clear = Buffer.from(bytes)
+    clear[25] = 6
+    assert.throws(() => reviewPicture(clear), /transparency/)
+    assert.throws(() => reviewPicture(Buffer.from('not a picture at all, not at all')), /is not a PNG/)
+  })
+
+  test('trial: the App Store item is made once, part by part, finished by the next run when one stops, and sent for review only when asked', async () => {
+    const { run: makeItem, client, trialItem, reviewPicture, SCREENSHOT, FULL_PRODUCT_ID, READY_WAIT_MS, READY_LOOK_MS } = await import('../scripts/iap-trial.mjs')
+    const { APPLE } = await import('../shared/stores.mjs')
+    const item = trialItem(read('docs/app-store.md'))
+    const picture = reviewPicture(readFileSync(new URL(`../${SCREENSHOT}`, import.meta.url)))
+
+    /*
+     * A pretend App Store Connect: what is there, and every request it is
+     * sent. Anything it does not know is refused. Like Apple, it processes
+     * the picture after the upload: UPLOAD_COMPLETE first, COMPLETE a few
+     * looks later, and the item says MISSING_METADATA until then.
+     */
+    const pretend = ({ full = { state: 'APPROVED', inAppPurchaseType: 'NON_CONSUMABLE' }, failUpload = 0, processLooks = 2 } = {}) => {
+      const apple = {
+        items: [{ id: 'full1', type: 'inAppPurchases', attributes: { productId: FULL_PRODUCT_ID, name: 'Full Version', ...full } }],
+        locales: [],
+        schedule: null,
+        availability: null,
+        shot: null,
+        uploaded: [],
+        sent: [],
+        failUpload,
+        looks: 0
+      }
+      const answer = (status, body) => ({ ok: status < 300, status, text: async () => (body === undefined ? '' : JSON.stringify(body)) })
+      const trialOf = () => apple.items.find((x) => x.attributes.productId === TRIAL_PRODUCT_ID)
+      const settle = () => {
+        const t = trialOf()
+        if (apple.shot?.state === 'UPLOAD_COMPLETE' && ++apple.looks >= processLooks) apple.shot.state = 'COMPLETE'
+        if (t && t.attributes.state === 'MISSING_METADATA' && apple.locales.length && apple.schedule && apple.availability && apple.shot?.state === 'COMPLETE') t.attributes.state = 'READY_TO_SUBMIT'
+      }
+      const fetch = async (url, init = {}) => {
+        const method = init.method ?? 'GET'
+        if (url.startsWith('https://upload.example/')) {
+          assert.equal(method, 'PUT')
+          assert.equal(init.headers['Content-Type'], 'image/png', 'the upload drops the headers Apple asked for')
+          if (apple.failUpload > 0) {
+            apple.failUpload -= 1
+            return answer(500, { error: 'busy' })
+          }
+          apple.uploaded.push(Buffer.from(init.body))
+          return answer(200)
+        }
+        const path = url.replace('https://api.appstoreconnect.apple.com', '')
+        assert.match(init.headers.Authorization, /^Bearer /)
+        assert.equal(init.headers.Accept, 'application/json', 'the price points may answer CSV')
+        const body = init.body ? JSON.parse(init.body) : null
+        apple.sent.push({ method, path, body })
+        const t = trialOf()
+        switch (`${method} ${path.split('?')[0]}`) {
+          case `GET /v1/apps/${APPLE.id}/inAppPurchasesV2`:
+            return answer(200, { data: apple.items, links: {} })
+          case 'POST /v2/inAppPurchases': {
+            const made = { id: 't1', type: 'inAppPurchases', attributes: { ...body.data.attributes, state: 'MISSING_METADATA' } }
+            apple.items.push(made)
+            return answer(201, { data: made })
+          }
+          case 'PATCH /v2/inAppPurchases/t1':
+            Object.assign(t.attributes, body.data.attributes)
+            return answer(200, { data: t })
+          case 'GET /v2/inAppPurchases/t1':
+            settle()
+            return answer(200, { data: t })
+          case 'GET /v2/inAppPurchases/t1/inAppPurchaseLocalizations':
+            return answer(200, { data: apple.locales, links: {} })
+          case 'POST /v1/inAppPurchaseLocalizations': {
+            const made = { id: 'l1', type: 'inAppPurchaseLocalizations', attributes: body.data.attributes }
+            apple.locales.push(made)
+            return answer(201, { data: made })
+          }
+          case 'PATCH /v1/inAppPurchaseLocalizations/l1':
+            Object.assign(apple.locales[0].attributes, body.data.attributes)
+            return answer(200, { data: apple.locales[0] })
+          case 'GET /v2/inAppPurchases/t1/iapPriceSchedule':
+            return apple.schedule ? answer(200, apple.schedule) : answer(404, { errors: [{ status: '404' }] })
+          case 'GET /v2/inAppPurchases/t1/pricePoints':
+            /* Two pages, the free one on the second, so a run that reads only the first finds no free price. */
+            return path.includes('cursor=2')
+              ? answer(200, { data: [{ id: 'pp-free', attributes: { customerPrice: '0.0' } }], links: {} })
+              : answer(200, {
+                  data: [{ id: 'pp-099', attributes: { customerPrice: '0.99' } }],
+                  links: { next: `https://api.appstoreconnect.apple.com/v2/inAppPurchases/t1/pricePoints?filter[territory]=USA&limit=200&cursor=2` }
+                })
+          case 'POST /v1/inAppPurchasePriceSchedules':
+            apple.schedule = { data: { id: 's', relationships: { manualPrices: { data: body.data.relationships.manualPrices.data } } }, included: body.included }
+            return answer(201, apple.schedule)
+          case 'GET /v2/inAppPurchases/full1/inAppPurchaseAvailability':
+            return answer(200, { data: { id: 'av-full', attributes: { availableInNewTerritories: false } } })
+          case 'GET /v1/inAppPurchaseAvailabilities/av-full/availableTerritories':
+            return answer(200, { data: [{ id: 'USA' }, { id: 'CAN' }, { id: 'GBR' }], links: {} })
+          case 'GET /v2/inAppPurchases/t1/inAppPurchaseAvailability':
+            return apple.availability ? answer(200, { data: apple.availability }) : answer(404, { errors: [{ status: '404' }] })
+          case 'POST /v1/inAppPurchaseAvailabilities':
+            apple.availability = { id: 'av1', ...body.data }
+            return answer(201, { data: apple.availability })
+          case 'GET /v2/inAppPurchases/t1/appStoreReviewScreenshot':
+            return apple.shot ? answer(200, { data: { id: apple.shot.id, attributes: { assetDeliveryState: { state: apple.shot.state } } } }) : answer(404, { errors: [] })
+          case 'POST /v1/inAppPurchaseAppStoreReviewScreenshots': {
+            assert.equal(apple.shot, null, 'a second review picture was reserved over the first')
+            const sid = `shot${apple.sent.filter((r) => r.method === 'POST' && r.path === '/v1/inAppPurchaseAppStoreReviewScreenshots').length}`
+            apple.shot = { id: sid, ...body.data.attributes, state: 'AWAITING_UPLOAD' }
+            apple.uploaded = []
+            const half = Math.floor(picture.fileSize / 2)
+            const ops = [
+              { method: 'PUT', url: 'https://upload.example/1', offset: 0, length: half, requestHeaders: [{ name: 'Content-Type', value: 'image/png' }] },
+              { method: 'PUT', url: 'https://upload.example/2', offset: half, length: picture.fileSize - half, requestHeaders: [{ name: 'Content-Type', value: 'image/png' }] }
+            ]
+            return answer(201, { data: { id: sid, attributes: { uploadOperations: ops } } })
+          }
+          default: {
+            const shotPath = path.match(/^\/v1\/inAppPurchaseAppStoreReviewScreenshots\/(shot\d+)$/)
+            if (shotPath && apple.shot?.id === shotPath[1] && method === 'PATCH') {
+              apple.shot.state = body.data.attributes.uploaded ? 'UPLOAD_COMPLETE' : apple.shot.state
+              apple.shot.checksum = body.data.attributes.sourceFileChecksum
+              return answer(200, { data: { id: apple.shot.id } })
+            }
+            if (shotPath && apple.shot?.id === shotPath[1] && method === 'DELETE') {
+              apple.shot = null
+              return answer(204)
+            }
+            if (method === 'POST' && path === '/v1/inAppPurchaseSubmissions') {
+              t.attributes.state = 'WAITING_FOR_REVIEW'
+              return answer(201, { data: { id: 'sub1' } })
+            }
+            throw new Error(`the pretend App Store Connect does not know ${method} ${path}`)
+          }
+        }
+      }
+      const waited = []
+      const asc = client({ jwt: 'x.y.z', fetch, wait: async (ms) => waited.push(ms) })
+      const writes = () => apple.sent.filter((r) => r.method !== 'GET')
+      return { apple, asc, waited, writes }
+    }
+    const quiet = () => {}
+
+    /* Unticked: it reads, and nothing is written. */
+    const a = pretend()
+    const looked = await makeItem({ asc: a.asc, item, picture, log: quiet })
+    assert.equal(looked.made, false)
+    assert.deepEqual(a.writes(), [], 'a run with nothing ticked changed App Store Connect')
+
+    /* Make it: every part, as Apple wants it, and not sent for review. */
+    const made = await makeItem({ asc: a.asc, item, picture, apply: true, log: quiet })
+    assert.equal(made.state, 'MISSING_METADATA', 'Make it waited for the picture to be processed, which only sending needs')
+    const created = a.writes().find((r) => r.path === '/v2/inAppPurchases').body.data
+    assert.equal(created.attributes.inAppPurchaseType, 'NON_CONSUMABLE')
+    assert.equal(created.attributes.productId, TRIAL_PRODUCT_ID)
+    assert.equal(created.attributes.name, '7-day Trial')
+    assert.equal(created.attributes.familySharable, false)
+    assert.equal(created.attributes.reviewNote, item.reviewNote)
+    assert.deepEqual(created.relationships.app.data, { type: 'apps', id: APPLE.id })
+    assert.deepEqual(a.apple.locales[0].attributes, { locale: 'en-US', name: '7-day Trial', description: item.description })
+    const price = a.writes().find((r) => r.path === '/v1/inAppPurchasePriceSchedules').body
+    assert.deepEqual(price.data.relationships.baseTerritory.data, { type: 'territories', id: 'USA' })
+    assert.equal(price.data.relationships.manualPrices.data[0].id, price.included[0].id, 'the price schedule points at a price it does not include')
+    assert.deepEqual(price.included[0].relationships.inAppPurchasePricePoint.data, { type: 'inAppPurchasePricePoints', id: 'pp-free' }, 'the trial is not priced Free')
+    assert.deepEqual(a.apple.availability.relationships.availableTerritories.data.map((x) => x.id), ['USA', 'CAN', 'GBR'], 'the trial is not sold where the full version is')
+    assert.equal(a.apple.availability.attributes.availableInNewTerritories, false, 'the trial goes to new countries the full version does not')
+    assert.deepEqual(Buffer.concat(a.apple.uploaded), picture.bytes, 'the review picture arrived in pieces that do not make the file')
+    assert.equal(a.apple.shot.checksum, picture.checksum)
+    assert.equal(a.apple.shot.fileSize, picture.fileSize)
+    assert.ok(!a.writes().some((r) => r.path === '/v1/inAppPurchaseSubmissions'), 'Make it sent the item for review')
+
+    /* Again: nothing written. A whole item is left alone. */
+    const before = a.writes().length
+    await makeItem({ asc: a.asc, item, picture, apply: true, log: quiet })
+    assert.equal(a.writes().length, before, 'a second run changed what the first made')
+
+    /* Send for review: it waits for Apple to finish with the picture, then sends, once. */
+    const sent = await makeItem({ asc: a.asc, item, picture, submit: true, log: quiet })
+    assert.equal(sent.submitted, true)
+    assert.equal(sent.state, 'WAITING_FOR_REVIEW')
+    await makeItem({ asc: a.asc, item, picture, submit: true, log: quiet })
+    assert.equal(a.writes().filter((r) => r.path === '/v1/inAppPurchaseSubmissions').length, 1, 'the item was sent for review twice')
+
+    /* And an item already with Apple is never edited under it, even if the notes moved. */
+    const edits = a.writes().length
+    await makeItem({ asc: a.asc, item: { ...item, description: 'Changed in the notes after it went in.' }, picture, apply: true, log: quiet })
+    assert.equal(a.writes().length, edits, 'the item’s words were changed while Apple has it')
+
+    /* A picture whose upload fails: its reservation is taken back, and the next run makes it from nothing. */
+    const b = pretend({ failUpload: 1 })
+    await assert.rejects(makeItem({ asc: b.asc, item, picture, apply: true, log: quiet }), /uploading the review picture answered 500/)
+    assert.equal(b.apple.shot, null, 'a failed upload left its reservation behind, which no later run would fill')
+    await makeItem({ asc: b.asc, item, picture, apply: true, log: quiet })
+    assert.ok(['UPLOAD_COMPLETE', 'COMPLETE'].includes(b.apple.shot.state), 'the next run did not make the picture again')
+    assert.deepEqual(Buffer.concat(b.apple.uploaded), picture.bytes)
+
+    /* A reservation a stopped run left unfilled is replaced, never "there already". */
+    const c = pretend()
+    await makeItem({ asc: c.asc, item, picture, apply: true, log: quiet })
+    c.apple.shot.state = 'AWAITING_UPLOAD'
+    const stale = c.apple.shot.id
+    await makeItem({ asc: c.asc, item, picture, apply: true, log: quiet })
+    assert.ok(c.writes().some((r) => r.method === 'DELETE' && r.path === `/v1/inAppPurchaseAppStoreReviewScreenshots/${stale}`), 'an unfilled reservation was left alone for good')
+    assert.ok(['UPLOAD_COMPLETE', 'COMPLETE'].includes(c.apple.shot.state), 'the unfilled reservation was not made again')
+
+    /* Sent the moment it is made: it waits, at most READY_WAIT_MS, for the picture to be processed. */
+    const d = pretend({ processLooks: 3 })
+    const straight = await makeItem({ asc: d.asc, item, picture, submit: true, log: quiet })
+    assert.equal(straight.state, 'WAITING_FOR_REVIEW')
+    assert.ok(d.waited.length >= 1 && d.waited.every((ms) => ms === READY_LOOK_MS), 'sending did not wait for Apple to process the picture')
+    const e = pretend({ processLooks: 1e9 })
+    await assert.rejects(makeItem({ asc: e.asc, item, picture, submit: true, log: quiet }), /MISSING_METADATA after 4 minutes/)
+    assert.equal(e.waited.length, READY_WAIT_MS / READY_LOOK_MS, 'it waited longer, or shorter, than it says')
+    assert.ok(!e.writes().some((r) => r.path === '/v1/inAppPurchaseSubmissions'))
+
+    /* On its own only with an approved Non-Consumable before it (App Store Connect Help, "Submit an In-App Purchase"). */
+    const f = pretend({ full: { state: 'WAITING_FOR_REVIEW', inAppPurchaseType: 'NON_CONSUMABLE' } })
+    await assert.rejects(makeItem({ asc: f.asc, item, picture, submit: true, log: quiet }), /Attach it to the next app version instead/)
+    assert.ok(!f.writes().some((r) => r.path === '/v1/inAppPurchaseSubmissions'))
+
+    /* Only what differs is changed; and Family Sharing switched on by hand is said, never fought on every run. */
+    const g = pretend()
+    await makeItem({ asc: g.asc, item, picture, apply: true, log: quiet })
+    g.apple.items.find((x) => x.id === 't1').attributes.reviewNote = 'old notes'
+    await makeItem({ asc: g.asc, item, picture, apply: true, log: quiet })
+    const patch = g.writes().filter((r) => r.method === 'PATCH' && r.path === '/v2/inAppPurchases/t1')
+    assert.equal(patch.length, 1)
+    assert.deepEqual(patch[0].body.data.attributes, { reviewNote: item.reviewNote }, 'the PATCH sent more than what differs')
+    g.apple.items.find((x) => x.id === 't1').attributes.familySharable = true
+    await assert.rejects(makeItem({ asc: g.asc, item, picture, apply: true, log: quiet }), /Apple never lets it be switched off again/)
+  })
+
+  test('trial: the App Store item’s job only reads unless a box is ticked, and the key never outlives it', () => {
+    const job = read('.github/workflows/iap-trial.yml')
+    assert.match(job, /workflow_dispatch:/)
+    assert.doesNotMatch(job, /^\s*(push|pull_request|schedule):/m, 'the App Store item job runs by itself')
+    assert.match(job, /else node scripts\/iap-trial\.mjs\n/, 'unticked, the job does more than read')
+    assert.match(job, /if \[ "\$SUBMIT" = "true" \]; then node scripts\/iap-trial\.mjs --submit/)
+    assert.match(job, /if: always\(\)\n\s+run: rm -f "\$RUNNER_TEMP\/asc\.p8"/, 'the Apple key is left on the runner')
+    for (const secret of ['ASC_KEY_P8', 'ASC_KEY_ID', 'ASC_ISSUER_ID']) assert.ok(job.includes(`secrets.${secret}`), `the job does not use the builds' ${secret}`)
+    assert.doesNotMatch(job, /GOOGLE_PLAY|REVENUECAT|SUPABASE/, 'the App Store item job is handed a key it has no use for')
   })
 }

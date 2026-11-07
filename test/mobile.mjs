@@ -8780,7 +8780,8 @@ export function run(test) {
        the three sample packages, with the real unlock on the last of them. */
     const mod = await import(`data:text/javascript,${encodeURIComponent(
       picker.replace('const theUnlockIn', 'export const theUnlockIn') +
-        "\nexport const PRODUCT_ID = 'cloud.newbold.fractalremote.full'\n"
+        "\nexport const PRODUCT_ID = 'cloud.newbold.fractalremote.full'\n" +
+        "export const TRIAL_PRODUCT_ID = 'trial_7day'\n"
     )}`).catch(() => null)
     if (mod) {
       const pack = (id) => ({ product: { identifier: id } })

@@ -134,7 +134,8 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
    */
   const trialOn = trialRunning(purchase.trialEndsAt)
   if (trialOn && !asked && !busy) onUnlocked?.()
-  const offerTrial = trialAvailable(purchase)
+  /* And only with the price to say under it: 3.1.1 wants any later charge named before a trial starts, and the terms leave it out without one. */
+  const offerTrial = trialAvailable(purchase) && Boolean(price)
   const tryIt = async () => {
     setBusy(true)
     setSaid({ tone: 'info', text: TRIAL_STARTING })
