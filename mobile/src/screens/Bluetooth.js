@@ -160,12 +160,12 @@ import bluetoothIcon from '../../assets/icons/bluetooth.png'
  * Settings draws this page for nobody else (useBluetoothAllowed,
  * lib/bluetooth.js).
  *
- * TWO WAYS TO CONNECT, AND THE COMPUTER IS THE BEST. "Make it clear that
- * there's multiple ways to connect the device, but also make it clear that
- * the computer is the preferred method and that Bluetooth will have more lag
- * and not have as many features." (25 October 2026.) Said first, in one
- * line over the steps (BLUETOOTH_WAYS, the same words as the Settings row,
- * the waiting screen and the purchase page), before anybody taps Connect.
+ * TWO WAYS TO CONNECT, BLUETOOTH FIRST. Since 7 November 2026 ("make sure
+ * it's Bluetooth first as far as connection options go"), with no ranking:
+ * Bluetooth needs no computer, and a computer has less lag and more
+ * features (BLUETOOTH_WAYS in shared/bluetooth-gear.mjs, and CLAUDE.md "How
+ * it is presented"). It replaced his 25 October rule that the computer was
+ * the preferred way.
  *
  * EVERY UNIT, AND NOTHING OF WHICH HAVE BEEN TRIED. Step 1 offers what
  * lib/bluetooth says this account may pick (offeredUnits): all five on a
@@ -911,9 +911,9 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
 
       {/*
         THE TWO WAYS, AND THE BUTTON, at the foot of the page rather than
-        over the steps: the computer is the best one, and this one is slower
-        and does less (BLUETOOTH_WAYS, the one sentence every way onto this
-        page says), and where to say something is not working (REPORT_NOTE).
+        over the steps: Bluetooth needs no computer, and a computer has less
+        lag and more features (BLUETOOTH_WAYS, no ranking), and where to say
+        something is not working (REPORT_NOTE).
       */}
       <View style={{ gap: space.sm }}>
         <Hint>{BLUETOOTH_WAYS}</Hint>
