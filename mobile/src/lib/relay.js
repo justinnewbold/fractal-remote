@@ -60,7 +60,7 @@ import {
 } from './relay-rules'
 import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, CONFIRMED_SIGN_IN, cleanCode, codeRefused } from './confirm-code'
 import { deviceNoun } from './device-word'
-import { nameData } from './account-name'
+import { NAME_KEYS, nameData } from './account-name'
 
 export { DEFAULT_PROJECT, RELAY_GRACE, forbiddenRemotely, explainAuth, NOT_IN_INBOX, sentAgain }
 
@@ -460,7 +460,14 @@ export async function currentAccount() {
   try {
     const { data } = await supabase().auth.getUser()
     if (!data?.user) return null
-    return { id: data.user.id, email: data.user.email || '' }
+    /* The name kept on the account (shared/account-name.mjs), empty for an account made before names were asked. */
+    const meta = data.user.user_metadata || {}
+    return {
+      id: data.user.id,
+      email: data.user.email || '',
+      first: typeof meta[NAME_KEYS.first] === 'string' ? meta[NAME_KEYS.first] : '',
+      last: typeof meta[NAME_KEYS.last] === 'string' ? meta[NAME_KEYS.last] : ''
+    }
   } catch {
     return null
   }
@@ -649,6 +656,19 @@ export async function deleteAccount() {
   if (!res.ok || !body?.deleted) throw new Error(body?.error || 'The account could not be deleted. Try again in a minute.')
   /* Its pick, and what its last roll call heard, go with it: not waited for past a second, on a disk that does not answer. */
   await within(dropPick(data?.session?.user?.id), 1000)
+}
+
+/**
+ * Add or change the name on the signed-in account, where sign-up keeps it
+ * (the account's own metadata, shared/account-name.mjs), with the same rules
+ * and words as Create account. Returns the names as kept.
+ */
+export async function changeName({ first, last } = {}) {
+  const name = nameData({ first, last })
+  const { error } = await supabase().auth.updateUser({ data: name })
+  if (error) throw new Error(explainAuth(error.message))
+  logDebug('account: name saved')
+  return { first: name[NAME_KEYS.first], last: name[NAME_KEYS.last] }
 }
 
 export async function changePassword(password) {

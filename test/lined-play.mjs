@@ -73,6 +73,7 @@ export function run(test) {
       [1366, 1024, 'an iPad Pro 13 on its side'],
       [700, 830, 'the iPhone Duo opened'],
       [1280, 800, 'an Android tablet on its side'],
+      [962, 601, 'a small Android tablet on its side (Galaxy Tab A 8.0)'],
       [673, 841, 'a Galaxy Fold opened']
     ]) assert.equal(playOn(g, w, h).lined, true, `${what} (${w} by ${h}) did not line up`)
     /*
@@ -86,12 +87,38 @@ export function run(test) {
       [834, 1194, 'an iPad Pro 11 upright'],
       [744, 1133, 'an iPad mini upright'],
       [1024, 1366, 'an iPad Pro upright'],
-      [800, 1280, 'an Android tablet upright']
+      [800, 1280, 'an Android tablet upright'],
+      [601, 962, 'a small Android tablet upright (Galaxy Tab A 8.0)']
     ]) {
       const p = playOn(g, w, h)
       assert.equal(p.lined, false, `${what} (${w} by ${h}) lined up, where it should be the phone's Play, bigger`)
       assert.equal(p.shape.wide, true, `${what} lost the opened-up Play it had before A1`)
     }
+    /*
+     * Play's own height as measured, not the window less a guess. Justin's
+     * Galaxy Tab A 8.0 on its side (962 by 601, 7 November 2026): 436 at
+     * Smallest, 420 at the other sizes; an 8-inch tablet with its buttons
+     * on the screen, 389 and 373. All lined up.
+     */
+    for (const tall of [436, 420, 389, 373]) assert.equal(g.linedOn({ wide: true, tall, across: 962 }), true, `a small tablet on its side ${tall} tall did not line up`)
+    /*
+     * Those are Play's heights with the buttons in one row. At Medium and up,
+     * or with the scenes Down or in My own order, the buttons are two rows
+     * until Play lines up, a row (56, or 48 at Smallest) and its gap (8)
+     * shorter: 356 and 309 on that tablet. Stage counts the second row back
+     * in while it is there (footSpare), so those line up too, and never once
+     * lined up, where the buttons are one row already.
+     */
+    const stage = read('mobile/src/screens/Stage.js').replace(/\s+/g, ' ')
+    assert.match(stage, /const footSpare = shape\.footFixed && !shape\.footRow && !linedWas\.current \? \(tight \? 48 : TAP\) \+ space\.sm : 0 const lined = linedOn\(\{ wide: shape\.wide, tall: viewport \+ footSpare, across: playWidth \}, linedWas\.current\)/, 'Play decides to line up on the height it has with the buttons in two rows')
+    for (const twoRows of [356, 309]) assert.equal(g.linedOn({ wide: true, tall: twoRows + 56 + 8, across: 962 }), true, `a small tablet on its side at Medium (${twoRows} with two rows of buttons) did not line up`)
+    for (const twoRows of [279 - 64, 340 - 64]) assert.equal(g.linedOn({ wide: true, tall: twoRows + 56 + 8, across: 1067 }), false, 'a phone on its side lined up once its second row of buttons was counted back in')
+    /*
+     * And the tallest Play a phone on its side has: an iPhone Pro Max 279,
+     * an Android phone 248, one with no clock and no buttons on the screen
+     * 308, one set to its smallest display size 340. Never.
+     */
+    for (const tall of [279, 248, 308, 340]) assert.equal(g.linedOn({ wide: true, tall, across: 1067 }), false, `a phone on its side ${tall} tall lined up`)
     /* An iPad sharing the screen: lined up while its half is wide enough, today's Play when it is a slim third. */
     assert.equal(playOn(g, 320, 1180).lined, false, 'an iPad’s slim third lined up')
     assert.equal(playOn(g, 507, 820).lined, false, 'half an iPad mini lined up')
@@ -163,7 +190,7 @@ export function run(test) {
     assert.match(stage, /const sceneAcross = lined \? plan\.sceneCols : sceneCols\n/)
     assert.match(stage, /const pedalsAcross = lined \? plan\.chainCols : fxCols\n/)
     assert.match(stage, /const pedalWords = lined \? linedName\([^\n]*\) : undefined\n/)
-    assert.match(stage, /const lined = linedOn\(\{ wide: shape\.wide, tall: viewport, across: playWidth \}, linedWas\.current\)\n/, 'lined up is decided by something other than Play’s own size')
+    assert.match(stage, /const lined = linedOn\(\{ wide: shape\.wide, tall: viewport \+ footSpare, across: playWidth \}, linedWas\.current\)\n/, 'lined up is decided by something other than Play’s own size')
     assert.match(stage, /const plan = linedPlan\(\{ scenes: scenes\.hasScenes \? scenes\.count : 0, pedals: fitBlocks \}\)\n/, 'the rows do not count the looper, or the cards while a preset loads')
     /* Both halves start level: each heading the same height. */
     assert.equal(stage.match(/style=\{lined \? LANE_HEADING : /g).length, 2, 'the two headings are not one height lined up')

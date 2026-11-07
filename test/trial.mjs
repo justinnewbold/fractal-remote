@@ -216,6 +216,11 @@ async function phone({ os = 'ios', storeTrial = true, session = ACCOUNT } = {}) 
     bought,
     pass: (await import(at('relayPass.js'))).pass,
     disk: (await import(at('storage.js'))).disk,
+    /* The pretend SDK itself, so a test can make the store answer otherwise, and what the store holds. */
+    api: holder.api,
+    setInfo: (next) => {
+      info = next
+    },
     done: () => rmSync(dir, { recursive: true, force: true })
   }
 }
@@ -392,6 +397,74 @@ export function run(test) {
     /* Never had one: a definite null. */
     assert.equal((await entitlementFn({ trial: null })).said.trial, null)
     assert.equal(trialAnswer(null), null)
+  })
+
+  test('trial: one purchase is one account: an Apple ID that bought for another account gives no trial and no unlock here, and says why', async () => {
+    /*
+     * 7 November 2026: the free item, bought on a new account, sent the Apple
+     * ID's history to RevenueCat, which moved the full version off the
+     * account that bought it. Transfer moves and never copies, so it stays
+     * (Justin, the same day); the trial says when the purchase arrives, and
+     * should the setting ever be Keep, receipt_already_in_use (code 7) is
+     * said in plain words too.
+     */
+    const inUse = Object.assign(new Error('The receipt is already in use by another subscriber.'), { code: '7' })
+    const ios = await phone({ os: 'ios', storeTrial: true })
+    try {
+      await ios.p.startPurchases()
+      ios.api.purchaseStoreProduct = async () => {
+        throw inUse
+      }
+      const out = await ios.p.startTrial()
+      assert.deepEqual([out.ok, out.why], [false, 'other-account'])
+      assert.match(out.message, /^This Apple ID bought the full version already, for another Fractal Remote account\. Sign in with that account to use it/)
+      assert.deepEqual(ios.pass.asks, [], 'the server was asked for a trial the store refused')
+      assert.equal(ios.p.purchaseState().unlocked, false, 'another account’s purchase unlocked this one')
+      ios.api.restorePurchases = async () => {
+        throw inUse
+      }
+      const back = await ios.p.restorePurchase()
+      assert.equal(back.ok, false)
+      assert.equal(back.otherAccount, true)
+      assert.match(back.message, /for another Fractal Remote account/)
+      assert.equal(ios.p.purchaseState().unlocked, false)
+    } finally {
+      ios.done()
+    }
+
+    /* And where the store did carry this Apple ID's own purchase across: unlocked, no trial, and said. */
+    const own = await phone({ os: 'ios', storeTrial: true })
+    try {
+      await own.p.startPurchases()
+      own.api.purchaseStoreProduct = async (p) => {
+        own.bought.push(p.identifier)
+        const next = { entitlements: { active: { full: { isActive: true, store: 'APP_STORE' } } }, nonSubscriptionTransactions: [{ productIdentifier: p.identifier }], allPurchasedProductIdentifiers: ['cloud.newbold.fractalremote.full', p.identifier] }
+        own.setInfo(next)
+        return { customerInfo: next }
+      }
+      const out = await own.p.startTrial()
+      assert.deepEqual([out.ok, out.why], [false, 'apple-id-owns'])
+      assert.deepEqual(own.pass.asks, [], 'a trial was started on an account the full version had just reached')
+      assert.equal(own.p.purchaseState().unlocked, true)
+    } finally {
+      own.done()
+    }
+
+    /* Said in plain words, and RevenueCat's setting is written down where it is set. */
+    assert.match(trialRefusal('other-account'), /^This Apple ID bought the full version already, for another Fractal Remote account\./)
+    /* A trial that began when the App Store's item was bought, days before this account arrived on the Apple ID: its own days, or over, never seven. */
+    const { trialStartedWords, TRIAL_STARTED, TRIAL_OVER } = await import('../shared/trial-words.mjs')
+    const now = new Date(2026, 10, 7, 12).getTime()
+    const ends = (days) => ({ endsAt: new Date(now + days * 86400000).toISOString() })
+    assert.deepEqual(trialStartedWords(ends(7), now), { over: false, text: TRIAL_STARTED })
+    assert.deepEqual(trialStartedWords(ends(4), now), { over: false, text: 'Your free trial has 4 days left. Unlock now and it carries on for good.' })
+    assert.deepEqual(trialStartedWords({ endsAt: new Date(now - 3600000).toISOString() }, now), { over: true, text: TRIAL_OVER })
+    assert.deepEqual(trialStartedWords(null, now), { over: false, text: TRIAL_STARTED }, 'an answer with no trial in it says nothing it does not know')
+    assert.match(flat('mobile/src/screens/Paywall.js'), /if \(out\.ok\) \{ const said = trialStartedWords\(out\.trial\) if \(said\.over\) return setSaid\(\{ tone: 'warn', text: said\.text \}\) Alert\.alert\('Free trial', said\.text\)/, 'the purchase page says seven days have started whatever the server answered')
+    assert.match(trialRefusal('apple-id-owns'), /so the full version is on this account now and no trial is needed\. Any other account it was on doesn’t have it any more\.$/)
+    assert.match(read('docs/app-store.md'), /Restore behavior: Transfer to new App\s+User ID\*\*, RevenueCat's default, left as it is/, 'the RevenueCat setting, and why it stays, is not written down')
+    const pay = flat('mobile/src/screens/Paywall.js')
+    assert.match(pay, /if \(out\.why === 'apple-id-owns'\) \{ Alert\.alert\('Already unlocked', trialRefusal\(out\.why\)\) return onUnlocked\?\.\(\) \}/)
   })
 
   test('trial: an iPhone offers it only with the App Store’s free item, buys that item first, and Android asks the server', async () => {

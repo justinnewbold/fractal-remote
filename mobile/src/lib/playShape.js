@@ -15,14 +15,17 @@
  * the window's own size may not even say so, and a phone held upright is a
  * phone at any of them.
  *
- *   under 621  today's Play, exactly. Every phone, the Duo closed, half of
+ *   under 550  today's Play, exactly. Every phone, the Duo closed, half of
  *              the Duo open beside another app. A test holds it.
- *   621 and up the pedals' whole names (the three letters where a name does
+ *   550 and up the pedals' whole names (the three letters where a name does
  *              not fit), the six buttons in a strip fixed to the bottom, tiles
  *              up to 120 tall under Fit, the page no wider than 1180 and
- *              centered, sheets no wider than 480 and centered. 621 is the
- *              browser's own line between its phone layout and its computer
- *              one (max-width: 620px).
+ *              centered, sheets no wider than 480 and centered. It was 621
+ *              (the browser's own line, max-width: 620px) until 7 November
+ *              2026, when a small Android tablet held upright (Galaxy Tab A
+ *              8.0, a 569-point row) still got the phone's Play: "Android
+ *              tablet views not tablet friendly like ipad." 550 is under
+ *              every tablet and over every phone (the widest, 408).
  *   700 and up at Smallest or Small, with the scenes Across or Like the unit:
  *              four scenes to a row, WIDE_PEDALS pedals to a row (two more
  *              from 936), and the six buttons in one row, Previous, Setlists
@@ -55,7 +58,7 @@ import { FX_MAX, SCENES_LIKE_UNIT, SCENE_LAYOUTS, SIZES, clampSize, sceneColsFor
 const LAYOUT_IDS = SCENE_LAYOUTS.map((l) => l.id)
 
 /** From this row width (points), Play opens up: whole names, the buttons fixed to the bottom. */
-export const OPENS_AT = 621
+export const OPENS_AT = 550
 /** From this row, at Smallest and Small with Across or Like the unit: four scenes, WIDE_PEDALS pedals, one row of buttons. */
 export const SPREADS_AT = 700
 /** From this row the spread layout takes two more pedals to a row. */
@@ -113,7 +116,7 @@ export function playLines(row, was) {
 /**
  * Play's shape on a row `row` points wide, at size step `step` (an index into
  * SIZES) with scene layout `layout`, given the last shape (`was`, for the
- * lines' memory). Every field under 621 is today's: the size step's and the
+ * lines' memory). Every field under OPENS_AT is today's: the size step's and the
  * layout's own counts, fitTiles' own caps, no names, the buttons in the page.
  *
  *   sceneCols  scenes to a row

@@ -12,18 +12,22 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-07",
     "day": "7 November 2026",
-    "version": "1.89.59",
+    "version": "1.89.61",
     "lines": [
       {
-        "text": "On a tablet held upright, Play is the phone's own layout again, just bigger. On its side it keeps your scenes on the left and your chain on the right.",
-        "only": null
+        "text": "Start 7-day free trial on an iPhone or iPad whose Apple ID already bought the full version now says so: the full version moves to the account you're signed in to, and no trial starts.",
+        "only": "ios"
       },
       {
-        "text": "On a tablet on its side, the pedals sit two across beside your scenes again, row for row, instead of one to a row running off the bottom of the screen.",
+        "text": "Tablets: held upright, Play is the phone's own layout, just bigger; on its side, your scenes sit on the left with the pedals two across beside them, row for row. Smaller tablets now get this too.",
         "only": null
       },
       {
         "text": "Try the full version free for 7 days with your own rig: tap Start 7-day free trial on the purchase page. While it runs, Play shows how many days are left, and when it ends everything you set up is kept. The demo is still free and unlimited.",
+        "only": null
+      },
+      {
+        "text": "In the phone app, accounts made before names were asked can add one: Settings → your account → tap your email → Add your name.",
         "only": null
       }
     ]

@@ -28,6 +28,23 @@ export const TRIAL_STARTING = 'Starting your trial…'
 export const TRIAL_STARTED = `Your ${TRIAL_DAYS}-day free trial has started. Plug in your unit and play.`
 
 /**
+ * What is said when the server answers a start with a trial: TRIAL_STARTED
+ * for a fresh one, its days left for one that began earlier, and TRIAL_OVER
+ * (with `over`) for one already ended. An iPhone's trial begins when the App
+ * Store's free item was bought, and with RevenueCat moving an Apple ID's
+ * purchases to the account signed in (docs/app-store.md, RevenueCat step 0),
+ * a second account on the same Apple ID can arrive days into that trial, or
+ * after it (7 November 2026): never told then that seven days have started.
+ */
+export function trialStartedWords(trial, now = Date.now()) {
+  if (!trial?.endsAt) return { over: false, text: TRIAL_STARTED }
+  const left = trialDaysLeft(trial.endsAt, now)
+  if (left === null) return { over: true, text: TRIAL_OVER }
+  if (left >= TRIAL_DAYS) return { over: false, text: TRIAL_STARTED }
+  return { over: false, text: trialRunning(trial.endsAt, now) }
+}
+
+/**
  * The line on Play while a trial runs, tappable to the purchase page:
  * "Trial: 3 days left · Unlock", and on its last day "Trial ends today ·
  * Unlock". Null when no trial is running.
@@ -69,6 +86,10 @@ export function trialRefusal(why) {
       return `This ${deviceNoun()} has had a free trial already, on another account.`
     case 'bought':
       return 'You have the full version already.'
+    case 'apple-id-owns':
+      return 'This Apple ID bought the full version already, so the full version is on this account now and no trial is needed. Any other account it was on doesn’t have it any more.'
+    case 'other-account':
+      return 'This Apple ID bought the full version already, for another Fractal Remote account. Sign in with that account to use it: one purchase is for one account.'
     case 'signed-out':
       return 'Sign in or make an account first, so the trial has an account to belong to.'
     case 'no-store-trial':

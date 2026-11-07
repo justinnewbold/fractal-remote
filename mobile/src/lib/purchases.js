@@ -610,7 +610,9 @@ const bringAcross = async (api, tries = 1) => {
       logDebug(`purchases: sent this phone’s purchase to the account (${entitled(info) ? 'it has it now' : 'it still does not'})`)
       if (entitled(info)) return info
     } catch (err) {
+      /* Another account's purchase (RECEIPT_IN_USE) is never this one's to take: said in the log, and nothing more is tried. */
       logDebug(`purchases: could not send this phone’s purchase to the account (${err?.message || err})`)
+      if (String(err?.code) === RECEIPT_IN_USE) return null
     }
   }
   return null
@@ -1026,9 +1028,25 @@ export const startTrial = async () => {
       /* On the account signed in, so the item lands where the server looks. */
       if ((await currentId(api)) !== who && !(await linkTo(api, who))) return { ok: false, cancelled: false, why: 'offline' }
       const info = await freshInfo(api)
+      const hadIt = entitled(info)
       if (!tookStoreTrial(info)) await api.purchaseStoreProduct(product)
+      /*
+       * The free item carried the Apple ID's own full version onto this
+       * account: never a trial then, and said as it is, including that it
+       * left any other account it was on (RevenueCat's Transfer, above).
+       */
+      if (!hadIt && entitled(await freshInfo(api))) {
+        logDebug('purchases: the free trial item brought this Apple ID’s full version with it')
+        set({ unlocked: true })
+        await remember(true)
+        return { ok: false, cancelled: false, why: 'apple-id-owns' }
+      }
     } catch (err) {
       if (err?.userCancelled) return { ok: false, cancelled: true, why: null }
+      if (String(err?.code) === RECEIPT_IN_USE) {
+        logDebug('purchases: this Apple ID’s purchases belong to another account, so no trial here')
+        return { ok: false, cancelled: false, why: 'other-account', message: otherAccountWords() }
+      }
       /* Already bought on this Apple ID: the server decides from RevenueCat's record. */
       if (String(err?.code) !== ALREADY_BOUGHT) {
         logDebug(`purchases: the free trial item did not go through (${err?.message || err})`)
@@ -1041,7 +1059,7 @@ export const startTrial = async () => {
     if (isDemo()) setDemo(false)
     claimRelay()
   }
-  return { ok: out.ok, cancelled: false, why: out.ok ? null : out.why }
+  return { ok: out.ok, cancelled: false, why: out.ok ? null : out.why, trial: out.trial || null }
 }
 
 /*
@@ -1314,6 +1332,31 @@ const ownedNow = async (api, who) => {
 /* RevenueCat's error codes (PURCHASES_ERROR_CODE), as the strings they arrive as. */
 const PAYMENT_PENDING = '20' // PAYMENT_PENDING_ERROR
 const ALREADY_BOUGHT = '6' // PRODUCT_ALREADY_PURCHASED_ERROR
+const RECEIPT_IN_USE = '7' // RECEIPT_ALREADY_IN_USE_ERROR
+
+/*
+ * ONE PURCHASE, ONE ACCOUNT. On 7 November 2026 Justin made a new account on
+ * an iPhone whose Apple ID had bought the full version for another account,
+ * tapped Start 7-day free trial, and the new account came out with the full
+ * version and the old one without it: buying the free item sent the Apple
+ * ID's whole history to RevenueCat, whose restore behaviour was "Transfer",
+ * and it moved the purchase across. "Someone could just keep signing up with
+ * accounts, unlocking them with their Apple account, and then giving people
+ * their usernames and passwords for free." Then, the same day: "if it's
+ * only a problem with new accounts, we shouldn't have much to worry about,
+ * as I don't think anyone with an unlocked account is gonna try to do a free
+ * trial. I'm just doing it for testing purposes." Transfer moves a purchase
+ * and never copies it (the account it leaves loses it), so RevenueCat keeps
+ * its default, Transfer (docs/app-store.md, RevenueCat step 0), and a
+ * customer who made a second account by mistake can still bring the
+ * purchase across with Restore. The trial says plainly when that happens
+ * ('apple-id-owns', below). Should the setting ever be Keep with original
+ * App User ID, any other account is refused with receipt_already_in_use,
+ * which is said here, in plain words, wherever it can come back: Buy,
+ * Restore and the trial.
+ */
+export const otherAccountWords = () =>
+  `This ${storeAccount()} bought the full version already, for another Fractal Remote account. Sign in with that account to use it: one purchase is for one account.`
 
 /**
  * Buy it.
@@ -1434,6 +1477,7 @@ export const buyUnlock = async () => {
       set({ held: PENDING })
       return { ok: false, cancelled: false, held: true, pending: true, message: PENDING }
     }
+    if (String(err?.code) === RECEIPT_IN_USE) return { ok: false, cancelled: false, otherAccount: true, message: otherAccountWords() }
     return { ok: false, cancelled: false, message: err?.message || 'The purchase did not go through.' }
   }
 }
@@ -1563,6 +1607,7 @@ export const restorePurchase = async ({ here = false } = {}) => {
     }
   } catch (err) {
     logDebug(`purchases: restore failed (${err?.message || err})`)
+    if (String(err?.code) === RECEIPT_IN_USE) return { ok: false, otherAccount: true, message: otherAccountWords() }
     return { ok: false, message: err?.message || 'Could not reach the store.' }
   }
 }
