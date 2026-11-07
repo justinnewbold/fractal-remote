@@ -2365,10 +2365,15 @@ export function run(test) {
     assert.match(inAppsLine, /if \(inDesktopApp\(\)\) return null/, 'the computer app’s window says where Bluetooth is, about itself')
     assert.match(inAppsLine, /STORES\.filter\(\(s\) => s\.live\)/, 'the line links a store that is not open')
     const { BLUETOOTH_IN_APPS } = await import('../shared/stores.mjs')
-    assert.equal(BLUETOOTH_IN_APPS, 'Bluetooth, with no computer, is in the iPhone and Android apps. A web browser connects through a computer only.')
+    /* The iPad by name: the App Store app is the iPhone and iPad app, and Bluetooth works on an iPad (the review of 7 November 2026). */
+    assert.equal(BLUETOOTH_IN_APPS, 'Bluetooth, with no computer, is in the iPhone, iPad and Android apps. A web browser connects through a computer only.')
     const connectScreen = read('src/components/ConnectScreen.jsx').replace(/\s+/g, ' ')
     assert.match(connectScreen, /<h2>\{SETUP\.title\}<\/h2> <Steps \/> \{[^}]*\} <BluetoothInApps \/>/, 'the browser’s first screen does not say where Bluetooth is')
     assert.match(connectScreen, /<p>Finding your computer\.<\/p> \{[^}]*\} <BluetoothInApps \/>/, 'Connecting… does not say where Bluetooth is')
+    /* And on the two screens a customer with no computer is left on: Your computer isn’t answering, and Connect to your computer (the review of 7 November 2026). */
+    assert.match(connectScreen, /<h2>Your computer isn&rsquo;t answering<\/h2> \{[^}]*\} <BluetoothInApps \/>/, 'Your computer isn’t answering does not say where Bluetooth is, first')
+    assert.match(connectScreen, /<h2>Connect to your computer<\/h2> \{[^}]*\} <BluetoothInApps \/>/, 'Connect to your computer does not say where Bluetooth is, first')
+    assert.equal((connectScreen.match(/<BluetoothInApps \/>/g) || []).length, 4, 'the browser’s connect screen says where Bluetooth is somewhere else as well, or lost one')
     const webApp = read('src/App.jsx').replace(/\s+/g, ' ')
     assert.match(webApp, /\{\/\* Bluetooth first, and where it is: [^}]*\} <BluetoothInApps \/> <ChainCards/, 'Phone & computer in the browser does not say where Bluetooth is, first')
     assert.match(webApp, /<\/details> \{[^}]*\} <BluetoothInApps \/>/, 'the browser’s unlock page does not say where Bluetooth is')

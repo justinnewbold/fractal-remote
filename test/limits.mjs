@@ -4568,7 +4568,7 @@ export function run(test) {
     assert.ok(supportWords.includes(BLUETOOTH_WAYS), 'the support page does not say the two ways in the app’s own sentence')
     assert.ok(supportWords.indexOf('By Bluetooth, with no computer.') > -1 && supportWords.indexOf('By Bluetooth, with no computer.') < supportWords.indexOf('Through a computer.'), 'the support page puts the computer before Bluetooth')
     assert.ok(!/best (?:one|way)|more lag and fewer features/i.test(supportWords), 'the support page still ranks the computer first')
-    assert.match(supportWords, /Bluetooth is in the iPhone and Android apps only: a web browser connects through a computer\./, 'the support page does not say a browser has no Bluetooth')
+    assert.match(supportWords, /Bluetooth is in the iPhone, iPad and Android apps only: a web browser connects through a computer\./, 'the support page does not say a browser has no Bluetooth, or leaves the iPad out')
     assert.match(support, /href="\/bluetooth"/, 'the support page does not lead on to /bluetooth')
     assert.match(supportWords, /From version 1\.89\.0/, 'the support page does not say which versions have Bluetooth')
     /* The Android page is about getting the app, and still says nothing about Bluetooth. */

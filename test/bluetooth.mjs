@@ -6848,14 +6848,18 @@ export function run(test) {
      *
      * THE THREE THINGS NOW, in every full wording: Bluetooth named before
      * the computer; that Bluetooth needs no computer; and what a computer
-     * adds, in one clause, only what is true of it: less lag (the preset
-     * list, a first preset's scene names, a footswitch change shown at the
-     * next poll), plus editing and saving, which no customer has over
-     * Bluetooth (lib/ble-rule.js EDIT_FROM_STORE, held null below). And no
-     * ranking either way.
+     * adds, in his own 25 October words, "less lag and more features", true
+     * on every unit: less lag (the preset list, a first preset's scene
+     * names, a footswitch change shown at the next poll), and more features
+     * (no editing or saving over Bluetooth, and on a VP4 no effects, names
+     * or tuner over it: VP4_OVER_BLUETOOTH). Never "plus editing and
+     * saving", which it said for a day: through the computer a VP4 is not
+     * edited or saved either (VP4_SO_FAR), and the purchase page names the
+     * VP4. And no ranking either way. The short lines leave the clause out
+     * on purpose (below).
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
-    assert.equal(gear.BLUETOOTH_WAYS, 'Bluetooth needs no computer, just an adapter on your unit, sold separately. A computer has less lag, plus editing and saving.')
+    assert.equal(gear.BLUETOOTH_WAYS, 'Bluetooth needs no computer, just an adapter on your unit, sold separately. A computer has less lag and more features.')
     /* Not "and does everything": on the purchase page it sits beside what a VP4 cannot do from the app yet. */
     assert.ok(!/does everything|every feature/i.test(gear.BLUETOOTH_WAYS + gear.BLUETOOTH_PAYWALL), 'a sentence says the computer does everything, beside what a VP4 cannot do')
     assert.equal(gear.BLUETOOTH_WAYS_SHORT, 'No computer needed')
@@ -6869,9 +6873,8 @@ export function run(test) {
     const different = src('mobile/src/screens/Bluetooth.js').match(/const DIFFERENT = \[([\s\S]*?)\n\]/)?.[1] ?? ''
     assert.match(different, /No editing or saving over Bluetooth\./)
     assert.match(different, /Slower to load the preset list\./)
-    /* "Plus editing and saving" is true only while no store version opens editing over Bluetooth to customers: the day one does, these words change in that build's pull request. */
-    const { EDIT_FROM_STORE } = await import('../mobile/src/lib/ble-rule.js')
-    for (const [unit, at] of Object.entries(EDIT_FROM_STORE)) assert.equal(at, null, `editing over Bluetooth opens to customers on the ${unit}, and every two-ways line still says a computer adds editing and saving`)
+    /* And on a VP4 too: over Bluetooth it gets presets and scenes only, and the gear file sends it to the computer for the rest. */
+    assert.match(gear.VP4_OVER_BLUETOOTH, /can’t show its effects, names or tuner[^.]*\. For those, use the computer\./, 'a VP4 gets as much over Bluetooth as over the computer, and “more features” is not true of it')
 
     /*
      * THE PURCHASE PAGE: one short line, Bluetooth first ("Way too much
@@ -6882,7 +6885,7 @@ export function run(test) {
      * list itself: it sent them to "the Bluetooth page" for a day, which
      * nobody who has not paid can open.
      */
-    assert.equal(gear.BLUETOOTH_PAYWALL, 'Connect with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer, which has less lag, plus editing and saving.')
+    assert.equal(gear.BLUETOOTH_PAYWALL, 'Connect with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer, which has less lag and more features.')
     assert.equal(gear.BLUETOOTH_PARTS_SHOW, 'Which adapter do I need?')
     for (const part of Object.values(gear.PARTS)) assert.ok(!gear.BLUETOOTH_PAYWALL.includes(part.name), `the purchase page’s one line names the ${part.name}: the parts are one tap under it`)
     assert.equal(
@@ -6933,7 +6936,7 @@ export function run(test) {
     assert.match(paywall, /const \[partsOpen, setPartsOpen\] = useState\(false\)/, 'the purchase page opens on the parts list')
     /* The walkthrough and the sign-in screen too, since the audit of 2 November 2026 (WALKTHROUGH_TWO_WAYS), and the screens of 7 November. */
     for (const f of ['mobile/src/screens/Bluetooth.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/Fixes.js', 'mobile/src/components/NoComputer.js', 'mobile/src/screens/Onboarding.js', 'mobile/src/screens/SignIn.js', 'mobile/src/components/LiveUnit.js', 'mobile/src/components/TopBar.js', 'mobile/src/screens/Connect.js', 'mobile/src/components/HowConnect.js']) {
-      assert.ok(!/two ways to connect|(slower|more lag) than the computer|no computer needed|AM4 only for now ·|Opens Apple’s Bluetooth screen|best (?:one|way)|more lag and|less lag, plus|fewer features/i.test(code(f)), `${f} types the words out again instead of taking them from the gear file or shared/no-computer.mjs`)
+      assert.ok(!/two ways to connect|(slower|more lag) than the computer|no computer needed|AM4 only for now ·|Opens Apple’s Bluetooth screen|best (?:one|way)|more lag and|less lag and more|less lag, plus|fewer features/i.test(code(f)), `${f} types the words out again instead of taking them from the gear file or shared/no-computer.mjs`)
     }
     /*
      * AND THE OTHER PLACES THE WORDING LIVES, held to the same three things:
@@ -6954,9 +6957,21 @@ export function run(test) {
       const bluetooth = words.indexOf('Bluetooth')
       assert.ok(bluetooth > -1 && bluetooth < words.search(computerWay), `${where} does not name Bluetooth before the computer`)
       assert.match(words, /\bno computer\b/i, `${where} does not say Bluetooth needs no computer`)
-      assert.match(words, /less lag/, `${where} does not say what a computer adds: less lag`)
-      assert.match(words, /editing and saving/, `${where} does not say what a computer adds: editing and saving`)
+      assert.match(words, /less lag and more features/, `${where} does not say what a computer adds, in his words: less lag and more features`)
       assert.doesNotMatch(words, RANKED, `${where} still ranks the two ways`)
+      /* Nothing a VP4 does not get through the computer either. */
+      assert.doesNotMatch(words, /editing|saving/i, `${where} promises editing or saving through a computer, which a VP4 does not get`)
+    }
+    /*
+     * THE SHORT LINES LEAVE THE COMPUTER'S CLAUSE OUT ON PURPOSE: the
+     * walkthrough's, the box before Unlock, the sign-in screen's Get
+     * connected, How do you connect to your unit? and the website's line say
+     * the two ways, Bluetooth first, and nothing more ("eliminate so much of
+     * the text"). Held so a later change does not put it back.
+     */
+    const { BLUETOOTH_IN_APPS } = await import('../shared/stores.mjs')
+    for (const words of [...Object.values(gear.WALKTHROUGH_TWO_WAYS), ...Object.values(gear.HOW_CONNECT), BLUETOOTH_IN_APPS]) {
+      assert.doesNotMatch(words, /less lag|more features|editing and saving/, `a short line carries the computer’s clause: ${words}`)
     }
     /* And the walkthrough's short lines, on a copy that opens Bluetooth (the next tests), and How it works' Bluetooth foot: Bluetooth first, no ranking. */
     for (const [key, words] of Object.entries(gear.WALKTHROUGH_TWO_WAYS)) {
@@ -7237,9 +7252,15 @@ export function run(test) {
 
     /* App: owed, signed in and past the purchase page, not the demo, Bluetooth offered (the row's own gate) and off, nothing connected; before the sharing card, in Play's place. */
     const app = flat('mobile/App.js')
-    assert.match(app, /const howOwed = useHowConnectOwed\(\) const askHow = howOwed && auth === 'in' && !demo && bluetoothOffered && !bluetooth && link\.link !== 'connected'/, 'How do you connect is asked in the demo, signed out, where Bluetooth is not offered, or over a connected rig')
+    assert.match(app, /const howOwed = useHowConnectOwed\(\) const askHow = howConnectShown\(\{ owed: howOwed, auth, demo, offered: bluetoothOffered, bluetooth, link: link\.link, caps \}\)/, 'How do you connect is asked by some other rule than lib/howConnect’s')
     assert.match(app, /\) : askHow \? \( \/\*[^]*?\*\/ <HowConnect onBluetooth=\{bluetoothOffered \? \(\) => \(howConnectAnswered\(\), openSettings\('bluetooth'\)\) : null\} onComputer=\{howConnectAnswered\} \/> \) : askShare \? \(/, 'How do you connect is not drawn in Play’s place, before the sharing card, or an answer does not settle it')
-    assert.match(app, /useEffect\(\(\) => \{ if \(auth === 'in' && !demo && link\.link === 'connected' && unitHere\) unitConnected\(\) \}, \[auth, demo, link\.link, unitHere\]\)/, 'a unit answering does not settle the question, or the demo counts as a connection')
+    /*
+     * Settled the moment a unit answers, and at once when it is asked with a
+     * unit already connected (`howOwed` among the effect's reasons): bought
+     * from Play's trial line over a live rig, it was owed, and drawn in
+     * Play's place at the next drop (the review of 7 November 2026).
+     */
+    assert.match(app, /useEffect\(\(\) => \{ if \(auth === 'in' && !demo && link\.link === 'connected' && unitHere\) unitConnected\(\) \}, \[auth, demo, link\.link, unitHere, howOwed\]\)/, 'a unit answering does not settle the question, a purchase made with a unit connected leaves it owed, or the demo counts as a connection')
     /* Owed only by the three moments, on this device: an account made, a trial started, the full version bought just now. */
     const signIn = code('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
     assert.match(signIn, /const \{ needsConfirmation, userId \} = await signUp\(\{[^}]*\}\) askHowToConnect\(\) if \(needsConfirmation\) \{/, 'making an account does not ask how they connect')
@@ -7300,6 +7321,64 @@ export function run(test) {
       /* Storage that will not answer: nothing owed, and the sharing card as it was. */
       h = await fresh({}, true)
       assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: true })
+      /*
+       * ONCE PER DEVICE, NEVER ARMED AGAIN (the review of 7 November 2026).
+       * Answered, then a purchase on day 8 asks again: nothing.
+       */
+      h = await fresh()
+      await h.readHowConnect()
+      h.askHowToConnect()
+      h.howConnectAnswered()
+      await settle()
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'an answered question was armed again in storage')
+      /* And at the next launch, with 'done' on disk: asked again, still nothing. */
+      h = await fresh({ [ASK]: 'done' })
+      await h.readHowConnect()
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'a question answered at an earlier launch was armed again')
+      assert.equal((await h.readHowConnect()).owed, false)
+      /* A unit that has connected here before: a computer customer buying from Play's trial line is never asked. */
+      h = await fresh({ [CONNECTED]: 'yes' })
+      await h.readHowConnect()
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], undefined, 'a device whose unit has connected was asked how it connects')
+      /* Bought while a unit is connected: the effect settles it at once (unitConnected), and it is never owed again. */
+      h = await fresh()
+      await h.readHowConnect()
+      h.askHowToConnect()
+      h.unitConnected()
+      await settle()
+      assert.deepEqual(globalThis.__howStorage.kept, { [ASK]: 'done', [CONNECTED]: 'yes' }, 'a purchase made with a unit connected is left owed')
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'a device whose unit just connected was asked again')
+
+      /*
+       * AND THE CARD NEVER TAKES THE PLACE OF A RIG: not while a unit is
+       * connected, and not while one on screen reconnects (its capabilities
+       * kept through the drop), by either way. Only with no rig at all.
+       */
+      const shown = h.howConnectShown
+      const base = { owed: true, auth: 'in', demo: false, offered: true, bluetooth: false, link: 'joining', caps: null }
+      assert.equal(shown(base), true, 'the card is not drawn for a new account with nothing connected')
+      for (const link of ['connected', 'joining', 'no-answer']) {
+        assert.equal(shown({ ...base, link, caps: { device: 'am4' } }), false, `the card is drawn over a rig on screen (${link})`)
+      }
+      assert.equal(shown({ ...base, link: 'connected' }), false, 'the card is drawn over a connected link')
+      for (const [why, change] of [
+        ['not owed', { owed: false }],
+        ['signed out', { auth: 'out' }],
+        ['on the purchase page', { auth: 'paywall' }],
+        ['in the demo', { demo: true }],
+        ['where Bluetooth is not offered', { offered: false }],
+        ['over Bluetooth', { bluetooth: true }]
+      ]) {
+        assert.equal(shown({ ...base, ...change }), false, `the card is drawn ${why}`)
+      }
     } finally {
       delete globalThis.__howStorage
       rmSync(dir, { recursive: true, force: true })

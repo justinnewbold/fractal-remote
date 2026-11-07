@@ -67,6 +67,9 @@ export const anyStoreLive = () => STORES.some((s) => s.live)
  * the website never offers one: it says, in one line, where Bluetooth is,
  * with the two stores beside it (src/components/BluetoothInApps.jsx), wherever
  * it explains connecting. Bluetooth first, as everywhere since that day.
- * Never in the computer app's own window, which is the computer.
+ * Never in the computer app's own window, which is the computer. The iPad by
+ * name: the App Store app is the iPhone and iPad app (STORES), Bluetooth
+ * works on an iPad, and an iPad owner read "the iPhone and Android apps" as
+ * not theirs.
  */
-export const BLUETOOTH_IN_APPS = 'Bluetooth, with no computer, is in the iPhone and Android apps. A web browser connects through a computer only.'
+export const BLUETOOTH_IN_APPS = 'Bluetooth, with no computer, is in the iPhone, iPad and Android apps. A web browser connects through a computer only.'

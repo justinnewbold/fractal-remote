@@ -847,8 +847,9 @@ export function run(test) {
     const settings = flat('mobile/src/screens/Settings.js')
     assert.match(
       settings,
-      /\{link === 'no-answer' && account\?\.email && !isPairAccount\(account\.email\) && !noneSaid \? \( <Note>\{`Make sure you’re connected to your computer using \$\{account\.email\}\.`\}<\/Note> \) : null\}/,
-      'Phone & computer says “make sure you’re connected” beside the new words'
+      /* And not under the account warning, which names the account itself (since 7 November 2026, as on the waiting screen). */
+      /\{link === 'no-answer' && account\?\.email && !isPairAccount\(account\.email\) && !noneSaid && !elsewhere \? \( <Note>\{`Make sure you’re connected to your computer using \$\{account\.email\}\.`\}<\/Note> \) : null\}/,
+      'Phone & computer says “make sure you’re connected” beside the new words, or under the account warning'
     )
     const app = flat('mobile/App.js')
     const waking = app.slice(app.indexOf('function Waking('))
@@ -1123,12 +1124,13 @@ export function run(test) {
      */
     assert.equal(
       line,
-      'No computer needed: the app can connect to your unit by Bluetooth, through an adapter. A computer has less lag, plus editing and saving. Settings → My rig → Bluetooth says what to buy.'
+      'No computer needed: the app can connect to your unit by Bluetooth, through an adapter. A computer has less lag and more features. Settings → My rig → Bluetooth says what to buy.'
     )
     assert.ok(!/\bAM4\b/.test(line), 'the line is still for an AM4 alone')
-    /* In this order: no computer needed, Bluetooth, what a computer adds (in his word, lag; and the editing and saving Bluetooth has not), then where. Out of beta since 26 October 2026, so "in beta" went. */
+    /* In this order: no computer needed, Bluetooth, what a computer adds (in his own words, less lag and more features, true on every unit, the VP4 too), then where. Out of beta since 26 October 2026, so "in beta" went. */
     assert.ok(!/\bbeta\b|best (?:one|way)|still the best/i.test(line), 'the line still calls Bluetooth a beta, or ranks the two ways')
-    const at = ['No computer needed', 'your unit', 'Bluetooth', 'A computer has less lag', 'editing and saving', 'Settings → My rig → Bluetooth'].map((w) => line.indexOf(w))
+    const at = ['No computer needed', 'your unit', 'Bluetooth', 'A computer has less lag', 'more features', 'Settings → My rig → Bluetooth'].map((w) => line.indexOf(w))
+    assert.ok(!/editing|saving/i.test(line), 'the line promises editing or saving through a computer, which a VP4 does not get')
     assert.ok(at.every((i) => i >= 0), 'the line lost one of the things it has to say')
     assert.deepEqual([...at].sort((a, b) => a - b), at, 'the line says them out of order: Bluetooth is not before what a computer adds')
     /* What a computer adds, only as far as the Bluetooth page itself says Bluetooth lacks it. */

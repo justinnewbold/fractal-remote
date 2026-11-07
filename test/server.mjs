@@ -1160,8 +1160,8 @@ export function run(test) {
     assert.equal(first.subject, 'Having trouble getting Fractal Remote connected?')
     assert.equal(reminder.subject, 'Still need a hand getting Fractal Remote connected?')
     /* The two ways in the opening, Bluetooth first, the computer with what it adds, no ranking, and nobody told their phone has nothing to connect to. */
-    assert.match(first.text, /There are two ways: over Bluetooth with no computer, or through a free app on the computer your unit is plugged into, which has less lag, plus editing and saving\./)
-    assert.match(reminder.text, /Fractal Remote still hasn’t connected to your Fractal with fan@example\.com, so here are the two ways again: over Bluetooth with no computer, or through the free computer app, which has less lag, plus editing and saving\./)
+    assert.match(first.text, /There are two ways: over Bluetooth with no computer, or through a free app on the computer your unit is plugged into, which has less lag and more features\./)
+    assert.match(reminder.text, /Fractal Remote still hasn’t connected to your Fractal with fan@example\.com, so here are the two ways again: over Bluetooth with no computer, or through the free computer app, which has less lag and more features\./)
     assert.ok(!/best way|more lag|fewer features/.test(first.text + reminder.text), 'the emails still rank the two ways')
     assert.match(reminder.text, /This is the last email about it\. You got it because fan@example\.com has the full version of Fractal Remote and it hasn’t connected to a unit yet\./)
     /* And with the switch off, the computer alone, as before Bluetooth. */

@@ -69,10 +69,11 @@ export const noComputerBody = (email) => `${noComputerSteps(email)} ${NO_COMPUTE
  * computer's words wherever both are (Settings → Phone & computer, and
  * Troubleshooting → It will not connect at all), and it says, in order: no
  * computer needed, Bluetooth, and what a computer adds, in the one clause the
- * gear file's sentence uses (shared/bluetooth-gear.mjs BLUETOOTH_WAYS): less
- * lag ("lag" is his word: a footswitch change reaches the screen at the next
- * poll, up to two seconds after it is pressed), plus editing and saving,
- * which no customer has over Bluetooth (ble-rule.js EDIT_FROM_STORE). Then
+ * gear file's sentence uses (shared/bluetooth-gear.mjs BLUETOOTH_WAYS), his
+ * own words: less lag ("lag" is his word: a footswitch change reaches the
+ * screen at the next poll, up to two seconds after it is pressed) and more
+ * features (no editing or saving over Bluetooth, and a VP4 gets no effects,
+ * names or tuner over it), true on every unit, the VP4 too. Then
  * where it is: the row under Settings → My rig, whose page says what to buy
  * and how it plugs in. Until 7 November 2026 it called the computer "still
  * the best way", from his 25 October words, and came after the computer.
@@ -97,7 +98,7 @@ export const noComputerBody = (email) => `${noComputerSteps(email)} ${NO_COMPUTE
  * says it (mobile/src/components/NoComputer.js NoComputerOtherWay, and Fixes).
  */
 export const NO_COMPUTER_BLUETOOTH =
-  'No computer needed: the app can connect to your unit by Bluetooth, through an adapter. A computer has less lag, plus editing and saving. Settings → My rig → Bluetooth says what to buy.'
+  'No computer needed: the app can connect to your unit by Bluetooth, through an adapter. A computer has less lag and more features. Settings → My rig → Bluetooth says what to buy.'
 
 /** How long after one question before another may be asked. */
 export const ASK_EVERY_MS = 60 * 1000

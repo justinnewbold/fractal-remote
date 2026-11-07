@@ -184,21 +184,30 @@ export const REPORT_NOTE = `Something not working? Tap ${REPORT_BUTTON}.`
  * with the computer.
  *
  * So the order is Bluetooth, then the computer, and there is no ranking. What
- * the computer adds is still said, in one short clause wherever the two are
- * set side by side, because it is true and somebody choosing needs it:
+ * the computer adds is still said, in one short clause, in his own 25
+ * October words, wherever the full sentence is: "A computer has less lag and
+ * more features". True on every unit, the VP4 too:
  *
  * LESS LAG: the preset list is read a name at a time over a 5-pin MIDI cable
  * (bleWire NAME_GAP_MS), an AM4's scene names take seconds the first time a
  * preset is seen, and a footswitch change shows at the next poll, up to two
  * seconds later (POLL_MS). "Lag" is his word.
  *
- * EDITING AND SAVING: no customer can edit or save over Bluetooth
- * (lib/ble-rule.js EDIT_FROM_STORE is null on every unit). The day a store
- * version opens editing on a unit, this clause changes in that build's pull
- * request. The rest of what Bluetooth does not do (the looper, the volume
- * button, the unit's metronome click, Footswitches) is on the Bluetooth
- * page's What Bluetooth can't do, where somebody who wants the detail looks:
- * "that kind of stuff can come into troubleshooting guides".
+ * MORE FEATURES: over Bluetooth there is no editing or saving, no looper,
+ * volume button, unit metronome click or Footswitches page (the page's
+ * DIFFERENT list); and a VP4 gets presets and scenes only, with no effects,
+ * names or tuner (VP4_OVER_BLUETOOTH: "For those, use the computer").
+ * Never "plus editing and saving", which it said for a day: through the
+ * computer a VP4 is not edited or saved either (shared/vp4-safety.mjs
+ * VP4_SO_FAR), and the purchase page names the VP4. The detail is on the
+ * Bluetooth page's What Bluetooth can't do, where somebody who wants it
+ * looks: "that kind of stuff can come into troubleshooting guides".
+ *
+ * THE SHORT LINES LEAVE THE CLAUSE OUT ON PURPOSE: the walkthrough's, the box
+ * before Unlock, the sign-in screen's Get connected, How do you connect to
+ * your unit? (HOW_CONNECT) and the website's BLUETOOTH_IN_APPS say the two
+ * ways, Bluetooth first, and nothing more ("eliminate so much of the
+ * text").
  *
  * NOT "AND DOES EVERYTHING". On the purchase page it would sit beside the
  * list of what a VP4 cannot do from the app yet.
@@ -207,7 +216,7 @@ export const REPORT_NOTE = `Something not working? Tap ${REPORT_BUTTON}.`
  * button line, and the Settings row's own one line: written together here so
  * they can never say different things.
  */
-export const BLUETOOTH_WAYS = 'Bluetooth needs no computer, just an adapter on your unit, sold separately. A computer has less lag, plus editing and saving.'
+export const BLUETOOTH_WAYS = 'Bluetooth needs no computer, just an adapter on your unit, sold separately. A computer has less lag and more features.'
 export const BLUETOOTH_WAYS_SHORT = 'No computer needed'
 /*
  * THE SETTINGS ROW, OFF, in the one line a row has (Settings.js SetupRow, cut
@@ -250,7 +259,7 @@ export const NOT_FOR_FM3 = 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI 
  * have to scroll" (Justin, 7 November 2026, of the purchase page, which
  * carried every part of every adapter above the trial button).
  */
-export const BLUETOOTH_PAYWALL = 'Connect with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer, which has less lag, plus editing and saving.'
+export const BLUETOOTH_PAYWALL = 'Connect with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer, which has less lag and more features.'
 /* The tap under it that shows BLUETOOTH_PARTS. */
 export const BLUETOOTH_PARTS_SHOW = 'Which adapter do I need?'
 /*

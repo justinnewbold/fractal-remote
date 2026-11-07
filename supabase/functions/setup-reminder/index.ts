@@ -84,7 +84,7 @@ const SETTINGS_DOOR = { section: 'My rig', row: 'Phone & computer', button: 'Sig
  * computer, and "your phone has nothing to connect to" stops being true for
  * them. So with this on, both emails offer both ways: Bluetooth first, with
  * what it needs and where in the app it is, then the computer app, with what
- * it adds (less lag, plus editing and saving). "I think most people are gonna
+ * it adds (less lag and more features). "I think most people are gonna
  * opt for Bluetooth, probably 90%. So we need to make that the most prominent
  * thing" (Justin, 7 November 2026); until then the computer came first, as
  * "the best way", from his 25 October words.
@@ -227,7 +227,7 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
    * supabase/migrations/20261101_bluetooth_seen.sql), so with Bluetooth in
    * them they say both ways, Bluetooth first since 7 November 2026, in the
    * app's own three things (Bluetooth needs no computer; a computer has less
-   * lag, plus editing and saving; no ranking). With the switch off they say
+   * lag and more features; no ranking). With the switch off they say
    * the computer alone, as they did before Bluetooth.
    */
   const subject = both
@@ -241,11 +241,11 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
     ? first
       ? [
           'Thanks for getting Fractal Remote!',
-          'It looks like it hasn’t connected to your Fractal yet, so here’s how. There are two ways: over Bluetooth with no computer, or through a free app on the computer your unit is plugged into, which has less lag, plus editing and saving.'
+          'It looks like it hasn’t connected to your Fractal yet, so here’s how. There are two ways: over Bluetooth with no computer, or through a free app on the computer your unit is plugged into, which has less lag and more features.'
         ]
       : [
           'Just checking in.',
-          `Fractal Remote still hasn’t connected to your Fractal with ${who}, so here are the two ways again: over Bluetooth with no computer, or through the free computer app, which has less lag, plus editing and saving.`
+          `Fractal Remote still hasn’t connected to your Fractal with ${who}, so here are the two ways again: over Bluetooth with no computer, or through the free computer app, which has less lag and more features.`
         ]
     : first
       ? [

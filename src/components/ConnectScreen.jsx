@@ -211,6 +211,8 @@ export default function ConnectScreen({
       ) : state === 'no-answer' ? (
         <>
           <h2>Your computer isn&rsquo;t answering</h2>
+          {/* Where a customer with no computer lands on the website, so where Bluetooth is is said first (shared/stores.mjs, 7 November 2026). */}
+          <BluetoothInApps />
           {mismatch || noneSaid || (
             <p>
               Make sure the Fractal Remote app is open on the computer and the computer is awake. This keeps trying on
@@ -248,6 +250,8 @@ export default function ConnectScreen({
       ) : (
         <>
           <h2>Connect to your computer</h2>
+          {/* And here, signed out or after Disconnect: Bluetooth is in the apps, a browser connects through a computer. */}
+          <BluetoothInApps />
           {remembered ? (
             <>
               <p>

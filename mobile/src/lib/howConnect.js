@@ -25,6 +25,12 @@ import { useEffect, useState } from 'react'
  * for a launch after a unit has connected here (connectedBefore, read once
  * at launch so the card never comes up over a rig that has just answered).
  *
+ * ONCE PER DEVICE, AND NEVER ARMED AGAIN. Once it is settled (either answer,
+ * a unit having connected here, or 'done' on disk) it stays settled for good,
+ * in memory too (`settled`): a trial and then a purchase on day 8 each ask,
+ * and the second one asked again an owner who had answered, or whose
+ * computer already worked (the review of 7 November 2026).
+ *
  * Per device, like the walkthrough's own key: a new phone has not been
  * asked. Storage that will not answer is "nothing owed" and "connected
  * before": the app opens as it did before either existed.
@@ -33,6 +39,8 @@ const ASK_KEY = 'fractal.howConnect.v1'
 const CONNECTED_KEY = 'fractal.unitConnected.v1'
 
 let owed = false
+/* Answered, or a unit has connected here, or 'done' on disk: never owed again. */
+let settled = false
 let connectedKept = false
 const listeners = new Set()
 const tell = () => {
@@ -49,8 +57,9 @@ const tell = () => {
 export async function readHowConnect() {
   try {
     const [ask, connected] = await Promise.all([AsyncStorage.getItem(ASK_KEY), AsyncStorage.getItem(CONNECTED_KEY)])
-    owed = owed || ask === 'owed'
     connectedKept = connectedKept || connected === 'yes'
+    settled = settled || ask === 'done' || connectedKept
+    owed = !settled && (owed || ask === 'owed')
     tell()
     return { owed, connectedBefore: connected === 'yes' }
   } catch {
@@ -58,9 +67,9 @@ export async function readHowConnect() {
   }
 }
 
-/** An account made, a trial started or the full version bought, here: the question is owed. */
+/** An account made, a trial started or the full version bought, here: the question is owed, unless it was ever settled. */
 export function askHowToConnect() {
-  if (owed) return
+  if (owed || settled) return
   owed = true
   tell()
   AsyncStorage.setItem(ASK_KEY, 'owed').catch(() => {})
@@ -69,6 +78,7 @@ export function askHowToConnect() {
 /** Either answer tapped: never asked again on this device. */
 export function howConnectAnswered() {
   const was = owed
+  settled = true
   owed = false
   if (was) tell()
   AsyncStorage.setItem(ASK_KEY, 'done').catch(() => {})
@@ -77,10 +87,21 @@ export function howConnectAnswered() {
 /** A unit answered, by either way: the question is settled, and the sharing card may come at the next launch. */
 export function unitConnected() {
   if (owed) howConnectAnswered()
+  settled = true
   if (connectedKept) return
   connectedKept = true
   AsyncStorage.setItem(CONNECTED_KEY, 'yes').catch(() => {})
 }
+
+/**
+ * WHETHER THE CARD IS DRAWN, in Play's place (App.js askHow): owed, signed in
+ * and past the purchase page, not the demo, Bluetooth offered (the Settings
+ * row's own gate) and off, and no rig at all, neither connected nor on
+ * screen while the link comes back (`caps`, the unit's capabilities, kept
+ * through a drop): it never takes the place of a live or reconnecting rig.
+ */
+export const howConnectShown = ({ owed: isOwed = false, auth = 'checking', demo = false, offered = false, bluetooth = false, link = 'idle', caps = null } = {}) =>
+  isOwed === true && auth === 'in' && !demo && offered === true && !bluetooth && link !== 'connected' && !caps
 
 /** Whether the question is owed, live. */
 export function useHowConnectOwed() {

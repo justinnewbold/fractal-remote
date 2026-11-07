@@ -39,7 +39,7 @@ import IndependentNotice, { independentNoticeSeen, markIndependentNotice } from 
 import GearShareNotice from './src/components/GearShareNotice'
 import HowConnect from './src/components/HowConnect'
 import { setSharing, shareQuestionDue, startGearShare } from './src/lib/gearShare'
-import { howConnectAnswered, readHowConnect, unitConnected, useHowConnectOwed } from './src/lib/howConnect'
+import { howConnectAnswered, howConnectShown, readHowConnect, unitConnected, useHowConnectOwed } from './src/lib/howConnect'
 import { startBluetoothSeen } from './src/lib/bluetoothSeen'
 import { NOT_AFFILIATED } from './src/lib/affiliation'
 import { walkthroughSeen, markWalkthrough } from './src/lib/walkthrough'
@@ -678,10 +678,17 @@ export default function App() {
    * it, and so does a unit answering first (the effect below).
    */
   const howOwed = useHowConnectOwed()
-  const askHow = howOwed && auth === 'in' && !demo && bluetoothOffered && !bluetooth && link.link !== 'connected'
+  const askHow = howConnectShown({ owed: howOwed, auth, demo, offered: bluetoothOffered, bluetooth, link: link.link, caps })
+  /*
+   * And settled the moment a unit answers, by either way, or at once when it
+   * is asked with a unit already connected (`howOwed` among the reasons to
+   * look): bought from Play's trial line over a live rig, it was owed and
+   * then drawn in Play's place at the next drop (the review of 7 November
+   * 2026).
+   */
   useEffect(() => {
     if (auth === 'in' && !demo && link.link === 'connected' && unitHere) unitConnected()
-  }, [auth, demo, link.link, unitHere])
+  }, [auth, demo, link.link, unitHere, howOwed])
   /*
    * THE SHARING QUESTION'S MOMENT: signed in and past the purchase page
    * ('in'), and not in the demo, so the App Review demo is never stopped by
