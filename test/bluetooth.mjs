@@ -9470,7 +9470,8 @@ export function run(test) {
   test('the note under Play’s pill has Report a problem beside Turn off Bluetooth, each its own button, and says the device in hand', () => {
     const bar = flat('mobile/src/components/TopBar.js')
     /* And, since 6 November 2026, the Bluetooth page for a USB cable's Use a Bluetooth adapter instead (onBluetoothPage, App's gate). */
-    assert.match(bar, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, saveHere: saveWanted = true \}\)/)
+    /* And, since 7 November 2026, the account's photo beside the pill (onOpenAccount, App's openAccount). */
+    assert.match(bar, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, saveHere: saveWanted = true, onOpenAccount = null \}\)/)
     const ble = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
     assert.match(ble, /function Which\(\{ link, cable = false, onClose, onReport = null, onBluetoothPage = null \}\)/)
     /* Two buttons, each its own element to VoiceOver inside a note that is not one. */

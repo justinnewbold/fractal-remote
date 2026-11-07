@@ -10,7 +10,8 @@ import { SAFE_EDGES } from './src/lib/screenShape'
 import { loadLooks, looksVersion, watchLooks } from './src/lib/looks'
 import { useSolidChrome } from './src/lib/useSolidChrome'
 import { haveSession, linkState, probeNow, startLink, stopLink, subscribeLink } from './src/lib/link'
-import { currentAccount, signOut } from './src/lib/relay'
+import { currentAccount, keptAccount, signOut } from './src/lib/relay'
+import { showPhotoFor } from './src/lib/accountPhoto'
 import { useComputerElsewhere } from './src/lib/useComputerElsewhere'
 import { useNoComputer } from './src/lib/useNoComputer'
 import { isPairAccount } from './src/lib/pairing'
@@ -215,13 +216,18 @@ export default function App() {
    */
   const [settingsAt, setSettingsAt] = useState(null)
   const [settingsVisit, setSettingsVisit] = useState(0)
+  /* Your account's sheet, open on arrival: the top bar's photo asks for it (openAccount), and Settings says once it has opened it. */
+  const [accountSheet, setAccountSheet] = useState(false)
   /* Where Amp & pedal names goes back to: Settings, or Edit, whichever opened it. */
   const [gearBack, setGearBack] = useState('settings')
-  const openSettings = (at = null) => {
+  const openSettings = (at = null, sheet = false) => {
     setSettingsAt(at)
+    setAccountSheet(sheet)
     setSettingsVisit((n) => n + 1)
     setScreen('settings')
   }
+  /* The top bar's photo: "if they tap that, it will take them to their profile to edit it" (Justin, 7 November 2026). */
+  const openAccount = () => openSettings('account', true)
   /*
    * Settings → About → What's new, from a new-version card's What's new
    * (components/UpdateReady). Back from it comes up to the Settings list, as
@@ -1031,6 +1037,25 @@ export default function App() {
   }, [auth, demo])
 
   /*
+   * AND THE TOP BAR'S PHOTO, for whoever is signed in (lib/accountPhoto): the
+   * copy kept on the phone at once, so it shows with no signal, then the
+   * account's own from its bucket, at every sign-in and every launch. Read
+   * off the phone the way the door reads it (relay.js keptAccount), never the
+   * account server, which with no signal answers nobody. Signed out, the
+   * circle goes, and the copy with it.
+   */
+  useEffect(() => {
+    if (auth === 'checking') return undefined
+    let alive = true
+    ;(auth === 'out' ? Promise.resolve(null) : keptAccount())
+      .then((who) => alive && showPhotoFor(who))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [auth])
+
+  /*
    * THE LINK, AND IT HAS TO WATCH THE DEMO TOO.
    *
    * "This says I'm connected to an AM4 which I have not connected to in
@@ -1458,6 +1483,8 @@ export default function App() {
               unitGoes={unitGoes}
               /* Edit has its own Save; two on one screen would be one too many. */
               saveHere={screen !== 'edit'}
+              /* The photo beside the pill: Settings → your account, its sheet open. */
+              onOpenAccount={openAccount}
             />
             <DemoUnit open={pickUnit} onClose={() => setPickUnit(false)} />
             <LiveUnit
@@ -1583,6 +1610,8 @@ export default function App() {
                 key={settingsVisit}
                 startPage={settingsAt}
                 onPage={setSettingsAt}
+                openAccountSheet={accountSheet}
+                onAccountSheet={() => setAccountSheet(false)}
                 onUnlock={() => setBuying(true)}
                 onSignIn={toSignIn}
                 onMakeAccount={toMakeAccount}

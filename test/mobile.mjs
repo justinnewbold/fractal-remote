@@ -50,7 +50,11 @@ const PHONE_GLOBALS = new Set([
   /* FormData and XMLHttpRequest: a report's video goes from its file on the
      phone, with how much has gone (lib/reports putVideo). React Native sets
      both up itself, as it does fetch. */
-  'FormData', 'XMLHttpRequest'
+  'FormData', 'XMLHttpRequest',
+  /* FileReader: the account's profile photo, read back from its bucket as
+     the copy kept on the phone (lib/accountPhoto, readAsDataURL). React
+     Native sets it up with the two above (Libraries/Blob/FileReader). */
+  'FileReader'
 ])
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
@@ -211,6 +215,125 @@ async function clickOnTheBench(os = 'ios') {
  * the real ones device.js builds, so a count of GET /preset/blocks here is a
  * count of preset dumps on a rig.
  */
+/**
+ * THE ACCOUNT'S PHOTO ON A BENCH: lib/accountPhoto.js as the phone runs it,
+ * with the device's storage, the picker, the drawing-again and the bucket
+ * stood in for. `b.disk` is the device's storage, `b.session` whose sign-in
+ * supabase-js holds, `b.download(path)` what the bucket answers a read with
+ * (a base64 JPEG, an error, or a promise of either), `b.picked` the picker's
+ * answer, `b.image` the size of the picture it handed over, and
+ * `b.saved(compress)` the base64 each save makes. Everything asked is kept on
+ * `b`. A fresh copy of the module each time, so no store carries over.
+ */
+const JPEG_A = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]).toString('base64')
+const JPEG_B = Buffer.from([0xff, 0xd8, 0xff, 0xe1, 4, 5, 6, 0xff, 0xd9]).toString('base64')
+let photoBenches = 0
+async function photoOnTheBench(b = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'photo-'))
+  const bench = (globalThis.__photoBench = { disk: {}, downloads: [], uploads: [], removes: [], crops: [], resizes: [], saves: [], ...b })
+  const esm = (src) =>
+    src
+      .replace("from 'react'", "from './react.js'")
+      .replace("from '@react-native-async-storage/async-storage'", "from './storage.js'")
+      .replace("from 'expo-image-picker'", "from './picker.js'")
+      .replace("from 'expo-image-manipulator'", "from './manip.js'")
+      .replace("from 'base64-js'", "from './b64.js'")
+      .replace(/from '\.\/([\w.-]+)'/g, (whole, name) => (/\.m?js$/.test(name) ? whole : `from './${name}.js'`))
+  const files = {
+    'package.json': '{ "type": "module" }',
+    'react.js': 'export const useSyncExternalStore = (subscribe, read) => read()\n',
+    'storage.js': `
+      const b = globalThis.__photoBench
+      export default {
+        getItem: async (k) => (k in b.disk ? b.disk[k] : null),
+        setItem: async (k, v) => { b.disk[k] = v },
+        removeItem: async (k) => { delete b.disk[k] }
+      }
+    `,
+    'b64.js': "export const toByteArray = (s) => new Uint8Array(Buffer.from(s, 'base64'))\n",
+    'picker.js': `
+      const b = globalThis.__photoBench
+      export const launchImageLibraryAsync = async (options) => {
+        b.pickerAsked = options
+        return b.picked || { canceled: true, assets: null }
+      }
+    `,
+    'manip.js': `
+      const b = globalThis.__photoBench
+      export const SaveFormat = { JPEG: 'jpeg', PNG: 'png' }
+      const image = (width, height) => ({
+        width,
+        height,
+        saveAsync: async ({ format, compress, base64 }) => {
+          b.saves.push({ format, compress, base64 })
+          return { uri: 'file:///photo.jpg', width, height, base64: b.saved ? b.saved(compress) : ${JSON.stringify(JPEG_B)} }
+        },
+        release: () => {}
+      })
+      export const ImageManipulator = {
+        manipulate: (source) => {
+          let size = typeof source === 'string' ? { ...(b.image || { width: 1000, height: 1000 }) } : { width: source.width, height: source.height }
+          const context = {
+            crop: (rect) => { b.crops.push(rect); size = { width: rect.width, height: rect.height }; return context },
+            resize: (to) => { b.resizes.push(to); size = { width: to.width, height: to.height }; return context },
+            renderAsync: async () => image(size.width, size.height),
+            release: () => {}
+          }
+          return context
+        }
+      }
+    `,
+    'relay.js': `
+      const b = globalThis.__photoBench
+      export const supabaseClient = () => ({
+        auth: { getSession: async () => ({ data: { session: b.session ? { user: { id: b.session } } : null } }) },
+        storage: {
+          from: (bucket) => ({
+            download: async (path) => {
+              b.downloads.push({ bucket, path })
+              const said = await (b.download ? b.download(path) : { error: { name: 'StorageApiError', status: 400, statusCode: '404', message: 'Object not found' } })
+              return typeof said === 'string' ? { data: { b64: said }, error: null } : { data: null, error: said.error }
+            },
+            upload: async (path, body, options) => {
+              b.uploads.push({ bucket, path, body, options })
+              return b.upload ? b.upload(path) : { error: null }
+            },
+            remove: async (paths) => {
+              b.removes.push({ bucket, paths })
+              return b.remove ? b.remove(paths) : { data: [], error: null }
+            }
+          })
+        }
+      })
+    `,
+    'pairing.js': read('mobile/src/lib/pairing.js'),
+    'report-rules.js': read('mobile/src/lib/report-rules.js'),
+    'debugLog.js': read('mobile/src/lib/debugLog.js'),
+    'profile-photo.js': read('mobile/src/lib/profile-photo.js'),
+    'accountPhoto.js': esm(read('mobile/src/lib/accountPhoto.js'))
+  }
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+  /* React Native's FileReader, as the phone's fetch hands a Blob over: here the Blob carries its base64, and the reader gives it back as a data address of the kind the server sent. */
+  const was = globalThis.FileReader
+  globalThis.FileReader = class {
+    readAsDataURL(blob) {
+      setTimeout(() => {
+        this.result = `data:application/octet-stream;base64,${blob.b64}`
+        this.onload?.()
+      }, 0)
+    }
+  }
+  try {
+    const photo = await import(`${pathToFileURL(join(dir, 'accountPhoto.js')).href}?bench=${++photoBenches}`)
+    const rules = await import(pathToFileURL(join(dir, 'profile-photo.js')).href)
+    return { photo, rules, bench, now: () => photo.useProfilePhoto(), done: () => { globalThis.FileReader = was; rmSync(dir, { recursive: true, force: true }) } }
+  } catch (err) {
+    globalThis.FileReader = was
+    rmSync(dir, { recursive: true, force: true })
+    throw err
+  }
+}
+
 async function rigOnTheBench(over = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'rig-'))
   const lib = (f) => read(`mobile/src/lib/${f}`)
@@ -12108,7 +12231,7 @@ export function run(test) {
      */
     const flat = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
     assert.doesNotMatch(flat, /placeholder="New password"/, 'a password box still sits open on the Setup page')
-    assert.match(flat, /<TipCard icon=\{mailIcon\} label="SIGNED IN" body=\{`\$\{account\.email\}\\nTap for your name and password`\}/, 'the account line is not the way in')
+    assert.match(flat, /<TipCard icon=\{mailIcon\} label="SIGNED IN" body=\{`\$\{account\.email\}\\nTap for your name, photo and password`\}/, 'the account line is not the way in')
     assert.match(flat, /<Sheet open=\{accountMenu\}/, 'the account line opens nothing')
     assert.match(flat, /label="Change password" sub="Type a new one here, twice"/, 'the sheet has no Change password')
     assert.match(flat, /await sendPasswordReset\(account\.email\)/, 'the sheet cannot send a reset email')
@@ -12121,6 +12244,275 @@ export function run(test) {
     assert.equal((box.match(/secureTextEntry/g) || []).length, 2, 'the password is not typed twice, hidden')
     assert.match(box, /export const PASSWORD_MIN = 6/)
     assert.match(box, /const ready = first\.length >= PASSWORD_MIN && first === again && !busy/, 'Change lights up before the two match')
+  })
+
+  /*
+   * A PROFILE PHOTO (Justin, 7 November 2026): "puts a little profile photo
+   * up next to [the Live pill] ... [People] that don't have the picture just
+   * have a picture of a silhouette of a person, and if they tap that, it will
+   * take them to their profile to edit it." What the phone keeps and when,
+   * run on the bench: the copy on the device first, the bucket after, and
+   * nothing but the bucket's own "there is none" takes the copy away.
+   */
+  test('the profile photo shows from the copy on the phone at once, and only the bucket saying there is none takes it away', async () => {
+    const USER = '7dfe6912-e43b-49bf-84e4-b56afbd442b1'
+    const OTHER = '11111111-2222-4333-8444-555555555555'
+    const who = { id: USER, email: 'player@example.com' }
+    const { keepPhoto } = await import('../shared/profile-photo.mjs')
+    const kept = (id, b64) => ({ 'fractal.profilePhoto': keepPhoto(id, `data:image/jpeg;base64,${b64}`, 1) })
+
+    /* Signed in with a signal: the kept copy at once, then the bucket's, kept in its place. */
+    {
+      let answer
+      const held = new Promise((r) => (answer = r))
+      const t = await photoOnTheBench({ disk: kept(USER, JPEG_A), session: USER, download: () => held })
+      try {
+        const going = t.photo.showPhotoFor(who)
+        await new Promise((r) => setTimeout(r, 5))
+        assert.deepEqual(t.now(), { id: USER, uri: `data:image/jpeg;base64,${JPEG_A}` }, 'the kept photo waits for the bucket')
+        answer(JPEG_B)
+        await going
+        assert.deepEqual(t.now(), { id: USER, uri: `data:image/jpeg;base64,${JPEG_B}` }, 'the bucket’s photo is not the one shown')
+        assert.deepEqual(t.bench.downloads, [{ bucket: 'profile-photos', path: `${USER}/photo.jpg` }])
+        assert.equal(JSON.parse(t.bench.disk['fractal.profilePhoto']).uri, `data:image/jpeg;base64,${JPEG_B}`, 'the phone does not keep the photo it fetched')
+        /* Asked once per account while the app runs: the same account again asks nothing. */
+        await t.photo.showPhotoFor(who)
+        assert.equal(t.bench.downloads.length, 1, 'the bucket was asked again for an account it has answered')
+      } finally {
+        t.done()
+      }
+    }
+    /* No signal, a refused pass, a sign-in supabase-js does not hold for this account: the kept copy stays. */
+    for (const [why, over] of [
+      ['no signal', { session: USER, download: () => ({ error: { name: 'StorageUnknownError', message: 'Network request failed' } }) }],
+      ['a pass refused', { session: USER, download: () => ({ error: { name: 'StorageApiError', status: 400, statusCode: '403', message: 'jwt expired' } }) }],
+      ['no sign-in held', { session: null }],
+      ['another sign-in held', { session: OTHER }]
+    ]) {
+      const t = await photoOnTheBench({ disk: kept(USER, JPEG_A), ...over })
+      try {
+        await t.photo.showPhotoFor(who)
+        assert.equal(t.now().uri, `data:image/jpeg;base64,${JPEG_A}`, `${why}: the kept photo went`)
+        assert.ok(t.bench.disk['fractal.profilePhoto'], `${why}: the copy on the phone went`)
+        if (!over.session || over.session !== USER) assert.equal(t.bench.downloads.length, 0, `${why}: the bucket was asked without the account’s own pass`)
+      } finally {
+        t.done()
+      }
+    }
+    /* The bucket saying there is none, as either version of Storage says it: the silhouette, and nothing kept. */
+    for (const gone of [{ name: 'StorageApiError', status: 400, statusCode: '404', message: 'Object not found' }, { name: 'StorageApiError', status: 404, statusCode: '404', message: 'not_found' }]) {
+      const t = await photoOnTheBench({ disk: kept(USER, JPEG_A), session: USER, download: () => ({ error: gone }) })
+      try {
+        await t.photo.showPhotoFor(who)
+        assert.deepEqual(t.now(), { id: USER, uri: null }, 'a photo removed elsewhere is still shown')
+        assert.equal(t.bench.disk['fractal.profilePhoto'], undefined)
+      } finally {
+        t.done()
+      }
+    }
+    /* Another account's copy is never shown, and does not stay; signed out, or a pairing code's account, is nobody. */
+    {
+      const t = await photoOnTheBench({ disk: kept(OTHER, JPEG_A), session: USER })
+      try {
+        await t.photo.showPhotoFor(who)
+        assert.deepEqual(t.now(), { id: USER, uri: null }, 'another account’s photo is shown')
+        assert.equal(t.bench.disk['fractal.profilePhoto'], undefined, 'another account’s photo stays on the phone')
+      } finally {
+        t.done()
+      }
+    }
+    for (const nobody of [null, { id: USER, email: 'abcd-efgh@pair.fractal.newbold.cloud' }]) {
+      const t = await photoOnTheBench({ disk: kept(USER, JPEG_A), session: USER })
+      try {
+        await t.photo.showPhotoFor(nobody)
+        assert.deepEqual(t.now(), { id: null, uri: null }, 'nobody signed in has a circle')
+        assert.equal(t.bench.disk['fractal.profilePhoto'], undefined, 'the photo stays on the phone after its account has gone')
+        assert.equal(t.bench.downloads.length, 0)
+      } finally {
+        t.done()
+      }
+    }
+    /* A copy that is not a JPEG is no photo. */
+    const { keptPhoto, photoUri, jpegBase64, photoGone, photoPath, avatarShown } = await import('../shared/profile-photo.mjs')
+    assert.equal(keptPhoto(JSON.stringify({ id: USER, uri: 'data:image/png;base64,iVBORw0KGgo=' }), USER), null)
+    assert.equal(keptPhoto('not json', USER), null)
+    assert.equal(keptPhoto(keepPhoto(USER, JPEG_A), null), null)
+    assert.equal(photoUri(`data:application/octet-stream;base64,${JPEG_A}`), `data:image/jpeg;base64,${JPEG_A}`, 'what the reader hands back is not drawn as a JPEG')
+    assert.equal(jpegBase64('javascript:alert(1)'), null)
+    assert.ok(!photoGone(null) && !photoGone({ name: 'StorageUnknownError', status: 404 }) && photoGone({ name: 'StorageApiError', status: 400, statusCode: '404' }))
+    assert.equal(photoPath('../x'), null)
+    assert.equal(photoPath(USER.toUpperCase()), `${USER}/photo.jpg`)
+    assert.equal(avatarShown({ demo: true, account: { id: USER } }), false, 'the demo shows somebody’s photo')
+    assert.equal(avatarShown({ demo: false, account: { id: null } }), false)
+    assert.equal(avatarShown({ demo: false, account: { id: USER } }), true)
+  })
+
+  test('Add a photo crops it square and small, puts it in the account’s own place, and Remove photo takes it out', async () => {
+    const USER = '7dfe6912-e43b-49bf-84e4-b56afbd442b1'
+    const who = { id: USER, email: 'player@example.com' }
+    const { PHOTO_BYTES, PHOTO_EDGE, PHOTO_QUALITIES, PHOTO_WORDS } = await import('../shared/profile-photo.mjs')
+    /* Picked, squared from the middle of a picture wider than tall, and saved at the best quality under the cap. */
+    {
+      const big = Buffer.alloc(PHOTO_BYTES + 1, 7)
+      big[0] = 0xff
+      big[1] = 0xd8
+      big[2] = 0xff
+      const t = await photoOnTheBench({
+        session: USER,
+        picked: { canceled: false, assets: [{ uri: 'file:///picked.jpg', width: 4000, height: 3000 }] },
+        image: { width: 4000, height: 3000 },
+        saved: (compress) => (compress === PHOTO_QUALITIES[0] ? big.toString('base64') : JPEG_B)
+      })
+      try {
+        await t.photo.showPhotoFor(who)
+        const said = []
+        assert.equal(await t.photo.choosePhoto({ onPicked: () => said.push('picked') }), true)
+        assert.deepEqual(said, ['picked'])
+        assert.deepEqual(t.bench.pickerAsked, { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1, exif: false }, 'the picker is not the square-cropping, picked-only one')
+        assert.deepEqual(t.bench.crops, [{ originX: 500, originY: 0, width: 3000, height: 3000 }], 'the photo is not squared from the middle')
+        assert.deepEqual(t.bench.resizes, [{ width: PHOTO_EDGE, height: PHOTO_EDGE }])
+        assert.deepEqual(t.bench.saves.map((s) => s.compress), PHOTO_QUALITIES.slice(0, 2), 'the qualities were not tried best first, or past the one that fit')
+        assert.ok(t.bench.saves.every((s) => s.format === 'jpeg' && s.base64 === true))
+        assert.equal(t.bench.uploads.length, 1)
+        const up = t.bench.uploads[0]
+        assert.equal(up.bucket, 'profile-photos')
+        assert.equal(up.path, `${USER}/photo.jpg`, 'the photo went somewhere other than the account’s one place')
+        assert.deepEqual(up.options, { contentType: 'image/jpeg', upsert: true, cacheControl: '0' }, 'Change photo cannot replace the one there')
+        assert.deepEqual(Buffer.from(up.body).toString('base64'), JPEG_B, 'the bytes sent are not the photo')
+        assert.deepEqual(t.now(), { id: USER, uri: `data:image/jpeg;base64,${JPEG_B}` }, 'the top bar does not show the new photo')
+        assert.equal(JSON.parse(t.bench.disk['fractal.profilePhoto']).uri, `data:image/jpeg;base64,${JPEG_B}`)
+
+        /* Remove photo: out of the bucket, then off the phone and the bar. */
+        await t.photo.removePhoto()
+        assert.deepEqual(t.bench.removes, [{ bucket: 'profile-photos', paths: [`${USER}/photo.jpg`] }])
+        assert.deepEqual(t.now(), { id: USER, uri: null })
+        assert.equal(t.bench.disk['fractal.profilePhoto'], undefined)
+      } finally {
+        t.done()
+      }
+    }
+    /* Closed without a picture: nothing said, nothing sent. Too big at every quality, or refused by the bucket: said in plain words, nothing changed. */
+    {
+      const t = await photoOnTheBench({ session: USER })
+      try {
+        await t.photo.showPhotoFor(who)
+        assert.equal(await t.photo.choosePhoto(), false)
+        assert.equal(t.bench.uploads.length, 0)
+      } finally {
+        t.done()
+      }
+    }
+    for (const [why, over, words] of [
+      ['too big', { saved: () => Buffer.alloc(PHOTO_BYTES + 10, 0xff).toString('base64').replace(/^/, '/9j/') }, PHOTO_WORDS.tooBig],
+      ['refused', { upload: () => ({ error: { name: 'StorageApiError', status: 403, message: 'new row violates row-level security policy' } }) }, PHOTO_WORDS.notSaved]
+    ]) {
+      const t = await photoOnTheBench({ session: USER, picked: { canceled: false, assets: [{ uri: 'file:///p.jpg', width: 800, height: 800 }] }, ...over })
+      try {
+        await t.photo.showPhotoFor(who)
+        await assert.rejects(t.photo.choosePhoto(), (err) => err.message === words, `${why}: not said in plain words`)
+        assert.deepEqual(t.now(), { id: USER, uri: null }, `${why}: the bar changed`)
+        assert.equal(t.bench.disk['fractal.profilePhoto'], undefined)
+      } finally {
+        t.done()
+      }
+    }
+    /* A square picture is not cropped; a Remove the bucket refuses keeps the photo. */
+    {
+      const t = await photoOnTheBench({
+        session: USER,
+        download: () => JPEG_A,
+        picked: { canceled: false, assets: [{ uri: 'file:///p.jpg', width: 900, height: 900 }] },
+        image: { width: 900, height: 900 },
+        remove: () => ({ data: null, error: { name: 'StorageUnknownError', message: 'Network request failed' } })
+      })
+      try {
+        await t.photo.showPhotoFor(who)
+        await t.photo.choosePhoto()
+        assert.deepEqual(t.bench.crops, [], 'a square picture was cropped')
+        await assert.rejects(t.photo.removePhoto(), (err) => err.message === PHOTO_WORDS.notRemoved)
+        assert.equal(t.now().uri, `data:image/jpeg;base64,${JPEG_B}`, 'a photo the bucket kept is gone from the bar')
+      } finally {
+        t.done()
+      }
+    }
+    /* A slow answer from the bucket never undoes a photo changed here meanwhile. */
+    {
+      let answer
+      const held = new Promise((r) => (answer = r))
+      const t = await photoOnTheBench({ session: USER, download: () => held, picked: { canceled: false, assets: [{ uri: 'file:///p.jpg', width: 900, height: 900 }] } })
+      try {
+        const going = t.photo.showPhotoFor(who)
+        await new Promise((r) => setTimeout(r, 5))
+        await t.photo.choosePhoto()
+        answer(JPEG_A)
+        await going
+        assert.equal(t.now().uri, `data:image/jpeg;base64,${JPEG_B}`, 'the bucket’s older photo replaced the one just saved')
+      } finally {
+        t.done()
+      }
+    }
+  })
+
+  test('the top bar draws the account’s photo beside the pill, or a silhouette, and a tap opens Settings → your account with its sheet up', async () => {
+    const raw = read('mobile/src/components/TopBar.js')
+    const bar = withoutComments(raw).replace(/\s+/g, ' ')
+    /* Beside the pill, before it; only for somebody signed in here, never in the demo, and out of the way while Save needs the room. */
+    assert.match(bar, /const photo = useProfilePhoto\(\) const showPhoto = Boolean\(onOpenAccount\) && avatarShown\(\{ demo, account: photo \}\) && !canSave/, 'the photo shows in the demo, signed out, or beside Save')
+    assert.match(bar, /\{showPhoto \? \( <Pressable accessibilityRole="button" accessibilityLabel="Your account" accessibilityHint="Your name, photo and password" hitSlop=\{\{ top: 10, bottom: 10, left: 14, right: 6 \}\} onPress=\{\(\) => \{ tick\(\) onOpenAccount\(\) \}\} > <Avatar uri=\{photo\.uri\} size=\{24\} \/> <\/Pressable> \) : null\}/, 'the photo is not its own button, named Your account, opening the account')
+    assert.ok(raw.indexOf('<Avatar ') > raw.indexOf('v${APP_VERSION}') && raw.indexOf('<Avatar ') < raw.indexOf('{pill.status}'), 'the photo is not between the version and the pill')
+    /* A thumb's 44 each way, and the pill keeps the overlap it reaches into. */
+    assert.ok(10 + 24 + 10 >= 44 && 14 + 24 + 6 >= 44, 'the photo is smaller than a thumb')
+    /* The silhouette is drawn, not a picture: nothing new in the app's files. */
+    const avatar = withoutComments(read('mobile/src/components/Avatar.js')).replace(/\s+/g, ' ')
+    assert.match(avatar, /\{uri \? \( <Image source=\{\{ uri \}\} accessible=\{false\} resizeMode="cover"/)
+    assert.doesNotMatch(avatar, /require\(|from '\.\.\/\.\.\/assets/, 'the silhouette is a picture file, which is something new in the app')
+    assert.doesNotMatch(avatar, /classic\(\)|color\.glass|GlassDisc|BlurView/, 'the circle reads the glass, and Classic is not held to it')
+
+    /* App: the photo for whoever is signed in, read off the phone; a tap opens the account page with its sheet. */
+    const app = withoutComments(read('mobile/App.js')).replace(/\s+/g, ' ')
+    assert.match(app, /const openSettings = \(at = null, sheet = false\) => \{ setSettingsAt\(at\) setAccountSheet\(sheet\) setSettingsVisit\(\(n\) => n \+ 1\) setScreen\('settings'\) \}/)
+    assert.match(app, /const openAccount = \(\) => openSettings\('account', true\)/)
+    assert.match(app, /onOpenAccount=\{openAccount\}/)
+    assert.match(app, /if \(auth === 'checking'\) return undefined let alive = true ;\(auth === 'out' \? Promise\.resolve\(null\) : keptAccount\(\)\) \.then\(\(who\) => alive && showPhotoFor\(who\)\)/, 'the photo is not for whoever the phone says is signed in, or stays after a sign-out')
+    assert.match(app, /openAccountSheet=\{accountSheet\} onAccountSheet=\{\(\) => setAccountSheet\(false\)\}/)
+
+    /* Settings: the sheet opens once, on the account page, for an account the service vouched for; the rows are the photo's own. */
+    const settings = withoutComments(read('mobile/src/screens/Settings.js')).replace(/\s+/g, ' ')
+    assert.match(settings, /useEffect\(\(\) => \{ if \(!openAccountSheet \|\| !asked\) return onAccountSheet\?\.\(\) if \(page !== 'account' \|\| !signedInAs\) return setNote\(null\) setError\(null\) setPhotoSaid\(null\) setAccountMenu\(true\) \}, \[openAccountSheet, asked\]\)/, 'the sheet does not come up from the top bar, or comes up more than once')
+    assert.match(settings, /const photoHere = Boolean\(signedInAs && photo\.id && photo\.id === account\?\.id\)/, 'a photo can be saved to an account the sheet is not about')
+    assert.match(settings, /label=\{photoBusy === 'saving' \? PHOTO_WORDS\.saving : photo\.uri \? PHOTO_WORDS\.change : PHOTO_WORDS\.add\}/)
+    assert.match(settings, /\{photo\.uri \? \( <Press label=\{photoBusy === 'removing' \? PHOTO_WORDS\.removing : PHOTO_WORDS\.remove\}/, 'Remove photo shows with no photo, or not at all')
+    assert.match(settings, /<Sheet open=\{accountMenu\} onClose=\{\(\) => \(photoBusy \? null : setAccountMenu\(false\)\)\} title="Your account"/, 'the sheet can be closed under a photo being saved')
+    const { PHOTO_WORDS } = await import('../shared/profile-photo.mjs')
+    for (const words of Object.values(PHOTO_WORDS)) assert.doesNotMatch(words, /this (phone|iphone|device)/i)
+  })
+
+  /*
+   * ON THE NARROWEST IPHONE, 320 points: the photo costs the bar 36 (its 24
+   * and one more 12 between), and the pill and the gear lose none of what
+   * they need. Worked from the bar's own numbers: its side padding and gap,
+   * the speaker's 24 and the gear's 22, and the pill's words in Menlo, 0.602
+   * of its 13 a letter, as the phone draws them. Beside Save there is no
+   * photo, so the bar is as it was.
+   */
+  test('on a 320-point phone the photo leaves the pill every unit’s name whole, and the gear its place', async () => {
+    const { space, font } = await import('../mobile/src/lib/theme.js')
+    const bar = withoutComments(read('mobile/src/components/TopBar.js')).replace(/\s+/g, ' ')
+    assert.match(bar, /gap: space\.md, paddingHorizontal: space\.lg,/)
+    const photo = Number(/<Avatar uri=\{photo\.uri\} size=\{(\d+)\} \/>/.exec(bar)?.[1])
+    assert.equal(photo, 24)
+    const speaker = 24
+    const gear = 22
+    const inside = 320 - 2 * space.lg
+    /* The version, the photo, the pill, the speaker and the gear: four gaps. The version gives way first, to nothing. */
+    const room = inside - 4 * space.md - photo - speaker - gear
+    const letter = 0.602 * font.small
+    /* The pill: its border and padding, the word, the lamp's 8 with a gap each side, and the unit. */
+    const pill = (status, unit) => 2 + 2 * space.sm + status.length * letter + space.sm + 8 + space.sm + unit.length * letter
+    for (const unit of ['FM3', 'AM4', 'FM9', 'VP4', 'Axe-Fx III']) assert.ok(pill('Live', unit) <= room, `Live ● ${unit} is cut on a 320-point phone with the photo (${pill('Live', unit).toFixed(1)} of ${room})`)
+    assert.ok(pill('Not answering', 'FM3') <= room, 'Not answering ● FM3 is cut on a 320-point phone with the photo')
+    /* And beside Save the photo steps out, so the pill has what it had before the photo came. */
+    assert.match(bar, /const showPhoto = [^\n]*&& !canSave/, 'the photo stays beside Save, where a 320-point phone has no room for it')
   })
 
   test('the way into the chain editor is called Edit chain', () => {

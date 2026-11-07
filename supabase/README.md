@@ -738,6 +738,59 @@ Accounts made before are never asked, and have none.
 3. Developer → Customers → Everyone with an account: the name is under the
    address, and typing part of it in the find box finds the row.
 
+## A profile photo on an account (7 November 2026)
+
+"Let's also add an ability to add a profile photo that also puts a little
+profile photo up next to [the Live pill] ... [People] that don't have the
+picture just have a picture of a silhouette of a person, and if they tap
+that, it will take them to their profile to edit it." On the phone app:
+Settings → your account → Add a photo (or Change photo, Remove photo), and
+a small circle beside the top bar's pill that opens it. The website and the
+computer app do not show it. Two pieces here:
+
+- `migrations/20261107_user_profile_photos.sql` — the private bucket
+  `profile-photos` (JPEG only, 128 KB a file), and four rules on it, one
+  each for putting in, replacing, reading and removing, all for a signed-in
+  account and its own `<account id>/photo.jpg` only. Nothing for anybody
+  signed out. And `profile_photos_room()`, which refuses a new photo once the
+  bucket holds 250 MB.
+- `functions/_shared/forget-account.ts` — Delete account, and Delete on
+  Developer → Accounts, delete the account's photo before the account. Two
+  functions carry this file, `delete-account` and `grant-access`, so both
+  are deployed again.
+
+### Putting it live, in this order
+
+1. **Apply `20261107_user_profile_photos.sql`.** Nothing anybody sees
+   changes: no copy out today asks for the bucket.
+2. **Deploy delete-account**: `supabase functions deploy delete-account`
+   (it checks the caller's sign-in itself, and keeps the JWT check it has).
+3. **Deploy grant-access**: `supabase functions deploy grant-access`
+   (verify JWT on, as it is).
+4. **Merge the app**, with every check green. It goes out as an update (no
+   build: the fingerprint is Unchanged).
+
+Out of order, nothing breaks. Merged before step 1, Add a photo says "The
+photo couldn't be saved" and the circle stays a silhouette. Before steps 2
+and 3, deleting an account leaves its photo behind in the bucket, under the
+deleted account's id, where nobody can reach it through the app; it is then
+deleted by hand on the dashboard's Storage page. So deploy both before the
+merge.
+
+### Checking it
+
+```sql
+-- private, JPEG only, 128 KB
+select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'profile-photos';
+-- four rules, all for signed-in accounts, each on the account's own photo.jpg
+select polname, polcmd, polroles::regrole[], pg_get_expr(polqual, polrelid), pg_get_expr(polwithcheck, polrelid)
+from pg_policy where polrelid = 'storage.objects'::regclass and polname like 'a profile photo%';
+```
+
+After the merge, Settings → your account → Add a photo on the phone puts
+one file at `<account id>/photo.jpg` in the bucket, the top bar's circle
+shows it, and Delete account leaves the folder empty.
+
 ## How many people, day by day (counts only, naming nobody)
 
 "A day-by-day history of how many people use the app, on your Developer

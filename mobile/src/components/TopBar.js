@@ -27,6 +27,9 @@ import { fire } from '../lib/tapped'
 import { useSaveToSlot } from './SaveToSlot'
 import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS } from '../lib/save-wait'
 import { deviceNoun } from '../lib/device-word'
+import Avatar from './Avatar'
+import { useProfilePhoto } from '../lib/accountPhoto'
+import { avatarShown } from '../lib/profile-photo'
 
 const face = Platform.select(mono)
 
@@ -54,7 +57,7 @@ const face = Platform.select(mono)
  * The words come from shared/link-word.mjs rather than from here, so the two
  * apps cannot drift into saying different things about the same link.
  */
-export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, saveHere: saveWanted = true }) {
+export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, saveHere: saveWanted = true, onOpenAccount = null }) {
   const unit = useRig(ofDeviceName)
   const unitState = useRig(ofUnitState)
   const blocks = useRig(ofAllBlocks)
@@ -247,6 +250,17 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    */
   const hasOutput = connected && Number.isInteger(idOf((blocks || []).find((b) => b?.slug === 'output')))
 
+  /*
+   * THE ACCOUNT'S PHOTO, beside the pill, or a silhouette where there is
+   * none, and a tap on it opens Settings → your account (Justin, 7 November
+   * 2026). Only for somebody signed in to an account on this device, never
+   * in the demo (shared/profile-photo avatarShown), and out of the way while
+   * Save needs the room, as the version is: beside Save, a 320-point phone
+   * has no room left for it without cutting into the pill.
+   */
+  const photo = useProfilePhoto()
+  const showPhoto = Boolean(onOpenAccount) && avatarShown({ demo, account: photo }) && !canSave
+
   return (
     /*
      * GLASS, AND IT COSTS NOTHING TO ADD.
@@ -326,6 +340,22 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
           {`v${APP_VERSION}`}
         </Text>
       )}
+
+      {/* A thumb's 44 each way round its 24: the version beside it takes no touch, and the pill, drawn after, has the 12 between them. */}
+      {showPhoto ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Your account"
+          accessibilityHint="Your name, photo and password"
+          hitSlop={{ top: 10, bottom: 10, left: 14, right: 6 }}
+          onPress={() => {
+            tick()
+            onOpenAccount()
+          }}
+        >
+          <Avatar uri={photo.uri} size={24} />
+        </Pressable>
+      ) : null}
 
       {/*
         THE PILL: WHICH UNIT, ON WHICH COMPUTER, AND THE WAY TO ANOTHER.

@@ -2447,7 +2447,8 @@ export function run(test) {
     }
     assert.ok(cleanup(self).length > 6, 'delete-account did less than this test expects')
     assert.deepEqual(cleanup(page), cleanup(self), 'Developer → Accounts deletes differently from the app’s own Delete account')
-    for (const want of [`${PROJECT}/rest/v1/feedback?user_id=eq.${CUSTOMER}`, `${PROJECT}/storage/v1/object/report-shots`, `${PROJECT}/auth/v1/admin/users/${CUSTOMER}`, `${RC_PROJECT}/customers/${CUSTOMER}`]) {
+    /* The profile photo's bucket since 7 November 2026: the account's one photo goes the same way from either. */
+    for (const want of [`${PROJECT}/rest/v1/feedback?user_id=eq.${CUSTOMER}`, `${PROJECT}/storage/v1/object/report-shots`, `${PROJECT}/storage/v1/object/profile-photos`, `${PROJECT}/auth/v1/admin/users/${CUSTOMER}`, `${RC_PROJECT}/customers/${CUSTOMER}`]) {
       assert.ok(cleanup(page).some(([method, url]) => method === 'DELETE' && url === want), `${want} was not deleted`)
     }
     /* One file says it, and both import it: neither function keeps a copy of its own. */
