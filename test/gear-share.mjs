@@ -469,7 +469,19 @@ export function run(test) {
     assert.match(card, /label=\{SHARE_NO\}[^\n]*onAnswer\?\.\(false\)/)
     /* Shown after the independent card and the walkthrough, signed in and past the paywall, never in the demo, in Play's place. */
     const app = read('mobile/App.js')
-    assert.match(app, /const askShare = shareDue && auth === 'in' && !demo\n/, 'the sharing card can come in the demo or before the sign-in')
+    /*
+     * And only at a launch after a unit has connected on this device
+     * (connectedBefore, lib/howConnect), since 7 November 2026: straight
+     * after the trial it was one more card between paying and playing,
+     * about gear that had not connected yet. Read once at launch, so it
+     * never comes up over a rig that has just answered.
+     */
+    assert.match(app, /const askShare = shareDue && connectedBefore && auth === 'in' && !demo\n/, 'the sharing card can come in the demo, before the sign-in, or before a unit has ever connected here')
+    assert.match(app, /readHowConnect\(\)\.then\(\(kept\) => setConnectedBefore\(kept\.connectedBefore\)\)/, 'whether a unit has connected here is not read at launch')
+    assert.ok(!/setConnectedBefore\(true\)/.test(app), 'the sharing card comes up the moment a unit first answers, over the rig')
+    assert.match(read('mobile/src/lib/howConnect.js'), /export function unitConnected\(\) \{[\s\S]*?AsyncStorage\.setItem\(CONNECTED_KEY, 'yes'\)/, 'a first connection is not kept for the next launch')
+    /* And How do you connect to your unit? comes before it, in Play's place too (components/HowConnect). */
+    assert.ok(app.indexOf(') : askHow ? (') > app.indexOf(") : auth === 'paywall' ? (") && app.indexOf(') : askHow ? (') < app.indexOf(') : askShare ? ('), 'How do you connect is not between the purchase page and the sharing card')
     const at = (s) => app.indexOf(s)
     assert.ok(at(') : independentDue ? (') > 0 && at(') : independentDue ? (') < at(') : askShare ? ('), 'the sharing card can come before "An independent app"')
     assert.ok(at(') : seenWalk === false ? (') < at(') : askShare ? ('), 'the sharing card can come before the walkthrough')

@@ -632,6 +632,19 @@ export const AREAS = [
         web: null,
         phone: 'Done',
         why: 'signing in is a page in the browser, with nothing to close'
+      },
+      {
+        does: 'connect over Bluetooth instead of a computer',
+        web: null,
+        phone: 'Connect over Bluetooth',
+        /*
+         * "Everything that mentions how to connect to a computer also
+         * mentions how to connect to Bluetooth and putting Bluetooth first on
+         * everything" (Justin, 7 November 2026, of Connect a computer). The
+         * browser says instead where Bluetooth is, in one line with the
+         * stores (src/components/BluetoothInApps.jsx, shared/stores.mjs).
+         */
+        why: 'phone only — a browser cannot reach a Bluetooth MIDI adapter; it says in one line that Bluetooth is in the iPhone, iPad and Android apps and that a web browser connects through a computer only (src/components/BluetoothInApps.jsx)'
       }
     ]
   },
@@ -1459,6 +1472,8 @@ export function run(test) {
       'One-time payment, with every future update, on the',
       'It unlocks on every phone or tablet you sign in on.',
       'Presets, scenes, amp & effect blocks, the tuner, tap tempo, setlists and more.',
+      /* What a VP4 gets, one tap away at both ends since 7 November 2026 ("Way too much text, should not have to scroll"). */
+      'On a VP4? See what works',
       'Unlock Full Version — ${'
     ]) {
       assert.ok(norm(phone).includes(line), `the phone paywall no longer says: ${line}`)
@@ -1470,11 +1485,15 @@ export function run(test) {
      * we need to put that in there for now." The VP4 is named above among the
      * units this unlocks, so the line comes with it; shared/vp4-safety.mjs
      * words it, and test/vp4-safety.mjs holds the words to what the app does.
+     * ONE TAP AWAY since 7 November 2026, under a line that says it is there,
+     * at both ends: "Way too much text, should not have to scroll." Its
+     * words are as they were.
      */
     assert.match(phone, /import \{ VP4_SO_FAR \} from '\.\.\/lib\/vp4-safety'/, 'the phone paywall does not take its VP4 line from the shared rule')
     assert.match(web, /import \{ VP4_SO_FAR \} from '\.\.\/shared\/vp4-safety\.mjs'/, 'the web unlock page does not take its VP4 line from the shared rule')
-    assert.match(phone, /setlists and more\.\s*<\/Text>[\s\S]{0,1200}?<Text[^>]*>\s*\{VP4_SO_FAR\}\s*<\/Text>\s*<\/View>/, 'the phone paywall does not say what a VP4 gets, under the list of what the app does')
-    assert.match(page, /setlists and more\.\s*<\/p>[\s\S]{0,300}?<p className="hint">\{VP4_SO_FAR\}<\/p>/, 'the web unlock page does not say what a VP4 gets, under the list of what the app does')
+    assert.match(phone, /setlists and more\.\s*<\/Text>[\s\S]{0,1600}?onPress=\{\(\) => setVp4Open\(\(open\) => !open\)\}[^>]*>\s*On a VP4\? See what works\s*<\/Text>\s*\{vp4Open \? \(\s*<Text[^>]*>\s*\{VP4_SO_FAR\}\s*<\/Text>\s*\) : null\}\s*<\/View>/, 'the phone paywall does not say what a VP4 gets, one tap under the list of what the app does')
+    assert.match(phone, /const \[vp4Open, setVp4Open\] = useState\(false\)/)
+    assert.match(page, /setlists and more\.\s*<\/p>[\s\S]{0,600}?<details className="unlock-vp4">\s*<summary>On a VP4\? See what works<\/summary>\s*<p className="hint">\{VP4_SO_FAR\}<\/p>\s*<\/details>/, 'the web unlock page does not say what a VP4 gets, one tap under the list of what the app does')
     /* The Setup row is the phone's row, word for word. */
     const settings = read('mobile/src/screens/Settings.js')
     assert.match(settings, /title="Unlock the full version"/, 'the phone renamed its unlock row')
@@ -2275,7 +2294,7 @@ export function run(test) {
     assert.match(link.slice(link.indexOf('async function turnOnMac')), /await cloudLogin\(email, password\)[\s\S]{0,200}await remoteEnable\(true\)/, 'the set-up turns the phone remote on without signing the device server in')
   })
 
-  test('a phone gets the phone’s walkthrough, in the browser too', () => {
+  test('a phone gets the phone’s walkthrough, in the browser too', async () => {
     const app = read('src/App.jsx')
     const web = read('src/components/PhoneWalkthrough.jsx')
     const phone = read('mobile/src/screens/Onboarding.js')
@@ -2312,7 +2331,16 @@ export function run(test) {
     assert.ok(phone.replace(/\s+/g, ' ').includes('{twoWays ? WALKTHROUGH_TWO_WAYS.demoSub : P9.demo.sub}'), 'the phone’s walkthrough says P9.demo.sub on a copy that opens Bluetooth, or no longer says it at all')
     assert.ok(web.includes('{P3.real.agree}'), 'the browser’s box before Unlock says something other than his sentence, and the browser does need the computer')
     assert.ok(phone.includes('label={twoWays ? WALKTHROUGH_TWO_WAYS.agree : P3.real.agree}'), 'the phone’s box before Unlock does not say both ways where Bluetooth is open, or his sentence everywhere else')
-    assert.ok(!/bluetooth-gear|WALKTHROUGH_TWO_WAYS|twoWays|Bluetooth/.test(web), 'the browser’s phone walkthrough offers Bluetooth, which a browser does not have')
+    /*
+     * Never a Bluetooth way: a browser has none. Since 7 November 2026 it
+     * says where Bluetooth is instead, in one line from one component
+     * (src/components/BluetoothInApps.jsx): "That is available only in the
+     * apps, not on the website version ... it was confusing for me cause I
+     * kept trying to find Bluetooth" (Justin). That line, and nothing else.
+     */
+    const inApps = (text) => text.replace(/<BluetoothInApps\b[^>]*\/>|import BluetoothInApps from '\.\/BluetoothInApps'/g, ' ')
+    assert.ok(!/bluetooth-gear|WALKTHROUGH_TWO_WAYS|twoWays|Bluetooth/.test(inApps(web)), 'the browser’s phone walkthrough offers Bluetooth, which a browser does not have')
+    assert.match(web, /\{computer \? null : <BluetoothInApps className="pw-note" \/>\}/, 'the browser’s How it works does not say where Bluetooth is, or says it on the computer')
     /*
      * And the browser's sign-in screen: Get connected is the computer's three
      * steps there, and only there. The phone adds the Bluetooth way under
@@ -2320,10 +2348,38 @@ export function run(test) {
      * Bluetooth adapter, so nothing it draws for signing in names one.
      */
     for (const f of ['src/components/ConnectScreen.jsx', 'src/components/SignIn.jsx', 'src/components/SignInSheet.jsx']) {
-      const drawn = read(f).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+      const drawn = inApps(read(f).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' '))
       assert.ok(!/bluetooth-gear|WALKTHROUGH_TWO_WAYS|twoWays|Bluetooth/i.test(drawn), `${f} offers Bluetooth on the browser’s sign-in screen, which a browser does not have`)
     }
     assert.ok(read('mobile/src/screens/SignIn.js').includes('{WALKTHROUGH_TWO_WAYS.setup}'), 'the phone’s sign-in screen no longer says the Bluetooth way; the browser’s check above follows it')
+    /*
+     * AND THE ONE LINE THE BROWSER DOES SAY, wherever it explains connecting:
+     * every screen of the connect page, How it works, Phone & computer,
+     * Troubleshooting and the unlock page. Bluetooth first, where it is (the
+     * iPhone, iPad and Android apps, with the stores that are open), and
+     * that a web browser connects through a computer only. Never in the
+     * computer app's own window, which is the computer.
+     */
+    const inAppsLine = read('src/components/BluetoothInApps.jsx')
+    assert.match(inAppsLine, /import \{ BLUETOOTH_IN_APPS, STORES \} from '\.\.\/\.\.\/shared\/stores\.mjs'/)
+    assert.match(inAppsLine, /if \(inDesktopApp\(\)\) return null/, 'the computer app’s window says where Bluetooth is, about itself')
+    assert.match(inAppsLine, /STORES\.filter\(\(s\) => s\.live\)/, 'the line links a store that is not open')
+    const { BLUETOOTH_IN_APPS } = await import('../shared/stores.mjs')
+    /* The iPad by name: the App Store app is the iPhone and iPad app, and Bluetooth works on an iPad (the review of 7 November 2026). */
+    assert.equal(BLUETOOTH_IN_APPS, 'Bluetooth, with no computer, is in the iPhone, iPad and Android apps. A web browser connects through a computer only.')
+    const connectScreen = read('src/components/ConnectScreen.jsx').replace(/\s+/g, ' ')
+    /* First on the first screen and on Connecting… too, before the computer's steps and its search (the review of 7 November 2026). */
+    assert.match(connectScreen, /<h2>\{SETUP\.title\}<\/h2> \{[^}]*\} <BluetoothInApps \/> <Steps \/>/, 'the browser’s first screen does not say where Bluetooth is, first')
+    assert.match(connectScreen, /<h2>Connecting…<\/h2> \{[^}]*\} <BluetoothInApps \/> <p>Finding your computer\.<\/p>/, 'Connecting… does not say where Bluetooth is, first')
+    /* And on the two screens a customer with no computer is left on: Your computer isn’t answering, and Connect to your computer (the review of 7 November 2026). */
+    assert.match(connectScreen, /<h2>Your computer isn&rsquo;t answering<\/h2> \{[^}]*\} <BluetoothInApps \/>/, 'Your computer isn’t answering does not say where Bluetooth is, first')
+    assert.match(connectScreen, /<h2>Connect to your computer<\/h2> \{[^}]*\} <BluetoothInApps \/>/, 'Connect to your computer does not say where Bluetooth is, first')
+    assert.equal((connectScreen.match(/<BluetoothInApps \/>/g) || []).length, 4, 'the browser’s connect screen says where Bluetooth is somewhere else as well, or lost one')
+    const webApp = read('src/App.jsx').replace(/\s+/g, ' ')
+    assert.match(webApp, /\{\/\* Bluetooth first, and where it is: [^}]*\} <BluetoothInApps \/> <ChainCards/, 'Phone & computer in the browser does not say where Bluetooth is, first')
+    assert.match(webApp, /<\/details> \{[^}]*\} <BluetoothInApps \/>/, 'the browser’s unlock page does not say where Bluetooth is')
+    /* And Troubleshooting, first, before the fixes, as the phone's Fixes opens on its own Bluetooth line (the review of 7 November 2026). */
+    assert.match(webApp, /\{\/\* Bluetooth first, and where it is: in the apps, never a browser [^}]*\} <BluetoothInApps \/> <div className="fixes"> \{FIXES\.map\(/, 'the browser’s Troubleshooting does not say where Bluetooth is, first')
     /* His pictures, the phone's own files, and the plain box that took the
        place of the two with Fractal's logo on them (test/independent.mjs). */
     for (const art of ['unit-plain.png', 'piece-computer.png', 'piece-phone.png']) {
@@ -2466,7 +2522,7 @@ export function run(test) {
     assert.match(phone, /accessibilityLabel=\{`\$\{\[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)\}\. \$\{pillGoes\}`\}/, 'the phone’s label changed; this check follows it')
     assert.match(web, /const said = \[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)/, 'the browser’s pill is read out in other words than the phone’s')
     assert.match(web, /aria-label=\{`\$\{said\}\. \$\{goes\}`\}/, 'the browser’s pill does not say where it goes, as the phone’s does')
-    assert.match(phone, /const pillGoes = demo \? 'Change the demo unit' : cable \? 'How it’s connected' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/)
+    assert.match(phone, /const pillGoes = demo \? 'Change the demo unit' : toBluetooth \? 'Connect over Bluetooth' : cable \? 'How it’s connected' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/)
     assert.match(web, /const goes = demo \? 'Change the demo unit' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/, 'the browser’s pill names a page it does not open')
     /*
      * And a change is said politely, from the held link, as the phone's bar

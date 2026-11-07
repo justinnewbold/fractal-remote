@@ -886,7 +886,14 @@ async function linkOnABench(t) {
       notes: [],
       resets: 0,
       tunerWrites: [],
-      app: []
+      app: [],
+      /* How often the adapter was let go of (releaseAdapter), and Bluetooth said off (bluetoothLooksOff). */
+      releases: 0,
+      offs: 0,
+      /* What bluetoothLooksOff answers: true when it found Bluetooth off (the module's search said so), false when it is on. */
+      offAnswer: true,
+      linkWaitsEnded: 0,
+      rekey: () => false
     }
 `,
     /* The app going to sleep and coming back: `screen(status)` in what the bench returns. */
@@ -904,7 +911,13 @@ async function linkOnABench(t) {
       export const noteBluetooth = (patch) => { bench.notes.push(patch) }
       export const onAdapter = (name, fn) => { bench.listeners.set(name, fn); return () => bench.listeners.delete(name) }
       export const refreshKeptAdapter = () => { bench.refreshed++; return false }
-      export const releaseAdapter = () => {}
+      /* The iPhone's adapter kept, back under a new id (lib/bluetooth adapterBackUnderNewId): bench.rekey() says whether it was, and chooses it. */
+      export const adapterBackUnderNewId = () => bench.rekey()
+      /* Android's no at once, said as Bluetooth off (lib/bluetooth bluetoothLooksOff): counted. */
+      export const bluetoothLooksOff = async () => { bench.offs++; return bench.offAnswer }
+      /* The link's own wait for Bluetooth, ended as it stops (lib/bluetooth endLinkWait): counted. */
+      export const endLinkWait = () => { bench.linkWaitsEnded++ }
+      export const releaseAdapter = () => { bench.releases++ }
       export const subscribeBluetooth = (fn) => { bench.watchers.push(fn); return () => {} }
       export const unitName = (u) => (u === 'am4' ? 'AM4' : 'FM3')
 `,
@@ -5777,11 +5790,12 @@ export function run(test) {
      */
     assert.match(waking, /\{bluetooth \? \( <View style=\{\{ alignSelf: 'stretch' \}\}> <Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/, 'the Bluetooth waiting screen has no way back to the computer')
     assert.ok(waking.indexOf('Use the computer instead') < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way back to the computer waits fifteen seconds')
-    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, adapterInsteadOfCable, allowBluetooth, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
+    /* turnOnBluetooth since 7 November 2026: the waiting screen's Turn on Bluetooth, under the note that says it is off. */
+    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, adapterInsteadOfCable, allowBluetooth, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, turnOnBluetooth, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     /* Handed only through the Settings row's own gate: test 'every way onto the Bluetooth page' holds it. */
     assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
-    assert.match(waking, /\{email && link\.link !== 'connected' && !bluetooth && !noneSaid \? \(/, 'the waiting screen names the computer’s account over Bluetooth')
+    assert.match(waking, /\{long && email && link\.link !== 'connected' && !bluetooth && !noneSaid && !elsewhere \? \(/, 'the waiting screen names the computer’s account over Bluetooth')
   })
 
   test('Settings offers Bluetooth only where it is open (his account on every copy, a customer’s only on a copy built to open it), unlocked, on a device and build that can do it', () => {
@@ -5824,13 +5838,19 @@ export function run(test) {
     assert.equal((settings.match(/label="BLUETOOTH \(BETA\)"/g) || []).length, 0, 'the old card is still on Phone & computer')
     assert.equal((settings.match(/<BluetoothPage /g) || []).length, 1, 'a second way onto the page skips the gate')
     assert.doesNotMatch(one, /bluetooth: 'link'/, 'back from the page goes to Phone & computer, not Settings')
-    /* On the front list, after Phone & computer and before the metronome. */
+    /*
+     * On the front list, first in My rig, over Phone & computer, since 7
+     * November 2026: "make sure it's Bluetooth first as far as connection
+     * options go" (Justin). It was after Phone & computer until then.
+     */
     const front = settings.slice(settings.indexOf('{page === null ? ('), settings.indexOf("{page === 'account' ? ("))
     const row = front.indexOf('title="Bluetooth"')
     /* The row is named by PAIR_TITLE (Phone & computer, or iPad & computer on an iPad): a literal title here was never found, and -1 held nothing. */
     const pair = front.indexOf('<SetupRow title={PAIR_TITLE}')
+    const rig = front.indexOf('<Group title="My rig"')
     assert.notEqual(pair, -1, 'the Settings list has no Phone & computer row; this check reads it')
-    assert.ok(row > pair && row < front.indexOf('title="Metronome"'), 'the row is not on the Settings list beside Phone & computer')
+    assert.ok(row > rig && rig > -1 && row < pair, 'the row is not first in My rig, over Phone & computer')
+    assert.equal((front.slice(rig, row).match(/<SetupRow\b/g) || []).length, 1, 'something is drawn in My rig over the Bluetooth row')
     /* Phone & computer, which the Live pill opens, has one button to the page (26 October 2026), behind the row's gate as one name. */
     const link = settings.slice(settings.indexOf("{page === 'link' ? ("), settings.indexOf("{page === 'bluetooth'"))
     assert.equal((link.match(/setPage\('bluetooth'\)/g) || []).length, 1, 'Phone & computer opens Bluetooth from more than one button')
@@ -5839,21 +5859,23 @@ export function run(test) {
     const at = settings.indexOf("{page === 'bluetooth'")
     assert.ok(at > settings.indexOf("{page === 'link' ? (") && at < settings.indexOf("{page === 'metronome' ? ("), 'the page moved into a slice another test reads')
     /*
-     * Said for the device in hand, and with the two ways to connect, the
-     * computer the best one (BLUETOOTH_WAYS): changed on purpose on 25
-     * October 2026 from "This phone talks to the unit directly".
+     * Said for the device in hand: changed on purpose on 25 October 2026
+     * from "This phone talks to the unit directly", and on 7 November 2026
+     * without the two ways after it, which sold somebody already on
+     * Bluetooth the computer again.
      */
     /* And on a USB cable, the cable's own note (lib/cableWords cableComputerNote), which makes no lag claim: nothing has measured one. */
-    assert.match(one, /\{cable \? cableComputerNote\(deviceNoun\(\)\) : `Bluetooth is on\. This \$\{deviceNoun\(\)\} talks to the unit directly, not through the computer\. \$\{BLUETOOTH_WAYS\}`\}/, 'Phone & computer does not say Bluetooth is on, or that the computer is the best way')
+    assert.match(one, /\{cable \? cableComputerNote\(deviceNoun\(\)\) : `Bluetooth is on: this \$\{deviceNoun\(\)\} talks to the unit directly, not through the computer\.`\}/, 'Phone & computer does not say Bluetooth is on')
     /*
-     * The row's own line: on, the device in hand; off, what it is for and
-     * what it costs against the computer, in the gear file's words, in one
-     * line (BLUETOOTH_ROW_OFF). Changed on purpose on 25 October 2026 from
-     * the cost alone, which read as a row with nothing going for it.
+     * The row's own line: on, the device in hand; off, what it is for, in
+     * the gear file's words, in one line (BLUETOOTH_ROW_OFF). Changed on
+     * purpose on 25 October 2026 from the cost alone, which read as a row
+     * with nothing going for it, and on 7 November 2026 to what it is for
+     * alone: the cost is said where the two ways are set side by side.
      */
     /* On a USB cable, the cable (lib/cableWords CABLE_ROW_ON). */
     assert.match(one, /status=\{cable \? CABLE_ROW_ON : bluetooth \? `On · the \$\{deviceNoun\(\)\} talks to the unit itself` : BLUETOOTH_ROW_OFF\}/, 'the Settings row does not say what Bluetooth is for and what it costs')
-    assert.match(one, /import \{ BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS(?:, NO_SIGNAL_BLUETOOTH)? \} from '\.\.\/lib\/bluetooth-gear'/)
+    assert.match(one, /import \{ BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH \} from '\.\.\/lib\/bluetooth-gear'/)
     /* The looper row stays away: the looper is left off the chain over Bluetooth. */
     assert.match(one, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) && !onRealVp4 \? \( <SetupRow title="Stop the looper"/)
   })
@@ -6756,7 +6778,8 @@ export function run(test) {
     /* And the page's own Connect, by the same purchase rule: never mayDrive, whose "store out of reach" is a yes. */
     const bluetoothPage = flat('mobile/src/screens/Bluetooth.js')
     assert.match(bluetoothPage, /const his = useBluetoothAdmin\(\) const paid = mayDriveBluetooth\(purchase, his\)/, 'Connect reads the full version some other way than the row')
-    assert.match(bluetoothPage, /if \(paid\) setBluetooth\(true\)/)
+    /* The promise kept only for the unit it was made for, since 7 November 2026 (review), and still only with the purchase. */
+    assert.match(bluetoothPage, /if \(paid && wanted === b\.unit\) setBluetooth\(true\)/)
     assert.match(bluetoothPage, /const canStart = !!b\.unit && paid/)
     assert.ok(!/mayDrive\(/.test(code('mobile/src/screens/Bluetooth.js')), 'the Bluetooth page lets a free account connect with the store out of reach')
     /* App.js: one way to the page, handed to the waiting screen only through the same three: the row's gate as one hook. */
@@ -6766,10 +6789,17 @@ export function run(test) {
      * and, since 3 November 2026, the one after a found purchase's Bluetooth
      * way has signed in (askedBluetooth), all behind bluetoothOffered.
      * Four since 6 November 2026: the Live pill's note on a USB cable, Use a
-     * Bluetooth adapter instead (TopBar onBluetoothPage), behind it too.
+     * Bluetooth adapter instead (TopBar onBluetoothPage), behind it too; and
+     * since 7 November 2026 the same handed thing is the pill's own tap while
+     * it says Not connected · tap to connect (connectFirst). Six since that
+     * day: How do you connect to your unit?'s Bluetooth adapter
+     * (components/HowConnect), and Connect over Bluetooth on Connect a
+     * computer (screens/Connect), both behind it too.
      */
-    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 4, 'App.js opens the Bluetooth page from somewhere else too')
+    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 6, 'App.js opens the Bluetooth page from somewhere else too')
     assert.ok(app.includes("onBluetoothPage={bluetoothOffered ? () => openSettings('bluetooth') : null}"), 'the pill note’s Bluetooth adapter button is behind another gate')
+    assert.ok(app.includes("<HowConnect onBluetooth={bluetoothOffered ? () => (howConnectAnswered(), openSettings('bluetooth')) : null}"), 'How do you connect to your unit? opens the Bluetooth page from behind another gate')
+    assert.ok(app.includes("<Connect onBack={() => setScreen('settings')} onBluetooth={bluetoothOffered ? () => openSettings('bluetooth') : null} />"), 'Connect a computer opens the Bluetooth page from behind another gate')
     assert.ok(app.includes("if (auth !== 'in' || !askedBluetooth.current || !bluetoothOffered) return askedBluetooth.current = false openSettings('bluetooth')"), 'the found purchase’s Bluetooth way opens the page from behind another gate')
     assert.ok(app.includes("onBluetooth={bluetoothOffered ? () => (setPickLive(false), openSettings('bluetooth')) : null}"), 'the Which unit sheet’s Bluetooth button is behind another gate')
     assert.ok(app.includes('const bluetoothOffered = useBluetoothOffered()'), 'the waiting screen’s way in is not the Settings row’s gate')
@@ -6782,27 +6812,26 @@ export function run(test) {
     const uses = [...waking.matchAll(/onPress=\{onBluetooth\}/g)].length
     assert.equal(uses, 2, 'the waiting screen opens the Bluetooth page from more or fewer than its two buttons')
     /* Three since 6 November 2026: on a USB cable, Use a Bluetooth adapter instead, whose page is the same gate's (cable && onBluetooth). */
-    assert.equal((waking.match(/&& onBluetooth (?:&& !elsewhere )?\? (?:\( )?<Press/g) || []).length, 3, 'a waiting-screen button opens the Bluetooth page without the gate')
+    assert.equal((waking.match(/&& onBluetooth (?:&& link\.link !== 'connected' )?\? (?:\( )?<Press/g) || []).length, 3, 'a waiting-screen button opens the Bluetooth page without the gate')
     assert.match(waking, /\{cable && onBluetooth \? \( <Press label=\{CABLE_TO_ADAPTER\} sub=\{CABLE_TO_ADAPTER_SUB\} style=\{\{ marginTop: space\.sm \}\} onPress=\{\(\) => adapterInsteadOfCable\(\{ byHand: true \}\) \|\| onBluetooth\(\)\} \/> \) : null\}/, 'the waiting screen’s cable has no Bluetooth adapter way, or it skips the gate')
     /*
-     * THE NEW WAY IN: "No computer? Use Bluetooth", while it is off,
-     * with what it costs against the computer under it (and, to a customer,
-     * that it is the AM4 alone), and after the computer's own button, never
-     * before it. Short enough for the one line a button's label has on a
-     * 360-point Android phone: "Connect by Bluetooth" was cut there.
+     * THE WAY IN, FIRST AND FROM THE FIRST SECOND. "I think most people are
+     * gonna opt for Bluetooth, probably 90%. So we need to make that the most
+     * prominent thing" (Justin, 7 November 2026). Changed on purpose that
+     * day: it was "No computer? Use Bluetooth", after Look for the computer
+     * again, inside the block that comes after fifteen seconds, and never
+     * under the account warning, so his new account, with his own computer
+     * on the wifi on another account, was offered no Bluetooth at all. Now
+     * it is the first thing on the screen, over the spinner, the Bluetooth
+     * page's own Connect look, while Bluetooth is off, whatever the computer
+     * is doing. Short enough for one line on a small phone.
      */
-    /*
-     * And never under the account warning ("The computer on this wifi is
-     * signed into a different account"): a computer is right there, and the
-     * fix is the account, so "No computer?" would point the other way.
-     */
-    assert.match(waking, /\{!bluetooth && onBluetooth && !elsewhere \? \( <Press label="No computer\? Use Bluetooth" sub=\{BLUETOOTH_WAYS_SHORT\} onPress=\{onBluetooth\} \/> \) : null\}/, 'the waiting screen offers no way to Bluetooth with no computer, or offers it under the account warning')
-    assert.ok('No computer? Use Bluetooth'.length <= 34, 'the waiting screen’s way in is too long for one line on a small phone')
-    const advice = waking.slice(waking.indexOf("{long && link.link !== 'connected' ? ("))
-    const noComputer = advice.indexOf('No computer? Use Bluetooth')
-    const computer = advice.indexOf('label="Look for the computer again"')
-    assert.ok(computer > 0 && noComputer > computer, 'Bluetooth is offered before the computer, which is the best way')
-    assert.ok(noComputer > 0 && noComputer < advice.indexOf('label="Troubleshooting"'), 'the way to Bluetooth is not with the waiting screen’s advice')
+    assert.match(waking, /\{!bluetooth && onBluetooth && link\.link !== 'connected' \? \( <Press label="Connect over Bluetooth" sub=\{BLUETOOTH_WAYS_SHORT\} icon=\{bluetoothIcon\} inkColor=\{color\.ble\} labelSize=\{font\.lead\} height=\{64\} tone="live" style=\{\{ alignSelf: 'stretch' \}\} onPress=\{onBluetooth\} \/> \) : null\}/, 'the waiting screen offers no way to Bluetooth, or not in the Bluetooth page’s own look')
+    assert.ok('Connect over Bluetooth'.length <= 34, 'the waiting screen’s way in is too long for one line on a small phone')
+    const wayIn = waking.indexOf('label="Connect over Bluetooth"')
+    assert.ok(wayIn > 0 && wayIn < waking.indexOf('<ActivityIndicator'), 'Bluetooth is not the first thing on the waiting screen')
+    assert.ok(wayIn < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way to Bluetooth waits fifteen seconds')
+    assert.ok(!/!elsewhere \? \( <Press label="Connect over Bluetooth"|No computer\? Use Bluetooth/.test(waking), 'the way to Bluetooth is hidden under the account warning again, or offered twice')
     /* Nothing anywhere else in the app opens the page. */
     const files = []
     const walk = (dir) => {
@@ -6820,63 +6849,102 @@ export function run(test) {
     }
   })
 
-  test('two ways to connect, the computer the best one: said wherever Bluetooth is offered, from the gear file, and the same three things in the no-computer words and the email', async () => {
+  test('two ways to connect, Bluetooth first: said wherever Bluetooth is offered, from the gear file, and the same three things in the no-computer words, the purchase page and the email', async () => {
     /*
-     * "Make it clear that there's multiple ways to connect the device, but
-     * also make it clear that the computer is the preferred method and that
-     * Bluetooth will have more lag and not have as many features." (25
-     * October 2026.) In words a guitarist reads in two seconds, and only what
-     * is true: slower (the preset list, a first preset's scene names, a
-     * footswitch change shown at the next poll) and fewer features (the
-     * page's own list of what is not there over Bluetooth).
+     * "I think most people are gonna opt for Bluetooth, probably 90%. So we
+     * need to make that the most prominent thing, we also need to eliminate
+     * so much of the text ... we need to go through the whole app and make
+     * sure it's Bluetooth first as far as connection options go. It says no
+     * Bluetooth connects through a computer instead." (Justin, 7 November
+     * 2026.) Changed on purpose that day from his 25 October rule ("make it
+     * clear that the computer is the preferred method and that Bluetooth
+     * will have more lag and not have as many features"), which every
+     * wording here was held to: "The computer is the best one".
+     *
+     * THE THREE THINGS NOW, in every full wording: Bluetooth named before
+     * the computer; that Bluetooth needs no computer; and what a computer
+     * adds, "less lag and more features", which is our wording of his 25
+     * October point, not his words ("Bluetooth will have more lag and not
+     * have as many features"). True on every unit: less lag (the preset
+     * list, a first preset's scene names, a footswitch change shown at the
+     * next poll), and more features (no editing or saving over Bluetooth,
+     * and on a VP4 presets and scenes only over it, while the computer also
+     * turns its effects on and off, shows the name of the preset it is on
+     * and checks that a preset or scene landed: VP4_OVER_BLUETOOTH). Never
+     * the tuner for a VP4, which it does not get from the app either way
+     * (VP4_NO_TUNER). Never "plus editing and saving", which it said for a
+     * day: through the computer a VP4 is not edited or saved either
+     * (VP4_SO_FAR), and the purchase page names the VP4. And no ranking
+     * either way. The short lines leave the clause out on purpose (below).
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
-    /* "More lag": his word, kept (the gear file says why "slower" stood in for a day). */
-    assert.equal(gear.BLUETOOTH_WAYS, 'There are two ways to connect. The computer is the best one. Bluetooth needs no computer, but it has more lag and fewer features.')
-    /* Not "and does everything": on the purchase page it follows the list of what a VP4 cannot do from the app yet. */
-    assert.ok(!/does everything|every feature/i.test(gear.BLUETOOTH_WAYS), 'the sentence says the computer does everything, beside what a VP4 cannot do')
-    assert.equal(gear.BLUETOOTH_WAYS_SHORT, 'More lag than the computer, fewer features')
+    assert.equal(gear.BLUETOOTH_WAYS, 'Bluetooth needs no computer, just an adapter on your unit, sold separately. A computer has less lag and more features.')
+    /* Not "and does everything": on the purchase page it sits beside what a VP4 cannot do from the app yet. */
+    assert.ok(!/does everything|every feature/i.test(gear.BLUETOOTH_WAYS + gear.BLUETOOTH_PAYWALL), 'a sentence says the computer does everything, beside what a VP4 cannot do')
+    assert.equal(gear.BLUETOOTH_WAYS_SHORT, 'No computer needed')
     assert.ok(gear.BLUETOOTH_WAYS.split(/\s+/).length <= 30, 'the sentence takes longer than two seconds to read')
     /* One short line for everybody since every unit opened together: the customer's "AM4 only for now · …" is gone. */
     assert.equal(gear.BLUETOOTH_WAYS_SHORT_AM4, undefined, 'a customer is still told the AM4 only')
-    /* The Settings row: both halves, what it is for and what it costs, short enough for one line on a 320-point screen. */
-    assert.equal(gear.BLUETOOTH_ROW_OFF, 'Off · no computer needed, more lag')
+    /* The Settings row: what it is for, short enough for one line on a 320-point screen. */
+    assert.equal(gear.BLUETOOTH_ROW_OFF, 'Off · no computer needed')
     assert.ok(gear.BLUETOOTH_ROW_OFF.length <= 36, 'the Settings row is too long for its one line')
-    /* What it says it lacks, the page's list says too. */
+    /* What a computer adds, the page's list says Bluetooth lacks. */
     const different = src('mobile/src/screens/Bluetooth.js').match(/const DIFFERENT = \[([\s\S]*?)\n\]/)?.[1] ?? ''
     assert.match(different, /No editing or saving over Bluetooth\./)
     assert.match(different, /Slower to load the preset list\./)
     /*
-     * The purchase page's line: the two ways, then every unit (and, since
-     * 31 October 2026, nothing of which has been tried: that is the
-     * Developer page's), what a VP4 gets, and every part bought separately,
-     * with no prices. It said "a Bluetooth MIDI adapter" for a day, and the list it
-     * stands for is four parts and a charger: each of them has to be in it.
-     * And by name, in the line itself: it sent them to "the Bluetooth page"
-     * for a day, which nobody who has not paid can open. The AM4 alone until
-     * 25 October 2026, when every unit opened together.
+     * And on a VP4 too: over Bluetooth it gets presets and scenes only, and
+     * the gear file says what the computer adds for one, which is only what
+     * the computer does for a VP4 (shared/vp4-safety.mjs): effects on and
+     * off, the name of the preset it is on, and a check that a preset or
+     * scene landed. Never the tuner, which no way opens on a VP4
+     * (VP4_NO_TUNER); until 7 November 2026 this sent VP4 owners to the
+     * computer for it.
      */
+    assert.match(gear.VP4_OVER_BLUETOOTH, /\. Through the computer, the app also turns its effects on and off, shows that name, and checks that a preset or scene landed\.$/, 'a VP4 gets as much over Bluetooth as over the computer, and “more features” is not true of it')
+    assert.doesNotMatch(gear.VP4_OVER_BLUETOOTH, /tuner|For those, use the computer/i, 'a VP4 owner is sent to the computer for the tuner, which a VP4 does not get from the app at all')
+    const vp4 = await import('../shared/vp4-safety.mjs')
+    assert.match(vp4.VP4_NO_TUNER, /can’t open a VP4’s tuner/, 'the computer opens a VP4’s tuner now: VP4_OVER_BLUETOOTH may say so')
+    assert.match(vp4.VP4_SO_FAR, /turns effects on and off/, 'the computer no longer turns a VP4’s effects on and off: VP4_OVER_BLUETOOTH says it does')
+    assert.match(vp4.VP4_SO_FAR, /names of a VP4’s presets, except the one it is on/, 'the computer no longer shows the name of the preset a VP4 is on: VP4_OVER_BLUETOOTH says it does')
+
+    /*
+     * THE PURCHASE PAGE: one short line, Bluetooth first ("Way too much
+     * text, should not have to scroll", 7 November 2026), and the parts one
+     * tap under it (BLUETOOTH_PARTS_SHOW). The list it opens is the one it
+     * always was: every unit, what a VP4 gets, and every part each way of
+     * the Bluetooth page takes, by name, with no prices. By name, in the
+     * list itself: it sent them to "the Bluetooth page" for a day, which
+     * nobody who has not paid can open.
+     */
+    assert.equal(gear.BLUETOOTH_PAYWALL, 'Connect with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer, which has less lag and more features.')
+    assert.equal(gear.BLUETOOTH_PARTS_SHOW, 'Which adapter do I need?')
+    for (const part of Object.values(gear.PARTS)) assert.ok(!gear.BLUETOOTH_PAYWALL.includes(part.name), `the purchase page’s one line names the ${part.name}: the parts are one tap under it`)
     assert.equal(
-      gear.BLUETOOTH_PAYWALL,
-      `${gear.BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a CME Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank. Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one.`
+      gear.BLUETOOTH_PARTS,
+      `It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a CME Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank. Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one.`
     )
     /* Every part each way of the Bluetooth page takes is named in it (3 November 2026: it named the Uhost kit alone for a week after the page put the WIDI Master first). */
     for (const unit of ['am4', 'vp4', 'fm3', 'fm9', 'axefx3']) {
       for (const way of gear.waysFor(unit)) {
         for (const key of way.parts) {
           const words = { jackTrs: 'TRS-35', jackDin: 'CME WIDI Jack', usbA: 'USB-C to USB-A adapter' }[key] ?? gear.PARTS[key].name
-          assert.ok(gear.BLUETOOTH_PAYWALL.toLowerCase().includes(words.toLowerCase()), `the purchase page’s line leaves out ${gear.PARTS[key].name}, which the ${unit}’s ${way.title} takes`)
+          assert.ok(gear.BLUETOOTH_PARTS.toLowerCase().includes(words.toLowerCase()), `the purchase page’s parts leave out ${gear.PARTS[key].name}, which the ${unit}’s ${way.title} takes`)
         }
       }
     }
     const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
-    for (const u of BLE_UNITS) assert.ok(new RegExp(`\\b${u.name}\\b`).test(gear.BLUETOOTH_PAYWALL), `the purchase page’s line leaves out the ${u.name}`)
+    for (const u of BLE_UNITS) assert.ok(new RegExp(`\\b${u.name}\\b`).test(gear.BLUETOOTH_PARTS), `the purchase page’s parts leave out the ${u.name}`)
     assert.deepEqual(gear.partsFor('vp4').map((p) => p.key), gear.partsFor('am4').map((p) => p.key), 'a VP4’s parts are not the AM4’s, and the purchase page says they are')
-    assert.equal(gear.partsFor('am4').length, 3, 'the AM4’s list changed, and the purchase page’s line names the old one')
-    for (const part of gear.partsFor('am4')) assert.ok(gear.BLUETOOTH_PAYWALL.toLowerCase().includes(part.name.toLowerCase()), `the purchase page’s line does not name the ${part.name}`)
-    assert.ok(!/Bluetooth page|Settings →/.test(gear.BLUETOOTH_PAYWALL), 'the purchase page sends somebody who has not paid to a page they cannot open yet')
+    assert.equal(gear.partsFor('am4').length, 3, 'the AM4’s list changed, and the purchase page’s parts name the old one')
+    for (const part of gear.partsFor('am4')) assert.ok(gear.BLUETOOTH_PARTS.toLowerCase().includes(part.name.toLowerCase()), `the purchase page’s parts do not name the ${part.name}`)
+    /* The FM3's warning goes with the parts it is about: nobody reads an adapter's name on the page without it. */
+    assert.match(gear.BLUETOOTH_PARTS, /Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one\.$/, 'the parts on the purchase page leave out the FM3’s warning')
+    for (const words of [gear.BLUETOOTH_PAYWALL, gear.BLUETOOTH_PARTS]) {
+      assert.ok(!/Bluetooth page|Settings →/.test(words), 'the purchase page sends somebody who has not paid to a page they cannot open yet')
+      assert.ok(!/\$|price|\d+\.\d\d/i.test(words), 'the purchase page’s Bluetooth words name a price')
+    }
     assert.match(gear.POWER_LINE, /charger or power bank/, 'the power the purchase page names is not the list’s')
-    assert.ok(!/\$|price|\d+\.\d\d/i.test(gear.BLUETOOTH_PAYWALL), 'the purchase page’s line names a price')
 
     /* Wherever it is offered, from the gear file and never typed again. */
     const page = flat('mobile/src/screens/Bluetooth.js')
@@ -6885,48 +6953,82 @@ export function run(test) {
     assert.ok(main.indexOf('<Hint>{BLUETOOTH_WAYS}</Hint>') > main.indexOf('<Heading>2 · Connect</Heading>'), 'the page does not say the two ways under the steps')
     assert.ok(page.slice(page.indexOf('export function BluetoothLimits(')).includes('<Hint>{BLUETOOTH_WAYS}</Hint>'), 'What Bluetooth can’t do does not say the two ways')
     assert.match(flat('mobile/src/screens/Settings.js'), /: BLUETOOTH_ROW_OFF\}/, 'the Settings row does not say it')
-    assert.match(flat('mobile/src/screens/Settings.js'), /not through the computer\. \$\{BLUETOOTH_WAYS\}`/, 'Phone & computer does not say it while Bluetooth is on')
+    /* Not to somebody already on Bluetooth, on Phone & computer (7 November 2026): what is on, and nothing more. */
+    assert.ok(!/BLUETOOTH_WAYS\b/.test(code('mobile/src/screens/Settings.js')), 'Phone & computer sells somebody already on Bluetooth the two ways again')
     assert.match(flat('mobile/App.js'), /sub=\{BLUETOOTH_WAYS_SHORT\}/, 'the waiting screen’s way in does not say it')
+    /* The Which unit sheet's and Phone & computer's buttons, which typed their own cost line until 7 November 2026. */
+    assert.match(flat('mobile/src/components/LiveUnit.js'), /<BluetoothCard label="Connect over Bluetooth" sub=\{BLUETOOTH_WAYS_SHORT\} onPress=\{onBluetooth\} \/>/, 'the Which unit sheet types its own line')
+    assert.match(flat('mobile/src/screens/Settings.js'), /sub=\{cable \? CABLE_PAGE_SUB : bluetooth \? 'Bluetooth is on: open its page' : BLUETOOTH_WAYS_SHORT\}/, 'Phone & computer’s button types its own line')
     const paywall = flat('mobile/src/screens/Paywall.js')
-    assert.match(paywall, /\{openForCustomersHere\(\) && bluetoothSupported\(\) \? \( <Text[^>]*> \{BLUETOOTH_PAYWALL\} <\/Text> \) : null\}/, 'the purchase page offers Bluetooth on a copy that cannot open it, or not at all')
-    /* The walkthrough and the sign-in screen too, since the audit of 2 November 2026 (WALKTHROUGH_TWO_WAYS). */
-    for (const f of ['mobile/src/screens/Bluetooth.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/Fixes.js', 'mobile/src/components/NoComputer.js', 'mobile/src/screens/Onboarding.js', 'mobile/src/screens/SignIn.js']) {
-      assert.ok(!/two ways to connect|(slower|more lag) than the computer|no computer needed, more lag|AM4 only for now ·|Opens Apple’s Bluetooth screen|best (?:one|way)|more lag and/i.test(code(f)), `${f} types the words out again instead of taking them from the gear file or shared/no-computer.mjs`)
+    assert.match(
+      paywall,
+      /\{openForCustomersHere\(\) && bluetoothSupported\(\) \? \( <View style=\{\{ gap: space\.sm \}\}> <Text[^>]*> \{BLUETOOTH_PAYWALL\} <\/Text> <Text accessibilityRole="button" accessibilityState=\{\{ expanded: partsOpen \}\} onPress=\{\(\) => setPartsOpen\(\(open\) => !open\)\}[^>]*> \{BLUETOOTH_PARTS_SHOW\} <\/Text> \{partsOpen \? \( <Text[^>]*> \{BLUETOOTH_PARTS\} <\/Text> \) : null\} <\/View> \) : null\}/,
+      'the purchase page offers Bluetooth on a copy that cannot open it, or not at all, or the parts not one tap under its line'
+    )
+    assert.match(paywall, /const \[partsOpen, setPartsOpen\] = useState\(false\)/, 'the purchase page opens on the parts list')
+    /* The walkthrough and the sign-in screen too, since the audit of 2 November 2026 (WALKTHROUGH_TWO_WAYS), and the screens of 7 November. */
+    for (const f of ['mobile/src/screens/Bluetooth.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/Fixes.js', 'mobile/src/components/NoComputer.js', 'mobile/src/screens/Onboarding.js', 'mobile/src/screens/SignIn.js', 'mobile/src/components/LiveUnit.js', 'mobile/src/components/TopBar.js', 'mobile/src/screens/Connect.js', 'mobile/src/components/HowConnect.js']) {
+      assert.ok(!/two ways to connect|(slower|more lag) than the computer|no computer needed|AM4 only for now ·|Opens Apple’s Bluetooth screen|best (?:one|way)|more lag and|less lag and more|less lag, plus|fewer features/i.test(code(f)), `${f} types the words out again instead of taking them from the gear file or shared/no-computer.mjs`)
     }
     /*
-     * AND THE OTHER TWO PLACES THE WORDING LIVES, held to the same three
-     * things: the no-computer note and Fixes (shared/no-computer.mjs
-     * NO_COMPUTER_BLUETOOTH), and the setup email (secondWay in
-     * supabase/functions/setup-reminder). Each says it in its own words, for
+     * AND THE OTHER PLACES THE WORDING LIVES, held to the same three things:
+     * the no-computer note and Fixes (shared/no-computer.mjs
+     * NO_COMPUTER_BLUETOOTH), the purchase page's line, and the setup email
+     * (supabase/functions/setup-reminder). Each says it in its own words, for
      * its own place, so a change to how Bluetooth is presented is made in
-     * all three (CLAUDE.md names them); this is what keeps one from being
+     * all of them (CLAUDE.md names them); this is what keeps one from being
      * left saying something else.
      */
     const { NO_COMPUTER_BLUETOOTH } = await import('../shared/no-computer.mjs')
     /* The setup email says them in its first email's opening, since 1 November 2026 ("Having trouble getting connected?"), and the Bluetooth paragraph says the cost again: no editing or saving. */
     const email = src('supabase/functions/setup-reminder/index.ts').match(/'(It looks like it hasn’t connected to your Fractal yet[^']*)'/)?.[1] ?? ''
     assert.ok(email.length > 100, 'the setup email’s opening was not found; this check needs telling')
-    /* And the walkthrough's two, on a copy that opens Bluetooth (the next test), since the audit of 2 November 2026. */
-    const walk = [...Object.entries(gear.WALKTHROUGH_TWO_WAYS).map(([key, words]) => [`the walkthrough’s ${key}`, words]), ['How it works, the Bluetooth way', gear.HOW_TWO_WAYS.foot]]
-    for (const [where, words] of [['the gear file’s sentence', gear.BLUETOOTH_WAYS], ['the no-computer note and Fixes', NO_COMPUTER_BLUETOOTH], ['the setup email', email], ...walk]) {
-      assert.match(words, /The computer is (?:still )?the best (?:one|way)|the computer [^.]*, which is the best way/, `${where} does not say the computer is the best way`)
-      assert.match(words, /more lag/, `${where} does not say Bluetooth has more lag`)
-      assert.match(words, /fewer features|does less/, `${where} does not say Bluetooth does less`)
+    const RANKED = /best (?:one|way)|preferred|more lag|fewer features|does less/i
+    const computerWay = /\b(?:a|the) computer\b/i
+    for (const [where, words] of [['the gear file’s sentence', gear.BLUETOOTH_WAYS], ['the no-computer note and Fixes', NO_COMPUTER_BLUETOOTH], ['the purchase page’s line', gear.BLUETOOTH_PAYWALL], ['the setup email', email]]) {
+      const bluetooth = words.indexOf('Bluetooth')
+      assert.ok(bluetooth > -1 && bluetooth < words.search(computerWay), `${where} does not name Bluetooth before the computer`)
+      assert.match(words, /\bno computer\b/i, `${where} does not say Bluetooth needs no computer`)
+      assert.match(words, /less lag and more features/, `${where} does not say what a computer adds, in our wording of his point: less lag and more features`)
+      assert.doesNotMatch(words, RANKED, `${where} still ranks the two ways`)
+      /* Nothing a VP4 does not get through the computer either. */
+      assert.doesNotMatch(words, /editing|saving/i, `${where} promises editing or saving through a computer, which a VP4 does not get`)
     }
+    /*
+     * THE SHORT LINES LEAVE THE COMPUTER'S CLAUSE OUT ON PURPOSE: the
+     * walkthrough's, the box before Unlock, the sign-in screen's Get
+     * connected, How do you connect to your unit? and the website's line say
+     * the two ways, Bluetooth first, and nothing more ("eliminate so much of
+     * the text"). Held so a later change does not put it back.
+     */
+    const { BLUETOOTH_IN_APPS } = await import('../shared/stores.mjs')
+    for (const words of [...Object.values(gear.WALKTHROUGH_TWO_WAYS), ...Object.values(gear.HOW_CONNECT), BLUETOOTH_IN_APPS]) {
+      assert.doesNotMatch(words, /less lag|more features|editing and saving/, `a short line carries the computer’s clause: ${words}`)
+    }
+    /* And the walkthrough's short lines, on a copy that opens Bluetooth (the next tests), and How it works' Bluetooth foot: Bluetooth first, no ranking. */
+    for (const [key, words] of Object.entries(gear.WALKTHROUGH_TWO_WAYS)) {
+      const at = words.search(computerWay)
+      assert.ok(at === -1 || words.indexOf('Bluetooth') < at, `the walkthrough’s ${key} names the computer before Bluetooth`)
+      assert.doesNotMatch(words, RANKED, `the walkthrough’s ${key} still ranks the two ways`)
+      assert.ok(words.split(/\s+/).length <= 30, `the walkthrough’s ${key} is ${words.split(/\s+/).length} words: "eliminate so much of the text"`)
+    }
+    assert.doesNotMatch(gear.HOW_TWO_WAYS.foot, RANKED, 'How it works’ Bluetooth way still ranks the two ways')
   })
 
   /*
    * HOW IT WORKS, BOTH WAYS (Justin, 3 November 2026: "Needs to say computer
    * or Bluetooth"). On a copy that opens Bluetooth the walkthrough's first
-   * page offers Computer, picked to start with, and Bluetooth; his three
+   * page offers Bluetooth, picked to start with, and Computer; his three
    * boxes are the Computer way, untouched, and the Bluetooth way is the unit,
    * the adapter and the phone. Anywhere else the page is as it was.
+   * Bluetooth first since 7 November 2026 ("make sure it's Bluetooth first as
+   * far as connection options go"); the computer was, until then.
    */
-  test('How it works offers the computer and Bluetooth on a copy that opens Bluetooth, the computer first, and is as it was anywhere else', async () => {
+  test('How it works offers Bluetooth and the computer on a copy that opens Bluetooth, Bluetooth first, and is as it was anywhere else', async () => {
     const gear = await import('../shared/bluetooth-gear.mjs')
     const how = gear.HOW_TWO_WAYS
-    assert.deepEqual(how.ways.map((w) => w.key), ['computer', 'bluetooth'], 'the computer is not the first way, or a way was added')
-    assert.deepEqual(how.ways.map((w) => w.label), ['Computer', 'Bluetooth'])
+    assert.deepEqual(how.ways.map((w) => w.key), ['bluetooth', 'computer'], 'Bluetooth is not the first way, or a way was added')
+    assert.deepEqual(how.ways.map((w) => w.label), ['Bluetooth', 'Computer'])
     assert.match(how.wire, /^BLUETOOTH MIDI ADAPTER$/)
     assert.match(how.phoneBody, /no computer needed/)
     assert.match(how.foot, /sold separately/, 'the Bluetooth way does not say the adapter is bought apart')
@@ -6934,7 +7036,7 @@ export function run(test) {
       assert.doesNotMatch(words, /this phone|\bbeta\b|\btried\b|official|free desktop/i, words)
     }
     const page = flat('mobile/src/screens/Onboarding.js')
-    assert.match(page, /const \[howWay, setHowWay\] = useState\('computer'\)/, 'How it works starts on Bluetooth')
+    assert.match(page, /const \[howWay, setHowWay\] = useState\('bluetooth'\)/, 'How it works starts on the computer')
     assert.match(page, /const howBluetooth = twoWays && howWay === 'bluetooth'/, 'a copy that does not open Bluetooth can draw the Bluetooth way')
     assert.match(page, /\{twoWays \? \( <View style=\{\{ flexDirection: 'row', gap: space\.sm, marginTop: -space\.sm \}\}> \{HOW_TWO_WAYS\.ways\.map\(/, 'the two ways are offered on a copy that does not open Bluetooth')
     /*
@@ -6972,21 +7074,21 @@ export function run(test) {
      * computer"), Get connected on the sign-in screen, the computer's steps
      * alone, and the box ticked before Unlock ("I understand this app
      * requires a computer connected to my Fractal unit via USB cable"). On a
-     * copy that opens Bluetooth to customers the first two say both ways, the
-     * computer first; the box is his own sentence and waits for his answer;
-     * the browser, which does need the computer, keeps the words it had
-     * (test/both-ends.mjs).
+     * copy that opens Bluetooth to customers they say both ways, Bluetooth
+     * first since 7 November 2026, and short ("absolutely way too much
+     * text"); the browser, which does need the computer, keeps the words it
+     * had (test/both-ends.mjs).
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
     const two = gear.WALKTHROUGH_TWO_WAYS
     assert.deepEqual(Object.keys(two).sort(), ['agree', 'demoSub', 'restored', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
-    /* The page after Restore finds a purchase offers the Bluetooth way too, to sign-in, on a copy that opens it (the audit of 3 November 2026). */
+    /* The page after Restore finds a purchase offers the Bluetooth way too, to sign-in, on a copy that opens it (the audit of 3 November 2026), and first, over his Yes and No, since 7 November 2026. */
     assert.equal(gear.RESTORED_BLUETOOTH_GO, 'No computer - I’ll use Bluetooth')
-    assert.match(flat('mobile/src/screens/Onboarding.js'), /\{twoWays \? \( <> <Press label=\{RESTORED_BLUETOOTH_GO\} height=\{TAP\} onPress=\{\(\) => onAccount\?\.\('bluetooth'\)\} \/> <Note>\{WALKTHROUGH_TWO_WAYS\.restored\}<\/Note> <\/> \) : null\} <Press label=\{P6\.back\}/, 'the page after a found purchase does not offer Bluetooth, or offers it where Bluetooth is not open')
-    /* And Playing with no internet says Bluetooth needs none, where it is offered. */
+    assert.match(code('mobile/src/screens/Onboarding.js').replace(/\s+/g, ' '), /<Head>\{P6\.head\}<\/Head> (?:\{ \} )?\{twoWays \? \( <> <Press label=\{RESTORED_BLUETOOTH_GO\} tone="live" height=\{TAP\} onPress=\{\(\) => onAccount\?\.\('bluetooth'\)\} \/> <Note>\{WALKTHROUGH_TWO_WAYS\.restored\}<\/Note> <\/> \) : null\} (?:\{ \} )?<Cta label=\{P6\.yes\}/, 'the page after a found purchase does not offer Bluetooth first, or offers it where Bluetooth is not open')
+    /* And Playing with no internet says Bluetooth needs none, where it is offered: no ranking after it since 7 November 2026. */
     for (const say of [gear.NO_SIGNAL_BLUETOOTH.off('iPad'), gear.NO_SIGNAL_BLUETOOTH.on('tablet')]) {
       assert.match(say, /needs no internet/)
-      assert.match(say, /The computer is the best way: Bluetooth has more lag and fewer features\./)
+      assert.doesNotMatch(say, /best (?:one|way)|more lag|fewer features/, say)
       assert.ok(!/this phone|\bbeta\b|\btried\b|free/i.test(say), say)
     }
     assert.match(gear.NO_SIGNAL_BLUETOOTH.off('phone'), /adapter on its MIDI jacks, sold separately/)
@@ -7017,10 +7119,17 @@ export function run(test) {
       /* CLAUDE.md: never "this phone", never Bluetooth as a beta, and nothing a customer reads says what has been tried. */
       assert.ok(!/this phone|beta|\btried\b|tested/i.test(words), `the walkthrough’s ${key} says something a customer is never told`)
     }
-    assert.match(two.demoSub, /^This app connects to your Fractal guitar processor one of two ways: through a computer connected to it by USB, or with no computer, through a Bluetooth MIDI adapter sold separately\./)
-    assert.match(two.setup, /^No computer\? Sign in here, and the app can connect by Bluetooth instead/)
-    /* The box before Unlock: the sentence put to him on 3 November 2026, word for word, and said yes to. */
-    assert.equal(two.agree, 'I understand this app connects to my Fractal unit one of two ways: through a computer running the desktop app, connected by USB cable, or with no computer, through a Bluetooth MIDI adapter sold separately. The computer is the best way: Bluetooth has more lag and fewer features.')
+    /* Bluetooth first and short since 7 November 2026: "we also need to eliminate so much of the text". */
+    assert.equal(two.demoSub, 'This app connects to your Fractal with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer connected to it by USB.')
+    /* The sign-in screen's Get connected, cut to this one line where Bluetooth is open. */
+    assert.equal(two.setup, 'Make an account, then connect with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer.')
+    /*
+     * The box before Unlock: the sentence put to him on 3 November 2026 and
+     * said yes to, cut from 48 words to 26 on 7 November 2026, his "way too
+     * much text": both ways still, Bluetooth first, and the desktop app named.
+     */
+    assert.equal(two.agree, 'I understand this app connects to my unit with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer running the desktop app.')
+    assert.equal(two.restored, 'No computer needed: sign in, and the Bluetooth page opens. It takes a Bluetooth MIDI adapter, sold separately.')
 
     /*
      * EVERY LINE THE PHONE'S WALKTHROUGH SHOWS THAT SPEAKS OF HAVING A
@@ -7091,13 +7200,18 @@ export function run(test) {
     assert.match(flatScreen, /<Agree on=\{agreed\} label=\{twoWays \? WALKTHROUGH_TWO_WAYS\.agree : P3\.real\.agree\} onPress=/, 'the box before Unlock does not say both ways on a copy that opens Bluetooth')
     assert.match(flatScreen, /disabled=\{!agreed\} onPress=\{\(\) => agreed && onUnlock\?\.\(\)\}/, 'Unlock no longer waits for the box')
 
-    /* The sign-in screen: the computer's three steps, then the other way, inside the card. */
+    /*
+     * The sign-in screen: Get connected in one line where Bluetooth is open,
+     * Bluetooth first, and the computer's three steps anywhere else (7
+     * November 2026: "Signup was difficult, no tutorial. No mention of
+     * bluetooth"). The steps are on Connect a computer and in
+     * Troubleshooting → It will not connect at all (screens/Fixes.js).
+     */
     const signIn = code('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
-    const card = signIn.slice(signIn.indexOf('{SETUP.title}'), signIn.indexOf('</View>', signIn.indexOf('{WALKTHROUGH_TWO_WAYS.setup}')))
-    assert.ok(card.indexOf('SETUP.steps.map') > 0 && card.indexOf('SETUP.steps.map') < card.indexOf('{WALKTHROUGH_TWO_WAYS.setup}'), 'Get connected does not say the other way under the computer’s steps')
-    assert.match(card, /\{twoWays \? \( <Text[^>]*> \{WALKTHROUGH_TWO_WAYS\.setup\} <\/Text> \) : null\}/, 'Get connected says Bluetooth on a copy that does not open it, or never')
-    const between = card.slice(0, card.indexOf('{WALKTHROUGH_TWO_WAYS.setup}'))
-    assert.equal((between.match(/<View\b/g) || []).length, (between.match(/<\/View>/g) || []).length, 'the other way is drawn outside the Get connected card')
+    const card = signIn.slice(signIn.indexOf('{SETUP.title}'), signIn.indexOf('{start === \'trial\''))
+    assert.match(card, /^\{SETUP\.title\}<\/Text> \{twoWays \? \( <Text[^>]*> \{WALKTHROUGH_TWO_WAYS\.setup\} <\/Text> \) : \( SETUP\.steps\.map\(/, 'Get connected is not the one line where Bluetooth is open, and the computer’s steps everywhere else')
+    assert.equal((card.match(/<View\b/g) || []).length + 1, (card.match(/<\/View>/g) || []).length, 'the one line is drawn outside the Get connected card')
+    assert.match(flat('mobile/src/screens/Fixes.js'), /\{fix\.id === 'connect' \? <Note tone="hint">\{`\$\{SETUP_FIRST\} \$\{SETUP\.steps\.join\(' '\)\}`\}<\/Note> : null\}/, 'the computer’s first-time steps are not in Troubleshooting')
 
     /*
      * THE GATE, the purchase page's word for word: a copy that opens
@@ -7134,6 +7248,376 @@ export function run(test) {
           bench.done()
         }
       }
+    }
+  })
+
+  /*
+   * "HOW DO YOU CONNECT TO YOUR UNIT?" (7 November 2026). "Signup was
+   * difficult, no tutorial. No mention of bluetooth" and "just immediately
+   * says, looking for computer, no tutorial, nothing after signing up for
+   * the free trial" (Justin). After an account is made, a trial started or
+   * the full version bought on this device, once, in Play's place, where
+   * this copy offers Bluetooth: Bluetooth adapter first and biggest, then
+   * his words for the other way. And the sharing card waits for a unit to
+   * have connected here.
+   */
+  test('How do you connect to your unit? comes once after sign-up, a trial or a purchase, Bluetooth first, through the row’s gate, and the sharing card waits for a first connection', async () => {
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    assert.deepEqual(gear.HOW_CONNECT, {
+      head: 'How do you connect to your unit?',
+      bluetooth: 'Bluetooth adapter',
+      bluetoothSub: 'No computer needed',
+      computer: 'No Bluetooth adapter?',
+      computerSub: 'Connect through a computer instead'
+    })
+    for (const words of Object.values(gear.HOW_CONNECT)) assert.ok(!/this phone|\bbeta\b|\btried\b|tested|official/i.test(words), words)
+    /* The card: the question, Bluetooth in the Bluetooth page's own Connect look (its symbol, its blue, and bigger), then the computer. Nothing else to read. */
+    const card = code('mobile/src/components/HowConnect.js').replace(/\s+/g, ' ')
+    const blue = card.indexOf('label={HOW_CONNECT.bluetooth}')
+    const other = card.indexOf('label={HOW_CONNECT.computer}')
+    assert.ok(card.indexOf('{HOW_CONNECT.head}') > 0 && blue > card.indexOf('{HOW_CONNECT.head}') && other > blue, 'the card does not ask, then offer Bluetooth, then the computer')
+    assert.match(card, /<Press label=\{HOW_CONNECT\.bluetooth\} sub=\{HOW_CONNECT\.bluetoothSub\} icon=\{bluetoothIcon\} inkColor=\{color\.ble\} labelSize=\{font\.lead\} height=\{88\} tone="live" onPress=\{onBluetooth\} \/>/, 'Bluetooth is not the biggest thing on the card, in its own look')
+    assert.match(card, /<Press label=\{HOW_CONNECT\.computer\} sub=\{HOW_CONNECT\.computerSub\} height=\{TAP \+ 8\} onPress=\{onComputer\} \/>/)
+    assert.equal((card.match(/<Text\b/g) || []).length, 1, 'the card has more to read than its question')
+    /* It opens a page and nothing more: nothing touches the phone's Bluetooth before Connect on the Bluetooth page. */
+    assert.ok(!/setBluetooth|requestPermissions|lib\/bluetooth'|bleLink|import\(/.test(card), 'the card reaches for the phone’s Bluetooth itself')
+
+    /*
+     * App: owed, signed in and past the purchase page, not the demo,
+     * Bluetooth offered (the row's own gate) and off, nothing connected;
+     * before the sharing card, in Play's place, and only while Play is the
+     * screen, from the link as the top bar says it (shownLink, read after
+     * it is made). The second review of 7 November 2026: drawn ahead of
+     * every screen, a drop put it in place of Settings, Troubleshooting, a
+     * report half typed or the Bluetooth page.
+     */
+    const app = flat('mobile/App.js')
+    assert.match(app, /const howOwed = useHowConnectOwed\(\) const askHow = howConnectShown\(\{ owed: howOwed, auth, demo, offered: bluetoothOffered, bluetooth, link: shownLink\.link, caps, screen \}\)/, 'How do you connect is asked by some other rule than lib/howConnect’s, over another screen, or from the raw link')
+    assert.ok(app.indexOf('const shownLink = useHeldLink(') > -1 && app.indexOf('const shownLink = useHeldLink(') < app.indexOf('const askHow = howConnectShown('), 'How do you connect reads the held link before it is made')
+    assert.match(app, /\) : askHow \? \( \/\*[^]*?\*\/ <HowConnect onBluetooth=\{bluetoothOffered \? \(\) => \(howConnectAnswered\(\), openSettings\('bluetooth'\)\) : null\} onComputer=\{howConnectAnswered\} \/> \) : askShare \? \(/, 'How do you connect is not drawn in Play’s place, before the sharing card, or an answer does not settle it')
+    /*
+     * Settled the moment a real link answers, and at once when it is asked
+     * with one already answering (`howOwed` among the effect's reasons):
+     * bought from Play's trial line over a live rig, it was owed, and drawn
+     * in Play's place at the next drop. Never by the demo's link, which is
+     * still on the render that leaves it (lib/howConnect noteLink, on the
+     * bench below).
+     */
+    assert.match(app, /useEffect\(\(\) => \{ noteLink\(\{ auth, demo, link: link\.link, unit: unitHere \}\) \}, \[auth, demo, link\.link, unitHere, howOwed\]\)/, 'a link answering does not settle the question, a purchase made with a unit connected leaves it owed, or the demo counts as a connection')
+    assert.ok(!/unitConnected\(/.test(code('mobile/App.js')), 'App counts a connection by some other rule than noteLink’s, which leaves the demo out')
+    /*
+     * And the walkthrough's own choice of way, after Restore finds a
+     * purchase: No computer - I'll use Bluetooth, or Yes for the computer,
+     * is the answer, and the account made next is not asked it again.
+     */
+    assert.match(app, /if \(way === 'bluetooth' \|\| way === 'computer'\) howConnectAnswered\(\) \/\*[^*]*\*\/ askedBluetooth\.current = way === 'bluetooth' setAuth\('out'\)/, 'the walkthrough’s choice of way is asked again once the account is in')
+    assert.match(code('mobile/src/screens/Onboarding.js').replace(/\s+/g, ' '), /<Cta label=\{P6\.yes\} onPress=\{\(\) => onAccount\?\.\(twoWays \? 'computer' : undefined\)\} \/>/, 'Yes on the page after a found purchase is not the computer’s way where Bluetooth was offered beside it')
+    /* Owed only by the three moments, on this device: an account made, a trial started, the full version bought just now. */
+    const signIn = code('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
+    assert.match(signIn, /const \{ needsConfirmation, userId \} = await signUp\(\{[^}]*\}\) askHowToConnect\(\) if \(needsConfirmation\) \{/, 'making an account does not ask how they connect')
+    const pay = code('mobile/src/screens/Paywall.js').replace(/\s+/g, ' ')
+    assert.match(pay, /if \(said\.over\) return setSaid\(\{ tone: 'warn', text: said\.text \}\) Alert\.alert\('Free trial', said\.text\) askHowToConnect\(\) return onUnlocked\?\.\(\) \}/, 'starting the trial does not ask how they connect, or a trial already over does')
+    /* An Apple ID that owns it already is no purchase made here: nothing is asked. */
+    assert.match(pay, /if \(out\.why === 'apple-id-owns'\) \{ Alert\.alert\('Already unlocked', trialRefusal\(out\.why\)\) return onUnlocked\?\.\(\) \}/, 'the Apple ID’s own purchase asks how they connect, or lost its branch')
+    assert.match(pay, /if \(out\.ok && !out\.message\) askHowToConnect\(\)/, 'buying does not ask how they connect')
+    const callers = []
+    for (const f of ['mobile/App.js', 'mobile/src/screens/Settings.js', 'mobile/src/screens/Stage.js', 'mobile/src/screens/Onboarding.js', 'mobile/src/screens/SignIn.js', 'mobile/src/screens/Paywall.js']) {
+      for (const m of code(f).matchAll(/askHowToConnect\(\)/g)) callers.push(f)
+    }
+    assert.deepEqual(callers.sort(), ['mobile/src/screens/Paywall.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/SignIn.js'], 'the question is owed from somewhere else too')
+    /* The Developer button that lets his own devices ask again is his account's alone, on the Testing page. */
+    const settingsPage = code('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
+    const testing = settingsPage.slice(settingsPage.indexOf("{page === 'testing' && isAdmin(account?.id) ? ("))
+    assert.ok(testing.indexOf('askAgainHere()') > 0 && testing.indexOf('askAgainHere()') < testing.indexOf("{page === '", 10), 'Ask How do you connect again is not on the Developer Testing page')
+    assert.equal((settingsPage.match(/askAgainHere\(\)/g) || []).length, 1, 'the question is re-armed from somewhere other than Developer → Testing')
+    /* Siri takes it for a screen other than Play, as it does the sharing card. */
+    assert.match(app, /shareCard: askHow \|\| askShare/)
+
+    /* lib/howConnect on a bench: kept per device, settled by either answer or a first connection, and storage that will not answer owes nothing. */
+    const settle = () => new Promise((r) => setTimeout(r, 0))
+    const dir = mkdtempSync(join(tmpdir(), 'how-connect-'))
+    try {
+      writeFileSync(join(dir, 'package.json'), '{ "type": "module" }')
+      writeFileSync(join(dir, 'react.js'), 'export const useState = (v) => [v, () => {}]\nexport const useEffect = () => {}\n')
+      /* `gate`: a disk slow to answer, held until the test opens it. `readBroken`: a disk that will not read but still writes. */
+      writeFileSync(
+        join(dir, 'async-storage.js'),
+        'const s = () => globalThis.__howStorage\nexport default { getItem: async (k) => { if (s().gate) await s().gate; if (s().broken || s().readBroken) throw new Error("no"); return k in s().kept ? s().kept[k] : null }, setItem: async (k, v) => { if (s().broken) throw new Error("no"); s().kept[k] = v } }\n'
+      )
+      const lib = src('mobile/src/lib/howConnect.js').replace("from '@react-native-async-storage/async-storage'", "from './async-storage.js'").replace("from 'react'", "from './react.js'")
+      writeFileSync(join(dir, 'howConnect.js'), lib)
+      let n = 0
+      const fresh = (kept = {}, broken = false) => {
+        globalThis.__howStorage = { kept, ...(broken && typeof broken === 'object' ? broken : { broken }) }
+        return import(`${pathToFileURL(join(dir, 'howConnect.js')).href}?n=${++n}`)
+      }
+      const ASK = 'fractal.howConnect.v1'
+      const CONNECTED = 'fractal.unitConnected.v1'
+      /* A new device: nothing owed, nothing connected. An account made: owed, and kept. */
+      let h = await fresh()
+      assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: false })
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'owed')
+      /* The next launch still owes it, until it is answered. */
+      h = await fresh({ [ASK]: 'owed' })
+      assert.deepEqual(await h.readHowConnect(), { owed: true, connectedBefore: false })
+      h.howConnectAnswered()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done')
+      h = await fresh({ [ASK]: 'done' })
+      assert.equal((await h.readHowConnect()).owed, false, 'an answered question is asked again')
+      /* Developer → Testing's Ask How do you connect again: the next ask on this device is owed again, and an answer settles it again. */
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'an answered question was asked again without the Developer button')
+      h.askAgainHere()
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'owed', 'Ask How do you connect again did not make the next ask owed')
+      h.howConnectAnswered()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done')
+      /* A unit answering first settles it, and is kept for the sharing card's next launch. */
+      h = await fresh({ [ASK]: 'owed' })
+      await h.readHowConnect()
+      h.unitConnected()
+      await settle()
+      assert.deepEqual(globalThis.__howStorage.kept, { [ASK]: 'done', [CONNECTED]: 'yes' })
+      h = await fresh({ [CONNECTED]: 'yes' })
+      assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: true })
+      /* Storage that will not answer: nothing owed, and the sharing card as it was. */
+      h = await fresh({}, true)
+      assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: true })
+      /*
+       * ONCE PER DEVICE, NEVER ARMED AGAIN (the review of 7 November 2026).
+       * Answered, then a purchase on day 8 asks again: nothing.
+       */
+      h = await fresh()
+      await h.readHowConnect()
+      h.askHowToConnect()
+      h.howConnectAnswered()
+      await settle()
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'an answered question was armed again in storage')
+      /* And at the next launch, with 'done' on disk: asked again, still nothing. */
+      h = await fresh({ [ASK]: 'done' })
+      await h.readHowConnect()
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'a question answered at an earlier launch was armed again')
+      assert.equal((await h.readHowConnect()).owed, false)
+      /* A unit that has connected here before: a computer customer buying from Play's trial line is never asked. */
+      h = await fresh({ [CONNECTED]: 'yes' })
+      await h.readHowConnect()
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], undefined, 'a device whose unit has connected was asked how it connects')
+      /* Bought while a unit is connected: the effect settles it at once (unitConnected), and it is never owed again. */
+      h = await fresh()
+      await h.readHowConnect()
+      h.askHowToConnect()
+      h.unitConnected()
+      await settle()
+      assert.deepEqual(globalThis.__howStorage.kept, { [ASK]: 'done', [CONNECTED]: 'yes' }, 'a purchase made with a unit connected is left owed')
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'a device whose unit just connected was asked again')
+
+      /*
+       * AND THE CARD NEVER TAKES THE PLACE OF A RIG: not while a unit is
+       * connected, and not while one on screen reconnects (its capabilities
+       * kept through the drop), by either way. Only with no rig at all.
+       */
+      const shown = h.howConnectShown
+      const base = { owed: true, auth: 'in', demo: false, offered: true, bluetooth: false, link: 'joining', caps: null, screen: 'stage' }
+      assert.equal(shown(base), true, 'the card is not drawn for a new account with nothing connected')
+      assert.equal(shown({ ...base, link: 'no-answer' }), true, 'the card is not drawn while the computer is held unanswered')
+      /* Only in Play's place: never instead of another screen the link drops under (the second review of 7 November 2026). */
+      for (const screen of ['settings', 'fixes', 'report', 'log', 'connect', 'setlists', 'presets', 'gear', undefined]) {
+        assert.equal(shown({ ...base, screen }), false, `the card takes the place of ${screen || 'a screen nobody named'}`)
+      }
+      for (const link of ['connected', 'joining', 'no-answer']) {
+        assert.equal(shown({ ...base, link, caps: { device: 'am4' } }), false, `the card is drawn over a rig on screen (${link})`)
+      }
+      assert.equal(shown({ ...base, link: 'connected' }), false, 'the card is drawn over a connected link')
+      for (const [why, change] of [
+        ['not owed', { owed: false }],
+        ['signed out', { auth: 'out' }],
+        ['on the purchase page', { auth: 'paywall' }],
+        ['in the demo', { demo: true }],
+        ['where Bluetooth is not offered', { offered: false }],
+        ['over Bluetooth', { bluetooth: true }]
+      ]) {
+        assert.equal(shown({ ...base, ...change }), false, `the card is drawn ${why}`)
+      }
+
+      /*
+       * LEAVING THE DEMO IS NOT A CONNECTION (the second review of 7
+       * November 2026). Bought in the demo, the question is owed; the render
+       * that switches the demo off still carries its link ('connected') and
+       * its unit, because stopLink resets them only in the cleanup after it.
+       * Counted, it settled the question at Exit demo and wrote a first
+       * connection for the sharing card, with nothing ever connected.
+       */
+      h = await fresh()
+      await h.readHowConnect()
+      h.askHowToConnect()
+      await settle()
+      const inDemo = { auth: 'in', demo: true, link: 'connected', unit: true }
+      h.noteLink(inDemo)
+      h.noteLink({ ...inDemo, demo: false })
+      await settle()
+      assert.equal(h.useHowConnectOwed(), true, 'leaving the demo settled the question a purchase in it had owed')
+      assert.deepEqual(globalThis.__howStorage.kept, { [ASK]: 'owed' }, 'leaving the demo was kept as a first connection')
+      /* Signed out on the way out (toSignIn): still nothing. */
+      h.noteLink({ ...inDemo, auth: 'out', demo: false })
+      await settle()
+      assert.equal(h.useHowConnectOwed(), true)
+      /* Then the real link: down first, then the computer answering with no unit behind it settles the question, and is no first connection. */
+      h.noteLink({ auth: 'in', demo: false, link: 'off', unit: false })
+      h.noteLink({ auth: 'in', demo: false, link: 'joining', unit: false })
+      assert.equal(h.useHowConnectOwed(), true, 'the question was settled before anything answered')
+      h.noteLink({ auth: 'in', demo: false, link: 'connected', unit: false })
+      await settle()
+      assert.equal(h.useHowConnectOwed(), false, 'a computer answering with no unit leaves the question owed, to come back at its next drop')
+      assert.deepEqual(globalThis.__howStorage.kept, { [ASK]: 'done' }, 'a computer with no unit was kept as a first connection')
+      /* And the unit answering behind it is the first connection. */
+      h.noteLink({ auth: 'in', demo: false, link: 'connected', unit: true })
+      await settle()
+      assert.deepEqual(globalThis.__howStorage.kept, { [ASK]: 'done', [CONNECTED]: 'yes' })
+      /* A Bluetooth adapter connecting says 'connected' too (bleLink), before any unit answers: settled the same way. */
+      h = await fresh({ [ASK]: 'owed' })
+      await h.readHowConnect()
+      h.noteLink({ auth: 'in', demo: false, link: 'connected', unit: false })
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'an adapter connecting leaves the question owed')
+      /* A trial started from inside the demo switches it off first (purchases.js startTrial): asked after, still owed. */
+      h = await fresh()
+      await h.readHowConnect()
+      h.noteLink(inDemo)
+      h.noteLink({ ...inDemo, demo: false })
+      h.askHowToConnect()
+      await settle()
+      h.noteLink({ ...inDemo, demo: false })
+      await settle()
+      assert.deepEqual(globalThis.__howStorage.kept, { [ASK]: 'owed' }, 'a trial started in the demo was settled by the demo’s own unit')
+
+      /*
+       * DEVICES THAT CONNECTED BEFORE THIS CARD EXISTED (the second review
+       * of 7 November 2026): what they kept then counts, read only where
+       * neither of the card's own keys is on the disk, and is written down
+       * as a first connection.
+       */
+      const before = [
+        ['a computer the account heard', { 'fractal.remote.host': JSON.stringify({ accounts: { u1: { name: 'Studio Mac', many: false } } }) }],
+        ['the one pick 1.87.47 kept', { 'fractal.remote.host': 'Studio Mac' }],
+        ['a Bluetooth unit kept', { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: null, pcChannel: 1, methods: {} }) }],
+        ['a Bluetooth adapter kept', { 'fractal.bluetooth': JSON.stringify({ on: true, unit: null, adapter: { id: 'a1', name: 'WIDI Uhost' }, pcChannel: 1, methods: {} }) }],
+        ['the way a USB cable took over from', { 'fractal.bluetooth.cable': JSON.stringify({ adapter: null, unit: null, from: 'computer' }) }],
+        ['a gear note sent', { 'fractal.gearShare.sent.v1': JSON.stringify({ 'am4|bluetooth': 1 }) }]
+      ]
+      for (const [what, kept] of before) {
+        h = await fresh({ ...kept })
+        assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: true }, `${what} is not a connection before`)
+        h.askHowToConnect()
+        await settle()
+        assert.equal(globalThis.__howStorage.kept[ASK], undefined, `a device with ${what} is asked how it connects`)
+        assert.equal(globalThis.__howStorage.kept[CONNECTED], 'yes', `${what} is not written down as a first connection`)
+      }
+      /* What a device keeps with nothing set up: no connection. */
+      const nothing = {
+        'fractal.remote.host': JSON.stringify({ accounts: {} }),
+        'fractal.bluetooth': JSON.stringify({ on: false, unit: null, adapter: null, pcChannel: 1, methods: {} }),
+        'fractal.bluetooth.cable': JSON.stringify({ adapter: null, unit: null, from: null }),
+        'fractal.gearShare.sent.v1': '{}'
+      }
+      h = await fresh({ ...nothing })
+      assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: false }, 'empty records count as a connection')
+      /* And once the card's own keys are there, they decide: owed stays owed until a link answers or it is answered. */
+      h = await fresh({ [ASK]: 'owed', 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: null }) })
+      assert.deepEqual(await h.readHowConnect(), { owed: true, connectedBefore: false })
+
+      /*
+       * NEVER 'owed' OVER A 'done' NOBODY HAS READ YET (the second review of
+       * 7 November 2026): asked before the launch read answers, it waits for
+       * it; asked with no read at all, it makes one; and a read that could
+       * not be made leaves it unasked.
+       */
+      let open
+      h = await fresh({ [ASK]: 'done' }, { gate: new Promise((r) => (open = r)) })
+      const reading = h.readHowConnect()
+      h.askHowToConnect()
+      await settle()
+      open()
+      await reading
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'a question asked before the launch read wrote owed over an answer')
+      h = await fresh(globalThis.__howStorage.kept)
+      assert.equal((await h.readHowConnect()).owed, false, 'the next launch asks an owner who had answered')
+      h = await fresh({ [ASK]: 'done' })
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'a question asked with no read at all wrote owed over an answer')
+      assert.equal(h.useHowConnectOwed(), false)
+      h = await fresh({ [ASK]: 'done' }, { readBroken: true })
+      assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: true })
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'a read that failed armed the question again over an answer')
+      assert.equal(h.useHowConnectOwed(), false, 'a read that failed armed the question again')
+      /* And a slow read that finds nothing still owes it, once it has answered. */
+      h = await fresh({}, { gate: new Promise((r) => (open = r)) })
+      const slow = h.readHowConnect()
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], undefined, 'the question was armed before the disk answered')
+      open()
+      await slow
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'owed', 'a question asked during a slow launch read was lost')
+      assert.equal(h.useHowConnectOwed(), true)
+    } finally {
+      delete globalThis.__howStorage
+      rmSync(dir, { recursive: true, force: true })
+    }
+
+    /*
+     * THE FREE TRIAL WITH NOBODY SIGNED IN opens Create account, not Sign
+     * in: he tapped Start 7-day free trial three times and Sign in once
+     * before finding Create account (his log, 7 November 2026). Its own
+     * side, 'trial', so the form never says "You've paid", and the trial's
+     * own words say why an account comes first.
+     */
+    assert.match(app, /const toTrialAccount = \(\) => \{ toSignIn\(\) setSignInSide\('trial'\) \}/)
+    assert.match(app, /onMakeAccount=\{\(\) => \{ markWalkthrough\(\) setSeenWalk\(true\) setReplaying\(false\) toTrialAccount\(\) \}\}/, 'the walkthrough’s purchase sheet sends the trial to Sign in')
+    assert.match(app, /<Paywall asked onSignIn=\{toSignIn\} onMakeAccount=\{toTrialAccount\}/, 'the purchase sheet over Play sends the trial to Sign in')
+    assert.match(pay, /const makeOne = onMakeAccount \|\| onSignIn if \(out\.why === 'signed-out' && makeOne\) \{ setSaid\(null\) return makeOne\(\) \}/)
+    assert.match(signIn, /const paid = start === 'up' \|\| paidHere/, 'a trial’s Create account says “you’ve paid”')
+    assert.match(signIn, /\{start === 'trial' && mode === 'up' && !note \? <Note>\{trialRefusal\('signed-out'\)\}<\/Note> : null\}/)
+
+    /*
+     * THE TOP BAR'S PILL, for somebody with no computer: Not connected · tap
+     * to connect, opening the Bluetooth page through the note's own handed
+     * way (onBluetoothPage, the row's gate), only while App says so.
+     */
+    const bar = flat('mobile/src/components/TopBar.js')
+    assert.match(bar, /const toBluetooth = connectFirst && !demo && !bluetooth && Boolean\(onBluetoothPage\) if \(toBluetooth\) Object\.assign\(pill, \{ status: 'Not connected', mark: 'off', unit: '', where: 'tap to connect' \}\)/)
+    assert.match(bar, /if \(toBluetooth\) \{ onBluetoothPage\(\) return \}/, 'the pill says tap to connect and opens somewhere else')
+    assert.ok(!/connectFirst|tap to connect/.test(src('shared/pill-words.mjs')), 'the browser’s pill words carry the phone’s Bluetooth way')
+    assert.match(app, /connectFirst=\{connectFirst\}/)
+
+    /*
+     * AND NO FIRST-RUN SCREEN OFFERS A USB CABLE TO THE PHONE as a way to
+     * connect: until a store version opens it, the cable gets "no
+     * instructions, no store text, no purchase-page line" (docs/app-store.md).
+     */
+    for (const f of ['mobile/src/screens/Onboarding.js', 'mobile/src/screens/SignIn.js', 'mobile/src/screens/Paywall.js', 'mobile/src/components/HowConnect.js']) {
+      assert.ok(!/cableWords|cablePlugIn|CABLE_|useCableNow/.test(code(f)), `${f} offers the USB cable way on the way in`)
+    }
+    for (const words of [...Object.values(gear.HOW_CONNECT), ...Object.values(gear.WALKTHROUGH_TWO_WAYS), gear.BLUETOOTH_PAYWALL, gear.HOW_TWO_WAYS.foot, gear.HOW_TWO_WAYS.phoneBody]) {
+      assert.ok(!/USB cable|straight into|plug(?:ged)? into (?:the|your|this) (?:phone|iPhone|iPad|tablet)/i.test(words), `a first-run line offers the USB cable way: ${words}`)
     }
   })
 
@@ -7289,7 +7773,8 @@ export function run(test) {
      */
     assert.ok(!/in step 1, then tap Connect/.test(page), 'the page words a pick in step 1 of its own, outside wrongUnitLine')
     assert.ok(!/pick (the )?(FM3|FM9|Axe-Fx III|VP4)/.test(page), 'the page sends somebody to pick a unit by name outside wrongUnitLine')
-    assert.match(page, /pickable: units\.some\(\(u\) => u\.name === b\.answeredAs\)/)
+    /* Changed on purpose on 7 November 2026: worked out once, then handed to the line by the adapter's name or to wrongUnitLine (the next test holds both). */
+    assert.match(page, /const pickable = units\.some\(\(u\) => u\.name === b\.answeredAs\)/)
   })
 
   test('over Bluetooth nothing is marked unsaved, so no Save button appears that cannot work', () => {
@@ -7401,7 +7886,14 @@ export function run(test) {
      * shared/bluetooth-gear wrongUnitLine's, run for every pairing in its
      * own test; the page hands it what step 1 offers this account.
      */
-    assert.match(status, /if \(b\.answeredAs\) \{ const units = offeredUnits\(\) return \{ line: wrongUnitLine\(\{ answered: b\.answeredAs, picked: name, pickable: units\.some\(\(u\) => u\.name === b\.answeredAs\) \}\), tone: 'fault' \}/)
+    /*
+     * CHANGED ON PURPOSE, 7 November 2026 ("The WIDI Jack is on an AM4, not
+     * your FM3"): when the unit that answered can be picked, the line says
+     * the adapter by its name (wrongAdapterLine) and Switch to is under it;
+     * a cable, an adapter with no name, or a unit this account cannot pick
+     * keeps wrongUnitLine's words.
+     */
+    assert.match(status, /if \(b\.answeredAs\) \{ const units = offeredUnits\(\) const pickable = units\.some\(\(u\) => u\.name === b\.answeredAs\) \/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/ if \(pickable && !cable && adapterName\(b\.adapter\) && carriesTo\(b\.answeredAs, b\.adapter\)\) return \{ line: wrongAdapterLine\(\{ adapter: adapterName\(b\.adapter\), answered: b\.answeredAs, picked: name \}\), tone: 'fault' \} return \{ line: wrongUnitLine\(\{ answered: b\.answeredAs, picked: name, pickable \}\), tone: 'fault' \}/)
     /* A VP4 never answers over Bluetooth: its connected line says the phone is sending, never "answering" (lib/bleVp4.js). */
     assert.match(status, /if \(b\.unit === 'vp4'\) return \{ line: VP4_CONNECTED, tone: 'ok' \} if \(unitState === 'present'\) return \{ line: `Connected · \$\{name\} answering`, tone: 'ok' \}/)
     assert.ok(!/in step 1, then tap Connect/.test(status), 'another line sends somebody to step 1 for a unit')
@@ -7455,8 +7947,14 @@ export function run(test) {
     assert.equal(gearWords.notAnsweringLine('fm9'), 'Adapter connected, but the FM9 isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.')
     assert.equal(gearWords.notAnsweringLine('axefx3'), 'Adapter connected, but the Axe-Fx III isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.')
     assert.match(page, /if \(b\.trouble === 'permission'\) return \{ line: ALLOW_WORDS, tone: 'fault' \}/)
-    /* For the device in hand, changed on purpose on 25 October 2026 from "the phone’s settings". */
-    assert.match(page, /`Turn on Bluetooth in the \$\{deviceNoun\(\)\}’s settings`/)
+    /*
+     * For the device in hand, changed on purpose on 25 October 2026 from
+     * "the phone’s settings". And again on 7 November 2026: "Bluetooth is
+     * off on this tablet", with Turn on Bluetooth under it, which asks
+     * Android itself (the test 'Bluetooth off on Android' runs it).
+     */
+    assert.match(page, /if \(b\.trouble === 'bluetooth-off'\) return \{ line: bluetoothOffLine\(deviceNoun\(\)\), tone: 'fault' \}/)
+    assert.equal(gearWords.bluetoothOffLine('tablet'), 'Bluetooth is off on this tablet')
     /*
      * Android 11 and older asks for Location, not Nearby devices, and finds
      * nothing while Location is off; the words follow the phone, and an
@@ -7648,16 +8146,23 @@ export function run(test) {
     assert.match(ble, /return Array\.isArray\(list\) \? list\.filter\(isAdapter\) : \[\]/, 'the Wi-Fi session is offered as an adapter again')
     assert.match(ble, /const rows = \(Array\.isArray\(list\) \? list : \[\]\)\.filter\(isAdapter\)/, 'the list the page draws offers the Wi-Fi session')
     /* Told the unit picked (cableRule), so a cable named for another unit is listed, never chosen for the player (bleAdapters pickAdapter). */
-    assert.match(ble, /const pick = pickAdapter\(list, fresh, pickRule\(\)\) if \(pick\) chooseAdapter\(pick\) return pick/, 'after Apple’s screen the adapter is not chosen by itself')
+    /*
+     * And, changed on purpose on 7 November 2026, a port that CoreMIDI adds
+     * a moment after Done is still taken by the same rule (tookAfterScreen),
+     * so the line after the pick waits a few seconds for one.
+     */
+    assert.match(ble, /const pick = pickAdapter\(list, fresh, pickRule\(\)\) if \(pick\) chooseAdapter\(pick\) \/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/ else afterScreen = \{ before, until: Date\.now\(\) \+ AFTER_SCREEN_MS \} return pick/, 'after Apple’s screen the adapter is not chosen by itself')
     assert.match(ble, /const pick = saved\.adapter \? null : pickAdapter\(now\.devices, new Set\(\), pickRule\(\)\) if \(pick\) chooseAdapter\(pick\)/, 'after an Android search the only adapter is not chosen by itself')
     /* The pick is told what the cable rule is, and for an FM3 the adapters never offered for one: listed, never chosen by themselves. */
-    assert.match(ble, /const pickRule = \(\) => \(\{ \.\.\.cableRule\(\), refused: saved\.unit === 'fm3' \? neverOnFm3 : null \}\)/, 'the phone chooses a WIDI Master or a C2MIDI Pro for an FM3 by itself')
+    /* And, since 7 November 2026, never another unit's adapter as the only one there (`taken`: each unit keeps its own). */
+    assert.match(ble, /const pickRule = \(\) => \(\{ \.\.\.cableRule\(\), refused: saved\.unit === 'fm3' \? neverOnFm3 : null, taken: takenIds\(\) \}\)/, 'the phone chooses a WIDI Master or a C2MIDI Pro for an FM3 by itself')
 
     /* The page: step 1 the unit, step 2 Connect; Stop once it is on; the list only for a real choice. */
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.ok(page.indexOf('1 · Pick your unit') < page.indexOf('2 · Connect'), 'the steps are out of order')
     assert.match(page, /const showList = !b\.on && !b\.adapter && b\.devices\.length > 0/, 'the list shows when there is nothing to choose')
-    assert.match(page, /if \(!wanted \|\| !b\.adapter \|\| !b\.unit \|\| b\.on\) return setWanted\(false\) if \(paid\) setBluetooth\(true\)/, 'choosing the adapter does not turn Bluetooth on')
+    /* Changed on purpose, 7 November 2026 (review): the promise is the unit's the tap was for, so another unit's own adapter, arriving with it, turns nothing on. */
+    assert.match(page, /if \(!wanted \|\| !b\.adapter \|\| !b\.unit \|\| b\.on\) return setWanted\(null\) if \(paid && wanted === b\.unit\) setBluetooth\(true\)/, 'choosing the adapter does not turn Bluetooth on')
     assert.match(page, /if \(b\.adapter\) setBluetooth\(true\) else find\(\)/, 'Connect with an adapter from last time goes looking again')
     /* Except on an iPhone it is not connected to: Apple's screen is the only way back, so Connect opens it. */
     assert.match(page, /if \(b\.adapter && ios && offlineHere\(b\.adapter\)\) return another\(\)/, 'Connect on an iPhone waits for an offline adapter instead of opening Apple’s screen')
@@ -7710,7 +8215,8 @@ export function run(test) {
 
     /* And one question wakes a new link, its answer not used, before the rig asks the real ones. */
     const link = flat('mobile/src/lib/bleLink.js')
-    const wake = link.indexOf("const woke = await made.request('/device/detect')")
+    /* Kept in a `let` since 7 November 2026, for the fresh connection when nothing at all came back (bleLink connected()). */
+    const wake = link.indexOf("woke = await made.request('/device/detect')")
     assert.ok(wake > 0 && wake < link.indexOf('await refreshAll()', wake), 'the rig asks its questions before the link is woken')
   })
 
@@ -7877,7 +8383,8 @@ export function run(test) {
     assert.equal(pillWords({ tone: 'dim', bluetooth: true }).status, 'Not connected', 'the bar says No computer over Bluetooth')
     assert.equal(pillWords({ tone: 'good', unitState: 'present', unit: 'AM4', computer: 'WIDI Uhost', bluetooth: true }).where, 'over Bluetooth', 'the pill names a computer over Bluetooth')
     assert.match(bar, /\[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)/, 'a screen reader is not told the link is Bluetooth')
-    assert.match(bar, /<Which link=\{link\} cable=\{cable\} onClose=/)
+    /* And, since 7 November 2026, `quiet` between them: Connect again while the unit says nothing. */
+    assert.match(bar, /<Which link=\{link\} cable=\{cable\} \/\*[^*]*\*\/ quiet=\{[^}]*\} onClose=/)
     /* A blue in both themes, and plainly not the computer's cyan or the unit's green: at least 20 degrees of hue from each, theme by theme. */
     const theme = src('mobile/src/lib/theme.js')
     const hue = (hex) => {
@@ -7907,7 +8414,8 @@ export function run(test) {
   test('over Bluetooth, CONNECTED opens a note with Turn off Bluetooth, which does what Stop does', async () => {
     /* "Make it so you can click the connected button at the top of the screen and have a button that pop up that says turn off Bluetooth." */
     const bar = flat('mobile/src/components/TopBar.js')
-    assert.match(bar, /import \{ adapterInsteadOfCable, setBluetooth, useBluetoothOn, useCableNow \} from '\.\.\/lib\/bluetooth'/, 'the bar cannot turn Bluetooth off')
+    /* useBluetoothUnit since 7 November 2026, for Connect again, which a VP4 is not offered. */
+    assert.match(bar, /import \{ adapterInsteadOfCable, setBluetooth, useBluetoothAnsweredAs, useBluetoothOn, useBluetoothUnit, useCableNow \} from '\.\.\/lib\/bluetooth'/, 'the bar cannot turn Bluetooth off')
     /*
      * The word CONNECTED is the pill since 24 October 2026 (Axiom's "Live ●
      * AM4" over "on Raspberry Pi"), and over Bluetooth, in every state of the
@@ -7915,7 +8423,8 @@ export function run(test) {
      */
     assert.match(bar, /onPress=\{\(\) => \{ tick\(\) if \(bluetooth\) \{ setSaying\(\(open\) => !open\) return \}/, 'the pill does not open the note over Bluetooth')
     /* With Report a problem beside Turn off Bluetooth since 25 October 2026 (onReport, App's, through the page's gate). */
-    assert.match(bar, /\{saying && bluetooth \? <Which link=\{link\} cable=\{cable\} onClose=\{\(\) => setSaying\(false\)\} onReport=\{onReport\} onBluetoothPage=\{onBluetoothPage\} \/> : null\}/)
+    /* And `quiet`, for Connect again, since 7 November 2026. */
+    assert.match(bar, /\{saying && bluetooth \? \( <Which link=\{link\} cable=\{cable\} \/\*[^*]*\*\/ quiet=\{!cable && bleUnit !== 'vp4' && !bleAnswered && link\?\.link === 'connected' && \(unitState === 'missing' \|\| unitState === 'silent'\)\} onClose=\{\(\) => setSaying\(false\)\} onReport=\{onReport\} onBluetoothPage=\{onBluetoothPage\} \/> \) : null\}/)
     assert.match(bar, /useEffect\(\(\) => \{ if \(!bluetooth\) setSaying\(false\) \}, \[bluetooth\]\)/, 'the note is left open, to come back by itself when Bluetooth next comes on')
     const ble = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
     assert.ok(ble.length > 0 && ble.includes('Connected over Bluetooth, through'), 'the Bluetooth note is not where this looks')
@@ -8066,7 +8575,7 @@ export function run(test) {
    * pull request will set it, so the opening can be tried before any copy
    * has it.
    */
-  async function bluetoothOnABench({ os = 'ios', version = 18, mod = null, disk = {}, installed = '1.88.4', from = undefined, later = [] } = {}) {
+  async function bluetoothOnABench({ os = 'ios', version = 18, mod = null, disk = {}, installed = '1.88.4', from = undefined, later = [], clock = null } = {}) {
     const dir = mkdtempSync(join(tmpdir(), 'ble-lib-'))
     const real = (f) => new URL(`../mobile/src/lib/${f}`, import.meta.url).href
     const swaps = [
@@ -8094,12 +8603,24 @@ export function run(test) {
       assert.ok(lib.includes(from), `lib/bluetooth no longer imports ${from}: the bench needs telling`)
       lib = lib.replace(from, to)
     }
+    /* `clock`: its timers on a clock the test turns by hand (fakeClock), the wait for Bluetooth and the ten-second look among them. */
+    if (clock) lib = "import { clock as __clock } from './clock.js'\n" + lib.replace(/\bsetTimeout\(/g, '__clock.setTimeout(').replace(/\bclearTimeout\(/g, '__clock.clearTimeout(').replace(/\bDate\.now\(\)/g, '__clock.now()')
     const files = {
       'package.json': '{ "type": "module" }',
+      'clock.js': 'export const clock = { setTimeout: null, clearTimeout: null, now: () => Date.now() }\n',
       'bluetooth.js': lib,
       /* Every subscribe a hook hands React, kept, so a test can listen the way a screen would. */
       'react.js': 'export const subscribed = []\nexport const useSyncExternalStore = (subscribe, read) => {\n  subscribed.push(subscribe)\n  return read()\n}\n',
-      'react-native.js': `export const Platform = { OS: ${JSON.stringify(os)}, Version: ${JSON.stringify(version)} }\n`,
+      /*
+       * And Linking, for Android's turn-on question (lib/bluetooth
+       * turnOnBluetooth), every intent kept in \`intents\`, \`refuse\` the
+       * actions Android will not start; and AppState, for the page's
+       * refresh as the app comes back (refreshOnScreen), its listeners kept.
+       */
+      'react-native.js':
+        `export const Platform = { OS: ${JSON.stringify(os)}, Version: ${JSON.stringify(version)} }\n` +
+        'export const Linking = { intents: [], refuse: new Set(), settings: 0, sendIntent: async (action, extras) => { Linking.intents.push([action, extras ?? null]); if (Linking.refuse.has(action)) throw new Error(`no ${action}`) }, openSettings: async () => { Linking.settings++ } }\n' +
+        'export const AppState = { listeners: [], addEventListener: (type, fn) => { AppState.listeners.push(fn); return { remove() { AppState.listeners.splice(AppState.listeners.indexOf(fn) >>> 0, 1) } } } }\n',
       'storage.js':
         `export const disk = new Map(Object.entries(${JSON.stringify(disk)}))\n` +
         'export default { getItem: async (k) => (disk.has(k) ? disk.get(k) : null), setItem: async (k, v) => { disk.set(k, String(v)) } }\n',
@@ -8124,13 +8645,20 @@ export function run(test) {
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
     const at = (f) => pathToFileURL(join(dir, f)).href
     ;(await import(at('expo.js'))).native.module = mod
+    if (clock) Object.assign((await import(at('clock.js'))).clock, { setTimeout: (fn, ms) => clock.setTimeout(fn, ms), clearTimeout: (id) => clock.clearTimeout(id), now: () => clock.now() })
+    const ble = await import(at('bluetooth.js'))
     return {
-      ble: await import(at('bluetooth.js')),
+      ble,
       sw: await import(at('bleSwitch.js')),
       subscribed: (await import(at('react.js'))).subscribed,
       disk: (await import(at('storage.js'))).disk,
       log: (await import(at('debugLog.js'))).lines,
-      done: () => rmSync(dir, { recursive: true, force: true })
+      rn: await import(at('react-native.js')),
+      done: () => {
+        /* A wait for Bluetooth to come on ends with the bench, as it does with the page. */
+        ble.stopWaitingForBluetooth?.()
+        rmSync(dir, { recursive: true, force: true })
+      }
     }
   }
 
@@ -9406,7 +9934,7 @@ export function run(test) {
 
     /* The waiting screen: over Bluetooth only, in the fifteen-second block where a stuck player sits, with the line it is stuck on. */
     const waking = app.slice(app.indexOf('function Waking('))
-    assert.match(waking, /^function Waking\(\{ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, onReport, onSetlists \}\)/)
+    assert.match(waking, /^function Waking\(\{ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, onReport \}\)/)
     assert.match(waking, /\{bluetooth && onReport \? <Press label=\{REPORT_BUTTON\} onPress=\{\(\) => onReport\(said\)\} \/> : null\}/)
     assert.ok(waking.indexOf('onReport(said)') > waking.indexOf("{long && link.link !== 'connected' ? ("), 'the waiting screen’s report is drawn before the advice')
   })
@@ -9418,8 +9946,10 @@ export function run(test) {
     assert.match(drawn, /\{onReport \? <Press label=\{REPORT_BUTTON\} sub="Or tell us it works" height=\{52\} onPress=\{\(\) => onReport\(null\)\} \/> : null\}/)
     assert.ok(!drawn.slice(0, drawn.indexOf('function UnitChips(')).includes('<Fold '), 'the report button is inside a row that has to be opened')
     /* Report this: beside each fault line, the plugs hint, No adapter and the search's own note; never beside the permission line or Unlock. */
-    assert.match(page, /const reportable = said\.tone === 'fault' && b\.trouble !== 'permission' && b\.phase !== 'locked' && !!onReport/)
-    assert.match(page, /\{said\.line\} <\/Text> \{b\.trouble === 'permission' \? <OpenSettings \/> : null\} \{reportable && !quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/)
+    /* Nor beside Bluetooth off, since 7 November 2026: Turn on Bluetooth is under it, and it is not a fault in the app. */
+    assert.match(page, /const reportable = said\.tone === 'fault' && b\.trouble !== 'permission' && b\.trouble !== 'bluetooth-off' && b\.phase !== 'locked' && !!onReport/)
+    /* Turn on Bluetooth and Switch to between the line's own button and Report this, since 7 November 2026. */
+    assert.match(page, /\{said\.line\} <\/Text> \{b\.trouble === 'permission' \? <OpenSettings \/> : null\} \{offOnAndroid \? <Press label=\{TURN_ON_BLUETOOTH\} tone="live" height=\{52\} onPress=\{turnOn\} \/> : null\} \{offOnAndroid \? <Hint>\{bluetoothOffHint\(b\.on && !!b\.adapter, waitingOn\)\}<\/Hint> : null\} \{offerSwitch \? <Press label=\{SWITCH_TO\(b\.answeredAs\)\} sub=\{SWITCH_TO_SUB\(adapterName\(b\.adapter\), b\.answeredAs\)\} tone="live" height=\{52\} onPress=\{switchUnit\} \/> : null\} \{reportable && !quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/)
     assert.match(page, /\{b\.phase === 'connecting' \|\| quiet \? <Hint>\{cable \? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN\}<\/Hint> : null\} \{reportable && quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/, 'Report this is not under the plugs hint')
     assert.match(page, /\{!b\.on && missed && !b\.adapter && !b\.trouble && !b\.said && onReport \? <ReportThis onPress=\{\(\) => onReport\('No adapter was connected\.'\)\} \/> : null\}/)
     assert.match(page, /\{b\.said && onReport \? <ReportThis onPress=\{\(\) => onReport\(b\.said\)\} \/> : null\}/)
@@ -9471,9 +10001,12 @@ export function run(test) {
     const bar = flat('mobile/src/components/TopBar.js')
     /* And, since 6 November 2026, the Bluetooth page for a USB cable's Use a Bluetooth adapter instead (onBluetoothPage, App's gate). */
     /* And, since 7 November 2026, the account's photo beside the pill (onOpenAccount, App's openAccount). */
-    assert.match(bar, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, saveHere: saveWanted = true, onOpenAccount = null \}\)/)
+    assert.match(bar, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true, onOpenAccount = null \}\)/)
     const ble = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
-    assert.match(ble, /function Which\(\{ link, cable = false, onClose, onReport = null, onBluetoothPage = null \}\)/)
+    /* `quiet` since 7 November 2026: Connect again, its own button too. */
+    assert.match(ble, /function Which\(\{ link, cable = false, quiet = false, onClose, onReport = null, onBluetoothPage = null \}\)/)
+    assert.match(ble, /\{quiet \? \( <Pressable accessibilityRole="button" accessibilityLabel=\{CONNECT_AGAIN\}/)
+    assert.match(ble, /fire\(`press \$\{CONNECT_AGAIN\}`, \(\) => connectBluetoothAgain\(\)\)/)
     /* Two buttons, each its own element to VoiceOver inside a note that is not one. */
     assert.match(ble, /accessible=\{false\} onPress=\{onClose\}/)
     assert.match(ble, /accessibilityRole="button" accessibilityLabel=\{off\} accessibilityHint=\{`The \$\{deviceNoun\(\)\} goes back to using the computer`\}/)
@@ -12297,5 +12830,1119 @@ export function run(test) {
         b.done()
       }
     }
+  })
+
+
+  /* ------------------------------------------------------------------ */
+  /* 7 November 2026: a first connection that stayed silent, another     */
+  /* unit on the adapter, Bluetooth off on a tablet, which adapter goes   */
+  /* with which unit, and Apple's list out of step with the page          */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * A wire for the unit picked, on a line to another unit (or to nothing),
+   * which hears only the messages for its own model byte, as a Fractal unit
+   * does. What it says reaches the wire as the adapter hands it on: bytes
+   * first, then the joiner.
+   */
+  async function wrongLine(picked, onLine, { loop = false } = {}) {
+    const sx = await import(SX)
+    const { createBleWire } = await import(WIRE)
+    const clock = fakeClock()
+    const sent = []
+    const logs = []
+    const foreign = []
+    let wire = null
+    const joiner = sx.createJoiner({ onSysex: (f) => wire.heard(f), onShort: (m) => wire.heardShort(m) })
+    const say = (bytes, after = 6) => {
+      clock.setTimeout(() => {
+        wire.heardBytes(bytes)
+        joiner.push(bytes)
+      }, after)
+      return after
+    }
+    const model = onLine ? sx.MODELS[onLine] : null
+    const unit = !onLine ? null : onLine === 'am4' ? fakeAm4(sx, { say, clock }) : fakeGen3(sx, { say, clock, model })
+    const line = { gone: false }
+    /* A fresh wire to the same unit, as bleLink's next connection makes one (linkOnABench's `reconnect`). */
+    const reconnect = () => {
+      wire = createBleWire({
+        unit: picked,
+        catalog,
+        clock,
+        log: (l) => logs.push(l),
+        onForeign: (n) => foreign.push(n),
+        send: (b) => {
+          if (line.gone) return false
+          sent.push([...b])
+          if (unit && b[4] === model) unit.hear([...b])
+          /* `loop`: every frame comes straight back, as a white plug in a THRU jack, or an adapter that loops, hands it back; a number is how late, in ms. */
+          if (loop) say([...b], loop === true ? 5 : loop)
+          return true
+        }
+      })
+      return wire
+    }
+    reconnect()
+    return {
+      sx,
+      clock,
+      sent,
+      logs,
+      foreign,
+      unit,
+      line,
+      reconnect,
+      get wire() {
+        return wire
+      },
+      get: (path) => drive(clock, wire.request(path))
+    }
+  }
+
+  test('every byte that comes back on a connection is counted, a timing clock’s too, and nothing is counted on a line that carries none', async () => {
+    const t = await wrongLine('fm3', null)
+    assert.equal(t.wire.bytesIn(), 0)
+    assert.equal((await t.get('/device/detect')).connected, false)
+    assert.equal(t.wire.bytesIn(), 0, 'bytes were counted on a line that carried none')
+    t.wire.heardBytes([0xf8])
+    t.wire.heardBytes([0xf0, 0x00])
+    assert.equal(t.wire.bytesIn(), 3, 'a timing clock, or a piece of a frame, was not counted')
+    t.wire.close()
+    t.wire.heardBytes([0xf8])
+    assert.equal(t.wire.bytesIn(), 3, 'bytes were counted on a wire that has closed')
+    const u = await onTheLine('fm3')
+    assert.ok(u.wire.bytesIn() > 0, 'an answered question counted nothing')
+    const a = await onTheLine('am4')
+    await a.get('/device/detect')
+    assert.ok(a.wire.bytesIn() > 0, 'an AM4’s answer counted nothing')
+  })
+
+  /*
+   * "Not answering · FM3 over Bluetooth", with the WIDI Jack plugged into his
+   * AM4 (Justin's iPhone, 7 November 2026). An AM4 does not answer an FM3's
+   * question, so nothing ever named it. Now a Gen 3 connection that has heard
+   * nothing asks each other unit's own detect question, the AM4's first.
+   */
+  test('a Gen 3 connection that hears nothing asks the other units’ own detect questions, the AM4’s first, and names the one on the adapter', async () => {
+    const { buildAm4Structure, buildGetScene, isAllowedAm4, MODELS } = await import(SX)
+    /* The FM3 picked, an AM4 on the adapter. */
+    const t = await wrongLine('fm3', 'am4')
+    assert.equal((await t.get('/device/detect')).connected, false, 'the AM4 answered an FM3’s question')
+    assert.deepEqual(t.foreign, [])
+    assert.equal(await drive(t.clock, t.wire.askAround()), 'AM4')
+    assert.deepEqual(t.foreign, ['AM4'], 'the page is not told the AM4 is on the adapter')
+    const asked = t.sent.slice(1)
+    assert.deepEqual(asked.map(hex), [hex(buildAm4Structure())], 'more, or other, than the AM4’s own question went')
+    assert.ok(isAllowedAm4(asked[0]), 'the AM4’s question is not on the AM4’s own list')
+    assert.equal(t.unit.state.frozen, false, 'the AM4 froze')
+    assert.ok(t.logs.includes('an AM4 is on this adapter, not the FM3'), t.logs.join(' | '))
+    /* And nothing more goes on this connection: what is on the other end is an AM4. */
+    const before = t.sent.length
+    await assert.rejects(t.get('/preset'), (e) => e.status === 409)
+    assert.equal(t.sent.length, before, 'the AM4 was sent an FM3’s messages after it answered')
+    /* The FM3 picked, an FM9 on the adapter: the AM4's question, then the FM9's own, and it is named. */
+    const g = await wrongLine('fm3', 'fm9')
+    assert.equal((await g.get('/device/detect')).connected, false)
+    assert.equal(await drive(g.clock, g.wire.askAround()), 'FM9')
+    assert.deepEqual(g.foreign, ['FM9'])
+    assert.deepEqual(g.sent.slice(1).map(hex), [hex(buildAm4Structure()), hex(buildGetScene(MODELS.fm9))], 'not the AM4’s and then the FM9’s own question, in that order, and no more')
+    /* Nothing on the other end: each other unit's question once, and no answer. */
+    const n = await wrongLine('axefx3', null)
+    assert.equal(await drive(n.clock, n.wire.askAround()), null)
+    assert.deepEqual(n.sent.map(hex), [hex(buildAm4Structure()), hex(buildGetScene(MODELS.fm3)), hex(buildGetScene(MODELS.fm9))])
+    assert.ok(n.logs.includes('no other unit answered on this adapter either'), n.logs.join(' | '))
+    /* A connection whose unit has answered asks nobody else. */
+    const ok = await onTheLine('fm3')
+    const sentBefore = ok.sent.length
+    assert.equal(await drive(ok.clock, ok.wire.askAround()), null)
+    assert.equal(ok.sent.length, sentBefore, 'a connection that works asked other units’ questions')
+    /* AN AM4 CONNECTION ASKS NOTHING ELSE: what is on the other end may be an AM4, which is never sent anything off its list. */
+    const a = await wrongLine('am4', 'fm3')
+    assert.equal(await drive(a.clock, a.wire.askAround()), null)
+    assert.deepEqual(a.sent, [], 'an AM4 connection asked another unit’s question')
+    /* Nor a VP4's, which has its own wire and sends nothing of this file's. */
+    const { createBleWire } = await import(WIRE)
+    assert.equal(createBleWire({ unit: 'vp4', send: () => true, clock: fakeClock() }).askAround, undefined, 'a VP4 connection can ask other units’ questions')
+    /*
+     * In the file: only questions each unit is already sent, its own detect
+     * (am4Detect reads the preset by buildAm4Structure, gen3Detect asks the
+     * scene by buildGetScene), and the AM4's held to the AM4's own list.
+     */
+    const wire = flat('mobile/src/lib/bleWire.js')
+    const around = wire.slice(wire.indexOf('async function askAround() {'), wire.indexOf('/** What the unit said that nobody was waiting for. */'))
+    assert.ok(around.length > 100, 'askAround is not where this looks')
+    assert.match(around, /if \(am4 \|\| closed \|\| wrongUnit \|\| answered \|\| foreignTold\) return null/)
+    assert.deepEqual([...new Set([...around.matchAll(/\bbuild\w+\(/g)].map((m) => m[0]))].sort(), ['buildAm4Structure(', 'buildGetScene('], 'askAround builds a question no unit is already sent')
+    assert.match(around, /if \(o\.am4 && !am4Allowed\(o\.frame\)\) continue/, 'the AM4’s question is not held to its own list')
+    assert.match(wire, /const got = await ask\(buildAm4Structure\(\), parseAm4Structure, WAIT\.am4Structure, 'the preset'/)
+    assert.match(wire, /const got = await ask\(buildGetScene\(model\), \(f\) => parseScene\(f, model\), WAIT\.detect, 'the scene, to see whether the unit answers', \{ probe: true \}\)/)
+    assert.ok(!/askAround|bytesIn/.test(src('mobile/src/lib/bleVp4.js')), 'the VP4’s wire grew a way to ask other units')
+  })
+
+  test('the link: a first connection that brings back nothing at all is let go of and made afresh, once, and the fresh one is used', async () => {
+    const t = await onTheLine('am4', { silent: true })
+    const b = await linkOnABench(t)
+    try {
+      let reads = 0
+      b.bench.refreshAll = async () => {
+        reads++
+      }
+      const connects = []
+      b.bench.connect = async () => (connects.push(t.clock.now()), true)
+      b.link.startBluetoothLink(() => {})
+      /* The wake and its second asking: 1.5 s each on an AM4, and not a byte back. */
+      await advance(t.clock, 3100)
+      assert.equal(b.bench.releases, 1, 'a connection that brought nothing back was not let go of')
+      assert.equal(b.bench.current, null)
+      assert.equal(reads, 0, 'the rig read everything on a connection about to be replaced, and said the unit did not answer in time')
+      assert.ok(b.said.includes('nothing at all has come back from the adapter since it connected (0 bytes)'), b.said.join(' | '))
+      assert.ok(b.said.includes('still nothing at all from the adapter: letting go of it and connecting to it again, once'), b.said.join(' | '))
+      assert.equal(b.bench.notes.at(-1).phase, 'connecting')
+      /* A fresh connection after RETRY_FIRST, which answers. */
+      t.unit.opt.silent = false
+      await advance(t.clock, 3500)
+      assert.equal(connects.length, 2, 'no fresh connection was made')
+      assert.ok(connects[1] - connects[0] >= b.link.RETRY_FIRST, 'the fresh connection did not give the old one time to go')
+      assert.ok(b.bench.current, 'the fresh connection is not used')
+      assert.equal(reads, 1, 'the rig did not read the fresh connection')
+      assert.ok(b.said.includes('the first question was answered'), b.said.join(' | '))
+    } finally {
+      b.done()
+    }
+    /* Silent on the fresh one too: no third, and the page's not-answering line as before. */
+    {
+      const u = await onTheLine('am4', { silent: true })
+      const c = await linkOnABench(u)
+      try {
+        let reads = 0
+        c.bench.refreshAll = async () => {
+          reads++
+        }
+        let connects = 0
+        c.bench.connect = async () => (connects++, true)
+        c.link.startBluetoothLink(() => {})
+        await advance(u.clock, 30000)
+        assert.equal(connects, 2, `made afresh ${connects - 1} times`)
+        assert.equal(c.bench.releases, 1)
+        assert.equal(reads, 1, 'the rig never read the second connection')
+        assert.ok(c.said.includes('nothing at all came back on this connection to the adapter either'), c.said.join(' | '))
+      } finally {
+        c.done()
+      }
+    }
+    /* Anything at all back (a timing clock): not made afresh, the rig reads it as before. */
+    {
+      const u = await onTheLine('am4', { silent: true })
+      const c = await linkOnABench(u)
+      try {
+        let reads = 0
+        c.bench.refreshAll = async () => {
+          reads++
+        }
+        c.link.startBluetoothLink(() => {})
+        await advance(u.clock, 10)
+        c.bench.current.heardBytes([0xf8])
+        await advance(u.clock, 10000)
+        assert.equal(c.bench.releases, 0, 'a connection that carried bytes was made afresh')
+        assert.equal(reads, 1)
+      } finally {
+        c.done()
+      }
+    }
+    /* A unit on a USB cable: plugged in or not, never made afresh. */
+    {
+      const u = await onTheLine('am4', { silent: true })
+      const c = await linkOnABench(u)
+      try {
+        const cable = { id: 'usb:2466:0007', name: 'AM4', transport: 'usb' }
+        c.bench.settings = { unit: 'am4', adapter: cable }
+        c.bench.devices = [cable]
+        c.link.startBluetoothLink(() => {})
+        await advance(u.clock, 10000)
+        assert.ok(c.bench.current, 'the cable did not connect')
+        assert.equal(c.bench.releases, 0, 'a unit on a USB cable was made afresh')
+      } finally {
+        c.done()
+      }
+    }
+    /* And in the file: never for a VP4, which never answers over Bluetooth, and on both phones. */
+    const link = flat('mobile/src/lib/bleLink.js')
+    assert.match(link, /if \(!woke\?\.connected && made\.unit !== 'vp4' && !onCable\(\)\) \{/)
+    const fresh = link.slice(link.indexOf('const heard = () =>'), link.indexOf('await refreshAll()', link.indexOf('const heard = () =>')))
+    assert.ok(fresh.includes('againAfresh(name)') && !/Platform/.test(fresh), 'the fresh connection is one phone’s only')
+  })
+
+  test('the link: with an AM4 on the FM3’s adapter, the connection names it, a timing clock coming back or not, and is never made afresh', async () => {
+    const { buildAm4Structure } = await import(SX)
+    for (const stray of [false, true]) {
+      const t = await wrongLine('fm3', 'am4')
+      const b = await linkOnABench(t)
+      try {
+        b.bench.settings = { unit: 'fm3', adapter: { id: 'adapter-1', name: 'WIDI Jack Bluetooth' } }
+        b.link.startBluetoothLink(() => {})
+        if (stray) {
+          await advance(t.clock, 5)
+          b.bench.current.heardBytes([0xf8])
+        }
+        await advance(t.clock, 10000)
+        assert.deepEqual(t.foreign, ['AM4'], `${stray ? 'with' : 'without'} a timing clock: the AM4 on the adapter is not named`)
+        assert.equal(b.bench.releases, 0, 'a connection with an AM4 answering on it was made afresh')
+        assert.equal(t.unit.state.frozen, false, 'the AM4 froze')
+        /* Its own question once, and after its answer nothing more of anybody's. */
+        assert.equal(t.sent.filter((f) => f[4] === 0x15).map(hex).join(' | '), hex(buildAm4Structure()))
+      } finally {
+        b.done()
+      }
+    }
+  })
+
+  test('the link: Connect again lets go of the adapter and makes a fresh connection to it, and only while one is connected', async () => {
+    const t = await onTheLine('am4')
+    const b = await linkOnABench(t)
+    try {
+      assert.equal(b.link.connectBluetoothAgain(), false, 'Connect again did something before the link started')
+      let connects = 0
+      b.bench.connect = async () => (connects++, true)
+      b.link.startBluetoothLink(() => {})
+      await advance(t.clock, 2000)
+      const first = b.bench.current
+      assert.ok(first, 'the bench did not connect')
+      assert.equal(b.link.connectBluetoothAgain(), true)
+      await advance(t.clock, 100)
+      assert.equal(b.bench.releases, 1, 'the adapter was not let go of')
+      assert.equal(b.bench.current, null)
+      assert.ok(b.said.includes('connecting to the adapter again, as asked'), b.said.join(' | '))
+      await advance(t.clock, 3500)
+      assert.equal(connects, 2)
+      assert.ok(b.bench.current && b.bench.current !== first, 'no fresh connection')
+      /* Disconnected by hand: nothing to connect again. */
+      await b.link.holdBluetooth()
+      await advance(t.clock, 2000)
+      assert.equal(b.link.connectBluetoothAgain(), false)
+    } finally {
+      b.done()
+    }
+  })
+
+  test('the link: Android saying no at once is said as Bluetooth off, and Bluetooth back on is tried at once', async () => {
+    const t = await onTheLine('am4')
+    const b = await linkOnABench(t)
+    try {
+      const tries = []
+      b.bench.connect = async () => (tries.push(t.clock.now()), false)
+      b.link.startBluetoothLink(() => {})
+      await advance(t.clock, 10)
+      assert.equal(b.bench.offs, 1, 'a no at once was not said as Bluetooth off')
+      /* lib/bluetooth notes it, and later the wait takes it off: the try is now, not at the end of the backoff. */
+      await b.settings({ trouble: 'bluetooth-off' })
+      const was = tries.length
+      b.bench.connect = async () => (tries.push(t.clock.now()), true)
+      await b.settings({ trouble: null })
+      await advance(t.clock, 10)
+      assert.equal(tries.length, was + 1, 'Bluetooth back on was not tried at once')
+      assert.ok(b.bench.current, 'not connected once Bluetooth was back on')
+      assert.ok(b.said.includes('Bluetooth is on again: trying the adapter now'), b.said.join(' | '))
+    } finally {
+      b.done()
+    }
+    /* In the file: Android only, for a Bluetooth adapter, and only a no within half a second (an adapter merely away takes fifteen). */
+    const link = flat('mobile/src/lib/bleLink.js')
+    assert.match(link, /const OFF_ANSWER_MS = 500/)
+    assert.match(link, /if \(!ok && mine === attempt && Platform\.OS === 'android' && !isCable\(s\.adapter\) && Date\.now\(\) - asked < OFF_ANSWER_MS\) await bluetoothLooksOff\(\)/)
+  })
+
+  test('Bluetooth off on Android: Connect says so and logs it, Turn on Bluetooth asks Android, and the look starts by itself once it is on', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const clock = fakeClock()
+    let on = false
+    let list = []
+    const scans = []
+    const JACK = { id: 'AA:BB:CC:00:00:09', name: 'WIDI Jack', rssi: -55 }
+    const mod = { supported: () => true, devices: () => list, requestPermissions: async () => true, scan: async (secs) => (scans.push(secs), on), addListener: () => ({ remove() {} }) }
+    const bench = await bluetoothOnABench({ os: 'android', version: 28, mod, clock })
+    try {
+      const b = bench.ble
+      b.allowBluetooth(ADMINS[0])
+      b.setBluetoothUnit('am4')
+      await b.findAdapters()
+      assert.equal(b.useBluetoothTrouble(), 'bluetooth-off')
+      assert.ok(bench.log.some((l) => /^ble Connect: Bluetooth is off on this \w+, so the search did not start$/.test(l)), bench.log.join(' | '))
+      assert.deepEqual(bench.rn.Linking.intents, [], 'Android was asked before anybody tapped Turn on Bluetooth')
+      /* Turn on Bluetooth: Android's own question, naming the app. */
+      assert.equal(await b.turnOnBluetooth(), true)
+      assert.deepEqual(bench.rn.Linking.intents, [['android.bluetooth.adapter.action.REQUEST_ENABLE', [{ key: 'android.intent.extra.PACKAGE_NAME', value: 'cloud.newbold.fractalremote' }]]])
+      assert.ok(bench.log.includes('ble asked Android to turn Bluetooth on'))
+      /* Still off: asked once a second, quietly, and still said. */
+      await advance(clock, 3000)
+      assert.equal(b.useBluetoothTrouble(), 'bluetooth-off')
+      assert.ok(scans.length >= 3, `asked ${scans.length} times in three seconds`)
+      /* On: the next ask is the look itself, the trouble goes, and the one adapter found is chosen at its end. */
+      on = true
+      list = [JACK]
+      await advance(clock, 1000)
+      assert.equal(b.useBluetoothTrouble(), null, 'Bluetooth on is not noticed')
+      assert.equal(scans.at(-1), 10, 'the look is not the ten-second search')
+      assert.ok(bench.log.includes('ble Bluetooth is on now: looking for the adapter'), bench.log.join(' | '))
+      await advance(clock, 11000)
+      assert.equal(b.bluetoothSettings().adapter?.id, JACK.id, 'the one adapter found was not chosen')
+      /* And no more asking once it is on. */
+      const asked = scans.length
+      await advance(clock, 5000)
+      assert.equal(scans.length, asked, 'the wait goes on after Bluetooth came on')
+    } finally {
+      bench.done()
+    }
+    /* Android will not ask: its Bluetooth settings; and with those refused, the app's own page. */
+    for (const refuse of [['android.bluetooth.adapter.action.REQUEST_ENABLE'], ['android.bluetooth.adapter.action.REQUEST_ENABLE', 'android.settings.BLUETOOTH_SETTINGS']]) {
+      const m = { supported: () => true, devices: () => [], requestPermissions: async () => true, scan: async () => false, addListener: () => ({ remove() {} }) }
+      const k = await bluetoothOnABench({ os: 'android', version: 34, mod: m, clock: fakeClock() })
+      try {
+        await k.ble.findAdapters()
+        for (const action of refuse) k.rn.Linking.refuse.add(action)
+        await k.ble.turnOnBluetooth()
+        assert.deepEqual(k.rn.Linking.intents.map(([action]) => action), ['android.bluetooth.adapter.action.REQUEST_ENABLE', 'android.settings.BLUETOOTH_SETTINGS'])
+        assert.equal(k.rn.Linking.settings, refuse.length === 2 ? 1 : 0, 'the app’s own page opened over Android’s Bluetooth settings, or not at all')
+      } finally {
+        k.done()
+      }
+    }
+    /* The page closing ends the wait. */
+    {
+      const c = fakeClock()
+      let count = 0
+      const m = { supported: () => true, devices: () => [], requestPermissions: async () => true, scan: async () => (count++, false), addListener: () => ({ remove() {} }) }
+      const k = await bluetoothOnABench({ os: 'android', version: 34, mod: m, clock: c })
+      try {
+        await k.ble.findAdapters()
+        await advance(c, 2000)
+        k.ble.stopPageWait()
+        const asked = count
+        await advance(c, 10000)
+        assert.equal(count, asked, 'Bluetooth is still asked about after the page closed')
+        assert.equal(k.ble.useWaitingForBluetooth(), false)
+        /*
+         * Changed on purpose, 7 November 2026 (review): the page opening
+         * again, with Bluetooth still said to be off (only ever after a
+         * Connect), takes the wait up again, so the line's "the search
+         * starts by itself" stays true after one of the page's own pages.
+         */
+        k.ble.refreshAdapters()
+        await advance(c, 1500)
+        assert.ok(count > asked, 'the page opened again on Bluetooth off, and the wait did not start again')
+        assert.equal(k.ble.useWaitingForBluetooth(), true)
+      } finally {
+        k.done()
+      }
+    }
+    /* An iPhone: no such question, nothing sent. */
+    {
+      const { mod: m } = iphoneModule('allowedAlways')
+      const k = await bluetoothOnABench({ mod: m })
+      try {
+        assert.equal(await k.ble.turnOnBluetooth(), false)
+        assert.deepEqual(k.rn.Linking.intents, [])
+      } finally {
+        k.done()
+      }
+    }
+    /* The package Android is told is the app's own. */
+    const app = JSON.parse(src('mobile/app.json'))
+    assert.match(src('mobile/src/lib/bluetooth.js'), new RegExp(`export const ANDROID_PACKAGE = '${app.expo.android.package.replace(/\./g, '\\.')}'`))
+  })
+
+  test('each unit keeps its own adapter: picking a unit picks up its adapter or none, one adapter is one unit’s, and each can be forgotten', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const BT = 'com.apple.AppleMIDIBluetoothDriver'
+    const JACK = { id: '11:12', name: 'WIDI Jack Bluetooth', driver: BT }
+    const UHOST = { id: '21:22', name: 'WIDI Uhost Bluetooth', driver: BT }
+    const kept = (d) => ({ id: d.id, name: d.name, driver: d.driver })
+    let list = [JACK, UHOST].map((d) => ({ ...d, offline: false }))
+    const mod = { supported: () => true, devices: () => list, authorization: () => 'allowedAlways', pair: async () => {}, addListener: () => ({ remove() {} }) }
+    const disk = { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: kept(JACK), pcChannel: 1 }) }
+    const bench = await bluetoothOnABench({ mod, disk })
+    const byUnit = () => JSON.parse(bench.disk.get('fractal.bluetooth.adapters'))
+    try {
+      const b = bench.ble
+      b.allowBluetooth(ADMINS[0])
+      await b.restoreBluetooth()
+      /* One kept from before adapters were kept per unit is the unit's own, written down. */
+      assert.deepEqual(byUnit(), { am4: kept(JACK) })
+      /* The FM3 picked: none of its own, so Connect finds one, never the AM4's. */
+      b.setBluetoothUnit('fm3')
+      assert.equal(b.bluetoothSettings().adapter, null, 'the FM3 was handed the AM4’s WIDI Jack')
+      assert.equal(b.adapterKeptFor(JACK.id), 'am4')
+      assert.ok(bench.log.includes('ble no adapter kept for the FM3 yet: Connect finds one'), bench.log.join(' | '))
+      b.chooseAdapter(UHOST)
+      /* Back to the AM4: its own WIDI Jack again, and the FM3 keeps its Uhost. */
+      b.setBluetoothUnit('am4')
+      assert.equal(b.bluetoothSettings().adapter.id, JACK.id)
+      assert.equal(b.adapterKeptFor(UHOST.id), 'fm3')
+      assert.deepEqual(byUnit(), { am4: kept(JACK), fm3: kept(UHOST) })
+      assert.deepEqual(b.adaptersForOtherUnits(), [{ unit: 'fm3', adapter: kept(UHOST) }])
+      /* The settings keep their shape on the disk: which adapter is whose is under its own key. */
+      assert.deepEqual(Object.keys(JSON.parse(bench.disk.get('fractal.bluetooth'))).sort(), ['adapter', 'methods', 'on', 'pcChannel', 'unit'])
+      /* One adapter is on one unit: the Uhost chosen for the AM4 is the FM3's no longer. */
+      b.chooseAdapter(UHOST)
+      assert.deepEqual(byUnit(), { am4: kept(UHOST) })
+      b.setBluetoothUnit('fm3')
+      assert.equal(b.bluetoothSettings().adapter, null, 'one adapter is kept for two units')
+      /* The page's Switch to (carry): the adapter in use goes with the unit that answered on it. */
+      b.chooseAdapter(JACK)
+      assert.deepEqual(byUnit(), { am4: kept(UHOST), fm3: kept(JACK) })
+      b.setBluetoothUnit('am4', { carry: true })
+      assert.equal(b.bluetoothSettings().adapter.id, JACK.id, 'the adapter that answered for the AM4 did not go with it')
+      assert.deepEqual(byUnit(), { am4: kept(JACK) }, 'the FM3 still keeps the adapter that is on the AM4')
+      assert.ok(bench.log.includes('ble WIDI Jack Bluetooth is on the AM4: it is the AM4’s adapter now'), bench.log.join(' | '))
+      /* Never chosen by itself for another unit: the AM4's WIDI Jack, the only port connected, with the FM9 picked. */
+      list = [{ ...JACK, offline: false }]
+      b.setBluetoothUnit('fm9')
+      assert.equal(await b.findAdapters(), null, 'the AM4’s adapter was chosen for the FM9 by itself')
+      assert.equal(b.bluetoothSettings().adapter, null)
+      /* Forgotten, on the phone's storage too. */
+      assert.equal(b.forgetAdapterFor('am4'), true)
+      assert.deepEqual(byUnit(), {})
+      assert.equal(b.forgetAdapterFor('am4'), false)
+      assert.deepEqual(b.adaptersForOtherUnits(), [])
+    } finally {
+      bench.done()
+    }
+    /* The rule itself: another unit's adapter is never the only one chosen, and one just connected in Apple's screen is the player's own choice. */
+    const { pickAdapter } = await import('../mobile/src/lib/bleAdapters.js')
+    const taken = new Set([JACK.id])
+    assert.equal(pickAdapter([JACK], new Set(), { taken }), null)
+    assert.equal(pickAdapter([JACK], new Set([JACK.id]), { taken }), JACK)
+    assert.equal(pickAdapter([JACK, UHOST], new Set(), { taken }), null, 'one of two was guessed')
+    assert.equal(pickAdapter([UHOST], new Set(), { taken }), UHOST)
+  })
+
+  test('iPhone: an adapter kept that Apple’s screen connected again under a new id is found by its name, never guessed between two, nor another unit’s', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const BT = 'com.apple.AppleMIDIBluetoothDriver'
+    const OLD = { id: '11:12', name: 'WIDI Jack Bluetooth', driver: BT }
+    const NEW = { id: '31:32', name: 'WIDI Jack Bluetooth', driver: BT, offline: false }
+    let list = []
+    const mod = { supported: () => true, devices: () => list, authorization: () => 'allowedAlways', pair: async () => {}, addListener: () => ({ remove() {} }) }
+    const disk = { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: OLD }) }
+    const bench = await bluetoothOnABench({ mod, disk })
+    try {
+      const b = bench.ble
+      b.allowBluetooth(ADMINS[0])
+      await b.restoreBluetooth()
+      /* Nothing of that name connected: nothing guessed. */
+      assert.equal(b.adapterBackUnderNewId(), false)
+      /* Its own ids, connected: it is itself. */
+      list = [{ ...OLD, offline: false }, NEW]
+      assert.equal(b.adapterBackUnderNewId(), false, 'an adapter connected under its own ids was swapped for another of its name')
+      /* Two of that name: a question, never a guess. */
+      list = [NEW, { ...NEW, id: '41:42' }]
+      assert.equal(b.adapterBackUnderNewId(), false, 'one of two adapters of the same name was guessed')
+      /* Another name, or another driver: not it. */
+      list = [{ ...NEW, name: 'WIDI Master Bluetooth' }, { ...NEW, id: '51:52', driver: 'com.apple.AppleMIDIUSBDriver' }]
+      assert.equal(b.adapterBackUnderNewId(), false)
+      /* Its old ids gone (or offline), one of its name connected now: that is the one used. */
+      list = [{ ...OLD, offline: true }, NEW]
+      assert.equal(b.adapterBackUnderNewId(), true)
+      assert.equal(b.bluetoothSettings().adapter.id, NEW.id)
+      assert.ok(bench.log.some((l) => /^ble WIDI Jack Bluetooth is connected to this \w+ again, under a new id in Apple’s list: that is the one used now$/.test(l)), bench.log.join(' | '))
+      /* Never one kept for another unit. */
+      b.setBluetoothUnit('fm3')
+      b.chooseAdapter({ ...OLD })
+      list = [NEW]
+      assert.equal(b.adapterKeptFor(NEW.id), 'am4')
+      assert.equal(b.adapterBackUnderNewId(), false, 'the AM4’s adapter was taken for the FM3’s')
+      /* Android: never. */
+      const android = await bluetoothOnABench({ os: 'android', version: 34, mod: { ...mod, devices: () => [NEW] }, disk })
+      try {
+        android.ble.allowBluetooth(ADMINS[0])
+        await android.ble.restoreBluetooth()
+        assert.equal(android.ble.adapterBackUnderNewId(), false)
+      } finally {
+        android.done()
+      }
+    } finally {
+      bench.done()
+    }
+  })
+
+  test('iPhone: a port that turns up new just after Apple’s screen closed is chosen as it would have been at Done, and the page reads the list again on its way back', async () => {
+    const BT = 'com.apple.AppleMIDIBluetoothDriver'
+    const UHOST = { id: '21:22', name: 'WIDI Uhost Bluetooth', driver: BT, offline: false }
+    let list = []
+    const listeners = {}
+    const mod = { supported: () => true, devices: () => list, authorization: () => 'allowedAlways', pair: async () => {}, addListener: (event, fn) => ((listeners[event] = fn), { remove() {} }) }
+    const bench = await bluetoothOnABench({ mod })
+    try {
+      const b = bench.ble
+      assert.equal(await b.findAdapters(), null)
+      assert.equal(b.bluetoothSettings().adapter, null)
+      /* CoreMIDI tells of it a moment after Done. */
+      list = [UHOST]
+      listeners.onDevices({ devices: list })
+      assert.equal(b.bluetoothSettings().adapter?.id, UHOST.id, 'the adapter Apple’s screen had just connected was not taken')
+      assert.ok(bench.log.includes('ble WIDI Uhost Bluetooth came into Apple’s list a moment after its screen closed: chosen'), bench.log.join(' | '))
+      /* And once: a second port later is the list's, for a tap. */
+      listeners.onDevices({ devices: [UHOST, { ...UHOST, id: '61:62', name: 'WIDI Master Bluetooth' }] })
+      assert.equal(b.bluetoothSettings().adapter.id, UHOST.id)
+      /* The page's refresh as the app comes back: one listener, and it reads the list. */
+      const off = b.refreshOnScreen()
+      assert.equal(bench.rn.AppState.listeners.length, 1)
+      off()
+      assert.equal(bench.rn.AppState.listeners.length, 0, 'the page leaves its listener behind')
+    } finally {
+      bench.done()
+    }
+    const lib = flat('mobile/src/lib/bluetooth.js')
+    assert.match(lib, /const AFTER_SCREEN_MS = 4000/)
+    assert.match(lib, /if \(Date\.now\(\) > a\.until\) \{ afterScreen = null return \}/, 'a port long after the screen is taken as its')
+  })
+
+  test('the page and Play: Turn on Bluetooth under Bluetooth off, Connect again while the unit says nothing, Switch to the unit on the adapter, and Apple’s screen for an adapter not connected', () => {
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    /* Turn on Bluetooth: Android only, drawn once Connect or the link has found it off, with what happens next under it. */
+    assert.match(page, /const offOnAndroid = b\.trouble === 'bluetooth-off' && !ios/)
+    assert.match(page, /const turnOn = \(\) => \{ arm\(\) turnOnBluetooth\(\) \}/)
+    /* Connect again: the adapter connected, the unit silent, never a VP4 or a cable. */
+    assert.match(page, /const offerAgain = quiet && !vp4 && !cable/)
+    assert.match(page, /const again = \(\) => \{ arm\(\) connectBluetoothAgain\(\) \}/)
+    assert.match(page, /\{offerAgain \? <Press label=\{CONNECT_AGAIN\} sub=\{CONNECT_AGAIN_SUB\} tone="live" height=\{52\} onPress=\{again\} \/> : null\} \{quiet && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/, 'Connect again is not first under a silent unit')
+    /* Switch to: the unit that answered, one this account can pick, with the adapter going with it. */
+    assert.match(page, /const answeredKey = connected && b\.answeredAs \? units\.find\(\(u\) => u\.name === b\.answeredAs\)\?\.key \|\| null : null/)
+    /* And never an FM3 on an adapter the app does not name for one (carriesTo): the FM3 rule. */
+    assert.match(page, /const offerSwitch = !!answeredKey && !cable && canStart && carriesTo\(b\.answeredAs, b\.adapter\)/)
+    assert.match(page, /const carriesTo = \(answered, a\) => answered !== 'FM3' \|\| namedForFm3\(adapterName\(a\)\)/)
+    assert.match(page, /setBluetoothUnit\(answeredKey, \{ carry: true \}\)/)
+    /* An iPhone's row for an adapter not connected to it opens Apple's screen, and says so under itself. */
+    assert.match(page, /const viaApple = ios && d\.offline && !isCable\(d\) && !shut/)
+    assert.match(page, /sub=\{viaApple \? APPLE_SCREEN_OPENS : undefined\}/)
+    assert.match(page, /onPress=\{\(\) => \(viaApple \? connectInApplesScreen\(\) : choose\(d\)\)\}/)
+    /* Another unit's adapter in the list says whose it is. */
+    assert.match(page, /\$\{whose \? ` · \$\{adapterOfUnit\(whose\)\}` : ''\}/)
+    /* The list is read again as the page opens and each time the app comes back, and the wait for Bluetooth ends with the page. */
+    /* The page's own wait only ends with it (stopPageWait), and opening it again resumes a wait a Connect began; `wanted` too, so the look's adapter is switched on. */
+    assert.match(page, /useEffect\(\(\) => \{ refreshAdapters\(\) const off = refreshOnScreen\(\) return \(\) => \{ off\(\) stopPageWait\(\) \} \}, \[\]\)/)
+    /* Changed on purpose, 7 November 2026 (second review): only within two minutes of the Connect that found Bluetooth off (connectOwedUntil), never from an older "Bluetooth is off". */
+    assert.match(page, /const \[wanted, setWanted\] = useState\(\(\) => \(connectOwedUntil\(\) !== null && !b\.adapter \? b\.unit : null\)\)/)
+    assert.equal((page.match(/setWanted\(b\.unit\)/g) || []).length, 2, 'a Connect or a row tapped no longer makes the promise for its unit')
+    assert.ok(!/setWanted\(true\)/.test(page), 'a promise made for no unit in particular')
+    assert.ok(!/stopWaitingForBluetooth/.test(page), 'the page ends the link’s own wait for Bluetooth')
+    /* Troubleshooting: each other unit's adapter with its Forget, and on an iPhone how to take one off Apple's list. */
+    const trouble = page.slice(page.indexOf('export function BluetoothTrouble('))
+    assert.match(trouble, /\{adaptersForOtherUnits\(\)\.map\(\(\{ unit, adapter \}\) => \( <Press key=\{unit\} label=\{`Forget \$\{adapterName\(adapter\) \|\| 'the adapter'\}`\}/)
+    assert.match(trouble, /onPress=\{\(\) => forgetAdapterFor\(unit\)\}/)
+    assert.match(trouble, /ios \? appleListForget\(deviceNoun\(\)\) : null,/)
+    /* Play's Bluetooth note, and the waiting screen's Bluetooth-off note. */
+    const bar = flat('mobile/src/components/TopBar.js')
+    assert.match(bar, /import \{ connectBluetoothAgain \} from '\.\.\/lib\/bleLink'/)
+    const waking = flat('mobile/App.js').slice(flat('mobile/App.js').indexOf('function Waking('))
+    assert.match(waking, /\{bluetooth && trouble === 'bluetooth-off' \? <Press label="Turn on Bluetooth" tone="live" onPress=\{\(\) => turnOnBluetooth\(\)\} \/> : null\}/)
+  })
+
+  test('the words for 7 November 2026: plain, for the device in hand, never beta and never tried', async () => {
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    assert.equal(gear.wrongAdapterLine({ adapter: 'WIDI Jack Bluetooth', answered: 'AM4', picked: 'FM3' }), 'The WIDI Jack is on an AM4, not your FM3.')
+    assert.equal(gear.wrongAdapterLine({ adapter: 'WIDI Uhost', answered: 'FM9', picked: 'FM3' }), 'The WIDI Uhost is on an FM9, not your FM3.')
+    assert.equal(gear.SWITCH_TO('AM4'), 'Switch to AM4')
+    assert.equal(gear.SWITCH_TO_SUB('WIDI Jack Bluetooth', 'AM4'), 'Uses the WIDI Jack for the AM4')
+    assert.equal(gear.bluetoothOffLine('tablet'), 'Bluetooth is off on this tablet')
+    assert.equal(gear.TURN_ON_BLUETOOTH, 'Turn on Bluetooth')
+    assert.match(gear.appleListForget('iPad'), /in the iPad’s Settings → Bluetooth, tap ⓘ beside it, then Forget This Device\.$/)
+    assert.equal(gear.adapterOfUnit('am4'), 'the AM4’s adapter')
+    const all = [
+      gear.wrongAdapterLine({ adapter: 'X', answered: 'AM4', picked: 'FM3' }),
+      gear.SWITCH_TO_SUB('X', 'AM4'),
+      gear.CONNECT_AGAIN,
+      gear.CONNECT_AGAIN_SUB,
+      gear.bluetoothOffLine('tablet'),
+      gear.bluetoothOffHint(true),
+      gear.bluetoothOffHint(false),
+      gear.bluetoothOffHint(false, false),
+      gear.appleListForget('iPhone')
+    ]
+    for (const line of all) assert.ok(!/\bbeta\b|\btried\b|this phone/i.test(line), `“${line}” says beta, tried, or this phone`)
+    /* And the generated copy is the source's. */
+    assert.match(src('mobile/src/lib/bluetooth-gear.js'), /export function wrongAdapterLine\(\{ adapter, answered, picked \}\)/)
+  })
+
+  test('the log says the demo’s unit as the demo’s, and a free trial beside the relay pass', () => {
+    const rig = flat('mobile/src/lib/rig.js')
+    assert.match(rig, /: simulated \? unit === 'missing' \? 'the demo has no unit' : 'the demo’s unit' : unit === 'missing' \? 'the computer has no unit' : 'the computer has a unit'/)
+    const pass = flat('mobile/src/lib/relayPass.js')
+    assert.match(pass, /const trial = body && !body\.unlocked && body\.trial \? \(body\.trial\.live \? ' · free trial running' : ' · free trial over'\) : ''/)
+    assert.match(pass, /logDebug\(`relay pass: \$\{res\.status\} \$\{body\?\.unlocked \? 'paid' : 'not paid'\}\$\{trial\}/)
+    /* The relay itself lets a running trial in: its one question says so (the server, not this file, decides). */
+    assert.match(src('supabase/migrations/20261107_trials.sql'), /or exists \(select 1 from public\.trials where account_id = uid and now\(\) < ends_at\)/)
+  })
+
+
+  /* ------------------------------------------------------------------ */
+  /* 7 November 2026, after review: the echo, the FM3 rule, a quick no    */
+  /* with Bluetooth on, and whose wait it is                              */
+  /* ------------------------------------------------------------------ */
+
+  test('the phone’s own questions coming straight back (a THRU plug, an adapter that loops) are never another unit answering', async () => {
+    for (const picked of ['axefx3', 'fm3', 'fm9']) {
+      const t = await wrongLine(picked, null, { loop: true })
+      assert.equal((await t.get('/device/detect')).connected, false)
+      assert.equal((await t.get('/device/detect')).connected, false)
+      assert.equal(await drive(t.clock, t.wire.askAround()), null, `${picked}: its own AM4 question, echoed, was taken for an AM4`)
+      assert.deepEqual(t.foreign, [], `${picked}: a unit was named for the phone’s own echo`)
+      /* The connection is not stopped: it goes on asking its own unit. */
+      assert.deepEqual(await t.get('/preset'), { number: -1, name: '' }, `${picked}: the connection was stopped by its own echo`)
+      /* And the echo is said, as it always was. */
+      assert.ok(t.logs.includes(picked === 'axefx3' ? 'the unit is echoing what it receives: the white plug may be in the Axe-Fx III’s MIDI THRU, not OUT' : 'the unit is echoing what it receives: MIDI Thru is on'), `${picked}: ${t.logs.join(' | ')}`)
+    }
+    /* A real AM4 answering is still heard as one, echo or none. */
+    const a = await wrongLine('fm3', 'am4', { loop: true })
+    await a.get('/device/detect')
+    assert.equal(await drive(a.clock, a.wire.askAround()), 'AM4')
+    /* In the file: the echo guard first, then any other unit. */
+    const wire = flat('mobile/src/lib/bleWire.js')
+    const heard = wire.slice(wire.indexOf('function heard(f) {'), wire.indexOf('heardAgain()', wire.indexOf('function heard(f) {')))
+    const guard = heard.indexOf('if (ownEcho || (f[4] !== model && askedAroundEcho(f))) {')
+    assert.ok(guard > 0 && guard < heard.indexOf('if (f[4] !== model) {'), 'another unit is heard before the echo guard')
+  })
+
+  test('the phone’s own questions to other units coming back late (600 ms, 1.3 s, 3 s) are still never another unit answering', async () => {
+    for (const late of [600, 1300, 3000]) {
+      for (const picked of ['axefx3', 'fm3', 'fm9']) {
+        const t = await wrongLine(picked, null, { loop: late })
+        assert.equal((await t.get('/device/detect')).connected, false)
+        assert.equal((await t.get('/device/detect')).connected, false)
+        assert.equal(await drive(t.clock, t.wire.askAround()), null, `${picked}, ${late} ms: its own AM4 question, echoed late, was taken for an AM4`)
+        /* Every late echo heard, the last of them too. */
+        await advance(t.clock, late + 500)
+        assert.deepEqual(t.foreign, [], `${picked}, ${late} ms: a unit was named for the phone’s own echo`)
+        assert.ok(t.logs.includes('no other unit answered on this adapter either'), `${picked}, ${late} ms: ${t.logs.join(' | ')}`)
+        /* The connection is not stopped: it goes on asking its own unit, with no 409. */
+        assert.deepEqual(await t.get('/preset'), { number: -1, name: '' }, `${picked}, ${late} ms: the connection was stopped by its own echo`)
+        /* And the echo is said, as it always was. */
+        assert.ok(t.logs.includes(picked === 'axefx3' ? 'the unit is echoing what it receives: the white plug may be in the Axe-Fx III’s MIDI THRU, not OUT' : 'the unit is echoing what it receives: MIDI Thru is on'), `${picked}, ${late} ms: ${t.logs.join(' | ')}`)
+      }
+    }
+    /* A real AM4 on the adapter, behind a slow loop, is still named. */
+    const a = await wrongLine('fm3', 'am4', { loop: 600 })
+    await a.get('/device/detect')
+    assert.equal(await drive(a.clock, a.wire.askAround()), 'AM4')
+    /* In the file: kept for this connection only, as each is sent, and apart from allowEcho. */
+    const wire = flat('mobile/src/lib/bleWire.js')
+    assert.match(wire, /if \(o\.am4 && !am4Allowed\(o\.frame\)\) continue askedAround\.push\(o\.frame\)/)
+    assert.match(wire, /const ownEcho = isEcho\(f, now\) && !\(job && job\.opts\.allowEcho\) if \(ownEcho \|\| \(f\[4\] !== model && askedAroundEcho\(f\)\)\) \{/)
+  })
+
+  test('the FM3 rule: Switch to FM3 is never offered, nor carried, on an adapter the app does not name for an FM3', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const BT = 'com.apple.AppleMIDIBluetoothDriver'
+    const kept = (d) => ({ id: d.id, name: d.name, driver: d.driver })
+    const MASTER = { id: '71:72', name: 'WIDI Master Bluetooth', driver: BT }
+    const NAMELESS = { id: '81:82', name: 'BLE MIDI', driver: BT }
+    const UHOST = { id: '21:22', name: 'WIDI Uhost Bluetooth', driver: BT }
+    for (const never of [MASTER, NAMELESS]) {
+      const disk = { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'fm9', adapter: kept(never) }) }
+      const bench = await bluetoothOnABench({ mod: { ...iphoneModule('allowedAlways').mod, devices: () => [{ ...never, offline: false }] }, disk })
+      try {
+        const b = bench.ble
+        b.allowBluetooth(ADMINS[0])
+        await b.restoreBluetooth()
+        assert.equal(b.setBluetoothUnit('fm3', { carry: true }), 'fm9', `${never.name}: switched to the FM3 on it`)
+        assert.equal(b.bluetoothSettings().unit, 'fm9')
+        assert.equal(b.bluetoothSettings().adapter.id, never.id)
+        assert.deepEqual(JSON.parse(bench.disk.get('fractal.bluetooth.adapters')), { fm9: kept(never) }, `${never.name}: kept as the FM3’s`)
+        assert.ok(bench.log.some((l) => l.endsWith('is not one the app names for an FM3: the FM3 is not switched to on it')), bench.log.join(' | '))
+      } finally {
+        bench.done()
+      }
+    }
+    /* An adapter kept with no unit picked yet is not handed to an FM3 picked first, unless the app names it for one. */
+    for (const [adapter, handed] of [[MASTER, false], [UHOST, true]]) {
+      const disk = { 'fractal.bluetooth': JSON.stringify({ on: false, unit: null, adapter: kept(adapter) }) }
+      const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk })
+      try {
+        bench.ble.allowBluetooth(ADMINS[0])
+        await bench.ble.restoreBluetooth()
+        bench.ble.setBluetoothUnit('fm3')
+        assert.equal(bench.ble.bluetoothSettings().adapter?.id ?? null, handed ? adapter.id : null, `${adapter.name} ${handed ? 'not ' : ''}handed to the FM3`)
+      } finally {
+        bench.done()
+      }
+    }
+    /* A USB cable kept with no unit is the unit itself, and still the FM3's when the FM3 is picked first. */
+    {
+      const CABLE = { id: 'usb:2466:0011', name: 'FM3', transport: 'usb' }
+      const disk = { 'fractal.bluetooth': JSON.stringify({ on: false, unit: null, adapter: CABLE }) }
+      const bench = await bluetoothOnABench({ os: 'android', version: 34, mod: { supported: () => true, devices: () => [], addListener: () => ({ remove() {} }) }, disk })
+      try {
+        bench.ble.allowBluetooth(ADMINS[0])
+        await bench.ble.restoreBluetooth()
+        assert.equal(bench.ble.bluetoothSettings().adapter?.id, CABLE.id, 'the bench did not keep the cable')
+        bench.ble.setBluetoothUnit('fm3')
+        assert.equal(bench.ble.bluetoothSettings().adapter?.id ?? null, CABLE.id, 'the FM3 on its own USB cable was refused as an adapter not named for it')
+      } finally {
+        bench.done()
+      }
+    }
+    /* The WIDI Uhost, the FM3's own: carried, and kept as the FM3's. */
+    {
+      const disk = { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: kept(UHOST) }) }
+      const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk })
+      try {
+        bench.ble.allowBluetooth(ADMINS[0])
+        await bench.ble.restoreBluetooth()
+        assert.equal(bench.ble.setBluetoothUnit('fm3', { carry: true }), 'fm3')
+        assert.equal(bench.ble.bluetoothSettings().adapter.id, UHOST.id)
+        assert.deepEqual(JSON.parse(bench.disk.get('fractal.bluetooth.adapters')), { fm3: kept(UHOST) })
+      } finally {
+        bench.done()
+      }
+    }
+    /* The page: the line falls back to Stop, pick and Connect, and no button, for any but the Uhost on an FM3. */
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    for (const [name, offered] of [['WIDI Master Bluetooth', false], ['C2MIDI Pro', false], ['WIDI Jack', false], ['BLE MIDI', false], ['WIDI Uhost Bluetooth', true]]) {
+      assert.equal(gear.namedForFm3(name), offered, `${name} is ${offered ? 'not ' : ''}named for an FM3`)
+    }
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    assert.match(page, /const switchUnit = \(\) => \{ if \(!offerSwitch\) return arm\(\) setBluetoothUnit\(answeredKey, \{ carry: true \}\) \}/)
+    assert.equal(gear.wrongUnitLine({ answered: 'FM3', picked: 'AM4', pickable: true }), 'An FM3 answered, not the AM4. Tap Stop, pick FM3 in step 1, then tap Connect.')
+    /* And the red FM3 warning stays drawn whenever an FM3 answered a connection made for another unit. */
+    assert.match(page, /\(b\.answeredAs === 'FM3' && b\.unit !== 'fm3'\) \? <Note tone="fault">\{FM3_NEVER\}<\/Note> : null/)
+  })
+
+  test('Android: a quick no from the adapter is Bluetooth off only when the module’s own search says so; with Bluetooth on, the ordinary backoff', async () => {
+    const clock = fakeClock()
+    let on = true
+    const asked = []
+    const mod = { supported: () => true, devices: () => [], requestPermissions: async () => true, scan: async (secs) => (asked.push(`scan ${secs}`), !on ? false : true), stopScan: () => asked.push('stopScan'), addListener: () => ({ remove() {} }) }
+    const bench = await bluetoothOnABench({ os: 'android', version: 34, mod, clock })
+    try {
+      const b = bench.ble
+      /* Bluetooth on: not said, the search stopped again, and said in the log once. */
+      assert.equal(await b.bluetoothLooksOff(), false)
+      assert.equal(b.useBluetoothTrouble(), null, 'Bluetooth is said to be off on a phone whose Bluetooth is on')
+      assert.equal(b.useWaitingForBluetooth(), false, 'the app waits for a Bluetooth that is already on')
+      assert.deepEqual(asked, ['scan 1', 'stopScan'])
+      /* The link's next quick tries, within the minute: answered from that search, with no search of their own. */
+      await advance(clock, 3000)
+      assert.equal(await b.bluetoothLooksOff(), false)
+      await advance(clock, 6000)
+      assert.equal(await b.bluetoothLooksOff(), false)
+      assert.equal(asked.length, 2, 'a search started at every quick try')
+      await advance(clock, 10000)
+      assert.equal(asked.length, 2, 'something went on asking with Bluetooth on')
+      /* After the minute: asked again, and the log says it once all the same. */
+      await advance(clock, 45000)
+      assert.equal(await b.bluetoothLooksOff(), false)
+      assert.deepEqual(asked, ['scan 1', 'stopScan', 'scan 1', 'stopScan'])
+      assert.equal(bench.log.filter((l) => /refused at once with Bluetooth on/.test(l)).length, 1, 'the same line every try')
+      /* Bluetooth off, a minute on: said, and waited on. */
+      on = false
+      await advance(clock, 61000)
+      assert.equal(await b.bluetoothLooksOff(), true)
+      assert.equal(b.useBluetoothTrouble(), 'bluetooth-off')
+      assert.equal(b.useWaitingForBluetooth(), true)
+    } finally {
+      bench.done()
+    }
+    /* The link with an answer of on: no Bluetooth off, and its tries at 3, 6 and 12 s, not every second. */
+    const t = await onTheLine('am4')
+    const k = await linkOnABench(t)
+    try {
+      k.bench.offAnswer = false
+      const tries = []
+      k.bench.connect = async () => (tries.push(t.clock.now()), false)
+      k.link.startBluetoothLink(() => {})
+      await advance(t.clock, 30000)
+      assert.deepEqual(tries, [0, 3000, 9000, 21000], 'a quick no with Bluetooth on is tried faster than the ordinary backoff')
+    } finally {
+      k.done()
+    }
+  })
+
+  test('whose wait it is: the page ends only its own, the link’s ends with the link, and the trouble goes with it', async () => {
+    const mk = () => ({ supported: () => true, devices: () => [], requestPermissions: async () => true, scan: async () => false, stopScan: () => {}, addListener: () => ({ remove() {} }) })
+    const { ADMINS } = await import('../shared/admin.mjs')
+    /* The link's wait (an adapter kept, Bluetooth on in the app): the page closing leaves it. */
+    {
+      const clock = fakeClock()
+      const disk = { 'fractal.bluetooth': JSON.stringify({ on: true, unit: 'am4', adapter: { id: 'AA:BB:CC:00:00:09', name: 'WIDI Jack' } }) }
+      const bench = await bluetoothOnABench({ os: 'android', version: 34, mod: mk(), clock, disk })
+      try {
+        const b = bench.ble
+        b.allowBluetooth(ADMINS[0])
+        await b.restoreBluetooth()
+        assert.equal(await b.bluetoothLooksOff(), true)
+        b.stopPageWait()
+        assert.equal(b.useWaitingForBluetooth(), true, 'the page closing ended the link’s wait for the adapter kept')
+        /* The computer picked (the link stops): the wait ends, and the trouble with it. */
+        b.endLinkWait()
+        assert.equal(b.useWaitingForBluetooth(), false)
+        assert.equal(b.useBluetoothTrouble(), null, 'Bluetooth is still said to be off for somebody on the computer')
+      } finally {
+        bench.done()
+      }
+    }
+    /* The page's wait (Connect, nothing kept): the link stopping leaves it; the page closing ends it. */
+    {
+      const clock = fakeClock()
+      const bench = await bluetoothOnABench({ os: 'android', version: 34, mod: mk(), clock })
+      try {
+        const b = bench.ble
+        await b.findAdapters()
+        assert.equal(b.useWaitingForBluetooth(), true)
+        b.endLinkWait()
+        assert.equal(b.useWaitingForBluetooth(), true, 'the link stopping ended the page’s own wait')
+        assert.equal(b.useBluetoothTrouble(), 'bluetooth-off')
+        b.stopPageWait()
+        assert.equal(b.useWaitingForBluetooth(), false)
+        /* Opened again within the Connect's two minutes: taken up again, for what is left of them. */
+        await advance(clock, 30000)
+        b.refreshAdapters()
+        assert.equal(b.useWaitingForBluetooth(), true)
+        assert.ok(bench.log.includes('ble waiting for Bluetooth to come on again, for the 90 s left of the Connect’s 2 minutes'), bench.log.join(' | '))
+        /* The shade closing (Android's focus) within them takes it up again too. */
+        b.stopPageWait()
+        const off = b.refreshOnScreen()
+        assert.equal(bench.rn.AppState.listeners.length, 2, 'Android’s focus is not listened to')
+        for (const fn of [...bench.rn.AppState.listeners]) fn('active')
+        assert.equal(b.useWaitingForBluetooth(), true)
+        /* Two minutes from the Connect it stops by itself, and says so. */
+        await advance(clock, b.WAIT_ON_MS - 30000 + 2000)
+        assert.equal(b.useWaitingForBluetooth(), false, 'the wait outlived its Connect')
+        assert.ok(bench.log.includes('ble Bluetooth did not come on within 2 minutes: no longer waiting for it'), bench.log.join(' | '))
+        /*
+         * Changed on purpose, 7 November 2026 (second review): after them the
+         * shade closing takes nothing up. "Bluetooth is off" goes, and the
+         * page asks for a Connect again.
+         */
+        for (const fn of [...bench.rn.AppState.listeners]) fn('active')
+        assert.equal(b.useWaitingForBluetooth(), false, 'a Connect more than two minutes old was waited on again')
+        assert.equal(b.useBluetoothTrouble(), null)
+        off()
+        assert.equal(bench.rn.AppState.listeners.length, 0)
+      } finally {
+        bench.done()
+      }
+    }
+    /* And the words follow it: the search is promised only while the app waits. */
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    assert.equal(gear.bluetoothOffHint(false, true), 'Once it is on, the search starts by itself.')
+    assert.equal(gear.bluetoothOffHint(false, false), 'Turn it on, then tap Connect again.')
+    assert.equal(gear.bluetoothOffHint(true, false), 'Once it is on, the adapter connects by itself.')
+    /* The link: its wait ends as it stops, after it is no longer running. */
+    const link = flat('mobile/src/lib/bleLink.js')
+    const stop = link.slice(link.indexOf('export function stopBluetoothLink() {'))
+    assert.ok(stop.indexOf('running = false') < stop.indexOf('endLinkWait()'), 'the trouble goes while the link still listens')
+    const t = await onTheLine('am4')
+    const k = await linkOnABench(t)
+    try {
+      k.link.startBluetoothLink(() => {})
+      await advance(t.clock, 2000)
+      await k.link.stopBluetoothLink()
+      assert.equal(k.bench.linkWaitsEnded, 1)
+    } finally {
+      k.done()
+    }
+  })
+
+  /*
+   * A "BLUETOOTH IS OFF" FROM A CONNECT LONG AGO. Android keeps the app
+   * alive, so the trouble a Connect left (the tablet's Bluetooth off, the
+   * page closed without turning it on) was still there hours later, with
+   * Bluetooth on for headphones and the WIDI powered: opening the page just
+   * to look started the wait, its search found the one adapter, and the
+   * page's promise switched a customer off the computer with no tap
+   * (second review, 7 November 2026). Now the promise holds for two minutes
+   * from the Connect and no more.
+   */
+  test('an old “Bluetooth is off” never starts a search or switches anybody to Bluetooth: only a Connect within two minutes does', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const JACK = { id: 'AA:BB:CC:00:00:09', name: 'WIDI Jack', rssi: -55 }
+    const make = async () => {
+      const clock = fakeClock()
+      const state = { on: false, list: [], scans: [] }
+      const mod = { supported: () => true, devices: () => state.list, requestPermissions: async () => true, scan: async (secs) => (state.scans.push(secs), state.on), stopScan: () => {}, addListener: () => ({ remove() {} }) }
+      const bench = await bluetoothOnABench({ os: 'android', version: 34, mod, clock })
+      bench.ble.allowBluetooth(ADMINS[0])
+      bench.ble.setBluetoothUnit('am4')
+      return { clock, state, bench, b: bench.ble }
+    }
+    /* Connect with Bluetooth off, the page closed, three hours later Bluetooth on and the WIDI Jack about. */
+    {
+      const { clock, state, bench, b } = await make()
+      try {
+        await b.findAdapters()
+        assert.equal(b.useBluetoothTrouble(), 'bluetooth-off')
+        assert.notEqual(b.connectOwedUntil(), null)
+        b.stopPageWait()
+        await advance(clock, 3 * 3600 * 1000)
+        assert.equal(b.connectOwedUntil(), null, 'a Connect three hours old is still owed')
+        state.on = true
+        state.list = [JACK]
+        const asked = state.scans.length
+        /* The page opened, the app back on screen, Turn on Bluetooth: nothing searches, nothing is chosen. */
+        b.refreshAdapters()
+        await advance(clock, 15000)
+        assert.equal(state.scans.length, asked, 'the page opening searched for an adapter with no Connect')
+        assert.equal(b.useBluetoothTrouble(), null, 'the old “Bluetooth is off” is still said')
+        assert.equal(b.useWaitingForBluetooth(), false)
+        assert.equal(b.bluetoothSettings().adapter, null, 'an adapter was chosen with no tap')
+        assert.equal(b.bluetoothSettings().on, false)
+        assert.ok(bench.log.includes('ble Bluetooth was said to be off at a Connect more than 2 minutes ago: no longer said, nothing looked for'), bench.log.join(' | '))
+      } finally {
+        bench.done()
+      }
+    }
+    /* Turn on Bluetooth after the two minutes, the page left open: Android is asked, and nothing is looked for by itself. */
+    {
+      const { clock, state, bench, b } = await make()
+      try {
+        await b.findAdapters()
+        await advance(clock, b.WAIT_ON_MS + 5000)
+        assert.equal(b.useWaitingForBluetooth(), false)
+        const asked = state.scans.length
+        state.on = true
+        state.list = [JACK]
+        assert.equal(await b.turnOnBluetooth(), true)
+        await advance(clock, 15000)
+        assert.equal(state.scans.length, asked, 'Turn on Bluetooth searched for a Connect more than two minutes old')
+        assert.equal(b.bluetoothSettings().adapter, null)
+      } finally {
+        bench.done()
+      }
+    }
+    /* Within them: Bluetooth on in Android's settings, the page opened again, and the look chooses the one adapter, as the Connect would have. */
+    {
+      const { clock, state, bench, b } = await make()
+      try {
+        await b.findAdapters()
+        b.stopPageWait()
+        await advance(clock, 60000)
+        state.on = true
+        state.list = [JACK]
+        b.refreshAdapters()
+        await advance(clock, 13000)
+        assert.equal(b.bluetoothSettings().adapter?.id, JACK.id, 'a Connect a minute old was not kept')
+      } finally {
+        bench.done()
+      }
+    }
+    /* A new Connect clears the old one's time: found on, nothing is owed. */
+    {
+      const { bench, b, state } = await make()
+      try {
+        await b.findAdapters()
+        state.on = true
+        await b.findAdapters()
+        assert.equal(b.connectOwedUntil(), null)
+      } finally {
+        bench.done()
+      }
+    }
+    /* In the file: the time is set where Connect finds Bluetooth off, and cleared at the top of every Connect. */
+    const lib = flat('mobile/src/lib/bluetooth.js')
+    const find = lib.slice(lib.indexOf('export async function findAdapters('), lib.indexOf('function look() {'))
+    assert.ok(find.indexOf('offAtConnect = null') >= 0 && find.indexOf('offAtConnect = null') < find.indexOf('offAtConnect = Date.now()'), 'the time of the Connect is not cleared at its top')
+    assert.match(find, /offAtConnect = Date\.now\(\) noteBluetooth\(\{ trouble: 'bluetooth-off' \}\) waitForBluetoothOn\(look, offAtConnect \+ WAIT_ON_MS\)/)
+    assert.equal((lib.match(/waitForBluetoothOn\(look\b/g) || []).length, 3, 'the page’s look waited on somewhere new')
+    assert.equal((lib.match(/waitForBluetoothOn\(look, (offAtConnect \+ WAIT_ON_MS|connectOwedUntil\(\)|until)\)/g) || []).length, 3, 'the page’s look waited on past its Connect')
+  })
+
+  test('the wait for Bluetooth ends when the search fails rather than answering off, instead of failing every second for two minutes', async () => {
+    for (const [code, trouble] of [['E_PERMISSION', 'permission'], ['E_SCAN', 'bluetooth-off']]) {
+      const clock = fakeClock()
+      let scans = 0
+      const mod = {
+        supported: () => true,
+        devices: () => [],
+        requestPermissions: async () => true,
+        scan: async () => {
+          scans++
+          if (scans === 1) return false
+          throw Object.assign(new Error('the search would not start'), { code })
+        },
+        stopScan: () => {},
+        addListener: () => ({ remove() {} })
+      }
+      const bench = await bluetoothOnABench({ os: 'android', version: 34, mod, clock })
+      try {
+        const b = bench.ble
+        await b.findAdapters()
+        assert.equal(b.useWaitingForBluetooth(), true)
+        await advance(clock, 30000)
+        assert.equal(scans, 2, `${code}: asked ${scans} times`)
+        assert.equal(b.useWaitingForBluetooth(), false)
+        assert.equal(b.useBluetoothTrouble(), trouble)
+        assert.ok(bench.log.some((l) => /the search would not start while waiting for Bluetooth/.test(l)), bench.log.join(' | '))
+      } finally {
+        bench.done()
+      }
+    }
+  })
+
+  test('the link: the one fresh connection by itself is owed again after a connection that carried anything back, and only after a drop', async () => {
+    const t = await onTheLine('am4', { silent: true })
+    const b = await linkOnABench(t)
+    try {
+      let connects = 0
+      b.bench.connect = async () => (connects++, true)
+      b.link.startBluetoothLink(() => {})
+      /* Silent, so made afresh; the fresh connection answers. */
+      await advance(t.clock, 3100)
+      assert.equal(b.bench.releases, 1)
+      t.unit.opt.silent = false
+      await advance(t.clock, 3500)
+      assert.equal(connects, 2)
+      assert.ok(b.bench.current?.bytesIn() > 0, 'the bench unit never answered')
+      /* Later the adapter drops, and the connection that comes back is silent: it gets its fresh connection too. */
+      t.unit.opt.silent = true
+      b.drop()
+      t.line.gone = false
+      await advance(t.clock, 20000)
+      assert.equal(b.bench.releases, 2, 'a silent connection after a working one was not made afresh')
+      assert.equal(connects, 4)
+      assert.ok(b.said.some((l) => /bytes came back on that connection/.test(l)), b.said.join(' | '))
+      /* And no more than that one: silent again, it is kept as it is. */
+      await advance(t.clock, 60000)
+      assert.equal(connects, 4, 'made afresh more than once a round')
+      assert.equal(b.bench.releases, 2)
+    } finally {
+      b.done()
+    }
+    /* Bytes that came only after connecting (the made-afresh one silent at first, then a timing clock): owed again after its drop too. */
+    {
+      const u = await onTheLine('am4', { silent: true })
+      const c = await linkOnABench(u)
+      try {
+        let connects = 0
+        c.bench.connect = async () => (connects++, true)
+        c.link.startBluetoothLink(() => {})
+        await advance(u.clock, 12000)
+        assert.equal(connects, 2)
+        assert.equal(c.bench.releases, 1)
+        c.bench.current.heardBytes([0xf8])
+        c.drop()
+        u.line.gone = false
+        await advance(u.clock, 20000)
+        assert.ok(c.said.includes('the adapter went away (1 bytes came back on that connection)'), c.said.join(' | '))
+        assert.equal(c.bench.releases, 2, 'a connection that carried bytes did not owe the next one its fresh connection')
+        assert.equal(connects, 4)
+        /* A silent connection dropped: nothing owed, so the next silent one is kept. */
+        c.drop()
+        u.line.gone = false
+        await advance(u.clock, 20000)
+        assert.equal(c.bench.releases, 2, 'made afresh again after a connection that brought nothing back')
+        assert.equal(connects, 5)
+      } finally {
+        c.done()
+      }
+    }
+  })
+
+  test('Play’s Bluetooth note: no Connect again once another unit has answered on the adapter, and the bar redraws only when that changes', () => {
+    const bar = flat('mobile/src/components/TopBar.js')
+    assert.match(bar, /const bleAnswered = useBluetoothAnsweredAs\(\)/)
+    const lib = flat('mobile/src/lib/bluetooth.js')
+    assert.match(lib, /const readAnsweredAs = \(\) => snapshot\.answeredAs \?\? null/)
+    assert.match(lib, /export const useBluetoothAnsweredAs = \(\) => useSyncExternalStore\(subscribeBluetooth, readAnsweredAs, readAnsweredAs\)/)
+    assert.ok(!/useBluetooth\(\)/.test(code('mobile/src/components/TopBar.js')), 'the bar redraws for every change on the Bluetooth page')
   })
 }

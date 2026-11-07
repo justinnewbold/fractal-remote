@@ -3901,6 +3901,8 @@ export function run(test) {
     const NAMES = /android|google|play store|play console|\bapk\b/i
     const KNOWN = [
       ['src/lib/bluetooth.js', /in Android’s settings/, 'ALLOW_WORDS: the iPhone line is picked first, on Platform.OS'],
+      /* Android's own turn-on question and its Bluetooth settings, and the log lines about them (7 November 2026): turnOnBluetooth and the wait return at once anywhere but Android (Platform.OS), and nothing sets 'bluetooth-off' on an iPhone. */
+      ['src/lib/bluetooth.js', /^android\.(bluetooth|intent|settings)\.|asked Android to turn Bluetooth on|^Android would not ask to turn Bluetooth on \(|^opened Android’s Bluetooth settings$|^Android’s Bluetooth settings did not open \(/, 'turnOnBluetooth: Android only, on Platform.OS'],
       /* What we know of each try, drawn only on Developer → App health → Tried, which only his account opens, and never for Apple's reviewer (31 October 2026). */
       ['src/lib/bluetooth-gear.js', /^From an iPhone and an Android phone, 26 October 2026/, 'TRIED_NOTES: on Developer → App health → Tried, his account alone'],
       ['src/screens/Bluetooth.js', /If Android asks to pair, accept\./, 'the Connect hint, behind ios ? … :'],
@@ -5129,11 +5131,12 @@ export function run(test) {
        purpose on 25 October 2026); for the computer it is the poke alone.
        And the way to the Bluetooth page only through the Settings row's own
        gate (bluetoothOffered), changed on purpose the same day with the No
-       computer? button. */
+       computer? button. And no Setlists since 7 November 2026: "it
+       shouldn't be on a connect screen" (Justin). */
     assert.match(
       flat,
       /* And, changed on purpose on 25 October 2026, Report a Bluetooth problem, through the page's own gate (reportBluetooth). */
-      /\{settling && screen === 'stage' \? \( <Waking link=\{link\} long=\{lookedLong\} onRetry=\{probeNow\} onSwitch=\{\(\) => openSettings\('link'\)\} onTroubleshoot=\{openConnectFix\} onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\} onReport=\{reportBluetooth \? \(said\) => reportBluetooth\('stage', said\) : null\} onSetlists=\{\(\) => setScreen\('setlists'\)\} \/>/,
+      /\{settling && screen === 'stage' \? \( <Waking link=\{link\} long=\{lookedLong\} onRetry=\{probeNow\} onSwitch=\{\(\) => openSettings\('link'\)\} onTroubleshoot=\{openConnectFix\} onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\} onReport=\{reportBluetooth \? \(said\) => reportBluetooth\('stage', said\) : null\} \/>/,
       'nothing is shown while the app waits'
     )
 
@@ -5323,8 +5326,8 @@ export function run(test) {
        a moment later, and again after every trip to Settings. It asks from
        the first second of looking now; the note still waits for `long`. */
     assert.match(waking, /useComputerElsewhere\(link\.link !== 'connected' && !bluetooth\)/, 'the phone never asks while it waits')
-    /* "This iPad" on an iPad (device-word.mjs). */
-    assert.match(waking, /This \$\{deviceNoun\(\)\} is signed in as \$\{email\}/, 'the phone does not say which account it is on')
+    /* "This iPad" on an iPad (device-word.mjs). Shorter since 7 November 2026 ("way too much text"): the email once, and the two fixes. */
+    assert.match(waking, /The computer on this wifi is signed into a different account\. Sign it in as \$\{email\}, or switch this \$\{deviceNoun\(\)\} to its account\./, 'the phone does not say which account it is on')
     assert.match(waking, /Switch account on this \$\{deviceNoun\(\)\}/, 'the phone gives no way to change account')
     assert.match(read('mobile/src/screens/Settings.js'), /useComputerElsewhere\(link === 'no-answer'\)/, 'Setup never asks')
 
@@ -7413,7 +7416,19 @@ export function run(test) {
     )
     /* Changed on purpose, 12 October 2026: "the Fractal Remote app", not "the Fractal app", which reads as Fractal Audio's own (FM3-Edit). */
     assert.match(waking, /Open the Fractal Remote app on the computer, and check the computer is awake\./, 'no advice on the phone')
-    assert.match(waking, /<Press label="Look for the computer again" onPress=\{\(\) => onRetry\?\.\(\)\} \/>/, 'no button on the phone')
+    /*
+     * Look again in a component of its own since 7 November 2026, so the
+     * tap is seen to do something ("seemingly does nothing when it's already
+     * looking"): Looking… for a few seconds, then that nothing answered. Its
+     * timer is its own, above Waking, never the waiting screen's clock.
+     */
+    assert.match(waking, /<LookAgain onRetry=\{onRetry\} \/>/, 'no button on the phone')
+    const again = flat.slice(flat.indexOf('function LookAgain('), flat.indexOf('function useHeldLink('))
+    assert.ok(again.startsWith('function LookAgain(') && flat.indexOf('function LookAgain(') < flat.indexOf('function useLookedLong('), 'Look again is not its own component, ahead of the clock')
+    assert.match(again, /label=\{asked === 'asking' \? 'Looking…' : 'Look for the computer again'\} disabled=\{asked === 'asking'\} onPress=\{\(\) => \{ setAsked\('asking'\) onRetry\?\.\(\) \}\}/, 'Look again does not say it is looking, or does not ask at once')
+    assert.match(again, /setTimeout\(\(\) => setAsked\('unanswered'\), RETRY_SHOWN_MS\)/, 'Look again never says nothing answered')
+    assert.match(again, /No answer from the computer yet\. It keeps looking by itself\./)
+    assert.ok(!/setLong|link\.link/.test(again), 'Look again keeps the fifteen-second clock, or follows the link')
 
     const web = read('src/components/ConnectScreen.jsx').replace(/\s+/g, ' ')
     assert.match(web, /if \(state !== 'joining'\) return undefined const t = setTimeout\(\(\) => setLong\(true\), 15000\)/, 'the browser never says more than Connecting')
@@ -7495,16 +7510,15 @@ export function run(test) {
     assert.match(wrong, /const saying = Boolean\(active && elsewhere\) useEffect\(\(\) => \{ onSaying\?\.\(saying\)/, 'the account warning does not say when it is up')
 
     /*
-     * SETLISTS FROM THE WAITING SCREEN. Their only door is the play screen,
-     * which this stands in front of for as long as nothing answers, so with
-     * the computer shut tonight's running order could not be fixed on the
-     * sofa. With the advice, for the computer and the adapter alike.
+     * NO SETLISTS ON THE WAITING SCREEN, since 7 November 2026: "I don't know
+     * the purpose of having set lists on a screen when you're not connected
+     * at all ... it shouldn't be on a connect screen" (Justin). They had been
+     * there since 1.87.17, because the play screen was their only door; they
+     * are on Play, and in the demo.
      */
     const waking = flat.slice(flat.indexOf('function Waking('))
-    assert.match(waking, /^function Waking\(\{[^}]*\bonSetlists \}\)/, 'the waiting screen has no way to Setlists')
-    const advice = waking.slice(waking.indexOf("{long && link.link !== 'connected' ? ("))
-    assert.match(advice, /\{onSetlists \? <Press label="Setlists" sub="These work with nothing connected" onPress=\{onSetlists\} \/> : null\}/, 'the waiting screen has no way to Setlists')
-    assert.ok(!/bluetooth && onSetlists|!bluetooth && onSetlists/.test(waking), 'Setlists are offered for one link and not the other')
+    assert.match(waking, /^function Waking\(\{ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, onReport \}\)/, 'the waiting screen is handed a way to Setlists again')
+    assert.ok(!/Setlists|onSetlists/.test(waking.replace(/\/\*[\s\S]*?\*\//g, ' ')), 'the waiting screen offers Setlists again')
   })
 
   test('a computer that says it has no unit is an answer: Play stays, and the waiting screen never flips with it', () => {
@@ -7868,8 +7882,17 @@ export function run(test) {
      * fractal.newbold.cloud/downloads." What was ruled out was GitHub and the
      * routes' install steps, and both stay out.
      */
+    /*
+     * And, since 7 November 2026, the website's Bluetooth setup guide, from
+     * Connect over Bluetooth over the page where nobody has paid yet (from
+     * the sign-in screen): "everything that mentions how to connect to a
+     * computer also mentions how to connect to Bluetooth and putting
+     * Bluetooth first" (Justin). His own site, read by anybody, never a shop.
+     */
     const opens = [...screen.matchAll(/Linking\.openURL\(([^)]*)\)/g)].map((m) => m[1])
-    assert.deepEqual(opens, ['`https://${DOWNLOADS_URL}`'], 'the phone can be sent to a page other than the downloads page')
+    assert.deepEqual(opens, ['GUIDE_URL', '`https://${DOWNLOADS_URL}`'], 'the phone can be sent to a page other than the downloads page and the Bluetooth guide')
+    assert.match(screen.replace(/\s+/g, ' '), /onPress=\{onBluetooth \|\| \(\(\) => Linking\.openURL\(GUIDE_URL\)\.catch\(\(\) => \{\}\)\)\}/, 'the guide opens where the Bluetooth page is offered')
+    assert.match(screen.replace(/\s+/g, ' '), /\{onBluetooth \|\| \(openForCustomersHere\(\) && bluetoothSupported\(\)\) \? \(/, 'Connect a computer offers Bluetooth on a copy that does not open it')
     assert.ok(!/github/i.test(screen.replace(/\/\*[\s\S]*?\*\//g, ' ')), 'the phone is sent to GitHub again')
     /* His mockup: the card says it is the desktop app, for which computers,
        and the address sits in it with a copy button. */
@@ -9346,10 +9369,15 @@ export function run(test) {
      */
     assert.deepEqual(order, [
       '# My rig',
+      /*
+       * "Move the Bluetooth card from the phone and computer menu to its own
+       * menu under the settings menu." First since 7 November 2026, where it
+       * is offered: "make sure it's Bluetooth first as far as connection
+       * options go".
+       */
+      'Bluetooth',
       /* Phone & computer, or iPad & computer on an iPad (device-word.mjs). */
       'PAIR_TITLE',
-      /* "Move the Bluetooth card from the phone and computer menu to its own menu under the settings menu." */
-      'Bluetooth',
       /* What each footswitch does, where the switches can be read. */
       'Footswitches',
       /* Stop the looper is under Troubleshooting since 29 October 2026 ("Move stop the looper to the troubleshooting menu"). */
@@ -13725,7 +13753,7 @@ export function run(test) {
     assert.match(app, /const unitGoes = demo \? 'demo' : link\.hosts\?\.length > 1 && link\.link === 'connected' \? 'which' : 'link'/, 'a pill tapped over a dropped link opens Which unit, with no way to look again')
     assert.match(flat, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes,/, 'the bar is not told where its pill goes')
     /* On a USB cable it opens the note that says how it is connected, with its one way back to the computer (lib/cableWords). */
-    assert.match(flat, /const pillGoes = demo \? 'Change the demo unit' : cable \? 'How it’s connected' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/, 'a screen reader is told Switch unit for a page with nothing to switch')
+    assert.match(flat, /const pillGoes = demo \? 'Change the demo unit' : toBluetooth \? 'Connect over Bluetooth' : cable \? 'How it’s connected' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/, 'a screen reader is told Switch unit for a page with nothing to switch')
     assert.match(flat, /accessibilityLabel=\{`\$\{\[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)\}\. \$\{pillGoes\}`\}/)
     assert.ok(!/'Switch unit'/.test(bar), 'the pill still says Switch unit')
     /* The demo on a 360-wide phone: Unlock over the price, and the pill's edge at space.sm. */
@@ -13793,7 +13821,13 @@ export function run(test) {
     const link = read('mobile/src/lib/link.js').replace(/\s+/g, ' ')
     assert.match(link, /watchUnit\(\)/, 'nothing starts the phone asking')
     /* A phone in a pocket has no screen to be wrong on. */
-    assert.match(link, /if \(status === 'active'\) watchUnit\(\) else stopWatching\(\)/, 'the asking does not stop with the screen')
+    /*
+     * And only while the computer answers, since 7 November 2026: signed
+     * out, or with no computer at all, it asked one that was not there every
+     * thirty seconds and put the failure on screen (link.js
+     * watchWhileConnected, run on a bench in test/bluetooth.mjs).
+     */
+    assert.match(link, /if \(status === 'active' && state\.link === 'connected'\) watchUnit\(\) else stopWatching\(\)/, 'the asking does not stop with the screen')
 
     const app = read('src/App.jsx').replace(/\s+/g, ' ')
     assert.match(app, /if \(status !== 'live'\) return undefined/, 'the browser asks about a unit it never had')
@@ -14237,7 +14271,8 @@ export function run(test) {
     /* On the phone the name is in the pill since 24 October 2026, and the pill says where it goes: the demo units, Which unit, or Phone & computer (App.js unitGoes). */
     assert.match(
       read('mobile/src/components/TopBar.js').replace(/\s+/g, ' '),
-      /demo \? 'Change the demo unit' : cable \? 'How it’s connected' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/,
+      /* And, since 7 November 2026, the Bluetooth page while the pill says Not connected · tap to connect (App.js connectFirst). */
+      /demo \? 'Change the demo unit' : toBluetooth \? 'Connect over Bluetooth' : cable \? 'How it’s connected' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/,
       'the phone’s unit name is labelled for a page it does not open'
     )
     assert.ok(!/About this unit/.test(web + read('mobile/src/components/TopBar.js')), 'the unit name still promises a page that is not there')
@@ -17534,7 +17569,8 @@ export function run(test) {
     }
     /* And the price page says it, since it closes. */
     const pay = withoutComments(read('mobile/src/screens/Paywall.js')).replace(/\s+/g, ' ')
-    assert.match(pay, /if \(out\.ok && out\.message\) Alert\.alert\('Already unlocked', out\.message\) if \(out\.ok\) return onUnlocked\?\.\(\)/, 'the price page closes on “nothing was charged” without saying it')
+    /* And, since 7 November 2026, only a purchase made just now asks How do you connect to your unit? next (lib/howConnect): never one found already made. */
+    assert.match(pay, /if \(out\.ok && out\.message\) Alert\.alert\('Already unlocked', out\.message\) if \(out\.ok && !out\.message\) askHowToConnect\(\) if \(out\.ok\) return onUnlocked\?\.\(\)/, 'the price page closes on “nothing was charged” without saying it, or asks a returning owner how they connect')
     /* A sale made just now is still “you’ve paid”. */
     const rc2 = pretendRevenueCat()
     const bench2 = await benchWith(rc2)
@@ -18300,6 +18336,32 @@ export function run(test) {
       assert.equal(asked(CHAIN), 1, 'the new preset’s chain was not read once')
       await clock.advance(30000 + 50)
       assert.equal(asked(CHAIN), 1, 'the timed check reads the chain when nothing changed')
+    } finally {
+      rig.stopWatching()
+    }
+  })
+
+  /*
+   * A CHECK STILL OUT IS A WATCH. link.js asks for the watch at every
+   * keepalive (every nine seconds or so) since 7 November 2026, and the
+   * timer is empty while a check waits on its answer: a watchUnit() then
+   * started a second run, the answer on its way was thrown away, and the
+   * count of quiet answers went back to nothing. An FM3 unplugged at the
+   * computer, whose computer is slow to say so, was never said to be gone.
+   */
+  test('the unit watch asked for again while a check is out keeps that check, and a unit gone is still noticed', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    unit.which = () => ({ number: -1, name: '' })
+    unit.lag = (line) => (line === 'GET /preset' ? 2000 : 0)
+    rig.watchUnit()
+    try {
+      for (let i = 0; i < 160 && rig.getState().unit === 'present'; i++) {
+        rig.watchUnit()
+        await clock.advance(500)
+      }
+      assert.ok(rig.getState().unit === 'silent' || rig.getState().unit === 'missing', `a unit that stopped answering is still ${rig.getState().unit} after 80 s`)
+      /* One check at a time: two quiet answers, a timed check each, and the read that decides the word. */
+      assert.ok(asked('GET /preset') <= 4, `asked ${asked('GET /preset')} times`)
     } finally {
       rig.stopWatching()
     }

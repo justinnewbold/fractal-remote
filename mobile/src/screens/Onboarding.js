@@ -108,12 +108,12 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
    * (WALKTHROUGH_TWO_WAYS); anywhere else it says what it always did. The
    * purchase page's own gate, word for word (Paywall.js): nobody here has
    * paid yet, so the Settings row's gate, which waits for the purchase, is
-   * not the question. The box before Unlock is his own sentence and waits
-   * for his answer (WALKTHROUGH_TWO_WAYS says what was put to him).
+   * not the question. The box before Unlock says both ways too
+   * (WALKTHROUGH_TWO_WAYS says what was put to him, and how it was cut).
    */
   const twoWays = openForCustomersHere() && bluetoothSupported()
-  /* Which way How it works draws on such a copy: the computer, the best one, to start with (HOW_TWO_WAYS). */
-  const [howWay, setHowWay] = useState('computer')
+  /* Which way How it works draws on such a copy: Bluetooth to start with, since 7 November 2026 ("make sure it's Bluetooth first"; HOW_TWO_WAYS). */
+  const [howWay, setHowWay] = useState('bluetooth')
   const howBluetooth = twoWays && howWay === 'bluetooth'
 
   /*
@@ -345,14 +345,15 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
           <Steps at={0} of={WALK_STEPS} />
           <Head>{P2.head}</Head>
           {/*
-            Both ways, on a copy that offers Bluetooth: the computer first,
+            Both ways, on a copy that offers Bluetooth: Bluetooth first,
             picked (HOW_TWO_WAYS). `grow`, never style flex 1: Press sets its
             own flexGrow and flexBasis, which beat a flex laid on top, and the
             pair came out 26pt wide with no words on them. The row costs
             44 + 16 of height, so on these copies the boxes and the cable are
             drawn tighter (`tight`) and the row sits 8 closer to the heading:
             the Computer way, three boxes, ends 4pt higher than the page did
-            before the row, and Got it still shows without scrolling.
+            before the row, and Got it still shows without scrolling. The
+            Bluetooth way, which it opens on, has one box fewer.
           */}
           {twoWays ? (
             <View style={{ flexDirection: 'row', gap: space.sm, marginTop: -space.sm }}>
@@ -510,12 +511,29 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
           <Steps at={2} of={WALK_STEPS} />
           <Head>{P6.head}</Head>
           {/*
+            THE BLUETOOTH WAY, FIRST, on a copy that opens it: somebody who has
+            paid and has no computer was asked only whether the computer app
+            is installed, and No told them to download it (the audit of 3
+            November 2026). Sign-in is their way in too, so this goes where
+            Yes goes, and on to the Bluetooth page once signed in
+            (WALKTHROUGH_TWO_WAYS.restored). Over his Yes and No since 7
+            November 2026: "make sure it's Bluetooth first as far as
+            connection options go".
+          */}
+          {twoWays ? (
+            <>
+              <Press label={RESTORED_BLUETOOTH_GO} tone="live" height={TAP} onPress={() => onAccount?.('bluetooth')} />
+              <Note>{WALKTHROUGH_TWO_WAYS.restored}</Note>
+            </>
+          ) : null}
+          {/*
             The one way on from here. An account is the only thing that joins
             a phone to a computer, so the button goes to sign-in — and the
             label says so, where it used to promise a scanner that no longer
-            exists.
+            exists. Beside the Bluetooth way it is the computer's, and either
+            one answers How do you connect to your unit? (App.js onAccount).
           */}
-          <Cta label={P6.yes} onPress={() => onAccount?.()} />
+          <Cta label={P6.yes} onPress={() => onAccount?.(twoWays ? 'computer' : undefined)} />
           {/*
             HIDDEN UNTIL ASKED FOR. "Hide information on how to download the
             computer app until they click no." Somebody who already has it
@@ -564,18 +582,6 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
               {error ? <Note tone="fault">{error}</Note> : null}
             </>
           ) : null}
-          {/*
-            THE BLUETOOTH WAY, on a copy that opens it: somebody who has paid
-            and has no computer was asked only whether the computer app is
-            installed, and No told them to download it. Sign-in is their way
-            in too, so this goes where Yes goes (WALKTHROUGH_TWO_WAYS.restored).
-          */}
-          {twoWays ? (
-            <>
-              <Press label={RESTORED_BLUETOOTH_GO} height={TAP} onPress={() => onAccount?.('bluetooth')} />
-              <Note>{WALKTHROUGH_TWO_WAYS.restored}</Note>
-            </>
-          ) : null}
           <Press label={P6.back} height={TAP} onPress={() => go('mode')} />
         </>
       ) : null}
@@ -601,7 +607,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
             The unit's name and "simulated" came off the top: the mockup
             puts the one sentence that matters there instead — this app
             needs a computer with the unit on its USB, or, where Bluetooth is
-            open, that there are two ways, the computer first (see
+            open, that there are two ways, Bluetooth first (see
             `twoWays`). The demo's words, because the demo is the only way
             here now.
 

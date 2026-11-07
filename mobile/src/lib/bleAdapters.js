@@ -190,12 +190,21 @@ export function cablesFirst(list, { unit = null, units = null, skip = null } = {
  * question is the same; only the answer is left to a tap, under the red
  * FM3 note. A cable is not refused here: it is the unit itself.
  */
-export function pickAdapter(list, fresh = new Set(), { unit = null, units = null, refused = null } = {}) {
+export function pickAdapter(list, fresh = new Set(), { unit = null, units = null, refused = null, taken = null } = {}) {
   /* A cable named for another unit than the one picked is listed, never chosen for the player (anotherUnit, above). */
   const here = (Array.isArray(list) ? list : []).filter((d) => isAdapter(d) && !d.offline && !anotherUnit(d, { unit, units }))
   const just = here.filter((d) => fresh.has(d.id))
   const pick = just.length === 1 ? just[0] : !just.length && here.length === 1 ? here[0] : null
   if (pick && !isCable(pick) && typeof refused === 'function' && refused(pick.name)) return null
+  /*
+   * NOR ONE KEPT FOR ANOTHER UNIT (`taken`, its ids: lib/bluetooth keeps an
+   * adapter for each unit), as the only one there: it is on that unit. "The
+   * WIDI Jack is on my AM4" (Justin, 7 November 2026): with the FM3 picked,
+   * the AM4's WIDI Jack, the one port connected, was the FM3's by itself.
+   * Listed, for a tap. One just connected in Apple's screen is the player's
+   * own choice, and is taken.
+   */
+  if (pick && !fresh.has(pick.id) && taken?.has?.(pick.id)) return null
   return pick
 }
 

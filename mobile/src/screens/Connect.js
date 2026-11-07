@@ -27,6 +27,9 @@ import Note from '../components/Note'
 import Press from '../components/Press'
 import { DOWNLOADS_URL, sendDownloadLink } from '../lib/downloadLink'
 import { tick } from '../lib/feedback'
+import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
+import { GUIDE_URL, HOW_CONNECT } from '../lib/bluetooth-gear'
+import bluetoothIcon from '../../assets/icons/bluetooth.png'
 
 /**
  * How to get a computer on the other end of this — asked from a phone.
@@ -73,7 +76,7 @@ import { tick } from '../lib/feedback'
  * what it is has moved to the page that explains it.
  */
 
-export default function Connect({ onBack }) {
+export default function Connect({ onBack, onBluetooth = null }) {
   const [email, setEmail] = useState('')
   const [said, setSaid] = useState(null)
   const [error, setError] = useState(null)
@@ -111,6 +114,30 @@ export default function Connect({ onBack }) {
         </View>
         <Press label="Done" height={40} onPress={onBack} />
       </View>
+
+      {/*
+        BLUETOOTH FIRST, ON THE PAGE ABOUT THE COMPUTER. "Everything that
+        mentions how to connect to a computer also mentions how to connect to
+        Bluetooth and putting Bluetooth first on everything" (Justin, 7
+        November 2026, of this page). From Settings, App hands the way to the
+        Bluetooth page (`onBluetooth`, the Settings row's own gate). From the
+        sign-in screen nobody has paid, and the page waits for the purchase,
+        so on a copy that opens Bluetooth to customers (the purchase page's
+        gate) the same button opens the website's setup guide instead, which
+        anybody may read. Anywhere else, nothing: the page is as it was.
+      */}
+      {onBluetooth || (openForCustomersHere() && bluetoothSupported()) ? (
+        <Press
+          label="Connect over Bluetooth"
+          sub={onBluetooth ? HOW_CONNECT.bluetoothSub : `${HOW_CONNECT.bluetoothSub} · setup guide`}
+          icon={bluetoothIcon}
+          inkColor={color.ble}
+          labelSize={font.lead}
+          height={64}
+          tone="live"
+          onPress={onBluetooth || (() => Linking.openURL(GUIDE_URL).catch(() => {}))}
+        />
+      ) : null}
 
       <View
         style={{

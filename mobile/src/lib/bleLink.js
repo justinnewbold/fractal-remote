@@ -2,13 +2,16 @@ import { AppState, Platform } from 'react-native'
 
 import { bluetoothOn, setSwitch } from './bleSwitch'
 import {
+  adapterBackUnderNewId,
   adapterDevices,
   adapterName,
   bluetoothAdmin,
+  bluetoothLooksOff,
   bluetoothSettings,
   bluetoothSupported,
   closeWire,
   connectAdapter,
+  endLinkWait,
   noteBluetooth,
   onAdapter,
   openWire,
@@ -102,6 +105,29 @@ let unlockWait = null
  * otherAdapterNow), on a tap. Told once a round, not at every try.
  */
 let missed = false
+/*
+ * A CONNECTION THAT CAME UP AND STAYED SILENT HAS BEEN MADE AFRESH, once, this
+ * round. "Connected to the WIDI Jack, 21 questions unanswered for 101 s"
+ * (Justin's tablet, 7 November 2026): Android kept a first connection up that
+ * never carried a byte back, nothing said 'disconnected', so nothing ever
+ * tried again, and the cure was his own Turn off Bluetooth and Connect, a
+ * fresh connection that answered in 133 ms. So when the wake question and
+ * its second asking bring back nothing at all (the wire's bytesIn), the link
+ * lets go of the adapter and connects to it again by itself, once (see
+ * connected()). Back to false when a connection hears anything, and at
+ * every new round: Connect, Disconnect, another unit or adapter.
+ */
+let afresh = false
+/* Android said Bluetooth was off at the last try (the trouble 'bluetooth-off'): its going is the moment to try again (settingsMoved). */
+let wasOff = false
+/*
+ * Android answers a connect no this quickly with its Bluetooth off, and an
+ * adapter that is merely away takes its fifteen seconds (FractalBleMidiModule.kt
+ * OPEN_TIMEOUT_MS). Not only then: an adapter whose MIDI port another app
+ * holds is refused as fast, so a quick no is only a reason to ask
+ * (lib/bluetooth bluetoothLooksOff asks the module's own search).
+ */
+const OFF_ANSWER_MS = 500
 
 const say = (line, detail) => logDebug('ble', line, detail)
 
@@ -157,7 +183,9 @@ export function startBluetoothLink(set) {
   stopWaitingForPurchase()
   running = true
   held = false
+  afresh = false
   delay = 0
+  wasOff = false
   const s = bluetoothSettings()
   seen = { unit: s.unit, adapter: s.adapter?.id || null }
   offs = [
@@ -224,6 +252,12 @@ function begin() {
 async function tryConnect() {
   timer = null
   if (!running || held || wire || inFlight || letting) return
+  /*
+   * iPhone: the adapter kept, back in Apple's list under a new id, is chosen
+   * again (lib/bluetooth adapterBackUnderNewId), and the change of adapter
+   * starts the try with it (settingsMoved).
+   */
+  if (Platform.OS === 'ios' && adapterBackUnderNewId()) return
   const s = bluetoothSettings()
   if (!s.adapter) return
   const mine = ++attempt
@@ -240,7 +274,16 @@ async function tryConnect() {
     const here = (Platform.OS !== 'ios' && !isCable(s.adapter)) || adapterDevices().some((d) => d.id === s.adapter.id && !d.offline)
     if (here) {
       touched = true
+      const asked = Date.now()
       ok = await connectAdapter(s.adapter.id)
+      /*
+       * ANDROID WITH ITS BLUETOOTH OFF answers no at once: asked whether it
+       * is off, and when it is, said, so the page and the waiting screen
+       * offer Turn on Bluetooth, and the link tries again the moment it is on
+       * (lib/bluetooth bluetoothLooksOff). Before, the page said "Connecting
+       * to WIDI Jack…" for ever. With Bluetooth on, the ordinary backoff.
+       */
+      if (!ok && mine === attempt && Platform.OS === 'android' && !isCable(s.adapter) && Date.now() - asked < OFF_ANSWER_MS) await bluetoothLooksOff()
     }
     if (ok) noteBluetooth({ trouble: null })
   } catch (err) {
@@ -314,13 +357,51 @@ async function connected(e) {
    * the allowlist; one extra read on connecting is all it costs. Why the
    * first is lost is not known yet — the debug log of the next test says.
    */
+  let woke = null
   try {
-    const woke = await made.request('/device/detect')
-    say(woke?.connected ? 'the first question was answered' : 'no answer to the first question; asking again')
+    woke = await made.request('/device/detect')
   } catch {
-    say('no answer to the first question; asking again')
+    woke = null
   }
+  const heard = () => (typeof made.bytesIn === 'function' ? made.bytesIn() : null)
+  /* With how much came back, when something did: an answer the app could not read is not a silent line. */
+  say(woke?.connected ? 'the first question was answered' : heard() > 0 ? `no answer to the first question (${heard()} bytes came back); asking again` : 'no answer to the first question; asking again')
   if (wire !== made || !running) return
+  /*
+   * NOT ANSWERED: asked once more here, and still nothing, the other units'
+   * own questions (an AM4 on the adapter does not answer an FM3's, so
+   * nothing named it: bleWire askAround), asked whether bytes came back or
+   * not, since a unit sending only a timing clock is still not the unit
+   * picked. And with NOTHING AT ALL back (see `afresh`), not one byte, the
+   * adapter is let go of and connected to again, once a round. That returns
+   * before the rig's read, so no "did not answer in time" goes up for a
+   * connection about to be replaced. Not for a VP4, which never answers
+   * over Bluetooth, nor a unit on a USB cable, which is plugged in or not.
+   */
+  if (!woke?.connected && made.unit !== 'vp4' && !onCable()) {
+    if (heard() === 0) say(`nothing at all has come back from ${name} since it connected (0 bytes)`)
+    let again = null
+    try {
+      again = await made.request('/device/detect')
+    } catch {
+      again = null
+    }
+    if (wire !== made || !running) return
+    if (!again?.connected) {
+      const who = typeof made.askAround === 'function' ? await made.askAround() : null
+      if (wire !== made || !running) return
+      if (!who && heard() === 0) {
+        if (!afresh) {
+          afresh = true
+          say(`still nothing at all from ${name}: letting go of it and connecting to it again, once`)
+          return againAfresh(name)
+        }
+        say(`nothing at all came back on this connection to ${name} either`)
+      }
+    }
+  }
+  /* A connection that heard anything is a working line: the one made afresh by itself is owed again. */
+  if (woke?.connected || heard() > 0) afresh = false
   try {
     await refreshAll()
   } catch {
@@ -477,6 +558,46 @@ function letGoOfWireInTurn(then) {
   return letting
 }
 
+/*
+ * THE SAME AS TURN OFF BLUETOOTH, THEN CONNECT, in one go: the wire let go
+ * of (the AM4's or a Gen 3 unit's tuner closed first, as ever), the adapter
+ * released, and after RETRY_FIRST, which gives Android's MIDI service time
+ * to let go of the old connection, a fresh one asked for. Said to the bar
+ * and the page as connecting meanwhile.
+ */
+function againAfresh(name) {
+  attempt++
+  clearTimer()
+  stopWatching()
+  return letGoOfWireInTurn((had) => {
+    if (!running || held) return
+    if (touched) releaseAdapter()
+    tell?.({ link: 'joining', macName: name, hostVersion: null })
+    noteBluetooth({ phase: 'connecting', answeredAs: null, notThere: false })
+    delay = 0
+    later(tryConnect, RETRY_FIRST)
+    return had
+  })
+}
+
+/**
+ * CONNECT AGAIN, by hand: the Bluetooth page's button, and the one in Play's
+ * Bluetooth note, while the adapter is connected and the unit says nothing.
+ * Exactly what Turn off Bluetooth and then Connect did for him on 7 November
+ * 2026, in one tap: a fresh connection to the same adapter. True when it
+ * started one.
+ */
+export function connectBluetoothAgain() {
+  if (!running || held || letting || !wire) return false
+  const s = bluetoothSettings()
+  const name = adapterName(s.adapter) || fallbackName(s.adapter)
+  /* Asked for by hand: the one by itself is not owed on top of it. */
+  afresh = true
+  say(`connecting to ${name} again, as asked`)
+  againAfresh(name)
+  return true
+}
+
 function heardState(e) {
   if (!running) return
   const id = bluetoothSettings().adapter?.id
@@ -491,11 +612,21 @@ function heardState(e) {
 /* The adapter went: out of range, the unit switched off, or iOS letting an idle link go. Look again. */
 function dropped(reason) {
   const had = !!wire
+  /* How much that connection carried back, for the log: none at all is a connection that never worked. */
+  const back = typeof wire?.bytesIn === 'function' ? wire.bytesIn() : null
   letGoOfWire()
   stopWatching()
   if (!running || held) return
   const cable = onCable()
-  say(had ? (cable ? 'the USB cable was unplugged' : 'the adapter went away') : cable ? 'the USB cable did not stay connected' : 'the adapter did not stay connected', reason || undefined)
+  const carried = had && back !== null ? ` (${back} bytes came back on that connection)` : ''
+  say(had ? (cable ? 'the USB cable was unplugged' : `the adapter went away${carried}`) : cable ? 'the USB cable did not stay connected' : 'the adapter did not stay connected', reason || undefined)
+  /*
+   * A connection that heard anything, however late (a unit that finished
+   * starting up after the fresh connection was made), was a working line:
+   * the one fresh connection by itself is owed to the next. Never by the
+   * app's own letting go, which says no 'disconnected', so no loop.
+   */
+  if (back > 0) afresh = false
   delay = 0
   begin()
 }
@@ -507,6 +638,8 @@ function dropped(reason) {
  */
 function heardDevices(e) {
   if (!running || held || wire || (Platform.OS !== 'ios' && !onCable())) return
+  /* The adapter kept, back under a new id in Apple's list: chosen again, and its change of adapter tries it (settingsMoved). */
+  if (Platform.OS === 'ios' && !inFlight && !letting && adapterBackUnderNewId()) return
   const id = bluetoothSettings().adapter?.id
   const list = Array.isArray(e?.devices) ? e.devices : []
   if (id && list.some((d) => d?.id === id && !d.offline)) {
@@ -523,12 +656,27 @@ function heardDevices(e) {
  */
 function settingsMoved(s) {
   if (!running) return
+  /*
+   * BLUETOOTH BACK ON (the wait in lib/bluetooth took the trouble off):
+   * tried now, not at the end of a wait that may have grown to thirty
+   * seconds.
+   */
+  const back = wasOff && s.trouble !== 'bluetooth-off'
+  wasOff = s.trouble === 'bluetooth-off'
+  if (back && !wire && !inFlight && !held && !letting && s.adapter?.id === seen.adapter) {
+    say('Bluetooth is on again: trying the adapter now')
+    delay = 0
+    clearTimer()
+    tryConnect()
+  }
   const unit = s.unit
   const adapter = s.adapter?.id || null
   if (unit === seen.unit && adapter === seen.adapter) return
   const unitMoved = unit !== seen.unit
   const adapterMoved = adapter !== seen.adapter
   seen = { unit, adapter }
+  /* Another unit or adapter is a new round: one connection made afresh by itself is owed to it again. */
+  afresh = false
   const name = s.connectedTo
   attempt++
   clearTimer()
@@ -600,6 +748,7 @@ export function pokeBluetooth() {
   }
   if (wire) return
   held = false
+  afresh = false
   delay = 0
   begin()
 }
@@ -608,6 +757,7 @@ export function pokeBluetooth() {
 export function holdBluetooth() {
   if (!running || held) return
   held = true
+  afresh = false
   attempt++
   clearTimer()
   stopWatching()
@@ -634,6 +784,13 @@ export function stopBluetoothLink() {
     }
   }
   stopWatching()
+  /*
+   * The computer picked (Use the computer instead, Stop, a sign-out): the
+   * wait for Bluetooth this link started ends, and its "Bluetooth is off"
+   * goes with it (lib/bluetooth endLinkWait). Here, not running any more and
+   * no longer listening, so the trouble going starts no try.
+   */
+  endLinkWait()
   return letGoOfWireInTurn(() => {
     /* Started again while the AM4's tuner was closing: the new loop keeps the adapter, and goes on from here. */
     if (running) return begin()
