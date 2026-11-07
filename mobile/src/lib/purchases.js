@@ -1032,9 +1032,8 @@ export const startTrial = async () => {
       if (!tookStoreTrial(info)) await api.purchaseStoreProduct(product)
       /*
        * The free item carried the Apple ID's own full version onto this
-       * account: never a trial then, and said as it is. With RevenueCat
-       * keeping a purchase with its account (above) this is only ever this
-       * account's own purchase coming back, never another's.
+       * account: never a trial then, and said as it is, including that it
+       * left any other account it was on (RevenueCat's Transfer, above).
        */
       if (!hadIt && entitled(await freshInfo(api))) {
         logDebug('purchases: the free trial item brought this Apple ID’s full version with it')
@@ -1060,7 +1059,7 @@ export const startTrial = async () => {
     if (isDemo()) setDemo(false)
     claimRelay()
   }
-  return { ok: out.ok, cancelled: false, why: out.ok ? null : out.why }
+  return { ok: out.ok, cancelled: false, why: out.ok ? null : out.why, trial: out.trial || null }
 }
 
 /*
@@ -1343,11 +1342,18 @@ const RECEIPT_IN_USE = '7' // RECEIPT_ALREADY_IN_USE_ERROR
  * ID's whole history to RevenueCat, whose restore behaviour was "Transfer",
  * and it moved the purchase across. "Someone could just keep signing up with
  * accounts, unlocking them with their Apple account, and then giving people
- * their usernames and passwords for free." So RevenueCat keeps a purchase
- * with the account that made it (Project settings → General → Restore
- * behavior: Keep with original App User ID, docs/app-store.md), and refuses
- * any other account with receipt_already_in_use, which is said here, in
- * plain words, wherever it can come back: Buy, Restore and the trial.
+ * their usernames and passwords for free." Then, the same day: "if it's
+ * only a problem with new accounts, we shouldn't have much to worry about,
+ * as I don't think anyone with an unlocked account is gonna try to do a free
+ * trial. I'm just doing it for testing purposes." Transfer moves a purchase
+ * and never copies it (the account it leaves loses it), so RevenueCat keeps
+ * its default, Transfer (docs/app-store.md, RevenueCat step 0), and a
+ * customer who made a second account by mistake can still bring the
+ * purchase across with Restore. The trial says plainly when that happens
+ * ('apple-id-owns', below). Should the setting ever be Keep with original
+ * App User ID, any other account is refused with receipt_already_in_use,
+ * which is said here, in plain words, wherever it can come back: Buy,
+ * Restore and the trial.
  */
 export const otherAccountWords = () =>
   `This ${storeAccount()} bought the full version already, for another Fractal Remote account. Sign in with that account to use it: one purchase is for one account.`

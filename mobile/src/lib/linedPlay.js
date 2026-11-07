@@ -18,7 +18,7 @@
  * it is held:
  *
  *   wide  Play has already opened up (lib/playShape `wide`: a row of tiles at
- *         least 621 points, Play about 653 wide). The same line, so the
+ *         least OPENS_AT, 550 points, Play about 582 wide). The same line, so the
  *         buttons are already in their strip at the bottom on both sides of
  *         this one and nothing else moves when it switches.
  *   tall  Play's own height (the room between the top bar and that strip) at
@@ -43,7 +43,7 @@
  */
 
 /** From this tall (Play's own height, points), with Play opened up, it lines up. */
-export const LINED_TALL = 480
+export const LINED_TALL = 360
 /** How far under LINED_TALL it switches back off. */
 export const LINED_LETS_GO = 40
 /** Scenes to a row: two, as the phone's own default. */

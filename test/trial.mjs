@@ -403,8 +403,10 @@ export function run(test) {
     /*
      * 7 November 2026: the free item, bought on a new account, sent the Apple
      * ID's history to RevenueCat, which moved the full version off the
-     * account that bought it. RevenueCat now keeps a purchase with its
-     * account and answers receipt_already_in_use (code 7); the app says so.
+     * account that bought it. Transfer moves and never copies, so it stays
+     * (Justin, the same day); the trial says when the purchase arrives, and
+     * should the setting ever be Keep, receipt_already_in_use (code 7) is
+     * said in plain words too.
      */
     const inUse = Object.assign(new Error('The receipt is already in use by another subscriber.'), { code: '7' })
     const ios = await phone({ os: 'ios', storeTrial: true })
@@ -450,8 +452,17 @@ export function run(test) {
 
     /* Said in plain words, and RevenueCat's setting is written down where it is set. */
     assert.match(trialRefusal('other-account'), /^This Apple ID bought the full version already, for another Fractal Remote account\./)
-    assert.match(trialRefusal('apple-id-owns'), /so this account is unlocked/)
-    assert.match(read('docs/app-store.md'), /Restore behavior: Keep with original App\s+User ID/, 'the RevenueCat setting that keeps a purchase with its account is not written down')
+    /* A trial that began when the App Store's item was bought, days before this account arrived on the Apple ID: its own days, or over, never seven. */
+    const { trialStartedWords, TRIAL_STARTED, TRIAL_OVER } = await import('../shared/trial-words.mjs')
+    const now = new Date(2026, 10, 7, 12).getTime()
+    const ends = (days) => ({ endsAt: new Date(now + days * 86400000).toISOString() })
+    assert.deepEqual(trialStartedWords(ends(7), now), { over: false, text: TRIAL_STARTED })
+    assert.deepEqual(trialStartedWords(ends(4), now), { over: false, text: 'Your free trial has 4 days left. Unlock now and it carries on for good.' })
+    assert.deepEqual(trialStartedWords({ endsAt: new Date(now - 3600000).toISOString() }, now), { over: true, text: TRIAL_OVER })
+    assert.deepEqual(trialStartedWords(null, now), { over: false, text: TRIAL_STARTED }, 'an answer with no trial in it says nothing it does not know')
+    assert.match(flat('mobile/src/screens/Paywall.js'), /if \(out\.ok\) \{ const said = trialStartedWords\(out\.trial\) if \(said\.over\) return setSaid\(\{ tone: 'warn', text: said\.text \}\) Alert\.alert\('Free trial', said\.text\)/, 'the purchase page says seven days have started whatever the server answered')
+    assert.match(trialRefusal('apple-id-owns'), /so the full version is on this account now and no trial is needed\. Any other account it was on doesn’t have it any more\.$/)
+    assert.match(read('docs/app-store.md'), /Restore behavior: Transfer to new App\s+User ID\*\*, RevenueCat's default, left as it is/, 'the RevenueCat setting, and why it stays, is not written down')
     const pay = flat('mobile/src/screens/Paywall.js')
     assert.match(pay, /if \(out\.why === 'apple-id-owns'\) \{ Alert\.alert\('Already unlocked', trialRefusal\(out\.why\)\) return onUnlocked\?\.\(\) \}/)
   })

@@ -2662,24 +2662,28 @@ store a reviewer's copy asks.
 
 ### RevenueCat
 
-0. **Project settings → General → Restore behavior: Keep with original App
-   User ID** (and "Use a different restore behavior for sandbox" off, so a
-   TestFlight copy behaves as the App Store's). Never "Transfer to new App
-   User ID", RevenueCat's default. On 7 November 2026, with Transfer on,
-   Justin made a new account on an iPhone whose Apple ID had bought the full
-   version for another account (justinnewbold@mac.com), tapped Start 7-day
-   free trial, and buying the free item sent the Apple ID's history across:
-   the new account came out with the full version and the old one without
-   it. "Someone could just keep signing up with accounts, unlocking them
-   with their Apple account, and then giving people their usernames and
-   passwords for free." With Keep, a purchase stays with the account that
-   made it, and any other account on the same Apple ID or Google account is
-   refused with receipt_already_in_use, which the app says in plain words on
-   Buy, Restore and the trial (lib/purchases `otherAccountWords`): "This Apple
-   ID bought the full version already, for another Fractal Remote account.
-   Sign in with that account to use it." A purchase made with nobody signed
-   in (RevenueCat's anonymous id) still follows the first account signed in
-   to, as RevenueCat aliases those under every setting.
+0. **Project settings → General → Restore behavior: Transfer to new App
+   User ID**, RevenueCat's default, left as it is (Justin's call, 7 November
+   2026). That day Justin made a new account on an iPhone whose Apple ID had
+   bought the full version for another account (justinnewbold@mac.com),
+   tapped Start 7-day free trial, and buying the free item sent the Apple
+   ID's history across: the new account came out with the full version and
+   the old one without it. Transfer MOVES a purchase and never copies it, so
+   only one account has it at a time, and "if it's only a problem with new
+   accounts, we shouldn't have much to worry about, as I don't think anyone
+   with an unlocked account is gonna try to do a free trial. I'm just doing
+   it for testing purposes." The other setting, Keep with original App User
+   ID, would also stop a customer who made a second account by mistake from
+   bringing the purchase across with Restore. The trial says plainly when the
+   Apple ID's own purchase arrives ('apple-id-owns' in shared/trial-words.mjs:
+   on this account now, no trial, and gone from any other account). To put
+   mac.com's purchase back: sign in to it on that iPhone and tap Restore a
+   purchase. Should the setting ever be Keep, any other account on the same
+   Apple ID or Google account is refused with receipt_already_in_use, which
+   the app already says in plain words on Buy, Restore and the trial
+   (lib/purchases `otherAccountWords`). A purchase made with nobody signed in
+   (RevenueCat's anonymous id) follows the first account signed in to under
+   either setting.
 1. Product catalog → Products → + New → App Store app → identifier
    `trial_7day`, type Non-Consumable.
    Leave it **NOT attached to the `full` entitlement**, and to no entitlement at all. On `full` it would make a

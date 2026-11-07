@@ -243,6 +243,7 @@ export function run(test) {
     assert.deepEqual(
       popups.map((p) => p.file).sort(),
       [
+        'mobile/src/components/NameBox.js',
         'mobile/src/components/PasswordBox.js',
         'mobile/src/components/Sheet.js',
         'mobile/src/components/SongPicker.js',
@@ -917,7 +918,7 @@ export function run(test) {
       }
     }
     /* The phone's own widths, as Play measures them (its width less its 16 a side). */
-    for (const width of [320, 375, 390, 393, 402, 412, 430, 440, 466, 600, 652]) {
+    for (const width of [320, 375, 390, 393, 402, 412, 430, 440, 466, 480, 507, 561, 581]) {
       assert.equal(g.playShape(g.pageRow(width), 0, 'across', null).wide, false, `a ${width}-point Play opened up`)
     }
     /* Today's values handed to Play's fit (fitWide) change nothing: fitTiles' own four and 96 are what it had. */
@@ -976,7 +977,9 @@ export function run(test) {
       393: [false, false, 4],
       440: [false, false, 4],
       466: [false, false, 4], // the Duo closed
-      637: [false, false, 4],
+      581: [false, false, 4], // the widest Play that stays the phone's
+      601: [true, false, 4], // a small Android tablet upright (Galaxy Tab A 8.0)
+      637: [true, false, 4],
       669: [true, false, 4], // the Duo open, held tall: names and the fixed buttons
       712: [true, false, 4],
       744: [true, true, 6], // an iPad mini upright
@@ -1041,8 +1044,8 @@ export function run(test) {
     }
     const up = Array.from({ length: 1101 }, (_, i) => 300 + i)
     const down = [...up].reverse()
-    assert.deepEqual(flips(up), { wide: [[621, true]], spread: [[700, true]], eight: [[936, true]] }, 'a row widening point by point did not switch each line on once, at its number')
-    assert.deepEqual(flips(down), { wide: [[580, false]], spread: [[659, false]], eight: [[895, false]] }, 'a row narrowing point by point did not switch each line off once, 40 under it')
+    assert.deepEqual(flips(up), { wide: [[550, true]], spread: [[700, true]], eight: [[936, true]] }, 'a row widening point by point did not switch each line on once, at its number')
+    assert.deepEqual(flips(down), { wide: [[509, false]], spread: [[659, false]], eight: [[895, false]] }, 'a row narrowing point by point did not switch each line off once, 40 under it')
     /* Jiggled either side of a line, a point or two at a time or up to 39, it stays as it was. */
     for (const line of [g.OPENS_AT, g.SPREADS_AT, g.TWO_MORE_AT]) {
       const wobble = [line - 100, line + 5]
@@ -1285,11 +1288,11 @@ export function run(test) {
       }
       /* A divider dragged out across both lines and back: on at its number, off 40 under, each once. */
       const seen = []
-      for (const w of [600, 640, 652, 653, 700, 731, 732, 760, 700, 692, 691, 640, 613, 612, 600]) {
+      for (const w of [560, 575, 581, 582, 700, 731, 732, 760, 700, 692, 691, 600, 542, 541, 530]) {
         const s = at(w)
         seen.push(`${w}:${s.wide ? 'W' : '-'}${s.spread ? 'S' : '-'}`)
       }
-      assert.deepEqual(seen, ['600:--', '640:--', '652:--', '653:W-', '700:W-', '731:W-', '732:WS', '760:WS', '700:WS', '692:WS', '691:W-', '640:W-', '613:W-', '612:--', '600:--'])
+      assert.deepEqual(seen, ['560:--', '575:--', '581:--', '582:W-', '700:W-', '731:W-', '732:WS', '760:WS', '700:WS', '692:WS', '691:W-', '600:W-', '542:W-', '541:--', '530:--'])
     })
   })
 
