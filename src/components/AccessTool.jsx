@@ -114,7 +114,7 @@ export default function AccessTool() {
         <div className="history-actions">
           {signInHelp(said).confirm ? (
             <button type="button" className="chip" disabled={!!busy} onClick={() => help('confirm')}>
-              {busy === 'confirm' ? 'Sending…' : 'Resend their "confirm your email" link'}
+              {busy === 'confirm' ? 'Sending…' : 'Resend their confirmation code'}
             </button>
           ) : null}
           {signInHelp(said).confirmNow ? (

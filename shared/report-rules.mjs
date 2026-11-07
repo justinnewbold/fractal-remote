@@ -154,12 +154,15 @@ export function logsMessage(note) {
 }
 
 /**
- * SCREENSHOTS, UP TO THREE.
+ * SCREENSHOTS, UP TO FIVE.
  *
  * A report says what the app did; a screenshot says what the person saw,
- * which is the half nobody can type. Three, because a fourth is almost
- * never a different problem and every one is a few hundred kilobytes over a
- * stage's two bars.
+ * which is the half nobody can type. Five since 7 November 2026: "let's make
+ * it so a user can upload up to five photos instead of three. And one video,
+ * Max." (Justin). Three until then, because a fourth is seldom a different
+ * problem and every one is a few hundred kilobytes over a stage's two bars;
+ * they still all go at once, inside the one SHOT_WAIT_MS, and one that is
+ * late costs the report a line, never the report.
  *
  * SHRUNK BEFORE THEY GO. The browser draws each one again at no more than
  * SHOT_EDGE on its long side and writes it as a JPEG: a phone's screenshot
@@ -173,11 +176,18 @@ export function logsMessage(note) {
  *
  * SHOT_BYTES is the app's own cap on one picture, under the bucket's 2 MB
  * (supabase/migrations/20261022_report_screenshots.sql), so a picture the app
- * lets through is never one the server turns away. Three at the cap is
- * 4.5 MB, about 6 MB in the email, well inside both Resend's 40 MB and
- * Gmail's 25 MB.
+ * lets through is never one the server turns away. Five at the cap is
+ * 7.5 MB, about 10 MB in the email (and five at the bucket's own 2 MB, which
+ * only something other than the app could put there, about 13.3 MB), well
+ * inside both Resend's 40 MB and Gmail's 25 MB.
+ *
+ * THE SERVER COUNTS TO FIVE TOO, and has to first: the bucket's insert rule
+ * and its tidy (supabase/migrations/20261107_report_five_shots.sql), the
+ * email function and Delete account (SHOT_PATH, below). An app merged before
+ * them has its fourth and fifth refused by the bucket, and the report goes
+ * without them, saying so (supabase/README.md has the order).
  */
-export const SHOTS_MAX = 3
+export const SHOTS_MAX = 5
 export const SHOT_EDGE = 1600
 export const SHOT_BYTES = 1_500_000
 /** The browser's JPEG qualities, best first: the next only when a picture is still over SHOT_BYTES. */
@@ -202,12 +212,12 @@ export const SEND_WAIT_MS = 20_000
 /**
  * A screenshot's place in the bucket: the sender's account id (or `anon`
  * for nobody signed in), then the report's own random key and which of the
- * three it is. The bucket's insert rule takes nothing else, and the email
+ * five it is. The bucket's insert rule takes nothing else, and the email
  * function attaches nothing else, so a row cannot point it at somebody
  * else's picture.
  */
 export const SHOT_PATH =
-  /^(anon|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[1-3]\.jpg$/
+  /^(anon|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[1-5]\.jpg$/
 
 export const shotPath = (owner, key, n) => `${owner || 'anon'}/${key}-${n}.jpg`
 

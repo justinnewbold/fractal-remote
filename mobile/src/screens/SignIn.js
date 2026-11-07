@@ -171,14 +171,15 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
           /* And the purchase goes onto it now, before the email is opened
              anywhere (purchases.js, linkNewAccount). */
           if (paid && userId) onAccountMade?.(userId)
-          /* Paid on this phone: said that this phone is where to sign in.
-             Not "before you open the website": the confirmation link itself
-             opens the website, so that could not be followed. The code is
-             typed here, on this phone, so only the link needs saying so. */
+          /* The code only: since 7 November 2026 the email carries no link,
+             which opened the website rather than the app ("let's just confirm
+             the account by the code ... If not, just the code is fine",
+             Justin). Paid on this phone: the code typed here is what takes
+             the purchase with the account. */
           setNote(
             paid
-              ? `Account made — type the code from the email we just sent in the box below. Or tap the link in that email, then come back to this ${deviceNoun()} and sign in, so your purchase goes with your account.`
-              : 'Account made. Type the code from the email we just sent in the box below, or tap the link in that email and then sign in.'
+              ? 'Account made — type the code from the email we just sent in the box below, so your purchase goes with your account.'
+              : 'Account made. Type the code from the email we just sent in the box below.'
           )
           setUnconfirmed({ why: 'made', email: email.trim() })
           setMode('in')
