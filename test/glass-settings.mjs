@@ -175,7 +175,8 @@ const FIXES_IMPORTS = [
   "import { NO_COMPUTER_BLUETOOTH } from '../lib/no-computer'",
   "import { useBluetoothOffered } from '../lib/useBluetoothOffered'",
   "import { cableNow } from '../lib/bluetooth'",
-  "import { cableFixesLine } from '../lib/cableWords'"
+  "import { cableFixesLine } from '../lib/cableWords'",
+  "import { SETUP } from '../lib/onboarding'"
 ]
 
 export function run(test) {

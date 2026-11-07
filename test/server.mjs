@@ -932,7 +932,7 @@ export function run(test) {
       assert.ok(!/\bMac\b|yesterday|\bOTA\b|\brelay\b/i.test(e.text + e.subject), `the ${which} email says something it should not`)
     }
     assert.match(first.text, /It looks like it hasn’t connected to your Fractal yet, so here’s how\./, 'the first email does not say why it is here')
-    assert.match(first.text, /\nThe computer \(the best way, about five minutes\):\n\n1\. /, 'the computer’s steps have no heading saying how long they take')
+    assert.match(first.text, /\nOr the computer \(about five minutes\):\n\n1\. /, 'the computer’s steps have no heading saying how long they take')
     assert.match(first.text, /If you get stuck anywhere, just reply to this email\. It comes straight to me\./)
     assert.match(first.text, /You’re getting this because fan@example\.com has the full version of Fractal Remote and it hasn’t connected to a unit yet, through a computer or over Bluetooth\./, 'the first email does not say why it came')
     assert.match(first.text, /I’ll send one reminder at most, and nothing after that\./, 'the first email does not say at most one reminder follows')
@@ -1101,14 +1101,17 @@ export function run(test) {
     assert.deepEqual(iosOnly.filter((b) => b.version === '1.89.0').map((b) => b.platform), ['ios'])
   })
 
-  test('with the switch on, both emails offer both ways: the computer first and best, then Bluetooth for every unit from 1.89.0, and help still a reply to Justin', async () => {
+  test('with the switch on, both emails offer both ways: Bluetooth first for every unit from 1.89.0, then the computer, and help still a reply to Justin', async () => {
     const { setupEmail, BLUETOOTH_FROM } = await setupWords()
     /*
      * "Having trouble getting connected? Here's how to set up the computer or
      * connect with Bluetooth" (Justin, 1 November 2026): each way under a
-     * heading of its own, the computer's first. Changed on purpose: until
-     * then the email was about the computer, with Bluetooth one paragraph
-     * after it, "From version 1.89.0 of the app there’s a second way".
+     * heading of its own. Changed on purpose: until then the email was about
+     * the computer, with Bluetooth one paragraph after it, "From version
+     * 1.89.0 of the app there’s a second way". And Bluetooth first since 7
+     * November 2026: "I think most people are gonna opt for Bluetooth,
+     * probably 90%. So we need to make that the most prominent thing" (the
+     * computer's came first, as "the best way", until then).
      */
     const second =
       'You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. ' +
@@ -1122,14 +1125,15 @@ export function run(test) {
       ['first', first, 'If you get stuck anywhere, just reply to this email.'],
       ['reminder', reminder, 'If something got in the way, reply and tell me what you see']
     ]) {
-      assert.ok(e.text.includes(`\nThe computer (the best way, about five minutes):\n\n1. `), `the ${which} email has no heading over the computer’s steps`)
-      assert.ok(e.text.includes(`\nBluetooth (no computer needed):\n\n${second}\n\n${allSet}\n\n`), `the ${which} email does not say the second way under its own heading, with the all-set line`)
-      assert.ok(e.html.includes(`<p style="margin:0 0 16px">${second}</p>`), `the ${which} email’s HTML does not say the second way`)
+      assert.ok(e.text.includes(`\nBluetooth (no computer needed):\n\n${second}\n\nOr the computer (about five minutes):\n\n1. `), `the ${which} email does not say Bluetooth under its own heading, then the computer’s`)
+      assert.ok(e.text.includes(`\nUsed the computer app before? `) && e.text.includes(`\n\n${allSet}\n\n`), `the ${which} email lost the computer’s returning line or the all-set line`)
+      assert.ok(e.html.includes(`<p style="margin:0 0 16px">${second}</p>`), `the ${which} email’s HTML does not say the Bluetooth way`)
       assert.ok(e.html.includes('font-weight:700">Bluetooth (no computer needed):</p>'), `the ${which} email’s HTML has no Bluetooth heading`)
-      /* After every word about the computer, and before the help. */
+      assert.ok(e.html.indexOf('Bluetooth (no computer needed):') < e.html.indexOf('Or the computer (about five minutes):'), `the ${which} email’s HTML puts the computer first`)
+      /* Before every word about the computer's steps, and the help after both. */
       const at = e.text.indexOf(second)
-      assert.ok(at > e.text.indexOf('3. Open Fractal Remote on your phone.') && at > e.text.indexOf('Used the computer app before?'), `the ${which} email offers Bluetooth before the computer`)
-      assert.ok(at < e.text.indexOf(help), `the ${which} email’s help is not after the second way`)
+      assert.ok(at > 0 && at < e.text.indexOf('1. On the computer your Fractal is plugged into') && at < e.text.indexOf('Used the computer app before?'), `the ${which} email offers the computer before Bluetooth`)
+      assert.ok(e.text.indexOf(allSet) > e.text.indexOf('Used the computer app before?') && e.text.indexOf(allSet) < e.text.indexOf(help), `the ${which} email’s help is not after both ways`)
       /* The computer's steps and the button to the download are all still there. */
       assert.match(e.text, /1\. On the computer your Fractal is plugged into, go to fractal\.newbold\.cloud\/downloads and install the Fractal Remote computer app\./)
       assert.ok(e.html.includes('href="https://fractal.newbold.cloud/downloads"'), `the ${which} email lost the download link`)
@@ -1155,9 +1159,10 @@ export function run(test) {
     /* Getting connected is what the emails are about now, either way. */
     assert.equal(first.subject, 'Having trouble getting Fractal Remote connected?')
     assert.equal(reminder.subject, 'Still need a hand getting Fractal Remote connected?')
-    /* The two ways in the opening, the computer best, Bluetooth with its cost, and nobody told their phone has nothing to connect to. */
-    assert.match(first.text, /There are two ways: through a free app on the computer your unit is plugged into, which is the best way, or over Bluetooth with no computer, which has more lag and fewer features\./)
-    assert.match(reminder.text, /Fractal Remote still hasn’t connected to your Fractal with fan@example\.com, so here are the two ways again: through the free computer app, which is the best way, or over Bluetooth with no computer\./)
+    /* The two ways in the opening, Bluetooth first, the computer with what it adds, no ranking, and nobody told their phone has nothing to connect to. */
+    assert.match(first.text, /There are two ways: over Bluetooth with no computer, or through a free app on the computer your unit is plugged into, which has less lag and more features\./)
+    assert.match(reminder.text, /Fractal Remote still hasn’t connected to your Fractal with fan@example\.com, so here are the two ways again: over Bluetooth with no computer, or through the free computer app, which has less lag and more features\./)
+    assert.ok(!/best way|more lag|fewer features/.test(first.text + reminder.text), 'the emails still rank the two ways')
     assert.match(reminder.text, /This is the last email about it\. You got it because fan@example\.com has the full version of Fractal Remote and it hasn’t connected to a unit yet\./)
     /* And with the switch off, the computer alone, as before Bluetooth. */
     const off = setupEmail('first', 'fan@example.com', { bluetooth: false })

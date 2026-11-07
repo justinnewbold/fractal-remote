@@ -104,12 +104,11 @@
 
 /**
  * The full guide on the website, for everything that does not fit on a phone
- * screen. At bluetooth-guide.html, linked from nowhere on the website until
- * the store version that opens Bluetooth (beta) to customers is live:
- * /bluetooth says it is not in the app yet, with nothing to buy. Only the
- * app's Bluetooth page links here, which only his account can open on every
- * copy there is today (lib/ble-rule.js: a customer's only on a store copy
- * built to open it).
+ * screen. At bluetooth-guide.html, linked from /bluetooth since 1.89.3 went
+ * live in both stores (30 October 2026). In the app, the Bluetooth page links
+ * here, and, since 7 November 2026, Connect a computer's Connect over
+ * Bluetooth where nobody has paid yet (from the sign-in screen), on a copy
+ * that opens Bluetooth to customers: the guide is anybody's to read.
  */
 export const GUIDE_URL = 'https://fractal.newbold.cloud/bluetooth-guide.html'
 
@@ -170,48 +169,81 @@ export const REPORT_BUTTON = 'Report a Bluetooth problem'
 export const REPORT_NOTE = `Something not working? Tap ${REPORT_BUTTON}.`
 
 /*
- * TWO WAYS TO CONNECT, AND WHICH IS BEST. "Make it clear that there's
- * multiple ways to connect the device, but also make it clear that the
- * computer is the preferred method and that Bluetooth will have more lag and
- * not have as many features." (Justin, 25 October 2026.) Said wherever
- * Bluetooth is offered, in words a guitarist reads in two seconds: the
- * Bluetooth page above Connect, the Settings row, the waiting screen's way
- * in, the Phone & computer page while it is on, and the purchase page.
+ * TWO WAYS TO CONNECT, BLUETOOTH FIRST. "I think most people are gonna opt
+ * for Bluetooth, probably 90%. So we need to make that the most prominent
+ * thing ... we need to go through the whole app and make sure it's Bluetooth
+ * first as far as connection options go. It says no Bluetooth connects
+ * through a computer instead." (Justin, 7 November 2026.) Until then this
+ * said "The computer is the best one", from his 25 October words ("make it
+ * clear that the computer is the preferred method and that Bluetooth will
+ * have more lag and not have as many features"), and every first screen led
+ * with the computer.
  *
- * ONLY WHAT IS TRUE OF IT. More lag: the preset list is read a name at a
- * time over a 5-pin MIDI cable (bleWire NAME_GAP_MS), an AM4's scene names
- * take seconds the first time a preset is seen, and a footswitch change shows
- * at the next poll, up to two seconds later (POLL_MS). Fewer features: no
- * editing or saving, no looper, volume button, unit metronome click or
- * Footswitches page (the page's DIFFERENT list). Everything the app does, it
- * does through the computer.
+ * So the order is Bluetooth, then the computer, and there is no ranking. What
+ * the computer adds is still said, in one short clause, wherever the full
+ * sentence is: "A computer has less lag and more features". That is our
+ * wording of his 25 October point, not his words, which were "Bluetooth
+ * will have more lag and not have as many features". The features half is
+ * true on every unit, the VP4 too; the lag half is his own point, and on a
+ * VP4, which reads nothing back over Bluetooth, nobody has measured it:
  *
- * "MORE LAG" IS HIS WORD, AND KEPT. For a day this said "slower", because how
- * long one tap takes each way has never been timed. But he has played it, and
- * what the code shows is lag too: a footswitch change reaches the screen up
- * to two seconds after it is pressed, and names arrive a few at a time. And
- * "slower" reads as the preset list taking its time, not as a delay on what
- * he plays, which is the thing he asked to have said.
+ * LESS LAG: the preset list is read a name at a time over a 5-pin MIDI cable
+ * (bleWire NAME_GAP_MS), an AM4's scene names take seconds the first time a
+ * preset is seen, and a footswitch change shows at the next poll, up to two
+ * seconds later (POLL_MS). "Lag" is his word.
  *
- * NOT "AND DOES EVERYTHING". It said that for a day, and on the purchase
- * page it came straight after VP4_SO_FAR, the list of what a VP4 cannot do
- * from the app yet: two sentences that disagree, where somebody pays. The
- * computer is the best way; what Bluetooth lacks is said after it.
+ * MORE FEATURES: over Bluetooth there is no editing or saving, no looper,
+ * volume button, unit metronome click or Footswitches page (the page's
+ * DIFFERENT list); and a VP4 gets presets and scenes only, while through the
+ * computer it also gets its effects turned on and off, the name of the
+ * preset it is on, and a check that a preset or scene landed
+ * (VP4_OVER_BLUETOOTH). Never the tuner, which a VP4 does not get from the
+ * app either way (shared/vp4-safety.mjs VP4_NO_TUNER).
+ * Never "plus editing and saving", which it said for a day: through the
+ * computer a VP4 is not edited or saved either (shared/vp4-safety.mjs
+ * VP4_SO_FAR), and the purchase page names the VP4. The detail is on the
+ * Bluetooth page's What Bluetooth can't do, where somebody who wants it
+ * looks: "that kind of stuff can come into troubleshooting guides".
  *
- * One sentence, its one-line form for a button's second line, and the Settings row's
- * own, which has one short line to say both halves in: written together here
- * so they can never say different things.
+ * THE SHORT LINES LEAVE THE CLAUSE OUT ON PURPOSE: the walkthrough's, the box
+ * before Unlock, the sign-in screen's Get connected, How do you connect to
+ * your unit? (HOW_CONNECT) and the website's BLUETOOTH_IN_APPS say the two
+ * ways, Bluetooth first, and nothing more ("eliminate so much of the
+ * text").
+ *
+ * NOT "AND DOES EVERYTHING". On the purchase page it would sit beside the
+ * list of what a VP4 cannot do from the app yet.
+ *
+ * The sentence (the Bluetooth page's foot and What Bluetooth can't do), its
+ * button line, and the Settings row's own one line: written together here so
+ * they can never say different things.
  */
-export const BLUETOOTH_WAYS =
-  'There are two ways to connect. The computer is the best one. Bluetooth needs no computer, but it has more lag and fewer features.'
-export const BLUETOOTH_WAYS_SHORT = 'More lag than the computer, fewer features'
+export const BLUETOOTH_WAYS = 'Bluetooth needs no computer, just an adapter on your unit, sold separately. A computer has less lag and more features.'
+export const BLUETOOTH_WAYS_SHORT = 'No computer needed'
 /*
- * THE SETTINGS ROW, OFF: what it is for and what it costs, in the one line a
- * row has (Settings.js SetupRow, cut at one line on a 320-point screen). It
- * said only the cost for a day, "slower than the computer, fewer features",
- * which read as a row that had nothing going for it, in the row's green.
+ * THE SETTINGS ROW, OFF, in the one line a row has (Settings.js SetupRow, cut
+ * at one line on a 320-point screen): what it is for. The cost is said where
+ * the two ways are set side by side, not on the row that opens the page.
  */
-export const BLUETOOTH_ROW_OFF = 'Off · no computer needed, more lag'
+export const BLUETOOTH_ROW_OFF = 'Off · no computer needed'
+
+/*
+ * "HOW DO YOU CONNECT TO YOUR UNIT?", once, after an account is made, a trial
+ * started or the full version bought, where this copy offers Bluetooth
+ * (mobile/src/components/HowConnect.js). "Signup was difficult, no tutorial.
+ * No mention of bluetooth" and "just immediately says, looking for computer,
+ * no tutorial, nothing after signing up for the free trial" (Justin, 7
+ * November 2026). Two choices and nothing to read: Bluetooth first and
+ * biggest, then his own words for the other way, "No Bluetooth connects
+ * through a computer instead".
+ */
+export const HOW_CONNECT = {
+  head: 'How do you connect to your unit?',
+  bluetooth: 'Bluetooth adapter',
+  bluetoothSub: BLUETOOTH_WAYS_SHORT,
+  computer: 'No Bluetooth adapter?',
+  computerSub: 'Connect through a computer instead'
+}
 
 /*
  * NEVER THE C2MIDI PRO ON AN FM3, TO EVERYBODY, BEFORE AND WHATEVER IS
@@ -224,32 +256,31 @@ export const BLUETOOTH_ROW_OFF = 'Off · no computer needed, more lag'
 export const NOT_FOR_FM3 = 'On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master: both got very hot on one.'
 
 /*
- * The purchase page's line, on a copy that opens Bluetooth to customers: the
- * two ways, which units and which have been tried, then what it needs. Every
- * part, by the name on its box (PARTS, below) and what it is, plus
- * POWER_LINE's charger, with no prices: the one screen where somebody pays
- * on what it says, and the list is four parts and a charger, not "an
- * adapter". It said one adapter for a day, and the AM4 alone until 25
- * October 2026. And what a VP4 gets over it (presets and scenes), and that
- * the cable is never for an FM3, on the screen where an owner of either
- * decides whether to pay.
- *
- * NAMED HERE, NOT SENT ELSEWHERE. It said "(the Bluetooth page lists them)"
- * for a day, but nobody who has not paid can open that page: the Settings
- * row, the waiting screen's button and the Fixes line all wait for the
- * purchase. So the names are in the line itself, where somebody deciding
- * whether to pay can read them, and look them up.
+ * THE PURCHASE PAGE'S LINE, on a copy that opens Bluetooth to customers: one
+ * short line, the two ways, Bluetooth first. "Way too much text, should not
+ * have to scroll" (Justin, 7 November 2026, of the purchase page, which
+ * carried every part of every adapter above the trial button).
  */
+export const BLUETOOTH_PAYWALL = 'Connect with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer, which has less lag and more features.'
+/* The tap under it that shows BLUETOOTH_PARTS. */
+export const BLUETOOTH_PARTS_SHOW = 'Which adapter do I need?'
 /*
+ * AND THE PARTS, ONE TAP AWAY (BLUETOOTH_PARTS_SHOW), on the same page: which
+ * units, what a VP4 gets over it, and every part each way of the Bluetooth
+ * page takes, by the name on its box (PARTS, below) and what it is, plus
+ * POWER_LINE's charger, with no prices. Named here, not sent elsewhere:
+ * nobody who has not paid can open the Bluetooth page. And the parts never
+ * for an FM3, in the same lines that name them.
+ *
  * AND THE WAYS THE BLUETOOTH PAGE OFFERS (waysFor), since the audit of 3
- * November 2026 found this line still listing only the Uhost kit of 25
+ * November 2026 found this list still naming only the Uhost kit of 25
  * October: the page has put the WIDI Master first since 26 October (one
  * piece, powered by the unit, no charger), then the WIDI Jack, then the
  * Uhost. Never a sentence that says it works on a unit, only what each unit
  * takes; and the FM3's own list, with the small adapter its U2MIDI Pro needs,
  * and both parts it is never to have.
  */
-export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a CME Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank. Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one.`
+export const BLUETOOTH_PARTS = `It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a CME Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank. Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one.`
 
 /*
  * THE WALKTHROUGH AND THE SIGN-IN SCREEN, ON A COPY THAT OPENS BLUETOOTH.
@@ -281,37 +312,45 @@ export const BLUETOOTH_PAYWALL = `${BLUETOOTH_WAYS} It is offered on the AM4, FM
  * (scripts/computer-fingerprint.mjs hashes every file the web app imports).
  *
  * MY WORDING, and he can change any of it. The demo's line was mine already
- * (P9.demo.sub, "These two lines are mine"); the sign-in line is new, under
- * his mockup's three steps, which stay as he drew them. Each way gets its
- * own half, and the Bluetooth half says "no computer" out loud, so neither
- * reads as a computer reaching the unit by Bluetooth (nothing does that).
- * Never the "free" desktop app here (docs/app-store.md: "That could confuse
- * people thinking the iOS/android app is free"). An adapter sold
- * separately, because no Fractal unit has Bluetooth of its own; the purchase
- * page names every part (BLUETOOTH_PAYWALL). And each line ends with what
- * Bluetooth costs, one sentence for both (BEST_WAY): "make it clear that the
- * computer is the preferred method and that Bluetooth will have more lag and
- * not have as many features" (25 October 2026), wherever Bluetooth is
- * offered.
+ * (P9.demo.sub, "These two lines are mine"). Each line names Bluetooth first
+ * and says "no computer" before it, so neither half reads as a computer
+ * reaching the unit by Bluetooth (nothing does that). Never the "free"
+ * desktop app here (docs/app-store.md: "That could confuse people thinking
+ * the iOS/android app is free"). An adapter sold separately, because no
+ * Fractal unit has Bluetooth of its own; the purchase page names every part
+ * one tap away (BLUETOOTH_PARTS).
+ *
+ * SHORT, SINCE 7 NOVEMBER 2026: "absolutely way too much text ... it needs to
+ * be just clear steps to get connected and how things work in the tutorial"
+ * and "we also need to eliminate so much of the text". Each line said "The
+ * computer is the best way: Bluetooth has more lag and fewer features." at
+ * its end until then (the box before Unlock was 48 words; it is 26). What a
+ * computer adds is said where the choice is made and paid for: the purchase
+ * page (BLUETOOTH_PAYWALL) and the Bluetooth page (BLUETOOTH_WAYS).
  */
-const BEST_WAY = 'The computer is the best way: Bluetooth has more lag and fewer features.'
 export const WALKTHROUGH_TWO_WAYS = {
   /* In place of P9.demo.sub, under Here’s the app at the end of the demo's walkthrough. */
-  demoSub: `This app connects to your Fractal guitar processor one of two ways: through a computer connected to it by USB, or with no computer, through a Bluetooth MIDI adapter sold separately. ${BEST_WAY}`,
-  /* Under SETUP.steps, the computer's three, on the sign-in screen. */
-  setup: `No computer? Sign in here, and the app can connect by Bluetooth instead, through an adapter sold separately. ${BEST_WAY}`,
-  /* In place of P3.real.agree, the box ticked before Unlock: the sentence put to him, word for word. */
-  agree: `I understand this app connects to my Fractal unit one of two ways: through a computer running the desktop app, connected by USB cable, or with no computer, through a Bluetooth MIDI adapter sold separately. ${BEST_WAY}`,
+  demoSub: 'This app connects to your Fractal with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer connected to it by USB.',
+  /*
+   * The sign-in screen's Get connected card, in one line on such a copy:
+   * setting up the computer is on Connect a computer (the desktop app, the
+   * same account on both, the link by email), the computer's three steps are
+   * in Troubleshooting (It will not connect at all), and once the account is
+   * in, How do you connect to your unit? asks (HOW_CONNECT).
+   */
+  setup: 'Make an account, then connect with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer.',
+  /* In place of P3.real.agree, the box ticked before Unlock. */
+  agree: 'I understand this app connects to my unit with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer running the desktop app.',
   /*
    * Under the page after Restore finds a purchase (P6), which asked only
    * whether the computer app is installed: somebody with no computer had to
    * answer No and was told to download it (the audit of 3 November 2026).
-   * Under the third button, RESTORED_BLUETOOTH_GO.
+   * Under RESTORED_BLUETOOTH_GO, drawn first.
    */
-  restored: `No computer? Sign in, and the app can connect by Bluetooth instead, through an adapter sold separately. ${BEST_WAY}`
+  restored: 'No computer needed: sign in, and the Bluetooth page opens. It takes a Bluetooth MIDI adapter, sold separately.'
 }
 
-/* The third button on that page, beside his Yes and No: to sign-in, as Yes goes, for the Bluetooth way. */
+/* The first button on that page, over his Yes and No: to sign-in, as Yes goes, and on to the Bluetooth page. */
 export const RESTORED_BLUETOOTH_GO = 'No computer - I’ll use Bluetooth'
 
 /*
@@ -323,8 +362,8 @@ export const RESTORED_BLUETOOTH_GO = 'No computer - I’ll use Bluetooth'
  * page is drawn.
  */
 export const NO_SIGNAL_BLUETOOTH = {
-  off: (noun) => `No signal? Bluetooth needs no internet: the ${noun} talks to the unit itself, through a Bluetooth MIDI adapter on its MIDI jacks, sold separately. ${BEST_WAY}`,
-  on: () => `You’re on Bluetooth, which needs no internet, so there is nothing to change. ${BEST_WAY}`,
+  off: (noun) => `No signal? Bluetooth needs no internet: the ${noun} talks to the unit itself, through a Bluetooth MIDI adapter on its MIDI jacks, sold separately.`,
+  on: () => 'You’re on Bluetooth, which needs no internet, so there is nothing to change.',
   go: 'Connect over Bluetooth',
   /* Under the button, over the steps it leads into: the computer's way with no signal. */
   browser: (noun) => `To use the computer with no signal, open its own page in the ${noun}’s web browser:`
@@ -335,9 +374,11 @@ export const NO_SIGNAL_BLUETOOTH = {
  * computer or Bluetooth" (Justin, 3 November 2026, of the walkthrough's first
  * page). His three boxes and their words stay as they are (shared/
  * onboarding.mjs CHAIN, P2): on a copy that opens Bluetooth they are the
- * Computer way, picked to start with because it is the best one, and the
- * Bluetooth way is the other choice above them, drawn the same way with one
- * box fewer: the unit, the adapter on its MIDI jacks, the phone. The choice
+ * Computer way, and the Bluetooth way is the other choice, drawn the same
+ * way with one box fewer: the unit, the adapter on its MIDI jacks, the
+ * phone. Bluetooth first and picked to start with since 7 November 2026
+ * ("make sure it's Bluetooth first as far as connection options go"); the
+ * computer was, as "the best one", until then. The choice
  * row costs 44 + 16 of height on both ways, so on those copies the boxes and
  * the cable are drawn tighter (Onboarding.js `tight`) and the Computer way
  * ends no lower than the page did before it: he had text taken off this
@@ -347,15 +388,15 @@ export const NO_SIGNAL_BLUETOOTH = {
 export const HOW_TWO_WAYS = {
   /* The two choices, in this order, the first picked to start with. */
   ways: [
-    { key: 'computer', label: 'Computer' },
-    { key: 'bluetooth', label: 'Bluetooth' }
+    { key: 'bluetooth', label: 'Bluetooth' },
+    { key: 'computer', label: 'Computer' }
   ],
   /* The line between the unit and the phone, the Bluetooth way. */
   wire: 'BLUETOOTH MIDI ADAPTER',
   /* Under the phone's box, the Bluetooth way. */
   phoneBody: 'Your remote - no computer needed',
   /* In place of the demo's line, the Bluetooth way; the button under it still offers the demo. */
-  foot: `The adapter plugs into the unit's MIDI jacks and is sold separately. ${BEST_WAY}`
+  foot: 'The adapter plugs into the unit’s MIDI jacks and is sold separately.'
 }
 
 
@@ -892,11 +933,17 @@ export const unitForReport = (unit) => (UNITS[unit] ? `${UNITS[unit]}${!untried(
  * units, and on Play in place of the chain the phone cannot read (Stage, a
  * VP4 over Bluetooth). Presets and scenes, by the two messages a foot
  * controller sends, and nothing read back (lib/bleVp4.js): no effects, no
- * names, no tuner, and nothing to say a preset or scene landed. The way to
- * the rest is the computer, as it is for every unit.
+ * names, no tuner, and nothing to say a preset or scene landed.
+ *
+ * AND WHAT THE COMPUTER ADDS FOR ONE, said as only what it does (shared/
+ * vp4-safety.mjs, the computer's own sentences): its effects turned on and
+ * off, the name of the preset it is on, and a check that a preset or scene
+ * landed. Never the tuner: until 7 November 2026 this sent VP4 owners to
+ * the computer for "effects, names or tuner", and a VP4's tuner does not
+ * open from the app at all (VP4_NO_TUNER, VP4_SO_FAR).
  */
 export const VP4_OVER_BLUETOOTH =
-  'Over Bluetooth, the app changes a VP4’s presets and scenes, the way a MIDI foot controller does, and nothing else. It can’t hear the VP4 that way, so it can’t show its effects, names or tuner, or check that a preset or scene landed. For those, use the computer.'
+  'Over Bluetooth, the app changes a VP4’s presets and scenes, the way a MIDI foot controller does, and nothing else. It can’t hear the VP4 that way, so it can’t show its effects or the name of the preset it is on, or check that a preset or scene landed. Through the computer, the app also turns its effects on and off, shows that name, and checks that a preset or scene landed.'
 
 /* And under "Connected" on the page: the adapter is all a VP4's link can know. */
 export const VP4_CONNECTED = 'Connected · sending to the VP4'

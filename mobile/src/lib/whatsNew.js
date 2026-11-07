@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-07",
     "day": "7 November 2026",
-    "version": "1.89.62",
+    "version": "1.89.63",
     "lines": [
+      {
+        "text": "Getting started is quicker: after you sign up, start the free trial or buy, one card asks how you connect, a Bluetooth adapter first or a computer instead. Connect over Bluetooth is there from the start while the app looks for your computer, and sign-in and the purchase page have far less to read.",
+        "only": null
+      },
       {
         "text": "When you report a problem, you can now add up to five pictures instead of three, plus one video.",
         "only": null

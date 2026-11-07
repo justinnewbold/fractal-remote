@@ -54,7 +54,7 @@ const face = Platform.select(mono)
  * The words come from shared/link-word.mjs rather than from here, so the two
  * apps cannot drift into saying different things about the same link.
  */
-export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, saveHere: saveWanted = true }) {
+export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true }) {
   const unit = useRig(ofDeviceName)
   const unitState = useRig(ofUnitState)
   const blocks = useRig(ofAllBlocks)
@@ -204,6 +204,20 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
   const pill = pillWords({ tone, unitState, unit, computer: link?.macName, demo, bluetooth })
   if (cable) pill.where = CABLE_WHERE
   /*
+   * NOT CONNECTED · TAP TO CONNECT, for somebody with no computer. The pill
+   * said "Disconnected · on your computer" to a customer who bought the app
+   * for a Bluetooth adapter and has never signed a computer in (Justin, 7
+   * November 2026): the problem it named was a computer they do not have.
+   * App says when (connectFirst: Bluetooth offered here and off, nothing
+   * connected, and the account server sure no computer has ever signed in
+   * with this account), and the tap opens the Bluetooth page, through the
+   * same gate as the note's own button (onBluetoothPage). Here and not in
+   * shared/pill-words.mjs, which the browser draws: a browser has no
+   * Bluetooth.
+   */
+  const toBluetooth = connectFirst && !demo && !bluetooth && Boolean(onBluetoothPage)
+  if (toBluetooth) Object.assign(pill, { status: 'Not connected', mark: 'off', unit: '', where: 'tap to connect' })
+  /*
    * Blue rather than green over Bluetooth, as the word was. Looking and No
    * computer in silkDim, not the faint grey the word had: on the pill's fill
    * that grey was under 4.5:1 in Light mode, and these are the words read
@@ -219,6 +233,8 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    */
   const pillGoes = demo
     ? 'Change the demo unit'
+    : toBluetooth
+      ? 'Connect over Bluetooth'
     : cable
       ? 'How it’s connected'
       : bluetooth
@@ -353,6 +369,10 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
           tick()
           if (bluetooth) {
             setSaying((open) => !open)
+            return
+          }
+          if (toBluetooth) {
+            onBluetoothPage()
             return
           }
           ;(onOpenUnit || onOpenSettings)?.()

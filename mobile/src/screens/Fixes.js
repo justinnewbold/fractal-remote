@@ -15,6 +15,10 @@ import { NO_COMPUTER_BLUETOOTH } from '../lib/no-computer'
 import { useBluetoothOffered } from '../lib/useBluetoothOffered'
 import { cableNow } from '../lib/bluetooth'
 import { cableFixesLine } from '../lib/cableWords'
+import { SETUP } from '../lib/onboarding'
+
+/* The lead-in to SETUP's three steps under It will not connect at all. */
+const SETUP_FIRST = 'Setting up a computer for the first time?'
 
 /**
  * What to try when it isn't working.
@@ -37,7 +41,7 @@ export default function Fixes({ onBack, open = null, hostVersion = null }) {
   const [shown, setShown] = useState(open)
   /* A VP4 on a computer that cannot change its scenes and presets is behind, as its taps and the red line say (lib/vp4-safety vp4ComputerLacks). */
   const sync = versionsInSync({ app: APP_VERSION, host: hostVersion, lacks: vp4ComputerLacks(vp4Here(), vp4Capabilities()) })
-  /* Where this copy offers Bluetooth (beta): the other way in, under "It will not connect at all" (below). */
+  /* Where this copy offers Bluetooth: the other way in, first under "It will not connect at all" (below). */
   const bluetoothOffered = useBluetoothOffered()
 
   return (
@@ -90,6 +94,37 @@ export default function Fixes({ onBack, open = null, hostVersion = null }) {
                   boxShadow: color.glassLift
                 }}
               >
+                {/*
+                  AND THE OTHER WAY IN, FIRST, over the computer's steps: every
+                  step below is about the computer, the cable and the computer
+                  app, and an owner who has no computer, or never got one
+                  going, read them as the only way there is. "Make sure it's
+                  Bluetooth first as far as connection options go" (Justin, 7
+                  November 2026). So, where this copy offers Bluetooth and it
+                  is not already on, the line Phone & computer draws over the
+                  no-computer words (shared/no-computer.mjs
+                  NO_COMPUTER_BLUETOOTH): no computer needed, what a computer
+                  adds, and where it is. It is also where Play's card about the
+                  computer sends them: that card leaves the line out to keep
+                  its height, and its Troubleshooting opens this fix. Everywhere
+                  else nothing is drawn and this fix is word for word what it
+                  was. The steps are the browser's too
+                  (shared/troubleshooting.mjs), and a browser has no Bluetooth,
+                  so the line is here and not in them. Until 7 November 2026 it
+                  came after the steps.
+                */}
+                {fix.id === 'connect' && bluetoothOffered && !bluetoothOn() ? (
+                  <Note tone="hint">{NO_COMPUTER_BLUETOOTH}</Note>
+                ) : null}
+                {/*
+                  AND THE COMPUTER'S FIRST-TIME STEPS, his mockup's three from
+                  the sign-in screen's Get connected (shared/onboarding.mjs
+                  SETUP), which on a copy that opens Bluetooth is one line
+                  since 7 November 2026: "we don't need to put it all upfront
+                  that kind of stuff can come into troubleshooting guides".
+                  Over the fixes, which are for a computer that was set up.
+                */}
+                {fix.id === 'connect' ? <Note tone="hint">{`${SETUP_FIRST} ${SETUP.steps.join(' ')}`}</Note> : null}
                 {fix.steps.map((step, i) => (
                   <View key={i} style={{ flexDirection: 'row', gap: space.sm }}>
                     <Text
@@ -102,30 +137,6 @@ export default function Fixes({ onBack, open = null, hostVersion = null }) {
                     </Text>
                   </View>
                 ))}
-
-                {/*
-                  AND THE OTHER WAY IN, under the computer's steps: for an AM4,
-                  Bluetooth, with no computer. Every step above is about
-                  the computer, the cable and the computer app, and an AM4
-                  owner who has no computer, or never got one going, reads
-                  them as the only way there is. So, where this copy offers
-                  Bluetooth and it is not already on, the same line
-                  Phone & computer draws under the no-computer words (the
-                  waiting screen has its own button instead; shared/no-computer.mjs
-                  NO_COMPUTER_BLUETOOTH): the second way, the computer still
-                  the best, what Bluetooth costs, and where it is. It is also
-                  where Play's card about the computer sends them: that card
-                  leaves the line out to keep its height, and its
-                  Troubleshooting opens this fix. Everywhere
-                  else (every customer's copy today: lib/useBluetoothOffered.js)
-                  nothing is drawn and this fix is word for word what it was.
-                  The steps are the browser's too (shared/troubleshooting.mjs),
-                  and a browser has no Bluetooth, so the line is here and not
-                  in them.
-                */}
-                {fix.id === 'connect' && bluetoothOffered && !bluetoothOn() ? (
-                  <Note tone="hint">{NO_COMPUTER_BLUETOOTH}</Note>
-                ) : null}
 
                 {/*
                   The version check itself, rather than a step telling somebody

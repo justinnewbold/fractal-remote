@@ -395,10 +395,10 @@ the build refused), and an update hides it from everybody but him:
   access note leaves it out, because that build does not have it.
 - /bluetooth on the website said it isn't in the app until the live day.
   Since 30 October 2026 (1.89.3 live in both stores) it is the real page:
-  in the app from 1.89.0, the two ways with the computer first, what it
-  does, the units it is offered on, the FM3's warning, and a link to the guide
-  (bluetooth-guide.html), which search engines may list now. support.html
-  says the two ways, the computer first.
+  in the app from 1.89.0, the two ways (Bluetooth first since 7 November
+  2026, below), what it does, the units it is offered on, the FM3's
+  warning, and a link to the guide (bluetooth-guide.html), which search
+  engines may list now. support.html says the two ways, Bluetooth first.
 - The store listing no longer opens on REQUIRES A COMPUTER: "It doesn't
   require a computer anymore if people are using Bluetooth instead. So we
   can drop that now." (30 October 2026.) The promotional text and the Play
@@ -486,35 +486,111 @@ the rest:
   the function redeployed, only on the day 1.89.0 is live (supabase/README.md
   says how, with Justin reading the sample first).
 
-How it is presented, in his words: "make it clear that there's multiple ways
-to connect the device, but also make it clear that the computer is the
+**How it is presented: Bluetooth first, and short.**
+
+> "Make sure that it's simple, quick and easy for people to sign up, and
+> it's crystal clear how to get started quickly using Bluetooth or a
+> computer. I think most people are gonna opt for Bluetooth, probably 90%.
+> So we need to make that the most prominent thing, we also need to
+> eliminate so much of the text that it tells people, while we want to give
+> them full information they need if they can't connect or they're having
+> trouble, we don't need to put it all upfront that kind of stuff can come
+> into troubleshooting guides. So we need to go through the whole app and
+> make sure it's Bluetooth first as far as connection options go. It says no
+> Bluetooth connects through a computer instead." (7 November 2026)
+
+This replaces his 25 October rule ("make it clear that the computer is the
 preferred method and that Bluetooth will have more lag and not have as many
-features." It is said in several wordings, each in one place:
+features"), which made every wording say "The computer is the best one" and
+put the computer first on every screen. Now Bluetooth is named first
+wherever the two ways are set side by side, with no ranking either way.
+
+The FULL wordings (`BLUETOOTH_WAYS`, `BLUETOOTH_PAYWALL`,
+`NO_COMPUTER_BLUETOOTH`, the setup email's openings, /bluetooth and
+support.html) say three things: Bluetooth first; that it needs no computer;
+and what a computer adds, "A computer has less lag and more features".
+That clause is our wording of his 25 October point, not his words, which
+were "Bluetooth will have more lag and not have as many features". The
+features half is true on every unit, the VP4 too: through a computer a VP4 also gets its
+effects turned on and off, the name of the preset it is on, and a check
+that a preset or scene landed, which Bluetooth cannot give it
+(`VP4_OVER_BLUETOOTH`). Never the tuner, which a VP4 does not get from the
+app either way (`VP4_NO_TUNER`). Never "plus editing and saving", which it
+said for a day: through the computer a VP4 is not edited or saved either
+(`VP4_SO_FAR`), and the purchase page names the VP4. So the clause does
+not depend on `EDIT_FROM_STORE`, and no test ties it to that switch.
+
+The SHORT lines leave the computer's clause out on purpose: the
+walkthrough's (`WALKTHROUGH_TWO_WAYS`, the box before Unlock among them),
+the sign-in screen's Get connected, How do you connect to your unit?
+(`HOW_CONNECT`) and the website's `BLUETOOTH_IN_APPS` say the two ways,
+Bluetooth first, and nothing more ("eliminate so much of the text"); a
+test fails if one grows the clause back. Everything else (what to buy, the
+FM3's warning, what Bluetooth can't do) goes where the adapter is chosen or
+one tap away, not up front. The browser has no Bluetooth: it says in one
+line that Bluetooth is in the iPhone, iPad and Android apps and that a web
+browser connects through a computer only (`BLUETOOTH_IN_APPS` in
+shared/stores.mjs, src/components/BluetoothInApps.jsx), on every screen of
+its connect page and wherever it explains connecting, never in the
+computer app's own window.
+
+It is said in several wordings, each in one place:
 
 - `BLUETOOTH_WAYS` in shared/bluetooth-gear.mjs, the full sentence: the
-  Bluetooth page, the Phone & computer note while Bluetooth is on, and the
-  purchase page through `BLUETOOTH_PAYWALL`, which also names the parts.
-- `BLUETOOTH_WAYS_SHORT` (same file): the line under the waiting screen's
-  "No computer? Use Bluetooth", the same for every account since
-  every unit opened together.
-- `BLUETOOTH_ROW_OFF` (same file): the Settings row, which has one line, so
-  it says what it is for and the lag only.
-- `NO_COMPUTER_BLUETOOTH` in shared/no-computer.mjs: the no-computer note on
-  Phone & computer, and the Fixes page. Not on the waiting screen, which
-  has its own button for it.
+  foot of the Bluetooth page and What Bluetooth can't do, /bluetooth and
+  support.html.
+- `BLUETOOTH_PAYWALL` (same file): the purchase page's one line, with the
+  parts one tap under it (`BLUETOOTH_PARTS`, every part by name and the
+  FM3's two never). `VP4_SO_FAR` is one tap away there too, word for word.
+- `BLUETOOTH_WAYS_SHORT` (same file), "No computer needed": under Connect
+  over Bluetooth, the first thing on the waiting screen from its first
+  second (also with a computer on another account on the wifi), on Phone &
+  computer, the Which unit sheet and How do you connect to your unit?
+- `BLUETOOTH_ROW_OFF` (same file): the Settings row, first in My rig, which
+  has one line, so it says what it is for.
+- `HOW_CONNECT` (same file): "How do you connect to your unit?", once per
+  device and never again, in Play's place after an account is made, a trial
+  started or the full version bought there (lib/howConnect.js: settled for
+  good by either answer, by the walkthrough's choice of way after a found
+  purchase, by a real link answering, the computer with or without a unit
+  or an adapter, never the demo's, or by 'done' on disk; a device with a
+  record of connecting from before the card existed counts as connected),
+  drawn only while Play is the screen and never over a rig that is
+  connected or reconnecting (`howConnectShown`). Bluetooth adapter first
+  and biggest, then his "No Bluetooth adapter? Connect through a computer
+  instead", which lands on Finding your computer…. The sharing card waits
+  for a launch after a unit has connected.
+- `WALKTHROUGH_TWO_WAYS` and `HOW_TWO_WAYS` (same file): the walkthrough
+  (How it works opens on Bluetooth), the box before Unlock, and the sign-in
+  screen's Get connected, which is one line where Bluetooth is open; there
+  the computer's three steps are in Troubleshooting → It will not connect
+  at all, and Connect a computer has its setup (the desktop app, the same
+  account on both, the link by email).
+- `NO_COMPUTER_BLUETOOTH` in shared/no-computer.mjs: over the no-computer
+  words on Phone & computer, and first on the Fixes page. Not on the
+  waiting screen, which has its own button for it.
 - the first email's opening in supabase/functions/setup-reminder/index.ts:
   the setup email, which since 1 November 2026 says both ways under their
-  own headings, the computer first ("Having trouble getting connected?
-  Here's how to set up the computer or connect with Bluetooth"), and goes
-  only to a buyer who has connected neither (20261101_bluetooth_seen.sql,
-  told once by the phone, lib/bluetoothSeen.js).
+  own headings ("Having trouble getting connected? Here's how to set up the
+  computer or connect with Bluetooth"), Bluetooth first since 7 November
+  2026 in the repository (the deployed function changes only when it is
+  redeployed, with Justin reading the sample first, supabase/README.md),
+  and goes only to a buyer who has connected neither
+  (20261101_bluetooth_seen.sql, told once by the phone, lib/bluetoothSeen.js).
 
-A change to the wording changes all of them; a test holds the three full
-wordings to the same three things (the computer best, more lag, fewer
-features). Each is shown only where this copy offers Bluetooth, except the
-purchase page, which shows its line only on a copy that opens Bluetooth to
-customers (`openForCustomersHere()`), since somebody who has not paid is not
-past the row's gate.
+A change to the wording changes all of them; a test holds the full wordings
+(`BLUETOOTH_WAYS`, `BLUETOOTH_PAYWALL`, `NO_COMPUTER_BLUETOOTH`, the email's
+opening) to the same three things (Bluetooth named first, no computer
+needed, "less lag and more features"), no ranking and no editing or saving
+promised, and the short lines to Bluetooth first, no ranking, thirty words
+at most and no computer clause.
+Each is shown only where this copy offers Bluetooth, except the purchase
+page, the walkthrough and the sign-in screen, which show theirs only on a
+copy that opens Bluetooth to customers (`openForCustomersHere()`), since
+somebody who has not paid is not past the row's gate. Store records
+(docs/app-store.md's past version blocks, store/google-play/*) keep the
+words they were submitted with: a test pins the 1.89.0 Description to its
+own literal, never to the live sentence.
 
 **The Bluetooth symbol is allowed.**
 

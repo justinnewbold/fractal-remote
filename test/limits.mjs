@@ -4534,9 +4534,13 @@ export function run(test) {
     const said = page.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ')
     assert.match(notice, /<title>Bluetooth — Fractal Remote<\/title>/)
     assert.match(said, /Bluetooth is in the app, from version 1\.89\.0\./, '/bluetooth does not say which versions have Bluetooth')
-    assert.ok(said.includes(BLUETOOTH_WAYS), '/bluetooth does not say the computer is the best way, with more lag and fewer features on Bluetooth')
-    assert.ok(said.indexOf(BLUETOOTH_WAYS) < said.indexOf('What it does'), '/bluetooth says what Bluetooth does before it says the computer is best')
+    /* The two ways, Bluetooth first since 7 November 2026, in the app's own sentence. */
+    assert.ok(said.includes(BLUETOOTH_WAYS), '/bluetooth does not say the two ways in the app’s own sentence')
+    assert.ok(said.indexOf(BLUETOOTH_WAYS) < said.indexOf('What it does'), '/bluetooth says what Bluetooth does before it says the two ways')
+    assert.ok(!/best (?:one|way)|more lag and fewer features/i.test(said), '/bluetooth still ranks the computer first')
     assert.match(said, /No editing or saving over Bluetooth/, '/bluetooth does not say editing and saving need the computer')
+    /* And not for a VP4, which the computer does not edit or save either (VP4_SO_FAR). */
+    assert.match(said, /No editing or saving over Bluetooth: for those, use the desktop app , on any unit but the VP4, which the app doesn’t edit or save either way\./, '/bluetooth sends a VP4 owner to the computer for editing and saving, which it does not get there either')
     assert.match(said, /on a VP4, presets and scenes/, '/bluetooth promises a VP4 more than presets and scenes')
     assert.match(said, /It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4\./, '/bluetooth does not say which units it is offered on')
     assert.ok(!/\btried\b|\btested\b/i.test(said), '/bluetooth says where it was tried')
@@ -4558,13 +4562,15 @@ export function run(test) {
     assert.equal(vercel.rewrites[at].destination, '/bluetooth.html')
     assert.ok(at < vercel.rewrites.findIndex((r) => r.source === '/(.*)'), '/bluetooth sits after the catch-all, so it never reaches the page')
 
-    /* The support page: the two ways, the computer first, and /bluetooth for the rest. Help stays Justin's own channels. */
+    /* The support page: the two ways, Bluetooth first since 7 November 2026, and /bluetooth for the rest. Help stays Justin's own channels. */
     const support = read('public/support.html').replace(/<!--[\s\S]*?-->/g, '')
     const supportWords = support.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
     assert.ok(!/<h2>Bluetooth/.test(support), 'the support page has grown a Bluetooth section of its own')
     assert.ok(!/The phone doesn’t talk to the unit directly/.test(support), 'the support page still says the phone never talks to the unit itself')
-    assert.ok(supportWords.includes(BLUETOOTH_WAYS), 'the support page does not say the two ways, the computer first')
-    assert.ok(supportWords.indexOf('Through a computer.') > -1 && supportWords.indexOf('Through a computer.') < supportWords.indexOf('By Bluetooth, with no computer.'), 'the support page puts Bluetooth before the computer')
+    assert.ok(supportWords.includes(BLUETOOTH_WAYS), 'the support page does not say the two ways in the app’s own sentence')
+    assert.ok(supportWords.indexOf('By Bluetooth, with no computer.') > -1 && supportWords.indexOf('By Bluetooth, with no computer.') < supportWords.indexOf('Through a computer.'), 'the support page puts the computer before Bluetooth')
+    assert.ok(!/best (?:one|way)|more lag and fewer features/i.test(supportWords), 'the support page still ranks the computer first')
+    assert.match(supportWords, /Bluetooth is in the iPhone, iPad and Android apps only: a web browser connects through a computer\./, 'the support page does not say a browser has no Bluetooth, or leaves the iPad out')
     assert.match(support, /href="\/bluetooth"/, 'the support page does not lead on to /bluetooth')
     assert.match(supportWords, /From version 1\.89\.0/, 'the support page does not say which versions have Bluetooth')
     /* The Android page is about getting the app, and still says nothing about Bluetooth. */
@@ -4946,7 +4952,6 @@ export function run(test) {
     const store = read('docs/app-store.md')
     const { fenced } = await import('../scripts/store-text.mjs')
     const { AFFILIATION } = await import('../shared/affiliation.mjs')
-    const { BLUETOOTH_WAYS } = await import('../shared/bluetooth-gear.mjs')
     const { CUSTOMER_UNITS, unitOffered } = await import('../mobile/src/lib/ble-rule.js')
     const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
     const from = store.indexOf('## 1.89.0: Bluetooth (beta) for customers')
@@ -5100,7 +5105,14 @@ export function run(test) {
     assert.equal(paragraphs.indexOf(btDescription), paragraphs.findIndex((p) => p.startsWith('HOW IT WORKS\n')) + 2, 'the Bluetooth section is not straight after HOW IT WORKS')
     assert.match(paragraph(description, 'TRY THE DEMO'), /Controlling your real unit needs the computer described at the top \(or Bluetooth\)\.$/, 'the demo paragraph still says only the computer controls a real unit')
     assert.match(paragraph(description, 'HOW IT WORKS'), /^HOW IT WORKS\nA phone needs something between it and your Fractal unit, and the best one is the desktop app\./, 'HOW IT WORKS still says the desktop app is the only way')
-    assert.ok(btDescription.includes(BLUETOOTH_WAYS), 'the Bluetooth section does not say the two ways in the app’s own words')
+    /*
+     * The app's own words AS SUBMITTED: this section is the record of the
+     * 1.89.0 text, written from BLUETOOTH_WAYS as it was then. The app said
+     * the two ways Bluetooth first from 7 November 2026, and the record
+     * keeps the words that went to the stores, so it is held to them, not
+     * to the live sentence (never the listing rewritten to pass a test).
+     */
+    assert.ok(btDescription.includes('There are two ways to connect. The computer is the best one. Bluetooth needs no computer, but it has more lag and fewer features.'), 'the Bluetooth section does not say the two ways in the words it was submitted with')
     for (const [said, why] of [
       [/It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4/, 'every unit'],
       [/So far it has been tried on the AM4 and the FM3/, 'which units have been tried'],

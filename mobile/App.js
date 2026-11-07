@@ -37,7 +37,9 @@ import SignIn from './src/screens/SignIn'
 import Onboarding from './src/screens/Onboarding'
 import IndependentNotice, { independentNoticeSeen, markIndependentNotice } from './src/components/IndependentNotice'
 import GearShareNotice from './src/components/GearShareNotice'
+import HowConnect from './src/components/HowConnect'
 import { setSharing, shareQuestionDue, startGearShare } from './src/lib/gearShare'
+import { howConnectAnswered, howConnectShown, noteLink, readHowConnect, useHowConnectOwed } from './src/lib/howConnect'
 import { startBluetoothSeen } from './src/lib/bluetoothSeen'
 import { NOT_AFFILIATED } from './src/lib/affiliation'
 import { walkthroughSeen, markWalkthrough } from './src/lib/walkthrough'
@@ -74,6 +76,7 @@ import {
 } from './src/lib/bluetooth'
 import { useBluetoothOffered } from './src/lib/useBluetoothOffered'
 import { BLUETOOTH_WAYS_SHORT, REPORT_BUTTON } from './src/lib/bluetooth-gear'
+import bluetoothIcon from './assets/icons/bluetooth.png'
 import { CABLE_LOOK_AGAIN, CABLE_TO_ADAPTER, CABLE_TO_ADAPTER_SUB, CABLE_WAITING } from './src/lib/cableWords'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
@@ -179,6 +182,13 @@ export default function App() {
    * below).
    */
   const [shareDue, setShareDue] = useState(false)
+  /*
+   * AND WHETHER A UNIT HAS CONNECTED ON THIS DEVICE BEFORE, read once at
+   * launch (lib/howConnect): the sharing card waits for a launch after the
+   * first connection, rather than standing between a new customer's trial
+   * and their rig (Justin, 7 November 2026: "Signup was difficult").
+   */
+  const [connectedBefore, setConnectedBefore] = useState(false)
   useEffect(() => {
     /* A first run is told where Match my unit is too, on Play after the walkthrough (components/ColoursNotice): nothing is marked here for it. */
     Promise.all([walkthroughSeen(), independentNoticeSeen()]).then(([seen, noticed]) => {
@@ -194,6 +204,7 @@ export default function App() {
    */
   useEffect(() => {
     shareQuestionDue().then(setShareDue)
+    readHowConnect().then((kept) => setConnectedBefore(kept.connectedBefore))
     startGearShare()
     /* And the account server told, once, that this account has connected over Bluetooth (lib/bluetoothSeen), so the setup emails leave it alone. */
     startBluetoothSeen()
@@ -579,6 +590,18 @@ export default function App() {
     setSignInSide('up')
   }
   /*
+   * THE FREE TRIAL TAPPED WITH NOBODY SIGNED IN: Create account, not Sign in.
+   * A trial needs an account to belong to, and somebody tapping it from the
+   * walkthrough is new: he was sent to Sign in, tapped Start 7-day free trial
+   * three times and Sign in once before finding Create account (Justin's log,
+   * 7 November 2026). Its own side, 'trial', because 'up' also says "You've
+   * paid", which a trial has not (SignIn.js `paid`).
+   */
+  const toTrialAccount = () => {
+    toSignIn()
+    setSignInSide('trial')
+  }
+  /*
    * THE TOUR, WHICH THIS END NEVER HAD. "First issue is demo has no
    * tutorial. Very important."
    *
@@ -638,24 +661,6 @@ export default function App() {
   /* The play screen itself is up: not the waiting screen standing in for it. */
   const playOnScreen = screen === 'stage' && !settling
   /*
-   * AND ANOTHER SCREEN IS UP IN ITS PLACE, for Siri (lib/siri): a command
-   * said there is answered with "Open Play" at once, while one said as the
-   * app is still starting waits for Play inside its tap rule. The startup
-   * card, the walkthrough, the sign-in, the paywall and the sharing card
-   * (askShare, below) are elsewhere too: Play does not come by itself from
-   * any of them (lib/siri-rule playElsewhereOf says which is which).
-   */
-  /*
-   * THE SHARING QUESTION'S MOMENT: signed in and past the purchase page
-   * ('in'), and not in the demo, so the App Review demo is never stopped by
-   * it. It comes after the independent card and the walkthrough because the
-   * branches below put those first; it is drawn in Play's place, never over
-   * it. A name, rather than the condition written out where it is drawn.
-   */
-  const askShare = shareDue && auth === 'in' && !demo
-  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen, shareCard: askShare })
-  useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
-  /*
    * And the new-version note only floats over it while the phone is off the
    * rig. Over a connected rig a download can land mid-song, and the note's
    * Restart now would come up where the preset button is, under a thumb on
@@ -704,6 +709,18 @@ export default function App() {
    */
   const noComputer = useNoComputer(lookedLong && !bluetooth)
   /*
+   * AND, WHERE BLUETOOTH IS OFFERED, FROM THE FIRST SECOND: for the top bar's
+   * pill, which told somebody who bought the app for an adapter
+   * "Disconnected · on your computer" (Justin, 7 November 2026). The same
+   * memory and the same once-a-minute limit (lib/useNoComputer.js), asked
+   * only of an account this copy offers Bluetooth to, off Bluetooth, with
+   * nothing connected. A definite no, and the pill says Not connected · tap
+   * to connect and opens the Bluetooth page (TopBar connectFirst). Anything
+   * else, and the pill says what it always did.
+   */
+  const noComputerYet = useNoComputer(auth === 'in' && !demo && !bluetooth && bluetoothOffered && link.link !== 'connected')
+  const connectFirst = Boolean(noComputerYet) && bluetoothOffered && !bluetooth && !demo && link.link !== 'connected'
+  /*
    * THE LINK AS THE TOP BAR AND SETUP SAY IT. The flip under the waiting
    * screen was in the corner too: amber CONNECTING for a second and a half,
    * red DISCONNECTED for five, for minutes, with Try now coming and going
@@ -712,6 +729,56 @@ export default function App() {
    * unanswered until the computer is back (useHeldLink, below).
    */
   const shownLink = useHeldLink(link, looking, bluetooth ? 'adapter' : 'computer')
+  /*
+   * "HOW DO YOU CONNECT TO YOUR UNIT?" (components/HowConnect): owed once an
+   * account is made, a trial started or the full version bought on this
+   * device (lib/howConnect), and asked signed in and past the purchase page,
+   * not in the demo, where this copy offers Bluetooth (the Settings row's own
+   * gate, bluetoothOffered) and nothing is connected yet. Drawn in Play's
+   * place, never over it, ahead of the sharing card, and only while Play is
+   * the screen (`screen`): never in place of Settings, Troubleshooting, a
+   * report being typed or the Bluetooth page. Read from the link as the top
+   * bar says it (shownLink), so it does not come and go with a flip. Either
+   * answer settles it, and so does a link answering first (the effect
+   * below).
+   */
+  const howOwed = useHowConnectOwed()
+  const askHow = howConnectShown({ owed: howOwed, auth, demo, offered: bluetoothOffered, bluetooth, link: shownLink.link, caps, screen })
+  /*
+   * And settled the moment a real link answers, the computer (a unit behind
+   * it or not) or an adapter, or at once when it is asked with one already
+   * answering (`howOwed` among the reasons to look): bought from Play's
+   * trial line over a live rig, it was owed and then drawn in Play's place
+   * at the next drop (the review of 7 November 2026). Never the demo's
+   * link, which is still on the render that leaves it (lib/howConnect
+   * noteLink).
+   */
+  useEffect(() => {
+    noteLink({ auth, demo, link: link.link, unit: unitHere })
+  }, [auth, demo, link.link, unitHere, howOwed])
+  /*
+   * THE SHARING QUESTION'S MOMENT: signed in and past the purchase page
+   * ('in'), and not in the demo, so the App Review demo is never stopped by
+   * it. It comes after the independent card and the walkthrough because the
+   * branches below put those first; it is drawn in Play's place, never over
+   * it. A name, rather than the condition written out where it is drawn.
+   *
+   * AND ONLY ONCE A UNIT HAS CONNECTED ON THIS DEVICE, at a later launch
+   * (connectedBefore): straight after the trial it was one more card between
+   * paying and playing, about gear that had not connected yet.
+   */
+  const askShare = shareDue && connectedBefore && auth === 'in' && !demo
+  /*
+   * AND ANOTHER SCREEN IS UP IN ITS PLACE, for Siri (lib/siri): a command
+   * said there is answered with "Open Play" at once, while one said as the
+   * app is still starting waits for Play inside its tap rule. The startup
+   * card, the walkthrough, the sign-in, the paywall, How do you connect to
+   * your unit? and the sharing card (askHow, askShare) are elsewhere too:
+   * Play does not come by itself from any of them (lib/siri-rule
+   * playElsewhereOf says which is which).
+   */
+  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen, shareCard: askHow || askShare })
+  useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
   /*
    * Where the pill on the bar goes, named once, so the tap and what a screen
    * reader says it does cannot disagree (TopBar unitGoes). Which unit only
@@ -1235,11 +1302,18 @@ export default function App() {
              * every other exit from it. Sending somebody back to the start of
              * a first-run flow they have just walked out of would read as the
              * app forgetting what they did.
+             *
+             * After a found purchase, the way picked (`way`: No computer -
+             * I'll use Bluetooth, or Yes, the computer's) is the answer to
+             * How do you connect to your unit?, never asked again once the
+             * account is in (lib/howConnect); Bluetooth's goes on to its page
+             * (askedBluetooth).
              */
             onAccount={(way) => {
               markWalkthrough()
               setSeenWalk(true)
               setReplaying(false)
+              if (way === 'bluetooth' || way === 'computer') howConnectAnswered()
               /* The found purchase's Bluetooth way: on to the Bluetooth page once signed in (askedBluetooth). */
               askedBluetooth.current = way === 'bluetooth'
               setAuth('out')
@@ -1286,6 +1360,13 @@ export default function App() {
                   setSeenWalk(true)
                   setReplaying(false)
                   toSignIn()
+                }}
+                /* The free trial with nobody signed in: out of the walkthrough the same way, onto Create account (toTrialAccount). */
+                onMakeAccount={() => {
+                  markWalkthrough()
+                  setSeenWalk(true)
+                  setReplaying(false)
+                  toTrialAccount()
                 }}
                 onUnlocked={() => {
                   setBuying(false)
@@ -1412,6 +1493,19 @@ export default function App() {
                   }
             }
           />
+        ) : askHow ? (
+          /*
+           * "How do you connect to your unit?", once, in Play's place
+           * (components/HowConnect). Either answer settles it: Bluetooth
+           * adapter opens the Bluetooth page, through the Settings row's own
+           * gate; No Bluetooth adapter? goes on to Finding your computer…,
+           * always, since the card is drawn only while Play is the screen
+           * (askHow): there is nothing else behind it to land on.
+           */
+          <HowConnect
+            onBluetooth={bluetoothOffered ? () => (howConnectAnswered(), openSettings('bluetooth')) : null}
+            onComputer={howConnectAnswered}
+          />
         ) : askShare ? (
           /*
            * "Help make Fractal Remote better?", once, in Play's place. Either
@@ -1451,8 +1545,9 @@ export default function App() {
               onOpenSettings={() => openSettings()}
               /* The note under the pill, over Bluetooth: back to the screen it was opened over; never over the form (typingReport). */
               onReport={reportBluetooth && !typingReport ? (said) => reportBluetooth(screen, said) : null}
-              /* On a USB cable, its note's Use a Bluetooth adapter instead, behind the Bluetooth row's own gate. */
+              /* On a USB cable, its note's Use a Bluetooth adapter instead, behind the Bluetooth row's own gate; and the pill itself, while it says Not connected · tap to connect (connectFirst, above). */
               onBluetoothPage={bluetoothOffered ? () => openSettings('bluetooth') : null}
+              connectFirst={connectFirst}
               onUnlock={() => setBuying(true)}
               onOpenUnit={() => (unitGoes === 'demo' ? setPickUnit(true) : unitGoes === 'which' ? setPickLive(true) : openSettings('link'))}
               unitGoes={unitGoes}
@@ -1477,6 +1572,7 @@ export default function App() {
               <Paywall
                 asked
                 onSignIn={toSignIn}
+                onMakeAccount={toTrialAccount}
                 onUnlocked={() => setBuying(false)}
                 onDemo={() => setBuying(false)}
                 onBack={() => setBuying(false)}
@@ -1527,7 +1623,6 @@ export default function App() {
                 onTroubleshoot={openConnectFix}
                 onBluetooth={bluetoothOffered ? () => openSettings('bluetooth') : null}
                 onReport={reportBluetooth ? (said) => reportBluetooth('stage', said) : null}
-                onSetlists={() => setScreen('setlists')}
               />
             ) : screen === 'presets' ? (
               <Presets onBack={() => setScreen('stage')} />
@@ -1542,7 +1637,7 @@ export default function App() {
                 }}
               />
             ) : screen === 'connect' ? (
-              <Connect onBack={() => setScreen('settings')} />
+              <Connect onBack={() => setScreen('settings')} onBluetooth={bluetoothOffered ? () => openSettings('bluetooth') : null} />
             ) : screen === 'gear' ? (
               <Gear onBack={() => setScreen(gearBack)} />
             ) : screen === 'log' ? (
@@ -1781,6 +1876,49 @@ const ofCaps = (s) => s.capabilities
 /* The gate's answer from the unit (readFailed, above): a failed read, or the computer saying it has no unit. */
 const ofReadEnded = (s) => s.error || (s.unit === 'missing' ? 'no unit' : null)
 
+/*
+ * How long Look for the computer again says Looking… before it says nothing
+ * answered: past one round of asking, which goes at once (lib/link.js
+ * probeNow), and a computer that answers takes the waiting screen away first.
+ */
+const RETRY_SHOWN_MS = 4000
+
+/**
+ * LOOK FOR THE COMPUTER AGAIN, SEEN TO DO SOMETHING. "Tapping look for
+ * computer again seemingly does nothing when it's already looking" (Justin,
+ * 7 November 2026). It asks at once (probeNow), and a computer that answers
+ * takes the waiting screen away; one that does not changed nothing on screen.
+ * So the button says Looking… for a few seconds, and then, still unanswered,
+ * says so under it. Its own timer, out here and never Waking's: the waiting
+ * screen keeps no clock (useLookedLong is the fifteen seconds), and the
+ * advice stays up through it.
+ */
+function LookAgain({ onRetry }) {
+  const [asked, setAsked] = useState(null)
+  useEffect(() => {
+    if (asked !== 'asking') return undefined
+    const t = setTimeout(() => setAsked('unanswered'), RETRY_SHOWN_MS)
+    return () => clearTimeout(t)
+  }, [asked])
+  return (
+    <>
+      <Press
+        label={asked === 'asking' ? 'Looking…' : 'Look for the computer again'}
+        disabled={asked === 'asking'}
+        onPress={() => {
+          setAsked('asking')
+          onRetry?.()
+        }}
+      />
+      {asked === 'unanswered' ? (
+        <Text style={{ color: color.silkDim, fontSize: font.small, textAlign: 'center' }}>
+          No answer from the computer yet. It keeps looking by itself.
+        </Text>
+      ) : null}
+    </>
+  )
+}
+
 /**
  * The link as the top bar and Setup say it, through a stretch of looking.
  *
@@ -1873,7 +2011,7 @@ function useLookedLong(looking, again) {
  * over a spinner tells somebody standing in front of a silent rig nothing they
  * can act on — and what they can act on is usually the Mac.
  */
-function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, onReport, onSetlists }) {
+function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, onReport }) {
   /*
    * OVER BLUETOOTH (BETA) THERE IS NO COMPUTER TO FIND. What is being looked
    * for is the adapter on the unit — the link names it, so the line below
@@ -1958,7 +2096,7 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
    * download link under the words, the column is taller than a small phone
    * with Display Zoom or a large text size (320 by 548), and a column that
    * cannot scroll was cut at both ends, the spinner under the top bar and
-   * Setlists off the bottom.
+   * the last button off the bottom.
    */
   return (
     <ScrollView
@@ -1966,12 +2104,43 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
       style={{ flex: 1 }}
       contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: space.lg, padding: space.xl }}
     >
+      {/*
+        BLUETOOTH FIRST, FROM THE FIRST SECOND. "I think most people are gonna
+        opt for Bluetooth, probably 90%. So we need to make that the most
+        prominent thing" (Justin, 7 November 2026). It came after fifteen
+        seconds, third, under Look for the computer again, and never under
+        the account warning, so a new customer with a computer on another
+        account in the house was never offered it at all (his report that
+        day). Now it is the first thing here, the Bluetooth page's own Connect
+        look (its symbol, its blue), for whoever App hands a way in
+        (`onBluetooth`: the Settings row's own gate), while Bluetooth is off
+        and until the computer answers (then the unit is being asked what it
+        is, and there is nothing to choose). It only opens the page: nothing
+        touches the phone's Bluetooth before Connect there.
+      */}
+      {!bluetooth && onBluetooth && link.link !== 'connected' ? (
+        <Press
+          label="Connect over Bluetooth"
+          sub={BLUETOOTH_WAYS_SHORT}
+          icon={bluetoothIcon}
+          inkColor={color.ble}
+          labelSize={font.lead}
+          height={64}
+          tone="live"
+          style={{ alignSelf: 'stretch' }}
+          onPress={onBluetooth}
+        />
+      ) : null}
       <ActivityIndicator color={color.silkDim} />
       <Text style={{ color: color.silkDim, fontSize: font.body, textAlign: 'center' }}>{said}</Text>
       {/* Not over "No computer is signed in with this account yet", which
           names the account already: beside it, "make sure you're connected"
-          is about a computer that is not there. */}
-      {email && link.link !== 'connected' && !bluetooth && !noneSaid ? (
+          is about a computer that is not there. Nor over the account
+          warning, which names it too (report of 7 November 2026: the same
+          email twice, one under the other). And only once the computer has
+          been looked for a while: from the first second it was one more line
+          about a computer, read first by somebody who has none. */}
+      {long && email && link.link !== 'connected' && !bluetooth && !noneSaid && !elsewhere ? (
         <Text style={{ color: color.silkFaint, fontSize: font.small, textAlign: 'center' }}>
           {'Make sure you’re connected to your computer using '}
           <Text style={{ color: color.silkDim, fontWeight: '700' }}>{email}</Text>.
@@ -2012,7 +2181,7 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           ) : elsewhere ? (
             <Note tone="fault">
               {email
-                ? `The computer on this wifi is signed into a different account. This ${deviceNoun()} is signed in as ${email}. On the computer, sign in to the Fractal Remote app with ${email}, or sign this ${deviceNoun()} into the computer’s account.`
+                ? `The computer on this wifi is signed into a different account. Sign it in as ${email}, or switch this ${deviceNoun()} to its account.`
                 : `The computer on this wifi is signed into a different account than this ${deviceNoun()}. Sign both into the same account.`}
             </Note>
           ) : noneSaid ? (
@@ -2031,13 +2200,12 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
             2026). To the account's own address, the one the words name.
           */}
           {noneSaid ? <SendLinkButton email={noComputer.email} /> : null}
-          {/* Not the no-computer note's Bluetooth (beta) line here
+          {/* Not the no-computer note's Bluetooth line here
               (components/NoComputer.js NoComputerOtherWay), which Phone &
               computer draws: this screen has its own way to Bluetooth, the
-              button below for somebody with no computer, after the
-              computer's own, with what it costs under it. Both together were
-              the same pitch twice, the note sending them the long way round
-              to the page the button opens in one tap. */}
+              button at the top. Both together were the same pitch twice, the
+              note sending them the long way round to the page the button
+              opens in one tap. */}
           {elsewhere && onSwitch ? <Press label={`Switch account on this ${deviceNoun()}`} onPress={onSwitch} /> : null}
           {/*
             The way to what the line above asks for, right under it, as on the
@@ -2063,7 +2231,7 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
               onPress={() => lookForAdapterAgain(onRetry)}
             />
           ) : (
-            <Press label="Look for the computer again" onPress={() => onRetry?.()} />
+            <LookAgain onRetry={onRetry} />
           )}
           {/* Over Bluetooth the adapter's own page, where it is found and
               its status is; the computer's troubleshooting is about a
@@ -2076,44 +2244,15 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
             own gate (App's reportBluetooth).
           */}
           {bluetooth && onReport ? <Press label={REPORT_BUTTON} onPress={() => onReport(said)} /> : null}
-          {/*
-            AND THE OTHER WAY IN, FOR SOMEBODY WITH NO COMPUTER. Until now the
-            only Bluetooth buttons here showed once Bluetooth was already on,
-            so a player who bought the app to use an adapter sat on "Finding
-            your computer" with nothing to say Bluetooth exists, and the gear
-            was the only way to it. After the computer's own button, never
-            before it: the computer is the best way, and the line under this
-            one says what Bluetooth costs (BLUETOOTH_WAYS_SHORT), the same
-            for every account since every unit opened together (it said "AM4
-            only for now" to a customer until 25 October 2026). Only
-            where App hands it a way in (`onBluetooth`: the row's own gate),
-            only while it is off, and never under the account warning: a
-            computer on this wifi on another account is right there, and
-            the fix is the account, not "No computer?".
-
-            SHORT ENOUGH FOR ONE LINE. A button's label is one line at 15
-            points, and "No computer? Connect by Bluetooth" was about
-            296 points, cut on a 360-point Android phone and a 375-point
-            iPhone. This one is about 254 at its widest; the line under it
-            carries the cost.
-          */}
-          {!bluetooth && onBluetooth && !elsewhere ? (
-            <Press
-              label="No computer? Use Bluetooth"
-              sub={BLUETOOTH_WAYS_SHORT}
-              onPress={onBluetooth}
-            />
-          ) : null}
           {/* "Open the troubleshooting if it doesn't connect" — the browser's
               connecting screen has the same button. */}
           {onTroubleshoot && !bluetooth ? <Press label="Troubleshooting" onPress={onTroubleshoot} /> : null}
           {/*
-            SETLISTS, which never needed the rig. Their only door is on the
-            play screen, and this screen stands in front of it for as long as
-            nothing answers, so tonight's running order could not be fixed on
-            the sofa with the computer shut. Back from them is back here.
+            NO SETLISTS HERE since 7 November 2026: "I don't know the purpose
+            of having set lists on a screen when you're not connected at all
+            ... it shouldn't be on a connect screen." They are on Play, and in
+            the demo.
           */}
-          {onSetlists ? <Press label="Setlists" sub="These work with nothing connected" onPress={onSetlists} /> : null}
         </View>
       ) : null}
       {/*

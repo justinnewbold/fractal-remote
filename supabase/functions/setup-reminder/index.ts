@@ -82,11 +82,12 @@ const SETTINGS_DOOR = { section: 'My rig', row: 'Phone & computer', button: 'Sig
  * Once Bluetooth (beta) opens to customers, in store version 1.89.0 and on
  * every unit the app works with, a buyer has a second way that needs no
  * computer, and "your phone has nothing to connect to" stops being true for
- * them. So with this on, both emails offer both ways: the computer app
- * first, the best way, and then Bluetooth (beta), with what it costs ("make it clear that there's multiple
- * ways to connect the device, but also make it clear that the computer is
- * the preferred method and that Bluetooth will have more lag and not have as
- * many features") and where in the app it is.
+ * them. So with this on, both emails offer both ways: Bluetooth first, with
+ * what it needs and where in the app it is, then the computer app, with what
+ * it adds (less lag and more features). "I think most people are gonna
+ * opt for Bluetooth, probably 90%. So we need to make that the most prominent
+ * thing" (Justin, 7 November 2026); until then the computer came first, as
+ * "the best way", from his 25 October words.
  *
  * OFF UNTIL THE STORE VERSION THAT OPENS IT IS IN BOTH STORES. The email goes
  * to every buyer, on whatever store copy they have, and this function cannot
@@ -224,9 +225,10 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
    * Here's how to set up the computer or connect with Bluetooth" (Justin).
    * The emails go only to somebody who has connected neither (the rule in
    * supabase/migrations/20261101_bluetooth_seen.sql), so with Bluetooth in
-   * them they say both ways, the computer first and best, in the app's own
-   * three things (the computer best, more lag, fewer features). With the
-   * switch off they say the computer alone, as they did before Bluetooth.
+   * them they say both ways, Bluetooth first since 7 November 2026, in the
+   * app's own three things (Bluetooth needs no computer; a computer has less
+   * lag and more features; no ranking). With the switch off they say
+   * the computer alone, as they did before Bluetooth.
    */
   const subject = both
     ? first
@@ -239,11 +241,11 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
     ? first
       ? [
           'Thanks for getting Fractal Remote!',
-          'It looks like it hasn’t connected to your Fractal yet, so here’s how. There are two ways: through a free app on the computer your unit is plugged into, which is the best way, or over Bluetooth with no computer, which has more lag and fewer features.'
+          'It looks like it hasn’t connected to your Fractal yet, so here’s how. There are two ways: over Bluetooth with no computer, or through a free app on the computer your unit is plugged into, which has less lag and more features.'
         ]
       : [
           'Just checking in.',
-          `Fractal Remote still hasn’t connected to your Fractal with ${who}, so here are the two ways again: through the free computer app, which is the best way, or over Bluetooth with no computer.`
+          `Fractal Remote still hasn’t connected to your Fractal with ${who}, so here are the two ways again: over Bluetooth with no computer, or through the free computer app, which has less lag and more features.`
         ]
     : first
       ? [
@@ -254,18 +256,18 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
           'Just checking in.',
           `No computer has signed in to Fractal Remote with ${who} yet, so your phone has nothing to connect to. The computer app is free, and it’s the same three steps:`
         ]
-  /* The two ways' own headings, with both in the email. */
-  const computerHead = 'The computer (the best way, about five minutes):'
+  /* The two ways' own headings, with both in the email: Bluetooth's first. */
   const bluetoothHead = 'Bluetooth (no computer needed):'
+  const computerHead = 'Or the computer (about five minutes):'
   /*
-   * THE OTHER WAY, after the computer's steps and never before them: what
-   * it needs, where in the app it is, what it costs (no editing or saving),
-   * the units it is offered on (docs/app-store.md SUPPORTED UNITS, which
-   * test/server.mjs holds it to), what a VP4 gets, and the FM3's warning,
-   * the one unit with one. "Update the app" because the email cannot tell
-   * which store copy they hold, and only BLUETOOTH_FROM and later have the
-   * row. Never what has been tried, and never that it works on a unit:
-   * "offered on".
+   * BLUETOOTH, BEFORE THE COMPUTER'S STEPS: what it needs, where in the app
+   * it is, what it costs (no editing or saving), the units it is offered on
+   * (docs/app-store.md SUPPORTED UNITS, which test/server.mjs holds it to),
+   * what a VP4 gets, and the FM3's warning, the one unit with one. "Update
+   * the app" because the email cannot tell which store copy they hold, and
+   * only BLUETOOTH_FROM and later have the row. Never what has been tried,
+   * and never that it works on a unit: "offered on". (Still named secondWay:
+   * it was the second until 7 November 2026.)
    */
   const secondWay = `You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. Bluetooth is offered from version ${BLUETOOTH_FROM} of the app, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only), with no editing or saving. On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one.`
   /* Somebody who got going since the account server last heard (a phone that has not had the update that tells it): no harm done. */
@@ -286,12 +288,12 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
     '',
     opening.join(' '),
     '',
-    ...(both ? [computerHead, ''] : []),
+    ...(both ? [bluetoothHead, '', secondWay, '', computerHead, ''] : []),
     ...steps.map((s, i) => `${i + 1}. ${s}`),
     '',
     opened,
     '',
-    ...(both ? [bluetoothHead, '', secondWay, '', allSet, ''] : []),
+    ...(both ? [allSet, ''] : []),
     help,
     '',
     'Justin',
@@ -306,12 +308,12 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
   const html = `
     <div style="font:15px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1d21;max-width:560px">
       ${p('Hi,')}
-      ${p(opening.join(' '))}${both ? `\n      ${h(computerHead)}` : ''}
+      ${p(opening.join(' '))}${both ? `\n      ${h(bluetoothHead)}\n      ${p(secondWay)}\n      ${h(computerHead)}` : ''}
       <ol style="margin:0 0 20px;padding-left:22px">${steps.map((s) => `<li style="margin:0 0 8px">${esc(s)}</li>`).join('')}</ol>
       <p style="margin:0 0 20px">
         <a href="https://${DOWNLOADS}" style="background:#7c5cff;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block;font-weight:600">Get the computer app</a>
       </p>
-      ${p(opened)}${both ? `\n      ${h(bluetoothHead)}\n      ${p(secondWay)}\n      ${p(allSet)}` : ''}
+      ${p(opened)}${both ? `\n      ${p(allSet)}` : ''}
       ${p(help)}
       ${p('Justin', 'margin:0')}
       ${p('Fractal Remote', 'margin:0 0 24px;color:#5f6670')}
