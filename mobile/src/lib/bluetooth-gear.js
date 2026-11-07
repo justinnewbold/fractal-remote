@@ -1040,11 +1040,14 @@ export const CONNECT_AGAIN_SUB = 'A fresh connection to the adapter'
  * under it (Android's own question), and what happens next, so nobody taps
  * Connect again for nothing. `noun` is the device in hand (lib/device-word
  * deviceNoun). `kept`: an adapter is kept, which the link connects to by
- * itself; otherwise the page's search starts by itself.
+ * itself whenever it next tries. Otherwise the page's search starts by
+ * itself only while the app is waiting for Bluetooth (`waiting`); once that
+ * wait has run out, the line says what to do instead.
  */
 export const TURN_ON_BLUETOOTH = 'Turn on Bluetooth'
 export const bluetoothOffLine = (noun) => `Bluetooth is off on this ${noun}`
-export const bluetoothOffHint = (kept) => (kept ? 'Once it is on, the adapter connects by itself.' : 'Once it is on, the search starts by itself.')
+export const bluetoothOffHint = (kept, waiting = true) =>
+  kept ? 'Once it is on, the adapter connects by itself.' : waiting ? 'Once it is on, the search starts by itself.' : 'Turn it on, then tap Connect again.'
 
 /*
  * AN ADAPTER THAT WILL NOT LEAVE APPLE'S LIST (iPhone or iPad): Forget in

@@ -16,7 +16,7 @@ import { DEMO_TRIAL_PILL } from '../lib/trial-words'
 import setupIcon from '../../assets/icons/setup.png'
 import volumeIcon from '../../assets/icons/volume.png'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
-import { adapterInsteadOfCable, setBluetooth, useBluetoothOn, useBluetoothUnit, useCableNow } from '../lib/bluetooth'
+import { adapterInsteadOfCable, setBluetooth, useBluetoothAnsweredAs, useBluetoothOn, useBluetoothUnit, useCableNow } from '../lib/bluetooth'
 import { connectBluetoothAgain } from '../lib/bleLink'
 import { CONNECT_AGAIN } from '../lib/bluetooth-gear'
 import { CABLE_OFF, CABLE_TO_ADAPTER, CABLE_WHERE, cableNote } from '../lib/cableWords'
@@ -123,6 +123,8 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
   const wireless = bluetooth && !cable
   /* The unit picked on the Bluetooth page: a VP4 never answers over it, so its silence is not offered Connect again. */
   const bleUnit = useBluetoothUnit()
+  /* Another unit answered on the adapter: a fresh connection would only hear it again, so no Connect again (the Bluetooth page offers Switch to). */
+  const bleAnswered = useBluetoothAnsweredAs()
   /* The note under the pill is Bluetooth's alone: put away when Bluetooth goes, so it is not open on its own when Bluetooth next comes on. */
   useEffect(() => {
     if (!bluetooth) setSaying(false)
@@ -624,7 +626,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
           link={link}
           cable={cable}
           /* The adapter connected and the unit silent: Connect again beside Turn off Bluetooth (not a VP4, which never answers, nor a cable). */
-          quiet={!cable && bleUnit !== 'vp4' && link?.link === 'connected' && (unitState === 'missing' || unitState === 'silent')}
+          quiet={!cable && bleUnit !== 'vp4' && !bleAnswered && link?.link === 'connected' && (unitState === 'missing' || unitState === 'silent')}
           onClose={() => setSaying(false)}
           onReport={onReport}
           onBluetoothPage={onBluetoothPage}

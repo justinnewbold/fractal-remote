@@ -17877,6 +17877,32 @@ export function run(test) {
     }
   })
 
+  /*
+   * A CHECK STILL OUT IS A WATCH. link.js asks for the watch at every
+   * keepalive (every nine seconds or so) since 7 November 2026, and the
+   * timer is empty while a check waits on its answer: a watchUnit() then
+   * started a second run, the answer on its way was thrown away, and the
+   * count of quiet answers went back to nothing. An FM3 unplugged at the
+   * computer, whose computer is slow to say so, was never said to be gone.
+   */
+  test('the unit watch asked for again while a check is out keeps that check, and a unit gone is still noticed', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    unit.which = () => ({ number: -1, name: '' })
+    unit.lag = (line) => (line === 'GET /preset' ? 2000 : 0)
+    rig.watchUnit()
+    try {
+      for (let i = 0; i < 160 && rig.getState().unit === 'present'; i++) {
+        rig.watchUnit()
+        await clock.advance(500)
+      }
+      assert.ok(rig.getState().unit === 'silent' || rig.getState().unit === 'missing', `a unit that stopped answering is still ${rig.getState().unit} after 80 s`)
+      /* One check at a time: two quiet answers, a timed check each, and the read that decides the word. */
+      assert.ok(asked('GET /preset') <= 4, `asked ${asked('GET /preset')} times`)
+    } finally {
+      rig.stopWatching()
+    }
+  })
+
   test('another client choosing a preset is followed with one chain read', async () => {
     const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
     unit.number = 60

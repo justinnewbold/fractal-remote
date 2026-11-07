@@ -40,12 +40,13 @@ import {
   setBluetooth,
   setBluetoothUnit,
   setMethods,
-  stopWaitingForBluetooth,
+  stopPageWait,
   switchAdapter,
   turnOnBluetooth,
   unitName,
   useBluetooth,
-  useBluetoothAdmin
+  useBluetoothAdmin,
+  useWaitingForBluetooth
 } from '../lib/bluetooth'
 import { connectBluetoothAgain } from '../lib/bleLink'
 import {
@@ -81,6 +82,7 @@ import {
   hookupFor,
   midiSettingsFor,
   missingBlocksLine,
+  namedForFm3,
   notAnsweringLine,
   untried,
   unitForReport,
@@ -311,7 +313,7 @@ function status(b, unitState) {
        * under it, one tap on the same connection (switchUnit, below). Not
        * for a unit on a USB cable, which is the unit itself.
        */
-      if (pickable && !cable && adapterName(b.adapter)) return { line: wrongAdapterLine({ adapter: adapterName(b.adapter), answered: b.answeredAs, picked: name }), tone: 'fault' }
+      if (pickable && !cable && adapterName(b.adapter) && carriesTo(b.answeredAs, b.adapter)) return { line: wrongAdapterLine({ adapter: adapterName(b.adapter), answered: b.answeredAs, picked: name }), tone: 'fault' }
       return { line: wrongUnitLine({ answered: b.answeredAs, picked: name, pickable }), tone: 'fault' }
     }
     /* A unit on a USB cable: the same lines, saying the cable (lib/cableWords cableStatus), a VP4's still never answering. */
@@ -326,6 +328,16 @@ function status(b, unitState) {
   if (cable) return { line: cableConnectingLine(b.adapter?.name), tone: 'dim' }
   return { line: `Connecting to ${b.adapter?.name || 'the adapter'}…`, tone: 'dim' }
 }
+
+/*
+ * WHETHER THE PAGE MAY OFFER THE UNIT THAT ANSWERED ITS ADAPTER (Switch to):
+ * any unit, but an FM3 only on an adapter the app names for one, the WIDI
+ * Uhost (shared/bluetooth-gear namedForFm3). The FM3 rule: the WIDI Master
+ * and the C2MIDI Pro are never offered for an FM3. With any other on an
+ * FM3, the page says so with wrongUnitLine's Stop, pick and Connect, under
+ * the red FM3 warning, and Connect lists the adapter for its owner's tap.
+ */
+const carriesTo = (answered, a) => answered !== 'FM3' || namedForFm3(adapterName(a))
 
 /*
  * Blue for the unit answering over Bluetooth, as the bar is; green stays the
@@ -388,7 +400,13 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * in the list when there is a real choice. `wanted` is that promise, kept
    * until an adapter arrives.
    */
-  const [wanted, setWanted] = useState(false)
+  /*
+   * And from the start when the page opens on Bluetooth off with nothing
+   * kept (a Connect on an earlier visit found it off): the look that starts
+   * once it is on chooses the adapter, and this turns Bluetooth on with it,
+   * as that Connect would have.
+   */
+  const [wanted, setWanted] = useState(() => b.trouble === 'bluetooth-off' && !b.adapter && !b.on)
   /* Apple's screen closed with no adapter connected in it. */
   const [missed, setMissed] = useState(false)
   /* The full version as Bluetooth reads it: the purchase itself for a customer, never "the store cannot be reached" (unlock-rule mayDriveBluetooth). */
@@ -595,9 +613,9 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * step 1 rule (no other unit picked while on) has nothing to guard here.
    */
   const answeredKey = connected && b.answeredAs ? units.find((u) => u.name === b.answeredAs)?.key || null : null
-  const offerSwitch = !!answeredKey && !cable && canStart
+  const offerSwitch = !!answeredKey && !cable && canStart && carriesTo(b.answeredAs, b.adapter)
   const switchUnit = () => {
-    if (!answeredKey || !canStart) return
+    if (!offerSwitch) return
     arm()
     setBluetoothUnit(answeredKey, { carry: true })
   }
@@ -619,6 +637,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * has found it off: nothing sets that trouble on an iPhone.
    */
   const offOnAndroid = b.trouble === 'bluetooth-off' && !ios
+  /* Whether the app is waiting for it to come on: the hint promises the search, or the connection, only while it is (lib/bluetooth useWaitingForBluetooth). */
+  const waitingOn = useWaitingForBluetooth()
   const turnOn = () => {
     arm()
     turnOnBluetooth()
@@ -627,15 +647,18 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * WHAT THE PHONE CAN SEE, READ AGAIN as the page opens and each time the
    * app is back on screen (lib/bluetooth refreshAdapters): an adapter kept
    * that Apple's screen connected again under a new id is found, and on
-   * Android a Bluetooth turned on in its settings is noticed. The wait for
-   * Bluetooth to come on ends with the page.
+   * Android, with Bluetooth still said to be off (only ever after a
+   * Connect), the wait for it starts again, so "once it is on, the search
+   * starts by itself" holds after a visit to one of the page's own pages
+   * too. The page's own wait ends with the page (stopPageWait); the link's,
+   * for an adapter kept, goes on.
    */
   useEffect(() => {
-    refreshAdapters({ resume: false })
+    refreshAdapters()
     const off = refreshOnScreen()
     return () => {
       off()
-      stopWaitingForBluetooth()
+      stopPageWait()
     }
   }, [])
 
@@ -684,7 +707,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
             </Text>
             {b.trouble === 'permission' ? <OpenSettings /> : null}
             {offOnAndroid ? <Press label={TURN_ON_BLUETOOTH} tone="live" height={52} onPress={turnOn} /> : null}
-            {offOnAndroid ? <Hint>{bluetoothOffHint(b.on && !!b.adapter)}</Hint> : null}
+            {offOnAndroid ? <Hint>{bluetoothOffHint(b.on && !!b.adapter, waitingOn)}</Hint> : null}
             {offerSwitch ? <Press label={SWITCH_TO(b.answeredAs)} sub={SWITCH_TO_SUB(adapterName(b.adapter), b.answeredAs)} tone="live" height={52} onPress={switchUnit} /> : null}
             {reportable && !quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
             {vp4 && connected && !b.answeredAs ? <Hint>{cable ? (jacks ? CABLE_VP4_CANT_HEAR_JACKS : CABLE_VP4_CANT_HEAR) : VP4_CANT_HEAR}</Hint> : null}

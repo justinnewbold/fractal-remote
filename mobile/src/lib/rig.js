@@ -1096,13 +1096,25 @@ let watchTimer = null
  * second watchUnit() would then leave two of them running.
  */
 let watchRun = 0
+/*
+ * THE RUN WHOSE CHECK IS OUT NOW, waiting on its answer, or 0. The timer is
+ * empty while a check waits (each tick clears it first), so watchUnit took a
+ * check that was out for no watch at all, and started a new run: the answer
+ * on its way was thrown away (`run !== watchRun`), the two-quiet count went
+ * back to nothing, and the next check was a fresh half-minute off. Since 7
+ * November 2026 link.js asks for the watch at every keepalive, every nine
+ * seconds or so, so that happened often, and an FM3 unplugged at the
+ * computer was said to be gone a minute or more late. A run with a check
+ * out is a watch.
+ */
+let checkingRun = 0
 
 /** Ask about the unit from now on. Safe to call repeatedly. */
 export function watchUnit() {
-  if (watchTimer) return stopWatching
+  if (watchTimer || (checkingRun !== 0 && checkingRun === watchRun)) return stopWatching
   const run = ++watchRun
   let quiet = 0
-  const tick = async () => {
+  const check = async () => {
     watchTimer = null
     const loadRun = presetRun
     /* A VP4 is asked which scene it is on: it can never say which preset,
@@ -1184,6 +1196,15 @@ export function watchUnit() {
       if (run !== watchRun) return
     }
     watchTimer = setTimeout(tick, nextWatch())
+  }
+  /* One check at a time, marked while it is out (checkingRun), and unmarked however it ends. */
+  const tick = async () => {
+    checkingRun = run
+    try {
+      await check()
+    } finally {
+      if (checkingRun === run) checkingRun = 0
+    }
   }
   watchTimer = setTimeout(tick, nextWatch())
   return stopWatching

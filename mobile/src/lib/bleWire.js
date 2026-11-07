@@ -788,13 +788,6 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   function heard(f) {
     if (closed || !isFractal(f)) return
     const now = time.now()
-    if (f[4] !== model) {
-      if (f[4] === 0x7f) return
-      foreign = { model: f[4], at: now }
-      if (!am4 && f[4] === MODELS.am4) heardAnAm4()
-      else heardAnother(f[4])
-      return
-    }
     const job = current
     /*
      * THE ECHO GUARD. With MIDI Thru on, the unit hands the phone its own
@@ -802,6 +795,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * scene 8. A frame identical to the one just sent is dropped — except
      * while a write is waiting for the one answer that IS identical: the
      * published scene change, which the unit answers with the same bytes.
+     *
+     * BEFORE ANY OTHER UNIT IS HEARD, since 7 November 2026: the other units'
+     * own questions (askAround) carry their model bytes, and the AM4's,
+     * echoed back by a white plug in an Axe-Fx III's THRU or an adapter that
+     * loops, read as an AM4 answering. That named an AM4 on the adapter and
+     * stopped the connection. The phone's own message coming back is never
+     * another unit.
      */
     if (isEcho(f, now) && !(job && job.opts.allowEcho)) {
       echoes++
@@ -810,6 +810,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         /* The Axe-Fx III has no MIDI Thru setting: what echoes there is a white plug in its THRU jack, which repeats what comes in. */
         say(unit === 'axefx3' ? 'the unit is echoing what it receives: the white plug may be in the Axe-Fx III’s MIDI THRU, not OUT' : 'the unit is echoing what it receives: MIDI Thru is on')
       }
+      return
+    }
+    if (f[4] !== model) {
+      if (f[4] === 0x7f) return
+      foreign = { model: f[4], at: now }
+      if (!am4 && f[4] === MODELS.am4) heardAnAm4()
+      else heardAnother(f[4])
       return
     }
     heardAgain()

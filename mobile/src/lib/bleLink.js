@@ -11,6 +11,7 @@ import {
   bluetoothSupported,
   closeWire,
   connectAdapter,
+  endLinkWait,
   noteBluetooth,
   onAdapter,
   openWire,
@@ -119,7 +120,13 @@ let missed = false
 let afresh = false
 /* Android said Bluetooth was off at the last try (the trouble 'bluetooth-off'): its going is the moment to try again (settingsMoved). */
 let wasOff = false
-/* Android answers a connect no this quickly only with its Bluetooth off; an adapter that is merely away takes its fifteen seconds (FractalBleMidiModule.kt OPEN_TIMEOUT_MS). */
+/*
+ * Android answers a connect no this quickly with its Bluetooth off, and an
+ * adapter that is merely away takes its fifteen seconds (FractalBleMidiModule.kt
+ * OPEN_TIMEOUT_MS). Not only then: an adapter whose MIDI port another app
+ * holds is refused as fast, so a quick no is only a reason to ask
+ * (lib/bluetooth bluetoothLooksOff asks the module's own search).
+ */
 const OFF_ANSWER_MS = 500
 
 const say = (line, detail) => logDebug('ble', line, detail)
@@ -270,12 +277,13 @@ async function tryConnect() {
       const asked = Date.now()
       ok = await connectAdapter(s.adapter.id)
       /*
-       * ANDROID WITH ITS BLUETOOTH OFF answers no at once: said, so the page
-       * and the waiting screen offer Turn on Bluetooth, and the link tries
-       * again the moment it is on (lib/bluetooth bluetoothLooksOff). Before,
-       * the page said "Connecting to WIDI Jack…" for ever.
+       * ANDROID WITH ITS BLUETOOTH OFF answers no at once: asked whether it
+       * is off, and when it is, said, so the page and the waiting screen
+       * offer Turn on Bluetooth, and the link tries again the moment it is on
+       * (lib/bluetooth bluetoothLooksOff). Before, the page said "Connecting
+       * to WIDI Jack…" for ever. With Bluetooth on, the ordinary backoff.
        */
-      if (!ok && mine === attempt && Platform.OS === 'android' && !isCable(s.adapter) && Date.now() - asked < OFF_ANSWER_MS) bluetoothLooksOff()
+      if (!ok && mine === attempt && Platform.OS === 'android' && !isCable(s.adapter) && Date.now() - asked < OFF_ANSWER_MS) await bluetoothLooksOff()
     }
     if (ok) noteBluetooth({ trouble: null })
   } catch (err) {
@@ -612,6 +620,13 @@ function dropped(reason) {
   const cable = onCable()
   const carried = had && back !== null ? ` (${back} bytes came back on that connection)` : ''
   say(had ? (cable ? 'the USB cable was unplugged' : `the adapter went away${carried}`) : cable ? 'the USB cable did not stay connected' : 'the adapter did not stay connected', reason || undefined)
+  /*
+   * A connection that heard anything, however late (a unit that finished
+   * starting up after the fresh connection was made), was a working line:
+   * the one fresh connection by itself is owed to the next. Never by the
+   * app's own letting go, which says no 'disconnected', so no loop.
+   */
+  if (back > 0) afresh = false
   delay = 0
   begin()
 }
@@ -769,6 +784,13 @@ export function stopBluetoothLink() {
     }
   }
   stopWatching()
+  /*
+   * The computer picked (Use the computer instead, Stop, a sign-out): the
+   * wait for Bluetooth this link started ends, and its "Bluetooth is off"
+   * goes with it (lib/bluetooth endLinkWait). Here, not running any more and
+   * no longer listening, so the trouble going starts no try.
+   */
+  endLinkWait()
   return letGoOfWireInTurn(() => {
     /* Started again while the AM4's tuner was closing: the new loop keeps the adapter, and goes on from here. */
     if (running) return begin()

@@ -591,8 +591,13 @@ async function joinOnce(run) {
    * the computer and it still said connected" — it had, because after this
    * line nothing on a stage screen asks the unit anything: everything those
    * screens draw is already in the store. See rig.watchUnit.
+   *
+   * Only for a link still going, connected, with the app on screen: a
+   * sign-out or Bluetooth turned on while these reads were out stopped the
+   * link (stopLink's stopWatching), and a check started after that asked a
+   * computer that was gone, every half-minute, with nothing left to stop it.
    */
-  watchUnit()
+  if (running && state.link === 'connected' && !asleep) watchUnit()
 }
 
 async function countHosts() {
