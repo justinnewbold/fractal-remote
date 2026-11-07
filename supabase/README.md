@@ -160,7 +160,8 @@ context bullets and the row id, and none of the log. Three pieces now:
   with the service key and **attached**, shown in the body by `cid:` (a link
   that expires is dead by the time a report from a gig is read; one that
   does not is a public picture). Each is at most 1.5 MB from the app (2 MB
-  in the bucket), so three are about 6 MB encoded, inside Resend's 40 MB and
+  in the bucket), so five (three until 7 November 2026, below) are about
+  10 MB encoded, 13.3 MB at the bucket's 2 MB each, inside Resend's 40 MB and
   Gmail's 25 MB. A row may only name pictures under its own sender's folder.
   When nobody typed an address, the reply goes to the account's own email,
   read from the account service and labeled "(the account's email)". Every
@@ -168,14 +169,16 @@ context bullets and the row id, and none of the log. Three pieces now:
   cannot be had costs the email one line.
 - `migrations/20261022_report_screenshots.sql` — the private bucket
   `report-shots` (JPEG only, 2 MB a file), one rule for putting a picture in
-  (`<account id>/<key>-<1..3>.jpg`, or `anon/…` signed out, and only while
+  (`<account id>/<key>-<1..3>.jpg`, `<1..5>` since
+  `20261107_report_five_shots.sql`, or `anon/…` signed out, and only while
   `report_shots_room(folder)` says there is room: fewer than 15 in the last
   hour in that folder, an account's or anon/, anon/ under 100 MB, and the
   bucket under 200 MB, so a stranger signed out can never shut an account's
   pictures out), and nothing for reading, listing, replacing or removing.
   `report_shots_due()` lists what is to go: older than 7 days, or older than
   an hour and named by no report of its own (a row from the folder's own
-  sender, among its first three). And `notify_feedback()` again,
+  sender, among its first three; five since `20261107_report_five_shots.sql`,
+  which makes the rule and this again). And `notify_feedback()` again,
   unchanged but for sixty seconds for the email instead of five. The row's
   shape does not change: the pictures' places ride in `context.screenshots`.
 - `migrations/20261022_report_shots_sweep.sql` — once a day (pg_cron), asks
@@ -248,6 +251,74 @@ The function's answer in `net._http_response` is
 `{"sent":true,"screenshots":n,"log":true}` for a sent email (with
 `"withoutScreenshots":true` when Resend refused it with its pictures and it
 went again without them), and `{"swept":n}` for the daily tidy.
+
+## Five screenshots in a report (7 November 2026)
+
+"Let's make it so a user can upload up to five photos instead of three. And
+one video, Max." One video was already the rule, so only the pictures move:
+`SHOTS_MAX` in shared/report-rules.mjs goes from 3 to 5, on the phone, the
+website and the computer app. The server counts to three in three places,
+and each has to count to five BEFORE the app is merged:
+
+- `migrations/20261107_report_five_shots.sql` — the bucket's insert rule
+  made again with `<key>-<1..5>.jpg`, and `report_shots_due()` keeping a
+  picture named among a row's first five, each otherwise word for word as
+  `20261022_report_screenshots.sql` made it (that file is not edited). The
+  bucket, its 2 MB a file and `report_shots_room()` do not change, so 15 an
+  hour into one folder is now three full reports an hour from one account,
+  or from everybody signed out together (it was five), and anon/'s 100 MB
+  and the bucket's 200 MB hold about fourteen and twenty-eight reports of
+  five pictures at the app's 1.5 MB cap. A phone's screenshot is usually a
+  few hundred kilobytes.
+- `functions/feedback-email/` — reads and attaches up to five. Five at the
+  app's cap are about 10 MB in the email, 13.3 MB at the bucket's 2 MB
+  each, under Gmail's 25 MB.
+- `functions/_shared/forget-account.ts` — Delete account, and Delete on
+  Developer → Accounts, remove a fourth and fifth picture too. Two
+  functions carry this file, `delete-account` and `grant-access`, so both
+  are deployed again (`supabase functions deploy` bundles it into each).
+
+### Putting it live, in this order
+
+Steps 1 to 4 before the pull request is merged, deployed from its branch
+brought up to date with main (as the trial's functions were, 7 November
+2026), so what runs differs from main only by this change until the merge.
+
+1. **Apply `20261107_report_five_shots.sql`.** Nothing anybody sees
+   changes: every copy out today sends three pictures at most, which the
+   new rule takes as the old one did.
+2. **Deploy feedback-email**: `supabase functions deploy feedback-email
+   --no-verify-jwt` (the trigger is its caller, as before).
+3. **Deploy delete-account**: `supabase functions deploy delete-account`
+   (it checks the caller's sign-in itself, and keeps the JWT check it has).
+4. **Deploy grant-access**: `supabase functions deploy grant-access`
+   (verify JWT on, as it is).
+5. **Merge the app**, with every check green. It goes out as an update (no
+   build: the fingerprint is Unchanged), on the website, and in a new
+   computer app, since the web app inside it changed.
+
+Out of order, no report is lost. Merged before step 1, the bucket refuses a
+fourth and fifth picture, and the report goes without them, saying "2
+screenshots couldn't be added, so the report went without them." Before
+step 2, a report with five is emailed with its first three and says nothing
+of the other two (they stay in the bucket for the week). Before steps 3 and
+4, deleting an account leaves its fourth and fifth pictures in the bucket
+until the tidy deletes them, an hour after the rows that named them have
+gone.
+
+### Checking it
+
+```sql
+-- the rule's path ends -[1-5]\.jpg$
+select polname, pg_get_expr(polwithcheck, polrelid)
+from pg_policy where polrelid = 'storage.objects'::regclass and polname like 'a report''s screenshots%';
+-- the tidy keeps a picture among a row's first five
+select prosrc like '%->> 4)%' as keeps_five from pg_proc where proname = 'report_shots_due';
+```
+
+After the merge, a report with five pictures answers
+`{"sent":true,"screenshots":5,"log":true}` in `net._http_response`, and its
+email shows all five.
 
 ## The setup emails (paid, but no computer yet)
 

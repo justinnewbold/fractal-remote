@@ -6,7 +6,7 @@
  * message and upload photos? Let's get it all set up if it's not already."
  *
  * What is held here, end to end: the note (optional, and the one tap still
- * sends with none), the screenshots (three at most, made smaller, and a
+ * sends with none), the screenshots (five at most, made smaller, and a
  * failed one never costs the report), the head and the runs before inside the
  * log's one budget, the email (its body, its attachments, its reply address),
  * and the one shape of a screenshot's place in the bucket that the app, the
@@ -18,13 +18,29 @@
  * as test/server.mjs runs grant-access and setup-reminder.
  */
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 const flat = (p) => read(p).replace(/\s+/g, ' ')
+/*
+ * The screenshots' bucket as first made, three to a report, and the file that
+ * made it five (7 November 2026): the bucket's insert rule and its tidy are
+ * read from the second, everything else about the bucket from the first.
+ */
+const SHOTS_SQL = 'supabase/migrations/20261022_report_screenshots.sql'
+const FIVE_SQL = 'supabase/migrations/20261107_report_five_shots.sql'
+/* A migration as the database reads it: no comments, one space between words. */
+const sqlCode = (p) => read(p).replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ')
+/* Every migration whose code says `what`, oldest first: the last one applied is the one that stands. */
+const migrationsSaying = (what) =>
+  readdirSync(new URL('../supabase/migrations/', import.meta.url))
+    .filter((f) => f.endsWith('.sql') && sqlCode(`supabase/migrations/${f}`).includes(what))
+    .sort()
+/* A count as the pages say it, so a page's "up to five" is held to SHOTS_MAX. */
+const inWords = (n) => ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n]
 /* Comments out, so a check reads the code and not its explanation. */
 const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ')
 
@@ -758,13 +774,15 @@ export function run(test) {
     }
   })
 
-  test('screenshots are three at most, and made smaller before they go', async () => {
+  test('screenshots are five at most, and made smaller before they go', async () => {
     const r = await import('../shared/report-rules.mjs')
-    assert.equal(r.SHOTS_MAX, 3)
+    /* "Up to five photos instead of three. And one video, Max." (Justin, 7 November 2026.) */
+    assert.equal(r.SHOTS_MAX, 5)
     const one = { size: 1000 }
     let list = []
-    for (let i = 0; i < 5; i++) list = r.withShot(list, { ...one, n: i })
-    assert.equal(list.length, 3, 'a fourth screenshot was kept')
+    for (let i = 0; i < 7; i++) list = r.withShot(list, { ...one, n: i })
+    assert.equal(list.length, 5, 'a sixth screenshot was kept')
+    assert.deepEqual(r.withShot(list, { ...one, n: 99 }), list, 'a full list took one more')
     assert.deepEqual(r.withShot([], { size: r.SHOT_BYTES + 1 }), [], 'a picture over the cap was kept')
     assert.deepEqual(r.withShot([], { size: 0 }), [], 'an empty picture was kept')
     assert.deepEqual(r.withShot([], null), [])
@@ -780,10 +798,14 @@ export function run(test) {
     assert.equal(r.base64Bytes(Buffer.alloc(12345).toString('base64')), 12345)
 
     /* Under the bucket's own limit, so the app never lets through a picture the server turns away. */
-    const sql = read('supabase/migrations/20261022_report_screenshots.sql')
+    const sql = read(SHOTS_SQL)
     const limit = Number(sql.match(/values \('report-shots', 'report-shots', false, (\d+), array\['image\/jpeg'\]\)/)?.[1])
     assert.ok(limit > r.SHOT_BYTES, `the bucket takes ${limit} bytes and the app sends up to ${r.SHOT_BYTES}`)
-    assert.ok(r.SHOTS_MAX * r.SHOT_BYTES * 4 / 3 < 25 * 1024 * 1024, 'three screenshots at the cap do not fit in a Gmail inbox')
+    assert.ok(r.SHOTS_MAX * r.SHOT_BYTES * 4 / 3 < 25 * 1024 * 1024, 'five screenshots at the cap do not fit in a Gmail inbox')
+    /* Nor five at the bucket's own limit, which only something other than the app could put there, with the whole log beside them. */
+    assert.ok((r.SHOTS_MAX * limit + r.LOG_BYTES) * 4 / 3 < 25 * 1024 * 1024, 'five pictures at the bucket’s limit, and the log, do not fit in a Gmail inbox')
+    /* No other migration changes the bucket's size or kind: the five-picture file moves only the rule and the tidy. */
+    assert.deepEqual(migrationsSaying("insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types) values ('report-shots'"), [SHOTS_SQL.split('/').pop()])
 
     /* The phone: the clipboard read as a JPEG, once, and once more at the lower quality only when that is too big. */
     const small = Buffer.alloc(200_000, 7).toString('base64')
@@ -897,7 +919,7 @@ export function run(test) {
     assert.match(patch, /^\+\s+&& itemProvider\.hasItemConformingToTypeIdentifier\(UTType\.livePhoto\.identifier\)/m)
     assert.equal(JSON.parse(read('mobile/package-lock.json')).packages['node_modules/patch-package']?.version, pkg.devDependencies['patch-package'])
 
-    /* Both ends stop at three, and say how many are in. */
+    /* Both ends stop at SHOTS_MAX, and say how many are in. */
     assert.match(flat('mobile/src/components/Shots.js'), /disabled=\{disabled \|\| pasting \|\| picking \|\| full\}/)
     assert.match(flat('src/components/Shots.jsx'), /disabled=\{disabled \|\| busy \|\| full\}/)
     for (const f of ['mobile/src/components/Shots.js', 'src/components/Shots.jsx']) {
@@ -1234,7 +1256,7 @@ export function run(test) {
     assert.match(fn, /const within = \(url: string, init: RequestInit = \{\}, ms = WAIT_MS\) => fetch\(url, \{ \.\.\.init, signal: AbortSignal\.timeout\(ms\) \}\)/)
     assert.equal((fn.match(/\bfetch\(/g) || []).length, 1, 'a request is made without the deadline')
     /* And the trigger gives it time to finish: sixty seconds, and the function keeps itself under fifty-five. */
-    assert.match(read('supabase/migrations/20261022_report_screenshots.sql'), /timeout_milliseconds := 60000/)
+    assert.match(read(SHOTS_SQL), /timeout_milliseconds := 60000/)
     assert.match(fn, /const BUDGET_MS = 55_000/)
   })
 
@@ -1299,29 +1321,46 @@ export function run(test) {
       assert.equal(m[1].replace(/\\\//g, '/'), shared, `${f} takes a different shape of path from the app`)
       assert.match(read(f), /const SHOT_BUCKET = 'report-shots'/)
     }
-    const sql = read('supabase/migrations/20261022_report_screenshots.sql')
+    /*
+     * The rule that stands is the last migration to make it: since 7 November
+     * 2026 the five-picture file, and no file after it (one that made it again
+     * would have to be read here instead).
+     */
+    const RULE = `create policy "a report's screenshots, put in by whoever sends it"`
+    assert.deepEqual(migrationsSaying(RULE), [SHOTS_SQL, FIVE_SQL].map((f) => f.split('/').pop()), 'the bucket’s rule is made by a migration this test does not read')
+    const sql = read(FIVE_SQL)
     assert.ok(sql.includes(`name ~ '${shared}'`), 'the bucket’s rule takes a different shape of path from the app')
     assert.equal(r.SHOT_BUCKET, 'report-shots')
-    assert.ok(r.SHOT_PATH.test(r.shotPath(USER, KEY, 3)))
+    for (let n = 1; n <= r.SHOTS_MAX; n++) assert.ok(r.SHOT_PATH.test(r.shotPath(USER, KEY, n)), `picture ${n} has no place`)
     assert.ok(r.SHOT_PATH.test(r.shotPath(null, KEY, 1)) && r.shotPath(null, KEY, 1).startsWith('anon/'))
-    assert.ok(!r.SHOT_PATH.test(r.shotPath(USER, KEY, 4)), 'a fourth picture has a place')
+    assert.ok(!r.SHOT_PATH.test(r.shotPath(USER, KEY, r.SHOTS_MAX + 1)), 'a sixth picture has a place')
+    assert.ok(!r.SHOT_PATH.test(r.shotPath(USER, KEY, 0)))
     assert.ok(!r.SHOT_PATH.test(`${USER}/../${KEY}-1.jpg`))
     assert.match(r.reportKey(), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
 
-    /* The bucket: private, JPEG only, and one rule, for putting in: the sender's own folder or anon/, never another's. */
-    const q = sql.replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ')
-    assert.match(q, /insert into storage\.buckets \(id, name, public, file_size_limit, allowed_mime_types\) values \('report-shots', 'report-shots', false, 2097152, array\['image\/jpeg'\]\)/)
+    /* The bucket: private, JPEG only, made once, and its one rule, for putting in: the sender's own folder or anon/, never another's. */
+    const made = sqlCode(SHOTS_SQL)
+    assert.match(made, /insert into storage\.buckets \(id, name, public, file_size_limit, allowed_mime_types\) values \('report-shots', 'report-shots', false, 2097152, array\['image\/jpeg'\]\)/)
+    const q = sqlCode(FIVE_SQL)
+    assert.match(q, /drop policy if exists "a report's screenshots, put in by whoever sends it" on storage\.objects; create policy "a report's screenshots, put in by whoever sends it"/, 'the rule is made again without the old one going first')
     assert.match(q, /on storage\.objects for insert to anon, authenticated with check \( bucket_id = 'report-shots' and name ~ /)
     assert.match(q, /\(storage\.foldername\(name\)\)\[1\] = 'anon' or \(storage\.foldername\(name\)\)\[1\] = \(select auth\.uid\(\)\)::text/)
-    assert.equal((q.match(/create policy/g) || []).length, 1, 'the bucket has a rule for something besides putting a picture in')
-    assert.doesNotMatch(q, /for (select|update|delete|all)\b/, 'a picture can be read, listed, replaced or removed through the app’s key')
-    /* public.feedback itself is not touched: the pictures ride in context, so no older app's insert changes. */
-    assert.doesNotMatch(q, /alter table public\.feedback/)
+    for (const [f, text] of [[SHOTS_SQL, made], [FIVE_SQL, q]]) {
+      assert.equal((text.match(/create policy/g) || []).length, 1, `${f}: the bucket has a rule for something besides putting a picture in`)
+      assert.doesNotMatch(text, /for (select|update|delete|all)\b/, `${f}: a picture can be read, listed, replaced or removed through the app’s key`)
+      /* public.feedback itself is not touched: the pictures ride in context, so no older app's insert changes. */
+      assert.doesNotMatch(text, /alter table public\.feedback/)
+    }
+    /* The five-picture rule is the first one word for word, but for the count, and touches nothing else of the bucket's. */
+    const policy = (text) => text.slice(text.indexOf(RULE), text.indexOf(');', text.indexOf(RULE)) + 2)
+    assert.equal(policy(q), policy(made).replace('-[1-3]\\.jpg$', '-[1-5]\\.jpg$'), 'the five-picture rule changed more than the count')
+    assert.ok(policy(made).includes('-[1-3]\\.jpg$'), 'the first rule is not the one this test thinks it is')
+    assert.doesNotMatch(q, /storage\.buckets|report_shots_room\(folder text\)|notify_feedback/, 'the five-picture file changes the bucket, its room or the trigger')
 
     /* The trigger's function is the live one with sixty seconds instead of five, and nothing else changed. */
     const body = (s) => s.slice(s.indexOf('create or replace function public.notify_feedback()'), s.indexOf('$$;', s.indexOf('create or replace function public.notify_feedback()')))
     const norm = (s) => body(s).replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ').trim()
-    assert.equal(norm(sql), norm(read('supabase/migrations/20260905_feedback_email.sql')).replace('timeout_milliseconds := 5000', 'timeout_milliseconds := 60000'))
+    assert.equal(norm(read(SHOTS_SQL)), norm(read('supabase/migrations/20260905_feedback_email.sql')).replace('timeout_milliseconds := 5000', 'timeout_milliseconds := 60000'))
 
     /* Delete account takes the pictures before the rows that name them, through Storage's own API (in the deletion both ways of deleting share). */
     const del = code(read('supabase/functions/_shared/forget-account.ts'))
@@ -1348,6 +1387,42 @@ export function run(test) {
   })
 
   /*
+   * FIVE, NOT THREE (Justin, 7 November 2026: "up to five photos instead of
+   * three. And one video, Max."). The server has to take five before the app
+   * sends five, or the bucket refuses the fourth and fifth: supabase/README.md
+   * says the order, and every function that carries Delete account's half of
+   * the count is in it.
+   */
+  test('five pictures: the server counts to five before the app is merged', async () => {
+    const { SHOTS_MAX } = await import('../shared/report-rules.mjs')
+    assert.equal(SHOTS_MAX, 5)
+    /* One video, as before (the picker turns a second away, held above), and the report screen says both numbers. */
+    assert.match(read('mobile/src/components/Attach.js'), /`Up to \$\{SHOTS_MAX\} pictures and one video\. Pictures are made smaller before they go\.`/)
+    const fn = read('supabase/functions/feedback-email/index.ts')
+    assert.match(fn, /^const SHOTS_MAX = 5$/m, 'the email reads a different number of pictures from the app')
+
+    const readme = read('supabase/README.md')
+    const from = readme.indexOf('## Five screenshots in a report (7 November 2026)')
+    assert.ok(from > 0, 'the README does not say how the five go live')
+    const part = readme.slice(from, readme.indexOf('\n## ', from + 1))
+    const at = (s) => part.indexOf(s)
+    const carriers = readdirSync(new URL('../supabase/functions/', import.meta.url))
+      .filter((d) => !d.startsWith('_') && !d.includes('.'))
+      .filter((d) => /from '\.\.\/_shared\/forget-account\.ts'/.test(read(`supabase/functions/${d}/index.ts`)))
+      .sort()
+    assert.deepEqual(carriers, ['delete-account', 'grant-access'], 'another function carries Delete account’s half: the README’s steps must deploy it too')
+    const steps = [
+      '**Apply `20261107_report_five_shots.sql`.**',
+      '**Deploy feedback-email**: `supabase functions deploy feedback-email\n   --no-verify-jwt`',
+      ...carriers.map((d) => `**Deploy ${d}**: \`supabase functions deploy ${d}\``),
+      '**Merge the app**'
+    ]
+    for (const step of steps) assert.ok(at(step) > 0, `the README's steps leave out ${step}`)
+    for (let i = 1; i < steps.length; i++) assert.ok(at(steps[i - 1]) < at(steps[i]), `the README puts ${steps[i]} before ${steps[i - 1]}`)
+    assert.ok(read(FIVE_SQL).includes('APPLY THIS BEFORE THE APP THAT SENDS FIVE IS MERGED'))
+  })
+
+  /*
    * THE REVIEW OF 23 OCTOBER 2026, server side. The app's key is public and
    * so is the repository, so anybody can put a picture under anon/ and write
    * a row naming it. What holds: the bucket takes only so much, nothing stays
@@ -1357,12 +1432,15 @@ export function run(test) {
    * to delete.
    */
   test('the bucket takes only so much, and keeps nothing past its week', async () => {
-    const sql = read('supabase/migrations/20261022_report_screenshots.sql')
-    const q = sql.replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ')
-    const fnBody = (name) => q.slice(q.indexOf(`create or replace function public.${name}(`), q.indexOf('$$;', q.indexOf(`create or replace function public.${name}(`)))
+    /* The room as first made; the rule and the tidy as the five-picture file made them again (7 November 2026). */
+    const q = sqlCode(SHOTS_SQL)
+    const five = sqlCode(FIVE_SQL)
+    const bodyIn = (text, name) => text.slice(text.indexOf(`create or replace function public.${name}(`), text.indexOf('$$;', text.indexOf(`create or replace function public.${name}(`)))
+    const fnBody = (name) => bodyIn(q, name)
 
     /* The rule asks for room in the folder the picture goes to before it lets it in. */
-    assert.match(q, /\(storage\.foldername\(name\)\)\[1\] = \(select auth\.uid\(\)\)::text \) and public\.report_shots_room\(\(storage\.foldername\(name\)\)\[1\]\) \);/, 'a picture goes in however full its folder or the bucket is')
+    assert.match(five, /\(storage\.foldername\(name\)\)\[1\] = \(select auth\.uid\(\)\)::text \) and public\.report_shots_room\(\(storage\.foldername\(name\)\)\[1\]\) \);/, 'a picture goes in however full its folder or the bucket is')
+    assert.deepEqual(migrationsSaying('create or replace function public.report_shots_room('), [SHOTS_SQL.split('/').pop()], 'the room is made again by a migration this test does not read')
     /*
      * Room, a share each (second review): fewer than 15 an hour into any one
      * folder, an account's or anon/; anon/ under 100 MB; the bucket under
@@ -1377,15 +1455,24 @@ export function run(test) {
     assert.match(q, /revoke all on function public\.report_shots_room\(text\) from public; grant execute on function public\.report_shots_room\(text\) to anon, authenticated;/)
     /*
      * Due: past its week, or past an hour with no report OF ITS OWN naming
-     * it: a row from the folder's own sender, among the first three it names
-     * (all the app writes, all the email reads). One row from a stranger
-     * listing a hundred pictures kept all hundred for the week.
+     * it: a row from the folder's own sender, among the first five it names
+     * (SHOTS_MAX: all the app writes, all the email reads; three until 7
+     * November 2026). One row from a stranger listing a hundred pictures kept
+     * all hundred for the week. The tidy that stands is the five-picture
+     * file's, the first one word for word but for the count.
      */
-    const due = fnBody('report_shots_due')
+    const { SHOTS_MAX } = await import('../shared/report-rules.mjs')
+    assert.deepEqual(migrationsSaying('create or replace function public.report_shots_due('), [SHOTS_SQL, FIVE_SQL].map((f) => f.split('/').pop()), 'the tidy is made again by a migration this test does not read')
+    const due = bodyIn(five, 'report_shots_due')
+    const named = (n) => [...Array(n)].map((_, i) => `f.context -> 'screenshots' ->> ${i}`).join(', ')
     assert.match(due, /returns setof text language sql stable security definer set search_path = ''/)
-    assert.match(due, /o\.created_at < now\(\) - interval '7 days' or \( o\.created_at < now\(\) - interval '1 hour' and not exists \( select 1 from public\.feedback f where coalesce\(f\.user_id::text, 'anon'\) = split_part\(o\.name, '\/', 1\) and o\.name in \(f\.context -> 'screenshots' ->> 0, f\.context -> 'screenshots' ->> 1, f\.context -> 'screenshots' ->> 2\) \) \)/, 'a picture is kept by a row that is not its sender’s, or by a row naming more than the three a report carries')
+    assert.ok(
+      due.includes(`o.created_at < now() - interval '7 days' or ( o.created_at < now() - interval '1 hour' and not exists ( select 1 from public.feedback f where coalesce(f.user_id::text, 'anon') = split_part(o.name, '/', 1) and o.name in (${named(SHOTS_MAX)}) ) )`),
+      'a picture is kept by a row that is not its sender’s, or by a row naming more, or fewer, than the pictures a report carries'
+    )
+    assert.equal(due, fnBody('report_shots_due').replace(named(3), named(SHOTS_MAX)), 'the five-picture tidy changed more than the count')
     assert.doesNotMatch(due, /\? o\.name|jsonb_array_length/, 'kept by any row that names it, or by a count that fails on a row whose screenshots are not a list')
-    assert.match(q, /revoke all on function public\.report_shots_due\(\) from public, anon, authenticated; grant execute on function public\.report_shots_due\(\) to service_role;/)
+    for (const text of [q, five]) assert.match(text, /revoke all on function public\.report_shots_due\(\) from public, anon, authenticated; grant execute on function public\.report_shots_due\(\) to service_role;/)
     /* The hour the rule counts is never emptied under it: the tidy takes nothing younger, and the email deletes nothing it sends. */
     assert.doesNotMatch(due, /interval '(\d+ minutes?|[0-9.]+ seconds?)'/)
     const fn = code(read('supabase/functions/feedback-email/index.ts'))
@@ -1399,6 +1486,7 @@ export function run(test) {
     assert.match(cron, /revoke all on function public\.sweep_report_shots\(\) from public, anon, authenticated;/)
     assert.match(cron, /select cron\.schedule\('report-shots-sweep', '17 4 \* \* \*', \$\$select public\.sweep_report_shots\(\)\$\$\);/)
     assert.ok('20261022_report_screenshots.sql' < '20261022_report_shots_sweep.sql', 'the schedule would be applied before what it asks for')
+    assert.ok(SHOTS_SQL.split('/').pop() < FIVE_SQL.split('/').pop(), 'the five-picture file would be applied before the bucket it changes')
     /* And only once the function that understands the tidy is out: the one before it would email a blank report every morning. */
     const readme = read('supabase/README.md')
     const live = readme.slice(readme.indexOf('### Putting it live, in this order'))
@@ -1465,11 +1553,17 @@ export function run(test) {
     assert.equal((noId.sent[0].attachments || []).filter((x) => /\.jpg$/.test(x.filename)).length, 0)
     assert.match(noId.sent[0].html, /Screenshot 1 was left out: the report has no id to check it against\./)
 
-    /* All at once: three pictures take as long as one. */
-    const mine = [1, 2, 3].map((n) => `${USER}/${KEY}-${n}.jpg`)
-    const together = await feedbackEmail({ row: { ...row, user_id: USER, context: { screenshots: mine } }, stored: Object.fromEntries(mine.map((p) => [p, jpeg])), hold: 40 })
-    assert.equal(together.reads.most, 3, 'the pictures were read one after another')
-    assert.equal(together.sent[0].attachments.filter((x) => /\.jpg$/.test(x.filename)).length, 3)
+    /* All at once: five pictures take as long as one. And five is all one email carries: a sixth named is never read. */
+    const mine = [1, 2, 3, 4, 5].map((n) => `${USER}/${KEY}-${n}.jpg`)
+    const sixth = `${USER}/${KEY}-6.jpg`
+    const together = await feedbackEmail({ row: { ...row, user_id: USER, context: { screenshots: [...mine, sixth] } }, stored: Object.fromEntries([...mine, sixth].map((p) => [p, jpeg])), hold: 40 })
+    assert.equal(together.reads.most, 5, 'the pictures were read one after another')
+    const five = together.sent[0].attachments.filter((x) => /\.jpg$/.test(x.filename))
+    assert.deepEqual(five.map((x) => [x.filename, x.content_id]), [1, 2, 3, 4, 5].map((n) => [`screenshot-${n}.jpg`, `shot-${n}`]), 'the fourth or fifth picture was not attached')
+    for (let n = 1; n <= 5; n++) assert.match(together.sent[0].html, new RegExp(`src="cid:shot-${n}"`), `picture ${n} is attached and not shown`)
+    assert.ok(!together.calls.some((c) => c.url.endsWith(`/${sixth}`)), 'a sixth picture was looked up or read')
+    assert.doesNotMatch(together.sent[0].html, /Screenshot 6/)
+    assert.deepEqual(together.said, { sent: true, screenshots: 5, log: true })
   })
 
   test('an email refused with its pictures goes again without them, and says so', async () => {
@@ -1550,9 +1644,10 @@ export function run(test) {
       /* From another account, giving this address: anybody can write that, naming anything. Neither picture is this account's. */
       { id: 'c3333333-3333-4333-8333-333333333333', user_id: OTHER, context: { screenshots: [theirs, anonA] } }
     ]
-    const run = await deleteAccount({ reports, folder: [`${KEY}-3.jpg`, 'notes.txt'] })
+    /* The folder's own: up to the fifth picture of a report, and nothing that is not a picture's place. */
+    const run = await deleteAccount({ reports, folder: [`${KEY}-3.jpg`, `${KEY}-5.jpg`, `${KEY}-6.jpg`, 'notes.txt'] })
     assert.deepEqual(run.said, { deleted: true })
-    assert.deepEqual([...run.removed].sort(), [mine, anonB, `${USER}/${KEY}-3.jpg`].sort(), 'Delete account removed a picture that was not the account’s, or left one that was')
+    assert.deepEqual([...run.removed].sort(), [mine, anonB, `${USER}/${KEY}-3.jpg`, `${USER}/${KEY}-5.jpg`].sort(), 'Delete account removed a picture that was not the account’s, or left one that was')
     assert.ok(!run.removed.includes(theirs), 'another account’s picture was deleted')
 
     /* The note: one email, to the developer, once the rows have gone, by row id only. */
@@ -1660,7 +1755,7 @@ export function run(test) {
     assert.equal(hint('android'), 'Choose one from your photos (screenshots have a folder of their own), or paste one you have copied.')
     /* The support page says the same steps. */
     const support = read('public/support.html').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ')
-    assert.match(support, /To add up to three screenshots, tap Choose a screenshot and pick them from your photos, or copy one and tap Paste a screenshot\./)
+    assert.ok(support.includes(`To add up to ${inWords(r.SHOTS_MAX)} screenshots, tap Choose a screenshot and pick them from your photos, or copy one and tap Paste a screenshot.`), 'the support page says another number of screenshots from the one the app takes')
     assert.match(support, /To copy a screenshot on an iPhone or iPad: take a screenshot \(if only a little picture shows in the corner, tap it\), tap the check mark at the top right, then Copy and Delete\. On older versions, tap Done at the top left instead\./)
     assert.match(support, /For one already in Photos: open it there, tap Share, then Copy Photo\./)
     assert.match(support, /On the website and in the computer app: Settings → Troubleshooting → Debug log has the same button/, 'the support page sends website users to the Debug log by a path that is not there')
@@ -1745,7 +1840,12 @@ export function run(test) {
     /* How long a stored picture stays, the same as the bucket's own tidy. */
     assert.match(page, /They are stored privately for a week/)
     assert.match(page, /Screenshots added to a report — the stored copy is deleted a week after it was sent, or an hour after if its report never arrived\./)
-    const sql = read('supabase/migrations/20261022_report_screenshots.sql')
+    /* As many pictures as the app takes, and one video. */
+    const { SHOTS_MAX } = await import('../shared/report-rules.mjs')
+    assert.ok(page.includes(`a box for what you want to say, up to ${inWords(SHOTS_MAX)} pictures and one video if you add them`), 'the privacy page says another number of pictures from the one the app takes')
+    assert.ok(page.includes(`Screenshots and photos. You can add up to ${inWords(SHOTS_MAX)} pictures to a report`), 'the privacy page says another number of pictures from the one the app takes')
+    /* The tidy that stands, the five-picture file's. */
+    const sql = read(FIVE_SQL)
     assert.match(sql, /o\.created_at < now\(\) - interval '7 days'/)
     assert.match(sql, /o\.created_at < now\(\) - interval '1 hour'\s+and not exists/)
     assert.doesNotMatch(page, /Bug reports, and their screenshots — until the problem is fixed/)

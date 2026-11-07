@@ -435,7 +435,7 @@ Tracking Transparency entirely.
 | Contact Info → **Name** | Yes | Yes | The first and last name Create account asks for, kept on the account so Justin knows who it belongs to and who he is helping when they write in. App Functionality. Added 5 November 2026: published before the update that asks for it merges (see below) |
 | Contact Info → **Email Address** | Yes | Yes | Account sign-in, and answering a support message: the address they leave, or, when they leave none and are signed in, the account's own (22 October 2026) |
 | User Content → **Other User Content** | Yes | Yes | Setlists, so they follow you between devices |
-| User Content → **Photos or Videos** | Yes | Yes | Screenshots and photos somebody chooses to add to a bug report (up to three, pasted or picked on a phone, picked on the website), and from 29 October 2026 one video picked on a phone or tablet, sent only when they press Send. Linked unless they untick Include my email. Added 22 October 2026: on the live label since 1 November 2026 |
+| User Content → **Photos or Videos** | Yes | Yes | Screenshots and photos somebody chooses to add to a bug report (up to five, pasted or picked on a phone, picked on the website; three until 7 November 2026, a number the label does not carry, so nothing to publish for it), and from 29 October 2026 one video picked on a phone or tablet, sent only when they press Send. Linked unless they untick Include my email. Added 22 October 2026: on the live label since 1 November 2026 |
 | User Content → **Customer Support** | Yes | Yes | What somebody writes in a bug report or suggestion: the Feedback form, and the note beside Send logs to developer. It was true before the note came, and was never on the label; add it with Photos or Videos. on the live label since 1 November 2026 |
 | Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you, and the number RevenueCat files purchases under. App Functionality and **Analytics** (RevenueCat's own guidance: say how the id is used, as for Purchase History). Analytics added 25 October 2026: on the live label since 1 November 2026 |
 | Diagnostics → **Other Diagnostic Data** | Yes | Yes | The debug log, and only when somebody presses Send on a bug report |
@@ -1466,7 +1466,8 @@ And, from 22 October 2026 (screenshots in reports), one more, **collected**
 and **not shared**:
 
 - **Photos and videos → Photos.** Optional (only the screenshots somebody
-  adds to a bug report, up to three, sent when they press Send). For App
+  adds to a bug report, up to five, sent when they press Send; three until
+  7 November 2026, a number Data safety does not carry). For App
   functionality. Not processed ephemerally: they are kept a week in storage
   (an hour, if their report never arrived), and in the report's email.
 - **Photos and videos → Videos.** From 29 October 2026 (the phone's report
