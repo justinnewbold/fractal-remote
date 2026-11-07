@@ -2618,9 +2618,17 @@ and `EDIT_FROM_STORE` gate exactly as they did (test/trial.mjs holds it).
   function starts it on request. Google Play allows a free trial of a
   one-time unlock done in the app.
 
-### App Store Connect: the free item (Justin, or by the App Store Connect API)
+### App Store Connect: the free item
 
-My apps → Fractal Remote → Monetization → In-App Purchases → +
+Made by GitHub, with the App Store Connect key the builds already use:
+Actions → **iap-trial** → Run workflow. Unticked, it only reads and says
+what it would make. **Make it** ticked makes every part below that is
+missing (the item, its English words, the Free price, its countries and the
+review picture) and leaves what is there alone, so running it twice changes
+nothing. **Send for review** ticked also sends it to Apple, once it is
+complete (scripts/iap-trial.mjs, which reads this table and the notes
+under it, so the two cannot disagree). By hand it is My apps → Fractal
+Remote → Monetization → In-App Purchases → +, with the same values.
 
 | Field | Value |
 | --- | --- |
@@ -2631,8 +2639,8 @@ My apps → Fractal Remote → Monetization → In-App Purchases → +
 | Availability | all countries the app is sold in |
 | Family Sharing | off |
 | Localization (English (U.S.)) Display Name | `7-Day Trial` |
-| Localization Description | `Try the full version free for 7 days with your own rig. No charge.` |
-| Review screenshot | the purchase page showing "Start 7-day free trial" and the words under it |
+| Localization Description | `The full version free for 7 days, with your own rig.` (Apple takes 55 characters) |
+| Review screenshot | `docs/iap/trial-7day-review.png`: the purchase page showing "Start 7-day free trial" and the words under it, 1290×2796 |
 | Review notes | below |
 
 Review notes for the item:
@@ -2660,6 +2668,14 @@ its own if App Store Connect offers that for this app.
    item does not move it.
 
 ### Supabase (in this order)
+
+Done on 7 November 2026, before #808 was merged: the migration applied, and
+`trial`, `entitlement` and `grant-access` deployed from the branch. The
+salt secret was not set then; until it is, `trial` hashes with its built-in
+salt, which works the same (the install numbers it hashes are random, so a
+known salt gives nobody a way back to one). Set it before the first trial
+is started, or never: changing it later lets every device that has had a
+trial take another.
 
 1. Apply `supabase/migrations/20261107_trials.sql` (the trials tables,
    `start_trial`, `trial_of`, `owner_trials`, and `is_entitled` with a
