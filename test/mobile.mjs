@@ -12457,7 +12457,7 @@ export function run(test) {
     const raw = read('mobile/src/components/TopBar.js')
     const bar = withoutComments(raw).replace(/\s+/g, ' ')
     /* Beside the pill, before it; only for somebody signed in here, never in the demo, and out of the way while Save needs the room. */
-    assert.match(bar, /const photo = useProfilePhoto\(\) const showPhoto = Boolean\(onOpenAccount\) && avatarShown\(\{ demo, account: photo \}\) && !canSave/, 'the photo shows in the demo, signed out, or beside Save')
+    assert.match(bar, /const photo = useProfilePhoto\(\) [\s\S]{0,400}?const showPhoto = Boolean\(onOpenAccount\) && avatarShown\(\{ demo, account: photo \}\) && !canSave && pillNeeds <= besidePhoto/, 'the photo shows in the demo, signed out, beside Save, or beside words it cuts')
     assert.match(bar, /\{showPhoto \? \( <Pressable accessibilityRole="button" accessibilityLabel="Your account" accessibilityHint="Your name, photo and password" hitSlop=\{\{ top: 10, bottom: 10, left: 14, right: 6 \}\} onPress=\{\(\) => \{ tick\(\) onOpenAccount\(\) \}\} > <Avatar uri=\{photo\.uri\} size=\{24\} \/> <\/Pressable> \) : null\}/, 'the photo is not its own button, named Your account, opening the account')
     assert.ok(raw.indexOf('<Avatar ') > raw.indexOf('v${APP_VERSION}') && raw.indexOf('<Avatar ') < raw.indexOf('{pill.status}'), 'the photo is not between the version and the pill')
     /* A thumb's 44 each way, and the pill keeps the overlap it reaches into. */
@@ -12495,24 +12495,68 @@ export function run(test) {
    * of its 13 a letter, as the phone draws them. Beside Save there is no
    * photo, so the bar is as it was.
    */
-  test('on a 320-point phone the photo leaves the pill every unit’s name whole, and the gear its place', async () => {
+  test('the photo leaves the pill every unit’s name whole in every state, on a 320 and a 360, and the gear its place', async () => {
     const { space, font } = await import('../mobile/src/lib/theme.js')
+    const { pillWords } = await import('../shared/pill-words.mjs')
     const bar = withoutComments(read('mobile/src/components/TopBar.js')).replace(/\s+/g, ' ')
     assert.match(bar, /gap: space\.md, paddingHorizontal: space\.lg,/)
     const photo = Number(/<Avatar uri=\{photo\.uri\} size=\{(\d+)\} \/>/.exec(bar)?.[1])
     assert.equal(photo, 24)
     const speaker = 24
     const gear = 22
-    const inside = 320 - 2 * space.lg
-    /* The version, the photo, the pill, the speaker and the gear: four gaps. The version gives way first, to nothing. */
-    const room = inside - 4 * space.md - photo - speaker - gear
-    const letter = 0.602 * font.small
-    /* The pill: its border and padding, the word, the lamp's 8 with a gap each side, and the unit. */
-    const pill = (status, unit) => 2 + 2 * space.sm + status.length * letter + space.sm + 8 + space.sm + unit.length * letter
-    for (const unit of ['FM3', 'AM4', 'FM9', 'VP4', 'Axe-Fx III']) assert.ok(pill('Live', unit) <= room, `Live ● ${unit} is cut on a 320-point phone with the photo (${pill('Live', unit).toFixed(1)} of ${room})`)
-    assert.ok(pill('Not answering', 'FM3') <= room, 'Not answering ● FM3 is cut on a 320-point phone with the photo')
-    /* And beside Save the photo steps out, so the pill has what it had before the photo came. */
-    assert.match(bar, /const showPhoto = [^\n]*&& !canSave/, 'the photo stays beside Save, where a 320-point phone has no room for it')
+    /*
+     * The bar measures the pill's first line itself and lets the photo show
+     * only where it fits beside it: "Not answering ● Axe-Fx III" beside the
+     * speaker on a 360-wide phone, and "Disconnected ● Axe-Fx III" on a 320,
+     * fit without the photo and were cut by it (the review of 7 November
+     * 2026). Held to the bar's own sum, here worked again from its numbers.
+     */
+    assert.match(bar, /const letter = 0\.602 \* font\.small \* \(fontScale \|\| 1\)/, 'the bar no longer measures the pill’s letters as it draws them')
+    assert.match(bar, /const pillNeeds = 2 \+ 2 \* space\.sm \+ \(String\(pill\.status \|\| ''\)\.length \+ String\(pill\.unit \|\| ''\)\.length\) \* letter \+ \(demo \? 0 : 2 \* space\.sm \+ 10\)/, 'the bar no longer measures the pill’s first line')
+    assert.match(bar, /const besidePhoto = across - 2 \* space\.lg - 3 \* space\.md - 24 - 22 - \(hasOutput \? space\.md \+ 24 : 0\)/, 'the bar no longer works out what the row leaves the pill beside the photo')
+    assert.match(bar, /const showPhoto = [^\n]*&& !canSave && pillNeeds <= besidePhoto/, 'the photo shows beside Save, or beside words it cuts')
+    const shows = (across, status, unit, withSpeaker, scale = 1) => {
+      const letter = 0.602 * font.small * scale
+      const needs = 2 + 2 * space.sm + (status.length + unit.length) * letter + 2 * space.sm + 10
+      return needs <= across - 2 * space.lg - 3 * space.md - photo - gear - (withSpeaker ? space.md + speaker : 0)
+    }
+    /* What the pill really takes with the photo there: border, padding, the word, a gap, the Bluetooth mark's 10 (the lamp's 8 is less), a gap, the unit. */
+    const drawn = (status, unit, scale = 1) => {
+      const letter = 0.602 * font.small * scale
+      return 2 + 2 * space.sm + status.length * letter + (unit ? space.sm : 0) + space.sm + 10 + unit.length * letter
+    }
+    const units = ['FM3', 'AM4', 'FM9', 'VP4', 'Axe-Fx III']
+    const states = [
+      { tone: 'good', unitState: 'present' },
+      { tone: 'good', unitState: 'silent' },
+      { tone: 'good', unitState: 'missing' },
+      { tone: 'good', unitState: 'unknown' },
+      { tone: 'busy' },
+      { tone: 'bad' },
+      { tone: 'off' },
+      { tone: 'off', bluetooth: true }
+    ]
+    let held = 0
+    for (const across of [320, 360, 375, 390, 430]) {
+      for (const withSpeaker of [false, true]) {
+        for (const scale of [1, 1.35]) {
+          const room = across - 2 * space.lg - 3 * space.md - photo - gear - (withSpeaker ? space.md + speaker : 0)
+          for (const unit of units) {
+            for (const st of states) {
+              const pill = pillWords({ ...st, unit, computer: 'MacBook Pro' })
+              if (!shows(across, pill.status, pill.unit || '', withSpeaker, scale)) continue
+              held++
+              assert.ok(drawn(pill.status, pill.unit || '', scale) <= room, `${pill.status} ● ${pill.unit} is cut on a ${across}-point phone with the photo${withSpeaker ? ' and the speaker' : ''} (${drawn(pill.status, pill.unit || '', scale).toFixed(1)} of ${room})`)
+            }
+          }
+        }
+      }
+    }
+    assert.ok(held > 0, 'the photo never shows: this check needs telling')
+    /* And beside Live it shows on every phone, the speaker there or not, at the usual text size: it is stepping aside only for the longer words. */
+    for (const across of [320, 360, 390]) for (const unit of units) assert.ok(shows(across, 'Live', unit, true), `the photo is never beside Live ● ${unit} on a ${across}-point phone`)
+    assert.ok(!shows(360, 'Not answering', 'Axe-Fx III', true), 'the photo stays beside Not answering ● Axe-Fx III and the speaker on a 360, and cuts the name')
+    assert.ok(!shows(320, 'Disconnected', 'Axe-Fx III', false), 'the photo stays beside Disconnected ● Axe-Fx III on a 320, and cuts the name')
   })
 
   test('the way into the chain editor is called Edit chain', () => {

@@ -126,7 +126,7 @@ export const PHOTO_WORDS = {
   change: 'Change photo',
   changeSub: 'Pick another picture',
   remove: 'Remove photo',
-  removeSub: 'Back to the plain circle',
+  removeSub: 'Back to the outline of a person',
   saving: 'Saving your photo…',
   removing: 'Removing…',
   saved: 'Photo saved.',

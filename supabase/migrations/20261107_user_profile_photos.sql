@@ -50,7 +50,7 @@
 --
 -- APPLIED BEFORE THE APP THAT USES IT. Nothing breaks either way: an app
 -- that sends a photo to a project without this bucket is refused it and says
--- "The photo couldn't be saved", and the top bar keeps the plain circle.
+-- "The photo couldn't be saved", and the top bar keeps the silhouette.
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('profile-photos', 'profile-photos', false, 131072, array['image/jpeg'])

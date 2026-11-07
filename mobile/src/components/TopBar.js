@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Image, Platform, Pressable, Text, View } from 'react-native'
+import { Alert, Image, Platform, Pressable, Text, View, useWindowDimensions } from 'react-native'
 import { BlurView } from 'expo-blur'
 
 import { color, font, mono, radius, space, isDark } from '../lib/theme'
@@ -257,9 +257,24 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    * in the demo (shared/profile-photo avatarShown), and out of the way while
    * Save needs the room, as the version is: beside Save, a 320-point phone
    * has no room left for it without cutting into the pill.
+   *
+   * And out of the way while the pill's own words need its room: the photo
+   * and its gap are 36 points, and on a 360-wide phone "Not answering ●
+   * Axe-Fx III" beside the speaker, or on a 320 "Disconnected ● Axe-Fx III",
+   * fit without it and not with it. So the pill's first line is measured as
+   * it is drawn (mono, 0.602 of a letter, at the phone's text size; its
+   * border, its padding, and the lamp or the Bluetooth mark's 10 with their
+   * gaps) against what the row leaves it beside the photo (the side padding,
+   * three gaps, the photo and the gear, and the speaker with its gap when it
+   * shows). Beside Live it fits on every phone; a longer word moves it aside
+   * until the word is gone.
    */
   const photo = useProfilePhoto()
-  const showPhoto = Boolean(onOpenAccount) && avatarShown({ demo, account: photo }) && !canSave
+  const { width: across, fontScale = 1 } = useWindowDimensions()
+  const letter = 0.602 * font.small * (fontScale || 1)
+  const pillNeeds = 2 + 2 * space.sm + (String(pill.status || '').length + String(pill.unit || '').length) * letter + (demo ? 0 : 2 * space.sm + 10)
+  const besidePhoto = across - 2 * space.lg - 3 * space.md - 24 - 22 - (hasOutput ? space.md + 24 : 0)
+  const showPhoto = Boolean(onOpenAccount) && avatarShown({ demo, account: photo }) && !canSave && pillNeeds <= besidePhoto
 
   return (
     /*
