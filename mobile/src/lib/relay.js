@@ -676,7 +676,7 @@ export async function changePassword(password) {
   if (error) throw new Error(explainAuth(error.message))
 }
 
-/** A fresh "confirm your email" link, for an address that never tapped the first. */
+/** A fresh confirmation email (its code; no link since 7 November 2026), for an address that never used the first. */
 export async function resendConfirmation(email) {
   const { error } = await supabase().auth.resend({ type: 'signup', email })
   if (error) throw new Error(explainAuth(error.message))

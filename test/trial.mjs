@@ -354,6 +354,11 @@ export function run(test) {
     assert.equal(trialStart({ platform: 'web', had: true }).why, 'used')
     assert.equal(trialStart({ platform: 'web', deviceTaken: true }).why, 'device')
     assert.equal(trialStart({ platform: 'ios', storeAt: now + DAY_MS, now }).startedAt, now, 'a free item dated ahead starts the trial in the future')
+    /* An Apple ID's free item older than the trial (moved here from another account by RevenueCat): refused, never a row already ended. */
+    assert.deepEqual(trialStart({ platform: 'ios', storeAt: now - 8 * DAY_MS, now }), { ok: false, why: 'store-trial-over' })
+    assert.equal(trialStart({ platform: 'ios', storeAt: now - 6 * DAY_MS, now }).ok, true, 'an Apple ID’s trial with a day left is refused')
+    const { trialRefusal: refusal } = await import('../shared/trial-words.mjs')
+    assert.equal(refusal('store-trial-over'), 'This Apple ID has had its free trial already, on another account.')
     assert.equal(deviceIdOk('$RCAnonymousID:0123456789abcdef'), true, 'the browser’s made-up number is refused')
     assert.equal(deviceIdOk('a b c d e f g h'), false)
   })

@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-07",
     "day": "7 November 2026",
-    "version": "1.89.61",
+    "version": "1.89.62",
     "lines": [
+      {
+        "text": "When you report a problem, you can now add up to five pictures instead of three, plus one video.",
+        "only": null
+      },
       {
         "text": "Start 7-day free trial on an iPhone or iPad whose Apple ID already bought the full version now says so: the full version moves to the account you're signed in to, and no trial starts.",
         "only": "ios"

@@ -244,7 +244,7 @@ export default function SignIn({
         </span>
         <p className="signin-sent-head">Account made.</p>
         <p className="signin-sent-body">
-          Type the code from the email we just sent in the box below, or tap the link in that email and then sign in. {NOT_IN_INBOX}
+          Type the code from the email we just sent in the box below. {NOT_IN_INBOX}
         </p>
         <p className="signin-sent-to">
           <strong>{email.trim()}</strong>

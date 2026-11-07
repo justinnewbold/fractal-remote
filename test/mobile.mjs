@@ -5290,7 +5290,7 @@ export function run(test) {
     assert.deepEqual(signInHelp({ ok: false, message: 'Not allowed.' }), { confirm: false, confirmNow: false, reset: false })
     assert.match(signInHelpWords('reset', 'a@b.c').message, /a@b\.c/)
     assert.equal(signInHelpWords('confirm', 'a@b.c', 'nope').ok, false)
-    assert.match(signInHelpWords('confirm', 'a@b.c').message, /^A new "confirm your email" link is on its way to a@b\.c\.$/)
+    assert.match(signInHelpWords('confirm', 'a@b.c').message, /^A new confirmation code is on its way to a@b\.c\.$/)
     /* Confirmed by hand, in words he can pass on, and saying nobody told them: nothing is emailed. */
     assert.deepEqual(signInHelpWords('confirmNow', 'a@b.c'), {
       ok: true,
@@ -17646,7 +17646,7 @@ export function run(test) {
     /* The confirm-first note for a paid phone only, and one that can be followed: the email's own link opens the website. */
     assert.match(
       flatSign,
-      /paid \? `Account made — type the code from the email we just sent in the box below\. Or tap the link in that email, then come back to this \$\{deviceNoun\(\)\} and sign in, so your purchase goes with your account\.` : 'Account made\. Type the code from the email we just sent in the box below, or tap the link in that email and then sign in\.'/,
+      /paid \? 'Account made — type the code from the email we just sent in the box below, so your purchase goes with your account\.' : 'Account made\. Type the code from the email we just sent in the box below\.'/,
       'a new account on a paid phone is not told to come back here and sign in, or everybody is'
     )
     assert.ok(!/before you open the website/.test(flatSign), 'the phone says to sign in before opening the website, which the email itself opens')

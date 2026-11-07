@@ -1498,7 +1498,7 @@ export async function sendPasswordReset({ url, anonKey, email, redirectTo } = {}
   if (error) throw new Error(explainAuth(error.message))
 }
 
-/** A fresh "confirm your email" link, for an address that never tapped the first. */
+/** A fresh confirmation email (its code; no link since 7 November 2026), for an address that never used the first. */
 export async function resendConfirmation({ url, anonKey, email } = {}) {
   const { createClient } = await import('@supabase/supabase-js')
   const c = createClient(url || DEFAULT_PROJECT.url, anonKey || DEFAULT_PROJECT.anonKey)
