@@ -143,7 +143,7 @@ export default function AccessTool() {
       <Facts rows={lookupRows(said)} />
       {signInHelp(said).confirm ? (
         <Press
-          label={busy === 'confirm' ? 'Sending…' : 'Resend their "confirm your email" link'}
+          label={busy === 'confirm' ? 'Sending…' : 'Resend their confirmation code'}
           height={TAP}
           disabled={!!busy}
           onPress={() => help('confirm')}

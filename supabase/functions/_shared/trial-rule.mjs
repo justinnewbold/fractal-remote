@@ -174,6 +174,15 @@ export function trialStart({ bought = false, had = false, deviceTaken = false, s
     const at = timeOf(storeAt)
     if (at === null) return { ok: false, why: 'no-store-trial' }
     const began = Math.min(at, now)
+    /*
+     * An Apple ID's free item bought more than the trial's length ago: its
+     * trial is over before it starts. RevenueCat moves an Apple ID's
+     * purchases to the account signed in (docs/app-store.md, RevenueCat step
+     * 0), so a second account on that Apple ID arrives with the first one's
+     * old item (7 November 2026). Refused, rather than a row written already
+     * ended, which would spend this account's own trial on nothing.
+     */
+    if (trialEndsFrom(began) <= now) return { ok: false, why: 'store-trial-over' }
     return { ok: true, startedAt: began, endsAt: trialEndsFrom(began), source: 'app_store_trial' }
   }
   return { ok: true, startedAt: now, endsAt: trialEndsFrom(now), source: 'server' }

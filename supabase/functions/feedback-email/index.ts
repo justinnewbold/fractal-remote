@@ -50,15 +50,16 @@
  *     (an inline attachment, `content_id`). Attached rather than linked:
  *     a link that expires is dead by the time a report from a gig is read a
  *     week later, and a link that does not is a public picture. The app caps
- *     each at 1.5 MB and the bucket at 2 MB, so three are about 6 MB once
- *     encoded, well inside Resend's 40 MB and Gmail's 25 MB. Read from the
- *     private bucket with the service key here, and only from the sender's own
- *     folder (SHOT_PATH and the row's user_id), so a row cannot point this at
- *     somebody else's picture; only one no other row has named, so a picture
- *     put in once is mailed, and read out of storage, once (anybody can write
- *     a row, and a row is a few hundred bytes); and only bytes that are a
- *     JPEG, because the bucket checks the type the uploader declared and
- *     never the bytes;
+ *     each at 1.5 MB and the bucket at 2 MB, so five (SHOTS_MAX, since 7
+ *     November 2026; three before) are about 10 MB once encoded, 13.3 MB at
+ *     the bucket's 2 MB each, well inside Resend's 40 MB and Gmail's 25 MB.
+ *     Read from the private bucket with the service key here, and only from
+ *     the sender's own folder (SHOT_PATH and the row's user_id), so a row
+ *     cannot point this at somebody else's picture; only one no other row has
+ *     named, so a picture put in once is mailed, and read out of storage,
+ *     once (anybody can write a row, and a row is a few hundred bytes); and
+ *     only bytes that are a JPEG, because the bucket checks the type the
+ *     uploader declared and never the bytes;
  *   - a reply address: the one they typed, as before, or when there is none
  *     and the report came from an account, that account's email, looked up
  *     here with the service key and labeled "the account's email";
@@ -162,14 +163,14 @@ const BUDGET_MS = 55_000
 /*
  * THE SCREENSHOTS' BUCKET, and the only places in it a report may name: the
  * sender's account id (or `anon`), the report's own random key, and which of
- * the three it is. The same pattern as shared/report-rules.mjs SHOT_PATH and
- * the bucket's insert rule (migrations/20261022_report_screenshots.sql); a
- * test holds the three to each other.
+ * the five it is. The same pattern as shared/report-rules.mjs SHOT_PATH and
+ * the bucket's insert rule (migrations/20261107_report_five_shots.sql, which
+ * took it from three to five); a test holds them to each other.
  */
 const SHOT_BUCKET = 'report-shots'
 const SHOT_PATH =
-  /^(anon|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[1-3]\.jpg$/
-const SHOTS_MAX = 3
+  /^(anon|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[1-5]\.jpg$/
+const SHOTS_MAX = 5
 /** The bucket's own limit, so anything bigger is not a picture the app sent. */
 const SHOT_LIMIT = 2 * 1024 * 1024
 
@@ -317,7 +318,7 @@ async function namedElsewhere(url: string, key: string, path: string, id: string
  * The screenshots a row names, read from the bucket: each one that is the
  * sender's own, named by no other row, and comes back as a JPEG, as an
  * inline attachment, and a line for each that does not. All at once, so
- * three pictures take as long as one.
+ * five pictures take as long as one.
  */
 async function screenshots(row: Record<string, unknown>, ctx: Record<string, unknown>) {
   const named = Array.isArray(ctx.screenshots) ? ctx.screenshots.slice(0, SHOTS_MAX) : []

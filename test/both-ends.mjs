@@ -3724,7 +3724,7 @@ export function run(test) {
       assert.match(confirm, /finally \{ setBusy\(null\) \}/)
       /* Drawn only for an address that has not confirmed, between the resend and the reset. */
       const button = ui.indexOf("'Confirm their account now'")
-      assert.ok(button > ui.indexOf('Resend their "confirm your email" link') && button < ui.indexOf('Send them a password reset'), `${file}: Confirm now is not beside the resend`)
+      assert.ok(button > ui.indexOf('Resend their confirmation code') && button < ui.indexOf('Send them a password reset'), `${file}: Confirm now is not beside the resend`)
       assert.match(flat, /\{signInHelp\(said\)\.confirmNow \? \(/, `${file}: Confirm now is not tied to the lookup`)
       assert.match(flat, /busy === 'confirmNow' \? 'Confirming…' : 'Confirm their account now'/)
       assert.match(flat, /disabled=\{!!busy\} (onPress|onClick)=\{confirmNow\}|(onPress|onClick)=\{confirmNow\}/, `${file}: the button does not run Confirm now`)
@@ -3762,7 +3762,7 @@ export function run(test) {
     /* The website: the Account made screen, and Send it again under the refusal on both forms. */
     const web = read('src/components/SignIn.jsx')
     const flatWeb = web.replace(/\s+/g, ' ')
-    assert.match(flatWeb, /or tap the link in that email and then sign in\. \{NOT_IN_INBOX\}/, 'Account made does not say where else to look')
+    assert.match(flatWeb, /Type the code from the email we just sent in the box below\. \{NOT_IN_INBOX\}/, 'Account made does not say where else to look')
     assert.match(flatWeb, /setProblem\(err\.message\) setUnconfirmed\(mode === 'in' && err\?\.notConfirmed \? address : null\)/, 'the website does not notice the email was never confirmed, or forgets which address was refused')
     assert.match(flatWeb, /setNote\(null\) setUnconfirmed\(null\) const address = email\.trim\(\)/, 'a new try still offers to send the email again')
     /* To the address that was refused, not whatever the box says by the time it is tapped. */
@@ -3777,7 +3777,9 @@ export function run(test) {
 
     /* The phone: Account made says where else to look; a refusal offers Send it again. */
     const phone = read('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
-    assert.match(phone, /then sign in\.' \) setUnconfirmed\(\{ why: 'made', email: email\.trim\(\) \}\) setMode\('in'\)/, 'Account made on the phone does not say where else to look, or forgets which address the code is for')
+    assert.match(phone, /Type the code from the email we just sent in the box below\.' \) setUnconfirmed\(\{ why: 'made', email: email\.trim\(\) \}\) setMode\('in'\)/, 'Account made on the phone does not say where the code is, or forgets which address the code is for')
+    /* Code only since 7 November 2026: the email carries no link, so nothing sends anybody to tap one. */
+    assert.doesNotMatch(phone + web, /tap the link in that email/, 'Account made still sends somebody to a link the email no longer has')
     assert.match(phone, /\{note \? <Note>\{unconfirmed\?\.why === 'made' \? `\$\{note\} \$\{NOT_IN_INBOX\}` : note\}<\/Note> : null\}/)
     assert.match(phone, /if \(mode === 'in' && err\?\.notConfirmed\) setUnconfirmed\(\{ why: 'refused', email: email\.trim\(\) \}\)/, 'the phone does not notice the email was never confirmed, or forgets which address was refused')
     /*
@@ -4281,7 +4283,7 @@ export function run(test) {
     assert.match(webConfirm, /if \(password\.length >= 6\) await onSubmit\(\{ email: address, password \}\) else setNote\(CONFIRMED_SIGN_IN\)/, 'a good code does not go the way the form’s Sign in goes')
 
     /* The same sentence at both ends for an account made with nothing bought. */
-    const said = 'Type the code from the email we just sent in the box below, or tap the link in that email and then sign in.'
+    const said = 'Type the code from the email we just sent in the box below.'
     assert.ok(phone.includes(`'Account made. ${said}'`), 'the phone’s Account made says something else')
     assert.ok(web.includes(`${said} {NOT_IN_INBOX}`), 'the website’s Account made says something else')
   })
