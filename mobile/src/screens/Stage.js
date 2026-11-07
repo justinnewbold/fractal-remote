@@ -382,10 +382,10 @@ export default function Stage({
      on the Appearance page and only there. See gigSize. */
   const sceneLayout = loadSceneLayout(sync)
   /*
-   * PLAY'S SHAPE, FROM PLAY'S OWN WIDTH (lib/playShape). Under 621 points
+   * PLAY'S SHAPE, FROM PLAY'S OWN WIDTH (lib/playShape). Under 550 points
    * of row it is today's Play, exactly: the size step's own counts, the
    * scene layout's own columns, Fit's own caps, three letters on the pedals,
-   * the buttons at the end of the page. From 621 the pedals spell their
+   * the buttons at the end of the page. From 550 the pedals spell their
    * names, the buttons are fixed to the bottom and the page stops at 1180;
    * from 700, at Smallest or Small with the scenes Across or Like the unit,
    * four scenes and six pedals to a row and the buttons in one row. The last
@@ -594,7 +594,7 @@ export default function Stage({
           sceneCols,
           fxCols: shape.fxCols,
           /* Four, the phone's own most, except on the spread layout; and
-             fitTiles' own 96 under 621 points, 120 from there. */
+             fitTiles' own 96 under 550 points, 120 from there. */
           most: shape.fxMost,
           max: shape.tileMax,
           gap: space.sm,
@@ -617,7 +617,18 @@ export default function Stage({
    * below is the one Play has always drawn with.
    */
   const linedWas = useRef(false)
-  const lined = linedOn({ wide: shape.wide, tall: viewport, across: playWidth }, linedWas.current)
+  /*
+   * Asked on the height Play WILL have. Lined up, the buttons are one row of
+   * five; until then, at Medium and up or with the scenes Down or in My own
+   * order, they are two rows of three, so Play measures a row and a gap
+   * shorter than it would be lined up, and a small tablet on its side
+   * (Galaxy Tab A 8.0: 356 against 420 at Medium) never got there. So the
+   * second row is counted back in while it is there. The least that row
+   * takes: once lined up Play measures at least this, so it never flips
+   * back. A phone on its side, at most 340 with one row, stays under.
+   */
+  const footSpare = shape.footFixed && !shape.footRow && !linedWas.current ? (tight ? 48 : TAP) + space.sm : 0
+  const lined = linedOn({ wide: shape.wide, tall: viewport + footSpare, across: playWidth }, linedWas.current)
   linedWas.current = lined
   const plan = linedPlan({ scenes: scenes.hasScenes ? scenes.count : 0, pedals: fitBlocks })
   /* Where the two halves start down the page: everything above them (the notes, the preset) does not change with the tiles, so their room does not either. */
@@ -1458,7 +1469,7 @@ export default function Stage({
                 <Tile
                   key={idOf(block)}
                   label={shortBlock(block)}
-                  /* The whole name from 621 points of row, where it fits; the three letters otherwise, as always. */
+                  /* The whole name from 550 points of row, where it fits; the three letters otherwise, as always. */
                   full={shape.names ? pedalName(block) : undefined}
                   nameSize={pedalWords}
                   icon={showIcons ? blockIcon(block.slug) : undefined}
@@ -1521,7 +1532,7 @@ export default function Stage({
                 height={pedalTall}
                 onPress={() => setLooping(true)}
                 onLongPress={() => setLooping(true)}
-                /* "Looper" from 621 points of row, as the other pedals spell theirs. */
+                /* "Looper" from 550 points of row, as the other pedals spell theirs. */
                 full={shape.names ? pedalName(looperHere) : undefined}
                 nameSize={pedalWords}
                 style={{ width: tileWidth(laneRow, pedalsAcross) }}
@@ -1550,7 +1561,7 @@ export default function Stage({
           second time — so stepping presets was at the top of the screen and the
           tuner was off the bottom of it.
         */}
-        {/* In the page under 621 points of row, as it always was; from there in
+        {/* In the page under 550 points of row, as it always was; from there in
             its own strip fixed to the bottom, below the page (`footFixed`). */}
         {shape.footFixed ? null : <PlayFoot {...footing} />}
 
@@ -1566,12 +1577,12 @@ export default function Stage({
       </ScrollView>
 
       {/*
-        THE SIX BUTTONS FIXED TO THE BOTTOM, from 621 points of row: in their
+        THE SIX BUTTONS FIXED TO THE BOTTOM, from 550 points of row: in their
         own strip under the page rather than at the end of it, so a short
         preset leaves its spare room above them and they never float up the
         screen. Its width and padding are the page's, so its buttons line up
         with the tiles over them, and on the spread layout the gap between
-        its two halves is the fold. Never drawn under 621: there they are in
+        its two halves is the fold. Never drawn under 550: there they are in
         the page, as they always were.
       */}
       {shape.footFixed ? (
@@ -1829,7 +1840,7 @@ const tileWidth = (width, n) => tileWidthIn(width, n, space.sm, PixelRatio.get()
 /**
  * PLAY'S SIX BUTTONS: Previous, Setlists and Next over Tuner, Edit and Tap.
  *
- * At the end of Play's page under 621 points of row, exactly as they always
+ * At the end of Play's page under 550 points of row, exactly as they always
  * were; from there in a strip fixed to the bottom, below the page, so on a
  * short preset the spare room gathers above them and Previous, Next and Tap
  * never move from preset to preset (the browser's .gig-foot does the same).

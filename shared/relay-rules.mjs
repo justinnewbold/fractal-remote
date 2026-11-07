@@ -657,6 +657,15 @@ export function explainAuth(message) {
   if (m.includes('server error') || m.includes('503') || m.includes('504') || m.includes('unexpected_failure')) {
     return 'The account service is having trouble at its end. Try again in a few minutes. The demo works without it.'
   }
+  /*
+   * A change to the account (its name, its password) asked for after the
+   * sign-in it rides on has ended, elsewhere or by running out: the account
+   * service says "Auth session missing!" or names the token, which means
+   * nothing to a guitarist (7 November 2026).
+   */
+  if (m.includes('session missing') || m.includes('refresh token') || m.includes('claim in jwt does not exist')) {
+    return 'This sign-in has ended. Sign out and sign in again, then try once more.'
+  }
   return message
 }
 
