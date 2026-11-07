@@ -73,3 +73,19 @@ export const anyStoreLive = () => STORES.some((s) => s.live)
  * not theirs.
  */
 export const BLUETOOTH_IN_APPS = 'Bluetooth, with no computer, is in the iPhone, iPad and Android apps. A web browser connects through a computer only.'
+
+/*
+ * THE BOX TICKED BEFORE UNLOCK, IN A WEB BROWSER. It said his sentence of
+ * the first walkthrough, "I understand this app requires a computer
+ * connected to my Fractal unit via USB cable for the Fractal Remote app to
+ * work", which stopped being true of what is bought when Bluetooth opened:
+ * the purchase is the account's, and the iPhone, iPad and Android apps reach
+ * the unit with no computer. "This is on the website. Have you addressed
+ * this yet and added the Bluetooth stuff?" (Justin, 7 November 2026, of
+ * this box.) So Bluetooth first, where it is, and that a web browser needs
+ * the computer, as BLUETOOTH_IN_APPS says it. The computer app's own window
+ * keeps his sentence (it is the computer), and so do the phone's copies that
+ * do not open Bluetooth (WALKTHROUGH_TWO_WAYS.agree where they do).
+ */
+export const AGREE_IN_BROWSER =
+  'I understand Bluetooth, through a MIDI adapter sold separately, is in the iPhone, iPad and Android apps, and a web browser connects through a computer by USB cable.'

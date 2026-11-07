@@ -2174,7 +2174,7 @@ export function run(test) {
     const { C3, D4 } = await import('../shared/onboarding.mjs')
     const web = read('src/components/PhoneWalkthrough.jsx').replace(/\s+/g, ' ')
     /* Three cards on the computer: here, the demo, the phone remote. */
-    for (const piece of ['{C3.here.title}', "onClick={() => onHere?.()}", '{P3.demo.go}', '{computer ? C3.phone.title : P3.real.title}', '{P3.real.agree}']) {
+    for (const piece of ['{C3.here.title}', "onClick={() => onHere?.()}", '{P3.demo.go}', '{computer ? C3.phone.title : P3.real.title}', '{computer ? P3.real.agree : AGREE_IN_BROWSER}']) {
       assert.ok(web.includes(piece), `the computer's choice screen lost ${piece}`)
     }
     assert.ok(!/no account/i.test(C3.here.body), 'the computer card promises no account, which the pairing rule forbids')
@@ -2329,7 +2329,24 @@ export function run(test) {
      */
     assert.ok(web.includes('{P9.demo.sub}'), 'the browser’s phone walkthrough no longer says P9.demo.sub, which it needs: the browser has no Bluetooth')
     assert.ok(phone.replace(/\s+/g, ' ').includes('{twoWays ? WALKTHROUGH_TWO_WAYS.demoSub : P9.demo.sub}'), 'the phone’s walkthrough says P9.demo.sub on a copy that opens Bluetooth, or no longer says it at all')
-    assert.ok(web.includes('{P3.real.agree}'), 'the browser’s box before Unlock says something other than his sentence, and the browser does need the computer')
+    /*
+     * The box before Unlock: his sentence in the computer app's window, and
+     * in a browser both ways, Bluetooth first, in the apps, and the browser
+     * through the computer (AGREE_IN_BROWSER). It said his sentence in every
+     * browser until 7 November 2026: "This is on the website. Have you
+     * addressed this yet and added the Bluetooth stuff?" The purchase is the
+     * account's, and the apps reach the unit with no computer.
+     */
+    assert.ok(web.includes('{computer ? P3.real.agree : AGREE_IN_BROWSER}'), 'the browser’s box before Unlock says only that a computer is needed, or the computer app’s window lost his sentence')
+    assert.match(web, /import \{ AGREE_IN_BROWSER \} from '\.\.\/\.\.\/shared\/stores\.mjs'/)
+    {
+      const { AGREE_IN_BROWSER } = await import('../shared/stores.mjs')
+      assert.ok(AGREE_IN_BROWSER.indexOf('Bluetooth') > -1 && AGREE_IN_BROWSER.indexOf('Bluetooth') < AGREE_IN_BROWSER.indexOf('computer'), 'the browser’s box names the computer before Bluetooth')
+      assert.match(AGREE_IN_BROWSER, /iPhone, iPad and Android apps/, 'the browser’s box does not say where Bluetooth is')
+      assert.match(AGREE_IN_BROWSER, /web browser connects through a computer/, 'the browser’s box does not say a browser needs the computer')
+      assert.doesNotMatch(AGREE_IN_BROWSER, /requires a computer|less lag|more features|the best|best way/i, 'the browser’s box ranks the two ways, or says a computer is required')
+      assert.ok(AGREE_IN_BROWSER.split(/\s+/).length <= 30, `the browser’s box is ${AGREE_IN_BROWSER.split(/\s+/).length} words: "eliminate so much of the text"`)
+    }
     assert.ok(phone.includes('label={twoWays ? WALKTHROUGH_TWO_WAYS.agree : P3.real.agree}'), 'the phone’s box before Unlock does not say both ways where Bluetooth is open, or his sentence everywhere else')
     /*
      * Never a Bluetooth way: a browser has none. Since 7 November 2026 it
@@ -2341,6 +2358,8 @@ export function run(test) {
     const inApps = (text) => text.replace(/<BluetoothInApps\b[^>]*\/>|import BluetoothInApps from '\.\/BluetoothInApps'/g, ' ')
     assert.ok(!/bluetooth-gear|WALKTHROUGH_TWO_WAYS|twoWays|Bluetooth/.test(inApps(web)), 'the browser’s phone walkthrough offers Bluetooth, which a browser does not have')
     assert.match(web, /\{computer \? null : <BluetoothInApps className="pw-note" \/>\}/, 'the browser’s How it works does not say where Bluetooth is, or says it on the computer')
+    /* First, under the heading, before the three boxes and Got it: it sat under the boxes, below the button, until 7 November 2026, where nobody scrolled to it. */
+    assert.match(web.replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' '), /<h1 className="pw-head">\{P2\.head\}<\/h1> \{computer \? null : <BluetoothInApps className="pw-note" \/>\} <div className="pw-chain">/, 'the browser’s How it works does not say where Bluetooth is first, under its heading')
     /*
      * And the browser's sign-in screen: Get connected is the computer's three
      * steps there, and only there. The phone adds the Bluetooth way under
