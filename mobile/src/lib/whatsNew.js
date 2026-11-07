@@ -12,14 +12,18 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-07",
     "day": "7 November 2026",
-    "version": "1.89.63",
+    "version": "1.89.64",
     "lines": [
+      {
+        "text": "Bluetooth connects more reliably: if your adapter connects but your unit stays silent, the app reconnects once by itself (or tap Connect again), each unit remembers its own adapter, the app tells you when an adapter is plugged into a different unit, and no computer warnings show while you're on Bluetooth.",
+        "only": null
+      },
       {
         "text": "Getting started is quicker: after you sign up, start the free trial or buy, one card asks how you connect, a Bluetooth adapter first or a computer instead. Connect over Bluetooth is there from the start while the app looks for your computer, and sign-in and the purchase page have far less to read.",
         "only": null
       },
       {
-        "text": "When you report a problem, you can now add up to five pictures instead of three, plus one video.",
+        "text": "When you report a problem, you can now add up to five pictures instead of three, plus one video. And in the phone app, an account made before names were asked can add one: Settings → your account → tap your email → Add your name.",
         "only": null
       },
       {
@@ -32,10 +36,6 @@ export const WHATS_NEW = [
       },
       {
         "text": "Try the full version free for 7 days with your own rig: tap Start 7-day free trial on the purchase page. While it runs, Play shows how many days are left, and when it ends everything you set up is kept. The demo is still free and unlimited.",
-        "only": null
-      },
-      {
-        "text": "In the phone app, accounts made before names were asked can add one: Settings → your account → tap your email → Add your name.",
         "only": null
       }
     ]
