@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-07",
     "day": "7 November 2026",
-    "version": "1.89.59",
+    "version": "1.89.60",
     "lines": [
+      {
+        "text": "A purchase stays with the account that bought it. A second account can no longer use the same purchase: it's told to sign in with the account that bought it.",
+        "only": null
+      },
       {
         "text": "On a tablet held upright, Play is the phone's own layout again, just bigger. On its side it keeps your scenes on the left and your chain on the right.",
         "only": null
