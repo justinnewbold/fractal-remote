@@ -510,8 +510,8 @@ The FULL wordings (`BLUETOOTH_WAYS`, `BLUETOOTH_PAYWALL`,
 support.html) say three things: Bluetooth first; that it needs no computer;
 and what a computer adds, "A computer has less lag and more features".
 That clause is our wording of his 25 October point, not his words, which
-were "Bluetooth will have more lag and not have as many features". It is
-true on every unit, the VP4 too: through a computer a VP4 also gets its
+were "Bluetooth will have more lag and not have as many features". The
+features half is true on every unit, the VP4 too: through a computer a VP4 also gets its
 effects turned on and off, the name of the preset it is on, and a check
 that a preset or scene landed, which Bluetooth cannot give it
 (`VP4_OVER_BLUETOOTH`). Never the tuner, which a VP4 does not get from the

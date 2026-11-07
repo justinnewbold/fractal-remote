@@ -7310,6 +7310,11 @@ export function run(test) {
       for (const m of code(f).matchAll(/askHowToConnect\(\)/g)) callers.push(f)
     }
     assert.deepEqual(callers.sort(), ['mobile/src/screens/Paywall.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/SignIn.js'], 'the question is owed from somewhere else too')
+    /* The Developer button that lets his own devices ask again is his account's alone, on the Testing page. */
+    const settingsPage = code('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
+    const testing = settingsPage.slice(settingsPage.indexOf("{page === 'testing' && isAdmin(account?.id) ? ("))
+    assert.ok(testing.indexOf('askAgainHere()') > 0 && testing.indexOf('askAgainHere()') < testing.indexOf("{page === '", 10), 'Ask How do you connect again is not on the Developer Testing page')
+    assert.equal((settingsPage.match(/askAgainHere\(\)/g) || []).length, 1, 'the question is re-armed from somewhere other than Developer → Testing')
     /* Siri takes it for a screen other than Play, as it does the sharing card. */
     assert.match(app, /shareCard: askHow \|\| askShare/)
 
@@ -7347,6 +7352,17 @@ export function run(test) {
       assert.equal(globalThis.__howStorage.kept[ASK], 'done')
       h = await fresh({ [ASK]: 'done' })
       assert.equal((await h.readHowConnect()).owed, false, 'an answered question is asked again')
+      /* Developer → Testing's Ask How do you connect again: the next ask on this device is owed again, and an answer settles it again. */
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'an answered question was asked again without the Developer button')
+      h.askAgainHere()
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'owed', 'Ask How do you connect again did not make the next ask owed')
+      h.howConnectAnswered()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done')
       /* A unit answering first settles it, and is kept for the sharing card's next launch. */
       h = await fresh({ [ASK]: 'owed' })
       await h.readHowConnect()

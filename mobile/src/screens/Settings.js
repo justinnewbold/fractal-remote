@@ -103,6 +103,7 @@ import { GlassCard } from '../components/Glass'
 import { classic, glassCard } from '../lib/glass'
 import PasswordBox from '../components/PasswordBox'
 import NameBox from '../components/NameBox'
+import { askAgainHere } from '../lib/howConnect'
 import Press from '../components/Press'
 import { stopLooper } from '../components/Looper'
 import Vp4Setup from '../components/Vp4Setup'
@@ -1137,6 +1138,16 @@ export default function Settings({
           {onViewAsCustomer ? (
             <Press label="View as a new customer" sub="The walkthrough and the paywall, as a stranger sees them" height={52} onPress={onViewAsCustomer} />
           ) : null}
+          {/* The card asks once per device and never on one that has connected, so his own need this to see it (lib/howConnect askAgainHere). */}
+          <Press
+            label="Ask How do you connect again"
+            sub="The next account, trial or purchase on this device asks, as on a new one"
+            height={52}
+            onPress={() => {
+              askAgainHere()
+              Alert.alert('Ask again', 'The next account, trial or purchase made on this device asks How do you connect to your unit?')
+            }}
+          />
           {/* Its testing tools, moved off the Bluetooth page onto the Developer pages: his account's alone, as they always were. */}
           {bluetoothOffered ? (
             <>

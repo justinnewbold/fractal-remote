@@ -1128,7 +1128,7 @@ export function run(test) {
       'No computer needed: the app can connect to your unit by Bluetooth, through an adapter. A computer has less lag and more features. Settings → My rig → Bluetooth says what to buy.'
     )
     assert.ok(!/\bAM4\b/.test(line), 'the line is still for an AM4 alone')
-    /* In this order: no computer needed, Bluetooth, what a computer adds (in his own words, less lag and more features, true on every unit, the VP4 too), then where. Out of beta since 26 October 2026, so "in beta" went. */
+    /* In this order: no computer needed, Bluetooth, what a computer adds (our wording of his point, "Bluetooth will have more lag and not have as many features": less lag and more features), then where. Out of beta since 26 October 2026, so "in beta" went. */
     assert.ok(!/\bbeta\b|best (?:one|way)|still the best/i.test(line), 'the line still calls Bluetooth a beta, or ranks the two ways')
     const at = ['No computer needed', 'your unit', 'Bluetooth', 'A computer has less lag', 'more features', 'Settings → My rig → Bluetooth'].map((w) => line.indexOf(w))
     assert.ok(!/editing|saving/i.test(line), 'the line promises editing or saving through a computer, which a VP4 does not get')

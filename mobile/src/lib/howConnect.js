@@ -163,6 +163,20 @@ export function askHowToConnect() {
   })
 }
 
+/**
+ * Developer → Testing, his account's alone: the next account, trial or
+ * purchase made on this device asks again, as on a new one. On any device
+ * that has ever connected the question is settled for good (as it should be
+ * for a customer), so without this he could never see it on his own phone
+ * or tablet (the final check, 7 November 2026). Memory only: nothing on the
+ * disk is unset, so the next launch is settled again unless it was asked
+ * and answered, and a real link answering still settles it as ever.
+ */
+export function askAgainHere() {
+  settled = false
+  doneKept = false
+}
+
 /** Either answer tapped, or the walkthrough's choice of way: never asked again on this device. */
 export function howConnectAnswered() {
   settle()

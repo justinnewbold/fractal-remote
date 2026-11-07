@@ -187,8 +187,9 @@ export const REPORT_NOTE = `Something not working? Tap ${REPORT_BUTTON}.`
  * the computer adds is still said, in one short clause, wherever the full
  * sentence is: "A computer has less lag and more features". That is our
  * wording of his 25 October point, not his words, which were "Bluetooth
- * will have more lag and not have as many features". True on every unit,
- * the VP4 too:
+ * will have more lag and not have as many features". The features half is
+ * true on every unit, the VP4 too; the lag half is his own point, and on a
+ * VP4, which reads nothing back over Bluetooth, nobody has measured it:
  *
  * LESS LAG: the preset list is read a name at a time over a 5-pin MIDI cable
  * (bleWire NAME_GAP_MS), an AM4's scene names take seconds the first time a
