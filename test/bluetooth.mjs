@@ -7244,7 +7244,9 @@ export function run(test) {
     const signIn = code('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
     assert.match(signIn, /const \{ needsConfirmation, userId \} = await signUp\(\{[^}]*\}\) askHowToConnect\(\) if \(needsConfirmation\) \{/, 'making an account does not ask how they connect')
     const pay = code('mobile/src/screens/Paywall.js').replace(/\s+/g, ' ')
-    assert.match(pay, /if \(out\.ok\) \{ askHowToConnect\(\) Alert\.alert\('Free trial', TRIAL_STARTED\) return onUnlocked\?\.\(\) \}/, 'starting the trial does not ask how they connect')
+    assert.match(pay, /if \(said\.over\) return setSaid\(\{ tone: 'warn', text: said\.text \}\) Alert\.alert\('Free trial', said\.text\) askHowToConnect\(\) return onUnlocked\?\.\(\) \}/, 'starting the trial does not ask how they connect, or a trial already over does')
+    /* An Apple ID that owns it already is no purchase made here: nothing is asked. */
+    assert.match(pay, /if \(out\.why === 'apple-id-owns'\) \{ Alert\.alert\('Already unlocked', trialRefusal\(out\.why\)\) return onUnlocked\?\.\(\) \}/, 'the Apple ID’s own purchase asks how they connect, or lost its branch')
     assert.match(pay, /if \(out\.ok && !out\.message\) askHowToConnect\(\)/, 'buying does not ask how they connect')
     const callers = []
     for (const f of ['mobile/App.js', 'mobile/src/screens/Settings.js', 'mobile/src/screens/Stage.js', 'mobile/src/screens/Onboarding.js', 'mobile/src/screens/SignIn.js', 'mobile/src/screens/Paywall.js']) {

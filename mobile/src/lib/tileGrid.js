@@ -65,7 +65,7 @@ export function bandTop(viewport, cardBottom = 0, gap = 0) {
  * And no whole name at all ('') for a block with no name of its own: none
  * given, only its code word ("volpan", "geq": the AM4 over Bluetooth names
  * every block after it), or a code nobody has a name for ("0x7e"). Those
- * keep their three letters (VOL, EQ), as they have under 621 points of row,
+ * keep their three letters (VOL, EQ), as they have under 550 points of row,
  * rather than spelling a code word out in lowercase.
  */
 export function pedalName(block) {

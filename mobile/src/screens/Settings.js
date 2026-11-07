@@ -17,6 +17,7 @@ const CHECK_SHOWN_MS = 1200
 import { openStore, useStoreNote } from '../lib/storeVersion'
 import NewerInStore from '../components/NewerInStore'
 import {
+  changeName,
   changePassword,
   currentAccount,
   deleteAccount,
@@ -101,6 +102,7 @@ import Note from '../components/Note'
 import { GlassCard } from '../components/Glass'
 import { classic, glassCard } from '../lib/glass'
 import PasswordBox from '../components/PasswordBox'
+import NameBox from '../components/NameBox'
 import Press from '../components/Press'
 import { stopLooper } from '../components/Looper'
 import Vp4Setup from '../components/Vp4Setup'
@@ -251,6 +253,7 @@ export default function Settings({
    * everyone who came to change the tile size.
    */
   const [accountMenu, setAccountMenu] = useState(false)
+  const [naming, setNaming] = useState(false)
   /* A scene being dragged on the Appearance page holds the page still — see
      components/SceneArrange. */
   const [held, setHeld] = useState(false)
@@ -895,7 +898,7 @@ export default function Settings({
               <TipCard
                 icon={mailIcon}
                 label="SIGNED IN"
-                body={`${account.email}\nTap for password options`}
+                body={`${account.email}\nTap for your name and password`}
                 onPress={() => {
                   setNote(null)
                   setError(null)
@@ -1032,6 +1035,14 @@ export default function Settings({
 
           <Sheet open={accountMenu} onClose={() => setAccountMenu(false)} title="Your account" note={account?.email || ''}>
             <Press
+              label={account?.first || account?.last ? `${account.first} ${account.last}`.trim() : 'Add your name'}
+              sub={account?.first || account?.last ? 'Change your name' : 'Your first and last name'}
+              onPress={() => {
+                setAccountMenu(false)
+                setNaming(true)
+              }}
+            />
+            <Press
               label="Change password"
               sub="Type a new one here, twice"
               onPress={() => {
@@ -1058,6 +1069,18 @@ export default function Settings({
               }}
             />
           </Sheet>
+
+          <NameBox
+            open={naming}
+            first={account?.first}
+            last={account?.last}
+            onSave={async (typed) => {
+              const kept = await changeName(typed)
+              setAccount((a) => (a ? { ...a, ...kept } : a))
+              setNote('Name saved.')
+            }}
+            onClose={() => setNaming(false)}
+          />
 
           <PasswordBox
             open={changing}

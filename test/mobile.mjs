@@ -3867,6 +3867,15 @@ export function run(test) {
     }
   })
 
+  test('a message from a player scrolls as one sheet, with Copy all of it always at the bottom', () => {
+    /* "Looking at the bug reports, I can't scroll down" (7 November 2026): the log was a box that scrolled inside the sheet, and a drag on it moved only the log. */
+    const tool = read('mobile/src/components/MessagesTool.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' ')
+    assert.ok(!/ScrollView/.test(tool), 'the message sheet has a scroll inside its own scroll again')
+    assert.match(tool, /<Sheet open=\{!!open\} onClose=\{\(\) => setOpen\(null\)\} title="Message" tall foot=\{ open\?\.facts \? \( <> \{told \? \( <Note tone=\{told\.ok \? 'hint' : 'fault'\} strong size=\{font\.body\}> \{told\.message\} <\/Note> \) : null\} <Press label="Copy all of it" height=\{TAP\} onPress=\{copy\} \/> <\/> \) : null \} >/, 'Copy all of it, and what it said, are not kept together at the bottom')
+    assert.equal((tool.match(/Copy all of it/g) || []).length, 1, 'Copy all of it is drawn twice, or not at all')
+    assert.equal((tool.match(/\{told\.message\}/g) || []).length, 1, 'Copied. is said twice, or somewhere the button is not')
+  })
+
   test('nothing anybody reads calls this app "the Fractal app": it is the Fractal Remote app', () => {
     /*
      * "You shouldn't call it fractal app. It should be fractal remote app
@@ -12125,7 +12134,7 @@ export function run(test) {
      */
     const flat = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
     assert.doesNotMatch(flat, /placeholder="New password"/, 'a password box still sits open on the Setup page')
-    assert.match(flat, /<TipCard icon=\{mailIcon\} label="SIGNED IN" body=\{`\$\{account\.email\}\\nTap for password options`\}/, 'the account line is not the way in')
+    assert.match(flat, /<TipCard icon=\{mailIcon\} label="SIGNED IN" body=\{`\$\{account\.email\}\\nTap for your name and password`\}/, 'the account line is not the way in')
     assert.match(flat, /<Sheet open=\{accountMenu\}/, 'the account line opens nothing')
     assert.match(flat, /label="Change password" sub="Type a new one here, twice"/, 'the sheet has no Change password')
     assert.match(flat, /await sendPasswordReset\(account\.email\)/, 'the sheet cannot send a reset email')

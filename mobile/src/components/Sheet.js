@@ -72,7 +72,7 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
    * NO WIDER THAN SHEET_MAX, CENTERED, on a screen where Play opens up
    * (lib/playShape): the channel picker and Which unit ran nine hundred
    * points edge to edge on an iPad on its side or a Duo opened. By the same
-   * line as Play's, from 621 points of row, and off 40 under it, measured on
+   * line as Play's, from 550 points of row, and off 40 under it, measured on
    * the sheet's own frame (the screen it comes up over) and never the
    * window's size or the kind of device. Under the line, as on every phone,
    * the sheet is the full width it always was.

@@ -9,7 +9,7 @@ import RestoreAsk from '../components/RestoreAsk'
 import Sheet from '../components/Sheet'
 import { buyUnlock, restorePurchase, startTrial, trialAvailable, usePurchase } from '../lib/purchases'
 import { trialRunning } from '../lib/unlock-rule'
-import { TRIAL_BUTTON, TRIAL_OVER, TRIAL_STARTED, TRIAL_STARTING, trialRefusal, trialRunning as trialRunningWords, trialTerms } from '../lib/trial-words'
+import { TRIAL_BUTTON, TRIAL_OVER, TRIAL_STARTING, trialRefusal, trialRunning as trialRunningWords, trialStartedWords, trialTerms } from '../lib/trial-words'
 import { UNITS } from '../lib/demoUnits'
 import { ALREADY_UNLOCKED } from '../lib/onboarding'
 import { currentAccount, deleteAccount, signedInOnPhone } from '../lib/relay'
@@ -154,12 +154,20 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onMakeAc
     const out = await startTrial()
     setBusy(false)
     if (out.ok) {
-      /* And, where Bluetooth is offered, "How do you connect to your unit?" comes next, in Play's place (lib/howConnect). */
+      /* Its own days, not always seven: on an iPhone the trial began when the App Store's item was bought. */
+      const said = trialStartedWords(out.trial)
+      if (said.over) return setSaid({ tone: 'warn', text: said.text })
+      Alert.alert('Free trial', said.text)
+      /* A trial started just now: "How do you connect to your unit?" comes next, in Play's place, where Bluetooth is offered (lib/howConnect). */
       askHowToConnect()
-      Alert.alert('Free trial', TRIAL_STARTED)
       return onUnlocked?.()
     }
     if (out.cancelled) return setSaid(null)
+    /* The Apple ID had bought it already: unlocked, and said why there is no trial. Not a purchase made here, so nothing is asked. */
+    if (out.why === 'apple-id-owns') {
+      Alert.alert('Already unlocked', trialRefusal(out.why))
+      return onUnlocked?.()
+    }
     /*
      * Nobody signed in: an account first, which the sign-in screen makes, on
      * its Create account side (App.js toTrialAccount): somebody starting a

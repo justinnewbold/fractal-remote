@@ -24,7 +24,10 @@
  * account made before this is never asked afterwards: it simply has no name,
  * and the lookup says so. Nothing else makes an account through these
  * sign-ups (the old pairing accounts were made by the computer, and Apple's
- * review login by hand), so nothing else needs one.
+ * review login by hand), so nothing else needs one. Since 7 November 2026 an
+ * account can add or change its name in the phone app (Settings → your
+ * account, mobile/src/components/NameBox.js, relay.js changeName), with the
+ * same rules; until it does, it has none.
  *
  * Shared because both forms take it, and a name one end refuses must be
  * refused by the other in the same words. Plain ESM and zero imports, for the
