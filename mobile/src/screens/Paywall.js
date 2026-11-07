@@ -146,6 +146,11 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
       return onUnlocked?.()
     }
     if (out.cancelled) return setSaid(null)
+    /* The Apple ID had bought it already: unlocked, and said why there is no trial. */
+    if (out.why === 'apple-id-owns') {
+      Alert.alert('Already unlocked', trialRefusal(out.why))
+      return onUnlocked?.()
+    }
     /* Nobody signed in: an account first, which the sign-in screen makes. */
     if (out.why === 'signed-out' && onSignIn) {
       setSaid(null)
