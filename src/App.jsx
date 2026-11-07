@@ -212,7 +212,22 @@ import {
 import { isDemo, setDemo, demoUnit, setDemoUnit } from './lib/forgefx'
 import { UNITS as DEMO_UNITS, demoSentence, unitByKey } from './lib/demoUnits'
 import blockCatalog from './data/blocks.json' with { type: 'json' }
-import { askUntilUnlocked, buyOnWeb, checkUnlocked, webPrice } from './lib/webPurchase'
+import { askUntilUnlocked, buyOnWeb, checkUnlocked, startTrialOnWeb, webPrice } from './lib/webPurchase'
+import { timeOf, trialLive, trialOffered } from '../shared/trial-rule.mjs'
+import {
+  DEMO_NUDGE_AFTER_MS,
+  DEMO_NUDGE_GO,
+  DEMO_TRIAL_NUDGE,
+  DEMO_TRIAL_PILL,
+  TRIAL_BUTTON,
+  TRIAL_OVER,
+  TRIAL_STARTED,
+  trialAccountWord,
+  trialLine,
+  trialRefusal,
+  trialRunning,
+  trialTerms
+} from '../shared/trial-words.mjs'
 import {
   detect,
   currentPreset,
@@ -1641,6 +1656,44 @@ export default function App() {
   const [paid, setPaid] = useState({ checked: false, unlocked: false })
   const [webPriceText, setWebPriceText] = useState(null)
   /*
+   * THE FREE TRIAL (7 November 2026): what the server said with the purchase
+   * (`paid.trial`, { startedAt, endsAt, live } or null), and whether it is
+   * running now. A trial stands in for the purchase until its end and for
+   * nothing else; `paid.unlocked` stays "bought", so the unlock page can
+   * still be opened to buy. Redrawn on the second it ends.
+   */
+  const trialEndsAt = timeOf(paid.trial?.endsAt)
+  const onTrial = Boolean(paid.for && paid.checked && !paid.unlocked && trialLive(trialEndsAt))
+  const [, setTrialTick] = useState(0)
+  useEffect(() => {
+    if (!onTrial) return undefined
+    const t = setTimeout(() => setTrialTick((n) => n + 1), Math.min(trialEndsAt - Date.now() + 50, 2 ** 31 - 1))
+    return () => clearTimeout(t)
+  }, [onTrial, trialEndsAt])
+  const [trialSaid, setTrialSaid] = useState(null)
+  /* The demo's one card about the trial, after a few minutes in it, put away for good with its × (shared/trial-words.mjs). */
+  const [nudgeDue, setNudgeDue] = useState(false)
+  const [nudgeAway, setNudgeAway] = useState(() => {
+    try {
+      return localStorage.getItem('fractal.trialNudgeAway') === 'yes'
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    if (!isDemo()) return undefined
+    const t = setTimeout(() => setNudgeDue(true), DEMO_NUDGE_AFTER_MS)
+    return () => clearTimeout(t)
+  }, [])
+  const putNudgeAway = () => {
+    setNudgeAway(true)
+    try {
+      localStorage.setItem('fractal.trialNudgeAway', 'yes')
+    } catch {
+      // A private window brings it back next visit, which is fine.
+    }
+  }
+  /*
    * PLAY'S ONE-TIME NOTES, ONE AT A TIME, in the phone's order (Stage.js
    * `wants`): the demo's line (over every screen, its own key per unit),
    * then the demo's card on Play, then the hold tip over the pedals, then
@@ -2408,7 +2461,7 @@ export default function App() {
     /* `unknown` kept: a question that could not be put is not a no, and the
        one place that shuts a door on "not paid" — mustPay — leaves it open. */
     checkUnlocked().then(
-      (out) => live && setPaid({ checked: true, unlocked: out.unlocked, unknown: out.unknown, for: accountId })
+      (out) => live && setPaid({ checked: true, unlocked: out.unlocked, unknown: out.unknown, trial: out.trial, for: accountId })
     )
     webPrice(accountId).then((price) => live && setWebPriceText(price))
     return () => {
@@ -2478,7 +2531,7 @@ export default function App() {
    * the full version or not and the version, then what is behind it.
    */
   const accountWho = signedInHere ? link.account.email : isPairAccount(link.account?.email) ? 'Paired, no account' : 'Not signed in'
-  const accountWhat = isDemo() ? 'Demo' : paid.unlocked ? 'Full version' : 'Not unlocked yet'
+  const accountWhat = isDemo() ? 'Demo' : paid.unlocked ? 'Full version' : onTrial ? trialAccountWord(trialEndsAt) : 'Not unlocked yet'
   /*
    * The Phone & computer row's name and line, which My rig says too while it
    * is shut: how far along the chain gets, in the phone's words, over the
@@ -2510,7 +2563,57 @@ export default function App() {
      RevenueCat", which is right for holding Buy back and wrong for telling
      anybody they have it. Every "nothing more to pay" goes by this one. */
   const ownedSure = owned && !paid.unknown
-  const mustPay = Boolean(link.role === 'remote' && !isDemo() && answeredFor && !paid.unlocked && !paid.unknown)
+  const mustPay = Boolean(link.role === 'remote' && !isDemo() && answeredFor && !paid.unlocked && !paid.unknown) && !onTrial
+  /*
+   * WHETHER THIS PAGE OFFERS THE FREE TRIAL: not bought, never had one on
+   * this account (the server's word, `paid.trial` null), on the website or
+   * the computer app, where the server starts it. Signed out, the button
+   * asks for an account first.
+   */
+  const trialHere = trialOffered({ platform: link.role === 'mac' ? 'computer' : 'web', unlocked: paid.unlocked, used: Boolean(paid.trial) })
+  const startTrialHere = async () => {
+    if (!accountId) {
+      setUnlockAfterSignIn(true)
+      setSignInStart('up')
+      setSignIn('account')
+      return
+    }
+    setBuying(true)
+    setTrialSaid(null)
+    const out = await startTrialOnWeb(link.role === 'mac' ? 'computer' : 'web')
+    setBuying(false)
+    if (!out.ok) {
+      if (out.trial) setPaid((p) => ({ ...p, trial: out.trial }))
+      return setTrialSaid(trialRefusal(out.why))
+    }
+    setPaid({ checked: true, unlocked: false, trial: out.trial, for: accountId })
+    setPaidSaid(TRIAL_STARTED)
+    /* As a purchase does: the phone remote on, on the computer; out of the demo, elsewhere. */
+    if (!isDemo() && linkState().role === 'mac') {
+      try {
+        await setMacRemote(true)
+        record('remote', 'Phone remote turned on for the free trial')
+      } catch {
+        setSignIn(true)
+      }
+      setSetupPage(null)
+      setSheet(null)
+      return
+    }
+    if (isDemo()) {
+      try {
+        sessionStorage.setItem(PAID_SAID, TRIAL_STARTED)
+      } catch {
+        /* Unsaid after the reload; the account card says the trial. */
+      }
+      setDemo(false)
+      window.location.reload()
+      return
+    }
+    setSetupPage(null)
+    setSheet(null)
+    if (linkState().role === 'remote') await reconnectPhone()
+  }
   /* Either of the two places the unlock is drawn (unlockBody), on screen now.
      A name, so the asking below does not spell out their conditionals. */
   const unlockOnScreen = mustPay || (sheet === 'settings' && setupPage === 'unlock')
@@ -4486,6 +4589,22 @@ export default function App() {
           signed in with a different email, sign in here with that one instead.
         </p>
       ) : null}
+      {/*
+        THE FREE TRIAL, beside Unlock (7 November 2026): the button, and under
+        it how long, what stops after, and the price after, before anybody
+        taps it. While one runs, its days; once over, that it is over.
+      */}
+      {onTrial ? <p className="hint">{trialRunning(trialEndsAt)}</p> : null}
+      {!onTrial && !paid.unlocked && paid.trial ? <p className="hint">{TRIAL_OVER}</p> : null}
+      {trialHere ? (
+        <>
+          <button type="button" className="primary unlock-trial" disabled={buying || busy} onClick={startTrialHere}>
+            {TRIAL_BUTTON}
+          </button>
+          <p className="hint">{trialTerms(webPriceText)}</p>
+        </>
+      ) : null}
+      {trialSaid ? <p className="hint tone-bad">{trialSaid}</p> : null}
       {buySaid ? <p className="hint tone-bad">{buySaid}</p> : null}
       <button type="button" className="primary unlock-buy" disabled={buying || !accountId || owned} onClick={buyHere}>
         {webPriceText ? `Unlock Full Version — ${webPriceText}` : 'Unlock Full Version'}
@@ -4543,6 +4662,8 @@ export default function App() {
            Exit demo for somebody who has. As on the phone. */
         onUnlock={isDemo() && paid.checked && !paid.unlocked ? openUnlock : null}
         unlockPrice={webPriceText}
+        /* "Try it on your rig free for 7 days" over Unlock, where the trial is offered (shared/trial-words.mjs). */
+        unlockTrial={trialHere ? DEMO_TRIAL_PILL : null}
         onExitDemo={isDemo() && paid.unlocked ? () => linkAction('leave-demo') : null}
         device={device}
         faultReason={faultReason}
@@ -4988,6 +5109,16 @@ export default function App() {
            * tip (holdTipDue) waits for this one.
            */
           demoCard={offerShown ? { price: webPriceText, onUnlock: openUnlock, onPutAway: putOfferAway } : null}
+          trialNote={
+            onTrial && !isDemo()
+              ? { kind: 'line', text: trialLine(trialEndsAt), onGo: () => {
+                  setSheet('settings')
+                  setSetupPage('unlock')
+                } }
+              : isDemo() && nudgeDue && !nudgeAway && !offerShown && !playNotesUp && trialHere
+                ? { kind: 'nudge', text: DEMO_TRIAL_NUDGE, go: DEMO_NUDGE_GO, onGo: openUnlock, onPutAway: putNudgeAway }
+                : null
+          }
           /* A phone, or a phone-sized screen (phoneScreen): the pedals shorter than the scenes, three-letter names and no LEVEL bar, as the phone app's Play. */
           phoneScreen={phoneScreen}
           /* The hold tip's card over the pedals (components/Coach): due, remembered on Try it or the hold itself, and put away on Skip or Got it. */

@@ -7,7 +7,9 @@ import Note from '../components/Note'
 import Press from '../components/Press'
 import RestoreAsk from '../components/RestoreAsk'
 import Sheet from '../components/Sheet'
-import { buyUnlock, restorePurchase, usePurchase } from '../lib/purchases'
+import { buyUnlock, restorePurchase, startTrial, trialAvailable, usePurchase } from '../lib/purchases'
+import { trialRunning } from '../lib/unlock-rule'
+import { TRIAL_BUTTON, TRIAL_OVER, TRIAL_STARTED, TRIAL_STARTING, trialRefusal, trialRunning as trialRunningWords, trialTerms } from '../lib/trial-words'
 import { UNITS } from '../lib/demoUnits'
 import { ALREADY_UNLOCKED } from '../lib/onboarding'
 import { currentAccount, deleteAccount, signedInOnPhone } from '../lib/relay'
@@ -46,7 +48,8 @@ const supportedWords =
  * behind the thing that charges them again would be a poor way to treat them.
  */
 export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDeleted, asked = false }) {
-  const { price, unlocked, available, why, detail, held } = usePurchase()
+  const purchase = usePurchase()
+  const { price, unlocked, available, why, detail, held } = purchase
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState(null)
   /* Restore tapped with nobody signed in: RestoreAsk is up under it. */
@@ -120,6 +123,35 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
      page a moment later, once it has said how it went (purchases.js sets
      boughtAlone for the sign-in screen behind). */
   if (unlocked && !busy) onUnlocked?.()
+  /*
+   * THE FREE TRIAL (7 November 2026). Offered beside Unlock wherever this
+   * copy may offer it (purchases trialAvailable: on an iPhone only once the
+   * App Store's free 7-Day Trial item is there), with what it is and what
+   * happens after said under the button, before anybody taps it (Apple's
+   * 3.1.1). A trial running closes the page put in front of the app, as a
+   * purchase does; the page asked for from Play's "Trial: 3 days left ·
+   * Unlock" stays, to buy.
+   */
+  const trialOn = trialRunning(purchase.trialEndsAt)
+  if (trialOn && !asked && !busy) onUnlocked?.()
+  const offerTrial = trialAvailable(purchase)
+  const tryIt = async () => {
+    setBusy(true)
+    setSaid({ tone: 'info', text: TRIAL_STARTING })
+    const out = await startTrial()
+    setBusy(false)
+    if (out.ok) {
+      Alert.alert('Free trial', TRIAL_STARTED)
+      return onUnlocked?.()
+    }
+    if (out.cancelled) return setSaid(null)
+    /* Nobody signed in: an account first, which the sign-in screen makes. */
+    if (out.why === 'signed-out' && onSignIn) {
+      setSaid(null)
+      return onSignIn()
+    }
+    setSaid({ tone: 'warn', text: out.message || trialRefusal(out.why) })
+  }
 
   const buy = async () => {
     setBusy(true)
@@ -214,6 +246,9 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
         </Text>
       ) : null}
 
+      {trialOn ? <Note tone="info">{trialRunningWords(purchase.trialEndsAt)}</Note> : null}
+      {!trialOn && purchase.trialEnded && !unlocked ? <Note tone="warn">{TRIAL_OVER}</Note> : null}
+
       {said ? <Note tone={said.tone}>{said.text}</Note> : null}
 
       {/* A dead Unlock button is worse than an explained one. Restore still
@@ -249,6 +284,12 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
               onPress={onSignIn}
               style={{ borderColor: color.signal }}
             />
+          </>
+        ) : null}
+        {offerTrial ? (
+          <>
+            <Press label={TRIAL_BUTTON} tone="signal" disabled={busy} onPress={tryIt} />
+            <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>{trialTerms(price)}</Text>
           </>
         ) : null}
         <Press

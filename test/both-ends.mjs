@@ -2006,7 +2006,7 @@ export function run(test) {
     assert.match(bar, /\{canBuy \? \(/, 'the browser bar stopped offering the unlock in the demo')
     assert.match(
       bar,
-      /<span className="topbar-pill-face">\s*<span>Unlock<\/span>\s*\{unlockPrice \? <span className="topbar-pill-price">\{unlockPrice\}<\/span> : null\}/,
+      /<span className="topbar-pill-face">\s*(\{unlockTrial \? <span className="topbar-pill-trial">\{unlockTrial\}<\/span> : null\}\s*)?<span>Unlock<\/span>\s*\{unlockPrice \? <span className="topbar-pill-price">\{unlockPrice\}<\/span> : null\}/,
       'the browser bar does not say Unlock over the price in the demo, as the phone does'
     )
     assert.match(bar, /onClick=\{onUnlock\}[\s\S]*?aria-label="Unlock the full version"/, 'Unlock does not open the unlock')

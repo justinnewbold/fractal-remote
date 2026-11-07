@@ -2591,6 +2591,125 @@ alone moves, so it is one Android slot.
 
 ---
 
+## The seven-day free trial (approved 7 November 2026)
+
+"Okay, let's get the seven-day trial built out." One free trial per account,
+ever, and one per device (the install number the update check already
+sends, kept only as a salted hash), of everything the full version gives on
+that copy, with the player's own rig. Play says "Trial: 3 days left ·
+Unlock" (on the last day "Trial ends today · Unlock"); day 8 is back to the
+purchase page with setlists and settings kept; buying at any time ends it
+for good. The demo stays free, unlimited and needs no account, as before.
+The length is `TRIAL_DAYS` in shared/trial-rule.mjs. A trial stands in for
+the purchase and nothing else: `BLUETOOTH_FROM_STORE`, `UNITS_FROM_STORE`
+and `EDIT_FROM_STORE` gate exactly as they did (test/trial.mjs holds it).
+
+### How each copy starts one
+
+- **iPhone and iPad.** Apple's guideline 3.1.1: an app that is not a
+  subscription may offer a free time-based trial only as a Non-Consumable
+  in-app purchase at price tier 0, named like "7-Day Trial". So the button
+  buys that free item through RevenueCat (Apple's own sheet, $0), and the
+  `trial` function starts the trial from the moment it was bought, once it
+  sees the item on the account in RevenueCat. Until the item exists in the
+  store, the button does not show at all (lib/purchases `findStoreTrial`),
+  so the code ships safely before Apple approves the item.
+- **Android, the website and the computer app.** No store item: the `trial`
+  function starts it on request. Google Play allows a free trial of a
+  one-time unlock done in the app.
+
+### App Store Connect: the free item (Justin, or by the App Store Connect API)
+
+My apps → Fractal Remote → Monetization → In-App Purchases → +
+
+| Field | Value |
+| --- | --- |
+| Type | **Non-Consumable** |
+| Reference Name | `7-Day Trial` |
+| Product ID | `trial_7day` (exactly; it is `TRIAL_PRODUCT_ID` in shared/trial-rule.mjs) |
+| Price | **Free** (price tier 0), all countries |
+| Availability | all countries the app is sold in |
+| Family Sharing | off |
+| Localization (English (U.S.)) Display Name | `7-Day Trial` |
+| Localization Description | `Try the full version free for 7 days with your own rig. No charge.` |
+| Review screenshot | the purchase page showing "Start 7-day free trial" and the words under it |
+| Review notes | below |
+
+Review notes for the item:
+
+```
+A free 7-day trial of the full version, offered under guideline 3.1.1 as a Non-Consumable at price tier 0. Before it starts, the purchase page says how long it lasts (7 days), what stops when it ends (connecting to the player's own rig, until they unlock the full version), and what the full version costs after ($9.99, one-time, nothing charged automatically). One trial per account and one per device. To see it: sign in with a NEW account (not the review account, which has the full version) and tap "Start 7-day free trial" on the purchase page.
+```
+
+Then attach it to the next version for review (the version page →
+In-App Purchases and Subscriptions → select `7-Day Trial`), or submit it on
+its own if App Store Connect offers that for this app.
+
+### RevenueCat
+
+1. Product catalog → Products → + New → App Store app → identifier
+   `trial_7day`, type Non-Consumable.
+   Leave it **NOT attached to the `full` entitlement**, and to no entitlement at all. On `full` it would make a
+   free item the full version, for good; the server reads the item from
+   the customer's purchases instead.
+2. Optional: Offerings → the current offering → + Package → identifier
+   `trial`, product `trial_7day` (App Store). The app finds the item in an
+   offering first and by its id otherwise, and never sells it as the unlock
+   (`theUnlockIn` leaves it out).
+3. Nothing to change in the webhook: it re-reads `full` only, and the free
+   item does not move it.
+
+### Supabase (in this order)
+
+1. Apply `supabase/migrations/20261107_trials.sql` (the trials tables,
+   `start_trial`, `trial_of`, `owner_trials`, and `is_entitled` with a
+   running trial in it, so the relay opens for one).
+2. Edge Functions → Secrets: `TRIAL_DEVICE_SALT`, a long random string, set
+   once and never changed.
+3. Deploy `trial` (new; verify JWT on), then `entitlement` (adds `trial`
+   to its answer), then `grant-access` (Sales: the free trials, and the
+   free item left out of sales).
+
+All three before the pull request is merged: the Android, website and
+computer buttons ask `trial` from the moment the update lands.
+
+### Notes for App Review: the paragraph for the next submission
+
+```
+New: a free 7-day trial of the full version (guideline 3.1.1: a Non-Consumable in-app purchase at price tier 0, "7-Day Trial", product trial_7day). On the purchase page, "Start 7-day free trial" sits above "Unlock Full Version"; the words under it say how long it lasts, what stops when it ends (connecting to the player's own rig) and what the full version costs after, before anything is tapped. It is one per account and one per device. While it runs, Play shows "Trial: 3 days left · Unlock", which opens the purchase page. On day 8 the purchase page comes back, with everything the player set up kept. The demo is unchanged: free, unlimited, no account. To try the trial, make a NEW account (the review account already has the full version).
+```
+
+### What's New line
+
+```
+Try the full version free for 7 days with your own rig: tap Start 7-day free trial on the purchase page. The demo is still free and unlimited.
+```
+
+### App Privacy label and Play's Data safety: one row changes
+
+The Device ID row (Identifiers → Device ID) says "Linked: No" and "The app
+itself never reads it". With the trial, the app reads that same install
+number and sends it, with the signed-in account, to the `trial` function,
+which keeps a salted hash of it beside the account's trial. Nothing new is
+collected, but the row's answers change, the same day the update goes out:
+Identifiers → Device ID: **Linked to the user: Yes**, purposes App
+Functionality (the one-trial-per-device limit) and Analytics (Expo, as
+before); not used for tracking. Play's Data safety, *Device or other IDs*:
+collected, App functionality and Analytics, not shared, not optional.
+public/privacy.html says it under "The free trial".
+
+### Google Play
+
+Release notes: the What's New line above. App access → "Any other
+information": add one line under the review account's paragraph:
+
+```
+Free 7-day trial: a NEW account (not this one, which has the full version) sees "Start 7-day free trial" on the purchase page. One per account and device; it ends by itself after 7 days and charges nothing.
+```
+
+The Play listing needs no change for it; if the short description is ever
+rewritten, "Free 7-day trial" may go in it.
+
 ## Later: Edit over Bluetooth for customers (the AM4 and the FM3)
 
 Since 29 October 2026 Edit opens over Bluetooth on an AM4 and an FM3 for

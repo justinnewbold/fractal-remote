@@ -157,6 +157,24 @@
         the unit, the adapter or anything else about it, sent once by the app.
       </p>
 
+      <h3 id="free-trial">The free trial — only if you start one</h3>
+      <p>
+        The full version can be tried free for 7 days, once per account and once per device. When
+        you tap <strong>Start 7-day free trial</strong>, the server keeps, with your account, when the
+        trial started and ends, which kind of app started it (iPhone or iPad, Android, the website or
+        the computer app) and how. On an iPhone or iPad the trial is a free item in the App Store
+        ($0), so a record of that item is kept by RevenueCat with your purchases, as described above.
+      </p>
+      <p>
+        To allow one trial per device, the app sends the number it already uses for its update
+        check (the install number described under <em>How long it is kept</em>; in a browser or the
+        computer app, the made-up number kept in that browser), and the server keeps only a
+        scrambled, one-way code made from it (a salted hash), never the number itself. Deleting your
+        account deletes the trial record. The scrambled code is kept on its own, with the date it was
+        first used and nothing that names you or your account, so that a device that has had a trial
+        does not get another on a new account.
+      </p>
+
       <h3>Your setlists — only if you are signed in</h3>
       <p>
         So the setlist you built on the couch is on your phone at the gig. It holds the names and
@@ -467,6 +485,8 @@
           account.</li>
         <li><strong>Each day's totals on How many people</strong> — numbers only, naming nobody,
           kept two years, then deleted.</li>
+        <li><strong>The free trial</strong> — the record with your account until the account is
+          deleted; the scrambled device code on its own for as long as the app offers a trial.</li>
         <li><strong>Bug reports</strong> — until the problem is fixed and long enough afterward to
           be sure, then deleted, and the email of each with them.</li>
         <li><strong>The notes about which gear works</strong> — two years from when each was sent,

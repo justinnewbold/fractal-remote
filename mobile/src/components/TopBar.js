@@ -10,7 +10,9 @@ import { pillWords } from '../lib/pill-words'
 import { APP_VERSION } from '../lib/version'
 import { useRig } from '../lib/rig'
 import { setDemo, useDemo } from '../lib/demo'
-import { shouldOffer, usePurchase } from '../lib/purchases'
+import { shouldOffer, trialAvailable, usePurchase } from '../lib/purchases'
+import { trialRunning } from '../lib/unlock-rule'
+import { DEMO_TRIAL_PILL } from '../lib/trial-words'
 import setupIcon from '../../assets/icons/setup.png'
 import volumeIcon from '../../assets/icons/volume.png'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
@@ -140,7 +142,9 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    * where "we cannot take your money this second" belongs; the bar's job is
    * to be findable.
    */
-  const canBuy = Boolean(onUnlock) && shouldOffer({ demo })
+  const canBuy = Boolean(onUnlock) && shouldOffer({ demo }) && !trialRunning(purchase.trialEndsAt)
+  /* And the free trial over it, where this copy offers one: "Try it on your rig free for 7 days", with Unlock under it (7 November 2026). */
+  const offerTrial = Boolean(onUnlock) && shouldOffer({ demo }) && trialAvailable(purchase)
   /*
    * THE WAY OUT, FOR SOMEBODY WHO HAS ALREADY PAID.
    *
@@ -163,7 +167,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    * the store is having a bad minute. Neither of those is somebody who has
    * paid, and neither should be told the demo is all they have left.
    */
-  const canLeave = demo && purchase.unlocked
+  const canLeave = demo && purchase.unlocked || (demo && trialRunning(purchase.trialEndsAt))
   const connected = link?.link === 'connected'
   const tone = toneOfRemote(link?.link)
   /*
@@ -475,6 +479,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
             tick()
             onUnlock()
           }}
+          accessibilityHint={offerTrial ? DEMO_TRIAL_PILL : undefined}
           hitSlop={8}
           /* FILLED, not outlined. An outline reads as one more piece of
              chrome in a bar that is mostly lamps and labels; this is the only
@@ -500,6 +505,11 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
               pill now. Over the price rather than beside it, as the pill
               has the computer under the unit: "Unlock $9.99" in one line
               took the demo unit's name off a 360-wide phone. */}
+          {offerTrial ? (
+            <Text numberOfLines={2} style={{ color: color.onSignal, fontSize: font.micro, fontWeight: '700', textAlign: 'center', maxWidth: 140 }}>
+              {DEMO_TRIAL_PILL}
+            </Text>
+          ) : null}
           <Text style={{ color: color.onSignal, fontSize: font.micro, fontWeight: '700', letterSpacing: 0.6 }}>Unlock</Text>
           {purchase.price ? (
             <Text numberOfLines={1} style={{ color: color.onSignal, fontSize: font.micro, fontWeight: '700', letterSpacing: 0.6 }}>

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { Platform } from 'react-native'
+import { requireOptionalNativeModule } from 'expo'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Constants from 'expo-constants'
 
@@ -8,7 +9,8 @@ import { mayDrive, mayDriveBluetooth } from './unlock-rule'
 import { isOwner } from './owner-unlock'
 import { currentAccount, signedInOnPhone } from './relay'
 import { isDemo, setDemo } from './demo'
-import { claimRelay } from './relayPass'
+import { askForTrial, claimRelay, hearTrial } from './relayPass'
+import { TRIAL_PRODUCT_ID, keptTrial, timeOf, trialClock, trialOffered } from './trial-rule'
 import { deviceNoun } from './device-word'
 
 /**
@@ -70,6 +72,12 @@ const MADE_KEY = 'fractal.madeHere'
    account (unlinkAccount): the phone still paid, and the next sign-in,
    whoever's, is sent it. */
 const STUCK_KEY = 'fractal.stuck'
+
+/* And the free trial this phone last heard of, for the account it was heard
+   for, with the latest time the phone's clock has shown: { account, endsAt,
+   used, seen }. Read at launch so a trial works at a gig with no signal,
+   and never moved later (shared/trial-rule.mjs keptTrial, trialClock). */
+const TRIAL_KEY = 'fractal.trial'
 
 /*
  * The publishable keys, which are not secret.
@@ -147,7 +155,24 @@ let state = {
    * phone, so a relaunch keeps both and tries again, and kept through a
    * sign-out (unlinkAccount), so signing back in cannot sell it again.
    */
-  stuck: false
+  stuck: false,
+  /*
+   * THE FREE TRIAL (7 November 2026), which stands in for the purchase until
+   * it ends and for nothing else (lib/unlock-rule). `unlocked` stays "bought":
+   * the purchase page closes on it, and a trial must be able to open that
+   * page to buy.
+   *
+   *   trialEndsAt  when the running trial ends, in ms, on this phone's clock
+   *                (pulled earlier if the clock has been put back), or null
+   *   trialUsed    this account has had one, running or over: no button
+   *   storeTrial   an iPhone or iPad found the App Store's free 7-Day Trial
+   *                item, so it may offer the button (Apple's guideline 3.1.1)
+   */
+  trialEndsAt: null,
+  /* A trial that ran here and is over: the purchase page says so. */
+  trialEnded: false,
+  trialUsed: false,
+  storeTrial: false
 }
 
 /* What a customer whose purchase is only on this phone is told, wherever
@@ -264,6 +289,8 @@ let posing = false
 let shown = state
 const refreshShown = () => {
   shown = posing ? { ...state, unlocked: false, posing: true } : state
+  /* And no trial while viewing as a new customer: a stranger has had none. */
+  if (posing) shown = { ...shown, trialEndsAt: null, trialEnded: false, trialUsed: false }
 }
 
 const set = (next) => {
@@ -689,6 +716,7 @@ const link = async () => {
   try {
     const account = await currentAccount()
     if (!account?.id) return
+    await loadTrial()
     const info = await linkTo(api, account.id)
     if (info && entitled(info)) {
       await remember(true)
@@ -769,6 +797,8 @@ export const linkAccount = () => {
  * answer stands, and Restore is there for the case where it really is gone.
  */
 export const unlinkAccount = async () => {
+  /* Nobody's trial is shown with nobody signed in; it stays kept for that account. */
+  showTrial(null)
   const api = await load()
   if (!api?.logOut) return
   /*
@@ -853,9 +883,187 @@ export const unlinkAccount = async () => {
 }
 
 
+/* ------------------------------------------------------------------ */
+/* The free trial                                                      */
+/* ------------------------------------------------------------------ */
+
+const readTrial = async () => {
+  try {
+    const kept = JSON.parse((await AsyncStorage.getItem(TRIAL_KEY)) || 'null')
+    return kept && typeof kept.account === 'string' ? kept : null
+  } catch {
+    return null
+  }
+}
+
+const writeTrial = async (kept) => {
+  try {
+    if (kept) await AsyncStorage.setItem(TRIAL_KEY, JSON.stringify(kept))
+    else await AsyncStorage.removeItem(TRIAL_KEY)
+  } catch {
+    /* Unwritten, the trial still runs this launch; the next asks the server. */
+  }
+}
+
+let trialTimer = null
+/*
+ * Show what is kept: the end on THIS phone's clock, pulled earlier by however
+ * far the clock has been put back since the latest time it showed, so a
+ * clock set back a week is never a week more. And a timer for the end, so
+ * Play's line and the gates change on the second rather than at the next tap.
+ */
+const showTrial = (kept) => {
+  clearTimeout(trialTimer)
+  const end = timeOf(kept?.endsAt)
+  const now = Date.now()
+  const back = Math.max(0, trialClock(now, kept?.seen || 0) - now)
+  const endsAt = end === null ? null : end - back
+  const live = endsAt !== null && endsAt > now
+  set({ trialEndsAt: live ? endsAt : null, trialEnded: endsAt !== null && !live, trialUsed: Boolean(kept?.used || end !== null) })
+  if (live) {
+    trialTimer = setTimeout(() => {
+      logDebug('purchases: the free trial has ended')
+      set({ trialEndsAt: null, trialEnded: true })
+    }, Math.min(endsAt - now + 50, 2 ** 31 - 1))
+    /* Never what keeps a process alive (node, on the test bench); a phone has no such thing. */
+    trialTimer?.unref?.()
+  }
+}
+
+/*
+ * What the server said about this account's trial (relayPass), kept and
+ * shown. One account's trial is kept at a time: the latest heard.
+ */
+const keepTrial = async (account, heard) => {
+  const was = await readTrial()
+  const kept = keptTrial({ kept: was, heard, account })
+  if (!kept) return
+  const next = { ...kept, seen: trialClock(Date.now(), was?.account === account ? was.seen || 0 : 0) }
+  await writeTrial(next)
+  if ((await signedInOnPhone().catch(() => null)) === account) showTrial(next)
+}
+
+hearTrial((account, heard) => (account ? keepTrial(account, heard).catch(() => {}) : null))
+
+/* The trial kept for whoever is signed in on the phone, at launch and at each sign-in. */
+const loadTrial = async () => {
+  const who = await signedInOnPhone().catch(() => null)
+  const kept = await readTrial()
+  if (who && kept?.account === who) {
+    const seen = trialClock(Date.now(), kept.seen || 0)
+    await writeTrial({ ...kept, seen })
+    showTrial({ ...kept, seen })
+  } else showTrial(null)
+}
+
+/*
+ * THIS INSTALL'S NUMBER: the id the app's update check already sends to Expo
+ * (expo-eas-client, inside every build that has expo-updates). Nothing new
+ * is collected for the trial; the server keeps only a salted hash of it, to
+ * hold one trial to one device. Null where there is none.
+ */
+const installNumber = () => {
+  try {
+    const id = requireOptionalNativeModule('EASClient')?.clientID
+    return typeof id === 'string' && id ? id : null
+  } catch {
+    return null
+  }
+}
+
+/* The App Store's free 7-Day Trial item, on an iPhone or iPad only, from an offering first, else by its id. Null when the store has none. */
+let trialProduct = null
+const findStoreTrial = async (api, offerings = null) => {
+  if (Platform.OS !== 'ios') return null
+  try {
+    const every = [
+      ...(offerings?.current?.availablePackages || []),
+      ...Object.values(offerings?.all || {}).flatMap((o) => o?.availablePackages || [])
+    ]
+    const inOffering = every.find((p) => p?.product?.identifier === TRIAL_PRODUCT_ID)?.product || null
+    const found = inOffering || (await api.getProducts([TRIAL_PRODUCT_ID], api.PRODUCT_CATEGORY?.NON_SUBSCRIPTION))?.[0] || null
+    trialProduct = found
+    set({ storeTrial: Boolean(found) })
+    return found
+  } catch (err) {
+    logDebug(`purchases: no free trial item (${err?.message || err})`)
+    return null
+  }
+}
+
+/* Whether the App Store's free trial item is on this store account already. */
+const tookStoreTrial = (info) =>
+  (info?.nonSubscriptionTransactions || []).some((t) => t?.productIdentifier === TRIAL_PRODUCT_ID) ||
+  (info?.allPurchasedProductIdentifiers || []).includes(TRIAL_PRODUCT_ID)
+
+/**
+ * May this copy show "Start 7-day free trial"? Signed in or not: with nobody
+ * signed in the button asks for an account first.
+ */
+export const trialAvailable = (p = shown) =>
+  trialOffered({ platform: Platform.OS, storeTrial: p.storeTrial, unlocked: p.unlocked, used: p.trialUsed })
+
+/**
+ * START THE FREE TRIAL. On an iPhone or iPad the App Store's free 7-Day
+ * Trial item is bought first (Apple's own sheet, nothing charged), and the
+ * server then starts the trial from it; on Android the server starts it.
+ * Either way the server holds the limits: one per account, one per device.
+ *
+ * Answers { ok, cancelled, why, message } and never throws.
+ */
+export const startTrial = async () => {
+  if (posing) return { ok: false, cancelled: false, why: 'posing', message: 'Starting a trial is off while you’re viewing as a new customer.' }
+  if (state.unlocked) return { ok: false, cancelled: false, why: 'bought' }
+  const who = await signedInOnPhone().catch(() => null)
+  if (!who) return { ok: false, cancelled: false, why: 'signed-out' }
+  const device = installNumber()
+  if (!device) return { ok: false, cancelled: false, why: 'failed' }
+  if (Platform.OS === 'ios') {
+    const api = await load()
+    const product = trialProduct || (api ? await findStoreTrial(api) : null)
+    if (!api || !product) return { ok: false, cancelled: false, why: 'no-store-trial' }
+    try {
+      /* On the account signed in, so the item lands where the server looks. */
+      if ((await currentId(api)) !== who && !(await linkTo(api, who))) return { ok: false, cancelled: false, why: 'offline' }
+      const info = await freshInfo(api)
+      if (!tookStoreTrial(info)) await api.purchaseStoreProduct(product)
+    } catch (err) {
+      if (err?.userCancelled) return { ok: false, cancelled: true, why: null }
+      /* Already bought on this Apple ID: the server decides from RevenueCat's record. */
+      if (String(err?.code) !== ALREADY_BOUGHT) {
+        logDebug(`purchases: the free trial item did not go through (${err?.message || err})`)
+        return { ok: false, cancelled: false, why: 'no-store-trial' }
+      }
+    }
+  }
+  const out = await askForTrial({ device, platform: Platform.OS })
+  if (out.ok) {
+    if (isDemo()) setDemo(false)
+    claimRelay()
+  }
+  return { ok: out.ok, cancelled: false, why: out.ok ? null : out.why }
+}
+
+/*
+ * An iPhone that bought the free item and could not reach the server then
+ * (no signal on the way out of Apple's sheet): asked again at the next launch
+ * that can, so the trial is not lost. The server starts it from when the item
+ * was bought, so the wait costs days, never adds them.
+ */
+const finishStoreTrial = async (api, info) => {
+  if (Platform.OS !== 'ios' || state.unlocked || state.trialUsed || !tookStoreTrial(info)) return
+  const who = await signedInOnPhone().catch(() => null)
+  const device = installNumber()
+  if (!who || !device || (await currentId(api)) !== who) return
+  logDebug('purchases: the free trial item is bought and no trial is known, so the server is asked')
+  await askForTrial({ device, platform: 'ios' })
+}
+
 export const startPurchases = async () => {
   const known = await remembered()
   if (known) set({ unlocked: true })
+  /* The trial kept on the phone, before anything is asked: a gig with no signal still has it. */
+  await loadTrial()
 
   /* Before the store is asked anything: an owner is unlocked whether or not
      RevenueCat is reachable, has a product, or exists. */
@@ -969,6 +1177,7 @@ export const startPurchases = async () => {
     if (!available) {
       logDebug(`purchases: nothing is locked (canPay ${canPay}, sellable ${sellable})`)
     }
+    finishStoreTrial(api, info).catch(() => {})
     api.addCustomerInfoUpdateListener?.((next) => {
       /* A purchase on its way to this account keeps the gate open: the
          account's "not yet" is not a no from somebody this phone saw pay. */
@@ -1011,10 +1220,11 @@ export const startPurchases = async () => {
  * rather than nothing, and because that is what shipped.
  */
 const theUnlockIn = (offerings) => {
+  /* Never the free trial item, even as first-wins: it would sell nothing, and unlock nothing. */
   const every = [
     ...(offerings?.current?.availablePackages || []),
     ...Object.values(offerings?.all || {}).flatMap((o) => o?.availablePackages || [])
-  ]
+  ].filter((p) => p?.product?.identifier !== 'trial_7day')
   return every.find((p) => p?.product?.identifier === PRODUCT_ID) || every[0] || null
 }
 
@@ -1031,6 +1241,7 @@ const loadPrice = async () => {
   if (!api) return false
   try {
     const offerings = await api.getOfferings()
+    findStoreTrial(api, offerings)
     const found = theUnlockIn(offerings)
     if (found) {
       pkg = found
@@ -1433,7 +1644,9 @@ export const usePurchase = () => useSyncExternalStore(subscribe, purchaseState, 
 export const __reset = () => {
   Purchases = null
   pkg = null
-  state = { available: false, unlocked: false, checking: true, price: null, why: null, onlyHere: false, boughtAlone: false, held: null, madeHere: false, stuck: false }
+  state = { available: false, unlocked: false, checking: true, price: null, why: null, onlyHere: false, boughtAlone: false, held: null, madeHere: false, stuck: false, trialEndsAt: null, trialEnded: false, trialUsed: false, storeTrial: false }
+  trialProduct = null
+  clearTimeout(trialTimer)
   openFor = null
   posing = false
   shown = state

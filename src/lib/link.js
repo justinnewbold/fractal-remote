@@ -1497,7 +1497,11 @@ async function deviceServerToo({ email, password }) {
   if (!computersOwnPage(servedLocally())) throw new Error('This is a phone or tablet on the computer’s wifi page, so only the window was signed in.')
   /* Looked up when used: the purchase library is the browser's alone. */
   const { checkUnlocked } = await import('./webPurchase.js')
-  const { unlocked, unknown } = await checkUnlocked()
+  const answer = await checkUnlocked()
+  const { unknown } = answer
+  /* A free trial still running is the purchase for its seven days (shared/trial-rule.mjs trialLive, written out here). */
+  const trialEnds = Date.parse(answer.trial?.endsAt || '')
+  const unlocked = answer.unlocked || (Number.isFinite(trialEnds) && Date.now() < trialEnds)
   if (!unlocked && !unknown) {
     const { cloudLogin } = await device()
     await cloudLogin(email, password).catch(() => {})

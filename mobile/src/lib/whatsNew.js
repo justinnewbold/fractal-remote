@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-07",
+    "day": "7 November 2026",
+    "version": "1.89.56",
+    "lines": [
+      {
+        "text": "Try the full version free for 7 days with your own rig: tap Start 7-day free trial on the purchase page. While it runs, Play shows how many days are left, and when it ends everything you set up is kept. The demo is still free and unlimited.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-06",
     "day": "6 November 2026",
     "version": "1.89.55",

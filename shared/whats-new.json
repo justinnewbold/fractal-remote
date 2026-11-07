@@ -3,6 +3,13 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-07",
+      "version": "1.89.56",
+      "lines": [
+        "Try the full version free for 7 days with your own rig: tap Start 7-day free trial on the purchase page. While it runs, Play shows how many days are left, and when it ends everything you set up is kept. The demo is still free and unlimited."
+      ]
+    },
+    {
       "date": "2026-11-06",
       "version": "1.89.55",
       "lines": [

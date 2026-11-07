@@ -197,6 +197,8 @@ export default function Gig({
   onHoldTipClosed,
   /* The demo's card at the top of Play (components/UnlockOffer), { price, onUnlock, onPutAway }, while App says it is up (offerShown); null otherwise. */
   demoCard = null,
+  /* The free trial's line or the demo's card about it: { kind: 'line' | 'nudge', text, go, onGo, onPutAway }, or null. */
+  trialNote = null,
   /* Settings → Colors, which the colours' one-time line opens when pressed. */
   onOpenColours,
   onError: raiseInPage,
@@ -1202,6 +1204,28 @@ export default function Gig({
     >
       {/* The first thing on the first screen, as the phone's: where an eye starts. */}
       {demoCard ? <UnlockOffer price={demoCard.price} onUnlock={demoCard.onUnlock} onPutAway={demoCard.onPutAway} /> : null}
+      {/*
+        THE FREE TRIAL ON PLAY (7 November 2026), as the phone's: while one
+        runs, "Trial: 3 days left · Unlock", tappable to the unlock page; in
+        the demo after a few minutes, its one card, put away with its ×.
+      */}
+      {trialNote?.kind === 'line' ? (
+        <button type="button" className="chip trial-line" onClick={trialNote.onGo}>
+          {trialNote.text}
+        </button>
+      ) : trialNote?.kind === 'nudge' ? (
+        <div className="demo-card" role="region" aria-label={trialNote.text}>
+          <div className="demo-card-words">
+            <p className="demo-card-body">{trialNote.text}</p>
+          </div>
+          <button type="button" className="demo-card-unlock" onClick={trialNote.onGo}>
+            {trialNote.go}
+          </button>
+          <button type="button" className="demo-card-close" onClick={trialNote.onPutAway} aria-label="Put this away">
+            ×
+          </button>
+        </div>
+      ) : null}
       {card ? <ComputerCard words={card.words} buttons={card.buttons} /> : null}
       {/*
         The name, big, with the slot in the small line over it: "PRESET 000

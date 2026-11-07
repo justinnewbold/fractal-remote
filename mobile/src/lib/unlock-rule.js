@@ -18,6 +18,23 @@
  */
 
 /**
+ * THE FREE TRIAL STANDS IN FOR THE PURCHASE, and for nothing else, until its
+ * end (shared/trial-rule.mjs; 7 November 2026). `trialEndsAt` is the end the
+ * phone last heard from the server for the account signed in here, in ms,
+ * and `now` the phone's clock that never runs backwards (trialClock). Past
+ * the end it is nothing, offline or not: the phone never moves an end later,
+ * and no "the store cannot be reached" makes a trial last.
+ *
+ * Written out here rather than imported, because this file imports nothing
+ * (see above); test/trial.mjs holds it to trial-rule's trialLive.
+ */
+export const trialRunning = (trialEndsAt = null, now = Date.now()) =>
+  typeof trialEndsAt === 'number' && Number.isFinite(trialEndsAt) && Number.isFinite(now) && now < trialEndsAt
+
+/** Paid, or a free trial still running: what every rule below means by "has it". */
+const hasIt = ({ unlocked = false, trialEndsAt = null, now = Date.now() } = {}) => Boolean(unlocked) || trialRunning(trialEndsAt, now)
+
+/**
  * May this person point the app at real hardware?
  *
  * Note what counts as yes, and why:
@@ -27,8 +44,8 @@
  *                or the store could not be reached. A paywall that cannot take
  *                money must never be a paywall that blocks the app.
  */
-export const mayDrive = ({ unlocked = false, available = false } = {}) =>
-  Boolean(unlocked) || !available
+export const mayDrive = ({ unlocked = false, available = false, trialEndsAt = null, now = Date.now() } = {}) =>
+  hasIt({ unlocked, trialEndsAt, now }) || !available
 
 /**
  * May this person use Bluetooth (beta)? Stricter than mayDrive, on purpose.
@@ -55,8 +72,8 @@ export const mayDrive = ({ unlocked = false, available = false } = {}) =>
  * it lands (lib/bleLink waitForPurchase), where it used to sit on "not
  * unlocked" until somebody tapped Connect.
  */
-export const mayDriveBluetooth = ({ unlocked = false, available = false } = {}, admin = false) =>
-  admin === true ? mayDrive({ unlocked, available }) : Boolean(unlocked)
+export const mayDriveBluetooth = ({ unlocked = false, available = false, trialEndsAt = null, now = Date.now() } = {}, admin = false) =>
+  admin === true ? mayDrive({ unlocked, available, trialEndsAt, now }) : hasIt({ unlocked, trialEndsAt, now })
 
 /**
  * Should the app interrupt this person and ask them to pay?
@@ -79,5 +96,7 @@ export const shouldAskToPay = ({
   demo = false,
   checking = true,
   available = false,
-  unlocked = false
-} = {}) => Boolean(inApp) && !demo && !checking && Boolean(available) && !unlocked
+  unlocked = false,
+  trialEndsAt = null,
+  now = Date.now()
+} = {}) => Boolean(inApp) && !demo && !checking && Boolean(available) && !hasIt({ unlocked, trialEndsAt, now })

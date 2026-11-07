@@ -5137,8 +5137,8 @@ export function run(test) {
     assert.match(head, /\{accountWhat\} · v\{VERSION\}/, 'the version left the top of the browser’s Settings')
     assert.match(head, /<span className="setup-account-who">\{accountWho\}<\/span>/, 'the browser’s card does not say who is signed in')
     assert.match(web, /const accountWho = signedInHere \? link\.account\.email : isPairAccount\(link\.account\?\.email\) \? 'Paired, no account' : 'Not signed in'/, 'the browser does not say who is signed in, or that nobody is')
-    assert.match(web, /const accountWhat = isDemo\(\) \? 'Demo' : paid\.unlocked \? 'Full version' : 'Not unlocked yet'/, 'the browser’s card does not say Demo, Full version or Not unlocked yet as the phone’s does')
-    assert.match(phone, /const what = demo \? 'Demo' : unlocked \? 'Full version' : 'Not unlocked yet'/, 'the phone’s card says something else now')
+    assert.match(web, /const accountWhat = isDemo\(\) \? 'Demo' : paid\.unlocked \? 'Full version' : (onTrial \? trialAccountWord\(trialEndsAt\) : )?'Not unlocked yet'/, 'the browser’s card does not say Demo, Full version or Not unlocked yet as the phone’s does')
+    assert.match(phone, /const said = demo \? 'Demo' : unlocked \? 'Full version' : 'Not unlocked yet'\s+\/\*[^*]*\*\/\s+const what = !demo && !unlocked && trialWord \? trialWord : said/, 'the phone’s card says something else now')
     assert.match(head, /\{signedInHere \? <span className="setup-account-options">\{ACCOUNT_LINE\}<\/span> : null\}/, 'the browser’s card does not say where Delete account is')
     assert.match(head, /aria-label=\{`Account, \$\{accountWho\}, \$\{accountWhat\}`\}/, 'the browser’s card is said differently from the phone’s')
     assert.match(head, /onClick=\{\(\) => setSetupPage\('account'\)\}/, 'the browser’s account card does not open the account')
@@ -14236,7 +14236,7 @@ export function run(test) {
     /* And it still does what it did: the paywall shut, the screen's own step, Exit demo? on Play. */
     const ask = appSrc.slice(appSrc.indexOf('hardwareBack.current = () => {'), appSrc.indexOf("BackHandler.addEventListener('hardwareBackPress'"))
     assert.ok(ask.length > 100, 'App’s back moved; this check reads it')
-    for (const part of [/if \(buying\) \{ setBuying\(false\) return true \}/, /if \(auth !== 'in'\) return false/, /if \(screen !== 'stage'\) \{ setScreen\(BACK_TO\[screen\] \|\| 'stage'\) return true \}/, /if \(demo && purchase\.unlocked\) \{ Alert\.alert\('Exit demo\?'/]) {
+    for (const part of [/if \(buying\) \{ setBuying\(false\) return true \}/, /if \(auth !== 'in'\) return false/, /if \(screen !== 'stage'\) \{ setScreen\(BACK_TO\[screen\] \|\| 'stage'\) return true \}/, /if \(demo && purchase\.unlocked( \|\| \(demo && purchase\.trialEndsAt\))?\) \{ Alert\.alert\('Exit demo\?'/]) {
       assert.match(ask, part, `Android back no longer does ${part}`)
     }
 
@@ -15661,6 +15661,8 @@ export function run(test) {
       ["from './relay'", "from './relay.js'"],
       ["from './demo'", "from './demo.js'"],
       ["from './relayPass'", "from './relayPass.js'"],
+      ["from 'expo'", "from './expo.js'"],
+      ["from './trial-rule'", `from '${real('trial-rule.js')}'`],
       ["import('react-native-purchases')", "import('./rnp.js')"],
       /* The waits between tries of a sync, cut to nothing: the bench runs
          the tries, not the clock. */
@@ -15693,7 +15695,13 @@ export function run(test) {
       'demo.js': 'export const demo = { on: false }\nexport const isDemo = () => demo.on\nexport const setDemo = (on) => { demo.on = Boolean(on) }\n',
       /* The server's catch-up: `grant` runs before it answers, the way the
          entitlement function claims the waiting list. */
-      'relayPass.js': 'export const pass = { calls: 0, answer: false, grant: null }\nexport const claimRelay = async () => { pass.calls++; pass.grant?.(); return pass.answer }\n',
+      'relayPass.js':
+        'export const pass = { calls: 0, answer: false, grant: null, trialAsks: [], trialAnswer: { ok: false, why: \'offline\', trial: null }, heard: null }\n' +
+        'export const claimRelay = async () => { pass.calls++; pass.grant?.(); return pass.answer }\n' +
+        'export const hearTrial = (fn) => { pass.heard = fn }\n' +
+        'export const askForTrial = async (ask) => { pass.trialAsks.push(ask); const out = pass.trialAnswer; if (out.trial) await pass.heard?.(pass.account, out.trial); return out }\n',
+      /* This install's number, as expo-eas-client gives it (purchases installNumber). */
+      'expo.js': "export const requireOptionalNativeModule = (name) => (name === 'EASClient' ? { clientID: 'install-number-1234' } : null)\n",
       'rnp.js': 'export const holder = { api: null }\nexport default new Proxy({}, { get: (_, key) => holder.api?.[key] })\n'
     }
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)

@@ -48,6 +48,7 @@
  */
 import { forgetAccount } from '../_shared/forget-account.ts'
 import { dayCounts } from '../_shared/usage-count.mjs'
+import { TRIAL_PRODUCT_ID } from '../_shared/trial-rule.mjs'
 
 const RC = 'https://api.revenuecat.com/v2'
 const DEFAULT_PROJECT = 'proj827190e9'
@@ -177,7 +178,17 @@ type Sale = { store: string; at: number | null; sandbox: boolean; refunded: bool
 async function purchasesOf(account: string): Promise<Sale[] | null> {
   const body = await rcJson(`/customers/${encodeURIComponent(account)}/purchases?limit=100`)
   if (!body) return null
-  return (body?.items || []).map((p: any) => ({
+  /*
+   * NOT THE FREE TRIAL. An iPhone starts the 7-day trial by "buying" the App
+   * Store's free 7-Day Trial item (trial_7day), and RevenueCat keeps that as
+   * a purchase like any other. Counted, it would be a sale of nothing, and
+   * a customer who tried it and then bought would show as Paid twice. Only
+   * a purchase that took no money can be it, so the product list is read
+   * only when one of those is there.
+   */
+  const free = (body?.items || []).some((p: any) => p?.revenue_in_usd?.gross === 0)
+  const trialIds = free ? await trialProductIds() : new Set<string>()
+  return (body?.items || []).filter((p: any) => !trialIds.has(String(p?.product_id || ''))).map((p: any) => ({
     store: String(p?.store || 'unknown'),
     at: typeof p?.purchased_at === 'number' ? p.purchased_at : null,
     sandbox: p?.environment === 'sandbox' || p?.store === 'test_store',
@@ -185,6 +196,31 @@ async function purchasesOf(account: string): Promise<Sale[] | null> {
     product: String(p?.product_id || ''),
     gross: typeof p?.revenue_in_usd?.gross === 'number' ? p.revenue_in_usd.gross : null
   }))
+}
+
+/* RevenueCat's own ids for the App Store's free trial item, and the store's name for it. */
+let trialIdsKept: Set<string> | null = null
+async function trialProductIds(): Promise<Set<string>> {
+  if (trialIdsKept) return trialIdsKept
+  const ids = new Set<string>([TRIAL_PRODUCT_ID])
+  const body = await rcJson('/products?limit=100')
+  for (const p of body?.items || []) if (p?.store_identifier === TRIAL_PRODUCT_ID && p?.id) ids.add(String(p.id))
+  if (body) trialIdsKept = ids
+  return ids
+}
+
+/*
+ * THE FREE TRIALS, for Sales: whose, when, where, and whether they bought
+ * since (20261107_trials.sql owner_trials). Null when the table is not there
+ * yet, and then Sales has no trials section rather than a wrong one.
+ */
+async function trialsList(): Promise<unknown[] | null> {
+  try {
+    const rows = await rpc('owner_trials', {})
+    return Array.isArray(rows) ? rows : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -450,6 +486,8 @@ async function sales() {
     more: Math.max(0, (overview.buyers || []).length - buyers.length),
     givenByHand,
     unanswered,
+    /* The free trials, newest first; null before the table is there. */
+    trials: await trialsList(),
     sales: sold,
     /* New: a phone too old to know it leaves it alone. */
     twice,

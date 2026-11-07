@@ -6811,6 +6811,10 @@ console.log('\nGoogle Play from GitHub: the listing, its pictures and its crash 
 const { run: playText } = await import('./play-text.mjs')
 playText(test)
 
+console.log('\nthe seven-day free trial: one per account and device, seven days, and never past a purchase or a store gate')
+const { run: trial } = await import('./trial.mjs')
+trial(test)
+
 test('both file kinds are listed and told apart', async () => {
   // A .syx goes back to the unit verbatim; a design re-validates first. Load
   // treating one as the other would either corrupt or silently no-op.

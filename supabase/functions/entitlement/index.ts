@@ -38,6 +38,8 @@
  * given on the failure path further down.
  */
 
+import { trialAnswer } from '../_shared/trial-rule.mjs'
+
 const RC = 'https://api.revenuecat.com/v2'
 
 /** This app's RevenueCat project, unless a secret says otherwise. */
@@ -248,6 +250,34 @@ async function claim(email: string): Promise<boolean> {
   }
 }
 
+/**
+ * THIS ACCOUNT'S FREE TRIAL, running or over, for the app to show the days
+ * left (supabase/functions/trial starts one; 20261107_trials.sql keeps it).
+ *
+ * `undefined` when the question could not be put (the table not there yet,
+ * the database out of reach): then the answer carries no `trial` at all, and
+ * the app keeps the end it heard last, which it never moves later. null is a
+ * definite "never had one".
+ */
+async function trialFor(account: string): Promise<ReturnType<typeof trialAnswer> | undefined> {
+  const url = Deno.env.get('SUPABASE_URL')
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!url || !key) return undefined
+  try {
+    const res = await fetch(`${url}/rest/v1/rpc/trial_of`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid: account })
+    })
+    if (!res.ok) return undefined
+    const text = await res.text()
+    return trialAnswer(text ? JSON.parse(text) : null)
+  } catch (err) {
+    console.error(`entitlement: could not read the trial (${err})`)
+    return undefined
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: CORS })
@@ -306,5 +336,13 @@ Deno.serve(async (req: Request) => {
    * ask during an outage, for ever.
    */
   await record(account, answer, 'revenuecat')
-  return json({ unlocked: answer })
+  /*
+   * AND THE FREE TRIAL BESIDE IT, never in it. `unlocked` stays "bought":
+   * the phone re-reads the store on a yes, and the browser's unlock page
+   * closes on one, so a trial in `unlocked` would end the purchase page for
+   * the very person a trial sends there. A purchase wins over a trial
+   * wherever both are true, and a trial never writes the row above.
+   */
+  const trial = answer ? undefined : await trialFor(account)
+  return json(trial === undefined ? { unlocked: answer } : { unlocked: answer, trial })
 })
