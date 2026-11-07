@@ -82,7 +82,19 @@ export default function MessagesTool() {
         onClose={() => setOpen(null)}
         title="Message"
         tall
-        foot={open?.facts ? <Press label="Copy all of it" height={TAP} onPress={copy} /> : null}
+        foot={
+          open?.facts ? (
+            <>
+              {/* Said by the button that did it, not at the end of a long log. */}
+              {told ? (
+                <Note tone={told.ok ? 'hint' : 'fault'} strong size={font.body}>
+                  {told.message}
+                </Note>
+              ) : null}
+              <Press label="Copy all of it" height={TAP} onPress={copy} />
+            </>
+          ) : null
+        }
       >
         {open?.loading ? <Text style={{ color: color.silkDim, fontSize: font.body }}>Loading…</Text> : null}
         {open?.failed ? <Note tone="fault">{open.failed}</Note> : null}
@@ -101,11 +113,6 @@ export default function MessagesTool() {
             ) : (
               <Text style={{ color: color.silkFaint, fontSize: font.small }}>No log came with this one.</Text>
             )}
-            {told ? (
-              <Note tone={told.ok ? 'hint' : 'fault'} strong size={font.body}>
-                {told.message}
-              </Note>
-            ) : null}
           </View>
         ) : null}
       </Sheet>

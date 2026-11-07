@@ -1059,7 +1059,7 @@ export const startTrial = async () => {
     if (isDemo()) setDemo(false)
     claimRelay()
   }
-  return { ok: out.ok, cancelled: false, why: out.ok ? null : out.why }
+  return { ok: out.ok, cancelled: false, why: out.ok ? null : out.why, trial: out.trial || null }
 }
 
 /*

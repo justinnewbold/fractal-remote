@@ -27,7 +27,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "Accounts made before names were asked can add one: Settings → your account → tap your email → Add your name.",
+        "text": "In the phone app, accounts made before names were asked can add one: Settings → your account → tap your email → Add your name.",
         "only": null
       }
     ]

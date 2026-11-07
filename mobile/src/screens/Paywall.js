@@ -9,7 +9,7 @@ import RestoreAsk from '../components/RestoreAsk'
 import Sheet from '../components/Sheet'
 import { buyUnlock, restorePurchase, startTrial, trialAvailable, usePurchase } from '../lib/purchases'
 import { trialRunning } from '../lib/unlock-rule'
-import { TRIAL_BUTTON, TRIAL_OVER, TRIAL_STARTED, TRIAL_STARTING, trialRefusal, trialRunning as trialRunningWords, trialTerms } from '../lib/trial-words'
+import { TRIAL_BUTTON, TRIAL_OVER, TRIAL_STARTING, trialRefusal, trialRunning as trialRunningWords, trialStartedWords, trialTerms } from '../lib/trial-words'
 import { UNITS } from '../lib/demoUnits'
 import { ALREADY_UNLOCKED } from '../lib/onboarding'
 import { currentAccount, deleteAccount, signedInOnPhone } from '../lib/relay'
@@ -142,7 +142,10 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
     const out = await startTrial()
     setBusy(false)
     if (out.ok) {
-      Alert.alert('Free trial', TRIAL_STARTED)
+      /* Its own days, not always seven: on an iPhone the trial began when the App Store's item was bought. */
+      const said = trialStartedWords(out.trial)
+      if (said.over) return setSaid({ tone: 'warn', text: said.text })
+      Alert.alert('Free trial', said.text)
       return onUnlocked?.()
     }
     if (out.cancelled) return setSaid(null)

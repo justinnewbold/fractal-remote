@@ -4050,6 +4050,13 @@ export function run(test) {
     assert.match(box, /import \{ NAME_LABELS, NAME_MAX, nameProblem \} from '\.\.\/lib\/account-name'/)
     assert.match(box, /const problem = nameProblem\(\{ first, last \}\)/, 'the box saves a name Create account would refuse')
     for (const needed of ['textContentType="givenName"', 'textContentType="familyName"', 'maxLength={NAME_MAX}', 'autoCapitalize="words"']) assert.ok(box.includes(needed), `the name box lost ${needed}`)
+    /* Neither the glass nor the panel is one element to VoiceOver, which would hide the fields inside it. */
+    assert.equal((box.match(/<Pressable\s+accessible=\{false\}/g) || []).length, 2, 'VoiceOver reads the name box as one button and never reaches its fields')
+    /* A sign-in that ended while Settings was open is said in plain words, at both ends, not as the account service's own. */
+    const rules = await import('../shared/relay-rules.mjs')
+    for (const said of ['Auth session missing!', 'Invalid Refresh Token: Refresh Token Not Found', 'invalid claim: missing sub claim in JWT does not exist'.replace('missing sub claim in JWT does not exist', 'claim in JWT does not exist')]) {
+      assert.equal(rules.explainAuth(said), 'This sign-in has ended. Sign out and sign in again, then try once more.', `"${said}" reached the screen as it was`)
+    }
   })
 
   test('Create account asks for a first and last name over the email, at both ends, and Sign in never does', () => {

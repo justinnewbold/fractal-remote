@@ -452,6 +452,15 @@ export function run(test) {
 
     /* Said in plain words, and RevenueCat's setting is written down where it is set. */
     assert.match(trialRefusal('other-account'), /^This Apple ID bought the full version already, for another Fractal Remote account\./)
+    /* A trial that began when the App Store's item was bought, days before this account arrived on the Apple ID: its own days, or over, never seven. */
+    const { trialStartedWords, TRIAL_STARTED, TRIAL_OVER } = await import('../shared/trial-words.mjs')
+    const now = new Date(2026, 10, 7, 12).getTime()
+    const ends = (days) => ({ endsAt: new Date(now + days * 86400000).toISOString() })
+    assert.deepEqual(trialStartedWords(ends(7), now), { over: false, text: TRIAL_STARTED })
+    assert.deepEqual(trialStartedWords(ends(4), now), { over: false, text: 'Your free trial has 4 days left. Unlock now and it carries on for good.' })
+    assert.deepEqual(trialStartedWords({ endsAt: new Date(now - 3600000).toISOString() }, now), { over: true, text: TRIAL_OVER })
+    assert.deepEqual(trialStartedWords(null, now), { over: false, text: TRIAL_STARTED }, 'an answer with no trial in it says nothing it does not know')
+    assert.match(flat('mobile/src/screens/Paywall.js'), /if \(out\.ok\) \{ const said = trialStartedWords\(out\.trial\) if \(said\.over\) return setSaid\(\{ tone: 'warn', text: said\.text \}\) Alert\.alert\('Free trial', said\.text\)/, 'the purchase page says seven days have started whatever the server answered')
     assert.match(trialRefusal('apple-id-owns'), /so the full version is on this account now and no trial is needed\. Any other account it was on doesn’t have it any more\.$/)
     assert.match(read('docs/app-store.md'), /Restore behavior: Transfer to new App\s+User ID\*\*, RevenueCat's default, left as it is/, 'the RevenueCat setting, and why it stays, is not written down')
     const pay = flat('mobile/src/screens/Paywall.js')

@@ -74,7 +74,11 @@ export default function NameBox({ open, first: wasFirst = '', last: wasLast = ''
 
   return (
     <Modal visible={!!open} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent supportedOrientations={ANY_WAY_UP}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={{ flex: 1 }}>
+      {/* Neither the glass nor the panel is one element to a screen reader, or
+          VoiceOver reads the whole box as a single Close button and never
+          reaches the fields inside it (as TopBar's note learned). Cancel is
+          its way out. */}
+      <Pressable accessible={false} onPress={onClose} style={{ flex: 1 }}>
         <View
           style={{
             flex: 1,
@@ -85,6 +89,7 @@ export default function NameBox({ open, first: wasFirst = '', last: wasLast = ''
           }}
         >
           <Pressable
+            accessible={false}
             onPress={() => field.current?.focus()}
             style={{
               width: '100%',

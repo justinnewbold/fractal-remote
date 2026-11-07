@@ -617,7 +617,18 @@ export default function Stage({
    * below is the one Play has always drawn with.
    */
   const linedWas = useRef(false)
-  const lined = linedOn({ wide: shape.wide, tall: viewport, across: playWidth }, linedWas.current)
+  /*
+   * Asked on the height Play WILL have. Lined up, the buttons are one row of
+   * five; until then, at Medium and up or with the scenes Down or in My own
+   * order, they are two rows of three, so Play measures a row and a gap
+   * shorter than it would be lined up, and a small tablet on its side
+   * (Galaxy Tab A 8.0: 356 against 420 at Medium) never got there. So the
+   * second row is counted back in while it is there. The least that row
+   * takes: once lined up Play measures at least this, so it never flips
+   * back. A phone on its side, at most 340 with one row, stays under.
+   */
+  const footSpare = shape.footFixed && !shape.footRow && !linedWas.current ? (tight ? 48 : TAP) + space.sm : 0
+  const lined = linedOn({ wide: shape.wide, tall: viewport + footSpare, across: playWidth }, linedWas.current)
   linedWas.current = lined
   const plan = linedPlan({ scenes: scenes.hasScenes ? scenes.count : 0, pedals: fitBlocks })
   /* Where the two halves start down the page: everything above them (the notes, the preset) does not change with the tiles, so their room does not either. */
