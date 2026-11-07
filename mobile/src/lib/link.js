@@ -269,8 +269,26 @@ export function subscribeLink(fn) {
  */
 function refresh() {
   if (!running) return
-  if (!remoteActive()) return set({ link: 'joining' })
-  set({ link: remoteHostSeen() ? 'connected' : 'no-answer' })
+  if (!remoteActive()) set({ link: 'joining' })
+  else set({ link: remoteHostSeen() ? 'connected' : 'no-answer' })
+  watchWhileConnected()
+}
+
+/*
+ * THE UNIT IS WATCHED ONLY WHILE THE COMPUTER ANSWERS. "GET /preset — link
+ * down … Not connected to your computer" every thirty seconds, and "[error]
+ * Not connected to your computer." on screen (Justin's iPhone, 7 November
+ * 2026): signed out, or setting up Bluetooth with no computer at all, the
+ * rig's timed check (rig watchUnit) went on asking a computer that was not
+ * there, and put its failure on screen. So it runs while the link is
+ * connected and the app is on screen, and stops the moment the link is not:
+ * a computer that answers again, without a fresh join, is watched again
+ * from here; a join starts it itself once it has read the unit (join). Over
+ * Bluetooth this loop is not running at all, and bleLink keeps the watch.
+ */
+function watchWhileConnected() {
+  if (state.link !== 'connected') return stopWatching()
+  if (!asleep && !joinBusy) watchUnit()
 }
 
 let running = false
@@ -1087,7 +1105,7 @@ export function startLink() {
        * connection on sleep anyway, so the checks that would run in there
        * would only be a column of failures in the log.
        */
-      if (status === 'active') watchUnit()
+      if (status === 'active' && state.link === 'connected') watchUnit()
       else stopWatching()
     })
   ]
@@ -1123,6 +1141,8 @@ export async function stopLink() {
   /* First: Bluetooth lets go of the adapter before the link and the rig are reset; with the AM4 on its own tuner, a second at most after (bleLink). */
   stopBluetoothLink()
   running = false
+  /* And the unit is no longer asked about through a link that is going: a sign-out left it asking every thirty seconds (see watchWhileConnected). */
+  stopWatching()
   if (timer) clearTimeout(timer)
   timer = null
   for (const off of unbind) {

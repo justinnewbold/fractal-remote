@@ -352,7 +352,7 @@ async function linkOnABench() {
     'bleLink.mjs': 'export const pokeBluetooth = () => {}\nexport const startBluetoothLink = () => {}\nexport const stopBluetoothLink = () => {}\n',
     'tapGate.mjs': read('mobile/src/lib/tapGate.js'),
     'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
-    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const startClean = (o) => { bench.order.push('startClean'); (bench.cleans = bench.cleans || []).push(o ?? null) }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const unitReadSince = () => bench.unitRead !== false\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\nexport const setOnScreen = (on) => { (bench.onScreen = bench.onScreen || []).push(on) }\n",
+    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const startClean = (o) => { bench.order.push('startClean'); (bench.cleans = bench.cleans || []).push(o ?? null) }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const unitReadSince = () => bench.unitRead !== false\nexport const watchUnit = () => { bench.watching = true }\nexport const stopWatching = () => { bench.watching = false }\nexport const setOnScreen = (on) => { (bench.onScreen = bench.onScreen || []).push(on) }\n",
     'phone-note.mjs': "export const PHONE_NOTE_PATH = '/store/config/phone'\nexport const phoneNote = () => ({})\nexport const timeToTell = () => false\n",
     /* The relay as link.js hears it: the same order of news as relay.js gives it. */
     'relay.mjs': `
@@ -1832,6 +1832,41 @@ export function run(test) {
   /* ------------------------------------------------------------------ */
   /* The phone's link: down, and only when it is                        */
   /* ------------------------------------------------------------------ */
+
+  /*
+   * THE UNIT IS ASKED ABOUT ONLY WHILE THE COMPUTER ANSWERS. "GET /preset —
+   * link down … Not connected to your computer" every thirty seconds, with
+   * "[error] Not connected to your computer." on screen, signed out or
+   * setting up Bluetooth with no computer at all (Justin's iPhone, 7 November
+   * 2026): the rig's timed check went on asking a computer that was not
+   * there. Now it runs while the link is connected and the app on screen,
+   * stops the moment the computer stops answering, starts again when it
+   * answers without a fresh join, and stops with the link.
+   */
+  test('the unit is asked about only while the computer answers: not with none there, not back on screen with none, and not after the link stops', async () => {
+    const t = await connectedLoop()
+    assert.equal(t.bench.watching, true, 'a connected computer’s unit is not watched')
+    /* The computer stops answering a keepalive: the watch stops with it. */
+    t.relay.seen(false)
+    assert.equal(t.link.linkState().link, 'no-answer')
+    assert.equal(t.bench.watching, false, 'the unit is still asked about with no computer answering')
+    /* Back on screen with no computer answering: still not asked. */
+    t.app.change('background')
+    t.app.change('active')
+    assert.equal(t.bench.watching, false, 'coming back on screen asks about the unit of a computer that is not answering')
+    /* It answers again, without a fresh join: watched again. */
+    t.relay.seen(true)
+    assert.equal(t.link.linkState().link, 'connected')
+    assert.equal(t.bench.watching, true, 'a computer that answers again is not watched again')
+    /* Put away: not asked from a pocket; back on screen, connected: asked again. */
+    t.app.change('background')
+    assert.equal(t.bench.watching, false)
+    t.app.change('active')
+    assert.equal(t.bench.watching, true)
+    /* Signed out, or over to Bluetooth (stopLink): no more questions through the link that went. */
+    await t.link.stopLink()
+    assert.equal(t.bench.watching, false, 'the unit is still asked about after the link stopped')
+  })
 
   test('one missed keepalive that recovers never dims the screen', async () => {
     const t = await connectedLoop()

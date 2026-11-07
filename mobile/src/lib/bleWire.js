@@ -524,6 +524,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* Watch questions unanswered in a row, and when the wire went quiet (QUIET_AFTER), or null. Gen 3 only. */
   let misses = 0
   let quietSince = null
+  /*
+   * EVERY BYTE THAT CAME BACK ON THIS CONNECTION, whatever it was. "The
+   * tablet heard nothing" and "the unit answered with something the app
+   * could not read" looked the same in the log (7 November 2026: a first
+   * connection to a WIDI Jack that stayed up for 101 s with 21 questions
+   * unanswered). bleLink reads it: nothing at all is a connection to make
+   * afresh, once (bleLink connected()).
+   */
+  let bytesIn = 0
 
   /*
    * A QUESTION THAT WENT UNANSWERED MAY STILL BE ANSWERED, late, and that
@@ -754,6 +763,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   function heardBytes(bytes) {
     if (closed || bytes == null || typeof bytes.length !== 'number') return
+    /* Every byte, a timing clock's too: whether anything at all came back on this connection (bytesIn). */
+    bytesIn += bytes.length
     let real = false
     for (let i = 0; i < bytes.length; i++) {
       if ((bytes[i] & 0xff) < 0xf8) {
@@ -957,6 +968,45 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     } catch {
       // Telling the page is a courtesy; the wire goes on as it was.
     }
+  }
+
+  /*
+   * IS ANOTHER UNIT ON THIS ADAPTER? "Not answering · FM3 over Bluetooth",
+   * with the WIDI Jack plugged into his AM4 (Justin, 7 November 2026): the
+   * FM3 picked, the adapter on another unit, and an AM4 does not answer an
+   * FM3's question, so nothing ever named it and the page sent him to the
+   * plugs. So, once the unit picked has said nothing at all, each other
+   * unit's own detect question is asked, one at a time: the AM4's (its
+   * preset, the very frame am4Detect sends, and held to the AM4's list
+   * before it goes) and the other Gen 3 units' (the scene, as gen3Detect
+   * asks it, on their own model byte). An answer is heard as any other
+   * unit's is (heard: heardAnAm4, heardAnother), which names it to the page,
+   * and an AM4 stops this connection sending anything more.
+   *
+   * Only from a Gen 3 connection, and only questions each unit is already
+   * sent. Never from an AM4's: what may be on the other end is an AM4, and
+   * an AM4 is never sent anything off its list (am4Sender), so an AM4
+   * connection asks nothing else. Never from a VP4's, which has its own
+   * wire and sends nothing of this file's (bleVp4.js), and never a question
+   * for a VP4, which answers nothing over Bluetooth. Answers the bare name
+   * of the unit that answered, or null.
+   */
+  async function askAround() {
+    if (am4 || closed || wrongUnit || answered || foreignTold) return null
+    const others = [
+      { name: 'AM4', frame: buildAm4Structure(), am4: true },
+      ...['fm3', 'fm9', 'axefx3'].filter((k) => k !== unit).map((k) => ({ name: SPEC[k].name, frame: buildGetScene(MODELS[k]) }))
+    ]
+    say(`nothing came back from the ${spec.name}: asking whether another unit is on this adapter`)
+    for (const o of others) {
+      if (closed || wrongUnit || answered || foreignTold) break
+      /* The AM4's own question, held to the AM4's own list as everything an AM4 is sent is. */
+      if (o.am4 && !am4Allowed(o.frame)) continue
+      await ex(o.frame, { probe: true, match: () => null, ms: WAIT.detect, what: `the ${o.name}’s own question, to see whether ${MODEL_NAMES[o.frame[4]] || 'another unit'} is on this adapter` }).catch(() => null)
+    }
+    const who = foreignTold && foreign ? modelName(foreign.model) : null
+    say(who ? `${MODEL_NAMES[foreign.model]} is on this adapter, not the ${spec.name}` : `no other unit answered on this adapter either`)
+    return who
   }
 
   /** What the unit said that nobody was waiting for. */
@@ -3412,6 +3462,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     heardShort,
     /** Every chunk of bytes from the adapter, before the joiner: a long answer is timed by them. */
     heardBytes,
+    /** How many bytes have come back on this connection, of any kind (bleLink: nothing at all is a connection to make afresh). */
+    bytesIn: () => bytesIn,
+    /** Gen 3, with nothing heard from the unit picked: each other unit's own detect question, to name the one on this adapter (null when none answers). */
+    askAround,
     /** Once closed: whether the AM4's own tuner may have been left open, its 0 owed to the next connection. */
     unitTunerOwed: () => unitOwed,
     /** While open: whether the AM4 may be on its own tuner from this connection, its 0 not yet sent (see bleLink). */

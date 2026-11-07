@@ -1275,6 +1275,7 @@ async function readAll() {
   /* Over Bluetooth (beta) the answer came through the adapter, not a computer
      (bleWire's detect carries capabilities.via 'bluetooth'). */
   const blue = caps?.capabilities?.via === 'bluetooth'
+  /* And the demo's unit as the demo's: "the computer has a unit — Axe-Fx III" read as a computer in a log that had none (7 November 2026). */
   if (unit !== state.unit) {
     logDebug(
       'unit',
@@ -1282,9 +1283,13 @@ async function readAll() {
         ? unit === 'missing'
           ? 'the unit does not answer through the Bluetooth adapter'
           : 'the unit answers through the Bluetooth adapter'
-        : unit === 'missing'
-          ? 'the computer has no unit'
-          : 'the computer has a unit',
+        : simulated
+          ? unit === 'missing'
+            ? 'the demo has no unit'
+            : 'the demo’s unit'
+          : unit === 'missing'
+            ? 'the computer has no unit'
+            : 'the computer has a unit',
       caps?.short || caps?.name || undefined
     )
   }

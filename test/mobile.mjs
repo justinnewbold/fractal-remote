@@ -3778,6 +3778,8 @@ export function run(test) {
     const NAMES = /android|google|play store|play console|\bapk\b/i
     const KNOWN = [
       ['src/lib/bluetooth.js', /in Android’s settings/, 'ALLOW_WORDS: the iPhone line is picked first, on Platform.OS'],
+      /* Android's own turn-on question and its Bluetooth settings, and the log lines about them (7 November 2026): turnOnBluetooth and the wait return at once anywhere but Android (Platform.OS), and nothing sets 'bluetooth-off' on an iPhone. */
+      ['src/lib/bluetooth.js', /^android\.(bluetooth|intent|settings)\.|asked Android to turn Bluetooth on|^Android would not ask to turn Bluetooth on \(|^opened Android’s Bluetooth settings$|^Android’s Bluetooth settings did not open \(/, 'turnOnBluetooth: Android only, on Platform.OS'],
       /* What we know of each try, drawn only on Developer → App health → Tried, which only his account opens, and never for Apple's reviewer (31 October 2026). */
       ['src/lib/bluetooth-gear.js', /^From an iPhone and an Android phone, 26 October 2026/, 'TRIED_NOTES: on Developer → App health → Tried, his account alone'],
       ['src/screens/Bluetooth.js', /If Android asks to pair, accept\./, 'the Connect hint, behind ios ? … :'],
@@ -13348,7 +13350,13 @@ export function run(test) {
     const link = read('mobile/src/lib/link.js').replace(/\s+/g, ' ')
     assert.match(link, /watchUnit\(\)/, 'nothing starts the phone asking')
     /* A phone in a pocket has no screen to be wrong on. */
-    assert.match(link, /if \(status === 'active'\) watchUnit\(\) else stopWatching\(\)/, 'the asking does not stop with the screen')
+    /*
+     * And only while the computer answers, since 7 November 2026: signed
+     * out, or with no computer at all, it asked one that was not there every
+     * thirty seconds and put the failure on screen (link.js
+     * watchWhileConnected, run on a bench in test/bluetooth.mjs).
+     */
+    assert.match(link, /if \(status === 'active' && state\.link === 'connected'\) watchUnit\(\) else stopWatching\(\)/, 'the asking does not stop with the screen')
 
     const app = read('src/App.jsx').replace(/\s+/g, ' ')
     assert.match(app, /if \(status !== 'live'\) return undefined/, 'the browser asks about a unit it never had')
