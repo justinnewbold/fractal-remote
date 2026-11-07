@@ -141,7 +141,19 @@ const NO_FOLD = { left: 0, right: 0 }
 const LANE_HEAD = 18
 /* The two halves side by side, the fold's gap between them; and each half, its heading over its grid. */
 const LANES = { flexDirection: 'row', gap: space.xl, alignItems: 'flex-start' }
-const LANE = { flex: 1, gap: space.sm }
+/*
+ * Each half is given its width (laneRow, worked out from Play's own width),
+ * never left to flex: 1 to share out. On an iPad Pro on its side (7 November
+ * 2026) flex: 1 gave the scenes 661 points and the chain 463, so the chain's
+ * 277-point pedals went one to a row and ran off the bottom: Yoga measures
+ * Play's page once before its width is settled, works each half's flex
+ * basis out from what is in it then (four scenes in a row against three
+ * pedals), and keeps that basis for the real layout, shrinking the two from
+ * there instead of halving the row. A width is the one basis it never
+ * guesses, so every pass agrees and the halves are each laneRow, exactly
+ * the row the tiles inside them were sized from.
+ */
+const LANE = { flexGrow: 0, flexShrink: 0, gap: space.sm }
 const LANE_HEADING = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: LANE_HEAD }
 /* The raw words a computer with nothing plugged in answers every unit read with (ForgeFX, registryCore). */
 const NO_DEVICE = /no fractal device found/i
@@ -622,6 +634,8 @@ export default function Stage({
   const centre = lined ? foldInset(insets.left, insets.right) : fold
   /* The row each half's tiles share, lined up: half the page less the gap between the halves, worked out rather than measured, so the first frame after a switch is already the right width. */
   const laneRow = lined ? Math.max(0, (pageRow(playWidth, space.lg) - centre.left - centre.right - space.xl) / 2) : row
+  /** Each half, lined up: its own width, never flex's share of the row (LANE says why). */
+  const laneBox = lined ? [LANE, { width: laneRow }] : null
   /* A pedal's name a size up on a big tile, lined up only. */
   const pedalWords = lined ? linedName({ height: cell, width: tileWidth(laneRow, pedalsAcross) }) : undefined
   /*
@@ -1261,7 +1275,7 @@ export default function Stage({
           scene and what a setlist written on paper says.
         */}
         {scenes.hasScenes ? (
-          <View style={lined ? LANE : { gap: space.sm }}>
+          <View style={lined ? laneBox : { gap: space.sm }}>
             {/*
               "Keep having issues showing the scene names on the AM4. Have a way to
               refresh them." Beside the heading, the size of the heading: a thing
@@ -1331,8 +1345,8 @@ export default function Stage({
 
         {/* ---------------------------------------------------------- blocks */}
         {/* Lined up with no scenes, the chain keeps its own half. */}
-        {lined && !scenes.hasScenes ? <View style={LANE} /> : null}
-        <View style={lined ? LANE : { gap: space.sm }}>
+        {lined && !scenes.hasScenes ? <View style={laneBox} /> : null}
+        <View style={lined ? laneBox : { gap: space.sm }}>
           {/*
             "Where it says chain above the pedals, also put hold to switch
             channels. So users know that they can just hold the things to switch
