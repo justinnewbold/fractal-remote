@@ -63,55 +63,45 @@ export const NO_COMPUTER_GO = 'On that computer, go to'
 export const noComputerBody = (email) => `${noComputerSteps(email)} ${NO_COMPUTER_GO} ${NO_COMPUTER_ADDRESS}.`
 
 /**
- * AND THE OTHER WAY: BLUETOOTH (BETA), with no computer at all.
+ * AND THE OTHER WAY, FIRST: BLUETOOTH, with no computer at all.
  *
- * WHY. Once Bluetooth (beta) opens to customers (store version 1.89.0, on
- * every unit), an owner may never sign a computer in, and everything above
- * would tell them the computer is the only way there is. Justin, on how it is
- * to be put wherever Bluetooth is offered: "make it clear that there's
- * multiple ways to connect the device, but also make it clear that the
- * computer is the preferred method and that Bluetooth will have more lag and
- * not have as many features."
- *
- * So, in that order: a second way, for every unit the app works with (it
- * said "Have an AM4?" until 25 October 2026, when every unit opened in the
- * same store version); the computer still the best
- * way; and what Bluetooth costs, said only as far as the Bluetooth page's own
- * "What it can and can't do" says it (mobile/src/screens/Bluetooth.js): no
- * editing or saving, slower to load the preset list, footswitch changes a
- * moment late, no looper, volume button, unit click or Footswitches page.
- * "More lag and does less" is all of that in five words, and "no editing or
- * saving" is the part a player would miss first. Then where it is: the row
- * under Settings → My rig, whose page says what to buy and how it plugs in.
- *
- * "MORE LAG", HIS WORD, not "slower". He has played it on his AM4, and the
- * code agrees: a footswitch change reaches the screen at the next poll, up to
- * two seconds after it is pressed (bleWire POLL_MS), and names come a few at
- * a time (NAME_GAP_MS). "Slower" read as the preset list taking its time,
- * when what he asked to have said is a delay on what he plays.
+ * WHY. Since Bluetooth opened to customers (store version 1.89.0, on every
+ * unit), an owner may never sign a computer in, and everything above would
+ * tell them the computer is the only way there is. "I think most people are
+ * gonna opt for Bluetooth, probably 90%. So we need to make that the most
+ * prominent thing" (Justin, 7 November 2026). So it is drawn before the
+ * computer's words wherever both are (Settings → Phone & computer, and
+ * Troubleshooting → It will not connect at all), and it says, in order: no
+ * computer needed, Bluetooth, and what a computer adds, in the one clause the
+ * gear file's sentence uses (shared/bluetooth-gear.mjs BLUETOOTH_WAYS): less
+ * lag ("lag" is his word: a footswitch change reaches the screen at the next
+ * poll, up to two seconds after it is pressed), plus editing and saving,
+ * which no customer has over Bluetooth (ble-rule.js EDIT_FROM_STORE). Then
+ * where it is: the row under Settings → My rig, whose page says what to buy
+ * and how it plugs in. Until 7 November 2026 it called the computer "still
+ * the best way", from his 25 October words, and came after the computer.
  *
  * "AN ADAPTER", because no Fractal unit has Bluetooth of its own: without
- * it, the line reads as if the unit did. And "in beta", in Justin's words
- * on the page, since only the AM4 has run it. And it names no phone (CLAUDE.md: never
- * "this phone"), so it reads the same on an iPad or a tablet.
+ * it, the line reads as if the unit did. And it names no phone (CLAUDE.md:
+ * never "this phone"), so it reads the same on an iPad or a tablet.
  *
- * ONLY WHERE BLUETOOTH (BETA) IS OPEN ON THE COPY IT IS SHOWN ON, which is
- * the phone's to say (mobile/src/lib/useBluetoothOffered.js, the same gate as
- * the Settings row the line names). Everywhere else — every customer's copy
- * today, and the browser, which has no Bluetooth — nothing here is drawn and
- * the words above are exactly what they were.
+ * ONLY WHERE BLUETOOTH IS OPEN ON THE COPY IT IS SHOWN ON, which is the
+ * phone's to say (mobile/src/lib/useBluetoothOffered.js, the same gate as
+ * the Settings row the line names). Everywhere else, and in the browser,
+ * which has no Bluetooth, nothing here is drawn and the words above are
+ * exactly what they were.
  *
- * A NOTE OF ITS OWN, AFTER "SEND ME THE DOWNLOAD LINK", never inside the
- * no-computer words: right above that button, "says what to buy" read as if
- * the button sent the Bluetooth parts, when it sends the computer app. And
- * never on Play's floating card, which does not scroll and keeps one height
- * so NOT CONNECTED under it stays put: this line doubled it, and on a
- * 320-point phone pushed NOT CONNECTED off the bottom. The card's
- * Troubleshooting opens It will not connect at all, which says it
- * (mobile/src/components/NoComputer.js NoComputerOtherWay, and Fixes).
+ * A NOTE OF ITS OWN, never inside the no-computer words, and above them,
+ * not between them and "Send me the download link": right above that
+ * button, "says what to buy" read as if the button sent the Bluetooth parts,
+ * when it sends the computer app. And never on Play's floating card, which
+ * does not scroll and keeps one height so NOT CONNECTED under it stays put:
+ * this line doubled it, and on a 320-point phone pushed NOT CONNECTED off the
+ * bottom. The card's Troubleshooting opens It will not connect at all, which
+ * says it (mobile/src/components/NoComputer.js NoComputerOtherWay, and Fixes).
  */
 export const NO_COMPUTER_BLUETOOTH =
-  'The app can also connect to your unit with no computer, by Bluetooth through an adapter. The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. Settings → My rig → Bluetooth says what to buy.'
+  'No computer needed: the app can connect to your unit by Bluetooth, through an adapter. A computer has less lag, plus editing and saving. Settings → My rig → Bluetooth says what to buy.'
 
 /** How long after one question before another may be asked. */
 export const ASK_EVERY_MS = 60 * 1000

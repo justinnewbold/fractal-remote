@@ -55,3 +55,18 @@ export const STORES = [
 
 /** Whether there is anything at all to point anybody at yet. */
 export const anyStoreLive = () => STORES.some((s) => s.live)
+
+/**
+ * BLUETOOTH IS IN THE APPS, NOT IN A WEB BROWSER.
+ *
+ * "We need to have options on there to say, do you wanna connect with
+ * Bluetooth? That is available only in the apps, not on the website version.
+ * Only a computer can connect on the web version. But it was confusing for me
+ * cause I kept trying to find Bluetooth." (Justin, 7 November 2026, of the
+ * website on an iPhone.) A browser cannot reach a Bluetooth MIDI adapter, so
+ * the website never offers one: it says, in one line, where Bluetooth is,
+ * with the two stores beside it (src/components/BluetoothInApps.jsx), wherever
+ * it explains connecting. Bluetooth first, as everywhere since that day.
+ * Never in the computer app's own window, which is the computer.
+ */
+export const BLUETOOTH_IN_APPS = 'Bluetooth, with no computer, is in the iPhone and Android apps. A web browser connects through a computer only.'

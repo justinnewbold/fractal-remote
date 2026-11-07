@@ -5781,7 +5781,7 @@ export function run(test) {
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     /* Handed only through the Settings row's own gate: test 'every way onto the Bluetooth page' holds it. */
     assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
-    assert.match(waking, /\{email && link\.link !== 'connected' && !bluetooth && !noneSaid \? \(/, 'the waiting screen names the computer’s account over Bluetooth')
+    assert.match(waking, /\{long && email && link\.link !== 'connected' && !bluetooth && !noneSaid && !elsewhere \? \(/, 'the waiting screen names the computer’s account over Bluetooth')
   })
 
   test('Settings offers Bluetooth only where it is open (his account on every copy, a customer’s only on a copy built to open it), unlocked, on a device and build that can do it', () => {
@@ -5824,13 +5824,19 @@ export function run(test) {
     assert.equal((settings.match(/label="BLUETOOTH \(BETA\)"/g) || []).length, 0, 'the old card is still on Phone & computer')
     assert.equal((settings.match(/<BluetoothPage /g) || []).length, 1, 'a second way onto the page skips the gate')
     assert.doesNotMatch(one, /bluetooth: 'link'/, 'back from the page goes to Phone & computer, not Settings')
-    /* On the front list, after Phone & computer and before the metronome. */
+    /*
+     * On the front list, first in My rig, over Phone & computer, since 7
+     * November 2026: "make sure it's Bluetooth first as far as connection
+     * options go" (Justin). It was after Phone & computer until then.
+     */
     const front = settings.slice(settings.indexOf('{page === null ? ('), settings.indexOf("{page === 'account' ? ("))
     const row = front.indexOf('title="Bluetooth"')
     /* The row is named by PAIR_TITLE (Phone & computer, or iPad & computer on an iPad): a literal title here was never found, and -1 held nothing. */
     const pair = front.indexOf('<SetupRow title={PAIR_TITLE}')
+    const rig = front.indexOf('<Group title="My rig"')
     assert.notEqual(pair, -1, 'the Settings list has no Phone & computer row; this check reads it')
-    assert.ok(row > pair && row < front.indexOf('title="Metronome"'), 'the row is not on the Settings list beside Phone & computer')
+    assert.ok(row > rig && rig > -1 && row < pair, 'the row is not first in My rig, over Phone & computer')
+    assert.equal((front.slice(rig, row).match(/<SetupRow\b/g) || []).length, 1, 'something is drawn in My rig over the Bluetooth row')
     /* Phone & computer, which the Live pill opens, has one button to the page (26 October 2026), behind the row's gate as one name. */
     const link = settings.slice(settings.indexOf("{page === 'link' ? ("), settings.indexOf("{page === 'bluetooth'"))
     assert.equal((link.match(/setPage\('bluetooth'\)/g) || []).length, 1, 'Phone & computer opens Bluetooth from more than one button')
@@ -5839,21 +5845,23 @@ export function run(test) {
     const at = settings.indexOf("{page === 'bluetooth'")
     assert.ok(at > settings.indexOf("{page === 'link' ? (") && at < settings.indexOf("{page === 'metronome' ? ("), 'the page moved into a slice another test reads')
     /*
-     * Said for the device in hand, and with the two ways to connect, the
-     * computer the best one (BLUETOOTH_WAYS): changed on purpose on 25
-     * October 2026 from "This phone talks to the unit directly".
+     * Said for the device in hand: changed on purpose on 25 October 2026
+     * from "This phone talks to the unit directly", and on 7 November 2026
+     * without the two ways after it, which sold somebody already on
+     * Bluetooth the computer again.
      */
     /* And on a USB cable, the cable's own note (lib/cableWords cableComputerNote), which makes no lag claim: nothing has measured one. */
-    assert.match(one, /\{cable \? cableComputerNote\(deviceNoun\(\)\) : `Bluetooth is on\. This \$\{deviceNoun\(\)\} talks to the unit directly, not through the computer\. \$\{BLUETOOTH_WAYS\}`\}/, 'Phone & computer does not say Bluetooth is on, or that the computer is the best way')
+    assert.match(one, /\{cable \? cableComputerNote\(deviceNoun\(\)\) : `Bluetooth is on: this \$\{deviceNoun\(\)\} talks to the unit directly, not through the computer\.`\}/, 'Phone & computer does not say Bluetooth is on')
     /*
-     * The row's own line: on, the device in hand; off, what it is for and
-     * what it costs against the computer, in the gear file's words, in one
-     * line (BLUETOOTH_ROW_OFF). Changed on purpose on 25 October 2026 from
-     * the cost alone, which read as a row with nothing going for it.
+     * The row's own line: on, the device in hand; off, what it is for, in
+     * the gear file's words, in one line (BLUETOOTH_ROW_OFF). Changed on
+     * purpose on 25 October 2026 from the cost alone, which read as a row
+     * with nothing going for it, and on 7 November 2026 to what it is for
+     * alone: the cost is said where the two ways are set side by side.
      */
     /* On a USB cable, the cable (lib/cableWords CABLE_ROW_ON). */
     assert.match(one, /status=\{cable \? CABLE_ROW_ON : bluetooth \? `On · the \$\{deviceNoun\(\)\} talks to the unit itself` : BLUETOOTH_ROW_OFF\}/, 'the Settings row does not say what Bluetooth is for and what it costs')
-    assert.match(one, /import \{ BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS(?:, NO_SIGNAL_BLUETOOTH)? \} from '\.\.\/lib\/bluetooth-gear'/)
+    assert.match(one, /import \{ BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH \} from '\.\.\/lib\/bluetooth-gear'/)
     /* The looper row stays away: the looper is left off the chain over Bluetooth. */
     assert.match(one, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) && !onRealVp4 \? \( <SetupRow title="Stop the looper"/)
   })
@@ -6766,10 +6774,17 @@ export function run(test) {
      * and, since 3 November 2026, the one after a found purchase's Bluetooth
      * way has signed in (askedBluetooth), all behind bluetoothOffered.
      * Four since 6 November 2026: the Live pill's note on a USB cable, Use a
-     * Bluetooth adapter instead (TopBar onBluetoothPage), behind it too.
+     * Bluetooth adapter instead (TopBar onBluetoothPage), behind it too; and
+     * since 7 November 2026 the same handed thing is the pill's own tap while
+     * it says Not connected · tap to connect (connectFirst). Six since that
+     * day: How do you connect to your unit?'s Bluetooth adapter
+     * (components/HowConnect), and Connect over Bluetooth on Connect a
+     * computer (screens/Connect), both behind it too.
      */
-    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 4, 'App.js opens the Bluetooth page from somewhere else too')
+    assert.equal((app.match(/openSettings\('bluetooth'\)/g) || []).length, 6, 'App.js opens the Bluetooth page from somewhere else too')
     assert.ok(app.includes("onBluetoothPage={bluetoothOffered ? () => openSettings('bluetooth') : null}"), 'the pill note’s Bluetooth adapter button is behind another gate')
+    assert.ok(app.includes("<HowConnect onBluetooth={bluetoothOffered ? () => (howConnectAnswered(), openSettings('bluetooth')) : null}"), 'How do you connect to your unit? opens the Bluetooth page from behind another gate')
+    assert.ok(app.includes("<Connect onBack={() => setScreen('settings')} onBluetooth={bluetoothOffered ? () => openSettings('bluetooth') : null} />"), 'Connect a computer opens the Bluetooth page from behind another gate')
     assert.ok(app.includes("if (auth !== 'in' || !askedBluetooth.current || !bluetoothOffered) return askedBluetooth.current = false openSettings('bluetooth')"), 'the found purchase’s Bluetooth way opens the page from behind another gate')
     assert.ok(app.includes("onBluetooth={bluetoothOffered ? () => (setPickLive(false), openSettings('bluetooth')) : null}"), 'the Which unit sheet’s Bluetooth button is behind another gate')
     assert.ok(app.includes('const bluetoothOffered = useBluetoothOffered()'), 'the waiting screen’s way in is not the Settings row’s gate')
@@ -6782,27 +6797,26 @@ export function run(test) {
     const uses = [...waking.matchAll(/onPress=\{onBluetooth\}/g)].length
     assert.equal(uses, 2, 'the waiting screen opens the Bluetooth page from more or fewer than its two buttons')
     /* Three since 6 November 2026: on a USB cable, Use a Bluetooth adapter instead, whose page is the same gate's (cable && onBluetooth). */
-    assert.equal((waking.match(/&& onBluetooth (?:&& !elsewhere )?\? (?:\( )?<Press/g) || []).length, 3, 'a waiting-screen button opens the Bluetooth page without the gate')
+    assert.equal((waking.match(/&& onBluetooth (?:&& link\.link !== 'connected' )?\? (?:\( )?<Press/g) || []).length, 3, 'a waiting-screen button opens the Bluetooth page without the gate')
     assert.match(waking, /\{cable && onBluetooth \? \( <Press label=\{CABLE_TO_ADAPTER\} sub=\{CABLE_TO_ADAPTER_SUB\} style=\{\{ marginTop: space\.sm \}\} onPress=\{\(\) => adapterInsteadOfCable\(\{ byHand: true \}\) \|\| onBluetooth\(\)\} \/> \) : null\}/, 'the waiting screen’s cable has no Bluetooth adapter way, or it skips the gate')
     /*
-     * THE NEW WAY IN: "No computer? Use Bluetooth", while it is off,
-     * with what it costs against the computer under it (and, to a customer,
-     * that it is the AM4 alone), and after the computer's own button, never
-     * before it. Short enough for the one line a button's label has on a
-     * 360-point Android phone: "Connect by Bluetooth" was cut there.
+     * THE WAY IN, FIRST AND FROM THE FIRST SECOND. "I think most people are
+     * gonna opt for Bluetooth, probably 90%. So we need to make that the most
+     * prominent thing" (Justin, 7 November 2026). Changed on purpose that
+     * day: it was "No computer? Use Bluetooth", after Look for the computer
+     * again, inside the block that comes after fifteen seconds, and never
+     * under the account warning, so his new account, with his own computer
+     * on the wifi on another account, was offered no Bluetooth at all. Now
+     * it is the first thing on the screen, over the spinner, the Bluetooth
+     * page's own Connect look, while Bluetooth is off, whatever the computer
+     * is doing. Short enough for one line on a small phone.
      */
-    /*
-     * And never under the account warning ("The computer on this wifi is
-     * signed into a different account"): a computer is right there, and the
-     * fix is the account, so "No computer?" would point the other way.
-     */
-    assert.match(waking, /\{!bluetooth && onBluetooth && !elsewhere \? \( <Press label="No computer\? Use Bluetooth" sub=\{BLUETOOTH_WAYS_SHORT\} onPress=\{onBluetooth\} \/> \) : null\}/, 'the waiting screen offers no way to Bluetooth with no computer, or offers it under the account warning')
-    assert.ok('No computer? Use Bluetooth'.length <= 34, 'the waiting screen’s way in is too long for one line on a small phone')
-    const advice = waking.slice(waking.indexOf("{long && link.link !== 'connected' ? ("))
-    const noComputer = advice.indexOf('No computer? Use Bluetooth')
-    const computer = advice.indexOf('label="Look for the computer again"')
-    assert.ok(computer > 0 && noComputer > computer, 'Bluetooth is offered before the computer, which is the best way')
-    assert.ok(noComputer > 0 && noComputer < advice.indexOf('label="Troubleshooting"'), 'the way to Bluetooth is not with the waiting screen’s advice')
+    assert.match(waking, /\{!bluetooth && onBluetooth && link\.link !== 'connected' \? \( <Press label="Connect over Bluetooth" sub=\{BLUETOOTH_WAYS_SHORT\} icon=\{bluetoothIcon\} inkColor=\{color\.ble\} labelSize=\{font\.lead\} height=\{64\} tone="live" style=\{\{ alignSelf: 'stretch' \}\} onPress=\{onBluetooth\} \/> \) : null\}/, 'the waiting screen offers no way to Bluetooth, or not in the Bluetooth page’s own look')
+    assert.ok('Connect over Bluetooth'.length <= 34, 'the waiting screen’s way in is too long for one line on a small phone')
+    const wayIn = waking.indexOf('label="Connect over Bluetooth"')
+    assert.ok(wayIn > 0 && wayIn < waking.indexOf('<ActivityIndicator'), 'Bluetooth is not the first thing on the waiting screen')
+    assert.ok(wayIn < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way to Bluetooth waits fifteen seconds')
+    assert.ok(!/!elsewhere \? \( <Press label="Connect over Bluetooth"|No computer\? Use Bluetooth/.test(waking), 'the way to Bluetooth is hidden under the account warning again, or offered twice')
     /* Nothing anywhere else in the app opens the page. */
     const files = []
     const walk = (dir) => {
@@ -6820,63 +6834,82 @@ export function run(test) {
     }
   })
 
-  test('two ways to connect, the computer the best one: said wherever Bluetooth is offered, from the gear file, and the same three things in the no-computer words and the email', async () => {
+  test('two ways to connect, Bluetooth first: said wherever Bluetooth is offered, from the gear file, and the same three things in the no-computer words, the purchase page and the email', async () => {
     /*
-     * "Make it clear that there's multiple ways to connect the device, but
-     * also make it clear that the computer is the preferred method and that
-     * Bluetooth will have more lag and not have as many features." (25
-     * October 2026.) In words a guitarist reads in two seconds, and only what
-     * is true: slower (the preset list, a first preset's scene names, a
-     * footswitch change shown at the next poll) and fewer features (the
-     * page's own list of what is not there over Bluetooth).
+     * "I think most people are gonna opt for Bluetooth, probably 90%. So we
+     * need to make that the most prominent thing, we also need to eliminate
+     * so much of the text ... we need to go through the whole app and make
+     * sure it's Bluetooth first as far as connection options go. It says no
+     * Bluetooth connects through a computer instead." (Justin, 7 November
+     * 2026.) Changed on purpose that day from his 25 October rule ("make it
+     * clear that the computer is the preferred method and that Bluetooth
+     * will have more lag and not have as many features"), which every
+     * wording here was held to: "The computer is the best one".
+     *
+     * THE THREE THINGS NOW, in every full wording: Bluetooth named before
+     * the computer; that Bluetooth needs no computer; and what a computer
+     * adds, in one clause, only what is true of it: less lag (the preset
+     * list, a first preset's scene names, a footswitch change shown at the
+     * next poll), plus editing and saving, which no customer has over
+     * Bluetooth (lib/ble-rule.js EDIT_FROM_STORE, held null below). And no
+     * ranking either way.
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
-    /* "More lag": his word, kept (the gear file says why "slower" stood in for a day). */
-    assert.equal(gear.BLUETOOTH_WAYS, 'There are two ways to connect. The computer is the best one. Bluetooth needs no computer, but it has more lag and fewer features.')
-    /* Not "and does everything": on the purchase page it follows the list of what a VP4 cannot do from the app yet. */
-    assert.ok(!/does everything|every feature/i.test(gear.BLUETOOTH_WAYS), 'the sentence says the computer does everything, beside what a VP4 cannot do')
-    assert.equal(gear.BLUETOOTH_WAYS_SHORT, 'More lag than the computer, fewer features')
+    assert.equal(gear.BLUETOOTH_WAYS, 'Bluetooth needs no computer, just an adapter on your unit, sold separately. A computer has less lag, plus editing and saving.')
+    /* Not "and does everything": on the purchase page it sits beside what a VP4 cannot do from the app yet. */
+    assert.ok(!/does everything|every feature/i.test(gear.BLUETOOTH_WAYS + gear.BLUETOOTH_PAYWALL), 'a sentence says the computer does everything, beside what a VP4 cannot do')
+    assert.equal(gear.BLUETOOTH_WAYS_SHORT, 'No computer needed')
     assert.ok(gear.BLUETOOTH_WAYS.split(/\s+/).length <= 30, 'the sentence takes longer than two seconds to read')
     /* One short line for everybody since every unit opened together: the customer's "AM4 only for now · …" is gone. */
     assert.equal(gear.BLUETOOTH_WAYS_SHORT_AM4, undefined, 'a customer is still told the AM4 only')
-    /* The Settings row: both halves, what it is for and what it costs, short enough for one line on a 320-point screen. */
-    assert.equal(gear.BLUETOOTH_ROW_OFF, 'Off · no computer needed, more lag')
+    /* The Settings row: what it is for, short enough for one line on a 320-point screen. */
+    assert.equal(gear.BLUETOOTH_ROW_OFF, 'Off · no computer needed')
     assert.ok(gear.BLUETOOTH_ROW_OFF.length <= 36, 'the Settings row is too long for its one line')
-    /* What it says it lacks, the page's list says too. */
+    /* What a computer adds, the page's list says Bluetooth lacks. */
     const different = src('mobile/src/screens/Bluetooth.js').match(/const DIFFERENT = \[([\s\S]*?)\n\]/)?.[1] ?? ''
     assert.match(different, /No editing or saving over Bluetooth\./)
     assert.match(different, /Slower to load the preset list\./)
+    /* "Plus editing and saving" is true only while no store version opens editing over Bluetooth to customers: the day one does, these words change in that build's pull request. */
+    const { EDIT_FROM_STORE } = await import('../mobile/src/lib/ble-rule.js')
+    for (const [unit, at] of Object.entries(EDIT_FROM_STORE)) assert.equal(at, null, `editing over Bluetooth opens to customers on the ${unit}, and every two-ways line still says a computer adds editing and saving`)
+
     /*
-     * The purchase page's line: the two ways, then every unit (and, since
-     * 31 October 2026, nothing of which has been tried: that is the
-     * Developer page's), what a VP4 gets, and every part bought separately,
-     * with no prices. It said "a Bluetooth MIDI adapter" for a day, and the list it
-     * stands for is four parts and a charger: each of them has to be in it.
-     * And by name, in the line itself: it sent them to "the Bluetooth page"
-     * for a day, which nobody who has not paid can open. The AM4 alone until
-     * 25 October 2026, when every unit opened together.
+     * THE PURCHASE PAGE: one short line, Bluetooth first ("Way too much
+     * text, should not have to scroll", 7 November 2026), and the parts one
+     * tap under it (BLUETOOTH_PARTS_SHOW). The list it opens is the one it
+     * always was: every unit, what a VP4 gets, and every part each way of
+     * the Bluetooth page takes, by name, with no prices. By name, in the
+     * list itself: it sent them to "the Bluetooth page" for a day, which
+     * nobody who has not paid can open.
      */
+    assert.equal(gear.BLUETOOTH_PAYWALL, 'Connect with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer, which has less lag, plus editing and saving.')
+    assert.equal(gear.BLUETOOTH_PARTS_SHOW, 'Which adapter do I need?')
+    for (const part of Object.values(gear.PARTS)) assert.ok(!gear.BLUETOOTH_PAYWALL.includes(part.name), `the purchase page’s one line names the ${part.name}: the parts are one tap under it`)
     assert.equal(
-      gear.BLUETOOTH_PAYWALL,
-      `${gear.BLUETOOTH_WAYS} It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a CME Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank. Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one.`
+      gear.BLUETOOTH_PARTS,
+      `It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4, and on a VP4 it changes presets and scenes only. It needs a CME Bluetooth MIDI adapter, sold separately. On an AM4, VP4, FM9 or Axe-Fx III that is a CME WIDI Master, the simplest (one piece, powered by the unit), a CME WIDI Jack, or a CME WIDI Uhost with a CME C2MIDI Pro cable and a USB charger or power bank. On an AM4 or VP4, the WIDI Master and the Uhost also need two Type-A MIDI to 3.5 mm adapters; the WIDI Jack’s TRS-35 bundle does not. On an FM3 it is the WIDI Uhost with a CME U2MIDI Pro, a small USB-C to USB-A adapter, and a USB charger or power bank. Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one.`
     )
     /* Every part each way of the Bluetooth page takes is named in it (3 November 2026: it named the Uhost kit alone for a week after the page put the WIDI Master first). */
     for (const unit of ['am4', 'vp4', 'fm3', 'fm9', 'axefx3']) {
       for (const way of gear.waysFor(unit)) {
         for (const key of way.parts) {
           const words = { jackTrs: 'TRS-35', jackDin: 'CME WIDI Jack', usbA: 'USB-C to USB-A adapter' }[key] ?? gear.PARTS[key].name
-          assert.ok(gear.BLUETOOTH_PAYWALL.toLowerCase().includes(words.toLowerCase()), `the purchase page’s line leaves out ${gear.PARTS[key].name}, which the ${unit}’s ${way.title} takes`)
+          assert.ok(gear.BLUETOOTH_PARTS.toLowerCase().includes(words.toLowerCase()), `the purchase page’s parts leave out ${gear.PARTS[key].name}, which the ${unit}’s ${way.title} takes`)
         }
       }
     }
     const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
-    for (const u of BLE_UNITS) assert.ok(new RegExp(`\\b${u.name}\\b`).test(gear.BLUETOOTH_PAYWALL), `the purchase page’s line leaves out the ${u.name}`)
+    for (const u of BLE_UNITS) assert.ok(new RegExp(`\\b${u.name}\\b`).test(gear.BLUETOOTH_PARTS), `the purchase page’s parts leave out the ${u.name}`)
     assert.deepEqual(gear.partsFor('vp4').map((p) => p.key), gear.partsFor('am4').map((p) => p.key), 'a VP4’s parts are not the AM4’s, and the purchase page says they are')
-    assert.equal(gear.partsFor('am4').length, 3, 'the AM4’s list changed, and the purchase page’s line names the old one')
-    for (const part of gear.partsFor('am4')) assert.ok(gear.BLUETOOTH_PAYWALL.toLowerCase().includes(part.name.toLowerCase()), `the purchase page’s line does not name the ${part.name}`)
-    assert.ok(!/Bluetooth page|Settings →/.test(gear.BLUETOOTH_PAYWALL), 'the purchase page sends somebody who has not paid to a page they cannot open yet')
+    assert.equal(gear.partsFor('am4').length, 3, 'the AM4’s list changed, and the purchase page’s parts name the old one')
+    for (const part of gear.partsFor('am4')) assert.ok(gear.BLUETOOTH_PARTS.toLowerCase().includes(part.name.toLowerCase()), `the purchase page’s parts do not name the ${part.name}`)
+    /* The FM3's warning goes with the parts it is about: nobody reads an adapter's name on the page without it. */
+    assert.match(gear.BLUETOOTH_PARTS, /Never the C2MIDI Pro or a WIDI Master on an FM3: both got very hot on one\.$/, 'the parts on the purchase page leave out the FM3’s warning')
+    for (const words of [gear.BLUETOOTH_PAYWALL, gear.BLUETOOTH_PARTS]) {
+      assert.ok(!/Bluetooth page|Settings →/.test(words), 'the purchase page sends somebody who has not paid to a page they cannot open yet')
+      assert.ok(!/\$|price|\d+\.\d\d/i.test(words), 'the purchase page’s Bluetooth words name a price')
+    }
     assert.match(gear.POWER_LINE, /charger or power bank/, 'the power the purchase page names is not the list’s')
-    assert.ok(!/\$|price|\d+\.\d\d/i.test(gear.BLUETOOTH_PAYWALL), 'the purchase page’s line names a price')
 
     /* Wherever it is offered, from the gear file and never typed again. */
     const page = flat('mobile/src/screens/Bluetooth.js')
@@ -6885,48 +6918,70 @@ export function run(test) {
     assert.ok(main.indexOf('<Hint>{BLUETOOTH_WAYS}</Hint>') > main.indexOf('<Heading>2 · Connect</Heading>'), 'the page does not say the two ways under the steps')
     assert.ok(page.slice(page.indexOf('export function BluetoothLimits(')).includes('<Hint>{BLUETOOTH_WAYS}</Hint>'), 'What Bluetooth can’t do does not say the two ways')
     assert.match(flat('mobile/src/screens/Settings.js'), /: BLUETOOTH_ROW_OFF\}/, 'the Settings row does not say it')
-    assert.match(flat('mobile/src/screens/Settings.js'), /not through the computer\. \$\{BLUETOOTH_WAYS\}`/, 'Phone & computer does not say it while Bluetooth is on')
+    /* Not to somebody already on Bluetooth, on Phone & computer (7 November 2026): what is on, and nothing more. */
+    assert.ok(!/BLUETOOTH_WAYS\b/.test(code('mobile/src/screens/Settings.js')), 'Phone & computer sells somebody already on Bluetooth the two ways again')
     assert.match(flat('mobile/App.js'), /sub=\{BLUETOOTH_WAYS_SHORT\}/, 'the waiting screen’s way in does not say it')
+    /* The Which unit sheet's and Phone & computer's buttons, which typed their own cost line until 7 November 2026. */
+    assert.match(flat('mobile/src/components/LiveUnit.js'), /<BluetoothCard label="Connect over Bluetooth" sub=\{BLUETOOTH_WAYS_SHORT\} onPress=\{onBluetooth\} \/>/, 'the Which unit sheet types its own line')
+    assert.match(flat('mobile/src/screens/Settings.js'), /sub=\{cable \? CABLE_PAGE_SUB : bluetooth \? 'Bluetooth is on: open its page' : BLUETOOTH_WAYS_SHORT\}/, 'Phone & computer’s button types its own line')
     const paywall = flat('mobile/src/screens/Paywall.js')
-    assert.match(paywall, /\{openForCustomersHere\(\) && bluetoothSupported\(\) \? \( <Text[^>]*> \{BLUETOOTH_PAYWALL\} <\/Text> \) : null\}/, 'the purchase page offers Bluetooth on a copy that cannot open it, or not at all')
-    /* The walkthrough and the sign-in screen too, since the audit of 2 November 2026 (WALKTHROUGH_TWO_WAYS). */
-    for (const f of ['mobile/src/screens/Bluetooth.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/Fixes.js', 'mobile/src/components/NoComputer.js', 'mobile/src/screens/Onboarding.js', 'mobile/src/screens/SignIn.js']) {
-      assert.ok(!/two ways to connect|(slower|more lag) than the computer|no computer needed, more lag|AM4 only for now ·|Opens Apple’s Bluetooth screen|best (?:one|way)|more lag and/i.test(code(f)), `${f} types the words out again instead of taking them from the gear file or shared/no-computer.mjs`)
+    assert.match(
+      paywall,
+      /\{openForCustomersHere\(\) && bluetoothSupported\(\) \? \( <View style=\{\{ gap: space\.sm \}\}> <Text[^>]*> \{BLUETOOTH_PAYWALL\} <\/Text> <Text accessibilityRole="button" accessibilityState=\{\{ expanded: partsOpen \}\} onPress=\{\(\) => setPartsOpen\(\(open\) => !open\)\}[^>]*> \{BLUETOOTH_PARTS_SHOW\} <\/Text> \{partsOpen \? \( <Text[^>]*> \{BLUETOOTH_PARTS\} <\/Text> \) : null\} <\/View> \) : null\}/,
+      'the purchase page offers Bluetooth on a copy that cannot open it, or not at all, or the parts not one tap under its line'
+    )
+    assert.match(paywall, /const \[partsOpen, setPartsOpen\] = useState\(false\)/, 'the purchase page opens on the parts list')
+    /* The walkthrough and the sign-in screen too, since the audit of 2 November 2026 (WALKTHROUGH_TWO_WAYS), and the screens of 7 November. */
+    for (const f of ['mobile/src/screens/Bluetooth.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/Fixes.js', 'mobile/src/components/NoComputer.js', 'mobile/src/screens/Onboarding.js', 'mobile/src/screens/SignIn.js', 'mobile/src/components/LiveUnit.js', 'mobile/src/components/TopBar.js', 'mobile/src/screens/Connect.js', 'mobile/src/components/HowConnect.js']) {
+      assert.ok(!/two ways to connect|(slower|more lag) than the computer|no computer needed|AM4 only for now ·|Opens Apple’s Bluetooth screen|best (?:one|way)|more lag and|less lag, plus|fewer features/i.test(code(f)), `${f} types the words out again instead of taking them from the gear file or shared/no-computer.mjs`)
     }
     /*
-     * AND THE OTHER TWO PLACES THE WORDING LIVES, held to the same three
-     * things: the no-computer note and Fixes (shared/no-computer.mjs
-     * NO_COMPUTER_BLUETOOTH), and the setup email (secondWay in
-     * supabase/functions/setup-reminder). Each says it in its own words, for
+     * AND THE OTHER PLACES THE WORDING LIVES, held to the same three things:
+     * the no-computer note and Fixes (shared/no-computer.mjs
+     * NO_COMPUTER_BLUETOOTH), the purchase page's line, and the setup email
+     * (supabase/functions/setup-reminder). Each says it in its own words, for
      * its own place, so a change to how Bluetooth is presented is made in
-     * all three (CLAUDE.md names them); this is what keeps one from being
+     * all of them (CLAUDE.md names them); this is what keeps one from being
      * left saying something else.
      */
     const { NO_COMPUTER_BLUETOOTH } = await import('../shared/no-computer.mjs')
     /* The setup email says them in its first email's opening, since 1 November 2026 ("Having trouble getting connected?"), and the Bluetooth paragraph says the cost again: no editing or saving. */
     const email = src('supabase/functions/setup-reminder/index.ts').match(/'(It looks like it hasn’t connected to your Fractal yet[^']*)'/)?.[1] ?? ''
     assert.ok(email.length > 100, 'the setup email’s opening was not found; this check needs telling')
-    /* And the walkthrough's two, on a copy that opens Bluetooth (the next test), since the audit of 2 November 2026. */
-    const walk = [...Object.entries(gear.WALKTHROUGH_TWO_WAYS).map(([key, words]) => [`the walkthrough’s ${key}`, words]), ['How it works, the Bluetooth way', gear.HOW_TWO_WAYS.foot]]
-    for (const [where, words] of [['the gear file’s sentence', gear.BLUETOOTH_WAYS], ['the no-computer note and Fixes', NO_COMPUTER_BLUETOOTH], ['the setup email', email], ...walk]) {
-      assert.match(words, /The computer is (?:still )?the best (?:one|way)|the computer [^.]*, which is the best way/, `${where} does not say the computer is the best way`)
-      assert.match(words, /more lag/, `${where} does not say Bluetooth has more lag`)
-      assert.match(words, /fewer features|does less/, `${where} does not say Bluetooth does less`)
+    const RANKED = /best (?:one|way)|preferred|more lag|fewer features|does less/i
+    const computerWay = /\b(?:a|the) computer\b/i
+    for (const [where, words] of [['the gear file’s sentence', gear.BLUETOOTH_WAYS], ['the no-computer note and Fixes', NO_COMPUTER_BLUETOOTH], ['the purchase page’s line', gear.BLUETOOTH_PAYWALL], ['the setup email', email]]) {
+      const bluetooth = words.indexOf('Bluetooth')
+      assert.ok(bluetooth > -1 && bluetooth < words.search(computerWay), `${where} does not name Bluetooth before the computer`)
+      assert.match(words, /\bno computer\b/i, `${where} does not say Bluetooth needs no computer`)
+      assert.match(words, /less lag/, `${where} does not say what a computer adds: less lag`)
+      assert.match(words, /editing and saving/, `${where} does not say what a computer adds: editing and saving`)
+      assert.doesNotMatch(words, RANKED, `${where} still ranks the two ways`)
     }
+    /* And the walkthrough's short lines, on a copy that opens Bluetooth (the next tests), and How it works' Bluetooth foot: Bluetooth first, no ranking. */
+    for (const [key, words] of Object.entries(gear.WALKTHROUGH_TWO_WAYS)) {
+      const at = words.search(computerWay)
+      assert.ok(at === -1 || words.indexOf('Bluetooth') < at, `the walkthrough’s ${key} names the computer before Bluetooth`)
+      assert.doesNotMatch(words, RANKED, `the walkthrough’s ${key} still ranks the two ways`)
+      assert.ok(words.split(/\s+/).length <= 30, `the walkthrough’s ${key} is ${words.split(/\s+/).length} words: "eliminate so much of the text"`)
+    }
+    assert.doesNotMatch(gear.HOW_TWO_WAYS.foot, RANKED, 'How it works’ Bluetooth way still ranks the two ways')
   })
 
   /*
    * HOW IT WORKS, BOTH WAYS (Justin, 3 November 2026: "Needs to say computer
    * or Bluetooth"). On a copy that opens Bluetooth the walkthrough's first
-   * page offers Computer, picked to start with, and Bluetooth; his three
+   * page offers Bluetooth, picked to start with, and Computer; his three
    * boxes are the Computer way, untouched, and the Bluetooth way is the unit,
    * the adapter and the phone. Anywhere else the page is as it was.
+   * Bluetooth first since 7 November 2026 ("make sure it's Bluetooth first as
+   * far as connection options go"); the computer was, until then.
    */
-  test('How it works offers the computer and Bluetooth on a copy that opens Bluetooth, the computer first, and is as it was anywhere else', async () => {
+  test('How it works offers Bluetooth and the computer on a copy that opens Bluetooth, Bluetooth first, and is as it was anywhere else', async () => {
     const gear = await import('../shared/bluetooth-gear.mjs')
     const how = gear.HOW_TWO_WAYS
-    assert.deepEqual(how.ways.map((w) => w.key), ['computer', 'bluetooth'], 'the computer is not the first way, or a way was added')
-    assert.deepEqual(how.ways.map((w) => w.label), ['Computer', 'Bluetooth'])
+    assert.deepEqual(how.ways.map((w) => w.key), ['bluetooth', 'computer'], 'Bluetooth is not the first way, or a way was added')
+    assert.deepEqual(how.ways.map((w) => w.label), ['Bluetooth', 'Computer'])
     assert.match(how.wire, /^BLUETOOTH MIDI ADAPTER$/)
     assert.match(how.phoneBody, /no computer needed/)
     assert.match(how.foot, /sold separately/, 'the Bluetooth way does not say the adapter is bought apart')
@@ -6934,7 +6989,7 @@ export function run(test) {
       assert.doesNotMatch(words, /this phone|\bbeta\b|\btried\b|official|free desktop/i, words)
     }
     const page = flat('mobile/src/screens/Onboarding.js')
-    assert.match(page, /const \[howWay, setHowWay\] = useState\('computer'\)/, 'How it works starts on Bluetooth')
+    assert.match(page, /const \[howWay, setHowWay\] = useState\('bluetooth'\)/, 'How it works starts on the computer')
     assert.match(page, /const howBluetooth = twoWays && howWay === 'bluetooth'/, 'a copy that does not open Bluetooth can draw the Bluetooth way')
     assert.match(page, /\{twoWays \? \( <View style=\{\{ flexDirection: 'row', gap: space\.sm, marginTop: -space\.sm \}\}> \{HOW_TWO_WAYS\.ways\.map\(/, 'the two ways are offered on a copy that does not open Bluetooth')
     /*
@@ -6972,21 +7027,21 @@ export function run(test) {
      * computer"), Get connected on the sign-in screen, the computer's steps
      * alone, and the box ticked before Unlock ("I understand this app
      * requires a computer connected to my Fractal unit via USB cable"). On a
-     * copy that opens Bluetooth to customers the first two say both ways, the
-     * computer first; the box is his own sentence and waits for his answer;
-     * the browser, which does need the computer, keeps the words it had
-     * (test/both-ends.mjs).
+     * copy that opens Bluetooth to customers they say both ways, Bluetooth
+     * first since 7 November 2026, and short ("absolutely way too much
+     * text"); the browser, which does need the computer, keeps the words it
+     * had (test/both-ends.mjs).
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
     const two = gear.WALKTHROUGH_TWO_WAYS
     assert.deepEqual(Object.keys(two).sort(), ['agree', 'demoSub', 'restored', 'setup'], 'the walkthrough’s two-ways lines changed; this check needs telling')
-    /* The page after Restore finds a purchase offers the Bluetooth way too, to sign-in, on a copy that opens it (the audit of 3 November 2026). */
+    /* The page after Restore finds a purchase offers the Bluetooth way too, to sign-in, on a copy that opens it (the audit of 3 November 2026), and first, over his Yes and No, since 7 November 2026. */
     assert.equal(gear.RESTORED_BLUETOOTH_GO, 'No computer - I’ll use Bluetooth')
-    assert.match(flat('mobile/src/screens/Onboarding.js'), /\{twoWays \? \( <> <Press label=\{RESTORED_BLUETOOTH_GO\} height=\{TAP\} onPress=\{\(\) => onAccount\?\.\('bluetooth'\)\} \/> <Note>\{WALKTHROUGH_TWO_WAYS\.restored\}<\/Note> <\/> \) : null\} <Press label=\{P6\.back\}/, 'the page after a found purchase does not offer Bluetooth, or offers it where Bluetooth is not open')
-    /* And Playing with no internet says Bluetooth needs none, where it is offered. */
+    assert.match(code('mobile/src/screens/Onboarding.js').replace(/\s+/g, ' '), /<Head>\{P6\.head\}<\/Head> (?:\{ \} )?\{twoWays \? \( <> <Press label=\{RESTORED_BLUETOOTH_GO\} tone="live" height=\{TAP\} onPress=\{\(\) => onAccount\?\.\('bluetooth'\)\} \/> <Note>\{WALKTHROUGH_TWO_WAYS\.restored\}<\/Note> <\/> \) : null\} (?:\{ \} )?<Cta label=\{P6\.yes\}/, 'the page after a found purchase does not offer Bluetooth first, or offers it where Bluetooth is not open')
+    /* And Playing with no internet says Bluetooth needs none, where it is offered: no ranking after it since 7 November 2026. */
     for (const say of [gear.NO_SIGNAL_BLUETOOTH.off('iPad'), gear.NO_SIGNAL_BLUETOOTH.on('tablet')]) {
       assert.match(say, /needs no internet/)
-      assert.match(say, /The computer is the best way: Bluetooth has more lag and fewer features\./)
+      assert.doesNotMatch(say, /best (?:one|way)|more lag|fewer features/, say)
       assert.ok(!/this phone|\bbeta\b|\btried\b|free/i.test(say), say)
     }
     assert.match(gear.NO_SIGNAL_BLUETOOTH.off('phone'), /adapter on its MIDI jacks, sold separately/)
@@ -7017,10 +7072,17 @@ export function run(test) {
       /* CLAUDE.md: never "this phone", never Bluetooth as a beta, and nothing a customer reads says what has been tried. */
       assert.ok(!/this phone|beta|\btried\b|tested/i.test(words), `the walkthrough’s ${key} says something a customer is never told`)
     }
-    assert.match(two.demoSub, /^This app connects to your Fractal guitar processor one of two ways: through a computer connected to it by USB, or with no computer, through a Bluetooth MIDI adapter sold separately\./)
-    assert.match(two.setup, /^No computer\? Sign in here, and the app can connect by Bluetooth instead/)
-    /* The box before Unlock: the sentence put to him on 3 November 2026, word for word, and said yes to. */
-    assert.equal(two.agree, 'I understand this app connects to my Fractal unit one of two ways: through a computer running the desktop app, connected by USB cable, or with no computer, through a Bluetooth MIDI adapter sold separately. The computer is the best way: Bluetooth has more lag and fewer features.')
+    /* Bluetooth first and short since 7 November 2026: "we also need to eliminate so much of the text". */
+    assert.equal(two.demoSub, 'This app connects to your Fractal with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer connected to it by USB.')
+    /* The sign-in screen's Get connected, cut to this one line where Bluetooth is open. */
+    assert.equal(two.setup, 'Make an account, then connect with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer.')
+    /*
+     * The box before Unlock: the sentence put to him on 3 November 2026 and
+     * said yes to, cut from 48 words to 26 on 7 November 2026, his "way too
+     * much text": both ways still, Bluetooth first, and the desktop app named.
+     */
+    assert.equal(two.agree, 'I understand this app connects to my unit with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer running the desktop app.')
+    assert.equal(two.restored, 'No computer needed: sign in, and the Bluetooth page opens. It takes a Bluetooth MIDI adapter, sold separately.')
 
     /*
      * EVERY LINE THE PHONE'S WALKTHROUGH SHOWS THAT SPEAKS OF HAVING A
@@ -7091,13 +7153,18 @@ export function run(test) {
     assert.match(flatScreen, /<Agree on=\{agreed\} label=\{twoWays \? WALKTHROUGH_TWO_WAYS\.agree : P3\.real\.agree\} onPress=/, 'the box before Unlock does not say both ways on a copy that opens Bluetooth')
     assert.match(flatScreen, /disabled=\{!agreed\} onPress=\{\(\) => agreed && onUnlock\?\.\(\)\}/, 'Unlock no longer waits for the box')
 
-    /* The sign-in screen: the computer's three steps, then the other way, inside the card. */
+    /*
+     * The sign-in screen: Get connected in one line where Bluetooth is open,
+     * Bluetooth first, and the computer's three steps anywhere else (7
+     * November 2026: "Signup was difficult, no tutorial. No mention of
+     * bluetooth"). The steps are on Connect a computer and in
+     * Troubleshooting → It will not connect at all (screens/Fixes.js).
+     */
     const signIn = code('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
-    const card = signIn.slice(signIn.indexOf('{SETUP.title}'), signIn.indexOf('</View>', signIn.indexOf('{WALKTHROUGH_TWO_WAYS.setup}')))
-    assert.ok(card.indexOf('SETUP.steps.map') > 0 && card.indexOf('SETUP.steps.map') < card.indexOf('{WALKTHROUGH_TWO_WAYS.setup}'), 'Get connected does not say the other way under the computer’s steps')
-    assert.match(card, /\{twoWays \? \( <Text[^>]*> \{WALKTHROUGH_TWO_WAYS\.setup\} <\/Text> \) : null\}/, 'Get connected says Bluetooth on a copy that does not open it, or never')
-    const between = card.slice(0, card.indexOf('{WALKTHROUGH_TWO_WAYS.setup}'))
-    assert.equal((between.match(/<View\b/g) || []).length, (between.match(/<\/View>/g) || []).length, 'the other way is drawn outside the Get connected card')
+    const card = signIn.slice(signIn.indexOf('{SETUP.title}'), signIn.indexOf('{start === \'trial\''))
+    assert.match(card, /^\{SETUP\.title\}<\/Text> \{twoWays \? \( <Text[^>]*> \{WALKTHROUGH_TWO_WAYS\.setup\} <\/Text> \) : \( SETUP\.steps\.map\(/, 'Get connected is not the one line where Bluetooth is open, and the computer’s steps everywhere else')
+    assert.equal((card.match(/<View\b/g) || []).length + 1, (card.match(/<\/View>/g) || []).length, 'the one line is drawn outside the Get connected card')
+    assert.match(flat('mobile/src/screens/Fixes.js'), /\{fix\.id === 'connect' \? <Note tone="hint">\{`\$\{SETUP_FIRST\} \$\{SETUP\.steps\.join\(' '\)\}`\}<\/Note> : null\}/, 'the computer’s first-time steps are not in Troubleshooting')
 
     /*
      * THE GATE, the purchase page's word for word: a copy that opens
@@ -7134,6 +7201,143 @@ export function run(test) {
           bench.done()
         }
       }
+    }
+  })
+
+  /*
+   * "HOW DO YOU CONNECT TO YOUR UNIT?" (7 November 2026). "Signup was
+   * difficult, no tutorial. No mention of bluetooth" and "just immediately
+   * says, looking for computer, no tutorial, nothing after signing up for
+   * the free trial" (Justin). After an account is made, a trial started or
+   * the full version bought on this device, once, in Play's place, where
+   * this copy offers Bluetooth: Bluetooth adapter first and biggest, then
+   * his words for the other way. And the sharing card waits for a unit to
+   * have connected here.
+   */
+  test('How do you connect to your unit? comes once after sign-up, a trial or a purchase, Bluetooth first, through the row’s gate, and the sharing card waits for a first connection', async () => {
+    const gear = await import('../shared/bluetooth-gear.mjs')
+    assert.deepEqual(gear.HOW_CONNECT, {
+      head: 'How do you connect to your unit?',
+      bluetooth: 'Bluetooth adapter',
+      bluetoothSub: 'No computer needed',
+      computer: 'No Bluetooth adapter?',
+      computerSub: 'Connect through a computer instead'
+    })
+    for (const words of Object.values(gear.HOW_CONNECT)) assert.ok(!/this phone|\bbeta\b|\btried\b|tested|official/i.test(words), words)
+    /* The card: the question, Bluetooth in the Bluetooth page's own Connect look (its symbol, its blue, and bigger), then the computer. Nothing else to read. */
+    const card = code('mobile/src/components/HowConnect.js').replace(/\s+/g, ' ')
+    const blue = card.indexOf('label={HOW_CONNECT.bluetooth}')
+    const other = card.indexOf('label={HOW_CONNECT.computer}')
+    assert.ok(card.indexOf('{HOW_CONNECT.head}') > 0 && blue > card.indexOf('{HOW_CONNECT.head}') && other > blue, 'the card does not ask, then offer Bluetooth, then the computer')
+    assert.match(card, /<Press label=\{HOW_CONNECT\.bluetooth\} sub=\{HOW_CONNECT\.bluetoothSub\} icon=\{bluetoothIcon\} inkColor=\{color\.ble\} labelSize=\{font\.lead\} height=\{88\} tone="live" onPress=\{onBluetooth\} \/>/, 'Bluetooth is not the biggest thing on the card, in its own look')
+    assert.match(card, /<Press label=\{HOW_CONNECT\.computer\} sub=\{HOW_CONNECT\.computerSub\} height=\{TAP \+ 8\} onPress=\{onComputer\} \/>/)
+    assert.equal((card.match(/<Text\b/g) || []).length, 1, 'the card has more to read than its question')
+    /* It opens a page and nothing more: nothing touches the phone's Bluetooth before Connect on the Bluetooth page. */
+    assert.ok(!/setBluetooth|requestPermissions|lib\/bluetooth'|bleLink|import\(/.test(card), 'the card reaches for the phone’s Bluetooth itself')
+
+    /* App: owed, signed in and past the purchase page, not the demo, Bluetooth offered (the row's own gate) and off, nothing connected; before the sharing card, in Play's place. */
+    const app = flat('mobile/App.js')
+    assert.match(app, /const howOwed = useHowConnectOwed\(\) const askHow = howOwed && auth === 'in' && !demo && bluetoothOffered && !bluetooth && link\.link !== 'connected'/, 'How do you connect is asked in the demo, signed out, where Bluetooth is not offered, or over a connected rig')
+    assert.match(app, /\) : askHow \? \( \/\*[^]*?\*\/ <HowConnect onBluetooth=\{bluetoothOffered \? \(\) => \(howConnectAnswered\(\), openSettings\('bluetooth'\)\) : null\} onComputer=\{howConnectAnswered\} \/> \) : askShare \? \(/, 'How do you connect is not drawn in Play’s place, before the sharing card, or an answer does not settle it')
+    assert.match(app, /useEffect\(\(\) => \{ if \(auth === 'in' && !demo && link\.link === 'connected' && unitHere\) unitConnected\(\) \}, \[auth, demo, link\.link, unitHere\]\)/, 'a unit answering does not settle the question, or the demo counts as a connection')
+    /* Owed only by the three moments, on this device: an account made, a trial started, the full version bought just now. */
+    const signIn = code('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
+    assert.match(signIn, /const \{ needsConfirmation, userId \} = await signUp\(\{[^}]*\}\) askHowToConnect\(\) if \(needsConfirmation\) \{/, 'making an account does not ask how they connect')
+    const pay = code('mobile/src/screens/Paywall.js').replace(/\s+/g, ' ')
+    assert.match(pay, /if \(out\.ok\) \{ askHowToConnect\(\) Alert\.alert\('Free trial', TRIAL_STARTED\) return onUnlocked\?\.\(\) \}/, 'starting the trial does not ask how they connect')
+    assert.match(pay, /if \(out\.ok && !out\.message\) askHowToConnect\(\)/, 'buying does not ask how they connect')
+    const callers = []
+    for (const f of ['mobile/App.js', 'mobile/src/screens/Settings.js', 'mobile/src/screens/Stage.js', 'mobile/src/screens/Onboarding.js', 'mobile/src/screens/SignIn.js', 'mobile/src/screens/Paywall.js']) {
+      for (const m of code(f).matchAll(/askHowToConnect\(\)/g)) callers.push(f)
+    }
+    assert.deepEqual(callers.sort(), ['mobile/src/screens/Paywall.js', 'mobile/src/screens/Paywall.js', 'mobile/src/screens/SignIn.js'], 'the question is owed from somewhere else too')
+    /* Siri takes it for a screen other than Play, as it does the sharing card. */
+    assert.match(app, /shareCard: askHow \|\| askShare/)
+
+    /* lib/howConnect on a bench: kept per device, settled by either answer or a first connection, and storage that will not answer owes nothing. */
+    const settle = () => new Promise((r) => setTimeout(r, 0))
+    const dir = mkdtempSync(join(tmpdir(), 'how-connect-'))
+    try {
+      writeFileSync(join(dir, 'package.json'), '{ "type": "module" }')
+      writeFileSync(join(dir, 'react.js'), 'export const useState = (v) => [v, () => {}]\nexport const useEffect = () => {}\n')
+      writeFileSync(
+        join(dir, 'async-storage.js'),
+        'const s = () => globalThis.__howStorage\nexport default { getItem: async (k) => { if (s().broken) throw new Error("no"); return k in s().kept ? s().kept[k] : null }, setItem: async (k, v) => { if (s().broken) throw new Error("no"); s().kept[k] = v } }\n'
+      )
+      const lib = src('mobile/src/lib/howConnect.js').replace("from '@react-native-async-storage/async-storage'", "from './async-storage.js'").replace("from 'react'", "from './react.js'")
+      writeFileSync(join(dir, 'howConnect.js'), lib)
+      let n = 0
+      const fresh = (kept = {}, broken = false) => {
+        globalThis.__howStorage = { kept, broken }
+        return import(`${pathToFileURL(join(dir, 'howConnect.js')).href}?n=${++n}`)
+      }
+      const ASK = 'fractal.howConnect.v1'
+      const CONNECTED = 'fractal.unitConnected.v1'
+      /* A new device: nothing owed, nothing connected. An account made: owed, and kept. */
+      let h = await fresh()
+      assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: false })
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'owed')
+      /* The next launch still owes it, until it is answered. */
+      h = await fresh({ [ASK]: 'owed' })
+      assert.deepEqual(await h.readHowConnect(), { owed: true, connectedBefore: false })
+      h.howConnectAnswered()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done')
+      h = await fresh({ [ASK]: 'done' })
+      assert.equal((await h.readHowConnect()).owed, false, 'an answered question is asked again')
+      /* A unit answering first settles it, and is kept for the sharing card's next launch. */
+      h = await fresh({ [ASK]: 'owed' })
+      await h.readHowConnect()
+      h.unitConnected()
+      await settle()
+      assert.deepEqual(globalThis.__howStorage.kept, { [ASK]: 'done', [CONNECTED]: 'yes' })
+      h = await fresh({ [CONNECTED]: 'yes' })
+      assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: true })
+      /* Storage that will not answer: nothing owed, and the sharing card as it was. */
+      h = await fresh({}, true)
+      assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: true })
+    } finally {
+      delete globalThis.__howStorage
+      rmSync(dir, { recursive: true, force: true })
+    }
+
+    /*
+     * THE FREE TRIAL WITH NOBODY SIGNED IN opens Create account, not Sign
+     * in: he tapped Start 7-day free trial three times and Sign in once
+     * before finding Create account (his log, 7 November 2026). Its own
+     * side, 'trial', so the form never says "You've paid", and the trial's
+     * own words say why an account comes first.
+     */
+    assert.match(app, /const toTrialAccount = \(\) => \{ toSignIn\(\) setSignInSide\('trial'\) \}/)
+    assert.match(app, /onMakeAccount=\{\(\) => \{ markWalkthrough\(\) setSeenWalk\(true\) setReplaying\(false\) toTrialAccount\(\) \}\}/, 'the walkthrough’s purchase sheet sends the trial to Sign in')
+    assert.match(app, /<Paywall asked onSignIn=\{toSignIn\} onMakeAccount=\{toTrialAccount\}/, 'the purchase sheet over Play sends the trial to Sign in')
+    assert.match(pay, /const makeOne = onMakeAccount \|\| onSignIn if \(out\.why === 'signed-out' && makeOne\) \{ setSaid\(null\) return makeOne\(\) \}/)
+    assert.match(signIn, /const paid = start === 'up' \|\| paidHere/, 'a trial’s Create account says “you’ve paid”')
+    assert.match(signIn, /\{start === 'trial' && mode === 'up' && !note \? <Note>\{trialRefusal\('signed-out'\)\}<\/Note> : null\}/)
+
+    /*
+     * THE TOP BAR'S PILL, for somebody with no computer: Not connected · tap
+     * to connect, opening the Bluetooth page through the note's own handed
+     * way (onBluetoothPage, the row's gate), only while App says so.
+     */
+    const bar = flat('mobile/src/components/TopBar.js')
+    assert.match(bar, /const toBluetooth = connectFirst && !demo && !bluetooth && Boolean\(onBluetoothPage\) if \(toBluetooth\) Object\.assign\(pill, \{ status: 'Not connected', mark: 'off', unit: '', where: 'tap to connect' \}\)/)
+    assert.match(bar, /if \(toBluetooth\) \{ onBluetoothPage\(\) return \}/, 'the pill says tap to connect and opens somewhere else')
+    assert.ok(!/connectFirst|tap to connect/.test(src('shared/pill-words.mjs')), 'the browser’s pill words carry the phone’s Bluetooth way')
+    assert.match(app, /connectFirst=\{connectFirst\}/)
+
+    /*
+     * AND NO FIRST-RUN SCREEN OFFERS A USB CABLE TO THE PHONE as a way to
+     * connect: until a store version opens it, the cable gets "no
+     * instructions, no store text, no purchase-page line" (docs/app-store.md).
+     */
+    for (const f of ['mobile/src/screens/Onboarding.js', 'mobile/src/screens/SignIn.js', 'mobile/src/screens/Paywall.js', 'mobile/src/components/HowConnect.js']) {
+      assert.ok(!/cableWords|cablePlugIn|CABLE_|useCableNow/.test(code(f)), `${f} offers the USB cable way on the way in`)
+    }
+    for (const words of [...Object.values(gear.HOW_CONNECT), ...Object.values(gear.WALKTHROUGH_TWO_WAYS), gear.BLUETOOTH_PAYWALL, gear.HOW_TWO_WAYS.foot, gear.HOW_TWO_WAYS.phoneBody]) {
+      assert.ok(!/USB cable|straight into|plug(?:ged)? into (?:the|your|this) (?:phone|iPhone|iPad|tablet)/i.test(words), `a first-run line offers the USB cable way: ${words}`)
     }
   })
 
@@ -9406,7 +9610,7 @@ export function run(test) {
 
     /* The waiting screen: over Bluetooth only, in the fifteen-second block where a stuck player sits, with the line it is stuck on. */
     const waking = app.slice(app.indexOf('function Waking('))
-    assert.match(waking, /^function Waking\(\{ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, onReport, onSetlists \}\)/)
+    assert.match(waking, /^function Waking\(\{ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, onReport \}\)/)
     assert.match(waking, /\{bluetooth && onReport \? <Press label=\{REPORT_BUTTON\} onPress=\{\(\) => onReport\(said\)\} \/> : null\}/)
     assert.ok(waking.indexOf('onReport(said)') > waking.indexOf("{long && link.link !== 'connected' ? ("), 'the waiting screen’s report is drawn before the advice')
   })
@@ -9470,7 +9674,7 @@ export function run(test) {
   test('the note under Play’s pill has Report a problem beside Turn off Bluetooth, each its own button, and says the device in hand', () => {
     const bar = flat('mobile/src/components/TopBar.js')
     /* And, since 6 November 2026, the Bluetooth page for a USB cable's Use a Bluetooth adapter instead (onBluetoothPage, App's gate). */
-    assert.match(bar, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, saveHere: saveWanted = true \}\)/)
+    assert.match(bar, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true \}\)/)
     const ble = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
     assert.match(ble, /function Which\(\{ link, cable = false, onClose, onReport = null, onBluetoothPage = null \}\)/)
     /* Two buttons, each its own element to VoiceOver inside a note that is not one. */

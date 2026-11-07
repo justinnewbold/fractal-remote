@@ -32,6 +32,7 @@ import { isPairAccount } from '../lib/link'
 import { computerElsewhere } from '../lib/remote'
 import { useNoComputer } from '../lib/noComputer'
 import NoComputer from './NoComputer'
+import BluetoothInApps from './BluetoothInApps'
 import { CONNECT, P6, SETUP } from '../../shared/onboarding.mjs'
 import { DOWNLOADS_URL, sendDownloadLink } from '../../mobile/src/lib/downloadLink'
 import laptopIcon from '../../mobile/assets/icons/laptop.png'
@@ -143,6 +144,8 @@ export default function ConnectScreen({
         <div className="connect-card">
           <h2>{SETUP.title}</h2>
           <Steps />
+          {/* And where the other way is: in the phone apps, never a browser (shared/stores.mjs, 7 November 2026). */}
+          <BluetoothInApps />
         </div>
         <SignIn variant="stage" submitLabel="Sign in" onSubmit={onSignIn} onCreate={onCreate} busy={busy} />
         <button type="button" className="connect-howto" onClick={() => setHowTo((v) => !v)} aria-expanded={howTo}>
@@ -165,6 +168,8 @@ export default function ConnectScreen({
         <>
           <h2>Connecting…</h2>
           <p>Finding your computer.</p>
+          {/* A browser connects through a computer only; the apps have Bluetooth (shared/stores.mjs). */}
+          <BluetoothInApps />
           {/*
             FRACTAL AUDIO'S SENTENCE, while the phone's browser starts up and
             looks for the computer (their letter, 18 October 2026, asks for it

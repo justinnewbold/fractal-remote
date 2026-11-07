@@ -20,6 +20,8 @@ import { SETUP } from '../lib/onboarding'
 import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
 import { WALKTHROUGH_TWO_WAYS } from '../lib/bluetooth-gear'
 import { MADE_HERE, ONLY_HERE } from '../lib/purchases'
+import { trialRefusal } from '../lib/trial-words'
+import { askHowToConnect } from '../lib/howConnect'
 import mailIcon from '../../assets/icons/mail.png'
 import lockIcon from '../../assets/icons/lock.png'
 import checkIcon from '../../assets/icons/check.png'
@@ -51,8 +53,9 @@ import { NAME_LABELS, NAME_MAX, nameProblem } from '../lib/account-name'
  * service — that part has not changed.
  */
 export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = false, madeHere = false, onAccountMade, onBackToRig = null }) {
-  const [mode, setMode] = useState(start === 'up' ? 'up' : 'in') // 'in' | 'up'
-  /* Whether Get connected says Bluetooth is the other way: see under its steps. */
+  /* 'trial' is Create account too, for the free trial tapped with nobody signed in (App.js toTrialAccount). */
+  const [mode, setMode] = useState(start === 'up' || start === 'trial' ? 'up' : 'in') // 'in' | 'up'
+  /* Whether Get connected says both ways, Bluetooth first, in one line: see the card. */
   const twoWays = openForCustomersHere() && bluetoothSupported()
   /*
    * The instructions, from the one screen that needs them most.
@@ -167,6 +170,8 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
     try {
       if (mode === 'up') {
         const { needsConfirmation, userId } = await signUp({ email: email.trim(), password, firstName: first, lastName: last })
+        /* And, once it is in, "How do you connect to your unit?" (lib/howConnect), where Bluetooth is offered. */
+        askHowToConnect()
         if (needsConfirmation) {
           /* And the purchase goes onto it now, before the email is opened
              anywhere (purchases.js, linkNewAccount). */
@@ -338,7 +343,25 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
           <Text style={{ color: color.silkDim, fontSize: font.lead, textAlign: 'center' }}>{SETUP.tagline}</Text>
         </View>
 
-        {/* A card of frosted glass (lib/glass), rimmed, with the light along its top. */}
+        {/*
+          A card of frosted glass (lib/glass), rimmed, with the light along its
+          top: his mockup's Get connected, the computer's three steps.
+
+          ONE LINE ON A COPY THAT OPENS BLUETOOTH, since 7 November 2026:
+          "Signup was difficult, no tutorial. No mention of bluetooth" and
+          "we don't need to put it all upfront that kind of stuff can come
+          into troubleshooting guides" (Justin). The three steps and a small
+          grey Bluetooth line under them were 57 words before the form, the
+          computer first; on such a copy the card is the one line, Bluetooth
+          first (WALKTHROUGH_TWO_WAYS.setup), and once the account is in, How
+          do you connect to your unit? asks (components/HowConnect). The
+          computer's steps are on Connect a computer (How to connect my
+          computer, below) and in Troubleshooting → It will not connect at
+          all. The purchase page's own gate (Paywall.js), because somebody
+          here may not have paid yet; everywhere else, and in the browser,
+          which does need the computer, the steps are as he drew them
+          (shared/onboarding.mjs SETUP).
+        */}
         <View
           style={{
             ...glassCard({ bordered: true, classicCorner: radius.lg }),
@@ -348,41 +371,35 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
           }}
         >
           <Text style={{ color: color.silk, fontSize: font.title, fontWeight: '800' }}>{SETUP.title}</Text>
-          {SETUP.steps.map((line, i) => (
-            <View key={line} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-              <View
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 15,
-                  backgroundColor: color.signal,
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <Text style={{ color: color.onSignal, fontSize: font.body, fontWeight: '800' }}>{i + 1}</Text>
-              </View>
-              <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 22, flexShrink: 1 }}>
-                {line}
-              </Text>
-            </View>
-          ))}
-          {/*
-            AND THE OTHER WAY, under the computer's three steps, on a copy that
-            opens Bluetooth to customers and a device that can do it: "It
-            doesn't require a computer anymore if people are using Bluetooth
-            instead." (Justin, 30 October 2026.) The purchase page's own gate
-            (Paywall.js), because somebody here may not have paid yet; the
-            steps stay the browser's word for word (shared/onboarding.mjs
-            SETUP), which does need the computer. Since the audit of 2
-            November 2026.
-          */}
           {twoWays ? (
-            <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>
+            <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 22 }}>
               {WALKTHROUGH_TWO_WAYS.setup}
             </Text>
-          ) : null}
+          ) : (
+            SETUP.steps.map((line, i) => (
+              <View key={line} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+                <View
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
+                    backgroundColor: color.signal,
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <Text style={{ color: color.onSignal, fontSize: font.body, fontWeight: '800' }}>{i + 1}</Text>
+                </View>
+                <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 22, flexShrink: 1 }}>
+                  {line}
+                </Text>
+              </View>
+            ))
+          )}
         </View>
+
+        {/* The free trial tapped with nobody signed in (App.js toTrialAccount): why an account comes first, in the trial's own words. */}
+        {start === 'trial' && mode === 'up' && !note ? <Note>{trialRefusal('signed-out')}</Note> : null}
 
         {/* Paid on this phone, with no account yet: said where the form is.
             Making the account is what carries the purchase to the computer.

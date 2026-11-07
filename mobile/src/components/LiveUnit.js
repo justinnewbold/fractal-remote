@@ -9,6 +9,7 @@ import { space } from '../lib/theme'
 import Sheet from './Sheet'
 import MissingPick from './MissingPick'
 import UnitCard, { BluetoothCard, NotUsingOne } from './UnitCard'
+import { BLUETOOTH_WAYS_SHORT } from '../lib/bluetooth-gear'
 
 const ofPreset = (s) => s.preset
 const ofScene = (s) => s.sceneIndex
@@ -83,7 +84,7 @@ export default function LiveUnit({ open, onClose, hosts = [], units = {}, chosen
           />
         ))}
         {/* The other way, from the Live pill too (Justin, 26 October 2026): for whoever is offered the Bluetooth page. */}
-        {onBluetooth ? <BluetoothCard label="Connect over Bluetooth" sub="No computer needed. More lag, fewer features." onPress={onBluetooth} /> : null}
+        {onBluetooth ? <BluetoothCard label="Connect over Bluetooth" sub={BLUETOOTH_WAYS_SHORT} onPress={onBluetooth} /> : null}
         {/* The pick that does not answer, grayed, with Forget. */}
         <MissingPick name={missing} onForget={() => forgetMissing()} />
         {/* How one you don't use comes off this list: at that computer (relay-rules notUsingOne), a link that opens to the words. Only with two or more listed, as in Settings. */}

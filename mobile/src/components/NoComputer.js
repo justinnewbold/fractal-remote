@@ -25,26 +25,24 @@ export default function NoComputerWords({ email }) {
 }
 
 /**
- * AND, WHERE THIS COPY OFFERS BLUETOOTH (BETA), THE OTHER WAY, for an AM4:
- * "make it clear that there's multiple ways to connect the device, but also
- * make it clear that the computer is the preferred method". Where Bluetooth
- * is not offered (every customer's copy today: see lib/useBluetoothOffered.js)
- * nothing is drawn, and the screen is exactly what it was. The website's copy
- * (src/components/NoComputer.jsx) never says it: a browser has no Bluetooth
- * (beta).
+ * AND, WHERE THIS COPY OFFERS BLUETOOTH, THE OTHER WAY, FIRST: "I think most
+ * people are gonna opt for Bluetooth, probably 90%. So we need to make that
+ * the most prominent thing" (Justin, 7 November 2026). Where Bluetooth is not
+ * offered (lib/useBluetoothOffered.js) nothing is drawn, and the screen is
+ * exactly what it was. The website's copy (src/components/NoComputer.jsx)
+ * never says it: a browser has no Bluetooth.
  *
- * A NOTE OF ITS OWN, drawn after the computer's words AND after the "Send me
- * the download link" button under them, on Settings → Phone & computer. It
- * was once the last lines of the words themselves, so the last thing read
- * before that button was "Bluetooth (beta) says what to buy", and the
- * button, which emails the computer app, read as the link for the Bluetooth
- * parts.
+ * A NOTE OF ITS OWN, drawn over the computer's words on Settings → Phone &
+ * computer, and so never between them and the "Send me the download link"
+ * button under them. It was once the last lines of the words themselves, so
+ * the last thing read before that button was "Bluetooth says what to buy",
+ * and the button, which emails the computer app, read as the link for the
+ * Bluetooth parts.
  *
- * NOT ON THE WAITING SCREEN, which has its own way there: "No computer? Use
- * Bluetooth (beta)", after the computer's button, with what it costs under
- * it (App.js Waking). The two together said the same thing twice, in two
- * wordings, the note sending somebody the long way round through Settings to
- * the page the button two rows down opens in one tap.
+ * NOT ON THE WAITING SCREEN, which has its own way there, Connect over
+ * Bluetooth, the first thing on it (App.js Waking). The two together said the
+ * same thing twice, the note sending somebody the long way round through
+ * Settings to the page the button opens in one tap.
  *
  * NEVER ON PLAY'S FLOATING CARD (Stage's 'advice' Toast). That card does not
  * scroll and keeps one height so NOT CONNECTED under it stays put; with these

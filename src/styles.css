@@ -13042,6 +13042,24 @@ button.setup-back {
   line-height: 1.45;
 }
 
+/* What a VP4 gets, one tap away under the list (7 November 2026): the phone's own underlined line, opening the paragraph under it. */
+.unlock-vp4 {
+  margin: 0 0 var(--s-3);
+}
+
+.unlock-vp4 summary {
+  color: var(--signal);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Where Bluetooth is: the phone apps' stores, as links in the line. */
+.bluetooth-in-apps a {
+  color: var(--signal);
+  font-weight: 600;
+}
+
 .unlock-buy {
   width: 100%;
   min-height: 52px;

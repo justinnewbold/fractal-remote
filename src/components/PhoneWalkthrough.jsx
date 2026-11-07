@@ -31,6 +31,7 @@ import playIcon from '../../mobile/assets/icons/play.png'
 import slidersIcon from '../../mobile/assets/icons/sliders.png'
 import saveIcon from '../../mobile/assets/icons/save.png'
 import { Cta, FootRow, Steps, TipCard } from './Walk'
+import BluetoothInApps from './BluetoothInApps'
 
 const PIECES = { unit: unitShot, computer: pieceComputer, phone: piecePhone }
 
@@ -191,6 +192,8 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
                 {P2.footGo}
               </button>
             </p>
+            {/* The other way, and where it is: the phone apps, not a browser (shared/stores.mjs, 7 November 2026). On a phone's browser only. */}
+            {computer ? null : <BluetoothInApps className="pw-note" />}
             {/* Held at the bottom of the screen while the boxes scroll under
                 it, so a phone too short for the whole page still shows the
                 way on. */}

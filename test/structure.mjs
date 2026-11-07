@@ -1574,8 +1574,14 @@ export function run(test) {
     const titles = [...phone.matchAll(/<SetupRow\s+title=(?:"([^"]+)"|\{(PAIR_TITLE)\})/g)].map((m) => m[1] || m[2])
     /* Settings in groups now: the rig first, then the play screen, then help —
        where the amp and pedal names went, beside the other things to look up. */
-    /* PAIR_TITLE is Phone & computer, or iPad & computer on an iPad (device-word.mjs). */
-    assert.equal(titles[0], 'PAIR_TITLE', `the phone's Setup opens on ${titles.join(', ')}`)
+    /*
+     * PAIR_TITLE is Phone & computer, or iPad & computer on an iPad
+     * (device-word.mjs). Bluetooth over it since 7 November 2026, where this
+     * copy offers Bluetooth ("make sure it's Bluetooth first as far as
+     * connection options go"), and Phone & computer first wherever it does
+     * not: the row is drawn only behind its gate (test/bluetooth.mjs).
+     */
+    assert.deepEqual(titles.slice(0, 2), ['Bluetooth', 'PAIR_TITLE'], `the phone's Setup opens on ${titles.join(', ')}`)
     assert.ok(titles.includes('Amp & pedal names'), 'the amp and pedal names left Settings')
 
     /* The row's own component, not a colour pasted per row: one place to be
@@ -4531,7 +4537,8 @@ export function run(test) {
      * if they already have a sign in or sign up right after they unlock it" —
      * and Sign in otherwise. Nothing moves it later.
      */
-    assert.match(native, /const \[mode, setMode\] = useState\(start === 'up' \? 'up' : 'in'\)/, 'the form is held on something other than its own choice again')
+    /* 'trial', since 7 November 2026, is Create account too: the free trial tapped with nobody signed in (App.js toTrialAccount). */
+    assert.match(native, /const \[mode, setMode\] = useState\(start === 'up' \|\| start === 'trial' \? 'up' : 'in'\)/, 'the form is held on something other than its own choice again')
     assert.ok(!/useEffect/.test(native), 'the form watches something and can change sides by itself again')
     /* Nothing on this screen can unlock, so it has no business watching the
        purchase: the last time it did, a restore landing late told somebody
