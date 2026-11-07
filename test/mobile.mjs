@@ -3867,6 +3867,14 @@ export function run(test) {
     }
   })
 
+  test('a message from a player scrolls as one sheet, with Copy all of it always at the bottom', () => {
+    /* "Looking at the bug reports, I can't scroll down" (7 November 2026): the log was a box that scrolled inside the sheet, and a drag on it moved only the log. */
+    const tool = read('mobile/src/components/MessagesTool.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' ')
+    assert.ok(!/ScrollView/.test(tool), 'the message sheet has a scroll inside its own scroll again')
+    assert.match(tool, /<Sheet open=\{!!open\} onClose=\{\(\) => setOpen\(null\)\} title="Message" tall foot=\{open\?\.facts \? <Press label="Copy all of it" height=\{TAP\} onPress=\{copy\} \/> : null\} >/)
+    assert.equal((tool.match(/Copy all of it/g) || []).length, 1, 'Copy all of it is drawn twice, or not at all')
+  })
+
   test('nothing anybody reads calls this app "the Fractal app": it is the Fractal Remote app', () => {
     /*
      * "You shouldn't call it fractal app. It should be fractal remote app

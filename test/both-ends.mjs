@@ -3819,6 +3819,7 @@ export function run(test) {
       'service.mjs': `export const made = []
         export const asked = []
         export const signups = []
+        export const updates = []
         export const said = {
           answer: () => ({ data: {}, error: { message: 'the bench was not told what to say' } }),
           signUp: () => ({ data: { user: { id: 'new-1', identities: [{ provider: 'email' }] }, session: null }, error: null })
@@ -3829,7 +3830,9 @@ export function run(test) {
           return {
             auth: {
               verifyOtp: async (params) => { asked.push(params); return said.answer(params) },
-              signUp: async (params) => { signups.push(params); return said.signUp(params) }
+              signUp: async (params) => { signups.push(params); return said.signUp(params) },
+              updateUser: async (params) => { updates.push(params); return { data: { user: { id: 'u1' } }, error: null } },
+              getUser: async () => ({ data: { user: { id: 'u1', email: 'player@example.com', user_metadata: said.meta || {} } }, error: null })
             }
           }
         }`,
@@ -3980,7 +3983,7 @@ export function run(test) {
       FILES.some((f) => f.source === '../shared/account-name.mjs' && f.target === '../mobile/src/lib/account-name.js' && !f.render),
       'the phone has no copy of the name rule'
     )
-    assert.match(read('mobile/src/lib/relay.js'), /^import \{ nameData \} from '\.\/account-name'$/m)
+    assert.match(read('mobile/src/lib/relay.js'), /^import \{ NAME_KEYS, nameData \} from '\.\/account-name'$/m)
     assert.match(read('src/lib/remote.js'), /^import \{ nameData \} from '\.\.\/\.\.\/shared\/account-name\.mjs'$/m)
   })
 
@@ -4014,6 +4017,39 @@ export function run(test) {
         done()
       }
     }
+  })
+
+  test('the phone adds or changes the name on an account made without one, with the same rules, where sign-up keeps it', async () => {
+    const { mod, service, done } = await confirmBench('phone')
+    try {
+      /* An account made before names were asked reads with none, and says so with empty names, never undefined. */
+      assert.deepEqual(await mod.currentAccount(), { id: 'u1', email: 'player@example.com', first: '', last: '' })
+      service.said.meta = { first_name: 'Jane', last_name: 'Smith' }
+      assert.deepEqual(await mod.currentAccount(), { id: 'u1', email: 'player@example.com', first: 'Jane', last: 'Smith' })
+      service.said.meta = { first_name: 7 }
+      assert.deepEqual(await mod.currentAccount(), { id: 'u1', email: 'player@example.com', first: '', last: '' }, 'a name that is not words is read as one')
+      for (const [names, message] of [
+        [{}, 'Type your first name.'],
+        [{ first: 'Jane' }, 'Type your last name.'],
+        [{ first: 'x'.repeat(51), last: 'Smith' }, 'Your first name can be 50 characters at most.']
+      ]) {
+        await assert.rejects(mod.changeName(names), { message }, `${JSON.stringify(names)} was saved`)
+      }
+      assert.equal(service.updates.length, 0, 'a name the form refuses was sent')
+      assert.deepEqual(await mod.changeName({ first: ' Jane ', last: ' van  der Berg ' }), { first: 'Jane', last: 'van der Berg' })
+      assert.deepEqual(service.updates, [{ data: { first_name: 'Jane', last_name: 'van der Berg' } }], 'the name did not go onto the account as sign-up keeps it, or something else changed with it')
+    } finally {
+      done()
+    }
+    /* Settings → Your account: the row says the name, or asks for one, and opens the box with it filled in. */
+    const flat = read('mobile/src/screens/Settings.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' ')
+    const menu = flat.slice(flat.indexOf('title="Your account"'), flat.indexOf('<PasswordBox'))
+    assert.match(menu, /label=\{account\?\.first \|\| account\?\.last \? `\$\{account\.first\} \$\{account\.last\}`\.trim\(\) : 'Add your name'\}/)
+    assert.match(menu, /<NameBox open=\{naming\} first=\{account\?\.first\} last=\{account\?\.last\} onSave=\{async \(typed\) => \{ const kept = await changeName\(typed\)/)
+    const box = read('mobile/src/components/NameBox.js')
+    assert.match(box, /import \{ NAME_LABELS, NAME_MAX, nameProblem \} from '\.\.\/lib\/account-name'/)
+    assert.match(box, /const problem = nameProblem\(\{ first, last \}\)/, 'the box saves a name Create account would refuse')
+    for (const needed of ['textContentType="givenName"', 'textContentType="familyName"', 'maxLength={NAME_MAX}', 'autoCapitalize="words"']) assert.ok(box.includes(needed), `the name box lost ${needed}`)
   })
 
   test('Create account asks for a first and last name over the email, at both ends, and Sign in never does', () => {

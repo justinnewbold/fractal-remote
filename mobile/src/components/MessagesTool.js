@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Platform, ScrollView, Text, View } from 'react-native'
+import { Platform, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
@@ -72,7 +72,18 @@ export default function MessagesTool() {
       {said?.ok ? messageSections(said).map((s) => <Facts key={s.title} title={s.title} rows={s.rows} onRow={pick} />) : null}
       <Press label={busy ? 'Loading…' : 'Refresh'} height={TAP} disabled={busy} onPress={load} />
 
-      <Sheet open={!!open} onClose={() => setOpen(null)} title="Message">
+      {/* Tall, with Copy all of it kept at the bottom, and the log drawn in the
+          sheet's own scroll rather than a box that scrolled inside it: on the
+          iPhone a drag that started on the log moved only the log, so the
+          rest of the sheet could never be reached ("Looking at the bug
+          reports, I can't scroll down", 7 November 2026). */}
+      <Sheet
+        open={!!open}
+        onClose={() => setOpen(null)}
+        title="Message"
+        tall
+        foot={open?.facts ? <Press label="Copy all of it" height={TAP} onPress={copy} /> : null}
+      >
         {open?.loading ? <Text style={{ color: color.silkDim, fontSize: font.body }}>Loading…</Text> : null}
         {open?.failed ? <Note tone="fault">{open.failed}</Note> : null}
         {open?.facts ? (
@@ -82,14 +93,11 @@ export default function MessagesTool() {
             </Text>
             <Facts rows={open.facts} />
             {open.log ? (
-              <ScrollView
-                style={{ maxHeight: 260, borderRadius: radius.md, backgroundColor: color.panel }}
-                contentContainerStyle={{ padding: space.md }}
-              >
+              <View style={{ borderRadius: radius.md, backgroundColor: color.panel, padding: space.md }}>
                 <Text selectable style={{ color: color.silkDim, fontSize: font.micro, fontFamily: face, lineHeight: font.micro * 1.5 }}>
                   {open.log}
                 </Text>
-              </ScrollView>
+              </View>
             ) : (
               <Text style={{ color: color.silkFaint, fontSize: font.small }}>No log came with this one.</Text>
             )}
@@ -98,7 +106,6 @@ export default function MessagesTool() {
                 {told.message}
               </Note>
             ) : null}
-            <Press label="Copy all of it" height={TAP} onPress={copy} />
           </View>
         ) : null}
       </Sheet>
