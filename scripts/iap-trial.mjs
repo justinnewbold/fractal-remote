@@ -20,6 +20,10 @@
  *   availability      the same countries as the full version's item
  *   review picture    docs/iap/trial-7day-review.png, the purchase page with the button
  *
+ * Checked against Apple's documentation on 7 November 2026 (App Store
+ * Connect API 4.6, App Store Connect Help "In-App Purchase information" and
+ * "Submit an In-App Purchase"), request by request, before it was first run.
+ *
  * Each part is made only if it is missing, so running it twice changes
  * nothing, and a run stopped half way is finished by the next. Nothing that
  * is there already is overwritten, except the item's own review notes and
@@ -42,12 +46,34 @@ import { fenced, token } from './store-text.mjs'
 /** The full version's item: its countries are the trial's. purchases.js `PRODUCT_ID`. */
 export const FULL_PRODUCT_ID = 'cloud.newbold.fractalremote.full'
 
-/** Apple's limits for an in-app purchase, as App Store Connect enforces them. */
-export const LIMITS = { referenceName: 64, displayName: 35, description: 55, reviewNote: 4000 }
+/*
+ * Apple's limits for an in-app purchase, from App Store Connect Help, "In-App
+ * Purchase information": the reference name 64, the display name 30, the
+ * description 45, the review notes 4000. (The 35 and 55 on Apple's product
+ * page marketing are not what App Store Connect takes.)
+ */
+export const LIMITS = { referenceName: 64, displayName: 30, description: 45, reviewNote: 4000 }
 
-/** The picture the reviewer is shown, and Apple's smallest size for it. */
+/*
+ * The picture the reviewer is shown. Apple takes it at one of the iPhone's
+ * own screenshot sizes, either way up, with no transparency: anything else
+ * comes back FAILED after the upload.
+ */
 export const SCREENSHOT = 'docs/iap/trial-7day-review.png'
-export const SCREENSHOT_MIN = { width: 640, height: 920 }
+export const SCREENSHOT_SIZES = [
+  [1320, 2868],
+  [1290, 2796],
+  [1284, 2778],
+  [1242, 2688],
+  [1179, 2556],
+  [1170, 2532],
+  [1125, 2436],
+  [1242, 2208]
+]
+
+/** How long a run with Send for review waits for Apple to finish with the picture, and how often it looks. */
+export const READY_WAIT_MS = 4 * 60 * 1000
+export const READY_LOOK_MS = 15 * 1000
 
 /** The territory the price is set from; every other country follows it. */
 export const BASE_TERRITORY = 'USA'
@@ -86,8 +112,9 @@ export function trialItem(md) {
     if (!length) throw new Error(`the free item's ${key} is empty`)
     if (length > LIMITS[key]) throw new Error(`the free item's ${key} is ${length} characters; App Store Connect takes ${LIMITS[key]}`)
   }
-  if (!item.displayName.includes(`${TRIAL_DAYS}-Day`)) {
-    throw new Error(`the name "${item.displayName}" does not say the trial's length, which 3.1.1 asks for`)
+  /* Guideline 3.1.1's own naming: "XX-day Trial". */
+  if (!new RegExp(`^${TRIAL_DAYS}-day Trial$`, 'i').test(item.displayName)) {
+    throw new Error(`the name "${item.displayName}" is not "${TRIAL_DAYS}-day Trial", the naming guideline 3.1.1 asks for`)
   }
   return item
 }
@@ -97,20 +124,25 @@ export function freePoint(points) {
   return points.find((p) => Number(p?.attributes?.customerPrice) === 0) || null
 }
 
-/** A PNG's width and height, from its header; null for anything else. */
+/** A PNG's width, height and whether it can be see-through, from its header; null for anything else. */
 export function pngSize(bytes) {
   const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
-  if (bytes.length < 24 || sig.some((b, i) => bytes[i] !== b)) return null
-  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
+  if (bytes.length < 26 || sig.some((b, i) => bytes[i] !== b)) return null
+  /* Colour types 4 and 6 carry an alpha channel; 3 (a palette) can carry one in a tRNS chunk. */
+  const kind = bytes[25]
+  const alpha = kind === 4 || kind === 6 || (kind === 3 && bytes.includes(Buffer.from('tRNS')))
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20), alpha }
 }
 
 /** The review picture, refused if Apple would refuse it. */
 export function reviewPicture(bytes) {
   const size = pngSize(bytes)
   if (!size) throw new Error(`${SCREENSHOT} is not a PNG`)
-  if (size.width < SCREENSHOT_MIN.width || size.height < SCREENSHOT_MIN.height) {
-    throw new Error(`${SCREENSHOT} is ${size.width}×${size.height}; Apple wants at least ${SCREENSHOT_MIN.width}×${SCREENSHOT_MIN.height}`)
+  const fits = SCREENSHOT_SIZES.some(([w, h]) => (size.width === w && size.height === h) || (size.width === h && size.height === w))
+  if (!fits) {
+    throw new Error(`${SCREENSHOT} is ${size.width}×${size.height}, not one of the iPhone screenshot sizes Apple takes (${SCREENSHOT_SIZES.map(([w, h]) => `${w}×${h}`).join(', ')})`)
   }
+  if (size.alpha) throw new Error(`${SCREENSHOT} has transparency, which Apple refuses in a screenshot`)
   return { ...size, bytes, fileSize: bytes.length, fileName: SCREENSHOT.split('/').pop(), checksum: createHash('md5').update(bytes).digest('hex') }
 }
 
@@ -118,15 +150,19 @@ export function reviewPicture(bytes) {
 export const SENDABLE = new Set(['READY_TO_SUBMIT', 'DEVELOPER_ACTION_NEEDED', 'REJECTED'])
 export const SENT = new Set(['WAITING_FOR_REVIEW', 'IN_REVIEW', 'PENDING_BINARY_APPROVAL', 'APPROVED', 'DEVELOPER_REMOVED_FROM_SALE', 'REMOVED_FROM_SALE'])
 
+/** A review picture whose bytes are with Apple: left as it is. */
+export const KEPT_PICTURE = new Set(['UPLOAD_COMPLETE', 'COMPLETE'])
+
 /**
  * Talks to App Store Connect. `fetch` is passed in so the whole run can be
  * held by a test against a pretend Apple (test/trial.mjs).
  */
-export function client({ jwt, fetch = globalThis.fetch }) {
+export function client({ jwt, fetch = globalThis.fetch, wait = (ms) => new Promise((done) => setTimeout(done, ms)) }) {
   const call = async (path, init = {}, { missingOk = false } = {}) => {
     const res = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
       ...init,
-      headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' }
+      /* JSON asked for by name: the price points can also answer CSV. */
+      headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json', Accept: 'application/json' }
     })
     const body = await res.text()
     if (missingOk && res.status === 404) return null
@@ -145,7 +181,7 @@ export function client({ jwt, fetch = globalThis.fetch }) {
     }
     return out
   }
-  return { call, all, fetch }
+  return { call, all, fetch, wait }
 }
 
 const ref = (type, id) => ({ data: { type, id } })
@@ -190,15 +226,21 @@ export async function run({ asc, item, picture, apply = false, submit = false, l
   } else if (trial.attributes.inAppPurchaseType && trial.attributes.inAppPurchaseType !== item.type) {
     throw new Error(`${item.productId} exists as ${trial.attributes.inAppPurchaseType}; a product id can never change type, so it would need a new id`)
   } else {
+    /* Family Sharing switched on by hand can never be switched off again (Apple): said, never fought with on every run. */
+    if (trial.attributes.familySharable === true && item.familySharable === false) {
+      throw new Error(`Family Sharing is on for ${item.productId}, and Apple never lets it be switched off again. Either say "on" in docs/app-store.md and in scripts/iap-trial.mjs, or make the item under a new product id.`)
+    }
     const stale = Object.keys(attributes).filter((k) => (trial.attributes[k] ?? null) !== attributes[k])
     if (stale.length && SENT.has(trial.attributes.state)) {
       log(`  left alone: ${stale.join(', ')} differ from the docs, but the item is ${trial.attributes.state}`)
     } else if (stale.length) {
       would(`the item's ${stale.join(', ')} brought back to the docs`)
       if (make) {
+        /* Only what differs. */
+        const changed = Object.fromEntries(stale.map((k) => [k, attributes[k]]))
         await asc.call(`/v2/inAppPurchases/${trial.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({ data: { type: 'inAppPurchases', id: trial.id, attributes } })
+          body: JSON.stringify({ data: { type: 'inAppPurchases', id: trial.id, attributes: changed } })
         })
       }
     }
@@ -310,13 +352,18 @@ export async function run({ asc, item, picture, apply = false, submit = false, l
     log('  the countries are set already; left alone')
   }
 
-  /* 5. The review picture. A failed upload is deleted and made again. */
+  /*
+   * 5. The review picture. Left alone only once its bytes are with Apple
+   * (UPLOAD_COMPLETE, or COMPLETE once processed). One that failed, or a
+   * reservation a stopped run never filled (AWAITING_UPLOAD), is deleted and
+   * made again, or the item would wait on it for good.
+   */
   const shot = await asc.call(`/v2/inAppPurchases/${id}/appStoreReviewScreenshot`, {}, { missingOk: true })
   const shotState = shot?.data?.attributes?.assetDeliveryState?.state
-  if (shot?.data && shotState !== 'FAILED') {
-    log(`  the review picture is there already (${shotState ?? 'state unknown'}); left alone`)
+  if (shot?.data && KEPT_PICTURE.has(shotState)) {
+    log(`  the review picture is there already (${shotState}); left alone`)
   } else {
-    would(`the review picture ${picture.fileName}, ${picture.width}×${picture.height}${shot?.data ? ', in place of the one that failed' : ''}`)
+    would(`the review picture ${picture.fileName}, ${picture.width}×${picture.height}${shot?.data ? `, in place of the one that is ${shotState ?? 'in no known state'}` : ''}`)
     if (make) {
       if (shot?.data) await asc.call(`/v1/inAppPurchaseAppStoreReviewScreenshots/${shot.data.id}`, { method: 'DELETE' })
       const reserved = await asc.call('/v1/inAppPurchaseAppStoreReviewScreenshots', {
@@ -330,37 +377,65 @@ export async function run({ asc, item, picture, apply = false, submit = false, l
         })
       })
       const sid = reserved.data.id
-      for (const op of reserved.data.attributes.uploadOperations ?? []) {
-        const headers = Object.fromEntries((op.requestHeaders ?? []).map((h) => [h.name, h.value]))
-        const res = await asc.fetch(op.url, {
-          method: op.method,
-          headers,
-          body: picture.bytes.subarray(op.offset, op.offset + op.length)
+      try {
+        const ops = reserved.data.attributes?.uploadOperations ?? []
+        const covered = ops.reduce((n, op) => n + (Number(op.length) || 0), 0)
+        if (!ops.length || covered !== picture.fileSize) {
+          throw new Error(`Apple asked for ${covered} bytes of the review picture in ${ops.length} pieces; it is ${picture.fileSize}`)
+        }
+        for (const op of ops) {
+          const headers = Object.fromEntries((op.requestHeaders ?? []).map((h) => [h.name, h.value]))
+          const res = await asc.fetch(op.url, {
+            method: op.method,
+            headers,
+            body: picture.bytes.subarray(op.offset, op.offset + op.length)
+          })
+          if (!res.ok) throw new Error(`uploading the review picture answered ${res.status}: ${(await res.text()).slice(0, 400)}`)
+        }
+        await asc.call(`/v1/inAppPurchaseAppStoreReviewScreenshots/${sid}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            data: { type: 'inAppPurchaseAppStoreReviewScreenshots', id: sid, attributes: { uploaded: true, sourceFileChecksum: picture.checksum } }
+          })
         })
-        if (!res.ok) throw new Error(`uploading the review picture answered ${res.status}: ${(await res.text()).slice(0, 400)}`)
+      } catch (err) {
+        /* Never leave a reservation behind: the next run starts the picture again from nothing. */
+        await asc.call(`/v1/inAppPurchaseAppStoreReviewScreenshots/${sid}`, { method: 'DELETE' }).catch(() => {})
+        throw err
       }
-      await asc.call(`/v1/inAppPurchaseAppStoreReviewScreenshots/${sid}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          data: { type: 'inAppPurchaseAppStoreReviewScreenshots', id: sid, attributes: { uploaded: true, sourceFileChecksum: picture.checksum } }
-        })
-      })
     }
   }
 
   if (!make) return { made: false, id }
 
   /* 6. Where it stands now, and the review. */
-  const now = (await asc.call(`/v2/inAppPurchases/${id}`)).data.attributes.state
+  const stateNow = async () => (await asc.call(`/v2/inAppPurchases/${id}`)).data.attributes.state
+  let now = await stateNow()
   log(`\nThe trial's item is now ${now}.`)
   if (!submit) return { made: true, id, state: now }
   if (SENT.has(now)) {
     log(`Not sent: it is ${now} already.`)
     return { made: true, id, state: now }
   }
+  /*
+   * Sent on its own, with no new app version: Apple allows that only once an
+   * item of the same type has been approved and the app has an approved
+   * version (App Store Connect Help, "Submit an In-App Purchase"). The full
+   * version's item is that, and is checked rather than assumed.
+   */
+  if (!full || full.attributes.inAppPurchaseType !== 'NON_CONSUMABLE' || full.attributes.state !== 'APPROVED') {
+    throw new Error(
+      `not sent: Apple takes a Non-Consumable on its own only once another has been approved, and the full version's item is ${full ? `${full.attributes.inAppPurchaseType} ${full.attributes.state}` : 'not there'}. Attach it to the next app version instead.`
+    )
+  }
+  /* Apple processes the picture after it is uploaded; until then the item says MISSING_METADATA. */
+  for (let waited = 0; now === 'MISSING_METADATA' && waited < READY_WAIT_MS; waited += READY_LOOK_MS) {
+    await asc.wait(READY_LOOK_MS)
+    now = await stateNow()
+  }
   if (!SENDABLE.has(now)) {
     throw new Error(
-      `it is ${now}, not ready to send. MISSING_METADATA usually means the review picture is still being processed: run it again in a few minutes.`
+      `it is ${now}, not ready to send. MISSING_METADATA after ${READY_WAIT_MS / 60000} minutes means a part is missing or the picture is still being processed: run it again, unticked, to see which.`
     )
   }
   await asc.call('/v1/inAppPurchaseSubmissions', {

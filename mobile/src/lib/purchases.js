@@ -1224,7 +1224,7 @@ const theUnlockIn = (offerings) => {
   const every = [
     ...(offerings?.current?.availablePackages || []),
     ...Object.values(offerings?.all || {}).flatMap((o) => o?.availablePackages || [])
-  ].filter((p) => p?.product?.identifier !== 'trial_7day')
+  ].filter((p) => p?.product?.identifier !== TRIAL_PRODUCT_ID)
   return every.find((p) => p?.product?.identifier === PRODUCT_ID) || every[0] || null
 }
 
