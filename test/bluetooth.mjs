@@ -13029,7 +13029,8 @@ export function run(test) {
     /* In the file: the echo guard first, then any other unit. */
     const wire = flat('mobile/src/lib/bleWire.js')
     const heard = wire.slice(wire.indexOf('function heard(f) {'), wire.indexOf('heardAgain()', wire.indexOf('function heard(f) {')))
-    assert.ok(heard.indexOf('if (isEcho(f, now)') > 0 && heard.indexOf('if (isEcho(f, now)') < heard.indexOf('if (f[4] !== model) {'), 'another unit is heard before the echo guard')
+    const guard = heard.indexOf('if (ownEcho || (f[4] !== model && askedAroundEcho(f))) {')
+    assert.ok(guard > 0 && guard < heard.indexOf('if (f[4] !== model) {'), 'another unit is heard before the echo guard')
   })
 
   test('the phone’s own questions to other units coming back late (600 ms, 1.3 s, 3 s) are still never another unit answering', async () => {
