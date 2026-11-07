@@ -143,17 +143,22 @@ const LANE_HEAD = 18
 const LANES = { flexDirection: 'row', gap: space.xl, alignItems: 'flex-start' }
 /*
  * Each half is given its width (laneRow, worked out from Play's own width),
- * never left to flex: 1 to share out. On an iPad Pro on its side (7 November
- * 2026) flex: 1 gave the scenes 661 points and the chain 463, so the chain's
- * 277-point pedals went one to a row and ran off the bottom: Yoga measures
- * Play's page once before its width is settled, works each half's flex
- * basis out from what is in it then (four scenes in a row against three
- * pedals), and keeps that basis for the real layout, shrinking the two from
- * there instead of halving the row. A width is the one basis it never
- * guesses, so every pass agrees and the halves are each laneRow, exactly
- * the row the tiles inside them were sized from.
+ * never flex: 1 to share out. On an iPad Pro on its side (7 November 2026)
+ * flex: 1 gave the scenes 661 points and the chain 463, so the chain's
+ * 277-point pedals went one to a row and ran off the bottom. Play's first
+ * frame is always stacked (its height is not known yet, so it cannot line
+ * up), and these same two Views are laid out one under the other in it;
+ * Yoga keeps that frame's flex basis on each (their heights, 314 and 116),
+ * flex: 1 never works a basis out again, and grow then adds half of what is
+ * left to each. A width is the one basis Yoga works out on every pass, so
+ * both halves are laneRow, the row their tiles were sized from. Grow and
+ * shrink stay on, never flex: for the frame between a turn or a split-view
+ * drag and the next layout, laneRow is the old width, and the two equal
+ * bases stretch or shrink together into the row instead of one running off
+ * it. (Checked against React Native 0.86's own Yoga, built and run on the
+ * iPad's numbers: flex: 1 gives 661 and 463, a width gives 562 and 562.)
  */
-const LANE = { flexGrow: 0, flexShrink: 0, gap: space.sm }
+const LANE = { flexGrow: 1, flexShrink: 1, gap: space.sm }
 const LANE_HEADING = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: LANE_HEAD }
 /* The raw words a computer with nothing plugged in answers every unit read with (ForgeFX, registryCore). */
 const NO_DEVICE = /no fractal device found/i
@@ -1984,8 +1989,15 @@ function PlayFoot({
       </View>
     )
   }
+  /*
+   * The two shapes below are keyed apart, so turning the one into the other
+   * makes new Views: reused, the two-row shape's rows (laid out one under
+   * the other) would hand FOOT_HALF their heights as its flex basis, the
+   * way the lined-up halves once got theirs (LANE says how), and the halves
+   * would come out unequal with the middle gap off the Duo's fold.
+   */
   return oneRow ? (
-    <View style={FOOT_ONE_ROW}>
+    <View key="one-row" style={FOOT_ONE_ROW}>
       <View style={FOOT_HALF}>
         {previous}
         {setlists}
@@ -1998,7 +2010,7 @@ function PlayFoot({
       </View>
     </View>
   ) : (
-    <View style={{ gap: space.sm }}>
+    <View key="two-rows" style={{ gap: space.sm }}>
       <View style={FOOT_ROW}>
         {previous}
         {setlists}

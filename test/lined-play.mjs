@@ -148,13 +148,14 @@ export function run(test) {
     assert.equal(stage.match(/style=\{lined \? LANE_HEADING : /g).length, 2, 'the two headings are not one height lined up')
     assert.equal(stage.match(/style=\{lined \? laneBox : \{ gap: space\.sm \}\}/g).length, 2, 'the scenes and the chain are not the two halves')
     /*
-     * Each half its own width, never flex's share: on an iPad Pro on its side
+     * Each half its own width, never flex: on an iPad Pro on its side
      * (7 November 2026) flex: 1 came out 661 points for the scenes and 463
-     * for the chain, Yoga keeping a flex basis it worked out from the
-     * halves' contents before the row's width was settled, and the chain's
-     * pedals went one to a row off the bottom of the screen.
+     * for the chain: Yoga kept the stacked first frame's heights as the
+     * halves' flex basis, and the chain's pedals went one to a row off the
+     * bottom of the screen. A width is worked out again on every pass.
      */
-    assert.match(stage, /const LANE = \{ flexGrow: 0, flexShrink: 0, gap: space\.sm \}\n/, 'a half is left to flex: 1 to share out, which Yoga sizes by what is in it')
+    assert.match(stage, /const LANE = \{ flexGrow: 1, flexShrink: 1, gap: space\.sm \}\n/, 'a half is left to flex or a flex basis, which Yoga keeps from the stacked first frame')
+    assert.doesNotMatch(stage.slice(stage.indexOf('const LANE ='), stage.indexOf('const LANE_HEADING')), /\bflex:|flexBasis/, 'a half has a flex or a flex basis again')
     assert.match(stage, /const laneBox = lined \? \[LANE, \{ width: laneRow \}\] : null\n/, 'the halves are not each the row their tiles were sized from')
     assert.match(stage, /\{lined && !scenes\.hasScenes \? <View style=\{laneBox\} \/> : null\}/, 'with no scenes the chain does not keep its own half')
     /* And the two widths and the gap are exactly the page inside its padding, the padding the page is drawn with. */
@@ -168,6 +169,9 @@ export function run(test) {
     /* The bottom row: Previous far left, Tuner, Edit, Tap, Next far right. */
     const foot = stage.slice(stage.indexOf('function PlayFoot('), stage.indexOf('const FOOT_HALF'))
     assert.match(foot.replace(/\s+/g, ' '), /if \(lined\) \{ return \( <View style=\{FOOT_ROW\}> \{previous\} \{tuner\} \{edit\} \{tap\} \{next\} <\/View> \) \}/, 'the lined-up buttons are not in A1’s order')
+    /* The spread shape's two halves never inherit the two-row shape's rows, and their heights as a flex basis. */
+    assert.match(foot, /<View key="one-row" style=\{FOOT_ONE_ROW\}>/, 'the spread buttons reuse the two-row shape’s Views')
+    assert.match(foot, /<View key="two-rows" style=\{\{ gap: space\.sm \}\}>/, 'the two-row buttons reuse the spread shape’s Views')
     assert.match(stage, /lined,\n/, 'the buttons are not told Play is lined up')
     /* The Duo's fold down the middle gap, and nothing decided by the kind of device or which way up it is. */
     assert.match(stage, /const centre = lined \? foldInset\(insets\.left, insets\.right\) : fold\n/)
