@@ -143,9 +143,9 @@ export default function ConnectScreen({
         </header>
         <div className="connect-card">
           <h2>{SETUP.title}</h2>
-          <Steps />
-          {/* And where the other way is: in the phone apps, never a browser (shared/stores.mjs, 7 November 2026). */}
+          {/* Where the other way is, first, as everywhere: in the phone apps, never a browser (shared/stores.mjs, 7 November 2026). */}
           <BluetoothInApps />
+          <Steps />
         </div>
         <SignIn variant="stage" submitLabel="Sign in" onSubmit={onSignIn} onCreate={onCreate} busy={busy} />
         <button type="button" className="connect-howto" onClick={() => setHowTo((v) => !v)} aria-expanded={howTo}>
@@ -167,9 +167,9 @@ export default function ConnectScreen({
       {state === 'joining' ? (
         <>
           <h2>Connecting…</h2>
-          <p>Finding your computer.</p>
-          {/* A browser connects through a computer only; the apps have Bluetooth (shared/stores.mjs). */}
+          {/* First here too: a browser connects through a computer only; the apps have Bluetooth (shared/stores.mjs). */}
           <BluetoothInApps />
+          <p>Finding your computer.</p>
           {/*
             FRACTAL AUDIO'S SENTENCE, while the phone's browser starts up and
             looks for the computer (their letter, 18 October 2026, asks for it
@@ -180,8 +180,11 @@ export default function ConnectScreen({
           <p className="connect-independent">{NOT_AFFILIATED}</p>
           {/* Not beside "No computer is signed in with this account yet", which
               already names the account, and to which "make sure you're
-              connected" is advice about a computer that is not there. */}
-          {account && !noneSaid ? <Using email={remembered} paired={paired} /> : null}
+              connected" is advice about a computer that is not there. Nor
+              under the account warning (`elsewhere`), which names the account
+              itself: the same email twice, one under the other, as on the
+              phone until 7 November 2026. */}
+          {account && !noneSaid && !elsewhere ? <Using email={remembered} paired={paired} /> : null}
           {long ? (
             <>
               {mismatch || noneSaid || (
@@ -219,7 +222,8 @@ export default function ConnectScreen({
               its own.
             </p>
           )}
-          {noneSaid ? null : <Using email={remembered} paired={paired} />}
+          {/* Not beside the new words, nor under the account warning: both name the account themselves. */}
+          {noneSaid || elsewhere ? null : <Using email={remembered} paired={paired} />}
           <div className="connect-actions">
             <button className="primary" onClick={onRetry} disabled={busy}>
               Try now

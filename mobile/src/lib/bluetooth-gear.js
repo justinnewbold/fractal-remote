@@ -184,9 +184,11 @@ export const REPORT_NOTE = `Something not working? Tap ${REPORT_BUTTON}.`
  * with the computer.
  *
  * So the order is Bluetooth, then the computer, and there is no ranking. What
- * the computer adds is still said, in one short clause, in his own 25
- * October words, wherever the full sentence is: "A computer has less lag and
- * more features". True on every unit, the VP4 too:
+ * the computer adds is still said, in one short clause, wherever the full
+ * sentence is: "A computer has less lag and more features". That is our
+ * wording of his 25 October point, not his words, which were "Bluetooth
+ * will have more lag and not have as many features". True on every unit,
+ * the VP4 too:
  *
  * LESS LAG: the preset list is read a name at a time over a 5-pin MIDI cable
  * (bleWire NAME_GAP_MS), an AM4's scene names take seconds the first time a
@@ -195,8 +197,11 @@ export const REPORT_NOTE = `Something not working? Tap ${REPORT_BUTTON}.`
  *
  * MORE FEATURES: over Bluetooth there is no editing or saving, no looper,
  * volume button, unit metronome click or Footswitches page (the page's
- * DIFFERENT list); and a VP4 gets presets and scenes only, with no effects,
- * names or tuner (VP4_OVER_BLUETOOTH: "For those, use the computer").
+ * DIFFERENT list); and a VP4 gets presets and scenes only, while through the
+ * computer it also gets its effects turned on and off, the name of the
+ * preset it is on, and a check that a preset or scene landed
+ * (VP4_OVER_BLUETOOTH). Never the tuner, which a VP4 does not get from the
+ * app either way (shared/vp4-safety.mjs VP4_NO_TUNER).
  * Never "plus editing and saving", which it said for a day: through the
  * computer a VP4 is not edited or saved either (shared/vp4-safety.mjs
  * VP4_SO_FAR), and the purchase page names the VP4. The detail is on the
@@ -330,10 +335,11 @@ export const WALKTHROUGH_TWO_WAYS = {
   /* In place of P9.demo.sub, under Here’s the app at the end of the demo's walkthrough. */
   demoSub: 'This app connects to your Fractal with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer connected to it by USB.',
   /*
-   * The sign-in screen's Get connected card, in one line on such a copy: the
-   * computer's three steps are on Connect a computer and in Troubleshooting
-   * (It will not connect at all), and once the account is in, How do you
-   * connect to your unit? asks (HOW_CONNECT).
+   * The sign-in screen's Get connected card, in one line on such a copy:
+   * setting up the computer is on Connect a computer (the desktop app, the
+   * same account on both, the link by email), the computer's three steps are
+   * in Troubleshooting (It will not connect at all), and once the account is
+   * in, How do you connect to your unit? asks (HOW_CONNECT).
    */
   setup: 'Make an account, then connect with no computer, through a Bluetooth MIDI adapter sold separately, or through a computer.',
   /* In place of P3.real.agree, the box ticked before Unlock. */
@@ -930,11 +936,17 @@ export const unitForReport = (unit) => (UNITS[unit] ? `${UNITS[unit]}${!untried(
  * units, and on Play in place of the chain the phone cannot read (Stage, a
  * VP4 over Bluetooth). Presets and scenes, by the two messages a foot
  * controller sends, and nothing read back (lib/bleVp4.js): no effects, no
- * names, no tuner, and nothing to say a preset or scene landed. The way to
- * the rest is the computer, as it is for every unit.
+ * names, no tuner, and nothing to say a preset or scene landed.
+ *
+ * AND WHAT THE COMPUTER ADDS FOR ONE, said as only what it does (shared/
+ * vp4-safety.mjs, the computer's own sentences): its effects turned on and
+ * off, the name of the preset it is on, and a check that a preset or scene
+ * landed. Never the tuner: until 7 November 2026 this sent VP4 owners to
+ * the computer for "effects, names or tuner", and a VP4's tuner does not
+ * open from the app at all (VP4_NO_TUNER, VP4_SO_FAR).
  */
 export const VP4_OVER_BLUETOOTH =
-  'Over Bluetooth, the app changes a VP4’s presets and scenes, the way a MIDI foot controller does, and nothing else. It can’t hear the VP4 that way, so it can’t show its effects, names or tuner, or check that a preset or scene landed. For those, use the computer.'
+  'Over Bluetooth, the app changes a VP4’s presets and scenes, the way a MIDI foot controller does, and nothing else. It can’t hear the VP4 that way, so it can’t show its effects or the name of the preset it is on, or check that a preset or scene landed. Through the computer, the app also turns its effects on and off, shows that name, and checks that a preset or scene landed.'
 
 /* And under "Connected" on the page: the adapter is all a VP4's link can know. */
 export const VP4_CONNECTED = 'Connected · sending to the VP4'

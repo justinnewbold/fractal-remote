@@ -354,13 +354,16 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
           grey Bluetooth line under them were 57 words before the form, the
           computer first; on such a copy the card is the one line, Bluetooth
           first (WALKTHROUGH_TWO_WAYS.setup), and once the account is in, How
-          do you connect to your unit? asks (components/HowConnect). The
-          computer's steps are on Connect a computer (How to connect my
-          computer, below) and in Troubleshooting → It will not connect at
-          all. The purchase page's own gate (Paywall.js), because somebody
-          here may not have paid yet; everywhere else, and in the browser,
-          which does need the computer, the steps are as he drew them
-          (shared/onboarding.mjs SETUP).
+          do you connect to your unit? asks (components/HowConnect). Setting
+          up the computer is on Connect a computer (How to connect my
+          computer, below: the desktop app, the same account on both, the
+          link by email), and the three steps themselves are in
+          Troubleshooting → It will not connect at all, the one place they
+          are drawn on such a copy. The purchase page's own gate
+          (Paywall.js), because somebody here may not have paid yet;
+          everywhere else, and in the browser, which does need the
+          computer, the steps are as he drew them (shared/onboarding.mjs
+          SETUP).
         */}
         <View
           style={{

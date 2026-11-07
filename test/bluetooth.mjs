@@ -6848,15 +6848,19 @@ export function run(test) {
      *
      * THE THREE THINGS NOW, in every full wording: Bluetooth named before
      * the computer; that Bluetooth needs no computer; and what a computer
-     * adds, in his own 25 October words, "less lag and more features", true
-     * on every unit: less lag (the preset list, a first preset's scene
-     * names, a footswitch change shown at the next poll), and more features
-     * (no editing or saving over Bluetooth, and on a VP4 no effects, names
-     * or tuner over it: VP4_OVER_BLUETOOTH). Never "plus editing and
-     * saving", which it said for a day: through the computer a VP4 is not
-     * edited or saved either (VP4_SO_FAR), and the purchase page names the
-     * VP4. And no ranking either way. The short lines leave the clause out
-     * on purpose (below).
+     * adds, "less lag and more features", which is our wording of his 25
+     * October point, not his words ("Bluetooth will have more lag and not
+     * have as many features"). True on every unit: less lag (the preset
+     * list, a first preset's scene names, a footswitch change shown at the
+     * next poll), and more features (no editing or saving over Bluetooth,
+     * and on a VP4 presets and scenes only over it, while the computer also
+     * turns its effects on and off, shows the name of the preset it is on
+     * and checks that a preset or scene landed: VP4_OVER_BLUETOOTH). Never
+     * the tuner for a VP4, which it does not get from the app either way
+     * (VP4_NO_TUNER). Never "plus editing and saving", which it said for a
+     * day: through the computer a VP4 is not edited or saved either
+     * (VP4_SO_FAR), and the purchase page names the VP4. And no ranking
+     * either way. The short lines leave the clause out on purpose (below).
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
     assert.equal(gear.BLUETOOTH_WAYS, 'Bluetooth needs no computer, just an adapter on your unit, sold separately. A computer has less lag and more features.')
@@ -6873,8 +6877,21 @@ export function run(test) {
     const different = src('mobile/src/screens/Bluetooth.js').match(/const DIFFERENT = \[([\s\S]*?)\n\]/)?.[1] ?? ''
     assert.match(different, /No editing or saving over Bluetooth\./)
     assert.match(different, /Slower to load the preset list\./)
-    /* And on a VP4 too: over Bluetooth it gets presets and scenes only, and the gear file sends it to the computer for the rest. */
-    assert.match(gear.VP4_OVER_BLUETOOTH, /can’t show its effects, names or tuner[^.]*\. For those, use the computer\./, 'a VP4 gets as much over Bluetooth as over the computer, and “more features” is not true of it')
+    /*
+     * And on a VP4 too: over Bluetooth it gets presets and scenes only, and
+     * the gear file says what the computer adds for one, which is only what
+     * the computer does for a VP4 (shared/vp4-safety.mjs): effects on and
+     * off, the name of the preset it is on, and a check that a preset or
+     * scene landed. Never the tuner, which no way opens on a VP4
+     * (VP4_NO_TUNER); until 7 November 2026 this sent VP4 owners to the
+     * computer for it.
+     */
+    assert.match(gear.VP4_OVER_BLUETOOTH, /\. Through the computer, the app also turns its effects on and off, shows that name, and checks that a preset or scene landed\.$/, 'a VP4 gets as much over Bluetooth as over the computer, and “more features” is not true of it')
+    assert.doesNotMatch(gear.VP4_OVER_BLUETOOTH, /tuner|For those, use the computer/i, 'a VP4 owner is sent to the computer for the tuner, which a VP4 does not get from the app at all')
+    const vp4 = await import('../shared/vp4-safety.mjs')
+    assert.match(vp4.VP4_NO_TUNER, /can’t open a VP4’s tuner/, 'the computer opens a VP4’s tuner now: VP4_OVER_BLUETOOTH may say so')
+    assert.match(vp4.VP4_SO_FAR, /turns effects on and off/, 'the computer no longer turns a VP4’s effects on and off: VP4_OVER_BLUETOOTH says it does')
+    assert.match(vp4.VP4_SO_FAR, /names of a VP4’s presets, except the one it is on/, 'the computer no longer shows the name of the preset a VP4 is on: VP4_OVER_BLUETOOTH says it does')
 
     /*
      * THE PURCHASE PAGE: one short line, Bluetooth first ("Way too much
@@ -6957,7 +6974,7 @@ export function run(test) {
       const bluetooth = words.indexOf('Bluetooth')
       assert.ok(bluetooth > -1 && bluetooth < words.search(computerWay), `${where} does not name Bluetooth before the computer`)
       assert.match(words, /\bno computer\b/i, `${where} does not say Bluetooth needs no computer`)
-      assert.match(words, /less lag and more features/, `${where} does not say what a computer adds, in his words: less lag and more features`)
+      assert.match(words, /less lag and more features/, `${where} does not say what a computer adds, in our wording of his point: less lag and more features`)
       assert.doesNotMatch(words, RANKED, `${where} still ranks the two ways`)
       /* Nothing a VP4 does not get through the computer either. */
       assert.doesNotMatch(words, /editing|saving/i, `${where} promises editing or saving through a computer, which a VP4 does not get`)
@@ -7250,17 +7267,36 @@ export function run(test) {
     /* It opens a page and nothing more: nothing touches the phone's Bluetooth before Connect on the Bluetooth page. */
     assert.ok(!/setBluetooth|requestPermissions|lib\/bluetooth'|bleLink|import\(/.test(card), 'the card reaches for the phone’s Bluetooth itself')
 
-    /* App: owed, signed in and past the purchase page, not the demo, Bluetooth offered (the row's own gate) and off, nothing connected; before the sharing card, in Play's place. */
+    /*
+     * App: owed, signed in and past the purchase page, not the demo,
+     * Bluetooth offered (the row's own gate) and off, nothing connected;
+     * before the sharing card, in Play's place, and only while Play is the
+     * screen, from the link as the top bar says it (shownLink, read after
+     * it is made). The second review of 7 November 2026: drawn ahead of
+     * every screen, a drop put it in place of Settings, Troubleshooting, a
+     * report half typed or the Bluetooth page.
+     */
     const app = flat('mobile/App.js')
-    assert.match(app, /const howOwed = useHowConnectOwed\(\) const askHow = howConnectShown\(\{ owed: howOwed, auth, demo, offered: bluetoothOffered, bluetooth, link: link\.link, caps \}\)/, 'How do you connect is asked by some other rule than lib/howConnect’s')
+    assert.match(app, /const howOwed = useHowConnectOwed\(\) const askHow = howConnectShown\(\{ owed: howOwed, auth, demo, offered: bluetoothOffered, bluetooth, link: shownLink\.link, caps, screen \}\)/, 'How do you connect is asked by some other rule than lib/howConnect’s, over another screen, or from the raw link')
+    assert.ok(app.indexOf('const shownLink = useHeldLink(') > -1 && app.indexOf('const shownLink = useHeldLink(') < app.indexOf('const askHow = howConnectShown('), 'How do you connect reads the held link before it is made')
     assert.match(app, /\) : askHow \? \( \/\*[^]*?\*\/ <HowConnect onBluetooth=\{bluetoothOffered \? \(\) => \(howConnectAnswered\(\), openSettings\('bluetooth'\)\) : null\} onComputer=\{howConnectAnswered\} \/> \) : askShare \? \(/, 'How do you connect is not drawn in Play’s place, before the sharing card, or an answer does not settle it')
     /*
-     * Settled the moment a unit answers, and at once when it is asked with a
-     * unit already connected (`howOwed` among the effect's reasons): bought
-     * from Play's trial line over a live rig, it was owed, and drawn in
-     * Play's place at the next drop (the review of 7 November 2026).
+     * Settled the moment a real link answers, and at once when it is asked
+     * with one already answering (`howOwed` among the effect's reasons):
+     * bought from Play's trial line over a live rig, it was owed, and drawn
+     * in Play's place at the next drop. Never by the demo's link, which is
+     * still on the render that leaves it (lib/howConnect noteLink, on the
+     * bench below).
      */
-    assert.match(app, /useEffect\(\(\) => \{ if \(auth === 'in' && !demo && link\.link === 'connected' && unitHere\) unitConnected\(\) \}, \[auth, demo, link\.link, unitHere, howOwed\]\)/, 'a unit answering does not settle the question, a purchase made with a unit connected leaves it owed, or the demo counts as a connection')
+    assert.match(app, /useEffect\(\(\) => \{ noteLink\(\{ auth, demo, link: link\.link, unit: unitHere \}\) \}, \[auth, demo, link\.link, unitHere, howOwed\]\)/, 'a link answering does not settle the question, a purchase made with a unit connected leaves it owed, or the demo counts as a connection')
+    assert.ok(!/unitConnected\(/.test(code('mobile/App.js')), 'App counts a connection by some other rule than noteLink’s, which leaves the demo out')
+    /*
+     * And the walkthrough's own choice of way, after Restore finds a
+     * purchase: No computer - I'll use Bluetooth, or Yes for the computer,
+     * is the answer, and the account made next is not asked it again.
+     */
+    assert.match(app, /if \(way === 'bluetooth' \|\| way === 'computer'\) howConnectAnswered\(\) \/\*[^*]*\*\/ askedBluetooth\.current = way === 'bluetooth' setAuth\('out'\)/, 'the walkthrough’s choice of way is asked again once the account is in')
+    assert.match(code('mobile/src/screens/Onboarding.js').replace(/\s+/g, ' '), /<Cta label=\{P6\.yes\} onPress=\{\(\) => onAccount\?\.\(twoWays \? 'computer' : undefined\)\} \/>/, 'Yes on the page after a found purchase is not the computer’s way where Bluetooth was offered beside it')
     /* Owed only by the three moments, on this device: an account made, a trial started, the full version bought just now. */
     const signIn = code('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
     assert.match(signIn, /const \{ needsConfirmation, userId \} = await signUp\(\{[^}]*\}\) askHowToConnect\(\) if \(needsConfirmation\) \{/, 'making an account does not ask how they connect')
@@ -7283,15 +7319,16 @@ export function run(test) {
     try {
       writeFileSync(join(dir, 'package.json'), '{ "type": "module" }')
       writeFileSync(join(dir, 'react.js'), 'export const useState = (v) => [v, () => {}]\nexport const useEffect = () => {}\n')
+      /* `gate`: a disk slow to answer, held until the test opens it. `readBroken`: a disk that will not read but still writes. */
       writeFileSync(
         join(dir, 'async-storage.js'),
-        'const s = () => globalThis.__howStorage\nexport default { getItem: async (k) => { if (s().broken) throw new Error("no"); return k in s().kept ? s().kept[k] : null }, setItem: async (k, v) => { if (s().broken) throw new Error("no"); s().kept[k] = v } }\n'
+        'const s = () => globalThis.__howStorage\nexport default { getItem: async (k) => { if (s().gate) await s().gate; if (s().broken || s().readBroken) throw new Error("no"); return k in s().kept ? s().kept[k] : null }, setItem: async (k, v) => { if (s().broken) throw new Error("no"); s().kept[k] = v } }\n'
       )
       const lib = src('mobile/src/lib/howConnect.js').replace("from '@react-native-async-storage/async-storage'", "from './async-storage.js'").replace("from 'react'", "from './react.js'")
       writeFileSync(join(dir, 'howConnect.js'), lib)
       let n = 0
       const fresh = (kept = {}, broken = false) => {
-        globalThis.__howStorage = { kept, broken }
+        globalThis.__howStorage = { kept, ...(broken && typeof broken === 'object' ? broken : { broken }) }
         return import(`${pathToFileURL(join(dir, 'howConnect.js')).href}?n=${++n}`)
       }
       const ASK = 'fractal.howConnect.v1'
@@ -7363,8 +7400,13 @@ export function run(test) {
        * kept through the drop), by either way. Only with no rig at all.
        */
       const shown = h.howConnectShown
-      const base = { owed: true, auth: 'in', demo: false, offered: true, bluetooth: false, link: 'joining', caps: null }
+      const base = { owed: true, auth: 'in', demo: false, offered: true, bluetooth: false, link: 'joining', caps: null, screen: 'stage' }
       assert.equal(shown(base), true, 'the card is not drawn for a new account with nothing connected')
+      assert.equal(shown({ ...base, link: 'no-answer' }), true, 'the card is not drawn while the computer is held unanswered')
+      /* Only in Play's place: never instead of another screen the link drops under (the second review of 7 November 2026). */
+      for (const screen of ['settings', 'fixes', 'report', 'log', 'connect', 'setlists', 'presets', 'gear', undefined]) {
+        assert.equal(shown({ ...base, screen }), false, `the card takes the place of ${screen || 'a screen nobody named'}`)
+      }
       for (const link of ['connected', 'joining', 'no-answer']) {
         assert.equal(shown({ ...base, link, caps: { device: 'am4' } }), false, `the card is drawn over a rig on screen (${link})`)
       }
@@ -7379,6 +7421,132 @@ export function run(test) {
       ]) {
         assert.equal(shown({ ...base, ...change }), false, `the card is drawn ${why}`)
       }
+
+      /*
+       * LEAVING THE DEMO IS NOT A CONNECTION (the second review of 7
+       * November 2026). Bought in the demo, the question is owed; the render
+       * that switches the demo off still carries its link ('connected') and
+       * its unit, because stopLink resets them only in the cleanup after it.
+       * Counted, it settled the question at Exit demo and wrote a first
+       * connection for the sharing card, with nothing ever connected.
+       */
+      h = await fresh()
+      await h.readHowConnect()
+      h.askHowToConnect()
+      await settle()
+      const inDemo = { auth: 'in', demo: true, link: 'connected', unit: true }
+      h.noteLink(inDemo)
+      h.noteLink({ ...inDemo, demo: false })
+      await settle()
+      assert.equal(h.useHowConnectOwed(), true, 'leaving the demo settled the question a purchase in it had owed')
+      assert.deepEqual(globalThis.__howStorage.kept, { [ASK]: 'owed' }, 'leaving the demo was kept as a first connection')
+      /* Signed out on the way out (toSignIn): still nothing. */
+      h.noteLink({ ...inDemo, auth: 'out', demo: false })
+      await settle()
+      assert.equal(h.useHowConnectOwed(), true)
+      /* Then the real link: down first, then the computer answering with no unit behind it settles the question, and is no first connection. */
+      h.noteLink({ auth: 'in', demo: false, link: 'off', unit: false })
+      h.noteLink({ auth: 'in', demo: false, link: 'joining', unit: false })
+      assert.equal(h.useHowConnectOwed(), true, 'the question was settled before anything answered')
+      h.noteLink({ auth: 'in', demo: false, link: 'connected', unit: false })
+      await settle()
+      assert.equal(h.useHowConnectOwed(), false, 'a computer answering with no unit leaves the question owed, to come back at its next drop')
+      assert.deepEqual(globalThis.__howStorage.kept, { [ASK]: 'done' }, 'a computer with no unit was kept as a first connection')
+      /* And the unit answering behind it is the first connection. */
+      h.noteLink({ auth: 'in', demo: false, link: 'connected', unit: true })
+      await settle()
+      assert.deepEqual(globalThis.__howStorage.kept, { [ASK]: 'done', [CONNECTED]: 'yes' })
+      /* A Bluetooth adapter connecting says 'connected' too (bleLink), before any unit answers: settled the same way. */
+      h = await fresh({ [ASK]: 'owed' })
+      await h.readHowConnect()
+      h.noteLink({ auth: 'in', demo: false, link: 'connected', unit: false })
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'an adapter connecting leaves the question owed')
+      /* A trial started from inside the demo switches it off first (purchases.js startTrial): asked after, still owed. */
+      h = await fresh()
+      await h.readHowConnect()
+      h.noteLink(inDemo)
+      h.noteLink({ ...inDemo, demo: false })
+      h.askHowToConnect()
+      await settle()
+      h.noteLink({ ...inDemo, demo: false })
+      await settle()
+      assert.deepEqual(globalThis.__howStorage.kept, { [ASK]: 'owed' }, 'a trial started in the demo was settled by the demo’s own unit')
+
+      /*
+       * DEVICES THAT CONNECTED BEFORE THIS CARD EXISTED (the second review
+       * of 7 November 2026): what they kept then counts, read only where
+       * neither of the card's own keys is on the disk, and is written down
+       * as a first connection.
+       */
+      const before = [
+        ['a computer the account heard', { 'fractal.remote.host': JSON.stringify({ accounts: { u1: { name: 'Studio Mac', many: false } } }) }],
+        ['the one pick 1.87.47 kept', { 'fractal.remote.host': 'Studio Mac' }],
+        ['a Bluetooth unit kept', { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: null, pcChannel: 1, methods: {} }) }],
+        ['a Bluetooth adapter kept', { 'fractal.bluetooth': JSON.stringify({ on: true, unit: null, adapter: { id: 'a1', name: 'WIDI Uhost' }, pcChannel: 1, methods: {} }) }],
+        ['the way a USB cable took over from', { 'fractal.bluetooth.cable': JSON.stringify({ adapter: null, unit: null, from: 'computer' }) }],
+        ['a gear note sent', { 'fractal.gearShare.sent.v1': JSON.stringify({ 'am4|bluetooth': 1 }) }]
+      ]
+      for (const [what, kept] of before) {
+        h = await fresh({ ...kept })
+        assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: true }, `${what} is not a connection before`)
+        h.askHowToConnect()
+        await settle()
+        assert.equal(globalThis.__howStorage.kept[ASK], undefined, `a device with ${what} is asked how it connects`)
+        assert.equal(globalThis.__howStorage.kept[CONNECTED], 'yes', `${what} is not written down as a first connection`)
+      }
+      /* What a device keeps with nothing set up: no connection. */
+      const nothing = {
+        'fractal.remote.host': JSON.stringify({ accounts: {} }),
+        'fractal.bluetooth': JSON.stringify({ on: false, unit: null, adapter: null, pcChannel: 1, methods: {} }),
+        'fractal.bluetooth.cable': JSON.stringify({ adapter: null, unit: null, from: null }),
+        'fractal.gearShare.sent.v1': '{}'
+      }
+      h = await fresh({ ...nothing })
+      assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: false }, 'empty records count as a connection')
+      /* And once the card's own keys are there, they decide: owed stays owed until a link answers or it is answered. */
+      h = await fresh({ [ASK]: 'owed', 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'am4', adapter: null }) })
+      assert.deepEqual(await h.readHowConnect(), { owed: true, connectedBefore: false })
+
+      /*
+       * NEVER 'owed' OVER A 'done' NOBODY HAS READ YET (the second review of
+       * 7 November 2026): asked before the launch read answers, it waits for
+       * it; asked with no read at all, it makes one; and a read that could
+       * not be made leaves it unasked.
+       */
+      let open
+      h = await fresh({ [ASK]: 'done' }, { gate: new Promise((r) => (open = r)) })
+      const reading = h.readHowConnect()
+      h.askHowToConnect()
+      await settle()
+      open()
+      await reading
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'a question asked before the launch read wrote owed over an answer')
+      h = await fresh(globalThis.__howStorage.kept)
+      assert.equal((await h.readHowConnect()).owed, false, 'the next launch asks an owner who had answered')
+      h = await fresh({ [ASK]: 'done' })
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'a question asked with no read at all wrote owed over an answer')
+      assert.equal(h.useHowConnectOwed(), false)
+      h = await fresh({ [ASK]: 'done' }, { readBroken: true })
+      assert.deepEqual(await h.readHowConnect(), { owed: false, connectedBefore: true })
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'done', 'a read that failed armed the question again over an answer')
+      assert.equal(h.useHowConnectOwed(), false, 'a read that failed armed the question again')
+      /* And a slow read that finds nothing still owes it, once it has answered. */
+      h = await fresh({}, { gate: new Promise((r) => (open = r)) })
+      const slow = h.readHowConnect()
+      h.askHowToConnect()
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], undefined, 'the question was armed before the disk answered')
+      open()
+      await slow
+      await settle()
+      assert.equal(globalThis.__howStorage.kept[ASK], 'owed', 'a question asked during a slow launch read was lost')
+      assert.equal(h.useHowConnectOwed(), true)
     } finally {
       delete globalThis.__howStorage
       rmSync(dir, { recursive: true, force: true })

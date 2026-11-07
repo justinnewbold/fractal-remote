@@ -39,7 +39,7 @@ import IndependentNotice, { independentNoticeSeen, markIndependentNotice } from 
 import GearShareNotice from './src/components/GearShareNotice'
 import HowConnect from './src/components/HowConnect'
 import { setSharing, shareQuestionDue, startGearShare } from './src/lib/gearShare'
-import { howConnectAnswered, howConnectShown, readHowConnect, unitConnected, useHowConnectOwed } from './src/lib/howConnect'
+import { howConnectAnswered, howConnectShown, noteLink, readHowConnect, useHowConnectOwed } from './src/lib/howConnect'
 import { startBluetoothSeen } from './src/lib/bluetoothSeen'
 import { NOT_AFFILIATED } from './src/lib/affiliation'
 import { walkthroughSeen, markWalkthrough } from './src/lib/walkthrough'
@@ -661,49 +661,6 @@ export default function App() {
   /* The play screen itself is up: not the waiting screen standing in for it. */
   const playOnScreen = screen === 'stage' && !settling
   /*
-   * AND ANOTHER SCREEN IS UP IN ITS PLACE, for Siri (lib/siri): a command
-   * said there is answered with "Open Play" at once, while one said as the
-   * app is still starting waits for Play inside its tap rule. The startup
-   * card, the walkthrough, the sign-in, the paywall and the sharing card
-   * (askShare, below) are elsewhere too: Play does not come by itself from
-   * any of them (lib/siri-rule playElsewhereOf says which is which).
-   */
-  /*
-   * "HOW DO YOU CONNECT TO YOUR UNIT?" (components/HowConnect): owed once an
-   * account is made, a trial started or the full version bought on this
-   * device (lib/howConnect), and asked signed in and past the purchase page,
-   * not in the demo, where this copy offers Bluetooth (the Settings row's own
-   * gate, bluetoothOffered) and nothing is connected yet. Drawn in Play's
-   * place, never over it, ahead of the sharing card. Either answer settles
-   * it, and so does a unit answering first (the effect below).
-   */
-  const howOwed = useHowConnectOwed()
-  const askHow = howConnectShown({ owed: howOwed, auth, demo, offered: bluetoothOffered, bluetooth, link: link.link, caps })
-  /*
-   * And settled the moment a unit answers, by either way, or at once when it
-   * is asked with a unit already connected (`howOwed` among the reasons to
-   * look): bought from Play's trial line over a live rig, it was owed and
-   * then drawn in Play's place at the next drop (the review of 7 November
-   * 2026).
-   */
-  useEffect(() => {
-    if (auth === 'in' && !demo && link.link === 'connected' && unitHere) unitConnected()
-  }, [auth, demo, link.link, unitHere, howOwed])
-  /*
-   * THE SHARING QUESTION'S MOMENT: signed in and past the purchase page
-   * ('in'), and not in the demo, so the App Review demo is never stopped by
-   * it. It comes after the independent card and the walkthrough because the
-   * branches below put those first; it is drawn in Play's place, never over
-   * it. A name, rather than the condition written out where it is drawn.
-   *
-   * AND ONLY ONCE A UNIT HAS CONNECTED ON THIS DEVICE, at a later launch
-   * (connectedBefore): straight after the trial it was one more card between
-   * paying and playing, about gear that had not connected yet.
-   */
-  const askShare = shareDue && connectedBefore && auth === 'in' && !demo
-  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen, shareCard: askHow || askShare })
-  useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
-  /*
    * And the new-version note only floats over it while the phone is off the
    * rig. Over a connected rig a download can land mid-song, and the note's
    * Restart now would come up where the preset button is, under a thumb on
@@ -772,6 +729,56 @@ export default function App() {
    * unanswered until the computer is back (useHeldLink, below).
    */
   const shownLink = useHeldLink(link, looking, bluetooth ? 'adapter' : 'computer')
+  /*
+   * "HOW DO YOU CONNECT TO YOUR UNIT?" (components/HowConnect): owed once an
+   * account is made, a trial started or the full version bought on this
+   * device (lib/howConnect), and asked signed in and past the purchase page,
+   * not in the demo, where this copy offers Bluetooth (the Settings row's own
+   * gate, bluetoothOffered) and nothing is connected yet. Drawn in Play's
+   * place, never over it, ahead of the sharing card, and only while Play is
+   * the screen (`screen`): never in place of Settings, Troubleshooting, a
+   * report being typed or the Bluetooth page. Read from the link as the top
+   * bar says it (shownLink), so it does not come and go with a flip. Either
+   * answer settles it, and so does a link answering first (the effect
+   * below).
+   */
+  const howOwed = useHowConnectOwed()
+  const askHow = howConnectShown({ owed: howOwed, auth, demo, offered: bluetoothOffered, bluetooth, link: shownLink.link, caps, screen })
+  /*
+   * And settled the moment a real link answers, the computer (a unit behind
+   * it or not) or an adapter, or at once when it is asked with one already
+   * answering (`howOwed` among the reasons to look): bought from Play's
+   * trial line over a live rig, it was owed and then drawn in Play's place
+   * at the next drop (the review of 7 November 2026). Never the demo's
+   * link, which is still on the render that leaves it (lib/howConnect
+   * noteLink).
+   */
+  useEffect(() => {
+    noteLink({ auth, demo, link: link.link, unit: unitHere })
+  }, [auth, demo, link.link, unitHere, howOwed])
+  /*
+   * THE SHARING QUESTION'S MOMENT: signed in and past the purchase page
+   * ('in'), and not in the demo, so the App Review demo is never stopped by
+   * it. It comes after the independent card and the walkthrough because the
+   * branches below put those first; it is drawn in Play's place, never over
+   * it. A name, rather than the condition written out where it is drawn.
+   *
+   * AND ONLY ONCE A UNIT HAS CONNECTED ON THIS DEVICE, at a later launch
+   * (connectedBefore): straight after the trial it was one more card between
+   * paying and playing, about gear that had not connected yet.
+   */
+  const askShare = shareDue && connectedBefore && auth === 'in' && !demo
+  /*
+   * AND ANOTHER SCREEN IS UP IN ITS PLACE, for Siri (lib/siri): a command
+   * said there is answered with "Open Play" at once, while one said as the
+   * app is still starting waits for Play inside its tap rule. The startup
+   * card, the walkthrough, the sign-in, the paywall, How do you connect to
+   * your unit? and the sharing card (askHow, askShare) are elsewhere too:
+   * Play does not come by itself from any of them (lib/siri-rule
+   * playElsewhereOf says which is which).
+   */
+  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen, shareCard: askHow || askShare })
+  useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
   /*
    * Where the pill on the bar goes, named once, so the tap and what a screen
    * reader says it does cannot disagree (TopBar unitGoes). Which unit only
@@ -1295,11 +1302,18 @@ export default function App() {
              * every other exit from it. Sending somebody back to the start of
              * a first-run flow they have just walked out of would read as the
              * app forgetting what they did.
+             *
+             * After a found purchase, the way picked (`way`: No computer -
+             * I'll use Bluetooth, or Yes, the computer's) is the answer to
+             * How do you connect to your unit?, never asked again once the
+             * account is in (lib/howConnect); Bluetooth's goes on to its page
+             * (askedBluetooth).
              */
             onAccount={(way) => {
               markWalkthrough()
               setSeenWalk(true)
               setReplaying(false)
+              if (way === 'bluetooth' || way === 'computer') howConnectAnswered()
               /* The found purchase's Bluetooth way: on to the Bluetooth page once signed in (askedBluetooth). */
               askedBluetooth.current = way === 'bluetooth'
               setAuth('out')
@@ -1484,7 +1498,9 @@ export default function App() {
            * "How do you connect to your unit?", once, in Play's place
            * (components/HowConnect). Either answer settles it: Bluetooth
            * adapter opens the Bluetooth page, through the Settings row's own
-           * gate; No Bluetooth adapter? goes on to Finding your computer….
+           * gate; No Bluetooth adapter? goes on to Finding your computer…,
+           * always, since the card is drawn only while Play is the screen
+           * (askHow): there is nothing else behind it to land on.
            */
           <HowConnect
             onBluetooth={bluetoothOffered ? () => (howConnectAnswered(), openSettings('bluetooth')) : null}

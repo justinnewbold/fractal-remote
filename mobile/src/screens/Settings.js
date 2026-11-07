@@ -1422,8 +1422,8 @@ export default function Settings({
             {/* And not under "No computer is signed in with this account yet",
                 which names the account already, and beside which "make sure
                 you're connected" is about a computer that is not there. */}
-            {/* Nor under the account warning, which names the account itself: the same email twice, one under the other (his tablet's report, 7 November 2026). */}
-            {link === 'no-answer' && account?.email && !isPairAccount(account.email) && !noneSaid && !elsewhere ? (
+            {/* Nor under the account warning, which names the account itself: the same email twice, one under the other (his tablet's report, 7 November 2026). So it waits for the account server's definite no (`elsewhere` false), as the website does, rather than coming up a moment before the warning takes its place. */}
+            {link === 'no-answer' && account?.email && !isPairAccount(account.email) && !noneSaid && elsewhere === false ? (
               <Note>{`Make sure you’re connected to your computer using ${account.email}.`}</Note>
             ) : null}
 

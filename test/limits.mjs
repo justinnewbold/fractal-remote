@@ -4539,6 +4539,8 @@ export function run(test) {
     assert.ok(said.indexOf(BLUETOOTH_WAYS) < said.indexOf('What it does'), '/bluetooth says what Bluetooth does before it says the two ways')
     assert.ok(!/best (?:one|way)|more lag and fewer features/i.test(said), '/bluetooth still ranks the computer first')
     assert.match(said, /No editing or saving over Bluetooth/, '/bluetooth does not say editing and saving need the computer')
+    /* And not for a VP4, which the computer does not edit or save either (VP4_SO_FAR). */
+    assert.match(said, /No editing or saving over Bluetooth: for those, use the desktop app , on any unit but the VP4, which the app doesn’t edit or save either way\./, '/bluetooth sends a VP4 owner to the computer for editing and saving, which it does not get there either')
     assert.match(said, /on a VP4, presets and scenes/, '/bluetooth promises a VP4 more than presets and scenes')
     assert.match(said, /It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4\./, '/bluetooth does not say which units it is offered on')
     assert.ok(!/\btried\b|\btested\b/i.test(said), '/bluetooth says where it was tried')

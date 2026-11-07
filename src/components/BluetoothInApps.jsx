@@ -2,13 +2,15 @@ import { BLUETOOTH_IN_APPS, STORES } from '../../shared/stores.mjs'
 import { inDesktopApp } from '../lib/desktop'
 
 /**
- * One line: Bluetooth is in the phone apps, and a web browser connects
- * through a computer only, with the stores it is in (shared/stores.mjs
- * BLUETOOTH_IN_APPS says why). Drawn wherever the website explains
- * connecting: the first screen and the connecting screen, How it works in
- * the walkthrough, Phone & computer, and the unlock page. Nothing in the
- * computer app's own window, which is the computer, and only the stores that
- * are open.
+ * One line: Bluetooth is in the iPhone, iPad and Android apps, and a web
+ * browser connects through a computer only, with the stores it is in
+ * (shared/stores.mjs BLUETOOTH_IN_APPS says why). Drawn wherever the website
+ * explains connecting: first, under the heading, on every screen of the
+ * connect page (the first screen, Connecting…, Your computer isn't answering
+ * and Connect to your computer), on Phone & computer and in Troubleshooting;
+ * and under How it works in the walkthrough and on the unlock page. Nothing
+ * in the computer app's own window, which is the computer, and only the
+ * stores that are open.
  */
 export default function BluetoothInApps({ className = 'hint' }) {
   if (inDesktopApp()) return null

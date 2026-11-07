@@ -644,7 +644,7 @@ export const AREAS = [
          * browser says instead where Bluetooth is, in one line with the
          * stores (src/components/BluetoothInApps.jsx, shared/stores.mjs).
          */
-        why: 'phone only — a browser cannot reach a Bluetooth MIDI adapter; it says in one line that Bluetooth is in the iPhone and Android apps and that a web browser connects through a computer only (src/components/BluetoothInApps.jsx)'
+        why: 'phone only — a browser cannot reach a Bluetooth MIDI adapter; it says in one line that Bluetooth is in the iPhone, iPad and Android apps and that a web browser connects through a computer only (src/components/BluetoothInApps.jsx)'
       }
     ]
   },
@@ -2354,11 +2354,11 @@ export function run(test) {
     assert.ok(read('mobile/src/screens/SignIn.js').includes('{WALKTHROUGH_TWO_WAYS.setup}'), 'the phone’s sign-in screen no longer says the Bluetooth way; the browser’s check above follows it')
     /*
      * AND THE ONE LINE THE BROWSER DOES SAY, wherever it explains connecting:
-     * the first screen and Connecting…, How it works, Phone & computer and
-     * the unlock page. Bluetooth first, where it is (the iPhone and Android
-     * apps, with the stores that are open), and that a web browser connects
-     * through a computer only. Never in the computer app's own window, which
-     * is the computer.
+     * every screen of the connect page, How it works, Phone & computer,
+     * Troubleshooting and the unlock page. Bluetooth first, where it is (the
+     * iPhone, iPad and Android apps, with the stores that are open), and
+     * that a web browser connects through a computer only. Never in the
+     * computer app's own window, which is the computer.
      */
     const inAppsLine = read('src/components/BluetoothInApps.jsx')
     assert.match(inAppsLine, /import \{ BLUETOOTH_IN_APPS, STORES \} from '\.\.\/\.\.\/shared\/stores\.mjs'/)
@@ -2368,8 +2368,9 @@ export function run(test) {
     /* The iPad by name: the App Store app is the iPhone and iPad app, and Bluetooth works on an iPad (the review of 7 November 2026). */
     assert.equal(BLUETOOTH_IN_APPS, 'Bluetooth, with no computer, is in the iPhone, iPad and Android apps. A web browser connects through a computer only.')
     const connectScreen = read('src/components/ConnectScreen.jsx').replace(/\s+/g, ' ')
-    assert.match(connectScreen, /<h2>\{SETUP\.title\}<\/h2> <Steps \/> \{[^}]*\} <BluetoothInApps \/>/, 'the browser’s first screen does not say where Bluetooth is')
-    assert.match(connectScreen, /<p>Finding your computer\.<\/p> \{[^}]*\} <BluetoothInApps \/>/, 'Connecting… does not say where Bluetooth is')
+    /* First on the first screen and on Connecting… too, before the computer's steps and its search (the review of 7 November 2026). */
+    assert.match(connectScreen, /<h2>\{SETUP\.title\}<\/h2> \{[^}]*\} <BluetoothInApps \/> <Steps \/>/, 'the browser’s first screen does not say where Bluetooth is, first')
+    assert.match(connectScreen, /<h2>Connecting…<\/h2> \{[^}]*\} <BluetoothInApps \/> <p>Finding your computer\.<\/p>/, 'Connecting… does not say where Bluetooth is, first')
     /* And on the two screens a customer with no computer is left on: Your computer isn’t answering, and Connect to your computer (the review of 7 November 2026). */
     assert.match(connectScreen, /<h2>Your computer isn&rsquo;t answering<\/h2> \{[^}]*\} <BluetoothInApps \/>/, 'Your computer isn’t answering does not say where Bluetooth is, first')
     assert.match(connectScreen, /<h2>Connect to your computer<\/h2> \{[^}]*\} <BluetoothInApps \/>/, 'Connect to your computer does not say where Bluetooth is, first')
@@ -2377,6 +2378,8 @@ export function run(test) {
     const webApp = read('src/App.jsx').replace(/\s+/g, ' ')
     assert.match(webApp, /\{\/\* Bluetooth first, and where it is: [^}]*\} <BluetoothInApps \/> <ChainCards/, 'Phone & computer in the browser does not say where Bluetooth is, first')
     assert.match(webApp, /<\/details> \{[^}]*\} <BluetoothInApps \/>/, 'the browser’s unlock page does not say where Bluetooth is')
+    /* And Troubleshooting, first, before the fixes, as the phone's Fixes opens on its own Bluetooth line (the review of 7 November 2026). */
+    assert.match(webApp, /\{\/\* Bluetooth first, and where it is: in the apps, never a browser [^}]*\} <BluetoothInApps \/> <div className="fixes"> \{FIXES\.map\(/, 'the browser’s Troubleshooting does not say where Bluetooth is, first')
     /* His pictures, the phone's own files, and the plain box that took the
        place of the two with Fractal's logo on them (test/independent.mjs). */
     for (const art of ['unit-plain.png', 'piece-computer.png', 'piece-phone.png']) {

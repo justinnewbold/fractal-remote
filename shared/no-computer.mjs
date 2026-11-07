@@ -69,11 +69,14 @@ export const noComputerBody = (email) => `${noComputerSteps(email)} ${NO_COMPUTE
  * computer's words wherever both are (Settings → Phone & computer, and
  * Troubleshooting → It will not connect at all), and it says, in order: no
  * computer needed, Bluetooth, and what a computer adds, in the one clause the
- * gear file's sentence uses (shared/bluetooth-gear.mjs BLUETOOTH_WAYS), his
- * own words: less lag ("lag" is his word: a footswitch change reaches the
- * screen at the next poll, up to two seconds after it is pressed) and more
- * features (no editing or saving over Bluetooth, and a VP4 gets no effects,
- * names or tuner over it), true on every unit, the VP4 too. Then
+ * gear file's sentence uses (shared/bluetooth-gear.mjs BLUETOOTH_WAYS), our
+ * wording of his 25 October point ("Bluetooth will have more lag and not
+ * have as many features"): less lag ("lag" is his word: a footswitch change
+ * reaches the screen at the next poll, up to two seconds after it is
+ * pressed) and more features (no editing or saving over Bluetooth, and a
+ * VP4 gets presets and scenes only over it, while the computer also turns
+ * its effects on and off, shows the name of the preset it is on and checks
+ * that a preset or scene landed), true on every unit, the VP4 too. Then
  * where it is: the row under Settings → My rig, whose page says what to buy
  * and how it plugs in. Until 7 November 2026 it called the computer "still
  * the best way", from his 25 October words, and came after the computer.

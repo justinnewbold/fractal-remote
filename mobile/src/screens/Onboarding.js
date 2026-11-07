@@ -530,9 +530,10 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
             The one way on from here. An account is the only thing that joins
             a phone to a computer, so the button goes to sign-in — and the
             label says so, where it used to promise a scanner that no longer
-            exists.
+            exists. Beside the Bluetooth way it is the computer's, and either
+            one answers How do you connect to your unit? (App.js onAccount).
           */}
-          <Cta label={P6.yes} onPress={() => onAccount?.()} />
+          <Cta label={P6.yes} onPress={() => onAccount?.(twoWays ? 'computer' : undefined)} />
           {/*
             HIDDEN UNTIL ASKED FOR. "Hide information on how to download the
             computer app until they click no." Somebody who already has it

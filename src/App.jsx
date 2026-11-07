@@ -6693,6 +6693,8 @@ export default function App() {
               — so a fix reads the same wherever somebody standing in front of a
               dead rig happens to look it up.
             */}
+            {/* Bluetooth first, and where it is: in the apps, never a browser (BluetoothInApps), as the phone's Fixes opens on its own Bluetooth line. */}
+            <BluetoothInApps />
             <div className="fixes">
               {FIXES.map((entry) => (
                 <details key={entry.id} className="fix" open={fix === entry.id}>

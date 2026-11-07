@@ -508,14 +508,17 @@ wherever the two ways are set side by side, with no ranking either way.
 The FULL wordings (`BLUETOOTH_WAYS`, `BLUETOOTH_PAYWALL`,
 `NO_COMPUTER_BLUETOOTH`, the setup email's openings, /bluetooth and
 support.html) say three things: Bluetooth first; that it needs no computer;
-and what a computer adds, in his own 25 October words, "A computer has less
-lag and more features". That clause is true on every unit, the VP4 too:
-over a computer a VP4 also gets its effects and the current preset's name,
-which Bluetooth cannot give it (`VP4_OVER_BLUETOOTH`: "For those, use the
-computer"). Never "plus editing and saving", which it said for a day:
-through the computer a VP4 is not edited or saved either (`VP4_SO_FAR`),
-and the purchase page names the VP4. So the clause does not depend on
-`EDIT_FROM_STORE`, and no test ties it to that switch.
+and what a computer adds, "A computer has less lag and more features".
+That clause is our wording of his 25 October point, not his words, which
+were "Bluetooth will have more lag and not have as many features". It is
+true on every unit, the VP4 too: through a computer a VP4 also gets its
+effects turned on and off, the name of the preset it is on, and a check
+that a preset or scene landed, which Bluetooth cannot give it
+(`VP4_OVER_BLUETOOTH`). Never the tuner, which a VP4 does not get from the
+app either way (`VP4_NO_TUNER`). Never "plus editing and saving", which it
+said for a day: through the computer a VP4 is not edited or saved either
+(`VP4_SO_FAR`), and the purchase page names the VP4. So the clause does
+not depend on `EDIT_FROM_STORE`, and no test ties it to that switch.
 
 The SHORT lines leave the computer's clause out on purpose: the
 walkthrough's (`WALKTHROUGH_TWO_WAYS`, the box before Unlock among them),
@@ -548,16 +551,21 @@ It is said in several wordings, each in one place:
 - `HOW_CONNECT` (same file): "How do you connect to your unit?", once per
   device and never again, in Play's place after an account is made, a trial
   started or the full version bought there (lib/howConnect.js: settled for
-  good by either answer, by a unit having connected, or by 'done' on disk),
-  and never over a rig that is connected or reconnecting
-  (`howConnectShown`). Bluetooth adapter first and biggest, then his "No
-  Bluetooth adapter? Connect through a computer instead". The sharing card
-  waits for a launch after a unit has connected.
+  good by either answer, by the walkthrough's choice of way after a found
+  purchase, by a real link answering, the computer with or without a unit
+  or an adapter, never the demo's, or by 'done' on disk; a device with a
+  record of connecting from before the card existed counts as connected),
+  drawn only while Play is the screen and never over a rig that is
+  connected or reconnecting (`howConnectShown`). Bluetooth adapter first
+  and biggest, then his "No Bluetooth adapter? Connect through a computer
+  instead", which lands on Finding your computer…. The sharing card waits
+  for a launch after a unit has connected.
 - `WALKTHROUGH_TWO_WAYS` and `HOW_TWO_WAYS` (same file): the walkthrough
   (How it works opens on Bluetooth), the box before Unlock, and the sign-in
-  screen's Get connected, which is one line where Bluetooth is open; the
-  computer's three steps are on Connect a computer and in Troubleshooting →
-  It will not connect at all.
+  screen's Get connected, which is one line where Bluetooth is open; there
+  the computer's three steps are in Troubleshooting → It will not connect
+  at all, and Connect a computer has its setup (the desktop app, the same
+  account on both, the link by email).
 - `NO_COMPUTER_BLUETOOTH` in shared/no-computer.mjs: over the no-computer
   words on Phone & computer, and first on the Fixes page. Not on the
   waiting screen, which has its own button for it.

@@ -847,8 +847,8 @@ export function run(test) {
     const settings = flat('mobile/src/screens/Settings.js')
     assert.match(
       settings,
-      /* And not under the account warning, which names the account itself (since 7 November 2026, as on the waiting screen). */
-      /\{link === 'no-answer' && account\?\.email && !isPairAccount\(account\.email\) && !noneSaid && !elsewhere \? \( <Note>\{`Make sure you’re connected to your computer using \$\{account\.email\}\.`\}<\/Note> \) : null\}/,
+      /* And not under the account warning, which names the account itself (since 7 November 2026, as on the waiting screen): it waits for the account server's definite no, so it never comes up a moment before the warning takes its place. */
+      /\{link === 'no-answer' && account\?\.email && !isPairAccount\(account\.email\) && !noneSaid && elsewhere === false \? \( <Note>\{`Make sure you’re connected to your computer using \$\{account\.email\}\.`\}<\/Note> \) : null\}/,
       'Phone & computer says “make sure you’re connected” beside the new words, or under the account warning'
     )
     const app = flat('mobile/App.js')
@@ -860,8 +860,9 @@ export function run(test) {
       'the waiting screen says “make sure you’re connected” over the new words'
     )
     const connect = flat('src/components/ConnectScreen.jsx')
-    assert.match(connect, /\{account && !noneSaid \? <Using email=\{remembered\} paired=\{paired\} \/> : null\}/, 'Connecting… says “make sure you’re connected” beside the new words')
-    assert.match(connect, /\{noneSaid \? null : <Using email=\{remembered\} paired=\{paired\} \/>\}/, 'Not answering says “make sure you’re connected” beside the new words')
+    /* And the website not under the account warning either, which names the account itself (as the phone, since 7 November 2026). */
+    assert.match(connect, /\{account && !noneSaid && !elsewhere \? <Using email=\{remembered\} paired=\{paired\} \/> : null\}/, 'Connecting… says “make sure you’re connected” beside the new words, or under the account warning')
+    assert.match(connect, /\{noneSaid \|\| elsewhere \? null : <Using email=\{remembered\} paired=\{paired\} \/>\}/, 'Not answering says “make sure you’re connected” beside the new words, or under the account warning')
 
     /*
      * The customer we know has no computer keeps the big Download button (or,
