@@ -141,7 +141,24 @@ const NO_FOLD = { left: 0, right: 0 }
 const LANE_HEAD = 18
 /* The two halves side by side, the fold's gap between them; and each half, its heading over its grid. */
 const LANES = { flexDirection: 'row', gap: space.xl, alignItems: 'flex-start' }
-const LANE = { flex: 1, gap: space.sm }
+/*
+ * Each half is given its width (laneRow, worked out from Play's own width),
+ * never flex: 1 to share out. On an iPad Pro on its side (7 November 2026)
+ * flex: 1 gave the scenes 661 points and the chain 463, so the chain's
+ * 277-point pedals went one to a row and ran off the bottom. Play's first
+ * frame is always stacked (its height is not known yet, so it cannot line
+ * up), and these same two Views are laid out one under the other in it;
+ * Yoga keeps that frame's flex basis on each (their heights, 314 and 116),
+ * flex: 1 never works a basis out again, and grow then adds half of what is
+ * left to each. A width is the one basis Yoga works out on every pass, so
+ * both halves are laneRow, the row their tiles were sized from. Grow and
+ * shrink stay on, never flex: for the frame between a turn or a split-view
+ * drag and the next layout, laneRow is the old width, and the two equal
+ * bases stretch or shrink together into the row instead of one running off
+ * it. (Checked against React Native 0.86's own Yoga, built and run on the
+ * iPad's numbers: flex: 1 gives 661 and 463, a width gives 562 and 562.)
+ */
+const LANE = { flexGrow: 1, flexShrink: 1, gap: space.sm }
 const LANE_HEADING = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: LANE_HEAD }
 /* The raw words a computer with nothing plugged in answers every unit read with (ForgeFX, registryCore). */
 const NO_DEVICE = /no fractal device found/i
@@ -622,6 +639,8 @@ export default function Stage({
   const centre = lined ? foldInset(insets.left, insets.right) : fold
   /* The row each half's tiles share, lined up: half the page less the gap between the halves, worked out rather than measured, so the first frame after a switch is already the right width. */
   const laneRow = lined ? Math.max(0, (pageRow(playWidth, space.lg) - centre.left - centre.right - space.xl) / 2) : row
+  /** Each half, lined up: its own width, never flex's share of the row (LANE says why). */
+  const laneBox = lined ? [LANE, { width: laneRow }] : null
   /* A pedal's name a size up on a big tile, lined up only. */
   const pedalWords = lined ? linedName({ height: cell, width: tileWidth(laneRow, pedalsAcross) }) : undefined
   /*
@@ -1261,7 +1280,7 @@ export default function Stage({
           scene and what a setlist written on paper says.
         */}
         {scenes.hasScenes ? (
-          <View style={lined ? LANE : { gap: space.sm }}>
+          <View style={lined ? laneBox : { gap: space.sm }}>
             {/*
               "Keep having issues showing the scene names on the AM4. Have a way to
               refresh them." Beside the heading, the size of the heading: a thing
@@ -1331,8 +1350,8 @@ export default function Stage({
 
         {/* ---------------------------------------------------------- blocks */}
         {/* Lined up with no scenes, the chain keeps its own half. */}
-        {lined && !scenes.hasScenes ? <View style={LANE} /> : null}
-        <View style={lined ? LANE : { gap: space.sm }}>
+        {lined && !scenes.hasScenes ? <View style={laneBox} /> : null}
+        <View style={lined ? laneBox : { gap: space.sm }}>
           {/*
             "Where it says chain above the pedals, also put hold to switch
             channels. So users know that they can just hold the things to switch
@@ -1970,8 +1989,15 @@ function PlayFoot({
       </View>
     )
   }
+  /*
+   * The two shapes below are keyed apart, so turning the one into the other
+   * makes new Views: reused, the two-row shape's rows (laid out one under
+   * the other) would hand FOOT_HALF their heights as its flex basis, the
+   * way the lined-up halves once got theirs (LANE says how), and the halves
+   * would come out unequal with the middle gap off the Duo's fold.
+   */
   return oneRow ? (
-    <View style={FOOT_ONE_ROW}>
+    <View key="one-row" style={FOOT_ONE_ROW}>
       <View style={FOOT_HALF}>
         {previous}
         {setlists}
@@ -1984,7 +2010,7 @@ function PlayFoot({
       </View>
     </View>
   ) : (
-    <View style={{ gap: space.sm }}>
+    <View key="two-rows" style={{ gap: space.sm }}>
       <View style={FOOT_ROW}>
         {previous}
         {setlists}
