@@ -896,7 +896,7 @@ export default function Settings({
               <TipCard
                 icon={mailIcon}
                 label="SIGNED IN"
-                body={`${account.email}\nTap for password options`}
+                body={`${account.email}\nTap for your name and password`}
                 onPress={() => {
                   setNote(null)
                   setError(null)
