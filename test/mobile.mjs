@@ -12485,7 +12485,7 @@ export function run(test) {
     const raw = read('mobile/src/components/TopBar.js')
     const bar = withoutComments(raw).replace(/\s+/g, ' ')
     /* Beside the pill, before it; only for somebody signed in here, never in the demo, and out of the way while Save needs the room. */
-    assert.match(bar, /const photo = useProfilePhoto\(\) [\s\S]{0,400}?const showPhoto = Boolean\(onOpenAccount\) && avatarShown\(\{ demo, account: photo \}\) && !canSave && pillNeeds <= besidePhoto/, 'the photo shows in the demo, signed out, beside Save, or beside words it cuts')
+    assert.match(bar, /const photo = useProfilePhoto\(\) [\s\S]{0,900}?const showPhoto = Boolean\(onOpenAccount\) && avatarShown\(\{ demo, account: photo \}\) && !canSave && Math\.max\(pillNeeds, whereNeeds\) <= besidePhoto/, 'the photo shows in the demo, signed out, beside Save, or beside words it cuts')
     assert.match(bar, /\{showPhoto \? \( <Pressable accessibilityRole="button" accessibilityLabel="Your account" accessibilityHint="Your name, photo and password" hitSlop=\{\{ top: 10, bottom: 10, left: 14, right: 6 \}\} onPress=\{\(\) => \{ tick\(\) onOpenAccount\(\) \}\} > <Avatar uri=\{photo\.uri\} size=\{24\} \/> <\/Pressable> \) : null\}/, 'the photo is not its own button, named Your account, opening the account')
     assert.ok(raw.indexOf('<Avatar ') > raw.indexOf('v${APP_VERSION}') && raw.indexOf('<Avatar ') < raw.indexOf('{pill.status}'), 'the photo is not between the version and the pill')
     /* A thumb's 44 each way, and the pill keeps the overlap it reaches into. */
@@ -12541,12 +12541,15 @@ export function run(test) {
      */
     assert.match(bar, /const letter = 0\.602 \* font\.small \* \(fontScale \|\| 1\)/, 'the bar no longer measures the pill’s letters as it draws them')
     assert.match(bar, /const pillNeeds = 2 \+ 2 \* space\.sm \+ \(String\(pill\.status \|\| ''\)\.length \+ String\(pill\.unit \|\| ''\)\.length\) \* letter \+ \(demo \? 0 : 2 \* space\.sm \+ 10\)/, 'the bar no longer measures the pill’s first line')
-    assert.match(bar, /const besidePhoto = across - 2 \* space\.lg - 3 \* space\.md - 24 - 22 - \(hasOutput \? space\.md \+ 24 : 0\)/, 'the bar no longer works out what the row leaves the pill beside the photo')
-    assert.match(bar, /const showPhoto = [^\n]*&& !canSave && pillNeeds <= besidePhoto/, 'the photo shows beside Save, or beside words it cuts')
-    const shows = (across, status, unit, withSpeaker, scale = 1) => {
+    assert.match(bar, /const \{ left: stripLeft = 0, right: stripRight = 0 \} = useSafeAreaInsets\(\)/, 'the bar takes its width for the window’s, past a side strip (the Duo closed)')
+    assert.match(bar, /const whereNeeds = 2 \+ 2 \* space\.sm \+ String\(pill\.where \|\| ''\)\.length \* 0\.56 \* font\.micro \* \(fontScale \|\| 1\)/, 'the bar no longer measures the pill’s second line, where the computer is')
+    assert.match(bar, /const besidePhoto = across - stripLeft - stripRight - 2 \* space\.lg - 3 \* space\.md - 24 - 22 - \(hasOutput \? space\.md \+ 24 : 0\)/, 'the bar no longer works out what the row leaves the pill beside the photo')
+    assert.match(bar, /const showPhoto = [^\n]*&& !canSave && Math\.max\(pillNeeds, whereNeeds\) <= besidePhoto/, 'the photo shows beside Save, or beside words it cuts')
+    const shows = (across, status, unit, withSpeaker, scale = 1, where = '', strip = 0) => {
       const letter = 0.602 * font.small * scale
       const needs = 2 + 2 * space.sm + (status.length + unit.length) * letter + 2 * space.sm + 10
-      return needs <= across - 2 * space.lg - 3 * space.md - photo - gear - (withSpeaker ? space.md + speaker : 0)
+      const whereNeeds = 2 + 2 * space.sm + where.length * 0.56 * font.micro * scale
+      return Math.max(needs, whereNeeds) <= across - strip - 2 * space.lg - 3 * space.md - photo - gear - (withSpeaker ? space.md + speaker : 0)
     }
     /* What the pill really takes with the photo there: border, padding, the word, a gap, the Bluetooth mark's 10 (the lamp's 8 is less), a gap, the unit. */
     const drawn = (status, unit, scale = 1) => {
@@ -12565,21 +12568,40 @@ export function run(test) {
       { tone: 'off', bluetooth: true }
     ]
     let held = 0
-    for (const across of [320, 360, 375, 390, 430]) {
+    /*
+     * Each width with the side strip App's SafeAreaView keeps clear of: none
+     * on a phone held upright, and 44 on the iPhone Duo closed (466 wide,
+     * test/duo.mjs), where the bar is 422 and the window is not. And the
+     * second line, where the computer is, with a long name: "on Justin
+     * Newbolds MacBook Pro" is about 176 points at 11, the system font's
+     * letters a little under 0.56 of it on average.
+     */
+    const screens = [[320, 0], [360, 0], [375, 0], [390, 0], [430, 0], [466, 44]]
+    const wheres = ['', 'on MacBook Pro', 'on Justin Newbolds MacBook Pro']
+    const whereDrawn = (where, scale = 1) => 2 + 2 * space.sm + where.length * 0.55 * font.micro * scale
+    for (const [across, strip] of screens) {
       for (const withSpeaker of [false, true]) {
-        for (const scale of [1, 1.35]) {
-          const room = across - 2 * space.lg - 3 * space.md - photo - gear - (withSpeaker ? space.md + speaker : 0)
+        for (const scale of [1, 1.235, 1.353, 1.786]) {
+          const room = across - strip - 2 * space.lg - 3 * space.md - photo - gear - (withSpeaker ? space.md + speaker : 0)
           for (const unit of units) {
             for (const st of states) {
-              const pill = pillWords({ ...st, unit, computer: 'MacBook Pro' })
-              if (!shows(across, pill.status, pill.unit || '', withSpeaker, scale)) continue
-              held++
-              assert.ok(drawn(pill.status, pill.unit || '', scale) <= room, `${pill.status} ● ${pill.unit} is cut on a ${across}-point phone with the photo${withSpeaker ? ' and the speaker' : ''} (${drawn(pill.status, pill.unit || '', scale).toFixed(1)} of ${room})`)
+              for (const where of wheres) {
+                const pill = pillWords({ ...st, unit, computer: 'MacBook Pro' })
+                if (!shows(across, pill.status, pill.unit || '', withSpeaker, scale, where, strip)) continue
+                held++
+                assert.ok(drawn(pill.status, pill.unit || '', scale) <= room, `${pill.status} ● ${pill.unit} is cut on a ${across}-point screen${strip ? ` with a ${strip} strip` : ''} with the photo${withSpeaker ? ' and the speaker' : ''} at ${scale}× text (${drawn(pill.status, pill.unit || '', scale).toFixed(1)} of ${room})`)
+                assert.ok(whereDrawn(where, scale) <= room, `"${where}" is cut on a ${across}-point screen with the photo at ${scale}× text`)
+              }
             }
           }
         }
       }
     }
+    /* The Duo closed at the largest standard text size, Not answering ● Axe-Fx III beside the speaker: it fits the window's width and not the bar's, so the photo steps aside there. */
+    assert.ok(!shows(466, 'Not answering', 'Axe-Fx III', true, 1.353, '', 44), 'the photo stays beside Not answering ● Axe-Fx III on the Duo closed at large text, where the strip leaves it no room')
+    /* And a long computer name on a 320 beside the speaker moves the photo aside, where an ordinary one leaves it beside Live. */
+    assert.ok(!shows(320, 'Live', 'AM4', true, 1, 'on Justin Newbolds MacBook Pro'), 'the photo cuts a long computer name on a 320-point phone')
+    assert.ok(shows(320, 'Live', 'AM4', true, 1, 'on MacBook Pro'), 'the photo steps aside for an ordinary computer name on a 320-point phone')
     assert.ok(held > 0, 'the photo never shows: this check needs telling')
     /* And beside Live it shows on every phone, the speaker there or not, at the usual text size: it is stepping aside only for the longer words. */
     for (const across of [320, 360, 390]) for (const unit of units) assert.ok(shows(across, 'Live', unit, true), `the photo is never beside Live ● ${unit} on a ${across}-point phone`)

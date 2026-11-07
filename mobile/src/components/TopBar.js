@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Alert, Image, Platform, Pressable, Text, View, useWindowDimensions } from 'react-native'
 import { BlurView } from 'expo-blur'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, mono, radius, space, isDark } from '../lib/theme'
 import { at } from '../lib/vivid'
@@ -293,10 +294,14 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    */
   const photo = useProfilePhoto()
   const { width: across, fontScale = 1 } = useWindowDimensions()
+  /* The bar is the window less the side strips App's SafeAreaView keeps clear of (the Duo closed, a tablet with its camera down one side): 0 on a phone held upright. */
+  const { left: stripLeft = 0, right: stripRight = 0 } = useSafeAreaInsets()
   const letter = 0.602 * font.small * (fontScale || 1)
   const pillNeeds = 2 + 2 * space.sm + (String(pill.status || '').length + String(pill.unit || '').length) * letter + (demo ? 0 : 2 * space.sm + 10)
-  const besidePhoto = across - 2 * space.lg - 3 * space.md - 24 - 22 - (hasOutput ? space.md + 24 : 0)
-  const showPhoto = Boolean(onOpenAccount) && avatarShown({ demo, account: photo }) && !canSave && pillNeeds <= besidePhoto
+  /* And its second line, where the computer is ("on Justins MacBook Pro"), in the system font at micro: 0.56 of a letter errs wide, so a long name moves the photo aside rather than being cut by it. */
+  const whereNeeds = 2 + 2 * space.sm + String(pill.where || '').length * 0.56 * font.micro * (fontScale || 1)
+  const besidePhoto = across - stripLeft - stripRight - 2 * space.lg - 3 * space.md - 24 - 22 - (hasOutput ? space.md + 24 : 0)
+  const showPhoto = Boolean(onOpenAccount) && avatarShown({ demo, account: photo }) && !canSave && Math.max(pillNeeds, whereNeeds) <= besidePhoto
 
   return (
     /*
