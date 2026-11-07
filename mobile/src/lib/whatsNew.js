@@ -12,14 +12,14 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-07",
     "day": "7 November 2026",
-    "version": "1.89.64",
+    "version": "1.89.65",
     "lines": [
       {
         "text": "Bluetooth connects more reliably: if your adapter connects but your unit stays silent, the app reconnects once by itself (or tap Connect again), each unit remembers its own adapter, the app tells you when an adapter is plugged into a different unit, and no computer warnings show while you're on Bluetooth.",
         "only": null
       },
       {
-        "text": "Getting started is quicker: after you sign up, start the free trial or buy, one card asks how you connect, a Bluetooth adapter first or a computer instead. Connect over Bluetooth is there from the start while the app looks for your computer, and sign-in and the purchase page have far less to read.",
+        "text": "Getting started is quicker: after you sign up, start the trial or buy, one card asks how you connect, Bluetooth adapter first or a computer. Connect over Bluetooth shows while the app looks for your computer, with far less to read. The website's welcome now says Bluetooth is in the phone and tablet apps.",
         "only": null
       },
       {

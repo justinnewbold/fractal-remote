@@ -32,6 +32,7 @@ import slidersIcon from '../../mobile/assets/icons/sliders.png'
 import saveIcon from '../../mobile/assets/icons/save.png'
 import { Cta, FootRow, Steps, TipCard } from './Walk'
 import BluetoothInApps from './BluetoothInApps'
+import { AGREE_IN_BROWSER } from '../../shared/stores.mjs'
 
 const PIECES = { unit: unitShot, computer: pieceComputer, phone: piecePhone }
 
@@ -165,6 +166,11 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
           <>
             <Steps at={0} of={WALK_STEPS} />
             <h1 className="pw-head">{P2.head}</h1>
+            {/* The other way, and where it is: the phone apps, not a browser
+                (shared/stores.mjs). First, under the heading, since 7
+                November 2026: it sat under the boxes, past Got it, where
+                nobody scrolled to it. In a browser only. */}
+            {computer ? null : <BluetoothInApps className="pw-note" />}
             <div className="pw-chain">
               {CHAIN.map((box, i) => (
                 <div key={box.key}>
@@ -192,8 +198,6 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
                 {P2.footGo}
               </button>
             </p>
-            {/* The other way, and where it is: the phone apps, not a browser (shared/stores.mjs, 7 November 2026). On a phone's browser only. */}
-            {computer ? null : <BluetoothInApps className="pw-note" />}
             {/* Held at the bottom of the screen while the boxes scroll under
                 it, so a phone too short for the whole page still shows the
                 way on. */}
@@ -262,7 +266,8 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
                 <>
                   <label className="pw-agree">
                     <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-                    <span>{P3.real.agree}</span>
+                    {/* Both ways, in a browser (AGREE_IN_BROWSER, shared/stores.mjs); his sentence in the computer app's window. */}
+                    <span>{computer ? P3.real.agree : AGREE_IN_BROWSER}</span>
                   </label>
                   <button type="button" className="chip pw-go" disabled={!agreed} onClick={() => agreed && leave(onUnlock)}>
                     {computer ? C3.phone.go : P3.real.go}
