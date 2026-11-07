@@ -74,7 +74,7 @@ export function trialRefusal(why) {
     case 'bought':
       return 'You have the full version already.'
     case 'apple-id-owns':
-      return 'This Apple ID bought the full version already, so this account is unlocked: no trial needed.'
+      return 'This Apple ID bought the full version already, so the full version is on this account now and no trial is needed. Any other account it was on doesn’t have it any more.'
     case 'other-account':
       return 'This Apple ID bought the full version already, for another Fractal Remote account. Sign in with that account to use it: one purchase is for one account.'
     case 'signed-out':
