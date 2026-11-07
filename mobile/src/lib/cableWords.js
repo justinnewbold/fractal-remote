@@ -175,8 +175,10 @@ export function cableRowWord({ link, unitState, unit } = {}) {
  * Phone & computer's note at its top, while it is on by cable. Said as the
  * way it is set, never as connected: it is drawn whatever the link is doing,
  * the cable pulled out included (the cards under it say that). The computer
- * stays the best way, as BLUETOOTH_WAYS says for Bluetooth. No lag claim:
- * nothing has measured one.
+ * stays the best way here, as BLUETOOTH_WAYS said for Bluetooth until 7
+ * November 2026, when Bluetooth went first everywhere: the cable is not open
+ * to customers yet, and its words wait for its own store version. No lag
+ * claim: nothing has measured one.
  */
 export const cableComputerNote = (noun) =>
   `On a USB cable: this ${noun} talks to the unit itself, not through the computer. The computer is still the best way, and some things only work through it.`

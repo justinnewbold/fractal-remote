@@ -16,7 +16,8 @@ import { currentAccount, deleteAccount, signedInOnPhone } from '../lib/relay'
 import { isPairAccount } from '../lib/pairing'
 import { VP4_SO_FAR } from '../lib/vp4-safety'
 import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
-import { BLUETOOTH_PAYWALL } from '../lib/bluetooth-gear'
+import { BLUETOOTH_PARTS, BLUETOOTH_PARTS_SHOW, BLUETOOTH_PAYWALL } from '../lib/bluetooth-gear'
+import { askHowToConnect } from '../lib/howConnect'
 
 /*
  * The units named on the offer, read off the list the app actually carries.
@@ -47,11 +48,22 @@ const supportedWords =
  * anyway: the person tapping it has already paid, and hiding their way back in
  * behind the thing that charges them again would be a poor way to treat them.
  */
-export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDeleted, asked = false }) {
+export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onMakeAccount, onDeleted, asked = false }) {
   const purchase = usePurchase()
   const { price, unlocked, available, why, detail, held } = purchase
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState(null)
+  /*
+   * WHAT A VP4 GETS, AND WHICH BLUETOOTH ADAPTER, ONE TAP AWAY EACH. "Way too
+   * much text, should not have to scroll" (Justin, 7 November 2026): the two
+   * paragraphs were about 270 words above the trial button, which a tablet
+   * held upright could not show without scrolling. Their words are as they
+   * were (shared/vp4-safety.mjs VP4_SO_FAR, held to the store Description;
+   * shared/bluetooth-gear.mjs BLUETOOTH_PARTS), shown under the line that
+   * opens them.
+   */
+  const [vp4Open, setVp4Open] = useState(false)
+  const [partsOpen, setPartsOpen] = useState(false)
   /* Restore tapped with nobody signed in: RestoreAsk is up under it. */
   const [asking, setAsking] = useState(false)
   /*
@@ -146,18 +158,25 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
       const said = trialStartedWords(out.trial)
       if (said.over) return setSaid({ tone: 'warn', text: said.text })
       Alert.alert('Free trial', said.text)
+      /* A trial started just now: "How do you connect to your unit?" comes next, in Play's place, where Bluetooth is offered (lib/howConnect). */
+      askHowToConnect()
       return onUnlocked?.()
     }
     if (out.cancelled) return setSaid(null)
-    /* The Apple ID had bought it already: unlocked, and said why there is no trial. */
+    /* The Apple ID had bought it already: unlocked, and said why there is no trial. Not a purchase made here, so nothing is asked. */
     if (out.why === 'apple-id-owns') {
       Alert.alert('Already unlocked', trialRefusal(out.why))
       return onUnlocked?.()
     }
-    /* Nobody signed in: an account first, which the sign-in screen makes. */
-    if (out.why === 'signed-out' && onSignIn) {
+    /*
+     * Nobody signed in: an account first, which the sign-in screen makes, on
+     * its Create account side (App.js toTrialAccount): somebody starting a
+     * trial is new, and was sent to Sign in.
+     */
+    const makeOne = onMakeAccount || onSignIn
+    if (out.why === 'signed-out' && makeOne) {
       setSaid(null)
-      return onSignIn()
+      return makeOne()
     }
     setSaid({ tone: 'warn', text: out.message || trialRefusal(out.why) })
   }
@@ -171,6 +190,8 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
        goes with it as an alert, or somebody who just pressed the price
        thinks they paid twice. */
     if (out.ok && out.message) Alert.alert('Already unlocked', out.message)
+    /* A purchase made here, not one found already made: "How do you connect to your unit?" next (lib/howConnect). */
+    if (out.ok && !out.message) askHowToConnect()
     if (out.ok) return onUnlocked?.()
     /* A cancel is not a fault and is not worth a sentence. A payment still
        waiting is not one either: it is said calmly, and Buy stays off. */
@@ -224,35 +245,61 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
         </Text>
         {/*
           AND WHAT A VP4 GETS OF THAT, right under the list it is an exception
-          to. "I didn't know that those settings didn't work on the VP4. I
-          thought that they did, so yeah, if they don't, we need to put that
-          in there for now." The VP4 is named above among the units this
-          unlocks, and this is the one screen where somebody pays on the
-          strength of what it says. Worded once in shared/vp4-safety.mjs, so
-          the browser's unlock page says it word for word.
+          to, one tap away. "I didn't know that those settings didn't work on
+          the VP4. I thought that they did, so yeah, if they don't, we need to
+          put that in there for now." The VP4 is named above among the units
+          this unlocks, and this is the one screen where somebody pays on the
+          strength of what it says, so the line that opens it says it is
+          there. Worded once in shared/vp4-safety.mjs, so the browser's unlock
+          page says it word for word, behind the same line.
         */}
-        <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>
-          {VP4_SO_FAR}
+        <Text
+          accessibilityRole="button"
+          accessibilityState={{ expanded: vp4Open }}
+          onPress={() => setVp4Open((open) => !open)}
+          style={{ color: color.signal, fontSize: font.small, fontWeight: '600', textDecorationLine: 'underline' }}
+        >
+          On a VP4? See what works
         </Text>
+        {vp4Open ? (
+          <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>
+            {VP4_SO_FAR}
+          </Text>
+        ) : null}
       </View>
 
       {/*
-        AND BLUETOOTH (BETA), which the full version unlocks too, said where
-        it is sold: the two ways to connect, the computer the best one, and
-        the AM4 alone, with every part it needs bought separately (the
-        adapter, its cable, the two plug adapters and a charger:
-        BLUETOOTH_PAYWALL, shared/bluetooth-gear.mjs). Only on a copy that
-        opens it to customers (lib/ble-rule.js, by the version built into
-        the copy) and on a device that can do it: a line on any other copy
-        would sell what it cannot open, which Apple's 2.3.1(a) forbids. No
-        copy today draws it. Under the panel, not in it: the panel is the
-        browser's unlock page word for word (test/both-ends.mjs), and the
-        browser has no Bluetooth to offer.
+        AND BLUETOOTH, which the full version unlocks too, said where it is
+        sold, in one short line: the two ways, Bluetooth first, and what a
+        computer adds (BLUETOOTH_PAYWALL, shared/bluetooth-gear.mjs). Every
+        part each unit takes, and the two never for an FM3, one tap under it
+        (BLUETOOTH_PARTS): names to look up, nothing to buy here. Only on a
+        copy that opens it to customers (lib/ble-rule.js, by the version
+        built into the copy) and on a device that can do it: a line on any
+        other copy would sell what it cannot open, which Apple's 2.3.1(a)
+        forbids. Under the panel, not in it: the panel is the browser's
+        unlock page word for word (test/both-ends.mjs), and the browser has
+        no Bluetooth to offer.
       */}
       {openForCustomersHere() && bluetoothSupported() ? (
-        <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>
-          {BLUETOOTH_PAYWALL}
-        </Text>
+        <View style={{ gap: space.sm }}>
+          <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>
+            {BLUETOOTH_PAYWALL}
+          </Text>
+          <Text
+            accessibilityRole="button"
+            accessibilityState={{ expanded: partsOpen }}
+            onPress={() => setPartsOpen((open) => !open)}
+            style={{ color: color.signal, fontSize: font.small, fontWeight: '600', textDecorationLine: 'underline' }}
+          >
+            {BLUETOOTH_PARTS_SHOW}
+          </Text>
+          {partsOpen ? (
+            <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>
+              {BLUETOOTH_PARTS}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
 
       {trialOn ? <Note tone="info">{trialRunningWords(purchase.trialEndsAt)}</Note> : null}

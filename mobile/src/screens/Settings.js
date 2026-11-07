@@ -73,7 +73,7 @@ import { siriPresent } from '../lib/siriPipe'
 import SiriHelp from '../components/SiriHelp'
 import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn, useCableNow, useMidiJacks } from '../lib/bluetooth'
 import { CABLE_LOOK_AGAIN, CABLE_NO_SIGNAL, CABLE_PAGE_SUB, CABLE_ROW_ON, cableChain, cableComputerNote, cableRowWord } from '../lib/cableWords'
-import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS, NO_SIGNAL_BLUETOOTH } from '../lib/bluetooth-gear'
+import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage, { BluetoothLimits, BluetoothTools, BluetoothTried, BluetoothTrouble, BluetoothWays } from './Bluetooth'
 import AccessTool from '../components/AccessTool'
@@ -103,6 +103,7 @@ import { GlassCard } from '../components/Glass'
 import { classic, glassCard } from '../lib/glass'
 import PasswordBox from '../components/PasswordBox'
 import NameBox from '../components/NameBox'
+import { askAgainHere } from '../lib/howConnect'
 import Press from '../components/Press'
 import { stopLooper } from '../components/Looper'
 import Vp4Setup from '../components/Vp4Setup'
@@ -653,11 +654,6 @@ export default function Settings({
 
           <Group title="My rig" hint={pairStatus}>
             {/*
-              One row for the whole chain: this phone, the computer, and the
-              unit plugged into it — the status says how far along it gets.
-            */}
-            <SetupRow title={PAIR_TITLE} status={pairStatus} onPress={() => setPage('link')} />
-            {/*
               BLUETOOTH (BETA), ITS OWN ROW. "Move the Bluetooth card from the
               phone and computer menu to its own menu under the settings menu.
               Still saying Bluetooth (beta)." The phone straight to the unit,
@@ -681,12 +677,14 @@ export default function Settings({
               store version whose review notes say so, never an update
               (CLAUDE.md).
 
-              Off, the row says what it is for and what it costs against the
-              computer, in the one line it has (BLUETOOTH_ROW_OFF, beside the
-              Bluetooth page's own sentence in the gear file): "make it clear
-              that the computer is the preferred method". Not the cost alone,
-              which read as a row with nothing going for it, in the row's
-              green.
+              Off, the row says what it is for, in the one line it has
+              (BLUETOOTH_ROW_OFF, beside the Bluetooth page's own sentence in
+              the gear file).
+
+              FIRST IN MY RIG, over Phone & computer, since 7 November 2026:
+              "make sure it's Bluetooth first as far as connection options
+              go" (Justin). Where it is not offered, Phone & computer is first,
+              as it was.
             */}
             {mayDriveBluetooth(purchase, bluetoothAdmin) && bluetoothAllowed && bluetoothSupported() ? (
               <SetupRow
@@ -695,6 +693,11 @@ export default function Settings({
                 onPress={() => setPage('bluetooth')}
               />
             ) : null}
+            {/*
+              One row for the whole chain: this phone, the computer, and the
+              unit plugged into it — the status says how far along it gets.
+            */}
+            <SetupRow title={PAIR_TITLE} status={pairStatus} onPress={() => setPage('link')} />
             {/* What each switch does, read off the unit — the browser's
                 Footswitches panel, here. Only where the switches can be read. */}
             {(link === 'connected' || demo) && switchesReadable ? (
@@ -1135,6 +1138,16 @@ export default function Settings({
           {onViewAsCustomer ? (
             <Press label="View as a new customer" sub="The walkthrough and the paywall, as a stranger sees them" height={52} onPress={onViewAsCustomer} />
           ) : null}
+          {/* The card asks once per device and never on one that has connected, so his own need this to see it (lib/howConnect askAgainHere). */}
+          <Press
+            label="Ask How do you connect again"
+            sub="The next account, trial or purchase on this device asks, as on a new one"
+            height={52}
+            onPress={() => {
+              askAgainHere()
+              Alert.alert('Ask again', 'The next account, trial or purchase made on this device asks How do you connect to your unit?')
+            }}
+          />
           {/* Its testing tools, moved off the Bluetooth page onto the Developer pages: his account's alone, as they always were. */}
           {bluetoothOffered ? (
             <>
@@ -1237,12 +1250,12 @@ export default function Settings({
           {head(PAIR_TITLE, 'back')}
           {/* Said first, because everything under it is about a computer
               this phone is not using while it is on. */}
-          {/* And the two ways, with the computer the best one: the Bluetooth page's own sentence (BLUETOOTH_WAYS). */}
+          {/* Somebody already on Bluetooth is not sold either way again (7 November 2026): what is on, and nothing more. */}
           {bluetooth && !demo ? (
             <Note tone="warn">
               {cable
                 ? cableComputerNote(deviceNoun())
-                : `Bluetooth is on. This ${deviceNoun()} talks to the unit directly, not through the computer. ${BLUETOOTH_WAYS}`}
+                : `Bluetooth is on: this ${deviceNoun()} talks to the unit directly, not through the computer.`}
             </Note>
           ) : null}
           {/*
@@ -1256,7 +1269,7 @@ export default function Settings({
           {bluetoothOffered && !demo ? (
             <Press
               label={bluetooth ? 'Bluetooth' : 'Connect over Bluetooth'}
-              sub={cable ? CABLE_PAGE_SUB : bluetooth ? 'Bluetooth is on: open its page' : 'No computer needed. More lag, fewer features.'}
+              sub={cable ? CABLE_PAGE_SUB : bluetooth ? 'Bluetooth is on: open its page' : BLUETOOTH_WAYS_SHORT}
               tone="live"
               height={52}
               onPress={() => setPage('bluetooth')}
@@ -1398,9 +1411,13 @@ export default function Settings({
                   : `The computer on this wifi is on a different account than this ${deviceNoun()}. Sign both into the same one.`}
               </Note>
             ) : noneSaid ? (
-              <Note tone="warn">
-                <NoComputerWords email={noComputer.email} />
-              </Note>
+              <>
+                {/* And, where this copy offers Bluetooth, the other way first, over the computer's words and their button, never between them (components/NoComputer.js NoComputerOtherWay). */}
+                <NoComputerOtherWay />
+                <Note tone="warn">
+                  <NoComputerWords email={noComputer.email} />
+                </Note>
+              </>
             ) : link === 'no-answer' ? (
               <Note tone="warn">
                 Open the Fractal Remote app on the computer, and check the computer is awake.
@@ -1409,10 +1426,6 @@ export default function Settings({
             {/* And the download link to their inbox, under those words and
                 only with them: to the account's own address, which they name. */}
             {noneSaid ? <SendLinkButton email={noComputer.email} /> : null}
-            {/* And, where this copy offers Bluetooth (beta), the other way
-                for an AM4, after the words and their button, never between
-                them (components/NoComputer.js NoComputerOtherWay). */}
-            {noneSaid ? <NoComputerOtherWay /> : null}
             {/* Which account this is — his words: "make sure you're connected
                 to your computer using and then show the user's email
                 address". A computer signed in as somebody else is the
@@ -1420,7 +1433,8 @@ export default function Settings({
             {/* And not under "No computer is signed in with this account yet",
                 which names the account already, and beside which "make sure
                 you're connected" is about a computer that is not there. */}
-            {link === 'no-answer' && account?.email && !isPairAccount(account.email) && !noneSaid ? (
+            {/* Nor under the account warning, which names the account itself: the same email twice, one under the other (his tablet's report, 7 November 2026). So it waits for the account server's definite no (`elsewhere` false), as the website does, rather than coming up a moment before the warning takes its place. */}
+            {link === 'no-answer' && account?.email && !isPairAccount(account.email) && !noneSaid && elsewhere === false ? (
               <Note>{`Make sure you’re connected to your computer using ${account.email}.`}</Note>
             ) : null}
 

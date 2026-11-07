@@ -369,7 +369,9 @@ async function otherWayOnABench() {
     ["from '../lib/useBluetoothOffered'", "from './useBluetoothOffered.mjs'"],
     ["from '../lib/bluetooth'", "from './bluetooth.mjs'"],
     ["from '../lib/cableWords'", `from '${repoUrl('mobile/src/lib/cableWords.js')}'`],
-    ["from '../lib/device-word'", "from './device-word.mjs'"]
+    ["from '../lib/device-word'", "from './device-word.mjs'"],
+    /* Get connected's three computer steps, under It will not connect at all since 7 November 2026. */
+    ["from '../lib/onboarding'", `from '${repoUrl('shared/onboarding.mjs')}'`]
   ])
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
   const at = (f) => pathToFileURL(join(dir, f)).href
@@ -731,7 +733,17 @@ export function run(test) {
     assert.match(app, /const noComputer = useNoComputer\(lookedLong && !bluetooth\)/, 'the phone asks before the advice comes up, or over Bluetooth')
     const waking = app.slice(app.indexOf('function Waking('))
     assert.match(waking, /const noComputer = useNoComputer\(long && !bluetooth\)/, 'the waiting screen asks before its advice comes up, or over Bluetooth')
-    assert.equal((app.match(/useNoComputer\(/g) || []).length, 2, 'the phone asks from somewhere else as well')
+    /*
+     * AND, SINCE 7 NOVEMBER 2026, FOR THE TOP BAR'S PILL, from the first
+     * second, only where Bluetooth is offered and off and nothing is
+     * connected: a definite no and the pill says Not connected · tap to
+     * connect, which opens the Bluetooth page, not "Disconnected · on your
+     * computer" to somebody who has none (TopBar connectFirst). The same
+     * memory and the same minute (lib/useNoComputer.js).
+     */
+    assert.match(app, /const noComputerYet = useNoComputer\(auth === 'in' && !demo && !bluetooth && bluetoothOffered && link\.link !== 'connected'\)/, 'the pill’s question is asked in the demo, signed out, over Bluetooth, or where Bluetooth is not offered')
+    assert.match(app, /const connectFirst = Boolean\(noComputerYet\) && bluetoothOffered && !bluetooth && !demo && link\.link !== 'connected'/)
+    assert.equal((app.match(/useNoComputer\(/g) || []).length, 3, 'the phone asks from somewhere else as well')
 
     const hook = read('mobile/src/lib/useNoComputer.js')
     assert.match(hook, /^const check = computerCheck\(accountHasComputer\)$/m, 'each screen keeps its own memory, so a yes is forgotten and the minute is not shared')
@@ -786,7 +798,8 @@ export function run(test) {
       /\) : elsewhere \? \( <Note tone="fault">[\s\S]*?<\/Note> \) : noneSaid \? \( <Note tone="warn"> <NoComputerWords email=\{noComputer\.email\} \/> <\/Note> \) : \( <Note tone="warn"> Open the Fractal Remote app on the computer, and check the computer is awake\. <\/Note> \)\}/,
       'the waiting screen puts the new words before the account warning, or lost today’s'
     )
-    assert.match(waking, /<Press label="Look for the computer again" onPress=\{\(\) => onRetry\?\.\(\)\} \/>/, 'Look for the computer again went')
+    /* Look again is its own component since 7 November 2026, which says it is looking (App.js LookAgain, held in test/mobile.mjs). */
+    assert.match(waking, /<LookAgain onRetry=\{onRetry\} \/>/, 'Look for the computer again went')
     assert.match(waking, /\{onTroubleshoot && !bluetooth \? <Press label="Troubleshooting" onPress=\{onTroubleshoot\} \/> : null\}/, 'Troubleshooting went')
 
     /* Settings → Phone & computer. */
@@ -794,7 +807,8 @@ export function run(test) {
     assert.match(settings, /const noneSaid = link === 'no-answer' && Boolean\(noComputer\) && elsewhere === false/, 'Setup says it before the account warning has answered')
     assert.match(
       settings,
-      /\{link === 'no-answer' && elsewhere \? \( <Note tone="fault">[\s\S]*?<\/Note> \) : noneSaid \? \( <Note tone="warn"> <NoComputerWords email=\{noComputer\.email\} \/> <\/Note> \) : link === 'no-answer' \? \( <Note tone="warn"> Open the Fractal Remote app on the computer, and check the computer is awake\. <\/Note> \) : null\}/,
+      /* And, since 7 November 2026, the other way first, over the new words (NoComputerOtherWay: Bluetooth, where it is offered). */
+      /\{link === 'no-answer' && elsewhere \? \( <Note tone="fault">[\s\S]*?<\/Note> \) : noneSaid \? \( <> \{\/\*[^*]*\*\/\} <NoComputerOtherWay \/> <Note tone="warn"> <NoComputerWords email=\{noComputer\.email\} \/> <\/Note> <\/> \) : link === 'no-answer' \? \( <Note tone="warn"> Open the Fractal Remote app on the computer, and check the computer is awake\. <\/Note> \) : null\}/,
       'Setup puts the new words before the account warning, or lost today’s'
     )
     assert.match(app, /noComputer=\{noComputer\} \/\* As the top bar says it[^*]*\*\/ link=\{shownLink\.link\}/, 'Setup is not told')
@@ -833,19 +847,22 @@ export function run(test) {
     const settings = flat('mobile/src/screens/Settings.js')
     assert.match(
       settings,
-      /\{link === 'no-answer' && account\?\.email && !isPairAccount\(account\.email\) && !noneSaid \? \( <Note>\{`Make sure you’re connected to your computer using \$\{account\.email\}\.`\}<\/Note> \) : null\}/,
-      'Phone & computer says “make sure you’re connected” beside the new words'
+      /* And not under the account warning, which names the account itself (since 7 November 2026, as on the waiting screen): it waits for the account server's definite no, so it never comes up a moment before the warning takes its place. */
+      /\{link === 'no-answer' && account\?\.email && !isPairAccount\(account\.email\) && !noneSaid && elsewhere === false \? \( <Note>\{`Make sure you’re connected to your computer using \$\{account\.email\}\.`\}<\/Note> \) : null\}/,
+      'Phone & computer says “make sure you’re connected” beside the new words, or under the account warning'
     )
     const app = flat('mobile/App.js')
     const waking = app.slice(app.indexOf('function Waking('))
     assert.match(
       waking,
-      /\{email && link\.link !== 'connected' && !bluetooth && !noneSaid \? \( <Text[^>]*> \{'Make sure you’re connected to your computer using '\}/,
+      /* And since 7 November 2026 only once the computer has been looked for a while, and not over the account warning, which names the account itself. */
+      /\{long && email && link\.link !== 'connected' && !bluetooth && !noneSaid && !elsewhere \? \( <Text[^>]*> \{'Make sure you’re connected to your computer using '\}/,
       'the waiting screen says “make sure you’re connected” over the new words'
     )
     const connect = flat('src/components/ConnectScreen.jsx')
-    assert.match(connect, /\{account && !noneSaid \? <Using email=\{remembered\} paired=\{paired\} \/> : null\}/, 'Connecting… says “make sure you’re connected” beside the new words')
-    assert.match(connect, /\{noneSaid \? null : <Using email=\{remembered\} paired=\{paired\} \/>\}/, 'Not answering says “make sure you’re connected” beside the new words')
+    /* And the website not under the account warning either, which names the account itself (as the phone, since 7 November 2026). */
+    assert.match(connect, /\{account && !noneSaid && !elsewhere \? <Using email=\{remembered\} paired=\{paired\} \/> : null\}/, 'Connecting… says “make sure you’re connected” beside the new words, or under the account warning')
+    assert.match(connect, /\{noneSaid \|\| elsewhere \? null : <Using email=\{remembered\} paired=\{paired\} \/>\}/, 'Not answering says “make sure you’re connected” beside the new words, or under the account warning')
 
     /*
      * The customer we know has no computer keeps the big Download button (or,
@@ -902,7 +919,7 @@ export function run(test) {
     const wakingButton = waking.indexOf('{noneSaid ? <SendLinkButton email={noComputer.email} /> : null}')
     assert.ok(wakingWords > 0, 'the waiting screen lost the words')
     assert.ok(wakingButton > wakingWords, 'the waiting screen has no download link button under the words, or not behind the same no')
-    assert.ok(wakingButton < waking.indexOf('<Press label="Look for the computer again"'), 'the waiting screen’s button is not with the words, above Look for the computer again')
+    assert.ok(wakingButton < waking.indexOf('<LookAgain onRetry={onRetry} />'), 'the waiting screen’s button is not with the words, above Look for the computer again')
 
     const stage = flat('mobile/src/screens/Stage.js')
     const card = stage.slice(stage.indexOf("<Toast open={lost && !lostAway && !error} onLayout={endOf('advice')}>"))
@@ -1097,25 +1114,31 @@ export function run(test) {
    * Bluetooth — and on every customer's copy today it does not, so
    * there the words must be exactly what they were.
    */
-  test('the other way’s words: a second way for every unit, the computer still the best, what Bluetooth costs, that it is a beta, and where it is', async () => {
+  test('the other way’s words: Bluetooth first for every unit, no computer needed, what a computer adds, and where it is', async () => {
     const words = await import('../shared/no-computer.mjs')
     const line = words.NO_COMPUTER_BLUETOOTH
-    /* For every unit since 25 October 2026, when they all opened in one store version: it said "Have an AM4?" until then. */
+    /*
+     * For every unit since 25 October 2026, when they all opened in one store
+     * version: it said "Have an AM4?" until then. Bluetooth first since 7
+     * November 2026 ("I think most people are gonna opt for Bluetooth,
+     * probably 90%"): it said "The computer is still the best way" until then.
+     */
     assert.equal(
       line,
-      'The app can also connect to your unit with no computer, by Bluetooth through an adapter. The computer is still the best way: Bluetooth has more lag and does less, with no editing or saving. Settings → My rig → Bluetooth says what to buy.'
+      'No computer needed: the app can connect to your unit by Bluetooth, through an adapter. A computer has less lag and more features. Settings → My rig → Bluetooth says what to buy.'
     )
     assert.ok(!/\bAM4\b/.test(line), 'the line is still for an AM4 alone')
-    /* In Justin's order: more than one way, the computer the best of them, what Bluetooth costs (in his word, lag), then where. Out of beta since 26 October 2026, so "in beta" went. */
-    assert.ok(!/\bbeta\b/i.test(line), 'the line still calls Bluetooth a beta')
-    const at = ['your unit', 'with no computer', 'The computer is still the best way', 'more lag and does less', 'no editing or saving', 'Settings → My rig → Bluetooth'].map((w) => line.indexOf(w))
+    /* In this order: no computer needed, Bluetooth, what a computer adds (our wording of his point, "Bluetooth will have more lag and not have as many features": less lag and more features), then where. Out of beta since 26 October 2026, so "in beta" went. */
+    assert.ok(!/\bbeta\b|best (?:one|way)|still the best/i.test(line), 'the line still calls Bluetooth a beta, or ranks the two ways')
+    const at = ['No computer needed', 'your unit', 'Bluetooth', 'A computer has less lag', 'more features', 'Settings → My rig → Bluetooth'].map((w) => line.indexOf(w))
+    assert.ok(!/editing|saving/i.test(line), 'the line promises editing or saving through a computer, which a VP4 does not get')
     assert.ok(at.every((i) => i >= 0), 'the line lost one of the things it has to say')
-    assert.deepEqual([...at].sort((a, b) => a - b), at, 'the line says them out of order: the computer is not named the best before what Bluetooth costs')
-    /* What it costs, only as far as the Bluetooth page itself says it. */
+    assert.deepEqual([...at].sort((a, b) => a - b), at, 'the line says them out of order: Bluetooth is not before what a computer adds')
+    /* What a computer adds, only as far as the Bluetooth page itself says Bluetooth lacks it. */
     const page = read('mobile/src/screens/Bluetooth.js')
     assert.ok(page.includes("'No editing or saving over Bluetooth.'"), 'the Bluetooth page no longer says there is no editing or saving; the line should not either')
-    assert.ok(page.includes("'Slower to load the preset list.'"), 'the Bluetooth page no longer says the preset list is slow to load; the line’s “more lag” stands on it')
-    assert.ok(page.includes("'Footswitch changes may take a moment to show.'"), 'the Bluetooth page no longer says footswitch changes come late; the line’s “more lag” stands on it')
+    assert.ok(page.includes("'Slower to load the preset list.'"), 'the Bluetooth page no longer says the preset list is slow to load; the line’s “less lag” stands on it')
+    assert.ok(page.includes("'Footswitch changes may take a moment to show.'"), 'the Bluetooth page no longer says footswitch changes come late; the line’s “less lag” stands on it')
     /* Where it sends them is a row that is there: Bluetooth, under My rig. */
     const settings = flat('mobile/src/screens/Settings.js')
     const rig = settings.indexOf('<Group title="My rig"')
@@ -1150,15 +1173,17 @@ export function run(test) {
     const drawn = flat('mobile/src/components/NoComputer.js').replace(/\/\*[\s\S]*?\*\//g, ' ')
     assert.match(drawn, /export default function NoComputerWords\(\{ email \}\) \{ return \( <> <Text style=\{\{ fontWeight: '700' \}\}>\{NO_COMPUTER_TITLE\}<\/Text> \{'\\n'\} \{noComputerBody\(email\)\} <\/> \) \}/, 'the no-computer words are not what they were, or say the other way inside them')
     assert.match(drawn, /export function NoComputerOtherWay\(\) \{ const offered = useBluetoothOffered\(\) return offered \? <Note tone="hint">\{NO_COMPUTER_BLUETOOTH\}<\/Note> : null \}/, 'the other way is not its own note behind the hook')
-    /* After the words AND their download button, on Phone & computer, behind the same no. */
+    /* Over the words, and so never between them and their download button, on Phone & computer, behind the same no: Bluetooth first since 7 November 2026. */
     const app = flat('mobile/App.js').replace(/\/\*[\s\S]*?\*\//g, ' ')
     const waking = app.slice(app.indexOf('function Waking('))
     const settingsCode = settings.replace(/\/\*[\s\S]*?\*\//g, ' ')
     for (const [where, text, next] of [['Phone & computer', settingsCode, 'Make sure you’re connected to your computer using']]) {
       const button = text.indexOf('{noneSaid ? <SendLinkButton email={noComputer.email} /> : null}')
-      const other = text.indexOf('{noneSaid ? <NoComputerOtherWay /> : null}')
-      assert.ok(button > 0 && other > button, `${where} draws the other way before the download link button, or not behind the same no`)
-      assert.ok(other < text.indexOf(next), `${where} draws the other way away from the words and their button`)
+      const other = text.indexOf('<NoComputerOtherWay />')
+      const words = text.indexOf('<NoComputerWords email={noComputer.email} />')
+      assert.ok(other > 0 && other < words && words < button, `${where} does not draw the other way over the words and their download link button`)
+      assert.match(text, /\) : noneSaid \? \( <> \{ \} <NoComputerOtherWay \/> <Note tone="warn"> <NoComputerWords email=\{noComputer\.email\} \/> <\/Note> <\/> \) :/, `${where} draws the other way behind something other than the same no`)
+      assert.ok(button < text.indexOf(next), `${where} draws the other way away from the words and their button`)
     }
     /* Never on Play's floating card, which does not scroll and keeps one height so NOT CONNECTED stays put. */
     const stage = read('mobile/src/screens/Stage.js').replace(/\/\*[\s\S]*?\*\//g, ' ')
@@ -1181,7 +1206,7 @@ export function run(test) {
      * round to the page the button opens in one tap.
      */
     assert.ok(!/<NoComputerOtherWay|NO_COMPUTER_BLUETOOTH|useBluetoothOffered/.test(waking), 'the waiting screen draws the no-computer note’s Bluetooth line beside its own Bluetooth button')
-    assert.ok(waking.includes('label="No computer? Use Bluetooth"'), 'the waiting screen lost its own way to Bluetooth, so the note has to come back')
+    assert.ok(waking.includes('label="Connect over Bluetooth"'), 'the waiting screen lost its own way to Bluetooth, so the note has to come back')
     /* And Fixes, under It will not connect at all, where Play's card sends them. */
     const fixes = flat('mobile/src/screens/Fixes.js')
     assert.match(fixes, /const bluetoothOffered = useBluetoothOffered\(\)/)
@@ -1270,12 +1295,19 @@ export function run(test) {
     }
     assert.equal(b.bench.asked, 0, 'a phone Bluetooth is not open to was asked whether it can do Bluetooth')
 
-    /* Offered and off: once, as a hint, under the connect fix's last step. */
+    /*
+     * Offered and off: once, as a hint, over the connect fix's steps since 7
+     * November 2026 ("make sure it's Bluetooth first as far as connection
+     * options go"); it was under the last one until then. And under it, the
+     * computer's first-time steps from Get connected (shared/onboarding.mjs
+     * SETUP), which the sign-in screen cut to one line that day.
+     */
     b.bench.allowed = true
     assert.deepEqual(lines('connect'), [{ tone: 'hint', says: NO_COMPUTER_BLUETOOTH }], 'It will not connect at all does not offer the other way where it is offered')
     const page = says('connect')
     const steps = fixById('connect').steps
-    assert.ok(page.indexOf(NO_COMPUTER_BLUETOOTH) > page.indexOf(steps.at(-1)), 'the other way comes before the computer’s steps')
+    const { SETUP } = await import('../shared/onboarding.mjs')
+    assert.ok(page.indexOf(NO_COMPUTER_BLUETOOTH) > -1 && page.indexOf(NO_COMPUTER_BLUETOOTH) < page.indexOf(SETUP.steps[0]) && page.indexOf(SETUP.steps.at(-1)) < page.indexOf(steps[0]), 'the other way is not first, then the computer’s first-time steps, then the fixes')
     /* Under no other fix, and not with every fix shut. */
     for (const open of [null, 'frozen', 'versions', 'preset']) assert.deepEqual(lines(open), [], `the other way is said under ${open}`)
 

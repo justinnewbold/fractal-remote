@@ -266,6 +266,7 @@ import { MIDI_SETUP_TITLE, VP4_NO_EDITS, VP4_NO_KNOBS, VP4_NO_RENAME, vp4Compute
 /* What a VP4 gets from the app, on the unlock page: the phone paywall's line, word for word. */
 import { VP4_SO_FAR } from '../shared/vp4-safety.mjs'
 import ConnectScreen, { AccountCheck } from './components/ConnectScreen'
+import BluetoothInApps from './components/BluetoothInApps'
 import PhoneRemote from './components/PhoneRemote'
 import WifiQr from './components/WifiQr'
 import PhoneWalkthrough from './components/PhoneWalkthrough'
@@ -4567,8 +4568,18 @@ export default function App() {
       <p className="unlock-features">
         Presets, scenes, amp &amp; effect blocks, the tuner, tap tempo, setlists and more.
       </p>
-      {/* What a VP4 gets of that, under the list it is an exception to: the phone paywall's line, from shared/vp4-safety.mjs. */}
-      <p className="hint">{VP4_SO_FAR}</p>
+      {/*
+        What a VP4 gets of that, under the list it is an exception to, one tap
+        away: the phone paywall's line, from shared/vp4-safety.mjs, behind the
+        phone's own words for it ("Way too much text, should not have to
+        scroll", 7 November 2026).
+      */}
+      <details className="unlock-vp4">
+        <summary>On a VP4? See what works</summary>
+        <p className="hint">{VP4_SO_FAR}</p>
+      </details>
+      {/* And where Bluetooth is: the phone apps, never a browser (shared/stores.mjs). */}
+      <BluetoothInApps />
       {/*
         THE LINES HERE THAT ARE NOT THE PHONE'S: only this end can be looking
         at an account that a phone's purchase has not reached yet, because
@@ -6448,6 +6459,8 @@ export default function App() {
               The red "Update the computer app" line is a link here too: the
               card becomes the button and opens the steps, as on the phone.
             */}
+            {/* Bluetooth first, and where it is: the phone apps, never a browser (shared/stores.mjs, 7 November 2026). */}
+            <BluetoothInApps />
             <ChainCards
               cards={linkChain({
                 here: link.role === 'remote' || link.role === 'wifi' ? 'phone' : 'computer',
@@ -6680,6 +6693,8 @@ export default function App() {
               — so a fix reads the same wherever somebody standing in front of a
               dead rig happens to look it up.
             */}
+            {/* Bluetooth first, and where it is: in the apps, never a browser (BluetoothInApps), as the phone's Fixes opens on its own Bluetooth line. */}
+            <BluetoothInApps />
             <div className="fixes">
               {FIXES.map((entry) => (
                 <details key={entry.id} className="fix" open={fix === entry.id}>

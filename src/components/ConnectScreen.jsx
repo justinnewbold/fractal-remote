@@ -32,6 +32,7 @@ import { isPairAccount } from '../lib/link'
 import { computerElsewhere } from '../lib/remote'
 import { useNoComputer } from '../lib/noComputer'
 import NoComputer from './NoComputer'
+import BluetoothInApps from './BluetoothInApps'
 import { CONNECT, P6, SETUP } from '../../shared/onboarding.mjs'
 import { DOWNLOADS_URL, sendDownloadLink } from '../../mobile/src/lib/downloadLink'
 import laptopIcon from '../../mobile/assets/icons/laptop.png'
@@ -142,6 +143,8 @@ export default function ConnectScreen({
         </header>
         <div className="connect-card">
           <h2>{SETUP.title}</h2>
+          {/* Where the other way is, first, as everywhere: in the phone apps, never a browser (shared/stores.mjs, 7 November 2026). */}
+          <BluetoothInApps />
           <Steps />
         </div>
         <SignIn variant="stage" submitLabel="Sign in" onSubmit={onSignIn} onCreate={onCreate} busy={busy} />
@@ -164,6 +167,8 @@ export default function ConnectScreen({
       {state === 'joining' ? (
         <>
           <h2>Connecting…</h2>
+          {/* First here too: a browser connects through a computer only; the apps have Bluetooth (shared/stores.mjs). */}
+          <BluetoothInApps />
           <p>Finding your computer.</p>
           {/*
             FRACTAL AUDIO'S SENTENCE, while the phone's browser starts up and
@@ -175,8 +180,11 @@ export default function ConnectScreen({
           <p className="connect-independent">{NOT_AFFILIATED}</p>
           {/* Not beside "No computer is signed in with this account yet", which
               already names the account, and to which "make sure you're
-              connected" is advice about a computer that is not there. */}
-          {account && !noneSaid ? <Using email={remembered} paired={paired} /> : null}
+              connected" is advice about a computer that is not there. Nor
+              under the account warning (`elsewhere`), which names the account
+              itself: the same email twice, one under the other, as on the
+              phone until 7 November 2026. */}
+          {account && !noneSaid && !elsewhere ? <Using email={remembered} paired={paired} /> : null}
           {long ? (
             <>
               {mismatch || noneSaid || (
@@ -206,13 +214,16 @@ export default function ConnectScreen({
       ) : state === 'no-answer' ? (
         <>
           <h2>Your computer isn&rsquo;t answering</h2>
+          {/* Where a customer with no computer lands on the website, so where Bluetooth is is said first (shared/stores.mjs, 7 November 2026). */}
+          <BluetoothInApps />
           {mismatch || noneSaid || (
             <p>
               Make sure the Fractal Remote app is open on the computer and the computer is awake. This keeps trying on
               its own.
             </p>
           )}
-          {noneSaid ? null : <Using email={remembered} paired={paired} />}
+          {/* Not beside the new words, nor under the account warning: both name the account themselves. */}
+          {noneSaid || elsewhere ? null : <Using email={remembered} paired={paired} />}
           <div className="connect-actions">
             <button className="primary" onClick={onRetry} disabled={busy}>
               Try now
@@ -243,6 +254,8 @@ export default function ConnectScreen({
       ) : (
         <>
           <h2>Connect to your computer</h2>
+          {/* And here, signed out or after Disconnect: Bluetooth is in the apps, a browser connects through a computer. */}
+          <BluetoothInApps />
           {remembered ? (
             <>
               <p>
