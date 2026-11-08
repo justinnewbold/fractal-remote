@@ -3,6 +3,13 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-08",
+      "version": "1.89.67",
+      "lines": [
+        "The glass circles behind the speaker and settings buttons at the top now sit centered on their icons."
+      ]
+    },
+    {
       "date": "2026-11-07",
       "version": "1.89.66",
       "lines": [

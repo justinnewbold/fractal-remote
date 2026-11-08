@@ -630,7 +630,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
           onPress={() => setVolume(true)}
         >
           {/* A round of glass behind the speaker, drawn first so the speaker sits on it: it takes no room and no touch (components/Glass). 24 and 10 each side is a thumb's 44. */}
-          <GlassDisc size={30} />
+          <GlassDisc size={30} box={24} />
           {/* The browser's speaker, drawn the same: "make the mobile app
               volume icon look like the web icon". A colour emoji at this size
               was a smudge that no theme could tint; this takes the bar's grey,
@@ -675,7 +675,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
         onPress={onOpenSettings}
       >
         {/* The same round of glass behind the gear, drawn first, taking no room and no touch. */}
-        <GlassDisc size={30} />
+        <GlassDisc size={30} box={22} />
         <Image
           source={setupIcon}
           accessible={false}

@@ -310,12 +310,12 @@
    {
     "decl": "TopBar",
     "main": null,
-    "now": "__GlassDisc({ size: 30 })"
+    "now": "__GlassDisc({ size: 30, box: 24 })"
    },
    {
     "decl": "TopBar",
     "main": null,
-    "now": "__GlassDisc({ size: 30 })"
+    "now": "__GlassDisc({ size: 30, box: 22 })"
    },
    {
     "decl": "Which",

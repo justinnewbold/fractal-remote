@@ -387,11 +387,13 @@ export function run(test) {
     assert.match(glass, /export function GlassCard\(\{ flat = false, bordered = false, clip = false, pressed = false, bare = false, style, children, \.\.\.viewProps \}\)/)
     /* Classic: a bare card is the plain View it was, and there is no disc. */
     assert.match(glass, /if \(bare && classic\(\)\) \{ return \( <View \{\.\.\.viewProps\} style=\{style\}> \{children\} <\/View> \) \}/, 'a bare card is glass in Classic')
-    assert.match(glass, /export function GlassDisc\(\{ size = 30 \}\) \{ if \(classic\(\)\) return null /, 'the disc is drawn in Classic')
+    assert.match(glass, /export function GlassDisc\(\{ size = 30, box = 24 \}\) \{ if \(classic\(\)\) return null /, 'the disc is drawn in Classic')
     assert.match(glass, /style=\{\[glassCard\(\{ pressed, bordered, flat \}\), clip \? \{ overflow: 'hidden' \} : null, style\]\}/)
-    assert.match(glass, /export function GlassDisc\(\{ size = 30 \}\)/)
+    assert.match(glass, /export function GlassDisc\(\{ size = 30, box = 24 \}\)/)
     assert.match(glass, /pointerEvents="none"/, 'the disc takes the icon’s touch')
-    assert.match(glass, /position: 'absolute', left: '50%', top: '50%', width: size, height: size, marginLeft: -size \/ 2, marginTop: -size \/ 2, borderRadius: size \/ 2, backgroundColor: color\.glassFill, boxShadow: color\.glassLiftRing/, 'the disc is not a centred, absolute circle of glass')
+    /* Centred by numbers from the button's own size, never "50%" (8 November 2026: that put both discs about 6 points low on the phone; test/glass-classic.mjs works the numbers). */
+    assert.match(glass, /const edge = \(box - size\) \/ 2 return \( <View pointerEvents="none" accessible=\{false\} importantForAccessibility="no" style=\{\{ position: 'absolute', left: edge, top: edge, width: size, height: size, borderRadius: size \/ 2, backgroundColor: color\.glassFill, boxShadow: color\.glassLiftRing/, 'the disc is not a centred, absolute circle of glass')
+    assert.ok(!/50%/.test(glass), 'the disc is placed by a percentage again')
   })
 
   test('glass: six live blurs in the whole app, one in each of the six that had one, and nothing new installed', () => {

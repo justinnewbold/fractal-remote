@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-08",
+    "day": "8 November 2026",
+    "version": "1.89.67",
+    "lines": [
+      {
+        "text": "The glass circles behind the speaker and settings buttons at the top now sit centered on their icons.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-07",
     "day": "7 November 2026",
     "version": "1.89.66",
