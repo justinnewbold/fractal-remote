@@ -12,7 +12,7 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-08",
     "day": "8 November 2026",
-    "version": "1.89.75",
+    "version": "1.89.76",
     "lines": [
       {
         "text": "On an Axe-Fx III over Bluetooth or a USB cable, Play now shows the NAM blocks from firmware 33 (NAM and NAM 2) and the IR Player block, and turns them on and off like your other effects.",
@@ -23,7 +23,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "If a Bluetooth MIDI footswitch, like an M-VAVE Chocolate, gets picked as your adapter, the app no longer takes it on its own, and the Bluetooth page says it’s a footswitch and to pick the adapter on your unit instead. Through a computer, an FM3’s Footswitches page also shows which scene, preset or effect each switch picks.",
+        "text": "If a Bluetooth MIDI footswitch, like an M-VAVE Chocolate, gets picked as your adapter, the app no longer takes it on its own, and the Bluetooth page says it’s a footswitch and to pick the adapter on your unit instead. Through a computer, an FM3’s Footswitches page also shows what each switch picks.",
         "only": null
       },
       {
