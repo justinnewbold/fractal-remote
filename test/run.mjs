@@ -6771,6 +6771,10 @@ console.log('\nthe server')
 const { run: server } = await import('./server.mjs')
 server(test)
 
+console.log('\nreading the bug reports: two questions, a key that can do nothing else')
+const { run: readReports } = await import('./read-reports.mjs')
+readReports(test)
+
 console.log('\nhow many people, day by day')
 const { run: usageDays } = await import('./usage-days.mjs')
 usageDays(test)
