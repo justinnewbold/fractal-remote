@@ -638,10 +638,11 @@ written by the phone the way the computer app does it
 the three gen-3 units, bound to each unit's own catalog by fm3-edit.js,
 fm9-edit.js and axefx3-edit.js; the bytes and the decoding checked against
 the pinned codec, and the gen-3 units' against ForgeFX's own gen-3 driver,
-run on the same answers). A unit on its own USB cable (an FM9 or Axe-Fx
-III, never an FM3, whose USB port is the computer's kind) is the same wire
-as an adapter, so Edit opens there on the same rule, and its note says the
-USB cable instead of Bluetooth (lib/cableWords `CABLE_EDIT_NOTE`); on
+run on the same answers). A unit on a USB cable into the phone (its own
+USB port, or a USB MIDI cable on its MIDI jacks, such as the U2MIDI Pro on
+an FM3) is the same wire as an adapter (`isCable`), so Edit opens there on
+the same rule on all four, and its note says the USB cable instead of
+Bluetooth (lib/cableWords `CABLE_EDIT_NOTE`); on
 Android that needs the 1.89.36 build or later, the first with USB MIDI.
 No saving, moving blocks, modifiers or names over Bluetooth or a cable
 yet, and Edit says so; no cab picking on a gen-3 unit (that needs the

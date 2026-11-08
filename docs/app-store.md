@@ -2769,7 +2769,7 @@ rewritten, "Free 7-day trial" may go in it.
 
 Since 29 October 2026 Edit opens over Bluetooth on an AM4 and an FM3 for
 Justin's account only, and since 8 November 2026 on an FM9 and an Axe-Fx
-III too, over Bluetooth or the unit's own USB cable: knobs, models and
+III too, all four over Bluetooth or a USB cable into the phone: knobs, models and
 on/off, with no saving, moving blocks, modifiers or names, and no cab
 picking on an FM3, FM9 or Axe-Fx III (CLAUDE.md, "Edit over Bluetooth and
 USB"). Each unit opens on its own entry, so the notes name the unit or
