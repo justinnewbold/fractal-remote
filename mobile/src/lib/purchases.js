@@ -1006,6 +1006,17 @@ export const trialAvailable = (p = shown) =>
   trialOffered({ platform: Platform.OS, storeTrial: p.storeTrial, unlocked: p.unlocked, used: p.trialUsed })
 
 /**
+ * WHETHER A TRIAL BUTTON MAY BE SHOWN ANYWHERE: offered here, and the store's
+ * price known. The purchase page shows Start 7-day free trial only with the
+ * price to say in its terms (Apple's 3.1.1 wants any later charge named before
+ * a trial starts), so every button that leads there asks the same: with no
+ * price yet (no signal, Play Billing not answering) a button on the
+ * walkthrough, the demo's card, the top bar or the nudge would open a page
+ * with no trial on it. One rule, so they can never disagree again.
+ */
+export const trialOnOffer = (p = shown) => trialAvailable(p) && Boolean(p.price)
+
+/**
  * START THE FREE TRIAL. On an iPhone or iPad the App Store's free 7-Day
  * Trial item is bought first (Apple's own sheet, nothing charged), and the
  * server then starts the trial from it; on Android the server starts it.

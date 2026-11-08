@@ -12,7 +12,7 @@
  * is, what stops when it ends, and what it costs after. TRIAL_TERMS says all
  * three, under every Start button.
  */
-import { deviceNoun } from './device-word.js'
+import { deviceKind, deviceNoun } from './device-word.js'
 import { TRIAL_DAYS, trialDaysLeft } from './trial-rule.js'
 
 /** The button on the purchase page. */
@@ -134,5 +134,11 @@ export const DEMO_NUDGE_GO = 'Try it free'
  * button anywhere else starts one.
  */
 
-/** The demo's card on Play, where the trial is offered: the trial first, and the price after it. */
-export const demoTrialLine = (price = null) => `Try your own rig free for ${TRIAL_DAYS} days${price ? `, or unlock for ${price}` : ''}.`
+/**
+ * The demo's card on Play, where the trial is offered: the trial first, and
+ * the price after it. Read when it is shown, as demoCardBody is: on the
+ * computer app the rig plays free with no trial, and what the trial (and the
+ * purchase) gives there is a phone or tablet as the remote.
+ */
+export const demoTrialLine = (price = null, kind = deviceKind()) =>
+  `${kind === 'computer' ? 'Try a phone or tablet as your remote' : 'Try your own rig'} free for ${TRIAL_DAYS} days${price ? `, or unlock for ${price}` : ''}.`

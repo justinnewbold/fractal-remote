@@ -22,7 +22,7 @@ export default function UnlockOffer({ price, trial = false, onUnlock, onPutAway 
         <p className="demo-card-body">{trial ? demoTrialLine(price) : demoCardBody()}</p>
       </div>
       {/* The price, where there is one: asking somebody to tap to find out what it costs is asking for the tap most people will not make. */}
-      <button type="button" className="demo-card-unlock" onClick={onUnlock} aria-label={trial ? 'Try the full version free' : 'Unlock the full version'}>
+      <button type="button" className="demo-card-unlock" onClick={onUnlock} aria-label={trial ? DEMO_NUDGE_GO : 'Unlock the full version'}>
         {trial ? DEMO_NUDGE_GO : unlockWord(price)}
       </button>
       <button type="button" className="demo-card-close" onClick={onPutAway} aria-label="Put this away">

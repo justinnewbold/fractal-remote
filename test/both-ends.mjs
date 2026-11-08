@@ -4582,6 +4582,11 @@ export function run(test) {
     assert.equal(w.demoCardBody('ipad'), 'Unlock to drive your own rig from this iPad.')
     assert.equal(w.demoCardBody('browser'), 'Unlock to drive your own rig from this browser.')
     assert.equal(w.demoCardBody('tablet'), 'Unlock to drive your own rig from this tablet.')
+    /* The trial line, where the trial is offered: the rig itself on a phone or a browser, the phone or tablet remote on the computer, where the rig plays free. */
+    const tw = await import('../shared/trial-words.mjs')
+    assert.equal(tw.demoTrialLine('$9.99', 'phone'), 'Try your own rig free for 7 days, or unlock for $9.99.')
+    assert.equal(tw.demoTrialLine('$9.99', 'browser'), 'Try your own rig free for 7 days, or unlock for $9.99.')
+    assert.equal(tw.demoTrialLine('$9.99', 'computer'), 'Try a phone or tablet as your remote free for 7 days, or unlock for $9.99.')
     assert.equal(w.demoCardBody('computer'), 'Unlock to drive your own rig from a phone or tablet.')
     setDevice('browser')
     try {
@@ -4662,7 +4667,7 @@ export function run(test) {
     assert.match(card, /^import \{ DEMO_CARD, demoCardBody, unlockWord \} from '\.\.\/\.\.\/shared\/play-words\.mjs'$/m)
     for (const said of ['{DEMO_CARD}', 'demoCardBody()}', 'unlockWord(price)}']) assert.ok(card.includes(said), `the card does not say ${said}`)
     assert.ok(!/This is the demo|Unlock to drive|'Unlock'/.test(card.replace(/\/\*[\s\S]*?\*\//g, '')), 'the browser’s card spells out its words itself')
-    assert.match(card, /aria-label=\{trial \? 'Try the full version free' : 'Unlock the full version'\}/)
+    assert.match(card, /aria-label=\{trial \? DEMO_NUDGE_GO : 'Unlock the full version'\}/)
     /* Where the page offers the trial, the trial first, as the phone's card (8 November 2026). */
     assert.match(card, /\{trial \? demoTrialLine\(price\) : demoCardBody\(\)\}/)
     assert.match(card, /\{trial \? DEMO_NUDGE_GO : unlockWord\(price\)\}/)

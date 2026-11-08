@@ -11,7 +11,7 @@ import { pillWords } from '../lib/pill-words'
 import { APP_VERSION } from '../lib/version'
 import { useRig } from '../lib/rig'
 import { setDemo, useDemo } from '../lib/demo'
-import { shouldOffer, trialAvailable, usePurchase } from '../lib/purchases'
+import { shouldOffer, trialOnOffer, usePurchase } from '../lib/purchases'
 import { trialRunning } from '../lib/unlock-rule'
 import { DEMO_TRIAL_PILL } from '../lib/trial-words'
 import setupIcon from '../../assets/icons/setup.png'
@@ -154,7 +154,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    */
   const canBuy = Boolean(onUnlock) && shouldOffer({ demo }) && !trialRunning(purchase.trialEndsAt)
   /* And the free trial over it, where this copy offers one: "Try it on your rig free for 7 days", with Unlock under it (7 November 2026). */
-  const offerTrial = Boolean(onUnlock) && shouldOffer({ demo }) && trialAvailable(purchase)
+  const offerTrial = Boolean(onUnlock) && shouldOffer({ demo }) && trialOnOffer(purchase)
   /*
    * THE WAY OUT, FOR SOMEBODY WHO HAS ALREADY PAID.
    *

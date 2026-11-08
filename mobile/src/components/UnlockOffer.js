@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import { color, font, radius, space } from '../lib/theme'
 import { tick } from '../lib/feedback'
-import { shouldOffer, trialAvailable, usePurchase } from '../lib/purchases'
+import { shouldOffer, trialOnOffer, usePurchase } from '../lib/purchases'
 import { DEMO_NUDGE_GO, demoTrialLine } from '../lib/trial-words'
 import { useDemo } from '../lib/demo'
 import { deviceNoun } from '../lib/device-word'
@@ -68,7 +68,7 @@ export default function UnlockOffer({ onUnlock, waiting = false, onWant }) {
   if (wants !== true || waiting) return null
 
   /* The free trial first where this copy may offer it: "it should list the trial" (8 November 2026). Its button opens the purchase page, which has its terms and Unlock too. */
-  const offerTrial = trialAvailable(purchase)
+  const offerTrial = trialOnOffer(purchase)
 
   const put = () => {
     tick()
@@ -102,7 +102,7 @@ export default function UnlockOffer({ onUnlock, waiting = false, onWant }) {
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={offerTrial ? 'Try the full version free' : 'Unlock the full version'}
+        accessibilityLabel={offerTrial ? DEMO_NUDGE_GO : 'Unlock the full version'}
         onPress={() => {
           tick()
           onUnlock()

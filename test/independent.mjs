@@ -162,6 +162,7 @@ async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 
       export const shouldOffer = ({ demo }) => Boolean(demo) && !buy.unlocked
       /* The free trial is offered only where a test says so (buy.trial): every note's order below is the same either way. */
       export const trialAvailable = (p = buy) => Boolean(p.trial) && !p.unlocked
+      export const trialOnOffer = (p = buy) => trialAvailable(p) && Boolean(p.price)
       export const usePurchase = () => ({ ...buy })
       export const NOT_ACROSS = 'NOT_ACROSS'
       export const NOT_ACROSS_SIGNED_OUT = 'NOT_ACROSS_SIGNED_OUT'
@@ -319,6 +320,10 @@ export function run(test) {
     said = words(drawn.offer)
     assert.ok(said.includes('Unlock to drive your own rig from this phone.') && said.includes('Unlock $9.99'), `with no trial on offer the card is not its own words: ${said}`)
     assert.ok(!said.includes('Try'), 'a trial is offered where it is not')
+    /* Offered, but the store has given no price yet (no signal): the purchase page would show no trial, so the card keeps its own words too. */
+    drawn = await (await playNotesOnABench({ kept: seen(), demo: { demo: true, unit: 'fm3' }, buy: { trial: true, price: null } })).play()
+    said = words(drawn.offer)
+    assert.ok(said.includes('Unlock to drive your own rig from this phone.') && !said.includes('Try'), `with no price the card offers a trial the purchase page will not show: ${said}`)
   })
 
   test('Fractal Audio’s sentence is the one in shared/affiliation.mjs, word for word, with where help comes from', async () => {
