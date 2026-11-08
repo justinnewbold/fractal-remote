@@ -84,6 +84,7 @@ import {
   midiSettingsFor,
   missingBlocksLine,
   namedForFm3,
+  notAnAdapter,
   notAnsweringLine,
   untried,
   unitForReport,
@@ -320,10 +321,12 @@ function status(b, unitState) {
     /* A unit on a USB cable: the same lines, saying the cable (lib/cableWords cableStatus), a VP4's still never answering. */
     if (cable) return cableStatus({ unit: b.unit, name, unitState, jacks })
     /* A VP4 never answers over Bluetooth (lib/bleVp4.js): connected is the adapter, and the phone sending. */
+    /* A footswitch taken for the adapter (shared/bluetooth-gear notAnAdapter): said for every unit, the VP4 too, which never answers and so would read as connected. */
+    if (notAnAdapter(b.adapter?.name)) return { line: notAnsweringLine(b.unit, b.adapter?.name), tone: 'fault' }
     if (b.unit === 'vp4') return { line: VP4_CONNECTED, tone: 'ok' }
     if (unitState === 'present') return { line: `Connected · ${name} answering`, tone: 'ok' }
     /* The usual reasons, by unit (shared/bluetooth-gear notAnsweringLine): the Axe-Fx III has no MIDI Thru setting, only a THRU jack the white plug must stay out of. */
-    if (unitState === 'missing' || unitState === 'silent') return { line: notAnsweringLine(b.unit), tone: 'fault' }
+    if (unitState === 'missing' || unitState === 'silent') return { line: notAnsweringLine(b.unit, b.adapter?.name), tone: 'fault' }
     return { line: `Connected · asking the ${name}…`, tone: 'dim' }
   }
   if (cable) return { line: cableConnectingLine(b.adapter?.name), tone: 'dim' }
@@ -388,6 +391,13 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
   /* Not beside Bluetooth off either, which has Turn on Bluetooth under it: it is not a fault in the app. */
   const reportable = said.tone === 'fault' && b.trouble !== 'permission' && b.trouble !== 'bluetooth-off' && b.phase !== 'locked' && !!onReport
   const connected = b.on && b.phase === 'connected'
+  /*
+   * CONNECTED TO A FOOTSWITCH, NOT AN ADAPTER (notAnAdapter): none of the
+   * not-answering help fits (Connect again only reconnects to it, the plugs
+   * are not the trouble), and the way out is Use a different adapter, under
+   * the line that says so.
+   */
+  const footswitch = connected && !b.answeredAs && !cable && notAnAdapter(b.adapter?.name)
   /* The units step 1 offers this account (lib/bluetooth offeredUnits). */
   const units = offeredUnits()
   const vp4 = b.unit === 'vp4'
@@ -555,7 +565,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * with the one chosen, as the first time; then the same as another(): the
    * search, never a cable in its place.
    */
-  const offerDifferent = keptAdapter && canStart && (!b.on || notThere)
+  const offerDifferent = keptAdapter && canStart && (!b.on || notThere || footswitch)
   const different = () => {
     if (!canStart || !letGoOfKeptAdapter()) return
     arm()
@@ -632,7 +642,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * did for him on 7 November 2026 (lib/bleLink connectBluetoothAgain). Not
    * for a VP4, which never answers, nor a unit on a USB cable.
    */
-  const offerAgain = quiet && !vp4 && !cable
+  const offerAgain = quiet && !vp4 && !cable && !footswitch
   const again = () => {
     arm()
     connectBluetoothAgain()
@@ -744,13 +754,13 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
             */}
             {/* The cure that worked first, before the plugs: a fresh connection (offerAgain). */}
             {offerAgain ? <Press label={CONNECT_AGAIN} sub={CONNECT_AGAIN_SUB} tone="live" height={52} onPress={again} /> : null}
-            {quiet && (!cable || jacks) ? <Hint>{PLUGS_CHECK}</Hint> : null}
+            {quiet && !footswitch && (!cable || jacks) ? <Hint>{PLUGS_CHECK}</Hint> : null}
             {/*
               STILL NOTHING AFTER THE ADAPTER WAS UNPLUGGED AND PLUGGED BACK
               IN: the way out that worked for him was closing the app
               completely (shared/bluetooth-gear CLOSE_AND_REOPEN).
             */}
-            {b.phase === 'connecting' || quiet ? <Hint>{cable ? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN}</Hint> : null}
+            {b.phase === 'connecting' || (quiet && !footswitch) ? <Hint>{cable ? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN}</Hint> : null}
             {reportable && quiet ? <ReportThis onPress={() => onReport(said.line)} /> : null}
             {/* A unit on a USB cable: unplugged is said as unplugged, and it connects by itself when it is back (lib/bluetooth cableAway). */}
             {b.phase === 'connecting' && cable ? <Hint>{cableAway() ? CABLE_AWAY : CABLE_CONNECTING_HINT}</Hint> : null}
