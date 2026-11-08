@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
-import { NAME_LABELS, NAME_MAX, nameProblem } from '../lib/account-name'
+import { NAME_LABELS, NAME_MAX, cleanName, nameProblem } from '../lib/account-name'
 import Note from './Note'
 import Press from './Press'
 
@@ -49,6 +49,11 @@ export default function NameBox({ open, first: wasFirst = '', last: wasLast = ''
     const problem = nameProblem({ first, last })
     if (problem) {
       setError(problem)
+      return
+    }
+    /* Nothing changed (an empty box on an account with no name, say): close, send nothing, say nothing. */
+    if (cleanName(first) === cleanName(wasFirst) && cleanName(last) === cleanName(wasLast)) {
+      onClose()
       return
     }
     setBusy(true)
