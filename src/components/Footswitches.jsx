@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import { fcModel, fcSwitch } from '../lib/forgefx'
+import { fcCurrent, fcModel, fcNames, fcSwitch, unitCapabilities } from '../lib/forgefx'
 import {
   FC_BUSY_WARNING,
   FC_NOT_YET,
+  FC_PICKS_SOME,
+  currentOf,
   describeSwitch,
   fcGeometry,
-  layoutName,
+  fcKnowsCurrent,
+  fcKnowsNames,
+  fcSaysPicks,
+  layoutLabel,
   lightWords,
-  readView
+  namesOf,
+  nowWords,
+  readView,
+  viewLabel
 } from '../../shared/footswitches.mjs'
 
 /**
@@ -23,6 +31,11 @@ import {
  * stops asking when the fold closes. A view already read is kept for as long
  * as the screen is, so opening it again costs the unit nothing; "Read again"
  * is the one way to ask twice. See shared/footswitches.mjs for why.
+ *
+ * Where the computer has the reads (fcKnowsCurrent, fcKnowsNames), it first
+ * asks which layout and view are on now and opens there, marked "on now",
+ * and once the first view has been read it asks the layout names, once.
+ * A computer without them is asked neither, and the panel is as it was.
  */
 export default function Footswitches() {
   const root = useRef(null)
@@ -30,6 +43,15 @@ export default function Footswitches() {
   const [model, setModel] = useState(null)
   const [layout, setLayout] = useState(0)
   const [view, setView] = useState(0)
+  const [caps] = useState(() => unitCapabilities())
+  const knowsNow = fcKnowsCurrent(caps)
+  const knowsNames = fcKnowsNames(caps)
+  /* undefined while the unit is still being asked; null when it did not say. */
+  const [now, setNow] = useState(knowsNow ? undefined : null)
+  const [names, setNames] = useState(null)
+  const [naming, setNaming] = useState(false)
+  const picked = useRef(false)
+  const namesAsked = useRef(false)
   /* `${layout}:${view}` → { states: [...], error, complete } */
   const [seen, setSeen] = useState({})
   const [reading, setReading] = useState(null)
@@ -52,9 +74,35 @@ export default function Footswitches() {
   }, [])
 
   const key = `${layout}:${view}`
+  const asking = now === undefined
+
+  /* Which layout and view are on now: asked once, when the panel first opens, before any switch. */
+  useEffect(() => {
+    if (!open || !asking) return undefined
+    let stop = false
+    ;(async () => {
+      let got = null
+      try {
+        got = currentOf(await fcCurrent())
+      } catch {
+        got = null
+      }
+      if (stop) return
+      if (got && !picked.current) {
+        setLayout(got.layout)
+        setView(got.view)
+      }
+      setNow(got)
+    })()
+    return () => {
+      stop = true
+    }
+  }, [open, asking])
 
   useEffect(() => {
     if (!open) return undefined
+    /* Not before the unit has said which layout is on, so the first view read is the right one. */
+    if (asking) return undefined
     const forced = askedAgain.current !== again
     if (seenRef.current[key]?.complete && !forced) return undefined
     askedAgain.current = again
@@ -95,6 +143,20 @@ export default function Footswitches() {
         [key]: { states: result.states, error: result.error, complete: !result.error && !result.stopped }
       }))
       setReading(null)
+      /* The layout names, once, after the first view: about a hundred questions. Kept even if
+         the view changes meanwhile — they are the same names whatever is on screen. */
+      if (knowsNames && !namesAsked.current && !result.error && !result.stopped) {
+        namesAsked.current = true
+        setNaming(true)
+        let got = null
+        try {
+          got = namesOf(await fcNames(), fcGeometry(m).layouts)
+        } catch {
+          got = null
+        }
+        setNaming(false)
+        if (got) setNames(got)
+      }
     })()
     return () => {
       stop = true
@@ -102,7 +164,7 @@ export default function Footswitches() {
     }
     // `model` is read, not watched: loading it must not start a second read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, key, again])
+  }, [open, key, again, asking])
 
   const geo = fcGeometry(model)
   const shown = seen[key]
@@ -112,28 +174,44 @@ export default function Footswitches() {
     <section className="footswitches" ref={root}>
       <p className="hint">{FC_BUSY_WARNING}</p>
 
+      {now ? <p className="hint fc-now">{nowWords(now, { layouts: geo.layouts, names })}</p> : null}
+
       <div className="mod-grid">
         <label className="mod-field">
           <span className="diff-label">Layout</span>
-          <select value={layout} onChange={(e) => setLayout(Number(e.target.value))}>
+          <select
+            value={layout}
+            onChange={(e) => {
+              picked.current = true
+              setLayout(Number(e.target.value))
+            }}
+          >
             {Array.from({ length: geo.layouts }, (_, i) => (
               <option key={i} value={i}>
-                {layoutName(i, geo.layouts)}
+                {layoutLabel(i, { layouts: geo.layouts, names, now })}
               </option>
             ))}
           </select>
         </label>
         <label className="mod-field">
           <span className="diff-label">View</span>
-          <select value={view} onChange={(e) => setView(Number(e.target.value))}>
+          <select
+            value={view}
+            onChange={(e) => {
+              picked.current = true
+              setView(Number(e.target.value))
+            }}
+          >
             {Array.from({ length: geo.views }, (_, i) => (
               <option key={i} value={i}>
-                View {i + 1}
+                {viewLabel(i, { layout, now })}
               </option>
             ))}
           </select>
         </label>
       </div>
+
+      {asking && open ? <p className="progress mono">Asking which layout is on…</p> : null}
 
       {reading ? (
         <p className="progress mono">
@@ -153,11 +231,11 @@ export default function Footswitches() {
                 ) : (
                   <>
                     <span className="fc-line">
-                      <span className="fc-when">Tap</span> {sw.tap.action}
+                      <span className="fc-when">Tap</span> {sw.tap.pick || sw.tap.action}
                       {sw.tap.label ? <span className="fc-label mono"> “{sw.tap.label}”</span> : null}
                     </span>
                     <span className="fc-line">
-                      <span className="fc-when">Hold</span> {sw.hold.action}
+                      <span className="fc-when">Hold</span> {sw.hold.pick || sw.hold.action}
                       {sw.hold.label ? <span className="fc-label mono"> “{sw.hold.label}”</span> : null}
                     </span>
                     <span className="fc-line fc-light-line">
@@ -184,7 +262,9 @@ export default function Footswitches() {
         </div>
       ) : null}
 
-      <p className="hint">{FC_NOT_YET}</p>
+      {naming ? <p className="progress mono">Reading the layout names…</p> : null}
+
+      <p className="hint">{fcSaysPicks(shown?.states) ? FC_PICKS_SOME : FC_NOT_YET}</p>
     </section>
   )
 }

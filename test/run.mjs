@@ -3984,6 +3984,8 @@ test('the mirror agrees with the host about every route this app calls', () => {
    * routes before anyone compared them.
    */
   const hostAllows = (method, p) => {
+    // The footswitch setup (block 199) is never written from the relay (ForgeFX remote.ts FC_SETUP_WRITE).
+    if (method !== 'GET' && /^\/preset\/blocks\/0*199\/(params(\/\d+)?|bypass|channel|type)$/.test(p)) return false
     if (method === 'GET')
       return (
         !p.startsWith('/cloud') &&
@@ -4089,7 +4091,21 @@ test('the mirror agrees with the host about every route this app calls', () => {
     ['POST', '/version/1/restore'],
     ['PUT', '/preset/blocks/1/params/1'],
     ['PUT', '/preset/grid/cell'],
-    ['PUT', '/store/config/x']
+    ['PUT', '/store/config/x'],
+    // The footswitch setup and its routes: read, never written.
+    ['GET', '/fc/model'],
+    ['GET', '/fc/current'],
+    ['GET', '/fc/names'],
+    ['GET', '/fc/state'],
+    ['POST', '/preset/blocks/199/read'],
+    ['POST', '/preset/blocks/199/readrange'],
+    ['PUT', '/preset/blocks/199/params/4618'],
+    ['PUT', '/preset/blocks/0199/params/2241'],
+    ['POST', '/preset/blocks/199/bypass'],
+    ['POST', '/preset/blocks/199/channel'],
+    ['POST', '/preset/blocks/199/type'],
+    ['PUT', '/fc/state'],
+    ['POST', '/fc/names']
   ]
 
   for (const [m, p] of calls) {
@@ -16646,6 +16662,247 @@ test('the Footswitches fold reads only while it is open, and never on a timer', 
   assert.match(app, /<Section key="footswitches" title="Footswitches" note="[^"]*between songs[^"]*"/, 'the warning is only seen once the fold is open, when the unit is already being asked')
   /* A picker change stops the old read on its own; locking them made reaching View 4 read View 1 first. */
   assert.ok(!/<select[^>]*\bdisabled=/.test(panel), 'the Layout and View pickers are locked for a whole view, so reaching View 4 of a layout reads View 1 first')
+})
+
+/*
+ * "What each switch picks", "which layout is on" and the layout names (8
+ * November 2026, the research on footswitches, FC6 layouts and ring
+ * colours). The computer reads them (ForgeFX fc.current, fc.names and
+ * fc.picks, FM3 only, reads on the same question kind as the rest); the
+ * page says them in words, and with a computer from before them it looks
+ * exactly as it did.
+ */
+test('what a switch picks is said in plain words, only when the computer said it and the words are sure', async () => {
+  const { describeSwitch, pickWords } = await import('../shared/footswitches.mjs')
+  const pick = (category, fn, ...slots) => ({
+    category,
+    function: fn,
+    slots: slots.map((s, i) => (s && typeof s === 'object' ? { i, ...s } : { i, value: s }))
+  })
+  const drive = { value: 118, block: { effectId: 118, slug: 'drive', instance: 1, name: 'Drive 1' } }
+  /* Scenes, by the number on the screen (shared/footswitches.mjs says why that is an inference). */
+  assert.equal(pickWords(pick(3, 0, 3, 0)), 'Scene 3')
+  assert.equal(pickWords(pick(3, 1, 1, 2)), 'Scene 1 and 2, in turn')
+  assert.equal(pickWords(pick(3, 0, 0)), null, 'a number outside 1 to 8 is said as a scene')
+  assert.equal(pickWords(pick(3, 0, 9)), null, 'a number outside 1 to 8 is said as a scene')
+  assert.equal(pickWords(pick(3, 2, 1, 0, 1, 8)), null, 'which way an Increment steps has not been read off a unit')
+  /* Presets, as the unit and the app's own lists show them. */
+  assert.equal(pickWords(pick(2, 0, 125, 1)), 'Preset 125')
+  assert.equal(pickWords(pick(2, 0, 5, 0)), 'Preset 005')
+  assert.equal(pickWords(pick(2, 1, 1, 0)), 'Preset 2 in the bank')
+  assert.equal(pickWords(pick(2, 2, 3, 7)), 'Preset 003 and 007, in turn')
+  assert.equal(pickWords(pick(2, 3, 0, 2)), 'Preset 1 and 3 in the bank, in turn')
+  assert.equal(pickWords(pick(2, 4, 1, 0, 0, 511)), null)
+  /* Effects, by the block the computer named. */
+  assert.equal(pickWords(pick(4, 0, drive)), 'Drive 1 on/off')
+  assert.equal(pickWords(pick(4, 1, { value: 58, block: { name: 'Amp 1' } }, 1, 0)), 'Amp 1 to channel B')
+  assert.equal(pickWords(pick(4, 2, drive, 0, 1)), 'Drive 1 channel A and B, in turn')
+  assert.equal(pickWords(pick(4, 3, drive, 1, 0, 0, 3)), 'Drive 1 through its channels')
+  assert.equal(pickWords(pick(4, 0, { value: 999, block: null })), null, 'an effect nobody could name is said as one')
+  assert.equal(pickWords(pick(4, 1, drive, 7, 0)), null, 'a channel past D is said as one')
+  /* Every other kind by its name alone, and nothing for a slot the unit did not answer. */
+  assert.equal(pickWords(pick(6, 0, 1, 1)), null, 'a Layout switch is said as if its numbers had been checked')
+  assert.equal(pickWords(pick(8, 0)), null)
+  assert.equal(pickWords({ category: 3, function: 0, slots: [{ i: 0, value: null }] }), null, 'a slot the unit did not answer is said as a scene')
+  assert.equal(pickWords(null), null)
+  assert.equal(pickWords({ category: 3 }), null)
+
+  const model = { categories: { 3: 'Scene', 4: 'Effect' }, functions: { 3: [{ ord: 0, name: 'Select' }], 4: [{ ord: 0, name: 'Bypass' }] } }
+  const fields = { tapCategory: 3, tapFunction: 0, holdCategory: 4, holdFunction: 0, color: 0 }
+  const said = describeSwitch({ switch: 0, fields, tapLabel: 'VERSE', holdLabel: '', tapPick: pick(3, 0, 3, 0), holdPick: pick(4, 0, drive) }, model)
+  assert.equal(said.tap.pick, 'Scene 3')
+  assert.equal(said.tap.action, 'Scene · Select', 'the action words changed under a pick')
+  assert.equal(said.tap.label, 'VERSE')
+  assert.equal(said.hold.pick, 'Drive 1 on/off')
+  /* A computer from before the picks: the same switch reads exactly as it did. */
+  const older = describeSwitch({ switch: 0, fields, tapLabel: 'VERSE', holdLabel: '' }, model)
+  assert.equal(older.tap.pick, null)
+  assert.equal(older.hold.pick, null)
+  assert.equal(older.tap.action, 'Scene · Select')
+  assert.equal(older.hold.action, 'Effect · Bypass')
+})
+
+test('which layout is on, and the layout names, come only from a computer that has them', async () => {
+  const fs = await import('../shared/footswitches.mjs')
+  const newer = { fc: { model: true, liveState: true, current: true, names: true, picks: true } }
+  const older = { fc: { model: true, liveState: true } }
+  assert.equal(fs.fcKnowsCurrent(newer), true)
+  assert.equal(fs.fcKnowsNames(newer), true)
+  assert.equal(fs.fcKnowsCurrent(older), false, 'an older computer is asked a route it does not have')
+  assert.equal(fs.fcKnowsNames(older), false, 'an older computer is asked a route it does not have')
+  assert.equal(fs.fcKnowsCurrent({ fc: { model: true, liveState: false, current: true } }), false, 'a unit whose switches cannot be read is asked which layout is on')
+  assert.equal(fs.fcKnowsNames({ fc: { liveState: true, names: 'yes' } }), false, 'only the computer’s own true')
+  assert.equal(fs.fcKnowsCurrent(null), false)
+  assert.equal(fs.FC_CURRENT_PATH, '/fc/current')
+  assert.equal(fs.FC_NAMES_PATH, '/fc/names')
+
+  /* Which layout and view: counted from 0, inside the unit's own layouts and views, or nothing. */
+  assert.deepEqual(fs.currentOf({ effectId: 199, current: { layout: 1, view: 0 }, units: [] }), { layout: 1, view: 0 })
+  assert.deepEqual(fs.currentOf({ current: { layout: 8, view: 3 } }), { layout: 8, view: 3 })
+  assert.equal(fs.currentOf({ current: { layout: 9, view: 0 } }), null, 'a tenth layout')
+  assert.equal(fs.currentOf({ current: { layout: 0, view: 4 } }), null, 'a fifth view')
+  assert.equal(fs.currentOf({ current: { layout: -1, view: 0 } }), null)
+  assert.equal(fs.currentOf({ current: { layout: '1', view: 0 } }), null)
+  assert.equal(fs.currentOf({ current: null }), null)
+  assert.equal(fs.currentOf({ error: 'unsupported' }), null)
+  assert.equal(fs.currentOf(null), null)
+
+  /* The names: the unit's own text, padding off, and the Master always "Master". */
+  const names = fs.namesOf({ names: ['SONGS', '  SCENES ', null, '', 'x', null, null, null, 'MasterLayout'] })
+  assert.deepEqual(names, ['SONGS', 'SCENES', null, null, 'x', null, null, null, null])
+  assert.deepEqual(fs.namesOf({ error: 'x' }), new Array(9).fill(null))
+  assert.deepEqual(fs.namesOf(null), new Array(9).fill(null))
+
+  const now = { layout: 1, view: 0 }
+  assert.equal(fs.layoutLabel(1, { names, now }), 'Layout 2 · SCENES · on now')
+  assert.equal(fs.layoutLabel(0, { names, now }), 'Layout 1 · SONGS')
+  assert.equal(fs.layoutLabel(8, { names, now }), 'Master')
+  assert.equal(fs.viewLabel(0, { layout: 1, now }), 'View 1 · on now')
+  assert.equal(fs.viewLabel(0, { layout: 2, now }), 'View 1', 'View 1 of a layout that is not on is marked on')
+  assert.equal(fs.viewLabel(1, { layout: 1, now }), 'View 2')
+  assert.equal(fs.nowWords(now, { names }), 'The unit is on Layout 2 (SCENES), View 1 right now.')
+  assert.equal(fs.nowWords({ layout: 8, view: 2 }, { names }), 'The unit is on Master, View 3 right now.')
+  assert.equal(fs.nowWords(null), null)
+  /* An older computer: the pickers read exactly as they did. */
+  for (let i = 0; i < 9; i++) assert.equal(fs.layoutLabel(i), fs.layoutName(i, 9))
+  for (let i = 0; i < 4; i++) assert.equal(fs.viewLabel(i, { layout: 0 }), `View ${i + 1}`)
+  /* And the note under the switches is today's, until the computer says what they pick. */
+  assert.equal(fs.fcSaysPicks([{ fields: {} }]), false)
+  assert.equal(fs.fcSaysPicks([{ fields: {}, tapPick: null, holdPick: null }]), true)
+  assert.equal(fs.fcSaysPicks(undefined), false)
+  for (const words of [fs.FC_PICKS_SOME, fs.nowWords(now, { names }), fs.layoutLabel(1, { names, now })]) {
+    assert.ok(!/this phone|official|FM3-Edit/i.test(words), `a sentence the page shows: ${words}`)
+  }
+})
+
+test('the demo FM3 says which layout is on, what the layouts are called and what its switches pick', async () => {
+  const fs = await import('../shared/footswitches.mjs')
+  for (const file of ['../src/lib/mockDevice.js', '../mobile/src/lib/mockDevice.js']) {
+    const { createMockDevice } = await import(file)
+    const unit = createMockDevice('fm3')
+    const caps = unit.detect().capabilities
+    assert.equal(fs.fcKnowsCurrent(caps), true, `${file}: the demo FM3 does not say which layout is on`)
+    assert.equal(fs.fcKnowsNames(caps), true, `${file}: the demo FM3 has no layout names`)
+    const model = unit.fcModel()
+    const now = fs.currentOf(unit.fcCurrent(), fs.fcGeometry(model))
+    assert.deepEqual(now, { layout: 1, view: 0 }, `${file}: the demo is not on its Scenes layout`)
+    const names = fs.namesOf(unit.fcNames())
+    assert.equal(names[now.layout], 'SCENES', `${file}: the layout on now is not the one named for scenes`)
+    assert.equal(names[8], null, 'the Master is named')
+    const say = (layout, view, sw) => fs.describeSwitch(unit.fcState(layout, view, sw), model)
+    assert.deepEqual([0, 1, 2].map((s) => say(1, 0, s).tap.pick), ['Scene 1', 'Scene 2', 'Scene 3'], `${file}: the Scenes view`)
+    assert.equal(say(1, 0, 0).hold.pick, 'Drive 1 on/off')
+    assert.equal(say(1, 0, 0).hold.label, 'BOOST')
+    assert.deepEqual([0, 1, 2].map((s) => say(1, 1, s).tap.pick), ['Preset 1 in the bank', 'Preset 2 in the bank', 'Preset 3 in the bank'])
+    assert.deepEqual([0, 1, 2].map((s) => say(1, 2, s).tap.pick), ['Drive 1 on/off', 'Delay 1 on/off', 'Reverb 1 on/off'])
+    assert.equal(say(1, 2, 1).hold.pick, 'Delay 1 channel A and B, in turn')
+    /* A looper switch and the Master's Layout switch: said by their names alone. */
+    assert.equal(say(1, 3, 0).tap.pick, null)
+    assert.equal(say(8, 0, 0).tap.pick, null)
+    assert.ok(fs.fcSaysPicks([unit.fcState(1, 3, 0)]), 'the demo answers in the older computer’s shape')
+    for (const key of ['fm9', 'axefx3', 'am4', 'vp4']) {
+      const c = createMockDevice(key).detect().capabilities
+      assert.equal(fs.fcKnowsCurrent(c) || fs.fcKnowsNames(c), false, `${file}: the demo ${key} is offered a footswitch read`)
+    }
+  }
+  const wire = readSrc(new URL('../mobile/src/lib/demoWire.js', import.meta.url), 'utf8')
+  assert.match(wire, /if \(path === '\/fc\/current'\) return mock\.fcCurrent\(\)/)
+  assert.match(wire, /if \(path === '\/fc\/names'\) return mock\.fcNames\(\)/)
+})
+
+test('no write to the footswitch setup travels the relay, and reading it still does', async () => {
+  /*
+   * The footswitch setup is shared by every preset: block 199 on a gen-3
+   * unit. The computer's newer device server refuses a write to it from
+   * anywhere; this rule refuses it from a phone even to an older one.
+   */
+  for (const [m, p] of [
+    ['PUT', '/preset/blocks/199/params/4618'],
+    ['PUT', '/preset/blocks/199/params/2241'],
+    ['PUT', '/preset/blocks/199/params'],
+    ['PUT', '/preset/blocks/0199/params/0'],
+    ['PUT', '/preset/blocks/199/params/0/'],
+    ['PUT', '/preset/blocks/199/params/2237?x=1'],
+    ['POST', '/preset/blocks/199/bypass'],
+    ['POST', '/preset/blocks/199/channel'],
+    ['POST', '/preset/blocks/199/type'],
+    ['PUT', '/fc/state'],
+    ['POST', '/fc/state?layout=0&view=0&switch=0'],
+    ['POST', '/fc/current'],
+    ['PUT', '/fc/names'],
+    ['DELETE', '/fc/model']
+  ]) {
+    assert.equal(forbiddenRemotely(m, p), 'change the footswitch setup', `${m} ${p} travels the relay`)
+  }
+  for (const [m, p] of [
+    ['GET', '/fc/model'],
+    ['GET', '/fc/current'],
+    ['GET', '/fc/names'],
+    ['GET', '/fc/state?layout=1&view=0&switch=2'],
+    ['GET', '/preset/blocks/199/raw'],
+    ['POST', '/preset/blocks/199/read'],
+    ['POST', '/preset/blocks/199/readrange'],
+    /* The metronome, and blocks whose numbers only look like it. */
+    ['PUT', '/preset/blocks/1/params/14878'],
+    ['PUT', '/preset/blocks/1990/params/2'],
+    ['PUT', '/preset/blocks/19/params/1'],
+    ['POST', '/preset/blocks/58/bypass']
+  ]) {
+    assert.equal(forbiddenRemotely(m, p), null, `${m} ${p} is refused`)
+  }
+  /* Every write route at every spelling of 199, on both copies of the rule. */
+  const shared = await import('../shared/relay-rules.mjs')
+  const phone = await import('../mobile/src/lib/relay-rules.js')
+  for (const n of ['199', '0199', '00199']) {
+    for (const [m, tail] of [['PUT', 'params'], ['PUT', 'params/0'], ['PUT', 'params/65535'], ['POST', 'bypass'], ['POST', 'channel'], ['POST', 'type']]) {
+      const at = `/preset/blocks/${n}/${tail}`
+      assert.equal(shared.hostAllows(m, at), false, `${m} ${at}`)
+      assert.equal(phone.hostAllows(m, at), false, `the phone’s copy: ${m} ${at}`)
+    }
+  }
+  /* The names are a long read; which layout is on is six questions. */
+  assert.equal(timeoutFor('GET', '/fc/names'), 45000, 'the names are cut off at twenty seconds')
+  assert.equal(timeoutFor('GET', '/fc/current'), 20000)
+  /* And neither app builds one: no code (outside the rule and the demo) names block 199. */
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+  for (const file of ['src/lib/forgefx.js', 'mobile/src/lib/device.js', 'shared/footswitches.mjs', 'src/components/Footswitches.jsx', 'mobile/src/components/Footswitches.js']) {
+    const code = bare(readSrc(new URL(`../${file}`, import.meta.url), 'utf8'))
+    assert.ok(!/blocks\/0*199\b|\b199\b/.test(code), `${file} addresses the footswitch setup`)
+    assert.ok(!/method:\s*'(PUT|POST|DELETE)'[^}]*\/fc\//.test(code) && !/\b(put|post)\(\s*['`]\/fc\//.test(code), `${file} writes to a footswitch route`)
+  }
+})
+
+test('the Footswitches page asks which layout is on before the first view, the names once after, and an older computer neither', () => {
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+  const web = bare(readSrc(new URL('../src/components/Footswitches.jsx', import.meta.url), 'utf8'))
+  const phone = bare(readSrc(new URL('../mobile/src/components/Footswitches.js', import.meta.url), 'utf8'))
+  for (const [where, src] of [['browser', web], ['phone', phone]]) {
+    assert.match(src, /const knowsNow = fcKnowsCurrent\(caps\)|const \[knowsNow\] = useState\(\(\) => fcKnowsCurrent\(caps\)\)/, `${where}: the page asks which layout is on without asking the computer whether it can say`)
+    assert.match(src, /useState\(knowsNow \? undefined : null\)/, `${where}: an older computer is waited on for which layout is on`)
+    assert.match(src, /got = currentOf\(await fcCurrent\(\)\)/, `${where}: which layout is on is not read through currentOf`)
+    assert.match(src, /if \(got && !picked\.current\) \{\s*setLayout\(got\.layout\)\s*setView\(got\.view\)/, `${where}: the page does not open on the layout that is on, or overrides a pick`)
+    assert.match(src, /if \(asking\) return undefined/, `${where}: a view is read before the unit has said which layout is on`)
+    assert.match(src, /if \(knowsNames && !namesAsked\.current && !result\.error && !result\.stopped\) \{\s*namesAsked\.current = true/, `${where}: the names are asked more than once, or before a view`)
+    assert.match(src, /got = namesOf\(await fcNames\(\), fcGeometry\(m\)\.layouts\)/)
+    assert.match(src, /readView\(fcSwitch,/, `${where}: the switches are not read through the paced reader`)
+    assert.match(src, /sw\.tap\.pick \|\| sw\.tap\.action/, `${where}: a tap’s pick is not shown`)
+    assert.match(src, /sw\.hold\.pick \|\| sw\.hold\.action/, `${where}: a hold’s pick is not shown`)
+    assert.match(src, /fcSaysPicks\(shown(\?)?\.states\) \? FC_PICKS_SOME : FC_NOT_YET/, `${where}: the note under the switches is not today’s with an older computer`)
+    assert.match(src, /layoutLabel\(i, \{ layouts: geo\.layouts, names, now \}\)/)
+    assert.match(src, /viewLabel\(i, \{ layout, now \}\)/)
+    assert.match(src, /nowWords\(now, \{ layouts: geo\.layouts, names \}\)/)
+    assert.ok(!/setInterval|setTimeout/.test(src), `${where}: the footswitch page polls the unit`)
+  }
+  assert.match(web, /const \[caps\] = useState\(\(\) => unitCapabilities\(\)\)/, 'the browser does not ask what the computer said at the last detect')
+  assert.match(web, /if \(!open \|\| !asking\) return undefined/, 'the browser asks which layout is on while its fold is shut')
+  assert.match(phone, /const caps = useRig\(ofCapabilities\)/)
+  const forgefx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
+  assert.match(forgefx, /export const fcCurrent = \(\) => \(mock \? tick\(\)\.then\(\(\) => mock\.fcCurrent\(\)\) : request\(FC_CURRENT_PATH\)\)/)
+  assert.match(forgefx, /export const fcNames = \(\) => \(mock \? tick\(\)\.then\(\(\) => mock\.fcNames\(\)\) : request\(FC_NAMES_PATH\)\)/)
+  assert.match(forgefx, /export const unitCapabilities = \(\) => lastCaps/)
+  const device = readSrc(new URL('../mobile/src/lib/device.js', import.meta.url), 'utf8')
+  assert.match(device, /export const fcCurrent = \(\) => remoteRequest\('\/fc\/current'\)/)
+  assert.match(device, /export const fcNames = \(\) => remoteRequest\('\/fc\/names'\)/)
 })
 
 

@@ -552,6 +552,9 @@ export const blockParams = async (eid) => fixRead(await remoteRequest(`/preset/b
 export const fcModel = () => remoteRequest('/fc/model')
 /** One switch's settings, by its path from fcStatePath; paced by readView. */
 export const fcSwitch = (path) => remoteRequest(path)
+/** Which layout and view are on now, and the layout names. Reads only; asked only where the computer has them (lib/footswitches). */
+export const fcCurrent = () => remoteRequest('/fc/current')
+export const fcNames = () => remoteRequest('/fc/names')
 
 /**
  * What each knob of a kind of block does, from the computer's own help —
