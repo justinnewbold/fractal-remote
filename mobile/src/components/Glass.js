@@ -37,9 +37,17 @@ export function GlassCard({ flat = false, bordered = false, clip = false, presse
  * it, absolutely, so it takes no room, moves nothing, and never takes a touch;
  * the icon is drawn over it. Not drawn at all in Classic, where the icons
  * stood on the bar by themselves.
+ *
+ * Centred by numbers, from the button's own size (`box`, the icon's: 24 for
+ * the speaker, 22 for the gear), never by "50%" and a negative margin. That
+ * was right across and wrong down: on the phone the halfway point down came
+ * out of a taller box than the button, so both discs sat about 6 points
+ * below their icons ("The volume and settings button is a little
+ * off-center", Justin, 8 November 2026, with a screenshot).
  */
-export function GlassDisc({ size = 30 }) {
+export function GlassDisc({ size = 30, box = 24 }) {
   if (classic()) return null
+  const edge = (box - size) / 2
   return (
     <View
       pointerEvents="none"
@@ -47,12 +55,10 @@ export function GlassDisc({ size = 30 }) {
       importantForAccessibility="no"
       style={{
         position: 'absolute',
-        left: '50%',
-        top: '50%',
+        left: edge,
+        top: edge,
         width: size,
         height: size,
-        marginLeft: -size / 2,
-        marginTop: -size / 2,
         borderRadius: size / 2,
         backgroundColor: color.glassFill,
         boxShadow: color.glassLiftRing

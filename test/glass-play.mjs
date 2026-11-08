@@ -144,7 +144,7 @@ export function run(test) {
     ]) {
       /* The disc is the button's FIRST child, so the icon is drawn over it; the button has no style of its own, so the disc is centred on the icon. */
       const m = new RegExp(
-        `accessibilityLabel="${label}" hitSlop=\\{(\\d+|\\{ [^}]* \\})\\} onPress=\\{[^}]*\\}\\)?\\}? > <GlassDisc size=\\{30\\} \\/> <Image source=\\{${icon}\\} accessible=\\{false\\} resizeMode="contain" style=\\{\\{ width: ${size}, height: ${size}, tintColor: color\\.${ink} \\}\\} \\/> <\\/Pressable>`
+        `accessibilityLabel="${label}" hitSlop=\\{(\\d+|\\{ [^}]* \\})\\} onPress=\\{[^}]*\\}\\)?\\}? > <GlassDisc size=\\{30\\} box=\\{${size}\\} \\/> <Image source=\\{${icon}\\} accessible=\\{false\\} resizeMode="contain" style=\\{\\{ width: ${size}, height: ${size}, tintColor: color\\.${ink} \\}\\} \\/> <\\/Pressable>`
       ).exec(bar)
       assert.ok(m, `the ${name} is not its own picture, at ${size}, over a disc drawn first`)
       got[name] = { size, ...reach(m[1]) }

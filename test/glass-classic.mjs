@@ -776,6 +776,20 @@ export function run(test) {
       }
       t.setGlassStyle('glass')
       assert.ok(GlassDisc({ size: 30 }), 'the disc is gone from the glass')
+      /*
+       * Centred on its button by numbers, from the button's own size: "50%"
+       * and a negative margin put both discs about 6 points below their
+       * icons on the phone ("The volume and settings button is a little
+       * off-center", 8 November 2026). For the speaker's 24 and the gear's
+       * 22, the disc's middle is the icon's middle, both ways.
+       */
+      for (const box of [24, 22]) {
+        const style = GlassDisc({ size: 30, box }).props.style
+        assert.equal(style.position, 'absolute')
+        assert.equal(style.top + style.height / 2, box / 2, `the disc behind a ${box}-point icon is not centred on it top to bottom`)
+        assert.equal(style.left + style.width / 2, box / 2, `the disc behind a ${box}-point icon is not centred on it side to side`)
+        for (const k of ['top', 'left', 'marginTop', 'marginLeft']) assert.ok(typeof style[k] !== 'string', `the disc is placed by a percentage (${k}), which the phone measures from the wrong box`)
+      }
       assert.equal(GlassCard({ bare: true, children: [] }).props.style[0].borderRadius, 18, 'a bare card is not glass in the glass')
     } finally {
       t.setGlassStyle(was.style)
