@@ -621,21 +621,36 @@ group or Apple ever asks, it comes out by update: the plain aerial
 the rules about Fractal's logos, and Apple's, Microsoft's and Linux's, are
 unchanged.
 
-**Edit over Bluetooth: the AM4 and the FM3, his account until a store
-version opens each.**
+**Edit over Bluetooth and USB: the AM4, FM3, FM9 and Axe-Fx III, his
+account until a store version opens each.**
 
 > "I have an FM3 and AM4 I can test on. But I wanna make it an easy switch
 > if it works to be able to get it out to everyone"
 
+> "Push the edit over Bluetooth and USB to FM9 and AxeFX 3 as the over the
+> air update asap." (8 November 2026)
+
 Since 29 October 2026 Edit opens over Bluetooth on an AM4 and an FM3 for
-his account (by update, on every copy): knobs, models and on/off, read and
+his account (by update, on every copy), and since 8 November 2026 on an
+FM9 and an Axe-Fx III the same way: knobs, models and on/off, read and
 written by the phone the way the computer app does it
-(mobile/src/lib/am4-edit.js, mobile/src/lib/fm3-edit.js; the bytes and the
-decoding checked against the pinned codec, and the FM3's against ForgeFX's
-own gen-3 driver, run on the same answers). No saving, moving blocks,
-modifiers or names over Bluetooth yet, and Edit says so; no cab picking on
-an FM3 (that needs the computer's cab state). Never an FM9 or Axe-Fx III:
-their catalogs are not carried.
+(mobile/src/lib/am4-edit.js for the AM4; mobile/src/lib/gen3-edit.js for
+the three gen-3 units, bound to each unit's own catalog by fm3-edit.js,
+fm9-edit.js and axefx3-edit.js; the bytes and the decoding checked against
+the pinned codec, and the gen-3 units' against ForgeFX's own gen-3 driver,
+run on the same answers). A unit on a USB cable into the phone (its own
+USB port, or a USB MIDI cable on its MIDI jacks, such as the U2MIDI Pro on
+an FM3) is the same wire as an adapter (`isCable`), so Edit opens there on
+the same rule on all four, and its note says the USB cable instead of
+Bluetooth (lib/cableWords `CABLE_EDIT_NOTE`); on
+Android that needs the 1.89.36 build or later, the first with USB MIDI.
+No saving, moving blocks, modifiers or names over Bluetooth or a cable
+yet, and Edit says so; no cab picking on a gen-3 unit (that needs the
+computer's cab state). Edit on an FM9 or an Axe-Fx III has not run on a
+unit yet, so the first one edited through the phone is the first check
+that ForgeFX's tables for them (an amp's Gain is setting 7 on an FM3, 11 on
+an FM9 and 1 on a III) are what the unit takes; the phone sends exactly
+what the computer sends for the same edit, and a test holds it there.
 
 - **The switch is one line**: `EDIT_FROM_STORE` in
   mobile/src/lib/ble-rule.js, one entry per unit whose knobs are built,
@@ -647,23 +662,27 @@ their catalogs are not carried.
   work over Bluetooth (the same rules as Bluetooth itself, below). The
   ledger holds it the same way: its row says "Editing over Bluetooth for
   customers", and `EDIT_OPENED_AT` in test/ledger.mjs pins it.
-- **The catalogs are generated**, mobile/src/lib/am4-knobs.js and
-  mobile/src/lib/fm3-knobs.js, by scripts/am4-knobs.mjs and
-  scripts/fm3-knobs.mjs from forgefx-midi at the commit
-  desktop/forgefx.lock.json pins (tests hold each to it). A new codec pin
-  means running both scripts on it. The FM3's comes from the static FM3
-  tables; the computer may lay a walk of the unit over them, the phone
-  cannot.
+- **The catalogs are generated**, mobile/src/lib/am4-knobs.js by
+  scripts/am4-knobs.mjs, and fm3-knobs.js, fm9-knobs.js and
+  axefx3-knobs.js by scripts/gen3-knobs.mjs, from forgefx-midi at the
+  commit desktop/forgefx.lock.json pins (tests hold each to it). A new
+  codec pin means running both scripts on it. Each gen-3 catalog comes
+  from that unit's static tables through ForgeFX's own profile for it
+  (server/src/devices.ts PROFILES: the FM9's family-shaped rosters, the
+  III's ranges merged over its table and its read rosters); the computer
+  may lay a walk of the unit over them, the phone cannot.
 - **Every frame of Edit's is held** before it goes (am4EditAllowed;
-  gen3Sender with fm3EditAllowed): a read only of a block the unit has just
-  said is in its preset, a write only to a setting the catalog names on such
-  a block, within its range. AM4_ALLOWED stays as it was for everything
-  else, and everything the FM3 was sent before Edit goes as it went. A
-  request is Edit's only when it says so (device.js `EDITING`), so Play's
-  own read of the amp, for its boost, stays refused over Bluetooth.
+  gen3Sender with the unit's own fm3EditAllowed, fm9EditAllowed or
+  axefx3EditAllowed, picked by the frame's model byte): a read only of a
+  block the unit has just said is in its preset, a write only to a setting
+  the unit's catalog names on such a block, within its range. AM4_ALLOWED
+  stays as it was for everything else, and everything a gen-3 unit was
+  sent before Edit goes as it went. A request is Edit's only when it says
+  so (device.js `EDITING`), so Play's own read of the amp, for its boost,
+  stays refused over Bluetooth.
 - **Each unit opens on its own entry** in `EDIT_FROM_STORE` (`am4`,
-  `fm3`), so the AM4 can go out to everyone without the FM3, or the other
-  way round.
+  `fm3`, `fm9`, `axefx3`), so any one can go out to everyone without the
+  others.
 
 **Fractal Audio wrote on 18 October 2026, and the app does what it asked,
 except the name.** Their letter on Approved Vendor status asked for a clear

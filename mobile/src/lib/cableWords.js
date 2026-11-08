@@ -75,6 +75,14 @@ export function leaveWords({ cable = false, connected = false } = {}) {
   return { label: cable ? 'Stop using the USB cable' : 'Stop using Bluetooth', sub: 'Goes back to the computer' }
 }
 
+/*
+ * EDIT'S NOTE ON A USB CABLE, where it says BLE_NOTE over a Bluetooth
+ * adapter (screens/Edit.js): the same wire, so the same three things and
+ * the same no saving, said for the cable that is in.
+ */
+export const CABLE_EDIT_NOTE =
+  'On the USB cable you can turn knobs, change models and switch blocks on and off. Changes play right away, but the app can’t save them over the USB cable yet: to keep a change, save it on the unit itself before you change presets.'
+
 /* The page, while it connects. */
 export const CABLE_CONNECTING_HINT = 'If this stays here, check the USB cable is in at both ends and the unit is switched on.'
 /* A cable chosen that is not plugged in now: it connects by itself when it is (bleLink heardDevices). */
