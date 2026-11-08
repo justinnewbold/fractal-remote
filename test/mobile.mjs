@@ -2627,6 +2627,23 @@ export function run(test) {
     assert.ok(!lane.gaps.includes(2), 'the phone offers the new block’s cell as free')
   })
 
+  test('an Axe-Fx III’s NAM and IR Player, named by the Bluetooth wire, are on Play and switched there, and left out of the control search', async () => {
+    /* As the wire hands them over (bleWire gen3Blocks): slug and name from lib/gen3Catalog, and `knobs: false`, since no knob catalog carries them. */
+    const { rig, device } = await rigOnTheBench({
+      blocks: [
+        { slug: 'drive', name: 'Drive 1', effectId: 118, bypassed: false, channel: 'A' },
+        { slug: 'irplayer', name: 'IR Player 1', effectId: 195, bypassed: true, channel: 'A', knobs: false },
+        { slug: 'nam', name: 'NAM 1', effectId: 206, bypassed: false, channel: 'B', knobs: false },
+        { slug: 'nam', name: 'NAM 2', effectId: 207, bypassed: true, channel: 'A', knobs: false }
+      ]
+    })
+    const s = rig.getState()
+    assert.deepEqual(s.blocks.map((b) => b.effectId), [118, 195, 206, 207], 'Play leaves out a block the wire named')
+    assert.ok(s.allBlocks.filter((b) => b.effectId > 190).every((b) => b.knobs === false && !b.unknown), 'the mark Edit reads was lost on the way in')
+    assert.deepEqual(device.knobBlocks(s.allBlocks).map((b) => b.effectId), [118], 'the control search asks a block with no knobs in the app')
+    assert.deepEqual(device.stageBlocks(s.allBlocks).map((b) => b.effectId), [118, 195, 206, 207])
+  })
+
   test('the preset report never says every block is off over a new block that is on', async () => {
     const { silenceFaults, formatPresetReport } = await import('../src/lib/presetReport.js')
     const blocks = [

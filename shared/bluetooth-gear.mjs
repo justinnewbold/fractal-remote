@@ -971,15 +971,19 @@ export const VP4_CANT_HEAR =
  * THE BLOCKS PLAY DOES NOT DRAW YET, on the units that have them. Fractal's
  * Blocks Guide (June 2023) gives the FM9 and Axe-Fx III blocks the FM3 has
  * none of: Crossover, Vocoder and Tone Match on both, and IR Player and
- * Dynamic Distortion on the III alone. None has a family on Play (no color,
- * no picture, no place in the signal order), and the computer app does not
- * draw them either, so they come together on both paths in one later change.
- * Until then the page says so, rather than leave an owner looking for a
- * block that is in the preset.
+ * Dynamic Distortion on the III alone. None of those has a family on Play
+ * (no color, no picture, no place in the signal order), and the computer
+ * app does not draw them either, so they come together on both paths in one
+ * later change. Until then the page says so, rather than leave an owner
+ * looking for a block that is in the preset.
+ *
+ * Not the III's IR Player any more, nor its NAM (firmware 33): over
+ * Bluetooth, which is all this line speaks for, Play draws and switches both
+ * since 1.89.73 (mobile/src/lib/gen3Catalog.js OWN).
  */
 export function missingBlocksLine(unit) {
   if (unit === 'fm9') return 'A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match) aren’t shown on Play yet.'
-  if (unit === 'axefx3') return 'A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match, IR Player, Dynamic Distortion) aren’t shown on Play yet.'
+  if (unit === 'axefx3') return 'A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match, Dynamic Distortion) aren’t shown on Play yet.'
   return null
 }
 

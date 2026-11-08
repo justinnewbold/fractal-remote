@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-08",
     "day": "8 November 2026",
-    "version": "1.89.73",
+    "version": "1.89.74",
     "lines": [
+      {
+        "text": "On an Axe-Fx III over Bluetooth or a USB cable, Play now shows the NAM blocks from firmware 33 (NAM and NAM 2) and the IR Player block, and turns them on and off like your other effects.",
+        "only": null
+      },
       {
         "text": "Play’s Edit button no longer goes missing on Bluetooth or a USB cable: tap it and it tells you why it needs a computer there. In the demo, the VP4’s Edit no longer has knobs, chain editing, Modifiers or renaming, like a real VP4. And through a computer, an AM4’s Edit no longer shows a Modifiers section it can’t use.",
         "only": null
@@ -27,15 +31,11 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "The walkthrough’s last button now says Let’s go.",
+        "text": "The walkthrough’s last button now says Let’s go, and the glass circles behind the speaker and settings buttons at the top now sit centered on their icons.",
         "only": null
       },
       {
         "text": "On the website, How it works now opens on Bluetooth, as in the app: a Bluetooth adapter on your unit and the free app on your phone or tablet, with buttons to download it. Tap Computer for the computer way.",
-        "only": null
-      },
-      {
-        "text": "The glass circles behind the speaker and settings buttons at the top now sit centered on their icons.",
         "only": null
       }
     ]

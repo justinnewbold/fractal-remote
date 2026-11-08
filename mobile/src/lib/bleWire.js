@@ -105,6 +105,7 @@ import * as fm3Edit from './fm3-edit.js'
 import * as fm9Edit from './fm9-edit.js'
 import * as axefx3Edit from './axefx3-edit.js'
 import { presetMissLine } from './bluetooth-gear.js'
+import { NOT_BLOCKS } from './gen3Catalog.js'
 import { createVp4Wire } from './bleVp4.js'
 
 /* ------------------------------------------------------------------ */
@@ -1336,7 +1337,23 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     /* outlineChain names by effect id and wants the channel as a letter. */
     const states = list.map((b) => ({ effectId: b.effectId, bypassed: b.bypassed, channel: channelLetter(b.channel) }))
     sayStrangers(states)
-    return (outlineChain(states, blocks) || []).filter((b) => !OFF_STAGE.includes(b.slug))
+    return (outlineChain(states, blocks) || []).filter((b) => !OFF_STAGE.includes(b.slug)).map(knobsSaid)
+  }
+
+  /*
+   * A BLOCK PLAY SWITCHES AND EDIT HAS NO KNOBS FOR: `knobs: false`. The
+   * Axe-Fx III's NAM and IR Player (lib/gen3Catalog OWN) are named and
+   * switched here, and its knob catalog (lib/axefx3-knobs.js) carries neither,
+   * so Edit opens them on their on and off alone and says why, rather than
+   * ask for a read that is refused (gen3Params) and put the refusal up red.
+   * Every block the catalog's knobs do name is handed on exactly as before.
+   */
+  const knobsSaid = (b) => (g3Edit && !g3Edit.editBlock(b.effectId) ? { ...b, knobs: false } : b)
+
+  /* An id that is not a block a player switches (lib/gen3Catalog NOT_BLOCKS): refused with nothing sent, as forgefx-midi refuses it. */
+  const switchable = (eid) => {
+    if (NOT_BLOCKS.includes(eid)) throw badInput(`Block ${eid} is not one the app switches.`)
+    return eid
   }
 
   /*
@@ -1351,9 +1368,16 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * changed, or the block switched on the unit), so a report sent from a
    * preset with one in it carries the number. Nothing is sent to the unit for
    * it, and Play still leaves the block out.
+   *
+   * Known, and so not said: every id the unit's list names (on an Axe-Fx
+   * III, NAM 1 and 2 at 206 and 207 and the IR Player at 195 to 198, named
+   * in 1.89.73 from what this line said in a customer's log), and the ids
+   * that are not blocks at all (lib/gen3Catalog NOT_BLOCKS: the III's
+   * Preset FC, 200, was in every preset's line). Anything else, such as the
+   * 201 in every preset of that III, still is.
    */
   function sayStrangers(states) {
-    const known = new Set(blocks.filter((c) => Number.isInteger(c?.page) && c.slug).map((c) => c.page))
+    const known = new Set([...blocks.filter((c) => Number.isInteger(c?.page) && c.slug).map((c) => c.page), ...NOT_BLOCKS])
     const strangers = states.filter((s) => Number.isInteger(s?.effectId) && !known.has(s.effectId))
     const line = strangers
       .map((s) => `id ${s.effectId} (${s.bypassed === true ? 'off' : s.bypassed === false ? 'on' : 'on or off not said'}${s.channel ? `, channel ${s.channel}` : ''})`)
@@ -1538,7 +1562,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   async function gen3WriteChannel(eid, channel) {
-    blockNumber(eid)
+    switchable(blockNumber(eid))
     const c = channelIndex(channel)
     if (c === null) throw badInput(`${channel} is not A, B, C or D.`)
     forgetEdits(eid)
@@ -1681,7 +1705,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* ---- bypass and tap ---- */
 
   async function gen3WriteBypass(eid, bypassed) {
-    blockNumber(eid)
+    switchable(blockNumber(eid))
     const r = await fire(buildSetBypass(model, eid, bypassed === true), `block ${eid} ${bypassed === true ? 'off' : 'on'}`)
     forgetEdits(eid)
     if (rejected(r)) throw refusedBy(r.rejected)
@@ -3166,7 +3190,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * EFFECTS ON AND OFF, the one way they go (gen3WriteBypass), checked as
      * the AM4's is: the block read, switched, read again, and put back as it
      * was. The first effect the catalog names, before the amp and the cab
-     * (an amp switched off is a silent rig for the moment it takes), and
+     * (an amp switched off is a silent rig for the moment it takes) and
+     * the Axe-Fx III's NAM and IR Player, which stand where they do, and
      * never the input, output or looper, which Play does not show. With
      * nothing but the amp and the cab, the amp, by name, whichever the unit
      * lists first: the step's `warn` says so before it is tapped.
@@ -3176,7 +3201,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (!Array.isArray(list)) throw failure('The unit did not list its blocks.', 504)
       const slugOf = (b) => blocks.find((c) => c?.page === b.effectId)?.slug
       const known = list.filter((b) => slugOf(b) && !OFF_STAGE.includes(slugOf(b)))
-      const block = known.find((b) => !['amp', 'cab'].includes(slugOf(b))) || known.find((b) => slugOf(b) === 'amp') || known[0]
+      const block = known.find((b) => !['amp', 'cab', 'nam', 'irplayer'].includes(slugOf(b))) || known.find((b) => slugOf(b) === 'amp') || known[0]
       if (!block) throw failure('There is no effect to switch in this preset.', 409)
       const eid = block.effectId
       const name = nameOf(eid)
