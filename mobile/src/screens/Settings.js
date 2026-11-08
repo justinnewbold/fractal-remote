@@ -85,6 +85,7 @@ import GearShareSwitch from '../components/GearShareSwitch'
 import AxiomSwitch from '../components/AxiomSwitch'
 import LiveTool from '../components/LiveTool'
 import UsageTool from '../components/UsageTool'
+import TrialsTool from '../components/TrialsTool'
 import StuckTool from '../components/StuckTool'
 import Lamp from '../components/Lamp'
 import { ChainCards, TipCard } from '../components/Walk'
@@ -1201,6 +1202,7 @@ export default function Settings({
           {head('Customers', 'back')}
           <DevTabs tabs={CUSTOMER_TABS} on={devTab.customers} onPick={(t) => setDevTab({ ...devTab, customers: t })} />
           {devTab.customers === 'sales' ? <SalesTool /> : null}
+          {devTab.customers === 'trials' ? <TrialsTool /> : null}
           {devTab.customers === 'usage' ? <UsageTool /> : null}
           {devTab.customers === 'accounts' ? <AccountsTool /> : null}
           {/* "A 'paid but stuck' list on your Developer page" (15 October 2026). */}
@@ -2037,6 +2039,8 @@ const WATCH_KEEP = [
 /* The Developer pages' tools, in the order their buttons go across the top. */
 const CUSTOMER_TABS = [
   { key: 'sales', label: 'Sales' },
+  /* Who is on a free trial now, and how many started today, this week and this month (8 November 2026). */
+  { key: 'trials', label: 'Trials' },
   { key: 'usage', label: 'People' },
   { key: 'accounts', label: 'Accounts' },
   { key: 'stuck', label: 'No computer' },
