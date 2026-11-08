@@ -11943,6 +11943,193 @@ export function run(test) {
     }
   })
 
+  /* ---------------------------------------------------------------- */
+  /* Play goes first on the line: Edit beside Play, one adapter        */
+  /* ---------------------------------------------------------------- */
+
+  /*
+   * TWO SIDES, STEP 1. With Edit beside Play, both want the one adapter, and
+   * the line goes: Play's presses, Play's own reads, Edit's knob turns,
+   * Edit's reads, the watch (bleWire PRI, editWaits). Requests here are made
+   * the way the app makes them, several at once, and the clock turned until
+   * each has its answer. `answered` is when each one was answered: a frame
+   * sent before that instant was sent while it was still being answered.
+   * What Play sends by itself is read off a twin line first, the same
+   * pretend unit asked the same things alone.
+   */
+  const settingsOf = (unit) => (unit === 'am4' ? editSettings() : unit === 'fm3' ? fm3Settings() : g3Settings(unit))
+  async function playLine(unit, edit = true) {
+    const { settings } = await settingsOf(unit)
+    /* A gen-3 unit's scene goes the way it has learned, so a test's first scene is one exchange like its next. */
+    const t = await onTheLine(unit, { edit: () => edit, settings, ...(unit === 'am4' ? {} : { methods: { learned: { scene: 'published' } } }) })
+    await t.get('/preset')
+    return t
+  }
+  function answers(t) {
+    const answered = {}
+    const note = (name) => (v) => {
+      answered[name] = { at: t.clock.now() }
+      return v
+    }
+    return { answered, note }
+  }
+  const before = (t, from, at) => t.sent.slice(from).filter((s) => s.at < at)
+  const tapOn = (t, path, body) => t.wire.request(path, { method: 'POST', body: JSON.stringify(body), deadline: t.clock.now() + 1500 })
+  const editRead = (t, eid = 58) => t.wire.request(`/preset/blocks/${eid}/params`, { editing: true })
+  const EDIT_READ_ALL = 0x1f
+
+  test('over Bluetooth Play goes first: a tap waits only for the exchange on its way, never for Edit’s read waiting behind it, and Play’s own reads go out together, before Edit’s, on the AM4 and every gen-3 unit', async () => {
+    const sx = await import(SX)
+    for (const unit of ['am4', 'fm3', 'fm9', 'axefx3']) {
+      /* A read of Play's that is several exchanges: the AM4's blocks (each one's on and off, and its channel), a gen-3 unit's scene names. */
+      const playPath = unit === 'am4' ? '/preset/scene-state' : '/presets/12/summary'
+      const eid = unit === 'am4' ? 119 : 46
+      const tapFrame = hex(unit === 'am4' ? sx.buildAm4Bypass(eid, true) : sx.buildSetBypass(sx.MODELS[unit], eid, true))
+      const twin = await playLine(unit)
+      const was = twin.sent.length
+      await twin.get(playPath)
+      const alone = twin.frames().slice(was).map(hex)
+      assert.ok(alone.length >= 3, `${unit}: Play’s read is too short to show anything`)
+
+      const t = await playLine(unit)
+      const from = t.sent.length
+      const { answered, note } = answers(t)
+      const play = t.wire.request(playPath).then(note('play'))
+      await flush()
+      /* Edit's read of its block is asked while Play's is on its way, and the player taps a block after it. */
+      const edit = editRead(t).then(note('edit'))
+      await flush()
+      const tap = tapOn(t, `/preset/blocks/${eid}/bypass`, { bypassed: true }).then(note('tap'))
+      const [, block, tapped] = await drive(t.clock, Promise.all([play, edit, tap]))
+      assert.deepEqual(tapped, { ok: true })
+      assert.ok(block.named.length > 0, `${unit}: Edit’s read came back empty`)
+      const sent = t.frames().slice(from).map(hex)
+      assert.equal(sent[0], alone[0], `${unit}: the first of Play’s reads was not the exchange on its way`)
+      assert.equal(sent[1], tapFrame, `${unit}: the tap waited behind something that had not started`)
+      assert.deepEqual(sent.slice(2, alone.length + 1), alone.slice(1), `${unit}: Play’s own reads did not go out together`)
+      const playSent = before(t, from, answered.play.at)
+      assert.equal(playSent.length, alone.length + 1, `${unit}: something of Edit’s went while Play’s read was still being answered`)
+      assert.ok(playSent.every((s) => s.bytes[5] !== EDIT_READ_ALL), `${unit}: Edit’s read of the block went before Play’s`)
+      /* Edit's goes the moment Play's is answered: nothing was waiting for it after that. */
+      assert.equal(t.sent[from + alone.length + 1].at, answered.play.at, `${unit}: Edit waited on after Play’s read was answered`)
+      assert.ok(sent.slice(alone.length + 1).some((f) => H(f)[5] === EDIT_READ_ALL), `${unit}: Edit’s read of the block never went`)
+    }
+  })
+
+  test('after a scene tap Edit reads its block again only once Play has read the blocks, and the moment it has; with no read from Play it waits REREAD_MAX_MS at most', async () => {
+    const { REREAD_MAX_MS } = await import(WIRE)
+    const { OWN_SETTLE_MS } = await import('../shared/own-echo.mjs')
+    /* Play waits OWN_SETTLE_MS after a preset before it reads the blocks: Edit must not give up on Play before that. */
+    assert.ok(REREAD_MAX_MS > OWN_SETTLE_MS, 'Edit stops waiting for Play before Play reads a preset it has just loaded')
+    for (const unit of ['am4', 'fm3', 'fm9', 'axefx3']) {
+      /* Play's chain by itself: the scene, then its read of the blocks straight after, as rig.writeScene makes it. */
+      const twin = await playLine(unit)
+      await advance(twin.clock, 1000)
+      const was = twin.sent.length
+      await drive(twin.clock, tapOn(twin, '/scene', { index: 2 }).then(() => twin.wire.request('/preset/scene-state')))
+      const chain = twin.frames().slice(was).map(hex)
+
+      const t = await playLine(unit)
+      await advance(t.clock, 1000)
+      const from = t.sent.length
+      const { answered, note } = answers(t)
+      const tap = tapOn(t, '/scene', { index: 2 })
+        .then(() => t.wire.request('/preset/scene-state'))
+        .then(note('reread'))
+      /* Edit's block is asked again while the scene is on its way (it re-keys on the scene). */
+      const edit = editRead(t).then(note('edit'))
+      const [states, block] = await drive(t.clock, Promise.all([tap, edit]))
+      assert.ok(states.length > 0 && block.named.length > 0)
+      const playSent = before(t, from, answered.reread.at)
+      assert.deepEqual(playSent.map((s) => hex(s.bytes)), chain, `${unit}: something of Edit’s went between the scene and Play’s read of the blocks`)
+      assert.equal(t.sent[from + chain.length]?.at, answered.reread.at, `${unit}: Edit waited on after Play had read the blocks`)
+      assert.ok(!t.logs.some((l) => /Edit goes on/.test(l)))
+
+      /* A scene Play reads nothing after: Edit goes on by itself, REREAD_MAX_MS after the scene was answered, and says so. */
+      await advance(t.clock, 1000)
+      const mark = t.sent.length
+      const lone = tapOn(t, '/scene', { index: 1 }).then(note('lone'))
+      const late = editRead(t).then(note('late'))
+      await drive(t.clock, Promise.all([lone, late]))
+      const first = t.sent.slice(mark).find((s) => s.at >= answered.lone.at)
+      assert.equal(first?.at, answered.lone.at + REREAD_MAX_MS, `${unit}: Edit did not wait for Play, or waited for ever`)
+      assert.ok(t.logs.some((l) => /Edit goes on: Play read nothing after the scene or preset changed/.test(l)), `${unit}: the log does not say Edit went on`)
+    }
+  })
+
+  test('a scene changed on the unit itself: Edit, asking first, still reads its block only after Play’s read of the blocks', async () => {
+    for (const unit of ['am4', 'fm3']) {
+      const t = await playLine(unit)
+      await t.get('/scene')
+      await t.get('/tempo')
+      t.wire.startPolls()
+      await advance(t.clock, 2500)
+      const { answered, note } = answers(t)
+      let both = null
+      let from = 0
+      t.wire.subscribe((e) => {
+        if (e.type !== 'scene' || both) return
+        from = t.sent.length
+        /* As the app hears it: Edit's block re-keys on the scene, and Play reads the blocks again. Edit asks first. */
+        both = Promise.all([editRead(t).then(note('edit')), t.wire.request('/preset/scene-state').then(note('reread'))])
+      })
+      t.unit.state.scene = 3
+      for (let i = 0; i < 30 && !both; i++) await advance(t.clock, 100)
+      assert.ok(both, `${unit}: the watch did not hear the scene`)
+      const [block, states] = await drive(t.clock, both)
+      t.wire.stopPolls()
+      assert.ok(block.named.length > 0)
+      const playSent = before(t, from, answered.reread.at)
+      /* Play's read alone: a gen-3 unit's status, or the AM4's on/off and channel of each block (its preset was read by the watch just now). */
+      assert.equal(playSent.length, unit === 'am4' ? states.length * 2 : 1, `${unit}: Edit’s read went before Play’s, though the scene had changed`)
+      assert.ok(playSent.every((s) => s.bytes[5] !== EDIT_READ_ALL))
+      assert.equal(t.sent[from + playSent.length]?.at, answered.reread.at, `${unit}: Edit waited on after Play had read the blocks`)
+    }
+  })
+
+  test('Edit’s own knob turn goes ahead of its reads, and both after Play’s', async () => {
+    const t = await playLine('fm3')
+    /* The amp read: the unit's list of blocks is known for a moment, so neither request below asks for it first. */
+    await drive(t.clock, editRead(t))
+    const from = t.sent.length
+    const { answered, note } = answers(t)
+    const play = t.wire.request('/presets/12/summary').then(note('play'))
+    const read = editRead(t, 66).then(note('read'))
+    const knob = t.wire.request('/preset/blocks/58/params/7', { editing: true, method: 'PUT', body: JSON.stringify({ value: 0.4, continuous: true }) }).then(note('knob'))
+    await drive(t.clock, Promise.all([play, read, knob]))
+    const kinds = t.frames().slice(from).map((f) => (f[5] === 0x0e ? 'name' : f[5] === 0x01 && f[6] === 0x52 ? 'knob' : f[5] === EDIT_READ_ALL ? 'block' : hex(f)))
+    assert.deepEqual(kinds, [...Array(8).fill('name'), 'knob', 'block'], 'Edit’s read went ahead of its knob turn, or of Play’s read')
+    assert.ok(answered.knob.at < answered.read.at)
+  })
+
+  test('Play is never held by Edit’s rules, and a copy without Edit over Bluetooth goes in the order it always did', async () => {
+    const sx = await import(SX)
+    for (const unit of ['am4', 'fm3']) {
+      for (const edit of [false, true]) {
+        const t = await playLine(unit, edit)
+        /* A scene and Play's read of the blocks after it: the read goes the instant the scene is answered. */
+        const from = t.sent.length
+        let tapped = null
+        await drive(
+          t.clock,
+          tapOn(t, '/scene', { index: 2 }).then(() => {
+            tapped = t.clock.now()
+            return t.wire.request('/preset/scene-state')
+          })
+        )
+        assert.equal(t.sent.slice(from).find((s) => s.at >= tapped)?.at, tapped, `${unit}: Play’s read waited after its scene`)
+        /* A tap goes ahead of the reads waiting, and the reads go in the order they were asked. */
+        const tempo = hex(unit === 'am4' ? sx.buildAm4TempoRead() : sx.buildGetTempo(sx.MODELS[unit]))
+        const eid = unit === 'am4' ? 119 : 46
+        const tapFrame = hex(unit === 'am4' ? sx.buildAm4Bypass(eid, false) : sx.buildSetBypass(sx.MODELS[unit], eid, false))
+        const mark = t.sent.length
+        await drive(t.clock, Promise.all([t.wire.request('/tempo'), t.wire.request('/tempo'), tapOn(t, `/preset/blocks/${eid}/bypass`, { bypassed: false })]))
+        assert.deepEqual(t.frames().slice(mark).map(hex), [tempo, tapFrame, tempo], `${unit}: Play’s order moved`)
+        assert.ok(!t.logs.some((l) => /Edit goes on/.test(l)), `${unit}: Edit’s rule ran with nothing of Edit’s asked`)
+      }
+    }
+  })
+
   test('a unit on its own USB cable is the same wire: Edit opens there on the same rule, his account only, and never for a customer', async () => {
     const { ADMINS } = await import('../shared/admin.mjs')
     const cables = [
