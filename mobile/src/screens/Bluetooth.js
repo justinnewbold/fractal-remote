@@ -23,6 +23,7 @@ import {
   checkSteps,
   chooseAdapter,
   connectOwedUntil,
+  editOverBluetooth,
   findAdapters,
   forgetAdapter,
   forgetAdapterFor,
@@ -50,6 +51,7 @@ import {
   useWaitingForBluetooth
 } from '../lib/bluetooth'
 import { connectBluetoothAgain } from '../lib/bleLink'
+import { editingLine, limitsLine } from '../lib/editWords'
 import {
   BLUETOOTH_WAYS,
   CLOSE_AND_REOPEN,
@@ -252,9 +254,15 @@ import bluetoothIcon from '../../assets/icons/bluetooth.png'
 const face = Platform.select(mono)
 const ios = Platform.OS === 'ios'
 
-/* What a player loses by leaving the cable at home, in the order it is noticed. */
+/*
+ * What a player loses by leaving the cable at home, in the order it is
+ * noticed. Editing first, said for the unit picked (lib/editWords
+ * editingLine, by the switch Play's Edit asks, lib/bluetooth
+ * editOverBluetooth): closed, "No editing or saving over Bluetooth.", what
+ * every customer copy shows until a store version opens editing on the
+ * unit; open, what Edit does there and that nothing saves.
+ */
 const DIFFERENT = [
-  'No editing or saving over Bluetooth.',
   'Slower to load the preset list.',
   'Footswitch changes may take a moment to show.',
   'About 30 feet of range.',
@@ -1130,16 +1138,16 @@ export function BluetoothTrouble({ onReport = null }) {
 export function BluetoothLimits() {
   const b = useBluetooth()
   const vp4 = b.unit === 'vp4'
+  /* Edit over Bluetooth on the unit picked, for this account on this copy: never on a VP4, which is not one whose Edit is built. */
+  const editOpen = editOverBluetooth(b.unit)
   return (
     <View style={{ gap: space.md }}>
-      {/* A VP4's own: presets and scenes, and nothing heard back (lib/bleVp4.js). */}
+      {/* A VP4's own: presets and scenes, and nothing heard back (lib/bleVp4.js). Its words are the same whatever the switch says. */}
       <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
-        {vp4
-          ? VP4_OVER_BLUETOOTH
-          : 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. No editing or saving.'}
+        {vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen)}
       </Text>
       <Heading>What’s different from USB</Heading>
-      {DIFFERENT.map((line) => (
+      {[editingLine(editOpen), ...DIFFERENT].map((line) => (
         <Bullet key={line}>{line}</Bullet>
       ))}
       {/* The unit's own: blocks Play does not draw yet on an FM9 or Axe-Fx III (shared/bluetooth-gear missingBlocksLine). */}

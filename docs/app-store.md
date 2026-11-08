@@ -2778,9 +2778,10 @@ stores and on the website still says Bluetooth has "no editing or saving",
 which stays true for customers until a store version opens it. That version
 is a build like any other, and in its pull request:
 
-- `EDIT_FROM_STORE` in mobile/src/lib/ble-rule.js sets the unit to that
-  version on both phones (`am4: { ios: '1.90.0', android: '1.90.0' }`), and
-  nothing else in the switch moves;
+- `EDIT_FROM_STORE` in mobile/src/lib/ble-rule.js sets each unit that
+  version opens to it on both phones (`am4: { ios: '1.90.0', android:
+  '1.90.0' }`), and nothing else in the switch moves: a unit it does not
+  open stays null, and one an earlier version opened keeps that version;
 - the Notes for App Review describe it, and where to find it: Play →
   Edit, with Bluetooth on and an AM4 picked, and what it does not do;
 - What's New, the Description, the Google Play release notes and App
@@ -2788,8 +2789,11 @@ is a build like any other, and in its pull request:
 - public/bluetooth-guide.html ("No editing or saving over Bluetooth") and
   the Bluetooth page's own words say the same;
 - after the build is started, its row in docs/expo-builds.md says
-  "Editing over Bluetooth for customers", and `EDIT_OPENED_AT` in
-  test/ledger.mjs is set to it, in the first pull request after.
+  "Editing over Bluetooth for customers: " and the units that version
+  opened, by name ("Editing over Bluetooth for customers: AM4, FM3"), and
+  the entry of each of those units in `EDIT_OPENED_AT` in test/ledger.mjs
+  is set to it, in the first pull request after. A unit that version does
+  not open stays null in both, and opens later on its own row and pin.
 
 ## Later: a USB cable (the next store version)
 

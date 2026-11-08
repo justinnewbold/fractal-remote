@@ -49,14 +49,26 @@ From that merge on, updates made on main reach only 1.89.0 copies: phones
 on TestFlight's 1.88.3 and Play's 1.88.0 keep the last update made before
 it until they take 1.89.0 from the store.
 
-**The build that opens Edit over Bluetooth to customers says so too**, in
-these words in What it was for: "Editing over Bluetooth for customers".
-The same rules hold it, with its own switch and pin: `EDIT_FROM_STORE` in
-mobile/src/lib/ble-rule.js, one entry per unit (the AM4 first), null until
-the build pull request sets the unit to that build's version on both
-phones, and `EDIT_OPENED_AT` in test/ledger.mjs, set in the pull request
-that writes the row. Until then Edit over Bluetooth is Justin's account's
-alone, on every copy, by update.
+**A build that opens Edit over Bluetooth to customers says so too, and
+names its units**, in these words in What it was for: "Editing over
+Bluetooth for customers: " and the units that build opened, by the names
+the Bluetooth page gives them, as
+"Editing over Bluetooth for customers: AM4, FM3".
+Each unit opens on its own row, the build whose store version opens that
+unit: the AM4 and the FM3 can open in one version, and the FM9 and the
+Axe-Fx III stay closed and open in a later one of their own, with a row of
+their own then. The list is the names alone (AM4, FM3, FM9, Axe-Fx III),
+parted by commas or "and", and ends at the next full stop or bracket; the
+words with no list after them, or a name that is not one of those (the VP4
+has no Edit over Bluetooth), fail the test. The same rules as Bluetooth's
+hold each unit, with its own switch and its own pin: its entry in
+`EDIT_FROM_STORE` in mobile/src/lib/ble-rule.js, null until the build pull
+request sets that unit to the build's version on both phones, and its entry
+in `EDIT_OPENED_AT` in test/ledger.mjs, set in the pull request that writes
+the row, for every unit the row names and no other. A unit the row does not
+name stays null, or keyed to a later store version of its own. Until a row
+names it, Edit over Bluetooth on a unit is Justin's account's alone, on
+every copy, by update.
 
 **That pair, 1.89.0, is started with the Send box unticked**, the one build
 where it is: platform `all`, profile `production`, and "Send it to

@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-08",
     "day": "8 November 2026",
-    "version": "1.89.71",
+    "version": "1.89.73",
     "lines": [
+      {
+        "text": "Play’s Edit button no longer goes missing on Bluetooth or a USB cable: tap it and it tells you why it needs a computer there. In the demo, the VP4’s Edit no longer has knobs, chain editing, Modifiers or renaming, like a real VP4. And through a computer, an AM4’s Edit no longer shows a Modifiers section it can’t use.",
+        "only": null
+      },
       {
         "text": "If a Bluetooth MIDI footswitch, like an M-VAVE Chocolate, gets picked as your adapter, the app no longer takes it on its own, and the Bluetooth page says it’s a footswitch and to pick the adapter on your unit instead.",
         "only": null

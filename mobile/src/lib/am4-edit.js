@@ -395,7 +395,7 @@ const hasOption = (p, v) => Number.isInteger(v) && !!p.enumValues && Object.prot
  */
 export function knobFrame(code, id, body) {
   const at = settingAt(code, id)
-  if (!at) return { refused: 'That setting isn’t one the app can change over Bluetooth.' }
+  if (!at) return { refused: 'That setting isn’t one the app can change from here.' }
   const { p, pidLow, pidHigh } = at
   if (NOT_A_KNOB.has(p.key)) return { refused: 'That setting isn’t changed here.' }
   const v = Number(body?.value)

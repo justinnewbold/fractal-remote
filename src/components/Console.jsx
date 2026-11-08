@@ -113,7 +113,7 @@ import { editPages, pageFor, pageHolding } from '../lib/editPages'
 import { bringIntoView } from '../lib/feedback'
 import { useOverflow } from '../lib/overflow'
 import { slotLabel, startsBank } from '../lib/slots'
-import { vp4Capabilities, vp4Here } from '../lib/forgefx'
+import { vp4Bench, vp4Capabilities, vp4Here } from '../lib/forgefx'
 import { VP4_NO_NAMES, VP4_RELOAD, VP4_UPDATE_COMPUTER, vp4ComputerCan, vp4PresetCode } from '../../shared/vp4-safety.mjs'
 import { oneWriteAtATime } from '../../shared/knob-keys.mjs'
 
@@ -1149,9 +1149,10 @@ function KnownBlockPanel({ block, channels, onError, onChanged, busy, focus }) {
    * panel, at 1280 both at once, for a tap the Edit screen had just invited.
    * Nothing is asked and nothing raised; the knobs' words are said once on
    * the Edit screen where the search box was (App), and this panel has the
-   * on/off. The phone's rule (mobile Edit.js BlockPanel).
+   * on/off. The phone's rule (mobile Edit.js BlockPanel). The demo's VP4 the
+   * same (vp4Bench), so the demo shows what a real one gives.
    */
-  const knobless = vp4Here()
+  const knobless = vp4Bench()
   useEffect(() => {
     if (!block || knobless) return
     let stop = false

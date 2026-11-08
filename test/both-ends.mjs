@@ -4697,4 +4697,35 @@ export function run(test) {
     /* The demo's own line stays, for every unit, in its own words: nothing is taken away. */
     assert.match(app, /\{isDemo\(\) && status === 'live' && !demoNoteSeen \? \(\s*<p className="demo-banner">\s*<span>\{demoSentence\(demoUnit\(\)\)\}<\/span>/)
   })
+
+  /*
+   * AN AM4'S MODIFIERS DOOR OPENED ON A REFUSAL. Through the computer an AM4
+   * cannot be told to attach a modifier: ForgeFX's AM4 driver says modBind
+   * false (server/src/drivers/am4.ts, at the commit desktop/forgefx.lock.json
+   * pins), and the computer serves it on GET /device/detect as
+   * capabilities.modifiers.bind (registryCore #extendedCaps; its own caps
+   * test asserts false for the AM4), which the relay carries as it is and
+   * the phone's rig and the browser keep whole. So both ends leave the
+   * section out when it says false, and keep it when a computer too old to
+   * say leaves it out.
+   */
+  test('Modifiers is left out of Edit where the computer says the unit cannot bind one, and kept where it does not say, at both ends', () => {
+    const flat = (p) => read(p).replace(/\s+/g, ' ')
+    const asked = (caps) => caps?.modifiers?.bind !== false
+    assert.equal(asked({ modifiers: { model: true, bind: false } }), false, 'an AM4 is offered Modifiers')
+    assert.equal(asked({ modifiers: { model: true, bind: true } }), true)
+    for (const older of [{}, { modifiers: {} }, { modifiers: null }, null, undefined]) assert.equal(asked(older), true, 'an older computer loses Modifiers')
+    const edit = flat('mobile/src/screens/Edit.js')
+    assert.match(edit, /const modifiersBind = caps\?\.modifiers\?\.bind !== false/)
+    assert.match(edit, /\{modifiersBind \? <Modifiers blocks=\{blocks\} onError=\{setError\} \/> : null\}/, 'the phone’s Edit offers Modifiers whatever the computer says')
+    assert.equal((edit.match(/<Modifiers /g) || []).length, 1, 'the phone has another way to Modifiers')
+    const app = flat('src/App.jsx')
+    assert.match(app, /const modifiersBind = device\?\.capabilities\?\.modifiers\?\.bind !== false/)
+    assert.equal((app.match(/\{modifiersBind \? \( <Section key="(?:chain-)?modifiers" title="Modifiers"/g) || []).length, 2, 'the browser offers Modifiers whatever the computer says, on the Edit screen or the chain sheet')
+    assert.equal((app.match(/<Modifiers /g) || []).length, 2, 'the browser has another way to Modifiers')
+    /* What the screens read is the computer's own answer, kept whole: the rig's capabilities and the browser's device. */
+    assert.match(flat('mobile/src/lib/rig.js'), /capabilities: caps\?\.capabilities \?\? null,/)
+    assert.match(flat('mobile/src/lib/device.js'), /let res = await remoteRequest\('\/device\/detect'\)/)
+    assert.match(flat('src/lib/forgefx.js'), /let res = mock \? \(await tick\(\), mock\.detect\(\)\) : await request\('\/device\/detect'\)/)
+  })
 }
