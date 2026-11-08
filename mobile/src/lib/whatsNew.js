@@ -23,7 +23,7 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-08",
     "day": "8 November 2026",
-    "version": "1.89.75",
+    "version": "1.89.77",
     "lines": [
       {
         "text": "On an Axe-Fx III over Bluetooth or a USB cable, Play now shows the NAM blocks from firmware 33 (NAM and NAM 2) and the IR Player block, and turns them on and off like your other effects.",
@@ -34,7 +34,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "If a Bluetooth MIDI footswitch, like an M-VAVE Chocolate, gets picked as your adapter, the app no longer takes it on its own, and the Bluetooth page says it’s a footswitch and to pick the adapter on your unit instead.",
+        "text": "If a Bluetooth MIDI footswitch, like an M-VAVE Chocolate, gets picked as your adapter, the app no longer takes it on its own, and the Bluetooth page says it’s a footswitch and to pick the adapter on your unit instead. Through a computer, an FM3’s Footswitches page also shows what each switch picks.",
         "only": null
       },
       {
@@ -42,11 +42,11 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "Your first and last name are now optional when you make an account; add them any time under Settings → your account in the phone app. The walkthrough’s last button now says Let’s go, and the glass circles behind the top buttons sit centered on their icons.",
+        "text": "Your first and last name are now optional when you make an account; add them any time under Settings → your account in the phone app, where the reset link now names the email it goes to. The walkthrough’s last button now says Let’s go, and the glass circles behind the top buttons sit centered on their icons.",
         "only": null
       },
       {
-        "text": "On the website, How it works now opens on Bluetooth, as in the app: a Bluetooth adapter on your unit and the free app on your phone or tablet, with buttons to download it. Tap Computer for the computer way.",
+        "text": "On the website, How it works now opens on Bluetooth, as in the app: a Bluetooth adapter on your unit and the free app on your phone or tablet, with download buttons. Tap Computer for the computer way. Forgot password? now works: its email opens a page to choose a new password.",
         "only": null
       }
     ]

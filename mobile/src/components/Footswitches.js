@@ -2,10 +2,29 @@ import { useEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
 import { color, font, space } from '../lib/theme'
 import { glassCard } from '../lib/glass'
-import { fcModel, fcSwitch } from '../lib/device'
-import { FC_BUSY_WARNING, FC_NOT_YET, describeSwitch, fcGeometry, layoutName, lightWords, readView } from '../lib/footswitches'
+import { fcCurrent, fcModel, fcNames, fcSwitch } from '../lib/device'
+import { useRig } from '../lib/rig'
+import {
+  FC_BUSY_WARNING,
+  FC_NOT_YET,
+  FC_PICKS_SOME,
+  currentOf,
+  describeSwitch,
+  fcGeometry,
+  fcKnowsCurrent,
+  fcKnowsNames,
+  fcSaysPicks,
+  layoutLabel,
+  lightWords,
+  namesOf,
+  nowWords,
+  readView,
+  viewLabel
+} from '../lib/footswitches'
 import Note from './Note'
 import Press from './Press'
+
+const ofCapabilities = (s) => s.capabilities
 
 /**
  * WHAT EACH FOOTSWITCH DOES — the browser's Footswitches panel, on the phone.
@@ -13,11 +32,26 @@ import Press from './Press'
  * One layout and view at a time, one switch at a time, at the pace
  * lib/footswitches sets: reading a switch is about thirty questions to the
  * unit, so the page reads only while it is open and says so first. Read-only.
+ *
+ * Where the computer has the reads (lib/footswitches fcKnowsCurrent,
+ * fcKnowsNames), the page first asks which layout and view are on now and
+ * opens there, marked "on now", and once the first view has been read asks
+ * the layout names, once. A computer without them is asked neither, and the
+ * page is as it was.
  */
 export default function Footswitches() {
+  const caps = useRig(ofCapabilities)
+  const [knowsNow] = useState(() => fcKnowsCurrent(caps))
+  const [knowsNames] = useState(() => fcKnowsNames(caps))
   const [model, setModel] = useState(null)
   const [layout, setLayout] = useState(0)
   const [view, setView] = useState(0)
+  /* undefined while the unit is still being asked; null when it did not say. */
+  const [now, setNow] = useState(knowsNow ? undefined : null)
+  const [names, setNames] = useState(null)
+  const [naming, setNaming] = useState(false)
+  const picked = useRef(false)
+  const namesAsked = useRef(false)
   const [seen, setSeen] = useState({})
   const [reading, setReading] = useState(null)
   const [again, setAgain] = useState(0)
@@ -25,8 +59,34 @@ export default function Footswitches() {
   seenRef.current = seen
   const askedAgain = useRef(0)
   const key = `${layout}:${view}`
+  const asking = now === undefined
+
+  /* Which layout and view are on now: asked once, before any switch. */
+  useEffect(() => {
+    if (!asking) return undefined
+    let stop = false
+    ;(async () => {
+      let got = null
+      try {
+        got = currentOf(await fcCurrent())
+      } catch {
+        got = null
+      }
+      if (stop) return
+      if (got && !picked.current) {
+        setLayout(got.layout)
+        setView(got.view)
+      }
+      setNow(got)
+    })()
+    return () => {
+      stop = true
+    }
+  }, [asking])
 
   useEffect(() => {
+    /* Not before the unit has said which layout is on, so the first view read is the right one. */
+    if (asking) return undefined
     const forced = askedAgain.current !== again
     if (seenRef.current[key]?.complete && !forced) return undefined
     askedAgain.current = again
@@ -64,6 +124,20 @@ export default function Footswitches() {
       if (stop) return
       setSeen((prev) => ({ ...prev, [key]: { states: result.states, error: result.error, complete: !result.error && !result.stopped } }))
       setReading(null)
+      /* The layout names, once, after the first view: about a hundred questions. Kept even if
+         the view changes meanwhile — they are the same names whatever is on screen. */
+      if (knowsNames && !namesAsked.current && !result.error && !result.stopped) {
+        namesAsked.current = true
+        setNaming(true)
+        let got = null
+        try {
+          got = namesOf(await fcNames(), fcGeometry(m).layouts)
+        } catch {
+          got = null
+        }
+        setNaming(false)
+        if (got) setNames(got)
+      }
     })()
     return () => {
       stop = true
@@ -71,7 +145,7 @@ export default function Footswitches() {
     }
     // `model` is read, not watched: loading it must not start a second read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, again])
+  }, [key, again, asking])
 
   const geo = fcGeometry(model)
   const shown = seen[key]
@@ -82,19 +156,44 @@ export default function Footswitches() {
     <View style={{ gap: space.md }}>
       <Note>{FC_BUSY_WARNING}</Note>
 
+      {now ? <Text style={{ color: color.silk, fontSize: font.small }}>{nowWords(now, { layouts: geo.layouts, names })}</Text> : null}
+
       <Text style={small}>Layout</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
         {Array.from({ length: geo.layouts }, (_, i) => (
-          <Press key={i} label={layoutName(i, geo.layouts)} height={44} tone="signal" on={i === layout} disabled={busy} onPress={() => setLayout(i)} />
+          <Press
+            key={i}
+            label={layoutLabel(i, { layouts: geo.layouts, names, now })}
+            height={44}
+            tone="signal"
+            on={i === layout}
+            disabled={busy}
+            onPress={() => {
+              picked.current = true
+              setLayout(i)
+            }}
+          />
         ))}
       </View>
       <Text style={small}>View</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
         {Array.from({ length: geo.views }, (_, i) => (
-          <Press key={i} label={`View ${i + 1}`} height={44} tone="signal" on={i === view} disabled={busy} onPress={() => setView(i)} />
+          <Press
+            key={i}
+            label={viewLabel(i, { layout, now })}
+            height={44}
+            tone="signal"
+            on={i === view}
+            disabled={busy}
+            onPress={() => {
+              picked.current = true
+              setView(i)
+            }}
+          />
         ))}
       </View>
 
+      {asking ? <Text style={small}>Asking which layout is on…</Text> : null}
       {reading ? <Text style={small}>{`Reading switch ${Math.min(reading.done + 1, reading.of)} of ${reading.of}…`}</Text> : null}
 
       {(shown?.states || []).map((state, i) => {
@@ -107,8 +206,8 @@ export default function Footswitches() {
               <Text style={small}>The unit didn’t answer for this one.</Text>
             ) : (
               <>
-                <Text style={small}>{`Tap: ${sw.tap.action}${sw.tap.label ? ` “${sw.tap.label}”` : ''}`}</Text>
-                <Text style={small}>{`Hold: ${sw.hold.action}${sw.hold.label ? ` “${sw.hold.label}”` : ''}`}</Text>
+                <Text style={small}>{`Tap: ${sw.tap.pick || sw.tap.action}${sw.tap.label ? ` “${sw.tap.label}”` : ''}`}</Text>
+                <Text style={small}>{`Hold: ${sw.hold.pick || sw.hold.action}${sw.hold.label ? ` “${sw.hold.label}”` : ''}`}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
                   {sw.light?.hex ? <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: sw.light.hex }} /> : null}
                   <Text style={small}>{lightWords(sw.light)}</Text>
@@ -119,7 +218,10 @@ export default function Footswitches() {
         )
       })}
 
-      {shown?.states?.length ? <Text style={{ color: color.silkFaint, fontSize: font.micro }}>{FC_NOT_YET}</Text> : null}
+      {naming ? <Text style={small}>Reading the layout names…</Text> : null}
+      {shown?.states?.length ? (
+        <Text style={{ color: color.silkFaint, fontSize: font.micro }}>{fcSaysPicks(shown.states) ? FC_PICKS_SOME : FC_NOT_YET}</Text>
+      ) : null}
       {shown?.error ? <Note tone="warn">{shown.error}</Note> : null}
       {!busy ? <Press label="Read again" height={44} onPress={() => setAgain((n) => n + 1)} /> : null}
     </View>

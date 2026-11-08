@@ -634,7 +634,7 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
         cabIrs: unit.amps,
         /* The host's own answer per unit: the FM3's switches can be read, an
            FM9's and a III's only described, and an AM4 or VP4 has neither. */
-        fc: { model: ['fm3', 'fm9', 'axefx3'].includes(unit.key), liveState: unit.key === 'fm3' },
+        fc: { model: ['fm3', 'fm9', 'axefx3'].includes(unit.key), liveState: unit.key === 'fm3', current: unit.key === 'fm3', names: unit.key === 'fm3', picks: unit.key === 'fm3' },
         tuner: true,
         supportsSave: false
       },
@@ -1108,30 +1108,84 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
     }),
 
     fcState: (layout, view, sw) => {
-      const set = (tap, hold, color, tapLabel = '', holdLabel = '') => ({
-        effectId: 199,
-        layout,
-        view,
-        switch: sw,
-        config: layout * 12 + view * 3 + sw,
-        fields: {
-          tapCategory: tap[0],
-          tapFunction: tap[1],
-          tapDisplay: 0,
-          holdCategory: hold[0],
-          holdFunction: hold[1],
-          holdDisplay: 0,
-          color
-        },
-        tapLabel,
-        holdLabel
-      })
+      /*
+       * What a side picks, in the newer host's shape (tapParams/holdParams,
+       * tapPick/holdPick): the codec's function with each slot's raw number,
+       * for Preset, Scene and Effect switches only, and null for the rest.
+       * An effect slot carries the block the host names from its id.
+       */
+      const BLOCKS = { 118: ['drive', 'Drive 1'], 70: ['delay', 'Delay 1'], 66: ['reverb', 'Reverb 1'] }
+      const ROLES = {
+        '2:1': [['Preset', 'enum'], ['2nd Press = Prev. Preset', 'bool']],
+        '3:0': [['Scene', 'scene'], ['2nd Press = Prev. Scene', 'bool']],
+        '4:0': [['Effect', 'block']],
+        '4:2': [['Effect', 'block'], ['Primary Channel', 'channel'], ['Secondary Channel', 'channel']]
+      }
+      const side = ([category, fn], values = []) => {
+        const params = [null, null, null, null, null, null]
+        const roles = ROLES[`${category}:${fn}`]
+        if (!roles) return { params, pick: null }
+        const slots = roles.map(([role, type], i) => {
+          const value = values[i] ?? 0
+          params[i] = value
+          const b = BLOCKS[value]
+          return type === 'block' ? { i, role, type, value, block: b ? { effectId: value, slug: b[0], instance: 1, name: b[1] } : null } : { i, role, type, value }
+        })
+        return { params, pick: { category, function: fn, slots } }
+      }
+      const set = (tap, hold, color, tapLabel = '', holdLabel = '', tapValues = [], holdValues = []) => {
+        const t = side(tap, tapValues)
+        const h = side(hold, holdValues)
+        return {
+          effectId: 199,
+          layout,
+          view,
+          switch: sw,
+          config: layout * 12 + view * 3 + sw,
+          fields: {
+            tapCategory: tap[0],
+            tapFunction: tap[1],
+            tapDisplay: 0,
+            holdCategory: hold[0],
+            holdFunction: hold[1],
+            holdDisplay: 0,
+            color
+          },
+          tapLabel,
+          holdLabel,
+          tapParams: t.params,
+          holdParams: h.params,
+          tapPick: t.pick,
+          holdPick: h.pick
+        }
+      }
+      const effect = [118, 70, 66][sw] ?? 118
       if (layout === 8) return set([6, 0], [0, 0], 8)
-      if (view === 1) return set([2, 1], [0, 0], 2)
-      if (view === 2) return set([4, 0], [4, 2], 6, ['DRIVE', 'DELAY', 'VERB'][sw] || '')
+      if (view === 1) return set([2, 1], [0, 0], 2, '', '', [sw, 0])
+      if (view === 2) return set([4, 0], [4, 2], 6, ['DRIVE', 'DELAY', 'VERB'][sw] || '', '', [effect], [effect, 0, 1])
       if (view === 3) return set([8, [0, 1, 4][sw] ?? 0], [0, 0], [1, 4, 12][sw] ?? 12)
-      return set([3, 0], [[4, 0], [5, 1], [5, 0]][sw] || [0, 0], [4, 5, 1][sw] ?? 12, '', sw === 0 ? 'BOOST' : '')
+      /* Scenes 1 to 3 by the number on the screen, as lib/footswitches reads them. */
+      return set([3, 0], [[4, 0], [5, 1], [5, 0]][sw] || [0, 0], [4, 5, 1][sw] ?? 12, '', sw === 0 ? 'BOOST' : '', [sw + 1, 0], [118])
     },
+
+    /*
+     * GET /fc/current and GET /fc/names, in the newer host's shapes. The
+     * demo's switches are on its Scenes layout, View 1; the names are the
+     * demo's own, not a factory set.
+     */
+    fcCurrent: () => ({
+      effectId: 199,
+      current: { layout: 1, view: 0 },
+      units: [
+        { index: 0, layout: 1, view: 0 },
+        { index: 1, layout: 2, view: 0 },
+        { index: 2, layout: 0, view: 0 }
+      ]
+    }),
+    fcNames: () => ({
+      effectId: 199,
+      names: ['MY SONGS', 'SCENES', 'STOMPS', 'CHANNELS', 'LOOPER', 'SOLO', 'PRACTICE', 'LIVE', 'MASTER']
+    }),
 
     /* The same store the chain is drawn from, so the scene map and Play agree. */
     sceneStateNow: () =>

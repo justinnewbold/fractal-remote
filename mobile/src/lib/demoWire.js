@@ -72,6 +72,8 @@ export async function demoRequest(mock, path, options = {}) {
     }
     /* The footswitches, as the browser's demo answers them. */
     if (path === '/fc/model') return mock.fcModel()
+    if (path === '/fc/current') return mock.fcCurrent()
+    if (path === '/fc/names') return mock.fcNames()
     if (path.startsWith('/fc/state')) {
       /* By hand: a phone has no URLSearchParams. */
       const q = (name) => Number((path.match(new RegExp(`[?&]${name}=(\\d+)`)) || [])[1])

@@ -12286,7 +12286,7 @@ export function run(test) {
     assert.match(flat, /<TipCard icon=\{mailIcon\} label="SIGNED IN" body=\{`\$\{account\.email\}\\nTap for your name, photo and password`\}/, 'the account line is not the way in')
     assert.match(flat, /<Sheet open=\{accountMenu\}/, 'the account line opens nothing')
     assert.match(flat, /label="Change password" sub="Type a new one here, twice"/, 'the sheet has no Change password')
-    assert.match(flat, /await sendPasswordReset\(account\.email\)/, 'the sheet cannot send a reset email')
+    assert.match(flat, /const email = account\?\.email .{0,80}await sendPasswordReset\(email\)/, 'the sheet cannot send a reset email')
     assert.match(flat, /<PasswordBox open=\{changing\} onChange=\{async \(next\) => \{ await changePassword\(next\)/, 'the popup does not change the password')
 
     /* The popup: high, so the keyboard cannot reach it; typed twice; six at
