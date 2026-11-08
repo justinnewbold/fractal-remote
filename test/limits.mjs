@@ -4267,6 +4267,21 @@ export function run(test) {
     assert.match(words, /If you have not bought the full version, the app opens on the purchase page instead of Settings\. Delete account is at the bottom of that page, and does the same\./, 'the policy does not say where an account that has not paid is deleted')
     const deleting = words.slice(words.indexOf('Deleting your data'), words.indexOf('Children'))
     assert.ok(deleting.includes('the app opens on the purchase page'), 'the purchase page’s Delete account is not under Deleting your data')
+
+    /*
+     * GOOGLE PLAY'S DELETE-ACCOUNT LINK LANDS ON THE STEPS (8 November 2026).
+     * Google's account-deletion rule wants the way to delete "prominent and
+     * easy to find on the page", and the link opened the top of a long
+     * privacy policy. So "Deleting your data" has a fixed id, Play's link
+     * (docs/app-store.md) is the page with it, and what the trial keeps after
+     * a deletion is said there too, not only under How long it is kept.
+     */
+    const page = read('public/privacy.html')
+    assert.match(page, /<h2 id="delete">Deleting your data<\/h2>/, 'Deleting your data lost the id Google Play’s delete-account link opens it at')
+    assert.equal(page.match(/id="delete"/g).length, 1, 'two parts of the privacy page answer to #delete')
+    assert.match(read('docs/app-store.md').replace(/\s+/g, ' '), /the delete-account link is https:\/\/fractal\.newbold\.cloud\/privacy\.html#delete,/, 'the Play steps no longer give the delete-account link that opens at Deleting your data')
+    assert.match(deleting, /Deleting your account also deletes its free trial record\. The trial's scrambled device code is kept on its own, naming nobody, so that a device that has had a trial does not get another on a new account/, 'Deleting your data does not say what the trial keeps after an account is deleted')
+    assert.match(page, /<h3 id="free-trial">/, 'Deleting your data points at a free-trial part that is not there')
   })
 
   test('the Bluetooth guide says nothing of where it was tried, keeps the FM3 warning, names the parts, and links only what was checked', async () => {
