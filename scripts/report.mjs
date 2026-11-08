@@ -21,10 +21,19 @@
  * It sends nothing but a SELECT on public.feedback, built here from a fixed
  * shape: an id is held to hex digits and dashes, a count to a whole number
  * from 1 to 50, so nothing typed on the command line becomes SQL. It never
- * writes, never deletes, and reads no other table. The project's own
- * .claude/settings.json allows exactly this command and no other database
- * call, so a session may read a report without being able to do anything
- * else to the database.
+ * writes, never deletes, and reads no other table.
+ *
+ * NO PERMISSION RULE ALLOWS IT, on purpose. A rule naming this command
+ * would run whatever this file says on the branch checked out, with the
+ * full-account SUPABASE_TOKEN, so it would be a way past the session's own
+ * check rather than a read-only door. Running it is asked like any other
+ * command. An unprompted read would need a key that can do nothing but read
+ * reports (a database role with SELECT on public.feedback alone), and that
+ * is a change to the live database Justin decides.
+ *
+ * The token never goes on curl's command line, where a failed call's error
+ * message would print it: curl reads the Authorization header from stdin
+ * (-H @-), and an error is said without the command (callError).
  *
  * Needs SUPABASE_TOKEN (the Supabase access token, as every other server job
  * here uses) and curl, which goes through whatever proxy the machine has.
@@ -55,26 +64,38 @@ export function oneQuery(id) {
   )
 }
 
+/** curl's arguments: the query in the body, and never the token, which goes in on stdin. Exported for the tests. */
+export const curlArgs = (sql, url = `https://api.supabase.com/v1/projects/${PROJECT}/database/query`) => [
+  '-sS',
+  '--fail-with-body',
+  '-X',
+  'POST',
+  url,
+  '-H',
+  '@-',
+  '-H',
+  'Content-Type: application/json',
+  '--data-binary',
+  JSON.stringify({ query: sql, read_only: true })
+]
+
+/** A failed call, said from its status and the service's answer only, never the command, and with the token taken out of anything quoted. */
+export function callError(err, token) {
+  const said = [err?.status != null ? `curl exited ${err.status}` : 'curl failed', String(err?.stdout || '').slice(0, 300), String(err?.stderr || '').trim().slice(0, 300)]
+    .filter(Boolean)
+    .join(': ')
+  return new Error(token ? said.split(token).join('***') : said)
+}
+
 function ask(sql) {
   const token = process.env.SUPABASE_TOKEN
   if (!token) throw new Error('SUPABASE_TOKEN is not set')
-  const out = execFileSync(
-    'curl',
-    [
-      '-sS',
-      '--fail-with-body',
-      '-X',
-      'POST',
-      `https://api.supabase.com/v1/projects/${PROJECT}/database/query`,
-      '-H',
-      `Authorization: Bearer ${token}`,
-      '-H',
-      'Content-Type: application/json',
-      '--data-binary',
-      '@-'
-    ],
-    { input: JSON.stringify({ query: sql, read_only: true }), maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' }
-  )
+  let out
+  try {
+    out = execFileSync('curl', curlArgs(sql), { input: `Authorization: Bearer ${token}\n`, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' })
+  } catch (err) {
+    throw callError(err, token)
+  }
   const rows = JSON.parse(out)
   if (!Array.isArray(rows)) throw new Error(`unexpected answer: ${out.slice(0, 300)}`)
   return rows

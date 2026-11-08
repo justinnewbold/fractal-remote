@@ -1831,7 +1831,8 @@ export const otherAdapterNow = (list = adapterDevices()) => {
   /* Never one kept for another unit: it is on that unit (WHICH ADAPTER GOES WITH WHICH UNIT). */
   const taken = takenIds()
   const here = (Array.isArray(list) ? list : []).filter((d) => !taken.has(d?.id))
-  return otherAdapterHere(here, saved.adapter, { os: Platform.OS, refused: saved.unit === 'fm3' ? (name) => !namedForFm3(name) : null })
+  /* Never a footswitch (notAnAdapter), on any unit: it is not offered, nor counted against the one real adapter here. */
+  return otherAdapterHere(here, saved.adapter, { os: Platform.OS, refused: (name) => notAnAdapter(name) || (saved.unit === 'fm3' && !namedForFm3(name)) })
 }
 
 /*

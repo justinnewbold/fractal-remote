@@ -7783,7 +7783,7 @@ export function run(test) {
     /* Connected, the unit silent: the plugs. */
     /* Shorter since 30 October 2026 ("too much to read everywhere you go"): the plugs on the page, an adapter that carries one way in Troubleshooting. */
     /* Not for a unit on its own USB cable, which has no MIDI plugs to swap (lib/cableWords cableStatus says the cable instead); still for a USB MIDI cable on its MIDI jacks (lib/bluetooth midiJacks). */
-    assert.match(page, /\{quiet && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/, 'a unit that does not answer is not told about the plugs')
+    assert.match(page, /\{quiet && !footswitch && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/, 'a unit that does not answer is not told about the plugs')
     /*
      * Nothing tells anybody to pick a unit by name in step 1 but the wrong
      * unit's line, which is handed whether this account is offered it
@@ -9352,7 +9352,7 @@ export function run(test) {
     assert.ok(limits.includes('with no computer. No editing or saving.'))
     assert.ok(limits.includes('<Heading>What’s different from USB</Heading> {DIFFERENT.map('))
     /* The usual reason a connected adapter hears nothing: the plugs swapped. */
-    assert.match(page, /\{quiet && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/)
+    assert.match(page, /\{quiet && !footswitch && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/)
 
     /* ONE PLACE FOR THE ADDRESSES: no web address typed into the page, and no shop's anywhere in the app but the gear file. */
     assert.ok(!/https?:\/\//.test(code('mobile/src/screens/Bluetooth.js')), 'an address is typed into the page instead of coming from the gear file')
@@ -9968,7 +9968,7 @@ export function run(test) {
     assert.match(page, /const reportable = said\.tone === 'fault' && b\.trouble !== 'permission' && b\.trouble !== 'bluetooth-off' && b\.phase !== 'locked' && !!onReport/)
     /* Turn on Bluetooth and Switch to between the line's own button and Report this, since 7 November 2026. */
     assert.match(page, /\{said\.line\} <\/Text> \{b\.trouble === 'permission' \? <OpenSettings \/> : null\} \{offOnAndroid \? <Press label=\{TURN_ON_BLUETOOTH\} tone="live" height=\{52\} onPress=\{turnOn\} \/> : null\} \{offOnAndroid \? <Hint>\{bluetoothOffHint\(b\.on && !!b\.adapter, waitingOn\)\}<\/Hint> : null\} \{offerSwitch \? <Press label=\{SWITCH_TO\(b\.answeredAs\)\} sub=\{SWITCH_TO_SUB\(adapterName\(b\.adapter\), b\.answeredAs\)\} tone="live" height=\{52\} onPress=\{switchUnit\} \/> : null\} \{reportable && !quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/)
-    assert.match(page, /\{b\.phase === 'connecting' \|\| quiet \? <Hint>\{cable \? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN\}<\/Hint> : null\} \{reportable && quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/, 'Report this is not under the plugs hint')
+    assert.match(page, /\{b\.phase === 'connecting' \|\| \(quiet && !footswitch\) \? <Hint>\{cable \? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN\}<\/Hint> : null\} \{reportable && quiet \? <ReportThis onPress=\{\(\) => onReport\(said\.line\)\} \/> : null\}/, 'Report this is not under the plugs hint')
     assert.match(page, /\{!b\.on && missed && !b\.adapter && !b\.trouble && !b\.said && onReport \? <ReportThis onPress=\{\(\) => onReport\('No adapter was connected\.'\)\} \/> : null\}/)
     assert.match(page, /\{b\.said && onReport \? <ReportThis onPress=\{\(\) => onReport\(b\.said\)\} \/> : null\}/)
     assert.equal((drawn.match(/<ReportThis /g) || []).length, 4, 'Report this is drawn somewhere else, or twice for one line')
@@ -10003,7 +10003,7 @@ export function run(test) {
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.match(page, /const quiet = b\.on && b\.phase === 'connected' && !b\.answeredAs && \(unitState === 'missing' \|\| unitState === 'silent'\)/)
     /* The cable's own wording on a USB cable (lib/cableWords CABLE_CLOSE_AND_REOPEN), the adapter's on everything else. */
-    assert.match(page, /\{b\.phase === 'connecting' \|\| quiet \? <Hint>\{cable \? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN\}<\/Hint> : null\}/, 'the page does not say to close the app while it is connecting, or connected with the unit silent')
+    assert.match(page, /\{b\.phase === 'connecting' \|\| \(quiet && !footswitch\) \? <Hint>\{cable \? CABLE_CLOSE_AND_REOPEN : CLOSE_AND_REOPEN\}<\/Hint> : null\}/, 'the page does not say to close the app while it is connecting, or connected with the unit silent')
     const on = page.slice(page.indexOf('{b.on ? ( <View style={{ gap: space.sm }}>'), page.indexOf(') : ( <View style={{ gap: space.lg }}>'))
     assert.ok(on.includes(': CLOSE_AND_REOPEN}'), 'the line is not in the half of the page drawn while Bluetooth is on')
   })
@@ -12475,7 +12475,7 @@ export function run(test) {
       assert.ok(m, `the page no longer says ${name} in one line`)
       return `const ${name} = ${m[1]}`
     })
-    const drawnWith = new Function('b', 'cable', 'canStart', `${gate.join('; ')}; return !!offerDifferent`)
+    const drawnWith = new Function('b', 'cable', 'canStart', 'footswitch = false', `${gate.join('; ')}; return !!offerDifferent`)
     const state = (patch) => ({ on: false, phase: 'off', notThere: false, adapter: WIDI_MASTER, ...patch })
     assert.equal(drawnWith(state({}), false, true), true, 'no Use a different adapter under Connect, with one kept')
     assert.equal(drawnWith(state({ on: true, phase: 'idle' }), false, true), false, 'Use a different adapter flashes as Connect turns it on')
@@ -12485,6 +12485,8 @@ export function run(test) {
     assert.equal(drawnWith(state({ on: true, phase: 'connecting', notThere: true }), true, true), false, 'Use a different adapter for a unit on a USB cable')
     assert.equal(drawnWith(state({ adapter: null }), false, true), false, 'Use a different adapter with nothing kept')
     assert.equal(drawnWith(state({}), false, false), false, 'Use a different adapter without the purchase')
+    /* Connected to a footswitch taken for the adapter (8 November 2026): the way out, under the line that names it. */
+    assert.equal(drawnWith(state({ on: true, phase: 'connected' }), false, true, true), true, 'no Use a different adapter under a footswitch')
     /* Named, and "from last time" only when it is: with Bluetooth on it can be one picked a moment ago. */
     assert.match(page, /const differentButton = offerDifferent \? \( <Press label="Use a different adapter" sub=\{b\.on \? `Instead of \$\{adapterName\(b\.adapter\) \|\| 'the adapter'\}` : `Instead of \$\{adapterName\(b\.adapter\) \|\| 'the adapter'\}, from last time`\} height=\{52\} disabled=\{b\.looking\} onPress=\{different\} \/> \) : null/, 'the button does not name the adapter, or says from last time of one picked a moment ago')
     const ternary = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('{/* Not under a trouble line'))
@@ -12517,11 +12519,31 @@ export function run(test) {
     assert.equal(pickAdapter([foot]), foot, 'with no rule the only device is still chosen, as before')
     assert.equal(pickAdapter([widi], new Set([widi.id]), { refused }), widi, 'a real adapter was held back')
     /* Connected to it and the unit silent: the page names it a footswitch, for every unit, and never "check the plugs". */
-    for (const [unit, name] of [['fm3', 'FM3'], ['am4', 'AM4'], ['axefx3', 'Axe-Fx III']]) {
+    for (const [unit, name] of [['fm3', 'FM3'], ['am4', 'AM4'], ['fm9', 'FM9'], ['axefx3', 'Axe-Fx III'], ['vp4', 'VP4']]) {
       assert.equal(g.notAnsweringLine(unit, 'FootCtrlPlus Bluetooth'), `FootCtrlPlus is a MIDI footswitch, not an adapter for your ${name}. Pick the Bluetooth MIDI adapter plugged into the ${name} instead.`)
     }
     assert.equal(g.notAnsweringLine('fm3', 'WIDI Uhost'), g.notAnsweringLine('fm3'), 'a real adapter’s line changed')
-    assert.match(flat('mobile/src/screens/Bluetooth.js'), /return \{ line: notAnsweringLine\(b\.unit, b\.adapter\?\.name\), tone: 'fault' \}/)
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    assert.match(page, /return \{ line: notAnsweringLine\(b\.unit, b\.adapter\?\.name\), tone: 'fault' \}/)
+    /* Said before the VP4's green line, which a VP4 (never answering) would otherwise show for a footswitch. */
+    assert.ok(page.indexOf('if (notAnAdapter(b.adapter?.name)) return') > 0 && page.indexOf('if (notAnAdapter(b.adapter?.name)) return') < page.indexOf("if (b.unit === 'vp4') return { line: VP4_CONNECTED"), 'a VP4 connected to a footswitch shows green')
+    /* Under the line: Use a different adapter, and none of the not-answering help (Connect again reconnects to the footswitch; the plugs are not the trouble). */
+    assert.match(page, /const footswitch = connected && !b\.answeredAs && !cable && notAnAdapter\(b\.adapter\?\.name\)/)
+    assert.match(page, /const offerDifferent = keptAdapter && canStart && \(!b\.on \|\| notThere \|\| footswitch\)/)
+    assert.match(page, /const offerAgain = quiet && !vp4 && !cable && !footswitch/)
+    assert.match(page, /\{quiet && !footswitch && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/)
+    assert.match(page, /\{b\.phase === 'connecting' \|\| \(quiet && !footswitch\) \? <Hint>/)
+    /* And never offered as "another adapter here", nor counted against the real one. */
+    const { otherAdapterHere } = await import('../mobile/src/lib/bleAdapters.js')
+    const online = { driver: 'com.apple.AppleMIDIBluetoothDriver', offline: false }
+    const kept = { id: 'k', name: 'WIDI Jack Bluetooth', ...online }
+    const near = { ...foot, ...online }
+    const uhost = { id: 'u', name: 'WIDI Uhost', ...online }
+    const rule = { os: 'ios', refused: (n) => g.notAnAdapter(n) }
+    assert.equal(otherAdapterHere([kept, near], kept, { os: 'ios' })?.id, 'a', 'the bench does not offer a device at all')
+    assert.equal(otherAdapterHere([kept, near], kept, rule), null, 'a footswitch was offered as another adapter')
+    assert.equal(otherAdapterHere([kept, near, uhost], kept, rule)?.id, 'u', 'a footswitch nearby hid the real adapter')
+    assert.match(flat('mobile/src/lib/bluetooth.js'), /refused: \(name\) => notAnAdapter\(name\) \|\| \(saved\.unit === 'fm3' && !namedForFm3\(name\)\)/)
   })
 
   test('which other adapter is here while the one kept is not: one, by name, never the one kept, a cable, the iPhone’s own port, or for an FM3 one it is never offered', async () => {
@@ -13441,9 +13463,9 @@ export function run(test) {
     assert.match(page, /const offOnAndroid = b\.trouble === 'bluetooth-off' && !ios/)
     assert.match(page, /const turnOn = \(\) => \{ arm\(\) turnOnBluetooth\(\) \}/)
     /* Connect again: the adapter connected, the unit silent, never a VP4 or a cable. */
-    assert.match(page, /const offerAgain = quiet && !vp4 && !cable/)
+    assert.match(page, /const offerAgain = quiet && !vp4 && !cable && !footswitch/)
     assert.match(page, /const again = \(\) => \{ arm\(\) connectBluetoothAgain\(\) \}/)
-    assert.match(page, /\{offerAgain \? <Press label=\{CONNECT_AGAIN\} sub=\{CONNECT_AGAIN_SUB\} tone="live" height=\{52\} onPress=\{again\} \/> : null\} \{quiet && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/, 'Connect again is not first under a silent unit')
+    assert.match(page, /\{offerAgain \? <Press label=\{CONNECT_AGAIN\} sub=\{CONNECT_AGAIN_SUB\} tone="live" height=\{52\} onPress=\{again\} \/> : null\} \{quiet && !footswitch && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/, 'Connect again is not first under a silent unit')
     /* Switch to: the unit that answered, one this account can pick, with the adapter going with it. */
     assert.match(page, /const answeredKey = connected && b\.answeredAs \? units\.find\(\(u\) => u\.name === b\.answeredAs\)\?\.key \|\| null : null/)
     /* And never an FM3 on an adapter the app does not name for one (carriesTo): the FM3 rule. */
