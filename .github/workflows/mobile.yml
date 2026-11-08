@@ -54,6 +54,10 @@ on:
         description: 'Skip building; send the last build that succeeded'
         type: boolean
         default: false
+      keep_packages:
+        description: 'Build with the Expo packages as they are, even if Expo has newer patches (keeps this build on the same update line as the store copies before it)'
+        type: boolean
+        default: false
       update:
         description: 'Publish a JS update instead of building (costs no build slot)'
         type: boolean
@@ -232,9 +236,34 @@ jobs:
 
       # The full check, package versions included, before a build slot is
       # spent. See the same step in `check` for why only here.
+      #
+      # Unless "keep_packages" is ticked. Lining the packages up to Expo's
+      # newest patches moves expo-updates, so the fingerprint, so the build
+      # gets an update line of its own: every merge after it reaches only
+      # copies of this build, and the store copies before it (the App Store's
+      # 1.89.3 and Google Play's 1.89.36 on 8 November 2026) take no fix at
+      # all until their owners install the new one, which on an iPhone waits
+      # on Apple's review and release. The 1.90.0 pair (8 November 2026) was
+      # the first build Expo's patches stopped: expo 57.0.31 against 57.0.32,
+      # expo-updates 57.0.26 against 57.0.27, and five more, all patches. It
+      # was built with the packages as they were tested and bundled, and the
+      # fingerprint unchanged, so every copy kept one update line. Ticked, the
+      # rest of expo-doctor still blocks, and what Expo would line up is left
+      # in the log, for the build that does line them up.
       - name: The packages are the ones this SDK expects
+        if: ${{ !inputs.keep_packages }}
         working-directory: mobile
         run: npx expo-doctor
+
+      - name: The config is one the installed SDK understands (packages kept as they are)
+        if: ${{ inputs.keep_packages }}
+        working-directory: mobile
+        env:
+          EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK: '1'
+        run: |
+          npx expo-doctor
+          echo "::notice::Built with the Expo packages as they are (keep_packages). Expo's newer patches, left for a later build:"
+          npx expo install --check || true
 
       # The app has to exist on Expo's side before anything can be built for
       # it, and until now it never has: app.json carried an empty `extra.eas`,
