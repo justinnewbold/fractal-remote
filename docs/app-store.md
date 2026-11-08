@@ -1508,8 +1508,13 @@ Account management ticked for it (tick App functionality: on 24 October
 2026 Google's page showed only Account management). Nothing else changes.
 
 Keep **No data shared with third parties**: RevenueCat, Supabase, Resend and
-Expo only do their part of the job for the app. In the same form, check the
-delete-account link is https://fractal.newbold.cloud/privacy.html.
+Expo only do their part of the job for the app. In the same form, the
+delete-account link is https://fractal.newbold.cloud/privacy.html#delete,
+which opens the privacy page at "Deleting your data" (its `id="delete"`,
+since 8 November 2026; before that the link was the page's top, and Google
+wants the way to delete "prominent and easy to find on the page"). Changing
+it is saved under Publishing overview and sent for review there, with no
+build.
 
 Leave **Location** out, the same as Apple's answers ("Do not declare location"
 above). The country RevenueCat notes is worked out by RevenueCat from the
@@ -2637,8 +2642,12 @@ and `EDIT_FROM_STORE` gate exactly as they did (test/trial.mjs holds it).
   in-app purchase at price tier 0, named like "7-Day Trial". So the button
   buys that free item through RevenueCat (Apple's own sheet, $0), and the
   `trial` function starts the trial from the moment it was bought, once it
-  sees the item on the account in RevenueCat. Until the item exists in the
-  store, the button does not show at all (lib/purchases `findStoreTrial`),
+  sees the item on the account in RevenueCat. A test purchase (RevenueCat's
+  `environment: "sandbox"`: App Review's test Apple IDs, TestFlight) starts
+  it from the tap instead, so a reviewer whose test Apple ID bought the item
+  while the item was in review is not told it has had its trial already
+  (8 November 2026); a real purchase keeps its own date. Until the item
+  exists in the store, the button does not show at all (lib/purchases `findStoreTrial`),
   so the code ships safely before Apple approves the item.
 - **Android, the website and the computer app.** No store item: the `trial`
   function starts it on request. Google Play allows a free trial of a

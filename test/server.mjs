@@ -197,7 +197,7 @@ const fnBody = (sql, name) => {
 
 export function run(test) {
   test('reading a bug report sends only a fixed SELECT on the reports, and nothing typed becomes SQL', async () => {
-    /* scripts/report.mjs (8 November 2026): two fixed reads of the reports, asked like any other command. */
+    /* scripts/report.mjs (8 November 2026): two fixed reads of the reports, asked like any other command. The function's way is test/read-reports.mjs. */
     const r = await import('../scripts/report.mjs')
     assert.match(r.listQuery(), /^select [^;]* from public\.feedback order by created_at desc limit 10$/)
     assert.match(r.listQuery(50), /limit 50$/)
@@ -205,9 +205,9 @@ export function run(test) {
     assert.match(r.oneQuery('014F2692'), /^select [^;]* from public\.feedback where id::text like '014f2692%' order by created_at desc limit 2$/)
     for (const bad of ['', 'abc', "014f2692' or '1'='1", '014f2692;--', 'zzzzzzzz', 'x'.repeat(40)]) assert.throws(() => r.oneQuery(bad), `${bad} was taken as an id`)
     for (const q of [r.listQuery(), r.oneQuery('014f2692')]) assert.ok(!/\b(insert|update|delete|drop|alter|grant|truncate)\b/i.test(q), 'a report read that writes')
-    /* The token is never on curl's command line, and a failed call never repeats it. */
+    /* The token is never on curl's command line, and a failed call never repeats it (--management-api, the old way, off unless asked). */
     const fake = 'sbp_fake_token_for_the_test_1234567890'
-    const args = r.curlArgs(r.listQuery())
+    const args = r.managementArgs(r.listQuery())
     assert.ok(!args.join(' ').includes('Bearer') && args.includes('@-'), 'the token goes on curl’s command line')
     const err = r.callError({ status: 22, message: `Command failed: curl -H Authorization: Bearer ${fake}`, stdout: `{"message":"bad ${fake}"}`, stderr: `curl: (22) ${fake}` }, fake)
     assert.ok(!err.message.includes(fake), `a failed call prints the token: ${err.message}`)
