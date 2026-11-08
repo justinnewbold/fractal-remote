@@ -182,8 +182,8 @@ export function unitOffered(unit, { admin = false, platform = null, installed = 
  * to FM9 and AxeFX 3 as the over the air update asap." The same rule holds
  * on a unit's own USB cable, which is the same wire (lib/bleAdapters
  * isCable). His account has each on every copy from the update that brings
- * it, to try on his own units; nobody else has any yet, and each opens on
- * its own entry.
+ * it, to try on his own units; nobody else has any on a copy built before
+ * 1.90.0 (below), and each opens on its own entry.
  *
  * THE SWITCH IS ONE LINE HERE, AND IT IS A STORE VERSION. Every copy out
  * today was reviewed with notes, and a listing, that say editing does not
@@ -201,12 +201,29 @@ export function unitOffered(unit, { admin = false, platform = null, installed = 
  *
  * A UNIT IS LISTED HERE ONLY ONCE ITS EDITING IS BUILT. Not listed, it is
  * nobody's, his account's included: Edit stays closed over Bluetooth on it.
+ *
+ * ALL FOUR OPEN TO CUSTOMERS IN 1.90.0, ON BOTH PHONES. "I'm fine with
+ * turning them on for those devices that we haven't actually turned on
+ * Bluetooth yet. It says it's in beta, so if there's problems, they can
+ * notify us." (Justin, 8 November 2026, for the FM9 and the Axe-Fx III,
+ * whose Edit had not yet run through the phone on a real unit; the AM4 and
+ * the FM3 open with them.) So the 1.90.0 build pull request sets every
+ * unit here to '1.90.0' on both phones together, and its notes, What's New
+ * and Google's texts say editing opens over Bluetooth on those four
+ * (docs/app-store.md, "1.90.0: Editing over Bluetooth for customers"). The
+ * VP4 is never listed: it has no Edit over Bluetooth, nor through a
+ * computer. Copies built before 1.90.0 (the App Store's 1.89.3, Google
+ * Play's 1.89.36) take this by update and stay closed, since the version
+ * built into them is below it. The ledger's row, "Editing over Bluetooth
+ * for customers: AM4, FM3, FM9 and Axe-Fx III", and EDIT_OPENED_AT for
+ * each come in the first pull request after the build is started, and
+ * from then on no entry here is moved or set back by an update.
  */
 export const EDIT_FROM_STORE = Object.freeze({
-  am4: null,
-  fm3: null,
-  fm9: null,
-  axefx3: null
+  am4: { ios: '1.90.0', android: '1.90.0' },
+  fm3: { ios: '1.90.0', android: '1.90.0' },
+  fm9: { ios: '1.90.0', android: '1.90.0' },
+  axefx3: { ios: '1.90.0', android: '1.90.0' }
 })
 
 /** The units whose knobs the phone can read and turn over Bluetooth, keyed above. */

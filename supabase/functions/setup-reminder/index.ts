@@ -123,6 +123,29 @@ export const BLUETOOTH_IN_EMAILS = true
  * version rule's threshold for each phone has to be this same one.
  */
 export const BLUETOOTH_FROM = '1.89.0'
+/**
+ * The first store version that opens Edit over Bluetooth to customers, as
+ * the email says it: one number to iPhone and Android buyers alike, and the
+ * version mobile/src/lib/ble-rule.js EDIT_FROM_STORE keys every unit the
+ * sentence names to, on both phones (test/server.mjs holds the two
+ * together). A literal, as BLUETOOTH_FROM is: this function cannot import
+ * mobile/.
+ */
+export const EDIT_FROM = '1.90.0'
+/*
+ * EDITING IN THE BLUETOOTH PARAGRAPH, OFF UNTIL THE STORE VERSION THAT OPENS
+ * IT IS IN BOTH STORES. The same rule as BLUETOOTH_IN_EMAILS above, for the
+ * one sentence that says Edit opens over Bluetooth: the email goes to every
+ * buyer whatever store copy they hold, and a 1.89.3 or 1.89.36 copy keeps
+ * Edit closed over Bluetooth, so the sentence goes on only once EDIT_FROM is
+ * live on the App Store AND on Google Play (public/store-versions.json) and
+ * is the build whose row in docs/expo-builds.md says "Editing over Bluetooth
+ * for customers" with every unit the sentence names, on both phones. Off,
+ * the paragraph is word for word what it was ("with no editing or saving").
+ * supabase/README.md, "Editing in the emails, from 1.90.0", says the day's
+ * order: emails off, redeploy, Justin reads the sample, emails on.
+ */
+export const EDIT_IN_EMAILS = false
 /** A run's most. The backlog on the first day is about a dozen. */
 const AT_MOST = 25
 /* Resend takes a couple of requests a second; one at a time with a gap stays under it. */
@@ -206,10 +229,15 @@ type Kind = 'first' | 'reminder'
  * Never "yesterday you bought": on the day these are switched on, the
  * customers waiting longest get the first one, some of them weeks after.
  *
- * `bluetooth` is BLUETOOTH_IN_EMAILS unless a test asks for the other
- * wording: the emails that go are only ever the switch's (send, below).
+ * `bluetooth` is BLUETOOTH_IN_EMAILS, and `editing` EDIT_IN_EMAILS, unless
+ * a test asks for the other wording: the emails that go are only ever the
+ * switches' (send, below).
  */
-export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN_EMAILS }: { bluetooth?: boolean } = {}): { subject: string; text: string; html: string } {
+export function setupEmail(
+  kind: Kind,
+  email: string,
+  { bluetooth = BLUETOOTH_IN_EMAILS, editing = EDIT_IN_EMAILS }: { bluetooth?: boolean; editing?: boolean } = {}
+): { subject: string; text: string; html: string } {
   const who = String(email || '').trim()
   const both = bluetooth === true
   const steps = [
@@ -268,8 +296,17 @@ export function setupEmail(kind: Kind, email: string, { bluetooth = BLUETOOTH_IN
    * only BLUETOOTH_FROM and later have the row. Never what has been tried,
    * and never that it works on a unit: "offered on". (Still named secondWay:
    * it was the second until 7 November 2026.)
+   *
+   * WITH EDITING (EDIT_IN_EMAILS, from the day 1.90.0 is live in both
+   * stores): the units sentence ends at the VP4's scope, and one sentence
+   * after it says Edit opens over it from EDIT_FROM on the four units whose
+   * Edit is built, with no saving. Never the VP4, and never "works".
    */
-  const secondWay = `You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. Bluetooth is offered from version ${BLUETOOTH_FROM} of the app, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only), with no editing or saving. On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one.`
+  const units = `Bluetooth is offered from version ${BLUETOOTH_FROM} of the app, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only)`
+  const edits = editing === true
+    ? `${units}. From version ${EDIT_FROM} you can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself).`
+    : `${units}, with no editing or saving.`
+  const secondWay = `You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. ${edits} On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one.`
   /* Somebody who got going since the account server last heard (a phone that has not had the update that tells it): no harm done. */
   const allSet = 'Already up and running? Then you’re all set, and you can ignore this email.'
   const help = first

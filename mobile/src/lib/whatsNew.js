@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-09",
+    "day": "9 November 2026",
+    "version": "1.90.0",
+    "lines": [
+      {
+        "text": "From version 1.90.0 of the app, Edit opens over Bluetooth on an AM4, FM3, FM9 or Axe-Fx III: turn knobs, change models, switch blocks on and off and pick channels, and a unit on a USB cable does the same. Changes play right away; save on the unit to keep them.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-08",
     "day": "8 November 2026",
     "version": "1.89.77",

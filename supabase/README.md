@@ -533,6 +533,53 @@ key. Resend refuses that with a 409, which reads as "may have gone": that
 one email is kept as sent and is not tried again. At worst one email
 missed, never one sent twice.
 
+### Editing in the emails, from 1.90.0
+
+From store version 1.90.0, Edit opens over Bluetooth (and on a unit's own
+USB cable) on an AM4, FM3, FM9 and Axe-Fx III, for everybody with the full
+version (`EDIT_FROM_STORE` in mobile/src/lib/ble-rule.js). The Bluetooth
+paragraph of both emails still says "with no editing or saving", which is
+true of every copy before 1.90.0. So the function carries one more
+sentence, behind a switch of its own: the units sentence ends at the VP4's
+scope, and then "From version 1.90.0 you can also edit over it on an AM4,
+FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving
+(save on the unit itself)." Never the VP4.
+
+It is **off**: `EDIT_IN_EMAILS = false` at the top of
+`functions/setup-reminder/index.ts`, beside `EDIT_FROM = '1.90.0'`, which
+is the number the sentence says and has to be the one `EDIT_FROM_STORE`
+keys every unit it names to, on both phones (test/server.mjs holds the two
+together).
+
+**Switch it on the day 1.90.0 is live on the App Store and on Google Play,
+both, and only if 1.90.0 is the build that opened Edit over Bluetooth on
+every unit the sentence names**: its row in docs/expo-builds.md says
+"Editing over Bluetooth for customers: AM4, FM3, FM9 and Axe-Fx III", for
+both phones. If the build that opens it has another number, `EDIT_FROM`
+moves to that number first.
+
+1. Move `public/store-versions.json` to 1.90.0 for both stores, as that day
+   does anyway (docs/expo-builds.md).
+2. In that same pull request, or one after it, set `EDIT_IN_EMAILS = true`,
+   and merge it once it is green. `test/server.mjs` fails on `true` while
+   `store-versions.json` says either store is older than `EDIT_FROM`, or
+   while docs/expo-builds.md has no row at that version naming each of the
+   four units for both phones. It only reads those files, so it catches the
+   switch turned on before they were moved, not a file moved wrong: check
+   them by eye against App Store Connect and the Play Console before
+   merging.
+3. **On the phone, before the redeploy**: Developer → Paid but no computer
+   yet → Turn the setup emails off (if they are on).
+4. **Redeploy the function**: `supabase functions deploy setup-reminder
+   --no-verify-jwt`. This also puts out the Bluetooth-first wording of 7
+   November 2026, if it has not been deployed by then.
+5. Developer → Paid but no computer yet → Send me a sample of both emails,
+   and read the Bluetooth paragraph as a buyer would.
+6. Only then, Turn the setup emails on again.
+
+If only one store has 1.90.0 that day, leave it off until the other has it
+too: the emails go to iPhone and Android buyers alike.
+
 ## Sales at a glance: Handled
 
 "I've already handled this paid twice thing ... I wanna [be able to] mark as
