@@ -75,8 +75,9 @@ screen recording shows exactly what you clicked.
 4. Take a screenshot of what it says for that switch: tap, hold, label and
    light. If the app also says which layout is on now, which layout names
    it shows, or what a switch picks ("Scene 3", "Preset 125", "Drive 1
-   on/off"), screenshot that too. (Those need the newest computer app; an
-   older one just doesn't show them.)
+   on/off"), screenshot that too. (Those need a computer app newer than
+   the one out today. Until it's out, the app just doesn't show them, and
+   that's fine: carry on.)
 5. Quit Fractal Remote's computer app again: menu bar icon → Quit.
 
 ## 3. Set up the recorder (MIDI Monitor)

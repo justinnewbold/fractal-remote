@@ -3984,7 +3984,9 @@ test('the mirror agrees with the host about every route this app calls', () => {
    * routes before anyone compared them.
    */
   const hostAllows = (method, p) => {
-    // The footswitch setup (block 199) is never written from the relay (ForgeFX remote.ts FC_SETUP_WRITE).
+    // The footswitch setup (block 199) is never written from the relay: ForgeFX 18a9d80's remote.ts FC_SETUP_WRITE.
+    // That is the newer host, not yet the one desktop/forgefx.lock.json pins (e2030f4 takes the write), so until
+    // the pin moves this line is ahead of the computer app, and the phone's own rule is what stops the write.
     if (method !== 'GET' && /^\/preset\/blocks\/0*199\/(params(\/\d+)?|bypass|channel|type)$/.test(p)) return false
     if (method === 'GET')
       return (
@@ -16813,8 +16815,10 @@ test('the demo FM3 says which layout is on, what the layouts are called and what
 test('no write to the footswitch setup travels the relay, and reading it still does', async () => {
   /*
    * The footswitch setup is shared by every preset: block 199 on a gen-3
-   * unit. The computer's newer device server refuses a write to it from
-   * anywhere; this rule refuses it from a phone even to an older one.
+   * unit. ForgeFX's newer device server (18a9d80, not yet the one the
+   * computer app pins) refuses a write to it from anywhere; this rule
+   * refuses it from a phone or a browser to every computer, the one out
+   * today included, which would take it.
    */
   for (const [m, p] of [
     ['PUT', '/preset/blocks/199/params/4618'],

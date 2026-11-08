@@ -23,13 +23,18 @@
 
 /**
  * A write at the footswitch setup, block 199: its params, on/off, channel or
- * model, under any spelling the computer reads as 199. The host refuses
- * these from the relay (ForgeFX remote.ts FC_SETUP_WRITE, from the pin that
- * added /fc/current and /fc/names), and its gen-3 driver refuses them from
- * anywhere: the footswitch setup is shared by every preset, and nothing in
- * either app writes it. Reading it still travels (GET, and POST …/read or
- * …/readrange, which only ask). A computer from before that pin would take
- * the write, so the rule is here too, and no phone ever sends one.
+ * model, under any spelling the computer reads as 199. The footswitch setup
+ * is shared by every preset, and nothing in either app writes it. Reading it
+ * still travels (GET, and POST …/read or …/readrange, which only ask).
+ *
+ * The computer app does not refuse these yet. ForgeFX 18a9d80, the commit
+ * that adds /fc/current and /fc/names, refuses them from the relay
+ * (remote.ts FC_SETUP_WRITE) and its gen-3 driver refuses them from
+ * anywhere, but desktop/forgefx.lock.json still pins e2030f4, which takes
+ * such a write from the relay and from the computer itself. So until the pin
+ * moves to a commit that carries it, this rule is the only thing that stops
+ * one, and every computer from before that pin keeps taking it: that is why
+ * the rule is here, and no phone or browser ever sends one.
  */
 export const FC_SETUP_WRITE = /^\/preset\/blocks\/0*199\/(params(\/\d+)?|bypass|channel|type)$/
 
