@@ -2375,7 +2375,12 @@ export function run(test) {
     assert.match(flat, /const howBluetooth = !computer && howWay === 'bluetooth'/, 'the computer app’s window draws a Bluetooth way')
     assert.match(flat, /<h1 className="pw-head">\{P2\.head\}<\/h1> \{computer \? null : \( <div className="pw-ways"/, 'the website’s two ways are not first, under the heading, or are drawn in the computer app’s window')
     assert.match(flat, /phoneTitle: BROWSER_HOW_BLUETOOTH\.appTitle, phoneBody: BROWSER_HOW_BLUETOOTH\.appBody/)
-    /* "Let's add that Bluetooth will work if they download the app" (8 November 2026): said first under the boxes, with the open stores as buttons, the visitor's phone first. */
+    /* "Let's add that Bluetooth will work if they download the app" (8 November 2026): said straight under the choice and over the boxes, where a short phone shows it above the held Got it, with the open stores as buttons, the visitor's phone first. */
+    assert.match(flat, /<\/div> \)\} \{howBluetooth \? \( <> <p className="pw-note pw-get-app">\{BROWSER_HOW_BLUETOOTH\.getApp\}<\/p> <div className="pw-stores">[\s\S]*?<\/div> <\/> \) : null\} <div className="pw-chain">/, 'the website’s store links are not straight under the two ways, over the boxes')
+    /* Opened again from Settings, it opens on Bluetooth, as the phone's does. */
+    assert.match(flat, /if \(open\) \{ setAt\('welcome'\) setHowWay\('bluetooth'\) \}/, 'the website walkthrough opened again keeps Computer picked')
+    /* The adapter's words are read out between the two boxes; only the lines either side are hidden. */
+    assert.match(flat, /<div className="pw-wire"> <span className="pw-wire-line" aria-hidden="true" \/>/)
     assert.match(flat, /\{howBluetooth \? \( <> <p className="pw-note pw-get-app">\{BROWSER_HOW_BLUETOOTH\.getApp\}<\/p> <div className="pw-stores"> \{appStores\(\)\.map\(\(s\) => \( <a key=\{s\.key\} className="chip pw-store" href=\{s\.url\} target="_blank" rel="noreferrer">/, 'the website’s Bluetooth way does not say plainly that Bluetooth is in the app, with the stores')
     assert.match(BROWSER_HOW_BLUETOOTH.getApp, /^Bluetooth works in the app, not in a web browser\. Download it free:$/)
     assert.match(flat, /const appStores = \(\) => \{ const open = STORES\.filter\(\(s\) => s\.live\)/, 'a store that is not open yet is offered')

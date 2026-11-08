@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { holdInert } from '../lib/inert'
 
 import { C3, CHAIN, CLOSE, P1, P2, P3, P4, P9, WALK_STEPS } from '../../shared/onboarding.mjs'
 import { walkthroughTips } from '../../shared/vp4-safety.mjs'
@@ -102,9 +103,30 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
   const [howWay, setHowWay] = useState('bluetooth')
   const howBluetooth = !computer && howWay === 'bluetooth'
 
-  /* Back to the start when it is asked for again from Settings. */
+  /* Back to the start when it is asked for again from Settings, on Bluetooth, as the phone's opens every time. */
   useEffect(() => {
-    if (open) setAt('welcome')
+    if (open) {
+      setAt('welcome')
+      setHowWay('bluetooth')
+    }
+  }, [open])
+
+  /*
+   * NOTHING BEHIND IT FOR THE KEYBOARD while it is up: Tab went on from Got
+   * it to the top bar under it. Everything beside it inside #root is held
+   * inert (lib/inert, which stacks with the startup card's hold and a
+   * sheet's); the sign-in and unlock sheets it opens are drawn outside #root,
+   * so they stay usable over it.
+   */
+  const own = useRef(null)
+  useEffect(() => {
+    if (!open || !own.current || typeof document === 'undefined') return undefined
+    const root = document.getElementById('root')
+    const gives = []
+    for (let at = own.current; at.parentElement && at !== root && at !== document.body; at = at.parentElement) {
+      for (const other of at.parentElement.children) if (other !== at) gives.push(holdInert(other))
+    }
+    return () => gives.forEach((give) => give())
   }, [open])
 
   if (!open) return null
@@ -123,7 +145,7 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
     })
 
   return (
-    <div className={`onb pw${at === 'welcome' ? ' pw-at-welcome' : ''}`} role="dialog" aria-modal="true" aria-label={P1.head}>
+    <div ref={own} className={`onb pw${at === 'welcome' ? ' pw-at-welcome' : ''}`} role="dialog" aria-modal="true" aria-label={P1.head}>
       <div className="pw-sheet">
         {replay ? (
           <button type="button" className="chip pw-close" onClick={() => leave()}>
@@ -179,7 +201,7 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
                 picked (shared/stores.mjs, 8 November 2026). In a browser
                 only: the computer's own window is the computer. */}
             {computer ? null : (
-              <div className="pw-ways" role="group" aria-label={P2.head}>
+              <div className="pw-ways" role="group" aria-label="How you connect">
                 {BROWSER_HOW_BLUETOOTH.ways.map((w) => (
                   <button key={w.key} type="button" className={`pw-way${howWay === w.key ? ' on' : ''}`} aria-pressed={howWay === w.key} onClick={() => setHowWay(w.key)}>
                     {w.label}
@@ -187,6 +209,25 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
                 ))}
               </div>
             )}
+            {howBluetooth ? (
+              <>
+                {/*
+                  Where Bluetooth is, said plainly, and the app one tap away:
+                  the visitor's own phone first. Straight under the choice,
+                  over the boxes: under them, the held Got it covered both
+                  store links on an iPhone SE in Safari (375 by 548).
+                */}
+                <p className="pw-note pw-get-app">{BROWSER_HOW_BLUETOOTH.getApp}</p>
+                <div className="pw-stores">
+                  {appStores().map((s) => (
+                    <a key={s.key} className="chip pw-store" href={s.url} target="_blank" rel="noreferrer">
+                      <span className="pw-store-name">{s.name}</span>
+                      <span className="pw-store-where">{s.store}</span>
+                    </a>
+                  ))}
+                </div>
+              </>
+            ) : null}
             <div className="pw-chain">
               {(howBluetooth
                 ? [
@@ -205,10 +246,10 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
                     <img className="pw-art" src={PIECES[box.key] || PIECES.unit} alt="" />
                   </div>
                   {box.phoneWire ? (
-                    <div className="pw-wire" aria-hidden="true">
-                      <span className="pw-wire-line" />
+                    <div className="pw-wire">
+                      <span className="pw-wire-line" aria-hidden="true" />
                       <span className="pw-wire-label">{box.phoneWire}</span>
-                      <span className="pw-wire-line" />
+                      <span className="pw-wire-line" aria-hidden="true" />
                     </div>
                   ) : null}
                 </div>
@@ -216,16 +257,6 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
             </div>
             {howBluetooth ? (
               <>
-                {/* Where Bluetooth is, said plainly, and the app one tap away: the visitor's own phone first. */}
-                <p className="pw-note pw-get-app">{BROWSER_HOW_BLUETOOTH.getApp}</p>
-                <div className="pw-stores">
-                  {appStores().map((s) => (
-                    <a key={s.key} className="chip pw-store" href={s.url} target="_blank" rel="noreferrer">
-                      <span className="pw-store-name">{s.name}</span>
-                      <span className="pw-store-where">{s.store}</span>
-                    </a>
-                  ))}
-                </div>
                 <p className="pw-note">{BROWSER_HOW_BLUETOOTH.foot}</p>
                 <p className="pw-note">
                   <button type="button" className="pw-note-link" onClick={() => setAt('pick')}>
