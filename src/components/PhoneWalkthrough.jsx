@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { holdInert } from '../lib/inert'
 
 import { C3, CHAIN, CLOSE, P1, P2, P3, P4, P9, WALK_STEPS } from '../../shared/onboarding.mjs'
 import { walkthroughTips } from '../../shared/vp4-safety.mjs'
@@ -31,10 +32,16 @@ import playIcon from '../../mobile/assets/icons/play.png'
 import slidersIcon from '../../mobile/assets/icons/sliders.png'
 import saveIcon from '../../mobile/assets/icons/save.png'
 import { Cta, FootRow, Steps, TipCard } from './Walk'
-import BluetoothInApps from './BluetoothInApps'
-import { AGREE_IN_BROWSER } from '../../shared/stores.mjs'
+import { AGREE_IN_BROWSER, BROWSER_HOW_BLUETOOTH, STORES } from '../../shared/stores.mjs'
 
 const PIECES = { unit: unitShot, computer: pieceComputer, phone: piecePhone }
+
+/* The stores that are open, the visitor's own phone's first (an Android browser says so in its user agent). */
+const appStores = () => {
+  const open = STORES.filter((s) => s.live)
+  const android = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent || '')
+  return android ? [...open].sort((a) => (a.key === 'android' ? -1 : 1)) : open
+}
 
 /*
  * FOR SOMEBODY WHO HAS IT ALREADY, the last card stops selling. The
@@ -92,10 +99,34 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
   const [unit, setUnit] = useState(UNITS[0].key)
   /* The box under Connect my real rig. Unlock stays grey until it is ticked. */
   const [agreed, setAgreed] = useState(false)
+  /* How it works opens on Bluetooth in a browser (BROWSER_HOW_BLUETOOTH); the computer's own window has only its own way. */
+  const [howWay, setHowWay] = useState('bluetooth')
+  const howBluetooth = !computer && howWay === 'bluetooth'
 
-  /* Back to the start when it is asked for again from Settings. */
+  /* Back to the start when it is asked for again from Settings, on Bluetooth, as the phone's opens every time. */
   useEffect(() => {
-    if (open) setAt('welcome')
+    if (open) {
+      setAt('welcome')
+      setHowWay('bluetooth')
+    }
+  }, [open])
+
+  /*
+   * NOTHING BEHIND IT FOR THE KEYBOARD while it is up: Tab went on from Got
+   * it to the top bar under it. Everything beside it inside #root is held
+   * inert (lib/inert, which stacks with the startup card's hold and a
+   * sheet's); the sign-in and unlock sheets it opens are drawn outside #root,
+   * so they stay usable over it.
+   */
+  const own = useRef(null)
+  useEffect(() => {
+    if (!open || !own.current || typeof document === 'undefined') return undefined
+    const root = document.getElementById('root')
+    const gives = []
+    for (let at = own.current; at.parentElement && at !== root && at !== document.body; at = at.parentElement) {
+      for (const other of at.parentElement.children) if (other !== at) gives.push(holdInert(other))
+    }
+    return () => gives.forEach((give) => give())
   }, [open])
 
   if (!open) return null
@@ -114,7 +145,7 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
     })
 
   return (
-    <div className={`onb pw${at === 'welcome' ? ' pw-at-welcome' : ''}`} role="dialog" aria-modal="true" aria-label={P1.head}>
+    <div ref={own} className={`onb pw${at === 'welcome' ? ' pw-at-welcome' : ''}`} role="dialog" aria-modal="true" aria-label={P1.head}>
       <div className="pw-sheet">
         {replay ? (
           <button type="button" className="chip pw-close" onClick={() => leave()}>
@@ -166,13 +197,45 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
           <>
             <Steps at={0} of={WALK_STEPS} />
             <h1 className="pw-head">{P2.head}</h1>
-            {/* The other way, and where it is: the phone apps, not a browser
-                (shared/stores.mjs). First, under the heading, since 7
-                November 2026: it sat under the boxes, past Got it, where
-                nobody scrolled to it. In a browser only. */}
-            {computer ? null : <BluetoothInApps className="pw-note" />}
+            {/* The two ways, the phone's choice row: Bluetooth first and
+                picked (shared/stores.mjs, 8 November 2026). In a browser
+                only: the computer's own window is the computer. */}
+            {computer ? null : (
+              <div className="pw-ways" role="group" aria-label="How you connect">
+                {BROWSER_HOW_BLUETOOTH.ways.map((w) => (
+                  <button key={w.key} type="button" className={`pw-way${howWay === w.key ? ' on' : ''}`} aria-pressed={howWay === w.key} onClick={() => setHowWay(w.key)}>
+                    {w.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {howBluetooth ? (
+              <>
+                {/*
+                  Where Bluetooth is, said plainly, and the app one tap away:
+                  the visitor's own phone first. Straight under the choice,
+                  over the boxes: under them, the held Got it covered both
+                  store links on an iPhone SE in Safari (375 by 548).
+                */}
+                <p className="pw-note pw-get-app">{BROWSER_HOW_BLUETOOTH.getApp}</p>
+                <div className="pw-stores">
+                  {appStores().map((s) => (
+                    <a key={s.key} className="chip pw-store" href={s.url} target="_blank" rel="noreferrer">
+                      <span className="pw-store-name">{s.name}</span>
+                      <span className="pw-store-where">{s.store}</span>
+                    </a>
+                  ))}
+                </div>
+              </>
+            ) : null}
             <div className="pw-chain">
-              {CHAIN.map((box, i) => (
+              {(howBluetooth
+                ? [
+                    { key: 'unit', phoneTitle: CHAIN[0].phoneTitle, phoneBody: CHAIN[0].phoneBody, phoneWire: BROWSER_HOW_BLUETOOTH.wire },
+                    { key: 'phone', phoneTitle: BROWSER_HOW_BLUETOOTH.appTitle, phoneBody: BROWSER_HOW_BLUETOOTH.appBody }
+                  ]
+                : CHAIN
+              ).map((box, i) => (
                 <div key={box.key}>
                   <div className="pw-box">
                     <span className="pw-n">{i + 1}</span>
@@ -183,21 +246,32 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
                     <img className="pw-art" src={PIECES[box.key] || PIECES.unit} alt="" />
                   </div>
                   {box.phoneWire ? (
-                    <div className="pw-wire" aria-hidden="true">
-                      <span className="pw-wire-line" />
+                    <div className="pw-wire">
+                      <span className="pw-wire-line" aria-hidden="true" />
                       <span className="pw-wire-label">{box.phoneWire}</span>
-                      <span className="pw-wire-line" />
+                      <span className="pw-wire-line" aria-hidden="true" />
                     </div>
                   ) : null}
                 </div>
               ))}
             </div>
-            <p className="pw-note">
-              {P2.foot}{' '}
-              <button type="button" className="pw-note-link" onClick={() => setAt('pick')}>
-                {P2.footGo}
-              </button>
-            </p>
+            {howBluetooth ? (
+              <>
+                <p className="pw-note">{BROWSER_HOW_BLUETOOTH.foot}</p>
+                <p className="pw-note">
+                  <button type="button" className="pw-note-link" onClick={() => setAt('pick')}>
+                    {P2.footGo}
+                  </button>
+                </p>
+              </>
+            ) : (
+              <p className="pw-note">
+                {P2.foot}{' '}
+                <button type="button" className="pw-note-link" onClick={() => setAt('pick')}>
+                  {P2.footGo}
+                </button>
+              </p>
+            )}
             {/* Held at the bottom of the screen while the boxes scroll under
                 it, so a phone too short for the whole page still shows the
                 way on. */}

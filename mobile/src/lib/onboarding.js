@@ -616,7 +616,8 @@ export const P9 = {
     /* And now his mockup's, shorter: "Changes write to the slot on your unit." */
     { key: 'save', label: 'SAVE', body: 'Changes write to the slot on your unit.' }
   ],
-  go: 'Open Play',
+  /* "On this screen, instead of saying open play, say 'let's go'" (Justin, 8 November 2026). */
+  go: 'Let’s go',
   /* His mockup: a row with the gear, and this. */
   foot: 'Show walkthrough later in Settings.',
   /*

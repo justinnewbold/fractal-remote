@@ -72,7 +72,39 @@ export const anyStoreLive = () => STORES.some((s) => s.live)
  * works on an iPad, and an iPad owner read "the iPhone and Android apps" as
  * not theirs.
  */
-export const BLUETOOTH_IN_APPS = 'Bluetooth, with no computer, is in the iPhone, iPad and Android apps. A web browser connects through a computer only.'
+/* And plainer still, 8 November 2026: "It's still confusing, even for me, so let's add that Bluetooth will work if they download the app." */
+export const BLUETOOTH_IN_APPS = 'For Bluetooth, with no computer, download the free app for iPhone, iPad or Android. A web browser connects through a computer only.'
+
+/*
+ * HOW IT WORKS, IN A WEB BROWSER: BLUETOOTH FIRST, AS ON THE PHONE. "The
+ * initial walkthrough on the website is the one that's not showing the
+ * Bluetooth stuff at first" (Justin, 8 November 2026, of the website on an
+ * iPhone, which opened on the computer's three boxes with the line about
+ * the apps above them). So the website's How it works has the phone's two
+ * choices, Bluetooth first and picked (HOW_TWO_WAYS in shared/bluetooth-gear.mjs,
+ * whose labels, cable and foot these are, word for word: test/both-ends.mjs
+ * holds them together), and its Bluetooth way is the phone's two boxes. Its
+ * second box is the app, not this browser, which can never reach an adapter:
+ * BLUETOOTH_IN_APPS under it says where the app is, with the stores. Here and
+ * not imported from bluetooth-gear, which the browser does not carry.
+ */
+export const BROWSER_HOW_BLUETOOTH = {
+  ways: [
+    { key: 'bluetooth', label: 'Bluetooth' },
+    { key: 'computer', label: 'Computer' }
+  ],
+  wire: 'BLUETOOTH MIDI ADAPTER',
+  appTitle: 'YOUR PHONE OR TABLET',
+  appBody: 'With the free Fractal Remote app - no computer needed',
+  /*
+   * Over the two store buttons, under the boxes: "It's still confusing, even
+   * for me, so let's add that Bluetooth will work if they download the app"
+   * (8 November 2026). The buttons are STORES' names, so a visitor picks
+   * their own phone, not a store's.
+   */
+  getApp: 'Bluetooth works in the app, not in a web browser. Download it free:',
+  foot: 'The adapter plugs into the unit’s MIDI jacks and is sold separately.'
+}
 
 /*
  * THE BOX TICKED BEFORE UNLOCK, IN A WEB BROWSER. It said his sentence of

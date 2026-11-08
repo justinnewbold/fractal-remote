@@ -24,6 +24,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+/*
+ * THE WALKTHROUGH'S BUTTONS RENAMED SINCE NOTES WERE WRITTEN. The notes
+ * below are records, kept with the words they were sent with; each label
+ * they name must still be on a button, or be renamed to this one. "Open
+ * Play" became "Let’s go" on 8 November 2026 ("instead of saying open play,
+ * say 'let's go'"); the 1.90.0 notes say the new one.
+ */
+const RENAMED_SINCE = { 'Open Play': 'Let’s go' }
+
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 
 /** Every .js/.jsx under a directory, so a new file cannot quietly opt out. */
@@ -4885,7 +4894,8 @@ export function run(test) {
     assert.match(read('mobile/src/components/IndependentNotice.js'), /<Press label="OK"/, 'the startup card has no OK button, and the notes say to tap it')
     for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ', 'Open Play']) {
       assert.ok(steps.some((t) => t.includes(label)), `the next notes do not say to tap "${label}"`)
-      assert.ok(read('shared/onboarding.mjs').includes(label), `the next notes say to tap "${label}", which the walkthrough no longer says`)
+      /* A record of notes already written: a button renamed since says its new name in the walkthrough (RENAMED_SINCE). */
+      assert.ok(read('shared/onboarding.mjs').includes(RENAMED_SINCE[label] ?? label), `the next notes say to tap "${label}", which the walkthrough no longer says, nor anything it was renamed to`)
     }
 
     /* Every new thing, one paragraph each, and each held to the app it describes. */
@@ -4986,7 +4996,8 @@ export function run(test) {
     assert.match(steps[0], /^Tap "OK" on the card that says the app is independent$/, 'the 1.89.0 demo steps do not start on the startup card')
     for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ', 'Open Play']) {
       assert.ok(steps.some((t) => t.includes(label)), `the 1.89.0 notes do not say to tap "${label}"`)
-      assert.ok(read('shared/onboarding.mjs').includes(label), `the 1.89.0 notes say to tap "${label}", which the walkthrough no longer says`)
+      /* A record of notes already written: a button renamed since says its new name in the walkthrough (RENAMED_SINCE). */
+      assert.ok(read('shared/onboarding.mjs').includes(RENAMED_SINCE[label] ?? label), `the 1.89.0 notes say to tap "${label}", which the walkthrough no longer says, nor anything it was renamed to`)
     }
 
     /* EVERY LINE THAT SAID "ONLY THROUGH A COMPUTER" IS TRUE OF 1.89.0: the opening, the Hardware line and the Services line. */

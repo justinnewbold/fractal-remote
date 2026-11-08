@@ -13314,6 +13314,58 @@ button.setup-back {
   line-height: 1.45;
 }
 
+/* How it works' two ways, Bluetooth first: the phone's pair of signal buttons, the one picked lit. */
+.pw-ways {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+}
+.pw-way {
+  min-height: 44px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--panel);
+  color: var(--silk);
+  font: inherit;
+  font-size: var(--f-4);
+  font-weight: 600;
+  cursor: pointer;
+}
+.pw-way.on {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: var(--on-signal);
+}
+/* "Download it free:" in the ink of a heading, and the two stores under it as buttons, each the phone's name over its store's. */
+.pw-note.pw-get-app {
+  color: var(--silk);
+  font-weight: 600;
+}
+.pw-stores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+}
+a.chip.pw-store {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  min-height: 52px;
+  border-radius: var(--r-2);
+  text-decoration: none;
+}
+.pw-store-name {
+  color: var(--silk);
+  font-weight: 700;
+  font-size: var(--f-3);
+}
+.pw-store-where {
+  color: var(--silk-dim);
+  font-size: var(--f-2);
+}
+
 /* "Try the demo", inside the line that offers it. */
 .pw-note-link {
   padding: 0;
