@@ -9,32 +9,141 @@
  * in one and not the other would have left the other reading something else,
  * so there is one, here.
  */
-import { bluetoothOpen, unitOffered } from '../mobile/src/lib/ble-rule.js'
+import { bluetoothOpen, EDIT_UNITS, unitOffered } from '../mobile/src/lib/ble-rule.js'
+import { BLE_UNITS } from '../mobile/src/lib/bleWire.js'
 import { isOlder } from '../shared/versions.mjs'
 
 /* The words a row says when it is the build that opened Bluetooth (beta) to customers (docs/expo-builds.md's header). */
 export const OPENING = /Bluetooth \(beta\) for customers/
 
 /*
- * And the words a row says when it is the build that opened Edit over
- * Bluetooth to customers (mobile/src/lib/ble-rule.js EDIT_FROM_STORE), held
- * by the same two rules below with its own pin, EDIT_OPENED_AT.
+ * AND THE WORDS A ROW SAYS WHEN ITS BUILD OPENED EDIT OVER BLUETOOTH TO
+ * CUSTOMERS ON SOME UNITS (mobile/src/lib/ble-rule.js EDIT_FROM_STORE, one
+ * entry per unit): these words, a colon, and the units that build opened, by
+ * the names the Bluetooth page gives them (lib/bleWire BLE_UNITS), as
+ *
+ *   Editing over Bluetooth for customers: AM4, FM3
+ *
+ * One unit at a time. Each unit's entry opens on its own store version, so
+ * each is held by the two rules below on the rows that name it (editOpening),
+ * with its own words (editWords) and its own pin (EDIT_OPENED_AT[unit]). One
+ * marker for every unit, as there was, read a row that opened the AM4 and the
+ * FM3 as the opening of the FM9 and the Axe-Fx III too: left null, they failed
+ * ("marked as the opening, and the threshold is null"), and the only way to
+ * green was to open them by update on copies reviewed without them, which the
+ * stores forbid. A row that says the words without a list of units, or with
+ * something in its list that is not one of these names, is refused
+ * (editRowProblems), so a unit can never be marked by accident or missed by a
+ * typo.
  */
-export const EDIT_OPENING = /Editing over Bluetooth for customers/
+export const EDIT_MARKER = 'Editing over Bluetooth for customers'
+
+/* The name each unit goes by in a row: the Bluetooth page's own, for every unit whose Edit over Bluetooth is built (EDIT_UNITS). Never the VP4, which has none. */
+export const EDIT_UNIT_NAMES = Object.freeze(Object.fromEntries(EDIT_UNITS.map((unit) => [unit, BLE_UNITS.find((u) => u.key === unit)?.name ?? null])))
+
+const unitByName = (name) => Object.keys(EDIT_UNIT_NAMES).find((unit) => EDIT_UNIT_NAMES[unit] === name) ?? null
+const nameOf = (unit) => {
+  const name = Object.prototype.hasOwnProperty.call(EDIT_UNIT_NAMES, unit) ? EDIT_UNIT_NAMES[unit] : null
+  if (!name) throw new Error(`${String(unit)} is not a unit whose Edit over Bluetooth is built (EDIT_FROM_STORE in mobile/src/lib/ble-rule.js)`)
+  return name
+}
+
+/*
+ * What one row's What it was for says about Edit over Bluetooth: null when it
+ * does not say the words at all; otherwise the units its list names, anything
+ * in the list that is not one of their names, and whether the words come
+ * without a list, or more than once. The list runs from the colon to the
+ * first full stop, semicolon, colon, bracket or dash, its names parted by
+ * commas or "and", each with or without "the" in front.
+ */
+export const editRowUnits = (why) => {
+  const text = String(why ?? '')
+  const said = (text.match(/editing over bluetooth for customers/gi) || []).length
+  if (!said) return null
+  const at = text.indexOf(`${EDIT_MARKER}: `)
+  const list = at < 0 ? '' : text.slice(at + EDIT_MARKER.length + 2).split(/[.;:()\u2013\u2014|]/)[0]
+  const items = list
+    .split(/\s*,\s*(?:and\s+)?|\s+and\s+/)
+    .map((item) => item.trim().replace(/^the\s+/i, ''))
+    .filter(Boolean)
+  return {
+    units: items.map(unitByName).filter(Boolean),
+    unknown: items.filter((item) => !unitByName(item)),
+    bare: items.length === 0,
+    twice: said > 1
+  }
+}
+
+/*
+ * The marker for one unit, for ledgerBuilds: a row is that unit's opening
+ * when its list names the unit. Not a RegExp, which could not read a list,
+ * but asked the same way (`test`).
+ */
+export const editOpening = (unit) => {
+  nameOf(unit)
+  return Object.freeze({ test: (why) => editRowUnits(why)?.units.includes(unit) === true })
+}
 
 /* What the rules below call each: in what they say, nothing else. */
 export const BLUETOOTH_WORDS = Object.freeze({ name: 'Bluetooth (beta)', row: 'Bluetooth (beta) for customers', pin: 'OPENED_AT' })
-export const EDIT_WORDS = Object.freeze({ name: 'editing over Bluetooth', row: 'Editing over Bluetooth for customers', pin: 'EDIT_OPENED_AT' })
 
-/* Every build in docs/expo-builds.md, once for each phone it built: a cell that starts with a number is a build on that phone. */
-export const ledgerBuilds = (text, marker = OPENING) => {
+/* And Edit over Bluetooth on one unit: its own name, the row that names it, and its own pin. */
+export const editWords = (unit) => {
+  const name = nameOf(unit)
+  return Object.freeze({ name: `editing over Bluetooth on the ${name}`, row: `${EDIT_MARKER}: ${name}`, pin: `EDIT_OPENED_AT.${unit}` })
+}
+
+/* Every row of docs/expo-builds.md's tables that is a build: a version in its second cell. */
+const ledgerRows = (text) => {
   const out = []
   for (const line of String(text).split('\n')) {
     const cells = line.split('|').map((c) => c.trim())
     if (cells.length < 7 || !/^\d+\.\d+\.\d+$/.test(cells[2])) continue
-    const opening = marker.test(cells[5])
-    for (const [platform, cell] of [['ios', cells[3]], ['android', cells[4]]]) {
-      if (/^\d/.test(cell)) out.push({ date: cells[1], version: cells[2], platform, opening })
+    out.push({ date: cells[1], version: cells[2], ios: cells[3], android: cells[4], why: cells[5] })
+  }
+  return out
+}
+
+/*
+ * Every build in docs/expo-builds.md, once for each phone it built: a cell
+ * that starts with a number is a build on that phone. `marker` is anything
+ * with a `test` of the row's What it was for: OPENING for Bluetooth itself,
+ * editOpening(unit) for Edit over Bluetooth on one unit.
+ */
+export const ledgerBuilds = (text, marker = OPENING) => {
+  const out = []
+  for (const row of ledgerRows(text)) {
+    const opening = marker.test(row.why)
+    for (const [platform, cell] of [['ios', row.ios], ['android', row.android]]) {
+      if (/^\d/.test(cell)) out.push({ date: row.date, version: row.version, platform, opening })
+    }
+  }
+  return out
+}
+
+/*
+ * What is wrong with the ledger's Edit over Bluetooth rows themselves: a list
+ * of sentences, empty when nothing is. A row that says the words says them
+ * once, followed by ": " and the units its build opened, by name, and nothing
+ * else in that list: the words alone would mark no unit and leave the build's
+ * units unmarked, and a misspelt or unknown name (the VP4, say) would mark
+ * nothing while looking as if it did.
+ */
+export const editRowProblems = (text) => {
+  const out = []
+  const names = Object.values(EDIT_UNIT_NAMES).join(', ')
+  for (const row of ledgerRows(text)) {
+    const said = editRowUnits(row.why)
+    if (!said) continue
+    const where = `docs/expo-builds.md, the ${row.version} row of ${row.date}`
+    if (said.twice) out.push(`${where}: says "${EDIT_MARKER}" more than once; it says it once, with every unit that build opened after it`)
+    if (said.bare) {
+      out.push(
+        `${where}: says "${EDIT_MARKER}" without ": " and the units that build opened after it. Write "${EDIT_MARKER}: " and their names (${names}), as "${EDIT_MARKER}: AM4, FM3", so each unit opens on its own row`
+      )
+    }
+    for (const item of said.unknown) {
+      out.push(`${where}: "${item}" in its list of units is not a unit whose Edit over Bluetooth is built (${names}): the list is their names alone, up to the next full stop or bracket`)
     }
   }
   return out
@@ -90,13 +199,20 @@ export const withoutOpening = (text) => {
 export const OPENED_AT = Object.freeze({ version: '1.89.0', ios: '1.89.0', android: '1.89.0', units: ['am4', 'fm3', 'fm9', 'axefx3', 'vp4'] })
 
 /*
- * THE SAME PIN FOR EDIT OVER BLUETOOTH, one per unit it opened: null until a
- * build opens it to customers. The pull request that writes that build's
- * row ("Editing over Bluetooth for customers") sets it, in the same change,
- * to { am4: { version, ios, android } } for each unit the build opened, and
- * cannot go green without it (test/bluetooth.mjs asks pinProblems of each).
+ * THE SAME PIN FOR EDIT OVER BLUETOOTH, ONE PER UNIT: each null until a build
+ * opens that unit to customers. The pull request that writes that build's row
+ * ("Editing over Bluetooth for customers: AM4, FM3") sets, in the same change,
+ * the entry of every unit the row names to that build, and leaves every other
+ * unit's as it is:
+ *
+ *   am4: Object.freeze({ version: '1.90.0', ios: '1.90.0', android: '1.90.0' }),
+ *
+ * and cannot go green without it (editProblems asks pinProblems of each unit,
+ * on its own rows and its own entry). A unit opened by a later store version
+ * gets its pin then, from its own row. One entry for every unit in
+ * EDIT_FROM_STORE, held by test/bluetooth.mjs.
  */
-export const EDIT_OPENED_AT = null
+export const EDIT_OPENED_AT = Object.freeze({ am4: null, fm3: null, fm9: null, axefx3: null })
 
 /* The first build marked as the opening on this phone, or null. */
 const firstOpening = (builds, platform) =>
@@ -280,6 +396,38 @@ export const unitProblems = ({ units, from, pin }) => {
         out.push(`${platform}: ${unit} opens on ${pin.version}, which was reviewed without it: key it to a later store version of its own`)
       }
     }
+  }
+  return out
+}
+
+/**
+ * Everything wrong with Edit over Bluetooth's switch (`units`,
+ * EDIT_FROM_STORE's shape) against the ledger's text, for an app at
+ * `appVersion`, with these pins (`pins`, EDIT_OPENED_AT's shape) and the
+ * store versions live (`stores`): a list of sentences, empty when nothing is.
+ *
+ * One unit at a time: each unit is asked thresholdProblems and pinProblems
+ * on the rows that name it, its own entry and its own pin, exactly as
+ * Bluetooth's threshold is asked of its own. So a unit left null beside one
+ * that a row opens is fine, and so is one keyed to a later store version of
+ * its own, whose row comes with its own build. And every row's list of units
+ * is read (editRowProblems). Each sentence about a unit starts with its name.
+ *
+ * test/bluetooth.mjs asks this of the switch, the ledger and the pins as they
+ * are, and of made-up ones, so the two never disagree about what the build
+ * pull request and the row's pull request may say.
+ */
+export const editProblems = ({ text, units, appVersion, pins = null, stores = null }) => {
+  const out = [...editRowProblems(text)]
+  for (const unit of Object.keys(pins || {})) {
+    if (!Object.prototype.hasOwnProperty.call(units || {}, unit)) out.push(`EDIT_OPENED_AT names ${unit}, which EDIT_FROM_STORE does not: a unit once opened is never taken out of the switch`)
+  }
+  for (const [unit, entry] of Object.entries(units || {})) {
+    const from = entry || {}
+    const w = editWords(unit)
+    const builds = ledgerBuilds(text, editOpening(unit))
+    const pin = pins?.[unit] ?? null
+    for (const p of [...thresholdProblems(builds, from, appVersion, w), ...pinProblems({ builds, from, stores, pin, w })]) out.push(`${EDIT_UNIT_NAMES[unit]}: ${p}`)
   }
   return out
 }

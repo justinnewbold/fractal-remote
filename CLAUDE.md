@@ -660,8 +660,13 @@ what the computer sends for the same edit, and a test holds it there.
   What's New saying editing works over Bluetooth on that unit. Never by an
   update: the listing and every copy's review notes say editing does not
   work over Bluetooth (the same rules as Bluetooth itself, below). The
-  ledger holds it the same way: its row says "Editing over Bluetooth for
-  customers", and `EDIT_OPENED_AT` in test/ledger.mjs pins it.
+  ledger holds each unit the same way, on its own: the build's row names
+  the units it opened ("Editing over Bluetooth for customers: AM4, FM3",
+  the Bluetooth page's names and nothing else in the list), and
+  `EDIT_OPENED_AT` in test/ledger.mjs pins each of those units on its own
+  entry, in the first pull request after the build. A unit the row does
+  not name stays null, or is keyed to a later store version of its own and
+  gets its own row and pin with that build.
 - **The catalogs are generated**, mobile/src/lib/am4-knobs.js by
   scripts/am4-knobs.mjs, and fm3-knobs.js, fm9-knobs.js and
   axefx3-knobs.js by scripts/gen3-knobs.mjs, from forgefx-midi at the
@@ -682,7 +687,21 @@ what the computer sends for the same edit, and a test holds it there.
   stays refused over Bluetooth.
 - **Each unit opens on its own entry** in `EDIT_FROM_STORE` (`am4`,
   `fm3`, `fm9`, `axefx3`), so any one can go out to everyone without the
-  others.
+  others: test/ledger.mjs `editProblems` asks each unit on the rows that
+  name it, its own entry and its own pin, so the AM4 and the FM3 can open
+  in 1.90.0 with the FM9 and the Axe-Fx III left null.
+- **Where Edit is closed over Bluetooth or a cable, Play's Edit says why.**
+  "Why isn't the edit buttons working on iPad?" (8 November 2026): it was
+  never the iPad, the button was simply not drawn. On the four units whose
+  Edit is built, the button stays and a tap says "Editing works through a
+  computer" and what Play does over Bluetooth (or on the USB cable), from
+  mobile/src/lib/editWords.js and nowhere else; never on a VP4, and never a
+  "yet", a "coming" or a unit named as editing over Bluetooth. The rule is
+  mobile/src/lib/editDoor.js, which also takes Edit back to Play when its
+  door shuts while it is open (the link down past LINK_DOWN_HOLD_MS, or a
+  move to Bluetooth where Edit is closed). The Bluetooth page's editing
+  lines follow the same switch (`editingLine`, `limitsLine`): closed, its
+  words are exactly what every customer copy has always shown.
 
 **Fractal Audio wrote on 18 October 2026, and the app does what it asked,
 except the name.** Their letter on Approved Vendor status asked for a clear

@@ -239,9 +239,13 @@ check). In Auto:
   The FM3 shares this; the AM4 does not.
 - Each unit names its own blocks (mobile/src/lib/gen3Catalog.js): the second
   amp and cab, the third and fourth drives, and the rest, by Fractal's
-  effect-ID enum and Blocks Guide, id for id the computer app's. Crossover,
-  Vocoder, Tone Match, IR Player and Dynamic Distortion are not drawn yet,
-  and the page says so.
+  effect-ID enum and Blocks Guide, id for id the computer app's. On the
+  Axe-Fx III also its IR Player (195 to 198) and, since 1.89.73, the NAM
+  block of firmware 33 (206 and 207, read off a customer's unit), switched
+  by the same published bypass and with no knobs in Edit yet. Crossover,
+  Vocoder, Tone Match and Dynamic Distortion are not drawn yet, and the page
+  says so. 199 and 200 (the Foot Controller and Preset FC) and the rest
+  that are not blocks are known and never drawn or switched.
 - The setup steps set MIDI Thru off (FM9), Program Change on, the MIDI
   channel to 1 or Omni, PC Mapping off, MIDI PC Offset 0 and Send Realtime
   Sysex on, and name

@@ -193,11 +193,11 @@ export function unitOffered(unit, { admin = false, platform = null, installed = 
  * activated remotely). To open it, set the unit's entry to that version on
  * both phones, `am4: { ios: '1.90.0', android: '1.90.0' }`, in the build
  * pull request that moves the app to it. test/bluetooth.mjs holds each
- * entry to the ledger exactly as the Bluetooth threshold is held (test/
- * ledger.mjs thresholdProblems, with its own row, "Editing over Bluetooth
- * for customers", and its own pin, EDIT_OPENED_AT): null, or this app's own
- * version in the build pull request, until the row is written, and never
- * moved back after.
+ * entry to the ledger exactly as the Bluetooth threshold is held, each
+ * unit on its own (test/ledger.mjs editProblems: the rows that name it,
+ * "Editing over Bluetooth for customers: AM4, FM3", and its own pin,
+ * EDIT_OPENED_AT.am4): null, or this app's own version in the build pull
+ * request, until a row names the unit, and never moved back after.
  *
  * A UNIT IS LISTED HERE ONLY ONCE ITS EDITING IS BUILT. Not listed, it is
  * nobody's, his account's included: Edit stays closed over Bluetooth on it.

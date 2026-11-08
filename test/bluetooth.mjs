@@ -5320,7 +5320,9 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own. */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './axefx3-edit.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs'])
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './axefx3-edit.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3Catalog.js'])
+    /* The block lists, for the ids that are not blocks (NOT_BLOCKS): the FM3's list and nothing that sends. */
+    assert.deepEqual(imports(read('gen3Catalog.js')), ['../data/blocks.json'], 'the block lists import something')
     /* Edit's knobs: the codec and the catalogs the computer's codec writes (scripts/am4-knobs.mjs, scripts/gen3-knobs.mjs), and nothing that sends. */
     assert.deepEqual(imports(read('am4-edit.js')).sort(), ['./am4-knobs.js', './fractal-sysex.mjs'])
     assert.deepEqual(imports(read('am4-knobs.js')), [], 'the AM4 catalog imports something')
@@ -5777,12 +5779,15 @@ export function run(test) {
     for (const p of ['mobile/App.js', 'mobile/src/screens/Settings.js']) assert.ok(!/useBluetooth\(\)/.test(code(p)), `${p} redraws for every change on the Bluetooth page`)
     assert.match(app, /useEffect\(\(\) => \{ restoreBluetooth\(\) \}, \[\]\)/, 'the setting is never picked up at launch')
     assert.match(app, /startLink\(\) return \(\) => \{ stopLink\(\) \} \}, \[auth, demo, bluetooth\]\)/, 'turning Bluetooth on or off does not restart the link')
-    /* Over Bluetooth, Edit only where its knobs are built and open to this account (ble-rule editOffered, through bluetooth.js). */
-    assert.match(
-      app,
-      /BENCH && \(demo \|\| link\.link === 'connected'\) && \(!overBluetooth\(caps\) \|\| editOverBluetooth\(\)\) \? \(\) => setScreen\('edit'\) : null/,
-      'Edit opens over Bluetooth where it is not built or not open'
-    )
+    /*
+     * Over Bluetooth, Edit only where its knobs are built and open to this
+     * account (ble-rule editOffered, through bluetooth.js). Named once and
+     * handed to Play by name (editOpens), and where it is built and not
+     * open, the same button saying why (editExplained, test 'Play’s Edit
+     * button says why').
+     */
+    assert.match(app, /const editHere = editDoor\(\{ bench: BENCH, demo, link: link\.link, down: link\.down === true, overBluetooth: overBluetooth\(caps\), editOpen: editOverBluetooth\(\), built: editBuiltFor\(\), vp4: vp4Here\(\) \}\) const editOpens = editHere\.opens const editExplained = editHere\.explained/, 'Edit opens over Bluetooth where it is not built or not open')
+    assert.match(app, /onOpenEdit=\{editOpens \? \(\) => setScreen\('edit'\) : editExplained \? \(\) => setEditWhyAt\(Date\.now\(\)\) : null\}/, 'Play’s Edit opens the bench where its door is shut')
     assert.match(app, /<WrongAccount active=\{[^}]*&& !bluetooth\}/, 'the stage warns about a computer on another account while on Bluetooth')
     /* The waiting screen, over Bluetooth, is about the adapter. */
     const waking = app.slice(app.indexOf('function Waking('))
@@ -5812,7 +5817,7 @@ export function run(test) {
     assert.match(waking, /\{bluetooth \? \( <View style=\{\{ alignSelf: 'stretch' \}\}> <Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/, 'the Bluetooth waiting screen has no way back to the computer')
     assert.ok(waking.indexOf('Use the computer instead') < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way back to the computer waits fifteen seconds')
     /* turnOnBluetooth since 7 November 2026: the waiting screen's Turn on Bluetooth, under the note that says it is off. */
-    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, adapterInsteadOfCable, allowBluetooth, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, turnOnBluetooth, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
+    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, adapterInsteadOfCable, allowBluetooth, editBuiltFor, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, turnOnBluetooth, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     /* Handed only through the Settings row's own gate: test 'every way onto the Bluetooth page' holds it. */
     assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
@@ -5933,7 +5938,7 @@ export function run(test) {
     assert.match(lib, /import \{ isAdmin \} from '\.\/admin'/)
     assert.match(lib, /import \{ accountId \} from '\.\/owner-unlock'/)
     assert.match(lib, /import \{ installedStoreVersion \} from '\.\/storeVersion'/)
-    assert.match(lib, /import \{ bluetoothOpen, editOffered, unitOffered \} from '\.\/ble-rule'/)
+    assert.match(lib, /import \{ EDIT_UNITS, bluetoothOpen, editOffered, unitOffered \} from '\.\/ble-rule'/)
     assert.match(
       lib,
       /export function allowBluetooth\(id, \{ signedOut = false \} = \{\}\) \{ const was = allowed const wasAll = allUnits allowed = accountId\(id\) \? bluetoothOpen\(\{ platform: Platform\.OS, installed: builtInVersion\(\), admin: isAdmin\(id\) \}\) : null/,
@@ -6911,7 +6916,10 @@ export function run(test) {
     assert.ok(gear.BLUETOOTH_ROW_OFF.length <= 36, 'the Settings row is too long for its one line')
     /* What a computer adds, the page's list says Bluetooth lacks. */
     const different = src('mobile/src/screens/Bluetooth.js').match(/const DIFFERENT = \[([\s\S]*?)\n\]/)?.[1] ?? ''
-    assert.match(different, /No editing or saving over Bluetooth\./)
+    /* Editing first, by the switch, from the one place its words live (lib/editWords): closed, today's words. */
+    const ew = await import('../mobile/src/lib/editWords.js')
+    assert.equal(ew.editingLine(false), 'No editing or saving over Bluetooth.')
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /\{\[editingLine\(editOpen\), \.\.\.DIFFERENT\]\.map\(/)
     assert.match(different, /Slower to load the preset list\./)
     /*
      * And on a VP4 too: over Bluetooth it gets presets and scenes only, and
@@ -7922,8 +7930,10 @@ export function run(test) {
 
   test('the Bluetooth page says plainly what is different from USB, and names an adapter maker only in what to buy', async () => {
     const page = src('mobile/src/screens/Bluetooth.js')
+    /* Editing, the list's first line, comes from lib/editWords by the switch (test 'the Bluetooth page's editing lines'). */
+    const ew = await import('../mobile/src/lib/editWords.js')
+    assert.equal(ew.NO_EDITING_LINE, 'No editing or saving over Bluetooth.')
     for (const line of [
-      'No editing or saving over Bluetooth.',
       'Slower to load the preset list.',
       'Footswitch changes may take a moment to show.',
       'About 30 feet of range.',
@@ -9267,7 +9277,7 @@ export function run(test) {
    * under a shopping list. Now: where it stands, the unit, Connect; then the
    * reading, in rows that open when tapped; then the beta, never folded.
    */
-  test('the page opens on the two steps, with one button a page under them, and the report line always shown', () => {
+  test('the page opens on the two steps, with one button a page under them, and the report line always shown', async () => {
     /*
      * "On the actual Bluetooth screen have the connect steps right there at
      * the top before any warnings or anything ... It should be very
@@ -9352,8 +9362,9 @@ export function run(test) {
     assert.match(ways, /\{b\.unit \? <Hint>\{ONE_AT_A_TIME\}<\/Hint> : null\} \{b\.unit \? <Hint>\{SELLERS_LINE\}<\/Hint> : null\}/)
     /* What Bluetooth can't do: the paragraph, and the list of what is different from USB. */
     const limits = page.slice(page.indexOf('export function BluetoothLimits('), page.indexOf('function Bullet('))
-    assert.ok(limits.includes('with no computer. No editing or saving.'))
-    assert.ok(limits.includes('<Heading>What’s different from USB</Heading> {DIFFERENT.map('))
+    assert.ok(limits.includes('{vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen)}'))
+    assert.ok((await import('../mobile/src/lib/editWords.js')).LIMITS_CLOSED.endsWith('with no computer. No editing or saving.'))
+    assert.ok(limits.includes('<Heading>What’s different from USB</Heading> {[editingLine(editOpen), ...DIFFERENT].map('))
     /* The usual reason a connected adapter hears nothing: the plugs swapped. */
     assert.match(page, /\{quiet && !footswitch && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/)
 
@@ -10470,7 +10481,9 @@ export function run(test) {
       wah: [94, 2, 2], formant: [98, 2, 2], volume: [102, 4, 4], tremolo: [106, 2, 2], pitch: [110, 1, 2], filter: [114, 4, 4], drive: [118, 3, 4],
       enhancer: [122, 2, 2], mixer: [126, 4, 4], synth: [130, 1, 2], megatap: [138, 2, 2], gate: [146, 4, 4], ringmod: [150, 1, 1],
       multicomp: [154, 2, 2], tentap: [158, 2, 2], resonator: [162, 2, 2], looper: [166, 1, 1], plex: [178, 1, 2], send: [182, 2, 2],
-      return: [186, 2, 2], multiplexer: [191, 2, 2]
+      return: [186, 2, 2], multiplexer: [191, 2, 2],
+      /* The III's alone: IR Player 1–4 (Fractal's enum, 195–198), and NAM 1 and 2 (firmware 33, 206 and 207, the ids a customer's III listed). */
+      irplayer: [195, 0, 4], nam: [206, 0, 2]
     }
     for (const [unit, col] of [['fm9', 1], ['axefx3', 2]]) {
       const list = catalogFor(unit)
@@ -10487,19 +10500,248 @@ export function run(test) {
         assert.ok(Number.isInteger(b.paramCount) && Number.isInteger(b.typeCount), `${unit}: ${b.page} has no counts`)
       }
     }
-    /* ForgeFX's /blocks for the two units, at the pin (drivers/gen3.ts), written in here: the same ids. */
+    /*
+     * ForgeFX's /blocks for the two units, at the pin (drivers/gen3.ts), written in here: the same ids. And on the III the
+     * phone's own six beside them (lib/gen3Catalog OWN), which ForgeFX passes on with no slug: the computer leaves them a New block.
+     */
     const FORGEFX_EXTRA = {
       fm9: [39, 40, 44, 52, 53, 56, 57, 59, 63, 67, 104, 105, 120, 139, 148, 149, 155, 159],
       axefx3: [39, 40, 41, 44, 45, 48, 49, 52, 53, 56, 57, 59, 63, 67, 72, 73, 104, 105, 111, 120, 121, 131, 139, 148, 149, 155, 159, 179]
     }
+    const PHONE_OWN = { fm9: [], axefx3: [195, 196, 197, 198, 206, 207] }
     const fm3 = new Set(catalog.map((b) => b.page))
     for (const [unit, extra] of Object.entries(FORGEFX_EXTRA)) {
-      assert.deepEqual(catalogFor(unit).map((b) => b.page).filter((p) => !fm3.has(p)).sort((a, b) => a - b), extra, unit)
+      assert.deepEqual(catalogFor(unit).map((b) => b.page).filter((p) => !fm3.has(p)).sort((a, b) => a - b), [...extra, ...PHONE_OWN[unit]], unit)
     }
-    /* The blocks nobody names yet stay off: Crossover, Vocoder, Tone Match, RTA, Scene MIDI, IR Player. */
+    /* The blocks nobody names yet stay off: Crossover, Vocoder, Tone Match, RTA, and the ids that are not blocks (Scene MIDI, the Foot Controller, Preset FC). The IR Player only off the III. */
     for (const unit of ['fm9', 'axefx3']) {
-      for (const id of [134, 142, 143, 170, 174, 190, 195, 196]) assert.ok(!catalogFor(unit).some((b) => b.page === id), `${unit}: ${id} is drawn`)
+      for (const id of [134, 142, 143, 170, 174, 190, 199, 200, 201]) assert.ok(!catalogFor(unit).some((b) => b.page === id), `${unit}: ${id} is drawn`)
     }
+    for (const id of [195, 196, 206, 207]) assert.ok(!catalogFor('fm9').some((b) => b.page === id), `fm9: ${id} is drawn`)
+  })
+
+  /*
+   * THE AXE-FX III'S NAM AND IR PLAYER, read off a customer's log (an iPad,
+   * firmware 33.01, v1.89.71), which said the ids the wire had no name for,
+   * preset by preset: 206 and 207 only in his NAM presets, always one on and
+   * one off, so NAM 1 and NAM 2; 195, IR Player 1 in Fractal's enum; 200,
+   * Preset FC, in every preset and not a block; 201, in every preset, the one
+   * with no NAM too, and nobody's yet. Preset 62 as it was, with a drive and
+   * a delay of its own and the two ends.
+   */
+  const NAM_62 = () => [
+    { eid: 37, bypassed: false, channel: 0 },
+    { eid: 118, bypassed: false, channel: 0 },
+    { eid: 195, bypassed: true, channel: 0 },
+    { eid: 206, bypassed: false, channel: 1 },
+    { eid: 207, bypassed: true, channel: 0 },
+    { eid: 70, bypassed: true, channel: 0 },
+    { eid: 201, bypassed: false, channel: 0 },
+    { eid: 200, bypassed: false, channel: 0 },
+    { eid: 42, bypassed: false, channel: 0 }
+  ]
+  const onANamIII = async (options = {}) => {
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    const t = await onTheLine('axefx3', { catalog: catalogFor('axefx3'), ...options })
+    t.unit.state.blocks.splice(0, t.unit.state.blocks.length, ...NAM_62())
+    return t
+  }
+
+  test('on an Axe-Fx III, NAM 1 and 2 and the IR Player are on Play by name, with a colour, a picture and three letters; the FM3 and FM9 have none of them', async () => {
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    const iii = catalogFor('axefx3')
+    const own = iii.filter((b) => ['nam', 'irplayer'].includes(b.slug)).map((b) => [b.page, b.slug, b.family, b.name, b.instance])
+    assert.deepEqual(own, [
+      [195, 'irplayer', 'irplayer', 'IR Player 1', 1],
+      [196, 'irplayer', 'irplayer', 'IR Player 2', 2],
+      [197, 'irplayer', 'irplayer', 'IR Player 3', 3],
+      [198, 'irplayer', 'irplayer', 'IR Player 4', 4],
+      [206, 'nam', 'nam', 'NAM 1', 1],
+      [207, 'nam', 'nam', 'NAM 2', 2]
+    ])
+    /* The FM3's list is blocks.json as it was, and neither the FM3 nor the FM9 has a NAM or an IR Player. */
+    assert.deepEqual(catalogFor('fm3'), catalog)
+    for (const unit of ['fm3', 'fm9', 'am4']) {
+      assert.ok(!catalogFor(unit).some((b) => ['nam', 'irplayer'].includes(b.slug) || (b.page >= 195 && b.page <= 207)), `${unit} has the III's own blocks`)
+    }
+
+    /* The chain the wire hands Play from preset 62's status answer. */
+    const t = await onANamIII()
+    const chain = await t.get('/preset/blocks')
+    const by = Object.fromEntries(chain.map((b) => [b.effectId, b]))
+    assert.deepEqual(chain.map((b) => b.effectId).sort((a, b) => a - b), [70, 118, 195, 206, 207], 'Play’s pedals are not the preset’s')
+    assert.deepEqual(
+      [195, 206, 207].map((id) => [by[id].slug, by[id].name, by[id].bypassed, by[id].channel]),
+      [['irplayer', 'IR Player 1', true, 'A'], ['nam', 'NAM 1', false, 'B'], ['nam', 'NAM 2', true, 'A']]
+    )
+    /* And Play draws them (device.js stageBlocks keeps them, as any block with a name). */
+    assert.match(src('mobile/src/lib/device.js'), /export const stageBlocks = \(blocks\) =>\s+\(blocks \|\| \[\]\)\.filter\(\(b\) => b && !isNewBlock\(b\) && !STAGE_HIDDEN\.includes\(b\.slug\)\)/)
+
+    /* Their words on the tile: a lone " 1" dropped, as Amp and Amp 2. */
+    const { pedalName } = await import('../mobile/src/lib/tileGrid.js')
+    const { shortBlock } = await import('../mobile/src/lib/shortName.js')
+    assert.deepEqual([195, 206, 207].map((id) => pedalName(by[id])), ['IR Player', 'NAM', 'NAM 2'])
+    assert.deepEqual([195, 206, 207].map((id) => shortBlock(by[id])), ['IRP', 'NAM', 'NAM 2'])
+
+    /* The colour each family already had (lib/blockPalettes), in every look that paints it: violet and the IR Player's green in Match my unit. */
+    const pal = await import('../mobile/src/lib/blockPalettes.js')
+    assert.deepEqual(pal.familyOf('nam'), { key: 'nam', family: 'nam' })
+    assert.deepEqual(pal.familyOf('irplayer'), { key: 'irplayer', family: 'irplayer' })
+    assert.equal(pal.PALETTES.gen3.nam, '#7742e0')
+    assert.equal(pal.PALETTES.gen3.irplayer, '#61745a')
+    for (const look of pal.LOOKS.filter((l) => l.id !== pal.FRACTAL_REMOTE_LOOK)) {
+      for (const family of ['nam', 'irplayer']) assert.ok(look.families[family] || look.byUnit?.gen3?.[family], `${look.id} has no colour for ${family}`)
+    }
+
+    /* The picture: one of the app's own, the family each stands in for (the amp's, the cab's), phone only, and no new file. */
+    const icons = src('mobile/src/lib/blockIcons.js')
+    assert.match(icons, /export const PHONE_ONLY = Object\.freeze\(\{ nam: 'amp', irplayer: 'cab' \}\)/)
+    assert.match(icons, /const name = blockIconName\(slug\) \|\| PHONE_ONLY\[String\(slug \|\| ''\)\.toLowerCase\(\)\] \|\| null/)
+    for (const f of ['amp', 'cab']) assert.ok(existsSync(new URL(`../mobile/assets/icons/${f}.png`, import.meta.url)))
+    for (const f of ['nam', 'irplayer']) assert.ok(!existsSync(new URL(`../mobile/assets/icons/${f}.png`, import.meta.url)), `a new picture for ${f}`)
+    /* Not in the shared list, which is inside the computer app: through the computer they stay a New block. */
+    const { BLOCK_ICON } = await import('../shared/block-icons.mjs')
+    assert.ok(!('nam' in BLOCK_ICON) && !('irplayer' in BLOCK_ICON), 'the computer app’s pictures changed')
+    assert.equal(src('mobile/src/data/blocks.json'), src('src/data/blocks.json'), 'the FM3’s list moved')
+  })
+
+  test('the III’s NAM 1, NAM 2 and IR Player 1 switch on and off by the published bypass, byte for byte, and nothing is sent for 200 or 201', async () => {
+    const t = await onANamIII()
+    const chain = await t.get('/preset/blocks')
+    /* The frames, pinned: F0 00 01 74, the III (10), SET_BYPASS (0A), the id in 14 bits, 00 on or 01 off, the checksum. */
+    const PINNED = {
+      206: { on: 'F0 00 01 74 10 0A 4E 01 00 50 F7', off: 'F0 00 01 74 10 0A 4E 01 01 51 F7' },
+      207: { on: 'F0 00 01 74 10 0A 4F 01 00 51 F7', off: 'F0 00 01 74 10 0A 4F 01 01 50 F7' },
+      195: { on: 'F0 00 01 74 10 0A 43 01 00 5D F7', off: 'F0 00 01 74 10 0A 43 01 01 5C F7' }
+    }
+    /* The same shape as the frames in that log, by the same code: block 118 on and off, and 178, whose id runs past 127. */
+    assert.equal(hex(t.sx.buildSetBypass(0x10, 118, false)), 'F0 00 01 74 10 0A 76 00 00 69 F7')
+    assert.equal(hex(t.sx.buildSetBypass(0x10, 118, true)), 'F0 00 01 74 10 0A 76 00 01 68 F7')
+    assert.equal(hex(t.sx.buildSetBypass(0x10, 178, false)), 'F0 00 01 74 10 0A 32 01 00 2C F7')
+    for (const [eid, bytes] of Object.entries(PINNED)) {
+      const id = Number(eid)
+      assert.equal(hex(t.sx.buildSetBypass(0x10, id, false)), bytes.on)
+      assert.equal(hex(t.sx.buildSetBypass(0x10, id, true)), bytes.off)
+      for (const off of [false, true]) {
+        t.sent.length = 0
+        t.logs.length = 0
+        assert.deepEqual(await t.post(`/preset/blocks/${id}/bypass`, { bypassed: off }), { ok: true })
+        assert.deepEqual(t.frames().map(hex), [off ? bytes.off : bytes.on], `block ${id} ${off ? 'off' : 'on'} went another way`)
+        assert.ok(t.logs.includes(`sent block ${id} ${off ? 'off' : 'on'}: ${off ? bytes.off : bytes.on}`), t.logs.join(' | '))
+        assert.equal(t.unit.state.blocks.find((b) => b.eid === id).bypassed, off)
+      }
+    }
+    /* Every pedal Play has, switched both ways: no frame of any kind names 200 or 201. */
+    t.sent.length = 0
+    for (const b of chain) for (const off of [true, false]) await t.post(`/preset/blocks/${b.effectId}/bypass`, { bypassed: off })
+    const named = (f) => f[0] === 0xf0 && (f[5] === 0x0a || f[5] === 0x0b || f[5] === 0x1f || f[5] === 0x01)
+    const ids = t.frames().filter(named).map((f) => (f[5] === 0x01 ? t.sx.decode14(f[8], f[9]) : t.sx.decode14(f[6], f[7])))
+    assert.deepEqual([...new Set(ids)].sort((a, b) => a - b), chain.map((b) => b.effectId).sort((a, b) => a - b))
+    /* Preset FC, and the rest that are not blocks: a bypass or a channel for one is refused, and nothing goes. */
+    const { NOT_BLOCKS } = await import('../mobile/src/lib/gen3Catalog.js')
+    assert.deepEqual(NOT_BLOCKS, [2, 190, 199, 200])
+    t.sent.length = 0
+    for (const id of NOT_BLOCKS) {
+      await assert.rejects(t.post(`/preset/blocks/${id}/bypass`, { bypassed: true }), (e) => e.status === 400)
+      await assert.rejects(t.post(`/preset/blocks/${id}/channel`, { channel: 'B' }), (e) => e.status === 400)
+    }
+    assert.deepEqual(t.frames(), [], 'something went to a block that is not one')
+    /* A NAM's channel goes the way every gen-3 block's does (the long hold), nothing of its own. */
+    t.sent.length = 0
+    assert.deepEqual(await t.post('/preset/blocks/206/channel', { channel: 'C' }), { ok: true })
+    assert.deepEqual(t.frames().filter((f) => f[5] === 0x0b).map(hex), [hex(t.sx.buildSetChannel(0x10, 206, 2))])
+    assert.equal(t.unit.state.blocks.find((b) => b.eid === 206).channel, 2)
+    /* The check's own switch leaves the NAM and the IR Player alone, as it leaves the amp and the cab: the drive goes. */
+    const c = await onANamIII()
+    const r = await drive(c.clock, c.wire.check('write-bypass'))
+    assert.equal(r.ok, true, r.error)
+    assert.deepEqual(c.frames().filter((f) => f[5] === 0x0a).map(hex), [c.sx.buildSetBypass(0x10, 118, true), c.sx.buildSetBypass(0x10, 118, false)].map(hex))
+  })
+
+  test('the log stops naming the III’s NAM, IR Player and Preset FC, and still names 201 and anything else it has no name for', async () => {
+    const said = (t) => t.logs.filter((l) => /no name for yet/.test(l))
+    const t = await onANamIII()
+    await t.get('/preset')
+    await t.get('/preset/blocks')
+    assert.equal(said(t).length, 1, t.logs.join(' | '))
+    assert.match(said(t)[0], /: id 201 \(on, channel A\)$/, 'the line names a block the app now knows')
+    for (const id of [195, 196, 197, 198, 199, 200, 206, 207]) assert.ok(!new RegExp(`id ${id}\\b`).test(said(t)[0]), `the line still names ${id}`)
+    /* Preset 61, with no NAM: 201 alone, said again because the preset changed. */
+    t.unit.state.preset = 61
+    t.unit.state.blocks.splice(0, t.unit.state.blocks.length, { eid: 37, bypassed: false, channel: 0 }, { eid: 201, bypassed: false, channel: 0 }, { eid: 200, bypassed: false, channel: 0 }, { eid: 42, bypassed: false, channel: 0 })
+    await t.get('/preset')
+    await t.get('/preset/blocks')
+    assert.equal(said(t).length, 2)
+    assert.match(said(t)[1], /on preset 61: id 201 \(on, channel A\)$/)
+    /* A preset with nothing unknown in it: nothing said. And another id nobody has named yet still is. */
+    t.unit.state.preset = 63
+    t.unit.state.blocks.splice(0, t.unit.state.blocks.length, ...NAM_62().filter((b) => b.eid !== 201))
+    await t.get('/preset')
+    await t.get('/preset/blocks')
+    assert.equal(said(t).length, 2, 'a preset with nothing unknown in it was said')
+    t.unit.state.blocks.push({ eid: 208, bypassed: true, channel: 3 })
+    await t.get('/preset/blocks')
+    assert.match(said(t).at(-1), /on preset 63: id 208 \(off, channel D\)$/)
+    /* On an FM9 the III's own are strangers still, and Preset FC is not. */
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    const nine = await onTheLine('fm9', { catalog: catalogFor('fm9') })
+    nine.unit.state.blocks.splice(0, nine.unit.state.blocks.length, ...NAM_62())
+    await nine.get('/preset/blocks')
+    assert.match(said(nine)[0], /: id 195 \(off, channel A\); id 206 \(on, channel B\); id 207 \(off, channel A\); id 201 \(on, channel A\)$/)
+  })
+
+  test('Edit opens the III’s NAM and IR Player on their on and off, says their knobs aren’t in the app yet, and never reads or writes anything else of theirs', async () => {
+    const e = await import('../mobile/src/lib/axefx3-edit.js')
+    const k = await import('../mobile/src/lib/axefx3-knobs.js')
+    /* The III's knob catalog has neither (if it ever carries them, `knobs: false` goes by itself: bleWire asks editBlock). */
+    for (const id of [195, 196, 197, 198, 206, 207]) {
+      assert.equal(k.AXE3_BLOCKS[id], undefined, `the knob catalog has ${id} now: Edit may open its knobs`)
+      assert.equal(e.editBlock(id), null)
+    }
+    assert.ok(!Object.keys(k.AXE3_FAMILIES).some((f) => /IRPLAY|NAM/i.test(f)))
+    /* The wire marks them, and only them, `knobs: false`; every other block is handed on as it was. */
+    const t = await onANamIII({ edit: () => true })
+    const chain = await t.get('/preset/blocks')
+    assert.deepEqual(chain.filter((b) => b.knobs === false).map((b) => b.effectId).sort((a, b) => a - b), [195, 206, 207])
+    assert.ok(chain.filter((b) => b.knobs !== false).every((b) => !('knobs' in b)))
+    for (const unit of ['fm3', 'fm9', 'axefx3']) {
+      const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+      const w = await onTheLine(unit, { catalog: catalogFor(unit) })
+      w.unit.state.blocks.splice(0, w.unit.state.blocks.length, ...catalogFor(unit).filter((b) => !['nam', 'irplayer'].includes(b.slug)).map((b) => ({ eid: b.page, bypassed: false, channel: 0 })))
+      const all = await w.get('/preset/blocks')
+      assert.ok(all.length > 20, unit)
+      assert.deepEqual(all.filter((b) => 'knobs' in b).map((b) => b.effectId), [], `${unit}: a block with knobs is marked as having none`)
+    }
+    /* Asked for anyway, a read or a write of theirs is refused with nothing sent; the bypass still goes. */
+    const ask = (path, opts = {}) => drive(t.clock, t.wire.request(path, { editing: true, ...opts }))
+    t.sent.length = 0
+    await assert.rejects(ask('/preset/blocks/206/params'), (err) => err.status === 400)
+    await assert.rejects(ask('/preset/blocks/195/params/1', { method: 'PUT', body: JSON.stringify({ value: 0.5 }) }), (err) => err.status === 400)
+    await assert.rejects(ask('/preset/blocks/207/type', { method: 'POST', body: JSON.stringify({ value: 1 }) }))
+    assert.deepEqual(t.frames(), [], 'something of Edit’s went to a NAM or an IR Player')
+    assert.deepEqual(await ask('/blocks/nam/types'), [])
+    assert.ok(e.knobFrame(0x10, 206, 1, { value: 0.5 }).refused)
+    assert.ok(e.modelFrame(0x10, 207, 1).refused)
+    /* And held at the way out even when built by hand: a whole read of a NAM, in the preset, is not one of Edit's. */
+    const { gen3Sender } = await import(WIRE)
+    const out = []
+    const send = gen3Sender((b) => out.push(b), () => {}, 0x10, () => [195, 206, 207, 118])
+    assert.equal(send(e.buildReadAll(0x10, 206)), 'refused')
+    assert.equal(send(e.buildKnob(0x10, 206, 1, 0.5)), 'refused')
+    assert.equal(send(t.sx.buildSetBypass(0x10, 206, true)), 'sent')
+    assert.equal(out.length, 1)
+
+    /* The screen: on and off, the one line, no read and nothing raised; and the control search leaves them out. */
+    const { NO_KNOBS_YET } = await import('../mobile/src/lib/gen3Catalog.js')
+    assert.equal(NO_KNOBS_YET, 'This block’s knobs aren’t in the app yet.')
+    const edit = flat('mobile/src/screens/Edit.js')
+    assert.match(edit, /const noKnobsYet = block\.knobs === false const knobless = vp4Bench\(\) \|\| noKnobsYet useEffect\(\(\) => \{ if \(knobless\) return undefined/)
+    assert.match(edit, /onPress=\{\(\) => writeBlockBypass\(eid, engaged\)\} \/> \)\} \{noKnobsYet \? <Note>\{NO_KNOBS_YET\}<\/Note> : null\}/)
+    assert.equal((edit.match(/\{NO_KNOBS_YET\}/g) || []).length, 1)
+    assert.match(edit, /import \{ NO_KNOBS_YET \} from '\.\.\/lib\/gen3Catalog'/)
+    assert.match(flat('mobile/src/lib/device.js'), /export const knobBlocks = \(blocks\) => \(blocks \|\| \[\]\)\.filter\(\(b\) => b && !isNewBlock\(b\) && !EXCLUDED_BLOCKS\.includes\(b\.slug\) && b\.knobs !== false\)/)
+    /* Nothing of this is on the computer's path: the browser's Edit and its block panel are as they were. */
+    assert.ok(!/knobs === false|NO_KNOBS_YET/.test(src('src/components/Console.jsx')))
   })
 
   test('scene names are read the same way on an FM9 and an Axe-Fx III as on an FM3', async () => {
@@ -10571,7 +10813,11 @@ export function run(test) {
       assert.ok(gear.firmwareLineFor(unit).startsWith(`Use ${name} firmware`))
     }
     assert.ok(gear.missingBlocksLine('fm9').startsWith('A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match'))
-    assert.match(gear.missingBlocksLine('axefx3'), /IR Player, Dynamic Distortion\)/)
+    /* The III's IR Player and NAM are drawn over Bluetooth since 1.89.73 (lib/gen3Catalog OWN): the line no longer names them. */
+    assert.equal(gear.missingBlocksLine('axefx3'), 'A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match, Dynamic Distortion) aren’t shown on Play yet.')
+    assert.ok(!/IR Player|NAM/.test(gear.missingBlocksLine('axefx3')))
+    assert.match(src('public/bluetooth-guide.html'), /and on\s+the Axe-Fx III Dynamic Distortion\) don’t show on Play yet\./)
+    assert.ok(!/IR Player/.test(src('public/bluetooth-guide.html')), 'the guide still says the IR Player is not shown')
     for (const unit of ['am4', 'fm3', null, 'vp5']) {
       assert.equal(gear.missingBlocksLine(unit), null)
       assert.equal(gear.tunerQuietLine(unit), null)
@@ -10884,23 +11130,48 @@ export function run(test) {
 
   test('Edit over Bluetooth is one switch per unit, a store version, null until the build that opens it, held to the ledger like Bluetooth itself', async () => {
     const rule = await import('../mobile/src/lib/ble-rule.js')
-    const { ledgerBuilds, thresholdProblems, pinProblems, EDIT_OPENING, EDIT_WORDS, EDIT_OPENED_AT } = await import('./ledger.mjs')
+    const { editProblems, EDIT_OPENED_AT, EDIT_UNIT_NAMES } = await import('./ledger.mjs')
+    const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
     const { isOlder } = await import('../shared/versions.mjs')
     assert.deepEqual(rule.EDIT_UNITS, ['am4', 'fm3', 'fm9', 'axefx3'], 'Edit over Bluetooth is listed for a unit whose knobs the phone cannot read')
-    assert.deepEqual(rule.EDIT_FROM_STORE, { am4: null, fm3: null, fm9: null, axefx3: null }, 'Edit over Bluetooth opens to customers before a store version whose notes say so')
-    /* His account: every unit whose editing is built, on every copy. Nobody else, on any copy, until a store version opens it. Nobody at all, a unit not built (the VP4). */
-    for (const installed of [null, '1.87.11', '1.89.0', '1.89.36', '1.90.0', '9.9.9']) {
-      for (const unit of ['am4', 'fm3', 'fm9', 'axefx3']) {
-        assert.equal(rule.editOffered(unit, { admin: true, platform: 'ios', installed }), true)
-        assert.equal(rule.editOffered(unit, { admin: true, platform: 'android', installed }), true)
-        assert.equal(rule.editOffered(unit, { admin: false, platform: 'ios', installed }), false, `a customer is offered Edit over Bluetooth on the ${unit} on ${installed}`)
-        assert.equal(rule.editOffered(unit, { admin: false, platform: 'android', installed }), false, `a customer is offered Edit over Bluetooth on the ${unit} on ${installed}`)
+    assert.ok(!Object.prototype.hasOwnProperty.call(rule.EDIT_FROM_STORE, 'vp4'), 'the VP4 is in the Edit over Bluetooth switch: it has no Edit over Bluetooth at all')
+    /*
+     * The switch's shape, and nothing about its values: frozen, and each
+     * entry null or a store version on each phone. Which values are allowed is
+     * the ledger's to say (below), as it is for Bluetooth's threshold, so the
+     * build pull request that keys a unit, and the row's pull request after
+     * its build, go green here with no assertion rewritten.
+     */
+    assert.ok(Object.isFrozen(rule.EDIT_FROM_STORE), 'the Edit over Bluetooth switch can be changed while the app runs')
+    for (const [unit, from] of Object.entries(rule.EDIT_FROM_STORE)) {
+      const shaped = from === null || (typeof from === 'object' && Object.keys(from).sort().join() === 'android,ios' && ['ios', 'android'].every((p) => from[p] === null || /^\d+\.\d+\.\d+$/.test(from[p])))
+      assert.ok(shaped, `${unit}: the Edit over Bluetooth entry is not null, nor { ios: '1.90.0', android: '1.90.0' }: ${JSON.stringify(from)}`)
+    }
+    /* Each unit is named in the ledger by the Bluetooth page's own name for it. */
+    assert.deepEqual(Object.keys(EDIT_UNIT_NAMES), [...rule.EDIT_UNITS])
+    for (const unit of rule.EDIT_UNITS) assert.equal(EDIT_UNIT_NAMES[unit], BLE_UNITS.find((u) => u.key === unit)?.name, `the ledger names the ${unit} other than the Bluetooth page does`)
+    /*
+     * His account: every unit whose editing is built, on every copy. Anybody
+     * else, as the threshold lets a customer into Bluetooth: closed on a copy
+     * that cannot say its version and on every built-in version below the
+     * unit's entry, open at it and above, and closed on every copy while the
+     * entry is null. Nobody at all, a unit not built (the VP4).
+     */
+    for (const installed of [null, '1.87.11', '1.89.0', '1.89.36', '1.90.0', '1.90.4', '1.91.0', '9.9.9']) {
+      for (const unit of rule.EDIT_UNITS) {
+        for (const platform of ['ios', 'android']) {
+          assert.equal(rule.editOffered(unit, { admin: true, platform, installed }), true)
+          const at = rule.EDIT_FROM_STORE[unit]?.[platform] ?? null
+          const open = at !== null && installed !== null && isOlder(installed, at) === false
+          assert.equal(rule.editOffered(unit, { admin: false, platform, installed }), open, `a customer on ${platform} ${installed} is ${open ? 'not ' : ''}offered Edit over Bluetooth on the ${unit}, whose entry is ${at}`)
+        }
         assert.equal(rule.editOffered(unit, { admin: false, platform: null, installed }), false)
       }
       for (const unit of ['vp4', 'am3', '', null]) assert.equal(rule.editOffered(unit, { admin: true, platform: 'ios', installed }), false, `Edit opens over Bluetooth on the ${unit}, whose knobs are not built`)
     }
     /* Each unit on its own entry: the FM9's version opens the FM9 and nothing else. */
-    const fm9Only = { ...rule.EDIT_FROM_STORE, fm9: { ios: '1.90.0', android: '1.90.0' } }
+    const none = Object.fromEntries(rule.EDIT_UNITS.map((u) => [u, null]))
+    const fm9Only = { ...none, fm9: { ios: '1.90.0', android: '1.90.0' } }
     assert.equal(rule.editOffered('fm9', { platform: 'ios', installed: '1.90.0', units: fm9Only }), true)
     for (const unit of ['am4', 'fm3', 'axefx3']) assert.equal(rule.editOffered(unit, { platform: 'ios', installed: '1.90.0', units: fm9Only }), false, `the FM9’s entry opens the ${unit}`)
     /* The switch as a build will set it: open from that version on, on both phones, and never on a copy that cannot say what it is. */
@@ -10911,27 +11182,154 @@ export function run(test) {
       assert.equal(rule.editOffered('am4', { platform, installed: '1.89.9', units }), false)
       assert.equal(rule.editOffered('am4', { platform, installed: null, units }), false)
     }
-    /* Held to the ledger as the Bluetooth threshold is: null, or this app's own version in the build pull request, until its row is written. */
+    /*
+     * THE REAL ONE: the switch, the ledger and the pins as they are, each unit
+     * on its own rows, its own entry and its own pin (test/ledger.mjs
+     * editProblems): null, or this app's own version in the build pull
+     * request, until a row names the unit, and never moved back after.
+     */
+    assert.ok(Object.isFrozen(EDIT_OPENED_AT), 'EDIT_OPENED_AT can be changed')
+    assert.deepEqual(Object.keys(EDIT_OPENED_AT), [...rule.EDIT_UNITS], 'EDIT_OPENED_AT does not have one entry for every unit in EDIT_FROM_STORE')
+    for (const [unit, pin] of Object.entries(EDIT_OPENED_AT)) {
+      assert.ok(pin === null || (Object.isFrozen(pin) && Object.keys(pin).sort().join() === 'android,ios,version' && /^\d+\.\d+\.\d+$/.test(pin.version)), `EDIT_OPENED_AT.${unit} is not null, nor a frozen { version, ios, android }`)
+    }
     const app = JSON.parse(src('package.json')).version
-    const builds = ledgerBuilds(src('docs/expo-builds.md'), EDIT_OPENING)
+    const stores = JSON.parse(src('public/store-versions.json'))
+    assert.deepEqual(editProblems({ text: src('docs/expo-builds.md'), units: rule.EDIT_FROM_STORE, appVersion: app, pins: EDIT_OPENED_AT, stores }), [], 'Edit over Bluetooth is set where the ledger does not allow it')
     for (const [unit, from] of Object.entries(rule.EDIT_FROM_STORE)) {
-      assert.deepEqual(thresholdProblems(builds, from || {}, app, EDIT_WORDS), [], `${unit}: Edit over Bluetooth is set where the ledger does not allow it`)
       for (const p of ['ios', 'android']) {
         if (from?.[p]) assert.notEqual(isOlder(from[p], rule.BLUETOOTH_FROM_STORE[p]), true, `${unit} opens Edit over Bluetooth before Bluetooth itself on ${p}`)
       }
-      const pin = EDIT_OPENED_AT?.[unit] ?? null
-      assert.deepEqual(pinProblems({ builds, from: from || {}, stores: JSON.parse(src('public/store-versions.json')), pin, w: EDIT_WORDS }), [], `${unit}: Edit over Bluetooth's pin`)
     }
-    /* The rule says no to the slips it is there for: a store version already out (it would open by update), one phone alone. */
-    assert.ok(thresholdProblems(builds, { ios: '1.89.0', android: '1.89.0' }, app, EDIT_WORDS).length > 0, 'Edit over Bluetooth could open by update on copies already out')
-    assert.ok(thresholdProblems(builds, { ios: app, android: null }, app, EDIT_WORDS).length > 0, 'Edit over Bluetooth could open on one phone alone')
-    assert.deepEqual(thresholdProblems(builds, { ios: app, android: app }, app, EDIT_WORDS), [], 'the build pull request cannot set the switch')
-    assert.ok(thresholdProblems(builds, { ios: app, android: app }, app, EDIT_WORDS).length === 0 && thresholdProblems(builds, { ios: app, android: app }, '9.0.0', EDIT_WORDS)[0]?.includes('Editing over Bluetooth for customers'), 'the rule does not say which row to write')
+  })
+
+  test('Edit over Bluetooth opens one unit at a time: a build’s row names the units it opened, and each unit answers to its own entry and its own pin', async () => {
+    /*
+     * "Each unit opens on its own entry" (CLAUDE.md). The likely plan: the
+     * AM4 and the FM3 open to customers in 1.90.0, and the FM9 and the
+     * Axe-Fx III stay null and open in a later store version of their own.
+     * Tried here on made-up ledgers and made-up switches, the real ones left
+     * alone, at every step of that plan and at the slips it has to refuse.
+     */
+    const { editProblems, editRowProblems, editRowUnits, editOpening, editWords, ledgerBuilds, thresholdProblems, EDIT_MARKER } = await import('./ledger.mjs')
+    const { EDIT_UNITS } = await import('../mobile/src/lib/ble-rule.js')
+    const row = (date, version, ios, android, why) => `| ${date} | ${version} | ${ios} | ${android} | ${why} |`
+    const base = [
+      '| Date | Version | iOS | Android | What it was for |',
+      '|---|---|---|---|---|',
+      row('26 Oct', '1.89.0', '1', '1', 'Bluetooth (beta) for customers, on all five units (AM4, FM3, FM9, Axe-Fx III, VP4)'),
+      row('26 Oct', '1.89.3', '1', '1', 'The 1.89.0 version brought up to date'),
+      row('4 Nov', '1.89.36', '—', '1', 'Android plugs into the unit by USB cable')
+    ].join('\n')
+    const with90 = `${base}\n${row('20 Nov', '1.90.0', '1', '1', `${EDIT_MARKER}: AM4, FM3. And the rest of the pair`)}`
+    const with91 = `${with90}\n${row('10 Dec', '1.91.0', '1', '1', `${EDIT_MARKER}: FM9`)}`
+    const both = (v) => ({ ios: v, android: v })
+    const switchOf = (keyed) => ({ ...Object.fromEntries(EDIT_UNITS.map((u) => [u, null])), ...keyed })
+    const pinOf = (v) => Object.freeze({ version: v, ios: v, android: v })
+    const pins = (opened) => ({ ...Object.fromEntries(EDIT_UNITS.map((u) => [u, null])), ...opened })
+    const stores = { ios: '1.89.3', android: '1.89.36' }
+    const ask = (text, keyed, appVersion, opened = {}, live = stores) => editProblems({ text, units: switchOf(keyed), appVersion, pins: pins(opened), stores: live })
+    const AM4_FM3 = { am4: both('1.90.0'), fm3: both('1.90.0') }
+    const PINNED = { am4: pinOf('1.90.0'), fm3: pinOf('1.90.0') }
+
+    /* Today: every unit null, no row, no pin. */
+    assert.deepEqual(ask(base, {}, '1.89.72'), [], 'today, every unit null, is refused')
+    /* The 1.90.0 build pull request: the AM4 and the FM3 keyed to its own version, the FM9 and the III left null. */
+    assert.deepEqual(ask(base, AM4_FM3, '1.90.0'), [], 'the 1.90.0 build pull request, opening the AM4 and the FM3 alone, is refused')
+    /* The first pull request after that build: its row names the AM4 and the FM3, and their pins are set; the FM9 and the III still null. */
+    assert.deepEqual(ask(with90, AM4_FM3, '1.90.1', PINNED), [], 'the row’s pull request, naming the AM4 and the FM3 with the FM9 and the III null, is refused')
+    assert.deepEqual(ask(with90, AM4_FM3, '1.90.1', PINNED, both('1.90.0')), [], 'the day 1.90.0 is live, the AM4 and the FM3 pinned, is refused')
+    /* The row is the AM4's and the FM3's opening, and not the FM9's or the III's. */
+    for (const [unit, marked] of [['am4', 2], ['fm3', 2], ['fm9', 0], ['axefx3', 0]]) {
+      assert.equal(ledgerBuilds(with90, editOpening(unit)).filter((b) => b.opening).length, marked, `the 1.90.0 row is read wrong for the ${unit}`)
+    }
+    /* That row's pull request without the pins: red, for each unit it names, and it says what to write. */
+    const unpinned = ask(with90, AM4_FM3, '1.90.1')
+    assert.ok(unpinned.some((p) => /^AM4: docs\/expo-builds\.md marks 1\.90\.0 as the opening, and EDIT_OPENED_AT\.am4 in test\/ledger\.mjs is null/.test(p)), 'the row’s pull request goes green without the AM4’s pin')
+    assert.ok(unpinned.some((p) => /^FM3: docs\/expo-builds\.md marks 1\.90\.0 as the opening, and EDIT_OPENED_AT\.fm3/.test(p)), 'the row’s pull request goes green without the FM3’s pin')
+    assert.ok(!unpinned.some((p) => /^(FM9|Axe-Fx III):/.test(p)), 'the FM9 or the III is asked for a pin it was never opened with')
+    /* After the build, before the row: red, and it sends whoever reads it to the row, naming the unit. */
+    const noRow = ask(base, AM4_FM3, '1.90.1')
+    assert.ok(noRow.some((p) => /^AM4: ios: the threshold is 1\.90\.0 with no build marked as the opening/.test(p) && p.includes('"Editing over Bluetooth for customers: AM4" in What it was for') && p.includes('EDIT_OPENED_AT.am4')), 'the build without its row does not say which row to write')
+
+    /* The FM9's own later store version: its build pull request, and its row's after, with the AM4 and the FM3 left as they were opened. */
+    const AND_FM9 = { ...AM4_FM3, fm9: both('1.91.0') }
+    assert.deepEqual(ask(with90, AND_FM9, '1.91.0', PINNED), [], 'the FM9’s own build pull request, at 1.91.0, is refused')
+    assert.deepEqual(ask(with91, AND_FM9, '1.91.1', { ...PINNED, fm9: pinOf('1.91.0') }), [], 'the FM9’s row and pin, at 1.91.0, are refused')
+    assert.ok(ask(with91, AND_FM9, '1.91.1', PINNED).some((p) => /^FM9: docs\/expo-builds\.md marks 1\.91\.0 as the opening, and EDIT_OPENED_AT\.fm9/.test(p)), 'the FM9’s row goes green without its pin')
+    /* And the III, still null through all of it. */
+    assert.deepEqual(ask(with91, { ...AND_FM9, axefx3: null }, '1.92.0', { ...PINNED, fm9: pinOf('1.91.0') }), [])
+
+    /* THE SLIPS. A row naming the FM9 while the FM9 is null: it would be reviewed as opened and kept closed. */
+    const fm9Named = `${base}\n${row('20 Nov', '1.90.0', '1', '1', `${EDIT_MARKER}: AM4, FM3 and FM9`)}`
+    assert.ok(ask(fm9Named, AM4_FM3, '1.90.1', PINNED).some((p) => /^FM9: ios: 1\.90\.0 is marked as the opening, and the threshold is null/.test(p)), 'a row naming the FM9, with the FM9 null, passes')
+    /* The FM9 keyed to 1.90.0 after its build opened only the AM4 and the FM3: open by update on copies reviewed without it. */
+    const byUpdate = ask(with90, { ...AM4_FM3, fm9: both('1.90.0') }, '1.90.1', PINNED)
+    assert.ok(byUpdate.some((p) => /^FM9: ios 1\.90\.0 \(20 Nov\) is open to a customer, and no build before it is marked as the opening/.test(p)), 'the FM9 opened by update on the 1.90.0 copies passes')
+    /* A store version already out, or one phone alone: refused, as Bluetooth's threshold is. */
+    assert.ok(ask(base, { fm9: both('1.89.0') }, '1.89.72').some((p) => /^FM9: ios 1\.89\.0 .* is open to a customer/.test(p)), 'Edit over Bluetooth could open by update on copies already out')
+    for (const half of [{ ios: '1.91.0', android: null }, { ios: null, android: '1.91.0' }]) {
+      assert.ok(ask(with90, { ...AM4_FM3, fm9: half }, '1.91.0', PINNED).some((p) => /^FM9: the threshold is set on one phone only/.test(p)), `the FM9 keyed ${JSON.stringify(half)} passes`)
+    }
+    assert.ok(ask(base, { am4: { ios: '1.90.0', android: '1.89.99' } }, '1.90.0').some((p) => /^AM4: the threshold is not the same on both phones/.test(p)))
+    /* A unit already opened, set back to null or moved later: refused by its row and by its pin. */
+    for (const [moved, why] of [[null, 'set back to null'], [both('1.91.0'), 'moved to a later version']]) {
+      const back = ask(with91, { ...AND_FM9, am4: moved }, '1.91.1', { ...PINNED, fm9: pinOf('1.91.0') })
+      assert.ok(back.some((p) => /^AM4: ios: 1\.90\.0 is marked as the opening, and the threshold (is null|1\.91\.0 does not open on it)/.test(p)), `the AM4 ${why} after its opening passes the row`)
+      assert.ok(back.some((p) => /^AM4: ios: EDIT_OPENED_AT\.am4 says the threshold is 1\.90\.0, and it is/.test(p)), `the AM4 ${why} after its opening passes the pin`)
+      assert.ok(!back.some((p) => /^(FM3|FM9|Axe-Fx III):/.test(p)), `the AM4 ${why} is blamed on another unit`)
+    }
+    /* Its row taken out with its entry and its pin left: refused. */
+    assert.ok(ask(base, AND_FM9, '1.91.1', PINNED).some((p) => /^AM4: ios: EDIT_OPENED_AT\.am4 says 1\.90\.0 opened editing over Bluetooth on the AM4, and docs\/expo-builds\.md has no ios build of 1\.90\.0 marked "Editing over Bluetooth for customers: AM4"/.test(p)), 'the AM4’s row taken out passes')
+    /* A split row: the AM4 marked on the iPhone's 1.90.0 build, Android's left unmarked. */
+    const split = `${base}\n${row('20 Nov', '1.90.0', '1', '—', `${EDIT_MARKER}: AM4`)}\n${row('20 Nov', '1.90.0', '—', '1', 'The pair, Android')}`
+    assert.ok(ask(split, { am4: both('1.90.0') }, '1.90.1', { am4: pinOf('1.90.0') }).some((p) => /^AM4: the opening is marked on ios at 1\.90\.0 and on android at no build/.test(p)), 'a split row passes')
+    /* And a pin for a unit the switch does not have. */
+    assert.ok(editProblems({ text: base, units: switchOf({}), appVersion: '1.89.72', pins: { ...pins({}), vp4: pinOf('1.90.0') } }).some((p) => /EDIT_OPENED_AT names vp4/.test(p)))
+
+    /*
+     * THE ROW'S OWN WORDS. The marker names its units, by the Bluetooth page's
+     * names, and nothing else: the words alone, or a name the switch does not
+     * have (the VP4, or one misspelt), are refused before they can mark a unit
+     * by accident or miss one.
+     */
+    /* Said where it is written: the ledger's own header, and the notes for the version that opens it. */
+    assert.match(src('docs/expo-builds.md'), /\*\*A build that opens Edit over Bluetooth to customers says so too, and\s+names its units\*\*/, 'the ledger does not say an Edit row names its units')
+    assert.match(src('docs/expo-builds.md'), /"Editing over Bluetooth for customers: AM4, FM3"/, 'the ledger does not show an Edit row naming its units')
+    assert.match(src('docs/app-store.md'), /\("Editing over Bluetooth for customers: AM4, FM3"\)/, 'the store notes do not say the row names its units')
+    assert.deepEqual(editRowProblems(src('docs/expo-builds.md')), [], 'an Edit row in the ledger does not name its units')
+    assert.deepEqual(editRowUnits(`${EDIT_MARKER}: the AM4, FM3 and Axe-Fx III (both phones)`), { units: ['am4', 'fm3', 'axefx3'], unknown: [], bare: false, twice: false })
+    assert.deepEqual(editRowUnits(`${EDIT_MARKER}: AM4, FM3, and FM9. The rest`)?.units, ['am4', 'fm3', 'fm9'])
+    assert.equal(editRowUnits('Bluetooth (beta) for customers, on all five units (AM4, FM3, FM9, Axe-Fx III, VP4)'), null, 'Bluetooth’s own opening row is read as an Edit row')
+    assert.deepEqual(editRowProblems(with91), [])
+    for (const [why, says] of [
+      [EDIT_MARKER, /without ": " and the units that build opened after it/],
+      [`${EDIT_MARKER}, on the AM4`, /without ": " and the units/],
+      [`${EDIT_MARKER}: `, /without ": " and the units/],
+      ['editing over Bluetooth for customers: AM4', /without ": " and the units/],
+      [`${EDIT_MARKER}: VP4`, /"VP4" in its list of units is not a unit whose Edit over Bluetooth is built/],
+      [`${EDIT_MARKER}: AM4, FM 3`, /"FM 3" in its list of units is not/],
+      [`${EDIT_MARKER}: AM4, from both phones`, /"from both phones" in its list of units is not/],
+      [`${EDIT_MARKER}: AM4. And ${EDIT_MARKER}: FM3`, /more than once/]
+    ]) {
+      const text = `${base}\n${row('20 Nov', '1.90.0', '1', '1', why)}`
+      assert.ok(editRowProblems(text).some((p) => says.test(p)), `a row saying "${why}" passes`)
+      assert.ok(editProblems({ text, units: switchOf(AM4_FM3), appVersion: '1.90.1', pins: pins(PINNED) }).some((p) => says.test(p)), `a row saying "${why}" passes the whole check`)
+    }
+    /* And the words each unit's failures send to: its own row, its own pin, never a unit the switch does not have. */
+    assert.deepEqual({ ...editWords('axefx3') }, { name: 'editing over Bluetooth on the Axe-Fx III', row: 'Editing over Bluetooth for customers: Axe-Fx III', pin: 'EDIT_OPENED_AT.axefx3' })
+    for (const unit of ['vp4', 'am3', '', null, '__proto__', 'constructor']) {
+      assert.throws(() => editOpening(unit), /not a unit whose Edit over Bluetooth is built/, `${String(unit)} has an Edit over Bluetooth marker`)
+      assert.throws(() => editWords(unit), /not a unit whose Edit over Bluetooth is built/)
+    }
+    /* thresholdProblems itself, with a unit's words: the failure says that unit's row. */
+    assert.ok(thresholdProblems(ledgerBuilds(base, editOpening('fm3')), both('1.90.0'), '9.0.0', editWords('fm3'))[0]?.includes('"Editing over Bluetooth for customers: FM3"'), 'the rule does not say which row to write')
   })
 
   test('Edit opens over Bluetooth only through the switch, says what it does there, and keeps the computer’s jobs away', async () => {
     const app = flat('mobile/App.js')
-    assert.match(app, /\(!overBluetooth\(caps\) \|\| editOverBluetooth\(\)\) \? \(\) => setScreen\('edit'\)/)
+    assert.match(app, /overBluetooth: overBluetooth\(caps\), editOpen: editOverBluetooth\(\),/)
+    assert.match(app, /onOpenEdit=\{editOpens \? \(\) => setScreen\('edit'\)/)
     const lib = flat('mobile/src/lib/bluetooth.js')
     assert.match(lib, /export const editOverBluetooth = \(unit = saved\.unit\) => allowed === true && editOffered\(unit, \{ admin: allUnits, platform: Platform\.OS, installed: builtInVersion\(\) \}\)/)
     assert.match(lib, /edit: \(\) => editOverBluetooth\(unit\)/, 'the wire is not asked the switch at each request')
@@ -10969,6 +11367,135 @@ export function run(test) {
     assert.match(wire, /const g3Edit = am4 \? null : GEN3_EDIT\[unit\] \|\| null const editHere = am4 \|\| !!g3Edit const editOn = \(\) => editHere && \(typeof edit === 'function' \? edit\(\) === true : edit === true\)/, 'Edit over Bluetooth reaches a unit whose knobs are not built')
     const { GEN3_EDIT } = await import(WIRE)
     assert.deepEqual(Object.keys(GEN3_EDIT), ['fm3', 'fm9', 'axefx3'], 'a gen-3 unit’s Edit is not its own catalog’s')
+  })
+
+  /*
+   * "Why isn't the edit buttons working on iPad? They should work on all
+   * devices now." (Justin, 8 November 2026.) Nothing was wrong with the iPad:
+   * over Bluetooth or a USB cable Play drew no Edit at all where Edit is not
+   * open (every customer, every unit, until a store version opens it), and
+   * nothing said why. Now the button stays and a tap says so, in words that
+   * promise nothing the review notes do not cover.
+   */
+  test('Play’s Edit button says why where Edit does not open over Bluetooth or a cable, in one place, promising nothing', async () => {
+    const { editDoor } = await import('../mobile/src/lib/editDoor.js')
+    const ew = await import('../mobile/src/lib/editWords.js')
+    const { EDIT_UNITS } = await import('../mobile/src/lib/ble-rule.js')
+    /* The rule, run. Through the computer: opens, as it always has, on every unit, the VP4's included. */
+    const live = { bench: true, link: 'connected', down: false }
+    for (const vp4 of [false, true]) {
+      assert.deepEqual(editDoor({ ...live, vp4 }), { opens: true, explained: false, shuts: false }, 'Edit through the computer no longer opens')
+    }
+    /* The demo is its own far end, and never over Bluetooth. */
+    assert.deepEqual(editDoor({ bench: true, demo: true, link: 'off' }), { opens: true, explained: false, shuts: false })
+    /* Over Bluetooth or a cable, open for this account: opens, as before. */
+    assert.deepEqual(editDoor({ ...live, overBluetooth: true, editOpen: true, built: true }), { opens: true, explained: false, shuts: false })
+    /* Built and not open (every customer today): the button stays and says why. */
+    assert.deepEqual(editDoor({ ...live, overBluetooth: true, editOpen: false, built: true }), { opens: false, explained: true, shuts: true })
+    /* Never on a VP4, nor on a unit whose Edit is not built: no button, as before. */
+    assert.equal(editDoor({ ...live, overBluetooth: true, built: true, vp4: true }).explained, false, 'Play explains Edit on a VP4')
+    assert.equal(editDoor({ ...live, overBluetooth: true, built: false }).explained, false, 'Play explains Edit on a unit whose Edit is not built')
+    assert.deepEqual([...EDIT_UNITS], ['am4', 'fm3', 'fm9', 'axefx3'], 'a unit’s Edit is built that Play does not explain, or the VP4 is among them')
+    /* Nothing answering: no button at all, and Edit, if open, goes back to Play once the link is down long enough to mean it. */
+    for (const link of ['joining', 'no-answer', 'off', 'error']) {
+      assert.deepEqual(editDoor({ bench: true, link, down: false }), { opens: false, explained: false, shuts: false }, `a blink of ${link} takes Edit away`)
+      assert.deepEqual(editDoor({ bench: true, link, down: true }), { opens: false, explained: false, shuts: true }, `Edit stays up with the link ${link} and down`)
+    }
+    /* Off the bench switch, nothing. */
+    assert.equal(editDoor({ ...live, bench: false }).opens, false)
+
+    /* App.js asks it, names its answers, and hands Play the button by name. */
+    const app = flat('mobile/App.js')
+    assert.match(app, /import EditWhy from '\.\/src\/components\/EditWhy' import \{ editDoor \} from '\.\/src\/lib\/editDoor'/)
+    assert.match(app, /const editShut = screen === 'edit' && editHere\.shuts/)
+    assert.match(app, /useEffect\(\(\) => \{ if \(editShut\) setScreen\('stage'\) \}, \[editShut\]\)/, 'Edit stays up when its door shuts')
+    assert.match(app, /\{playOnScreen && editExplained \? <EditWhy at=\{editWhyAt\} cable=\{cableNow\} onDismiss=\{\(\) => setEditWhyAt\(0\)\} \/> : null\}/, 'Play’s line is not over Play, or not for the cable that is in')
+    assert.match(app, /const cableNow = useCableNow\(\)/)
+    assert.match(flat('mobile/src/lib/bluetooth.js'), /export const editBuiltFor = \(unit = saved\.unit\) => EDIT_UNITS\.includes\(unit\)/)
+    /* Play's own button is drawn as it always was: the same place, the same press. */
+    assert.match(flat('mobile/src/screens/Stage.js'), /const edit = onOpenEdit \? \( <Press grow label="Edit" icon=\{editIcon\} height=\{foot\} onPress=\{onOpenEdit\} \/> \) : null/)
+
+    /* The line, floated over Play and never in it, from the one place its words live. */
+    const why = flat('mobile/src/components/EditWhy.js')
+    assert.match(why, /import \{ EDIT_WHY_MS, editThroughComputer \} from '\.\.\/lib\/editWords'/)
+    assert.match(why, /const words = at \? editThroughComputer\(\{ cable \}\) : null/)
+    assert.match(why, /<Toast open=\{showing\} yields>/, 'the line pushes Play’s fault card aside, or is drawn into the page')
+
+    /* The words: one sentence, the connection's own name in it, and nothing promised. */
+    const blue = ew.editThroughComputer({ cable: false })
+    const cable = ew.editThroughComputer({ cable: true })
+    assert.equal(blue, 'Editing works through a computer. Over Bluetooth, Play changes presets and scenes and turns effects on and off.')
+    assert.equal(cable, 'Editing works through a computer. On the USB cable, Play changes presets and scenes and turns effects on and off.')
+    assert.ok(!/Bluetooth/.test(cable), 'the cable’s line says Bluetooth')
+    for (const line of [blue, cable]) {
+      assert.ok(!/\byet\b|coming|soon|for now|\bnot yet\b/i.test(line), `the line promises editing later: ${line}`)
+      assert.ok(!/\b(AM4|FM3|FM9|Axe-Fx|VP4)\b/.test(line), `the line names a unit: ${line}`)
+      assert.ok(!/this phone/i.test(line), `“this phone”: ${line}`)
+      assert.ok(line.split(/\s+/).length <= 25, `the line is long to read over Play: ${line}`)
+    }
+    /* One place: no screen types the sentence itself. */
+    const walk = (dir, out = []) => {
+      for (const e of readdirSync(dir)) {
+        const full = join(dir, e)
+        if (statSync(full).isDirectory()) walk(full, out)
+        else if (/\.(js|jsx|mjs)$/.test(e)) out.push(full)
+      }
+      return out
+    }
+    const root = fileURLToPath(new URL('../mobile/', import.meta.url))
+    const typed = [join(root, 'App.js'), ...walk(join(root, 'src'))].filter((f) => readFileSync(f, 'utf8').includes('Editing works through a computer'))
+    assert.deepEqual(typed.map((f) => f.slice(root.length)), [join('src', 'lib', 'editWords.js')], 'Play’s line is typed in more than one place')
+  })
+
+  test('the Bluetooth page’s editing lines follow the switch: today’s words exactly on every customer copy, what Edit does where it opens', async () => {
+    const ew = await import('../mobile/src/lib/editWords.js')
+    const { editOffered, EDIT_FROM_STORE } = await import('../mobile/src/lib/ble-rule.js')
+    /* Closed: today's words, letter for letter. */
+    assert.equal(ew.editingLine(false), 'No editing or saving over Bluetooth.')
+    assert.equal(ew.limitsLine(false), 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. No editing or saving.')
+    /* Open: what Edit does, and that nothing saves. */
+    assert.equal(ew.editingLine(true), 'Knobs, models and effects on and off change in Edit. No saving over Bluetooth: save on the unit itself.')
+    assert.equal(ew.limitsLine(true), 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. Knobs, models and effects on and off change in Edit. No saving over Bluetooth: save on the unit itself.')
+    /* Anything but a yes is closed. */
+    for (const v of [undefined, null, 0, 'yes', 1]) {
+      assert.equal(ew.editingLine(v), ew.NO_EDITING_LINE)
+      assert.equal(ew.limitsLine(v), ew.LIMITS_CLOSED)
+    }
+    /* A customer copy, as the switch stands: closed on every unit on every copy, so the page says today's words. */
+    for (const unit of [...Object.keys(EDIT_FROM_STORE), 'vp4']) {
+      for (const platform of ['ios', 'android']) {
+        for (const installed of ['1.89.0', '1.89.36', '1.90.0', '9.0.0', null]) {
+          const open = editOffered(unit, { admin: false, platform, installed })
+          if (Object.values(EDIT_FROM_STORE).every((v) => v === null)) assert.equal(open, false, `${unit} ${platform} ${installed}: a customer is offered Edit over Bluetooth by update`)
+          if (!open) {
+            assert.equal(ew.editingLine(open), 'No editing or saving over Bluetooth.')
+            assert.equal(ew.limitsLine(open), ew.LIMITS_CLOSED)
+          }
+        }
+      }
+    }
+    /* The VP4's own words, the same whatever the switch says, and its Edit never built. */
+    assert.equal(editOffered('vp4', { admin: true }), false)
+    /* The page asks the switch for the unit picked, and draws both lines from it. */
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    const limits = page.slice(page.indexOf('export function BluetoothLimits('), page.indexOf('function Bullet('))
+    assert.match(limits, /const editOpen = editOverBluetooth\(b\.unit\)/)
+    assert.ok(limits.includes('{vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen)}'))
+    assert.ok(limits.includes('{[editingLine(editOpen), ...DIFFERENT].map('))
+    assert.ok(!code('mobile/src/screens/Bluetooth.js').includes('No editing or saving'), 'the page types the closed words itself, beside the switch’s')
+    /* And nothing open promises a unit, or saving. */
+    assert.ok(!/\b(AM4|FM3|FM9|Axe-Fx|VP4)\b|\byet\b|coming/i.test(ew.EDITING_LINE + ew.LIMITS_OPEN))
+  })
+
+  test('Edit’s refusals over the wire name no connection: the same words over Bluetooth and a USB cable', () => {
+    const lines = []
+    for (const f of ['mobile/src/lib/gen3-edit.js', 'mobile/src/lib/am4-edit.js', 'mobile/src/lib/bleWire.js']) {
+      for (const m of code(f).matchAll(/(?:refused: |badInput\()(['`])((?:(?!\1).)*)\1/g)) lines.push([f, m[2]])
+    }
+    const edits = lines.filter(([, l]) => /can’t (?:open|change) block|isn’t one the app can change/.test(l))
+    assert.equal(edits.length, 6, `Edit has another refusal to hold: ${edits.map(([, l]) => l).join(' | ')}`)
+    for (const [f, l] of edits) assert.ok(!/bluetooth|usb|cable|adapter/i.test(l), `${f}: an Edit refusal names the connection: ${l}`)
+    assert.ok(edits.every(([, l]) => /from here/.test(l)), 'an Edit refusal no longer says where')
   })
   /* ---------------------------------------------------------------- */
   /* Edit over Bluetooth: the FM3's knobs                               */
