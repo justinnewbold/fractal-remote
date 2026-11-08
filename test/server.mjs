@@ -1206,6 +1206,100 @@ export function run(test) {
    * 2026). 20261101_setup_timing.sql replaces the two functions that say
    * when, and nothing else in them.
    */
+  /*
+   * EDITING OVER BLUETOOTH IN THE SETUP EMAILS, OFF UNTIL THE STORE VERSION
+   * THAT OPENS IT IS IN BOTH STORES. Edit opens over Bluetooth to customers
+   * in 1.90.0 (mobile/src/lib/ble-rule.js EDIT_FROM_STORE, every unit whose
+   * Edit is built). The email cannot tell which store copy a buyer holds,
+   * and a 1.89.3 or 1.89.36 copy keeps Edit closed, so the one sentence that
+   * says Edit opens over it waits behind its own switch, EDIT_IN_EMAILS, for
+   * the same day the Bluetooth paragraph waited for: the version it names
+   * live in both stores, and the build whose row opened every unit it names.
+   */
+  const editEmailProblems = ({ on, from, stores, text, units, named }, isOlder, { editOpening, EDIT_UNIT_NAMES: NAMED }) => {
+    const out = []
+    /* The sentence's units are the switch's at EDIT_FROM, switch on or off: the email says one version, for both phones. */
+    for (const unit of named) {
+      for (const p of ['ios', 'android']) if ((units?.[unit]?.[p] ?? null) !== from) out.push(`${unit}: the email says Edit opens over Bluetooth on it from ${from}, and EDIT_FROM_STORE says ${units?.[unit]?.[p] ?? null} on ${p}`)
+    }
+    for (const [unit, at] of Object.entries(units || {})) {
+      if (at && at.ios === from && at.android === from && !named.includes(unit)) out.push(`${unit}: EDIT_FROM_STORE opens it from ${from}, and the email’s Edit sentence leaves it out`)
+    }
+    if (!on) return out
+    for (const p of ['ios', 'android']) {
+      if (isOlder(stores?.[p], from) !== false) out.push(`${p}: the emails say Edit opens over Bluetooth from ${from}, and public/store-versions.json says ${stores?.[p]}`)
+      for (const unit of named) {
+        if (!ledgerBuilds(text, editOpening(unit)).some((b) => b.platform === p && b.version === from && b.opening)) out.push(`${p}: the emails say Edit opens over Bluetooth on the ${NAMED[unit] ?? unit} from ${from}, and docs/expo-builds.md has no ${p} build of ${from} whose row opens it ("Editing over Bluetooth for customers: …")`)
+      }
+    }
+    return out
+  }
+
+  test('the setup emails say Edit opens over Bluetooth only behind their own switch, from EDIT_FROM, on the units the switch opens there, never the VP4', async () => {
+    const { setupEmail, BLUETOOTH_FROM, EDIT_FROM, EDIT_IN_EMAILS, BLUETOOTH_IN_EMAILS } = await setupWords()
+    const ledger = await import('./ledger.mjs')
+    const { EDIT_FROM_STORE } = await import('../mobile/src/lib/ble-rule.js')
+    const { isOlder } = await import('../shared/versions.mjs')
+    const fn = code(read('supabase/functions/setup-reminder/index.ts'))
+    /* Its own literal, beside BLUETOOTH_FROM, and one plain switch. */
+    assert.equal(EDIT_FROM, '1.90.0', 'the version Edit over Bluetooth opens in moved; the email says it, so it moves on purpose, with EDIT_FROM_STORE')
+    assert.match(fn, /^export const BLUETOOTH_FROM = '\d+\.\d+\.\d+'\s+export const EDIT_FROM = '\d+\.\d+\.\d+'$/m, 'EDIT_FROM is not its own literal next to BLUETOOTH_FROM')
+    assert.equal((fn.match(/\bEDIT_IN_EMAILS\s*=/g) || []).length, 1, 'the editing switch is set in more than one place')
+    assert.match(fn, /^export const EDIT_IN_EMAILS = (true|false)$/m, 'the editing switch is not a plain true or false')
+
+    /* The sentence, exactly, and the units it names. */
+    const editLine = `From version ${EDIT_FROM} you can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself).`
+    const on = setupEmail('first', 'fan@example.com', { bluetooth: true, editing: true })
+    const off = setupEmail('first', 'fan@example.com', { bluetooth: true, editing: false })
+    assert.ok(on.text.includes(`on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). ${editLine} On an FM3, use a CME U2MIDI Pro`), 'the Bluetooth paragraph with editing is not the planned sentence, after the VP4’s scope and before the FM3’s warning')
+    assert.ok(on.html.includes(editLine), 'the HTML email leaves out the editing sentence')
+    assert.ok(!/no editing or saving/.test(on.text), 'the email says there is no editing beside the sentence that says there is')
+    assert.ok(off.text.includes('(on a VP4, presets and scenes only), with no editing or saving. On an FM3') && !off.text.includes(editLine), 'with editing off, the Bluetooth paragraph is not what it was')
+    assert.ok(!/\bworks? (on|with)\b|\bbeta\b|\btried\b/i.test(editLine), 'the editing sentence says it works, calls it a beta, or says what has been tried')
+    assert.ok(!/VP4/.test(editLine), 'the editing sentence names the VP4, which has no Edit over Bluetooth')
+    const NAMES = { am4: 'AM4', fm3: 'FM3', fm9: 'FM9', axefx3: 'Axe-Fx III' }
+    const named = Object.keys(NAMES).filter((u) => new RegExp(`\\b${NAMES[u]}\\b`).test(editLine))
+    assert.deepEqual(named, Object.keys(EDIT_FROM_STORE), 'the editing sentence names other units than the ones whose Edit is built')
+    /* Editing never without the Bluetooth paragraph it sits in. */
+    assert.deepEqual(setupEmail('first', 'fan@example.com', { bluetooth: false, editing: true }), setupEmail('first', 'fan@example.com', { bluetooth: false, editing: false }), 'the computer-only email changes with the editing switch')
+    /* The emails as they go are both switches'. */
+    for (const kind of ['first', 'reminder']) {
+      assert.deepEqual(setupEmail(kind, 'fan@example.com'), setupEmail(kind, 'fan@example.com', { bluetooth: BLUETOOTH_IN_EMAILS, editing: EDIT_IN_EMAILS }), `the ${kind} email is not the switches’ wording`)
+    }
+    if (!EDIT_IN_EMAILS) assert.ok(!setupEmail('first', 'fan@example.com').text.includes(editLine), 'a real email says Edit opens over Bluetooth with the switch off')
+
+    /* The rule, on the files as they are: the sentence's units are the switch's at EDIT_FROM, and on only on the day. */
+    const today = { on: EDIT_IN_EMAILS, from: EDIT_FROM, stores: JSON.parse(read('public/store-versions.json')), text: read('docs/expo-builds.md'), units: EDIT_FROM_STORE, named }
+    assert.deepEqual(editEmailProblems(today, isOlder, ledger), [])
+    assert.notEqual(isOlder(EDIT_FROM, BLUETOOTH_FROM), true, 'the email says Edit opens over Bluetooth before Bluetooth itself')
+
+    /* And on the days it is there for, on made-up files. */
+    const row = (version, why) => `| 20 Nov | ${version} | 1 | 1 | ${why} |`
+    const base = read('docs/expo-builds.md')
+    const four = `${base}\n${row('1.90.0', `${ledger.EDIT_MARKER}: AM4, FM3, FM9 and Axe-Fx III. The pair`)}\n`
+    const two = `${base}\n${row('1.90.0', `${ledger.EDIT_MARKER}: AM4, FM3. The pair`)}\n`
+    const live = { ios: '1.90.0', android: '1.90.0' }
+    const day = { ...today, on: true, stores: live, text: four }
+    const problems = (change) => editEmailProblems({ ...day, ...change }, isOlder, ledger)
+    assert.deepEqual(problems({}), [], 'the day 1.90.0 is live in both stores, its row opening all four, the switch is refused')
+    assert.ok(problems({ stores: { ios: '1.90.0', android: '1.89.36' } }).some((p) => /^android: .*1\.89\.36/.test(p)), 'the switch goes on with Google Play still on 1.89.36')
+    assert.ok(problems({ stores: { ios: '1.89.3', android: '1.90.0' } }).some((p) => /^ios: .*1\.89\.3/.test(p)), 'the switch goes on with the App Store still on 1.89.3')
+    assert.ok(problems({ text: two }).some((p) => /the FM9 from 1\.90\.0, and docs\/expo-builds\.md has no ios build/.test(p)), 'the switch goes on for a row that opened two of the four units the email names')
+    assert.ok(problems({ text: base }).length >= 8, 'the switch goes on with no row at all')
+    assert.ok(problems({ on: false, units: { ...EDIT_FROM_STORE, fm9: null } }).some((p) => /^fm9: the email says Edit opens over Bluetooth on it from 1\.90\.0, and EDIT_FROM_STORE says null/.test(p)), 'the email names a unit the switch leaves closed')
+    assert.ok(problems({ on: false, named: ['am4', 'fm3', 'fm9'] }).some((p) => /^axefx3: EDIT_FROM_STORE opens it from 1\.90\.0, and the email’s Edit sentence leaves it out/.test(p)), 'the email leaves out a unit the switch opens')
+
+    /* And the day is written down, in the same order as Bluetooth's: off, redeploy, the sample read, on. */
+    const readme = read('supabase/README.md').replace(/\s+/g, ' ')
+    const at = readme.indexOf('### Editing in the emails, from 1.90.0')
+    assert.ok(at > readme.indexOf('### Bluetooth in the emails, from 1.89.0'), 'supabase/README.md does not say how the editing sentence goes on')
+    const section = readme.slice(at, readme.indexOf('## ', at + 4))
+    assert.match(section, /`EDIT_IN_EMAILS = false`/)
+    const steps = ['set `EDIT_IN_EMAILS = true`', 'Turn the setup emails off', '`supabase functions deploy setup-reminder --no-verify-jwt`', 'Send me a sample of both emails', 'Turn the setup emails on again'].map((s) => section.indexOf(s))
+    assert.ok(steps.every((i) => i > 0), 'the README’s editing steps leave one out')
+    assert.deepEqual([...steps].sort((a, b) => a - b), steps, 'the README redeploys before the setup emails are off, or turns them on before the sample is read')
+  })
+
   test('the first setup email waits two days, the reminder a week after it, and nothing else in the rule moved', () => {
     const before = sqlOf(SETUP_SQL)
     const after = sqlOf('supabase/migrations/20261101_setup_timing.sql')

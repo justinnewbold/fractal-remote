@@ -622,13 +622,30 @@ the rules about Fractal's logos, and Apple's, Microsoft's and Linux's, are
 unchanged.
 
 **Edit over Bluetooth and USB: the AM4, FM3, FM9 and Axe-Fx III, his
-account until a store version opens each.**
+account on every copy, and every customer from store version 1.90.0.**
 
 > "I have an FM3 and AM4 I can test on. But I wanna make it an easy switch
 > if it works to be able to get it out to everyone"
 
 > "Push the edit over Bluetooth and USB to FM9 and AxeFX 3 as the over the
 > air update asap." (8 November 2026)
+
+> "I'm fine with turning them on for those devices that we haven't actually
+> turned on Bluetooth yet. It says it's in beta, so if there's problems,
+> they can notify us." (8 November 2026)
+
+So the 1.90.0 build pull request sets all four entries of `EDIT_FROM_STORE`
+to 1.90.0 on both phones, with no hardware check first on the FM9 and the
+Axe-Fx III, and its texts (docs/app-store.md, *1.90.0: Editing over
+Bluetooth for customers*) say Edit opens over Bluetooth on those four, the
+cable said once as doing what Bluetooth does, Edit included. Copies built
+before 1.90.0 (the App Store's 1.89.3, Google Play's 1.89.36) take that
+update and stay closed. Never the VP4. The ledger's row and
+`EDIT_OPENED_AT` come in the first pull request after the build is
+started, and from then on no entry is moved or set back by an update. The
+website's editing words (bluetooth.html, bluetooth-guide.html,
+support.html) and the setup email's editing sentence (`EDIT_IN_EMAILS`)
+wait for the live day, since a merge publishes them before review.
 
 Since 29 October 2026 Edit opens over Bluetooth on an AM4 and an FM3 for
 his account (by update, on every copy), and since 8 November 2026 on an
@@ -688,8 +705,8 @@ what the computer sends for the same edit, and a test holds it there.
 - **Each unit opens on its own entry** in `EDIT_FROM_STORE` (`am4`,
   `fm3`, `fm9`, `axefx3`), so any one can go out to everyone without the
   others: test/ledger.mjs `editProblems` asks each unit on the rows that
-  name it, its own entry and its own pin, so the AM4 and the FM3 can open
-  in 1.90.0 with the FM9 and the Axe-Fx III left null.
+  name it, its own entry and its own pin. 1.90.0 opens all four together
+  (Justin's call, 8 November 2026, above).
 - **Where Edit is closed over Bluetooth or a cable, Play's Edit says why.**
   "Why isn't the edit buttons working on iPad?" (8 November 2026): it was
   never the iPad, the button was simply not drawn. On the four units whose

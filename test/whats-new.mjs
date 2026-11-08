@@ -18,6 +18,37 @@ const older = (a, b) => {
   return false
 }
 
+/*
+ * WHAT A LINE MAY PROMISE OF EDITING OVER BLUETOOTH, as one rule: null when
+ * nothing is wrong, or why. Edit opens over Bluetooth (and on a unit's own
+ * USB cable, the same wire) to a customer only on a copy whose built-in
+ * store version is at or above that unit's entry in EDIT_FROM_STORE
+ * (mobile/src/lib/ble-rule.js), and every line here reaches every copy by
+ * update. So a line that promises it names the store version it opens
+ * from ("From version 1.90.0 of the app"), names the units, and every unit
+ * it names is keyed on each phone the line is shown on (`only`, or both) at
+ * that version or below. Never a VP4, whose Edit is not built. A line that
+ * says there is no editing or saving promises nothing.
+ */
+const EDIT_NAMES = { am4: 'AM4', fm3: 'FM3', fm9: 'FM9', axefx3: 'Axe-Fx III' }
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+export function editPromiseProblem(text, only, units) {
+  const said = String(text).replace(/no editing or saving/gi, '')
+  if (!/edit[^.]*over bluetooth|bluetooth[^.]*\bediting\b(?! or saving)/i.test(said)) return null
+  if (/\bVP4\b/.test(said)) return 'promises editing over Bluetooth beside a VP4, which has none'
+  const from = said.match(/\bfrom version (\d+\.\d+\.\d+)\b/i)?.[1] ?? null
+  if (!from) return 'promises editing over Bluetooth without the store version that opens it ("From version 1.90.0 of the app")'
+  const named = Object.keys(EDIT_NAMES).filter((u) => new RegExp(`\\b${escape(EDIT_NAMES[u])}\\b`).test(said))
+  if (named.length === 0) return 'promises editing over Bluetooth and names no unit it opens on'
+  for (const unit of named) {
+    for (const phone of only ? [only] : ['ios', 'android']) {
+      const at = units?.[unit]?.[phone] ?? null
+      if (at === null || older(from, at)) return `promises editing over Bluetooth on the ${EDIT_NAMES[unit]} from ${from}, and EDIT_FROM_STORE opens it ${at === null ? `nowhere on ${phone}` : `from ${at} on ${phone}`}`
+    }
+  }
+  return null
+}
+
 export function run(test) {
   test('the list is newest first, each day a real date and a version no newer than the app’s, and the app shows a short run of it', async () => {
     const list = JSON.parse(read('shared/whats-new.json'))
@@ -40,8 +71,9 @@ export function run(test) {
     assert.equal(dayWords('2026-11-01'), '1 November 2026')
   })
 
-  test('every line is plain, short, and says nothing a player is not to read', () => {
+  test('every line is plain, short, and says nothing a player is not to read', async () => {
     const list = JSON.parse(read('shared/whats-new.json'))
+    const { EDIT_FROM_STORE } = await import('../mobile/src/lib/ble-rule.js')
     const OTHER_PHONES = { ios: /android|google|play store|\bapk\b/i, android: /iphone|\bipad|apple watch|\bsiri\b|\bios\b|testflight|app store/i }
     for (const d of list.days) {
       for (const line of d.lines) {
@@ -59,10 +91,42 @@ export function run(test) {
         assert.ok(!/\btried\b|\btested\b|not tried/i.test(text), `${d.date}: says what has been tried, which is the Developer page’s: ${text}`)
         assert.ok(!/developer|admin|his account|justin/i.test(text), `${d.date}: names something only the developer has: ${text}`)
         assert.ok(!/\b(OTA|EAS|SysEx|fingerprint|commit|pull request|CI|PR)\b/.test(text), `${d.date}: developer words: ${text}`)
-        /* Editing over Bluetooth is his account's until a store version opens it (ble-rule EDIT_FROM_STORE). */
-        assert.ok(!/edit[^.]*over bluetooth|bluetooth[^.]*\bediting\b(?! or saving)/i.test(text.replace(/no editing or saving/gi, '')), `${d.date}: promises editing over Bluetooth: ${text}`)
+        /* Editing over Bluetooth is his account's until a store version opens it, one unit at a time (ble-rule EDIT_FROM_STORE). */
+        const why = editPromiseProblem(text, only, EDIT_FROM_STORE)
+        assert.equal(why, null, `${d.date}: ${why}: ${text}`)
       }
     }
+  })
+
+  test('a line may promise editing over Bluetooth only from the store version that opens it, on the units that version opens, and never on a VP4', () => {
+    /*
+     * The list reaches every copy by update, the 1.89.3 and 1.89.36 copies
+     * whose Edit stays closed among them, so the store version in the line
+     * is what keeps it true there. Tried on made-up switches and lines, so the
+     * rule is seen to refuse what it is for and to let the 1.90.0 line by.
+     */
+    const at = (v) => ({ ios: v, android: v })
+    const none = { am4: null, fm3: null, fm9: null, axefx3: null }
+    const four = { am4: at('1.90.0'), fm3: at('1.90.0'), fm9: at('1.90.0'), axefx3: at('1.90.0') }
+    const line = 'From version 1.90.0 of the app, Edit opens over Bluetooth on an AM4, FM3, FM9 or Axe-Fx III: turn knobs.'
+    assert.equal(editPromiseProblem(line, null, four), null, 'the 1.90.0 line is refused with all four keyed to 1.90.0')
+    assert.equal(editPromiseProblem('From version 1.91.2 of the app, Edit opens over Bluetooth on an AM4.', null, four), null, 'a later version than the entry is refused')
+    assert.equal(editPromiseProblem('No editing or saving over Bluetooth on an AM4.', null, none), null, 'a line that says there is no editing is read as a promise')
+    assert.equal(editPromiseProblem('Play’s Edit button no longer goes missing on Bluetooth or a USB cable.', null, none), null, 'a line about the Edit button is read as a promise')
+    for (const [text, units, only, pattern, why] of [
+      [line, none, null, /nowhere/, 'a line with every unit closed'],
+      [line, { ...four, fm9: null }, null, /FM9 from 1\.90\.0[^]*nowhere/, 'a line naming a unit left closed'],
+      [line, { ...four, axefx3: at('1.91.0') }, null, /Axe-Fx III from 1\.90\.0[^]*from 1\.91\.0/, 'a line older than the unit’s entry'],
+      [line, { ...four, am4: { ios: '1.90.0', android: null } }, null, /AM4[^]*nowhere on android/, 'a line for both phones where one phone is closed'],
+      ['Edit now opens over Bluetooth on an AM4, FM3, FM9 or Axe-Fx III.', four, null, /without the store version/, 'a line with no version'],
+      ['From version 1.90.0 of the app, Edit opens over Bluetooth.', four, null, /names no unit/, 'a line naming no unit'],
+      ['From version 1.90.0 of the app, Edit opens over Bluetooth on an AM4 and a VP4.', four, null, /VP4/, 'a line naming the VP4']
+    ]) {
+      const got = editPromiseProblem(text, only, units)
+      assert.ok(got && pattern.test(got), `${why} is let by: ${got}`)
+    }
+    /* A line for one phone is asked of that phone's entry alone. */
+    assert.equal(editPromiseProblem(line.replace('AM4, FM3, FM9 or Axe-Fx III', 'AM4'), 'ios', { ...four, am4: { ios: '1.90.0', android: null } }), null, 'an iPhone line is refused for Android’s entry')
   })
 
   test('the phone draws the newest days for its own platform, with All updates to the website’s page', async () => {

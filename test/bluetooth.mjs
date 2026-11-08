@@ -11943,8 +11943,17 @@ export function run(test) {
     }
   })
 
-  test('a unit on its own USB cable is the same wire: Edit opens there on the same rule, his account only, and never for a customer', async () => {
+  test('a unit on its own USB cable is the same wire: Edit opens there on the same rule, his account on every copy, a customer only where the switch opens it', async () => {
     const { ADMINS } = await import('../shared/admin.mjs')
+    /*
+     * A customer's answer is the switch's (ble-rule EDIT_FROM_STORE), asked
+     * of the copy's built-in version, never a value pinned here: until the
+     * 1.90.0 build pull request this said "never for a customer", which was
+     * the switch while it was null, and would have refused the one change
+     * that is allowed to open it. The copy Google Play has (1.89.36), reviewed
+     * with no editing over Bluetooth, stays closed whatever the switch says.
+     */
+    const { editOffered } = await import('../mobile/src/lib/ble-rule.js')
     const cables = [
       { os: 'ios', unit: 'fm9', adapter: { id: '71:72', name: 'FM9', offline: false, driver: 'com.apple.AppleMIDIUSBDriver' } },
       { os: 'ios', unit: 'axefx3', adapter: { id: '73:74', name: 'Axe-Fx III', offline: false, driver: 'com.apple.AppleMIDIUSBDriver' } },
@@ -11969,8 +11978,11 @@ export function run(test) {
         try {
           theirs.ble.allowBluetooth('0b6c7a51-8f1e-4c2a-9d3b-5e7f9a1c2d4e')
           await theirs.ble.restoreBluetooth()
-          assert.equal(theirs.ble.editOverBluetooth(), false, `${c.os} ${installed}: a customer is offered Edit on the ${c.unit} on its cable, before a store version opens it`)
-          for (const unit of ['am4', 'fm3', 'fm9', 'axefx3']) assert.equal(theirs.ble.editOverBluetooth(unit), false, `a customer is offered Edit on the ${unit}`)
+          const opens = (unit) => editOffered(unit, { admin: false, platform: c.os, installed })
+          assert.equal(theirs.ble.editOverBluetooth(), opens(c.unit), `${c.os} ${installed}: a customer’s Edit on the ${c.unit} on its cable is not what the switch says for that copy`)
+          for (const unit of ['am4', 'fm3', 'fm9', 'axefx3']) assert.equal(theirs.ble.editOverBluetooth(unit), opens(unit), `${c.os} ${installed}: a customer’s Edit on the ${unit} is not what the switch says for that copy`)
+          if (installed === '1.89.36') assert.equal(theirs.ble.editOverBluetooth(), false, `${c.os} 1.89.36: a copy reviewed with no editing over Bluetooth is offered Edit on the ${c.unit} on its cable by update`)
+          assert.equal(theirs.ble.editOverBluetooth('vp4'), false)
         } finally {
           theirs.done()
         }

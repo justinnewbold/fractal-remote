@@ -1,6 +1,17 @@
 {
   "days": [
     {
+      "date": "2026-11-09",
+      "day": "9 November 2026",
+      "version": "1.90.0",
+      "lines": [
+        {
+          "text": "From version 1.90.0 of the app, Edit opens over Bluetooth on an AM4, FM3, FM9 or Axe-Fx III: turn knobs, change models, switch blocks on and off and pick channels, and a unit on a USB cable does the same. Changes play right away; save on the unit to keep them. Update the app from the store to get it.",
+          "only": null
+        }
+      ]
+    },
+    {
       "date": "2026-11-08",
       "day": "8 November 2026",
       "version": "1.89.75",
@@ -227,33 +238,6 @@
       "lines": [
         {
           "text": "Less to read: the Bluetooth page, Settings, the purchase page and Edit say the same things in fewer words.",
-          "only": null
-        }
-      ]
-    },
-    {
-      "date": "2026-10-29",
-      "day": "29 October 2026",
-      "version": "1.89.12",
-      "lines": [
-        {
-          "text": "One screen for feedback and problem reports: type what happened, add a photo or video, and choose whether to include your email and the app’s log.",
-          "only": null
-        },
-        {
-          "text": "New, and only if you say yes: share which gear works with Fractal Remote, to help build a list of everything that works. It is not linked to you. Settings → Troubleshooting → Share what gear works.",
-          "only": null
-        },
-        {
-          "text": "Settings sections fold open and closed, so the list is shorter.",
-          "only": null
-        },
-        {
-          "text": "The quick preset jump numbers are no longer cut off on smaller screens.",
-          "only": null
-        },
-        {
-          "text": "Edit’s beta note has an X, and stays closed once you close it.",
           "only": null
         }
       ]
