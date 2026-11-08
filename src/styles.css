@@ -15811,3 +15811,94 @@ button.unit-card-how-link {
   color: var(--signal);
   font-weight: 700;
 }
+
+/*
+ * CHOOSE A NEW PASSWORD (components/ResetPassword): the page the reset
+ * email's link opens, drawn in the app's place for that one visit. A page
+ * of its own in the startup card's materials and at its width, with a 16px
+ * gutter on a phone, scrolling when a phone's keyboard takes half the
+ * screen. The boxes are Sign in's own (.signin-field), at the 16px floor
+ * that keeps iOS from zooming on them.
+ */
+.reset {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  justify-items: center;
+  padding: var(--s-5) var(--s-4);
+  background: var(--chassis);
+  overflow: auto;
+}
+/* Centred by its margins, not by the grid: taller than the screen (a phone
+   with its keyboard up), it starts at the top and scrolls, where a centred
+   one would hang its title above the top edge, out of reach. */
+.reset-card {
+  margin: auto 0;
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--panel);
+}
+.reset-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--f-6);
+  line-height: 1.15;
+}
+.reset-words {
+  margin: 0;
+  color: var(--silk);
+  font-size: var(--f-4);
+  line-height: 1.5;
+}
+.reset-for {
+  margin: 0;
+  color: var(--silk-dim);
+  font-size: var(--f-3);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.reset-show {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 44px;
+  color: var(--silk-dim);
+  font-size: var(--f-3);
+  cursor: pointer;
+}
+.reset-show input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--signal);
+}
+.reset-card .reset-hint,
+.reset-card .problem {
+  margin: 0;
+}
+.reset-go {
+  width: 100%;
+  min-height: 48px;
+  font-size: var(--f-4);
+}
+.reset-small {
+  margin: 0;
+  color: var(--silk-faint);
+  font-size: var(--f-1);
+  line-height: 1.5;
+}
+@media (max-width: 420px) {
+  .reset {
+    padding: var(--s-4);
+  }
+  .reset-card {
+    margin: 0;
+    padding: var(--s-4);
+  }
+}

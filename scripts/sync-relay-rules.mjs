@@ -190,6 +190,12 @@ export const FILES = [
    */
   { source: '../shared/account-name.mjs', target: '../mobile/src/lib/account-name.js' },
   /*
+   * What Forgot password? says once the email has gone: its button, the page
+   * it opens on the website, then sign in with the new password. Both ends
+   * send the same email to the same page, and say the same three steps.
+   */
+  { source: '../shared/password-reset.mjs', target: '../mobile/src/lib/password-reset.js' },
+  /*
    * The account's profile photo: its bucket and its one place there, how
    * small it is made, how the copy kept on the phone is read back, and when
    * the top bar draws its circle. The phone's alone to draw; shared so the

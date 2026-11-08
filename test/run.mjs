@@ -6815,6 +6815,10 @@ console.log('\nthe seven-day free trial: one per account and device, seven days,
 const { run: trial } = await import('./trial.mjs')
 trial(test)
 
+console.log('\nForgot password?: the email’s link opens a page to choose a new password')
+const { run: passwordReset } = await import('./password-reset.mjs')
+passwordReset(test)
+
 test('both file kinds are listed and told apart', async () => {
   // A .syx goes back to the unit verbatim; a design re-validates first. Load
   // treating one as the other would either corrupt or silently no-op.

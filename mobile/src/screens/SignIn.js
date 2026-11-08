@@ -28,6 +28,7 @@ import checkIcon from '../../assets/icons/check.png'
 import externalIcon from '../../assets/icons/external.png'
 import { deviceNoun } from '../lib/device-word'
 import { NAME_HINTS, NAME_MAX, nameProblem } from '../lib/account-name'
+import { RESET_SENT } from '../lib/password-reset'
 
 /**
  * One account, two ends.
@@ -216,7 +217,8 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
     setError(null)
     try {
       await sendPasswordReset(email.trim())
-      setNote('Check your email for a link to set a new password.')
+      /* What the email's button does and where the new password goes (shared/password-reset.mjs). */
+      setNote(RESET_SENT)
     } catch (err) {
       setError(err.message)
     } finally {

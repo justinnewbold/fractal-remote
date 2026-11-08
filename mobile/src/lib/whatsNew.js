@@ -12,7 +12,7 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-08",
     "day": "8 November 2026",
-    "version": "1.89.75",
+    "version": "1.89.77",
     "lines": [
       {
         "text": "On an Axe-Fx III over Bluetooth or a USB cable, Play now shows the NAM blocks from firmware 33 (NAM and NAM 2) and the IR Player block, and turns them on and off like your other effects.",
@@ -35,7 +35,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "On the website, How it works now opens on Bluetooth, as in the app: a Bluetooth adapter on your unit and the free app on your phone or tablet, with buttons to download it. Tap Computer for the computer way.",
+        "text": "On the website, How it works now opens on Bluetooth, as in the app: a Bluetooth adapter on your unit and the free app on your phone or tablet, with buttons to download it. Tap Computer for the computer way. Forgot password? now works: its email opens a page to choose a new password.",
         "only": null
       }
     ]
