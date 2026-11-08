@@ -1784,6 +1784,24 @@ export function run(test) {
     assert.deepEqual(t.frames().map(hex), [t.sx.buildGetPreset(0x11), t.sx.buildGetScene(0x11), t.sx.buildGetTempo(0x11)].map(hex))
   })
 
+  test('a block this app has no name for is said in the log by its number, once, and left off the chain', async () => {
+    /* The Axe-Fx III's NAM block (firmware 33) came in every status answer and reached no log: its number is what naming it needs. 201: nobody's id. */
+    const t = await onTheLine('fm3')
+    t.unit.state.blocks.push({ eid: 201, bypassed: false, channel: 1 })
+    const chain = await t.get('/preset/blocks')
+    assert.ok(!chain.some((b) => b.effectId === 201), 'a block the app has no name for was put on the chain')
+    const said = () => t.logs.filter((l) => /no name for yet/.test(l))
+    assert.equal(said().length, 1, `the unknown block was not said once: ${t.logs.join(' | ')}`)
+    assert.match(said()[0], /id 201 \(on, channel B\)/)
+    await t.get('/preset/blocks')
+    assert.equal(said().length, 1, 'the same unknown block was said again on the next read')
+    /* Switched on the unit: said again, as it is now. */
+    t.unit.state.blocks.find((b) => b.eid === 201).bypassed = true
+    await t.get('/preset/blocks')
+    assert.equal(said().length, 2)
+    assert.match(said()[1], /id 201 \(off, channel B\)/)
+  })
+
   test('the chain answer leaves out the input, the output and the looper', async () => {
     const t = await onTheLine('fm3', { looper: true })
     const chain = await t.get('/preset/blocks')
