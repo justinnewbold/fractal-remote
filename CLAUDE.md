@@ -690,6 +690,18 @@ what the computer sends for the same edit, and a test holds it there.
   others: test/ledger.mjs `editProblems` asks each unit on the rows that
   name it, its own entry and its own pin, so the AM4 and the FM3 can open
   in 1.90.0 with the FM9 and the Axe-Fx III left null.
+- **Where Edit is closed over Bluetooth or a cable, Play's Edit says why.**
+  "Why isn't the edit buttons working on iPad?" (8 November 2026): it was
+  never the iPad, the button was simply not drawn. On the four units whose
+  Edit is built, the button stays and a tap says "Editing works through a
+  computer" and what Play does over Bluetooth (or on the USB cable), from
+  mobile/src/lib/editWords.js and nowhere else; never on a VP4, and never a
+  "yet", a "coming" or a unit named as editing over Bluetooth. The rule is
+  mobile/src/lib/editDoor.js, which also takes Edit back to Play when its
+  door shuts while it is open (the link down past LINK_DOWN_HOLD_MS, or a
+  move to Bluetooth where Edit is closed). The Bluetooth page's editing
+  lines follow the same switch (`editingLine`, `limitsLine`): closed, its
+  words are exactly what every customer copy has always shown.
 
 **Fractal Audio wrote on 18 October 2026, and the app does what it asked,
 except the name.** Their letter on Approved Vendor status asked for a clear

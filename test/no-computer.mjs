@@ -1136,7 +1136,9 @@ export function run(test) {
     assert.deepEqual([...at].sort((a, b) => a - b), at, 'the line says them out of order: Bluetooth is not before what a computer adds')
     /* What a computer adds, only as far as the Bluetooth page itself says Bluetooth lacks it. */
     const page = read('mobile/src/screens/Bluetooth.js')
-    assert.ok(page.includes("'No editing or saving over Bluetooth.'"), 'the Bluetooth page no longer says there is no editing or saving; the line should not either')
+    /* Its editing line by the switch (lib/editWords editingLine), closed on every customer copy: no editing or saving. */
+    assert.ok(page.includes('{[editingLine(editOpen), ...DIFFERENT].map('), 'the Bluetooth page no longer says what editing does over Bluetooth')
+    assert.equal((await import('../mobile/src/lib/editWords.js')).editingLine(false), 'No editing or saving over Bluetooth.', 'the Bluetooth page no longer says there is no editing or saving; the line should not either')
     assert.ok(page.includes("'Slower to load the preset list.'"), 'the Bluetooth page no longer says the preset list is slow to load; the line’s “less lag” stands on it')
     assert.ok(page.includes("'Footswitch changes may take a moment to show.'"), 'the Bluetooth page no longer says footswitch changes come late; the line’s “less lag” stands on it')
     /* Where it sends them is a row that is there: Bluetooth, under My rig. */

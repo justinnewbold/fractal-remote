@@ -1189,7 +1189,10 @@ export function run(test) {
     assert.ok(!/nothing to connect to/.test(first.text + reminder.text), 'with Bluetooth in the emails, an AM4 owner is told their phone has nothing to connect to')
     /* What it costs is only what the app's Bluetooth page says (more lag: the preset list slow to load and footswitch changes a moment late), and the row it names is there. */
     const page = read('mobile/src/screens/Bluetooth.js')
-    for (const line of ["'No editing or saving over Bluetooth.'", "'Slower to load the preset list.'", "'Footswitch changes may take a moment to show.'"]) {
+    /* Its editing line by the switch, closed on every customer copy, which is who the email goes to (lib/editWords editingLine). */
+    assert.ok(page.includes('{[editingLine(editOpen), ...DIFFERENT].map('), 'the Bluetooth page no longer says what editing does over Bluetooth')
+    assert.equal((await import('../mobile/src/lib/editWords.js')).editingLine(false), 'No editing or saving over Bluetooth.', 'the Bluetooth page no longer says there is no editing or saving to a customer, which the email stands on')
+    for (const line of ["'Slower to load the preset list.'", "'Footswitch changes may take a moment to show.'"]) {
       assert.ok(page.includes(line), `the Bluetooth page no longer says ${line}, which the email’s “more lag and does less, with no editing or saving” stands on`)
     }
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')

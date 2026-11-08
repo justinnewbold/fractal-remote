@@ -1658,22 +1658,23 @@ export function run(test) {
     const v = await import('../shared/vp4-safety.mjs')
     const edit = flat('mobile/src/screens/Edit.js')
     /* The phone: the search box only off a VP4, the hint only off a VP4, the knobs' words once. */
-    assert.match(edit, /\{vp4Here\(\) \? null : \( <FindControl /, 'the phone’s Edit offers a VP4 the control search')
+    /* A real VP4, or the demo's, which shows only what a real one gives (vp4Bench, test 'the demo’s VP4'). */
+    assert.match(edit, /\{vp4Bench\(\) \? null : \( <FindControl /, 'the phone’s Edit offers a VP4 the control search')
     assert.equal((edit.match(/<FindControl /g) || []).length, 1, 'the phone’s Edit has another way to the control search')
-    assert.match(edit, /\) : blocks\.length && !chainNow\.elsewhere && !vp4Here\(\) \? \( <Note>Tap a block to open its controls\.<\/Note> \) : null\}/, 'the phone’s Edit tells a VP4 to tap a block for its controls')
-    assert.match(edit, /\{vp4Here\(\) && blocks\.length && !chainNow\.elsewhere \? <Note>\{VP4_NO_KNOBS\}<\/Note> : null\}/, 'the phone’s Edit does not say a VP4’s knobs can’t be shown')
+    assert.match(edit, /\) : blocks\.length && !chainNow\.elsewhere && !vp4Bench\(\) \? \( <Note>Tap a block to open its controls\.<\/Note> \) : null\}/, 'the phone’s Edit tells a VP4 to tap a block for its controls')
+    assert.match(edit, /\{vp4Bench\(\) && blocks\.length && !chainNow\.elsewhere \? <Note>\{VP4_NO_KNOBS\}<\/Note> : null\}/, 'the phone’s Edit does not say a VP4’s knobs can’t be shown')
     assert.equal((edit.match(/\{VP4_NO_KNOBS\}/g) || []).length, 1, 'the phone’s Edit says the knobs’ words more than once')
     /* An opened block: nothing read, so nothing refused and nothing raised as a fault. */
-    assert.match(edit, /const knobless = vp4Here\(\) useEffect\(\(\) => \{ if \(knobless\) return undefined let stop = false ;\(async \(\) => \{ setLoading\(true\) setLocal\(\{\}\) try \{ const \[p, t\] = await Promise\.all\(\[ blockParams\(eid\)/, 'the phone’s block panel asks a VP4 for its knobs')
+    assert.match(edit, /const knobless = vp4Bench\(\) useEffect\(\(\) => \{ if \(knobless\) return undefined let stop = false ;\(async \(\) => \{ setLoading\(true\) setLocal\(\{\}\) try \{ const \[p, t\] = await Promise\.all\(\[ blockParams\(eid\)/, 'the phone’s block panel asks a VP4 for its knobs')
     /* The browser: both search boxes give way to the same words; its panel reads nothing either. */
     const app = flat('src/App.jsx')
     const searches = app.split('<ParamSearch ').slice(1)
     assert.equal(searches.length, 2, 'the browser has another control search to hold')
     for (const before of app.split('<ParamSearch ').slice(0, -1)) {
-      assert.match(before, /\{onRealVp4 \? \( <p className="hint">\{VP4_NO_KNOBS\}<\/p> \) : \( $/, 'a browser control search is offered on a VP4')
+      assert.match(before, /\{vp4Edit \? \( <p className="hint">\{VP4_NO_KNOBS\}<\/p> \) : \( $/, 'a browser control search is offered on a VP4')
     }
     const panel = flat('src/components/Console.jsx')
-    assert.match(panel, /const knobless = vp4Here\(\) useEffect\(\(\) => \{ if \(!block \|\| knobless\) return let stop = false ;\(async \(\) => \{ setLoading\(true\) setLocal\(\{\}\) try \{ const \[p, t\] = await Promise\.all\(\[ blockParams\(block\.effectId\)/, 'the browser’s block panel asks a VP4 for its knobs')
+    assert.match(panel, /const knobless = vp4Bench\(\) useEffect\(\(\) => \{ if \(!block \|\| knobless\) return let stop = false ;\(async \(\) => \{ setLoading\(true\) setLocal\(\{\}\) try \{ const \[p, t\] = await Promise\.all\(\[ blockParams\(block\.effectId\)/, 'the browser’s block panel asks a VP4 for its knobs')
     /* The same words at both ends (the phone's copy is generated from these, and held to them), and not a promise. */
     assert.match(edit, /import \{ VP4_NO_EDITS, VP4_NO_KNOBS \} from '\.\.\/lib\/vp4-safety'/)
     assert.match(app, /import \{ MIDI_SETUP_TITLE, VP4_NO_EDITS, VP4_NO_KNOBS, VP4_NO_RENAME, vp4ComputerLacks, vp4SetupStatus \} from '\.\.\/shared\/vp4-safety\.mjs'/)
@@ -1696,14 +1697,63 @@ export function run(test) {
     const edit = flat('mobile/src/screens/Edit.js')
     assert.match(
       edit,
-      /\{vp4Here\(\) \? \( <Note tone="hint">\{VP4_NO_EDITS\}<\/Note> \) : viaBle \? \( <Note tone="hint">\{BLE_NO_CHAIN\}<\/Note> \) : \( <> \{chainNow\.elsewhere \? null : <ChainEditor/,
+      /\{vp4Bench\(\) \? \( <Note tone="hint">\{VP4_NO_EDITS\}<\/Note> \) : viaBle \? \( <Note tone="hint">\{BLE_NO_CHAIN\}<\/Note> \) : \( <> \{chainNow\.elsewhere \? null : <ChainEditor/,
       'the phone offers a VP4 Edit chain and Modifiers'
     )
-    assert.match(edit, /function RenameDoor\(\) \{ const \[open, setOpen\] = useState\(false\) \/\*[^*]*\*\/ if \(vp4Here\(\)\) return null/, 'the phone offers to rename on a VP4')
+    assert.match(edit, /function RenameDoor\(\) \{ const \[open, setOpen\] = useState\(false\) \/\*[^*]*\*\/ if \(vp4Bench\(\)\) return null/, 'the phone offers to rename on a VP4')
     const app = flat('src/App.jsx')
-    assert.equal((app.match(/\{onRealVp4 \? \( <p className="hint">\{VP4_NO_EDITS\}<\/p> \) : \(/g) || []).length, 2, 'the browser offers a VP4 its chain editor or modifiers')
-    assert.match(app, /\{onRealVp4 \? null : \( <button type="button" className="chip" disabled=\{busy \|\| status !== 'live'\} onClick=\{\(\) => \{ setSheetBack\('chain'\) setSheet\('scenes'\) \}\} > Rename preset and scenes/)
+    assert.equal((app.match(/\{vp4Edit \? \( <p className="hint">\{VP4_NO_EDITS\}<\/p> \) : \(/g) || []).length, 2, 'the browser offers a VP4 its chain editor or modifiers')
+    assert.match(app, /\{vp4Edit \? null : \( <button type="button" className="chip" disabled=\{busy \|\| status !== 'live'\} onClick=\{\(\) => \{ setSheetBack\('chain'\) setSheet\('scenes'\) \}\} > Rename preset and scenes/)
     assert.match(flat('src/components/Gig.jsx'), /\{vp4Here\(\) \? ' Tap one to hear it\.' : ' Tap one to hear it\. Name them yourself under Scenes on Edit\.'\}/, 'Play tells a VP4 owner to name scenes on Edit')
+  })
+
+  /*
+   * THE DEMO'S VP4 OFFERED AN EDIT NO VP4 HAS: knobs and models, the chain
+   * editor, the modifiers and renaming, none of which a real VP4 gets through
+   * the computer. Now Edit's own VP4 checks take the demo's VP4 too, at both
+   * ends (vp4Bench), and Play and every request keep vp4Here, never the
+   * demo's, untouched.
+   */
+  test('the demo’s VP4 gets the Edit a real VP4 has: its chain and effects on and off, at both ends, and Play is left as it was', async () => {
+    const edit = flat('mobile/src/screens/Edit.js')
+    assert.match(edit, /import \{ demoUnit, isDemo \} from '\.\.\/lib\/demo'/)
+    assert.match(edit, /const vp4Bench = \(\) => vp4Here\(\) \|\| \(isDemo\(\) && demoUnit\(\) === 'vp4'\)/)
+    /* Every check on Edit's screen that takes something away from a VP4 asks the bench; only the unread on/off (a real VP4's alone) asks vp4Here. */
+    const code = (text) => text.replace(/\/\*[^]*?\*\//g, '')
+    const body = code(edit)
+    assert.equal((body.match(/vp4Bench\(\)/g) || []).length, 6, 'one of Edit’s VP4 checks leaves the demo’s VP4 out, or there is another to hold')
+    assert.equal((body.match(/vp4Here\(\)/g) || []).length, 3, 'Edit asks vp4Here somewhere the demo’s VP4 should be asked too')
+    assert.equal((body.match(/const unsure = vp4Here\(\) && typeof (?:b|block)\.bypassed !== 'boolean'/g) || []).length, 2)
+    /* Play and the requests: device.js's VP4 is never the demo's, as before. */
+    assert.match(flat('mobile/src/lib/device.js'), /onVp4 = !demoDevice\(\) && isVp4\(res\)/)
+    assert.ok(!/vp4Bench/.test(read('mobile/src/screens/Stage.js') + read('mobile/src/lib/device.js')), 'Play or the requests take the demo’s VP4 for a real one')
+
+    /* The browser: Edit and its chain sheet ask vp4Edit, the block panel the bench; everything else keeps onRealVp4. */
+    const app = flat('src/App.jsx')
+    assert.match(app, /const vp4Edit = Boolean\(device\) && vp4Bench\(\)/)
+    assert.equal((code(app).match(/vp4Edit \?/g) || []).length, 5, 'one of the browser’s Edit checks leaves the demo’s VP4 out')
+    assert.match(flat('src/lib/forgefx.js'), /export const vp4Bench = \(\) => unitIsVp4 \|\| \(mock !== null && demoUnit\(\) === 'vp4'\)/)
+    assert.ok(!/vp4Bench/.test(read('src/components/Gig.jsx')), 'the browser’s Play takes the demo’s VP4 for a real one')
+
+    /* And run: the demo's VP4 is a VP4 on the bench and nowhere else; the demo's AM4, and no demo, are what vp4Here says. */
+    const had = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+    const kept = new Map()
+    globalThis.localStorage = { getItem: (k) => (kept.has(k) ? kept.get(k) : null), setItem: (k, v) => kept.set(k, String(v)), removeItem: (k) => kept.delete(k) }
+    const fx = await import('../src/lib/forgefx.js')
+    try {
+      fx.setDemoUnit('vp4')
+      fx.setDemo(true)
+      assert.equal(fx.vp4Bench(), true, 'the demo’s VP4 is offered the Edit a VP4 does not have')
+      assert.equal(fx.vp4Here(), false, 'the demo’s VP4 is taken for a real one by Play and the requests')
+      fx.setDemoUnit('am4')
+      assert.equal(fx.vp4Bench(), fx.vp4Here(), 'the demo’s AM4 is a VP4 on the bench')
+      fx.setDemo(false)
+      assert.equal(fx.vp4Bench(), fx.vp4Here(), 'with no demo, the bench is not vp4Here')
+    } finally {
+      fx.setDemo(false)
+      if (had) Object.defineProperty(globalThis, 'localStorage', had)
+      else delete globalThis.localStorage
+    }
   })
 
   /*

@@ -255,6 +255,7 @@ import {
   clearParkedPresetName,
   getHost,
   servedLocally,
+  vp4Bench,
   vp4Capabilities,
   vp4Here,
   vp4PresetName,
@@ -1602,6 +1603,15 @@ export default function App() {
   useLooks()
   /* A real VP4 on the computer, not the demo's: it gets the Scene Select card (components/Vp4Setup). Follows each detect through `device`. */
   const onRealVp4 = Boolean(device) && vp4Here()
+  /*
+   * And Edit's VP4, the demo's included (lib/forgefx vp4Bench): the chain and
+   * its effects on and off, no knobs, no chain editor, no modifiers and no
+   * renaming, as a real VP4 has through the computer. Edit and its chain
+   * sheet only; everything else keeps onRealVp4.
+   */
+  const vp4Edit = Boolean(device) && vp4Bench()
+  /* Whether the unit can be told to attach a modifier, as the computer says (capabilities.modifiers.bind: false on an AM4, ForgeFX drivers/am4.ts modBind); absent, from an older computer, offered as before. */
+  const modifiersBind = device?.capabilities?.modifiers?.bind !== false
   /*
    * THE TOP BAR, AS THE PHONE'S IS TOLD IT (mobile/App.js).
    *
@@ -5278,7 +5288,7 @@ export default function App() {
             stand where it was, once — the phone's rule (mobile Edit.js) — and
             a block opened on a VP4 has its on/off and no read (BlockPanel).
           */}
-          {onRealVp4 ? (
+          {vp4Edit ? (
             <p className="hint">{VP4_NO_KNOBS}</p>
           ) : (
             <ParamSearch
@@ -5292,7 +5302,7 @@ export default function App() {
           )}
 
           {/* Not on a VP4: one sentence where the chain editor and the modifiers were, the phone's (shared/vp4-safety.mjs VP4_NO_EDITS). */}
-          {onRealVp4 ? (
+          {vp4Edit ? (
             <p className="hint">{VP4_NO_EDITS}</p>
           ) : (
             <>
@@ -5309,14 +5319,17 @@ export default function App() {
                 />
               </Section>
 
-              <Section key="modifiers" title="Modifiers" note="Let a pedal or the volume knob move a control">
-                <Modifiers
-                  blocks={blocks}
-                  busy={busy}
-                  onError={setError}
-                  onChanged={(summary) => record('modifier', `Modifier bound: ${summary}`)}
-                />
-              </Section>
+              {/* Not where the computer says the unit cannot bind one (modifiersBind): an AM4's door only ever said it can't. */}
+              {modifiersBind ? (
+                <Section key="modifiers" title="Modifiers" note="Let a pedal or the volume knob move a control">
+                  <Modifiers
+                    blocks={blocks}
+                    busy={busy}
+                    onError={setError}
+                    onChanged={(summary) => record('modifier', `Modifier bound: ${summary}`)}
+                  />
+                </Section>
+              ) : null}
             </>
           )}
 
@@ -5416,7 +5429,7 @@ export default function App() {
             />
 
             {/* Not on a VP4: its knobs' words instead, once, as on the Edit screen above. */}
-            {onRealVp4 ? (
+            {vp4Edit ? (
               <p className="hint">{VP4_NO_KNOBS}</p>
             ) : (
               <ParamSearch
@@ -5433,7 +5446,7 @@ export default function App() {
                 it drew the chain a second and third time above the knobs
                 somebody opened Edit for. */}
             {/* Not on a VP4, the same as the Edit screen above (VP4_NO_EDITS). */}
-            {onRealVp4 ? (
+            {vp4Edit ? (
               <p className="hint">{VP4_NO_EDITS}</p>
             ) : (
               <>
@@ -5454,14 +5467,17 @@ export default function App() {
                   />
                 </Section>
 
-                <Section key="chain-modifiers" title="Modifiers" note="Let a pedal or the volume knob move a control">
-                  <Modifiers
-                    blocks={blocks}
-                    busy={busy}
-                    onError={setError}
-                    onChanged={(summary) => record('modifier', `Modifier bound: ${summary}`)}
-                  />
-                </Section>
+                {/* The same as the Edit screen above (modifiersBind). */}
+                {modifiersBind ? (
+                  <Section key="chain-modifiers" title="Modifiers" note="Let a pedal or the volume knob move a control">
+                    <Modifiers
+                      blocks={blocks}
+                      busy={busy}
+                      onError={setError}
+                      onChanged={(summary) => record('modifier', `Modifier bound: ${summary}`)}
+                    />
+                  </Section>
+                ) : null}
               </>
             )}
 
@@ -5472,7 +5488,7 @@ export default function App() {
               same button, in the same place under Modifiers.
             */}
             <div className="history-actions chain-rename">
-              {onRealVp4 ? null : (
+              {vp4Edit ? null : (
                 <button
                   type="button"
                   className="chip"

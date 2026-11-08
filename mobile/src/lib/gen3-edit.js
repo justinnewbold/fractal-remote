@@ -393,7 +393,7 @@ export function gen3Edit({ model: unitModel, blocks, families, rosters, pages })
   function knobFrame(model, eid, id, body) {
     const b = editBlock(eid)
     const s = b ? settingOf(b, id) : null
-    if (!s || s.kind === 'model') return { refused: 'That setting isn’t one the app can change over Bluetooth.' }
+    if (!s || s.kind === 'model') return { refused: 'That setting isn’t one the app can change from here.' }
     const v = Number(body?.value)
     if (s.kind === 'switch') {
       const [, label, min, max] = s.row

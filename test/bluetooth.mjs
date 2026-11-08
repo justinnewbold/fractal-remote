@@ -5777,12 +5777,15 @@ export function run(test) {
     for (const p of ['mobile/App.js', 'mobile/src/screens/Settings.js']) assert.ok(!/useBluetooth\(\)/.test(code(p)), `${p} redraws for every change on the Bluetooth page`)
     assert.match(app, /useEffect\(\(\) => \{ restoreBluetooth\(\) \}, \[\]\)/, 'the setting is never picked up at launch')
     assert.match(app, /startLink\(\) return \(\) => \{ stopLink\(\) \} \}, \[auth, demo, bluetooth\]\)/, 'turning Bluetooth on or off does not restart the link')
-    /* Over Bluetooth, Edit only where its knobs are built and open to this account (ble-rule editOffered, through bluetooth.js). */
-    assert.match(
-      app,
-      /BENCH && \(demo \|\| link\.link === 'connected'\) && \(!overBluetooth\(caps\) \|\| editOverBluetooth\(\)\) \? \(\) => setScreen\('edit'\) : null/,
-      'Edit opens over Bluetooth where it is not built or not open'
-    )
+    /*
+     * Over Bluetooth, Edit only where its knobs are built and open to this
+     * account (ble-rule editOffered, through bluetooth.js). Named once and
+     * handed to Play by name (editOpens), and where it is built and not
+     * open, the same button saying why (editExplained, test 'Play’s Edit
+     * button says why').
+     */
+    assert.match(app, /const editHere = editDoor\(\{ bench: BENCH, demo, link: link\.link, down: link\.down === true, overBluetooth: overBluetooth\(caps\), editOpen: editOverBluetooth\(\), built: editBuiltFor\(\), vp4: vp4Here\(\) \}\) const editOpens = editHere\.opens const editExplained = editHere\.explained/, 'Edit opens over Bluetooth where it is not built or not open')
+    assert.match(app, /onOpenEdit=\{editOpens \? \(\) => setScreen\('edit'\) : editExplained \? \(\) => setEditWhyAt\(Date\.now\(\)\) : null\}/, 'Play’s Edit opens the bench where its door is shut')
     assert.match(app, /<WrongAccount active=\{[^}]*&& !bluetooth\}/, 'the stage warns about a computer on another account while on Bluetooth')
     /* The waiting screen, over Bluetooth, is about the adapter. */
     const waking = app.slice(app.indexOf('function Waking('))
@@ -5812,7 +5815,7 @@ export function run(test) {
     assert.match(waking, /\{bluetooth \? \( <View style=\{\{ alignSelf: 'stretch' \}\}> <Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/, 'the Bluetooth waiting screen has no way back to the computer')
     assert.ok(waking.indexOf('Use the computer instead') < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way back to the computer waits fifteen seconds')
     /* turnOnBluetooth since 7 November 2026: the waiting screen's Turn on Bluetooth, under the note that says it is off. */
-    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, adapterInsteadOfCable, allowBluetooth, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, turnOnBluetooth, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
+    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, adapterInsteadOfCable, allowBluetooth, editBuiltFor, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, turnOnBluetooth, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     /* Handed only through the Settings row's own gate: test 'every way onto the Bluetooth page' holds it. */
     assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
@@ -5933,7 +5936,7 @@ export function run(test) {
     assert.match(lib, /import \{ isAdmin \} from '\.\/admin'/)
     assert.match(lib, /import \{ accountId \} from '\.\/owner-unlock'/)
     assert.match(lib, /import \{ installedStoreVersion \} from '\.\/storeVersion'/)
-    assert.match(lib, /import \{ bluetoothOpen, editOffered, unitOffered \} from '\.\/ble-rule'/)
+    assert.match(lib, /import \{ EDIT_UNITS, bluetoothOpen, editOffered, unitOffered \} from '\.\/ble-rule'/)
     assert.match(
       lib,
       /export function allowBluetooth\(id, \{ signedOut = false \} = \{\}\) \{ const was = allowed const wasAll = allUnits allowed = accountId\(id\) \? bluetoothOpen\(\{ platform: Platform\.OS, installed: builtInVersion\(\), admin: isAdmin\(id\) \}\) : null/,
@@ -6911,7 +6914,10 @@ export function run(test) {
     assert.ok(gear.BLUETOOTH_ROW_OFF.length <= 36, 'the Settings row is too long for its one line')
     /* What a computer adds, the page's list says Bluetooth lacks. */
     const different = src('mobile/src/screens/Bluetooth.js').match(/const DIFFERENT = \[([\s\S]*?)\n\]/)?.[1] ?? ''
-    assert.match(different, /No editing or saving over Bluetooth\./)
+    /* Editing first, by the switch, from the one place its words live (lib/editWords): closed, today's words. */
+    const ew = await import('../mobile/src/lib/editWords.js')
+    assert.equal(ew.editingLine(false), 'No editing or saving over Bluetooth.')
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /\{\[editingLine\(editOpen\), \.\.\.DIFFERENT\]\.map\(/)
     assert.match(different, /Slower to load the preset list\./)
     /*
      * And on a VP4 too: over Bluetooth it gets presets and scenes only, and
@@ -7922,8 +7928,10 @@ export function run(test) {
 
   test('the Bluetooth page says plainly what is different from USB, and names an adapter maker only in what to buy', async () => {
     const page = src('mobile/src/screens/Bluetooth.js')
+    /* Editing, the list's first line, comes from lib/editWords by the switch (test 'the Bluetooth page's editing lines'). */
+    const ew = await import('../mobile/src/lib/editWords.js')
+    assert.equal(ew.NO_EDITING_LINE, 'No editing or saving over Bluetooth.')
     for (const line of [
-      'No editing or saving over Bluetooth.',
       'Slower to load the preset list.',
       'Footswitch changes may take a moment to show.',
       'About 30 feet of range.',
@@ -9267,7 +9275,7 @@ export function run(test) {
    * under a shopping list. Now: where it stands, the unit, Connect; then the
    * reading, in rows that open when tapped; then the beta, never folded.
    */
-  test('the page opens on the two steps, with one button a page under them, and the report line always shown', () => {
+  test('the page opens on the two steps, with one button a page under them, and the report line always shown', async () => {
     /*
      * "On the actual Bluetooth screen have the connect steps right there at
      * the top before any warnings or anything ... It should be very
@@ -9352,8 +9360,9 @@ export function run(test) {
     assert.match(ways, /\{b\.unit \? <Hint>\{ONE_AT_A_TIME\}<\/Hint> : null\} \{b\.unit \? <Hint>\{SELLERS_LINE\}<\/Hint> : null\}/)
     /* What Bluetooth can't do: the paragraph, and the list of what is different from USB. */
     const limits = page.slice(page.indexOf('export function BluetoothLimits('), page.indexOf('function Bullet('))
-    assert.ok(limits.includes('with no computer. No editing or saving.'))
-    assert.ok(limits.includes('<Heading>What’s different from USB</Heading> {DIFFERENT.map('))
+    assert.ok(limits.includes('{vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen)}'))
+    assert.ok((await import('../mobile/src/lib/editWords.js')).LIMITS_CLOSED.endsWith('with no computer. No editing or saving.'))
+    assert.ok(limits.includes('<Heading>What’s different from USB</Heading> {[editingLine(editOpen), ...DIFFERENT].map('))
     /* The usual reason a connected adapter hears nothing: the plugs swapped. */
     assert.match(page, /\{quiet && !footswitch && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/)
 
@@ -11082,7 +11091,8 @@ export function run(test) {
 
   test('Edit opens over Bluetooth only through the switch, says what it does there, and keeps the computer’s jobs away', async () => {
     const app = flat('mobile/App.js')
-    assert.match(app, /\(!overBluetooth\(caps\) \|\| editOverBluetooth\(\)\) \? \(\) => setScreen\('edit'\)/)
+    assert.match(app, /overBluetooth: overBluetooth\(caps\), editOpen: editOverBluetooth\(\),/)
+    assert.match(app, /onOpenEdit=\{editOpens \? \(\) => setScreen\('edit'\)/)
     const lib = flat('mobile/src/lib/bluetooth.js')
     assert.match(lib, /export const editOverBluetooth = \(unit = saved\.unit\) => allowed === true && editOffered\(unit, \{ admin: allUnits, platform: Platform\.OS, installed: builtInVersion\(\) \}\)/)
     assert.match(lib, /edit: \(\) => editOverBluetooth\(unit\)/, 'the wire is not asked the switch at each request')
@@ -11120,6 +11130,135 @@ export function run(test) {
     assert.match(wire, /const g3Edit = am4 \? null : GEN3_EDIT\[unit\] \|\| null const editHere = am4 \|\| !!g3Edit const editOn = \(\) => editHere && \(typeof edit === 'function' \? edit\(\) === true : edit === true\)/, 'Edit over Bluetooth reaches a unit whose knobs are not built')
     const { GEN3_EDIT } = await import(WIRE)
     assert.deepEqual(Object.keys(GEN3_EDIT), ['fm3', 'fm9', 'axefx3'], 'a gen-3 unit’s Edit is not its own catalog’s')
+  })
+
+  /*
+   * "Why isn't the edit buttons working on iPad? They should work on all
+   * devices now." (Justin, 8 November 2026.) Nothing was wrong with the iPad:
+   * over Bluetooth or a USB cable Play drew no Edit at all where Edit is not
+   * open (every customer, every unit, until a store version opens it), and
+   * nothing said why. Now the button stays and a tap says so, in words that
+   * promise nothing the review notes do not cover.
+   */
+  test('Play’s Edit button says why where Edit does not open over Bluetooth or a cable, in one place, promising nothing', async () => {
+    const { editDoor } = await import('../mobile/src/lib/editDoor.js')
+    const ew = await import('../mobile/src/lib/editWords.js')
+    const { EDIT_UNITS } = await import('../mobile/src/lib/ble-rule.js')
+    /* The rule, run. Through the computer: opens, as it always has, on every unit, the VP4's included. */
+    const live = { bench: true, link: 'connected', down: false }
+    for (const vp4 of [false, true]) {
+      assert.deepEqual(editDoor({ ...live, vp4 }), { opens: true, explained: false, shuts: false }, 'Edit through the computer no longer opens')
+    }
+    /* The demo is its own far end, and never over Bluetooth. */
+    assert.deepEqual(editDoor({ bench: true, demo: true, link: 'off' }), { opens: true, explained: false, shuts: false })
+    /* Over Bluetooth or a cable, open for this account: opens, as before. */
+    assert.deepEqual(editDoor({ ...live, overBluetooth: true, editOpen: true, built: true }), { opens: true, explained: false, shuts: false })
+    /* Built and not open (every customer today): the button stays and says why. */
+    assert.deepEqual(editDoor({ ...live, overBluetooth: true, editOpen: false, built: true }), { opens: false, explained: true, shuts: true })
+    /* Never on a VP4, nor on a unit whose Edit is not built: no button, as before. */
+    assert.equal(editDoor({ ...live, overBluetooth: true, built: true, vp4: true }).explained, false, 'Play explains Edit on a VP4')
+    assert.equal(editDoor({ ...live, overBluetooth: true, built: false }).explained, false, 'Play explains Edit on a unit whose Edit is not built')
+    assert.deepEqual([...EDIT_UNITS], ['am4', 'fm3', 'fm9', 'axefx3'], 'a unit’s Edit is built that Play does not explain, or the VP4 is among them')
+    /* Nothing answering: no button at all, and Edit, if open, goes back to Play once the link is down long enough to mean it. */
+    for (const link of ['joining', 'no-answer', 'off', 'error']) {
+      assert.deepEqual(editDoor({ bench: true, link, down: false }), { opens: false, explained: false, shuts: false }, `a blink of ${link} takes Edit away`)
+      assert.deepEqual(editDoor({ bench: true, link, down: true }), { opens: false, explained: false, shuts: true }, `Edit stays up with the link ${link} and down`)
+    }
+    /* Off the bench switch, nothing. */
+    assert.equal(editDoor({ ...live, bench: false }).opens, false)
+
+    /* App.js asks it, names its answers, and hands Play the button by name. */
+    const app = flat('mobile/App.js')
+    assert.match(app, /import EditWhy from '\.\/src\/components\/EditWhy' import \{ editDoor \} from '\.\/src\/lib\/editDoor'/)
+    assert.match(app, /const editShut = screen === 'edit' && editHere\.shuts/)
+    assert.match(app, /useEffect\(\(\) => \{ if \(editShut\) setScreen\('stage'\) \}, \[editShut\]\)/, 'Edit stays up when its door shuts')
+    assert.match(app, /\{playOnScreen && editExplained \? <EditWhy at=\{editWhyAt\} cable=\{cableNow\} onDismiss=\{\(\) => setEditWhyAt\(0\)\} \/> : null\}/, 'Play’s line is not over Play, or not for the cable that is in')
+    assert.match(app, /const cableNow = useCableNow\(\)/)
+    assert.match(flat('mobile/src/lib/bluetooth.js'), /export const editBuiltFor = \(unit = saved\.unit\) => EDIT_UNITS\.includes\(unit\)/)
+    /* Play's own button is drawn as it always was: the same place, the same press. */
+    assert.match(flat('mobile/src/screens/Stage.js'), /const edit = onOpenEdit \? \( <Press grow label="Edit" icon=\{editIcon\} height=\{foot\} onPress=\{onOpenEdit\} \/> \) : null/)
+
+    /* The line, floated over Play and never in it, from the one place its words live. */
+    const why = flat('mobile/src/components/EditWhy.js')
+    assert.match(why, /import \{ EDIT_WHY_MS, editThroughComputer \} from '\.\.\/lib\/editWords'/)
+    assert.match(why, /const words = at \? editThroughComputer\(\{ cable \}\) : null/)
+    assert.match(why, /<Toast open=\{showing\} yields>/, 'the line pushes Play’s fault card aside, or is drawn into the page')
+
+    /* The words: one sentence, the connection's own name in it, and nothing promised. */
+    const blue = ew.editThroughComputer({ cable: false })
+    const cable = ew.editThroughComputer({ cable: true })
+    assert.equal(blue, 'Editing works through a computer. Over Bluetooth, Play changes presets and scenes and turns effects on and off.')
+    assert.equal(cable, 'Editing works through a computer. On the USB cable, Play changes presets and scenes and turns effects on and off.')
+    assert.ok(!/Bluetooth/.test(cable), 'the cable’s line says Bluetooth')
+    for (const line of [blue, cable]) {
+      assert.ok(!/\byet\b|coming|soon|for now|\bnot yet\b/i.test(line), `the line promises editing later: ${line}`)
+      assert.ok(!/\b(AM4|FM3|FM9|Axe-Fx|VP4)\b/.test(line), `the line names a unit: ${line}`)
+      assert.ok(!/this phone/i.test(line), `“this phone”: ${line}`)
+      assert.ok(line.split(/\s+/).length <= 25, `the line is long to read over Play: ${line}`)
+    }
+    /* One place: no screen types the sentence itself. */
+    const walk = (dir, out = []) => {
+      for (const e of readdirSync(dir)) {
+        const full = join(dir, e)
+        if (statSync(full).isDirectory()) walk(full, out)
+        else if (/\.(js|jsx|mjs)$/.test(e)) out.push(full)
+      }
+      return out
+    }
+    const root = fileURLToPath(new URL('../mobile/', import.meta.url))
+    const typed = [join(root, 'App.js'), ...walk(join(root, 'src'))].filter((f) => readFileSync(f, 'utf8').includes('Editing works through a computer'))
+    assert.deepEqual(typed.map((f) => f.slice(root.length)), [join('src', 'lib', 'editWords.js')], 'Play’s line is typed in more than one place')
+  })
+
+  test('the Bluetooth page’s editing lines follow the switch: today’s words exactly on every customer copy, what Edit does where it opens', async () => {
+    const ew = await import('../mobile/src/lib/editWords.js')
+    const { editOffered, EDIT_FROM_STORE } = await import('../mobile/src/lib/ble-rule.js')
+    /* Closed: today's words, letter for letter. */
+    assert.equal(ew.editingLine(false), 'No editing or saving over Bluetooth.')
+    assert.equal(ew.limitsLine(false), 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. No editing or saving.')
+    /* Open: what Edit does, and that nothing saves. */
+    assert.equal(ew.editingLine(true), 'Knobs, models and effects on and off change in Edit. No saving over Bluetooth: save on the unit itself.')
+    assert.equal(ew.limitsLine(true), 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. Knobs, models and effects on and off change in Edit. No saving over Bluetooth: save on the unit itself.')
+    /* Anything but a yes is closed. */
+    for (const v of [undefined, null, 0, 'yes', 1]) {
+      assert.equal(ew.editingLine(v), ew.NO_EDITING_LINE)
+      assert.equal(ew.limitsLine(v), ew.LIMITS_CLOSED)
+    }
+    /* A customer copy, as the switch stands: closed on every unit on every copy, so the page says today's words. */
+    for (const unit of [...Object.keys(EDIT_FROM_STORE), 'vp4']) {
+      for (const platform of ['ios', 'android']) {
+        for (const installed of ['1.89.0', '1.89.36', '1.90.0', '9.0.0', null]) {
+          const open = editOffered(unit, { admin: false, platform, installed })
+          if (Object.values(EDIT_FROM_STORE).every((v) => v === null)) assert.equal(open, false, `${unit} ${platform} ${installed}: a customer is offered Edit over Bluetooth by update`)
+          if (!open) {
+            assert.equal(ew.editingLine(open), 'No editing or saving over Bluetooth.')
+            assert.equal(ew.limitsLine(open), ew.LIMITS_CLOSED)
+          }
+        }
+      }
+    }
+    /* The VP4's own words, the same whatever the switch says, and its Edit never built. */
+    assert.equal(editOffered('vp4', { admin: true }), false)
+    /* The page asks the switch for the unit picked, and draws both lines from it. */
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    const limits = page.slice(page.indexOf('export function BluetoothLimits('), page.indexOf('function Bullet('))
+    assert.match(limits, /const editOpen = editOverBluetooth\(b\.unit\)/)
+    assert.ok(limits.includes('{vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen)}'))
+    assert.ok(limits.includes('{[editingLine(editOpen), ...DIFFERENT].map('))
+    assert.ok(!code('mobile/src/screens/Bluetooth.js').includes('No editing or saving'), 'the page types the closed words itself, beside the switch’s')
+    /* And nothing open promises a unit, or saving. */
+    assert.ok(!/\b(AM4|FM3|FM9|Axe-Fx|VP4)\b|\byet\b|coming/i.test(ew.EDITING_LINE + ew.LIMITS_OPEN))
+  })
+
+  test('Edit’s refusals over the wire name no connection: the same words over Bluetooth and a USB cable', () => {
+    const lines = []
+    for (const f of ['mobile/src/lib/gen3-edit.js', 'mobile/src/lib/am4-edit.js', 'mobile/src/lib/bleWire.js']) {
+      for (const m of code(f).matchAll(/(?:refused: |badInput\()(['`])((?:(?!\1).)*)\1/g)) lines.push([f, m[2]])
+    }
+    const edits = lines.filter(([, l]) => /can’t (?:open|change) block|isn’t one the app can change/.test(l))
+    assert.equal(edits.length, 6, `Edit has another refusal to hold: ${edits.map(([, l]) => l).join(' | ')}`)
+    for (const [f, l] of edits) assert.ok(!/bluetooth|usb|cable|adapter/i.test(l), `${f}: an Edit refusal names the connection: ${l}`)
+    assert.ok(edits.every(([, l]) => /from here/.test(l)), 'an Edit refusal no longer says where')
   })
   /* ---------------------------------------------------------------- */
   /* Edit over Bluetooth: the FM3's knobs                               */

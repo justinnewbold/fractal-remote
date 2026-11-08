@@ -45,6 +45,8 @@ import { startBluetoothSeen } from './src/lib/bluetoothSeen'
 import { NOT_AFFILIATED } from './src/lib/affiliation'
 import { walkthroughSeen, markWalkthrough } from './src/lib/walkthrough'
 import Edit from './src/screens/Edit'
+import EditWhy from './src/components/EditWhy'
+import { editDoor } from './src/lib/editDoor'
 import Connect from './src/screens/Connect'
 import Fixes from './src/screens/Fixes'
 import Gear from './src/screens/Gear'
@@ -55,7 +57,7 @@ import Setlists from './src/screens/Setlists'
 import Stage from './src/screens/Stage'
 import { hydrate, sync } from './src/lib/store'
 import { keepSetlistsInStep } from './src/lib/cloudSetlists'
-import { keepVp4SetupIn } from './src/lib/device'
+import { keepVp4SetupIn, vp4Here } from './src/lib/device'
 import { clearLinkFault, useRig } from './src/lib/rig'
 import { keepLog } from './src/lib/logKeep'
 import { installCrashCapture } from './src/lib/debugLog'
@@ -66,6 +68,7 @@ import {
   RESTRICTED_WORDS,
   adapterInsteadOfCable,
   allowBluetooth,
+  editBuiltFor,
   editOverBluetooth,
   lookForAdapterAgain,
   opensApplesScreen,
@@ -667,6 +670,35 @@ export default function App() {
   const settling = auth === 'in' && !demo && ((looking && (!caps || bluetooth)) || (link.link === 'connected' && !caps && !readFailed))
   /* The play screen itself is up: not the waiting screen standing in for it. */
   const playOnScreen = screen === 'stage' && !settling
+  /*
+   * EDIT, AND WHERE IT GOES (lib/editDoor, the one rule): whether Play's
+   * Edit opens the bench (`editOpens`), or, over Bluetooth or a USB cable on
+   * a unit whose Edit is built and not open here, says why in one line
+   * (`editExplained`, components/EditWhy); and whether Edit, open, has had
+   * its door shut under it and goes back to Play (`editShut`). Named here
+   * and handed to Play by name: test/structure.mjs and test/bluetooth.mjs
+   * read this file as text.
+   */
+  const editHere = editDoor({
+    bench: BENCH,
+    demo,
+    link: link.link,
+    down: link.down === true,
+    overBluetooth: overBluetooth(caps),
+    editOpen: editOverBluetooth(),
+    built: editBuiltFor(),
+    vp4: vp4Here()
+  })
+  const editOpens = editHere.opens
+  const editExplained = editHere.explained
+  const editShut = screen === 'edit' && editHere.shuts
+  /* The tap's moment, for EditWhy (zero for none), and the cable's own words while one is in. */
+  const [editWhyAt, setEditWhyAt] = useState(0)
+  const cableNow = useCableNow()
+  /* Edit open with its door shut: back to Play, never a page of reads that fail. */
+  useEffect(() => {
+    if (editShut) setScreen('stage')
+  }, [editShut])
   /*
    * And the new-version note only floats over it while the phone is off the
    * rig. Over a connected rig a download can land mid-song, and the note's
@@ -1818,22 +1850,8 @@ export default function App() {
                  * one screen in this app that never needed the rig.
                  */
                 onOpenSetlists={() => setScreen('setlists')}
-                /*
-                 * The bench, behind the switch in lib/features for this release.
-                 * Only once the Mac is answering either way: every control on
-                 * that screen is read off the unit, so with nothing on the other
-                 * end it is a screen of empty knobs.
-                 *
-                 * Over Bluetooth (or a unit's own USB cable, the same wire)
-                 * only where the phone can read and turn the unit's knobs
-                 * itself (lib/ble-rule.js editOffered: the AM4, FM3, FM9 and
-                 * Axe-Fx III, on his account until a store version opens
-                 * each), and even there no saving, no moving blocks (Edit
-                 * says so).
-                 */
-                onOpenEdit={
-                  BENCH && (demo || link.link === 'connected') && (!overBluetooth(caps) || editOverBluetooth()) ? () => setScreen('edit') : null
-                }
+                /* The bench where it opens; where it is built and not open over Bluetooth or a cable, the same button saying why (editOpens, editExplained, above). */
+                onOpenEdit={editOpens ? () => setScreen('edit') : editExplained ? () => setEditWhyAt(Date.now()) : null}
                 onUnlock={() => setBuying(true)}
                 onAccount={toMakeAccount}
                 /* The colours' one-time line, pressed: Settings, open on Colors. */
@@ -1873,6 +1891,8 @@ export default function App() {
             {playOnScreen ? <LookUndo /> : null}
             {/* A unit just plugged in by USB cable: the offer to use it, or the switch made by itself (components/CablePlugIn). */}
             {playOnScreen ? <CablePlugIn /> : null}
+            {/* Play's Edit tapped where Edit does not open over Bluetooth or a cable: why, in one line (editExplained, above). */}
+            {playOnScreen && editExplained ? <EditWhy at={editWhyAt} cable={cableNow} onDismiss={() => setEditWhyAt(0)} /> : null}
             </EdgeBack>
           </>
         )}
