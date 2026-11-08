@@ -31,10 +31,16 @@ import playIcon from '../../mobile/assets/icons/play.png'
 import slidersIcon from '../../mobile/assets/icons/sliders.png'
 import saveIcon from '../../mobile/assets/icons/save.png'
 import { Cta, FootRow, Steps, TipCard } from './Walk'
-import BluetoothInApps from './BluetoothInApps'
-import { AGREE_IN_BROWSER, BROWSER_HOW_BLUETOOTH } from '../../shared/stores.mjs'
+import { AGREE_IN_BROWSER, BROWSER_HOW_BLUETOOTH, STORES } from '../../shared/stores.mjs'
 
 const PIECES = { unit: unitShot, computer: pieceComputer, phone: piecePhone }
+
+/* The stores that are open, the visitor's own phone's first (an Android browser says so in its user agent). */
+const appStores = () => {
+  const open = STORES.filter((s) => s.live)
+  const android = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent || '')
+  return android ? [...open].sort((a) => (a.key === 'android' ? -1 : 1)) : open
+}
 
 /*
  * FOR SOMEBODY WHO HAS IT ALREADY, the last card stops selling. The
@@ -210,9 +216,17 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
             </div>
             {howBluetooth ? (
               <>
+                {/* Where Bluetooth is, said plainly, and the app one tap away: the visitor's own phone first. */}
+                <p className="pw-note pw-get-app">{BROWSER_HOW_BLUETOOTH.getApp}</p>
+                <div className="pw-stores">
+                  {appStores().map((s) => (
+                    <a key={s.key} className="chip pw-store" href={s.url} target="_blank" rel="noreferrer">
+                      <span className="pw-store-name">{s.name}</span>
+                      <span className="pw-store-where">{s.store}</span>
+                    </a>
+                  ))}
+                </div>
                 <p className="pw-note">{BROWSER_HOW_BLUETOOTH.foot}</p>
-                {/* Where the app is, with the stores: this browser connects through a computer only. */}
-                <BluetoothInApps className="pw-note" />
                 <p className="pw-note">
                   <button type="button" className="pw-note-link" onClick={() => setAt('pick')}>
                     {P2.footGo}

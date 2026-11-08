@@ -72,7 +72,8 @@ export const anyStoreLive = () => STORES.some((s) => s.live)
  * works on an iPad, and an iPad owner read "the iPhone and Android apps" as
  * not theirs.
  */
-export const BLUETOOTH_IN_APPS = 'Bluetooth, with no computer, is in the iPhone, iPad and Android apps. A web browser connects through a computer only.'
+/* And plainer still, 8 November 2026: "It's still confusing, even for me, so let's add that Bluetooth will work if they download the app." */
+export const BLUETOOTH_IN_APPS = 'For Bluetooth, with no computer, download the free app for iPhone, iPad or Android. A web browser connects through a computer only.'
 
 /*
  * HOW IT WORKS, IN A WEB BROWSER: BLUETOOTH FIRST, AS ON THE PHONE. "The
@@ -94,7 +95,14 @@ export const BROWSER_HOW_BLUETOOTH = {
   ],
   wire: 'BLUETOOTH MIDI ADAPTER',
   appTitle: 'YOUR PHONE OR TABLET',
-  appBody: 'In the Fractal Remote app - no computer needed',
+  appBody: 'With the free Fractal Remote app - no computer needed',
+  /*
+   * Over the two store buttons, under the boxes: "It's still confusing, even
+   * for me, so let's add that Bluetooth will work if they download the app"
+   * (8 November 2026). The buttons are STORES' names, so a visitor picks
+   * their own phone, not a store's.
+   */
+  getApp: 'Bluetooth works in the app, not in a web browser. Download it free:',
   foot: 'The adapter plugs into the unit’s MIDI jacks and is sold separately.'
 }
 

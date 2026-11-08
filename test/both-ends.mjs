@@ -2338,7 +2338,7 @@ export function run(test) {
      * account's, and the apps reach the unit with no computer.
      */
     assert.ok(web.includes('{computer ? P3.real.agree : AGREE_IN_BROWSER}'), 'the browser’s box before Unlock says only that a computer is needed, or the computer app’s window lost his sentence')
-    assert.match(web, /import \{ AGREE_IN_BROWSER, BROWSER_HOW_BLUETOOTH \} from '\.\.\/\.\.\/shared\/stores\.mjs'/)
+    assert.match(web, /import \{ AGREE_IN_BROWSER, BROWSER_HOW_BLUETOOTH, STORES \} from '\.\.\/\.\.\/shared\/stores\.mjs'/)
     {
       const { AGREE_IN_BROWSER } = await import('../shared/stores.mjs')
       assert.ok(AGREE_IN_BROWSER.indexOf('Bluetooth') > -1 && AGREE_IN_BROWSER.indexOf('Bluetooth') < AGREE_IN_BROWSER.indexOf('computer'), 'the browser’s box names the computer before Bluetooth')
@@ -2373,7 +2373,10 @@ export function run(test) {
     assert.match(flat, /const howBluetooth = !computer && howWay === 'bluetooth'/, 'the computer app’s window draws a Bluetooth way')
     assert.match(flat, /<h1 className="pw-head">\{P2\.head\}<\/h1> \{computer \? null : \( <div className="pw-ways"/, 'the website’s two ways are not first, under the heading, or are drawn in the computer app’s window')
     assert.match(flat, /phoneTitle: BROWSER_HOW_BLUETOOTH\.appTitle, phoneBody: BROWSER_HOW_BLUETOOTH\.appBody/)
-    assert.match(flat, /\{howBluetooth \? \( <> <p className="pw-note">\{BROWSER_HOW_BLUETOOTH\.foot\}<\/p> <BluetoothInApps className="pw-note" \/>/, 'the website’s Bluetooth way does not say where the app is')
+    /* "Let's add that Bluetooth will work if they download the app" (8 November 2026): said first under the boxes, with the open stores as buttons, the visitor's phone first. */
+    assert.match(flat, /\{howBluetooth \? \( <> <p className="pw-note pw-get-app">\{BROWSER_HOW_BLUETOOTH\.getApp\}<\/p> <div className="pw-stores"> \{appStores\(\)\.map\(\(s\) => \( <a key=\{s\.key\} className="chip pw-store" href=\{s\.url\} target="_blank" rel="noreferrer">/, 'the website’s Bluetooth way does not say plainly that Bluetooth is in the app, with the stores')
+    assert.match(BROWSER_HOW_BLUETOOTH.getApp, /^Bluetooth works in the app, not in a web browser\. Download it free:$/)
+    assert.match(flat, /const appStores = \(\) => \{ const open = STORES\.filter\(\(s\) => s\.live\)/, 'a store that is not open yet is offered')
     /* The one line about the apps, taken out of a file before it is searched for any other Bluetooth (the sign-in screens, below). */
     const inApps = (text) => text.replace(/<BluetoothInApps\b[^>]*\/>|import BluetoothInApps from '\.\/BluetoothInApps'/g, ' ')
     /* And no other Bluetooth on the browser's walkthrough: not the phone's words file, nor its switch. */
@@ -2403,7 +2406,7 @@ export function run(test) {
     assert.match(inAppsLine, /STORES\.filter\(\(s\) => s\.live\)/, 'the line links a store that is not open')
     const { BLUETOOTH_IN_APPS } = await import('../shared/stores.mjs')
     /* The iPad by name: the App Store app is the iPhone and iPad app, and Bluetooth works on an iPad (the review of 7 November 2026). */
-    assert.equal(BLUETOOTH_IN_APPS, 'Bluetooth, with no computer, is in the iPhone, iPad and Android apps. A web browser connects through a computer only.')
+    assert.equal(BLUETOOTH_IN_APPS, 'For Bluetooth, with no computer, download the free app for iPhone, iPad or Android. A web browser connects through a computer only.')
     const connectScreen = read('src/components/ConnectScreen.jsx').replace(/\s+/g, ' ')
     /* First on the first screen and on Connecting… too, before the computer's steps and its search (the review of 7 November 2026). */
     assert.match(connectScreen, /<h2>\{SETUP\.title\}<\/h2> \{[^}]*\} <BluetoothInApps \/> <Steps \/>/, 'the browser’s first screen does not say where Bluetooth is, first')
