@@ -105,6 +105,7 @@ import * as fm3Edit from './fm3-edit.js'
 import * as fm9Edit from './fm9-edit.js'
 import * as axefx3Edit from './axefx3-edit.js'
 import { presetMissLine } from './bluetooth-gear.js'
+import { PRESET_SETTLE_MS } from './own-echo.js'
 import { NOT_BLOCKS } from './gen3Catalog.js'
 import { createVp4Wire } from './bleVp4.js'
 
@@ -214,10 +215,14 @@ export const EDIT_WHOLE_MS = 30000
  * PLAY GOES FIRST (see editWaits). After a scene or a preset changed, Edit
  * waits for Play to read the blocks again, but never longer than this past
  * the change or Play's last request, whichever came later, in case Play
- * reads nothing. Longer than the wait Play takes before its read after a
- * preset (lib/own-echo OWN_SETTLE_MS, 800 ms; a test holds the two).
+ * reads nothing. Clearly longer than both waits Play takes before that read
+ * (lib/own-echo): OWN_SETTLE_MS after a preset this phone chose, and
+ * PRESET_SETTLE_MS after one changed on the unit (a footswitch, a Program
+ * Change), counted from Play's own read of the preset as it heard the news.
+ * Equal to the second, Edit's hold ran out just before Play's read, every
+ * time. A test holds it to both.
  */
-export const REREAD_MAX_MS = 1500
+export const REREAD_MAX_MS = PRESET_SETTLE_MS + 1000
 /*
  * And a request of Play's still being answered holds Edit off for no longer
  * than this from its start: longer than any of them takes on a unit that
@@ -360,6 +365,8 @@ const badInput = (what) => failure(what, 400)
 const notConnected = () => failure('The Bluetooth adapter is not connected.', 503)
 /* A tap still waiting for the line at its deadline: never sent (device.js says it in the words every dropped tap is said in). */
 const tooLate = () => failure('Not sent in time.', 504, { late: true })
+/* One of Edit's writes, asked before a scene or preset change and not sent after it (moved). */
+const movedFirst = () => failure('The scene or preset changed before that was sent. Try it again.', 409)
 const refusedBy = (code) => failure(`The unit refused it: ${rejectedWords(code)}.`, 502, { code })
 
 /* A poll that found the line busy, told apart from one the unit did not answer. */
@@ -575,6 +582,33 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     statusKept = null
     moves += 1
     movedAt = time.now()
+    /*
+     * And Edit's knob turns and model picks still waiting for the line were
+     * meant for what was there before: a knob frame names no channel, so one
+     * sent after the move changes the new scene's channel or the next
+     * preset. Never sent; the player turns it again (the routes themselves
+     * check the same for one still finding its block, movedSince).
+     */
+    for (let i = 0; i < waiting.length; ) {
+      const job = waiting[i]
+      if (job.priority !== PRI.editWrite) {
+        i++
+        continue
+      }
+      waiting.splice(i, 1)
+      if (job.late !== undefined) {
+        time.clearTimeout(job.late)
+        job.late = undefined
+      }
+      say(`not sent, the scene or preset changed first: ${job.opts.what || 'a write'}`)
+      job.reject(movedFirst())
+    }
+  }
+  /* Edit's write, asked when `at` was the count: refused if a scene or preset changed since (moved). */
+  function movedSince(at, what) {
+    if (moves === at) return
+    say(`not sent, the scene or preset changed first: ${what}`)
+    throw movedFirst()
   }
   /** How long Edit's next exchange must wait for Play, in ms; 0 when it may go. */
   function editWaits() {
@@ -2432,6 +2466,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const kept = editKept.get(code)
     const fresh = !!kept && time.now() - kept.at < EDIT_FRESH_MS && time.now() - kept.whole < EDIT_WHOLE_MS
     if (fresh && !kept.stale.size) return blockParamsOf(code, kept.chunks, { channel: kept.channel, bypassed: kept.bypassed })
+    /* A scene or preset changed while this was read: answered, but not kept for the next read, which is the new scene's (moved). */
+    const at = moves
     await placedHere(code)
     const started = time.now()
     const ch = fresh ? kept.channel : await am4ChannelNow(code, 'editRead')
@@ -2462,7 +2498,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     const channel = Number.isInteger(ch) ? ch : 0
     const bypassed = typeof off === 'boolean' ? off : undefined
-    editKept.set(code, { at: time.now(), whole: fresh ? kept.whole : time.now(), channel, bypassed, chunks, stale: new Set() })
+    if (moves === at) editKept.set(code, { at: time.now(), whole: fresh ? kept.whole : time.now(), channel, bypassed, chunks, stale: new Set() })
     const out = blockParamsOf(code, chunks, { channel, bypassed })
     say(`read the ${b.slug}’s settings in ${((time.now() - started) / 1000).toFixed(1)} s${fresh ? ' (the register written)' : ''}: ${out.named.length} knobs, channel ${Number.isInteger(ch) ? CH[ch] : 'A (not read)'}`)
     return out
@@ -2474,11 +2510,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * back to see whether it took, as it does over the computer.
    */
   async function am4WriteKnob(eid, id, body) {
+    const at = moves
     const code = blockNumber(eid)
     if (!editBlock(code)) throw badInput(`The app can’t change block ${toHex([code])} from here yet.`)
     const made = knobFrame(code, Number(id), body)
     if (made.refused) throw badInput(made.refused)
     await placedHere(code)
+    movedSince(at, made.what)
     const r = await fire(made.frame, made.what, EDIT_WRITE)
     /* Sent or refused, that register is read again next time; the rest of the block is as it was. */
     editKept.get(code)?.stale.add(made.register)
@@ -2488,10 +2526,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /* POST /preset/blocks/<code>/type: the block's model, the computer's own write for it. */
   async function am4WriteModel(eid, value) {
+    const at = moves
     const code = blockNumber(eid)
     const made = modelFrame(code, value)
     if (made.refused) throw badInput(made.refused)
     await placedHere(code)
+    movedSince(at, made.what)
     const r = await fire(made.frame, made.what, EDIT_WRITE)
     /* A new model is new settings, every one. */
     forgetEdits(code)
@@ -2512,9 +2552,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   async function gen3PlacedHere(eid) {
     let list = statusKept && time.now() - statusKept.at < STRUCTURE_FRESH_MS ? statusKept.list : null
     if (!list) {
+      /* Its channels are the scene's it was read in: not kept past a scene or preset change while it was on its way (moved). */
+      const at = moves
       list = await statusNow('editRead')
       if (!Array.isArray(list)) throw failure(`The ${spec.name} didn’t say what’s in this preset. Try again in a moment.`, 504)
-      statusKept = { list, at: time.now() }
+      if (moves === at) statusKept = { list, at: time.now() }
     }
     const b = list.find((x) => x.effectId === eid)
     if (!b) throw failure(`That block isn’t in the preset the ${spec.name} is on now.`, 409)
@@ -2537,6 +2579,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       return g3Edit.blockParamsOf(e, kept.bulk, { channel: kept.channel })
     }
     const started = time.now()
+    /* As on an AM4: a scene or preset changed while this was read, and it is answered but not kept (moved). */
+    const at = moves
     const st = await gen3PlacedHere(e)
     const got = await ask(g3Edit.buildReadAll(model, e), null, WAIT.gen3ReadAllGap, `the settings of the ${b.name}`, {
       cap: WAIT.gen3ReadAll,
@@ -2546,7 +2590,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (rejected(got)) throw refusedBy(got.rejected)
     if (!got) throw failure(`The ${spec.name} didn’t send the ${b.name}’s settings. Try again.`, 504)
     if (got.damaged) throw failure(`The ${b.name}’s settings came back damaged. Try again.`, 502)
-    editKept.set(e, { at: time.now(), whole: time.now(), channel: st.channel, bulk: got, stale: new Set() })
+    if (moves === at) editKept.set(e, { at: time.now(), whole: time.now(), channel: st.channel, bulk: got, stale: new Set() })
     const out = g3Edit.blockParamsOf(e, got, { channel: st.channel })
     say(`read the ${b.name}’s settings in ${((time.now() - started) / 1000).toFixed(1)} s: ${out.named.length} knobs, channel ${CH[st.channel] ?? st.channel}`)
     return out
@@ -2554,11 +2598,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /* PUT /preset/blocks/<eid>/params/<id> on a gen-3 unit: one knob or switch, the computer's frame for it. */
   async function gen3WriteKnob(eid, id, body) {
+    const at = moves
     const e = blockNumber(eid)
     if (!g3Edit.editBlock(e)) throw badInput(`The app can’t change block ${e} from here yet.`)
     const made = g3Edit.knobFrame(model, e, id, body)
     if (made.refused) throw badInput(made.refused)
     await gen3PlacedHere(e)
+    movedSince(at, made.what)
     const r = await fire(made.frame, made.what, EDIT_WRITE)
     editKept.get(e)?.stale.add('block')
     if (rejected(r)) throw refusedBy(r.rejected)
@@ -2567,10 +2613,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /* POST /preset/blocks/<eid>/type on a gen-3 unit: the block's model, the computer's own write for it. */
   async function gen3WriteModel(eid, value) {
+    const at = moves
     const e = blockNumber(eid)
     const made = g3Edit.modelFrame(model, e, value)
     if (made.refused) throw badInput(made.refused)
     await gen3PlacedHere(e)
+    movedSince(at, made.what)
     const r = await fire(made.frame, made.what, EDIT_WRITE)
     forgetEdits(e)
     if (rejected(r)) throw refusedBy(r.rejected)
