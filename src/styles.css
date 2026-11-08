@@ -13314,6 +13314,29 @@ button.setup-back {
   line-height: 1.45;
 }
 
+/* How it works' two ways, Bluetooth first: the phone's pair of signal buttons, the one picked lit. */
+.pw-ways {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+}
+.pw-way {
+  min-height: 44px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--panel);
+  color: var(--silk);
+  font: inherit;
+  font-size: var(--f-4);
+  font-weight: 600;
+  cursor: pointer;
+}
+.pw-way.on {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: var(--on-signal);
+}
+
 /* "Try the demo", inside the line that offers it. */
 .pw-note-link {
   padding: 0;

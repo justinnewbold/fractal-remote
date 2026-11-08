@@ -75,6 +75,30 @@ export const anyStoreLive = () => STORES.some((s) => s.live)
 export const BLUETOOTH_IN_APPS = 'Bluetooth, with no computer, is in the iPhone, iPad and Android apps. A web browser connects through a computer only.'
 
 /*
+ * HOW IT WORKS, IN A WEB BROWSER: BLUETOOTH FIRST, AS ON THE PHONE. "The
+ * initial walkthrough on the website is the one that's not showing the
+ * Bluetooth stuff at first" (Justin, 8 November 2026, of the website on an
+ * iPhone, which opened on the computer's three boxes with the line about
+ * the apps above them). So the website's How it works has the phone's two
+ * choices, Bluetooth first and picked (HOW_TWO_WAYS in shared/bluetooth-gear.mjs,
+ * whose labels, cable and foot these are, word for word: test/both-ends.mjs
+ * holds them together), and its Bluetooth way is the phone's two boxes. Its
+ * second box is the app, not this browser, which can never reach an adapter:
+ * BLUETOOTH_IN_APPS under it says where the app is, with the stores. Here and
+ * not imported from bluetooth-gear, which the browser does not carry.
+ */
+export const BROWSER_HOW_BLUETOOTH = {
+  ways: [
+    { key: 'bluetooth', label: 'Bluetooth' },
+    { key: 'computer', label: 'Computer' }
+  ],
+  wire: 'BLUETOOTH MIDI ADAPTER',
+  appTitle: 'YOUR PHONE OR TABLET',
+  appBody: 'In the Fractal Remote app - no computer needed',
+  foot: 'The adapter plugs into the unit’s MIDI jacks and is sold separately.'
+}
+
+/*
  * THE BOX TICKED BEFORE UNLOCK, IN A WEB BROWSER. It said his sentence of
  * the first walkthrough, "I understand this app requires a computer
  * connected to my Fractal unit via USB cable for the Fractal Remote app to

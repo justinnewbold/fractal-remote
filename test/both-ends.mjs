@@ -2338,7 +2338,7 @@ export function run(test) {
      * account's, and the apps reach the unit with no computer.
      */
     assert.ok(web.includes('{computer ? P3.real.agree : AGREE_IN_BROWSER}'), 'the browser’s box before Unlock says only that a computer is needed, or the computer app’s window lost his sentence')
-    assert.match(web, /import \{ AGREE_IN_BROWSER \} from '\.\.\/\.\.\/shared\/stores\.mjs'/)
+    assert.match(web, /import \{ AGREE_IN_BROWSER, BROWSER_HOW_BLUETOOTH \} from '\.\.\/\.\.\/shared\/stores\.mjs'/)
     {
       const { AGREE_IN_BROWSER } = await import('../shared/stores.mjs')
       assert.ok(AGREE_IN_BROWSER.indexOf('Bluetooth') > -1 && AGREE_IN_BROWSER.indexOf('Bluetooth') < AGREE_IN_BROWSER.indexOf('computer'), 'the browser’s box names the computer before Bluetooth')
@@ -2349,17 +2349,35 @@ export function run(test) {
     }
     assert.ok(phone.includes('label={twoWays ? WALKTHROUGH_TWO_WAYS.agree : P3.real.agree}'), 'the phone’s box before Unlock does not say both ways where Bluetooth is open, or his sentence everywhere else')
     /*
-     * Never a Bluetooth way: a browser has none. Since 7 November 2026 it
-     * says where Bluetooth is instead, in one line from one component
-     * (src/components/BluetoothInApps.jsx): "That is available only in the
-     * apps, not on the website version ... it was confusing for me cause I
-     * kept trying to find Bluetooth" (Justin). That line, and nothing else.
+     * BLUETOOTH FIRST, IN A BROWSER TOO, AND ALWAYS AS THE APP. A browser can
+     * never reach an adapter, so from 7 November 2026 it said where Bluetooth
+     * is in one line (src/components/BluetoothInApps.jsx): "That is available
+     * only in the apps, not on the website version ... it was confusing for
+     * me cause I kept trying to find Bluetooth." Then, 8 November: "The
+     * initial walkthrough on the website is the one that's not showing the
+     * Bluetooth stuff at first." So How it works has the phone's two choices,
+     * Bluetooth first and picked, and the Bluetooth way's second box is the
+     * app (BROWSER_HOW_BLUETOOTH in shared/stores.mjs), with that line and
+     * the stores under it. Nowhere else does the browser's walkthrough offer
+     * Bluetooth, and nothing of it is drawn in the computer app's own window.
      */
+    const { BROWSER_HOW_BLUETOOTH } = await import('../shared/stores.mjs')
+    const { HOW_TWO_WAYS } = await import('../shared/bluetooth-gear.mjs')
+    assert.deepEqual(BROWSER_HOW_BLUETOOTH.ways, HOW_TWO_WAYS.ways, 'the website’s two ways are not the phone’s, in the phone’s order')
+    assert.equal(BROWSER_HOW_BLUETOOTH.ways[0].key, 'bluetooth', 'the website’s How it works does not put Bluetooth first')
+    assert.equal(BROWSER_HOW_BLUETOOTH.wire, HOW_TWO_WAYS.wire)
+    assert.equal(BROWSER_HOW_BLUETOOTH.foot, HOW_TWO_WAYS.foot)
+    assert.match(BROWSER_HOW_BLUETOOTH.appBody, /Fractal Remote app/, 'the website’s Bluetooth way says this browser connects, which it never can')
+    const flat = web.replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' ')
+    assert.match(flat, /const \[howWay, setHowWay\] = useState\('bluetooth'\)/, 'the website’s How it works does not open on Bluetooth')
+    assert.match(flat, /const howBluetooth = !computer && howWay === 'bluetooth'/, 'the computer app’s window draws a Bluetooth way')
+    assert.match(flat, /<h1 className="pw-head">\{P2\.head\}<\/h1> \{computer \? null : \( <div className="pw-ways"/, 'the website’s two ways are not first, under the heading, or are drawn in the computer app’s window')
+    assert.match(flat, /phoneTitle: BROWSER_HOW_BLUETOOTH\.appTitle, phoneBody: BROWSER_HOW_BLUETOOTH\.appBody/)
+    assert.match(flat, /\{howBluetooth \? \( <> <p className="pw-note">\{BROWSER_HOW_BLUETOOTH\.foot\}<\/p> <BluetoothInApps className="pw-note" \/>/, 'the website’s Bluetooth way does not say where the app is')
+    /* The one line about the apps, taken out of a file before it is searched for any other Bluetooth (the sign-in screens, below). */
     const inApps = (text) => text.replace(/<BluetoothInApps\b[^>]*\/>|import BluetoothInApps from '\.\/BluetoothInApps'/g, ' ')
-    assert.ok(!/bluetooth-gear|WALKTHROUGH_TWO_WAYS|twoWays|Bluetooth/.test(inApps(web)), 'the browser’s phone walkthrough offers Bluetooth, which a browser does not have')
-    assert.match(web, /\{computer \? null : <BluetoothInApps className="pw-note" \/>\}/, 'the browser’s How it works does not say where Bluetooth is, or says it on the computer')
-    /* First, under the heading, before the three boxes and Got it: it sat under the boxes, below the button, until 7 November 2026, where nobody scrolled to it. */
-    assert.match(web.replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' '), /<h1 className="pw-head">\{P2\.head\}<\/h1> \{computer \? null : <BluetoothInApps className="pw-note" \/>\} <div className="pw-chain">/, 'the browser’s How it works does not say where Bluetooth is first, under its heading')
+    /* And no other Bluetooth on the browser's walkthrough: not the phone's words file, nor its switch. */
+    assert.ok(!/bluetooth-gear|WALKTHROUGH_TWO_WAYS|twoWays/.test(web), 'the browser’s phone walkthrough carries the phone’s Bluetooth')
     /*
      * And the browser's sign-in screen: Get connected is the computer's three
      * steps there, and only there. The phone adds the Bluetooth way under

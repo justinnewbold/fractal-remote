@@ -32,7 +32,7 @@ import slidersIcon from '../../mobile/assets/icons/sliders.png'
 import saveIcon from '../../mobile/assets/icons/save.png'
 import { Cta, FootRow, Steps, TipCard } from './Walk'
 import BluetoothInApps from './BluetoothInApps'
-import { AGREE_IN_BROWSER } from '../../shared/stores.mjs'
+import { AGREE_IN_BROWSER, BROWSER_HOW_BLUETOOTH } from '../../shared/stores.mjs'
 
 const PIECES = { unit: unitShot, computer: pieceComputer, phone: piecePhone }
 
@@ -92,6 +92,9 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
   const [unit, setUnit] = useState(UNITS[0].key)
   /* The box under Connect my real rig. Unlock stays grey until it is ticked. */
   const [agreed, setAgreed] = useState(false)
+  /* How it works opens on Bluetooth in a browser (BROWSER_HOW_BLUETOOTH); the computer's own window has only its own way. */
+  const [howWay, setHowWay] = useState('bluetooth')
+  const howBluetooth = !computer && howWay === 'bluetooth'
 
   /* Back to the start when it is asked for again from Settings. */
   useEffect(() => {
@@ -166,13 +169,26 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
           <>
             <Steps at={0} of={WALK_STEPS} />
             <h1 className="pw-head">{P2.head}</h1>
-            {/* The other way, and where it is: the phone apps, not a browser
-                (shared/stores.mjs). First, under the heading, since 7
-                November 2026: it sat under the boxes, past Got it, where
-                nobody scrolled to it. In a browser only. */}
-            {computer ? null : <BluetoothInApps className="pw-note" />}
+            {/* The two ways, the phone's choice row: Bluetooth first and
+                picked (shared/stores.mjs, 8 November 2026). In a browser
+                only: the computer's own window is the computer. */}
+            {computer ? null : (
+              <div className="pw-ways" role="group" aria-label={P2.head}>
+                {BROWSER_HOW_BLUETOOTH.ways.map((w) => (
+                  <button key={w.key} type="button" className={`pw-way${howWay === w.key ? ' on' : ''}`} aria-pressed={howWay === w.key} onClick={() => setHowWay(w.key)}>
+                    {w.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="pw-chain">
-              {CHAIN.map((box, i) => (
+              {(howBluetooth
+                ? [
+                    { key: 'unit', phoneTitle: CHAIN[0].phoneTitle, phoneBody: CHAIN[0].phoneBody, phoneWire: BROWSER_HOW_BLUETOOTH.wire },
+                    { key: 'phone', phoneTitle: BROWSER_HOW_BLUETOOTH.appTitle, phoneBody: BROWSER_HOW_BLUETOOTH.appBody }
+                  ]
+                : CHAIN
+              ).map((box, i) => (
                 <div key={box.key}>
                   <div className="pw-box">
                     <span className="pw-n">{i + 1}</span>
@@ -192,12 +208,25 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
                 </div>
               ))}
             </div>
-            <p className="pw-note">
-              {P2.foot}{' '}
-              <button type="button" className="pw-note-link" onClick={() => setAt('pick')}>
-                {P2.footGo}
-              </button>
-            </p>
+            {howBluetooth ? (
+              <>
+                <p className="pw-note">{BROWSER_HOW_BLUETOOTH.foot}</p>
+                {/* Where the app is, with the stores: this browser connects through a computer only. */}
+                <BluetoothInApps className="pw-note" />
+                <p className="pw-note">
+                  <button type="button" className="pw-note-link" onClick={() => setAt('pick')}>
+                    {P2.footGo}
+                  </button>
+                </p>
+              </>
+            ) : (
+              <p className="pw-note">
+                {P2.foot}{' '}
+                <button type="button" className="pw-note-link" onClick={() => setAt('pick')}>
+                  {P2.footGo}
+                </button>
+              </p>
+            )}
             {/* Held at the bottom of the screen while the boxes scroll under
                 it, so a phone too short for the whole page still shows the
                 way on. */}

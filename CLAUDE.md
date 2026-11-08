@@ -532,7 +532,13 @@ line that Bluetooth is in the iPhone, iPad and Android apps and that a web
 browser connects through a computer only (`BLUETOOTH_IN_APPS` in
 shared/stores.mjs, src/components/BluetoothInApps.jsx), on every screen of
 its connect page and wherever it explains connecting, never in the
-computer app's own window.
+computer app's own window. Its walkthrough's How it works opens on the
+phone's two ways, Bluetooth first and picked ("The initial walkthrough on
+the website is the one that's not showing the Bluetooth stuff at first",
+8 November 2026): the Bluetooth way's second box is the app on a phone or
+tablet, never the browser, with that line and the stores under it
+(`BROWSER_HOW_BLUETOOTH` in shared/stores.mjs, its labels the phone's
+HOW_TWO_WAYS word for word).
 
 It is said in several wordings, each in one place:
 
