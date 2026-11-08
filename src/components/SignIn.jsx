@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { confirmWithCode, loadRemoteConfig, NOT_IN_INBOX, resendConfirmation, sendPasswordReset, sentAgain } from '../lib/remote'
 import { CONFIRMED_SIGN_IN } from '../../shared/confirm-code.mjs'
-import { NAME_LABELS, NAME_MAX, nameProblem } from '../../shared/account-name.mjs'
+import { NAME_HINTS, NAME_MAX, nameProblem } from '../../shared/account-name.mjs'
 
 /**
  * The one sign-in form.
@@ -58,7 +58,8 @@ export default function SignIn({
   /*
    * THE NAME, on Create account only, as on the phone: "when they create an
    * account have them put in their first name and last name and email
-   * address" (Justin, 5 November 2026). Both needed, 50 characters each,
+   * address" (Justin, 5 November 2026). Optional since 8 November 2026, and
+   * the fields say so: either or both may be left empty, 50 characters each,
    * over the email; Sign in never asks. shared/account-name.mjs holds the
    * rule and its words for both ends.
    */
@@ -280,8 +281,8 @@ export default function SignIn({
                 value={first}
                 onChange={(e) => setFirst(e.target.value)}
                 disabled={off}
-                placeholder={NAME_LABELS.first}
-                aria-label={NAME_LABELS.first}
+                placeholder={NAME_HINTS.first}
+                aria-label={NAME_HINTS.first}
               />
             </label>
             <label className="signin-iconfield">
@@ -294,8 +295,8 @@ export default function SignIn({
                 value={last}
                 onChange={(e) => setLast(e.target.value)}
                 disabled={off}
-                placeholder={NAME_LABELS.last}
-                aria-label={NAME_LABELS.last}
+                placeholder={NAME_HINTS.last}
+                aria-label={NAME_HINTS.last}
               />
             </label>
           </>
@@ -372,7 +373,7 @@ export default function SignIn({
       {mode === 'up' ? (
         <>
           <label className="signin-field">
-            <span>{NAME_LABELS.first}</span>
+            <span>{NAME_HINTS.first}</span>
             <input
               type="text"
               autoComplete="given-name"
@@ -385,7 +386,7 @@ export default function SignIn({
             />
           </label>
           <label className="signin-field">
-            <span>{NAME_LABELS.last}</span>
+            <span>{NAME_HINTS.last}</span>
             <input
               type="text"
               autoComplete="family-name"

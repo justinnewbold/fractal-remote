@@ -16,7 +16,9 @@ import Press from './Press'
  * November 2026.) Accounts made before 5 November were never asked; this is
  * where they add one, and where anybody changes theirs. The same two fields
  * and the same rules as Create account (shared/account-name.mjs), kept on
- * the account itself the same way (relay.js changeName). Up high like the
+ * the account itself the same way (relay.js changeName): optional since 8
+ * November 2026, so either may be left empty, and emptying one and saving
+ * takes that name off the account. Up high like the
  * password box, so the keyboard cannot reach it. A solid panel rather than
  * frosted glass: the glass is kept to the six pop-ups that had it (the
  * Classic look is held to them, test/glass.mjs and test/glass-classic.mjs),

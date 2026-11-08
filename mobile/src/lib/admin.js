@@ -182,8 +182,13 @@ export const DEVICES = {
 
 const money = (n) => `$${n.toFixed(2)}`
 
-/** The lookup's Name row for an account made before Create account asked for one. */
-export const NO_NAME = 'None given. The account was made before Create account asked for a name.'
+/**
+ * The lookup's Name row for an account with none: a name is optional at
+ * Create account since 8 November 2026 (shared/account-name.mjs), and an
+ * account made before 5 November 2026 was never asked. The lookup is found
+ * by the email, so that is who it is.
+ */
+export const NO_NAME = 'None given. A name is optional, and they can add one later in the phone app.'
 
 /**
  * CUSTOMER LOOKUP: the rows under the answer to Check, Give access or Take it
@@ -212,8 +217,9 @@ export function lookupRows(answer, now = Date.now()) {
   const rows = [
     /*
      * Their name first, from 5 November 2026, when Create account began
-     * asking (shared/account-name.mjs). A server too old to send it sends no
-     * `name`, and then there is no row; an account made before then has ''.
+     * asking (shared/account-name.mjs), optional since 8 November. A server
+     * too old to send it sends no `name`, and then there is no row; an
+     * account with none (made before then, or with it left empty) has ''.
      */
     ...(typeof d.name === 'string' || d.name === null
       ? [{ label: 'Name', value: d.name ? d.name : d.name === '' ? NO_NAME : 'Could not be read just now. Check again.' }]

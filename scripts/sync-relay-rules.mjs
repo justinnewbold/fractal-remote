@@ -183,10 +183,10 @@ export const FILES = [
    */
   { source: '../shared/confirm-code.mjs', target: '../mobile/src/lib/confirm-code.js' },
   /*
-   * The first and last name Create account asks for: what will do, what is
-   * said about one that will not, and the keys it is kept under on the
-   * account. Both ends make accounts, and one taking a name the other
-   * refuses would be two different forms.
+   * The first and last name Create account asks for, both optional: what
+   * will do, what is said about one that will not, and the keys it is kept
+   * under on the account. Both ends make accounts, and one taking a name the
+   * other refuses would be two different forms.
    */
   { source: '../shared/account-name.mjs', target: '../mobile/src/lib/account-name.js' },
   /*
