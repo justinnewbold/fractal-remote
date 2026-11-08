@@ -4,7 +4,7 @@ import { View } from 'react-native'
 import { TAP, space } from '../lib/theme'
 import { DEFAULT_PROJECT } from '../lib/project'
 import { supabaseClient } from '../lib/relay'
-import { accessAction, trialsPageSections, trialsProblem } from '../lib/admin'
+import { accessAction, trialsAnswer, trialsPageSections, trialsProblem } from '../lib/admin'
 import Facts from './Facts'
 import Note from './Note'
 import Press from './Press'
@@ -30,14 +30,9 @@ export default function TrialsTool() {
     setBusy(true)
     try {
       const { data } = await supabaseClient().auth.getSession()
-      setSaid(
-        await accessAction({
-          url: DEFAULT_PROJECT.url,
-          anonKey: DEFAULT_PROJECT.anonKey,
-          token: data?.session?.access_token,
-          action: 'trials'
-        })
-      )
+      const ask = (action) => accessAction({ url: DEFAULT_PROJECT.url, anonKey: DEFAULT_PROJECT.anonKey, token: data?.session?.access_token, action })
+      /* 'trials', or Sales' answer from a server without it yet (trialsAnswer). */
+      setSaid(await trialsAnswer(ask))
     } finally {
       setBusy(false)
     }

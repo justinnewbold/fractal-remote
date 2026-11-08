@@ -1341,6 +1341,21 @@ export function stuckTurnOnWords(answer) {
  * the server's question about them fail. Anything else is said as it came.
  */
 /**
+ * THE TRIALS PAGE'S ANSWER. `ask(action)` asks grant-access (accessAction,
+ * with the page's sign-in). The 'trials' answer is one quick query; a server
+ * from before it refuses it as "Unknown action.", and then the page asks
+ * for Sales, whose answer has carried the same `trials` rows since 7
+ * November 2026, slower (Sales asks RevenueCat about every buyer) but the
+ * same list. Any other refusal is the page's to say (trialsProblem).
+ */
+export async function trialsAnswer(ask) {
+  const first = await ask('trials')
+  if (first?.ok || String(first?.message || '') !== 'Unknown action.') return first
+  const sales = await ask('sales')
+  return sales?.ok ? { ok: true, trials: Array.isArray(sales.trials) ? sales.trials : null } : sales || first
+}
+
+/**
  * What the Trials page says when the server refused: the page's update can
  * reach the phone before grant-access's 'trials' answer is live, and "Unknown
  * action." alone says nothing to him (the same words as stuckProblem).

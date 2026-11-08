@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DEFAULT_PROJECT, supabaseClient } from '../lib/remote'
-import { accessAction, trialsPageSections, trialsProblem } from '../../shared/admin.mjs'
+import { accessAction, trialsAnswer, trialsPageSections, trialsProblem } from '../../shared/admin.mjs'
 import Facts from './Facts'
 
 /**
@@ -16,14 +16,9 @@ export default function TrialsTool() {
     try {
       const client = supabaseClient()
       const { data } = client ? await client.auth.getSession() : { data: null }
-      setSaid(
-        await accessAction({
-          url: DEFAULT_PROJECT.url,
-          anonKey: DEFAULT_PROJECT.anonKey,
-          token: data?.session?.access_token,
-          action: 'trials'
-        })
-      )
+      const ask = (action) => accessAction({ url: DEFAULT_PROJECT.url, anonKey: DEFAULT_PROJECT.anonKey, token: data?.session?.access_token, action })
+      /* 'trials', or Sales' answer from a server without it yet (trialsAnswer). */
+      setSaid(await trialsAnswer(ask))
     } finally {
       setBusy(false)
     }

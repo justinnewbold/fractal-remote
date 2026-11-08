@@ -631,6 +631,22 @@ export function run(test) {
     assert.match(trialsProblem({ ok: false, message: 'Unknown action.' }), /server update that goes with it/)
     assert.equal(trialsProblem({ ok: false, message: 'Not allowed.' }), 'Not allowed.')
     assert.equal(trialsProblem({ ok: true }), null)
+    /* And it does not wait for that server update: an "Unknown action." server is asked for Sales, whose answer carries the same trials. */
+    const { trialsAnswer } = await import('../shared/admin.mjs')
+    const asked = []
+    const oldServer = async (action) => (asked.push(action), action === 'trials' ? { ok: false, message: 'Unknown action.' } : { ok: true, sales: [], trials: answer.trials, accounts: 9 })
+    assert.deepEqual(await trialsAnswer(oldServer), { ok: true, trials: answer.trials })
+    assert.deepEqual(asked, ['trials', 'sales'])
+    const newServer = async (action) => (asked.push(action), { ok: true, trials: answer.trials })
+    asked.length = 0
+    assert.deepEqual(await trialsAnswer(newServer), { ok: true, trials: answer.trials })
+    assert.deepEqual(asked, ['trials'], 'a server with the trials answer is asked for Sales as well')
+    /* Any other refusal is said, never retried as Sales (a stranger's 403 stays a 403). */
+    asked.length = 0
+    const refused = await trialsAnswer(async (action) => (asked.push(action), { ok: false, message: 'Not allowed.' }))
+    assert.deepEqual([refused.message, asked], ['Not allowed.', ['trials']])
+    /* Sales refused too: its refusal is said. */
+    assert.equal((await trialsAnswer(async (action) => (action === 'trials' ? { ok: false, message: 'Unknown action.' } : { ok: false, message: 'RevenueCat is busy.' }))).message, 'RevenueCat is busy.')
     /* The last day says so, rather than "0 days left". */
     assert.equal(trialLeft(now + 3600000, now), 'ends today')
     assert.equal(trialLeft(now + DAY_MS, now), `1 day left (ends ${new Date(now + DAY_MS).toLocaleString('en-US', { month: 'short' })} ${new Date(now + DAY_MS).getDate()}, ${new Date(now + DAY_MS).getFullYear()})`)
@@ -641,7 +657,8 @@ export function run(test) {
     const phone = read('mobile/src/components/TrialsTool.js')
     const web = read('src/components/TrialsTool.jsx')
     for (const [name, src] of [['phone', phone], ['browser', web]]) {
-      assert.equal((src.match(/action: 'trials'/g) || []).length, 1, `the ${name}’s Trials page does not ask the server for the trials, once`)
+      assert.match(src, /setSaid\(await trialsAnswer\(ask\)\)/, `the ${name}’s Trials page does not ask the server for the trials`)
+      assert.equal((src.match(/accessAction\(/g) || []).length, 1, `the ${name}’s Trials page asks the server some other way`)
       assert.match(src, /trialsPageSections\(said\)/, `the ${name}’s Trials page has words of its own`)
       assert.match(src, /trialsProblem\(said\)/, `the ${name}’s Trials page shows the server’s refusal raw`)
       assert.doesNotMatch(src, /said\.message/, `the ${name}’s Trials page shows the server’s refusal raw`)

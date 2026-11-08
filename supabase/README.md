@@ -813,9 +813,10 @@ keeps the counts. One piece here:
 2. **Merge the app**, with every check green. It goes out as an update (no
    build: the fingerprint is Unchanged).
 
-Merged first, the Trials page says the server doesn't have this list yet
-(`trialsProblem` in shared/admin.mjs) until step 1, and Sales shows the
-counts as before.
+Merged first, nothing is missing: until step 1 the Trials page asks for
+Sales instead (`trialsAnswer` in shared/admin.mjs), whose answer has
+carried the same trials since 7 November 2026, so it opens a few seconds
+slower (Sales asks RevenueCat about every buyer). Step 1 makes it quick.
 
 ### Checking it
 
