@@ -829,6 +829,33 @@ slower (Sales asks RevenueCat about every buyer). Step 1 makes it quick.
 The Trials page opens on Justin's account with the counts and the list. On
 any other account, `{"action":"trials"}` to grant-access answers 403.
 
+## The free trial and Apple's test Apple IDs (8 November 2026)
+
+An iPhone's trial begins when the App Store's free 7-day Trial item was
+bought. Apple's reviewers buy with test (sandbox) Apple IDs, and one that
+bought the item weeks ago, while the item itself was in review, would be
+told "This Apple ID has had its free trial already" on the version under
+review: a purchase that looks broken (guideline 2.1). So
+`functions/trial/` now starts a purchase RevenueCat marks
+`environment: "sandbox"` from the tap, and a real purchase keeps its own
+date exactly as before (`storeTrialAt`; test/trial.mjs runs every case).
+Nothing else changes: one trial per account and one per device still hold.
+
+### Putting it live, in this order
+
+1. **Merge it**, with every check green. Nothing on a phone, the website or
+   a computer changes: it is the server function only.
+2. **Deploy trial, with Justin's yes**, before 1.90.0 is sent for review:
+   `supabase functions deploy trial` (verify JWT on, as it is), which sends
+   `trial/index.ts` and `_shared/trial-rule.mjs` as they are on main.
+
+### Checking it
+
+On a TestFlight copy (whose purchases are sandbox ones too), a NEW account
+on an Apple ID that has bought the free item before, however long ago, taps
+Start 7-day free trial and gets seven days from that moment, on a device
+that has not had a trial. The function's log says `trial: started on ios`.
+
 ## How many people, day by day (counts only, naming nobody)
 
 "A day-by-day history of how many people use the app, on your Developer
@@ -914,3 +941,138 @@ select day, active_day, active_7, active_30, counted, unanswered, computed_at
 from public.usage_days order by day desc limit 7;
 select jobname, schedule, active from cron.job where jobname = 'usage-days';
 ```
+
+## Reading the reports without the full-account key (8 November 2026)
+
+"A read-only login for bug reports ... so I can open people's reports
+myself instead of you forwarding the emails" (Justin said yes, 8 November
+2026). `scripts/report.mjs` read `public.feedback` through the Management
+API with the full-account `SUPABASE_TOKEN`, which can do anything at all to
+the project. Now it asks a function that answers two questions and nothing
+else, to a caller holding a key that can do nothing else. Three pieces:
+
+- `migrations/20261108_report_readers.sql` — `private.report_reader_keys`,
+  the SHA-256 of each key (never the key), at most three, in a schema the
+  API does not serve, with row level security on, no policy and nothing
+  granted to anon or authenticated. Four database functions, service_role
+  only: `report_reader_hashes()` and `enroll_report_reader(key_hash,
+  replace_others)` for the keys, and the two questions the script used to
+  send as SQL, fixed here word for word, `read_reports_latest(most)` (1 to
+  50) and `read_report(prefix)` (8 to 36 hex digits and dashes, the newest
+  two that start so).
+- `functions/read-reports/` — `GET ?latest=N` and `GET ?id=<prefix>`,
+  answered only to a request whose `x-reports-key` header hashes to a kept
+  one (every kept hash compared in constant time; 401 otherwise, before
+  anything else is looked at), and `POST /enroll`, shut unless the function
+  secret `READ_REPORTS_ENROLL` is set. Nothing else: no way to write,
+  change or delete a report, and no other table. No CORS, so no web page
+  can read an answer. The key is never logged, never answered, and never
+  sent on to the database (only its hash is).
+- `scripts/report.mjs` — the same command line and the same output, asking
+  the function. It sends no key itself: the session's network proxy adds
+  `x-reports-key` to every request to the project's host, from the
+  credential Justin saves in its secure form. Off the proxy,
+  `READ_REPORTS_KEY` is the key, given to curl on stdin. The old way is
+  still there for the day the function is down, off unless asked:
+  `--management-api`, with `SUPABASE_TOKEN`.
+
+Every session in the environment that holds the credential sends the key
+to every address on `biznwrqeckviawjuhvyg.supabase.co`, the other
+functions included. None of them logs a request's headers, and
+test/read-reports.mjs fails if one starts to. Keep that environment
+personal: one shared with the organization would hand the key to other
+people's sessions too.
+
+### Putting it live, in this order
+
+1. **Apply `20261108_report_readers.sql`.** Nothing anybody sees changes.
+2. **Merge the change, with every check green.** No What's new line (it is
+   internal) and no build: nothing in the app moves. From here
+   `node scripts/report.mjs` asks the function, so until step 5 it says the
+   key was refused; `--management-api` reads the old way meanwhile.
+3. **Deploy read-reports from the merged commit's files, with verify JWT
+   off**: `supabase functions deploy read-reports --no-verify-jwt
+   --project-ref biznwrqeckviawjuhvyg` (with no CLI installed,
+   `npx supabase` with `--use-api`), or the Supabase connector's
+   `deploy_edge_function` with `verify_jwt: false` and the one file,
+   `index.ts`. With verify JWT on, the gateway refuses every call before
+   the function sees it, because the caller has no Supabase sign-in.
+4. **Justin saves the key, in the secure form, never in the chat.** The
+   lead asks for it with the credential form: host
+   `biznwrqeckviawjuhvyg.supabase.co`, header `x-reports-key`, no word
+   before the value, named "Bug reports key". Justin makes up a long
+   password (20 to 256 ordinary characters; a phrase of five or six words
+   is fine) and types it there. He never needs it again: nobody reads it
+   back, and a forgotten one is simply replaced (below). This can happen
+   any time before step 5.
+5. **Enrol the key, in one shell command**, so the one-time token is made
+   in the shell, goes nowhere but the two requests (always on curl's stdin,
+   never on a command line), and is gone when the subshell ends. It opens
+   enrolment, enrols the key the proxy adds to the request (the command
+   sends no key of its own), and shuts enrolment again whatever happened
+   (the trap). It prints a few short lines and never the token:
+
+   ```sh
+   (
+     set -eu
+     API=https://api.supabase.com/v1/projects/biznwrqeckviawjuhvyg/secrets
+     FN=https://biznwrqeckviawjuhvyg.supabase.co/functions/v1/read-reports
+     auth() { printf 'Authorization: Bearer %s\n' "$SUPABASE_TOKEN"; }
+     shut() { printf '["READ_REPORTS_ENROLL"]' | curl -sS -o /dev/null -w 'shut: %{http_code}\n' -X DELETE "$API" -H @<(auth) -H 'Content-Type: application/json' --data-binary @-; }
+     T=$(openssl rand -hex 32)
+     trap shut EXIT
+     printf '[{"name":"READ_REPORTS_ENROLL","value":"%s"}]' "$T" | curl -sS --fail-with-body -o /dev/null -w 'open: %{http_code}\n' -X POST "$API" -H @<(auth) -H 'Content-Type: application/json' --data-binary @-
+     printf '{"enroll":"%s"}' "$T" | curl -sS --fail-with-body --retry 6 --retry-delay 5 --retry-all-errors -X POST "$FN/enroll" -H 'Content-Type: application/json' --data-binary @-
+     echo
+   )
+   ```
+
+   `open: 201` (or 200), then the function's answer,
+   `{"ok":true,"why":"enrolled","keys":1}`, then `shut: 200`. Before the
+   answer there may be a refusal or two, `curl: (22) ... 403` with
+   `enrolment is closed`: a new secret can take a few seconds to reach the
+   function, and curl asks again every 5 seconds, seven times in all. Other
+   answers: `no x-reports-key ...` (400) means the proxy sent no key, so
+   step 4 is not done or the credential's host or header is not exactly as
+   above; `three keys are kept already` (409), see below. If `shut:` says
+   anything but 200, run the block's `API=`, `auth()` and `shut()` lines
+   again in a shell, then `shut`: enrolment must not stay open.
+
+### Checking it
+
+1. `node scripts/report.mjs --latest 3` prints the newest three reports,
+   with no token in the environment needed.
+2. Enrolment is shut: `printf '{"enroll":"x"}' | curl -sS -X POST
+   https://biznwrqeckviawjuhvyg.supabase.co/functions/v1/read-reports/enroll
+   --data-binary @-` answers `enrolment is closed`, never `wrong enrolment
+   token` (which would mean `READ_REPORTS_ENROLL` is still set).
+3. The function's log (Edge Functions → read-reports → Logs) has lines like
+   `read-reports: latest 3, 3 answered`, and never the key; nor does the
+   request's own entry in the edge logs list `x-reports-key` among the
+   headers it keeps. If a log ever shows it, take every key back (below)
+   and say so before enrolling another.
+4. `select left(hash, 12), created_at from private.report_reader_keys order
+   by created_at;` shows one row. (A request without the key cannot be made
+   from a session that holds it, since the proxy adds it to every one; the
+   refusals are run in test/read-reports.mjs instead.)
+
+### Changing the key, or taking it back
+
+- **To change it** (forgotten, or shown somewhere it should not have been):
+  Justin changes the "Bug reports key" credential's value in the
+  environment's settings (or deletes it, and the lead asks for it again
+  with the form, as in step 4). Then the lead runs step 5's command with
+  `"replace":true` in the enrolment body, `printf
+  '{"enroll":"%s","replace":true}' "$T"`, which keeps the new key and
+  takes back every other in one step.
+- **To take every key back at once**, the lead runs, as the project's own
+  SQL (the SQL editor, or the connector's `execute_sql`):
+  `delete from private.report_reader_keys where true;`. Every read is a 401
+  from that moment. Justin also deletes the credential from the
+  environment's settings, so the proxy stops sending it.
+- **To take back one of several**: find it by the day it was enrolled
+  (`select left(hash, 12), created_at ...`, as in Checking it, step 4),
+  then `delete from private.report_reader_keys where hash like
+  '<those 12>%';`.
+- **The cap**: three keys at most, so enrolment answers 409 when three are
+  kept; replace, or take one back first.

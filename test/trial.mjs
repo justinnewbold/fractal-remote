@@ -363,6 +363,56 @@ export function run(test) {
     assert.equal(deviceIdOk('a b c d e f g h'), false)
   })
 
+  test('trial: a test purchase (App Review’s and TestFlight’s Apple IDs) starts an iPhone’s trial now, and a real one keeps its date', async () => {
+    /*
+     * Apple's reviewer buys with a test Apple ID, which may have bought the
+     * free item weeks before, while the item itself was in review. RevenueCat
+     * marks that purchase environment "sandbox", and by its own date the trial
+     * would be over before it began ("This Apple ID has had its free trial
+     * already"), which reads as a broken purchase under guideline 2.1.
+     */
+    const products = [{ id: 'prod_trial', store_identifier: TRIAL_PRODUCT_ID }, { id: 'prod_full', store_identifier: 'cloud.newbold.fractalremote.full' }]
+    const ios = (purchases) =>
+      trialFn({ body: { action: 'start', device: 'install-number-1234', platform: 'ios' }, purchases, products, start: (x) => ({ ok: true, started_at: x.began, ends_at: x.ends }) })
+    const item = (daysAgo, more = {}) => ({ product_id: 'prod_trial', purchased_at: Date.now() - daysAgo * DAY_MS, status: 'owned', store: 'app_store', ...more })
+
+    /* A test purchase thirty days old: seven days from now, from the free item. */
+    const before = Date.now()
+    const a = await ios([item(30, { environment: 'sandbox' })])
+    assert.equal(a.said.ok, true, 'App Review’s old test purchase is told it has had its trial')
+    assert.equal(a.started.length, 1)
+    assert.equal(a.started[0].from_source, 'app_store_trial', 'a test purchase’s trial is not the free item’s')
+    const began = Date.parse(a.started[0].began)
+    assert.ok(began >= before && began <= Date.now(), 'a test purchase’s trial does not begin when it is asked')
+    assert.equal(Date.parse(a.started[0].ends) - began, TRIAL_MS)
+    assert.equal(a.said.trial.live, true)
+
+    /* A real purchase keeps the rule exactly: past seven days it is refused, as before. */
+    const b = await ios([item(30, { environment: 'production' })])
+    assert.deepEqual([b.said.ok, b.said.why, b.started.length], [false, 'store-trial-over', 0], 'a real purchase older than the trial starts one')
+    const c = await ios([item(30)])
+    assert.equal(c.said.why, 'store-trial-over', 'a purchase that does not say its environment is taken for a test one')
+    /* And from its own date when it is younger. */
+    const realAt = Date.now() - 2 * DAY_MS
+    const d = await ios([{ ...item(0, { environment: 'production' }), purchased_at: realAt }])
+    assert.equal(Date.parse(d.started[0].began), realAt, 'a real purchase’s trial no longer begins when it was bought')
+
+    /* A test purchase never moves a real one: the real date wins whichever is older. */
+    const e = await ios([item(30, { environment: 'sandbox' }), { ...item(0, { environment: 'production' }), purchased_at: realAt }])
+    assert.equal(Date.parse(e.started[0].began), realAt, 'an older test purchase moved a real one’s date')
+    const f = await ios([item(30, { environment: 'production' }), item(1, { environment: 'sandbox' })])
+    assert.equal(f.said.why, 'store-trial-over', 'a test purchase gave a real Apple ID’s spent trial back')
+
+    /* Only the free item, and never a refunded one. */
+    assert.equal((await ios([item(30, { environment: 'sandbox', status: 'refunded' })])).said.why, 'no-store-trial', 'a refunded test purchase starts a trial')
+    assert.equal((await ios([item(30, { environment: 'sandbox', product_id: 'prod_full' })])).said.why, 'no-store-trial', 'a test purchase of the full version starts a trial')
+
+    /* Elsewhere nothing changes: there is no store item to ask about. */
+    const g = await trialFn({ body: { action: 'start', device: 'install-number-1234', platform: 'android' }, purchases: [item(30, { environment: 'sandbox' })], products, start: (x) => ({ ok: true, started_at: x.began, ends_at: x.ends }) })
+    assert.equal(g.started[0].from_source, 'server')
+    assert.ok(!g.calls.some((x) => x.url.includes('/purchases')), 'Android asks RevenueCat for the App Store’s free item')
+  })
+
   test('trial: the database holds one per account and one per device, keeps them from clients, and never touches a purchase', () => {
     const sql = sqlOf('supabase/migrations/20261107_trials.sql')
     assert.match(sql, /create table if not exists public\.trials \( account_id uuid primary key references auth\.users \(id\) on delete cascade,/)

@@ -26,8 +26,9 @@
  * subscription offer a time-based trial only as a Non-Consumable at price
  * tier 0 ("7-Day Trial", product trial_7day; docs/app-store.md). So for
  * `ios` this asks RevenueCat whether that item is on the account, and the
- * trial begins when it was bought, never later. Elsewhere there is no store
- * item, and the trial begins now.
+ * trial begins when it was bought, never later; a test purchase (App
+ * Review's and TestFlight's Apple IDs, `storeTrialAt`) as if bought now.
+ * Elsewhere there is no store item, and the trial begins now.
  *
  * WHAT HAS TO BE SET, in Supabase -> Edge Functions -> Secrets:
  *
@@ -108,19 +109,33 @@ async function rcJson(path: string): Promise<any> {
  * product by its own id (prod…), so the project's products are read to find
  * which of its ids is the store's trial_7day; the store's name itself is
  * accepted too.
+ *
+ * A TEST PURCHASE STARTS IT NOW. Apple's reviewers, and TestFlight, buy with
+ * test Apple IDs, and RevenueCat marks what they buy `environment:
+ * "sandbox"` (its V2 purchase object: "production" or "sandbox", the field
+ * grant-access already reads to tell a test purchase from a sale). A
+ * reviewer's test Apple ID may have bought trial_7day weeks before, while
+ * the item itself was in review, and by its date that trial would be over
+ * before it began: "This Apple ID has had its free trial already", a
+ * purchase that looks broken (guideline 2.1). So a sandbox purchase counts
+ * as bought at `now`, and the trial runs its seven days from the tap. A real
+ * purchase keeps the rule exactly: when there is one, the oldest real one is
+ * the date, and a test one never moves it.
  */
-async function storeTrialAt(account: string): Promise<number | null> {
+async function storeTrialAt(account: string, now: number): Promise<number | null> {
   const bought = await rcJson(`/customers/${encodeURIComponent(account)}/purchases?limit=100`)
   const items: any[] = bought?.items || []
   if (!items.length) return null
   const products = await rcJson('/products?limit=100')
   const ids = new Set<string>([TRIAL_PRODUCT_ID])
   for (const p of products?.items || []) if (p?.store_identifier === TRIAL_PRODUCT_ID && p?.id) ids.add(String(p.id))
-  const times = items
-    .filter((p) => ids.has(String(p?.product_id || '')) && p?.status !== 'refunded')
+  const trials = items.filter((p) => ids.has(String(p?.product_id || '')) && p?.status !== 'refunded')
+  const times = trials
+    .filter((p) => p?.environment !== 'sandbox')
     .map((p) => (typeof p?.purchased_at === 'number' ? p.purchased_at : null))
     .filter((t): t is number => t !== null)
-  return times.length ? Math.min(...times) : null
+  if (times.length) return Math.min(...times)
+  return trials.some((p) => p?.environment === 'sandbox') ? now : null
 }
 
 Deno.serve(async (req: Request) => {
@@ -143,8 +158,9 @@ Deno.serve(async (req: Request) => {
   if (!deviceIdOk(input.device)) return json({ ok: false, why: 'no device', trial: null }, 400)
 
   /* An iPhone's trial is the App Store's free item, bought; nothing else starts it there. */
-  const storeAt = platform === 'ios' ? await storeTrialAt(who.id) : null
-  const plan = trialStart({ platform, storeAt })
+  const now = Date.now()
+  const storeAt = platform === 'ios' ? await storeTrialAt(who.id, now) : null
+  const plan = trialStart({ platform, storeAt, now })
   if (!plan.ok) return json({ ok: false, why: plan.why, trial: null })
 
   try {
