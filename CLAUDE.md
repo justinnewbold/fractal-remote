@@ -145,6 +145,14 @@ that Android builds used to go to. The track a build is sent to is
 `submit.production.android.track` in mobile/eas.json, which has to say
 `production`.
 
+If the build job stops at expo-doctor on Expo's package versions (Expo has
+published patches since the last build), run it again with keep_packages
+ticked, unless lining the packages up is the point of the build: lining
+them up moves expo-updates, so the fingerprint, and every store copy before
+the build then takes no update until its owner installs the new one. The
+1.90.0 pair (8 November 2026) was the first to need it; the stop spent no
+slot, since it comes before anything is queued.
+
 **And say so BEFORE a change that would need a build instead of an update.**
 
 > "You're supposed to let me know if anything you do would make it so that
