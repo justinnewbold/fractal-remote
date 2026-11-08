@@ -323,7 +323,7 @@ function status(b, unitState) {
     if (b.unit === 'vp4') return { line: VP4_CONNECTED, tone: 'ok' }
     if (unitState === 'present') return { line: `Connected · ${name} answering`, tone: 'ok' }
     /* The usual reasons, by unit (shared/bluetooth-gear notAnsweringLine): the Axe-Fx III has no MIDI Thru setting, only a THRU jack the white plug must stay out of. */
-    if (unitState === 'missing' || unitState === 'silent') return { line: notAnsweringLine(b.unit), tone: 'fault' }
+    if (unitState === 'missing' || unitState === 'silent') return { line: notAnsweringLine(b.unit, b.adapter?.name), tone: 'fault' }
     return { line: `Connected · asking the ${name}…`, tone: 'dim' }
   }
   if (cable) return { line: cableConnectingLine(b.adapter?.name), tone: 'dim' }

@@ -14,7 +14,7 @@ import { accountId } from './owner-unlock'
 import { installedStoreVersion } from './storeVersion'
 import { bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
-import { namedForFm3, neverOnFm3, unitForReport } from './bluetooth-gear'
+import { namedForFm3, neverOnFm3, notAnAdapter, unitForReport } from './bluetooth-gear'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -965,7 +965,8 @@ const cableRule = () => ({ unit: saved.unit, units: BLE_UNITS, skip: letGo })
  * listed for a tap but never chosen by themselves: the search's only one
  * found, Apple's screen's one just connected, or the iPhone's list.
  */
-const pickRule = () => ({ ...cableRule(), refused: saved.unit === 'fm3' ? neverOnFm3 : null, taken: takenIds() })
+/* Never picked by itself: a footswitch (notAnAdapter), on any unit, and on an FM3 the adapters never offered for one. Either is still listed, for a tap. */
+const pickRule = () => ({ ...cableRule(), refused: (n) => notAnAdapter(n) || (saved.unit === 'fm3' && neverOnFm3(n)), taken: takenIds() })
 
 /** The cables a tap on Connect would take straight away now, from a list already read (bleAdapters cablesFirst): the page's hint says the same as Connect does. */
 export const cablesConnectTakes = (list) => cablesFirst(list, cableRule())

@@ -564,6 +564,23 @@ export const FM3_NEVER_NAMES = Object.freeze([/widi\s*master/i, /widi\s*jack/i, 
 export const neverOnFm3 = (name) => FM3_NEVER_NAMES.some((re) => re.test(String(name || '')))
 
 /*
+ * NOT AN ADAPTER: A MIDI FOOTSWITCH THAT TALKS BLUETOOTH MIDI.
+ *
+ * "Hey, can it do MVAVe chocolate midi's?" (a customer's report, 8 November
+ * 2026, FM3): his phone had connected to the M-VAVE Chocolate Plus itself,
+ * "FootCtrlPlus Bluetooth", as if it were the adapter on the unit, and the
+ * FM3 never answered. A footswitch sends its own buttons; nothing documents
+ * one carrying the app's messages to a unit or the unit's answers back. The
+ * phone lists every Bluetooth MIDI device, so one like this is never picked
+ * by itself (bluetooth.js pickRule), and once connected the page says what it
+ * is rather than sending the player to check the plugs. FootCtrl is the
+ * original Chocolate, FootCtrlPlus the Plus (M-VAVE's own firmware names). A
+ * name is added here only once a report shows it.
+ */
+export const NOT_ADAPTER_NAMES = Object.freeze([/^\s*foot\s*ctrl/i])
+export const notAnAdapter = (name) => NOT_ADAPTER_NAMES.some((re) => re.test(String(name || '')))
+
+/*
  * AND THE ONLY ADAPTER NAMED FOR AN FM3 BY THE APP ITSELF: the FM3's own
  * way's, the WIDI Uhost (waysFor('fm3')). FM3_NEVER also refuses "any
  * adapter that can take power from MIDI OUT", and an adapter the app has no
@@ -990,8 +1007,10 @@ export const tunerQuietLine = (unit) =>
  * received at the MIDI IN port are passed automatically to the MIDI THRU
  * port").
  */
-export function notAnsweringLine(unit) {
+export function notAnsweringLine(unit, adapter = null) {
   const name = UNITS[unit] || 'unit'
+  /* A footswitch picked as the adapter (notAnAdapter): what it is, and where to go instead. */
+  if (notAnAdapter(adapter)) return `${adapterSaid(adapter)} is a MIDI footswitch, not an adapter for your ${name}. Pick the Bluetooth MIDI adapter plugged into the ${name} instead.`
   if (unit === 'axefx3') return `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.`
   return `Adapter connected, but the ${name} isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.`
 }

@@ -7960,7 +7960,7 @@ export function run(test) {
     assert.match(code('shared/bluetooth-gear.mjs'), /name: 'CME WIDI Uhost'/, 'the part he uses is not named where it is bought')
     /* The status line, in his words. */
     /* By unit since 25 October 2026 (shared/bluetooth-gear notAnsweringLine): the Axe-Fx III has no MIDI Thru setting, only a THRU jack to keep the white plug out of. */
-    assert.match(page, /if \(unitState === 'missing' \|\| unitState === 'silent'\) return \{ line: notAnsweringLine\(b\.unit\), tone: 'fault' \}/)
+    assert.match(page, /if \(unitState === 'missing' \|\| unitState === 'silent'\) return \{ line: notAnsweringLine\(b\.unit, b\.adapter\?\.name\), tone: 'fault' \}/)
     const gearWords = await import('../shared/bluetooth-gear.mjs')
     assert.equal(gearWords.notAnsweringLine('fm9'), 'Adapter connected, but the FM9 isn’t answering. Check both MIDI plugs, and that MIDI Thru is off.')
     assert.equal(gearWords.notAnsweringLine('axefx3'), 'Adapter connected, but the Axe-Fx III isn’t answering. Check both MIDI plugs: the white one goes in MIDI OUT, not THRU.')
@@ -8173,7 +8173,7 @@ export function run(test) {
     assert.match(ble, /const pick = saved\.adapter \? null : pickAdapter\(now\.devices, new Set\(\), pickRule\(\)\) if \(pick\) chooseAdapter\(pick\)/, 'after an Android search the only adapter is not chosen by itself')
     /* The pick is told what the cable rule is, and for an FM3 the adapters never offered for one: listed, never chosen by themselves. */
     /* And, since 7 November 2026, never another unit's adapter as the only one there (`taken`: each unit keeps its own). */
-    assert.match(ble, /const pickRule = \(\) => \(\{ \.\.\.cableRule\(\), refused: saved\.unit === 'fm3' \? neverOnFm3 : null, taken: takenIds\(\) \}\)/, 'the phone chooses a WIDI Master or a C2MIDI Pro for an FM3 by itself')
+    assert.match(ble, /const pickRule = \(\) => \(\{ \.\.\.cableRule\(\), refused: \(n\) => notAnAdapter\(n\) \|\| \(saved\.unit === 'fm3' && neverOnFm3\(n\)\), taken: takenIds\(\) \}\)/, 'the phone chooses a WIDI Master or a C2MIDI Pro for an FM3, or a footswitch on any unit, by itself')
 
     /* The page: step 1 the unit, step 2 Connect; Stop once it is on; the list only for a real choice. */
     const page = flat('mobile/src/screens/Bluetooth.js')
@@ -12502,6 +12502,26 @@ export function run(test) {
     assert.match(trouble, /\{b\.adapter && !cable \? \( <Press label="Forget the adapter" sub=\{`\$\{adapterName\(b\.adapter\) \|\| 'The adapter'\} from last time\. \$\{b\.on \? 'Bluetooth goes off, then tap' : 'Then tap'\} Connect to pick another\.`\} height=\{52\} onPress=\{\(\) => letGoOfKeptAdapter\(\)\} \/> \) : null\}/, 'Forget the adapter is drawn only with Bluetooth off, or forgets it with Bluetooth left on')
     /* A cable keeps its own, as it was: with Bluetooth off, and let go of by hand. */
     assert.match(trouble, /\{b\.adapter && !b\.on && cable \? \( <Press label="Forget the USB cable"[^]*?onPress=\{\(\) => forgetAdapter\(\{ byHand: true \}\)\} \/> \) : null\}/)
+  })
+
+  test('a Bluetooth MIDI footswitch is never taken for the adapter by itself, and the page says what it is', async () => {
+    /* A customer's FM3, 8 November 2026: the phone connected to his M-VAVE Chocolate Plus ("FootCtrlPlus Bluetooth") as the adapter, and the page sent him to check the plugs. */
+    const g = await import('../shared/bluetooth-gear.mjs')
+    const { pickAdapter } = await import('../mobile/src/lib/bleAdapters.js')
+    for (const name of ['FootCtrlPlus Bluetooth', 'FootCtrl', 'footctrlplus', ' Foot Ctrl']) assert.ok(g.notAnAdapter(name), `${name} was taken for an adapter`)
+    for (const name of ['WIDI Jack Bluetooth', 'WIDI Uhost', 'MD-BT01', 'C2MIDI Pro', 'yamaha12 Bluetooth', '', null]) assert.ok(!g.notAnAdapter(name), `${name} was called a footswitch`)
+    const foot = { id: 'a', name: 'FootCtrlPlus Bluetooth', driver: 'com.apple.AppleMIDIBluetoothDriver' }
+    const widi = { id: 'b', name: 'WIDI Jack Bluetooth', driver: 'com.apple.AppleMIDIBluetoothDriver' }
+    const refused = (n) => g.notAnAdapter(n)
+    assert.equal(pickAdapter([foot], new Set([foot.id]), { refused }), null, 'the footswitch just connected in Apple’s screen was chosen by itself')
+    assert.equal(pickAdapter([foot]), foot, 'with no rule the only device is still chosen, as before')
+    assert.equal(pickAdapter([widi], new Set([widi.id]), { refused }), widi, 'a real adapter was held back')
+    /* Connected to it and the unit silent: the page names it a footswitch, for every unit, and never "check the plugs". */
+    for (const [unit, name] of [['fm3', 'FM3'], ['am4', 'AM4'], ['axefx3', 'Axe-Fx III']]) {
+      assert.equal(g.notAnsweringLine(unit, 'FootCtrlPlus Bluetooth'), `FootCtrlPlus is a MIDI footswitch, not an adapter for your ${name}. Pick the Bluetooth MIDI adapter plugged into the ${name} instead.`)
+    }
+    assert.equal(g.notAnsweringLine('fm3', 'WIDI Uhost'), g.notAnsweringLine('fm3'), 'a real adapter’s line changed')
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /return \{ line: notAnsweringLine\(b\.unit, b\.adapter\?\.name\), tone: 'fault' \}/)
   })
 
   test('which other adapter is here while the one kept is not: one, by name, never the one kept, a cable, the iPhone’s own port, or for an FM3 one it is never offered', async () => {
