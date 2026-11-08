@@ -11213,6 +11213,8 @@ export function run(test) {
       assert.deepEqual(B[58], ['amp', 'DISTORT', 'Amp', 58])
       assert.deepEqual(B[59], ['amp', 'DISTORT', 'Amp', 58])
       assert.deepEqual(B[120], ['drive', 'FUZZ', 'Drive', 118])
+      /* Which ids are blocks is the codec's, the same on every gen-3 unit (gen3Sender tells an Edit-shaped write by it); the settings in them are each unit's own. */
+      assert.deepEqual(B, fm3.FM3_BLOCKS)
       for (const [family, f] of Object.entries(F)) {
         for (const knob of f.knobs) assert.ok(knob.length === 2 || (knob.length === 6 && knob[2] < knob[3]), `${u.name} ${family} ${knob[1]}: a knob with a range it cannot be drawn on`)
         for (const [, label, min, max, labels] of f.switches) assert.equal(labels.length, Math.min(128, max - min + 1), `${u.name} ${family} ${label}: options that are not its numbers`)
@@ -11331,6 +11333,10 @@ export function run(test) {
       assert.equal(send(e.buildReadAll(m, 74)), 'refused')
       assert.equal(send(e.buildKnob(m, 58, 1999, 0.4)), 'refused')
       assert.equal(send(e.buildTyped(m, 58, swId, swMax + 1)), 'refused')
+      /* A model with no catalog of its own: nothing of Edit's goes to it, whatever is placed. */
+      const nobody = gen3Sender(() => true, () => {}, 0x13, () => placed)
+      assert.equal(nobody(fm3.buildReadAll(0x13, 58)), 'refused')
+      assert.equal(nobody(fm3.buildTyped(0x13, 58, u.type, 1)), 'refused')
       /* What the unit was sent before Edit: the tempo's typed write at the Controllers, the scene and channel both ways, bypass, the published questions. */
       given = null
       for (const f of [

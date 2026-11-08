@@ -392,8 +392,6 @@ export function am4Sender(send, log = () => {}, learned = () => null, placed = (
  */
 export const GEN3_EDIT = Object.freeze({ fm3: fm3Edit, fm9: fm9Edit, axefx3: axefx3Edit })
 const GEN3_EDIT_BY_MODEL = Object.freeze({ [MODELS.fm3]: fm3Edit, [MODELS.fm9]: fm9Edit, [MODELS.axefx3]: axefx3Edit })
-/* A model with no catalog: nothing of Edit's is ever one of its own. */
-const NO_EDIT = Object.freeze({ editBlock: () => null, editAllowed: () => null })
 
 /*
  * A GEN-3 UNIT'S EDIT FRAMES, HELD AS THE AM4'S ARE. Everything the gen-3
@@ -407,14 +405,16 @@ const NO_EDIT = Object.freeze({ editBlock: () => null, editAllowed: () => null }
  * write is at the Controllers (2), not a block, and goes as before.
  */
 export function gen3Sender(send, log = () => {}, model, placed = () => null) {
-  const edit = GEN3_EDIT_BY_MODEL[model] || NO_EDIT
+  /* The unit's own Edit; a model with none has nothing of Edit's that may go. Which ids are blocks is the codec's, the same on every gen-3 unit. */
+  const edit = GEN3_EDIT_BY_MODEL[model] || null
+  const blockAt = (edit || fm3Edit).editBlock
   const editShaped = (b) =>
     Array.isArray(b) &&
     b[0] === 0xf0 &&
     b[4] === model &&
-    (b[5] === fm3Edit.READ_ALL || (b[5] === FN.PARAM && ((b[6] === fm3Edit.KNOB[0] && b[7] === fm3Edit.KNOB[1]) || (b[6] === fm3Edit.TYPED[0] && b[7] === fm3Edit.TYPED[1] && !!edit.editBlock((b[8] & 0x7f) | ((b[9] & 0x7f) << 7))))))
+    (b[5] === fm3Edit.READ_ALL || (b[5] === FN.PARAM && ((b[6] === fm3Edit.KNOB[0] && b[7] === fm3Edit.KNOB[1]) || (b[6] === fm3Edit.TYPED[0] && b[7] === fm3Edit.TYPED[1] && !!blockAt((b[8] & 0x7f) | ((b[9] & 0x7f) << 7))))))
   return (bytes) => {
-    if (editShaped(bytes) && !edit.editAllowed(bytes, placed(), model)) {
+    if (editShaped(bytes) && !(edit && edit.editAllowed(bytes, placed(), model))) {
       log(`refused to send ${toHex(bytes)}: it is not one of Edit’s reads or writes for a block in this preset`)
       return 'refused'
     }
