@@ -10884,23 +10884,48 @@ export function run(test) {
 
   test('Edit over Bluetooth is one switch per unit, a store version, null until the build that opens it, held to the ledger like Bluetooth itself', async () => {
     const rule = await import('../mobile/src/lib/ble-rule.js')
-    const { ledgerBuilds, thresholdProblems, pinProblems, EDIT_OPENING, EDIT_WORDS, EDIT_OPENED_AT } = await import('./ledger.mjs')
+    const { editProblems, EDIT_OPENED_AT, EDIT_UNIT_NAMES } = await import('./ledger.mjs')
+    const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
     const { isOlder } = await import('../shared/versions.mjs')
     assert.deepEqual(rule.EDIT_UNITS, ['am4', 'fm3', 'fm9', 'axefx3'], 'Edit over Bluetooth is listed for a unit whose knobs the phone cannot read')
-    assert.deepEqual(rule.EDIT_FROM_STORE, { am4: null, fm3: null, fm9: null, axefx3: null }, 'Edit over Bluetooth opens to customers before a store version whose notes say so')
-    /* His account: every unit whose editing is built, on every copy. Nobody else, on any copy, until a store version opens it. Nobody at all, a unit not built (the VP4). */
-    for (const installed of [null, '1.87.11', '1.89.0', '1.89.36', '1.90.0', '9.9.9']) {
-      for (const unit of ['am4', 'fm3', 'fm9', 'axefx3']) {
-        assert.equal(rule.editOffered(unit, { admin: true, platform: 'ios', installed }), true)
-        assert.equal(rule.editOffered(unit, { admin: true, platform: 'android', installed }), true)
-        assert.equal(rule.editOffered(unit, { admin: false, platform: 'ios', installed }), false, `a customer is offered Edit over Bluetooth on the ${unit} on ${installed}`)
-        assert.equal(rule.editOffered(unit, { admin: false, platform: 'android', installed }), false, `a customer is offered Edit over Bluetooth on the ${unit} on ${installed}`)
+    assert.ok(!Object.prototype.hasOwnProperty.call(rule.EDIT_FROM_STORE, 'vp4'), 'the VP4 is in the Edit over Bluetooth switch: it has no Edit over Bluetooth at all')
+    /*
+     * The switch's shape, and nothing about its values: frozen, and each
+     * entry null or a store version on each phone. Which values are allowed is
+     * the ledger's to say (below), as it is for Bluetooth's threshold, so the
+     * build pull request that keys a unit, and the row's pull request after
+     * its build, go green here with no assertion rewritten.
+     */
+    assert.ok(Object.isFrozen(rule.EDIT_FROM_STORE), 'the Edit over Bluetooth switch can be changed while the app runs')
+    for (const [unit, from] of Object.entries(rule.EDIT_FROM_STORE)) {
+      const shaped = from === null || (typeof from === 'object' && Object.keys(from).sort().join() === 'android,ios' && ['ios', 'android'].every((p) => from[p] === null || /^\d+\.\d+\.\d+$/.test(from[p])))
+      assert.ok(shaped, `${unit}: the Edit over Bluetooth entry is not null, nor { ios: '1.90.0', android: '1.90.0' }: ${JSON.stringify(from)}`)
+    }
+    /* Each unit is named in the ledger by the Bluetooth page's own name for it. */
+    assert.deepEqual(Object.keys(EDIT_UNIT_NAMES), [...rule.EDIT_UNITS])
+    for (const unit of rule.EDIT_UNITS) assert.equal(EDIT_UNIT_NAMES[unit], BLE_UNITS.find((u) => u.key === unit)?.name, `the ledger names the ${unit} other than the Bluetooth page does`)
+    /*
+     * His account: every unit whose editing is built, on every copy. Anybody
+     * else, as the threshold lets a customer into Bluetooth: closed on a copy
+     * that cannot say its version and on every built-in version below the
+     * unit's entry, open at it and above, and closed on every copy while the
+     * entry is null. Nobody at all, a unit not built (the VP4).
+     */
+    for (const installed of [null, '1.87.11', '1.89.0', '1.89.36', '1.90.0', '1.90.4', '1.91.0', '9.9.9']) {
+      for (const unit of rule.EDIT_UNITS) {
+        for (const platform of ['ios', 'android']) {
+          assert.equal(rule.editOffered(unit, { admin: true, platform, installed }), true)
+          const at = rule.EDIT_FROM_STORE[unit]?.[platform] ?? null
+          const open = at !== null && installed !== null && isOlder(installed, at) === false
+          assert.equal(rule.editOffered(unit, { admin: false, platform, installed }), open, `a customer on ${platform} ${installed} is ${open ? 'not ' : ''}offered Edit over Bluetooth on the ${unit}, whose entry is ${at}`)
+        }
         assert.equal(rule.editOffered(unit, { admin: false, platform: null, installed }), false)
       }
       for (const unit of ['vp4', 'am3', '', null]) assert.equal(rule.editOffered(unit, { admin: true, platform: 'ios', installed }), false, `Edit opens over Bluetooth on the ${unit}, whose knobs are not built`)
     }
     /* Each unit on its own entry: the FM9's version opens the FM9 and nothing else. */
-    const fm9Only = { ...rule.EDIT_FROM_STORE, fm9: { ios: '1.90.0', android: '1.90.0' } }
+    const none = Object.fromEntries(rule.EDIT_UNITS.map((u) => [u, null]))
+    const fm9Only = { ...none, fm9: { ios: '1.90.0', android: '1.90.0' } }
     assert.equal(rule.editOffered('fm9', { platform: 'ios', installed: '1.90.0', units: fm9Only }), true)
     for (const unit of ['am4', 'fm3', 'axefx3']) assert.equal(rule.editOffered(unit, { platform: 'ios', installed: '1.90.0', units: fm9Only }), false, `the FM9’s entry opens the ${unit}`)
     /* The switch as a build will set it: open from that version on, on both phones, and never on a copy that cannot say what it is. */
@@ -10911,22 +10936,148 @@ export function run(test) {
       assert.equal(rule.editOffered('am4', { platform, installed: '1.89.9', units }), false)
       assert.equal(rule.editOffered('am4', { platform, installed: null, units }), false)
     }
-    /* Held to the ledger as the Bluetooth threshold is: null, or this app's own version in the build pull request, until its row is written. */
+    /*
+     * THE REAL ONE: the switch, the ledger and the pins as they are, each unit
+     * on its own rows, its own entry and its own pin (test/ledger.mjs
+     * editProblems): null, or this app's own version in the build pull
+     * request, until a row names the unit, and never moved back after.
+     */
+    assert.ok(Object.isFrozen(EDIT_OPENED_AT), 'EDIT_OPENED_AT can be changed')
+    assert.deepEqual(Object.keys(EDIT_OPENED_AT), [...rule.EDIT_UNITS], 'EDIT_OPENED_AT does not have one entry for every unit in EDIT_FROM_STORE')
+    for (const [unit, pin] of Object.entries(EDIT_OPENED_AT)) {
+      assert.ok(pin === null || (Object.isFrozen(pin) && Object.keys(pin).sort().join() === 'android,ios,version' && /^\d+\.\d+\.\d+$/.test(pin.version)), `EDIT_OPENED_AT.${unit} is not null, nor a frozen { version, ios, android }`)
+    }
     const app = JSON.parse(src('package.json')).version
-    const builds = ledgerBuilds(src('docs/expo-builds.md'), EDIT_OPENING)
+    const stores = JSON.parse(src('public/store-versions.json'))
+    assert.deepEqual(editProblems({ text: src('docs/expo-builds.md'), units: rule.EDIT_FROM_STORE, appVersion: app, pins: EDIT_OPENED_AT, stores }), [], 'Edit over Bluetooth is set where the ledger does not allow it')
     for (const [unit, from] of Object.entries(rule.EDIT_FROM_STORE)) {
-      assert.deepEqual(thresholdProblems(builds, from || {}, app, EDIT_WORDS), [], `${unit}: Edit over Bluetooth is set where the ledger does not allow it`)
       for (const p of ['ios', 'android']) {
         if (from?.[p]) assert.notEqual(isOlder(from[p], rule.BLUETOOTH_FROM_STORE[p]), true, `${unit} opens Edit over Bluetooth before Bluetooth itself on ${p}`)
       }
-      const pin = EDIT_OPENED_AT?.[unit] ?? null
-      assert.deepEqual(pinProblems({ builds, from: from || {}, stores: JSON.parse(src('public/store-versions.json')), pin, w: EDIT_WORDS }), [], `${unit}: Edit over Bluetooth's pin`)
     }
-    /* The rule says no to the slips it is there for: a store version already out (it would open by update), one phone alone. */
-    assert.ok(thresholdProblems(builds, { ios: '1.89.0', android: '1.89.0' }, app, EDIT_WORDS).length > 0, 'Edit over Bluetooth could open by update on copies already out')
-    assert.ok(thresholdProblems(builds, { ios: app, android: null }, app, EDIT_WORDS).length > 0, 'Edit over Bluetooth could open on one phone alone')
-    assert.deepEqual(thresholdProblems(builds, { ios: app, android: app }, app, EDIT_WORDS), [], 'the build pull request cannot set the switch')
-    assert.ok(thresholdProblems(builds, { ios: app, android: app }, app, EDIT_WORDS).length === 0 && thresholdProblems(builds, { ios: app, android: app }, '9.0.0', EDIT_WORDS)[0]?.includes('Editing over Bluetooth for customers'), 'the rule does not say which row to write')
+  })
+
+  test('Edit over Bluetooth opens one unit at a time: a build’s row names the units it opened, and each unit answers to its own entry and its own pin', async () => {
+    /*
+     * "Each unit opens on its own entry" (CLAUDE.md). The likely plan: the
+     * AM4 and the FM3 open to customers in 1.90.0, and the FM9 and the
+     * Axe-Fx III stay null and open in a later store version of their own.
+     * Tried here on made-up ledgers and made-up switches, the real ones left
+     * alone, at every step of that plan and at the slips it has to refuse.
+     */
+    const { editProblems, editRowProblems, editRowUnits, editOpening, editWords, ledgerBuilds, thresholdProblems, EDIT_MARKER } = await import('./ledger.mjs')
+    const { EDIT_UNITS } = await import('../mobile/src/lib/ble-rule.js')
+    const row = (date, version, ios, android, why) => `| ${date} | ${version} | ${ios} | ${android} | ${why} |`
+    const base = [
+      '| Date | Version | iOS | Android | What it was for |',
+      '|---|---|---|---|---|',
+      row('26 Oct', '1.89.0', '1', '1', 'Bluetooth (beta) for customers, on all five units (AM4, FM3, FM9, Axe-Fx III, VP4)'),
+      row('26 Oct', '1.89.3', '1', '1', 'The 1.89.0 version brought up to date'),
+      row('4 Nov', '1.89.36', '—', '1', 'Android plugs into the unit by USB cable')
+    ].join('\n')
+    const with90 = `${base}\n${row('20 Nov', '1.90.0', '1', '1', `${EDIT_MARKER}: AM4, FM3. And the rest of the pair`)}`
+    const with91 = `${with90}\n${row('10 Dec', '1.91.0', '1', '1', `${EDIT_MARKER}: FM9`)}`
+    const both = (v) => ({ ios: v, android: v })
+    const switchOf = (keyed) => ({ ...Object.fromEntries(EDIT_UNITS.map((u) => [u, null])), ...keyed })
+    const pinOf = (v) => Object.freeze({ version: v, ios: v, android: v })
+    const pins = (opened) => ({ ...Object.fromEntries(EDIT_UNITS.map((u) => [u, null])), ...opened })
+    const stores = { ios: '1.89.3', android: '1.89.36' }
+    const ask = (text, keyed, appVersion, opened = {}, live = stores) => editProblems({ text, units: switchOf(keyed), appVersion, pins: pins(opened), stores: live })
+    const AM4_FM3 = { am4: both('1.90.0'), fm3: both('1.90.0') }
+    const PINNED = { am4: pinOf('1.90.0'), fm3: pinOf('1.90.0') }
+
+    /* Today: every unit null, no row, no pin. */
+    assert.deepEqual(ask(base, {}, '1.89.72'), [], 'today, every unit null, is refused')
+    /* The 1.90.0 build pull request: the AM4 and the FM3 keyed to its own version, the FM9 and the III left null. */
+    assert.deepEqual(ask(base, AM4_FM3, '1.90.0'), [], 'the 1.90.0 build pull request, opening the AM4 and the FM3 alone, is refused')
+    /* The first pull request after that build: its row names the AM4 and the FM3, and their pins are set; the FM9 and the III still null. */
+    assert.deepEqual(ask(with90, AM4_FM3, '1.90.1', PINNED), [], 'the row’s pull request, naming the AM4 and the FM3 with the FM9 and the III null, is refused')
+    assert.deepEqual(ask(with90, AM4_FM3, '1.90.1', PINNED, both('1.90.0')), [], 'the day 1.90.0 is live, the AM4 and the FM3 pinned, is refused')
+    /* The row is the AM4's and the FM3's opening, and not the FM9's or the III's. */
+    for (const [unit, marked] of [['am4', 2], ['fm3', 2], ['fm9', 0], ['axefx3', 0]]) {
+      assert.equal(ledgerBuilds(with90, editOpening(unit)).filter((b) => b.opening).length, marked, `the 1.90.0 row is read wrong for the ${unit}`)
+    }
+    /* That row's pull request without the pins: red, for each unit it names, and it says what to write. */
+    const unpinned = ask(with90, AM4_FM3, '1.90.1')
+    assert.ok(unpinned.some((p) => /^AM4: docs\/expo-builds\.md marks 1\.90\.0 as the opening, and EDIT_OPENED_AT\.am4 in test\/ledger\.mjs is null/.test(p)), 'the row’s pull request goes green without the AM4’s pin')
+    assert.ok(unpinned.some((p) => /^FM3: docs\/expo-builds\.md marks 1\.90\.0 as the opening, and EDIT_OPENED_AT\.fm3/.test(p)), 'the row’s pull request goes green without the FM3’s pin')
+    assert.ok(!unpinned.some((p) => /^(FM9|Axe-Fx III):/.test(p)), 'the FM9 or the III is asked for a pin it was never opened with')
+    /* After the build, before the row: red, and it sends whoever reads it to the row, naming the unit. */
+    const noRow = ask(base, AM4_FM3, '1.90.1')
+    assert.ok(noRow.some((p) => /^AM4: ios: the threshold is 1\.90\.0 with no build marked as the opening/.test(p) && p.includes('"Editing over Bluetooth for customers: AM4" in What it was for') && p.includes('EDIT_OPENED_AT.am4')), 'the build without its row does not say which row to write')
+
+    /* The FM9's own later store version: its build pull request, and its row's after, with the AM4 and the FM3 left as they were opened. */
+    const AND_FM9 = { ...AM4_FM3, fm9: both('1.91.0') }
+    assert.deepEqual(ask(with90, AND_FM9, '1.91.0', PINNED), [], 'the FM9’s own build pull request, at 1.91.0, is refused')
+    assert.deepEqual(ask(with91, AND_FM9, '1.91.1', { ...PINNED, fm9: pinOf('1.91.0') }), [], 'the FM9’s row and pin, at 1.91.0, are refused')
+    assert.ok(ask(with91, AND_FM9, '1.91.1', PINNED).some((p) => /^FM9: docs\/expo-builds\.md marks 1\.91\.0 as the opening, and EDIT_OPENED_AT\.fm9/.test(p)), 'the FM9’s row goes green without its pin')
+    /* And the III, still null through all of it. */
+    assert.deepEqual(ask(with91, { ...AND_FM9, axefx3: null }, '1.92.0', { ...PINNED, fm9: pinOf('1.91.0') }), [])
+
+    /* THE SLIPS. A row naming the FM9 while the FM9 is null: it would be reviewed as opened and kept closed. */
+    const fm9Named = `${base}\n${row('20 Nov', '1.90.0', '1', '1', `${EDIT_MARKER}: AM4, FM3 and FM9`)}`
+    assert.ok(ask(fm9Named, AM4_FM3, '1.90.1', PINNED).some((p) => /^FM9: ios: 1\.90\.0 is marked as the opening, and the threshold is null/.test(p)), 'a row naming the FM9, with the FM9 null, passes')
+    /* The FM9 keyed to 1.90.0 after its build opened only the AM4 and the FM3: open by update on copies reviewed without it. */
+    const byUpdate = ask(with90, { ...AM4_FM3, fm9: both('1.90.0') }, '1.90.1', PINNED)
+    assert.ok(byUpdate.some((p) => /^FM9: ios 1\.90\.0 \(20 Nov\) is open to a customer, and no build before it is marked as the opening/.test(p)), 'the FM9 opened by update on the 1.90.0 copies passes')
+    /* A store version already out, or one phone alone: refused, as Bluetooth's threshold is. */
+    assert.ok(ask(base, { fm9: both('1.89.0') }, '1.89.72').some((p) => /^FM9: ios 1\.89\.0 .* is open to a customer/.test(p)), 'Edit over Bluetooth could open by update on copies already out')
+    for (const half of [{ ios: '1.91.0', android: null }, { ios: null, android: '1.91.0' }]) {
+      assert.ok(ask(with90, { ...AM4_FM3, fm9: half }, '1.91.0', PINNED).some((p) => /^FM9: the threshold is set on one phone only/.test(p)), `the FM9 keyed ${JSON.stringify(half)} passes`)
+    }
+    assert.ok(ask(base, { am4: { ios: '1.90.0', android: '1.89.99' } }, '1.90.0').some((p) => /^AM4: the threshold is not the same on both phones/.test(p)))
+    /* A unit already opened, set back to null or moved later: refused by its row and by its pin. */
+    for (const [moved, why] of [[null, 'set back to null'], [both('1.91.0'), 'moved to a later version']]) {
+      const back = ask(with91, { ...AND_FM9, am4: moved }, '1.91.1', { ...PINNED, fm9: pinOf('1.91.0') })
+      assert.ok(back.some((p) => /^AM4: ios: 1\.90\.0 is marked as the opening, and the threshold (is null|1\.91\.0 does not open on it)/.test(p)), `the AM4 ${why} after its opening passes the row`)
+      assert.ok(back.some((p) => /^AM4: ios: EDIT_OPENED_AT\.am4 says the threshold is 1\.90\.0, and it is/.test(p)), `the AM4 ${why} after its opening passes the pin`)
+      assert.ok(!back.some((p) => /^(FM3|FM9|Axe-Fx III):/.test(p)), `the AM4 ${why} is blamed on another unit`)
+    }
+    /* Its row taken out with its entry and its pin left: refused. */
+    assert.ok(ask(base, AND_FM9, '1.91.1', PINNED).some((p) => /^AM4: ios: EDIT_OPENED_AT\.am4 says 1\.90\.0 opened editing over Bluetooth on the AM4, and docs\/expo-builds\.md has no ios build of 1\.90\.0 marked "Editing over Bluetooth for customers: AM4"/.test(p)), 'the AM4’s row taken out passes')
+    /* A split row: the AM4 marked on the iPhone's 1.90.0 build, Android's left unmarked. */
+    const split = `${base}\n${row('20 Nov', '1.90.0', '1', '—', `${EDIT_MARKER}: AM4`)}\n${row('20 Nov', '1.90.0', '—', '1', 'The pair, Android')}`
+    assert.ok(ask(split, { am4: both('1.90.0') }, '1.90.1', { am4: pinOf('1.90.0') }).some((p) => /^AM4: the opening is marked on ios at 1\.90\.0 and on android at no build/.test(p)), 'a split row passes')
+    /* And a pin for a unit the switch does not have. */
+    assert.ok(editProblems({ text: base, units: switchOf({}), appVersion: '1.89.72', pins: { ...pins({}), vp4: pinOf('1.90.0') } }).some((p) => /EDIT_OPENED_AT names vp4/.test(p)))
+
+    /*
+     * THE ROW'S OWN WORDS. The marker names its units, by the Bluetooth page's
+     * names, and nothing else: the words alone, or a name the switch does not
+     * have (the VP4, or one misspelt), are refused before they can mark a unit
+     * by accident or miss one.
+     */
+    /* Said where it is written: the ledger's own header, and the notes for the version that opens it. */
+    assert.match(src('docs/expo-builds.md'), /\*\*A build that opens Edit over Bluetooth to customers says so too, and\s+names its units\*\*/, 'the ledger does not say an Edit row names its units')
+    assert.match(src('docs/expo-builds.md'), /"Editing over Bluetooth for customers: AM4, FM3"/, 'the ledger does not show an Edit row naming its units')
+    assert.match(src('docs/app-store.md'), /\("Editing over Bluetooth for customers: AM4, FM3"\)/, 'the store notes do not say the row names its units')
+    assert.deepEqual(editRowProblems(src('docs/expo-builds.md')), [], 'an Edit row in the ledger does not name its units')
+    assert.deepEqual(editRowUnits(`${EDIT_MARKER}: the AM4, FM3 and Axe-Fx III (both phones)`), { units: ['am4', 'fm3', 'axefx3'], unknown: [], bare: false, twice: false })
+    assert.deepEqual(editRowUnits(`${EDIT_MARKER}: AM4, FM3, and FM9. The rest`)?.units, ['am4', 'fm3', 'fm9'])
+    assert.equal(editRowUnits('Bluetooth (beta) for customers, on all five units (AM4, FM3, FM9, Axe-Fx III, VP4)'), null, 'Bluetooth’s own opening row is read as an Edit row')
+    assert.deepEqual(editRowProblems(with91), [])
+    for (const [why, says] of [
+      [EDIT_MARKER, /without ": " and the units that build opened after it/],
+      [`${EDIT_MARKER}, on the AM4`, /without ": " and the units/],
+      [`${EDIT_MARKER}: `, /without ": " and the units/],
+      ['editing over Bluetooth for customers: AM4', /without ": " and the units/],
+      [`${EDIT_MARKER}: VP4`, /"VP4" in its list of units is not a unit whose Edit over Bluetooth is built/],
+      [`${EDIT_MARKER}: AM4, FM 3`, /"FM 3" in its list of units is not/],
+      [`${EDIT_MARKER}: AM4, from both phones`, /"from both phones" in its list of units is not/],
+      [`${EDIT_MARKER}: AM4. And ${EDIT_MARKER}: FM3`, /more than once/]
+    ]) {
+      const text = `${base}\n${row('20 Nov', '1.90.0', '1', '1', why)}`
+      assert.ok(editRowProblems(text).some((p) => says.test(p)), `a row saying "${why}" passes`)
+      assert.ok(editProblems({ text, units: switchOf(AM4_FM3), appVersion: '1.90.1', pins: pins(PINNED) }).some((p) => says.test(p)), `a row saying "${why}" passes the whole check`)
+    }
+    /* And the words each unit's failures send to: its own row, its own pin, never a unit the switch does not have. */
+    assert.deepEqual({ ...editWords('axefx3') }, { name: 'editing over Bluetooth on the Axe-Fx III', row: 'Editing over Bluetooth for customers: Axe-Fx III', pin: 'EDIT_OPENED_AT.axefx3' })
+    for (const unit of ['vp4', 'am3', '', null, '__proto__', 'constructor']) {
+      assert.throws(() => editOpening(unit), /not a unit whose Edit over Bluetooth is built/, `${String(unit)} has an Edit over Bluetooth marker`)
+      assert.throws(() => editWords(unit), /not a unit whose Edit over Bluetooth is built/)
+    }
+    /* thresholdProblems itself, with a unit's words: the failure says that unit's row. */
+    assert.ok(thresholdProblems(ledgerBuilds(base, editOpening('fm3')), both('1.90.0'), '9.0.0', editWords('fm3'))[0]?.includes('"Editing over Bluetooth for customers: FM3"'), 'the rule does not say which row to write')
   })
 
   test('Edit opens over Bluetooth only through the switch, says what it does there, and keeps the computer’s jobs away', async () => {

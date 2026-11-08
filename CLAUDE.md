@@ -660,8 +660,13 @@ what the computer sends for the same edit, and a test holds it there.
   What's New saying editing works over Bluetooth on that unit. Never by an
   update: the listing and every copy's review notes say editing does not
   work over Bluetooth (the same rules as Bluetooth itself, below). The
-  ledger holds it the same way: its row says "Editing over Bluetooth for
-  customers", and `EDIT_OPENED_AT` in test/ledger.mjs pins it.
+  ledger holds each unit the same way, on its own: the build's row names
+  the units it opened ("Editing over Bluetooth for customers: AM4, FM3",
+  the Bluetooth page's names and nothing else in the list), and
+  `EDIT_OPENED_AT` in test/ledger.mjs pins each of those units on its own
+  entry, in the first pull request after the build. A unit the row does
+  not name stays null, or is keyed to a later store version of its own and
+  gets its own row and pin with that build.
 - **The catalogs are generated**, mobile/src/lib/am4-knobs.js by
   scripts/am4-knobs.mjs, and fm3-knobs.js, fm9-knobs.js and
   axefx3-knobs.js by scripts/gen3-knobs.mjs, from forgefx-midi at the
@@ -682,7 +687,9 @@ what the computer sends for the same edit, and a test holds it there.
   stays refused over Bluetooth.
 - **Each unit opens on its own entry** in `EDIT_FROM_STORE` (`am4`,
   `fm3`, `fm9`, `axefx3`), so any one can go out to everyone without the
-  others.
+  others: test/ledger.mjs `editProblems` asks each unit on the rows that
+  name it, its own entry and its own pin, so the AM4 and the FM3 can open
+  in 1.90.0 with the FM9 and the Axe-Fx III left null.
 
 **Fractal Audio wrote on 18 October 2026, and the app does what it asked,
 except the name.** Their letter on Approved Vendor status asked for a clear
