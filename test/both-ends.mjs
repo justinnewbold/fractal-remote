@@ -4059,27 +4059,49 @@ export function run(test) {
    * their first name and last name and email address." (Justin, 5 November
    * 2026.) Create account asks for both, at both ends, and nothing else does;
    * they go onto the account as its metadata, trimmed and 50 characters at
-   * most, and an account made before is never asked. shared/account-name.mjs.
+   * most, and an account made before is never asked. Optional since 8
+   * November 2026: "I don't really need their names, it just helps
+   * sometimes" (Justin), and Apple's 5.1.1 lets an app require only data
+   * relevant to what it does. So either may be left empty, the fields say
+   * "(optional)", and only the names typed go onto the account, never ''.
+   * shared/account-name.mjs.
    */
-  test('a name will do when it has something in it and is 50 characters at most, and is kept trimmed', async () => {
+  test('a name will do when it is 50 characters at most, empty or not, and is kept trimmed', async () => {
     const n = await import('../shared/account-name.mjs')
     assert.equal(n.NAME_MAX, 50)
     assert.deepEqual(n.NAME_KEYS, { first: 'first_name', last: 'last_name' })
     assert.deepEqual(n.NAME_LABELS, { first: 'First name', last: 'Last name' })
+    /* The words on Create account's two fields say they may be left empty, in plain words. */
+    assert.deepEqual(n.NAME_HINTS, { first: 'First name (optional)', last: 'Last name (optional)' })
+    for (const key of ['first', 'last']) assert.ok(n.NAME_HINTS[key].startsWith(n.NAME_LABELS[key]), `the ${key} name field is not called what its rule calls it`)
     assert.equal(n.cleanName('  Jane  '), 'Jane')
     assert.equal(n.cleanName(' Mary \t Ann '), 'Mary Ann', 'a run of spaces inside a name is kept as it was typed')
     assert.equal(n.cleanName(null), '')
-    assert.equal(n.nameProblem({ first: '', last: 'Smith' }), 'Type your first name.')
-    assert.equal(n.nameProblem({ first: '   ', last: 'Smith' }), 'Type your first name.', 'a first name of spaces will do')
-    assert.equal(n.nameProblem({ first: 'Jane', last: ' ' }), 'Type your last name.')
-    assert.equal(n.nameProblem({}), 'Type your first name.', 'nothing at all is asked about the last name first')
+    /* Empty is fine since 8 November 2026: one, the other, both, spaces, or nothing passed at all. */
+    for (const names of [{}, { first: '', last: '' }, { first: '', last: 'Smith' }, { first: 'Jane', last: ' ' }, { first: '   ' }, { last: null }]) {
+      assert.equal(n.nameProblem(names), null, `${JSON.stringify(names)} is refused, but a name is optional`)
+    }
     assert.equal(n.nameProblem({ first: 'x'.repeat(51), last: 'Smith' }), 'Your first name can be 50 characters at most.')
     assert.equal(n.nameProblem({ first: 'Jane', last: 'y'.repeat(51) }), 'Your last name can be 50 characters at most.')
+    assert.equal(n.nameProblem({ last: 'y'.repeat(51) }), 'Your last name can be 50 characters at most.', 'an empty first name lets a long last one through')
     assert.equal(n.nameProblem({ first: ` ${'x'.repeat(50)} `, last: 'y'.repeat(50) }), null, '50 characters, once trimmed, is refused')
+    /* What goes onto a new account: only the names typed, never ''. */
     assert.deepEqual(n.nameData({ first: ' Jane ', last: ' van  der Berg ' }), { first_name: 'Jane', last_name: 'van der Berg' })
-    assert.throws(() => n.nameData({ first: 'Jane', last: '' }), { message: 'Type your last name.' })
+    assert.deepEqual(n.nameData({ first: 'Jane', last: '' }), { first_name: 'Jane' }, 'an empty last name is sent as one')
+    assert.deepEqual(n.nameData({ first: '  ', last: 'Smith' }), { last_name: 'Smith' }, 'a first name of spaces is sent as one')
+    assert.deepEqual(n.nameData({}), {}, 'no name at all puts something on the account')
+    assert.deepEqual(n.nameData({ first: null, last: undefined }), {})
+    assert.throws(() => n.nameData({ first: 'Jane', last: 'y'.repeat(51) }), { message: 'Your last name can be 50 characters at most.' })
+    assert.throws(() => n.nameData({ first: 'x'.repeat(51) }), { message: 'Your first name can be 50 characters at most.' })
+    /* What the profile changes: both keys, an emptied one as null, which the account service takes off the account. */
+    assert.deepEqual(n.nameChange({ first: ' Jane ', last: ' Smith ' }), { first_name: 'Jane', last_name: 'Smith' })
+    assert.deepEqual(n.nameChange({ first: 'Jane', last: '  ' }), { first_name: 'Jane', last_name: null }, 'an emptied last name is kept, or kept as ""')
+    assert.deepEqual(n.nameChange({}), { first_name: null, last_name: null }, 'clearing both leaves the old name on the account')
+    assert.throws(() => n.nameChange({ first: 'x'.repeat(51), last: '' }), { message: 'Your first name can be 50 characters at most.' })
     assert.equal(n.nameOn({ first_name: 'Jane', last_name: 'Smith' }), 'Jane Smith')
     assert.equal(n.nameOn({ first_name: ' Jane ' }), 'Jane')
+    assert.equal(n.nameOn({ last_name: 'Smith' }), 'Smith', 'a last name alone is not said')
+    assert.equal(n.nameOn({ first_name: null, last_name: null }), '', 'a name the profile cleared is read as one')
     assert.equal(n.nameOn({}), '', 'an account made before names were asked has one')
     assert.equal(n.nameOn(null), '')
     /* The phone's copy is a plain copy, made by npm run sync:rules. */
@@ -4088,27 +4110,26 @@ export function run(test) {
       FILES.some((f) => f.source === '../shared/account-name.mjs' && f.target === '../mobile/src/lib/account-name.js' && !f.render),
       'the phone has no copy of the name rule'
     )
-    assert.match(read('mobile/src/lib/relay.js'), /^import \{ NAME_KEYS, nameData \} from '\.\/account-name'$/m)
+    assert.match(read('mobile/src/lib/relay.js'), /^import \{ NAME_KEYS, nameChange, nameData \} from '\.\/account-name'$/m)
     assert.match(read('src/lib/remote.js'), /^import \{ nameData \} from '\.\.\/\.\.\/shared\/account-name\.mjs'$/m)
   })
 
-  test('each end makes the account with its first and last name as its metadata, and makes none without them', async () => {
+  test('each end makes the account with the names typed as its metadata, with none or one of them too, and none with a name too long', async () => {
     for (const end of ['phone', 'web']) {
       const { mod, service, done } = await confirmBench(end)
       try {
         const make = (details) => (end === 'phone' ? mod.signUp(details) : mod.remoteSignUp(details))
         const email = 'player@example.com'
         const password = 'secret-1'
+        /* Too long is still refused, said in the form's words, and nothing is asked of the account service. */
         for (const [names, message] of [
-          [{}, 'Type your first name.'],
-          [{ firstName: 'Jane' }, 'Type your last name.'],
-          [{ firstName: '  ', lastName: 'Smith' }, 'Type your first name.'],
           [{ firstName: 'x'.repeat(51), lastName: 'Smith' }, 'Your first name can be 50 characters at most.'],
-          [{ firstName: 'Jane', lastName: 'y'.repeat(51) }, 'Your last name can be 50 characters at most.']
+          [{ firstName: 'Jane', lastName: 'y'.repeat(51) }, 'Your last name can be 50 characters at most.'],
+          [{ lastName: 'y'.repeat(51) }, 'Your last name can be 50 characters at most.']
         ]) {
           await assert.rejects(make({ email, password, ...names }), { message }, `${end}: ${JSON.stringify(names)} made an account`)
         }
-        assert.equal(service.signups.length, 0, `${end}: an account was asked for without a name`)
+        assert.equal(service.signups.length, 0, `${end}: an account was asked for with a name too long`)
         const out = await make({ email, password, firstName: '  Jane ', lastName: ' van  der Berg ' })
         assert.equal(out.needsConfirmation, true)
         assert.deepEqual(
@@ -4118,6 +4139,24 @@ export function run(test) {
         )
         await make({ email, password, firstName: 'x'.repeat(50), lastName: 'y'.repeat(50) })
         assert.equal(service.signups.length, 2, `${end}: a 50-character name is refused`)
+        /* Empty since 8 November 2026: the account is made, with only the names typed, never ''. */
+        service.signups.length = 0
+        for (const [names, data] of [
+          [{}, {}],
+          [{ firstName: '', lastName: '' }, {}],
+          [{ firstName: '   ', lastName: ' ' }, {}],
+          [{ firstName: 'Jane', lastName: '' }, { first_name: 'Jane' }],
+          [{ firstName: '', lastName: ' Smith ' }, { last_name: 'Smith' }]
+        ]) {
+          const made = await make({ email, password, ...names })
+          assert.equal(made.needsConfirmation, true, `${end}: ${JSON.stringify(names)} made no account, but a name is optional`)
+          assert.deepEqual(service.signups.at(-1), { email, password, options: { data } }, `${end}: ${JSON.stringify(names)} sent something other than the names typed`)
+        }
+        assert.equal(service.signups.length, 5)
+        assert.ok(
+          service.signups.every((u) => Object.values(u.options.data).every((v) => typeof v === 'string' && v.length > 0)),
+          `${end}: an empty name went onto a new account as ''`
+        )
       } finally {
         done()
       }
@@ -4134,15 +4173,21 @@ export function run(test) {
       service.said.meta = { first_name: 7 }
       assert.deepEqual(await mod.currentAccount(), { id: 'u1', email: 'player@example.com', first: '', last: '' }, 'a name that is not words is read as one')
       for (const [names, message] of [
-        [{}, 'Type your first name.'],
-        [{ first: 'Jane' }, 'Type your last name.'],
-        [{ first: 'x'.repeat(51), last: 'Smith' }, 'Your first name can be 50 characters at most.']
+        [{ first: 'x'.repeat(51), last: 'Smith' }, 'Your first name can be 50 characters at most.'],
+        [{ first: 'Jane', last: 'y'.repeat(51) }, 'Your last name can be 50 characters at most.']
       ]) {
         await assert.rejects(mod.changeName(names), { message }, `${JSON.stringify(names)} was saved`)
       }
       assert.equal(service.updates.length, 0, 'a name the form refuses was sent')
       assert.deepEqual(await mod.changeName({ first: ' Jane ', last: ' van  der Berg ' }), { first: 'Jane', last: 'van der Berg' })
       assert.deepEqual(service.updates, [{ data: { first_name: 'Jane', last_name: 'van der Berg' } }], 'the name did not go onto the account as sign-up keeps it, or something else changed with it')
+      /* Optional since 8 November 2026: one or both may be emptied, which takes it off the account (null), never keeps ''. */
+      assert.deepEqual(await mod.changeName({ first: 'Jane', last: '' }), { first: 'Jane', last: '' })
+      assert.deepEqual(service.updates.at(-1), { data: { first_name: 'Jane', last_name: null } }, 'an emptied last name stays on the account')
+      assert.deepEqual(await mod.changeName({ first: '  ', last: '' }), { first: '', last: '' })
+      assert.deepEqual(service.updates.at(-1), { data: { first_name: null, last_name: null } }, 'clearing both names leaves them on the account')
+      assert.deepEqual(await mod.changeName({}), { first: '', last: '' })
+      assert.equal(service.updates.length, 4)
     } finally {
       done()
     }
@@ -4150,10 +4195,21 @@ export function run(test) {
     const flat = read('mobile/src/screens/Settings.js').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' ')
     const menu = flat.slice(flat.indexOf('title="Your account"'), flat.indexOf('<PasswordBox'))
     assert.match(menu, /label=\{account\?\.first \|\| account\?\.last \? `\$\{account\.first\} \$\{account\.last\}`\.trim\(\) : 'Add your name'\}/)
-    assert.match(menu, /<NameBox open=\{naming\} first=\{account\?\.first\} last=\{account\?\.last\} onSave=\{async \(typed\) => \{ const kept = await changeName\(typed\)/)
+    assert.match(menu, /<NameBox open=\{naming\} first=\{account\?\.first\} last=\{account\?\.last\} onSave=\{async \(typed\) => \{ const had = Boolean\(account\?\.first \|\| account\?\.last\) const kept = await changeName\(typed\)/, 'what the account had is not read before the save')
+    /* "Name removed." only when there was a name to remove: an account with none says nothing (8 November 2026). */
+    assert.match(menu, /setNote\(kept\.first \|\| kept\.last \? 'Name saved\.' : had \? 'Name removed\.' : null\)/, 'clearing the name says it was saved, or an account with no name is told one was removed')
     const box = read('mobile/src/components/NameBox.js')
-    assert.match(box, /import \{ NAME_LABELS, NAME_MAX, nameProblem \} from '\.\.\/lib\/account-name'/)
+    assert.match(box, /import \{ NAME_LABELS, NAME_MAX, cleanName, nameProblem \} from '\.\.\/lib\/account-name'/)
     assert.match(box, /const problem = nameProblem\(\{ first, last \}\)/, 'the box saves a name Create account would refuse')
+    /* Save (or Done on the keyboard) with nothing changed, an empty box on an account with no name among them, closes and sends nothing. */
+    const commit = box.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+    const refused = commit.indexOf('if (problem) {')
+    const same = commit.indexOf('if (cleanName(first) === cleanName(wasFirst) && cleanName(last) === cleanName(wasLast)) { onClose() return }')
+    const saved = commit.indexOf('await onSave({ first, last })')
+    assert.ok(refused > 0 && same > refused && saved > same, 'a save with nothing changed still goes to the account service')
+    assert.equal((commit.match(/await onSave\(/g) || []).length, 1, 'the box saves from somewhere the unchanged check does not cover')
+    const { cleanName } = await import('../shared/account-name.mjs')
+    for (const nothing of [undefined, null, '', '   ']) assert.equal(cleanName(nothing), '', `${JSON.stringify(nothing)} is not read as no name, so an empty box on an account with none is sent`)
     for (const needed of ['textContentType="givenName"', 'textContentType="familyName"', 'maxLength={NAME_MAX}', 'autoCapitalize="words"']) assert.ok(box.includes(needed), `the name box lost ${needed}`)
     /* Neither the glass nor the panel is one element to VoiceOver, which would hide the fields inside it. */
     assert.equal((box.match(/<Pressable\s+accessible=\{false\}/g) || []).length, 2, 'VoiceOver reads the name box as one button and never reaches its fields')
@@ -4164,20 +4220,20 @@ export function run(test) {
     }
   })
 
-  test('Create account asks for a first and last name over the email, at both ends, and Sign in never does', () => {
+  test('Create account asks for a first and last name over the email, marked optional, at both ends, and Sign in never does', () => {
     const flat = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' ')
 
     /* The phone. */
     const phone = flat(read('mobile/src/screens/SignIn.js'))
-    assert.match(phone, /import \{ NAME_LABELS, NAME_MAX, nameProblem \} from '\.\.\/lib\/account-name'/)
+    assert.match(phone, /import \{ NAME_HINTS, NAME_MAX, nameProblem \} from '\.\.\/lib\/account-name'/)
     const opens = phone.indexOf("{mode === 'up' ? ( <> <Field glyph={<Person />}>")
     const email = phone.indexOf('placeholder="Email"')
     assert.ok(opens > 0 && opens < email, 'the phone’s name fields are not on Create account alone, over the email')
     const box = phone.slice(opens, email)
     for (const [key, hint, fill] of [['first', 'givenName', 'given-name'], ['last', 'familyName', 'family-name']]) {
       for (const needed of [
-        `placeholder={NAME_LABELS.${key}}`,
-        `accessibilityLabel={NAME_LABELS.${key}}`,
+        `placeholder={NAME_HINTS.${key}}`,
+        `accessibilityLabel={NAME_HINTS.${key}}`,
         `textContentType="${hint}"`,
         `autoComplete="${fill}"`,
         'maxLength={NAME_MAX}',
@@ -4201,7 +4257,7 @@ export function run(test) {
 
     /* The website and the computer app: both of its forms. */
     const web = flat(read('src/components/SignIn.jsx'))
-    assert.match(web, /import \{ NAME_LABELS, NAME_MAX, nameProblem \} from '\.\.\/\.\.\/shared\/account-name\.mjs'/)
+    assert.match(web, /import \{ NAME_HINTS, NAME_MAX, nameProblem \} from '\.\.\/\.\.\/shared\/account-name\.mjs'/)
     for (const [form, start, end] of [
       ['the stage form', '<form className="signin signin-stage" onSubmit={go}>', '<FieldIcon kind="mail" />'],
       ['the sheet’s form', '<form className="signin" onSubmit={go}>', '<span>Email</span>']
@@ -4215,9 +4271,12 @@ export function run(test) {
       }
       assert.equal(names.split('maxLength={NAME_MAX}').length - 1, 2, `${form}: a name field takes more than 50 characters`)
       if (form === 'the stage form') {
-        assert.ok(names.includes('aria-label={NAME_LABELS.first}') && names.includes('aria-label={NAME_LABELS.last}'), `${form}: a name field has no label for a screen reader`)
+        assert.ok(names.includes('placeholder={NAME_HINTS.first}') && names.includes('placeholder={NAME_HINTS.last}'), `${form}: a name field does not say it is optional`)
+        assert.ok(names.includes('aria-label={NAME_HINTS.first}') && names.includes('aria-label={NAME_HINTS.last}'), `${form}: a name field has no label for a screen reader`)
         assert.equal(names.split('<FieldIcon kind="person" />').length - 1, 2)
-      } else assert.ok(names.includes('<span>{NAME_LABELS.first}</span>') && names.includes('<span>{NAME_LABELS.last}</span>'), `${form}: a name field has no label`)
+      } else assert.ok(names.includes('<span>{NAME_HINTS.first}</span>') && names.includes('<span>{NAME_HINTS.last}</span>'), `${form}: a name field has no label, or it does not say optional`)
+      assert.doesNotMatch(names, /NAME_LABELS/, `${form}: a name field is called what it was when it was needed`)
+      assert.doesNotMatch(names, /\brequired\b/, `${form}: a name field is required in the browser`)
     }
     assert.match(web, /const nameFault = mode === 'up' \? nameProblem\(\{ first, last \}\) : null if \(nameFault\) return setProblem\(nameFault\) if \(!address\) return setProblem\('Enter your email\.'\)/)
     assert.match(web, /await onCreate\(\{ email: address, password, firstName: first, lastName: last \}\)/)
@@ -4233,7 +4292,7 @@ export function run(test) {
     assert.equal(named[0].label, 'Name', 'the name is not the first thing the lookup says')
     assert.equal(row(named, 'Name'), 'Jane Smith')
     assert.equal(row(lookupRows({ found: true, details: { ...details, name: '' } }), 'Name'), NO_NAME)
-    assert.match(NO_NAME, /made before Create account asked for a name/)
+    assert.match(NO_NAME, /^None given\. A name is optional/)
     assert.match(row(lookupRows({ found: true, details: { ...details, name: null } }), 'Name'), /^Could not be read just now/)
     assert.equal(row(lookupRows({ found: true, details }), 'Name'), undefined, 'a server too old to send the name is said to have none')
 
@@ -4267,11 +4326,13 @@ export function run(test) {
 
     /* And the privacy page and the store labels say so. */
     const policy = read('public/privacy.html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
-    assert.match(policy, /Your first and last name Asked for when you make an account/)
+    assert.match(policy, /Your first and last name, only if you give them Optional: Create account asks for them/)
+    assert.match(policy, /you can leave either or both empty/)
+    assert.doesNotMatch(policy, /Your first and last name Asked for when you make an account/, 'the privacy page says the name is needed')
     assert.match(policy, /deleted with it/)
     const store = read('docs/app-store.md')
     assert.match(store, /\| Contact Info → \*\*Name\*\* \| Yes \| Yes \|/)
-    assert.match(store, /\| Personal info → Name \| Required \| App functionality, Account management \|/)
+    assert.match(store, /\| Personal info → Name \| Optional \| App functionality, Account management \|/)
   })
 
   test('the box for the code shows wherever an account waits on its email, at both ends, and a good code goes the way Sign in goes', () => {

@@ -60,7 +60,7 @@ import {
 } from './relay-rules'
 import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, CONFIRMED_SIGN_IN, cleanCode, codeRefused } from './confirm-code'
 import { deviceNoun } from './device-word'
-import { NAME_KEYS, nameData } from './account-name'
+import { NAME_KEYS, nameChange, nameData } from './account-name'
 
 export { DEFAULT_PROJECT, RELAY_GRACE, forbiddenRemotely, explainAuth, NOT_IN_INBOX, sentAgain }
 
@@ -207,9 +207,10 @@ export async function signIn({ email, password }) {
 /**
  * Create the account, when there isn't one yet. Same project, same policies.
  *
- * With the first and last name Create account asks for, kept on the account
- * itself (shared/account-name.mjs): refused here, before anything is asked,
- * if either will not do, so no account is made without them.
+ * With the first and last name Create account offers, kept on the account
+ * itself (shared/account-name.mjs): both optional since 8 November 2026, so
+ * only the names typed go with it (none at all is an account with no name),
+ * and one too long is refused here, before anything is asked.
  */
 export async function signUp({ email, password, firstName, lastName }) {
   const name = nameData({ first: firstName, last: lastName })
@@ -460,7 +461,7 @@ export async function currentAccount() {
   try {
     const { data } = await supabase().auth.getUser()
     if (!data?.user) return null
-    /* The name kept on the account (shared/account-name.mjs), empty for an account made before names were asked. */
+    /* The name kept on the account (shared/account-name.mjs), empty for an account with none: made before names were asked, or with them left empty. */
     const meta = data.user.user_metadata || {}
     return {
       id: data.user.id,
@@ -659,16 +660,18 @@ export async function deleteAccount() {
 }
 
 /**
- * Add or change the name on the signed-in account, where sign-up keeps it
- * (the account's own metadata, shared/account-name.mjs), with the same rules
- * and words as Create account. Returns the names as kept.
+ * Add, change or clear the name on the signed-in account, where sign-up
+ * keeps it (the account's own metadata, shared/account-name.mjs), with the
+ * same rules and words as Create account: either may be empty, and an
+ * emptied one is taken off the account (nameChange sends it as null).
+ * Returns the names as kept, '' for none.
  */
 export async function changeName({ first, last } = {}) {
-  const name = nameData({ first, last })
+  const name = nameChange({ first, last })
   const { error } = await supabase().auth.updateUser({ data: name })
   if (error) throw new Error(explainAuth(error.message))
   logDebug('account: name saved')
-  return { first: name[NAME_KEYS.first], last: name[NAME_KEYS.last] }
+  return { first: name[NAME_KEYS.first] || '', last: name[NAME_KEYS.last] || '' }
 }
 
 export async function changePassword(password) {

@@ -29,6 +29,7 @@ import { useCableNow } from '../lib/bluetooth'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
 import { bleEditNoteSeen, editBetaNoteSeen, markBleEditNote, markEditBetaNote } from '../lib/coach'
 import { VP4_NO_EDITS, VP4_NO_KNOBS } from '../lib/vp4-safety'
+import { NO_KNOBS_YET } from '../lib/gen3Catalog'
 import {
   CAB_REFUSED,
   CAB_UNDO_LOST,
@@ -748,7 +749,9 @@ function BlockPanel({
   /* Moved by a channel copy, so the panel reads the block again. */
   const [readAgain, setReadAgain] = useState(0)
   /* A VP4's knobs and models have no read the app can make (lib/vp4-safety VP4_NO_KNOBS, said once above): nothing is asked, and nothing raised. */
-  const knobless = vp4Bench()
+  /* Nor a block the wire has no knob catalog for (bleWire `knobs: false`: an Axe-Fx III's NAM and IR Player over Bluetooth): its on and off, and NO_KNOBS_YET under them. */
+  const noKnobsYet = block.knobs === false
+  const knobless = vp4Bench() || noKnobsYet
   useEffect(() => {
     if (knobless) return undefined
     let stop = false
@@ -1227,6 +1230,7 @@ function BlockPanel({
           onPress={() => writeBlockBypass(eid, engaged)}
         />
       )}
+      {noKnobsYet ? <Note>{NO_KNOBS_YET}</Note> : null}
 
       {/* ------------------------------------------------------------ model */}
       {models.length ? (

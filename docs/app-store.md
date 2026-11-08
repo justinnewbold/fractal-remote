@@ -432,7 +432,7 @@ Tracking Transparency entirely.
 
 | Data type | Collected | Linked to the user | Why |
 |---|---|---|---|
-| Contact Info → **Name** | Yes | Yes | The first and last name Create account asks for, kept on the account so Justin knows who it belongs to and who he is helping when they write in. App Functionality. Added 5 November 2026: published before the update that asks for it merges (see below) |
+| Contact Info → **Name** | Yes | Yes | The first and last name Create account asks for (optional since 8 November 2026: either may be left empty), kept on the account so Justin knows who it belongs to and who he is helping when they write in. App Functionality. Added 5 November 2026: published before the update that asks for it merges (see below). Apple's label has no optional box, so nothing changes on it for the 8 November change |
 | Contact Info → **Email Address** | Yes | Yes | Account sign-in, and answering a support message: the address they leave, or, when they leave none and are signed in, the account's own (22 October 2026) |
 | User Content → **Other User Content** | Yes | Yes | Setlists, so they follow you between devices |
 | User Content → **Photos or Videos** | Yes | Yes | Screenshots and photos somebody chooses to add to a bug report (up to five, pasted or picked on a phone, picked on the website; three until 7 November 2026, a number the label does not carry, so nothing to publish for it), and from 29 October 2026 one video picked on a phone or tablet, sent only when they press Send. Linked unless they untick Include my email. And from 7 November 2026 the profile photo an account may add in the phone app (Settings → your account → Add a photo), kept with the account and deleted with it: the same data type, linked, App Functionality, so nothing to publish for it. Added 22 October 2026: on the live label since 1 November 2026 |
@@ -521,6 +521,18 @@ what the live app collects:
 Both are published by Justin before the pull request that adds the name
 fields is merged. Done 5 November 2026 (Justin: Apple, then Google).
 
+**8 November 2026: the name is optional.** "I don't really need their
+names, it just helps sometimes" (Justin). Create account still shows the
+two fields, now marked "(optional)", and makes the account with either or
+both left empty; they can be added, changed or removed later under
+Settings → your account. Apple's guideline 5.1.1 lets an app require only
+data relevant to what it does, so a required name was a review risk for
+1.90.0. Apple's label stays as it is (it has no optional box). For Justin,
+in plain words: in Google Play → Data safety → Personal info → Name, change
+**Required** to **Optional**, then save. No build, and no hurry: until it
+is changed the form says the name is needed when it is not, which says
+more than the app does, never less. Not done until he says it is.
+
 **4 November 2026: one tick needed, for How many people.** Developer →
 Customers → People counts how many people used the app (today, the last 7
 and the last 30 days, where, on which app version, and since today on which
@@ -543,7 +555,8 @@ interactions row already lists Analytics (the 1 November table below).
 Done 5 November 2026 (Justin).
 
 **Google Play's Data safety, the whole list as it should stand (1 November
-2026, with the name added 5 November 2026).** Written for Justin to hand to his browser assistant, and the one
+2026, with the name added 5 November 2026, and made optional 8 November
+2026).** Written for Justin to hand to his browser assistant, and the one
 place it is all together: everything in the notes above and below, with the
 setup emails added (Email address gains Developer communications for them,
 and App interactions is Required now, because the Bluetooth date goes with
@@ -552,7 +565,7 @@ ephemerally no. Nothing else is declared: no Location, no Messages.
 
 | Data type | Required or optional | Purposes |
 |---|---|---|
-| Personal info → Name | Required | App functionality, Account management |
+| Personal info → Name | Optional | App functionality, Account management |
 | Personal info → Email address | Required | App functionality, Account management, Developer communications |
 | Personal info → User IDs | Optional | App functionality, Account management |
 | Financial info → Purchase history | Required | App functionality, Analytics |

@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
-import { NAME_LABELS, NAME_MAX, nameProblem } from '../lib/account-name'
+import { NAME_LABELS, NAME_MAX, cleanName, nameProblem } from '../lib/account-name'
 import Note from './Note'
 import Press from './Press'
 
@@ -16,7 +16,9 @@ import Press from './Press'
  * November 2026.) Accounts made before 5 November were never asked; this is
  * where they add one, and where anybody changes theirs. The same two fields
  * and the same rules as Create account (shared/account-name.mjs), kept on
- * the account itself the same way (relay.js changeName). Up high like the
+ * the account itself the same way (relay.js changeName): optional since 8
+ * November 2026, so either may be left empty, and emptying one and saving
+ * takes that name off the account. Up high like the
  * password box, so the keyboard cannot reach it. A solid panel rather than
  * frosted glass: the glass is kept to the six pop-ups that had it (the
  * Classic look is held to them, test/glass.mjs and test/glass-classic.mjs),
@@ -47,6 +49,11 @@ export default function NameBox({ open, first: wasFirst = '', last: wasLast = ''
     const problem = nameProblem({ first, last })
     if (problem) {
       setError(problem)
+      return
+    }
+    /* Nothing changed (an empty box on an account with no name, say): close, send nothing, say nothing. */
+    if (cleanName(first) === cleanName(wasFirst) && cleanName(last) === cleanName(wasLast)) {
+      onClose()
       return
     }
     setBusy(true)

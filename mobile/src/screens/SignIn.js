@@ -27,7 +27,7 @@ import lockIcon from '../../assets/icons/lock.png'
 import checkIcon from '../../assets/icons/check.png'
 import externalIcon from '../../assets/icons/external.png'
 import { deviceNoun } from '../lib/device-word'
-import { NAME_LABELS, NAME_MAX, nameProblem } from '../lib/account-name'
+import { NAME_HINTS, NAME_MAX, nameProblem } from '../lib/account-name'
 
 /**
  * One account, two ends.
@@ -115,9 +115,12 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
   /*
    * THE NAME, on Create account only. "When they create an account have them
    * put in their first name and last name and email address." (Justin, 5
-   * November 2026.) Both needed, 50 characters each, before the email and in
-   * that order; Sign in never asks, and nor is an account made before this.
-   * The rule and its words are shared with the website (shared/account-name.mjs).
+   * November 2026.) Optional since 8 November 2026 ("I don't really need
+   * their names, it just helps sometimes"), and the fields say so: either or
+   * both may be left empty, 50 characters each, before the email and in that
+   * order, and added later under Settings → your account. Sign in never asks,
+   * and nor is an account made before this. The rule and its words are
+   * shared with the website (shared/account-name.mjs).
    */
   const [first, setFirst] = useState('')
   const [last, setLast] = useState('')
@@ -429,9 +432,9 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
                   style={fieldText}
                   value={first}
                   onChangeText={setFirst}
-                  placeholder={NAME_LABELS.first}
+                  placeholder={NAME_HINTS.first}
                   placeholderTextColor={color.silkFaint}
-                  accessibilityLabel={NAME_LABELS.first}
+                  accessibilityLabel={NAME_HINTS.first}
                   autoCapitalize="words"
                   autoCorrect={false}
                   autoComplete="given-name"
@@ -448,9 +451,9 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
                   style={fieldText}
                   value={last}
                   onChangeText={setLast}
-                  placeholder={NAME_LABELS.last}
+                  placeholder={NAME_HINTS.last}
                   placeholderTextColor={color.silkFaint}
-                  accessibilityLabel={NAME_LABELS.last}
+                  accessibilityLabel={NAME_HINTS.last}
                   autoCapitalize="words"
                   autoCorrect={false}
                   autoComplete="family-name"
