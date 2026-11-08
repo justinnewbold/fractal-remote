@@ -1275,7 +1275,8 @@ export function run(test) {
 
     /* And on the days it is there for, on made-up files. */
     const row = (version, why) => `| 20 Nov | ${version} | 1 | 1 | ${why} |`
-    const base = read('docs/expo-builds.md')
+    /* The ledger as it would be with no editing row yet: the made-up rows below are the only ones that open anything. */
+    const base = read('docs/expo-builds.md').split('\n').filter((l) => !l.includes(ledger.EDIT_MARKER)).join('\n')
     const four = `${base}\n${row('1.90.0', `${ledger.EDIT_MARKER}: AM4, FM3, FM9 and Axe-Fx III. The pair`)}\n`
     const two = `${base}\n${row('1.90.0', `${ledger.EDIT_MARKER}: AM4, FM3. The pair`)}\n`
     const live = { ios: '1.90.0', android: '1.90.0' }

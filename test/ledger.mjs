@@ -212,7 +212,12 @@ export const OPENED_AT = Object.freeze({ version: '1.89.0', ios: '1.89.0', andro
  * gets its pin then, from its own row. One entry for every unit in
  * EDIT_FROM_STORE, held by test/bluetooth.mjs.
  */
-export const EDIT_OPENED_AT = Object.freeze({ am4: null, fm3: null, fm9: null, axefx3: null })
+export const EDIT_OPENED_AT = Object.freeze({
+  am4: Object.freeze({ version: '1.90.0', ios: '1.90.0', android: '1.90.0' }),
+  fm3: Object.freeze({ version: '1.90.0', ios: '1.90.0', android: '1.90.0' }),
+  fm9: Object.freeze({ version: '1.90.0', ios: '1.90.0', android: '1.90.0' }),
+  axefx3: Object.freeze({ version: '1.90.0', ios: '1.90.0', android: '1.90.0' }),
+})
 
 /* The first build marked as the opening on this phone, or null. */
 const firstOpening = (builds, platform) =>
