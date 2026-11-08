@@ -3984,9 +3984,7 @@ test('the mirror agrees with the host about every route this app calls', () => {
    * routes before anyone compared them.
    */
   const hostAllows = (method, p) => {
-    // The footswitch setup (block 199) is never written from the relay: ForgeFX 18a9d80's remote.ts FC_SETUP_WRITE.
-    // That is the newer host, not yet the one desktop/forgefx.lock.json pins (e2030f4 takes the write), so until
-    // the pin moves this line is ahead of the computer app, and the phone's own rule is what stops the write.
+    // The footswitch setup (block 199) is never written from the relay (ForgeFX remote.ts FC_SETUP_WRITE).
     if (method !== 'GET' && /^\/preset\/blocks\/0*199\/(params(\/\d+)?|bypass|channel|type)$/.test(p)) return false
     if (method === 'GET')
       return (
@@ -16815,10 +16813,8 @@ test('the demo FM3 says which layout is on, what the layouts are called and what
 test('no write to the footswitch setup travels the relay, and reading it still does', async () => {
   /*
    * The footswitch setup is shared by every preset: block 199 on a gen-3
-   * unit. ForgeFX's newer device server (18a9d80, not yet the one the
-   * computer app pins) refuses a write to it from anywhere; this rule
-   * refuses it from a phone or a browser to every computer, the one out
-   * today included, which would take it.
+   * unit. The computer's newer device server refuses a write to it from
+   * anywhere; this rule refuses it from a phone even to an older one.
    */
   for (const [m, p] of [
     ['PUT', '/preset/blocks/199/params/4618'],
@@ -17311,7 +17307,7 @@ test('the computer app carries the device server that answers only its own calle
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+am4tunerlease\+serverguard(\+|$)/, 'the computer app carries a device server any web page can sign out')
   /* Pinned at 93c1530, or at a later commit of the same branch that carries it (Axiom's own list, c7b4d3c, and the replug watch, e2030f4, sit on top). */
-  assert.ok(['93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337'].includes(lock.forgefx.commit), 'the pin moved off the guard')
+  assert.ok(['93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5'].includes(lock.forgefx.commit), 'the pin moved off the guard')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /93c1530/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17335,7 +17331,7 @@ test('the computer app carries the device server that can let Axiom onto the uni
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+serverguard\+deviceorigins(\+|$)/, 'the computer app carries a device server with no way to let Axiom in')
   /* Pinned at c7b4d3c, or at a later commit of the same branch that carries it (the replug watch, e2030f4, sits on top). */
-  assert.ok(['c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337'].includes(lock.forgefx.commit), 'the pin moved off FORGEFX_DEVICE_ORIGINS')
+  assert.ok(['c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5'].includes(lock.forgefx.commit), 'the pin moved off FORGEFX_DEVICE_ORIGINS')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /c7b4d3c/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17356,8 +17352,8 @@ test('the computer app carries the device server that can let Axiom onto the uni
  */
 test('the computer app carries the device server that finds a unit unplugged and plugged back in by itself', () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
-  assert.match(lock.forgefx.tag, /\+deviceorigins\+replug$/, 'the computer app carries a device server that never notices its unit was replugged')
-  assert.equal(lock.forgefx.commit, 'e2030f420a2d18f01234fad3c85dc25d52ada337')
+  assert.match(lock.forgefx.tag, /\+deviceorigins\+replug(\+|$)/, 'the computer app carries a device server that never notices its unit was replugged')
+  assert.ok(['e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5'].includes(lock.forgefx.commit), 'the pin moved off the replug watch')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /e2030f4/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17366,6 +17362,29 @@ test('the computer app carries the device server that finds a unit unplugged and
   }
   const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
   assert.ok(mods.includes("| Watch the unit's MIDI port every 2 seconds, sending nothing"), 'licences/MODIFICATIONS.md has no row for the port watch')
+})
+
+/*
+ * And the footswitch page reads more, and the footswitch setup cannot be
+ * written (ForgeFX 18a9d80, on top of the replug watch): an FM3's
+ * Footswitches page shows the layout and view that are on, the layout names
+ * and what each switch picks, and the device server refuses every write to
+ * the footswitch setup (block 199) and the unit's own settings, which every
+ * preset shares. The phone and the browser look as before on an older
+ * computer, so the red update line does not move.
+ */
+test('the computer app carries the device server that reads the footswitch page and refuses writes to the footswitch setup', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+replug\+fcread$/, 'the computer app carries a device server without the footswitch reads')
+  assert.equal(lock.forgefx.commit, '18a9d8066b843e001aaaa2622c462102af8be2a5')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  const why = lock._why.find((w) => /18a9d80/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/GET \/fc\/current/, /GET \/fc\/names/, /Preset, Scene and Effect/, /block 199/, /FC_SETUP_WRITE/, /nothing written/, /COMPUTER_NEEDED stays/, /one commit on top of e2030f4/]) {
+    assert.match(why, said, `the lock's reason leaves out ${said}`)
+  }
+  const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
+  assert.ok(mods.includes('| Read, for an FM3, which layout and view are on'), 'licences/MODIFICATIONS.md has no row for the footswitch reads')
 })
 
 /*
@@ -17381,7 +17400,7 @@ test('the computer app carries the server whose keep of the AM4’s own tuner en
   assert.match(lock.forgefx.tag, /\+am4tunerkeep\+am4tunerlease(\+|$)/, 'the computer app carries a keep that only a Close can end')
   /* Pinned at 41a0c1b, or at a later commit of the same branch that carries it (the device server's guard, 93c1530, sits on top). */
   assert.ok(
-    ['41a0c1b05d6172b057223c70565eec364dff4d67', '93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337'].includes(lock.forgefx.commit),
+    ['41a0c1b05d6172b057223c70565eec364dff4d67', '93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5'].includes(lock.forgefx.commit),
     'the pin moved off the tuner lease'
   )
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
