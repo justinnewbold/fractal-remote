@@ -1166,9 +1166,12 @@ export default function Settings({
             first={account?.first}
             last={account?.last}
             onSave={async (typed) => {
+              const had = Boolean(account?.first || account?.last)
               const kept = await changeName(typed)
               setAccount((a) => (a ? { ...a, ...kept } : a))
-              setNote('Name saved.')
+              /* Both emptied takes the name off the account (optional since 8 November 2026), and is
+                 said only when there was one to take off. */
+              setNote(kept.first || kept.last ? 'Name saved.' : had ? 'Name removed.' : null)
             }}
             onClose={() => setNaming(false)}
           />

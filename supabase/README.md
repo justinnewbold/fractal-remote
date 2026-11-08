@@ -709,11 +709,17 @@ from public.gear_reports group by 1, 2, 3, 4 order by max(created_at) desc;
 ## The name on an account (5 November 2026)
 
 Create account asks for a first name and a last name, on the phones, the
-website and the computer app (shared/account-name.mjs). They go onto the
+website and the computer app (shared/account-name.mjs), both optional since
+8 November 2026: only the names typed are sent, so an account made with
+none has neither key. They go onto the
 account itself, as the account service's `user_metadata` (`first_name`,
 `last_name`), from the sign-up: no table, no migration. Deleting the account
 deletes them with it (`_shared/forget-account.ts` deletes the auth user).
-Accounts made before are never asked, and have none.
+Accounts made before are never asked, and have none. The phone's profile
+(Settings → your account) adds, changes or clears them with `updateUser`,
+sending `null` for a cleared one, which the account service takes off the
+account. No function needs a name: grant-access only reads them, and says
+`''` for none.
 
 - `functions/grant-access/`: the Customer lookup's answer gains
   `details.name` (the name, `''` for none, `null` if the account service

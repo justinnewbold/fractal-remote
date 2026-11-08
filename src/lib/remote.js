@@ -1320,9 +1320,10 @@ export function canReuseChannel(channel, session, client) {
 /**
  * Create the account, when there isn't one yet. Same project, same policies.
  *
- * With the first and last name Create account asks for, kept on the account
- * itself (shared/account-name.mjs), as the phone does: refused here, before
- * anything is asked, if either will not do.
+ * With the first and last name Create account offers, kept on the account
+ * itself (shared/account-name.mjs), as the phone does: both optional since 8
+ * November 2026, so only the names typed go with it, and one too long is
+ * refused here, before anything is asked.
  */
 export async function remoteSignUp({ url, anonKey, email, password, firstName, lastName }) {
   const name = nameData({ first: firstName, last: lastName })
