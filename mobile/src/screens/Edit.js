@@ -23,6 +23,7 @@ import {
   setType
 } from '../lib/device'
 import { vp4Here } from '../lib/device'
+import { demoUnit, isDemo } from '../lib/demo'
 import { overBluetooth } from '../lib/bleSwitch'
 import { useCableNow } from '../lib/bluetooth'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
@@ -85,6 +86,17 @@ import ColourSheet from '../components/ColourSheet'
 import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 
 const face = Platform.select(mono)
+
+/*
+ * EDIT'S VP4 RULES, THE DEMO'S VP4 INCLUDED. A real VP4 through the computer
+ * gets its chain and its effects on and off here, and nothing else: no
+ * knobs or models (VP4_NO_KNOBS), no Edit chain, no Modifiers and no Rename
+ * (VP4_NO_EDITS). The demo's VP4 offered all of them, so the demo showed a
+ * VP4 owner an Edit their own unit would never give them. On this screen
+ * only: Play, and device.js's VP4 handling that drives it and every
+ * request, keep vp4Here, which is never the demo's.
+ */
+const vp4Bench = () => vp4Here() || (isDemo() && demoUnit() === 'vp4')
 
 const ofBlocks = (s) => s.allBlocks
 const ofScene = (s) => s.sceneIndex
@@ -200,6 +212,8 @@ export default function Edit({ onBack, onOpenGear }) {
   const pending = !!unsaved && unsaved.number === preset?.number
   /* Over Bluetooth: knobs, models and on/off, and no Save (rig.noteEdited marks nothing there). See BLE_NOTE. */
   const viaBle = overBluetooth(caps)
+  /* Whether the unit can be told to attach a modifier, as the computer says (capabilities.modifiers.bind); absent, from an older computer, it is offered as before. */
+  const modifiersBind = caps?.modifiers?.bind !== false
   /* A unit on its own USB cable is the same wire, and its note says the cable that is in, not Bluetooth (lib/cableWords CABLE_EDIT_NOTE). */
   const onCable = useCableNow()
   /* Up until its cross is pressed, once per device; hidden until storage has answered, so it never flashes up for somebody who put it away. */
@@ -432,7 +446,7 @@ export default function Edit({ onBack, onOpenGear }) {
         just cannot see it. VP4_NO_KNOBS says so once, under the chain, where
         "Tap a block to open its controls" was. The browser does the same.
       */}
-      {vp4Here() ? null : (
+      {vp4Bench() ? null : (
         <FindControl
           blocks={blocks}
           onError={setError}
@@ -532,7 +546,7 @@ export default function Edit({ onBack, onOpenGear }) {
         the knobs refusal as a fault: it went up red over the page and pushed
         the chain down, for a tap the screen had just invited.
       */}
-      {vp4Here() && blocks.length && !chainNow.elsewhere ? <Note>{VP4_NO_KNOBS}</Note> : null}
+      {vp4Bench() && blocks.length && !chainNow.elsewhere ? <Note>{VP4_NO_KNOBS}</Note> : null}
 
       {block ? (
         <View onLayout={panelLaid}>
@@ -563,7 +577,7 @@ export default function Edit({ onBack, onOpenGear }) {
             overBle={viaBle}
           />
         </View>
-      ) : blocks.length && !chainNow.elsewhere && !vp4Here() ? (
+      ) : blocks.length && !chainNow.elsewhere && !vp4Bench() ? (
         <Note>Tap a block to open its controls.</Note>
       ) : null}
 
@@ -573,7 +587,7 @@ export default function Edit({ onBack, onOpenGear }) {
         door offered them. One sentence where the three were (lib/vp4-safety
         VP4_NO_EDITS); the browser says the same.
       */}
-      {vp4Here() ? (
+      {vp4Bench() ? (
         <Note tone="hint">{VP4_NO_EDITS}</Note>
       ) : viaBle ? (
         <Note tone="hint">{BLE_NO_CHAIN}</Note>
@@ -581,7 +595,14 @@ export default function Edit({ onBack, onOpenGear }) {
         <>
           {chainNow.elsewhere ? null : <ChainEditor blocks={chainAll} caps={caps} onError={setError} onScrollLock={setHeld} />}
 
-          <Modifiers blocks={blocks} onError={setError} />
+          {/*
+            NOT WHERE THE COMPUTER SAYS THE UNIT CANNOT BIND ONE: an AM4
+            (ForgeFX drivers/am4.ts modBind false, served as
+            capabilities.modifiers.bind by registryCore). The door opened on
+            "This unit doesn't let an app attach a modifier", every time. A
+            computer too old to say keeps the door (`modifiersBind`).
+          */}
+          {modifiersBind ? <Modifiers blocks={blocks} onError={setError} /> : null}
         </>
       )}
 
@@ -730,7 +751,7 @@ function BlockPanel({
   /* A VP4's knobs and models have no read the app can make (lib/vp4-safety VP4_NO_KNOBS, said once above): nothing is asked, and nothing raised. */
   /* Nor a block the wire has no knob catalog for (bleWire `knobs: false`: an Axe-Fx III's NAM and IR Player over Bluetooth): its on and off, and NO_KNOBS_YET under them. */
   const noKnobsYet = block.knobs === false
-  const knobless = vp4Here() || noKnobsYet
+  const knobless = vp4Bench() || noKnobsYet
   useEffect(() => {
     if (knobless) return undefined
     let stop = false
@@ -1449,8 +1470,8 @@ function BlockColour({ slug }) {
 /** The rename boxes behind one button, the way Edit chain and Modifiers open. */
 function RenameDoor() {
   const [open, setOpen] = useState(false)
-  /* Not on a VP4, which the app cannot rename on: VP4_NO_EDITS says so above, where the chain editor was. */
-  if (vp4Here()) return null
+  /* Not on a VP4, the demo's included, which the app cannot rename on: VP4_NO_EDITS says so above, where the chain editor was. */
+  if (vp4Bench()) return null
   if (!open) {
     return <Press label="Rename preset and scenes" sub="Names you will know on a dark stage" onPress={() => setOpen(true)} />
   }

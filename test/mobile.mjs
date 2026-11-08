@@ -3554,7 +3554,11 @@ export function run(test) {
 
     const app = read('mobile/App.js')
     assert.match(app, /BENCH && screen === 'edit'/, 'the route no longer reads the switch, so turning it off would leave the screen reachable')
-    assert.match(app, /BENCH && \(demo \|\| link\.link === 'connected'\)/, 'the Edit button no longer reads the switch')
+    /* The button's rule is lib/editDoor's, handed the switch by App: off, nothing opens and nothing explains. */
+    assert.match(app, /editDoor\(\{\s*bench: BENCH,/, 'the Edit button no longer reads the switch')
+    const { editDoor } = await import('../mobile/src/lib/editDoor.js')
+    assert.deepEqual(editDoor({ bench: false, demo: true }), { opens: false, explained: false, shuts: true }, 'the Edit button opens with the switch off')
+    assert.equal(editDoor({ bench: false, link: 'connected', overBluetooth: true, built: true }).explained, false, 'the Edit button explains itself with the switch off')
 
     /*
      * Absent rather than disabled when there is nowhere to go — and now on the

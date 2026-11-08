@@ -557,6 +557,16 @@ export const vp4Setup = () => readVp4Setup(vp4Storage())
 /** Whether the unit is a VP4 (never the demo's). */
 export const vp4Here = () => unitIsVp4
 /*
+ * EDIT'S VP4 RULES, THE DEMO'S VP4 INCLUDED: a real VP4, or the demo's. A
+ * real VP4 through the computer gets its chain and its effects on and off on
+ * Edit and nothing else (shared/vp4-safety.mjs VP4_NO_KNOBS, VP4_NO_EDITS),
+ * and the demo's offered the knobs, the chain editor, the modifiers and
+ * renaming. For Edit's screens only (App's Edit and chain sheet, Console's
+ * block panel): Play and every request keep vp4Here, which is never the
+ * demo's. The phone's Edit does the same (mobile Edit.js vp4Bench).
+ */
+export const vp4Bench = () => unitIsVp4 || (mock !== null && demoUnit() === 'vp4')
+/*
  * THE NAME OF THE PRESET A VP4 IS ON, off the grid answer its chain is read
  * from — the phone's rule (mobile/src/lib/device.js vp4PresetName). A VP4
  * cannot say which preset it is on, so this end showed "Untitled" over a

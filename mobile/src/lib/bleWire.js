@@ -2328,7 +2328,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   async function am4Params(eid) {
     const code = blockNumber(eid)
     const b = editBlock(code)
-    if (!b) throw badInput(`The app can’t open block ${toHex([code])} over Bluetooth yet.`)
+    if (!b) throw badInput(`The app can’t open block ${toHex([code])} from here yet.`)
     /* Kept from a moment ago (editKept): nothing to send, or only the registers written since. */
     const kept = editKept.get(code)
     const fresh = !!kept && time.now() - kept.at < EDIT_FRESH_MS && time.now() - kept.whole < EDIT_WHOLE_MS
@@ -2376,7 +2376,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   async function am4WriteKnob(eid, id, body) {
     const code = blockNumber(eid)
-    if (!editBlock(code)) throw badInput(`The app can’t change block ${toHex([code])} over Bluetooth yet.`)
+    if (!editBlock(code)) throw badInput(`The app can’t change block ${toHex([code])} from here yet.`)
     const made = knobFrame(code, Number(id), body)
     if (made.refused) throw badInput(made.refused)
     await placedHere(code)
@@ -2432,7 +2432,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   async function gen3Params(eid) {
     const e = blockNumber(eid)
     const b = g3Edit.editBlock(e)
-    if (!b) throw badInput(`The app can’t open block ${e} over Bluetooth yet.`)
+    if (!b) throw badInput(`The app can’t open block ${e} from here yet.`)
     const kept = editKept.get(e)
     if (kept && !kept.stale.size && time.now() - kept.at < EDIT_FRESH_MS && time.now() - kept.whole < EDIT_WHOLE_MS) {
       return g3Edit.blockParamsOf(e, kept.bulk, { channel: kept.channel })
@@ -2455,7 +2455,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* PUT /preset/blocks/<eid>/params/<id> on a gen-3 unit: one knob or switch, the computer's frame for it. */
   async function gen3WriteKnob(eid, id, body) {
     const e = blockNumber(eid)
-    if (!g3Edit.editBlock(e)) throw badInput(`The app can’t change block ${e} over Bluetooth yet.`)
+    if (!g3Edit.editBlock(e)) throw badInput(`The app can’t change block ${e} from here yet.`)
     const made = g3Edit.knobFrame(model, e, id, body)
     if (made.refused) throw badInput(made.refused)
     await gen3PlacedHere(e)

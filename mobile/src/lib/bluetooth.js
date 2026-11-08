@@ -12,7 +12,7 @@ import { logDebug } from './debugLog'
 import { isAdmin } from './admin'
 import { accountId } from './owner-unlock'
 import { installedStoreVersion } from './storeVersion'
-import { bluetoothOpen, editOffered, unitOffered } from './ble-rule'
+import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { namedForFm3, neverOnFm3, notAnAdapter, unitForReport } from './bluetooth-gear'
 
@@ -540,6 +540,15 @@ export const builtInVersion = () => {
  */
 export const editOverBluetooth = (unit = saved.unit) =>
   allowed === true && editOffered(unit, { admin: allUnits, platform: Platform.OS, installed: builtInVersion() })
+
+/**
+ * Whether the unit picked is one whose Edit is built over Bluetooth and a
+ * USB cable (ble-rule.js EDIT_UNITS: the AM4, FM3, FM9 and Axe-Fx III),
+ * whoever it is open to. Where it is built and not open here, Play's Edit
+ * stays and says why (App.js editExplained, lib/editWords). Never the VP4,
+ * which has no knob editing anywhere, nor a unit not listed.
+ */
+export const editBuiltFor = (unit = saved.unit) => EDIT_UNITS.includes(unit)
 
 /** Whether this copy opens Bluetooth (beta) to customers, whoever is signed in: the log's head, and the purchase page. */
 export const openForCustomersHere = () => bluetoothOpen({ platform: Platform.OS, installed: builtInVersion(), admin: false })
