@@ -24,6 +24,8 @@ import {
 } from '../lib/device'
 import { vp4Here } from '../lib/device'
 import { overBluetooth } from '../lib/bleSwitch'
+import { useCableNow } from '../lib/bluetooth'
+import { CABLE_EDIT_NOTE } from '../lib/cableWords'
 import { bleEditNoteSeen, editBetaNoteSeen, markBleEditNote, markEditBetaNote } from '../lib/coach'
 import { VP4_NO_EDITS, VP4_NO_KNOBS } from '../lib/vp4-safety'
 import {
@@ -197,6 +199,8 @@ export default function Edit({ onBack, onOpenGear }) {
   const pending = !!unsaved && unsaved.number === preset?.number
   /* Over Bluetooth: knobs, models and on/off, and no Save (rig.noteEdited marks nothing there). See BLE_NOTE. */
   const viaBle = overBluetooth(caps)
+  /* A unit on its own USB cable is the same wire, and its note says the cable that is in, not Bluetooth (lib/cableWords CABLE_EDIT_NOTE). */
+  const onCable = useCableNow()
   /* Up until its cross is pressed, once per device; hidden until storage has answered, so it never flashes up for somebody who put it away. */
   const [bleNoteUp, setBleNoteUp] = useState(false)
   useEffect(() => {
@@ -399,7 +403,7 @@ export default function Edit({ onBack, onOpenGear }) {
             markBleEditNote()
           }}
         >
-          {BLE_NOTE}
+          {onCable ? CABLE_EDIT_NOTE : BLE_NOTE}
         </Note>
       ) : null}
 
@@ -619,11 +623,13 @@ const BETA_NOTE =
  * the computer, said once where the chain editor would be.
  *
  * "I have an FM3 and AM4 I can test on." Over Bluetooth the phone reads and
- * turns the unit's knobs itself (bleWire's edit routes, lib/am4-edit.js):
- * knobs, models and on/off. Saving is the computer's (lib/saveViaComputer),
- * so a change made here plays and is lost at the next preset change unless
- * it is saved on the unit; and moving blocks, modifiers and names are not
- * built over Bluetooth yet. Plain about both, rather than a Save that cannot
+ * turns the unit's knobs itself (bleWire's edit routes, lib/am4-edit.js, and
+ * lib/gen3-edit.js for the FM3, FM9 and Axe-Fx III): knobs, models and
+ * on/off. On a unit's own USB cable it is the same wire, and the note says
+ * the cable instead (lib/cableWords CABLE_EDIT_NOTE). Saving is the
+ * computer's (lib/saveViaComputer), so a change made here plays and is lost
+ * at the next preset change unless it is saved on the unit; and moving
+ * blocks, modifiers and names are not built over Bluetooth yet. Plain about both, rather than a Save that cannot
  * work and doors that open on refusals.
  */
 export const BLE_NOTE =

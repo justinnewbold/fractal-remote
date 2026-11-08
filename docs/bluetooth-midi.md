@@ -41,8 +41,13 @@ scripts/am4-knobs.mjs). Knobs, models and on/off; no saving, moving
 blocks, modifiers or names over Bluetooth yet. It opens to customers only
 in a store version that says so (`EDIT_FROM_STORE` in
 mobile/src/lib/ble-rule.js). The FM3 followed the same day, the same way
-(mobile/src/lib/fm3-edit.js, scripts/fm3-knobs.mjs), on its own entry, with
-no cab picking.
+(mobile/src/lib/fm3-edit.js), on its own entry, with no cab picking; and on
+8 November 2026 the FM9 and the Axe-Fx III, over Bluetooth or the unit's
+own USB cable ("Push the edit over Bluetooth and USB to FM9 and AxeFX 3 as
+the over the air update asap"): one gen-3 module (mobile/src/lib/
+gen3-edit.js) bound to each unit's own catalog (fm3-knobs.js, fm9-knobs.js,
+axefx3-knobs.js, all three written by scripts/gen3-knobs.mjs through
+ForgeFX's profile for that unit), each on its own entry.
 
 None of it had been tried on Justin's hardware when this was written. Since
 then (26 October 2026, from an iPhone and an Android phone): his AM4 works

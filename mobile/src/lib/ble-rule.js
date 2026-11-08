@@ -176,9 +176,14 @@ export function unitOffered(unit, { admin = false, platform = null, installed = 
  * if it works to be able to get it out to everyone." (Justin, 29 October
  * 2026.) Edit (Beta) opens over Bluetooth on a unit only once the phone can
  * read and turn that unit's knobs itself (bleWire's edit routes): the AM4
- * (lib/am4-edit.js) and the FM3 (lib/fm3-edit.js). His account has each on
- * every copy from the update that brings it, to try on his own units;
- * nobody else has either yet, and each opens on its own entry.
+ * (lib/am4-edit.js) and the FM3 (lib/fm3-edit.js) since 29 October, and
+ * the FM9 and the Axe-Fx III (lib/fm9-edit.js, lib/axefx3-edit.js, each on
+ * its own catalog) since 8 November: "Push the edit over Bluetooth and USB
+ * to FM9 and AxeFX 3 as the over the air update asap." The same rule holds
+ * on a unit's own USB cable, which is the same wire (lib/bleAdapters
+ * isCable). His account has each on every copy from the update that brings
+ * it, to try on his own units; nobody else has any yet, and each opens on
+ * its own entry.
  *
  * THE SWITCH IS ONE LINE HERE, AND IT IS A STORE VERSION. Every copy out
  * today was reviewed with notes, and a listing, that say editing does not
@@ -199,7 +204,9 @@ export function unitOffered(unit, { admin = false, platform = null, installed = 
  */
 export const EDIT_FROM_STORE = Object.freeze({
   am4: null,
-  fm3: null
+  fm3: null,
+  fm9: null,
+  axefx3: null
 })
 
 /** The units whose knobs the phone can read and turn over Bluetooth, keyed above. */

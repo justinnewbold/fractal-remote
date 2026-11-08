@@ -1824,10 +1824,12 @@ export default function App() {
                  * that screen is read off the unit, so with nothing on the other
                  * end it is a screen of empty knobs.
                  *
-                 * Over Bluetooth only where the phone can read and turn the
-                 * unit's knobs itself (lib/ble-rule.js editOffered: the AM4 and the FM3,
-                 * on his account until a store version opens it), and even
-                 * there no saving, no moving blocks (Edit says so).
+                 * Over Bluetooth (or a unit's own USB cable, the same wire)
+                 * only where the phone can read and turn the unit's knobs
+                 * itself (lib/ble-rule.js editOffered: the AM4, FM3, FM9 and
+                 * Axe-Fx III, on his account until a store version opens
+                 * each), and even there no saving, no moving blocks (Edit
+                 * says so).
                  */
                 onOpenEdit={
                   BENCH && (demo || link.link === 'connected') && (!overBluetooth(caps) || editOverBluetooth()) ? () => setScreen('edit') : null
