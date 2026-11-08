@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-08",
     "day": "8 November 2026",
-    "version": "1.89.69",
+    "version": "1.89.70",
     "lines": [
+      {
+        "text": "The Unlock page now puts its buttons at the top, so they fit on screen without scrolling. Where the free 7-day trial is offered, it’s now also on the walkthrough’s Connect my real rig card and on the demo’s card on Play.",
+        "only": null
+      },
       {
         "text": "The walkthrough’s last button now says Let’s go.",
         "only": null

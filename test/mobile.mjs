@@ -9103,6 +9103,9 @@ export function run(test) {
     const onb = read('mobile/src/screens/Onboarding.js').replace(/\s+/g, ' ')
     assert.match(onb, /label=\{P2\.footGo\}[\s\S]{0,80}?go\('pick'\)/, 'the walkthrough no longer offers the demo')
     assert.doesNotMatch(onb, /usePurchase/, 'the walkthrough’s demo is held back from a paid phone')
+    /* The free trial on Connect my real rig is App's to decide (trialAvailable), and opens the purchase page, as Unlock does (8 November 2026). */
+    assert.match(onb, /\{trial \? <Press label=\{TRIAL_BUTTON\} tone="signal" on height=\{TAP\} onPress=\{\(\) => onUnlock\?\.\(\)\} \/> : null\}/, 'the walkthrough’s Connect my real rig card does not offer the free trial')
+    assert.match(read('mobile/App.js').replace(/\s+/g, ' '), /onUnlock=\{\(\) => setBuying\(true\)\} \/\* [^*]*\*\/ trial=\{trialAvailable\(purchase\)\}/, 'App does not tell the walkthrough whether the trial is offered')
 
     /*
      * AND THE TWO DOORS ARE NAMED FOR THE TWO PEOPLE WALKING THROUGH THEM.

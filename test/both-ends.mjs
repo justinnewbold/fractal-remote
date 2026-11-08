@@ -1935,7 +1935,7 @@ export function run(test) {
       /\{paid \? \( <button type="button" className="chip pw-go" onClick=\{\(\) => leave\(onAccount\)\}> \{computer \? OWNED\.computerGo : OWNED\.phoneGo\} <\/button> \) : \(/,
       'an owner is not carried on to setting up'
     )
-    const ownerCard = walk.slice(walk.indexOf('{paid ? ( <button'), walk.indexOf(') : ( <> <label className="pw-agree">'))
+    const ownerCard = walk.slice(walk.indexOf('{paid ? ( <button'), walk.indexOf(') : ( <>', walk.indexOf('{paid ? ( <button')))
     assert.ok(ownerCard.length > 0 && !/onUnlock/.test(ownerCard), 'the owner’s card can still open the unlock')
 
     /* And "hasn't unlocked yet" is said on a definite answer only. */
@@ -4654,21 +4654,30 @@ export function run(test) {
     const app = read('src/App.jsx')
     const card = read('src/components/UnlockOffer.jsx')
     const phone = read('mobile/src/components/UnlockOffer.js')
-    /* The phone's card, untouched: its words are quoted in the App Store review notes. */
+    /* The phone's card, untouched where no trial is offered: its words are quoted in the App Store review notes. Where the trial is offered (8 November 2026), the trial first and the price after it, and Try it free, which opens the same purchase page. */
     assert.match(phone, />\s*This is the demo\s*</)
-    assert.match(phone, /Unlock to drive your own rig from this \{deviceNoun\(\)\}\./)
-    assert.match(phone, /\{purchase\.price \? `Unlock \$\{purchase\.price\}` : 'Unlock'\}/)
+    assert.match(phone, /\{offerTrial \? demoTrialLine\(purchase\.price\) : <>Unlock to drive your own rig from this \{deviceNoun\(\)\}\.<\/>\}/)
+    assert.match(phone, /\{offerTrial \? DEMO_NUDGE_GO : purchase\.price \? `Unlock \$\{purchase\.price\}` : 'Unlock'\}/)
     /* The browser's, from the shared words, none typed in. */
     assert.match(card, /^import \{ DEMO_CARD, demoCardBody, unlockWord \} from '\.\.\/\.\.\/shared\/play-words\.mjs'$/m)
-    for (const said of ['{DEMO_CARD}', '{demoCardBody()}', '{unlockWord(price)}']) assert.ok(card.includes(said), `the card does not say ${said}`)
+    for (const said of ['{DEMO_CARD}', 'demoCardBody()}', 'unlockWord(price)}']) assert.ok(card.includes(said), `the card does not say ${said}`)
     assert.ok(!/This is the demo|Unlock to drive|'Unlock'/.test(card.replace(/\/\*[\s\S]*?\*\//g, '')), 'the browser’s card spells out its words itself')
-    assert.match(card, /aria-label="Unlock the full version"/)
+    assert.match(card, /aria-label=\{trial \? 'Try the full version free' : 'Unlock the full version'\}/)
+    /* Where the page offers the trial, the trial first, as the phone's card (8 November 2026). */
+    assert.match(card, /\{trial \? demoTrialLine\(price\) : demoCardBody\(\)\}/)
+    assert.match(card, /\{trial \? DEMO_NUDGE_GO : unlockWord\(price\)\}/)
+    assert.match(read('src/App.jsx'), /demoCard=\{offerShown \? \{ price: webPriceText, trial: trialHere, onUnlock: openUnlock, onPutAway: putOfferAway \} : null\}/)
+    assert.match(read('src/components/Gig.jsx'), /<UnlockOffer price=\{demoCard\.price\} trial=\{demoCard\.trial\} /)
+    /* And the walkthrough's Connect my real rig card, over its box to tick, opening the same unlock page. */
+    const walk = read('src/components/PhoneWalkthrough.jsx').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/\s+/g, ' ')
+    assert.match(walk, /<> \{trial \? \( <button type="button" className="primary pw-go" onClick=\{\(\) => leave\(onUnlock\)\}> \{TRIAL_BUTTON\} <\/button> \) : null\} <label className="pw-agree">/, 'the website’s Connect my real rig card does not offer the free trial')
+    assert.match(read('src/App.jsx').replace(/\s+/g, ' '), /onUnlock=\{openUnlock\} \/\* [^*]*\*\/ trial=\{trialHere\}/)
     assert.match(card, /aria-label="Put this away"/)
     /* On Play, drawn by Gig, the first thing on the screen. */
     const gig = read('src/components/Gig.jsx')
-    assert.match(gig, /\{demoCard \? <UnlockOffer price=\{demoCard\.price\} onUnlock=\{demoCard\.onUnlock\} onPutAway=\{demoCard\.onPutAway\} \/> : null\}/)
+    assert.match(gig, /\{demoCard \? <UnlockOffer price=\{demoCard\.price\} trial=\{demoCard\.trial\} onUnlock=\{demoCard\.onUnlock\} onPutAway=\{demoCard\.onPutAway\} \/> : null\}/)
     assert.ok(gig.indexOf('<UnlockOffer') < gig.indexOf('<ComputerCard'), 'the demo’s card is not the first thing on Play, as on the phone')
-    assert.match(app, /demoCard=\{offerShown \? \{ price: webPriceText, onUnlock: openUnlock, onPutAway: putOfferAway \} : null\}/, 'the card is drawn on something other than offerShown, or without the price')
+    assert.match(app, /demoCard=\{offerShown \? \{ price: webPriceText, trial: trialHere, onUnlock: openUnlock, onPutAway: putOfferAway \} : null\}/, 'the card is drawn on something other than offerShown, or without the price')
     /* While the bar's Unlock would show (TopBar's own condition), once the purchase is checked, never under the demo's line, and not after its ×. */
     assert.match(app, /onUnlock=\{isDemo\(\) && paid\.checked && !paid\.unlocked \? openUnlock : null\}/)
     assert.match(app, /const offerWanted = isDemo\(\) && status === 'live' && !paid\.unlocked && !offerAway\n/)

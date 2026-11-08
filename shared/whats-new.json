@@ -4,8 +4,9 @@
   "days": [
     {
       "date": "2026-11-08",
-      "version": "1.89.69",
+      "version": "1.89.70",
       "lines": [
+        "The Unlock page now puts its buttons at the top, so they fit on screen without scrolling. Where the free 7-day trial is offered, it’s now also on the walkthrough’s Connect my real rig card and on the demo’s card on Play.",
         "The walkthrough’s last button now says Let’s go.",
         "On the website, How it works now opens on Bluetooth, as in the app: a Bluetooth adapter on your unit and the free app on your phone or tablet, with buttons to download it. Tap Computer for the computer way.",
         "The glass circles behind the speaker and settings buttons at the top now sit centered on their icons."

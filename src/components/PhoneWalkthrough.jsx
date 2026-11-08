@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { holdInert } from '../lib/inert'
+import { TRIAL_BUTTON } from '../../shared/trial-words.mjs'
 
 import { C3, CHAIN, CLOSE, P1, P2, P3, P4, P9, WALK_STEPS } from '../../shared/onboarding.mjs'
 import { walkthroughTips } from '../../shared/vp4-safety.mjs'
@@ -94,7 +95,7 @@ const OWNED = {
  * three cards (C3): use it here — which hands over to the computer's own
  * plug-in steps, `onHere` — the demo, and the phone remote's unlock.
  */
-export default function PhoneWalkthrough({ open, replay = false, computer = false, paid = false, onClose, onAccount, onUnlock, onHere }) {
+export default function PhoneWalkthrough({ open, replay = false, computer = false, paid = false, trial = false, onClose, onAccount, onUnlock, onHere }) {
   const [at, setAt] = useState('welcome')
   const [unit, setUnit] = useState(UNITS[0].key)
   /* The box under Connect my real rig. Unlock stays grey until it is ticked. */
@@ -338,6 +339,12 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
                 </button>
               ) : (
                 <>
+                  {/* The free trial first, as on the phone (8 November 2026): it opens the unlock page, where the trial starts with its terms under it; no box to tick, since nothing is paid. */}
+                  {trial ? (
+                    <button type="button" className="primary pw-go" onClick={() => leave(onUnlock)}>
+                      {TRIAL_BUTTON}
+                    </button>
+                  ) : null}
                   <label className="pw-agree">
                     <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
                     {/* Both ways, in a browser (AGREE_IN_BROWSER, shared/stores.mjs); his sentence in the computer app's window. */}
