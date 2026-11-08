@@ -195,7 +195,7 @@ export default function Gig({
   holdTip = false,
   onHoldTipSeen,
   onHoldTipClosed,
-  /* The demo's card at the top of Play (components/UnlockOffer), { price, onUnlock, onPutAway }, while App says it is up (offerShown); null otherwise. */
+  /* The demo's card at the top of Play (components/UnlockOffer), { price, trial, onUnlock, onPutAway }, while App says it is up (offerShown); null otherwise. */
   demoCard = null,
   /* The free trial's line or the demo's card about it: { kind: 'line' | 'nudge', text, go, onGo, onPutAway }, or null. */
   trialNote = null,
@@ -1203,7 +1203,7 @@ export default function Gig({
       }}
     >
       {/* The first thing on the first screen, as the phone's: where an eye starts. */}
-      {demoCard ? <UnlockOffer price={demoCard.price} onUnlock={demoCard.onUnlock} onPutAway={demoCard.onPutAway} /> : null}
+      {demoCard ? <UnlockOffer price={demoCard.price} trial={demoCard.trial} onUnlock={demoCard.onUnlock} onPutAway={demoCard.onPutAway} /> : null}
       {/*
         THE FREE TRIAL ON PLAY (7 November 2026), as the phone's: while one
         runs, "Trial: 3 days left · Unlock", tappable to the unlock page; in

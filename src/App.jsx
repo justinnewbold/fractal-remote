@@ -5121,7 +5121,7 @@ export default function App() {
            * So this waits for the demo's line to be put away, and the hold
            * tip (holdTipDue) waits for this one.
            */
-          demoCard={offerShown ? { price: webPriceText, onUnlock: openUnlock, onPutAway: putOfferAway } : null}
+          demoCard={offerShown ? { price: webPriceText, trial: trialHere, onUnlock: openUnlock, onPutAway: putOfferAway } : null}
           trialNote={
             onTrial && !isDemo()
               ? { kind: 'line', text: trialLine(trialEndsAt), onGo: () => {
@@ -5632,6 +5632,8 @@ export default function App() {
               : null
         }
         onUnlock={openUnlock}
+        /* The free trial on its Connect my real rig card, where this page offers it. */
+        trial={trialHere}
         /* So its phone-remote card says an owner has it, rather than selling it. */
         paid={ownedSure}
         onHere={() => setComputerSetup(true)}

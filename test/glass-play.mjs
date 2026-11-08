@@ -236,7 +236,8 @@ export function run(test) {
         "import AsyncStorage from '@react-native-async-storage/async-storage'",
         "import { color, font, radius, space } from '../lib/theme'",
         "import { tick } from '../lib/feedback'",
-        "import { shouldOffer, usePurchase } from '../lib/purchases'",
+        "import { shouldOffer, trialOnOffer, usePurchase } from '../lib/purchases'",
+        "import { DEMO_NUDGE_GO, demoTrialLine } from '../lib/trial-words'",
         "import { useDemo } from '../lib/demo'",
         "import { deviceNoun } from '../lib/device-word'"
       ],

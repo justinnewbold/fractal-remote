@@ -12,7 +12,7 @@
  * is, what stops when it ends, and what it costs after. TRIAL_TERMS says all
  * three, under every Start button.
  */
-import { deviceNoun } from './device-word.js'
+import { deviceKind, deviceNoun } from './device-word.js'
 import { TRIAL_DAYS, trialDaysLeft } from './trial-rule.js'
 
 /** The button on the purchase page. */
@@ -121,3 +121,24 @@ export const DEMO_NUDGE_AFTER_MS = 3 * 60 * 1000
 
 /** Its button. */
 export const DEMO_NUDGE_GO = 'Try it free'
+
+/*
+ * THE TRIAL WHEREVER THE UNLOCK IS SOLD. "People have been buying the
+ * unlock instead of starting the trial ... On the initial screen also where
+ * it says try demo or connect real rig, that should also say start trial"
+ * (Justin, 8 November 2026). The walkthrough's Connect my real rig card
+ * says TRIAL_BUTTON over Unlock, and the demo's card on Play says this line
+ * with DEMO_NUDGE_GO. Each of them opens the purchase page, where
+ * TRIAL_BUTTON starts it with trialTerms under it: Apple's 3.1.1 wants the
+ * length, what stops and the price after said before a trial starts, so no
+ * button anywhere else starts one.
+ */
+
+/**
+ * The demo's card on Play, where the trial is offered: the trial first, and
+ * the price after it. Read when it is shown, as demoCardBody is: on the
+ * computer app the rig plays free with no trial, and what the trial (and the
+ * purchase) gives there is a phone or tablet as the remote.
+ */
+export const demoTrialLine = (price = null, kind = deviceKind()) =>
+  `${kind === 'computer' ? 'Try a phone or tablet as your remote' : 'Try your own rig'} free for ${TRIAL_DAYS} days${price ? `, or unlock for ${price}` : ''}.`

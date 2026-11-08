@@ -7,7 +7,7 @@ import Note from '../components/Note'
 import Press from '../components/Press'
 import RestoreAsk from '../components/RestoreAsk'
 import Sheet from '../components/Sheet'
-import { buyUnlock, restorePurchase, startTrial, trialAvailable, usePurchase } from '../lib/purchases'
+import { buyUnlock, restorePurchase, startTrial, trialOnOffer, usePurchase } from '../lib/purchases'
 import { trialRunning } from '../lib/unlock-rule'
 import { TRIAL_BUTTON, TRIAL_OVER, TRIAL_STARTING, trialRefusal, trialRunning as trialRunningWords, trialStartedWords, trialTerms } from '../lib/trial-words'
 import { UNITS } from '../lib/demoUnits'
@@ -137,7 +137,7 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onMakeAc
   if (unlocked && !busy) onUnlocked?.()
   /*
    * THE FREE TRIAL (7 November 2026). Offered beside Unlock wherever this
-   * copy may offer it (purchases trialAvailable: on an iPhone only once the
+   * copy may offer it (purchases trialOnOffer: on an iPhone only once the
    * App Store's free 7-Day Trial item is there), with what it is and what
    * happens after said under the button, before anybody taps it (Apple's
    * 3.1.1). A trial running closes the page put in front of the app, as a
@@ -147,7 +147,7 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onMakeAc
   const trialOn = trialRunning(purchase.trialEndsAt)
   if (trialOn && !asked && !busy) onUnlocked?.()
   /* And only with the price to say under it: 3.1.1 wants any later charge named before a trial starts, and the terms leave it out without one. */
-  const offerTrial = trialAvailable(purchase) && Boolean(price)
+  const offerTrial = trialOnOffer(purchase)
   const tryIt = async () => {
     setBusy(true)
     setSaid({ tone: 'info', text: TRIAL_STARTING })
@@ -214,19 +214,116 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onMakeAc
     setSaid({ tone: 'warn', text: out.message })
   }
 
+  /* What it is and what it costs, in words: first on the page put in front of the app, under the buttons in the sheet (below). */
+  const intro = (
+    <View style={{ gap: space.sm }}>
+      <Text style={{ color: color.silk, fontSize: font.title, fontWeight: '700' }}>
+        Phone Remote
+      </Text>
+      <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: font.body * 1.45 }}>
+        {`One-time payment, with every future update, on the ${supportedWords}. It unlocks on every phone or tablet you sign in on.`}
+      </Text>
+    </View>
+  )
+
+  /*
+   * EVERYTHING ON ONE SCREEN, ASKED FOR (8 November 2026): "it should show
+   * everything on the screen instead of having to scroll up". In the sheet
+   * the sheet itself scrolls and pads (components/Sheet), so the page is a
+   * plain column there: a second padded scroll inside it took a gutter off
+   * each side and pushed Unlock and Restore under the fold on a 667-point
+   * iPhone. And there the heading goes under the buttons, since the sheet's
+   * own title already says Unlock and One payment, once.
+   */
+  const Column = asked ? View : ScrollView
+  const columnProps = asked
+    ? { style: { gap: space.lg } }
+    : { contentContainerStyle: { padding: space.lg, gap: space.lg }, keyboardShouldPersistTaps: 'handled' }
   const body = (
-    <ScrollView
-      contentContainerStyle={{ padding: space.lg, gap: space.lg }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={{ gap: space.sm }}>
-        <Text style={{ color: color.silk, fontSize: font.title, fontWeight: '700' }}>
-          Phone Remote
-        </Text>
-        <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: font.body * 1.45 }}>
-          {`One-time payment, with every future update, on the ${supportedWords}. It unlocks on every phone or tablet you sign in on.`}
-        </Text>
+    <Column {...columnProps}>
+      {asked ? null : intro}
+
+      {trialOn ? <Note tone="info">{trialRunningWords(purchase.trialEndsAt)}</Note> : null}
+      {!trialOn && purchase.trialEnded && !unlocked ? <Note tone="warn">{TRIAL_OVER}</Note> : null}
+
+      {said ? <Note tone={said.tone}>{said.text}</Note> : null}
+
+      {/* A dead Unlock button is worse than an explained one. Restore still
+          shows, because a purchase made elsewhere is worth trying for. */}
+      {!available ? <Note tone="warn">{why || 'Purchases are not available here.'}</Note> : null}
+      {/*
+        And underneath it, the store's own account, when there is one.
+        "The store has nothing to sell yet" is true and unactionable — it does
+        not say whether the gap is in RevenueCat or in the Play Console, and
+        those are fixed in different places. See purchases.detail: facts only,
+        and null for anybody who can actually buy the thing, which is every
+        customer who ever reaches this screen.
+      */}
+      {!available && detail ? (
+        <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 18 }}>{detail}</Text>
+      ) : null}
+
+      {/* A payment the store is still waiting on, one it has not confirmed,
+          or a purchase here that has not reached the account: said for as
+          long as Buy is held behind it. */}
+      {held && !said ? <Note tone="warn">{held}</Note> : null}
+
+      {/*
+        THE BUTTONS FIRST, then what it unlocks (8 November 2026): "it should
+        show everything on the screen instead of having to scroll up". The
+        list of features and the Bluetooth line used to come first and pushed
+        the free trial and Unlock under the bottom of the sheet; they are
+        under the buttons now, for whoever wants to read on.
+      */}
+      <View style={{ gap: space.md }}>
+        {freeFirst ? (
+          <>
+            <Text style={{ color: color.silk, fontSize: font.body, lineHeight: font.body * 1.45 }}>
+              Bought it on another device? Sign in with that account instead of buying again. Signing in never
+              charges you.
+            </Text>
+            <Press
+              label={ALREADY_UNLOCKED}
+              disabled={busy}
+              onPress={onSignIn}
+              style={{ borderColor: color.signal }}
+            />
+          </>
+        ) : null}
+        {offerTrial ? (
+          <>
+            <Press label={TRIAL_BUTTON} tone="signal" on disabled={busy} onPress={tryIt} />
+            <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>{trialTerms(price)}</Text>
+          </>
+        ) : null}
+        <Press
+          label={price ? `Unlock Full Version — ${price}` : 'Unlock Full Version'}
+          tone="signal"
+          disabled={busy || !available || Boolean(held)}
+          onPress={buy}
+        />
+        <Press label="Restore a purchase" disabled={busy} onPress={() => restore()} />
+        {/* With nobody signed in: whose the purchase is, and the two ways on. */}
+        {asking ? <RestoreAsk onSignIn={onSignIn} onHere={() => restore(true)} busy={busy} /> : null}
+        {/*
+          Restore asks the STORE whether this Apple or Google account has
+          bought it. That is a different question from "am I signed in as
+          somebody who already has this", and only one of them had an answer
+          here — which left somebody looking at a locked app, holding an
+          account that unlocks it, with nothing on screen to say so.
+        */}
+        {onSignIn && !freeFirst ? (
+          <Press
+            /* "I'm already unlocked, sign in" — his words, and the browser's
+               unlock page says the same (shared/onboarding.mjs). */
+            label={ALREADY_UNLOCKED}
+            disabled={busy}
+            onPress={onSignIn}
+          />
+        ) : null}
       </View>
+
+      {asked ? intro : null}
 
       {/*
         A card of frosted glass (lib/glass), its rim drawn inside it. Asked
@@ -302,79 +399,6 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onMakeAc
         </View>
       ) : null}
 
-      {trialOn ? <Note tone="info">{trialRunningWords(purchase.trialEndsAt)}</Note> : null}
-      {!trialOn && purchase.trialEnded && !unlocked ? <Note tone="warn">{TRIAL_OVER}</Note> : null}
-
-      {said ? <Note tone={said.tone}>{said.text}</Note> : null}
-
-      {/* A dead Unlock button is worse than an explained one. Restore still
-          shows, because a purchase made elsewhere is worth trying for. */}
-      {!available ? <Note tone="warn">{why || 'Purchases are not available here.'}</Note> : null}
-      {/*
-        And underneath it, the store's own account, when there is one.
-        "The store has nothing to sell yet" is true and unactionable — it does
-        not say whether the gap is in RevenueCat or in the Play Console, and
-        those are fixed in different places. See purchases.detail: facts only,
-        and null for anybody who can actually buy the thing, which is every
-        customer who ever reaches this screen.
-      */}
-      {!available && detail ? (
-        <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 18 }}>{detail}</Text>
-      ) : null}
-
-      {/* A payment the store is still waiting on, one it has not confirmed,
-          or a purchase here that has not reached the account: said for as
-          long as Buy is held behind it. */}
-      {held && !said ? <Note tone="warn">{held}</Note> : null}
-
-      <View style={{ gap: space.md }}>
-        {freeFirst ? (
-          <>
-            <Text style={{ color: color.silk, fontSize: font.body, lineHeight: font.body * 1.45 }}>
-              Bought it on another device? Sign in with that account instead of buying again. Signing in never
-              charges you.
-            </Text>
-            <Press
-              label={ALREADY_UNLOCKED}
-              disabled={busy}
-              onPress={onSignIn}
-              style={{ borderColor: color.signal }}
-            />
-          </>
-        ) : null}
-        {offerTrial ? (
-          <>
-            <Press label={TRIAL_BUTTON} tone="signal" disabled={busy} onPress={tryIt} />
-            <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>{trialTerms(price)}</Text>
-          </>
-        ) : null}
-        <Press
-          label={price ? `Unlock Full Version — ${price}` : 'Unlock Full Version'}
-          tone="signal"
-          disabled={busy || !available || Boolean(held)}
-          onPress={buy}
-        />
-        <Press label="Restore a purchase" disabled={busy} onPress={() => restore()} />
-        {/* With nobody signed in: whose the purchase is, and the two ways on. */}
-        {asking ? <RestoreAsk onSignIn={onSignIn} onHere={() => restore(true)} busy={busy} /> : null}
-        {/*
-          Restore asks the STORE whether this Apple or Google account has
-          bought it. That is a different question from "am I signed in as
-          somebody who already has this", and only one of them had an answer
-          here — which left somebody looking at a locked app, holding an
-          account that unlocks it, with nothing on screen to say so.
-        */}
-        {onSignIn && !freeFirst ? (
-          <Press
-            /* "I'm already unlocked, sign in" — his words, and the browser's
-               unlock page says the same (shared/onboarding.mjs). */
-            label={ALREADY_UNLOCKED}
-            disabled={busy}
-            onPress={onSignIn}
-          />
-        ) : null}
-      </View>
-
       <View style={{ gap: space.md }}>
         {/* Somebody STOPPED on the way in needs a way past this; somebody who
             came looking is already in the demo and only needs out. */}
@@ -428,12 +452,12 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onMakeAc
           <Press label="Keep my account" disabled={busy} onPress={() => setDeleting(false)} />
         </Sheet>
       ) : null}
-    </ScrollView>
+    </Column>
   )
 
   /* Imposed, it IS the screen. Asked for, it lies over the one they were on. */
   return asked ? (
-    <Sheet open onClose={() => onBack?.()} title="Unlock" note="One payment, once">
+    <Sheet open tall onClose={() => onBack?.()} title="Unlock" note="One payment, once">
       {body}
     </Sheet>
   ) : (

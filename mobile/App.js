@@ -83,7 +83,7 @@ import { CABLE_LOOK_AGAIN, CABLE_TO_ADAPTER, CABLE_TO_ADAPTER_SUB, CABLE_WAITING
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
-import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
+import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, trialOnOffer, unlinkAccount, usePurchase } from './src/lib/purchases'
 import { shouldAskToPay } from './src/lib/unlock-rule'
 import { deviceNoun } from './src/lib/device-word'
 import { allowSiriLinks, siriElsewhere, startSiri } from './src/lib/siri'
@@ -1355,6 +1355,8 @@ export default function App() {
                * paywall, and the walkthrough's next step is sign-in.
                */
               onUnlock={() => setBuying(true)}
+              /* The free trial on Connect my real rig, wherever this copy may offer it (on an iPhone, once the App Store has its free 7-Day Trial item). */
+              trial={trialOnOffer(purchase)}
             />
             {/*
               AND THE PAYWALL IS DRAWN HERE TOO, or that button does nothing.
