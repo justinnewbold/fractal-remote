@@ -2362,6 +2362,8 @@ export function run(test) {
      * Bluetooth, and nothing of it is drawn in the computer app's own window.
      */
     const { BROWSER_HOW_BLUETOOTH } = await import('../shared/stores.mjs')
+    /* The last screen's button, on both ends: "instead of saying open play, say 'let's go'" (8 November 2026). */
+    assert.equal((await import('../shared/onboarding.mjs')).P9.go, 'Let’s go')
     const { HOW_TWO_WAYS } = await import('../shared/bluetooth-gear.mjs')
     assert.deepEqual(BROWSER_HOW_BLUETOOTH.ways, HOW_TWO_WAYS.ways, 'the website’s two ways are not the phone’s, in the phone’s order')
     assert.equal(BROWSER_HOW_BLUETOOTH.ways[0].key, 'bluetooth', 'the website’s How it works does not put Bluetooth first')
