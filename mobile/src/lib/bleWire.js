@@ -487,6 +487,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /* What the phone was last told, so the footswitch watch knows a change when it sees one. */
   const last = { scene: null, preset: null, name: '', bpm: null }
+  /* The blocks this app has no name for, last said in the log (gen3Blocks): said again only when they change. */
+  let strangersSaid = ''
 
   /* ---------------- sending, one question at a time ---------------- */
 
@@ -1316,7 +1318,33 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (!Array.isArray(list)) throw timedOut()
     /* outlineChain names by effect id and wants the channel as a letter. */
     const states = list.map((b) => ({ effectId: b.effectId, bypassed: b.bypassed, channel: channelLetter(b.channel) }))
+    sayStrangers(states)
     return (outlineChain(states, blocks) || []).filter((b) => !OFF_STAGE.includes(b.slug))
+  }
+
+  /*
+   * A BLOCK THIS APP HAS NO NAME FOR, SAID IN THE LOG BY ITS NUMBER.
+   *
+   * The unit's status answer lists every block in the preset by its effect
+   * id, and outlineChain leaves out an id the catalog does not know, rather
+   * than guess at it. So the Axe-Fx III's NAM block (firmware 33) was in
+   * every answer and in no log: the one thing needed to name it, its number,
+   * never reached anybody. Now each such id goes in the log with whether it
+   * is on and its channel, once, and again only when that changes (a preset
+   * changed, or the block switched on the unit), so a report sent from a
+   * preset with one in it carries the number. Nothing is sent to the unit for
+   * it, and Play still leaves the block out.
+   */
+  function sayStrangers(states) {
+    const known = new Set(blocks.filter((c) => Number.isInteger(c?.page) && c.slug).map((c) => c.page))
+    const strangers = states.filter((s) => Number.isInteger(s?.effectId) && !known.has(s.effectId))
+    const line = strangers
+      .map((s) => `id ${s.effectId} (${s.bypassed === true ? 'off' : s.bypassed === false ? 'on' : 'on or off not said'}${s.channel ? `, channel ${s.channel}` : ''})`)
+      .join('; ')
+    const key = `${last.preset}|${line}`
+    if (!line || key === strangersSaid) return
+    strangersSaid = key
+    say(`blocks this app has no name for yet, on preset ${Number.isInteger(last.preset) ? last.preset : '?'}: ${line}`)
   }
 
   async function gen3SceneState() {

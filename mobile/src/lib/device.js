@@ -365,7 +365,25 @@ export async function presetBlocks() {
    * its cell is taken; the screens that switch or turn blocks still leave it
    * out (stageBlocks, knobBlocks, Edit's own list).
    */
-  return markNewBlocks(list)
+  const marked = markNewBlocks(list)
+  sayNewBlocks(marked)
+  return marked
+}
+
+/*
+ * And the same in the log as over Bluetooth (bleWire sayStrangers): each block
+ * newer than the app by the name the computer gives it (eid_N, its effect id)
+ * and where it sits, once, and again only when that changes.
+ */
+let newBlocksSaid = ''
+function sayNewBlocks(blocks) {
+  const line = blocks
+    .filter((b) => b?.unknown)
+    .map((b) => `${b.name || 'no name'}${Number.isInteger(b.effectId) ? ` (id ${b.effectId})` : ''}${Number.isInteger(b.row) && Number.isInteger(b.col) ? ` at row ${b.row}, column ${b.col}` : ''}${b.bypassed === true ? ', off' : b.bypassed === false ? ', on' : ''}`)
+    .join('; ')
+  if (!line || line === newBlocksSaid) return
+  newBlocksSaid = line
+  logDebug('blocks', `this app has no name for yet: ${line}`)
 }
 
 /**

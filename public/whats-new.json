@@ -3,8 +3,12 @@
     {
       "date": "2026-11-08",
       "day": "8 November 2026",
-      "version": "1.89.70",
+      "version": "1.89.71",
       "lines": [
+        {
+          "text": "If a Bluetooth MIDI footswitch, like an M-VAVE Chocolate, gets picked as your adapter, the app no longer takes it on its own, and the Bluetooth page says it’s a footswitch and to pick the adapter on your unit instead.",
+          "only": null
+        },
         {
           "text": "In the phone app, the Unlock page now shows the free trial and Unlock before the list of what it unlocks, so there’s less to scroll. Where the free 7-day trial is offered, it’s now also on the walkthrough’s Connect my real rig card and on the demo’s card on Play.",
           "only": null

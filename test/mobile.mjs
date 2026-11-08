@@ -4457,7 +4457,7 @@ export function run(test) {
     assert.match(read('desktop/forgefx.lock.json'), /\+am4scenes/, 'the computer app does not carry the device server that answers /presets/{n}/scenes')
     assert.match(
       device,
-      /export async function presetBlocks\(\) \{[\s\S]*?return markNewBlocks\(list\)\s*\}/,
+      /export async function presetBlocks\(\) \{[\s\S]*?const marked = markNewBlocks\(list\)\s*sayNewBlocks\(marked\)\s*return marked\s*\}/,
       'the read itself is filtering again, so the edit screen cannot see the ends of the chain'
     )
 
