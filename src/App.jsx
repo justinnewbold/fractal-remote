@@ -21,6 +21,7 @@ import SaveSheet, { SaveFooter } from './components/SaveSheet'
 import { overwriteCheck } from './lib/overwrite'
 import { SAVE_CANCELLED, SAVE_FRESH_MS, SAVE_WORKING_WORDS, startSaveWait, stillOnPreset } from '../shared/save-wait.mjs'
 import { aboutVp4, isVp4, VP4_NO_SAVE } from '../shared/vp4-safety.mjs'
+import { RESET_SENT_TO } from '../shared/password-reset.mjs'
 import {
   carryOutRestore,
   dirtyAfterRestore,
@@ -6905,7 +6906,7 @@ export default function App() {
                         try {
                           const c = loadRemoteConfig() || {}
                           await sendPasswordReset({ url: c.url, anonKey: c.anonKey, email: link.account.email, redirectTo: window.location.origin })
-                          setPasswordSaid(`A link to set a new password is on its way to ${link.account.email}.`)
+                          setPasswordSaid(RESET_SENT_TO(link.account.email))
                         } catch (err) {
                           setPasswordSaid(err?.message || 'The account service did not answer. Try again in a moment.')
                         }

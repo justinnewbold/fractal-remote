@@ -49,7 +49,7 @@ import {
   makeReset,
   resetTooShortThere
 } from '../src/lib/recovery.js'
-import { PASSWORD_MIN, RESET_NEXT, RESET_SENT, RESET_SENT_IF_ACCOUNT } from '../shared/password-reset.mjs'
+import { PASSWORD_MIN, RESET_CHECK, RESET_NEXT, RESET_NOT_SENT, RESET_ROW_SUB, RESET_SENT, RESET_SENT_IF_ACCOUNT, RESET_SENT_TO } from '../shared/password-reset.mjs'
 import { NOT_AFFILIATED } from '../shared/affiliation.mjs'
 import { DEFAULT_PROJECT } from '../desktop/lib/project.mjs'
 
@@ -431,5 +431,41 @@ export function run(test) {
     /* The email itself is asked for as it was, so the account service's settings and every email already sent stay as they are. */
     assert.match(read('mobile/src/lib/relay.js'), /await supabase\(\)\.auth\.resetPasswordForEmail\(email\)\n/)
     assert.match(read('src/lib/remote.js'), /await c\.auth\.resetPasswordForEmail\(email, redirectTo \? \{ redirectTo \} : undefined\)/)
+  })
+
+  /*
+   * "When I went to my profile and went send a link to reset password, it
+   * didn't do anything. I did not receive an email." (Justin, 8 November
+   * 2026.) It had gone, to the address signed in on that phone, and the line
+   * saying so landed on the page behind the account sheet as it closed.
+   */
+  test('the account menu’s reset link names its address before the tap, and says it in front of everything after', () => {
+    const at = 'someone@example.com'
+    assert.equal(RESET_ROW_SUB(at), `Goes to ${at}`)
+    assert.equal(RESET_ROW_SUB(undefined), 'For when the old one is forgotten', 'no address yet, no "Goes to undefined"')
+    assert.equal(RESET_CHECK, 'Check your email')
+    assert.ok(RESET_SENT_TO(at).startsWith(`A link is on its way to ${at}.`))
+    assert.ok(RESET_SENT_TO(at).includes('Tap Reset password in it'), 'the message says what the link does')
+    for (const said of [RESET_ROW_SUB(at), RESET_CHECK, RESET_SENT_TO(at), RESET_NOT_SENT]) {
+      assert.ok(!/this phone|this device|undefined/i.test(said), `"${said}"`)
+    }
+
+    const settings = code(read('mobile/src/screens/Settings.js'))
+    assert.match(settings, /import \{ RESET_CHECK, RESET_NOT_SENT, RESET_ROW_SUB, RESET_SENT_TO \} from '\.\.\/lib\/password-reset'/)
+    const at0 = settings.indexOf("'Email me a link to reset it'")
+    assert.ok(at0 > 0, 'the row is there')
+    const row = flat(settings.slice(settings.lastIndexOf('<Press', at0), settings.indexOf('/>', settings.indexOf('finally', at0))))
+    assert.match(row, /sub=\{RESET_ROW_SUB\(account\?\.email\)\}/, 'the row names the address it sends to')
+    /* The message, not a line on the page behind the sheet; and the sheet stays open under it until it is put away. */
+    assert.match(row, /await sendPasswordReset\(email\) const said = RESET_SENT_TO\(email\) setNote\(said\) Alert\.alert\(RESET_CHECK, said, \[\{ text: 'OK', onPress: close \}\], \{ cancelable: true, onDismiss: close \}\)/)
+    assert.match(row, /Alert\.alert\(RESET_NOT_SENT, err\.message, \[\{ text: 'OK', onPress: close \}\], \{ cancelable: true, onDismiss: close \}\)/, 'a refusal is said in front too')
+    const tried = row.slice(row.indexOf('try {'), row.indexOf('finally'))
+    assert.ok(!/setAccountMenu\(false\)/.test(tried.replace(/const close = \(\) => setAccountMenu\(false\)/, '')), 'the sheet is not shut under the message before it is put away')
+    assert.match(read('mobile/src/screens/Settings.js'), /^import \{ Alert,/m)
+
+    /* The website's account page says the same, beside its button. */
+    const app = read('src/App.jsx')
+    assert.match(app, /import \{ RESET_SENT_TO \} from '\.\.\/shared\/password-reset\.mjs'/)
+    assert.match(app, /setPasswordSaid\(RESET_SENT_TO\(link\.account\.email\)\)/)
   })
 }

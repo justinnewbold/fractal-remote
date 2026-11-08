@@ -46,3 +46,28 @@ export const RESET_SENT = `Check your email. ${RESET_NEXT}`
  * the website which addresses have one.
  */
 export const RESET_SENT_IF_ACCOUNT = `If that address has an account, a reset email is on its way. ${RESET_NEXT}`
+
+/*
+ * Email me a link to reset it, from an account that is signed in (Settings →
+ * your account on the phone, the account page on the website).
+ *
+ * "When I went to my profile and went send a link to reset password, it didn't
+ * do anything. I did not receive an email." (Justin, 8 November 2026.) It had
+ * gone, delivered, to the address signed in on that phone, which was not the
+ * inbox he looked in; and the line saying so landed on the page behind the
+ * sheet as it closed. So the row names the address before the tap, and the
+ * tap ends on a message in front of everything that names it again and says
+ * what the link does.
+ */
+
+/** Under the row, before the tap: where the link will go. */
+export const RESET_ROW_SUB = (email) => (email ? `Goes to ${email}` : 'For when the old one is forgotten')
+
+/** The message's title once the account service has taken the request. */
+export const RESET_CHECK = 'Check your email'
+
+/** And its words: the address, the email's button, the page it opens. */
+export const RESET_SENT_TO = (email) => `A link is on its way to ${email}. Tap Reset password in it and choose a new password on the page that opens.`
+
+/** The title if the account service refused (too soon after the last one, no connection). */
+export const RESET_NOT_SENT = 'It did not send'
