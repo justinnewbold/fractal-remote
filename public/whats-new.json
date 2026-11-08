@@ -6,7 +6,7 @@
       "version": "1.89.73",
       "lines": [
         {
-          "text": "Play’s Edit button no longer goes missing on Bluetooth or a USB cable: tap it and it tells you why it needs a computer there. In the demo, the VP4’s Edit shows only what a real VP4 can do. And through a computer, an AM4’s Edit no longer shows a Modifiers section it can’t use.",
+          "text": "Play’s Edit button no longer goes missing on Bluetooth or a USB cable: tap it and it tells you why it needs a computer there. In the demo, the VP4’s Edit no longer has knobs, chain editing, Modifiers or renaming, like a real VP4. And through a computer, an AM4’s Edit no longer shows a Modifiers section it can’t use.",
           "only": null
         },
         {

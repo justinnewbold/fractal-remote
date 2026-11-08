@@ -1728,10 +1728,12 @@ export function run(test) {
     assert.match(flat('mobile/src/lib/device.js'), /onVp4 = !demoDevice\(\) && isVp4\(res\)/)
     assert.ok(!/vp4Bench/.test(read('mobile/src/screens/Stage.js') + read('mobile/src/lib/device.js')), 'Play or the requests take the demo’s VP4 for a real one')
 
-    /* The browser: Edit and its chain sheet ask vp4Edit, the block panel the bench; everything else keeps onRealVp4. */
+    /* The browser: Edit, its chain sheet and its scenes sheet ask vp4Edit, the block panel the bench; everything else keeps onRealVp4 (Save and Revert too: saving works in the demo, VP4_DEMO, as on the phone). */
     const app = flat('src/App.jsx')
     assert.match(app, /const vp4Edit = Boolean\(device\) && vp4Bench\(\)/)
-    assert.equal((code(app).match(/vp4Edit \?/g) || []).length, 5, 'one of the browser’s Edit checks leaves the demo’s VP4 out')
+    assert.equal((code(app).match(/vp4Edit \?/g) || []).length, 7, 'one of the browser’s Edit checks leaves the demo’s VP4 out')
+    assert.match(app, /<Scenes [^>]*canRename=\{!vp4Edit\}/, 'the browser’s Scenes sheet offers the demo’s VP4 Edit name')
+    assert.equal((code(app).match(/setSheet\('scenes'\)/g) || []).length, 2, 'the Scenes sheet, which asks vp4Edit, opens from somewhere other than Edit')
     assert.match(flat('src/lib/forgefx.js'), /export const vp4Bench = \(\) => unitIsVp4 \|\| \(mock !== null && demoUnit\(\) === 'vp4'\)/)
     assert.ok(!/vp4Bench/.test(read('src/components/Gig.jsx')), 'the browser’s Play takes the demo’s VP4 for a real one')
 
@@ -1833,10 +1835,10 @@ export function run(test) {
     const start = app.indexOf("open={sheet === 'scenes'}")
     assert.ok(start > 0, 'the Scenes sheet is not where the test looks for it')
     const sheet = app.slice(start, app.indexOf('</Sheet>', start))
-    assert.match(sheet, /\{onRealVp4 \? null : <RenamePreset preset=\{preset\} busy=\{busy\} onRename=\{rename\} \/>\}/, 'the Scenes sheet offers a VP4 its preset’s name to type')
+    assert.match(sheet, /\{vp4Edit \? null : <RenamePreset preset=\{preset\} busy=\{busy\} onRename=\{rename\} \/>\}/, 'the Scenes sheet offers a VP4 its preset’s name to type')
     assert.equal((sheet.match(/<RenamePreset\b/g) || []).length, 1)
-    assert.match(sheet, /<Scenes [^>]*canRename=\{!onRealVp4\}/, 'the Scenes sheet offers a VP4 Edit name')
-    const gate = sheet.indexOf('{onRealVp4 ? ( <p className="hint">{VP4_NO_RENAME}</p> ) : ( <>')
+    assert.match(sheet, /<Scenes [^>]*canRename=\{!vp4Edit\}/, 'the Scenes sheet offers a VP4 Edit name')
+    const gate = sheet.indexOf('{vp4Edit ? ( <p className="hint">{VP4_NO_RENAME}</p> ) : ( <>')
     assert.ok(gate > 0, 'the Scenes sheet does not say once why a VP4 has no rename there')
     for (const tool of ['<SceneCopy', '<SceneMatrix']) {
       assert.equal(sheet.split(tool).length - 1, 1, `${tool} is drawn twice in the Scenes sheet`)

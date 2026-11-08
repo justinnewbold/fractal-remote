@@ -1606,8 +1606,9 @@ export default function App() {
   /*
    * And Edit's VP4, the demo's included (lib/forgefx vp4Bench): the chain and
    * its effects on and off, no knobs, no chain editor, no modifiers and no
-   * renaming, as a real VP4 has through the computer. Edit and its chain
-   * sheet only; everything else keeps onRealVp4.
+   * renaming, as a real VP4 has through the computer. Edit, its chain sheet
+   * and its scenes sheet only; everything else keeps onRealVp4 (Save and
+   * Revert included: saving works in the demo, VP4_DEMO, as on the phone).
    */
   const vp4Edit = Boolean(device) && vp4Bench()
   /* Whether the unit can be told to attach a modifier, as the computer says (capabilities.modifiers.bind: false on an AM4, ForgeFX drivers/am4.ts modBind); absent, from an older computer, offered as before. */
@@ -5886,8 +5887,10 @@ export default function App() {
           copy changed scene twice to copy nothing. A tap of a scene button is
           one message, as on Play. The phone's Edit offers none of them on a
           VP4 (RenameDoor); forgefx.js vp4SceneWalk refuses the walk anyway.
+          The demo's VP4 too (vp4Edit), as on the phone: the sheet opens only
+          from Edit.
         */}
-        {onRealVp4 ? null : <RenamePreset preset={preset} busy={busy} onRename={rename} />}
+        {vp4Edit ? null : <RenamePreset preset={preset} busy={busy} onRename={rename} />}
         <Scenes
           /* Not the outline drawn ahead of the chain read: a channel waits for it. */
           blocks={chainNow.outline ? [] : blocks}
@@ -5895,7 +5898,7 @@ export default function App() {
           count={device?.capabilities?.sceneCount || 8}
           channelNames={device?.capabilities?.channelNames}
           hasScenes={hasScenes}
-          canRename={!onRealVp4}
+          canRename={!vp4Edit}
           presetHere={presetHere}
           busy={busy}
           onChanged={(summary, { reread = true } = {}) => {
@@ -5907,7 +5910,7 @@ export default function App() {
           onError={setError}
         />
 
-        {onRealVp4 ? (
+        {vp4Edit ? (
           <p className="hint">{VP4_NO_RENAME}</p>
         ) : (
           <>
