@@ -123,6 +123,14 @@ So once he says yes to a build, run mobile.yml with platform `all`
 (production, submit), so iOS goes to TestFlight and Android to Google Play's
 production track in the same run. The yes still has to come first.
 
+If the build job stops at expo-doctor on Expo's package versions (Expo has
+published patches since the last build), run it again with keep_packages
+ticked, unless lining the packages up is the point of the build: lining
+them up moves expo-updates, so the fingerprint, and every store copy before
+the build then takes no update until its owner installs the new one. The
+1.90.0 pair (8 November 2026) was the first to need it; the stop spent no
+slot, since it comes before anything is queued.
+
 Except 1.89.0, the build pair that opens Bluetooth (beta) to customers: run
 it with platform `all`, profile `production` and the Send box UNTICKED. Once
 expo.dev shows the iOS build finished, send the iPhone with a second run:
