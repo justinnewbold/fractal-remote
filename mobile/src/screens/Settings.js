@@ -31,6 +31,7 @@ import {
   sendPasswordReset,
   unitCards
 } from '../lib/relay'
+import { RESET_CHECK, RESET_NOT_SENT, RESET_ROW_SUB, RESET_SENT_TO } from '../lib/password-reset'
 import { askUnknownUnits, chooseHost, forgetMissing } from '../lib/link'
 import MissingPick from '../components/MissingPick'
 import { playingOf } from '../lib/relay-rules'
@@ -1141,19 +1142,28 @@ export default function Settings({
                 setChanging(true)
               }}
             />
+            {/* The address before the tap, and a message in front of everything
+                after it (shared/password-reset.mjs): the line on the page
+                behind the sheet went unseen, and the email went to an inbox
+                that was not the one looked in. The message opens over the
+                sheet, which closes when it is put away: a message asked for
+                while a sheet is sliding shut can fail to show on an iPhone. */}
             <Press
               label={busy ? 'Sending…' : 'Email me a link to reset it'}
-              sub="For when the old one is forgotten"
+              sub={RESET_ROW_SUB(account?.email)}
               disabled={busy}
               onPress={async () => {
+                const email = account?.email
+                const close = () => setAccountMenu(false)
                 setBusy(true)
                 try {
-                  await sendPasswordReset(account.email)
-                  setAccountMenu(false)
-                  setNote(`A link to set a new password is on its way to ${account.email}.`)
+                  await sendPasswordReset(email)
+                  const said = RESET_SENT_TO(email)
+                  setNote(said)
+                  Alert.alert(RESET_CHECK, said, [{ text: 'OK', onPress: close }], { cancelable: true, onDismiss: close })
                 } catch (err) {
-                  setAccountMenu(false)
                   setError(err.message)
+                  Alert.alert(RESET_NOT_SENT, err.message, [{ text: 'OK', onPress: close }], { cancelable: true, onDismiss: close })
                 } finally {
                   setBusy(false)
                 }

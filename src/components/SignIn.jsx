@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { confirmWithCode, loadRemoteConfig, NOT_IN_INBOX, resendConfirmation, sendPasswordReset, sentAgain } from '../lib/remote'
 import { CONFIRMED_SIGN_IN } from '../../shared/confirm-code.mjs'
 import { NAME_HINTS, NAME_MAX, nameProblem } from '../../shared/account-name.mjs'
+import { RESET_SENT_IF_ACCOUNT } from '../../shared/password-reset.mjs'
 
 /**
  * The one sign-in form.
@@ -120,7 +121,8 @@ export default function SignIn({
         }
       } else {
         await sendPasswordReset({ ...project(), email: address, redirectTo: window.location.origin })
-        setNote('If that address has an account, a reset link is on its way.')
+        /* What the email's button does and where the new password goes (shared/password-reset.mjs). */
+        setNote(RESET_SENT_IF_ACCOUNT)
         setMode('in')
       }
     } catch (err) {
