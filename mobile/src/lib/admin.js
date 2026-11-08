@@ -382,8 +382,11 @@ export function salesSections(answer, now = Date.now()) {
  * 'trials' answer and Sales' both carry `trials` (owner_trials, the newest
  * 500); an older server sends no list, and then there is no section.
  *
- * Somebody who bought during their trial is not on a trial any more: they
- * are counted under Bought, and listed with the finished ones.
+ * Somebody who got the full version during their trial is not on a trial
+ * any more: they are counted, and listed with the finished ones. "Has the
+ * full version", never "Bought": `converted` (owner_trials) is the account
+ * holding the full version, and an unlock given by hand (Give someone
+ * access) is kept the same way as a purchase, so the words claim no sale.
  */
 export const TRIALS_TITLE = 'Free trials'
 export const TRIALS_NOW_TITLE = 'On a free trial now'
@@ -439,7 +442,7 @@ function trialCountRows(all, now) {
     { label: 'Last 30 days', value: String(c.month) },
     { label: 'All time', value: String(c.all) },
     { label: 'On a trial now', value: String(c.on) },
-    { label: 'Bought after a trial', value: `${c.bought}, ${c.rate}` }
+    { label: 'Full version after a trial', value: `${c.bought}, ${c.rate}` }
   ]
 }
 
@@ -452,7 +455,8 @@ export function trialSections(answer, now = Date.now()) {
 /**
  * THE TRIALS PAGE: the counts, everyone on a trial now (the one ending
  * soonest first, every one of them), and the latest 15 that finished. A
- * server that cannot list them yet says so, rather than showing nothing.
+ * server with the 'trials' answer but no table yet says so here; one
+ * without the answer at all refuses it, and trialsProblem words that.
  */
 export function trialsPageSections(answer, now = Date.now()) {
   if (!answer?.ok) return []
@@ -473,7 +477,7 @@ export function trialsPageSections(answer, now = Date.now()) {
       title: TRIALS_DONE_TITLE,
       rows: done.slice(0, 15).map((t) => ({
         label: t.email || 'An account',
-        value: `${trialWhere(t)}, started ${dayOf(t.started_at)}. ${t.converted ? 'Bought.' : `Ended ${dayOf(t.ends_at)}, didn’t buy.`}`
+        value: `${trialWhere(t)}, started ${dayOf(t.started_at)}. ${t.converted ? 'Has the full version.' : `Ended ${dayOf(t.ends_at)}, no full version.`}`
       }))
     })
   }
@@ -1340,6 +1344,18 @@ export function stuckTurnOnWords(answer) {
  * put live answers "Unknown action."; a database without its tables makes
  * the server's question about them fail. Anything else is said as it came.
  */
+/**
+ * What the Trials page says when the server refused: the page's update can
+ * reach the phone before grant-access's 'trials' answer is live, and "Unknown
+ * action." alone says nothing to him (the same words as stuckProblem).
+ */
+export function trialsProblem(answer) {
+  if (!answer || answer.ok) return null
+  const said = String(answer.message || '')
+  if (said === 'Unknown action.') return 'The server doesn’t have this list yet. It needs the server update that goes with it, which hasn’t been put live.'
+  return said || 'Something went wrong.'
+}
+
 export function stuckProblem(answer) {
   if (!answer || answer.ok) return null
   const said = String(answer.message || '')

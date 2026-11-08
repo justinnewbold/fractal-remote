@@ -791,6 +791,37 @@ After the merge, Settings → your account → Add a photo on the phone puts
 one file at `<account id>/photo.jpg` in the bucket, the top bar's circle
 shows it, and Delete account leaves the folder empty.
 
+## Free trials on the Developer pages (8 November 2026)
+
+"Can we add people that are on trials currently into the developer section
+of the app? And how many people have signed up for trials in the last day
+or seven days or whatever, just like all the other stuff?" On the phone,
+Developer → Customers → Trials; on the website, Developer → Free trials:
+how many started today, in the last 7 and 30 days and all time, everyone
+on a trial now with the days left, and the latest that finished. Sales
+keeps the counts. One piece here:
+
+- `functions/grant-access/` — a `trials` action behind the same lock as
+  every other (Justin's account only): `{ ok, trials }`, the rows
+  `owner_trials()` already gives Sales (20261107_trials.sql), and nothing
+  else. One query, no RevenueCat, no email asked for.
+
+### Putting it live, in this order
+
+1. **Deploy grant-access**: `supabase functions deploy grant-access`
+   (verify JWT on, as it is). Nothing anybody else sees changes.
+2. **Merge the app**, with every check green. It goes out as an update (no
+   build: the fingerprint is Unchanged).
+
+Merged first, the Trials page says the server doesn't have this list yet
+(`trialsProblem` in shared/admin.mjs) until step 1, and Sales shows the
+counts as before.
+
+### Checking it
+
+The Trials page opens on Justin's account with the counts and the list. On
+any other account, `{"action":"trials"}` to grant-access answers 403.
+
 ## How many people, day by day (counts only, naming nobody)
 
 "A day-by-day history of how many people use the app, on your Developer

@@ -601,7 +601,7 @@ export function run(test) {
     /* "How many people have signed up for trials in the last day or seven days or whatever, just like all the other stuff" (8 November 2026). */
     const [totals] = trialSections(answer, now)
     assert.equal(totals.title, 'Free trials')
-    assert.deepEqual(totals.rows.map((r) => r.label), ['Started today', 'Last 7 days', 'Last 30 days', 'All time', 'On a trial now', 'Bought after a trial'])
+    assert.deepEqual(totals.rows.map((r) => r.label), ['Started today', 'Last 7 days', 'Last 30 days', 'All time', 'On a trial now', 'Full version after a trial'])
     assert.deepEqual(totals.rows.map((r) => r.value), ['1', '3', '5', '5', '2', '2, 50% of the trials that have ended'])
     assert.equal(trialSections(answer, now).length, 1, 'Sales lists the people as well as counting them; the list is on the Trials page')
     assert.ok(salesSections(answer, now).some((s) => s.title === 'Free trials'))
@@ -616,14 +616,21 @@ export function run(test) {
     assert.match(on[1].value, /^iPhone or iPad, started .*, 7 days left \(ends .*\)\.$/)
     const done = page[2].rows
     assert.deepEqual(done.map((r) => r.label), ['e@x.y', 'b@x.y', 'c@x.y'])
-    assert.match(done[0].value, /Bought\.$/)
-    assert.match(done[2].value, /^Website, started .*\. Ended .*, didn’t buy\.$/)
+    /* "Has the full version", never "Bought": an unlock given by hand is kept the same way as a purchase (owner_trials' converted). */
+    assert.match(done[0].value, /Has the full version\.$/)
+    assert.match(done[2].value, /^Website, started .*\. Ended .*, no full version\.$/)
+    for (const sec of page) for (const r of sec.rows) assert.doesNotMatch(`${r.label} ${r.value}`, /\bbought\b|\bbuy\b/i, `the Trials page claims a sale: ${r.label} ${r.value}`)
     /* Nobody on one: said, never an empty box. */
     const none = trialsPageSections({ ok: true, trials: [answer.trials[3]] }, now)
     assert.deepEqual(none[1].rows, [{ label: '', value: NOBODY_ON_TRIAL }])
     /* A server that cannot list them says so; a refusal draws nothing (the page shows its message). */
     assert.match(trialsPageSections({ ok: true, trials: null }, now)[0].rows[0].value, /can’t list the free trials yet/)
     assert.deepEqual(trialsPageSections({ ok: false, message: 'Not allowed.' }, now), [])
+    /* A server without the 'trials' answer yet (the page's update can arrive first): plain words, not "Unknown action.". */
+    const { trialsProblem } = await import('../shared/admin.mjs')
+    assert.match(trialsProblem({ ok: false, message: 'Unknown action.' }), /server update that goes with it/)
+    assert.equal(trialsProblem({ ok: false, message: 'Not allowed.' }), 'Not allowed.')
+    assert.equal(trialsProblem({ ok: true }), null)
     /* The last day says so, rather than "0 days left". */
     assert.equal(trialLeft(now + 3600000, now), 'ends today')
     assert.equal(trialLeft(now + DAY_MS, now), `1 day left (ends ${new Date(now + DAY_MS).toLocaleString('en-US', { month: 'short' })} ${new Date(now + DAY_MS).getDate()}, ${new Date(now + DAY_MS).getFullYear()})`)
@@ -636,6 +643,8 @@ export function run(test) {
     for (const [name, src] of [['phone', phone], ['browser', web]]) {
       assert.equal((src.match(/action: 'trials'/g) || []).length, 1, `the ${name}’s Trials page does not ask the server for the trials, once`)
       assert.match(src, /trialsPageSections\(said\)/, `the ${name}’s Trials page has words of its own`)
+      assert.match(src, /trialsProblem\(said\)/, `the ${name}’s Trials page shows the server’s refusal raw`)
+      assert.doesNotMatch(src, /said\.message/, `the ${name}’s Trials page shows the server’s refusal raw`)
     }
     const settings = read('mobile/src/screens/Settings.js')
     assert.match(settings, /\{ key: 'trials', label: 'Trials' \}/, 'the phone’s Developer page has no Trials tab')

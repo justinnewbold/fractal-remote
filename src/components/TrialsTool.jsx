@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DEFAULT_PROJECT, supabaseClient } from '../lib/remote'
-import { accessAction, trialsPageSections } from '../../shared/admin.mjs'
+import { accessAction, trialsPageSections, trialsProblem } from '../../shared/admin.mjs'
 import Facts from './Facts'
 
 /**
@@ -37,7 +37,7 @@ export default function TrialsTool() {
     <div className="access-tool">
       {said && !said.ok ? (
         <p className="save-error" role="status">
-          {said.message}
+          {trialsProblem(said)}
         </p>
       ) : null}
       {said?.ok ? trialsPageSections(said).map((s) => <Facts key={s.title} title={s.title} rows={s.rows} />) : null}

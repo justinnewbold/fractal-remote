@@ -4,7 +4,7 @@ import { View } from 'react-native'
 import { TAP, space } from '../lib/theme'
 import { DEFAULT_PROJECT } from '../lib/project'
 import { supabaseClient } from '../lib/relay'
-import { accessAction, trialsPageSections } from '../lib/admin'
+import { accessAction, trialsPageSections, trialsProblem } from '../lib/admin'
 import Facts from './Facts'
 import Note from './Note'
 import Press from './Press'
@@ -49,7 +49,7 @@ export default function TrialsTool() {
 
   return (
     <View style={{ gap: space.lg }}>
-      {said && !said.ok ? <Note tone="fault">{said.message}</Note> : null}
+      {said && !said.ok ? <Note tone="fault">{trialsProblem(said)}</Note> : null}
       {said?.ok ? trialsPageSections(said).map((s) => <Facts key={s.title} title={s.title} rows={s.rows} />) : null}
       <Press label={busy ? 'Counting…' : 'Refresh'} height={TAP} disabled={busy} onPress={load} />
     </View>
