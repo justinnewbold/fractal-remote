@@ -152,6 +152,7 @@ import AccountsTool from './components/AccountsTool'
 import MessagesTool from './components/MessagesTool'
 import LiveTool from './components/LiveTool'
 import UsageTool from './components/UsageTool'
+import TrialsTool from './components/TrialsTool'
 import { remember as rememberPreset, CHANGED as MARKS_CHANGED } from './lib/presetMarks'
 import { CHANGED as SETLISTS_CHANGED } from './lib/setlists'
 import { syncSetlists, setlistCloudReady } from './lib/cloudSetlists'
@@ -657,6 +658,7 @@ const SETUP_PAGES = {
      are under the Developer heading on the front list (2 November 2026). */
   access: 'Give someone access',
   sales: 'Sales at a glance',
+  trials: 'Free trials',
   accounts: 'Everyone with an account',
   messages: 'Messages from users',
   live: "What's live",
@@ -6197,6 +6199,7 @@ export default function App() {
                 <div className="setup-rows">
                   <SetupRow key="access" title="Give someone access" status="Look someone up, or unlock them" onClick={() => setSetupPage('access')} />
                   <SetupRow key="sales" title="Sales at a glance" status="Today, this week, all time" onClick={() => setSetupPage('sales')} />
+                  <SetupRow key="trials" title="Free trials" status="Who is on one now, and how many started" onClick={() => setSetupPage('trials')} />
                   <SetupRow key="usage" title="How many people" status="Who used it today, this week, this month" onClick={() => setSetupPage('usage')} />
                   <SetupRow key="accounts" title="Everyone with an account" status="Who has signed up" onClick={() => setSetupPage('accounts')} />
                   <SetupRow key="messages" title="Messages from users" status="Bug reports and suggestions, with their logs" onClick={() => setSetupPage('messages')} />
@@ -7043,6 +7046,13 @@ export default function App() {
           <div className="setup-page">
             <SetupHead back={upLabel('am4check')} onBack={() => setSetupPage(upFrom('am4check'))} onDone={leaveSettings} title={SETUP_PAGES.am4check} />
             <Am4Check />
+          </div>
+        ) : null}
+
+        {setupPage === 'trials' && isAdmin(link.account?.id) ? (
+          <div className="setup-page">
+            <SetupHead back={upLabel('trials')} onBack={() => setSetupPage(upFrom('trials'))} onDone={leaveSettings} title={SETUP_PAGES.trials} />
+            <TrialsTool />
           </div>
         ) : null}
 

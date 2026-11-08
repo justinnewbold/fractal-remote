@@ -1549,6 +1549,26 @@ export function run(test) {
     }
   })
 
+  test('Trials: his account is answered the free trials alone, at once, and nobody else anything', async () => {
+    /* "Can we add people that are on trials currently into the developer section?" (8 November 2026.) */
+    const trials = [{ email: 'ann@example.com', started_at: '2026-11-07T16:19:23Z', ends_at: '2026-11-14T16:19:23Z', platform: 'android', source: 'server', converted: false }]
+    const { status, said, calls } = await grantAccess({ token: 'his-token', body: { action: 'trials' }, rpcs: { owner_trials: trials } })
+    assert.equal(status, 200, JSON.stringify(said))
+    assert.deepEqual(said, { ok: true, trials }, 'the Trials answer carries more than the trials, or not them')
+    /* One query: no RevenueCat, no account list, no account read. */
+    assert.ok(!calls.some((c) => c.url.startsWith(RC_PROJECT) || c.url.includes('/rpc/owner_accounts') || c.url.includes('/rpc/account_details')), 'Trials asks RevenueCat or reads the accounts')
+    /* No table yet: an answer the page words, never a failure. */
+    const none = await grantAccess({ token: 'his-token', body: { action: 'trials' }, more: (c) => (c.url.endsWith('/rest/v1/rpc/owner_trials') ? new Response('{"code":"PGRST202"}', { status: 404 }) : null) })
+    assert.equal(none.status, 200)
+    assert.deepEqual(none.said, { ok: true, trials: null })
+    /* The lock every other action is behind. */
+    for (const [who, token] of [['nobody signed in', undefined], ['a stranger', 'a-strangers-token'], ['the public key alone', 'the-anon-key']]) {
+      const res = await grantAccess({ token, body: { action: 'trials' }, rpcs: { owner_trials: trials } })
+      assert.equal(res.status, 403, `${who} was answered`)
+      assert.ok(!res.calls.some((c) => c.url.includes('/rpc/owner_trials')), `${who} had the trials read`)
+    }
+  })
+
   test('Day by day: People answers the days kept, and how many RevenueCat did not answer about, and still answers without the table', async () => {
     const { rpcs, more } = dayPeople()
     const { status, said } = await grantAccess({ token: 'his-token', body: { action: 'usage' }, rpcs, more })

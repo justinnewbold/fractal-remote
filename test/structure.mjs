@@ -1685,6 +1685,8 @@ export function run(test) {
         '# Developer',
         'Give someone access',
         'Sales at a glance',
+        /* Who is on a free trial now, and how many started (8 November 2026). */
+        'Free trials',
         'How many people',
         'Everyone with an account',
         'Messages from users',

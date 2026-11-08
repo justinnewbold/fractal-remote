@@ -579,26 +579,75 @@ export function run(test) {
     for (const f of ['shared/trial-words.mjs', 'mobile/src/components/TrialLine.js', 'mobile/src/components/DemoTrialNudge.js']) assert.doesNotMatch(read(f), /this phone/i)
   })
 
-  test('trial: Sales shows how the trials do', async () => {
-    const { trialSections, salesSections } = await import('../shared/admin.mjs')
+  test('trial: Sales counts the trials, and the Trials page lists who is on one now', async () => {
+    const { trialSections, trialsPageSections, trialLeft, salesSections, TRIALS_NOW_TITLE, TRIALS_DONE_TITLE, NOBODY_ON_TRIAL } = await import('../shared/admin.mjs')
     const now = START + 10 * DAY_MS
+    const iso = (ms) => new Date(ms).toISOString()
     const answer = {
       ok: true,
       sales: [],
       trials: [
-        { email: 'a@x.y', started_at: new Date(START + 5 * DAY_MS).toISOString(), ends_at: new Date(START + 12 * DAY_MS).toISOString(), platform: 'android', converted: false },
-        { email: 'b@x.y', started_at: new Date(START).toISOString(), ends_at: new Date(ENDS).toISOString(), platform: 'ios', converted: true },
-        { email: 'c@x.y', started_at: new Date(START).toISOString(), ends_at: new Date(ENDS).toISOString(), platform: 'web', converted: false }
+        /* Started today (an hour ago), on now. */
+        { email: 'd@x.y', started_at: iso(now - 3600000), ends_at: iso(now - 3600000 + 7 * DAY_MS), platform: 'ios', converted: false },
+        /* Started 5 days ago, on now, ends sooner, so listed first. */
+        { email: 'a@x.y', started_at: iso(START + 5 * DAY_MS), ends_at: iso(START + 12 * DAY_MS), platform: 'android', converted: false },
+        /* Bought during the trial: not on a trial any more. */
+        { email: 'e@x.y', started_at: iso(START + 6 * DAY_MS), ends_at: iso(START + 13 * DAY_MS), platform: 'web', converted: true },
+        /* Ten days ago, ended: one bought, one did not. */
+        { email: 'b@x.y', started_at: iso(START), ends_at: iso(ENDS), platform: 'ios', converted: true },
+        { email: 'c@x.y', started_at: iso(START), ends_at: iso(ENDS), platform: 'web', converted: false }
       ]
     }
-    const [totals, latest] = trialSections(answer, now)
+    /* "How many people have signed up for trials in the last day or seven days or whatever, just like all the other stuff" (8 November 2026). */
+    const [totals] = trialSections(answer, now)
     assert.equal(totals.title, 'Free trials')
-    assert.deepEqual(totals.rows.map((r) => r.value), ['3', '1', '1, 50% of the trials that have ended'])
-    assert.match(latest.rows[0].value, /^Android, started .*, ends .*\. Not bought yet\.$/)
-    assert.match(latest.rows[1].value, /Bought\.$/)
-    assert.match(latest.rows[2].value, /^Website, .* Didn’t buy\.$/)
+    assert.deepEqual(totals.rows.map((r) => r.label), ['Started today', 'Last 7 days', 'Last 30 days', 'All time', 'On a trial now', 'Bought after a trial'])
+    assert.deepEqual(totals.rows.map((r) => r.value), ['1', '3', '5', '5', '2', '2, 50% of the trials that have ended'])
+    assert.equal(trialSections(answer, now).length, 1, 'Sales lists the people as well as counting them; the list is on the Trials page')
     assert.ok(salesSections(answer, now).some((s) => s.title === 'Free trials'))
     assert.deepEqual(trialSections({ ok: true }, now), [], 'an older server’s answer grows a trials section')
+
+    /* "Can we add people that are on trials currently into the developer section": everyone on one now, the one ending soonest first. */
+    const page = trialsPageSections(answer, now)
+    assert.deepEqual(page.map((s) => s.title), ['Free trials', TRIALS_NOW_TITLE, TRIALS_DONE_TITLE])
+    const on = page[1].rows
+    assert.deepEqual(on.map((r) => r.label), ['a@x.y', 'd@x.y'], 'not everyone on a trial now, soonest ending first, or a buyer still listed as on a trial')
+    assert.match(on[0].value, /^Android, started .*, 2 days left \(ends .*\)\.$/)
+    assert.match(on[1].value, /^iPhone or iPad, started .*, 7 days left \(ends .*\)\.$/)
+    const done = page[2].rows
+    assert.deepEqual(done.map((r) => r.label), ['e@x.y', 'b@x.y', 'c@x.y'])
+    assert.match(done[0].value, /Bought\.$/)
+    assert.match(done[2].value, /^Website, started .*\. Ended .*, didn’t buy\.$/)
+    /* Nobody on one: said, never an empty box. */
+    const none = trialsPageSections({ ok: true, trials: [answer.trials[3]] }, now)
+    assert.deepEqual(none[1].rows, [{ label: '', value: NOBODY_ON_TRIAL }])
+    /* A server that cannot list them says so; a refusal draws nothing (the page shows its message). */
+    assert.match(trialsPageSections({ ok: true, trials: null }, now)[0].rows[0].value, /can’t list the free trials yet/)
+    assert.deepEqual(trialsPageSections({ ok: false, message: 'Not allowed.' }, now), [])
+    /* The last day says so, rather than "0 days left". */
+    assert.equal(trialLeft(now + 3600000, now), 'ends today')
+    assert.equal(trialLeft(now + DAY_MS, now), `1 day left (ends ${new Date(now + DAY_MS).toLocaleString('en-US', { month: 'short' })} ${new Date(now + DAY_MS).getDate()}, ${new Date(now + DAY_MS).getFullYear()})`)
+    assert.equal(trialLeft(null, now), 'end unknown')
+  })
+
+  test('trial: the Trials page is Justin’s, on both ends, asking the server for the trials alone', () => {
+    const phone = read('mobile/src/components/TrialsTool.js')
+    const web = read('src/components/TrialsTool.jsx')
+    for (const [name, src] of [['phone', phone], ['browser', web]]) {
+      assert.equal((src.match(/action: 'trials'/g) || []).length, 1, `the ${name}’s Trials page does not ask the server for the trials, once`)
+      assert.match(src, /trialsPageSections\(said\)/, `the ${name}’s Trials page has words of its own`)
+    }
+    const settings = read('mobile/src/screens/Settings.js')
+    assert.match(settings, /\{ key: 'trials', label: 'Trials' \}/, 'the phone’s Developer page has no Trials tab')
+    assert.match(settings, /\{devTab\.customers === 'trials' \? <TrialsTool \/> : null\}/)
+    const app = read('src/App.jsx')
+    assert.match(app, /\{setupPage === 'trials' && isAdmin\(link\.account\?\.id\) \? \(/, 'the browser’s Free trials page is not behind his account')
+    assert.match(app, /<SetupRow key="trials" title="Free trials"/)
+    /* The server's answer: his account only (the lock every action is behind), the trials and nothing else, no email asked for. */
+    const fn = read('supabase/functions/grant-access/index.ts')
+    assert.match(fn, /const ACTIONS = \[[^\]]*'trials'/)
+    assert.match(fn, /if \(!\['sales', 'accounts', 'usage', 'trials', /)
+    assert.match(fn, /if \(action === 'trials'\) return json\(\{ ok: true, trials: await trialsList\(\) \}\)/)
   })
   test('trial: the App Store item is made from the notes, within Apple’s limits, and its picture is one Apple takes', async () => {
     const { trialItem, freePoint, pngSize, reviewPicture, LIMITS, SCREENSHOT } = await import('../scripts/iap-trial.mjs')

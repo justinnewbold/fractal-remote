@@ -1120,16 +1120,23 @@ Deno.serve(async (req: Request) => {
   }
   const action = String(input.action || 'check')
   const email = String(input.email || '').trim().toLowerCase()
-  const ACTIONS = ['check', 'grant', 'revoke', 'confirm', 'sales', 'accounts', 'usage', 'stuck', 'reminders', 'leave-out', 'try-again', 'reminder-sample', 'handled', 'delete']
+  const ACTIONS = ['check', 'grant', 'revoke', 'confirm', 'sales', 'accounts', 'usage', 'trials', 'stuck', 'reminders', 'leave-out', 'try-again', 'reminder-sample', 'handled', 'delete']
   if (internal ? action !== 'claim' : !ACTIONS.includes(action)) {
     return json({ ok: false, message: 'Unknown action.' }, 400)
   }
-  if (!['sales', 'accounts', 'usage', 'stuck', 'reminders', 'reminder-sample'].includes(action) && !email.includes('@')) return json({ ok: false, message: 'Type the email address they signed up with.' }, 400)
+  if (!['sales', 'accounts', 'usage', 'trials', 'stuck', 'reminders', 'reminder-sample'].includes(action) && !email.includes('@')) return json({ ok: false, message: 'Type the email address they signed up with.' }, 400)
   if (!env('REVENUECAT_SECRET')) return json({ ok: false, message: 'The server has no RevenueCat key set.' }, 500)
 
   try {
     if (action === 'sales') return json(await sales())
     if (action === 'usage') return json(await usage())
+    /*
+     * "Can we add people that are on trials currently into the developer
+     * section?" (8 November 2026.) The free trials and nothing else: one
+     * query, no RevenueCat, so the Trials page opens at once (trialsPageSections
+     * in shared/admin.mjs words it). Null, before the table is there.
+     */
+    if (action === 'trials') return json({ ok: true, trials: await trialsList() })
     /* "How do I see a list of who has set up an account?" Marked, so Delete stays off the two that must never go (markEveryone above). */
     if (action === 'accounts') return json(await markEveryone({ ok: true, ...((await rpc('owner_accounts', {})) as Record<string, unknown>) }))
     /* Paid but no computer yet, and the setup emails (see stuck() above). Only exactly true turns them on. */

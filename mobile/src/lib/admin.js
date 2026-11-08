@@ -368,35 +368,115 @@ export function salesSections(answer, now = Date.now()) {
 }
 
 /**
- * THE FREE TRIALS ON SALES: how many started, how many are running, how many
- * bought afterwards, and the latest, each with when it started and ends and
- * whether that account has bought since. "So Justin can see how trials do."
- * An older server sends no list, and then there is no section.
+ * THE FREE TRIALS: how many started (today, the last 7 and 30 days, all
+ * time), who is on one right now, how many bought, and the ones that have
+ * finished. "So Justin can see how trials do."
+ *
+ * "Can we add people that are on trials currently into the developer section
+ * of the app? And how many people have signed up for trials in the last day
+ * or seven days or whatever, just like all the other stuff?" (Justin, 8
+ * November 2026.) So the counts are the People page's own (Today from
+ * midnight on this device, then the last 7 and 30 days), on Sales and on a
+ * Trials page of their own, which also lists everyone on a trial now, the
+ * one ending soonest first, and the latest that finished. The server's
+ * 'trials' answer and Sales' both carry `trials` (owner_trials, the newest
+ * 500); an older server sends no list, and then there is no section.
+ *
+ * Somebody who bought during their trial is not on a trial any more: they
+ * are counted under Bought, and listed with the finished ones.
  */
 export const TRIALS_TITLE = 'Free trials'
+export const TRIALS_NOW_TITLE = 'On a free trial now'
+export const TRIALS_DONE_TITLE = 'Finished free trials'
+export const NOBODY_ON_TRIAL = 'Nobody is on a free trial right now.'
+const TRIAL_WHERE = { ios: 'iPhone or iPad', android: 'Android', web: 'Website', computer: 'Computer app' }
+const trialWhere = (t) => TRIAL_WHERE[t?.platform] || 'Somewhere else'
+const trialTime = (at) => dateOf(at)?.getTime() ?? null
+
+/** Each trial, sorted into on one now (not bought, not ended) and finished (ended, or bought). */
+function trialsSorted(all, now) {
+  const live = (t) => (trialTime(t.ends_at) ?? 0) > now
+  return {
+    now: all.filter((t) => live(t) && !t.converted).sort((a, b) => (trialTime(a.ends_at) ?? 0) - (trialTime(b.ends_at) ?? 0)),
+    done: all.filter((t) => !live(t) || t.converted).sort((a, b) => (trialTime(b.ends_at) ?? 0) - (trialTime(a.ends_at) ?? 0))
+  }
+}
+
+/** "6 days left (ends Nov 14, 2026)", "1 day left (…)", or "ends today" on its last day. */
+export function trialLeft(endsAt, now = Date.now()) {
+  const end = trialTime(endsAt)
+  if (end === null) return 'end unknown'
+  const days = Math.round((dayStart(new Date(end)) - dayStart(new Date(now))) / 86400000)
+  if (days <= 0) return 'ends today'
+  return `${days} ${days === 1 ? 'day' : 'days'} left (ends ${dayOf(end)})`
+}
+
+/** The counts, as the People page counts: Today from this device's midnight, then 7 and 30 days back from now. */
+export function trialCounts(all, now = Date.now()) {
+  const since = (from) => all.filter((t) => (trialTime(t.started_at) ?? -Infinity) >= from).length
+  const { now: on, done } = trialsSorted(all, now)
+  const bought = all.filter((t) => t.converted)
+  const ended = all.filter((t) => (trialTime(t.ends_at) ?? 0) <= now)
+  const rate = ended.length ? `${Math.round((ended.filter((t) => t.converted).length / ended.length) * 100)}% of the trials that have ended` : 'none has ended yet'
+  return {
+    today: since(dayStart(new Date(now))),
+    week: since(now - 7 * 86400000),
+    month: since(now - 30 * 86400000),
+    all: all.length,
+    on: on.length,
+    bought: bought.length,
+    rate,
+    done: done.length
+  }
+}
+
+/** The counts as rows, on Sales and at the top of Trials. */
+function trialCountRows(all, now) {
+  const c = trialCounts(all, now)
+  return [
+    { label: 'Started today', value: String(c.today) },
+    { label: 'Last 7 days', value: String(c.week) },
+    { label: 'Last 30 days', value: String(c.month) },
+    { label: 'All time', value: String(c.all) },
+    { label: 'On a trial now', value: String(c.on) },
+    { label: 'Bought after a trial', value: `${c.bought}, ${c.rate}` }
+  ]
+}
+
+/** On Sales: the counts only. The people are on the Trials page. */
 export function trialSections(answer, now = Date.now()) {
   if (!Array.isArray(answer?.trials)) return []
+  return [{ title: TRIALS_TITLE, rows: trialCountRows(answer.trials, now) }]
+}
+
+/**
+ * THE TRIALS PAGE: the counts, everyone on a trial now (the one ending
+ * soonest first, every one of them), and the latest 15 that finished. A
+ * server that cannot list them yet says so, rather than showing nothing.
+ */
+export function trialsPageSections(answer, now = Date.now()) {
+  if (!answer?.ok) return []
+  if (!Array.isArray(answer.trials)) {
+    return [{ title: TRIALS_TITLE, rows: [{ label: '', value: 'The server can’t list the free trials yet.' }] }]
+  }
   const all = answer.trials
-  const at = (t) => dateOf(t)?.getTime() ?? null
-  const running = all.filter((t) => (at(t.ends_at) ?? 0) > now)
-  const bought = all.filter((t) => t.converted)
-  const over = all.filter((t) => (at(t.ends_at) ?? 0) <= now)
-  const rate = over.length ? `${Math.round((over.filter((t) => t.converted).length / over.length) * 100)}% of the trials that have ended` : 'none has ended yet'
-  const where = { ios: 'iPhone', android: 'Android', web: 'Website', computer: 'Computer app' }
-  const rows = [
-    { label: 'Started, all time', value: String(all.length) },
-    { label: 'Running now', value: String(running.length) },
-    { label: 'Bought after a trial', value: `${bought.length}, ${rate}` }
-  ]
-  const latest = all.slice(0, 15).map((t) => {
-    const live = (at(t.ends_at) ?? 0) > now
-    return {
-      label: t.email || 'An account',
-      value: `${where[t.platform] || 'Somewhere else'}, started ${dayOf(t.started_at)}, ${live ? 'ends' : 'ended'} ${dayOf(t.ends_at)}. ${t.converted ? 'Bought.' : live ? 'Not bought yet.' : 'Didn’t buy.'}`
-    }
+  const { now: on, done } = trialsSorted(all, now)
+  const sections = [{ title: TRIALS_TITLE, rows: trialCountRows(all, now) }]
+  sections.push({
+    title: TRIALS_NOW_TITLE,
+    rows: on.length
+      ? on.map((t) => ({ label: t.email || 'An account', value: `${trialWhere(t)}, started ${dayOf(t.started_at)}, ${trialLeft(t.ends_at, now)}.` }))
+      : [{ label: '', value: NOBODY_ON_TRIAL }]
   })
-  const sections = [{ title: TRIALS_TITLE, rows }]
-  if (latest.length) sections.push({ title: 'Latest free trials', rows: latest })
+  if (done.length) {
+    sections.push({
+      title: TRIALS_DONE_TITLE,
+      rows: done.slice(0, 15).map((t) => ({
+        label: t.email || 'An account',
+        value: `${trialWhere(t)}, started ${dayOf(t.started_at)}. ${t.converted ? 'Bought.' : `Ended ${dayOf(t.ends_at)}, didn’t buy.`}`
+      }))
+    })
+  }
   return sections
 }
 
