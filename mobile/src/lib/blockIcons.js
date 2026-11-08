@@ -36,7 +36,18 @@ import { blockIconName } from './block-icons'
 /* The files, by the name lib/block-icons (shared/block-icons.mjs) gives them. */
 const FILES = { amp, cab, comp, delay, drive, flanger, phaser, reverb, wah, chorus, enhancer, filter, formant, gate, geq, looper, mixer, multiplexer, peq, pitch, resonator, ringmod, rotary, synth, tremolo, volpan, sendfx, returnfx }
 
+/*
+ * THE PHONE'S OWN TWO, for the Axe-Fx III's blocks that only reach Play over
+ * Bluetooth (lib/gen3Catalog OWN), each wearing the picture of the family it
+ * stands in for, and no new picture: the NAM block is an amp (a captured amp,
+ * where an amp sits) and wears the amp's; the IR Player plays cabinet
+ * responses and wears the cab's. Here and not in shared/block-icons.mjs,
+ * which is inside the computer app, whose blocks never come with these
+ * names: they stay a New block there (shared/new-block.mjs).
+ */
+export const PHONE_ONLY = Object.freeze({ nam: 'amp', irplayer: 'cab' })
+
 export function blockIcon(slug) {
-  const name = blockIconName(slug)
+  const name = blockIconName(slug) || PHONE_ONLY[String(slug || '').toLowerCase()] || null
   return name ? FILES[name] || null : null
 }

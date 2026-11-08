@@ -5320,7 +5320,9 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own. */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './axefx3-edit.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs'])
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './axefx3-edit.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3Catalog.js'])
+    /* The block lists, for the ids that are not blocks (NOT_BLOCKS): the FM3's list and nothing that sends. */
+    assert.deepEqual(imports(read('gen3Catalog.js')), ['../data/blocks.json'], 'the block lists import something')
     /* Edit's knobs: the codec and the catalogs the computer's codec writes (scripts/am4-knobs.mjs, scripts/gen3-knobs.mjs), and nothing that sends. */
     assert.deepEqual(imports(read('am4-edit.js')).sort(), ['./am4-knobs.js', './fractal-sysex.mjs'])
     assert.deepEqual(imports(read('am4-knobs.js')), [], 'the AM4 catalog imports something')
@@ -10470,7 +10472,9 @@ export function run(test) {
       wah: [94, 2, 2], formant: [98, 2, 2], volume: [102, 4, 4], tremolo: [106, 2, 2], pitch: [110, 1, 2], filter: [114, 4, 4], drive: [118, 3, 4],
       enhancer: [122, 2, 2], mixer: [126, 4, 4], synth: [130, 1, 2], megatap: [138, 2, 2], gate: [146, 4, 4], ringmod: [150, 1, 1],
       multicomp: [154, 2, 2], tentap: [158, 2, 2], resonator: [162, 2, 2], looper: [166, 1, 1], plex: [178, 1, 2], send: [182, 2, 2],
-      return: [186, 2, 2], multiplexer: [191, 2, 2]
+      return: [186, 2, 2], multiplexer: [191, 2, 2],
+      /* The III's alone: IR Player 1–4 (Fractal's enum, 195–198), and NAM 1 and 2 (firmware 33, 206 and 207, the ids a customer's III listed). */
+      irplayer: [195, 0, 4], nam: [206, 0, 2]
     }
     for (const [unit, col] of [['fm9', 1], ['axefx3', 2]]) {
       const list = catalogFor(unit)
@@ -10487,19 +10491,248 @@ export function run(test) {
         assert.ok(Number.isInteger(b.paramCount) && Number.isInteger(b.typeCount), `${unit}: ${b.page} has no counts`)
       }
     }
-    /* ForgeFX's /blocks for the two units, at the pin (drivers/gen3.ts), written in here: the same ids. */
+    /*
+     * ForgeFX's /blocks for the two units, at the pin (drivers/gen3.ts), written in here: the same ids. And on the III the
+     * phone's own six beside them (lib/gen3Catalog OWN), which ForgeFX passes on with no slug: the computer leaves them a New block.
+     */
     const FORGEFX_EXTRA = {
       fm9: [39, 40, 44, 52, 53, 56, 57, 59, 63, 67, 104, 105, 120, 139, 148, 149, 155, 159],
       axefx3: [39, 40, 41, 44, 45, 48, 49, 52, 53, 56, 57, 59, 63, 67, 72, 73, 104, 105, 111, 120, 121, 131, 139, 148, 149, 155, 159, 179]
     }
+    const PHONE_OWN = { fm9: [], axefx3: [195, 196, 197, 198, 206, 207] }
     const fm3 = new Set(catalog.map((b) => b.page))
     for (const [unit, extra] of Object.entries(FORGEFX_EXTRA)) {
-      assert.deepEqual(catalogFor(unit).map((b) => b.page).filter((p) => !fm3.has(p)).sort((a, b) => a - b), extra, unit)
+      assert.deepEqual(catalogFor(unit).map((b) => b.page).filter((p) => !fm3.has(p)).sort((a, b) => a - b), [...extra, ...PHONE_OWN[unit]], unit)
     }
-    /* The blocks nobody names yet stay off: Crossover, Vocoder, Tone Match, RTA, Scene MIDI, IR Player. */
+    /* The blocks nobody names yet stay off: Crossover, Vocoder, Tone Match, RTA, and the ids that are not blocks (Scene MIDI, the Foot Controller, Preset FC). The IR Player only off the III. */
     for (const unit of ['fm9', 'axefx3']) {
-      for (const id of [134, 142, 143, 170, 174, 190, 195, 196]) assert.ok(!catalogFor(unit).some((b) => b.page === id), `${unit}: ${id} is drawn`)
+      for (const id of [134, 142, 143, 170, 174, 190, 199, 200, 201]) assert.ok(!catalogFor(unit).some((b) => b.page === id), `${unit}: ${id} is drawn`)
     }
+    for (const id of [195, 196, 206, 207]) assert.ok(!catalogFor('fm9').some((b) => b.page === id), `fm9: ${id} is drawn`)
+  })
+
+  /*
+   * THE AXE-FX III'S NAM AND IR PLAYER, read off a customer's log (an iPad,
+   * firmware 33.01, v1.89.71), which said the ids the wire had no name for,
+   * preset by preset: 206 and 207 only in his NAM presets, always one on and
+   * one off, so NAM 1 and NAM 2; 195, IR Player 1 in Fractal's enum; 200,
+   * Preset FC, in every preset and not a block; 201, in every preset, the one
+   * with no NAM too, and nobody's yet. Preset 62 as it was, with a drive and
+   * a delay of its own and the two ends.
+   */
+  const NAM_62 = () => [
+    { eid: 37, bypassed: false, channel: 0 },
+    { eid: 118, bypassed: false, channel: 0 },
+    { eid: 195, bypassed: true, channel: 0 },
+    { eid: 206, bypassed: false, channel: 1 },
+    { eid: 207, bypassed: true, channel: 0 },
+    { eid: 70, bypassed: true, channel: 0 },
+    { eid: 201, bypassed: false, channel: 0 },
+    { eid: 200, bypassed: false, channel: 0 },
+    { eid: 42, bypassed: false, channel: 0 }
+  ]
+  const onANamIII = async (options = {}) => {
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    const t = await onTheLine('axefx3', { catalog: catalogFor('axefx3'), ...options })
+    t.unit.state.blocks.splice(0, t.unit.state.blocks.length, ...NAM_62())
+    return t
+  }
+
+  test('on an Axe-Fx III, NAM 1 and 2 and the IR Player are on Play by name, with a colour, a picture and three letters; the FM3 and FM9 have none of them', async () => {
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    const iii = catalogFor('axefx3')
+    const own = iii.filter((b) => ['nam', 'irplayer'].includes(b.slug)).map((b) => [b.page, b.slug, b.family, b.name, b.instance])
+    assert.deepEqual(own, [
+      [195, 'irplayer', 'irplayer', 'IR Player 1', 1],
+      [196, 'irplayer', 'irplayer', 'IR Player 2', 2],
+      [197, 'irplayer', 'irplayer', 'IR Player 3', 3],
+      [198, 'irplayer', 'irplayer', 'IR Player 4', 4],
+      [206, 'nam', 'nam', 'NAM 1', 1],
+      [207, 'nam', 'nam', 'NAM 2', 2]
+    ])
+    /* The FM3's list is blocks.json as it was, and neither the FM3 nor the FM9 has a NAM or an IR Player. */
+    assert.deepEqual(catalogFor('fm3'), catalog)
+    for (const unit of ['fm3', 'fm9', 'am4']) {
+      assert.ok(!catalogFor(unit).some((b) => ['nam', 'irplayer'].includes(b.slug) || (b.page >= 195 && b.page <= 207)), `${unit} has the III's own blocks`)
+    }
+
+    /* The chain the wire hands Play from preset 62's status answer. */
+    const t = await onANamIII()
+    const chain = await t.get('/preset/blocks')
+    const by = Object.fromEntries(chain.map((b) => [b.effectId, b]))
+    assert.deepEqual(chain.map((b) => b.effectId).sort((a, b) => a - b), [70, 118, 195, 206, 207], 'Play’s pedals are not the preset’s')
+    assert.deepEqual(
+      [195, 206, 207].map((id) => [by[id].slug, by[id].name, by[id].bypassed, by[id].channel]),
+      [['irplayer', 'IR Player 1', true, 'A'], ['nam', 'NAM 1', false, 'B'], ['nam', 'NAM 2', true, 'A']]
+    )
+    /* And Play draws them (device.js stageBlocks keeps them, as any block with a name). */
+    assert.match(src('mobile/src/lib/device.js'), /export const stageBlocks = \(blocks\) =>\s+\(blocks \|\| \[\]\)\.filter\(\(b\) => b && !isNewBlock\(b\) && !STAGE_HIDDEN\.includes\(b\.slug\)\)/)
+
+    /* Their words on the tile: a lone " 1" dropped, as Amp and Amp 2. */
+    const { pedalName } = await import('../mobile/src/lib/tileGrid.js')
+    const { shortBlock } = await import('../mobile/src/lib/shortName.js')
+    assert.deepEqual([195, 206, 207].map((id) => pedalName(by[id])), ['IR Player', 'NAM', 'NAM 2'])
+    assert.deepEqual([195, 206, 207].map((id) => shortBlock(by[id])), ['IRP', 'NAM', 'NAM 2'])
+
+    /* The colour each family already had (lib/blockPalettes), in every look that paints it: violet and the IR Player's green in Match my unit. */
+    const pal = await import('../mobile/src/lib/blockPalettes.js')
+    assert.deepEqual(pal.familyOf('nam'), { key: 'nam', family: 'nam' })
+    assert.deepEqual(pal.familyOf('irplayer'), { key: 'irplayer', family: 'irplayer' })
+    assert.equal(pal.PALETTES.gen3.nam, '#7742e0')
+    assert.equal(pal.PALETTES.gen3.irplayer, '#61745a')
+    for (const look of pal.LOOKS.filter((l) => l.id !== pal.FRACTAL_REMOTE_LOOK)) {
+      for (const family of ['nam', 'irplayer']) assert.ok(look.families[family] || look.byUnit?.gen3?.[family], `${look.id} has no colour for ${family}`)
+    }
+
+    /* The picture: one of the app's own, the family each stands in for (the amp's, the cab's), phone only, and no new file. */
+    const icons = src('mobile/src/lib/blockIcons.js')
+    assert.match(icons, /export const PHONE_ONLY = Object\.freeze\(\{ nam: 'amp', irplayer: 'cab' \}\)/)
+    assert.match(icons, /const name = blockIconName\(slug\) \|\| PHONE_ONLY\[String\(slug \|\| ''\)\.toLowerCase\(\)\] \|\| null/)
+    for (const f of ['amp', 'cab']) assert.ok(existsSync(new URL(`../mobile/assets/icons/${f}.png`, import.meta.url)))
+    for (const f of ['nam', 'irplayer']) assert.ok(!existsSync(new URL(`../mobile/assets/icons/${f}.png`, import.meta.url)), `a new picture for ${f}`)
+    /* Not in the shared list, which is inside the computer app: through the computer they stay a New block. */
+    const { BLOCK_ICON } = await import('../shared/block-icons.mjs')
+    assert.ok(!('nam' in BLOCK_ICON) && !('irplayer' in BLOCK_ICON), 'the computer app’s pictures changed')
+    assert.equal(src('mobile/src/data/blocks.json'), src('src/data/blocks.json'), 'the FM3’s list moved')
+  })
+
+  test('the III’s NAM 1, NAM 2 and IR Player 1 switch on and off by the published bypass, byte for byte, and nothing is sent for 200 or 201', async () => {
+    const t = await onANamIII()
+    const chain = await t.get('/preset/blocks')
+    /* The frames, pinned: F0 00 01 74, the III (10), SET_BYPASS (0A), the id in 14 bits, 00 on or 01 off, the checksum. */
+    const PINNED = {
+      206: { on: 'F0 00 01 74 10 0A 4E 01 00 50 F7', off: 'F0 00 01 74 10 0A 4E 01 01 51 F7' },
+      207: { on: 'F0 00 01 74 10 0A 4F 01 00 51 F7', off: 'F0 00 01 74 10 0A 4F 01 01 50 F7' },
+      195: { on: 'F0 00 01 74 10 0A 43 01 00 5D F7', off: 'F0 00 01 74 10 0A 43 01 01 5C F7' }
+    }
+    /* The same shape as the frames in that log, by the same code: block 118 on and off, and 178, whose id runs past 127. */
+    assert.equal(hex(t.sx.buildSetBypass(0x10, 118, false)), 'F0 00 01 74 10 0A 76 00 00 69 F7')
+    assert.equal(hex(t.sx.buildSetBypass(0x10, 118, true)), 'F0 00 01 74 10 0A 76 00 01 68 F7')
+    assert.equal(hex(t.sx.buildSetBypass(0x10, 178, false)), 'F0 00 01 74 10 0A 32 01 00 2C F7')
+    for (const [eid, bytes] of Object.entries(PINNED)) {
+      const id = Number(eid)
+      assert.equal(hex(t.sx.buildSetBypass(0x10, id, false)), bytes.on)
+      assert.equal(hex(t.sx.buildSetBypass(0x10, id, true)), bytes.off)
+      for (const off of [false, true]) {
+        t.sent.length = 0
+        t.logs.length = 0
+        assert.deepEqual(await t.post(`/preset/blocks/${id}/bypass`, { bypassed: off }), { ok: true })
+        assert.deepEqual(t.frames().map(hex), [off ? bytes.off : bytes.on], `block ${id} ${off ? 'off' : 'on'} went another way`)
+        assert.ok(t.logs.includes(`sent block ${id} ${off ? 'off' : 'on'}: ${off ? bytes.off : bytes.on}`), t.logs.join(' | '))
+        assert.equal(t.unit.state.blocks.find((b) => b.eid === id).bypassed, off)
+      }
+    }
+    /* Every pedal Play has, switched both ways: no frame of any kind names 200 or 201. */
+    t.sent.length = 0
+    for (const b of chain) for (const off of [true, false]) await t.post(`/preset/blocks/${b.effectId}/bypass`, { bypassed: off })
+    const named = (f) => f[0] === 0xf0 && (f[5] === 0x0a || f[5] === 0x0b || f[5] === 0x1f || f[5] === 0x01)
+    const ids = t.frames().filter(named).map((f) => (f[5] === 0x01 ? t.sx.decode14(f[8], f[9]) : t.sx.decode14(f[6], f[7])))
+    assert.deepEqual([...new Set(ids)].sort((a, b) => a - b), chain.map((b) => b.effectId).sort((a, b) => a - b))
+    /* Preset FC, and the rest that are not blocks: a bypass or a channel for one is refused, and nothing goes. */
+    const { NOT_BLOCKS } = await import('../mobile/src/lib/gen3Catalog.js')
+    assert.deepEqual(NOT_BLOCKS, [2, 190, 199, 200])
+    t.sent.length = 0
+    for (const id of NOT_BLOCKS) {
+      await assert.rejects(t.post(`/preset/blocks/${id}/bypass`, { bypassed: true }), (e) => e.status === 400)
+      await assert.rejects(t.post(`/preset/blocks/${id}/channel`, { channel: 'B' }), (e) => e.status === 400)
+    }
+    assert.deepEqual(t.frames(), [], 'something went to a block that is not one')
+    /* A NAM's channel goes the way every gen-3 block's does (the long hold), nothing of its own. */
+    t.sent.length = 0
+    assert.deepEqual(await t.post('/preset/blocks/206/channel', { channel: 'C' }), { ok: true })
+    assert.deepEqual(t.frames().filter((f) => f[5] === 0x0b).map(hex), [hex(t.sx.buildSetChannel(0x10, 206, 2))])
+    assert.equal(t.unit.state.blocks.find((b) => b.eid === 206).channel, 2)
+    /* The check's own switch leaves the NAM and the IR Player alone, as it leaves the amp and the cab: the drive goes. */
+    const c = await onANamIII()
+    const r = await drive(c.clock, c.wire.check('write-bypass'))
+    assert.equal(r.ok, true, r.error)
+    assert.deepEqual(c.frames().filter((f) => f[5] === 0x0a).map(hex), [c.sx.buildSetBypass(0x10, 118, true), c.sx.buildSetBypass(0x10, 118, false)].map(hex))
+  })
+
+  test('the log stops naming the III’s NAM, IR Player and Preset FC, and still names 201 and anything else it has no name for', async () => {
+    const said = (t) => t.logs.filter((l) => /no name for yet/.test(l))
+    const t = await onANamIII()
+    await t.get('/preset')
+    await t.get('/preset/blocks')
+    assert.equal(said(t).length, 1, t.logs.join(' | '))
+    assert.match(said(t)[0], /: id 201 \(on, channel A\)$/, 'the line names a block the app now knows')
+    for (const id of [195, 196, 197, 198, 199, 200, 206, 207]) assert.ok(!new RegExp(`id ${id}\\b`).test(said(t)[0]), `the line still names ${id}`)
+    /* Preset 61, with no NAM: 201 alone, said again because the preset changed. */
+    t.unit.state.preset = 61
+    t.unit.state.blocks.splice(0, t.unit.state.blocks.length, { eid: 37, bypassed: false, channel: 0 }, { eid: 201, bypassed: false, channel: 0 }, { eid: 200, bypassed: false, channel: 0 }, { eid: 42, bypassed: false, channel: 0 })
+    await t.get('/preset')
+    await t.get('/preset/blocks')
+    assert.equal(said(t).length, 2)
+    assert.match(said(t)[1], /on preset 61: id 201 \(on, channel A\)$/)
+    /* A preset with nothing unknown in it: nothing said. And another id nobody has named yet still is. */
+    t.unit.state.preset = 63
+    t.unit.state.blocks.splice(0, t.unit.state.blocks.length, ...NAM_62().filter((b) => b.eid !== 201))
+    await t.get('/preset')
+    await t.get('/preset/blocks')
+    assert.equal(said(t).length, 2, 'a preset with nothing unknown in it was said')
+    t.unit.state.blocks.push({ eid: 208, bypassed: true, channel: 3 })
+    await t.get('/preset/blocks')
+    assert.match(said(t).at(-1), /on preset 63: id 208 \(off, channel D\)$/)
+    /* On an FM9 the III's own are strangers still, and Preset FC is not. */
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    const nine = await onTheLine('fm9', { catalog: catalogFor('fm9') })
+    nine.unit.state.blocks.splice(0, nine.unit.state.blocks.length, ...NAM_62())
+    await nine.get('/preset/blocks')
+    assert.match(said(nine)[0], /: id 195 \(off, channel A\); id 206 \(on, channel B\); id 207 \(off, channel A\); id 201 \(on, channel A\)$/)
+  })
+
+  test('Edit opens the III’s NAM and IR Player on their on and off, says their knobs aren’t in the app yet, and never reads or writes anything else of theirs', async () => {
+    const e = await import('../mobile/src/lib/axefx3-edit.js')
+    const k = await import('../mobile/src/lib/axefx3-knobs.js')
+    /* The III's knob catalog has neither (if it ever carries them, `knobs: false` goes by itself: bleWire asks editBlock). */
+    for (const id of [195, 196, 197, 198, 206, 207]) {
+      assert.equal(k.AXE3_BLOCKS[id], undefined, `the knob catalog has ${id} now: Edit may open its knobs`)
+      assert.equal(e.editBlock(id), null)
+    }
+    assert.ok(!Object.keys(k.AXE3_FAMILIES).some((f) => /IRPLAY|NAM/i.test(f)))
+    /* The wire marks them, and only them, `knobs: false`; every other block is handed on as it was. */
+    const t = await onANamIII({ edit: () => true })
+    const chain = await t.get('/preset/blocks')
+    assert.deepEqual(chain.filter((b) => b.knobs === false).map((b) => b.effectId).sort((a, b) => a - b), [195, 206, 207])
+    assert.ok(chain.filter((b) => b.knobs !== false).every((b) => !('knobs' in b)))
+    for (const unit of ['fm3', 'fm9', 'axefx3']) {
+      const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+      const w = await onTheLine(unit, { catalog: catalogFor(unit) })
+      w.unit.state.blocks.splice(0, w.unit.state.blocks.length, ...catalogFor(unit).filter((b) => !['nam', 'irplayer'].includes(b.slug)).map((b) => ({ eid: b.page, bypassed: false, channel: 0 })))
+      const all = await w.get('/preset/blocks')
+      assert.ok(all.length > 20, unit)
+      assert.deepEqual(all.filter((b) => 'knobs' in b).map((b) => b.effectId), [], `${unit}: a block with knobs is marked as having none`)
+    }
+    /* Asked for anyway, a read or a write of theirs is refused with nothing sent; the bypass still goes. */
+    const ask = (path, opts = {}) => drive(t.clock, t.wire.request(path, { editing: true, ...opts }))
+    t.sent.length = 0
+    await assert.rejects(ask('/preset/blocks/206/params'), (err) => err.status === 400)
+    await assert.rejects(ask('/preset/blocks/195/params/1', { method: 'PUT', body: JSON.stringify({ value: 0.5 }) }), (err) => err.status === 400)
+    await assert.rejects(ask('/preset/blocks/207/type', { method: 'POST', body: JSON.stringify({ value: 1 }) }))
+    assert.deepEqual(t.frames(), [], 'something of Edit’s went to a NAM or an IR Player')
+    assert.deepEqual(await ask('/blocks/nam/types'), [])
+    assert.ok(e.knobFrame(0x10, 206, 1, { value: 0.5 }).refused)
+    assert.ok(e.modelFrame(0x10, 207, 1).refused)
+    /* And held at the way out even when built by hand: a whole read of a NAM, in the preset, is not one of Edit's. */
+    const { gen3Sender } = await import(WIRE)
+    const out = []
+    const send = gen3Sender((b) => out.push(b), () => {}, 0x10, () => [195, 206, 207, 118])
+    assert.equal(send(e.buildReadAll(0x10, 206)), 'refused')
+    assert.equal(send(e.buildKnob(0x10, 206, 1, 0.5)), 'refused')
+    assert.equal(send(t.sx.buildSetBypass(0x10, 206, true)), 'sent')
+    assert.equal(out.length, 1)
+
+    /* The screen: on and off, the one line, no read and nothing raised; and the control search leaves them out. */
+    const { NO_KNOBS_YET } = await import('../mobile/src/lib/gen3Catalog.js')
+    assert.equal(NO_KNOBS_YET, 'This block’s knobs aren’t in the app yet.')
+    const edit = flat('mobile/src/screens/Edit.js')
+    assert.match(edit, /const noKnobsYet = block\.knobs === false const knobless = vp4Here\(\) \|\| noKnobsYet useEffect\(\(\) => \{ if \(knobless\) return undefined/)
+    assert.match(edit, /onPress=\{\(\) => writeBlockBypass\(eid, engaged\)\} \/> \)\} \{noKnobsYet \? <Note>\{NO_KNOBS_YET\}<\/Note> : null\}/)
+    assert.equal((edit.match(/\{NO_KNOBS_YET\}/g) || []).length, 1)
+    assert.match(edit, /import \{ NO_KNOBS_YET \} from '\.\.\/lib\/gen3Catalog'/)
+    assert.match(flat('mobile/src/lib/device.js'), /export const knobBlocks = \(blocks\) => \(blocks \|\| \[\]\)\.filter\(\(b\) => b && !isNewBlock\(b\) && !EXCLUDED_BLOCKS\.includes\(b\.slug\) && b\.knobs !== false\)/)
+    /* Nothing of this is on the computer's path: the browser's Edit and its block panel are as they were. */
+    assert.ok(!/knobs === false|NO_KNOBS_YET/.test(src('src/components/Console.jsx')))
   })
 
   test('scene names are read the same way on an FM9 and an Axe-Fx III as on an FM3', async () => {
@@ -10571,7 +10804,11 @@ export function run(test) {
       assert.ok(gear.firmwareLineFor(unit).startsWith(`Use ${name} firmware`))
     }
     assert.ok(gear.missingBlocksLine('fm9').startsWith('A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match'))
-    assert.match(gear.missingBlocksLine('axefx3'), /IR Player, Dynamic Distortion\)/)
+    /* The III's IR Player and NAM are drawn over Bluetooth since 1.89.73 (lib/gen3Catalog OWN): the line no longer names them. */
+    assert.equal(gear.missingBlocksLine('axefx3'), 'A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match, Dynamic Distortion) aren’t shown on Play yet.')
+    assert.ok(!/IR Player|NAM/.test(gear.missingBlocksLine('axefx3')))
+    assert.match(src('public/bluetooth-guide.html'), /and on\s+the Axe-Fx III Dynamic Distortion\) don’t show on Play yet\./)
+    assert.ok(!/IR Player/.test(src('public/bluetooth-guide.html')), 'the guide still says the IR Player is not shown')
     for (const unit of ['am4', 'fm3', null, 'vp5']) {
       assert.equal(gear.missingBlocksLine(unit), null)
       assert.equal(gear.tunerQuietLine(unit), null)

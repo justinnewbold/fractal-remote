@@ -423,9 +423,9 @@ export const freshSceneNames = () => bluetoothWire()?.forgetSceneNames?.()
 export const stageBlocks = (blocks) =>
   (blocks || []).filter((b) => b && !isNewBlock(b) && !STAGE_HIDDEN.includes(b.slug))
 
-/** The ones whose controls may be searched and turned: not the gate's threshold. See EXCLUDED_BLOCKS. */
+/** The ones whose controls may be searched and turned: not the gate's threshold (EXCLUDED_BLOCKS), and not a block whose knobs the app has no catalog for on this wire (bleWire `knobs: false`: an Axe-Fx III's NAM and IR Player over Bluetooth). */
 export const knobBlocks = (blocks) =>
-  (blocks || []).filter((b) => b && !isNewBlock(b) && !EXCLUDED_BLOCKS.includes(b.slug))
+  (blocks || []).filter((b) => b && !isNewBlock(b) && !EXCLUDED_BLOCKS.includes(b.slug) && b.knobs !== false)
 
 /**
  * What this preset's scenes are called.

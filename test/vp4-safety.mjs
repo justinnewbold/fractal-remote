@@ -1664,7 +1664,8 @@ export function run(test) {
     assert.match(edit, /\{vp4Here\(\) && blocks\.length && !chainNow\.elsewhere \? <Note>\{VP4_NO_KNOBS\}<\/Note> : null\}/, 'the phone’s Edit does not say a VP4’s knobs can’t be shown')
     assert.equal((edit.match(/\{VP4_NO_KNOBS\}/g) || []).length, 1, 'the phone’s Edit says the knobs’ words more than once')
     /* An opened block: nothing read, so nothing refused and nothing raised as a fault. */
-    assert.match(edit, /const knobless = vp4Here\(\) useEffect\(\(\) => \{ if \(knobless\) return undefined let stop = false ;\(async \(\) => \{ setLoading\(true\) setLocal\(\{\}\) try \{ const \[p, t\] = await Promise\.all\(\[ blockParams\(eid\)/, 'the phone’s block panel asks a VP4 for its knobs')
+    /* And a block the wire has no knob catalog for (an Axe-Fx III's NAM over Bluetooth) is opened the same way: test/bluetooth.mjs holds that. */
+    assert.match(edit, /const knobless = vp4Here\(\) \|\| noKnobsYet useEffect\(\(\) => \{ if \(knobless\) return undefined let stop = false ;\(async \(\) => \{ setLoading\(true\) setLocal\(\{\}\) try \{ const \[p, t\] = await Promise\.all\(\[ blockParams\(eid\)/, 'the phone’s block panel asks a VP4 for its knobs')
     /* The browser: both search boxes give way to the same words; its panel reads nothing either. */
     const app = flat('src/App.jsx')
     const searches = app.split('<ParamSearch ').slice(1)

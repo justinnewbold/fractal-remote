@@ -18,9 +18,25 @@
  * and name for name: a family with more than one is "Amp 1", "Amp 2", and
  * Play's pedalName drops a lone " 1", so the screen reads Amp and Amp 2.
  *
- * Not here, and not drawn: the blocks the FM3 has none of (Crossover,
- * Vocoder, Tone Match, IR Player, Dynamic Distortion), which have no family on
- * Play yet (shared/bluetooth-gear missingBlocksLine says so on the page).
+ * THE AXE-FX III'S OWN TWO, which the FM3 has none of (OWN, below): its IR
+ * Player, 195 to 198 in Fractal's enum, and the NAM block that firmware 33
+ * brought, up to two to a preset. The enum the codec carries is from before
+ * NAM (forgefx-midi marks it firstId null, 'pending-capture'), so its ids are
+ * the unit's own: a customer's Axe-Fx III on firmware 33.01, asked to put
+ * both NAM blocks in one preset, one on and one off, listed 206 and 207 in
+ * every NAM preset, always one on and one off, and neither in a preset with
+ * no NAM. Each has a family Play already paints ('nam', 'irplayer' in
+ * lib/blockPalettes), and is switched by the same published bypass as every
+ * other block. Neither has knobs in the app yet: the Axe-Fx III's knob
+ * catalog (lib/axefx3-knobs.js) carries no NAM or IR Player, so Edit gives
+ * them their on and off and says so (bleWire marks them `knobs: false`).
+ * Through the computer nothing changes: it passes them on with no slug, and
+ * they stay a New block (shared/new-block.mjs).
+ *
+ * Not here, and not drawn: the rest the FM3 has none of (Crossover, Vocoder,
+ * Tone Match, Dynamic Distortion), which have no family on Play yet
+ * (shared/bluetooth-gear missingBlocksLine says so on the page), and the ids
+ * that are not blocks a player switches (NOT_BLOCKS, below).
  *
  * The FM3 keeps blocks.json exactly as it is, and so do the relay path, Edit
  * and the demo, which read it through lib/blockCatalog.
@@ -66,6 +82,38 @@ const MORE = {
   }
 }
 
+/*
+ * THE BLOCKS ONLY A UNIT OF ITS OWN HAS, by their first id: the family, the
+ * name and how many. Named as every family of more than one is, "NAM 1" and
+ * "NAM 2", and Play's pedalName drops a lone " 1", so a preset with one NAM
+ * reads NAM. No knobs and no models in the app for either (0 and 0).
+ */
+const OWN = {
+  axefx3: [
+    { page: 195, slug: 'irplayer', name: 'IR Player', count: 4 }, // IR Player 1–4, Fractal's enum (195–198)
+    { page: 206, slug: 'nam', name: 'NAM', count: 2 } // NAM 1 and 2, the unit's own ids (firmware 33)
+  ]
+}
+
+/*
+ * KNOWN, AND NEVER DRAWN OR SWITCHED. The ids in Fractal's enum that are not
+ * blocks a player turns on and off: the Controllers (2), Scene MIDI (190),
+ * the Foot Controller (199) and Preset FC (200), which forgefx-midi marks
+ * `addressable: false` ("set_bypass / set_channel refuse with a clean error
+ * for these"). The same ids on every gen-3 unit. The Axe-Fx III lists 200 in
+ * every preset's status answer, so the log said it on every preset change;
+ * now it is known, left off Play as before, and a bypass or channel for one
+ * is refused with nothing sent (bleWire).
+ */
+export const NOT_BLOCKS = Object.freeze([2, 190, 199, 200])
+
+/*
+ * WHAT EDIT SAYS ON ONE OF THEM, under its on and off, where the knobs would
+ * be (bleWire marks the block `knobs: false`): no knob page, no read asked
+ * for, and no refusal put up red.
+ */
+export const NO_KNOBS_YET = 'This block’s knobs aren’t in the app yet.'
+
 /* A block's name for its instance: "Amp 2", from the FM3's "Amp", or "Drive 3" from "Drive 1". */
 const named = (base, instance, many) => {
   const plain = String(base).replace(/\s+\d+$/, '')
@@ -91,10 +139,18 @@ function build(unit) {
       out.push({ ...first, instance, page, name: named(first.name, instance, true) })
     }
   }
+  /* And the unit's own (OWN), each instance the next id. */
+  for (const fam of OWN[unit] || []) {
+    for (let instance = 1; instance <= fam.count; instance++) {
+      const page = fam.page + instance - 1
+      if (out.some((b) => b.page === page)) continue
+      out.push({ slug: fam.slug, family: fam.slug, instance, name: named(fam.name, instance, fam.count > 1), page, paramCount: 0, typeCount: 0 })
+    }
+  }
   return out.sort((a, b) => a.page - b.page)
 }
 
 const BY_UNIT = { fm3: blocks, fm9: build('fm9'), axefx3: build('axefx3') }
 
-/** The block list a Bluetooth wire names a unit's dump by: its own on an FM9 or Axe-Fx III, the FM3's for the rest. */
+/** The block list a Bluetooth wire names a unit's dump by: its own on an FM9 or Axe-Fx III (with the III's NAM and IR Player), the FM3's for the rest. */
 export const catalogFor = (unit) => BY_UNIT[unit] || blocks
