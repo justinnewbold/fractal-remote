@@ -459,8 +459,14 @@ export function run(test) {
     /* The message, not a line on the page behind the sheet; and the sheet stays open under it until it is put away. */
     assert.match(row, /await sendPasswordReset\(email\) const said = RESET_SENT_TO\(email\) setNote\(said\) Alert\.alert\(RESET_CHECK, said, \[\{ text: 'OK', onPress: close \}\], \{ cancelable: true, onDismiss: close \}\)/)
     assert.match(row, /Alert\.alert\(RESET_NOT_SENT, err\.message, \[\{ text: 'OK', onPress: close \}\], \{ cancelable: true, onDismiss: close \}\)/, 'a refusal is said in front too')
-    const tried = row.slice(row.indexOf('try {'), row.indexOf('finally'))
-    assert.ok(!/setAccountMenu\(false\)/.test(tried.replace(/const close = \(\) => setAccountMenu\(false\)/, '')), 'the sheet is not shut under the message before it is put away')
+    /* The sheet shuts only when the message is put away: close is handed to the
+       message and never called here, and nothing else shuts it, before the
+       request, after it, or in finally. */
+    assert.equal((row.match(/setAccountMenu\(false\)/g) || []).length, 1, 'the sheet is shut somewhere other than close')
+    assert.match(row, /const close = \(\) => setAccountMenu\(false\)/)
+    assert.doesNotMatch(row, /\bclose\s*\(/, 'the sheet is shut under the message before it is put away')
+    assert.equal((row.match(/\bclose\b/g) || []).length, 5, 'close is used for something other than the two messages')
+    assert.match(row, /\} finally \{ setBusy\(false\) \}/, 'finally does more than end Sending…')
     assert.match(read('mobile/src/screens/Settings.js'), /^import \{ Alert,/m)
 
     /* The website's account page says the same, beside its button. */

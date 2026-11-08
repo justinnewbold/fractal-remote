@@ -22,11 +22,11 @@
           "only": null
         },
         {
-          "text": "Your first and last name are now optional when you make an account; add them any time under Settings → your account in the phone app. The walkthrough’s last button now says Let’s go, and the glass circles behind the top buttons sit centered on their icons.",
+          "text": "Your first and last name are now optional when you make an account; add them any time under Settings → your account in the phone app, where the reset link now names the email it goes to. The walkthrough’s last button now says Let’s go, and the glass circles behind the top buttons sit centered on their icons.",
           "only": null
         },
         {
-          "text": "On the website, How it works now opens on Bluetooth, as in the app: a Bluetooth adapter on your unit and the free app on your phone or tablet, with download buttons. Tap Computer for the computer way. Forgot password? now works: its email opens a page to choose a new password, and the app says which email it went to.",
+          "text": "On the website, How it works now opens on Bluetooth, as in the app: a Bluetooth adapter on your unit and the free app on your phone or tablet, with download buttons. Tap Computer for the computer way. Forgot password? now works: its email opens a page to choose a new password.",
           "only": null
         }
       ]
