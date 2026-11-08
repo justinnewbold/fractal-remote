@@ -5380,6 +5380,37 @@ export function run(test) {
     const bytes = Buffer.byteLength(brackets.reduce((t, b) => t.replace(b, /video link/.test(b) ? drive : 'x'.repeat(30)), notes), 'utf8')
     assert.ok(bytes <= 3950, `the 1.90.0 notes are ${bytes} bytes with the links and brackets filled; Apple's Notes box takes 4000`)
     assert.match(notes, /\nVideos:\n1\. FM3 hardware: \[FM3 video link\]\n2\. Presets: \[presets video link\]\n3\. Deleting an account: \[account deletion video link\]\n4\. Bluetooth with an AM4: \[Bluetooth video link\]\n5\. Edit over Bluetooth: \[Edit video link\]$/, 'the five videos are not listed at the end of the 1.90.0 notes')
+    /*
+     * And with video 6, the cable clip, by the four changes the paste list
+     * gives: the Hardware line, a sixth link, and two sentences out. Made and
+     * measured here, since "124 bytes more, still inside the box" was a sum
+     * nobody checked, and the first two changes alone came to 4038 bytes
+     * filled, past Apple's 4000.
+     */
+    const listAt = section.indexOf('- **The five video links**')
+    const pasting = flat(section.slice(listAt, section.indexOf("- **The day's guideline pass**", listAt)))
+    const changes = [...pasting.matchAll(/`([^`]+)`/g)].map((m) => m[1])
+    assert.equal(changes.length, 5, 'the video 6 changes are no longer the Hardware line (as it is, as it becomes), the sixth link and the two sentences that come out')
+    const [hardwareWas, hardwareIs, sixth, ...cuts] = changes
+    const once = (text, part, why) => assert.equal(text.split(part).length, 2, `${why}: "${part.trim()}" is not in the 1.90.0 notes exactly once`)
+    once(notes, hardwareWas, 'the Hardware line video 6 changes')
+    let six = notes.replace(hardwareWas, hardwareIs)
+    for (const cut of cuts) {
+      once(six, ' ' + cut, 'a sentence the video 6 notes take out')
+      six = six.replace(' ' + cut, '')
+    }
+    assert.match(sixth, /^6\. [^:\n]+: \[[^\]\n]*video link\]$/, 'the video 6 line is not a sixth video with a place for its link')
+    six += '\n' + sixth
+    const sixBrackets = six.match(/\[[^\]\n]*\]/g) || []
+    assert.equal(sixBrackets.filter((b) => /video link/.test(b)).length, 6, 'the video 6 notes do not hold a place for six video links')
+    const sixBytes = Buffer.byteLength(sixBrackets.reduce((t, b) => t.replace(b, /video link/.test(b) ? drive : 'x'.repeat(30)), six), 'utf8')
+    assert.ok(sixBytes <= 3950, `with video 6 the 1.90.0 notes are ${sixBytes} bytes with the links and brackets filled; Apple's Notes box takes 4000`)
+    assert.ok(pasting.includes(`${sixBytes} bytes with the six links and the brackets filled`), `the paste list does not give the video 6 notes' true size, ${sixBytes} bytes filled`)
+    assert.match(paragraph(six, 'Hardware (Guideline 2.1)'), /video 5, Edit on it; video 6, the USB cable\.$/, 'with video 6 the Hardware line does not point at it')
+    /* What the cuts keep: the FM3's port, Edit's limits, and the watch. */
+    assert.match(paragraph(six, 'USB cable:'), /The FM3's USB port is not MIDI\./, 'the video 6 notes lose the FM3’s port')
+    assert.match(paragraph(six, 'Edit over Bluetooth, in the full version'), /it does not save, move blocks/, 'the video 6 notes lose what Edit does not do')
+    assert.ok(paragraph(six, 'Apple Watch:').length > 0, 'the video 6 notes lose the Apple Watch line')
     /* New since 1.89.3: build 31 is the last thing Apple reviewed. */
     assert.match(notes, /\n\nNew since 1\.89\.3:\n\n/, 'the 1.90.0 notes do not say what they are new since')
     /* The demo's steps, by the labels the walkthrough draws today: "Let’s go", never "Open Play". */
@@ -5442,6 +5473,19 @@ export function run(test) {
     /* GOOGLE'S RELEASE NOTES, within 500. */
     assert.ok([...play].length <= 500, `Google's release notes for 1.90.0 are ${[...play].length} characters; Play takes 500`)
     assert.doesNotMatch(play, /Siri|iPhone|iPad|Apple/, 'Google is told about Apple’s things')
+    /* And with the cable line swapped in, as the prose over the block says: still within 500. */
+    const playHead = '### Google Play release notes, 1.90.0'
+    const playProse = section.slice(section.indexOf(playHead), section.indexOf('```', section.indexOf(playHead)))
+    const swap = [...playProse.matchAll(/`([^`]+)`/g)].map((m) => flat(m[1]))
+    assert.equal(swap.length, 2, 'the release notes’ cable swap is no longer one line in and one line out')
+    const [cableLine, outLine] = swap
+    const playLines = play.split('\n')
+    assert.ok(playLines.includes(outLine), `the release notes have no "${outLine}" to take out for the cable line`)
+    assert.match(cableLine, /^• .*\bAM4\b.*USB cable/, 'the release notes’ cable line does not say an AM4 plugs in by USB cable')
+    const withCable = [playLines[0], cableLine, ...playLines.slice(1).filter((l) => l !== outLine)].join('\n')
+    assert.ok([...withCable].length <= 500, `Google's release notes for 1.90.0 with the cable line are ${[...withCable].length} characters; Play takes 500`)
+    assert.ok(flat(playProse).includes(`${[...withCable].length} of the 500 then`), `the release notes do not give their true length with the cable line, ${[...withCable].length}`)
+    assert.doesNotMatch(cableLine, /Siri|iPhone|iPad|Apple|this phone/, 'the cable line names Apple’s things, or says this phone')
     /* GOOGLE'S APP ACCESS NOTE: the same labels and limits, and video 4, which exists before the build (video 5 is filmed after it). */
     assert.match(access, /^This account has the full version\./)
     assert.match(paragraph(access, 'Edit over Bluetooth, new in this version'), /it does not save \(save on the unit itself\), move blocks, change modifiers or names, copy channels, or pick cabs on an FM3, FM9 or Axe-Fx III, and Edit says so at the top\. Not on a VP4\./, 'Google’s note does not say what Edit does not do')
@@ -5512,6 +5556,7 @@ export function run(test) {
       at('the Apple Vision Pro setting beside it'),
       at('Personal info → **Name → Optional**'),
       at('**Fraud prevention, security, and compliance**'),
+      at('set the delete-account link to https://fractal.newbold.cloud/privacy.html#delete'),
       at('**Play Console → Publishing overview → Send changes for review**'),
       at('**Both stores clear, before the build:**'),
       at('**Justin: Play Console → App content → App access → "Any other information":**'),
@@ -5530,14 +5575,30 @@ export function run(test) {
     assert.match(day, /"Editing over Bluetooth for customers: AM4, FM3, FM9 and Axe-Fx III"/, 'the steps do not say the row the first pull request after the build writes')
     assert.match(day, /16 November 2026 or later[^.]*Shared Location; Dating and Relationships[^.]*\*\*No\*\*/, 'the age rating step leaves out the new questions')
 
-    /* THE LIVE DAY: the website pages wait for it, and until a store has 1.90.0 they still say there is no editing over Bluetooth. */
+    /*
+     * THE LIVE DAY: the website pages wait for it in both stores, and until
+     * both stores have 1.90.0 they still say there is no editing over
+     * Bluetooth. So the first store's live-day pull request moves only its
+     * number (and CLAUDE.md), and the pages go with the second's, the way
+     * /bluetooth waited for 1.89.3 in both.
+     */
     const live = flat(section.slice(section.indexOf('### Live day for 1.90.0'), section.indexOf('### If Apple or Google says no to Edit')))
     for (const f of ['public/store-versions.json', 'public/bluetooth.html', 'public/bluetooth-guide.html', 'public/support.html', '`EDIT_IN_EMAILS`', 'CLAUDE.md']) assert.ok(live.includes(f), `the 1.90.0 live day leaves out ${f}`)
+    assert.match(live, /The first store's moves only public\/store-versions\.json and CLAUDE\.md; the website's words go only in the pull request that brings the second store to 1\.90\.0/, 'the 1.90.0 live day puts the website’s words in the first store’s pull request, which this test refuses')
     const stores = JSON.parse(read('public/store-versions.json'))
     const before = (v) => { const a = String(v).split('.').map(Number), b = [1, 90, 0]; for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false }
     if (before(stores.ios) || before(stores.android)) {
       const words = (f) => flat(read(f).replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, ' '))
-      assert.ok(!/From version 1\.90\.0/.test(words('public/bluetooth.html') + words('public/bluetooth-guide.html') + words('public/support.html')), 'a website page says what 1.90.0 does before a store has it: a merge publishes the website before review')
+      assert.ok(!/From version 1\.90\.0/.test(words('public/bluetooth.html') + words('public/bluetooth-guide.html') + words('public/support.html')), 'a website page says what 1.90.0 does before both stores have it: a merge publishes the website before review')
+      /*
+       * What's new is the one place the 1.90.0 words go before the live day:
+       * the house rule puts the line in the build pull request, and every
+       * copy and the website's page get it on that merge. "From version
+       * 1.90.0 of the app" keeps it true on a 1.89.3 or 1.89.36 copy; telling
+       * the player to update from the store would not be, while a store has
+       * no 1.90.0 to give.
+       */
+      assert.doesNotMatch(words('public/whats-new.html') + ' ' + read('shared/whats-new.json'), /\bupdate\b[^.]{0,40}\bfrom (the )?(app store|play store|google play|store)\b|\bfrom the store to get it\b/i, 'What’s new tells players to update from the store before both stores have 1.90.0')
       assert.match(words('public/bluetooth-guide.html'), /No editing or saving over Bluetooth\./)
       assert.match(words('public/support.html'), /with no editing or saving\./)
     }

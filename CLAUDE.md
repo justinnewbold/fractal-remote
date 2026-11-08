@@ -645,7 +645,13 @@ update and stay closed. Never the VP4. The ledger's row and
 started, and from then on no entry is moved or set back by an update. The
 website's editing words (bluetooth.html, bluetooth-guide.html,
 support.html) and the setup email's editing sentence (`EDIT_IN_EMAILS`)
-wait for the live day, since a merge publishes them before review.
+wait for the live day in both stores, since a merge publishes them before
+review: they go in the pull request that brings the second store to 1.90.0
+(test/limits.mjs refuses them before). The What's new line is the one
+exception, by the house rule: it goes in with the build pull request and
+reaches every copy and whats-new.html on that merge, so it says "From
+version 1.90.0 of the app" and never tells a player to update from the
+store, which has no 1.90.0 to give until the live day (the same test).
 
 Since 29 October 2026 Edit opens over Bluetooth on an AM4 and an FM3 for
 his account (by update, on every copy), and since 8 November 2026 on an

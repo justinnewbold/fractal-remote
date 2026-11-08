@@ -3109,10 +3109,17 @@ Videos:
   it cannot reach.
 - **The five video links** in place of the brackets under Videos, the fifth
   being video 5 below. Each a Google Drive link shared as Anyone with the
-  link. If a cable clip is made (video 6, below), the Hardware line's
-  `video 5, Edit on it.` becomes `video 5, Edit on it; video 6, the USB
-  cable.`, and `6. USB cable: [cable video link]` goes on the end; 124 bytes
-  more, still inside the box.
+  link. If a cable clip is made (video 6, below), four changes, all of
+  them, since the first two alone take the notes to 4038 bytes filled, past
+  Apple's 4000: the Hardware line's `video 5, Edit on it.` becomes
+  `video 5, Edit on it; video 6, the USB cable.`;
+  `6. USB cable: [cable video link]` goes on the end; and two sentences
+  come out,
+  `1.89.3 did this too, calling it Bluetooth.` from the USB cable paragraph
+  and `Video 5: a real AM4, this build, the demo account.` from the Edit
+  paragraph (the Hardware line names video 5 then). 3944 bytes with the six
+  links and the brackets filled, inside the house's 3950: test/limits.mjs
+  makes these four changes and measures the result.
 - **The day's guideline pass** (CLAUDE.md, *Before anything goes to Apple*).
 
 ### What's New in This Version, 1.90.0
@@ -3240,9 +3247,10 @@ Android build is uploaded by hand (Send unticked for Android). With Send
 ticked, the release goes with none, and the app's own What's new says it
 (Justin's steps, below, step 7). No cable line until Justin's Android phone
 has run a unit by cable from a Play build; then
-`• Plug an AM4 straight into the phone by USB cable, no adapter needed. Edit opens on it too.`
+`• Plug an AM4 into the phone by USB cable, no adapter. Edit opens on it too.`
 goes after the Edit line, and `• Bluetooth connects more reliably.` comes
-out.
+out: 489 of the 500 then, and test/limits.mjs makes that swap and measures
+it.
 
 ```
 • New: edit over Bluetooth on an AM4, FM3, FM9 or Axe-Fx III: turn knobs, change models, switch blocks on and off and pick channels. Changes play right away; save on the unit to keep them. Not on a VP4.
@@ -3334,7 +3342,9 @@ website, the listing or social media. Paste the link in place of
 **Video 6, optional, the USB cable:** the AM4 on its own USB-C cable into
 the iPhone, the Bluetooth page saying USB cable, a scene changed on Play,
 and one knob in Edit. The same sharing. Worth it for 2.1: Apple cannot see
-a cable either.
+a cable either. Adding it to the notes takes the four changes under *Four
+things every time this block is pasted*, two sentences out among them, or
+the notes go past Apple's box.
 
 ### The free item's review note, only if it goes with 1.90.0
 
@@ -3382,9 +3392,17 @@ and runs on GitHub. Only step 9 spends builds, and it waits for his yes.
    Optional** (the names have been optional at sign-up since 1.89.75), and
    Device or other IDs → also tick **Fraud prevention, security, and
    compliance** (the trial keeps a scrambled device code after an account
-   is deleted, so a device cannot take a second trial). **Save.**
+   is deleted, so a device cannot take a second trial). In the same form,
+   once the privacy page with its `#delete` mark is live on the website
+   (the trial-sandbox pull request, 1.89.76), set the delete-account link
+   to https://fractal.newbold.cloud/privacy.html#delete, which opens the
+   page at Deleting your data (Google wants the way to delete "prominent
+   and easy to find on the page"); if it is not live yet, leave the link
+   as it is and change it once it is, with its own Send changes for review.
+   **Save.**
 6. **Play Console → Publishing overview → Send changes for review**, in the
-   same sitting as step 5 (and step 8, if it is done then too). Saved
+   same sitting as step 5, the delete-account link included (and step 8,
+   if it is done then too). Saved
    changes only sit under "Changes not yet sent for review" until then: left
    there, Google's reviewer may not see them, and the automatic Android
    submission in step 9 can stop with "Changes cannot be sent for review
@@ -3452,8 +3470,9 @@ and runs on GitHub. Only step 9 spends builds, and it waits for his yes.
        above (the Subtitle under App Information). The promotional text
        stays as it is.
     3. **App Review Information → Notes:** the 1.90.0 block, with the Tested
-       on brackets and the five (or six) video links filled in. The review
-       account's email and password as before.
+       on brackets and the five video links filled in, or with video 6 the
+       six, after the four changes under *Four things every time this block
+       is pasted*. The review account's email and password as before.
     4. **Version Release: Manually release this version**, so it waits at
        Pending Developer Release for step 17, and Phased Release for
        Automatic Updates: **Release update over 7-day period using phased
@@ -3481,27 +3500,35 @@ and runs on GitHub. Only step 9 spends builds, and it waits for his yes.
 19. *(Send unticked only)* expo.dev → the Android 1.90.0 build →
     Download; Test and release → Production → Create new release, upload,
     paste the 1.90.0 release notes, then Send changes for review.
-20. **GitHub: the live day**, below, for each store as it goes live.
+20. **GitHub: the live day**, below, for each store as it goes live (the
+    website's words with the second).
 
 ### Live day for 1.90.0
 
 Not before: every merge publishes the website at once, before either store
-has reviewed 1.90.0, and until 1.90.0 is live these pages are true of every
-copy a customer can get as they stand. **A pull request for each store as
-it goes live**, the iPhone the hour it is released and Android the day
-Google's copy is out, with:
+has reviewed 1.90.0, and until 1.90.0 is live in both stores these pages are
+true of every copy a customer can get as they stand. **A pull request for
+each store as it goes live**, the iPhone the hour it is released and Android
+the day Google's copy is out. The first store's moves only
+public/store-versions.json and CLAUDE.md; the website's words go only in
+the pull request that brings the second store to 1.90.0, the way /bluetooth
+waited for 1.89.3 in both stores (test/limits.mjs refuses "From version
+1.90.0" on these pages until store-versions.json says 1.90.0 on both):
 
 - **public/store-versions.json:** that store's number to 1.90.0, that day
-  and not before.
+  and not before (each pull request).
+- **CLAUDE.md:** which copies open Edit over Bluetooth to customers (each
+  pull request).
 - **public/bluetooth.html, public/bluetooth-guide.html and
-  public/support.html**, in the words below. Until Justin's Android phone
-  has run a unit by cable from a Play build, the cable sentences say "into
-  your iPhone or iPad" in place of "into your phone or tablet".
+  public/support.html**, in the words below, with the test/limits.mjs check
+  that moves with them (below), only in the pull request that brings the
+  second store to 1.90.0. Until Justin's Android phone has run a unit by
+  cable from a Play build, the cable sentences say "into your iPhone or
+  iPad" in place of "into your phone or tablet".
 - **The setup emails' editing sentence**, only once 1.90.0 is live in both
   stores: supabase/README.md, *Editing in the emails, from 1.90.0*
   (`EDIT_IN_EMAILS` set to true with store-versions.json at 1.90.0 on both;
   emails off, the function redeployed, Justin reads the sample, emails on).
-- **CLAUDE.md:** which copies open Edit over Bluetooth to customers.
 - **The App Store promotional text**, if Justin wants Edit in it: his to set
   in App Store Connect, never by store-text's Write it, and only after
   1.90.0 is released (before that it would promise Edit to 1.89.3 copies).
