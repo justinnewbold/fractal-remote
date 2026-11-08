@@ -829,6 +829,33 @@ slower (Sales asks RevenueCat about every buyer). Step 1 makes it quick.
 The Trials page opens on Justin's account with the counts and the list. On
 any other account, `{"action":"trials"}` to grant-access answers 403.
 
+## The free trial and Apple's test Apple IDs (8 November 2026)
+
+An iPhone's trial begins when the App Store's free 7-day Trial item was
+bought. Apple's reviewers buy with test (sandbox) Apple IDs, and one that
+bought the item weeks ago, while the item itself was in review, would be
+told "This Apple ID has had its free trial already" on the version under
+review: a purchase that looks broken (guideline 2.1). So
+`functions/trial/` now starts a purchase RevenueCat marks
+`environment: "sandbox"` from the tap, and a real purchase keeps its own
+date exactly as before (`storeTrialAt`; test/trial.mjs runs every case).
+Nothing else changes: one trial per account and one per device still hold.
+
+### Putting it live, in this order
+
+1. **Merge it**, with every check green. Nothing on a phone, the website or
+   a computer changes: it is the server function only.
+2. **Deploy trial, with Justin's yes**, before 1.90.0 is sent for review:
+   `supabase functions deploy trial` (verify JWT on, as it is), which sends
+   `trial/index.ts` and `_shared/trial-rule.mjs` as they are on main.
+
+### Checking it
+
+On a TestFlight copy (whose purchases are sandbox ones too), a NEW account
+on an Apple ID that has bought the free item before, however long ago, taps
+Start 7-day free trial and gets seven days from that moment, on a device
+that has not had a trial. The function's log says `trial: started on ios`.
+
 ## How many people, day by day (counts only, naming nobody)
 
 "A day-by-day history of how many people use the app, on your Developer
