@@ -39,6 +39,7 @@ import featureTempo from '../../assets/welcome/tempo.png'
 import { WELCOME_NOTICE } from '../lib/affiliation'
 import { at as tint } from '../lib/vivid'
 import { restorePurchase } from '../lib/purchases'
+import { TRIAL_BUTTON } from '../lib/trial-words'
 import { sendDownloadLink, DOWNLOADS_URL } from '../lib/downloadLink'
 import CopyAddress from '../components/CopyAddress'
 import Note from '../components/Note'
@@ -83,7 +84,7 @@ import chevronIcon from '../../assets/icons/chevron.png'
  */
 const face = Platform.select(mono)
 
-export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnlock, replay, onClose }) {
+export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnlock, replay, onClose, trial = false }) {
   const [at, setAt] = useState('welcome')
   const [unit, setUnit] = useState(UNITS[0].key)
   /* The box under Connect my real rig. Unlock stays grey until it is ticked. */
@@ -423,6 +424,16 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
             body={P3.real.body}
             art={<Lock size={58} faint />}
           >
+            {/*
+              THE FREE TRIAL FIRST (8 November 2026): "that should also say
+              start trial. People have been buying the unlock instead of
+              starting the trial." `trial` is App's trialAvailable, so this
+              screen reads no purchase itself (the demo is never held back
+              from anybody). It opens the purchase page, as Unlock does, where
+              the same button starts it with its terms under it (Apple's
+              3.1.1); no box to tick first, since nothing is paid.
+            */}
+            {trial ? <Press label={TRIAL_BUTTON} tone="signal" on height={TAP} onPress={() => onUnlock?.()} /> : null}
             {/*
                 IT OPENS THE PAYWALL. It used to open the computer-app step.
 

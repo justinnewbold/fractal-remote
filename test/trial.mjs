@@ -559,13 +559,17 @@ export function run(test) {
   test('trial: the demo stays free and points at the trial; Play, the purchase page and both ends say it', () => {
     /* The phone. */
     const bar = flat('mobile/src/components/TopBar.js')
-    assert.match(bar, /const offerTrial = Boolean\(onUnlock\) && shouldOffer\(\{ demo \}\) && trialAvailable\(purchase\)/)
+    assert.match(bar, /const offerTrial = Boolean\(onUnlock\) && shouldOffer\(\{ demo \}\) && trialOnOffer\(purchase\)/)
     assert.match(bar, /\{offerTrial \? \( <Text numberOfLines=\{2\}[^>]*> \{DEMO_TRIAL_PILL\} <\/Text> \) : null\} <Text[^>]*>Unlock<\/Text>/, 'the demo’s bar does not say the trial over Unlock')
     const pay = flat('mobile/src/screens/Paywall.js')
-    assert.match(pay, /\{offerTrial \? \( <> <Press label=\{TRIAL_BUTTON\} tone="signal" disabled=\{busy\} onPress=\{tryIt\} \/> <Text[^>]*>\{trialTerms\(price\)\}<\/Text> <\/> \) : null\} <Press label=\{price \?/, 'the trial is not offered beside Unlock, or without its terms')
+    assert.match(pay, /\{offerTrial \? \( <> <Press label=\{TRIAL_BUTTON\} tone="signal" on disabled=\{busy\} onPress=\{tryIt\} \/> <Text[^>]*>\{trialTerms\(price\)\}<\/Text> <\/> \) : null\} <Press label=\{price \?/, 'the trial is not offered beside Unlock, or without its terms')
+    /* "It should show everything on the screen instead of having to scroll up" (8 November 2026): the buttons over what it unlocks, in a sheet that comes up to the status bar. */
+    assert.ok(pay.indexOf('{freeFirst ? (') > 0 && pay.indexOf('{freeFirst ? (') < pay.indexOf('glassCard({ flat: asked'), 'the Unlock page’s buttons are under its list of features again')
+    assert.ok(pay.indexOf('glassCard({ flat: asked') < pay.indexOf('{BLUETOOTH_PAYWALL}'), 'the Bluetooth line moved over the features')
+    assert.match(pay, /<Sheet open tall onClose=\{\(\) => onBack\?\.\(\)\} title="Unlock" note="One payment, once">/, 'the Unlock sheet is not tall')
     assert.match(flat('mobile/src/screens/Stage.js'), /<TrialLine onUnlock=\{onUnlock\} \/>/)
     assert.match(flat('mobile/src/screens/Stage.js'), /<DemoTrialNudge onUnlock=\{onUnlock\} waiting=\{notesUp \|\| coach \|\| watchTip\} \/>/)
-    assert.match(flat('mobile/src/components/DemoTrialNudge.js'), /if \(!demo \|\| !due \|\| gone !== false \|\| waiting \|\| !onUnlock \|\| !trialAvailable\(purchase\)\) return null/)
+    assert.match(flat('mobile/src/components/DemoTrialNudge.js'), /if \(!demo \|\| !due \|\| gone !== false \|\| waiting \|\| !onUnlock \|\| !trialOnOffer\(purchase\)\) return null/)
     assert.match(flat('mobile/App.js'), /\[auth, demo, purchase\.checking, purchase\.available, purchase\.unlocked, purchase\.trialEndsAt\]/, 'day 8 does not bring the purchase page back')
     /* The browser and the computer app. */
     const app = flat('src/App.jsx')

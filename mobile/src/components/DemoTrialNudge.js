@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import { color, font, radius, space } from '../lib/theme'
 import { tick } from '../lib/feedback'
-import { trialAvailable, usePurchase } from '../lib/purchases'
+import { trialOnOffer, usePurchase } from '../lib/purchases'
 import { useDemo } from '../lib/demo'
 import { DEMO_NUDGE_AFTER_MS, DEMO_NUDGE_GO, DEMO_TRIAL_NUDGE } from '../lib/trial-words'
 
@@ -39,7 +39,7 @@ export default function DemoTrialNudge({ onUnlock, waiting = false }) {
     return () => clearTimeout(timer)
   }, [demo])
 
-  if (!demo || !due || gone !== false || waiting || !onUnlock || !trialAvailable(purchase)) return null
+  if (!demo || !due || gone !== false || waiting || !onUnlock || !trialOnOffer(purchase)) return null
 
   const put = () => {
     tick()

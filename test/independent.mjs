@@ -160,6 +160,9 @@ async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 
     'purchases.mjs': `
       const buy = globalThis.__playNotes.buy
       export const shouldOffer = ({ demo }) => Boolean(demo) && !buy.unlocked
+      /* The free trial is offered only where a test says so (buy.trial): every note's order below is the same either way. */
+      export const trialAvailable = (p = buy) => Boolean(p.trial) && !p.unlocked
+      export const trialOnOffer = (p = buy) => trialAvailable(p) && Boolean(p.price)
       export const usePurchase = () => ({ ...buy })
       export const NOT_ACROSS = 'NOT_ACROSS'
       export const NOT_ACROSS_SIGNED_OUT = 'NOT_ACROSS_SIGNED_OUT'
@@ -174,7 +177,9 @@ async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 
     'parts.mjs': 'export default function Part() { return null }\n',
     'demoUnits.js': read('mobile/src/lib/demoUnits.js'),
     'vp4-safety.js': read('mobile/src/lib/vp4-safety.js'),
-    'swipe-hint.js': read('mobile/src/lib/swipe-hint.js')
+    'swipe-hint.js': read('mobile/src/lib/swipe-hint.js'),
+    /* The trial's words themselves, from the shared file the phone's copy is made from. */
+    'trial-words.mjs': `export { DEMO_NUDGE_GO, demoTrialLine } from ${JSON.stringify(pathToFileURL(join(root, 'shared/trial-words.mjs')).href)}\n`
   }
   const swaps = [
     ['from "react"', "from './react.mjs'"],
@@ -191,7 +196,8 @@ async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 
     ['from "../lib/coach"', "from './coach.mjs'"],
     ['from "./Note"', "from './parts.mjs'"],
     ['from "./Press"', "from './parts.mjs'"],
-    ['from "./swipe-hint"', "from './swipe-hint.js'"]
+    ['from "./swipe-hint"', "from './swipe-hint.js'"],
+    ['from "../lib/trial-words"', "from './trial-words.mjs'"]
   ]
   const take = (from, as) => {
     let src = transformSync(read(from), { loader: 'jsx', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'Frag', format: 'esm' }).code
@@ -288,6 +294,38 @@ async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 
 }
 
 export function run(test) {
+  test('the demo’s card on Play offers the free trial first where it is offered, and its own words where it is not', async () => {
+    /* "Then on this screen it should list the trial somewhere correct?" (8 November 2026). */
+    const words = (tree) => {
+      const out = []
+      const walk = (t) => {
+        if (t == null || t === false || t === true) return
+        if (typeof t === 'string' || typeof t === 'number') return void out.push(String(t))
+        if (Array.isArray(t)) return void t.forEach(walk)
+        if (typeof t === 'object') {
+          walk(t.children)
+          walk(t.props?.children)
+        }
+      }
+      walk(tree)
+      return out.join('')
+    }
+    const seen = () => new Map([['fractal.walkthrough.v1', 'done'], ['fractal.coloursOffer.v1', 'seen']])
+    let drawn = await (await playNotesOnABench({ kept: seen(), demo: { demo: true, unit: 'fm3' }, buy: { trial: true } })).play()
+    assert.ok(drawn.offer, 'the demo’s card is not drawn')
+    let said = words(drawn.offer)
+    assert.ok(said.includes('Try your own rig free for 7 days, or unlock for $9.99.'), `the card does not offer the trial first: ${said}`)
+    assert.ok(said.includes('Try it free') && !said.includes('Unlock $9.99'), `the card’s button does not say Try it free: ${said}`)
+    drawn = await (await playNotesOnABench({ kept: seen(), demo: { demo: true, unit: 'fm3' } })).play()
+    said = words(drawn.offer)
+    assert.ok(said.includes('Unlock to drive your own rig from this phone.') && said.includes('Unlock $9.99'), `with no trial on offer the card is not its own words: ${said}`)
+    assert.ok(!said.includes('Try'), 'a trial is offered where it is not')
+    /* Offered, but the store has given no price yet (no signal): the purchase page would show no trial, so the card keeps its own words too. */
+    drawn = await (await playNotesOnABench({ kept: seen(), demo: { demo: true, unit: 'fm3' }, buy: { trial: true, price: null } })).play()
+    said = words(drawn.offer)
+    assert.ok(said.includes('Unlock to drive your own rig from this phone.') && !said.includes('Try'), `with no price the card offers a trial the purchase page will not show: ${said}`)
+  })
+
   test('Fractal Audio’s sentence is the one in shared/affiliation.mjs, word for word, with where help comes from', async () => {
     const a = await import('../shared/affiliation.mjs')
     assert.equal(a.NOT_AFFILIATED, THEIR_SENTENCE, 'the disclaimer is not Fractal Audio’s sentence')
