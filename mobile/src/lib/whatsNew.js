@@ -23,7 +23,7 @@ export const WHATS_NEW = [
         "only": null
       },
       {
-        "text": "If a Bluetooth MIDI footswitch, like an M-VAVE Chocolate, gets picked as your adapter, the app no longer takes it on its own, and the Bluetooth page says it’s a footswitch and to pick the adapter on your unit instead.",
+        "text": "If a Bluetooth MIDI footswitch, like an M-VAVE Chocolate, gets picked as your adapter, the app no longer takes it on its own, and the Bluetooth page says it’s a footswitch and to pick the adapter on your unit instead. Through a computer, an FM3’s Footswitches page also shows what each switch picks.",
         "only": null
       },
       {

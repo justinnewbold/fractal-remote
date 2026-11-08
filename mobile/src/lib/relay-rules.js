@@ -22,6 +22,18 @@
  */
 
 /**
+ * A write at the footswitch setup, block 199: its params, on/off, channel or
+ * model, under any spelling the computer reads as 199. The host refuses
+ * these from the relay (ForgeFX remote.ts FC_SETUP_WRITE, from the pin that
+ * added /fc/current and /fc/names), and its gen-3 driver refuses them from
+ * anywhere: the footswitch setup is shared by every preset, and nothing in
+ * either app writes it. Reading it still travels (GET, and POST …/read or
+ * …/readrange, which only ask). A computer from before that pin would take
+ * the write, so the rule is here too, and no phone ever sends one.
+ */
+export const FC_SETUP_WRITE = /^\/preset\/blocks\/0*199\/(params(\/\d+)?|bypass|channel|type)$/
+
+/**
  * A verbatim port of the host's own rule — ForgeFX server/src/remote.ts,
  * remoteAllowed(). Keep the two in lockstep, character for character where the
  * shapes allow.
@@ -45,6 +57,7 @@
  * send is plain, and test/run.mjs holds every config name they build to that.
  */
 export function hostAllows(method, p) {
+  if (method !== 'GET' && FC_SETUP_WRITE.test(p)) return false
   if (method === 'GET')
     return (
       !p.startsWith('/cloud') &&
@@ -129,7 +142,9 @@ export const REMOTE_FORBIDDEN = [
   { match: (m, p) => p.startsWith('/store/') && !/^\/store\/config(\/|$)/.test(p), why: 'reach the sign-in and settings the computer keeps for itself' },
   { match: (m, p) => m !== 'GET' && p.startsWith('/ports'), why: 'change which port is used' },
   { match: (m, p) => p.startsWith('/firmware'), why: 'touch firmware' },
-  { match: (m, p) => p.startsWith('/debug/raw'), why: 'send raw SysEx' }
+  { match: (m, p) => p.startsWith('/debug/raw'), why: 'send raw SysEx' },
+  /* No /fc route takes a write, and block 199 is the footswitch setup itself. */
+  { match: (m, p) => m !== 'GET' && (p.startsWith('/fc/') || FC_SETUP_WRITE.test(p)), why: 'change the footswitch setup' }
 ]
 
 /** One path, one shape, whatever the caller wrote — query strings and trailing slashes off. */
@@ -174,7 +189,12 @@ const SLOW_READS = [
    * fcReadState) — so a unit slow to answer can take longer than twenty
    * seconds and still come back right. See shared/footswitches.mjs.
    */
-  /^\/fc\/state$/
+  /^\/fc\/state$/,
+  /*
+   * The layout names: up to twelve questions a layout, nine layouts, each
+   * allowed 800ms by the host (gen3.ts fcReadLayoutNames).
+   */
+  /^\/fc\/names$/
 ]
 
 export function timeoutFor(method, path) {

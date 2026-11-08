@@ -37,6 +37,7 @@ import { cleanPresetName, isEmptySlotName } from './presetName.js'
 import { zeroBasedChain, wrongSlot } from './slots.js'
 import { cableColumns, toWireCable, toWireCell } from '../../shared/grid-plan.mjs'
 import { DEFAULT_SLUG, deviceSlug } from '../../shared/device-slug.mjs'
+import { FC_CURRENT_PATH, FC_NAMES_PATH } from '../../shared/footswitches.mjs'
 import { setColourUnit } from './looks.js'
 import { firmwareOf } from '../../shared/firmware.mjs'
 import { fixRead } from '../../shared/param-fixes.mjs'
@@ -1959,6 +1960,19 @@ export const fcSwitch = (path) => {
   const q = new URLSearchParams(String(path).split('?')[1] || '')
   return tick().then(() => mock.fcState(Number(q.get('layout')), Number(q.get('view')), Number(q.get('switch'))))
 }
+
+/**
+ * Which layout and view the unit's switches are on now, and the layout
+ * names: GET /fc/current (six questions) and GET /fc/names (about a hundred,
+ * so asked once). Reads only. Only where the computer says it has them
+ * (shared/footswitches.mjs fcKnowsCurrent, fcKnowsNames): an older computer
+ * is never asked.
+ */
+export const fcCurrent = () => (mock ? tick().then(() => mock.fcCurrent()) : request(FC_CURRENT_PATH))
+export const fcNames = () => (mock ? tick().then(() => mock.fcNames()) : request(FC_NAMES_PATH))
+
+/** What the computer said this unit can do, at the last detect (the demo's included), or null. */
+export const unitCapabilities = () => lastCaps
 
 /**
  * Attach a modifier source to a parameter.
