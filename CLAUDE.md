@@ -758,6 +758,64 @@ what the computer sends for the same edit, and a test holds it there.
   lines follow the same switch (`editingLine`, `limitsLine`): closed, its
   words are exactly what every customer copy has always shown.
 
+**Two sides on a big screen: the plan is docs/two-sides/README.md, step 2
+is in, his account only.**
+
+> "How do I put these side by side on the iPad?" and "Check the side by
+> side stuff is optimized for iPhone Duo also." (9 November 2026)
+
+The plan (8 November 2026) and its nine mockups are in docs/two-sides/.
+Step 1 (Play first on the Bluetooth line, bleWire) and step 2 (#838,
+1.90.7) are merged. Since step 2, on a window wide enough and wider than
+tall (mobile/src/lib/twoSides.js: an iPad on its side, the opened iPhone
+Duo held sideways, Android tablets and folds sideways; every phone
+upright, an iPad upright and the Duo closed or opened upright stay one
+screen) Play keeps one half and Edit, Setlists or All presets opens in the
+other (mobile/src/components/Sides.js), each half with a bar: its name
+(tap for the list), Swap, Full screen; Two sides brings the other back.
+The Duo's divider sits on the fold, the side away from its strip wider.
+A Play hidden under a full-screen tool is asleep (`picture.awake`). The
+gate is his account (the kept sign-in, as the Bluetooth gate) or
+`SIDES_FOR_EVERYONE` in mobile/src/lib/features.js, false until step 6:
+nobody else sees anything, so no What's new line yet. Steps left: 3 the
+tuner in a side (it is still today's pop-up), 4 Derek's block panel
+(hold a block, the Scenes column becomes its knobs), 5 polish (icons on
+the bars instead of the words Swap / Full screen / Two sides, pop-ups
+over their own side, VoiceOver), 6 open it to customers. Nobody here has
+a Duo: its numbers come from the plan and are held by test/two-sides.mjs,
+and his first look is the real check. Unsettled: whether the Duo's half
+should get the one-row five-button foot of the mockups (it has the
+iPhone's two-row foot, which is proven to fit 393).
+
+**On a tablet, a new screen takes its sizes from the room.** "These
+screens are not using the space very efficiently. Very small." (9
+November 2026, iPad.) mobile/src/lib/tabletScale.js is the rule (a window
+whose short side is 600 points or more; 1.2 at the line, 1.4 on the
+12.9-inch iPad Pro; a centred column up to 840) and useRoom.js reads the
+window; the walkthrough and the Unlock page use it (#836), through the
+Press and Note wrappers in components/Roomy.js. Phones are untouched, and
+test/tablet-room.mjs holds them so.
+
+**A plugged-in USB cable is offered by name.** Report 8519c338 (9 November
+2026): the FM3's line said its USB port cannot plug in and sent him to an
+adapter, and the U2MIDI Pro straight into the iPad was reachable only
+through Apple's Bluetooth screen. Since #837 the Bluetooth page draws Use
+the USB cable, named after the cable, for any cable Connect is not using
+(lib/bluetooth cablesToOffer, chooseCableHere), the FM3's step-1 line
+names that button (lib/cableWords fm3CableLine), and the page listens for
+a cable plugged in while it is open. The FM3's two silences on the cable
+in that log had no app-side cause.
+
+**The App Store header and search artwork** ("Control your Fractal from
+your iPhone", on a real Play screen under stage lights) is rendered from
+docs/store-art/stage.html by docs/store-art/render.js (Playwright; it
+needs a clean Play screenshot at ../shots/play-scene2-clean.png, captured
+from the live demo with the demo and Unlock pills hidden, never
+committed). Nothing uploads it: Justin puts the files in App Store
+Connect → Product Page Information → Header and Search Results himself.
+"iPhone" keeps its casing inside the capitals; no price, "free", URL or
+logo, ever.
+
 **Fractal Audio wrote on 18 October 2026, and the app does what it asked,
 except the name.** Their letter on Approved Vendor status asked for a clear
 statement at startup, no logos or product artwork, products named in plain
