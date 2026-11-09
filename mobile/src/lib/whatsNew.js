@@ -12,7 +12,7 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-09",
     "day": "9 November 2026",
-    "version": "1.90.5",
+    "version": "1.90.6",
     "lines": [
       {
         "text": "On the Bluetooth page, a USB MIDI cable that’s plugged in, like the U2MIDI Pro on an FM3, now has its own Use the USB cable button, even while the app is still trying a Bluetooth adapter. The FM3’s note now says that cable plugs straight into your phone or tablet.",
