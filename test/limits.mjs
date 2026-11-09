@@ -3703,6 +3703,42 @@ export function run(test) {
     }
   })
 
+  test('Show the texts reads the App Store and writes nothing, and keeps logins out of the public log', async () => {
+    /*
+     * "Also, can you read what's there on your own?" (Justin, 9 November
+     * 2026.) scripts/store-read.mjs prints the newest versions' texts and
+     * review notes from store-text's own key. The Actions logs of a public
+     * repository are public, so it never asks for the review account or the
+     * contact, the notes go through redact, and it only ever GETs.
+     */
+    const { redact, field } = await import('../scripts/store-read.mjs')
+    const code = read('scripts/store-read.mjs').replace(/\/\*[\s\S]*?\*\//g, ' ')
+    assert.doesNotMatch(code, /method\s*:|['"](PATCH|POST|PUT|DELETE)['"]/, 'the reader can write to App Store Connect')
+    assert.doesNotMatch(code, /demoAccount|contact(Email|Phone|FirstName|LastName)/, 'the reader prints the review account or the contact')
+    const shown = redact('Demo login: someone@example.com\nPassword: hunter2\nTap Play, then Edit.')
+    assert.ok(!shown.includes('hunter2'), 'a password in the notes reaches the public log')
+    assert.ok(!shown.includes('someone@example.com'), 'an email in the notes reaches the public log')
+    assert.ok(shown.includes('Tap Play, then Edit.'), 'redact takes out more than logins')
+    /* However a login is written: in a sentence, with no colon, on the line under its label, or as name / secret. */
+    for (const note of ['The password is Hunter2!', 'pw: Hunter2!', 'Log in: reviewer / Hunter2!', 'Username: reviewer', 'Sign in with the password Hunter2!']) {
+      assert.ok(!/Hunter2|reviewer/.test(redact(note)), `"${note}" reaches the public log`)
+    }
+    assert.ok(!redact('Password:\nHunter2!\nTap Play.').includes('Hunter2'), 'a password on the line under its label reaches the public log')
+    assert.ok(redact('Password:\nHunter2!\nTap Play.').endsWith('Tap Play.'), 'redact hides more than the label and the line under it')
+    for (const plain of ['Delete account: Settings, the account card, Delete account, "Delete my account" (video 3).', 'The demo account in App Review Information has the full version.']) {
+      assert.equal(redact(plain), plain, `an ordinary line is hidden: "${plain}"`)
+    }
+    /* The review details are asked for the notes alone, so the review account and its password never reach the job at all. */
+    const { REVIEW_FIELDS } = await import('../scripts/store-read.mjs')
+    assert.equal(REVIEW_FIELDS, 'fields[appStoreReviewDetails]=notes')
+    assert.match(code, /appStoreReviewDetail\?\$\{REVIEW_FIELDS\}/, 'the review details are fetched whole, demo password and contact included')
+    assert.match(code, /if \(res\.status === 404 && missingIsNone\) return null/, 'a 404 anywhere is taken for "none yet"')
+    assert.equal(field('Keywords', 'a,b'), '--- Keywords (3 characters) ---\na,b\n')
+    const wf = read('.github/workflows/store-text.yml')
+    assert.match(wf, /if: \$\{\{ inputs\.show \}\}[\s\S]{0,300}run: node scripts\/store-read\.mjs/, 'Show the texts does not run the reader')
+    assert.match(wf, /if: \$\{\{ !inputs\.show \}\}[\s\S]{0,300}run: node scripts\/store-text\.mjs/, 'Show the texts can still write the promotional text')
+  })
+
   test('the promotional text goes to App Store Connect signed the way Apple checks it', async () => {
     /*
      * scripts/store-text.mjs only ever runs with the real key, on GitHub, so
