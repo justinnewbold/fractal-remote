@@ -8,7 +8,9 @@
 # ASC_KEY_P8). Started by hand. It builds nothing and spends no build slot.
 #
 # Leave "Write it" unticked to see what the store says now and what would
-# change. Tick it to change it.
+# change. Tick it to change it. "Show the texts" instead prints every text of
+# the newest versions, the subtitle and the review notes (scripts/store-read.mjs)
+# and writes nothing, whatever else is ticked.
 name: store-text
 
 on:
@@ -16,6 +18,10 @@ on:
     inputs:
       apply:
         description: Write it (unticked only shows what is there and what would change)
+        type: boolean
+        default: false
+      show:
+        description: Show the texts (the newest versions' texts, subtitle and review notes; reads only, writes nothing)
         type: boolean
         default: false
 
@@ -41,7 +47,16 @@ jobs:
           printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
           grep -q 'BEGIN PRIVATE KEY' "$RUNNER_TEMP/asc.p8" || { echo "::error::ASC_KEY_P8 is not a .p8 key"; exit 1; }
 
+      - name: The texts as they are, read only
+        if: ${{ inputs.show }}
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc.p8
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: node scripts/store-read.mjs
+
       - name: The promotional text
+        if: ${{ !inputs.show }}
         env:
           ASC_KEY_PATH: ${{ runner.temp }}/asc.p8
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
