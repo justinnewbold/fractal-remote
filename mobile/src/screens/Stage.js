@@ -189,6 +189,23 @@ export default function Stage({
   /* Settings → Colors, which the colours' one-time line opens when pressed (components/ColoursNotice). */
   onOpenColours,
   /*
+   * PLAY ON ONE SIDE OF A WINDOW SHOWING TWO (components/Sides, lib/
+   * twoSides): the buttons fixed to the bottom whatever the row, and no
+   * fold padding (lib/playShape `inSide`). False on every phone.
+   */
+  inSide = false,
+  /*
+   * AND WHETHER ANYBODY CAN SEE IT. False while a tool fills the window and
+   * Play is kept beside it at no width: then the quick tip, the colours line
+   * and the demo's nudge wait for Play to be back, and the Apple Watch's
+   * pages go down as they do when Play is not open. (The watch's own
+   * one-time tip is not held: it comes once, the first time a paired watch
+   * is seen from here, which is at a launch on Play.) The screen stays
+   * awake, and App tells Siri Play is elsewhere. True everywhere Play is
+   * drawn.
+   */
+  awake = true,
+  /*
    * THE COMPUTERS ON THE ACCOUNT, from App (link.js's own word for them):
    * every one that answered, the units on them, the one driven, and a pick
    * that does not answer. With two or more, Play says when the one driven is
@@ -392,7 +409,7 @@ export default function Stage({
    * shape is remembered so each line goes off 40 under where it came on.
    */
   const shapeWas = useRef(first.shape)
-  const shape = playShape(pageRow(playWidth, space.lg), SIZES.indexOf(size), sceneLayout, shapeWas.current)
+  const shape = playShape(pageRow(playWidth, space.lg), SIZES.indexOf(size), sceneLayout, shapeWas.current, inSide)
   shapeWas.current = shape
   /* Kept for the next time Play is drawn (see lastPlay): a Play that comes
      back from Setlists to a window the same width draws its first frame in
@@ -1081,6 +1098,8 @@ export default function Stage({
       channels: channels?.length > 1 && !chainNow.outline && !chainNow.elsewhere ? channels : [],
       tunerOn,
       tuning,
+      /* Down while Play is kept out of sight beside a tool filling the window (components/Sides), as when Play is not open at all. */
+      awake,
       /*
        * Not while NOT CONNECTED: the watch shows its own "isn't connected"
        * page instead of buttons that would only be refused — EXCEPT WHILE
@@ -1170,9 +1189,10 @@ export default function Stage({
         {/* Paid in the demo with no account yet: see the component. */}
         <OnlyOnThisPhone onAccount={onAccount} onWant={says.only} />
         {/* "Match your unit’s colors in Settings", once: last, after every other note. Pressed, it opens Settings → Colors. */}
-        <ColoursNotice waiting={notesUp || coach || watchTip} unanswered={coachPending || watchPending} onOpen={onOpenColours} />
+        {awake ? <ColoursNotice waiting={notesUp || coach || watchTip} unanswered={coachPending || watchPending} onOpen={onOpenColours} /> : null}
         {/* The demo's one card about the free trial, after a few minutes, once every note before it is away. */}
-        <DemoTrialNudge onUnlock={onUnlock} waiting={notesUp || coach || watchTip} />
+        {/* Neither of these two, nor the quick tip below, on a Play nobody can see (`awake`): drawn again, and asked again, when it is back. */}
+        {awake ? <DemoTrialNudge onUnlock={onUnlock} waiting={notesUp || coach || watchTip} /> : null}
         {conflict ? <Note tone="fault">{conflict}</Note> : null}
         {missingCard ? (
           <ComputerCard
@@ -1399,7 +1419,7 @@ export default function Stage({
             and a card up by the preset name would be describing something off
             the bottom of somebody's phone.
           */}
-          <Coach open={coach && !notesUp} stage={coachStage} onTry={tryCoach} onSkip={closeCoach} onDone={closeCoach} />
+          {awake ? <Coach open={coach && !notesUp} stage={coachStage} onTry={tryCoach} onSkip={closeCoach} onDone={closeCoach} /> : null}
 
           {/*
             A wrapped grid of coloured tiles, which is the browser's chain and

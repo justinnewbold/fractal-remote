@@ -127,14 +127,27 @@ export function playLines(row, was) {
  *   footFixed  the six buttons in a strip fixed to the bottom, out of the page
  *   footRow    the six buttons in one row, in two halves
  *   foldPad    the narrower side inset padded up to the wider one (foldInset)
+ *
+ * IN A SIDE (`inSide`: Play on one side of a window showing two, lib/
+ * twoSides), two fields change and nothing else does. The buttons are
+ * fixed to the bottom whatever the row: a side on the iPhone Duo is about
+ * 392 across, under OPENS_AT, and with the buttons at the end of the page a
+ * long preset put Next below the edge, while beside Edit the one thing Play
+ * is for is Next without a scroll. So a big preset scrolls above them and
+ * the buttons never move; the tiles themselves keep the phone's own counts
+ * and sizes at that width, which is what an iPhone draws. And the fold's
+ * padding is off: that centres Play on a window it has the whole of, and in
+ * a side the divider already sits on the fold. Every phone has inSide
+ * false, so every field is the one it always had.
  */
-export function playShape(row, step, layout, was) {
+export function playShape(row, step, layout, was, inSide = false) {
   const lines = playLines(row, was?.lines)
   const at = clampSize(step)
   const size = SIZES[at]
   const wide = lines.opens
   const spread = wide && lines.spreads && at <= 1 && (layout === 'across' || layout === 'four' || !LAYOUT_IDS.includes(layout))
   const fx = spread ? (lines.twoMore ? WIDEST_PEDALS : WIDE_PEDALS) : size.fx
+  const side = inSide === true
   return {
     lines,
     wide,
@@ -144,9 +157,9 @@ export function playShape(row, step, layout, was) {
     fxMost: spread ? fx : FX_MAX,
     tileMax: wide ? WIDE_TILE : 96,
     names: wide,
-    footFixed: wide,
+    footFixed: wide || side,
     footRow: spread,
-    foldPad: spread
+    foldPad: spread && !side
   }
 }
 

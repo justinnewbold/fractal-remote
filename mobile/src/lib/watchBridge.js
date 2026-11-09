@@ -117,15 +117,21 @@ export function useWatchBridge(picture, step) {
    * the same message twice is the same boost twice.
    */
   picture = { ...picture, chain: boostPedals(picture?.chain, { slug: pedalSlug(), shown: boostNow() }) }
+  /* Whether Play can be seen (Stage `awake`, in the picture): left out means yes, as every caller before it. */
+  const awake = picture.awake !== false
   const sender = useRef(null)
   const last = useRef(null)
   const stepRef = useRef(step)
   stepRef.current = step
 
-  /* One sender and one listener for the life of the screen. */
+  /* One sender and one listener for the life of the screen, and none while
+     Play is kept out of sight beside a tool that fills the window (`awake`
+     false, components/Sides): the watch sees what it sees when Play is not
+     open, and a Play shown again starts afresh. */
   useEffect(() => {
     const watch = link()
     if (!watch) return undefined
+    if (!awake) return undefined
     sender.current = createWatchSender({
       send: (state, { urgent }) => watch.sendState(JSON.stringify(state), urgent)
     })
@@ -285,12 +291,12 @@ export function useWatchBridge(picture, step) {
       sender.current?.stop()
       sender.current = null
     }
-  }, [])
+  }, [awake])
 
   /* Every render of the stage screen is a chance the picture moved. */
   useEffect(() => {
     if (!sender.current) return
-    const { chain, channels, ...rest } = picture
+    const { chain, channels, awake: seen, ...rest } = picture
     /* Each pedal with its channel and what a hold may switch it to: the
        stage screen's own list, empty wherever its own hold does nothing.
        And its word: an AM4 amp's Boost on, Boost off or Amp off, as Play's

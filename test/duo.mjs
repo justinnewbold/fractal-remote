@@ -423,7 +423,7 @@ export function run(test) {
         'mobile/src/screens/Stage.js',
         '  const { width: screen } = useWindowDimensions()\n',
         '  const row = grid || Math.max(0, pageRow(playWidth, space.lg) - fold.left - fold.right)\n',
-        ['useWindowDimensions', 'useSafeAreaInsets', 'firstFrame', 'lastPlay', 'SIZES', 'loadSize', 'sync', 'loadIcons', 'loadSceneLayout', 'playShape', 'pageRow', 'space', 'foldInset', 'NO_FOLD', 'grid'],
+        ['useWindowDimensions', 'useSafeAreaInsets', 'firstFrame', 'lastPlay', 'SIZES', 'loadSize', 'sync', 'loadIcons', 'loadSceneLayout', 'playShape', 'pageRow', 'space', 'foldInset', 'NO_FOLD', 'grid', 'inSide'],
         '{ row, shape, playWidth, setPlayWidth, kept: () => lastPlay }'
       )
       const render = (grid = 0) => {
@@ -442,7 +442,9 @@ export function run(test) {
           space: { lg: 16 },
           foldInset: g.foldInset,
           NO_FOLD: { left: 0, right: 0 },
-          grid
+          grid,
+          /* Play with the whole window: every case here is a phone, an iPad or the Duo with one screen (lib/twoSides has the sides). */
+          inSide: false
         })
         kept = out.kept()
         return out
@@ -1225,7 +1227,8 @@ export function run(test) {
   test('Play draws its shape from its own width: today’s page and buttons under 621, the strip, names and the fold only from there', () => {
     const stage = code(read('mobile/src/screens/Stage.js'))
     /* The shape from Play's own measured width, remembered render to render for the 40-point gap, and its counts used everywhere they were. */
-    assert.match(stage, /const shape = playShape\(pageRow\(playWidth, space\.lg\), SIZES\.indexOf\(size\), sceneLayout, shapeWas\.current\)/)
+    /* And, since the two sides (lib/twoSides, test/two-sides.mjs), whether Play is on one side of two, which moves only the buttons and the fold's padding. */
+    assert.match(stage, /const shape = playShape\(pageRow\(playWidth, space\.lg\), SIZES\.indexOf\(size\), sceneLayout, shapeWas\.current, inSide\)/)
     assert.equal(stage.match(/playShape\(/g).length, 1)
     assert.match(stage, /const sceneCols = shape\.sceneCols\n/)
     assert.match(stage, /fxCols: shape\.fxCols,\s*most: shape\.fxMost,\s*max: shape\.tileMax,/, 'Fit is not handed the shape’s counts and ceiling')
@@ -1274,11 +1277,11 @@ export function run(test) {
       const shapeLines = stageLines(
         '  const shapeWas = useRef(',
         '  const sceneCols = shape.sceneCols\n',
-        ['playShape', 'pageRow', 'playWidth', 'space', 'SIZES', 'size', 'sceneLayout', 'first', 'useEffect']
+        ['playShape', 'pageRow', 'playWidth', 'space', 'SIZES', 'size', 'sceneLayout', 'first', 'useEffect', 'inSide']
       )
       const at = (playWidth, step = 0, layout = 'across') =>
         shapeLines(
-          { playShape: g.playShape, pageRow: g.pageRow, playWidth, space: { lg: 16 }, SIZES: gig.SIZES, size: gig.SIZES[step], sceneLayout: layout, first: { shape: null }, useEffect: () => {} },
+          { playShape: g.playShape, pageRow: g.pageRow, playWidth, space: { lg: 16 }, SIZES: gig.SIZES, size: gig.SIZES[step], sceneLayout: layout, first: { shape: null }, useEffect: () => {}, inSide: false },
           'shape'
         )
       /* A phone held upright: today's, render after render. */
