@@ -5381,7 +5381,8 @@ export function run(test) {
      */
     const store = read('docs/app-store.md')
     const { fenced } = await import('../scripts/store-text.mjs')
-    const { AFFILIATION, AFFILIATION_APPLE, NOT_AFFILIATED, TRADEMARKS, TRADEMARKS_APPLE } = await import('../shared/affiliation.mjs')
+    const { AFFILIATION, NOT_AFFILIATED, TRADEMARKS } = await import('../shared/affiliation.mjs')
+    const { AFFILIATION_APPLE, TRADEMARKS_APPLE } = await import('../shared/affiliation-apple.mjs')
     const { EDIT_FROM_STORE } = await import('../mobile/src/lib/ble-rule.js')
     const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
     const { TRIAL_BUTTON } = await import('../shared/trial-words.mjs')
@@ -5570,6 +5571,8 @@ export function run(test) {
       for (const u of BLE_UNITS) assert.ok(!text.includes(u.name), `the ${where} name the ${u.name} as the developer’s alone`)
     }
     assert.match(line(notes, 'Developer pages and the Axiom switch'), /only on the developer's own account, checked by the server\.$/)
+    /* Google's note still says no other account sees them, the review login included (Apple's line, as it went, says the server checks). */
+    assert.match(paragraph(access, "Only on the developer's own account:"), /No other account sees them, (the demo account|this one) included/, 'Google’s note no longer says no other account sees the Developer pages')
     assert.match(paragraph(access, "Only on the developer's own account:"), /Developer pages \(messages, customers, sales, trials, giving access, app health, testing tools\)/, 'Google’s note leaves out a Developer page, giving access among them')
     assert.match(settings, /<SetupRow title="Customers" status="Sales, sign-ups, and giving access"/, 'Google’s note says giving access is on the Developer pages, and it is not')
     /* Deleting an account (5.1.1(v)), with the label the app draws. */
@@ -5639,9 +5642,11 @@ export function run(test) {
     assert.match(playDescription, /\nSUPPORTED UNITS\nFM3, FM9, Axe-Fx III and AM4, and the VP4 \(presets, scenes and effects on and off\)\.\n/, 'the supported units are not the live Play listing’s')
     assert.match(playDescription, /on a VP4, presets and scenes\)/, 'the Bluetooth section promises a VP4 more than presets and scenes')
     assert.doesNotMatch(playDescription, /\biPhone|\biPad|\bApple\b|\bSiri\b|App Store|TestFlight/, 'the Play Description names Apple’s things')
+    assert.doesNotMatch(playDescription, /Android/, 'the Play Description names a phone, and it names neither')
 
     /* GOOGLE'S RELEASE NOTES, within 500. */
     assert.ok(characters(play) <= 500, `Google's release notes for 1.90.0 are ${characters(play)} characters; Play takes 500`)
+    assert.doesNotMatch(play, /Siri|iPhone|iPad|Apple/, 'Google is told about Apple’s things')
     /* And with the cable line swapped in, as the prose over the block says: still within 500. */
     const playHead = '### Google Play release notes, 1.90.0'
     const playProse = section.slice(section.indexOf(playHead), section.indexOf('```', section.indexOf(playHead)))

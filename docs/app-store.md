@@ -3006,7 +3006,7 @@ Justin's own channels; no Apple words in Google's texts; "Let’s go", never
 The App Store's texts, as submitted, keep the rules Fractal Audio's letter
 and the house hang on: Fractal Audio's sentence word for word in the
 Description, with the trademark line that leaves the VP4 out
-(`AFFILIATION_APPLE` in shared/affiliation.mjs, Justin's 9 November rule);
+(`AFFILIATION_APPLE` in shared/affiliation-apple.mjs, Justin's 9 November rule);
 nothing official, certified, approved or endorsed; help only through
 Justin's own channels; nothing tried and no beta; no other platform
 (2.3.10); Bluetooth first; "Let’s go". Where they part from the drafts, it
