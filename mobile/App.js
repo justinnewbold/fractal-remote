@@ -88,7 +88,7 @@ import { BENCH, SIDES_FOR_EVERYONE } from './src/lib/features'
 import Sides, { SidesFrame } from './src/components/Sides'
 /* Whose sign-in is kept on this device, for the two sides: the same answer Bluetooth's gate reads. */
 import { useBluetoothAdmin } from './src/lib/bluetooth'
-import { backUnwinds, sideTools, tunerGoes, tunerStops, twoSidesOn, whenNarrow } from './src/lib/twoSides'
+import { backUnwinds, sideTools, tunerGivesBack, tunerGoes, tunerStops, twoSidesOn, whenNarrow } from './src/lib/twoSides'
 import { TunerSide } from './src/components/Tuner'
 import { PLAY_ON_RIGHT, keepPlayOnRight, readPlayOnRight } from './src/lib/sidesKeep'
 import Paywall from './src/screens/Paywall'
@@ -785,18 +785,17 @@ export default function App() {
    */
   const wasBeside = useRef(false)
   const shrunk = useRef(null)
-  /* The tuner's side gave way to one screen, rather than being closed: the tuner stays on, over everything as on a phone (lib/twoSides tunerStops). */
-  const tunerToOne = useRef(false)
+  /* What the tuner's side borrowed: the tool that was there before it (lib/twoSides tunerGivesBack), or null for Play alone. */
+  const tunerLent = useRef(null)
   if (wasBeside.current && !wide) {
     const to = whenNarrow({ tool: sideTool, sideFull })
     if (to.screen !== screen) {
-      shrunk.current = to.keep
-      if (to.keep === 'tuner') tunerToOne.current = true
+      /* Folded with the tuner beside Play: the tuner goes off (its side went, below), and what it borrowed is what comes back when the window widens. */
+      shrunk.current = to.keep === 'tuner' ? tunerLent.current : to.keep
       setScreen(to.screen)
     }
   } else if (screen === 'tuner' && !twoSidesUp) {
-    /* The tuner is a screen only in a side: anywhere else (the sides closed to this account, say) it is Play, with the tuner over it as always. */
-    tunerToOne.current = true
+    /* The tuner is a screen only in a side: anywhere else (the sides closed to this account, say) it is Play, and the tuner goes off with its side. */
     setScreen('stage')
   }
   wasBeside.current = playBeside
@@ -805,36 +804,38 @@ export default function App() {
     if (!wide) return
     const back = shrunk.current
     shrunk.current = null
-    /* The tuner comes back into its side only if it is still on: stopped meanwhile, it stays stopped. */
-    if (back && screen === 'stage' && (back !== 'tuner' || tunerOn)) setScreen(back)
+    if (back && screen === 'stage') setScreen(back)
   }, [wide])
   /*
-   * THE TUNER IN A SIDE (lib/twoSides, step 3). Turned on with two sides up,
-   * from Play's button, the list on a bar, the watch or Siri, it opens in
-   * the side; or when the window widens with it on. Turned off anywhere, its
-   * side closes. And its side closed any way but the window shrinking turns
-   * it off at the unit, which it mutes (tunerStops).
+   * THE TUNER IN A SIDE (lib/twoSides, step 3; docs/two-sides, "The
+   * tuner"). Turned on with two sides up, from Play's button, the list on a
+   * bar, the watch or Siri, it borrows the side; or when the window widens
+   * with it on. Turned off anywhere, the side is given back to what it
+   * borrowed. And its side gone any way at all, folding the Duo too, turns
+   * it off at the unit, which it usually mutes (tunerStops).
    */
   const tunerSeen = useRef({ on: tunerOn, wide })
   useEffect(() => {
     const was = tunerSeen.current
     tunerSeen.current = { on: tunerOn, wide }
     if (!tunerOn) {
-      if (screen === 'tuner') setScreen('stage')
+      if (screen === 'tuner') setScreen(tunerGivesBack(tunerLent.current))
       return
     }
     const came = !was.on || (wide && !was.wide)
-    if (came && screen !== 'tuner' && tunerGoes({ allowed: sidesAllowed, wide, screen }) === 'side') setScreen('tuner')
+    if (came && screen !== 'tuner' && tunerGoes({ allowed: sidesAllowed, wide, screen }) === 'side') {
+      tunerLent.current = screen
+      setScreen('tuner')
+    }
   }, [tunerOn, wide, screen, sidesAllowed])
   const screenWas = useRef(screen)
   useEffect(() => {
     const was = screenWas.current
     screenWas.current = screen
-    const toOneScreen = tunerToOne.current
-    tunerToOne.current = false
-    if (tunerStops({ was, now: screen, tunerOn, toOneScreen })) writeTuner(false)
+    if (tunerStops({ was, now: screen, tunerOn })) writeTuner(false)
   }, [screen])
-  const tunerBeside = twoSidesUp && sideTool === 'tuner'
+  /* Never the big pop-up while two sides can show: the tuner is in its side (docs/two-sides, critic 3). */
+  const tunerBeside = wide || (twoSidesUp && sideTool === 'tuner')
   /* What the list on either bar offers now: the same conditions Play's own buttons use. */
   const toolsOffered = sideTools({
     editOpens,

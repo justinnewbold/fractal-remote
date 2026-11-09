@@ -181,7 +181,7 @@ docs/two-sides/
 - A sideways swipe on Play never closes Edit. Android's back button undoes full screen first, then closes the side.
 - Your account only. Over-the-air update: yes.
 
-### Step 3: the tuner in a side (1 session)
+### Step 3: the tuner in a side (1 session) — done, 1.90.9 (#840)
 
 - Everything in "The tuner" above, whether Play's button, the watch or Siri turns it on.
 - Your account only. Over-the-air update: yes.

@@ -14,6 +14,7 @@ import { tunerQuietLine } from '../lib/bluetooth-gear'
 import { useRig } from '../lib/rig'
 import { NOT_CONNECTED } from '../lib/relay-rules'
 import { deviceNoun } from '../lib/device-word'
+import { TUNER_MUTES } from '../lib/twoSides'
 
 const ofUnitTuner = (s) => s.unitTuner
 const ofTuning = (s) => s.tuning
@@ -106,7 +107,7 @@ export default function Tuner({ reading, on, onClose, down = false }) {
  * word, without "Tap anywhere to close", since in a side Stop tuner is the
  * way out and a tap beside the pane does nothing.
  */
-export function TunerPane({ dial, reading, on, onClose, down = false, tapToClose = false }) {
+export function TunerPane({ dial, reading, on, onClose, down = false, tapToClose = false, footnote = null }) {
   const [stalled, setStalled] = useState(false)
   /* Over Bluetooth there is no computer to blame: the unit itself is quiet. */
   const bluetooth = useBluetoothOn()
@@ -269,6 +270,7 @@ export function TunerPane({ dial, reading, on, onClose, down = false, tapToClose
 
       <Press label="Stop tuner" height={TAP} tone="live" onPress={onClose} style={{ alignSelf: 'stretch' }} />
       {tapToClose ? <Text style={{ color: color.silkFaint, fontSize: font.micro }}>Tap anywhere to close</Text> : null}
+      {footnote ? <Text style={{ color: color.silkFaint, fontSize: font.micro, textAlign: 'center' }}>{footnote}</Text> : null}
     </View>
   )
 }
@@ -278,7 +280,8 @@ export function TunerPane({ dial, reading, on, onClose, down = false, tapToClose
  * pane as the tuner over everything, in the side beside Play, as wide as
  * the side allows (it is measured, since a side is not the window) and no
  * wider than the pane ever is. The side's own bar is over it; Stop tuner
- * turns the tuner off, and the side closes with it (App.js).
+ * turns the tuner off, and the side is given back (App.js). Under Stop
+ * tuner, one line: whether the sound mutes is the unit's own setting.
  */
 export function TunerSide({ onClose, down = false }) {
   const reading = useRig(ofTuning)
@@ -290,7 +293,7 @@ export function TunerSide({ onClose, down = false }) {
       style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.lg, backgroundColor: color.chassis }}
       onLayout={(e) => setRoom(e.nativeEvent.layout.width)}
     >
-      {dial > 0 ? <TunerPane dial={dial} reading={reading} on={on} onClose={onClose} down={down} /> : null}
+      {dial > 0 ? <TunerPane dial={dial} reading={reading} on={on} onClose={onClose} down={down} footnote={TUNER_MUTES} /> : null}
     </View>
   )
 }
