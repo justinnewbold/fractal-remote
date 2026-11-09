@@ -76,7 +76,7 @@ export default function Sides({
   const [list, setList] = useState(null)
   /* Everybody the sides are not open to: Play, and not one View around it, so their tree is today's. (After the hook above, so its count never changes.) */
   if (!allowed) return children
-  const widths = sideWidths({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight })
+  const widths = sideWidths({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool })
   const beside = two && Boolean(tool) && !full
   const playHidden = Boolean(tool) && full
   const toolName = TOOL_NAMES[tool] || ''

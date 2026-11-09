@@ -1,6 +1,6 @@
 /**
  * TWO SIDES ON A BIG SCREEN (mobile/src/lib/twoSides.js, components/Sides.js,
- * App.js): Play on one side, and Edit, Setlists or All presets on the other,
+ * App.js): Play on one side, and Edit, Setlists, All presets or the tuner on the other,
  * on an iPad on its side, an Android tablet sideways or the iPhone Duo
  * opened; one screen, exactly as today, on every phone held upright, the
  * Duo closed or held tall, and an iPad upright. His account only until
@@ -139,19 +139,90 @@ export function run(test) {
     assert.equal(r.twoSidesOn({ width: 780, height: 600 }, false), true)
   })
 
-  test('the list offers Edit only where its door opens, All presets only where Play offers it, and Setlists always; Play is never on it', async () => {
+  test('the list offers Edit only where its door opens, All presets and the Tuner only where Play offers them, and Setlists always; Play is never on it', async () => {
     const r = await rules()
-    assert.deepEqual(r.TOOLS, ['edit', 'setlists', 'presets'])
+    assert.deepEqual(r.TOOLS, ['edit', 'setlists', 'presets', 'tuner'])
+    assert.deepEqual(r.sideTools({ editOpens: true, presetsOffered: true, tunerOffered: true }), ['edit', 'setlists', 'presets', 'tuner'])
     assert.deepEqual(r.sideTools({ editOpens: true, presetsOffered: true }), ['edit', 'setlists', 'presets'])
     assert.deepEqual(r.sideTools({ editOpens: false, presetsOffered: true }), ['setlists', 'presets'])
     assert.deepEqual(r.sideTools({ editOpens: true, presetsOffered: false }), ['edit', 'setlists'])
+    assert.deepEqual(r.sideTools({ tunerOffered: true }), ['setlists', 'tuner'])
+    assert.deepEqual(r.sideTools({ tunerOffered: 'yes' }), ['setlists'], 'only a plain true offers it')
     assert.deepEqual(r.sideTools({}), ['setlists'])
     assert.deepEqual(r.sideTools(), ['setlists'])
-    assert.ok(!r.TOOLS.includes('play') && !r.TOOLS.includes('tuner'), 'Play, or the tuner (step 3), is on the list')
+    assert.ok(!r.TOOLS.includes('play'), 'Play is on the list')
     assert.equal(r.PLAY_ALWAYS, 'Play is always the other side.')
-    assert.deepEqual(r.TOOL_NAMES, { edit: 'Edit', setlists: 'Setlists', presets: 'All presets', play: 'Play' })
+    assert.deepEqual(r.TOOL_NAMES, { edit: 'Edit', setlists: 'Setlists', presets: 'All presets', tuner: 'Tuner', play: 'Play' })
     for (const t of r.TOOLS) assert.equal(r.isTool(t), true)
-    for (const t of ['stage', 'settings', 'tuner', null, undefined]) assert.equal(r.isTool(t), false)
+    for (const t of ['stage', 'settings', 'play', null, undefined]) assert.equal(r.isTool(t), false)
+  })
+
+  test('the tuner opens in a side with two sides up, and only there; it borrows the side and gives it back; its side and the unit’s tuner go together, folding too', async () => {
+    const r = await rules()
+    /* Turned on with two sides up and Play (or a tool beside it) on screen: into the side. */
+    for (const screen of ['stage', 'edit', 'setlists', 'presets']) assert.equal(r.tunerGoes({ allowed: true, wide: true, screen }), 'side', screen)
+    /* Anywhere else, over everything as on a phone. */
+    assert.equal(r.tunerGoes({ allowed: true, wide: false, screen: 'stage' }), null, 'a narrow window')
+    assert.equal(r.tunerGoes({ allowed: false, wide: true, screen: 'stage' }), null, 'an account the sides are not open to')
+    for (const screen of ['settings', 'fixes', 'report', null]) assert.equal(r.tunerGoes({ allowed: true, wide: true, screen }), null, String(screen))
+    assert.equal(r.tunerGoes(), null)
+    /* Its side gone, the tuner stops: to Play (closed, Full screen, or the Duo folded), another tool, Settings. */
+    for (const now of ['stage', 'edit', 'setlists', 'presets', 'settings']) assert.equal(r.tunerStops({ was: 'tuner', now, tunerOn: true }), true, now)
+    /* It borrows the side: off, what was there comes back, or Play alone. */
+    for (const t of ['edit', 'setlists', 'presets']) assert.equal(r.tunerGivesBack(t), t)
+    for (const t of ['stage', 'tuner', null, undefined, 'settings']) assert.equal(r.tunerGivesBack(t), 'stage', String(t))
+    assert.equal(r.TUNER_MUTES, 'Your unit’s own Tuner setting decides if the sound mutes.')
+    /* A narrow column on an iPad on its side (Play keeps the rest); half on the Duo and the Fold, on the fold. */
+    const ipad = r.sideWidths({ width: 1180, tool: 'tuner' })
+    assert.deepEqual(ipad, { play: 1180 - r.TUNER_COLUMN, tool: r.TUNER_COLUMN })
+    assert.equal(r.TUNER_COLUMN, r.SIDE_LEAST)
+    assert.deepEqual(r.sideWidths({ width: 1180, tool: 'tuner', playOnRight: false }), ipad, 'Swap moves the column, not its width')
+    assert.deepEqual(r.sideWidths({ width: 1180, tool: 'edit' }), { play: 590, tool: 590 }, 'every other tool is still half')
+    const duo = frameOf(951, 669, { left: 84 })
+    assert.deepEqual(r.sideWidths({ ...duo, tool: 'tuner' }), r.sideWidths({ ...duo, tool: 'edit' }), 'the Duo’s tuner is not on the fold')
+    assert.deepEqual(r.sideWidths({ width: 841, tool: 'tuner' }), r.sideWidths({ width: 841 }))
+    /* Nothing to stop: already off, or the side never was the tuner, or it still is. */
+    assert.equal(r.tunerStops({ was: 'tuner', now: 'stage', tunerOn: false }), false)
+    assert.equal(r.tunerStops({ was: 'edit', now: 'stage', tunerOn: true }), false)
+    assert.equal(r.tunerStops({ was: 'tuner', now: 'tuner', tunerOn: true }), false)
+    assert.equal(r.tunerStops(), false)
+    /* Folded with the tuner beside Play: Play shows (and the tuner goes off, above). Back closes it like any side. */
+    assert.deepEqual(r.whenNarrow({ tool: 'tuner', sideFull: false }).screen, 'stage')
+    assert.equal(r.backUnwinds({ tool: 'tuner', sideFull: false }), 'side')
+  })
+
+  test('App puts the tuner in its side and never the big pop-up while two sides can show, gives the side back, stops it when its side goes, and Play’s own tuner is untouched on one screen', () => {
+    const app = code(read('mobile/App.js'))
+    const stage = code(read('mobile/src/screens/Stage.js'))
+    const tuner = code(read('mobile/src/components/Tuner.js'))
+    /* Picked from a bar, or brought back: by turning the tuner on, never by a tuner screen with the unit off. */
+    assert.match(app, /const openTool = \(tool\) => \(tool === 'tuner' \? writeTuner\(true\) : setScreen\(tool\)\)\n/)
+    assert.match(app, /onPick=\{openTool\}/)
+    assert.match(app, /onTwoSides=\{\(\) => openTool\(sideKept\)\}/)
+    assert.match(app, /tunerOffered: \(demo \|\| link\.link === 'connected'\) && caps\?\.tuner !== false/)
+    /* On: into the side. Off: the side closes. Its side gone: off, unless the window shrank. */
+    assert.match(app, /if \(!tunerOn\) \{\s*if \(screen === 'tuner'\) setScreen\(tunerGivesBack\(tunerLent\.current\)\)\s*return\s*\}/)
+    assert.match(app, /tunerGoes\(\{ allowed: sidesAllowed, wide, screen \}\) === 'side'\) \{\s*tunerLent\.current = screen\s*setScreen\('tuner'\)\s*\}/)
+    assert.match(app, /if \(tunerStops\(\{ was, now: screen, tunerOn \}\)\) writeTuner\(false\)/)
+    /* Folded: what the tuner borrowed comes back when the window widens, never the tuner itself. */
+    assert.match(app, /shrunk\.current = to\.keep === 'tuner' \? tunerLent\.current : to\.keep/)
+    /* The tuner is a screen only in a side: anywhere else, Play, and it goes off. */
+    assert.match(app, /\} else if \(screen === 'tuner' && !twoSidesUp\) \{\s*setScreen\('stage'\)\s*\}/)
+    assert.doesNotMatch(app, /alone === 'tuner'/, 'the switch draws a tuner screen of its own')
+    /* In the side, and not also over everything. */
+    assert.match(app, /sideTool === 'tuner' \? \(\s*<TunerSide onClose=\{\(\) => writeTuner\(false\)\} down=\{link\.down === true && !demo\} \/>/)
+    assert.match(app, /const tunerBeside = wide \|\| \(twoSidesUp && sideTool === 'tuner'\)\n/)
+    assert.match(app, /tunerBeside=\{tunerBeside\}/)
+    assert.match(stage, /tunerBeside = false,\n/)
+    assert.match(stage, /<Tuner on=\{tunerOn && !tunerBeside\} reading=\{tuning\} onClose=\{\(\) => writeTuner\(false\)\} down=\{down\} \/>/)
+    /* One pane, in both places; "Tap anywhere to close" only over everything, and the side's pane measured from the side. */
+    assert.match(tuner, /<TunerPane dial=\{dial\} reading=\{reading\} on=\{on\} onClose=\{onClose\} down=\{down\} tapToClose \/>/)
+    assert.match(tuner, /\{tapToClose \? <Text[^>]*>Tap anywhere to close<\/Text> : null\}/)
+    assert.match(tuner, /export function TunerSide\(\{ onClose, down = false \}\)/)
+    assert.match(tuner, /footnote=\{TUNER_MUTES\}/, 'the tuner side does not say the unit decides whether it mutes')
+    assert.match(code(read('mobile/src/components/Sides.js')), /sideWidths\(\{ width: frame\?\.width, left: frame\?\.left, right: frame\?\.right, playOnRight, tool \}\)/)
+    assert.match(tuner, /onLayout=\{\(e\) => setRoom\(e\.nativeEvent\.layout\.width\)\}/)
+    assert.equal(tuner.match(/<Press label="Stop tuner"/g).length, 1, 'the pane is drawn twice over, so the two drift apart')
   })
 
   test('Android’s back undoes full screen first, then closes the side; shrinking to one screen shows Play and keeps the tool, or the tool that was filling the screen', async () => {
@@ -218,7 +289,7 @@ export function run(test) {
     assert.match(app, /\{sidesAllowed \? <SidesFrame onFrame=\{setFrame\} \/> : null\}/)
     assert.match(app, /const wide = sidesAllowed && twoSidesOn\(frame \|\| \{\}, wideWas\.current\)\n\s*wideWas\.current = wide\n/)
     /* `screen` stays the record: the tool is read off it, Edit behind the bench's switch, and the switch leaves it to the host on two sides. */
-    assert.match(app, /const sideTool = BENCH && screen === 'edit' \? 'edit' : screen === 'setlists' \|\| screen === 'presets' \? screen : null\n/)
+    assert.match(app, /const sideTool = BENCH && screen === 'edit' \? 'edit' : screen === 'setlists' \|\| screen === 'presets' \|\| screen === 'tuner' \? screen : null\n/)
     assert.match(app, /const twoSidesUp = sidesAllowed && sideTool !== null && \(wide \|\| sideFull\)\n/)
     assert.match(app, /const alone = twoSidesUp \? 'stage' : screen\n/)
     for (const t of ['presets', 'setlists']) assert.match(app, new RegExp(`\\) : alone === '${t}' \\? \\(`), `${t} is drawn by the switch beside the host’s copy`)
@@ -226,7 +297,7 @@ export function run(test) {
     /* Play is drawn once, inside the host, told its side and its sleep; the tool beside it is the same screen with the same Done. */
     assert.equal(app.match(/<Stage\b/g).length, 1, 'Play is drawn in two places, so it is drawn afresh when a side opens')
     assert.match(app, /<Sides\s+allowed=\{sidesAllowed\}\s+two=\{wide\}\s+tool=\{twoSidesUp \? sideTool : null\}\s+full=\{sideFull\}/)
-    assert.match(app, /<Stage\s+inSide=\{playBeside\}\s+awake=\{!playHidden\}/)
+    assert.match(app, /<Stage\s+inSide=\{playBeside\}\s+awake=\{!playHidden\}\s+tunerBeside=\{tunerBeside\}/)
     assert.match(app, /const playBeside = twoSidesUp && !sideFull\n\s*const playHidden = twoSidesUp && sideFull\n/)
     assert.match(app, /<Presets onBack=\{closeSide\} stay \/>/, 'All presets beside Play does not stay open after a pick')
     assert.match(app, /<Setlists onBack=\{closeSide\} \/>/)
@@ -235,18 +306,16 @@ export function run(test) {
     /* Play's own buttons keep their handlers: Edit opens 'edit', the preset name 'presets', Setlists 'setlists', and the host draws them beside Play. */
     assert.match(app, /onOpenEdit=\{editOpens \? \(\) => setScreen\('edit'\)/)
     assert.match(app, /onOpenSetlists=\{\(\) => setScreen\('setlists'\)\}/)
-    assert.match(app, /onPick=\{\(tool\) => setScreen\(tool\)\}/)
     /* Swap is kept on the device; Full screen on Play's bar is Play alone with the tool kept; Two sides brings it back. */
     assert.match(app, /onSwap=\{\(\) => \{\s*keepPlayOnRight\(!playOnRight\)\s*setPlayOnRight\(!playOnRight\)\s*\}\}/)
     assert.match(app, /onPlayFull=\{closeSide\}/)
-    assert.match(app, /onTwoSides=\{\(\) => setScreen\(sideKept\)\}/)
     assert.match(app, /if \(sideTool\) setSideKept\(sideTool\)\s*else setSideFull\(false\)/)
     /* Nothing reopens at launch: what was kept starts empty, and only which side Play is on is read off the device. */
     assert.match(app, /const \[sideKept, setSideKept\] = useState\(null\)\n/)
     assert.match(app, /readPlayOnRight\(\)\.then/)
     assert.doesNotMatch(app, /readSideKept|AsyncStorage/, 'a tool is read back off the device at launch')
     /* Shrunk to one screen: lib/twoSides says what shows, decided while drawing and only after a render with the tool beside Play; wide again, the tool comes back only onto Play. */
-    assert.match(app, /if \(wasBeside\.current && !wide\) \{\s*const to = whenNarrow\(\{ tool: sideTool, sideFull \}\)\s*if \(to\.screen !== screen\) \{\s*shrunk\.current = to\.keep\s*setScreen\(to\.screen\)\s*\}\s*\}\s*wasBeside\.current = playBeside\n/)
+    assert.match(app, /if \(wasBeside\.current && !wide\) \{\s*const to = whenNarrow\(\{ tool: sideTool, sideFull \}\)\s*if \(to\.screen !== screen\) \{\s*shrunk\.current = to\.keep === 'tuner' \? tunerLent\.current : to\.keep\s*setScreen\(to\.screen\)\s*\}\s*\} else if \(screen === 'tuner' && !twoSidesUp\) \{[^}]*\}\s*wasBeside\.current = playBeside\n/)
     assert.match(app, /if \(back && screen === 'stage'\) setScreen\(back\)/)
     /* Android's back: full screen first, then today's step (the side's Done). */
     assert.match(app, /if \(twoSidesUp && backUnwinds\(\{ tool: sideTool, sideFull \}\) === 'full'\) \{\s*setSideFull\(false\)\s*return true\s*\}\s*if \(screen !== 'stage'\)/)
@@ -258,7 +327,7 @@ export function run(test) {
     assert.match(sides, /const HIDDEN = \{ width: 0, overflow: 'hidden' \}/)
     assert.match(sides, /accessibilityElementsHidden=\{playHidden\}/)
     assert.match(sides, /importantForAccessibility=\{playHidden \? 'no-hide-descendants' : 'auto'\}/)
-    assert.match(sides, /sideWidths\(\{ width: frame\?\.width, left: frame\?\.left, right: frame\?\.right, playOnRight \}\)/)
+    assert.match(sides, /sideWidths\(\{ width: frame\?\.width, left: frame\?\.left, right: frame\?\.right, playOnRight, tool \}\)/)
     /* Keyed, so Swap moves the two Views and draws neither afresh. */
     assert.match(sides, /key="play"/)
     assert.match(sides, /key="side"/)

@@ -10737,7 +10737,10 @@ export function run(test) {
     assert.equal(NO_KNOBS_YET, 'This block’s knobs aren’t in the app yet.')
     const edit = flat('mobile/src/screens/Edit.js')
     assert.match(edit, /const noKnobsYet = block\.knobs === false const knobless = vp4Bench\(\) \|\| noKnobsYet useEffect\(\(\) => \{ if \(knobless\) return undefined/)
-    assert.match(edit, /onPress=\{\(\) => writeBlockBypass\(eid, engaged\)\} \/> \)\} \{noKnobsYet \? <Note>\{NO_KNOBS_YET\}<\/Note> : null\}/)
+    /* The line stands where the knobs would be, and on and off is under the knobs with the model (9 November 2026). */
+    assert.match(edit, /\{noKnobsYet \? <Note>\{NO_KNOBS_YET\}<\/Note> : null\}/)
+    assert.ok(edit.indexOf('{NO_KNOBS_YET}') < edit.indexOf('shown.map((p) =>'), 'the line is not where the knobs would be')
+    assert.ok(edit.indexOf('shown.map((p) =>') < edit.indexOf('onPress={() => writeBlockBypass(eid, engaged)}'), 'on and off is not under the knobs')
     assert.equal((edit.match(/\{NO_KNOBS_YET\}/g) || []).length, 1)
     assert.match(edit, /import \{ NO_KNOBS_YET \} from '\.\.\/lib\/gen3Catalog'/)
     assert.match(flat('mobile/src/lib/device.js'), /export const knobBlocks = \(blocks\) => \(blocks \|\| \[\]\)\.filter\(\(b\) => b && !isNewBlock\(b\) && !EXCLUDED_BLOCKS\.includes\(b\.slug\) && b\.knobs !== false\)/)

@@ -3397,7 +3397,7 @@ export function run(test) {
      * content (test/duo.mjs), and is taken out here all the same in case it
      * ever comes back in.
      */
-    const tunerTag = '<Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} down={down} />'
+    const tunerTag = '<Tuner on={tunerOn && !tunerBeside} reading={tuning} onClose={() => writeTuner(false)} down={down} />'
     assert.ok(stage.includes(tunerTag), 'the open tuner is not told the link is down')
     /* The page, and the six buttons, which are drawn in it under 621 points of row and in their strip under it from there (PlayFoot). */
     const footAt = stage.indexOf('function PlayFoot(')
@@ -3436,7 +3436,12 @@ export function run(test) {
     assert.match(tuner, /^import \{ NOT_CONNECTED \} from '\.\.\/lib\/relay-rules'$/m)
     /* In the modal, in place of the one line, and only one line however it reads. */
     const bare = tuner.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, ' ').replace(/\s+/g, ' ')
-    const modal = bare.slice(bare.indexOf('<Modal visible={on}'), bare.indexOf('</Modal>'))
+    /* The modal hands the link to the pane it draws, which the tuner in a side draws too (two sides, step 3). */
+    const outer = bare.slice(bare.indexOf('<Modal visible={on}'), bare.indexOf('</Modal>'))
+    assert.match(outer, /<TunerPane dial=\{dial\} reading=\{reading\} on=\{on\} onClose=\{onClose\} down=\{down\} tapToClose \/>/)
+    const paneAt = bare.indexOf('export function TunerPane(')
+    const pane = bare.slice(paneAt, bare.indexOf('export function TunerSide('))
+    const modal = pane.slice(pane.indexOf('return ('))
     const line = modal.match(/<Text numberOfLines=\{1\} accessibilityLiveRegion="polite" style=\{[^]*?\}\s*>\s*\{down \? NOT_CONNECTED : reading\?\.note \? `\$\{cents > 0 \? '\+' : ''\}\$\{cents\} cents` : 'Play a string'\}\s*<\/Text>/)
     assert.ok(line, 'the open tuner does not say NOT CONNECTED in its line under the needle')
     /* The same size either way: a style change, never a new row. */
