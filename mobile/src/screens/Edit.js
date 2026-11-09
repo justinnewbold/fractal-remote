@@ -1202,6 +1202,102 @@ function BlockPanel({
         </View>
       ) : null}
 
+      {noKnobsYet ? <Note>{NO_KNOBS_YET}</Note> : null}
+
+      {/* ------------------------------------------------------------ knobs */}
+      {/*
+        One tab per page. An amp has ten, more than a phone is wide, so the
+        row scrolls sideways rather than squeezing the words.
+      */}
+      {pages.length > 1 ? (
+        <SideScroll showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+          {pages.map((pg) => (
+            <Press
+              key={pg.key}
+              label={pg.name}
+              tone="signal"
+              on={pg.key === onPage?.key}
+              height={44}
+              onPress={() => setTab(pg.key)}
+            />
+          ))}
+        </SideScroll>
+      ) : null}
+
+      {/*
+        The knobs stay up while they are being read again. Swapping a deck of
+        six for one line of text takes 200 points out of a screen that is as
+        tall as its contents, so it lurches down and back up — for a read that
+        is usually over in a second, on values that are usually the same ones.
+      */}
+      {/* Hidden says why its settings are there, once, above them. */}
+      {onPage?.note ? <Note>{onPage.note}</Note> : null}
+
+      {loading && !shown.length ? (
+        <Note>{`Reading ${block.name}…`}</Note>
+      ) : (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md }}>
+          {shown.map((p) => (
+            <View
+              key={p.id}
+              style={{
+                width: '30%',
+                alignItems: 'center',
+                gap: space.xs,
+                /* The one you searched for, said with a ring for a couple of
+                   seconds rather than a colour change that outstays it. */
+                borderRadius: radius.md,
+                borderWidth: 2,
+                borderColor: lit === p.id ? color.live : 'transparent',
+                paddingVertical: 2
+              }}
+            >
+              <Knob
+                param={p}
+                label={p.label || p.name}
+                value={valueOf(p)}
+                onChange={(v) => {
+                  if (!restoring) setLocal((prev) => ({ ...prev, [p.id]: v }))
+                }}
+                onCommit={(v) => commit(p, v)}
+                onScrollLock={onScrollLock}
+              />
+              <ValueBox param={p} value={valueOf(p)} onCommit={(v) => commit(p, v)} />
+              {help?.params?.[p.id]?.blurb ? (
+                <Press
+                  label={helpOn === p.id ? 'Hide' : '?'}
+                  height={32}
+                  accessibilityLabel={`What does ${p.label || p.name} do?`}
+                  onPress={() => setHelpOn((was) => (was === p.id ? null : p.id))}
+                />
+              ) : null}
+            </View>
+          ))}
+        </View>
+      )}
+      {(() => {
+        const open = helpOn !== null ? shown.find((p) => p.id === helpOn) : null
+        const h = open ? help?.params?.[open.id] : null
+        return h?.blurb ? <Note>{`${open.label || open.name}: ${h.blurb}${h.tip ? ` ${h.tip}` : ''}`}</Note> : null
+      })()}
+
+      {level ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>LEVEL</Text>
+          <Text style={{ color: color.silk, fontSize: font.body, fontFamily: face }}>
+            {`${fmt(level.value)}${level.unit ? ` ${level.unit}` : ''}`}
+          </Text>
+          <Text style={{ color: color.silkFaint, fontSize: font.micro }}>read-only</Text>
+        </View>
+      ) : null}
+
+      {/*
+        UNDER THE KNOBS: copying the channel, on and off, and the model.
+        "On the edit screens, let's move the copy channel, engaged and the
+        pedal model name down below the actual knobs" (Justin, 9 November
+        2026): the knobs are what a player opens a block for, so they come
+        straight under the channel buttons, and these follow them.
+      */}
       {/* Copy this channel onto another — see ChannelCopy below. Not over Bluetooth, where it is not built yet. */}
       {channels?.length > 1 && block.channel && !overBle ? (
         <ChannelCopy
@@ -1230,8 +1326,6 @@ function BlockPanel({
           onPress={() => writeBlockBypass(eid, engaged)}
         />
       )}
-      {noKnobsYet ? <Note>{NO_KNOBS_YET}</Note> : null}
-
       {/* ------------------------------------------------------------ model */}
       {models.length ? (
         <View style={{ gap: space.sm }}>
@@ -1334,92 +1428,6 @@ function BlockPanel({
       ) : null}
       {undoSaid ? <Note tone={undoSaid.bad ? 'warn' : undefined}>{undoSaid.text}</Note> : null}
 
-      {/* ------------------------------------------------------------ knobs */}
-      {/*
-        One tab per page. An amp has ten, more than a phone is wide, so the
-        row scrolls sideways rather than squeezing the words.
-      */}
-      {pages.length > 1 ? (
-        <SideScroll showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
-          {pages.map((pg) => (
-            <Press
-              key={pg.key}
-              label={pg.name}
-              tone="signal"
-              on={pg.key === onPage?.key}
-              height={44}
-              onPress={() => setTab(pg.key)}
-            />
-          ))}
-        </SideScroll>
-      ) : null}
-
-      {/*
-        The knobs stay up while they are being read again. Swapping a deck of
-        six for one line of text takes 200 points out of a screen that is as
-        tall as its contents, so it lurches down and back up — for a read that
-        is usually over in a second, on values that are usually the same ones.
-      */}
-      {/* Hidden says why its settings are there, once, above them. */}
-      {onPage?.note ? <Note>{onPage.note}</Note> : null}
-
-      {loading && !shown.length ? (
-        <Note>{`Reading ${block.name}…`}</Note>
-      ) : (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md }}>
-          {shown.map((p) => (
-            <View
-              key={p.id}
-              style={{
-                width: '30%',
-                alignItems: 'center',
-                gap: space.xs,
-                /* The one you searched for, said with a ring for a couple of
-                   seconds rather than a colour change that outstays it. */
-                borderRadius: radius.md,
-                borderWidth: 2,
-                borderColor: lit === p.id ? color.live : 'transparent',
-                paddingVertical: 2
-              }}
-            >
-              <Knob
-                param={p}
-                label={p.label || p.name}
-                value={valueOf(p)}
-                onChange={(v) => {
-                  if (!restoring) setLocal((prev) => ({ ...prev, [p.id]: v }))
-                }}
-                onCommit={(v) => commit(p, v)}
-                onScrollLock={onScrollLock}
-              />
-              <ValueBox param={p} value={valueOf(p)} onCommit={(v) => commit(p, v)} />
-              {help?.params?.[p.id]?.blurb ? (
-                <Press
-                  label={helpOn === p.id ? 'Hide' : '?'}
-                  height={32}
-                  accessibilityLabel={`What does ${p.label || p.name} do?`}
-                  onPress={() => setHelpOn((was) => (was === p.id ? null : p.id))}
-                />
-              ) : null}
-            </View>
-          ))}
-        </View>
-      )}
-      {(() => {
-        const open = helpOn !== null ? shown.find((p) => p.id === helpOn) : null
-        const h = open ? help?.params?.[open.id] : null
-        return h?.blurb ? <Note>{`${open.label || open.name}: ${h.blurb}${h.tip ? ` ${h.tip}` : ''}`}</Note> : null
-      })()}
-
-      {level ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-          <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>LEVEL</Text>
-          <Text style={{ color: color.silk, fontSize: font.body, fontFamily: face }}>
-            {`${fmt(level.value)}${level.unit ? ` ${level.unit}` : ''}`}
-          </Text>
-          <Text style={{ color: color.silkFaint, fontSize: font.micro }}>read-only</Text>
-        </View>
-      ) : null}
     </View>
   )
 }
