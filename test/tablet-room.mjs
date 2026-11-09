@@ -189,7 +189,7 @@ export function run(test) {
     const users = []
     for (const file of phoneFiles()) {
       const src = readFileSync(file, 'utf8')
-      for (const _ of src.matchAll(/<Sheet\b[^>]*\bwide=/g)) users.push(file.split('/mobile/')[1])
+      for (const _ of src.matchAll(/<Sheet\b[^>]*\bwide=/g)) users.push(file.replaceAll('\\', '/').split('/mobile/')[1])
     }
     assert.deepEqual(users, ['src/screens/Paywall.js'], 'another sheet comes up wider on a tablet')
     /* The cards of Here's the app grow on the walkthrough alone: everywhere else they are drawn at 1. */
