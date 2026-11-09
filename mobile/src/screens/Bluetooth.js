@@ -20,8 +20,10 @@ import {
   cableAway,
   cablesConnectTakes,
   cablesHere,
+  cablesToOffer,
   checkSteps,
   chooseAdapter,
+  chooseCableHere,
   connectOwedUntil,
   editOverBluetooth,
   findAdapters,
@@ -105,6 +107,7 @@ import {
   CABLE_ROW_AWAY,
   CABLE_TO_ADAPTER,
   CABLE_TO_ADAPTER_SUB,
+  CABLE_USE_HERE,
   CABLE_VP4_CANT_HEAR,
   CABLE_VP4_CANT_HEAR_JACKS,
   cableAwayHint,
@@ -113,7 +116,8 @@ import {
   cableListedHint,
   cableStatus,
   cableSteps,
-  fm3NoCable,
+  FM3_CABLE_WAY,
+  fm3CableLine,
   leaveWords
 } from '../lib/cableWords'
 import { deviceNoun } from '../lib/device-word'
@@ -221,11 +225,22 @@ import bluetoothIcon from '../../assets/icons/bluetooth.png'
  * says how it is connected says the cable (lib/cableWords): the big line,
  * the hints, the list and Troubleshooting, with the MIDI plug checks kept
  * for a USB MIDI cable on the unit's MIDI jacks (lib/bluetooth midiJacks).
- * No Reconnect for one: plugging it back in is what brings it back. Nothing
- * new is offered: no cable way to buy, no cable steps before one is in use.
- * The FM3 cannot be plugged in by its USB port at all, and says so when it
- * is picked on a copy where a unit can plug in by cable (lib/bluetooth
- * cablesHere; fm3NoCable), beside its own red warning, which is unchanged.
+ * No Reconnect for one: plugging it back in is what brings it back. No
+ * cable way to buy. The FM3 cannot be plugged in by its USB port at all,
+ * but can by a USB MIDI cable on its MIDI ports, the U2MIDI Pro, and says
+ * both when it is picked on a copy where a unit can plug in by cable
+ * (lib/bluetooth cablesHere; lib/cableWords fm3CableLine), beside its own
+ * red warning, which is unchanged.
+ *
+ * USE THE USB CABLE. "Lots of issues connecting FM3 with U2midi pro.
+ * Finally did connect though, need better way to select that when FM3 is
+ * selected in the connection page" (Justin, 9 November 2026, iPad): Connect
+ * went to the WIDI Uhost kept from last time, the link tried it for ever
+ * with the cable plugged in beside it, and the cable was reached only
+ * through Apple's screen. So a cable plugged in now that Connect is not
+ * using is offered by its own name, one tap (lib/bluetooth cablesToOffer,
+ * chooseCableHere): off, under Connect; on, while the adapter kept is not
+ * there or the unit says nothing through it.
  *
  * The check, for finding out what a real unit does, is folded away under
  * Testing tools, last.
@@ -377,7 +392,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * this page), and with Android's USB build it is a call into Android's
    * MIDI service; neither is asked again by a page left as it is.
    */
-  const listed = useMemo(() => adapterDevices(), [b.devices, b.adapter?.id, b.on, b.phase, b.notThere])
+  const listed = useMemo(() => adapterDevices(), [b.devices, b.adapter?.id, b.on, b.phase, b.notThere, b.unit])
   const cables = cablesIn(listed)
   const cable = !!b.adapter && (isCable(b.adapter) || cables.some((d) => d.id === b.adapter.id))
   /* A USB MIDI cable on the unit's MIDI jacks, whose plugs can be swapped (lib/bluetooth midiJacks): the plug checks stay. */
@@ -616,6 +631,31 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
     if (ios && offlineHere(back)) return another()
     setBluetooth(true)
   }
+  /*
+   * USE THE USB CABLE (above, A UNIT ON A USB CABLE): each cable plugged in
+   * now that could be the unit picked's and is not the one chosen
+   * (lib/bluetooth cablesToOffer), by its own name, for a tap. Off: unless,
+   * with nothing chosen, Connect itself takes that one cable (its hint
+   * already names it) or the search's list has its row. On: only while what is chosen is not working, the
+   * Bluetooth adapter kept not there (notThere) or connected with the unit
+   * saying nothing through it, connected to a footswitch, or a cable chosen
+   * that is unplugged; never under a link that works. The tap chooses it
+   * and turns Bluetooth on with it (chooseCableHere), a cable let go of by
+   * hand included.
+   */
+  const cableAwayNow = b.on && b.phase === 'connecting' && cable && cableAway()
+  const cableWanted = !b.on || notThere || (quiet && !cable) || footswitch || cableAwayNow
+  /* Off with nothing chosen, already said elsewhere: the one cable Connect takes (its hint names it), or a row in the search's list. */
+  const saidElsewhere = (d) => !b.on && !b.adapter && ((takes.length === 1 && takes[0].id === d.id) || b.devices.some((x) => x.id === d.id))
+  const offerCables = canStart && cableWanted ? cablesToOffer(listed).filter((d) => !saidElsewhere(d)) : []
+  const useCable = (d) => {
+    if (!canStart) return
+    arm()
+    chooseCableHere(d)
+  }
+  const cableButtons = offerCables.map((d) => (
+    <Press key={d.id} label={CABLE_USE_HERE} sub={d.name || CABLE_ROW} tone={b.on ? 'live' : undefined} height={52} disabled={b.looking} onPress={() => useCable(d)} />
+  ))
   const differentButton = offerDifferent ? (
     <Press label="Use a different adapter" sub={b.on ? `Instead of ${adapterName(b.adapter) || 'the adapter'}` : `Instead of ${adapterName(b.adapter) || 'the adapter'}, from last time`} height={52} disabled={b.looking} onPress={different} />
   ) : null
@@ -791,6 +831,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                 <Press label={otherWords.button} tone="live" height={52} disabled={!canStart} onPress={() => takeOther(other)} />
               </View>
             ) : null}
+            {cableButtons}
             {differentButton}
             {/* The unit chips are not drawn while it is on: which one was picked, and how to change it. */}
             {b.unit ? <Hint>{`Unit: ${unitName(b.unit)}. Tap Stop to change it.`}</Hint> : null}
@@ -813,8 +854,8 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
               <Heading>1 · Pick your unit</Heading>
               <UnitChips units={units} picked={b.unit} disabled={b.on} />
               {b.unit === 'fm3' ? <Note tone="fault">{FM3_NEVER}</Note> : null}
-              {/* And wherever a unit can plug in by cable at all (lib/bluetooth cablesHere): its USB port is not MIDI, so it cannot. */}
-              {b.unit === 'fm3' && cablesHere() ? <Hint>{fm3NoCable(deviceNoun())}</Hint> : null}
+              {/* And wherever a unit can plug in by cable at all (lib/bluetooth cablesHere): not by its own USB port, which is not MIDI, but by a USB MIDI cable on its MIDI ports. */}
+              {b.unit === 'fm3' && cablesHere() ? <Hint>{fm3CableLine(deviceNoun())}</Hint> : null}
             </View>
 
             {/* STEP 2. One button. */}
@@ -855,6 +896,7 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
                             : `The ${deviceNoun()} looks for the adapter for ten seconds, then connects to it. If Android asks to pair, accept.`}
                 </Hint>
               )}
+              {cableButtons}
               {differentButton}
               {offerAdapterInstead ? <Press label={CABLE_TO_ADAPTER} sub={CABLE_TO_ADAPTER_SUB} height={52} disabled={b.looking} onPress={adapterInstead} /> : null}
             </View>
@@ -972,9 +1014,10 @@ const BOTH_WAYS = 'The adapter has to carry MIDI both ways. One with a single pl
  *
  * Every way to hook up the unit picked, best first (shared/bluetooth-gear
  * waysFor): the WIDI Master, the WIDI Jack, then the WIDI Uhost and a cable
- * on every unit but the FM3, whose one way is the Uhost and the U2MIDI Pro.
- * Each way is a row that opens on its parts, each with View on Amazon, and
- * its steps; the first is open. A way the app has not run on with this unit
+ * on every unit but the FM3, whose one way is the Uhost and the U2MIDI Pro,
+ * and, on a device a unit can plug into by cable, that U2MIDI Pro straight
+ * in with no adapter (lib/cableWords FM3_CABLE_WAY). Each way is a row
+ * that opens on its parts, each with View on Amazon, and its steps; the first is open. A way the app has not run on with this unit
  * says so, and says to feel the adapter in the first minute, straight after
  * the step that powers it.
  */
@@ -1001,6 +1044,8 @@ export function BluetoothWays() {
           <Way way={w} unit={b.unit} />
         </Fold>
       ))}
+      {/* The FM3's other way, with no adapter: the same U2MIDI Pro straight into this device, wherever a unit can plug in by cable at all (lib/bluetooth cablesHere). Nothing more to buy. */}
+      {b.unit === 'fm3' && cablesHere() ? <Hint>{FM3_CABLE_WAY(deviceNoun())}</Hint> : null}
       {midi ? <Hint>{midi}</Hint> : null}
       {b.unit ? <Hint>{ONE_AT_A_TIME}</Hint> : null}
       {b.unit ? <Hint>{SELLERS_LINE}</Hint> : null}
@@ -1054,8 +1099,8 @@ export function BluetoothTrouble({ onReport = null }) {
   const b = useBluetooth()
   const settings = b.unit ? (hookupFor(b.unit, deviceNoun()) || []).at(-1) : null
   const midi = midiSettingsFor(b.unit, deviceNoun())
-  /* An FM3 picked, wherever a unit can plug in by cable at all (lib/bluetooth cablesHere): it cannot by its USB port (lib/cableWords fm3NoCable). */
-  const fm3 = b.unit === 'fm3' && cablesHere() ? fm3NoCable(deviceNoun()) : null
+  /* An FM3 picked, wherever a unit can plug in by cable at all (lib/bluetooth cablesHere): not by its USB port, but by a USB MIDI cable on its MIDI ports (lib/cableWords fm3CableLine). */
+  const fm3 = b.unit === 'fm3' && cablesHere() ? fm3CableLine(deviceNoun()) : null
   /*
    * A UNIT ON A USB CABLE CHOSEN: the cable's own steps, and none about an
    * adapter's lights or Bluetooth, which are not in its way. A USB MIDI cable

@@ -13036,8 +13036,24 @@ export function run(test) {
     /* Phone & computer's note is the way it is set, never "connected" (it is drawn with the cable pulled out too), and keeps the computer the best way. */
     assert.ok(!/connected/i.test(W.cableComputerNote('iPad')), 'the note says connected whatever the link is doing')
     assert.match(W.cableComputerNote('iPad'), /^On a USB cable: this iPad talks to the unit itself, not through the computer\. The computer is still the best way/)
-    /* The FM3 cannot be plugged in by its USB port, and says how it connects instead. */
-    assert.equal(W.fm3NoCable('phone'), 'The FM3’s own USB port can’t plug into this phone. It connects through the computer, or by Bluetooth with an adapter on its MIDI ports.')
+    /*
+     * The FM3 cannot be plugged in by its USB port, but can by a USB MIDI
+     * cable on its MIDI ports, the U2MIDI Pro, straight into the device in
+     * hand (bug 8519c338, 9 November 2026: the old line sent him away from
+     * the cable that worked).
+     */
+    assert.equal(W.fm3CableLine('iPad'), 'The FM3’s own USB port can’t plug into this iPad, but a USB MIDI cable on its MIDI ports can, such as the U2MIDI Pro. Plug it straight in and tap Connect, or use Bluetooth with an adapter.')
+    for (const noun of ['phone', 'iPad', 'tablet']) {
+      for (const line of [W.fm3CableLine(noun), W.FM3_CABLE_WAY(noun)]) {
+        assert.ok(line.includes(`this ${noun}`), `“${line}” does not name the device in hand`)
+        assert.match(line, /U2MIDI Pro/)
+        assert.match(line, /MIDI (ports|IN)/)
+        assert.ok(!/C2MIDI|WIDI Master/.test(line), `“${line}” names a cable never offered for an FM3`)
+      }
+    }
+    assert.ok(!/this phone/.test(W.fm3CableLine('iPad')))
+    assert.match(W.FM3_CABLE_WAY('iPad'), /black plug in the FM3’s MIDI IN and the white in MIDI OUT\/THRU/, 'the plugs are said otherwise than the Uhost way’s steps')
+    assert.equal(W.CABLE_USE_HERE, 'Use the USB cable')
     /* Phone-only: nothing the web app imports was edited for it, and the file imports nothing. */
     assert.ok(!/^import /m.test(src('mobile/src/lib/cableWords.js')), 'the cable’s words import something')
     for (const f of ['src', 'shared', 'desktop']) {
@@ -13410,7 +13426,9 @@ export function run(test) {
     /* Use USB cable: the unit, the cable and Bluetooth on, never a cable let go of by hand. */
     const lib = flat('mobile/src/lib/bluetooth.js')
     const take = lib.slice(lib.indexOf('export function takeCable('), lib.indexOf('/* What auto learned'))
-    assert.match(take, /letGo\.has\(dev\.id\)\) return false/)
+    /* Never a cable let go of by hand, unless the hand is the page's Use the USB cable (chooseCableHere's byHand). */
+    assert.match(take, /\(letGo\.has\(dev\.id\) && !byHand\)\) return false/)
+    assert.match(take, /return takeCable\(here, null, \{ byHand: true \}\)/)
     assert.match(take, /chooseAdapter\(dev\) return setBluetooth\(true\)/)
     /* The card's words, from lib/cableWords, and a screen reader's ✕ as Undo's. */
     const W = await import('../mobile/src/lib/cableWords.js')
@@ -13464,14 +13482,113 @@ export function run(test) {
     }
   })
 
-  test('the FM3 says it cannot plug in by its USB port, on the page and in Troubleshooting, where a unit can plug in at all, and its heat warning is untouched', async () => {
+  /*
+   * Bug 8519c338 (Justin, 9 November 2026, iPad, FM3): "Lots of issues
+   * connecting FM3 with U2midi pro. Finally did connect though, need better
+   * way to select that when FM3 is selected in the connection page". The
+   * U2MIDI Pro was plugged into the iPad while the link tried the WIDI Uhost
+   * kept from last time for ever, and after "Use a Bluetooth adapter
+   * instead" the cable was let go of, so nothing on the page reached it.
+   * lib/bluetooth cablesToOffer says which cables the page's Use the USB
+   * cable offers, and chooseCableHere takes one on the tap.
+   */
+  test('Use the USB cable: a cable plugged in that Connect is not using is offered by name, a let-go one too, never another unit’s, a refused one, or the one chosen', async () => {
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const USB = 'com.apple.AppleMIDIUSBDriver'
+    const BT = 'com.apple.AppleMIDIBluetoothDriver'
+    const U2 = { id: '61:62', name: 'U2MIDI Pro Port 1', offline: false, driver: USB }
+    const C2 = { id: '41:42', name: 'C2MIDI Pro', offline: false, driver: USB }
+    const AM4C = { id: '11:12', name: 'AM4', offline: false, driver: USB }
+    const HOST = { id: '21:22', name: 'WIDI Uhost Bluetooth', offline: true, driver: BT }
+    let list = [HOST, U2, C2, AM4C]
+    const mod = { supported: () => true, devices: () => list, authorization: () => 'allowedAlways', addListener: () => ({ remove() {} }) }
+    const bench = await bluetoothOnABench({ os: 'ios', mod, disk: { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'fm3', adapter: HOST }) } })
+    try {
+      const b = bench.ble
+      b.allowBluetooth(ADMINS[0])
+      await b.restoreBluetooth()
+      const ids = (l) => l.map((d) => d.id)
+      /* The FM3 picked, the Uhost kept: the U2MIDI Pro, never the C2MIDI Pro (FM3_NEVER) nor the AM4 on its own cable. */
+      assert.deepEqual(ids(b.cablesToOffer(list)), [U2.id])
+      /* With a Bluetooth adapter up beside it Connect takes no cable (cablesFirst); the button still offers it. */
+      const up = [{ ...HOST, offline: false }, U2]
+      assert.deepEqual(b.cablesConnectTakes(up), [])
+      assert.deepEqual(ids(b.cablesToOffer(up)), [U2.id], 'a cable is not offered while a Bluetooth adapter is up')
+      /* The tap: that cable, and Bluetooth on with it. */
+      assert.equal(b.chooseCableHere(U2), true)
+      assert.equal(b.bluetoothSettings().adapter.id, U2.id)
+      assert.equal(b.bluetoothSettings().on, true)
+      assert.ok(bench.log.some((l) => l === 'ble Use the USB cable: U2MIDI Pro Port 1, as asked'), 'the tap is not logged')
+      assert.deepEqual(b.cablesToOffer(list), [], 'the cable in use is offered as another')
+      /* Use a Bluetooth adapter instead lets it go (Connect will not take it); the button offers it again, and the tap takes it back. */
+      assert.equal(b.adapterInsteadOfCable({ byHand: true })?.id, HOST.id)
+      assert.equal(b.cableLetGo(U2.id), true)
+      assert.ok(!ids(b.cablesConnectTakes([U2])).includes(U2.id))
+      assert.deepEqual(ids(b.cablesToOffer(list)), [U2.id], 'a cable let go of by hand is never offered again')
+      assert.equal(b.takeCable(U2, null), false, 'the cable watch takes a cable let go of by hand')
+      assert.equal(b.chooseCableHere(U2), true, 'the tap does not take a cable let go of by hand')
+      assert.equal(b.cableLetGo(U2.id), false, 'the tap leaves the cable let go of')
+      assert.equal(b.bluetoothSettings().adapter.id, U2.id)
+      /* Pulled out since the button was drawn: nothing is chosen. */
+      b.chooseAdapter(HOST)
+      list = [HOST, C2, AM4C]
+      assert.equal(b.chooseCableHere(U2), false, 'a cable no longer plugged in is chosen')
+      assert.equal(b.bluetoothSettings().adapter.id, HOST.id)
+      /* Never a cable the FM3 refuses, even asked for by hand. */
+      assert.equal(b.chooseCableHere(C2), false, 'the C2MIDI Pro is chosen for an FM3')
+      /* The AM4 picked: its own cable and the C2MIDI Pro are offered; the U2MIDI Pro kept for the FM3 is not (it is on the FM3). */
+      b.setBluetooth(false)
+      b.chooseAdapter(U2)
+      list = [HOST, U2, C2, AM4C]
+      assert.equal(b.setBluetoothUnit('am4'), 'am4')
+      assert.deepEqual(ids(b.cablesToOffer(list)), [C2.id, AM4C.id])
+    } finally {
+      bench.done()
+    }
+    /* An account Bluetooth is not open to on this copy: nothing offered, nothing taken. */
+    const theirs = await bluetoothOnABench({ os: 'ios', mod, installed: '1.88.4', disk: { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'fm3', adapter: null }) } })
+    try {
+      theirs.ble.allowBluetooth('11111111-2222-4333-8444-555555555555')
+      await theirs.ble.restoreBluetooth()
+      assert.deepEqual(theirs.ble.cablesToOffer([U2]), [])
+      assert.equal(theirs.ble.chooseCableHere(U2), false)
+    } finally {
+      theirs.done()
+    }
+    /* bleAdapters cablesFor, the rule both share: Connect's (cablesFirst) is it, less what needs a question. */
+    const A = await import('../mobile/src/lib/bleAdapters.js')
+    const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
+    const { neverOnFm3 } = await import('../shared/bluetooth-gear.mjs')
+    assert.deepEqual(ids2(A.cablesFor([HOST, U2, C2, AM4C, { ...U2, id: '71:72', offline: true }], { unit: 'fm3', units: BLE_UNITS, refused: neverOnFm3 })), [U2.id])
+    assert.deepEqual(ids2(A.cablesFor([U2, C2, AM4C], { unit: 'am4', units: BLE_UNITS })), [U2.id, C2.id, AM4C.id])
+    function ids2(l) {
+      return l.map((d) => d.id)
+    }
+
+    /* The page: the button by the cable's name, never the Bluetooth symbol, off under Connect and on while what is chosen is not working. */
+    const page = flat('mobile/src/screens/Bluetooth.js')
+    assert.match(page, /const cableWanted = !b\.on \|\| notThere \|\| \(quiet && !cable\) \|\| footswitch \|\| cableAwayNow/)
+    assert.match(page, /const offerCables = canStart && cableWanted \? cablesToOffer\(listed\)\.filter\(\(d\) => !saidElsewhere\(d\)\) : \[\]/)
+    assert.match(page, /const saidElsewhere = \(d\) => !b\.on && !b\.adapter && \(\(takes\.length === 1 && takes\[0\]\.id === d\.id\) \|\| b\.devices\.some\(\(x\) => x\.id === d\.id\)\)/)
+    assert.match(page, /<Press key=\{d\.id\} label=\{CABLE_USE_HERE\} sub=\{d\.name \|\| CABLE_ROW\} tone=\{b\.on \? 'live' : undefined\} height=\{52\} disabled=\{b\.looking\} onPress=\{\(\) => useCable\(d\)\} \/>/)
+    const button = page.slice(page.indexOf('const cableButtons'), page.indexOf('const differentButton'))
+    assert.ok(!/icon=/.test(button), 'the USB cable’s button wears a picture')
+    assert.match(page, /const useCable = \(d\) => \{ if \(!canStart\) return arm\(\) chooseCableHere\(d\) \}/)
+    assert.match(page, /\{cableButtons\} \{differentButton\} \{\/\* The unit chips are not drawn while it is on/, 'the button is not drawn while it is on')
+    assert.match(page, /\{cableButtons\} \{differentButton\} \{offerAdapterInstead \?/, 'the button is not drawn under Connect')
+    /* How to connect, for the FM3: the cable way with no adapter, where a unit can plug in at all. */
+    const ways = page.slice(page.indexOf('export function BluetoothWays('), page.indexOf('function Way('))
+    assert.match(ways, /\{b\.unit === 'fm3' && cablesHere\(\) \? <Hint>\{FM3_CABLE_WAY\(deviceNoun\(\)\)\}<\/Hint> : null\}/)
+  })
+
+  test('the FM3 says it cannot plug in by its USB port but can by a USB MIDI cable on its MIDI ports, on the page and in Troubleshooting, where a unit can plug in at all, and its heat warning is untouched', async () => {
     const page = flat('mobile/src/screens/Bluetooth.js')
     const step1 = page.slice(page.indexOf('<Heading>1 · Pick your unit</Heading>'), page.indexOf('<Heading>2 · Connect</Heading>'))
     assert.match(step1, /\{b\.unit === 'fm3' \? <Note tone="fault">\{FM3_NEVER\}<\/Note> : null\}/, 'the FM3’s heat warning moved')
     /* Only where a unit can plug in by cable at all (cablesHere): today's Android copies list no cable, so "can't plug in" would read as the others can. */
-    assert.match(step1, /\{b\.unit === 'fm3' && cablesHere\(\) \? <Hint>\{fm3NoCable\(deviceNoun\(\)\)\}<\/Hint> : null\}/, 'the FM3 is not told it cannot plug in by cable, or is told on a copy where no unit can')
+    assert.match(step1, /\{b\.unit === 'fm3' && cablesHere\(\) \? <Hint>\{fm3CableLine\(deviceNoun\(\)\)\}<\/Hint> : null\}/, 'the FM3 is not told how it plugs in by cable, or is told on a copy where no unit can')
     const trouble = page.slice(page.indexOf('export function BluetoothTrouble('), page.indexOf('export function BluetoothLimits('))
-    assert.match(trouble, /const fm3 = b\.unit === 'fm3' && cablesHere\(\) \? fm3NoCable\(deviceNoun\(\)\) : null/)
+    assert.match(trouble, /const fm3 = b\.unit === 'fm3' && cablesHere\(\) \? fm3CableLine\(deviceNoun\(\)\) : null/)
     /* A USB MIDI cable on the unit's MIDI jacks keeps its plug steps and the unit's MIDI settings; a unit on its own cable has its own steps. */
     assert.match(trouble, /const jacks = cable && midiJacks\(b\.adapter\)/)
     assert.match(trouble, /\? \[\.\.\.cableSteps\(deviceNoun\(\), \{ jacks \}\), \.\.\.\(jacks \? \[settings, midi\] : \[\]\), fm3, ANOTHER_UNIT\]\.filter\(Boolean\)/, 'Troubleshooting has no steps for a cable')
@@ -14037,7 +14154,7 @@ export function run(test) {
     assert.ok(!/glanced\.current/.test(code('mobile/src/screens/Bluetooth.js')), 'the page keeps a look from an earlier round')
     assert.match(page, /const other = notThere \? otherAdapterNow\(listed\) : null const otherWords = other \? otherAdapterWords\(b\.adapter, other\) : null const takeOther = \(d\) => \{ if \(!canStart\) return arm\(\) switchAdapter\(d\) \}/)
     assert.match(page, /\{otherWords \? \( <View style=\{\{ gap: space\.sm \}\}> <Text style=\{\{ color: color\.silk, fontSize: font\.body, lineHeight: 22 \}\}>\{otherWords\.line\}<\/Text> <Press label=\{otherWords\.button\} tone="live" height=\{52\} disabled=\{!canStart\} onPress=\{\(\) => takeOther\(other\)\} \/> <\/View> \) : null\}/)
-    assert.match(page, /const listed = useMemo\(\(\) => adapterDevices\(\), \[b\.devices, b\.adapter\?\.id, b\.on, b\.phase, b\.notThere\]\)/, 'the page does not read the list again when the adapter is missed')
+    assert.match(page, /const listed = useMemo\(\(\) => adapterDevices\(\), \[b\.devices, b\.adapter\?\.id, b\.on, b\.phase, b\.notThere, b\.unit\]\)/, 'the page does not read the list again when the adapter is missed, or the unit changes')
     /* Called from the button alone: never from a redraw or an effect. */
     assert.equal((code('mobile/src/screens/Bluetooth.js').match(/switchAdapter\(/g) || []).length, 1, 'the page switches adapters somewhere besides the button')
     assert.ok(!/switchAdapter|chooseAdapter/.test(code('mobile/src/lib/bleLink.js')), 'the link switches adapters by itself')
