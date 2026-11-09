@@ -2829,7 +2829,8 @@ is a build like any other, and in its pull request:
 **Said for 1.90.0** (8 November 2026): its texts carry the cable in the
 words of the rule below, with Edit included (*1.90.0: Editing over
 Bluetooth for customers*, below). The Apple blocks here are the record of
-what was proposed; the 1.90.0 ones are pasted in their place. Google's two
+what was proposed; the 1.90.0 ones went in their place, shorter, in
+Justin's own words. Google's two
 blocks here still wait for Justin's Android phone to run a unit by cable
 from a Play build.
 
@@ -2942,7 +2943,16 @@ decided it:
   they can notify us." (8 November 2026, for the FM9 and the Axe-Fx III,
   whose Edit has not yet run through the phone on a real unit.) So all four
   open together, with no hardware check first on the FM9 and the III.
-  Never the VP4.
+
+**Sent to Apple on 9 November 2026**, and Waiting for Review, with texts
+Justin and the lead wrote that day in place of the long drafts this section
+held until then: "We really don't need that much" (CLAUDE.md, *No VP4 in
+anything that goes to Apple*). The App Store blocks below are those texts
+as submitted, read back from App Store Connect the same day (store-text's
+Show the texts, scripts/store-read.mjs), each with its measured length.
+They are the record, not for pasting again, and test/limits.mjs pins each
+to the words that went. The Google Play blocks are still the drafts, for
+Android's own day.
 
 It opens by the version built into the copy (`EDIT_FROM_STORE` in
 mobile/src/lib/ble-rule.js, every unit set to '1.90.0' on both phones in
@@ -2957,7 +2967,8 @@ its README, and the fingerprint is expected to stay 1.89.3's on iOS and
 1.89.36's on Android (CI's check job says so on the pull request; it is not
 run in a worktree whose node_modules are borrowed).
 
-**What a customer gets, which every text below says and no more:**
+**What a customer gets** (what the app does; the texts as submitted say
+less of it, in Justin's words):
 
 - **Where:** Settings → My rig → Bluetooth, the unit under "1 · Pick your
   unit", Connect, then Play → Edit, with the full version. The same on a
@@ -2970,44 +2981,62 @@ run in a worktree whose node_modules are borrowed).
   `CABLE_EDIT_NOTE` on a cable) and in place of the chain editor
   (`BLE_NO_CHAIN`). It still says Edit (Beta), which Apple has accepted
   since 1.87.11.
-- **Never the VP4**, which has no Edit over Bluetooth or through a computer.
+- **Not on a VP4**, which is not in the switch and has no Edit over
+  Bluetooth or through a computer. Google's texts below say so; Apple's
+  never name the VP4, but for the keywords, which went as 1.89.3's (below).
 - **The Bluetooth page's editing lines** follow the same switch
   (lib/editWords `editingLine`, `limitsLine`): on a 1.90.0 copy, "Knobs,
   models and effects on and off change in Edit. No saving over Bluetooth:
   save on the unit itself."; on every older copy, today's "No editing or
   saving over Bluetooth."
 
-**The word rules every block below keeps:**
+**The word rules.** Google's blocks below keep the ones they were drafted
+to: every Edit line says Edit opens **over Bluetooth** on the four units,
+never that it works there; the cable is said once, as doing what Bluetooth
+does, Edit included, and Google's texts leave it out until Justin's Android
+phone has run a unit by cable from a Play build (*Later: a USB cable*);
+nothing tried, untried or tested; no "beta" beside Bluetooth (Edit (Beta)
+is the app's own name for Edit, and no text here repeats it); Bluetooth
+named first, with no ranking; the desktop app never called free; Fractal
+Audio's sentence word for word as the Description's second paragraph;
+nothing official, certified, approved or endorsed; help only through
+Justin's own channels; no Apple words in Google's texts; "Let’s go", never
+"Open Play"; never "this phone".
 
-- Every Edit line says Edit opens **over Bluetooth** on the four units. The
-  USB cable is said once, as its own line or paragraph: a unit on a USB
-  cable, such as an AM4 on its own USB-C cable, does what Bluetooth does,
-  Edit included. No text names a unit as running on a cable but the AM4,
-  the one that has (shared/bluetooth-gear.mjs, TRIED_NOTES), and Google's
-  texts leave the cable out until Justin's Android phone has run a unit by
-  cable from a Play build (*Later: a USB cable*, below).
-- Edit is said to open on a unit, never to work there; nothing says tried,
-  untried or tested; no "beta" beside Bluetooth (Edit (Beta) is the app's
-  own name for Edit, and no text here repeats it).
-- Bluetooth is named first wherever the two ways sit side by side, with no
-  ranking. The desktop app is never called free.
-- Fractal Audio's sentence word for word as the Description's second
-  paragraph; nothing official, certified, approved or endorsed; help only
-  through Justin's own channels.
-- No Android words in Apple's texts, no Apple words in Google's; "Let’s go",
-  never "Open Play"; never "this phone".
+The App Store's texts, as submitted, keep the rules Fractal Audio's letter
+and the house hang on: Fractal Audio's sentence word for word in the
+Description, with the trademark line that leaves the VP4 out
+(`AFFILIATION_APPLE` in shared/affiliation-apple.mjs, Justin's 9 November rule);
+nothing official, certified, approved or endorsed; help only through
+Justin's own channels; nothing tried and no beta; no other platform
+(2.3.10); Bluetooth first; "Let’s go". Where they part from the drafts, it
+is Justin's text and his call, recorded as it went:
+
+- What's New says Play's Edit "now works" with no computer.
+- The Description names the iPhone, the iPad, the Apple Watch and Siri, so
+  it is the App Store's alone; Google Play keeps its own (*Google Play
+  Description, from 1.90.0*, below).
+- Fractal Audio's sentence and the trademark line are the Description's
+  second-last paragraph, not its second.
+- No subtitle, and the keywords are 1.89.3's, `vp4` among them.
+- Four videos, the same four as 1.89.3's notes: no Edit video.
+- The notes' Tested on line went with its `[version]` and `[model]`
+  brackets unfilled.
 
 ### The guideline pass for 1.90.0 (8 November 2026)
 
 Read against https://developer.apple.com/app-store/review/guidelines/,
 "Last Updated: October 16, 2026" (the same as at 1.89.0's pass), Apple's
 news since 8 October 2026, and Google Play's policy pages and announcements
-(29 October 2026 the newest). **The day's pass on submission day still
-runs** (step 12), and only what has changed since is new.
+(29 October 2026 the newest). Written against the drafts; the texts that
+went on 9 November are shorter and say less (above), and step 12 was the
+day's own pass.
 
-- **2.1 (hardware).** Edit over Bluetooth needs a unit, so video 5 shows it
-  on a real AM4, filmed on the 1.90.0 TestFlight build signed in with the
-  review account. The editor itself opens in the no-account demo. The FM9
+- **2.1 (hardware).** Edit over Bluetooth needs a unit. The notes point to
+  four videos, the same four as 1.89.3's, video 1 a real FM3 through a
+  computer and video 4 Bluetooth on a real AM4, and the editor itself opens
+  in the no-account demo. No Edit video went: Justin's call (*No Edit
+  video*, below, says how to film one if Apple asks). The FM9
   and Axe-Fx III have not been edited through the phone on a real unit:
   Justin's call to open them anyway (above). Risk left: a customer's FM9 or
   III takes an edit differently from the computer, in a version whose notes
@@ -3017,22 +3046,29 @@ runs** (step 12), and only what has changed since is new.
   the item `7-day Trial` must be approved before 1.90.0 is released
   (step 3).
 - **2.3.1(a) and 2.5.19 (every feature described, nothing hidden).** The
-  notes describe Edit over Bluetooth with where it is and what it does not
-  do, the cable, the trial, and everything that reached App Store copies by
-  update since build 31, each named. What only the developer's account sees
-  is its own paragraph, giving access among it. No unit is held back for his
+  notes as submitted describe Edit over Bluetooth with where it is and what
+  it does not do, the trial, the cable, and in one line what else reached
+  App Store copies by update since build 31 (the name and photo, pictures
+  and a video in reports, the usage share, What's new, the glass look);
+  What's New adds the quicker start, steadier Bluetooth and the Axe-Fx
+  III's NAM and IR Player blocks. The tablet layouts are in neither, as
+  layouts rather than features. What only the developer's account sees has
+  its own line, with the Axiom switch. No unit is held back for his
   account, so no unit is named there.
-- **2.3.12 (What's New).** Edit first, then everything since 1.89.3.
+- **2.3.12 (What's New).** Edit first, then the rest since 1.89.3, a line
+  each.
 - **2.3 (metadata).** The live Description says "No editing or saving" and
   "(computer only)" or "(with a computer)", which become untrue on four
-  units: the 1.90.0 Description below replaces them, and the subtitle no
-  longer says it needs a computer.
-- **2.3.10 (other platforms).** None named in Apple's texts; the
-  Description, which both stores share, names neither phone.
+  units: the 1.90.0 Description below replaces them, and the subtitle is
+  empty (below).
+- **2.3.10 (other platforms).** None named in Apple's texts. The App
+  Store's Description names the iPhone and iPad, so Google Play has its
+  own, which names neither phone.
 - **3.1.1 (the trial).** Length, what stops and the price after are said
   before the tap; one per account and per device.
 - **4.1(c) and 5.2.1 (trademarks).** Unit names in plain text, the
-  trademark line in the Description, no logo or artwork. The name stays
+  trademark line in the Description (for Apple without the VP4,
+  `TRADEMARKS_APPLE`), no logo or artwork. The name stays
   (Justin's decision).
 - **5.1.1(v) and (x) (account deletion, personal data).** Deletion
   unchanged (video 3). First and last name are optional at sign-up since
@@ -3051,124 +3087,162 @@ runs** (step 12), and only what has changed since is new.
 
 ### Notes for App Review, 1.90.0
 
-App Store Connect → the 1.90.0 version → App Review Information → Notes.
-The 1.89.0 block's shape: what the app is, the demo, then *New since
-1.89.3*, then the standing paragraphs. Edit over Bluetooth first, with where
-to find it, what it does not do and what a reviewer with no adapter sees;
-then the trial, the cable (a unit on a cable does what Bluetooth does, Edit
-included), and everything else that reached App Store copies by update
-since build 31; why an account is needed; the developer paragraph with
-giving access in it; a fifth video. test/limits.mjs holds it to 3950 bytes
-with the brackets filled the house way, to five videos listed last, to the
-labels the app draws, and to the four units and never the VP4.
+App Store Connect → the 1.90.0 version → App Review Information → Notes,
+**as submitted on 9 November 2026** and read back from App Store Connect:
+2351 bytes (2341 characters), inside Apple's 4000. What the app is,
+the demo, the review account and the purchase, *New in 1.90.0*, the
+developer's own pages, deleting an account, the hardware, the watch, the
+Tested on line, the services, and four videos, the same four links as
+1.89.3's: no Edit video (Justin's call). The Tested on line went with its
+`[version]` and `[model]` brackets unfilled, and is kept here as it went.
+The four video links are the one thing changed: they went as Google Drive
+links, and stand here as the house's brackets, as in every block in this
+file, since the repository is public and the review videos never are. The
+lengths above are with the links; test/limits.mjs puts links of the same
+shape back in and measures them.
 
 ```
-A remote for Fractal Audio guitar units, by a Bluetooth MIDI adapter or a USB cable into the iPhone or iPad with no computer, or through a computer.
+A remote for Fractal Audio guitar units, by a Bluetooth MIDI adapter or a USB cable with no computer, or through a computer.
 
-No hardware? Use the demo. It needs no account:
+No hardware? Use the demo, no account needed: tap OK on the independent-app card, Get started, Got it, Start free demo, pick any unit, Play with ..., then Let’s go. Every screen but Bluetooth works in the demo, Edit included.
 
-1. Tap "OK" on the card that says the app is independent
-2. Tap "Get started"
-3. Tap "Got it"
-4. Tap "Start free demo"
-5. Choose any unit, tap "Play with ...", then "Let’s go"
+The demo account in App Review Information has the full version. In-app purchase: Unlock, at the top of the demo's Play; Restore is under Unlock Full Version.
 
-Every screen but Bluetooth works in the demo, Edit included. In-app purchase: Unlock, at the top of the demo's Play; Restore a purchase is under Unlock Full Version. Signed in: the demo account in App Review Information has the full version.
+New in 1.90.0:
+• Edit over Bluetooth on the AM4, FM3, FM9 and Axe-Fx III: Settings, Bluetooth under My rig, pick the unit, Connect, then Play's Edit. Knobs, models, blocks on and off, channels. It does not save, move blocks or rename, and says so.
+• Free 7-day trial (Non-Consumable, tier 0): Start 7-day free trial on the purchase page, with its length, what stops after and the price shown before any tap. One per account and device; try it with a NEW account.
+• A unit on a USB cable into the iPhone or iPad connects on the same page, shown as USB cable.
+• Also: optional name and profile photo (deleted with the account), up to five pictures and a video in reports (Apple's picker), an opt-in anonymous usage share, What's new under About, a frosted glass look.
 
-New since 1.89.3:
+Developer pages and the Axiom switch in Settings show only on the developer's own account, checked by the server.
 
-Edit over Bluetooth, in the full version, on the AM4, FM3, FM9 and Axe-Fx III: signed in with the demo account, Settings (the gear, top right), Bluetooth under My rig, the unit under "1 · Pick your unit", Connect, then Play's Edit. It changes knobs, models, blocks' on and off, and channels; it does not save, move blocks, edit modifiers, rename, copy channels, or pick cabs on an FM3, FM9 or Axe-Fx III, and says so. Never on a VP4. With no adapter, Apple's screen finds none and the page says so. Video 5: a real AM4, this build, the demo account.
+Delete account: Settings, the account card, Delete account, "Delete my account" (video 3). Without the full version, it is at the foot of the purchase page.
 
-Free 7-day trial (3.1.1: a Non-Consumable at tier 0, "7-day Trial"): "Start 7-day free trial" sits above "Unlock Full Version", with the length, what stops after and the price under it before any tap. One per account and per device. To try it, make a NEW account (Create account on the sign-in screen, then the emailed code); once it starts, Play asks "How do you connect to your unit?" once. The purchase and the trial belong to the account, so Bluetooth and the trial need one.
-
-USB cable: a unit on a USB cable into the iPhone or iPad, such as an AM4 on its USB-C cable, connects on the Bluetooth page with no adapter, Bluetooth screen or permission, shown as USB cable, and does what Bluetooth does, Edit included. The FM3's USB port is not MIDI. 1.89.3 did this too, calling it Bluetooth.
-
-Also new: first and last name (optional) at sign-up; a name and private photo on the account card, deleted with it; five pictures and a video in reports (Apple's picker, never the camera); "Help make Fractal Remote better?" (off unless Yes, anonymous); What's new under About; a frosted glass look; tablet layouts; Axe-Fx III NAM and IR Player blocks on Play over Bluetooth, on and off.
-
-Only on the developer's own account: Settings' Developer pages (messages, customers, sales, trials, giving access, app health, testing tools) and a switch for his other app, Axiom. No other account sees them, the demo account included.
-
-Deleting an account (Guideline 5.1.1(v), video 3 below): Settings, the account card, Delete account, "Delete my account". An account without the full version opens on the purchase page, with Delete account at its foot.
-
-Hardware (Guideline 2.1): video 1, a real FM3 through the computer, from pairing on; video 4, Bluetooth on a real AM4; video 5, Edit on it.
+Hardware: video 1, a real FM3 through a computer; video 4, Bluetooth on a real AM4.
 
 Apple Watch: open its app with the demo's Play on the iPhone.
 
 Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].
 
-Services: Supabase (accounts, setlists, trials, photos, the computer link), RevenueCat with Apple in-app purchase, Resend (email), Expo (updates). Bluetooth and the cable use no server.
+Services: Supabase (accounts), RevenueCat with Apple in-app purchase, Resend (email), Expo (updates). Bluetooth and USB use no server.
 
 Videos:
 1. FM3 hardware: [FM3 video link]
 2. Presets: [presets video link]
 3. Deleting an account: [account deletion video link]
 4. Bluetooth with an AM4: [Bluetooth video link]
-5. Edit over Bluetooth: [Edit video link]
 ```
-
-**Four things every time this block is pasted** (1.89.0's list, for
-1.90.0):
-
-- **The Tested on brackets**, from Settings → General → About on the iPhone
-  and the watch the build was tried on.
-- **The review account, on the 1.90.0 TestFlight build.** Signed in with the
-  account in App Review Information: the full version, the Bluetooth row
-  under My rig, and, with an AM4 connected, Play's Edit opening the editor
-  with its note at the top. Its log's head says "store copy: 1.90.0". If
-  Edit does not open there, stop: the notes would send Apple to something
-  it cannot reach.
-- **The five video links** in place of the brackets under Videos, the fifth
-  being video 5 below. Each a Google Drive link shared as Anyone with the
-  link. If a cable clip is made (video 6, below), four changes, all of
-  them, since the first two alone take the notes to 4038 bytes filled, past
-  Apple's 4000: the Hardware line's `video 5, Edit on it.` becomes
-  `video 5, Edit on it; video 6, the USB cable.`;
-  `6. USB cable: [cable video link]` goes on the end; and two sentences
-  come out,
-  `1.89.3 did this too, calling it Bluetooth.` from the USB cable paragraph
-  and `Video 5: a real AM4, this build, the demo account.` from the Edit
-  paragraph (the Hardware line names video 5 then). 3944 bytes with the six
-  links and the brackets filled, inside the house's 3950: test/limits.mjs
-  makes these four changes and measures the result.
-- **The day's guideline pass** (CLAUDE.md, *Before anything goes to Apple*).
 
 ### What's New in This Version, 1.90.0
 
-App Store Connect → the 1.90.0 version → What's New in This Version.
-Everything an iPhone or iPad customer sees that changed since 1.89.3 (the
-days of 28 October to 9 November in shared/whats-new.json, without the
-Android, website and computer-only lines), Edit first, then the trial and
-the new start. Within Apple's 4000 characters, no other platform named.
+App Store Connect → the 1.90.0 version → What's New in This Version, **as
+submitted on 9 November 2026**: 788 characters of Apple's 4000. Edit over
+Bluetooth first, then the trial, the USB cable, the quicker start, and the
+rest in a line each.
 
 ```
-• New: Edit over Bluetooth. On an AM4, FM3, FM9 or Axe-Fx III, Play's Edit now opens with no computer: turn knobs, change amp and effect models, switch blocks on and off and pick their channels, and hear each change straight away. Nothing is saved over Bluetooth, so save on the unit itself to keep a change. Moving blocks, modifiers and renaming aren't there over Bluetooth, and nor is picking a cab on an FM3, FM9 or Axe-Fx III. Not on a VP4.
-• New: try the full version free for 7 days with your own rig. Tap Start 7-day free trial on the purchase page, or on the walkthrough's Connect my real rig card. While it runs, Play shows how many days are left; when it ends nothing is charged and everything you set up is kept. The demo is still free and unlimited.
-• Getting started is quicker, Bluetooth first: How it works opens on Bluetooth, the last button says Let’s go, and after you sign up, start the trial or buy, one card asks how you connect, a Bluetooth adapter or a computer. Connect over Bluetooth shows while the app looks for your computer.
-• A unit plugged into your iPhone or iPad by USB cable, such as an AM4 on its own USB-C cable, now shows as USB cable instead of Bluetooth, and Connect uses it straight away, with no Bluetooth screen. It does what Bluetooth does, Edit included. Plug a cable in while on an adapter and the app switches to it by itself; unplug it and it goes back. The FM3 can't plug in this way: its USB port isn't MIDI.
-• Bluetooth connects more reliably: if your adapter connects but your unit stays silent, the app reconnects once by itself, each unit remembers its own adapter, the app tells you when an adapter is on a different unit, and Use a different adapter switches adapters. A Bluetooth MIDI footswitch is never taken for your adapter.
-• On an Axe-Fx III over Bluetooth, Play and Edit now show the NAM, NAM 2 and IR Player blocks and turn them on and off. Through a computer, blocks newer than the app are left alone in Edit.
-• Create account asks for your first and last name (optional), and a new account is confirmed with the code in its email. In Settings, tap your account, then your email, to add your name and a profile photo, shown in a small circle beside Live.
-• One screen for feedback and problem reports, with up to five pictures and one video, and a choice to include your email and the app's log.
-• New, and only if you say yes: Share what gear works (Settings → Troubleshooting) helps build a list of the gear that works with Fractal Remote. It is off unless you say yes, and never linked to you.
-• New: What's new, under Settings → About, lists what each update changed.
-• A frosted glass look for buttons, bars and pop-ups. Prefer the old one? Settings → Colors → Style → Classic. In Colors, tap a look, then Apply, with Undo on Play for a moment.
-• On an iPad on its side or an opened iPhone Duo, Play lines up your scenes and pedals row for row, with Previous and Next at the two ends. Held upright, an iPad gets the phone layout, bigger.
-• Which unit (tap your unit's name on Play) is one card per unit, with its computer, preset and scene.
-• Settings sections fold open and closed, and less to read on the Bluetooth page, Settings, the purchase page and Edit.
-• Quick preset jumps start at 0, and pressing Previous or Next quickly ends on the preset your unit is really on.
-• Restore a purchase, tapped while signed out, says the purchase belongs to the account you bought it with.
-• Start 7-day free trial on an Apple ID that already bought the full version says so, and the full version moves to the account you're signed in to.
-• Set to another language, the Bluetooth page no longer mistakes the iPhone's own Wi-Fi MIDI connection for your adapter.
-• Settings → Siri shows the newer way to stop Siri using the app on iOS 27.2 and later, and the Apple Watch tips say to keep your iPhone unlocked on Play.
+• New: Edit over Bluetooth. On an AM4, FM3, FM9 or Axe-Fx III, Play's Edit now works with no computer: turn knobs, change models, switch blocks on and off and pick channels. Save on the unit itself to keep a change.
+• New: try the full version free for 7 days with your own rig. Nothing is charged when it ends.
+• A unit plugged into your iPhone or iPad by USB cable now shows as USB cable and connects with no Bluetooth adapter (not the FM3, whose USB port isn't MIDI).
+• A quicker start, Bluetooth first, and Bluetooth connects more reliably.
+• Add your name and a profile photo, send up to five pictures and a video with feedback, see What's new under Settings → About, and try the new frosted glass look.
+• On an Axe-Fx III over Bluetooth, Play now shows the NAM and IR Player blocks.
 ```
 
-### Description, from 1.90.0 (App Store and Google Play)
+### Description, 1.90.0 (App Store)
 
+The App Store's, **as submitted on 9 November 2026**: 2760 characters of
+4000. Justin's own, written that day in place of the draft: Bluetooth
+first, the trial, how Bluetooth works, Edit, what it does, the computer,
+the units, the one payment, then Fractal Audio's sentence with the
+trademark line that leaves the VP4 out (`AFFILIATION_APPLE`), and where
+help is. It names the iPhone, the iPad, the Apple Watch and Siri, so it is
+the App Store's alone; Google Play keeps its own (below). It goes live when
+1.90.0 is released.
+
+```
+Control your Fractal Audio rig from your iPhone or iPad. Plug a small Bluetooth MIDI adapter into your unit and your phone becomes a wireless remote: switch presets and scenes, turn effects on and off, tune up and even shape your tone, all without walking back to your rig. No computer needed.
+
+TRY IT FREE FOR 7 DAYS
+Start a free 7-day trial of the full version and use it with your own rig. Nothing is charged when it ends, and the demo is always there to play with first.
+
+HOW BLUETOOTH WORKS
+1. Plug a Bluetooth MIDI adapter into your unit's MIDI jacks.
+2. In the app, open Settings → My rig → Bluetooth and pick your unit.
+3. Tap Connect. Your phone talks straight to your unit, from up to about 30 feet away.
+
+The app shows you which adapter to get and exactly how it plugs in, step by step. The adapter is sold separately.
+
+EDIT YOUR TONE OVER BLUETOOTH
+On an AM4, FM3, FM9 or Axe-Fx III, open Edit and turn real knobs, change amp and effect models, switch blocks on and off and pick their channels. You hear every change right away. Save on the unit when you find a sound you love.
+
+An AM4 can even plug straight into your iPhone or iPad with its own USB cable, no adapter needed.
+
+WHAT IT DOES
+• Switch any of your presets, by name, in slot order or from a setlist
+• Scenes, with the names your unit already uses
+• Turn effects on and off, and pick channels A to D
+• Tuner, with the note and how far off you are
+• Tap tempo, with the tempo right on the button
+• Setlists and starred presets that follow your account to every device
+• Two big Previous and Next buttons you can hit in the dark
+• Colors that can match your Fractal unit, so you find things at a glance
+• An Apple Watch app, and Siri for hands-free scene and song changes
+
+PREFER A COMPUTER?
+Plug your unit into a Mac, Windows PC, Linux computer or Raspberry Pi and run the Fractal Remote desktop app (fractal.newbold.cloud/downloads). A computer has less lag and more features, and once the two are paired your phone works from anywhere: the same room, across the stage or another building.
+
+SUPPORTED UNITS
+FM3, FM9, Axe-Fx III and AM4.
+
+ONE PAYMENT, YOURS FOR GOOD
+The demo is the whole app running on a simulated unit, with nothing cut short and nothing that expires. When your 7-day trial ends, one payment unlocks everything on every device you own, forever, with every future update. No subscription.
+
+Fractal Remote is independently developed and is not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC. “Fractal Audio”, “Axe-Fx”, “FM3”, “FM9” and “AM4” are trademarks of Fractal Audio Systems, LLC, used here only to say which hardware this app works with.
+
+Questions or ideas? Settings → Troubleshooting → Feedback, or fractal.newbold.cloud/support.html.
+```
+
+### Subtitle, 1.90.0: none
+
+App Information's subtitle is empty, on the live version and on 1.90.0
+alike (read back on 9 November 2026), so no subtitle went with 1.90.0, and
+the draft (`Independent · Bluetooth remote`) was not used. *The listing*
+table at the top of this file keeps the line planned before Bluetooth, as
+the record of what was planned.
+
+### Keywords, 1.90.0 (1.89.3's, unchanged)
+
+Unchanged from 1.89.3, **as submitted on 9 November 2026**: 99 characters
+of 100. The drafted swap (`editor` in) was not made. They still name
+`vp4`, the one VP4 left in what went to Apple for 1.90.0. Keywords change
+only with a version, so taking it out waits for the next one, if Justin
+wants it out (CLAUDE.md, *No VP4 in anything that goes to Apple*).
+
+```
+fractal,audio,guitar,amp,fm3,fm9,axefx,am4,vp4,preset,scene,setlist,tuner,pedalboard,bluetooth,midi
+```
+
+### Promotional text, 1.90.0
+
+On the 1.90.0 version, **as submitted on 9 November 2026**: 163 characters
+of 170. It shows once 1.90.0 is released (1.89.3's is empty), and can
+change any time without a version, by Justin in App Store Connect, never by
+store-text's Write it. It leaves out the short form of Fractal Audio's
+sentence that *Promotional text* at the top of this file suggests; the
+Description carries the full one.
+
+```
+Control your Fractal rig from your iPhone over Bluetooth or a computer bridge. Switch presets and scenes, edit your tone, and try the full version free for 7 days.
+```
+
+### Google Play Description, from 1.90.0
+
+Google Play's alone now: the App Store went with Justin's own (above).
 Started from the live Google Play Description (updated 4 November 2026),
 which is Justin's own text and already the two ways, Bluetooth first, with
-the trial in it. The App Store's live one is his edit of the 1.89.0 block
-and still opens REQUIRES A COMPUTER; this replaces it with 1.90.0. Five
-changes from the live Play text and nothing else, so he is not surprised by
-any: "free" taken out before "Fractal Remote desktop app" and before
+the trial in it. Five changes from the live Play text and nothing else, so
+he is not surprised by any: "free" taken out before "Fractal Remote desktop app" and before
 "desktop app" (CLAUDE.md: never call the computer app free); "and per
 device" on the trial; WHAT IT DOES's knob line; the BLUETOOTH section's
 "No editing or saving" sentence made what Edit does there; and a USB CABLE
@@ -3178,9 +3252,6 @@ second paragraph. It names neither phone. Within 4000 characters
 fractal.newbold.cloud/downloads)" out of the first paragraph (it is in the
 computer section too).
 
-- **App Store:** on the 1.90.0 version page, with the build (Apple changes
-  the Description only with a version; it goes live when 1.90.0 is
-  released).
 - **Google Play:** once 1.90.0 is live on Android, not before (until then
   the copies Google hands out are 1.89.36, whose Edit stays closed over
   Bluetooth), and without the USB CABLE section until Justin's Android phone
@@ -3225,29 +3296,6 @@ HELP
 For help with this app, use Settings → Troubleshooting → Feedback or visit fractal.newbold.cloud/support.html. Fractal Audio does not provide support for this app.
 ```
 
-### Subtitle, from 1.90.0
-
-App Store only, with 1.90.0, in place of the planned `Independent · needs a
-computer` in *The listing* table at the top of this file, which Bluetooth
-and the cable have made untrue (that table keeps the old line as the record
-of what was planned until then). "Independent" stays, for Fractal's letter,
-and the main way comes first. 30 of 30. If Justin would rather say Edit,
-`Independent · remote & editor` (29) fits too.
-
-```
-Independent · Bluetooth remote
-```
-
-### Keywords, from 1.90.0
-
-App Store only, with 1.90.0: the 1.89.0 keywords with `rig` swapped for
-`editor`, now that Edit is the headline. 98 of 100. Never `cme` or `widi`
-(2.3.7).
-
-```
-guitar,amp,fm3,fm9,axefx,am4,vp4,preset,scene,setlist,tuner,editor,stage,pedalboard,bluetooth,midi
-```
-
 ### Google Play release notes, 1.90.0
 
 Play Console → the 1.90.0 release → Release notes (en-US), within Play's
@@ -3277,8 +3325,7 @@ information", in place of the 1.89.0 note, whose "tried" sentence and
 is. It can go in before the build is started (step 8): the trial and the
 Bluetooth parts are true of today's copies, the Edit paragraph says "new in
 this version", and its video is video 4, which exists already (Google asked
-for no video; 1.89.0's note used the same one), so nothing in it waits for
-video 5. The cable paragraph (*Later: a USB cable*, below, with "Edit opens
+for no video; 1.89.0's note used the same one). The cable paragraph (*Later: a USB cable*, below, with "Edit opens
 on it the same way." on its end) goes after the Edit paragraph only once
 Justin's Android phone has run a unit by cable from a Play build. Google
 publishes no limit for the box; 1.89.0's note, which went in, was 1780
@@ -3316,44 +3363,24 @@ This account has the full version. Demo, no account: OK on the independent-app c
 Trial: a NEW account sees "Start 7-day free trial" on the purchase page; one per account and device, nothing charged. Bluetooth on AM4, FM3, FM9, Axe-Fx III, VP4: Settings → My rig → Bluetooth, only on devices with MIDI and Bluetooth LE. Tap AM4, then Connect: only then is Nearby devices asked for (Location on Android 11 and older), never to read location. New: Play → Edit over Bluetooth on AM4, FM3, FM9, Axe-Fx III, no saving; not VP4. Video: [Bluetooth video link]. Developer pages: developer's only.
 ```
 
-### Video 5: Edit over Bluetooth on an AM4 (Justin films it)
+### No Edit video (Justin's call), and if Apple asks for one
 
-Apple's 2.1 asks for a video of the app working the hardware, and the
-reviewer has no AM4 and no adapter, so this is the only way they see Edit
-over Bluetooth do anything. Filmed the way video 4 was.
+The 1.90.0 notes point to four videos, the same four links as 1.89.3's: an
+FM3 through a computer, presets, deleting an account, and Bluetooth on a
+real AM4. Edit over Bluetooth has no video of its own (Justin's call, 9
+November 2026), and nor has the USB cable. If Apple asks to see Edit on a
+unit, it is a reply in App Store Connect with a link, and no build:
 
-**When:** on the 1.90.0 TestFlight build, once it is on your iPhone, and
-before 1.90.0 is sent to Apple.
-
-**Before you start:** delete the app and install it from TestFlight, then
-sign in with the review account (the one in App Review Information), not
-yours, so the video shows what a customer gets. Film with a second phone or
-a camera, in one take, the iPhone's screen readable. Not a screen
-recording. Nothing with Fractal's name or logo in the shot but the AM4
-itself, and only in a private review video like this one.
-
-**What to film, in this order:**
-
-1. The AM4 with its Bluetooth adapter in, long enough to see the jacks.
-2. Settings → My rig → Bluetooth → **AM4** → **Connect** (and Apple's
-   Bluetooth screen, if it opens).
-3. Play → **Edit**: the note at the top.
-4. The amp: turn Gain, then change the amp model, turning the camera to the
-   AM4 each time so the change shows on the unit.
-5. A drive block off and on, then channel B on the amp.
-6. Back to Play.
-
-A minute is plenty. **Sharing:** Google Drive, Share → General access →
-**Anyone with the link**. **Never make it public**: not YouTube, the
-website, the listing or social media. Paste the link in place of
-`[Edit video link]` in the Apple notes.
-
-**Video 6, optional, the USB cable:** the AM4 on its own USB-C cable into
-the iPhone, the Bluetooth page saying USB cable, a scene changed on Play,
-and one knob in Edit. The same sharing. Worth it for 2.1: Apple cannot see
-a cable either. Adding it to the notes takes the four changes under *Four
-things every time this block is pasted*, two sentences out among them, or
-the notes go past Apple's box.
+- On the 1.90.0 build, sign in with the review account (the one in App
+  Review Information), not yours, so the video shows what a customer gets.
+- Film with a second phone or a camera, in one take, the screen readable.
+  Not a screen recording. Nothing with Fractal's name or logo in the shot
+  but the AM4 itself, and only in a private review video like this one.
+- Settings → My rig → Bluetooth → **AM4** → **Connect**, then Play →
+  **Edit**: turn Gain and change the amp model, the camera on the AM4 each
+  time, then a drive block off and on, and channel B on the amp.
+- Google Drive, Share → General access → **Anyone with the link**. **Never
+  make it public**: not YouTube, the website, the listing or social media.
 
 ### The free item's review note, only if it goes with 1.90.0
 
@@ -3373,6 +3400,9 @@ A free 7-day trial of the full version, offered under guideline 3.1.1 as a Non-C
 In order. Only Justin's steps are marked **Justin** (App Store Connect, Play
 Console, his phones and the yes to the build); the rest are pull requests
 and runs on GitHub. Only step 9 spends builds, and it waits for his yes.
+
+**1.90.0 was added for review on 9 November 2026** (step 15), with the
+texts above, and is Waiting for Review: what is left is E.
 
 **A. Any day before the build (Justin, no build, no version needed)**
 
@@ -3430,7 +3460,7 @@ and runs on GitHub. Only step 9 spends builds, and it waits for his yes.
    information":** the 1.90.0 note above, **Save**, then Publishing overview
    → **Send changes for review** (step 6). Right before the build, so it is
    there when Android reaches Google's review. Its video is video 4, which
-   exists, so it does not wait for video 5.
+   exists.
 9. **Justin: the yes to the build pair**, one iPhone and one Android slot,
    leaving 11 of each for November, and how Android goes:
    - **Send ticked** (the usual way, one run, my pick, as on 26 October):
@@ -3465,7 +3495,8 @@ and runs on GitHub. Only step 9 spends builds, and it waits for his yes.
 
 11. Signed in with the review account: the full version, the Bluetooth row,
     Edit opening over Bluetooth on an AM4, and the log's head saying "store
-    copy: 1.90.0". Then **video 5** (above), and video 6 if wanted.
+    copy: 1.90.0". No Edit video was filmed (Justin's call, *No Edit
+    video*, above).
 
 **D. Submission day**
 
@@ -3475,13 +3506,12 @@ and runs on GitHub. Only step 9 spends builds, and it waits for his yes.
     answering.
 13. **Justin: App Store Connect.**
     1. The **+** beside iOS App → **1.90.0** → Build: the 1.90.0 build.
-    2. **What's New, Description, Keywords and Subtitle:** the 1.90.0 blocks
-       above (the Subtitle under App Information). The promotional text
-       stays as it is.
-    3. **App Review Information → Notes:** the 1.90.0 block, with the Tested
-       on brackets and the five video links filled in, or with video 6 the
-       six, after the four changes under *Four things every time this block
-       is pasted*. The review account's email and password as before.
+    2. **What's New, Description, Keywords and promotional text:** what
+       went is the 1.90.0 blocks above, as submitted; the keywords stayed
+       1.89.3's, and the Subtitle under App Information stayed empty.
+    3. **App Review Information → Notes:** the 1.90.0 block above, as it
+       went: four video links, and the Tested on brackets unfilled. The
+       review account's email and password as before.
     4. **Version Release: Manually release this version**, so it waits at
        Pending Developer Release for step 17, and Phased Release for
        Automatic Updates: **Release update over 7-day period using phased
@@ -3503,7 +3533,8 @@ and runs on GitHub. Only step 9 spends builds, and it waits for his yes.
     Managed publishing on before step 9, which reverses Justin's 26 October
     call, so it is his to say.
 18. **The Play Description**, once 1.90.0 is live on Android: Store
-    presence → Store listings → Full description: the 1.90.0 Description
+    presence → Store listings → Full description: *Google Play Description,
+    from 1.90.0*
     (without USB CABLE until his Android phone has run a unit by cable).
     Save, then **Send changes for review**.
 19. *(Send unticked only)* expo.dev → the Android 1.90.0 build →
@@ -3538,12 +3569,10 @@ waited for 1.89.3 in both stores (test/limits.mjs refuses "From version
   stores: supabase/README.md, *Editing in the emails, from 1.90.0*
   (`EDIT_IN_EMAILS` set to true with store-versions.json at 1.90.0 on both;
   emails off, the function redeployed, Justin reads the sample, emails on).
-- **The App Store promotional text**, if Justin wants Edit in it: his to set
-  in App Store Connect, never by store-text's Write it, and only after
-  1.90.0 is released (before that it would promise Edit to 1.89.3 copies).
-  A suggestion, Bluetooth first, 164 of 170: "By Bluetooth or a computer.
-  Your presets, scenes, setlists and knobs, from your phone. Not affiliated
-  with, endorsed by, or supported by Fractal Audio Systems, LLC."
+- **The App Store promotional text** went with 1.90.0, Edit in it ("edit
+  your tone"; *Promotional text, 1.90.0*, above), and shows once 1.90.0 is
+  released: nothing to do. Any change to it is Justin's, in App Store
+  Connect, never by store-text's Write it.
 
 **public/bluetooth.html, *What it does*,** in place of today's paragraph
 ("No editing or saving over Bluetooth: for those, use the desktop app, on
@@ -3609,7 +3638,7 @@ The same plan as Bluetooth's (*If Bluetooth has to be switched off, or
 Apple says no to it*, above), for Edit:
 
 - **A question, other words in the listing, or a better video:** answered in
-  the console; no build. Other words in the app go as an update, with the
+  the console; no build (*No Edit video*, above, says how to film Edit). Other words in the app go as an update, with the
   restart line in the reply.
 - **No to Edit itself, after a reply:** the entries in `EDIT_FROM_STORE` go
   back to null only if no 1.90.0 copy that opens it ever reached a customer,

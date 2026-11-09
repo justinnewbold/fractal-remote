@@ -262,7 +262,11 @@ So the review notes, What's New, the Description and every other text
 drafted for App Store Connect name the VP4 nowhere: no "never on a VP4",
 no "presets and scenes only", no VP4 in a list of units, the trademark
 line or the units Bluetooth is offered on. The 1.90.0 texts were the
-first sent without it. Start the next version's texts from what is live
+first sent without it, and docs/app-store.md keeps them as submitted
+(the Apple trademark line is shared/affiliation-apple.mjs, outside the
+computer app so it makes no computer release). The keywords are the one
+exception: they are his own, carried from 1.89.3 with "vp4" in them, and
+are left to him. Start the next version's texts from what is live
 (Show the texts), and keep them short: "We really don't need that much"
 (the review notes went from about 3,900 to 2,350 characters). The app
 itself is unchanged: its own VP4 words (shared/vp4-safety.mjs and the

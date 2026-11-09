@@ -334,6 +334,27 @@ export function run(test) {
       '“Fractal Audio”, “Axe-Fx”, “FM3”, “FM9”, “AM4” and “VP4” are trademarks of Fractal Audio Systems, LLC, used here only to say which hardware this app works with.'
     )
     assert.equal(a.AFFILIATION, `${THEIR_SENTENCE} ${a.TRADEMARKS}`)
+    /*
+     * What goes to Apple, from 1.90.0: the trademark line with no VP4
+     * ("Leave out all the stuff on the VP4", Justin, 9 November 2026), and
+     * Fractal Audio's sentence word for word in front of it. Only the VP4 is
+     * cut; the app, the website and Google Play keep TRADEMARKS. It lives in
+     * shared/affiliation-apple.mjs, outside every bundle: in
+     * shared/affiliation.mjs it would move the computer's fingerprint and
+     * put out a computer release with nothing new in it.
+     */
+    const apple = await import('../shared/affiliation-apple.mjs')
+    assert.equal(
+      apple.TRADEMARKS_APPLE,
+      '“Fractal Audio”, “Axe-Fx”, “FM3”, “FM9” and “AM4” are trademarks of Fractal Audio Systems, LLC, used here only to say which hardware this app works with.'
+    )
+    assert.equal(apple.AFFILIATION_APPLE, `${THEIR_SENTENCE} ${apple.TRADEMARKS_APPLE}`)
+    assert.equal(apple.TRADEMARKS_APPLE, a.TRADEMARKS.replace(', “AM4” and “VP4”', ' and “AM4”'), 'the Apple trademark line differs from the shared one by more than the VP4')
+    assert.ok(!/VP4/.test(apple.AFFILIATION_APPLE), 'the Apple trademark line names the VP4')
+    assert.ok(!('TRADEMARKS_APPLE' in a) && !('AFFILIATION_APPLE' in a), 'the Apple trademark line is in shared/affiliation.mjs, which the computer app carries')
+    for (const f of shippedFiles().filter((p) => rel(p) !== 'shared/affiliation-apple.mjs')) {
+      assert.ok(!/affiliation-apple|TRADEMARKS_APPLE|AFFILIATION_APPLE/.test(readFileSync(f, 'utf8')), `${rel(f)} uses the Apple trademark line, which belongs to the store's records only`)
+    }
     /* The welcome screen's line is the sentence now, not his shorter one. */
     assert.equal(a.WELCOME_NOTICE, THEIR_SENTENCE)
     assert.equal(a.NOT_AFFILIATED_SHORT, 'Not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC.')
