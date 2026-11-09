@@ -171,7 +171,21 @@ const bluetoothUp = (d) => isAdapter(d) && !isCable(d) && d.offline === false
 export function cablesFirst(list, { unit = null, units = null, skip = null } = {}) {
   const all = Array.isArray(list) ? list : []
   if (all.some(bluetoothUp)) return []
-  return cablesIn(all).filter((d) => !skip?.has?.(d.id) && !anotherUnit(d, { unit, units }))
+  return cablesFor(all, { unit, units }).filter((d) => !skip?.has?.(d.id))
+}
+
+/**
+ * THE CABLES PLUGGED IN NOW THAT COULD BE THE UNIT PICKED'S: cablesIn, less
+ * one named for another unit (anotherUnit) and any `refused` by its name
+ * (for an FM3, the C2MIDI Pro: shared/bluetooth-gear neverOnFm3, passed in,
+ * so this file imports nothing). Connect's own rule (cablesFirst) is this,
+ * less what Connect cannot take without a question; the Bluetooth page's
+ * "Use the USB cable" (lib/bluetooth cablesToOffer) is this for a tap, with
+ * a Bluetooth adapter up beside it and a cable let go of by hand included:
+ * the tap is the player's own choice.
+ */
+export function cablesFor(list, { unit = null, units = null, refused = null } = {}) {
+  return cablesIn(list).filter((d) => !anotherUnit(d, { unit, units }) && !(typeof refused === 'function' && refused(d.name)))
 }
 
 /**

@@ -4,8 +4,9 @@
   "days": [
     {
       "date": "2026-11-09",
-      "version": "1.90.5",
+      "version": "1.90.6",
       "lines": [
+        "On the Bluetooth page, a USB MIDI cable that’s plugged in, like the U2MIDI Pro on an FM3, now has its own Use the USB cable button, even while the app is still trying a Bluetooth adapter. The FM3’s note now says that cable plugs straight into your phone or tablet.",
         "On a tablet, the walkthrough and the Unlock page now fill the screen, with bigger words, pictures and buttons, and the Unlock page opens wider.",
         "From version 1.90.0 of the app, Edit opens over Bluetooth on an AM4, FM3, FM9 or Axe-Fx III: turn knobs, change models, switch blocks on and off and pick channels, and a unit on a USB cable does the same. Changes play right away; save on the unit to keep them."
       ]
