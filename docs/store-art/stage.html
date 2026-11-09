@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stage Header Art</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@800&family=Inter:wght@600&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #050506; }
+  #stage { position: relative; overflow: hidden; background: #050506; }
+  #stage div, #stage svg, #stage img { position: absolute; }
+  .headline {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800;
+    text-transform: uppercase;
+    line-height: 0.9;
+    letter-spacing: 0.004em;
+    white-space: nowrap;
+    color: #f6efe4;
+  }
+  .headline span { display: block; }
+  .headline .hot {
+    background: linear-gradient(180deg, #ffd59a 0%, #ffad4a 45%, #ff8a26 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .headline.inline span { display: inline; }
+  /* a trademark word keeps its own casing inside a capitalised line */
+  .headline .tm { display: inline; text-transform: none; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+(async () => {
+  const q = new URLSearchParams(location.search);
+  const V = q.get('v') || 'header';
+  const GUIDES = q.has('guides');
+  const SHOT = q.get('shot') || '../shots/play-scene2-clean.png';
+  // polish pass: side layout headline size (header units), lines (2 or 3) and gap to the phone
+  const SIDE_T = +(q.get('t') || 198);
+  const SIDE_LINES = +(q.get('lines') || 3);
+  const SIDE_GAP = +(q.get('gap') || 100);
+  // the widest the side headline may grow (header units); 0 keeps the previous phrase's width
+  const SIDE_MAXW = +(q.get('maxw') || 0);
+
+  // Header units are the 21:9 header (3840 x 1646). The universal 16:9 is the
+  // header layout scaled by k and centred vertically, so Apple's 21:9 crop of it
+  // is the header and its 3:2 crop keeps everything that matters.
+  const CFG = {
+    header:    { W: 3840, H: 1646, layout: 'side', k: 1, oy: 0 },
+    universal: { W: 5244, H: 2950, layout: 'side', k: 5244 / 3840, oy: (2950 - 1646 * 5244 / 3840) / 2 },
+    search:    { W: 3840, H: 2560, layout: 'top',  k: 1, oy: 0 },
+  }[V];
+  const { W, H, k, oy } = CFG;
+  const stage = document.getElementById('stage');
+  stage.style.width = W + 'px';
+  stage.style.height = H + 'px';
+
+  const el = (tag, css, parent, cls) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (css) Object.assign(e.style, css);
+    (parent || stage).appendChild(e);
+    return e;
+  };
+  const px = (n) => n + 'px';
+
+  // ---------- seeded random ----------
+  let seed = 20261109;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+
+  // ---------- the phone ----------
+  const CW = 1170, CH = 2622; // screen content: 120 px status bar + shot rows 30..2532
+  const STATUS = `
+  <svg width="1170" height="120" viewBox="0 0 1170 120" xmlns="http://www.w3.org/2000/svg">
+    <text x="150" y="84" text-anchor="middle" font-family="Inter" font-weight="600" font-size="50" fill="#fff">9:41</text>
+    <g fill="#fff">
+      <rect x="866" y="72" width="11" height="14" rx="3"/>
+      <rect x="883" y="64" width="11" height="22" rx="3"/>
+      <rect x="900" y="55" width="11" height="31" rx="3"/>
+      <rect x="917" y="46" width="11" height="40" rx="3"/>
+    </g>
+    <g fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round">
+      <path d="M953.1 59.1 A38 38 0 0 1 1006.9 59.1"/>
+      <path d="M963 70 A24 24 0 0 1 997 70"/>
+    </g>
+    <circle cx="980" cy="82" r="6" fill="#fff"/>
+    <rect x="1030" y="50" width="78" height="36" rx="10" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="3"/>
+    <rect x="1036" y="56" width="62" height="24" rx="6" fill="#fff"/>
+    <rect x="1111" y="61" width="5" height="14" rx="2" fill="#fff" fill-opacity=".45"/>
+  </svg>`;
+
+  function makePhone(S, left, top, parent) {
+    const bez = Math.round(S * 0.034);
+    const ring = Math.max(2, Math.round(S * 0.0055));
+    const sh = S * CH / CW;
+    const w = S + 2 * bez, h = sh + 2 * bez;
+    const R = S * 0.155;
+    const outer = el('div', {
+      left: px(left), top: px(top), width: px(w), height: px(h), boxSizing: 'border-box',
+      borderRadius: px(R), padding: px(ring),
+      background: 'linear-gradient(180deg, #f0c286 0%, #7a5d40 3.5%, #2b2d33 16%, #18191d 55%, #24262c 100%)',
+    }, parent);
+    // cool rim on the right edge, warm kiss on the left
+    el('div', {
+      left: 0, top: 0, width: '100%', height: '100%', borderRadius: px(R),
+      background: 'linear-gradient(90deg, rgba(255,170,90,.55) 0%, rgba(255,170,90,0) 3%, rgba(0,0,0,0) 96.5%, rgba(120,185,255,.95) 100%)',
+    }, outer);
+    const bezel = el('div', {
+      left: px(ring), top: px(ring), width: px(w - 2 * ring), height: px(h - 2 * ring), boxSizing: 'border-box',
+      borderRadius: px(R - ring), background: '#030304', padding: px(bez - ring),
+    }, outer);
+    const scr = el('div', {
+      left: px(bez - ring), top: px(bez - ring), width: px(S), height: px(sh), overflow: 'hidden',
+      borderRadius: px(S * 0.12), background: 'rgb(12,14,18)',
+    }, bezel);
+    const c = el('div', {
+      left: 0, top: 0, width: px(CW), height: px(CH), transformOrigin: '0 0', transform: `scale(${S / CW})`,
+    }, scr);
+    const img = el('img', { left: 0, top: '90px', width: '1170px', height: '2532px' }, c);
+    img.src = SHOT;
+    const sb = el('div', { left: 0, top: 0, width: '1170px', height: '120px', background: 'rgb(12,14,18)' }, c);
+    sb.innerHTML = STATUS;
+    el('div', { left: '375px', top: px(CH - 52), width: '420px', height: '14px', borderRadius: '7px', background: 'rgba(240,240,245,.85)' }, c);
+    // glass sheen
+    el('div', {
+      left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none',
+      background: 'linear-gradient(116deg, rgba(255,255,255,.085) 0%, rgba(255,255,255,.025) 26%, rgba(255,255,255,0) 40%)',
+    }, scr);
+    return { outer, img, w, h, S };
+  }
+
+  // ---------- layout ----------
+  let L; // all in final pixels
+  if (CFG.layout === 'side') {
+    const S = 540 * k;
+    const bez = Math.round(S * 0.034);
+    const pw = S + 2 * bez, ph = S * CH / CW + 2 * bez;
+    L = { S, pw, ph, phoneTop: oy + 92 * k, T: SIDE_T * k, gap: SIDE_GAP * k, textMidY: oy + (q.get('mid') ? +q.get('mid') : 640) * k };
+  } else {
+    const S = 800;
+    const bez = Math.round(S * 0.034);
+    const pw = S + 2 * bez, ph = S * CH / CW + 2 * bez;
+    L = { S, pw, ph, phoneTop: 590, T: 272, textTop: 168 };
+  }
+  L.floorY = L.phoneTop + L.ph;
+
+  // text first (hidden) so it can be measured
+  const head = el('div', { left: 0, top: 0, fontSize: px(L.T), visibility: 'hidden' }, null, 'headline' + (CFG.layout === 'top' ? ' inline' : ''));
+  // the previous phrase, measured only so the new one is fitted into the same box
+  const REF_SIDE_HTML = SIDE_LINES === 3
+    ? '<span>Your rig,</span><span class="hot">in your</span><span class="hot">hand.</span>'
+    : '<span>Your rig,</span><span class="hot">in your hand.</span>';
+  const REF_TOP_HTML = '<span>Your rig,&nbsp;</span><span class="hot">in your hand.</span>';
+  const IPHONE = '<span class="tm">iPhone</span>';
+  const SIDE_HTML = `<span>Control your</span><span class="hot">Fractal from</span><span class="hot">your ${IPHONE}</span>`;
+  const TOP_HTML = `<span>Control your&nbsp;</span><span class="hot">Fractal from your ${IPHONE}</span>`;
+  head.innerHTML = CFG.layout === 'top' ? REF_TOP_HTML : REF_SIDE_HTML;
+  await document.fonts.ready;
+  await document.fonts.load(`800 ${L.T}px "Barlow Condensed"`);
+  await document.fonts.load('600 50px Inter');
+  const ref = head.getBoundingClientRect();
+  // fit the new phrase to the old one's width, shrinking the type only if it has to
+  head.innerHTML = CFG.layout === 'top' ? TOP_HTML : SIDE_HTML;
+  let tb = head.getBoundingClientRect();
+  const colW = CFG.layout === 'side' && SIDE_MAXW ? Math.max(ref.width, SIDE_MAXW * k) : ref.width;
+  if (tb.width > colW) {
+    L.T0 = L.T;
+    L.T = Math.floor(L.T * colW / tb.width * 10) / 10;
+    head.style.fontSize = px(L.T);
+    await document.fonts.load(`800 ${L.T}px "Barlow Condensed"`);
+    tb = head.getBoundingClientRect();
+    while (tb.width > colW + 0.5) { L.T -= 0.1; head.style.fontSize = px(L.T); tb = head.getBoundingClientRect(); }
+  }
+  L.refW = ref.width; L.refH = ref.height;
+
+  if (CFG.layout === 'side') {
+    // the column is the old phrase's width, so the phone does not move
+    const groupW = ref.width + L.gap + L.pw;
+    const gx = W / 2 - groupW / 2;
+    // a wider column grows leftwards: its right edge, and the gap to the phone, stay put
+    L.textLeft = gx + ref.width - tb.width;
+    L.textTop = L.textMidY - tb.height / 2;
+    L.phoneLeft = gx + ref.width + L.gap;
+  } else {
+    L.textLeft = W / 2 - tb.width / 2;
+    // centred on the old line's middle
+    L.textTop = L.textTop + (ref.height - tb.height) / 2;
+    L.phoneLeft = W / 2 - L.pw / 2;
+  }
+  L.cx = L.phoneLeft + L.pw / 2;
+  stage.removeChild(head);
+
+  const u = CFG.layout === 'side' ? k : L.S / 540; // light scale
+
+  // ---------- background ----------
+  el('div', {
+    left: 0, top: 0, width: '100%', height: '100%',
+    background: `radial-gradient(ellipse ${px(1500 * u)} ${px(1100 * u)} at ${px(L.cx)} ${px(L.phoneTop + L.ph * 0.55)}, #120d09 0%, #0a0807 50%, #050506 100%)`,
+  });
+  // cool back light, behind the phone on the right
+  el('div', {
+    left: 0, top: 0, width: '100%', height: '100%', mixBlendMode: 'screen',
+    background: `radial-gradient(ellipse ${px(620 * u)} ${px(900 * u)} at ${px(L.cx + L.pw * 0.8)} ${px(L.phoneTop + L.ph * 0.42)}, rgba(60,120,255,.16) 0%, rgba(40,90,220,.06) 50%, rgba(0,0,0,0) 78%)`,
+  });
+
+  // ---------- beams ----------
+  function poly(sx, sy, tx, ty, w0, w1) {
+    const dx = tx - sx, dy = ty - sy, len = Math.hypot(dx, dy);
+    const nx = -dy / len, ny = dx / len;
+    const p = [
+      [sx + nx * w0 / 2, sy + ny * w0 / 2], [tx + nx * w1 / 2, ty + ny * w1 / 2],
+      [tx - nx * w1 / 2, ty - ny * w1 / 2], [sx - nx * w0 / 2, sy - ny * w0 / 2],
+    ];
+    return 'polygon(' + p.map(([x, y]) => `${x.toFixed(1)}px ${y.toFixed(1)}px`).join(',') + ')';
+  }
+  function layer(clip, css, blur, opacity, inner) {
+    const wrap = el('div', { left: 0, top: 0, width: px(W), height: px(H), filter: blur ? `blur(${blur}px)` : 'none', opacity, mixBlendMode: 'screen' });
+    const c = el('div', Object.assign({ left: 0, top: 0, width: px(W), height: px(H), clipPath: clip }, css), wrap);
+    if (inner) c.innerHTML = inner;
+    return wrap;
+  }
+  const fy = L.floorY;
+  // the main spot: a high overhead light, so the cone is a slowly widening column
+  const srcY = -420 * u;
+  const wTopPhone = L.pw * 1.5;              // width at the phone's top
+  const wFloor = L.pw * 2.5;                 // width where it meets the floor
+  const slope = (wFloor - wTopPhone) / (fy - L.phoneTop);
+  const w0 = wTopPhone - (L.phoneTop - srcY) * slope;
+  const cone = poly(L.cx, srcY, L.cx, fy + 30 * u, w0, wFloor + 30 * u * slope);
+  const coreCone = poly(L.cx, srcY, L.cx, fy + 30 * u, w0 * 0.55, (wFloor + 30 * u * slope) * 0.55);
+  const warm = (a) => `rgba(255,174,92,${a})`;
+  const TOP = CFG.layout === 'top';
+  const vfade = TOP
+    ? `linear-gradient(180deg, ${warm(.06)} 0px, ${warm(.10)} ${px(L.textTop + L.T)}, ${warm(.24)} ${px(L.phoneTop + 40)}, ${warm(.15)} ${px(L.phoneTop + L.ph * 0.5)}, ${warm(.10)} ${px(fy)})`
+    : `linear-gradient(180deg, rgba(255,178,92,.40) 0px, ${warm(.17)} ${px(L.phoneTop + L.ph * 0.4)}, ${warm(.10)} ${px(fy)})`;
+  const e0 = L.cx - wFloor / 2, e1 = L.cx + wFloor / 2;
+  const hmask = `linear-gradient(90deg, rgba(0,0,0,.45) ${px(e0)}, #000 ${px(L.cx - wFloor * 0.2)}, #000 ${px(L.cx + wFloor * 0.2)}, rgba(0,0,0,.45) ${px(e1)})`;
+  layer(cone, { background: vfade, WebkitMaskImage: hmask }, 11 * u, 1);
+  layer(coreCone, { background: TOP
+    ? `linear-gradient(180deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) ${px(L.textTop + L.T)}, rgba(255,205,140,.22) ${px(L.phoneTop)}, ${warm(.05)} ${px(fy)})`
+    : `linear-gradient(180deg, rgba(255,205,140,.32) 0px, ${warm(.10)} ${px(L.phoneTop + L.ph * 0.5)}, ${warm(.05)} ${px(fy)})` }, 60 * u, 1);
+  // the source, just above the frame
+  if (!TOP) el('div', {
+    left: 0, top: 0, width: '100%', height: '100%', mixBlendMode: 'screen',
+    background: `radial-gradient(ellipse ${px(w0 * 1.5)} ${px(420 * u)} at ${px(L.cx)} ${px(-60 * u)}, rgba(255,214,160,.38) 0%, rgba(255,170,90,.10) 50%, rgba(0,0,0,0) 100%)`,
+  });
+  // smoke inside the cone
+  const f1 = (0.0015 / u).toFixed(6), f2 = (0.0024 / u).toFixed(6);
+  const smokeSvg = (seedN, rgb) => `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:0;top:0">
+    <filter id="smk${seedN}" x="0" y="0" width="${W}" height="${H}" filterUnits="userSpaceOnUse">
+      <feTurbulence type="fractalNoise" baseFrequency="${f1} ${f2}" numOctaves="5" seed="${seedN}"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 ${rgb[0]}  0 0 0 0 ${rgb[1]}  0 0 0 0 ${rgb[2]}  1.9 0 0 0 -0.74"/>
+    </filter>
+    <rect width="${W}" height="${H}" filter="url(#smk${seedN})"/></svg>`;
+  layer(cone, {
+    WebkitMaskImage: TOP
+      ? `linear-gradient(180deg, rgba(0,0,0,.15) 0px, rgba(0,0,0,.25) ${px(L.textTop + L.T)}, #000 ${px(L.phoneTop + 60)}, rgba(0,0,0,.35) ${px(fy)})`
+      : `linear-gradient(180deg, #000 0px, rgba(0,0,0,.75) ${px(L.phoneTop + L.ph * 0.5)}, rgba(0,0,0,.35) ${px(fy)})`,
+  }, 10 * u, .55, smokeSvg(11, [1, 0.72, 0.42]));
+  // a soft spill around the cone so its edge glows a little
+  layer(poly(L.cx, srcY, L.cx, fy + 30 * u, w0 * 1.25, wFloor * 1.25), { background: `linear-gradient(180deg, ${warm(.08)} 0px, ${warm(.05)} ${px(fy)})` }, 90 * u, 1);
+
+  // two faint side beams far out (decoration only, outside the safe area)
+  const sideL = poly(W * 0.035, -150 * u, W * 0.15, fy + 40 * u, 46 * u, 360 * u);
+  layer(sideL, { background: `linear-gradient(180deg, rgba(255,160,80,.26) 0px, rgba(255,140,60,.06) ${px(fy)})` }, 12 * u, .55);
+  const sideR = poly(W * 0.965, -150 * u, W * 0.85, fy + 40 * u, 46 * u, 360 * u);
+  if (TOP) {
+    layer(sideR, { background: `linear-gradient(180deg, rgba(150,172,235,.24) 0px, rgba(120,140,220,.055) ${px(fy)})` }, 14 * u, .5);
+    layer(sideR, {}, 10 * u, .07, smokeSvg(5, [0.62, 0.7, 0.92]));
+  } else {
+    layer(sideR, { background: `linear-gradient(180deg, rgba(120,170,255,.30) 0px, rgba(80,130,255,.07) ${px(fy)})` }, 12 * u, .6);
+    layer(sideR, {}, 8 * u, .22, smokeSvg(5, [0.55, 0.7, 1]));
+  }
+
+  // ---------- floor ----------
+  el('div', {
+    left: 0, top: px(fy), width: px(W), height: px(H - fy), mixBlendMode: 'screen',
+    background: `radial-gradient(ellipse ${px(1700 * u)} ${px(320 * u)} at ${px(L.cx)} 0px, rgba(255,170,90,.10) 0%, rgba(0,0,0,0) 100%)`,
+  });
+  el('div', {
+    left: 0, top: 0, width: '100%', height: '100%', mixBlendMode: 'screen',
+    background: `radial-gradient(ellipse ${px(wFloor * 0.62)} ${px(120 * u)} at ${px(L.cx)} ${px(fy + 6 * u)}, rgba(255,180,100,.50) 0%, rgba(255,150,70,.16) 45%, rgba(0,0,0,0) 100%)`,
+  });
+  // thin floor sheen line
+  el('div', {
+    left: px(L.cx - 1100 * u), top: px(fy - 1), width: px(2200 * u), height: px(Math.max(2, 2 * u)),
+    background: 'linear-gradient(90deg, rgba(255,190,120,0) 0%, rgba(255,190,120,.25) 50%, rgba(255,190,120,0) 100%)',
+  });
+
+  // ---------- dust in the beam ----------
+  const dust = el('div', { left: 0, top: 0, width: px(W), height: px(H), mixBlendMode: 'screen' });
+  for (let i = 0; i < 170; i++) {
+    const t = Math.pow(rnd(), 0.8);
+    const y = 10 * u + t * (fy - 30 * u);
+    const halfW = (w0 + (y - srcY) * slope) / 2 * 0.92;
+    const x = L.cx + (rnd() * 2 - 1) * halfW;
+    const big = rnd() < 0.12;
+    const s = (big ? 7 + rnd() * 10 : 1.6 + rnd() * 3.6) * u;
+    const a = big ? 0.10 + rnd() * 0.14 : 0.25 + rnd() * 0.5;
+    el('div', {
+      left: px(x - s / 2), top: px(y - s / 2), width: px(s), height: px(s), borderRadius: '50%',
+      background: `rgba(255,226,180,${a.toFixed(3)})`, filter: `blur(${(big ? s * 0.35 : rnd() * 1.2 * u).toFixed(2)}px)`,
+    }, dust);
+  }
+
+  // ---------- reflection ----------
+  const refl = el('div', {
+    left: px(L.phoneLeft), top: px(fy + 2 * u), width: px(L.pw), height: px(L.ph),
+    transform: 'scaleY(-1)', opacity: TOP ? .32 : .2, filter: `blur(${((TOP ? 1.5 : 6) * u).toFixed(1)}px)`,
+    WebkitMaskImage: 'linear-gradient(to top, rgba(0,0,0,.75) 0%, rgba(0,0,0,.25) 9%, rgba(0,0,0,0) 22%)',
+  });
+  makePhone(L.S, 0, 0, refl);
+
+  // contact shadow
+  el('div', {
+    left: px(L.cx - L.pw * 0.62), top: px(fy - 26 * u), width: px(L.pw * 1.24), height: px(60 * u), borderRadius: '50%',
+    background: 'radial-gradient(ellipse at center, rgba(0,0,0,.85) 0%, rgba(0,0,0,0) 70%)',
+  });
+
+  // ---------- the phone ----------
+  const ph = makePhone(L.S, L.phoneLeft, L.phoneTop, null);
+  ph.outer.style.boxShadow = [
+    `0 ${px(-18 * u)} ${px(60 * u)} ${px(-22 * u)} rgba(255,184,110,.75)`,
+    `${px(14 * u)} 0 ${px(50 * u)} ${px(-18 * u)} rgba(100,165,255,.75)`,
+    `${px(-12 * u)} 0 ${px(50 * u)} ${px(-20 * u)} rgba(255,160,80,.35)`,
+    `0 ${px(50 * u)} ${px(140 * u)} rgba(0,0,0,.85)`,
+  ].join(',');
+  // the screen's own glow spilling onto the haze
+  el('div', {
+    left: 0, top: 0, width: '100%', height: '100%', mixBlendMode: 'screen', pointerEvents: 'none',
+    background: `radial-gradient(ellipse ${px(L.pw * 1.15)} ${px(L.ph * 0.8)} at ${px(L.cx)} ${px(L.phoneTop + L.ph * 0.55)}, rgba(255,190,120,.06) 0%, rgba(0,0,0,0) 100%)`,
+  });
+
+  // ---------- headline ----------
+  if (TOP) el('div', {
+    left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none',
+    background: `radial-gradient(ellipse ${px(tb.width * 0.62)} ${px(L.T * 1.2)} at ${px(W / 2)} ${px(L.textTop + L.T * 0.48)}, rgba(5,5,6,.55) 0%, rgba(5,5,6,.25) 55%, rgba(5,5,6,0) 100%)`,
+  });
+  const hl = el('div', { left: px(L.textLeft), top: px(L.textTop), fontSize: px(L.T), filter: `drop-shadow(0 0 ${px(26 * u)} rgba(255,150,60,.28))` }, null, 'headline' + (CFG.layout === 'top' ? ' inline' : ''));
+  hl.innerHTML = CFG.layout === 'top' ? TOP_HTML : SIDE_HTML;
+
+  // ---------- vignette and grain ----------
+  el('div', {
+    left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none',
+    background: `radial-gradient(ellipse ${px(W * 0.62)} ${px(H * 0.75)} at ${px(W / 2)} ${px(H * 0.42)}, rgba(0,0,0,0) 55%, rgba(0,0,0,.55) 100%)`,
+  });
+  const grain = el('div', { left: 0, top: 0, width: px(W), height: px(H), opacity: .06, mixBlendMode: 'overlay', pointerEvents: 'none' });
+  grain.innerHTML = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="position:absolute;left:0;top:0">
+    <filter id="gr" filterUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="3"/><feColorMatrix type="saturate" values="0"/></filter>
+    <rect width="${W}" height="${H}" filter="url(#gr)"/></svg>`;
+
+  // ---------- guides (preview copies only) ----------
+  if (GUIDES) {
+    const g = el('div', { left: 0, top: 0, width: '100%', height: '100%', pointerEvents: 'none' });
+    const box = (x, y, w, h, c) => el('div', { left: px(x), top: px(y), width: px(w), height: px(h), boxSizing: 'border-box', border: `${Math.max(3, 3 * u)}px dashed ${c}` }, g);
+    if (V === 'header') {
+      box(W * 0.18, 0, W * 0.64, H * 0.78, 'rgba(0,255,140,.8)');
+    } else if (V === 'universal') {
+      const ch = W * 9 / 21, cy = (H - ch) / 2;
+      box(0, cy, W, ch, 'rgba(255,0,200,.8)');            // 21:9 crop
+      box(W * 0.18, cy, W * 0.64, ch * 0.78, 'rgba(0,255,140,.8)'); // header safe in that crop
+      const cw = H * 1.5; box((W - cw) / 2, 0, cw, H, 'rgba(0,200,255,.8)'); // 3:2 crop
+    } else {
+      box(W * 0.1, H * 0.06, W * 0.8, H * 0.79, 'rgba(0,255,140,.8)');
+    }
+  }
+
+  // wait for the screenshot images to decode
+  await Promise.all([...document.images].map((i) => i.decode().catch(() => {})));
+  L.tbW = tb.width; L.tbH = tb.height; L.textRight = L.textLeft + tb.width; L.phoneRight = L.phoneLeft + L.pw;
+  window.__layout = L;
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>
