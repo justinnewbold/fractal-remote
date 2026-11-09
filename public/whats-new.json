@@ -3,10 +3,10 @@
     {
       "date": "2026-11-09",
       "day": "9 November 2026",
-      "version": "1.90.12",
+      "version": "1.90.13",
       "lines": [
         {
-          "text": "The Bluetooth setup guide is now a short page: what to buy for your unit, how to plug it in, its settings, and how to connect.",
+          "text": "The Bluetooth and Raspberry Pi setup guides are now short pages: what to buy, with links, and a few clear steps.",
           "only": null
         },
         {
