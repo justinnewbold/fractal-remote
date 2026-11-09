@@ -5352,29 +5352,41 @@ export function run(test) {
     assert.match(manifest, /BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/, 'Bluetooth scanning no longer says it is never for location, and the answer says it is')
   })
 
-  test('the 1.90.0 texts open Edit over Bluetooth on the units the switch opens there, fit every store box, say the cable once, and keep the vendor rules', async () => {
+  test('the 1.90.0 texts are kept as they were submitted, fit every store box, name no VP4 to Apple, open Edit on the units the switch opens, and keep the vendor rules', async () => {
     /*
      * 1.90.0 is the store version that opens Edit over Bluetooth (and on a
      * unit's own USB cable) to customers. Justin, 8 November 2026: "I'm fine
      * with turning them on for those devices that we haven't actually turned
      * on Bluetooth yet. It says it's in beta, so if there's problems, they
-     * can notify us." Its texts sit in a section of their own, pasted only
-     * on the day it is sent, and are held here the way the 1.89.0 ones are:
-     * to the switch (every unit EDIT_FROM_STORE opens from 1.90.0 named
-     * wherever Edit is said, and no other, never the VP4), to the labels
-     * the app draws, to each store's box, and to the word rules: Edit "over
-     * Bluetooth", the cable said once as doing what Bluetooth does, nothing
-     * tried, no beta beside Bluetooth, no ranking, no free desktop app, no
-     * other platform in Apple's texts, and Fractal Audio's sentence second
-     * in the Description. The 1.89.0 section stays as it was submitted.
+     * can notify us."
+     *
+     * ITS APP STORE TEXTS ARE A RECORD NOW. They went to Apple on 9 November
+     * 2026 in the words Justin and the lead wrote that day, not the drafts
+     * this section held, and store-text's Show the texts read them back from
+     * App Store Connect. Store records keep the words they were submitted
+     * with, so each Apple block is pinned here to what went (its length and
+     * its hash), and held to what still has to be true of it: Apple's boxes,
+     * Fractal Audio's sentence word for word, nothing official or endorsed,
+     * nothing tried, no beta, no other platform, Edit named on exactly the
+     * units the switch opens, and Justin's rule of the same day: "Leave out
+     * all the stuff on the VP4. ... Seriously remove it. It's getting
+     * frustrating. I have to keep deleting it every time I submit it to
+     * Apple and they approve it just fine so stop." What he chose to do
+     * differently from the drafts (no Edit video, no subtitle, the keywords
+     * left as 1.89.3's, the trademark line without the VP4) is recorded here
+     * as his choice, and every other version keeps its own checks.
+     *
+     * Google's blocks are still the drafts, for Android's own day, and keep
+     * the drafted rules, the VP4 lines among them.
      */
     const store = read('docs/app-store.md')
     const { fenced } = await import('../scripts/store-text.mjs')
-    const { AFFILIATION } = await import('../shared/affiliation.mjs')
+    const { AFFILIATION, AFFILIATION_APPLE, NOT_AFFILIATED, TRADEMARKS, TRADEMARKS_APPLE } = await import('../shared/affiliation.mjs')
     const { EDIT_FROM_STORE } = await import('../mobile/src/lib/ble-rule.js')
     const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
     const { TRIAL_BUTTON } = await import('../shared/trial-words.mjs')
     const { HOW_CONNECT } = await import('../shared/bluetooth-gear.mjs')
+    const { createHash } = await import('node:crypto')
     const head = '## 1.90.0: Editing over Bluetooth for customers'
     const from = store.indexOf(head)
     const to = store.indexOf('## Kept for the record: the 1.87.1 texts (not for pasting)')
@@ -5382,197 +5394,218 @@ export function run(test) {
     const section = store.slice(from, to)
     const flat = (s) => s.replace(/\s+/g, ' ')
     const block = (heading) => fenced(section, heading).trim()
+    const prose = (heading) => {
+      const at = section.indexOf(heading)
+      assert.ok(at >= 0, `the 1.90.0 section has no "${heading}"`)
+      return flat(section.slice(at, section.indexOf('```', at)))
+    }
     const notes = block('### Notes for App Review, 1.90.0')
     const whatsNew = block("### What's New in This Version, 1.90.0")
-    const description = block('### Description, from 1.90.0 (App Store and Google Play)')
-    const subtitle = block('### Subtitle, from 1.90.0')
-    const keywords = block('### Keywords, from 1.90.0')
+    const description = block('### Description, 1.90.0 (App Store)')
+    const keywords = block("### Keywords, 1.90.0 (1.89.3's, unchanged)")
+    const promo = block('### Promotional text, 1.90.0')
+    const playDescription = block('### Google Play Description, from 1.90.0')
     const play = block('### Google Play release notes, 1.90.0')
     const access = block('### Google Play App access, 1.90.0')
     const accessShort = block('paste the short one instead')
     const itemNote = block("### The free item's review note, only if it goes with 1.90.0")
     const paragraph = (text, start) => text.split('\n\n').find((p) => p.startsWith(start)) || ''
+    const line = (text, start) => text.split('\n').find((l) => l.startsWith(start)) || ''
     const page = read('mobile/src/screens/Bluetooth.js')
     const settings = flat(read('mobile/src/screens/Settings.js'))
+    const characters = (t) => [...t].length
 
-    /* THE SWITCH: the units this version opens are the ones every Edit line names, and nothing else. */
+    /*
+     * AS SUBMITTED, 9 November 2026: each Apple block is the text App Store
+     * Connect gave back, by its length and its hash, and the prose over it
+     * gives that length. Change one only if App Store Connect does (Show the
+     * texts again), and its pin with it. The notes' four Google Drive links
+     * stand as the house's brackets, since the repository is public and the
+     * review videos never are: links of the same shape go back in to measure
+     * the 2351 bytes that went.
+     */
+    const drive = 'https://drive.google.com/file/d/' + 'x'.repeat(33) + '/view?usp=sharing'
+    const filled = notes.replace(/\[[^\]\n]*video link\]/g, drive)
+    const sha = (t) => createHash('sha256').update(t).digest('hex').slice(0, 16)
+    for (const [where, text, size, said, hash] of [
+      ['promotional text', promo, characters(promo), `${characters(promo)} characters of 170`, 'e749941f785c916e'],
+      ['What’s New', whatsNew, characters(whatsNew), `${characters(whatsNew)} characters of Apple's 4000`, 'b0d6485eedab7c1e'],
+      ['Description', description, characters(description), `${characters(description)} characters of 4000`, '63f1df695cb98c83'],
+      ['keywords', keywords, characters(keywords), `${characters(keywords)} characters of 100`, 'fa18c46e87faf4c5'],
+      ['notes', notes, Buffer.byteLength(filled), `${Buffer.byteLength(filled)} bytes (${characters(filled)} characters), inside Apple's 4000`, '7353d52bd25d13bc']
+    ]) {
+      assert.equal(sha(text), hash, `the 1.90.0 ${where} is not the text that was submitted on 9 November 2026`)
+      assert.ok(size > 0, `the 1.90.0 ${where} is empty`)
+      const heading = { 'promotional text': '### Promotional text, 1.90.0', 'What’s New': "### What's New in This Version, 1.90.0", Description: '### Description, 1.90.0 (App Store)', keywords: "### Keywords, 1.90.0 (1.89.3's, unchanged)", notes: '### Notes for App Review, 1.90.0' }[where]
+      assert.ok(prose(heading).includes('as submitted on 9 November 2026'), `the 1.90.0 ${where} is not said to be as submitted`)
+      assert.ok(prose(heading).includes(said), `the 1.90.0 ${where}'s prose does not give its measured length, ${said}`)
+    }
+    assert.deepEqual([characters(promo), characters(whatsNew), characters(description), characters(keywords), Buffer.byteLength(filled)], [163, 788, 2760, 99, 2351], 'the 1.90.0 texts are not the lengths App Store Connect gave back')
+    assert.ok(section.includes('The App Store blocks below are those texts\nas submitted, read back from App Store Connect the same day'), 'the section does not say its Apple blocks are the texts as submitted')
+    /* The real review video links never in the public repository, here or anywhere in the file. */
+    assert.doesNotMatch(store, /drive\.google\.com\/file\/d\/[A-Za-z0-9_-]{20,}/, 'a review video’s link is in docs/app-store.md, which is public')
+    /* No subtitle went: the heading says so, and no block sits under it. */
+    const subAt = section.indexOf('### Subtitle, 1.90.0: none')
+    assert.ok(subAt > 0, 'the 1.90.0 section does not say there is no subtitle')
+    assert.ok(section.indexOf('```', subAt) > section.indexOf("### Keywords, 1.90.0 (1.89.3's, unchanged)", subAt), 'a subtitle block sits under the 1.90.0 subtitle, and none went')
+    assert.match(flat(section.slice(subAt, section.indexOf('### Keywords, 1.90.0', subAt))), /App Information's subtitle is empty, on the live version and on 1\.90\.0 alike/)
+    /* The keywords went as 1.89.3's, word for word. */
+    assert.equal(keywords, 'fractal,audio,guitar,amp,fm3,fm9,axefx,am4,vp4,preset,scene,setlist,tuner,pedalboard,bluetooth,midi', 'the 1.90.0 keywords are not 1.89.3’s, which is what went')
+    /* The Tested on line went with its brackets unfilled, and is kept so. */
+    assert.equal(line(notes, 'Tested on: '), 'Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].', 'the Tested on line is not as it went')
+    assert.deepEqual((notes.match(/\[[^\]\n]*\]/g) || []).filter((b) => !/video link/.test(b)), ['[version]', '[model]', '[version]'], 'the 1.90.0 notes hold brackets other than the Tested on line’s')
+
+    /* APPLE'S BOXES. */
+    assert.ok(characters(promo) <= 170, `the 1.90.0 promotional text is ${characters(promo)} characters; Apple takes 170`)
+    assert.ok(characters(whatsNew) <= 4000, `What's New for 1.90.0 is ${characters(whatsNew)} characters; Apple takes 4000`)
+    assert.ok(characters(description) <= 4000, `the 1.90.0 Description is ${characters(description)} characters; Apple takes 4000`)
+    assert.ok(Buffer.byteLength(filled) <= 4000, `the 1.90.0 notes are ${Buffer.byteLength(filled)} bytes with their links; Apple's Notes box takes 4000`)
+    assert.ok(keywords.length <= 100 && !/,\s|\bcme\b|widi/i.test(keywords), `the 1.90.0 keywords are ${keywords.length} characters, or name CME's products`)
+
+    /*
+     * NO VP4 IN WHAT WENT TO APPLE, but for the keywords, which went as
+     * 1.89.3's: the one place left, said so over them, for the next version
+     * to take out if Justin wants (keywords change only with a version).
+     */
+    const apple = [['notes', notes], ['What’s New', whatsNew], ['Description', description], ['promotional text', promo]]
+    for (const [where, text] of apple) assert.doesNotMatch(text, /VP4/i, `the 1.90.0 ${where} name the VP4, and Justin said to leave it out of everything that goes to Apple`)
+    assert.match(prose("### Keywords, 1.90.0 (1.89.3's, unchanged)"), /They still name `vp4`, the one VP4 left in what went to Apple for 1\.90\.0\./, 'the keywords’ VP4 is not said to be the one left')
+
+    /* FRACTAL AUDIO'S SENTENCE, word for word, with the trademark line that leaves the VP4 out. */
+    assert.equal(description.split(NOT_AFFILIATED).length, 2, 'the 1.90.0 Description does not say Fractal Audio’s sentence word for word, once')
+    assert.ok(description.split('\n\n').includes(AFFILIATION_APPLE), 'the 1.90.0 Description’s small print is not Fractal Audio’s sentence and the Apple trademark line')
+    assert.ok(!description.includes(TRADEMARKS) && !description.includes(AFFILIATION), 'the 1.90.0 Description carries the trademark line that names the VP4')
+    assert.ok(description.includes(TRADEMARKS_APPLE))
+    /* Where it sits, and that it is his choice, recorded. */
+    const paragraphs = description.split('\n\n')
+    assert.equal(paragraphs.indexOf(AFFILIATION_APPLE), paragraphs.length - 2, 'the Description’s small print moved from where it went')
+    assert.ok(flat(section).includes("Fractal Audio's sentence and the trademark line are the Description's second-last paragraph, not its second."), 'the section does not record where the sentence went')
+
+    /* THE SWITCH: every Edit line names the units this version opens, and nothing else. */
     const NAMES = Object.fromEntries(BLE_UNITS.map((u) => [u.key, u.name]))
     const opened = Object.keys(EDIT_FROM_STORE).filter((u) => EDIT_FROM_STORE[u]?.ios === '1.90.0' && EDIT_FROM_STORE[u]?.android === '1.90.0')
     assert.ok(opened.length > 0, 'the 1.90.0 texts open Edit over Bluetooth, and EDIT_FROM_STORE opens it on no unit from 1.90.0')
     assert.ok(!Object.prototype.hasOwnProperty.call(EDIT_FROM_STORE, 'vp4'), 'the VP4 is in the Edit switch')
     const unitsIn = (text) => BLE_UNITS.filter((u) => new RegExp(`\\b${u.name}\\b`).test(text)).map((u) => u.key)
-    const editLines = [
-      ['notes', paragraph(notes, 'Edit over Bluetooth, in the full version, on the')],
+    const appleEdit = [
+      ['notes', line(notes, '• Edit over Bluetooth on the')],
       ['What’s New', whatsNew.split('\n')[0]],
-      ['Description, WHAT IT DOES', description.split('\n').find((l) => l.startsWith('• Open a block')) || ''],
-      ['Description, BLUETOOTH', (description.match(/On an AM4[^.]*, Edit opens over Bluetooth too[^.]*\./) || [''])[0]],
+      ['Description, EDIT', paragraph(description, 'EDIT YOUR TONE OVER BLUETOOTH\n')]
+    ]
+    const googleEdit = [
+      ['Play Description, WHAT IT DOES', line(playDescription, '• Open a block')],
+      ['Play Description, BLUETOOTH', (playDescription.match(/On an AM4[^.]*, Edit opens over Bluetooth too[^.]*\./) || [''])[0]],
       ['Play release notes', play.split('\n')[0]],
       ['App access note', paragraph(access, 'Edit over Bluetooth, new in this version')],
       ['short App access note', (accessShort.match(/New: Play → Edit over Bluetooth[^;]*;/) || [''])[0]]
     ]
-    for (const [where, text] of editLines) {
+    for (const [where, text] of [...appleEdit, ...googleEdit]) {
       assert.ok(text.length > 30, `the 1.90.0 ${where} say nothing of Edit over Bluetooth`)
-      /* The VP4 only ever in "Not on a VP4" and its kin. */
+      /* Google's say "Not on a VP4" and its kin; Apple's name no VP4 at all (above). */
       assert.deepEqual(unitsIn(text.replace(/[Nn](?:ot|ever) on a VP4|not VP4/g, '')), opened, `the 1.90.0 ${where} name other units than the ${opened.map((u) => NAMES[u]).join(', ')} EDIT_FROM_STORE opens from 1.90.0`)
-      assert.match(text, /over Bluetooth|by Bluetooth/, `the 1.90.0 ${where} do not say Edit is over Bluetooth`)
-      /* Edit lines say Bluetooth: the cable is said once, as doing what Bluetooth does, never paired with the unit list (the AM4 is the only unit that has run by cable). */
+      assert.match(text, /over Bluetooth|by Bluetooth/i, `the 1.90.0 ${where} do not say Edit is over Bluetooth`)
+      /* Edit lines say Bluetooth: the cable is said on its own, never paired with the unit list (the AM4 is the only unit that has run by cable). */
       assert.doesNotMatch(text, /USB cable/, `the 1.90.0 ${where} name the USB cable beside every unit that edits`)
-      assert.doesNotMatch(text, /\bworks? (on|with)\b/, `the 1.90.0 ${where} say Edit works on a unit, where it only opens`)
     }
-    for (const [where, text] of [['notes', notes], ['What’s New', whatsNew], ['Play release notes', play], ['App access note', access], ['short App access note', accessShort]]) {
+    /* Google's drafts say Edit opens, never that it works; Apple's What's New says "works", in Justin's words, recorded. */
+    for (const [where, text] of googleEdit) assert.doesNotMatch(text, /\bworks? (on|with)\b/, `the 1.90.0 ${where} say Edit works on a unit, where it only opens`)
+    assert.match(whatsNew.split('\n')[0], /^• New: Edit over Bluetooth\. On an AM4, FM3, FM9 or Axe-Fx III, Play's Edit now works with no computer/, 'What’s New does not open on Edit over Bluetooth as it went')
+    assert.ok(flat(section).includes(`What's New says Play's Edit "now works" with no computer.`), 'the section does not record What’s New’s "works"')
+    for (const [where, text] of [['Play release notes', play], ['App access note', access], ['short App access note', accessShort]]) {
       assert.match(text, /[Nn]ot on a VP4|[Nn]ever on a VP4|not VP4/, `the 1.90.0 ${where} do not say Edit is never on a VP4`)
     }
     assert.doesNotMatch(section, /Edit over Bluetooth or a USB cable|edit over Bluetooth or a USB cable/, 'a 1.90.0 text says Edit over Bluetooth or a USB cable, which names the cable on every unit')
+    /* What Edit does not do, said where a reviewer finds it, and that Edit says so too. */
+    assert.match(line(notes, '• Edit over Bluetooth on the'), /: Settings, Bluetooth under My rig, pick the unit, Connect, then Play's Edit\. .*It does not save[^.]*, and says so\.$/, 'the notes do not say where Edit is, or that it does not save')
+    assert.match(whatsNew.split('\n')[0], /Save on the unit itself to keep a change\.$/, 'What’s New does not say to save on the unit')
+    assert.ok(page.includes('<Heading>1 · Pick your unit</Heading>'), 'the texts say to pick the unit on a Bluetooth page that no longer has the step')
+    assert.ok(settings.indexOf('<SetupRow title="Bluetooth"') > settings.indexOf('<Group title="My rig"'), 'the texts send people to Settings → My rig → Bluetooth, which is not there')
+    assert.match(description, /\n2\. In the app, open Settings → My rig → Bluetooth and pick your unit\.\n/)
 
-    /* APPLE'S BOX, with a fifth video, Edit's. */
-    const drive = 'https://drive.google.com/file/d/' + 'x'.repeat(33) + '/view?usp=drive_link'
-    const brackets = notes.match(/\[[^\]\n]*\]/g) || []
-    assert.equal(brackets.filter((b) => /video link/.test(b)).length, 5, 'the 1.90.0 notes do not hold a place for five video links')
-    const bytes = Buffer.byteLength(brackets.reduce((t, b) => t.replace(b, /video link/.test(b) ? drive : 'x'.repeat(30)), notes), 'utf8')
-    assert.ok(bytes <= 3950, `the 1.90.0 notes are ${bytes} bytes with the links and brackets filled; Apple's Notes box takes 4000`)
-    assert.match(notes, /\nVideos:\n1\. FM3 hardware: \[FM3 video link\]\n2\. Presets: \[presets video link\]\n3\. Deleting an account: \[account deletion video link\]\n4\. Bluetooth with an AM4: \[Bluetooth video link\]\n5\. Edit over Bluetooth: \[Edit video link\]$/, 'the five videos are not listed at the end of the 1.90.0 notes')
-    /*
-     * And with video 6, the cable clip, by the four changes the paste list
-     * gives: the Hardware line, a sixth link, and two sentences out. Made and
-     * measured here, since "124 bytes more, still inside the box" was a sum
-     * nobody checked, and the first two changes alone came to 4038 bytes
-     * filled, past Apple's 4000.
-     */
-    const listAt = section.indexOf('- **The five video links**')
-    const pasting = flat(section.slice(listAt, section.indexOf("- **The day's guideline pass**", listAt)))
-    const changes = [...pasting.matchAll(/`([^`]+)`/g)].map((m) => m[1])
-    assert.equal(changes.length, 5, 'the video 6 changes are no longer the Hardware line (as it is, as it becomes), the sixth link and the two sentences that come out')
-    const [hardwareWas, hardwareIs, sixth, ...cuts] = changes
-    const once = (text, part, why) => assert.equal(text.split(part).length, 2, `${why}: "${part.trim()}" is not in the 1.90.0 notes exactly once`)
-    once(notes, hardwareWas, 'the Hardware line video 6 changes')
-    let six = notes.replace(hardwareWas, hardwareIs)
-    for (const cut of cuts) {
-      once(six, ' ' + cut, 'a sentence the video 6 notes take out')
-      six = six.replace(' ' + cut, '')
+    /* THE CABLE, said on its own, and never a unit on a cable but the AM4 (shared/bluetooth-gear.mjs, TRIED_NOTES); the FM3's port where it is named. */
+    const cable = [
+      ['notes', line(notes, '• A unit on a USB cable')],
+      ['What’s New', line(whatsNew, '• A unit plugged into your iPhone or iPad by USB cable')],
+      ['Description', paragraph(description, 'An AM4 can even plug straight into')]
+    ]
+    for (const [where, text] of cable) {
+      assert.ok(text.length > 30 && /USB cable/.test(text), `the 1.90.0 ${where} do not say the USB cable`)
+      assert.ok(unitsIn(text.replace(/\(not the FM3, whose USB port isn't MIDI\)/, '')).every((u) => u === 'am4'), `the 1.90.0 ${where} name a unit on a cable other than the AM4`)
     }
-    assert.match(sixth, /^6\. [^:\n]+: \[[^\]\n]*video link\]$/, 'the video 6 line is not a sixth video with a place for its link')
-    six += '\n' + sixth
-    const sixBrackets = six.match(/\[[^\]\n]*\]/g) || []
-    assert.equal(sixBrackets.filter((b) => /video link/.test(b)).length, 6, 'the video 6 notes do not hold a place for six video links')
-    const sixBytes = Buffer.byteLength(sixBrackets.reduce((t, b) => t.replace(b, /video link/.test(b) ? drive : 'x'.repeat(30)), six), 'utf8')
-    assert.ok(sixBytes <= 3950, `with video 6 the 1.90.0 notes are ${sixBytes} bytes with the links and brackets filled; Apple's Notes box takes 4000`)
-    assert.ok(pasting.includes(`${sixBytes} bytes with the six links and the brackets filled`), `the paste list does not give the video 6 notes' true size, ${sixBytes} bytes filled`)
-    assert.match(paragraph(six, 'Hardware (Guideline 2.1)'), /video 5, Edit on it; video 6, the USB cable\.$/, 'with video 6 the Hardware line does not point at it')
-    /* What the cuts keep: the FM3's port, Edit's limits, and the watch. */
-    assert.match(paragraph(six, 'USB cable:'), /The FM3's USB port is not MIDI\./, 'the video 6 notes lose the FM3’s port')
-    assert.match(paragraph(six, 'Edit over Bluetooth, in the full version'), /it does not save, move blocks/, 'the video 6 notes lose what Edit does not do')
-    assert.ok(paragraph(six, 'Apple Watch:').length > 0, 'the video 6 notes lose the Apple Watch line')
-    /* New since 1.89.3: build 31 is the last thing Apple reviewed. */
-    assert.match(notes, /\n\nNew since 1\.89\.3:\n\n/, 'the 1.90.0 notes do not say what they are new since')
-    /* The demo's steps, by the labels the walkthrough draws today: "Let’s go", never "Open Play". */
-    const steps = [...notes.matchAll(/^(\d)\. (.+)$/gm)].map((m) => m[2]).slice(0, 5)
-    assert.match(steps[0], /^Tap "OK" on the card that says the app is independent$/)
+    assert.match(cable[1][1], /\(not the FM3, whose USB port isn't MIDI\)/, 'What’s New does not say the FM3 cannot plug in')
+
+    /* THE DEMO AND THE LABELS the app draws today: "Let’s go", never "Open Play". */
+    const demo = paragraph(notes, 'No hardware? Use the demo')
+    assert.match(demo, /^No hardware\? Use the demo, no account needed: tap OK on the independent-app card, /, 'the notes do not open the demo on the startup card')
     assert.match(read('mobile/src/components/IndependentNotice.js'), /<Press label="OK"/, 'the startup card has no OK button, and the notes say to tap it')
     for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ', 'Let’s go']) {
-      assert.ok(steps.some((t) => t.includes(label)) && access.includes(label) && accessShort.includes(label), `the 1.90.0 notes or App access notes do not say to tap "${label}"`)
+      assert.ok(demo.includes(label) && access.includes(label) && accessShort.includes(label), `the 1.90.0 notes or App access notes do not say to tap "${label}"`)
       assert.ok(read('shared/onboarding.mjs').includes(label), `the 1.90.0 texts say to tap "${label}", which the walkthrough no longer says`)
     }
-    for (const text of [notes, whatsNew, access, accessShort]) assert.ok(!/Open Play/.test(text), 'a 1.90.0 text still says Open Play')
+    for (const text of [notes, whatsNew, description, promo, access, accessShort]) assert.ok(!/Open Play/.test(text), 'a 1.90.0 text still says Open Play')
     /* The opening names the ways with no computer first. */
-    assert.match(notes.split('\n\n')[0], /^A remote for Fractal Audio guitar units, by a Bluetooth MIDI adapter or a USB cable into the iPhone or iPad with no computer, or through a computer\.$/, 'the 1.90.0 notes do not open on the ways with no computer')
-    /* Edit, as a reviewer finds it, with what it does not do, and what an empty Apple screen means. */
-    const edit = paragraph(notes, 'Edit over Bluetooth, in the full version')
-    for (const [said, why] of [
-      [/signed in with the demo account, Settings \(the gear, top right\), Bluetooth under My rig, the unit under "1 · Pick your unit", Connect, then Play's Edit\./, 'where it is'],
-      [/it does not save, move blocks, edit modifiers, rename, copy channels, or pick cabs on an FM3, FM9 or Axe-Fx III, and says so\./, 'what it does not do'],
-      [/With no adapter, Apple's screen finds none and the page says so\./, 'what an empty Apple screen means'],
-      [/Video 5: a real AM4, this build, the demo account\./, 'the video']
-    ]) assert.match(edit, said, `the 1.90.0 Edit paragraph does not say ${why}`)
-    assert.ok(page.includes('<Heading>1 · Pick your unit</Heading>') && page.includes('No adapter was connected.'), 'the notes name a step or a no-adapter line the Bluetooth page no longer has')
-    assert.ok(settings.indexOf('<SetupRow title="Bluetooth"') > settings.indexOf('<Group title="My rig"'), 'the texts send people to Settings → My rig → Bluetooth, which is not there')
-    /* The trial, by the button's own words, and the card it meets once the trial starts. */
-    const trial = paragraph(notes, 'Free 7-day trial')
-    assert.ok(trial.includes(`"${TRIAL_BUTTON}" sits above "Unlock Full Version"`), 'the notes name a trial button the purchase page does not draw')
+    assert.match(notes.split('\n\n')[0], /^A remote for Fractal Audio guitar units, by a Bluetooth MIDI adapter or a USB cable with no computer, or through a computer\.$/, 'the 1.90.0 notes do not open on the ways with no computer')
+    /* The trial, by the button's own words; the purchase page's own Unlock Full Version. */
+    const trial = line(notes, '• Free 7-day trial')
+    assert.ok(trial.includes(`${TRIAL_BUTTON} on the purchase page`), 'the notes name a trial button the purchase page does not draw')
+    assert.match(trial, /One per account and device; try it with a NEW account\.$/)
     assert.match(read('mobile/src/screens/Paywall.js'), /'Unlock Full Version'/)
-    assert.ok(trial.includes(`once it starts, Play asks "${HOW_CONNECT.head}" once`), 'the notes put How do you connect a step early, or by another name')
-    assert.match(trial, /One per account and per device\./)
+    assert.ok(notes.includes('Restore is under Unlock Full Version.'))
+    assert.match(description, /\nTRY IT FREE FOR 7 DAYS\nStart a free 7-day trial of the full version and use it with your own rig\. Nothing is charged when it ends/)
     assert.ok(access.includes(`"${TRIAL_BUTTON}"`) && itemNote.includes(`"${TRIAL_BUTTON}"`), 'Google’s note or the item’s own note names another trial button')
-    assert.match(paragraph(access, 'Free 7-day trial'), /once its trial starts, Play asks once "How do you connect to your unit\?"/, 'Google’s note puts How do you connect a step early')
+    assert.match(paragraph(access, 'Free 7-day trial'), new RegExp(`once its trial starts, Play asks once "${HOW_CONNECT.head.replace(/[?]/g, '\\?')}"`), 'Google’s note puts How do you connect a step early, or by another name')
     assert.ok(!/Restart now/.test(itemNote), 'the item’s 1.90.0 note offers a restart that a 1.90.0 copy does not need')
-    /* The cable, once, in each Apple text: what Bluetooth does, Edit included, and the FM3's port. */
-    for (const [where, text] of [['notes', paragraph(notes, 'USB cable:')], ['What’s New', whatsNew.split('\n').find((l) => l.includes('by USB cable')) || '']]) {
-      assert.match(text, /such as an AM4 on its (own )?USB-C cable/, `the 1.90.0 ${where} name a unit on a cable other than the AM4`)
-      assert.match(text, /does what Bluetooth does, Edit included/, `the 1.90.0 ${where} do not say a unit on a cable does what Bluetooth does, Edit included`)
-      assert.match(text, /FM3/, `the 1.90.0 ${where} do not say the FM3 cannot plug in`)
-    }
-    /* Everything that reached App Store copies by update since build 31, named (2.5.19). */
-    const also = paragraph(notes, 'Also new:')
-    for (const [said, what] of [[/first and last name \(optional\)/, 'the optional names'], [/photo/, 'the profile photo'], [/five pictures and a video/, 'five pictures and a video'], [/never the camera/, 'that the camera is never used'], [/Help make Fractal Remote better\?/, 'the gear notes question'], [/What's new under About/, 'What’s new'], [/frosted glass/, 'the glass look'], [/tablet layouts/, 'the tablet layouts'], [/NAM and IR Player/, 'the NAM blocks']]) {
+    /* What else reached App Store copies by update since build 31 (2.5.19): the notes' Also line and What's New between them, as they went. */
+    const also = line(notes, '• Also:')
+    for (const [said, what] of [[/optional name and profile photo \(deleted with the account\)/, 'the optional name and the profile photo'], [/five pictures and a video in reports \(Apple's picker\)/, 'five pictures and a video, from Apple’s picker'], [/opt-in anonymous usage share/, 'the usage share'], [/What's new under About/, 'What’s new'], [/frosted glass/, 'the glass look']]) {
       assert.match(also, said, `the 1.90.0 notes leave out ${what}, new since 1.89.3`)
     }
-    /* 2.5.19: what only the developer's account sees, giving access among it, and no unit, since none is held back. */
-    assert.match(settings, /<SetupRow title="Customers" status="Sales, sign-ups, and giving access"/, 'the notes say giving access is on the Developer pages, and it is not')
-    for (const [where, text] of [['Apple notes', paragraph(notes, "Only on the developer's own account:")], ['App access note', paragraph(access, "Only on the developer's own account:")]]) {
-      assert.match(text, /Developer pages \(messages, customers, sales, trials, giving access, app health, testing tools\)/, `the ${where} leave out a Developer page, giving access among them`)
+    assert.match(whatsNew, /\n• On an Axe-Fx III over Bluetooth, Play now shows the NAM and IR Player blocks\.$/, 'What’s New leaves out the NAM blocks')
+    assert.match(whatsNew, /\n• A quicker start, Bluetooth first, and Bluetooth connects more reliably\.\n/)
+    /* 2.5.19: what only the developer's account sees, and no unit, since none is held back. */
+    for (const [where, text] of [['Apple notes', line(notes, 'Developer pages and the Axiom switch')], ['App access note', paragraph(access, "Only on the developer's own account:")]]) {
+      assert.ok(text.length > 0, `the ${where} do not say what only the developer’s account sees`)
+      assert.match(text, /Developer pages/)
       assert.match(text, /Axiom/, `the ${where} leave out the Axiom switch`)
       for (const u of BLE_UNITS) assert.ok(!text.includes(u.name), `the ${where} name the ${u.name} as the developer’s alone`)
-      assert.match(text, /No other account sees them, (the demo account|this one) included/)
     }
-    assert.match(paragraph(notes, 'Hardware (Guideline 2.1)'), /video 4, Bluetooth on a real AM4; video 5, Edit on it\.$/, 'the Hardware line does not point at the Edit video')
-    assert.match(paragraph(notes, 'Services:'), /Bluetooth and the cable use no server\.$/)
+    assert.match(line(notes, 'Developer pages and the Axiom switch'), /only on the developer's own account, checked by the server\.$/)
+    assert.match(paragraph(access, "Only on the developer's own account:"), /Developer pages \(messages, customers, sales, trials, giving access, app health, testing tools\)/, 'Google’s note leaves out a Developer page, giving access among them')
+    assert.match(settings, /<SetupRow title="Customers" status="Sales, sign-ups, and giving access"/, 'Google’s note says giving access is on the Developer pages, and it is not')
+    /* Deleting an account (5.1.1(v)), with the label the app draws. */
+    assert.match(line(notes, 'Delete account:'), /^Delete account: Settings, the account card, Delete account, "Delete my account" \(video 3\)\./)
+    assert.ok(read('mobile/src/screens/Settings.js').includes('Delete my account'), 'the notes name a Delete my account the app no longer draws')
+    assert.match(line(notes, 'Services:'), /Bluetooth and USB use no server\.$/)
 
-    /* WHAT'S NEW, within 4000, Edit first. */
-    assert.ok([...whatsNew].length <= 4000, `What's New for 1.90.0 is ${[...whatsNew].length} characters; Apple takes 4000`)
-    assert.match(whatsNew.split('\n')[0], /^• New: Edit over Bluetooth\. On an AM4, FM3, FM9 or Axe-Fx III, Play's Edit now opens with no computer/, 'What’s New does not open on Edit over Bluetooth')
-    assert.match(whatsNew, /Nothing is saved over Bluetooth, so save on the unit itself to keep a change\./)
-    assert.match(whatsNew, /first and last name \(optional\)/, 'What’s New says the names are needed')
-    /* GOOGLE'S RELEASE NOTES, within 500. */
-    assert.ok([...play].length <= 500, `Google's release notes for 1.90.0 are ${[...play].length} characters; Play takes 500`)
-    assert.doesNotMatch(play, /Siri|iPhone|iPad|Apple/, 'Google is told about Apple’s things')
-    /* And with the cable line swapped in, as the prose over the block says: still within 500. */
-    const playHead = '### Google Play release notes, 1.90.0'
-    const playProse = section.slice(section.indexOf(playHead), section.indexOf('```', section.indexOf(playHead)))
-    const swap = [...playProse.matchAll(/`([^`]+)`/g)].map((m) => flat(m[1]))
-    assert.equal(swap.length, 2, 'the release notes’ cable swap is no longer one line in and one line out')
-    const [cableLine, outLine] = swap
-    const playLines = play.split('\n')
-    assert.ok(playLines.includes(outLine), `the release notes have no "${outLine}" to take out for the cable line`)
-    assert.match(cableLine, /^• .*\bAM4\b.*USB cable/, 'the release notes’ cable line does not say an AM4 plugs in by USB cable')
-    const withCable = [playLines[0], cableLine, ...playLines.slice(1).filter((l) => l !== outLine)].join('\n')
-    assert.ok([...withCable].length <= 500, `Google's release notes for 1.90.0 with the cable line are ${[...withCable].length} characters; Play takes 500`)
-    assert.ok(flat(playProse).includes(`${[...withCable].length} of the 500 then`), `the release notes do not give their true length with the cable line, ${[...withCable].length}`)
-    assert.doesNotMatch(cableLine, /Siri|iPhone|iPad|Apple|this phone/, 'the cable line names Apple’s things, or says this phone')
-    /* GOOGLE'S APP ACCESS NOTE: the same labels and limits, and video 4, which exists before the build (video 5 is filmed after it). */
-    assert.match(access, /^This account has the full version\./)
-    assert.match(paragraph(access, 'Edit over Bluetooth, new in this version'), /it does not save \(save on the unit itself\), move blocks, change modifiers or names, copy channels, or pick cabs on an FM3, FM9 or Axe-Fx III, and Edit says so at the top\. Not on a VP4\./, 'Google’s note does not say what Edit does not do')
-    assert.match(paragraph(access, 'Edit over Bluetooth, new in this version'), /\[Bluetooth video link\]$/, 'Google’s note points at a video that does not exist when it is pasted')
-    assert.ok(!/\[Edit video link\]/.test(access + accessShort), 'Google’s note waits for video 5, filmed after its build is sent')
-    assert.match(paragraph(access, 'Bluetooth, part of the full version'), /The row is there only on a device with both MIDI and Bluetooth LE/)
-    for (const [where, text] of [['App access note', access], ['short App access note', accessShort], ['Play release notes', play]]) {
-      assert.doesNotMatch(text, /\biPhone|\biPad|App Store|TestFlight|\bSiri\b/, `the 1.90.0 ${where} name Apple’s things`)
-    }
+    /*
+     * THE VIDEOS (2.1): the same four as 1.89.0's, video 1 a real FM3
+     * through a computer and video 4 Bluetooth on a real AM4. No Edit
+     * video: Justin's call, recorded, with how to film one if Apple asks.
+     */
+    const videos = (text) => text.slice(text.lastIndexOf('\nVideos:\n'))
+    assert.equal(videos(notes), videos(fenced(store, '### Notes for App Review, 1.89.0').trim()), 'the 1.90.0 notes’ videos are not the four 1.89.0 named')
+    assert.match(notes, /\nVideos:\n1\. FM3 hardware: \[FM3 video link\]\n2\. Presets: \[presets video link\]\n3\. Deleting an account: \[account deletion video link\]\n4\. Bluetooth with an AM4: \[Bluetooth video link\]$/, 'the four videos are not listed at the end of the 1.90.0 notes')
+    assert.equal(line(notes, 'Hardware: '), 'Hardware: video 1, a real FM3 through a computer; video 4, Bluetooth on a real AM4.', 'the Hardware line does not point at the hardware videos')
+    assert.ok(prose('### Notes for App Review, 1.90.0').includes("no Edit video (Justin's call)"), 'the notes’ prose does not record that no Edit video went, and whose call it was')
+    const video = flat(section.slice(section.indexOf("### No Edit video (Justin's call), and if Apple asks for one"), section.indexOf("### The free item's review note")))
+    assert.ok(video.length > 200, 'the section does not say how to film Edit if Apple asks')
+    for (const [said, why] of [
+      [/sign in with the review account \(the one in App Review Information\), not yours/, 'to film it on the review account'],
+      [/Not a screen recording\./, 'that it is filmed, not recorded'],
+      [/\*\*Anyone with the link\*\*/, 'how the link is shared'],
+      [/\*\*Never make it public\*\*/, 'that it is never made public'],
+      [/a reply in App Store Connect with a link, and no build/, 'that it costs no build']
+    ]) assert.match(video, said, `the Edit video steps do not say ${why}`)
+    assert.doesNotMatch(section, /\[Edit video link\]|\[cable video link\]|^### Video 5/m, 'the 1.90.0 section still holds a place for a video that did not go')
 
-    /* THE DESCRIPTION: Justin's live Play text, Bluetooth first, with the 1.90.0 changes, Fractal Audio's sentence second. */
-    const paragraphs = description.split('\n\n')
-    assert.match(paragraphs[0], /^Control your Fractal unit from your phone, by Bluetooth or through a computer\./, 'the 1.90.0 Description does not open on the two ways, Bluetooth first')
-    assert.match(paragraphs[0], /A computer has less lag and more features\.$/)
-    assert.doesNotMatch(description, /REQUIRES A COMPUTER|best one|best way|\(computer only\)|\(with a computer\)|No editing or saving/, 'the 1.90.0 Description keeps a line 1.90.0 makes untrue')
-    assert.equal(paragraphs[1], AFFILIATION, 'the 1.90.0 Description’s second paragraph is not the shared disclaimer')
-    assert.equal(description.split(AFFILIATION).length, 2, 'the 1.90.0 Description says the disclaimer twice')
-    assert.ok([...description].length <= 4000, `the 1.90.0 Description is ${[...description].length} characters; both stores take 4000`)
-    assert.match(description, / One free trial per account and per device\.\n/, 'the Description’s trial line leaves out the device')
-    assert.match(description, /\n• Open a block and change its real parameters on real knobs, through a computer, or by Bluetooth on an AM4, FM3, FM9 or Axe-Fx III\n/)
-    assert.match(description, /\nUSB CABLE\nAn AM4 can also plug straight into your phone or tablet with a USB cable: no computer and no adapter, with the same features as Bluetooth\./, 'the Description has no USB CABLE section')
-    assert.match(description, /\nSUPPORTED UNITS\nFM3, FM9, Axe-Fx III and AM4, and the VP4 \(presets, scenes and effects on and off\)\.\n/, 'the supported units are not the live listing’s')
-    assert.match(description, /on a VP4, presets and scenes\)/, 'the Bluetooth section promises a VP4 more than presets and scenes')
-    /* SUBTITLE AND KEYWORDS. */
-    assert.ok([...subtitle].length <= 30 && /^Independent · /.test(subtitle) && !/computer/i.test(subtitle), `the 1.90.0 subtitle is ${subtitle}: 30 at most, "Independent" first, and no computer it does not need`)
-    assert.ok(keywords.length <= 100 && !/,\s|\bcme\b|widi/i.test(keywords) && /\beditor\b/.test(keywords) && /,bluetooth,midi$/.test(keywords), `the 1.90.0 keywords are ${keywords.length} characters, name CME's products, or leave out editor or bluetooth`)
-
-    /* NO OTHER PLATFORM IN APPLE'S TEXTS, and the Description names neither phone. */
-    for (const [where, text] of [['notes', notes], ['What’s New', whatsNew], ['Description', description], ['subtitle', subtitle], ['keywords', keywords]]) {
+    /* NO OTHER PLATFORM IN APPLE'S TEXTS. */
+    for (const [where, text] of [...apple, ['keywords', keywords]]) {
       assert.doesNotMatch(text, /android|google play|play store/i, `the 1.90.0 ${where} name another platform, which Apple's 2.3.10 turns down`)
     }
-    assert.doesNotMatch(description, /\biPhone|\biPad|Android/, 'the Description, which both stores share, names a phone')
 
-    /* THE WORD RULES, in every 1.90.0 block. */
+    /* THE WORD RULES, in every 1.90.0 block, Apple's as they went and Google's as drafted. */
     const disclaimer = /not affiliated with, endorsed by, or\s+supported by/gi
-    for (const [where, text] of [['notes', notes.replace(/^Tested on: /m, '')], ['What’s New', whatsNew], ['Description', description], ['subtitle', subtitle], ['keywords', keywords], ['Play release notes', play], ['App access note', access], ['short App access note', accessShort], ['item note', itemNote]]) {
+    for (const [where, text] of [['notes', notes.replace(/^Tested on: /m, '')], ['What’s New', whatsNew], ['Description', description], ['promotional text', promo], ['keywords', keywords], ['Play Description', playDescription], ['Play release notes', play], ['App access note', access], ['short App access note', accessShort], ['item note', itemNote]]) {
       assert.doesNotMatch(text.replace(disclaimer, ''), /\b(official|certified|approved|endorsed|authori[sz]ed|sponsored)\b/i, `the 1.90.0 ${where} call the app something Fractal Audio has not made it`)
       assert.doesNotMatch(text, /Fractal Audio Systems,? Inc\b|sponsored by/i)
       assert.doesNotMatch(text, /\bfractal\s+(?:(?:desktop|computer|mac|windows|linux|pc|phone|watch)\s+)?app/i, `the 1.90.0 ${where} say "the Fractal app"`)
@@ -5583,15 +5616,54 @@ export function run(test) {
       assert.ok(!/\bfree\b[^.\n]{0,40}\b(desktop|computer) app\b|\b(desktop|computer) app\b[^.\n]{0,20}\bis free\b/i.test(text), `the 1.90.0 ${where} call the desktop app free`)
       for (const l of text.split('\n').filter((x) => /bluetooth/i.test(x))) assert.doesNotMatch(l, /\bbeta\b/i, `the 1.90.0 ${where} call Bluetooth a beta`)
     }
+    for (const [where, text] of apple) assert.doesNotMatch(text, /\bbeta\b/i, `the 1.90.0 ${where} say beta`)
+    /* Help with the app is Justin's own channels. */
+    assert.match(description, /\nQuestions or ideas\? Settings → Troubleshooting → Feedback, or fractal\.newbold\.cloud\/support\.html\.$/, 'the Description does not end on where help comes from')
+    /* Bluetooth first, wherever the two ways sit side by side. */
+    assert.match(description.split('\n\n')[0], /Plug a small Bluetooth MIDI adapter into your unit/, 'the 1.90.0 Description does not open on Bluetooth')
+    assert.match(description, /\nPREFER A COMPUTER\?\n.*A computer has less lag and more features/, 'the 1.90.0 Description does not say what a computer adds')
+    assert.match(promo, /over Bluetooth or a computer/, 'the 1.90.0 promotional text does not put Bluetooth first')
+    assert.match(description, /\nSUPPORTED UNITS\nFM3, FM9, Axe-Fx III and AM4\.\n/, 'the 1.90.0 Description’s units are not the ones that went')
 
-    /* VIDEO 5, for Justin: the review account, filmed not recorded, a private link only. */
-    const video = flat(section.slice(section.indexOf('### Video 5: Edit over Bluetooth on an AM4'), section.indexOf("### The free item's review note")))
-    for (const [said, why] of [
-      [/sign in with the review account \(the one in App Review Information\), not yours/, 'to film it on the review account'],
-      [/Not a screen recording\./, 'that it is filmed, not recorded'],
-      [/\*\*Anyone with the link\*\*/, 'how the link is shared'],
-      [/\*\*Never make it public\*\*/, 'that it is never made public']
-    ]) assert.match(video, said, `the video 5 steps do not say ${why}`)
+    /* GOOGLE'S DESCRIPTION: Justin's live Play text, Bluetooth first, with the 1.90.0 changes, Fractal Audio's sentence second, and the trademark line that names the VP4. */
+    const playParagraphs = playDescription.split('\n\n')
+    assert.match(playParagraphs[0], /^Control your Fractal unit from your phone, by Bluetooth or through a computer\./, 'the Play Description does not open on the two ways, Bluetooth first')
+    assert.match(playParagraphs[0], /A computer has less lag and more features\.$/)
+    assert.doesNotMatch(playDescription, /REQUIRES A COMPUTER|best one|best way|\(computer only\)|\(with a computer\)|No editing or saving/, 'the Play Description keeps a line 1.90.0 makes untrue')
+    assert.equal(playParagraphs[1], AFFILIATION, 'the Play Description’s second paragraph is not the shared disclaimer')
+    assert.equal(playDescription.split(AFFILIATION).length, 2, 'the Play Description says the disclaimer twice')
+    assert.ok(characters(playDescription) <= 4000, `the Play Description is ${characters(playDescription)} characters; Play takes 4000`)
+    assert.match(playDescription, / One free trial per account and per device\.\n/, 'the Description’s trial line leaves out the device')
+    assert.match(playDescription, /\n• Open a block and change its real parameters on real knobs, through a computer, or by Bluetooth on an AM4, FM3, FM9 or Axe-Fx III\n/)
+    assert.match(playDescription, /\nUSB CABLE\nAn AM4 can also plug straight into your phone or tablet with a USB cable: no computer and no adapter, with the same features as Bluetooth\./, 'the Play Description has no USB CABLE section')
+    assert.match(playDescription, /\nSUPPORTED UNITS\nFM3, FM9, Axe-Fx III and AM4, and the VP4 \(presets, scenes and effects on and off\)\.\n/, 'the supported units are not the live Play listing’s')
+    assert.match(playDescription, /on a VP4, presets and scenes\)/, 'the Bluetooth section promises a VP4 more than presets and scenes')
+    assert.doesNotMatch(playDescription, /\biPhone|\biPad|\bApple\b|\bSiri\b|App Store|TestFlight/, 'the Play Description names Apple’s things')
+
+    /* GOOGLE'S RELEASE NOTES, within 500. */
+    assert.ok(characters(play) <= 500, `Google's release notes for 1.90.0 are ${characters(play)} characters; Play takes 500`)
+    /* And with the cable line swapped in, as the prose over the block says: still within 500. */
+    const playHead = '### Google Play release notes, 1.90.0'
+    const playProse = section.slice(section.indexOf(playHead), section.indexOf('```', section.indexOf(playHead)))
+    const swap = [...playProse.matchAll(/`([^`]+)`/g)].map((m) => flat(m[1]))
+    assert.equal(swap.length, 2, 'the release notes’ cable swap is no longer one line in and one line out')
+    const [cableLine, outLine] = swap
+    const playLines = play.split('\n')
+    assert.ok(playLines.includes(outLine), `the release notes have no "${outLine}" to take out for the cable line`)
+    assert.match(cableLine, /^• .*\bAM4\b.*USB cable/, 'the release notes’ cable line does not say an AM4 plugs in by USB cable')
+    const withCable = [playLines[0], cableLine, ...playLines.slice(1).filter((l) => l !== outLine)].join('\n')
+    assert.ok(characters(withCable) <= 500, `Google's release notes for 1.90.0 with the cable line are ${characters(withCable)} characters; Play takes 500`)
+    assert.ok(flat(playProse).includes(`${characters(withCable)} of the 500 then`), `the release notes do not give their true length with the cable line, ${characters(withCable)}`)
+    assert.doesNotMatch(cableLine, /Siri|iPhone|iPad|Apple|this phone/, 'the cable line names Apple’s things, or says this phone')
+    /* GOOGLE'S APP ACCESS NOTE: the same labels and limits, and video 4, which exists before the build. */
+    assert.match(access, /^This account has the full version\./)
+    assert.match(paragraph(access, 'Edit over Bluetooth, new in this version'), /it does not save \(save on the unit itself\), move blocks, change modifiers or names, copy channels, or pick cabs on an FM3, FM9 or Axe-Fx III, and Edit says so at the top\. Not on a VP4\./, 'Google’s note does not say what Edit does not do')
+    assert.match(paragraph(access, 'Edit over Bluetooth, new in this version'), /\[Bluetooth video link\]$/, 'Google’s note points at a video that does not exist when it is pasted')
+    assert.ok(!/\[Edit video link\]/.test(access + accessShort), 'Google’s note waits for a video that was never filmed')
+    assert.match(paragraph(access, 'Bluetooth, part of the full version'), /The row is there only on a device with both MIDI and Bluetooth LE/)
+    for (const [where, text] of [['App access note', access], ['short App access note', accessShort], ['Play release notes', play]]) {
+      assert.doesNotMatch(text, /\biPhone|\biPad|App Store|TestFlight|\bSiri\b/, `the 1.90.0 ${where} name Apple’s things`)
+    }
 
     /* THE DAY, IN ORDER: both stores clear and Google's changes sent before the build, the trial item approved before the iPhone is released. */
     const day = flat(section.slice(section.indexOf('### Submission day for 1.90.0, step by step'), section.indexOf('### Live day for 1.90.0')))
@@ -5613,7 +5685,7 @@ export function run(test) {
       at('**Justin: Play Console → App content → App access → "Any other information":**'),
       at('**Justin: the yes to the build pair**'),
       at('**GitHub: the ledger row**'),
-      at('Then **video 5**'),
+      at('No Edit video was filmed'),
       at('**The guideline pass**'),
       at('**Version Release: Manually release this version**'),
       at('**Age rating:**'),
@@ -5621,10 +5693,13 @@ export function run(test) {
       at('**Release This Version only once `7-day Trial` is approved.**')
     ]
     assert.deepEqual([...order].sort((a, b) => a - b), order, 'the 1.90.0 submission steps are out of order')
+    assert.match(day, /\*\*1\.90\.0 was added for review on 9 November 2026\*\* \(step 15\)/, 'the steps do not say 1.90.0 is in review')
     assert.match(day, /\*\*Android goes to every Android customer the moment Google approves it\*\*/, 'the steps do not say Android goes out when Google approves it, with Send ticked and Managed publishing off')
     assert.match(day, /While 1\.90\.0 is in review on either store, merge fixes only/, 'the steps do not keep big changes out while 1.90.0 is in review')
     assert.match(day, /"Editing over Bluetooth for customers: AM4, FM3, FM9 and Axe-Fx III"/, 'the steps do not say the row the first pull request after the build writes')
     assert.match(day, /16 November 2026 or later[^.]*Shared Location; Dating and Relationships[^.]*\*\*No\*\*/, 'the age rating step leaves out the new questions')
+    assert.match(day, /Full description: \*Google Play Description, from 1\.90\.0\*/, 'the Play Description step does not paste Google’s own Description')
+    assert.doesNotMatch(day, /video 5|video 6|five video links|Four things every time/i, 'the steps still wait for a video that was never filmed')
 
     /*
      * THE LIVE DAY: the website pages wait for it in both stores, and until
@@ -5636,6 +5711,7 @@ export function run(test) {
     const live = flat(section.slice(section.indexOf('### Live day for 1.90.0'), section.indexOf('### If Apple or Google says no to Edit')))
     for (const f of ['public/store-versions.json', 'public/bluetooth.html', 'public/bluetooth-guide.html', 'public/support.html', '`EDIT_IN_EMAILS`', 'CLAUDE.md']) assert.ok(live.includes(f), `the 1.90.0 live day leaves out ${f}`)
     assert.match(live, /The first store's moves only public\/store-versions\.json and CLAUDE\.md; the website's words go only in the pull request that brings the second store to 1\.90\.0/, 'the 1.90.0 live day puts the website’s words in the first store’s pull request, which this test refuses')
+    assert.match(live, /\*\*The App Store promotional text\*\* went with 1\.90\.0/, 'the live day still waits to write a promotional text that went with the version')
     const stores = JSON.parse(read('public/store-versions.json'))
     const before = (v) => { const a = String(v).split('.').map(Number), b = [1, 90, 0]; for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false }
     if (before(stores.ios) || before(stores.android)) {

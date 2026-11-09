@@ -78,6 +78,27 @@ export const WELCOME_NOTICE = NOT_AFFILIATED
 export const AFFILIATION = `${NOT_AFFILIATED} ${TRADEMARKS}`
 
 /**
+ * The trademark line as it goes to Apple: the same, with no VP4.
+ *
+ * "Leave out all the stuff on the VP4. ... Seriously remove it. It's getting
+ * frustrating. I have to keep deleting it every time I submit it to Apple
+ * and they approve it just fine so stop." (Justin, 9 November 2026.) So the
+ * App Store's Description, from 1.90.0 (the first whose Description went
+ * without the VP4), carries this line, and nothing else drafted for App
+ * Store Connect names the VP4. Only the trademark line is cut: Fractal
+ * Audio's sentence, NOT_AFFILIATED, is word for word in both. The app, the
+ * website and Google Play keep TRADEMARKS, which names every unit the app
+ * works with.
+ */
+export const TRADEMARKS_APPLE =
+  '“Fractal Audio”, “Axe-Fx”, “FM3”, “FM9” and “AM4” are trademarks of ' +
+  'Fractal Audio Systems, LLC, used here only to say which hardware this app ' +
+  'works with.'
+
+/** The App Store's block of small print: Fractal Audio's sentence, then the trademark line without the VP4. */
+export const AFFILIATION_APPLE = NOT_AFFILIATED + ' ' + TRADEMARKS_APPLE
+
+/**
  * The short form, for somewhere with one line to spare: the computer app's
  * tray menu, and the App Store's promotional text.
  *
