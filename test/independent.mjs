@@ -1212,10 +1212,9 @@ export function run(test) {
     assert.equal((bar.match(/bluetoothIcon/g) || []).length, 2, 'the top bar shows the Bluetooth symbol somewhere other than its Bluetooth lamp')
     assert.match(read('mobile/src/lib/cableWords.js'), /\.filter\(\(c\) => c && c\.key !== 'adapter'\)/, 'a USB cable’s chain keeps the Bluetooth adapter’s card, and its symbol')
     /* Mac, Windows, Linux: a laptop, a screen on a stand, a command prompt, in that order, at both ends. */
+    /* The browser's alone since 9 November 2026: the phone's Connect a computer is three steps, and names the computers in words (test/mobile.mjs). No picture of a computer maker's on it, drawn or imported. */
     const phone = read('mobile/src/screens/Connect.js')
-    assert.match(phone, /import desktopIcon from '\.\.\/\.\.\/assets\/icons\/desktop\.png'/)
-    assert.match(phone, /import terminalIcon from '\.\.\/\.\.\/assets\/icons\/terminal\.png'/)
-    assert.match(phone, /\[laptopIcon, 'Mac'\],\s+\[desktopIcon, 'Windows'\],\s+\[terminalIcon, 'Linux'\]/, 'the phone’s three computers are not the plain drawings')
+    assert.ok(!/import \w+ from '[^']*assets\/icons\/(?!mail|send|bluetooth)[^']*'/.test(phone), 'the phone’s Connect a computer draws a picture other than the envelope, the paper plane and the Bluetooth symbol')
     const web = read('src/components/ConnectScreen.jsx')
     assert.match(web, /import desktopIcon from '\.\.\/\.\.\/mobile\/assets\/icons\/desktop\.png'/)
     assert.match(web, /import terminalIcon from '\.\.\/\.\.\/mobile\/assets\/icons\/terminal\.png'/)
