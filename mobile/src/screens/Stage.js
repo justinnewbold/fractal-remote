@@ -29,6 +29,7 @@ import { nameOf, useNamesHeard } from '../lib/presetNames'
 import { SIZES, loadFit, loadIcons, loadSceneLayout, loadSceneOrder, loadSize, sceneOrderFor } from '../lib/gigSize'
 import { PAGE_MAX, fitWide, foldInset, pageRow, playShape } from '../lib/playShape'
 import { linedName, linedOn, linedPlan, linedRowsTall, linedTile } from '../lib/linedPlay'
+import { gridWide, squarePlan, squaresOn } from '../lib/squarePlay'
 import {
   arrivedCurrent,
   clearError,
@@ -160,6 +161,12 @@ const LANES = { flexDirection: 'row', gap: space.xl, alignItems: 'flex-start' }
  */
 const LANE = { flexGrow: 1, flexShrink: 1, gap: space.sm }
 const LANE_HEADING = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: LANE_HEAD }
+/* As squares (lib/squarePlay): side by side, the two grids centred in the row; one over the other, each grid centred under its heading. */
+const LANES_SQUARE = { ...LANES, justifyContent: 'center' }
+const SQUARE_LANE = { gap: space.sm }
+const CENTRED = { alignSelf: 'center' }
+/* The least width of a grid of squares with the chain's hold line beside its heading. */
+const HOLD_LINE_ROOM = 320
 /* The raw words a computer with nothing plugged in answers every unit read with (ForgeFX, registryCore). */
 const NO_DEVICE = /no fractal device found/i
 /* The fault for the card at the top, but not those words while Play says where the unit is instead. */
@@ -663,8 +670,37 @@ export default function Stage({
   const pedalTall = lined ? cell : Math.max(tight || fitted ? 44 : TAP, tileH - 12)
   const sceneAcross = lined ? plan.sceneCols : sceneCols
   const pedalsAcross = lined ? plan.chainCols : fxCols
+  /*
+   * PLAY'S TILES AS SQUARES ON A BIG SCREEN (lib/squarePlay): "it would be
+   * better if they looked like square boxes as much as possible" (Justin, 9
+   * November 2026). Opened up or in a side, every scene and pedal is the
+   * same square, as big as the room under the preset allows, side by side
+   * or one over the other, whichever makes them bigger. Asked once Play has
+   * measured its height and where the scenes start; until then, and on every
+   * phone held upright, the tiles are drawn as they always were.
+   */
+  const squares = squaresOn({ wide: shape.wide, inSide })
+  const squareEdge = lined ? foldInset(insets.left, insets.right) : fold
+  const squareRow = Math.max(0, pageRow(playWidth, space.lg) - squareEdge.left - squareEdge.right)
+  const sq =
+    squares && viewport > 0 && lanesAt > 0
+      ? squarePlan({
+          width: squareRow,
+          room: viewport - lanesAt - (tight ? space.md : space.lg),
+          scenes: scenes.hasScenes ? scenes.count : 0,
+          pedals: fitBlocks,
+          gap: space.sm,
+          head: LANE_HEAD + space.sm,
+          between: tight ? space.md : space.lg,
+          beside: space.xl
+        })
+      : null
+  /** The scenes and the chain side by side: as squares that fit better so, or lined up. */
+  const halves = sq ? sq.beside : lined
+  /** A grid of squares' box: its own width, centred under its heading when one is over the other. */
+  const squareGrid = (cols) => [SQUARE_LANE, sq.beside ? null : CENTRED, { width: gridWide(cols, sq.side, space.sm) }]
   /* The chain's frame: a scroll the scenes' height when the chain has more rows than they do, lined up; a plain box otherwise. */
-  const chainScrolls = lined && plan.scrolls
+  const chainScrolls = lined && !sq && plan.scrolls
   const ChainFrame = chainScrolls ? ScrollView : View
   const chainFrame = chainScrolls
     ? { style: { height: linedRowsTall(plan.rows, cell, space.sm) }, nestedScrollEnabled: true, contentContainerStyle: { paddingBottom: 0 } }
@@ -676,7 +712,17 @@ export default function Stage({
   /** Each half, lined up: its own width, never flex's share of the row (LANE says why). */
   const laneBox = lined ? [LANE, { width: laneRow }] : null
   /* A pedal's name a size up on a big tile, lined up only. */
-  const pedalWords = lined ? linedName({ height: cell, width: tileWidth(laneRow, pedalsAcross) }) : undefined
+  const pedalWords = sq ? linedName({ height: sq.side, width: sq.side }) : lined ? linedName({ height: cell, width: tileWidth(laneRow, pedalsAcross) }) : undefined
+  /** Each tile's height and width as drawn: the square, or as they always were. */
+  const sceneHigh = sq ? sq.side : sceneTall
+  const pedalHigh = sq ? sq.side : pedalTall
+  const sceneWide = sq ? sq.side : tileWidth(laneRow, sceneAcross)
+  const pedalWide = sq ? sq.side : tileWidth(laneRow, pedalsAcross)
+  /** Each half's box: its squares' own width, lined up's half, or the phone's column. */
+  const sceneLane = sq ? squareGrid(sq.sceneCols) : lined ? laneBox : { gap: space.sm }
+  const chainLane = sq ? squareGrid(sq.chainCols) : lined ? laneBox : { gap: space.sm }
+  /* Over a narrow grid of squares the chain's heading has no room for its hold line beside it. */
+  const holdRoom = !sq || gridWide(sq.chainCols, sq.side, space.sm) >= HOLD_LINE_ROOM
   /*
    * ONE SIZE FOR EVERY SCENE'S NAME (lib/name-fit `together`): each tile says
    * the biggest size its name fits at, and every tile draws the smallest of
@@ -1299,7 +1345,7 @@ export default function Stage({
         {/* The scenes and the chain: one under the other, as always, or lined up side by side (`lined`). */}
         <View
           onLayout={(e) => setLanesAt(e.nativeEvent.layout.y)}
-          style={lined ? LANES : { gap: tight ? space.md : space.lg }}
+          style={halves ? (sq ? LANES_SQUARE : LANES) : { gap: tight ? space.md : space.lg }}
         >
 
         {/* ---------------------------------------------------------- scenes */}
@@ -1317,13 +1363,13 @@ export default function Stage({
           scene and what a setlist written on paper says.
         */}
         {scenes.hasScenes ? (
-          <View style={lined ? laneBox : { gap: space.sm }}>
+          <View style={sceneLane}>
             {/*
               "Keep having issues showing the scene names on the AM4. Have a way to
               refresh them." Beside the heading, the size of the heading: a thing
               reached for now and then, not a control on the stage.
             */}
-            <View style={lined ? LANE_HEADING : { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={lined || sq ? LANE_HEADING : { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Label>Scenes</Label>
               {/*
                 On an AM4 over Bluetooth too, now. "It does say refresh names
@@ -1361,7 +1407,7 @@ export default function Stage({
                     ink={hue.ink}
                     picked={hue.picked}
                     on={i === scene}
-                    height={sceneTall}
+                    height={sceneHigh}
                     haptic={thud}
                     onPress={() => writeScene(i)}
                     /* Amber round the live one, as in the browser: every scene
@@ -1377,7 +1423,7 @@ export default function Stage({
                     fit
                     fitCap={sceneNameSize}
                     onFit={(size, name) => noteSceneFit(i, size, name)}
-                    style={{ width: tileWidth(laneRow, sceneAcross) }}
+                    style={{ width: sceneWide }}
                   />
                 )
               })}
@@ -1387,8 +1433,8 @@ export default function Stage({
 
         {/* ---------------------------------------------------------- blocks */}
         {/* Lined up with no scenes, the chain keeps its own half. */}
-        {lined && !scenes.hasScenes ? <View style={laneBox} /> : null}
-        <View style={lined ? laneBox : { gap: space.sm }}>
+        {lined && !sq && !scenes.hasScenes ? <View style={laneBox} /> : null}
+        <View style={chainLane}>
           {/*
             "Where it says chain above the pedals, also put hold to switch
             channels. So users know that they can just hold the things to switch
@@ -1396,9 +1442,9 @@ export default function Stage({
             own size, the way Refresh names sits beside Scenes. Only when a hold
             does something: a unit with no channels has nothing to switch.
           */}
-          <View style={lined ? LANE_HEADING : { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={lined || sq ? LANE_HEADING : { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Label icon={chainIcon}>{chainHeading(chain)}</Label>
-            {channels?.length > 1 && blocks.length ? (
+            {channels?.length > 1 && blocks.length && holdRoom ? (
               <Text style={{ color: color.silkDim, fontSize: font.micro, letterSpacing: 1.5, textTransform: 'uppercase' }}>
                 {HOLD_FOR_CHANNELS}
               </Text>
@@ -1463,9 +1509,9 @@ export default function Stage({
               <View style={{ width: '100%', height: held?.height || undefined, overflow: 'hidden' }}>
                 <ChainWait
                   chain={chainNow}
-                  height={pedalTall}
+                  height={pedalHigh}
                   cards={held ? held.count : 4}
-                  width={held ? tileWidth(laneRow, pedalsAcross) : 84}
+                  width={held ? pedalWide : 84}
                   overlay={!!held}
                 />
               </View>
@@ -1510,7 +1556,7 @@ export default function Stage({
                   on={engaged}
                   /* A switch: grey when off, if that is the choice in Settings → Colours. */
                   effect
-                  height={pedalTall}
+                  height={pedalHigh}
                   /* A pedal read ahead of the switch, whose on or off the unit
                      has not said yet: a tap would be a guess, so it waits. */
                   onPress={() => {
@@ -1524,7 +1570,7 @@ export default function Stage({
                       ? () => setPicking(picking === idOf(block) ? null : idOf(block))
                       : undefined
                   }
-                  style={{ width: tileWidth(laneRow, pedalsAcross) }}
+                  style={{ width: pedalWide }}
                 />
               )
             })}
@@ -1555,13 +1601,13 @@ export default function Stage({
                 picked={looperHue.picked}
                 on={vp4Looper ? looperHere.bypassed === false : !looperHere.bypassed}
                 effect
-                height={pedalTall}
+                height={pedalHigh}
                 onPress={() => setLooping(true)}
                 onLongPress={() => setLooping(true)}
                 /* "Looper" from 550 points of row, as the other pedals spell theirs. */
                 full={shape.names ? pedalName(looperHere) : undefined}
                 nameSize={pedalWords}
-                style={{ width: tileWidth(laneRow, pedalsAcross) }}
+                style={{ width: pedalWide }}
               />
             ) : null}
           </View>

@@ -3,8 +3,12 @@
     {
       "date": "2026-11-09",
       "day": "9 November 2026",
-      "version": "1.90.10",
+      "version": "1.90.11",
       "lines": [
+        {
+          "text": "On a tablet or other big screen, Play’s scenes and effects are now square tiles, as big as the screen allows, instead of wide stretched bars.",
+          "only": null
+        },
         {
           "text": "In Edit, a block’s knobs now come straight under its channel buttons, with Copy channel, on and off, and the model below the knobs.",
           "only": null
