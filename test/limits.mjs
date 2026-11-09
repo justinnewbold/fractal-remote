@@ -3719,6 +3719,20 @@ export function run(test) {
     assert.ok(!shown.includes('hunter2'), 'a password in the notes reaches the public log')
     assert.ok(!shown.includes('someone@example.com'), 'an email in the notes reaches the public log')
     assert.ok(shown.includes('Tap Play, then Edit.'), 'redact takes out more than logins')
+    /* However a login is written: in a sentence, with no colon, on the line under its label, or as name / secret. */
+    for (const note of ['The password is Hunter2!', 'pw: Hunter2!', 'Log in: reviewer / Hunter2!', 'Username: reviewer', 'Sign in with the password Hunter2!']) {
+      assert.ok(!/Hunter2|reviewer/.test(redact(note)), `"${note}" reaches the public log`)
+    }
+    assert.ok(!redact('Password:\nHunter2!\nTap Play.').includes('Hunter2'), 'a password on the line under its label reaches the public log')
+    assert.ok(redact('Password:\nHunter2!\nTap Play.').endsWith('Tap Play.'), 'redact hides more than the label and the line under it')
+    for (const plain of ['Delete account: Settings, the account card, Delete account, "Delete my account" (video 3).', 'The demo account in App Review Information has the full version.']) {
+      assert.equal(redact(plain), plain, `an ordinary line is hidden: "${plain}"`)
+    }
+    /* The review details are asked for the notes alone, so the review account and its password never reach the job at all. */
+    const { REVIEW_FIELDS } = await import('../scripts/store-read.mjs')
+    assert.equal(REVIEW_FIELDS, 'fields[appStoreReviewDetails]=notes')
+    assert.match(code, /appStoreReviewDetail\?\$\{REVIEW_FIELDS\}/, 'the review details are fetched whole, demo password and contact included')
+    assert.match(code, /if \(res\.status === 404 && missingIsNone\) return null/, 'a 404 anywhere is taken for "none yet"')
     assert.equal(field('Keywords', 'a,b'), '--- Keywords (3 characters) ---\na,b\n')
     const wf = read('.github/workflows/store-text.yml')
     assert.match(wf, /if: \$\{\{ inputs\.show \}\}[\s\S]{0,300}run: node scripts\/store-read\.mjs/, 'Show the texts does not run the reader')

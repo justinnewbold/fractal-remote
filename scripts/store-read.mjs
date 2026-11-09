@@ -23,13 +23,33 @@ import { token } from './store-text.mjs'
 /** The newest this many iOS versions are shown, newest first. */
 export const SHOWN = 3
 
-/** Emails and any line naming a password, a passcode or a login, hidden before a public log sees them. */
+/** The one field of a version's review details this asks Apple for. */
+export const REVIEW_FIELDS = 'fields[appStoreReviewDetails]=notes'
+
+/*
+ * What never reaches a public log, in case a login was typed into the notes:
+ * every line that names a password, passcode or PIN however it is written
+ * (with a colon or not), every line that pairs a sign-in word with a colon,
+ * equals sign or slash ("Log in: name / secret"), the line under a label that
+ * ends in a colon on such a line, and every email address.
+ */
+const SECRET_WORD = /pass\s*(word|code|phrase)?|\bpw\b|\bpin\b|credential/i
+const LOGIN_WORD = /\blog\s*-?\s*in\b|\bsign\s*-?\s*in\b|\buser\s*-?\s*(name|id)\b/i
 export function redact(text) {
-  return String(text ?? '')
-    .split('\n')
-    .map((line) => (/pass(word|code)?\b|login|sign[- ]?in\s*:/i.test(line) && /[:=]/.test(line) ? '[a line with a login in it, left out]' : line))
-    .join('\n')
-    .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, '[an email address]')
+  const lines = String(text ?? '').split('\n')
+  const out = []
+  let hideNext = false
+  for (const line of lines) {
+    const secret = SECRET_WORD.test(line) || (LOGIN_WORD.test(line) && /[:=/]/.test(line))
+    if (secret || hideNext) {
+      out.push('[a line with a login in it, left out]')
+      hideNext = secret && /:\s*$/.test(line)
+      continue
+    }
+    hideNext = false
+    out.push(line)
+  }
+  return out.join('\n').replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, '[an email address]')
 }
 
 /** A field, as it would be pasted, with its length. */
@@ -43,10 +63,11 @@ async function main() {
   const { ASC_KEY_ID: keyId, ASC_ISSUER_ID: issuerId, ASC_KEY_PATH: keyPath } = process.env
   if (!keyId || !issuerId || !keyPath) throw new Error('ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_PATH are all needed')
   const jwt = token({ keyId, issuerId, p8: readFileSync(keyPath, 'utf8') })
-  const get = async (path) => {
+  /* A 404 is an answer only where Apple uses it for "none yet" (a version with no review details); anywhere else it names the request. */
+  const get = async (path, { missingIsNone = false } = {}) => {
     const res = await fetch(`https://api.appstoreconnect.apple.com${path}`, { headers: { Authorization: `Bearer ${jwt}` } })
     const body = await res.text()
-    if (res.status === 404) return null
+    if (res.status === 404 && missingIsNone) return null
     if (!res.ok) throw new Error(`GET ${path} answered ${res.status}: ${body.slice(0, 600)}`)
     return body ? JSON.parse(body) : null
   }
@@ -74,7 +95,8 @@ async function main() {
       console.log(field('Keywords', a.keywords))
       console.log(field('Description', a.description))
     }
-    const review = await get(`/v1/appStoreVersions/${v.id}/appStoreReviewDetail`)
+    /* The notes alone: the review account, its password and the contact are never even fetched. */
+    const review = await get(`/v1/appStoreVersions/${v.id}/appStoreReviewDetail?${REVIEW_FIELDS}`, { missingIsNone: true })
     console.log(field('Notes for App Review', redact(review?.data?.attributes?.notes), 'bytes'))
   }
 }
