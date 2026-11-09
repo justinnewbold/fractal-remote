@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Dimensions, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 
 import { CHAIN, P1, P2, P3, P4, P6, P7, P9, CLOSE, WALK_STEPS } from '../lib/onboarding'
-import { color, font, mono, radius, space, TAP } from '../lib/theme'
+/* No font, space or TAP from the theme: each piece here takes them from the room (lib/useRoom), grown on a tablet. */
+import { color, mono, radius } from '../lib/theme'
 import { glassCard, glassField } from '../lib/glass'
 import { Platform } from 'react-native'
 import { UNITS } from '../lib/demoUnits'
@@ -42,10 +43,11 @@ import { restorePurchase } from '../lib/purchases'
 import { TRIAL_BUTTON } from '../lib/trial-words'
 import { sendDownloadLink, DOWNLOADS_URL } from '../lib/downloadLink'
 import CopyAddress from '../components/CopyAddress'
-import Note from '../components/Note'
-import Press from '../components/Press'
+/* The app's own Note and Press, grown with the page on a tablet and exactly themselves on a phone (components/Roomy). */
+import { RoomNote as Note, RoomPress as Press } from '../components/Roomy'
 import RestoreAsk from '../components/RestoreAsk'
 import { TipCard } from '../components/Walk'
+import { useRoom } from '../lib/useRoom'
 import playIcon from '../../assets/icons/play.png'
 import slidersIcon from '../../assets/icons/sliders.png'
 import saveIcon from '../../assets/icons/save.png'
@@ -85,6 +87,17 @@ import chevronIcon from '../../assets/icons/chevron.png'
 const face = Platform.select(mono)
 
 export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnlock, replay, onClose, trial = false }) {
+  /*
+   * ROOM ON A TABLET (lib/tabletScale): "these screens are not using the
+   * space very efficiently. Very small" (Justin, on an iPad, 9 November
+   * 2026). On a window a tablet's size, `font` and `space` here are the
+   * theme's grown (TAP, a button's height, too), every other size goes
+   * through `grow`, and the page is a centred column standing in the middle
+   * of the screen. On a phone they are the theme's own and `grow` changes
+   * nothing: drawn as it always was.
+   */
+  const room = useRoom()
+  const { font, space, TAP, grow } = room
   const [at, setAt] = useState('welcome')
   const [unit, setUnit] = useState(UNITS[0].key)
   /* The box under Connect my real rig. Unlock stays grey until it is ticked. */
@@ -204,9 +217,19 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
   return (
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: space.xxl }}
+      contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: space.xxl, ...room.page }}
       keyboardShouldPersistTaps="handled"
     >
+      {/*
+        IN THE MIDDLE OF A TABLET, NOT ITS TOP HALF: a spring above and one
+        below (the last thing on the page), which share whatever height the
+        page does not fill and give way to nothing once it is taller than the
+        screen, so a page that outgrows it (an iPad on its side) still starts
+        at the top and scrolls. Never flexGrow with centring, which pushes a
+        page too tall for the screen out through both ends (test/mobile.mjs).
+        None on a phone.
+      */}
+      {room.tablet ? <View style={{ flexGrow: 1 }} /> : null}
       {/*
         THE DOOR, WHEN SOMEBODY IS ONLY LOOKING.
 
@@ -289,7 +312,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
                 >
                   <Image
                     source={FEATURE_PICTURES[label]}
-                    style={{ width: 30, height: 30, tintColor: color.signal }}
+                    style={{ width: grow(30), height: grow(30), tintColor: color.signal }}
                     resizeMode="contain"
                     accessible={false}
                   />
@@ -422,7 +445,7 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
             eyebrow={P3.real.eyebrow}
             title={P3.real.title}
             body={P3.real.body}
-            art={<Lock size={58} faint />}
+            art={<Lock size={grow(58)} faint />}
           >
             {/*
               THE FREE TRIAL FIRST (8 November 2026): "that should also say
@@ -631,12 +654,13 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
           <Sub>{twoWays ? WALKTHROUGH_TWO_WAYS.demoSub : P9.demo.sub}</Sub>
           {/* A VP4 is not shown SAVE: see walkthroughTips. */}
           {walkthroughTips(P9.tips, unit).map((tip) => (
-            <TipCard key={tip.key} icon={TIP_ICONS[tip.key]} label={tip.label} body={tip.body} onPress={onEnterDemo} />
+            <TipCard key={tip.key} icon={TIP_ICONS[tip.key]} label={tip.label} body={tip.body} onPress={onEnterDemo} k={room.k} />
           ))}
           <Cta label={P9.go} onPress={onEnterDemo} />
           <FootRow text={P9.foot} onPress={onSettings || onEnterDemo} />
         </>
       ) : null}
+      {room.tablet ? <View style={{ flexGrow: 1 }} /> : null}
     </ScrollView>
   )
 }
@@ -657,6 +681,8 @@ const FEATURE_PICTURES = {
  */
 function Contours() {
   const { width } = Dimensions.get('window')
+  /* From the screen's edge, not the column's, where the page is a column in the middle of a tablet. */
+  const { space, inset } = useRoom()
   const line = tint(color.silk, 0.07)
   /* Centred well off each side and only as large as reaches the outer third,
      so they stay at the edges the way the browser fades them there. */
@@ -679,7 +705,7 @@ function Contours() {
   return (
     <View
       pointerEvents="none"
-      style={{ position: 'absolute', top: -space.lg, left: -space.lg, width, height: 1400, overflow: 'hidden' }}
+      style={{ position: 'absolute', top: -space.lg, left: -space.lg - inset, width, height: 1400, overflow: 'hidden' }}
     >
       {RINGS.map((r, i) => ring(-width * 0.6, 420, r, `l${i}`))}
       {RINGS.map((r, i) => ring(width * 1.6 - space.lg, 300, r, `r${i}`))}
@@ -698,125 +724,148 @@ function Contours() {
  * picture tile, one amber button with its arrow, and the settings row at the
  * foot. The browser's walkthrough and the computer's are drawn the same.
  */
-const Head = ({ children }) => (
-  <Text
-    accessibilityRole="header"
-    style={{ color: color.silk, fontSize: font.hero, fontWeight: '800', lineHeight: font.hero * 1.15 }}
-  >
-    {children}
-  </Text>
-)
+/*
+ * Each piece reads the room itself (lib/useRoom): the theme's sizes on a
+ * phone, grown on a tablet, so the page is drawn bigger as one.
+ */
+const Head = ({ children }) => {
+  const { font } = useRoom()
+  return (
+    <Text
+      accessibilityRole="header"
+      style={{ color: color.silk, fontSize: font.hero, fontWeight: '800', lineHeight: font.hero * 1.15 }}
+    >
+      {children}
+    </Text>
+  )
+}
 
-const Sub = ({ children }) => (
-  <Text style={{ color: color.silkDim, fontSize: font.lead, lineHeight: font.lead * 1.4 }}>{children}</Text>
-)
+const Sub = ({ children }) => {
+  const { font } = useRoom()
+  return <Text style={{ color: color.silkDim, fontSize: font.lead, lineHeight: font.lead * 1.4 }}>{children}</Text>
+}
 
 /** Dots joined by lines, the reached ones amber, and "2 of 4" under them. */
-const Steps = ({ at, of, label }) => (
-  <View style={{ alignItems: 'center', gap: space.sm, paddingTop: space.sm }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-      {Array.from({ length: of }, (_, i) => (
-        <View key={i} style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {i ? <View style={{ width: 56, height: 1, backgroundColor: i <= at ? color.signal : color.rule }} /> : null}
-          <View
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: 5,
-              marginHorizontal: space.sm,
-              backgroundColor: i <= at ? color.signal : color.rule
-            }}
-          />
-        </View>
-      ))}
+const Steps = ({ at, of, label }) => {
+  const { font, space, grow } = useRoom()
+  return (
+    <View style={{ alignItems: 'center', gap: space.sm, paddingTop: space.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {Array.from({ length: of }, (_, i) => (
+          <View key={i} style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {i ? <View style={{ width: grow(56), height: 1, backgroundColor: i <= at ? color.signal : color.rule }} /> : null}
+            <View
+              style={{
+                width: grow(10),
+                height: grow(10),
+                borderRadius: grow(5),
+                marginHorizontal: space.sm,
+                backgroundColor: i <= at ? color.signal : color.rule
+              }}
+            />
+          </View>
+        ))}
+      </View>
+      <Text style={{ color: color.silkDim, fontSize: font.small }}>{label || `${Math.min(at, of - 1) + 1} of ${of}`}</Text>
     </View>
-    <Text style={{ color: color.silkDim, fontSize: font.small }}>{label || `${Math.min(at, of - 1) + 1} of ${of}`}</Text>
-  </View>
-)
+  )
+}
 
 /** The one amber button: the words on the left, the arrow at the far end. */
-const Cta = ({ label, onPress, disabled }) => (
-  <Pressable
-    accessibilityRole="button"
-    accessibilityLabel={label}
-    disabled={disabled}
-    onPress={() => {
-      tick()
-      onPress?.()
-    }}
-    style={({ pressed }) => ({
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      minHeight: TAP + 16,
-      paddingHorizontal: space.xl,
-      borderRadius: radius.lg,
-      backgroundColor: color.signal,
-      opacity: disabled ? 0.45 : pressed ? 0.8 : 1,
-      shadowColor: color.signal,
-      shadowOpacity: 0.35,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 6,
-      /* Lit glass (lib/glass): the light along its top and the sheen over the amber. Its own glow stays, so no drop of its own. */
-      boxShadow: color.glassLitTop,
-      experimental_backgroundImage: color.glassSheen
-    })}
-  >
-    <Text style={{ color: color.onSignal, fontSize: font.title - 2, fontWeight: '800' }}>{label}</Text>
-    <Image source={arrowIcon} style={{ width: 26, height: 26, tintColor: color.onSignal }} />
-  </Pressable>
-)
+const Cta = ({ label, onPress, disabled }) => {
+  const { font, space, TAP, grow } = useRoom()
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={() => {
+        tick()
+        onPress?.()
+      }}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        minHeight: TAP + 16,
+        paddingHorizontal: space.xl,
+        borderRadius: radius.lg,
+        backgroundColor: color.signal,
+        opacity: disabled ? 0.45 : pressed ? 0.8 : 1,
+        shadowColor: color.signal,
+        shadowOpacity: 0.35,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 6,
+        /* Lit glass (lib/glass): the light along its top and the sheen over the amber. Its own glow stays, so no drop of its own. */
+        boxShadow: color.glassLitTop,
+        experimental_backgroundImage: color.glassSheen
+      })}
+    >
+      <Text style={{ color: color.onSignal, fontSize: font.title - 2, fontWeight: '800' }}>{label}</Text>
+      <Image source={arrowIcon} style={{ width: grow(26), height: grow(26), tintColor: color.onSignal }} />
+    </Pressable>
+  )
+}
 
 /** The foot: a hairline, then the gear, a quiet line, and a chevron. */
-const FootRow = ({ text, onPress }) => (
-  <View style={{ gap: space.lg, marginTop: space.sm }}>
-    <View style={{ height: 1, backgroundColor: color.rule }} />
-    <Pressable
-      accessibilityRole={onPress ? 'button' : undefined}
-      disabled={!onPress}
-      onPress={onPress}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.sm }}
-    >
-      <Image source={gearIcon} style={{ width: 26, height: 26, tintColor: color.silkDim }} />
-      <Text style={{ flex: 1, color: color.silkDim, fontSize: font.body }}>{text}</Text>
-      {onPress ? <Image source={chevronIcon} style={{ width: 14, height: 14, tintColor: color.silkDim }} /> : null}
-    </Pressable>
-  </View>
-)
+const FootRow = ({ text, onPress }) => {
+  const { font, space, grow } = useRoom()
+  return (
+    <View style={{ gap: space.lg, marginTop: space.sm }}>
+      <View style={{ height: 1, backgroundColor: color.rule }} />
+      <Pressable
+        accessibilityRole={onPress ? 'button' : undefined}
+        disabled={!onPress}
+        onPress={onPress}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.sm }}
+      >
+        <Image source={gearIcon} style={{ width: grow(26), height: grow(26), tintColor: color.silkDim }} />
+        <Text style={{ flex: 1, color: color.silkDim, fontSize: font.body }}>{text}</Text>
+        {onPress ? <Image source={chevronIcon} style={{ width: grow(14), height: grow(14), tintColor: color.silkDim }} /> : null}
+      </Pressable>
+    </View>
+  )
+}
 
 const TIP_ICONS = { play: playIcon, edit: slidersIcon, save: saveIcon }
 
 /** One of the units to simulate: a big card, the lit one amber-edged. */
-const UnitTile = ({ name, on, onPress }) => (
-  <Pressable
-    accessibilityRole="button"
-    accessibilityState={{ selected: !!on }}
-    onPress={() => {
-      tick()
-      onPress?.()
-    }}
-    style={({ pressed }) => ({
-      width: '47%',
-      flexGrow: 1,
-      minHeight: TAP + 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-      /* A card of frosted glass (lib/glass); the one picked keeps its amber edge and wash. */
-      ...glassCard({ bordered: true, pressed, classicCorner: radius.lg }),
-      borderWidth: on ? 2 : 1,
-      ...(on ? { borderColor: color.signal, backgroundColor: tint(color.signal, 0.14) } : null)
-    })}
-  >
-    <Text style={{ color: on ? color.signal : color.silk, fontSize: font.lead, fontWeight: '800' }}>{name}</Text>
-  </Pressable>
-)
+const UnitTile = ({ name, on, onPress }) => {
+  const { font, TAP } = useRoom()
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!on }}
+      onPress={() => {
+        tick()
+        onPress?.()
+      }}
+      style={({ pressed }) => ({
+        width: '47%',
+        flexGrow: 1,
+        minHeight: TAP + 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        /* A card of frosted glass (lib/glass); the one picked keeps its amber edge and wash. */
+        ...glassCard({ bordered: true, pressed, classicCorner: radius.lg }),
+        borderWidth: on ? 2 : 1,
+        ...(on ? { borderColor: color.signal, backgroundColor: tint(color.signal, 0.14) } : null)
+      })}
+    >
+      <Text style={{ color: on ? color.signal : color.silk, fontSize: font.lead, fontWeight: '800' }}>{name}</Text>
+    </Pressable>
+  )
+}
 
-const Eyebrow = ({ children }) => (
-  <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>
-    {children}
-  </Text>
-)
+const Eyebrow = ({ children }) => {
+  const { font } = useRoom()
+  return (
+    <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>
+      {children}
+    </Text>
+  )
+}
 
 /**
  * The unit on the demo card.
@@ -831,14 +880,17 @@ const Eyebrow = ({ children }) => (
  * fingerprints, which is why the chain-block icons in his other mockup are
  * waiting for a native build and this is not.
  */
-const UnitShot = () => (
-  <Image
-    source={unitPlain}
-    style={{ width: 132, height: 105 }}
-    resizeMode="contain"
-    accessible={false}
-  />
-)
+const UnitShot = () => {
+  const { grow } = useRoom()
+  return (
+    <Image
+      source={unitPlain}
+      style={{ width: grow(132), height: grow(105) }}
+      resizeMode="contain"
+      accessible={false}
+    />
+  )
+}
 
 /**
  * A padlock, drawn.
@@ -884,38 +936,41 @@ const Lock = ({ size = 18, faint }) => {
  * solid button. The other card is outlined and quiet. Two identical cards
  * made the screen a coin toss, and these two choices are not a coin toss.
  */
-const Choice = ({ lit, eyebrow, title, body, art, children }) => (
-  <View
-    style={{
-      gap: space.sm,
-      padding: space.lg,
-      /* A card of frosted glass (lib/glass); the lit one keeps its amber edge and warm wash. */
-      ...glassCard({ bordered: true, classicCorner: radius.lg }),
-      borderWidth: 1,
-      ...(lit ? { borderColor: color.signal, backgroundColor: color.signalWash } : null)
-    }}
-  >
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md }}>
-      <View style={{ flex: 1, gap: space.xs }}>
-        <Text
-          style={{
-            color: lit ? color.signal : color.silkFaint,
-            fontSize: font.micro,
-            letterSpacing: 1.5
-          }}
-        >
-          {eyebrow}
-        </Text>
-        <Text style={{ color: color.silk, fontSize: font.lead, fontWeight: '700' }}>{title}</Text>
-        <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.45 }}>
-          {body}
-        </Text>
+const Choice = ({ lit, eyebrow, title, body, art, children }) => {
+  const { font, space } = useRoom()
+  return (
+    <View
+      style={{
+        gap: space.sm,
+        padding: space.lg,
+        /* A card of frosted glass (lib/glass); the lit one keeps its amber edge and warm wash. */
+        ...glassCard({ bordered: true, classicCorner: radius.lg }),
+        borderWidth: 1,
+        ...(lit ? { borderColor: color.signal, backgroundColor: color.signalWash } : null)
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md }}>
+        <View style={{ flex: 1, gap: space.xs }}>
+          <Text
+            style={{
+              color: lit ? color.signal : color.silkFaint,
+              fontSize: font.micro,
+              letterSpacing: 1.5
+            }}
+          >
+            {eyebrow}
+          </Text>
+          <Text style={{ color: color.silk, fontSize: font.lead, fontWeight: '700' }}>{title}</Text>
+          <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.45 }}>
+            {body}
+          </Text>
+        </View>
+        {art ? <View style={{ paddingTop: space.xs }}>{art}</View> : null}
       </View>
-      {art ? <View style={{ paddingTop: space.xs }}>{art}</View> : null}
+      {children}
     </View>
-    {children}
-  </View>
-)
+  )
+}
 
 /**
  * The small print at the bottom: one question, and the short answers.
@@ -924,38 +979,41 @@ const Choice = ({ lit, eyebrow, title, body, art, children }) => (
  * the screen, shouting over the choice it exists to ask. A rule either side
  * of the question puts them where they belong without hiding them.
  */
-const Footnote = ({ question, links }) => (
-  <View style={{ gap: space.md, marginTop: space.sm }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-      <View style={{ flex: 1, height: 1, backgroundColor: color.rule }} />
-      <Text style={{ color: color.silkDim, fontSize: font.small }}>{question}</Text>
-      <View style={{ flex: 1, height: 1, backgroundColor: color.rule }} />
+const Footnote = ({ question, links }) => {
+  const { font, space, TAP } = useRoom()
+  return (
+    <View style={{ gap: space.md, marginTop: space.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+        <View style={{ flex: 1, height: 1, backgroundColor: color.rule }} />
+        <Text style={{ color: color.silkDim, fontSize: font.small }}>{question}</Text>
+        <View style={{ flex: 1, height: 1, backgroundColor: color.rule }} />
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.md }}>
+        {links.map((l, i) => (
+          <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+            {i > 0 ? (
+              <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color.silkFaint }} />
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              disabled={l.disabled}
+              onPress={() => {
+                tick()
+                l.onPress?.()
+              }}
+              hitSlop={12}
+              style={{ minHeight: TAP, justifyContent: 'center', paddingHorizontal: space.xs }}
+            >
+              <Text style={{ color: l.disabled ? color.silkFaint : color.signal, fontSize: font.body }}>
+                {l.label}
+              </Text>
+            </Pressable>
+          </View>
+        ))}
+      </View>
     </View>
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.md }}>
-      {links.map((l, i) => (
-        <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-          {i > 0 ? (
-            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: color.silkFaint }} />
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            disabled={l.disabled}
-            onPress={() => {
-              tick()
-              l.onPress?.()
-            }}
-            hitSlop={12}
-            style={{ minHeight: TAP, justifyContent: 'center', paddingHorizontal: space.xs }}
-          >
-            <Text style={{ color: l.disabled ? color.silkFaint : color.signal, fontSize: font.body }}>
-              {l.label}
-            </Text>
-          </Pressable>
-        </View>
-      ))}
-    </View>
-  </View>
-)
+  )
+}
 
 /**
  * A device, drawn rather than photographed.
@@ -1014,53 +1072,59 @@ const Footnote = ({ question, links }) => (
  */
 const PIECES = { unit: unitPlain, computer: pieceComputer, phone: piecePhone }
 
-const Art = ({ kind }) => (
-  <Image
-    source={PIECES[kind] || PIECES.unit}
-    accessible={false}
-    resizeMode="contain"
-    style={{ width: 92, height: 56 }}
-  />
-)
+const Art = ({ kind }) => {
+  const { grow } = useRoom()
+  return (
+    <Image
+      source={PIECES[kind] || PIECES.unit}
+      accessible={false}
+      resizeMode="contain"
+      style={{ width: grow(92), height: grow(56) }}
+    />
+  )
+}
 
 /**
  * One of the three boxes: a number, what it is, and a picture of it. `tight`
  * (a copy that offers both ways, whose choice row takes room above them)
  * pads it 12 rather than 16: 8pt less a box.
  */
-const ChainBox = ({ n, title, body, kind, tight = false }) => (
-  <View
-    style={{
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: space.md,
-      padding: tight ? space.md : space.lg,
-      /* A card of frosted glass (lib/glass), rimmed, with the light along its top. */
-      ...glassCard({ bordered: true, classicCorner: radius.lg }),
-      borderWidth: 1
-    }}
-  >
+const ChainBox = ({ n, title, body, kind, tight = false }) => {
+  const { font, space, grow } = useRoom()
+  return (
     <View
       style={{
-        width: 34,
-        height: 34,
-        borderRadius: 17,
-        backgroundColor: color.signal,
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center'
+        gap: space.md,
+        padding: tight ? space.md : space.lg,
+        /* A card of frosted glass (lib/glass), rimmed, with the light along its top. */
+        ...glassCard({ bordered: true, classicCorner: radius.lg }),
+        borderWidth: 1
       }}
     >
-      <Text style={{ color: color.onSignal, fontSize: font.body, fontWeight: '800' }}>{n}</Text>
+      <View
+        style={{
+          width: grow(34),
+          height: grow(34),
+          borderRadius: grow(17),
+          backgroundColor: color.signal,
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        <Text style={{ color: color.onSignal, fontSize: font.body, fontWeight: '800' }}>{n}</Text>
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '700', letterSpacing: 0.6 }}>
+          {title}
+        </Text>
+        <Text style={{ color: color.silkDim, fontSize: font.small }}>{body}</Text>
+      </View>
+      <Art kind={kind} />
     </View>
-    <View style={{ flex: 1, gap: 2 }}>
-      <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '700', letterSpacing: 0.6 }}>
-        {title}
-      </Text>
-      <Text style={{ color: color.silkDim, fontSize: font.small }}>{body}</Text>
-    </View>
-    <Art kind={kind} />
-  </View>
-)
+  )
+}
 
 /**
  * The cable between two boxes: a lit line with its name on it.
@@ -1070,27 +1134,31 @@ const ChainBox = ({ n, title, body, kind, tight = false }) => (
  * the box above to the box below. `tight` (see ChainBox) shortens the line
  * either side to 8 and the pill's padding to 2: 16pt less a cable.
  */
-const Wire = ({ label, tight = false }) => (
-  <View style={{ alignItems: 'center' }}>
-    <View style={{ width: 2, height: tight ? 8 : 14, backgroundColor: color.signal }} />
-    <View
-      style={{
-        paddingHorizontal: space.md,
-        paddingVertical: tight ? 2 : 4,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: color.signal,
-        backgroundColor: color.chassis
-      }}
-    >
-      <Text style={{ color: color.signal, fontSize: font.micro, letterSpacing: 1.2 }}>{label}</Text>
+const Wire = ({ label, tight = false }) => {
+  const { font, space, grow } = useRoom()
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <View style={{ width: 2, height: grow(tight ? 8 : 14), backgroundColor: color.signal }} />
+      <View
+        style={{
+          paddingHorizontal: space.md,
+          paddingVertical: tight ? 2 : 4,
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: color.signal,
+          backgroundColor: color.chassis
+        }}
+      >
+        <Text style={{ color: color.signal, fontSize: font.micro, letterSpacing: 1.2 }}>{label}</Text>
+      </View>
+      <View style={{ width: 2, height: grow(tight ? 8 : 14), backgroundColor: color.signal }} />
     </View>
-    <View style={{ width: 2, height: tight ? 8 : 14, backgroundColor: color.signal }} />
-  </View>
-)
+  )
+}
 
 /** One box to type in, the app's own shape. */
 function Field({ mono: isMono, ...rest }) {
+  const { font, space, TAP } = useRoom()
   return (
     <TextInput
       {...rest}
@@ -1117,6 +1185,7 @@ function Field({ mono: isMono, ...rest }) {
  * checkbox role, so a screen reader says "checked" rather than "selected".
  */
 function Agree({ on, label, onPress }) {
+  const { font, space, grow } = useRoom()
   return (
     <Pressable
       accessibilityRole="checkbox"
@@ -1130,8 +1199,8 @@ function Agree({ on, label, onPress }) {
     >
       <View
         style={{
-          width: 28,
-          height: 28,
+          width: grow(28),
+          height: grow(28),
           borderRadius: radius.sm,
           borderWidth: on ? 0 : 1,
           borderColor: color.silkFaint,

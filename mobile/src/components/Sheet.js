@@ -62,8 +62,13 @@ let lastFrame = null
  * and its foot. Under the status bar and never into it, by the phone's own
  * measure of it, so a tall sheet on a phone with an island keeps its title
  * clear of the clock. Every other sheet keeps the four fifths.
+ *
+ * `wide` is how wide a sheet may come up on a tablet, in place of SHEET_MAX:
+ * the Unlock page's (screens/Paywall, lib/tabletScale), which was a 480-point
+ * strip down the middle of an iPad. Still centred, and never wider than the
+ * screen. null, which every other sheet and every phone is, changes nothing.
  */
-export default function Sheet({ open, onClose, title, note, head, foot, tall = false, children }) {
+export default function Sheet({ open, onClose, title, note, head, foot, tall = false, wide = null, children }) {
   const { width: across, height } = useWindowDimensions()
   const { top, bottom, left, right } = useSafeAreaInsets()
   /* Tall: everything but the status bar and a strip of glass to tap out on. */
@@ -117,7 +122,7 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
             /* Swallows presses so the sheet does not close under the thing you
                are reaching for. */
             onPress={() => {}}
-            style={{
+            style={[{
               /* Its sides edged like its top, since it no longer meets the screen's;
                  or, edge to edge, everything on it kept clear of the phone's own
                  down its sides (lib/screenShape clearSides: the Duo's strip). A
@@ -135,7 +140,7 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
               borderColor: paneRim(),
               boxShadow: color.sheetLift,
               paddingBottom: Math.max(bottom, FOOT_AT_LEAST)
-            }}
+            }, wide ? { width: '100%', maxWidth: wide, alignSelf: 'center' } : null]}
           >
             {/* The grab handle. It does not drag — it says which way this came
                 from and which way it goes, which is most of what it is for. */}

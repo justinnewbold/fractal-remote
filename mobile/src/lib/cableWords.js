@@ -25,14 +25,16 @@
  * report-rules), and a change there is a new computer release for a phone
  * feature. A browser never has a cable to the unit.
  *
- * WHAT IS SAID, AND WHAT IS NOT. Only how it is connected: no new way to
- * connect is offered (the one line about a cable outside these is What's
- * new's, and it says what the app now calls it), nothing says a cable works
- * on a unit it has not run on, and no line says what has been tried (that
- * is the Developer page's).
- * No lag claim either: nothing has measured one. The FM3 is the one unit
- * that can never be on one: its USB port is the computer's kind, not MIDI,
- * so it says so (fm3NoCable). The device in hand is named by the caller
+ * WHAT IS SAID, AND WHAT IS NOT. How it is connected, and, since 9
+ * November 2026, the one cable way the app has run on that nobody would
+ * guess: a USB MIDI cable on the FM3's MIDI ports, the U2MIDI Pro, straight
+ * into the device in hand (fm3CableLine, FM3_CABLE_WAY), with Use the USB
+ * cable on the page for any cable plugged in that Connect is not using
+ * (CABLE_USE_HERE). Nothing says a cable works on a unit it has not run on,
+ * and no line says what has been tried (that is the Developer page's).
+ * No lag claim either: nothing has measured one. The FM3's own USB port is
+ * the computer's kind, not MIDI, so it can never plug in by that, and says
+ * so (fm3CableLine). The device in hand is named by the caller
  * (lib/device-word deviceNoun), never "this phone".
  *
  * Pure: no imports, so a test reads it as it is.
@@ -140,16 +142,43 @@ export function cableStatus({ unit, name, unitState, jacks = false } = {}) {
 export const cableConnectingLine = (name) => `Connecting to ${name || 'the unit'} by USB cable…`
 
 /*
- * THE FM3 CANNOT PLUG IN BY ITS USB PORT. Its USB is the computer's kind
- * (serial ports for FM3-Edit), not MIDI, so no phone lists it. Said
+ * THE FM3: NOT BY ITS OWN USB PORT, BUT BY A USB MIDI CABLE ON ITS MIDI
+ * PORTS. Its USB is the computer's kind (serial ports for FM3-Edit), not
+ * MIDI, so no phone lists it. A USB MIDI cable on its MIDI jacks is MIDI,
+ * and the U2MIDI Pro, the FM3's own cable (shared/bluetooth-gear FM3_NEVER),
+ * plugs straight into the device in hand: "Lots of issues connecting FM3
+ * with U2midi pro. Finally did connect though" (Justin, 9 November 2026,
+ * iPad), after this line had said only the computer or Bluetooth. Said
  * whenever the FM3 is picked on a copy where a unit can plug in by cable at
  * all (lib/bluetooth cablesHere: an iPhone or iPad, and Android from the
- * build that lists USB), beside its own red warning, which is about
- * Bluetooth adapters and stays exactly as it is. A USB MIDI cable on its
- * MIDI jacks is another thing, and is not what this is about.
+ * build that lists USB), beside its own red warning, which is about what
+ * goes on its MIDI ports and stays exactly as it is.
  */
-export const fm3NoCable = (noun) =>
-  `The FM3’s own USB port can’t plug into this ${noun}. It connects through the computer, or by Bluetooth with an adapter on its MIDI ports.`
+/*
+ * THE BUTTON THAT TAKES IT, NAMED. Connect goes to a Bluetooth adapter kept
+ * from last time, or to Apple's screen beside one already connected, and
+ * never to the cable then: the path from bug 8519c338. Use the USB cable
+ * (CABLE_USE_HERE) is drawn for the cable in exactly those states, and where
+ * it is not drawn, Connect takes the cable itself. So the line names that
+ * button first, and Connect for when it is not there.
+ *
+ * ONLY THE U2MIDI PRO, never "any USB MIDI cable": Troubleshooting draws the
+ * line without the red FM3_NEVER beside it, and the C2MIDI Pro, a USB MIDI
+ * cable too, got very hot on an FM3.
+ */
+export const fm3CableLine = (noun) =>
+  `The FM3’s own USB port can’t plug into this ${noun}, but the U2MIDI Pro on its MIDI ports can. Plug it straight in, then tap ${CABLE_USE_HERE} (or Connect, when that button isn’t there), or use Bluetooth with an adapter.`
+
+/* How to connect, for the FM3, under its Bluetooth way: the same cable with no adapter, its plugs as the Uhost way's steps say them (shared/bluetooth-gear hookupFor), and the same button as fm3CableLine. */
+export const FM3_CABLE_WAY = (noun) =>
+  `No Bluetooth adapter? Plug the U2MIDI Pro’s USB plug straight into this ${noun} (with a USB plug adapter if it doesn’t fit), its black plug in the FM3’s MIDI IN and the white in MIDI OUT/THRU, then tap ${CABLE_USE_HERE} on the Bluetooth page (or Connect, when that button isn’t there).`
+
+/*
+ * USE THE USB CABLE: the Bluetooth page's button for a cable plugged in now
+ * that Connect is not using (lib/bluetooth cablesToOffer), under the cable's
+ * own name. Never with the Bluetooth symbol: a cable is not Bluetooth.
+ */
+export const CABLE_USE_HERE = 'Use the USB cable'
 
 /**
  * Troubleshooting, with a cable chosen: what to check, in the order worth

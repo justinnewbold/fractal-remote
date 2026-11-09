@@ -7,7 +7,7 @@ import { BLE_UNITS, CHECK_STEPS, WAYS, createBleWire, settleMethods } from './bl
 import { createJoiner } from './fractal-sysex.mjs'
 import { catalogFor } from './gen3Catalog'
 import { setSwitch } from './bleSwitch'
-import { BLUETOOTH_DRIVER, cablesFirst, isAdapter, isCable, isNetworkSession, onMidiJacks, otherAdapterHere, pickAdapter, pairScreenCrashes, pairScreenShutWords } from './bleAdapters'
+import { BLUETOOTH_DRIVER, cablesFirst, cablesFor, isAdapter, isCable, isNetworkSession, onMidiJacks, otherAdapterHere, pickAdapter, pairScreenCrashes, pairScreenShutWords } from './bleAdapters'
 import { logDebug } from './debugLog'
 import { isAdmin } from './admin'
 import { accountId } from './owner-unlock'
@@ -1113,12 +1113,62 @@ export const unitOfferedNow = (key) => allowed === true && offered(key)
  * and connects; App.js restarts the link if Bluetooth was off. A cable let go
  * of by hand is never taken here. True when Bluetooth is on with it.
  */
-export function takeCable(dev, unit) {
-  if (!dev || !isCable(dev) || !isAdapter(dev) || letGo.has(dev.id)) return false
+export function takeCable(dev, unit, { byHand = false } = {}) {
+  if (!dev || !isCable(dev) || !isAdapter(dev) || (letGo.has(dev.id) && !byHand)) return false
   if (unit && unit !== saved.unit && setBluetoothUnit(unit) !== unit) return false
   if (!saved.unit || !offered(saved.unit)) return false
   chooseAdapter(dev)
   return setBluetooth(true)
+}
+
+/**
+ * USE THE USB CABLE: the cables plugged in now that the Bluetooth page offers
+ * by name, for a tap, or [].
+ *
+ * "Lots of issues connecting FM3 with U2midi pro. Finally did connect
+ * though, need better way to select that when FM3 is selected in the
+ * connection page" (Justin, 9 November 2026, iPad). His U2MIDI Pro was
+ * plugged straight into the iPad on the FM3's MIDI jacks, and the page had
+ * nothing to tap for it: Connect went to the WIDI Uhost kept from last time
+ * (Apple's screen, since it was not there), the link tried the Uhost for
+ * ever with the cable plugged in beside it (otherAdapterNow offers only
+ * Bluetooth adapters), and after "Use a Bluetooth adapter instead" the cable
+ * was let go of, so Connect would not take it either. He reached it only
+ * through Apple's screen, by luck: it was the one port left after it.
+ *
+ * So every cable plugged in now that could be the unit picked's (bleAdapters
+ * cablesFor: not one named for another unit; for an FM3 never the C2MIDI
+ * Pro), except the one chosen. A USB MIDI cable on a unit's MIDI jacks
+ * (onMidiJacks: named for no unit) kept for another unit is offered too: the
+ * same U2MIDI Pro moves from the AM4's jacks to the FM3's, Connect itself
+ * would take it (cablesFirst has no such rule), and the tap moves it to the
+ * unit picked (chooseAdapter keepFor). A port named for a unit kept for
+ * another is not (it is that unit's own). A cable let go of by hand is
+ * offered: the tap is the player's own choice, and takes it back
+ * (chooseCableHere). Nothing here is taken by itself. Only for a unit this
+ * account is offered.
+ */
+export function cablesToOffer(list = adapterDevices()) {
+  if (!saved.unit || !offered(saved.unit)) return []
+  const taken = takenIds()
+  return cablesFor(list, { unit: saved.unit, units: BLE_UNITS, refused: saved.unit === 'fm3' ? neverOnFm3 : null }).filter(
+    (d) => d.id !== saved.adapter?.id && !(taken.has(d.id) && !onMidiJacks(d, BLE_UNITS))
+  )
+}
+
+/**
+ * The page's Use the USB cable, tapped: that cable chosen, out of the ones
+ * let go of by hand, and Bluetooth on with it (takeCable), so the link
+ * connects to it at once, from the computer or from a Bluetooth adapter that
+ * is not there. Asked afresh against the list as it is now: a cable pulled
+ * out since the page drew the button is not chosen. True when it is on with
+ * it.
+ */
+export function chooseCableHere(dev) {
+  const here = dev && cablesToOffer().find((d) => d.id === dev.id)
+  if (!here) return false
+  logDebug('ble', `Use the USB cable: ${adapterName(here) || 'a cable with no name'}, as asked`)
+  return takeCable(here, null, { byHand: true })
 }
 
 /* What auto learned, kept for the unit it was learned on. */

@@ -56,7 +56,9 @@ export function Tile({ icon, size = 64 }) {
  * A card of frosted glass (lib/glass), its border the glass's rim; the amber
  * picture tile it leads with is the card's own, and stays.
  */
-export function TipCard({ icon, label, body, warn, onWarn, hint, onPress, right, tile = 64 }) {
+export function TipCard({ icon, label, body, warn, onWarn, hint, onPress, right, tile = 64, k = 1 }) {
+  /* `k`: the walkthrough's cards grown on a tablet (lib/tabletScale), the tile and the words. 1 everywhere else: as it was. */
+  const grow = (n) => (k === 1 ? n : Math.round(n * k))
   const warnLink = Boolean(warn && onWarn)
   const press = onPress || (warnLink ? onWarn : null)
   return (
@@ -81,13 +83,13 @@ export function TipCard({ icon, label, body, warn, onWarn, hint, onPress, right,
         ...glassCard({ bordered: true, pressed, classicCorner: radius.lg })
       })}
     >
-      <Tile icon={icon} size={tile} />
+      <Tile icon={icon} size={grow(tile)} />
       <View style={{ flex: 1, gap: space.xs }}>
-        <Text style={{ color: color.signal, fontSize: font.lead, fontWeight: '800', letterSpacing: 1 }}>{label}</Text>
-        {body ? <Text style={{ color: color.silkDim, fontSize: font.body + 1, lineHeight: 22 }}>{body}</Text> : null}
+        <Text style={{ color: color.signal, fontSize: grow(font.lead), fontWeight: '800', letterSpacing: 1 }}>{label}</Text>
+        {body ? <Text style={{ color: color.silkDim, fontSize: grow(font.body + 1), lineHeight: grow(22) }}>{body}</Text> : null}
         {warn ? <Text style={{ color: color.fault, fontSize: font.body, fontWeight: '700', lineHeight: 20, textDecorationLine: warnLink ? 'underline' : 'none' }}>{warn}</Text> : null}
       </View>
-      {right || (onPress ? <Image source={chevronIcon} style={{ width: 16, height: 16, tintColor: color.silkDim }} /> : null)}
+      {right || (onPress ? <Image source={chevronIcon} style={{ width: grow(16), height: grow(16), tintColor: color.silkDim }} /> : null)}
     </Pressable>
   )
 }

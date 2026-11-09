@@ -11584,7 +11584,8 @@ export function run(test) {
     const walk = read('mobile/src/components/Walk.js')
     const flatWalk = walk.replace(/\s+/g, ' ')
     /* The whole card takes the tap, and only when it has a red line and somewhere to go. */
-    assert.match(flatWalk, /export function TipCard\(\{ icon, label, body, warn, onWarn, hint, onPress, right, tile = 64 \}\)/)
+    /* `k = 1`: the walkthrough's cards grown on a tablet (lib/tabletScale); 1, as it was, everywhere else. */
+    assert.match(flatWalk, /export function TipCard\(\{ icon, label, body, warn, onWarn, hint, onPress, right, tile = 64, k = 1 \}\)/)
     assert.match(flatWalk, /const press = onPress \|\| \(warnLink \? onWarn : null\)/, 'a card without a red line became pressable')
     assert.match(flatWalk, /disabled=\{!press\}/)
     assert.match(flatWalk, /onPress=\{ press \? \(\) => \{ tick\(\) press\(\) \} : undefined \}/, 'the tap does not reach what the card was given')
