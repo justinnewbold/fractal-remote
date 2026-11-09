@@ -352,7 +352,7 @@ export function run(test) {
     assert.equal(apple.TRADEMARKS_APPLE, a.TRADEMARKS.replace(', “AM4” and “VP4”', ' and “AM4”'), 'the Apple trademark line differs from the shared one by more than the VP4')
     assert.ok(!/VP4/.test(apple.AFFILIATION_APPLE), 'the Apple trademark line names the VP4')
     assert.ok(!('TRADEMARKS_APPLE' in a) && !('AFFILIATION_APPLE' in a), 'the Apple trademark line is in shared/affiliation.mjs, which the computer app carries')
-    for (const f of shippedFiles().filter((p) => !p.endsWith('shared/affiliation-apple.mjs'))) {
+    for (const f of shippedFiles().filter((p) => rel(p) !== 'shared/affiliation-apple.mjs')) {
       assert.ok(!/affiliation-apple|TRADEMARKS_APPLE|AFFILIATION_APPLE/.test(readFileSync(f, 'utf8')), `${rel(f)} uses the Apple trademark line, which belongs to the store's records only`)
     }
     /* The welcome screen's line is the sentence now, not his shorter one. */
