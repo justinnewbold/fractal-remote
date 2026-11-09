@@ -1145,7 +1145,8 @@ export function run(test) {
     assert.ok(png.length < 300000, 'the plain box is too heavy for a phone on a signal')
     const phone = read('mobile/src/screens/Onboarding.js')
     assert.match(phone, /const PIECES = \{ unit: unitPlain, computer: pieceComputer, phone: piecePhone \}/)
-    assert.match(phone, /const UnitShot = \(\) => \(\s+<Image\s+source=\{unitPlain\}/)
+    /* Its size from the room (lib/useRoom), grown on a tablet: the picture is the same plain box. */
+    assert.match(phone, /const UnitShot = \(\) => \{\s+const \{ grow \} = useRoom\(\)\s+return \(\s+<Image\s+source=\{unitPlain\}/)
     const web = read('src/components/PhoneWalkthrough.jsx')
     assert.match(web, /const PIECES = \{ unit: unitShot, computer: pieceComputer, phone: piecePhone \}/)
   })
@@ -1252,7 +1253,15 @@ export function run(test) {
     const phone = read('mobile/src/screens/Onboarding.js')
     const css = read('src/styles.css')
     const web = read('src/components/PhoneWalkthrough.jsx')
-    const art = box(phone, /const Art = \(\{ kind \}\) => \(\s+<Image[\s\S]*?style=\{\{ width: (\d+), height: (\d+) \}\}/, 'the phone’s three pieces')
+    /*
+     * The phone's box is the size inside grow(), which is that size on a
+     * phone. On a tablet it is grown by at most GROW_MOST (lib/tabletScale),
+     * on an iPad's 2 pixels a point: under the 4 counted here, so the
+     * phone's box at its sharpest stays the biggest the pictures need.
+     */
+    const art = box(phone, /const Art = \(\{ kind \}\) => \{\s+const \{ grow \} = useRoom\(\)\s+return \(\s+<Image[\s\S]*?style=\{\{ width: grow\((\d+)\), height: grow\((\d+)\) \}\}/, 'the phone’s three pieces')
+    const growMost = Number(read('mobile/src/lib/tabletScale.js').match(/^export const GROW_MOST = ([\d.]+)$/m)?.[1])
+    assert.ok(growMost > 1 && growMost * 2 <= 4, `a tablet's pieces are drawn ${growMost} times bigger, past what a phone's sharpest screen needs`)
     const pwArt = box(css, /\n\.pw-art \{[^}]*?width: (\d+)px;\s+height: (\d+)px;/, 'the browser’s three pieces')
     const pwShot = box(css, /\n\.pw-unit-shot \{[^}]*?width: (\d+)px;\s+height: (\d+)px;/, 'the browser’s choice cards')
     assert.match(web, /<img className="pw-art" src=\{PIECES\[box\.key\] \|\| PIECES\.unit\} alt="" \/>/)

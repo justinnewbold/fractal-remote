@@ -6811,6 +6811,10 @@ console.log('\nPlay lined up on a tablet or the Duo opened: scenes left, chain r
 const { run: linedPlay } = await import('./lined-play.mjs')
 linedPlay(test)
 
+console.log('\nthe walkthrough and the Unlock page on a tablet: grown to fill it, and a phone exactly as it was')
+const { run: tabletRoom } = await import('./tablet-room.mjs')
+tabletRoom(test)
+
 console.log('\nwhat works: the gear notes, off unless somebody says yes')
 const { run: gearShare } = await import('./gear-share.mjs')
 gearShare(test)

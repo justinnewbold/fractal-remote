@@ -616,7 +616,8 @@ export function run(test) {
     /* "It should show everything on the screen instead of having to scroll up" (8 November 2026): the buttons over what it unlocks, in a sheet that comes up to the status bar. */
     assert.ok(pay.indexOf('{freeFirst ? (') > 0 && pay.indexOf('{freeFirst ? (') < pay.indexOf('glassCard({ flat: asked'), 'the Unlock page’s buttons are under its list of features again')
     assert.ok(pay.indexOf('glassCard({ flat: asked') < pay.indexOf('{BLUETOOTH_PAYWALL}'), 'the Bluetooth line moved over the features')
-    assert.match(pay, /<Sheet open tall onClose=\{\(\) => onBack\?\.\(\)\} title="Unlock" note="One payment, once">/, 'the Unlock sheet is not tall')
+    /* `wide`: wider on a tablet (lib/tabletScale), null on a phone. */
+    assert.match(pay, /<Sheet open tall wide=\{room\.sheet\} onClose=\{\(\) => onBack\?\.\(\)\} title="Unlock" note="One payment, once">/, 'the Unlock sheet is not tall')
     assert.match(flat('mobile/src/screens/Stage.js'), /<TrialLine onUnlock=\{onUnlock\} \/>/)
     assert.match(flat('mobile/src/screens/Stage.js'), /<DemoTrialNudge onUnlock=\{onUnlock\} waiting=\{notesUp \|\| coach \|\| watchTip\} \/>/)
     assert.match(flat('mobile/src/components/DemoTrialNudge.js'), /if \(!demo \|\| !due \|\| gone !== false \|\| waiting \|\| !onUnlock \|\| !trialOnOffer\(purchase\)\) return null/)
