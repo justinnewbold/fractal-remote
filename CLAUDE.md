@@ -417,6 +417,10 @@ the build refused), and an update hides it from everybody but him:
   nothing puts text live on the App Store: "No don't put any text live on
   the App Store. I already updated it the way I want it." He sets the
   listing himself, so the store-text workflow is never run with Write it.
+  Its Show the texts box (scripts/store-read.mjs, 9 November 2026) only
+  reads: the newest versions' texts, the subtitle and the review notes, so
+  a new version's texts start from what he left there ("Also, can you read
+  what's there on your own? I changed it last time and it was fine").
   Google Play has its own job, play-text (4 November 2026, the listing-only
   robot fractal-remote-listing and its GOOGLE_PLAY_KEY): it may be run
   unticked any time, to read the listing, its pictures or Android's crash
