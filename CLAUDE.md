@@ -421,6 +421,22 @@ the build refused), and an update hides it from everybody but him:
   reads: the newest versions' texts, the subtitle and the review notes, so
   a new version's texts start from what he left there ("Also, can you read
   what's there on your own? I changed it last time and it was fine").
+
+**No VP4 in anything that goes to Apple.**
+
+> "Leave out all the stuff on the VP4. ... Seriously remove it. It's getting
+> frustrating. I have to keep deleting it every time I submit it to Apple
+> and they approve it just fine so stop." (9 November 2026)
+
+So the review notes, What's New, the Description and every other text
+drafted for App Store Connect name the VP4 nowhere: no "never on a VP4",
+no "presets and scenes only", no VP4 in a list of units, the trademark
+line or the units Bluetooth is offered on. The 1.90.0 texts were the
+first sent without it. Start the next version's texts from what is live
+(Show the texts), and keep them short: "We really don't need that much"
+(the review notes went from about 3,900 to 2,350 characters). The app
+itself is unchanged: its own VP4 words (shared/vp4-safety.mjs and the
+rest) stay where a VP4 owner meets them.
   Google Play has its own job, play-text (4 November 2026, the listing-only
   robot fractal-remote-listing and its GOOGLE_PLAY_KEY): it may be run
   unticked any time, to read the listing, its pictures or Android's crash
