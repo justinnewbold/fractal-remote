@@ -3050,19 +3050,23 @@ export function run(test) {
     assert.match(stage, /const tileH = fitted \? fitted\.tile : size\.tile/, 'the tile height is no longer the chosen size')
     /* Through `sceneTall`, which is tileH itself on every Play but the lined-up one (lib/linedPlay). */
     assert.match(stage, /const sceneTall = lined \? cell : tileH\n/, 'the scene tiles ignore the size setting')
-    assert.match(stage, /height=\{sceneTall\}/, 'the scene tiles ignore the size setting')
+    /* Drawn at sceneHigh: the square on a big screen (lib/squarePlay), sceneTall everywhere else. */
+    assert.match(stage, /const sceneHigh = sq \? sq\.side : sceneTall\n/, 'the scene tiles ignore the size setting')
+    assert.match(stage, /height=\{sceneHigh\}/, 'the scene tiles ignore the size setting')
     /* The tiles are measured rather than given a percentage now — a percentage
        cannot pay for the gaps, and the last tile of a short row stretched the
        width of the screen. The rule being checked is the same: how many go
        across comes from the setting. */
-    assert.match(stage, /width: tileWidth\(laneRow, sceneAcross\)/, 'the scenes are a fixed number across whatever the setting says')
+    assert.match(stage, /const sceneWide = sq \? sq\.side : tileWidth\(laneRow, sceneAcross\)\n/, 'the scenes are a fixed number across whatever the setting says')
+    assert.match(stage, /width: sceneWide/, 'the scenes are a fixed number across whatever the setting says')
     /* Blocks take their column count from `fxCols`, which is the setting's
        own `fx` until fit is measuring — fit widens the rows rather than let a
        tile drop under a thumb. Either way it comes from the setting. */
     /* Play's shape's, which is the setting's own `fx` under 621 points of row (lib/playShape; test/duo.mjs holds it). */
     assert.match(stage, /const fxCols = fitted \? fitted\.fxCols : shape\.fxCols/, 'the chain column count is no longer the chosen one')
     assert.match(stage, /fxCols: shape\.fxCols,/, 'Fit starts the chain from something other than the chosen count')
-    assert.match(stage, /width: tileWidth\(laneRow, pedalsAcross\)/, 'the chain is a fixed number across whatever the setting says')
+    assert.match(stage, /const pedalWide = sq \? sq\.side : tileWidth\(laneRow, pedalsAcross\)\n/, 'the chain is a fixed number across whatever the setting says')
+    assert.match(stage, /width: pedalWide/, 'the chain is a fixed number across whatever the setting says')
     assert.match(stage, /const pedalsAcross = lined \? plan\.chainCols : fxCols\n/, 'the chain is a fixed number across whatever the setting says')
     /*
      * And `row` is not the raw measurement, which is zero on the first frame of
@@ -12243,7 +12247,8 @@ export function run(test) {
        being asked to fit, a chain tile held at 56 beside scene tiles of 48 is
        the thing that stops it fitting. */
     assert.match(stage, /const pedalTall = lined \? cell : Math\.max\(tight \|\| fitted \? 44 : TAP, tileH - 12\) /, 'a chain tile is held at 56 beside scene tiles of 48')
-    assert.equal(stage.split('height={pedalTall}').length - 1, 3, 'a chain tile is held at 56 beside scene tiles of 48')
+    assert.match(stage, /const pedalHigh = sq \? sq\.side : pedalTall /, 'a chain tile is held at 56 beside scene tiles of 48')
+    assert.equal(stage.split('height={pedalHigh}').length - 1, 3, 'a chain tile is held at 56 beside scene tiles of 48')
     assert.match(stage, /const foot = tight \? 48 : TAP/, 'the foot does not give at the smallest size')
     /* Six: Previous, Setlists, Next, Tuner, Tap Tempo and Edit — the last of
        which joined the bar when it came down off the preset row, "exactly like
@@ -20443,7 +20448,7 @@ export function run(test) {
     assert.match(stage, /if \(!chainNow\.elsewhere && tiles > 0 && blockGrid > 0\) heldGrid\.current = \{ count: tiles, height: blockGrid \}/, 'the pedals’ room is not remembered')
     assert.match(stage, /const fitBlocks = held \? held\.count : tiles/, 'the fit works the screen out again for a chain of no blocks while the next one loads')
     assert.match(stage, /blocks: fitBlocks,/, 'the fit does not use the held count')
-    assert.match(stage, /cards=\{held \? held\.count : 4\}\s*width=\{held \? tileWidth\(laneRow, pedalsAcross\) : 84\}\s*overlay=\{!!held\}/, 'the grey cards are not the tiles’ size, so the screen shrinks while a preset loads')
+    assert.match(stage, /cards=\{held \? held\.count : 4\}\s*width=\{held \? pedalWide : 84\}\s*overlay=\{!!held\}/, 'the grey cards are not the tiles’ size, so the screen shrinks while a preset loads')
     assert.match(stage, /block=\{chainNow\.elsewhere(?: \|\| chainNow\.outline)? \? null : blocks\.find/, 'a channel sheet opened on the last song stays up over this one')
     assert.match(stage, /useEffect\(\(\) => \{\s*if \(chainNow\.elsewhere\) setPicking\(null\)/, 'the channel sheet comes back by itself over the new song’s tiles')
     const edit = read('mobile/src/screens/Edit.js')

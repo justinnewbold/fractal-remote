@@ -3680,7 +3680,7 @@ export function run(test) {
     assert.match(read('shared/play-words.mjs'), /export const HOLD_FOR_CHANNELS = 'Hold to switch channels'/)
     assert.match(stage, /^import \{[^}]*\bHOLD_FOR_CHANNELS\b[^}]*\} from '\.\.\/lib\/play-words'$/m, 'the phone says the hold in words of its own')
     assert.ok(!/export const HOLD_FOR_CHANNELS/.test(stage), 'the phone keeps a second copy of the words')
-    assert.match(stage, /\{channels\?\.length > 1 && blocks\.length \? \(\s*<Text[^>]*>\s*\{HOLD_FOR_CHANNELS\}/, 'the words are not beside CHAIN, or show on a unit with no channels')
+    assert.match(stage, /\{channels\?\.length > 1 && blocks\.length && holdRoom \? \(\s*<Text[^>]*>\s*\{HOLD_FOR_CHANNELS\}/, 'the words are not beside CHAIN, or show on a unit with no channels')
     /* The same condition as the hold itself, so the words never promise a hold that does nothing. */
     assert.match(stage, /onLongPress=\{\s*channels\?\.length > 1/)
     const gig = read('src/components/Gig.jsx')
