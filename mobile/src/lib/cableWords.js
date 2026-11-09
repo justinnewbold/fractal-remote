@@ -154,12 +154,24 @@ export const cableConnectingLine = (name) => `Connecting to ${name || 'the unit'
  * build that lists USB), beside its own red warning, which is about what
  * goes on its MIDI ports and stays exactly as it is.
  */
+/*
+ * THE BUTTON THAT TAKES IT, NAMED. Connect goes to a Bluetooth adapter kept
+ * from last time, or to Apple's screen beside one already connected, and
+ * never to the cable then: the path from bug 8519c338. Use the USB cable
+ * (CABLE_USE_HERE) is drawn for the cable in exactly those states, and where
+ * it is not drawn, Connect takes the cable itself. So the line names that
+ * button first, and Connect for when it is not there.
+ *
+ * ONLY THE U2MIDI PRO, never "any USB MIDI cable": Troubleshooting draws the
+ * line without the red FM3_NEVER beside it, and the C2MIDI Pro, a USB MIDI
+ * cable too, got very hot on an FM3.
+ */
 export const fm3CableLine = (noun) =>
-  `The FM3’s own USB port can’t plug into this ${noun}, but a USB MIDI cable on its MIDI ports can, such as the U2MIDI Pro. Plug it straight in and tap Connect, or use Bluetooth with an adapter.`
+  `The FM3’s own USB port can’t plug into this ${noun}, but the U2MIDI Pro on its MIDI ports can. Plug it straight in, then tap ${CABLE_USE_HERE} (or Connect, when that button isn’t there), or use Bluetooth with an adapter.`
 
-/* How to connect, for the FM3, under its Bluetooth way: the same cable with no adapter, its plugs as the Uhost way's steps say them (shared/bluetooth-gear hookupFor). */
+/* How to connect, for the FM3, under its Bluetooth way: the same cable with no adapter, its plugs as the Uhost way's steps say them (shared/bluetooth-gear hookupFor), and the same button as fm3CableLine. */
 export const FM3_CABLE_WAY = (noun) =>
-  `No Bluetooth adapter? Plug the U2MIDI Pro’s USB plug straight into this ${noun} (with a USB plug adapter if it doesn’t fit), its black plug in the FM3’s MIDI IN and the white in MIDI OUT/THRU, then tap Connect on the Bluetooth page.`
+  `No Bluetooth adapter? Plug the U2MIDI Pro’s USB plug straight into this ${noun} (with a USB plug adapter if it doesn’t fit), its black plug in the FM3’s MIDI IN and the white in MIDI OUT/THRU, then tap ${CABLE_USE_HERE} on the Bluetooth page (or Connect, when that button isn’t there).`
 
 /*
  * USE THE USB CABLE: the Bluetooth page's button for a cable plugged in now

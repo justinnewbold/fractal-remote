@@ -1138,16 +1138,21 @@ export function takeCable(dev, unit, { byHand = false } = {}) {
  *
  * So every cable plugged in now that could be the unit picked's (bleAdapters
  * cablesFor: not one named for another unit; for an FM3 never the C2MIDI
- * Pro), except the one chosen, and except one kept for another unit (it is
- * on that unit). A cable let go of by hand is offered: the tap is the
- * player's own choice, and takes it back (chooseCableHere). Nothing here is
- * taken by itself. Only for a unit this account is offered.
+ * Pro), except the one chosen. A USB MIDI cable on a unit's MIDI jacks
+ * (onMidiJacks: named for no unit) kept for another unit is offered too: the
+ * same U2MIDI Pro moves from the AM4's jacks to the FM3's, Connect itself
+ * would take it (cablesFirst has no such rule), and the tap moves it to the
+ * unit picked (chooseAdapter keepFor). A port named for a unit kept for
+ * another is not (it is that unit's own). A cable let go of by hand is
+ * offered: the tap is the player's own choice, and takes it back
+ * (chooseCableHere). Nothing here is taken by itself. Only for a unit this
+ * account is offered.
  */
 export function cablesToOffer(list = adapterDevices()) {
   if (!saved.unit || !offered(saved.unit)) return []
   const taken = takenIds()
   return cablesFor(list, { unit: saved.unit, units: BLE_UNITS, refused: saved.unit === 'fm3' ? neverOnFm3 : null }).filter(
-    (d) => d.id !== saved.adapter?.id && !taken.has(d.id)
+    (d) => d.id !== saved.adapter?.id && !(taken.has(d.id) && !onMidiJacks(d, BLE_UNITS))
   )
 }
 

@@ -35,6 +35,7 @@ import {
   methodsFor,
   midiJacks,
   offeredUnits,
+  onAdapter,
   otherAdapterNow,
   otherAdapterWords,
   pairScreenShut,
@@ -391,8 +392,21 @@ export default function BluetoothPage({ purchase, admin = false, onReport = null
    * Bluetooth, and the module's own header keeps it for a phone that opens
    * this page), and with Android's USB build it is a call into Android's
    * MIDI service; neither is asked again by a page left as it is.
+   *
+   * AND AT A PLUG-IN, while the page is open: the module's list moves
+   * (onDevices: CoreMIDI's setup on an iPhone or iPad, Android's USB MIDI
+   * service), and nothing in Bluetooth's snapshot does, with Bluetooth off
+   * and no search running. A U2MIDI Pro plugged in after the page opened
+   * then got no Use the USB cable, and Connect went to Apple's screen, as in
+   * bug 8519c338, until the page was left and opened again. So the page
+   * counts the module's lists while it is open (`plugs`), and reads again on
+   * each. Listening asks iOS and Android nothing about Bluetooth; never
+   * through the search's listener, which would fill b.devices and draw its
+   * rows.
    */
-  const listed = useMemo(() => adapterDevices(), [b.devices, b.adapter?.id, b.on, b.phase, b.notThere, b.unit])
+  const [plugs, setPlugs] = useState(0)
+  useEffect(() => onAdapter('onDevices', () => setPlugs((n) => n + 1)), [])
+  const listed = useMemo(() => adapterDevices(), [b.devices, b.adapter?.id, b.on, b.phase, b.notThere, b.unit, plugs])
   const cables = cablesIn(listed)
   const cable = !!b.adapter && (isCable(b.adapter) || cables.some((d) => d.id === b.adapter.id))
   /* A USB MIDI cable on the unit's MIDI jacks, whose plugs can be swapped (lib/bluetooth midiJacks): the plug checks stay. */

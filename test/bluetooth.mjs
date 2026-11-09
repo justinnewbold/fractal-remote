@@ -13042,7 +13042,18 @@ export function run(test) {
      * hand (bug 8519c338, 9 November 2026: the old line sent him away from
      * the cable that worked).
      */
-    assert.equal(W.fm3CableLine('iPad'), 'The FM3’s own USB port can’t plug into this iPad, but a USB MIDI cable on its MIDI ports can, such as the U2MIDI Pro. Plug it straight in and tap Connect, or use Bluetooth with an adapter.')
+    assert.equal(W.fm3CableLine('iPad'), 'The FM3’s own USB port can’t plug into this iPad, but the U2MIDI Pro on its MIDI ports can. Plug it straight in, then tap Use the USB cable (or Connect, when that button isn’t there), or use Bluetooth with an adapter.')
+    /*
+     * The button that takes the cable, named: Connect goes to a Bluetooth
+     * adapter kept, or to Apple's screen beside one connected, never to the
+     * cable (the path from bug 8519c338). And only the U2MIDI Pro, never
+     * "a USB MIDI cable": Troubleshooting draws the line with no FM3_NEVER
+     * beside it, and the C2MIDI Pro is one too.
+     */
+    for (const line of [W.fm3CableLine('iPad'), W.FM3_CABLE_WAY('iPad')]) {
+      assert.ok(line.includes(`tap ${W.CABLE_USE_HERE}`), `“${line}” sends him to Connect, which takes a Bluetooth adapter kept over the cable`)
+      assert.ok(!/a USB MIDI cable|any USB MIDI cable/i.test(line), `“${line}” invites any USB MIDI cable onto an FM3`)
+    }
     for (const noun of ['phone', 'iPad', 'tablet']) {
       for (const line of [W.fm3CableLine(noun), W.FM3_CABLE_WAY(noun)]) {
         assert.ok(line.includes(`this ${noun}`), `“${line}” does not name the device in hand`)
@@ -13536,12 +13547,27 @@ export function run(test) {
       assert.equal(b.bluetoothSettings().adapter.id, HOST.id)
       /* Never a cable the FM3 refuses, even asked for by hand. */
       assert.equal(b.chooseCableHere(C2), false, 'the C2MIDI Pro is chosen for an FM3')
-      /* The AM4 picked: its own cable and the C2MIDI Pro are offered; the U2MIDI Pro kept for the FM3 is not (it is on the FM3). */
+      /*
+       * The AM4 picked, the U2MIDI Pro kept for the FM3: offered with the
+       * rest. A USB MIDI cable on the MIDI jacks (named for no unit) moves
+       * between units, and Connect itself would take it (cablesFirst), so the
+       * button does not leave it out; the tap moves it to the AM4.
+       */
       b.setBluetooth(false)
       b.chooseAdapter(U2)
       list = [HOST, U2, C2, AM4C]
       assert.equal(b.setBluetoothUnit('am4'), 'am4')
-      assert.deepEqual(ids(b.cablesToOffer(list)), [C2.id, AM4C.id])
+      assert.ok(ids(b.cablesConnectTakes(list)).includes(U2.id), 'Connect does not take the U2MIDI Pro kept for the FM3')
+      assert.deepEqual(ids(b.cablesToOffer(list)), [U2.id, C2.id, AM4C.id], 'a USB MIDI cable kept for another unit is not offered, though Connect takes it')
+      assert.equal(b.chooseCableHere(U2), true)
+      assert.equal(b.bluetoothSettings().adapter.id, U2.id)
+      assert.equal(b.adapterKeptFor(U2.id), null, 'the tap leaves the cable kept for the FM3 as well')
+      /* A port named for the unit picked, kept for another unit, is still left out: it is that unit's own. */
+      b.setBluetooth(false)
+      assert.equal(b.setBluetoothUnit('fm3'), 'fm3')
+      b.chooseAdapter(AM4C)
+      assert.equal(b.setBluetoothUnit('am4'), 'am4')
+      assert.ok(!ids(b.cablesToOffer(list)).includes(AM4C.id), 'a port named for the unit picked, kept for another, is offered')
     } finally {
       bench.done()
     }
@@ -14154,7 +14180,15 @@ export function run(test) {
     assert.ok(!/glanced\.current/.test(code('mobile/src/screens/Bluetooth.js')), 'the page keeps a look from an earlier round')
     assert.match(page, /const other = notThere \? otherAdapterNow\(listed\) : null const otherWords = other \? otherAdapterWords\(b\.adapter, other\) : null const takeOther = \(d\) => \{ if \(!canStart\) return arm\(\) switchAdapter\(d\) \}/)
     assert.match(page, /\{otherWords \? \( <View style=\{\{ gap: space\.sm \}\}> <Text style=\{\{ color: color\.silk, fontSize: font\.body, lineHeight: 22 \}\}>\{otherWords\.line\}<\/Text> <Press label=\{otherWords\.button\} tone="live" height=\{52\} disabled=\{!canStart\} onPress=\{\(\) => takeOther\(other\)\} \/> <\/View> \) : null\}/)
-    assert.match(page, /const listed = useMemo\(\(\) => adapterDevices\(\), \[b\.devices, b\.adapter\?\.id, b\.on, b\.phase, b\.notThere, b\.unit\]\)/, 'the page does not read the list again when the adapter is missed, or the unit changes')
+    assert.match(page, /const listed = useMemo\(\(\) => adapterDevices\(\), \[b\.devices, b\.adapter\?\.id, b\.on, b\.phase, b\.notThere, b\.unit, plugs\]\)/, 'the page does not read the list again when the adapter is missed, the unit changes, or a cable is plugged in')
+    /*
+     * A cable plugged in while the page is open, Bluetooth off and no search
+     * running, moves nothing in the snapshot: the page counts the module's
+     * own lists (onDevices), so Use the USB cable is drawn for it (bug
+     * 8519c338). Never through the search's listener, which fills b.devices.
+     */
+    assert.match(page, /const \[plugs, setPlugs\] = useState\(0\) useEffect\(\(\) => onAdapter\('onDevices', \(\) => setPlugs\(\(n\) => n \+ 1\)\), \[\]\)/, 'the page does not hear a cable plugged in while it is open')
+    assert.ok(page.indexOf('const [plugs, setPlugs]') < page.indexOf('const listed = useMemo'), 'the count is read after the list')
     /* Called from the button alone: never from a redraw or an effect. */
     assert.equal((code('mobile/src/screens/Bluetooth.js').match(/switchAdapter\(/g) || []).length, 1, 'the page switches adapters somewhere besides the button')
     assert.ok(!/switchAdapter|chooseAdapter/.test(code('mobile/src/lib/bleLink.js')), 'the link switches adapters by itself')
