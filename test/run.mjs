@@ -6811,6 +6811,10 @@ console.log('\nPlay lined up on a tablet or the Duo opened: scenes left, chain r
 const { run: linedPlay } = await import('./lined-play.mjs')
 linedPlay(test)
 
+console.log('\nTwo sides on a big screen: Play beside Edit, Setlists or All presets, his account only')
+const { run: twoSides } = await import('./two-sides.mjs')
+twoSides(test)
+
 console.log('\nwhat works: the gear notes, off unless somebody says yes')
 const { run: gearShare } = await import('./gear-share.mjs')
 gearShare(test)

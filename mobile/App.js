@@ -84,7 +84,12 @@ import { BLUETOOTH_WAYS_SHORT, REPORT_BUTTON } from './src/lib/bluetooth-gear'
 import bluetoothIcon from './assets/icons/bluetooth.png'
 import { CABLE_LOOK_AGAIN, CABLE_TO_ADAPTER, CABLE_TO_ADAPTER_SUB, CABLE_WAITING } from './src/lib/cableWords'
 import { overBluetooth } from './src/lib/bleSwitch'
-import { BENCH } from './src/lib/features'
+import { BENCH, SIDES_FOR_EVERYONE } from './src/lib/features'
+import Sides, { SidesFrame } from './src/components/Sides'
+/* Whose sign-in is kept on this device, for the two sides: the same answer Bluetooth's gate reads. */
+import { useBluetoothAdmin } from './src/lib/bluetooth'
+import { backUnwinds, sideTools, twoSidesOn, whenNarrow } from './src/lib/twoSides'
+import { PLAY_ON_RIGHT, keepPlayOnRight, readPlayOnRight } from './src/lib/sidesKeep'
 import Paywall from './src/screens/Paywall'
 import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, trialOnOffer, unlinkAccount, usePurchase } from './src/lib/purchases'
 import { shouldAskToPay } from './src/lib/unlock-rule'
@@ -350,6 +355,11 @@ export default function App() {
       return true
     }
     if (auth !== 'in') return false
+    /* With two sides up: a side filling the window goes back beside Play first, then the side itself closes, as its Done does (lib/twoSides backUnwinds). */
+    if (twoSidesUp && backUnwinds({ tool: sideTool, sideFull }) === 'full') {
+      setSideFull(false)
+      return true
+    }
     if (screen !== 'stage') {
       setScreen(BACK_TO[screen] || 'stage')
       return true
@@ -700,6 +710,97 @@ export default function App() {
     if (editShut) setScreen('stage')
   }, [editShut])
   /*
+   * TWO SIDES ON A BIG SCREEN (lib/twoSides, components/Sides). "How do I
+   * put these side by side on the iPad?" (Justin, 9 November 2026.) On an
+   * iPad on its side, an Android tablet sideways or the iPhone Duo opened,
+   * Play keeps one side and Edit, Setlists or All presets takes the other.
+   *
+   * HIS ACCOUNT ONLY, while it is built in steps (features SIDES_FOR_EVERYONE
+   * opens it to customers): the sign-in kept on this device is his
+   * (useBluetoothAdmin, isAdmin of the same session that lets the phone in,
+   * never the account server, which with no signal answers nobody). For
+   * everybody else, and on every window that shows one screen, nothing
+   * below is drawn and the app is exactly as today.
+   *
+   * `screen` STAYS THE RECORD OF WHAT IS OPEN. A tool beside Play is still
+   * `screen === 'edit'` (or 'setlists', 'presets'): Play's own buttons open
+   * it the way they always did, its Done and Android's back close it the way
+   * they always did, and the top bar's Save gives way to Edit's as before.
+   * What changes is only where it is drawn: where the window shows two sides
+   * (`wide`, from the frame under the top bar that SidesFrame measures), the
+   * switch below leaves the tool to the host, which draws it beside Play
+   * (`alone` is what the switch draws on its own). A tool that fills the
+   * window (`sideFull`) is the host's too, on any width, so folding the Duo
+   * with Edit full screen leaves Edit exactly as it was.
+   *
+   * WHEN THE WINDOW SHRINKS TO ONE SCREEN with a tool beside Play (the Duo
+   * folded, an iPad's divider dragged), Play is what shows, since that is
+   * what is needed mid-song, and the tool is kept (`sideKept`, and
+   * `shrunk`); wide again, it comes back by itself. Nothing comes back by
+   * itself at launch: `sideKept` starts empty, so the app starts on Play.
+   * Which side Play is on is the one thing kept on the device (lib/sidesKeep).
+   */
+  const sidesAdmin = useBluetoothAdmin()
+  const sidesAllowed = SIDES_FOR_EVERYONE || sidesAdmin
+  /* The frame under the top bar, as measured: { width, height, left, right }, or nothing yet. */
+  const [frame, setFrame] = useState(null)
+  const wideWas = useRef(false)
+  const wide = sidesAllowed && twoSidesOn(frame || {}, wideWas.current)
+  wideWas.current = wide
+  const [sideFull, setSideFull] = useState(false)
+  const [sideKept, setSideKept] = useState(null)
+  const [playOnRight, setPlayOnRight] = useState(PLAY_ON_RIGHT)
+  useEffect(() => {
+    let alive = true
+    readPlayOnRight().then((onRight) => alive && setPlayOnRight(onRight))
+    return () => {
+      alive = false
+    }
+  }, [])
+  /* The tool a side can hold, by the screen that is open: Edit only behind the bench's switch, as its route is. */
+  const sideTool = BENCH && screen === 'edit' ? 'edit' : screen === 'setlists' || screen === 'presets' ? screen : null
+  const twoSidesUp = sidesAllowed && sideTool !== null && (wide || sideFull)
+  /* Play is on screen beside the tool; or kept out of sight at no width while the tool fills the window (Stage `awake`). */
+  const playBeside = twoSidesUp && !sideFull
+  const playHidden = twoSidesUp && sideFull
+  const alone = twoSidesUp ? 'stage' : screen
+  /* The tool last open, for Two sides on Play's bar; and a side that fills the window stops doing so when it closes. */
+  useEffect(() => {
+    if (sideTool) setSideKept(sideTool)
+    else setSideFull(false)
+  }, [sideTool])
+  /*
+   * THE WINDOW SHRUNK TO ONE SCREEN WITH A TOOL BESIDE PLAY (the Duo folded,
+   * an iPad's divider dragged): what shows is lib/twoSides whenNarrow's
+   * answer, Play, with the tool kept to come back (`shrunk`). Decided while
+   * drawing, not in an effect after it: an effect runs after the frame is
+   * on screen, and that frame would have drawn the tool on its own (the
+   * switch's own branch), taking the host down and Play with it, open
+   * sheets and all, for the tool to come back a frame later. Only on the
+   * render after one that had the tool beside Play (`wasBeside`), so a tool
+   * opened on a phone, which is never beside anything, is left alone.
+   */
+  const wasBeside = useRef(false)
+  const shrunk = useRef(null)
+  if (wasBeside.current && !wide) {
+    const to = whenNarrow({ tool: sideTool, sideFull })
+    if (to.screen !== screen) {
+      shrunk.current = to.keep
+      setScreen(to.screen)
+    }
+  }
+  wasBeside.current = playBeside
+  /* Wide again: the tool the shrink put away comes back, if Play is still what is showing; gone to Settings meanwhile, it is left for Two sides. */
+  useEffect(() => {
+    if (!wide) return
+    const back = shrunk.current
+    shrunk.current = null
+    if (back && screen === 'stage') setScreen(back)
+  }, [wide])
+  /* What the list on either bar offers now: the same conditions Play's own buttons use. */
+  const toolsOffered = sideTools({ editOpens, presetsOffered: demo || link.link === 'connected' })
+  const closeSide = () => setScreen('stage')
+  /*
    * And the new-version note only floats over it while the phone is off the
    * rig. Over a connected rig a download can land mid-song, and the note's
    * Restart now would come up where the preset button is, under a thumb on
@@ -816,7 +917,8 @@ export default function App() {
    * Play does not come by itself from any of them (lib/siri-rule
    * playElsewhereOf says which is which).
    */
-  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen, shareCard: askHow || askShare })
+  /* And not elsewhere while it is beside a tool on two sides (playBeside): Play is showing, so a command is for it, not "Open Play". A tool filling the window over it is the tool's screen, and elsewhere. */
+  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen, shareCard: askHow || askShare }) && !playBeside
   useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
   /*
    * Where the pill on the bar goes, named once, so the tap and what a screen
@@ -1676,6 +1778,8 @@ export default function App() {
               and a gesture that does nothing is worse than none at all.
             */}
             <EdgeBack onBack={backFrom}>
+            {/* The frame under the top bar, measured for the two sides (his account only): nothing drawn, nothing moved. */}
+            {sidesAllowed ? <SidesFrame onFrame={setFrame} /> : null}
             {settling && screen === 'stage' ? (
               <Waking
                 link={link}
@@ -1686,11 +1790,11 @@ export default function App() {
                 onBluetooth={bluetoothOffered ? () => openSettings('bluetooth') : null}
                 onReport={reportBluetooth ? (said) => reportBluetooth('stage', said) : null}
               />
-            ) : screen === 'presets' ? (
+            ) : alone === 'presets' ? (
               <Presets onBack={() => setScreen('stage')} />
-            ) : screen === 'setlists' ? (
+            ) : alone === 'setlists' ? (
               <Setlists onBack={() => setScreen('stage')} />
-            ) : BENCH && screen === 'edit' ? (
+            ) : BENCH && alone === 'edit' ? (
               <Edit
                 onBack={() => setScreen('stage')}
                 onOpenGear={() => {
@@ -1828,7 +1932,51 @@ export default function App() {
                 }}
               />
             ) : (
+              /*
+               * Play, in the host that gives it a side (components/Sides). For
+               * everybody but his account the host draws Play and nothing
+               * else; for his, on a window wide enough, the tool the switch
+               * above left to it (twoSidesUp) is drawn beside Play, or over
+               * it when it fills the window, with a bar over each.
+               */
+              <Sides
+                allowed={sidesAllowed}
+                two={wide}
+                tool={twoSidesUp ? sideTool : null}
+                full={sideFull}
+                playOnRight={playOnRight}
+                frame={frame}
+                tools={toolsOffered}
+                kept={sideKept}
+                onPick={(tool) => setScreen(tool)}
+                onSwap={() => {
+                  keepPlayOnRight(!playOnRight)
+                  setPlayOnRight(!playOnRight)
+                }}
+                onFull={setSideFull}
+                onPlayFull={closeSide}
+                onTwoSides={() => setScreen(sideKept)}
+                side={
+                  !twoSidesUp ? null : sideTool === 'presets' ? (
+                    /* Beside Play the list stays open after a pick (`stay`), so you can keep browsing while the rig plays it. */
+                    <Presets onBack={closeSide} stay />
+                  ) : sideTool === 'setlists' ? (
+                    <Setlists onBack={closeSide} />
+                  ) : (
+                    <Edit
+                      onBack={closeSide}
+                      onOpenGear={() => {
+                        setGearBack('edit')
+                        setScreen('gear')
+                      }}
+                    />
+                  )
+                }
+              >
               <Stage
+                /* On one side of two, and asleep while a tool fills the window over it (components/Sides). */
+                inSide={playBeside}
+                awake={!playHidden}
                 /* An error on the stage screen can name the fix for it, and
                    Done comes back here rather than to Setup. */
                 onOpenFix={(id) => {
@@ -1882,6 +2030,7 @@ export default function App() {
                 computers={demo ? null : link}
                 onOpenUnits={() => setPickLive(true)}
               />
+              </Sides>
             )}
             {/* Over the play screen and never in it, where the fault floats,
                 and out of the way while the fault or the advice is up. */}

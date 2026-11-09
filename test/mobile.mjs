@@ -3869,7 +3869,8 @@ export function run(test) {
         `${file} waits for the whole read before it does anything, which is the two seconds`
       )
     }
-    assert.match(read('mobile/src/screens/Presets.js'), /loadPreset\(n\)\s*\n\s*onBack\?\.\(\)/, 'the picker does not close on the press')
+    /* On its own screen; beside Play on two sides it stays open (`stay`, test/two-sides.mjs). */
+    assert.match(read('mobile/src/screens/Presets.js'), /loadPreset\(n\)\s*\n\s*if \(!stay\) onBack\?\.\(\)/, 'the picker does not close on the press')
 
     /*
      * The chain before the scene names. The chain is most of what the stage
@@ -8812,7 +8813,7 @@ export function run(test) {
 
     const stage = read('mobile/src/screens/Stage.js')
     /* Through Play's shape (lib/playShape), which is the layout's own sceneColsFor under 621 points of row: test/duo.mjs holds that. */
-    assert.match(stage, /const sceneLayout = loadSceneLayout\(sync\)\n[\s\S]{0,1200}const shape = playShape\(pageRow\(playWidth, space\.lg\), SIZES\.indexOf\(size\), sceneLayout, shapeWas\.current\)\n[\s\S]{0,600}const sceneCols = shape\.sceneCols\n/, 'the phone ignores the choice')
+    assert.match(stage, /const sceneLayout = loadSceneLayout\(sync\)\n[\s\S]{0,1200}const shape = playShape\(pageRow\(playWidth, space\.lg\), SIZES\.indexOf\(size\), sceneLayout, shapeWas\.current, inSide\)\n[\s\S]{0,600}const sceneCols = shape\.sceneCols\n/, 'the phone ignores the choice')
     assert.match(stage, /sceneOrderFor\(sceneLayout, scenes\.count, loadSceneOrder\(sync\)\)\.map\(\(i\) => \{/, 'the phone draws the scenes in their own order whatever was chosen')
     assert.match(stage, /caption=\{String\(i \+ 1\)\}[\s\S]{0,600}onPress=\{\(\) => writeScene\(i\)\}/, 'a moved tile no longer picks its own scene')
     /* Through `sceneAcross` and `laneRow`, which are sceneCols and row themselves on every Play but the lined-up one. */

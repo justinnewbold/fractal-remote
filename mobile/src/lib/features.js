@@ -43,3 +43,16 @@
  * ever needs taking out again.
  */
 export const BENCH = true
+
+/**
+ * TWO SIDES ON A BIG SCREEN (lib/twoSides, components/Sides), for everyone.
+ *
+ * OFF: his account only, while it is built in steps (9 November 2026, "How
+ * do I put these side by side on the iPad?"). Each step is an ordinary
+ * over-the-air update and shows on his account first; this is the one line
+ * that opens it to customers once he says it is right, with its line in
+ * What's new in the same pull request. Until then nobody else sees a bar,
+ * a Swap or a second side: every phone held upright, and every other
+ * account on any screen, is drawn exactly as today.
+ */
+export const SIDES_FOR_EVERYONE = false

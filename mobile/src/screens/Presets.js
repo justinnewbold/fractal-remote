@@ -79,7 +79,7 @@ const STRIDE = ROW + GAP
  * line at the end of the list says so, and so does Settings → Colours,
  * which can tag the loaded preset with a tap.
  */
-export default function Presets({ onBack }) {
+export default function Presets({ onBack, stay = false }) {
   const preset = useRig(ofPreset)
   const caps = useRig(ofCaps)
   const device = useRig(ofSlug)
@@ -429,8 +429,9 @@ export default function Presets({ onBack }) {
                  * what put two seconds between the tap and anything happening.
                  */
                 onPress={() => {
+                  /* Beside Play (components/Sides, `stay`) the list stays open after a pick, so you can keep browsing while the rig plays it; on its own it goes back to Play, as it always has. */
                   loadPreset(n)
-                  onBack?.()
+                  if (!stay) onBack?.()
                 }}
                 /* Held, its colour tag — nothing to file one under before a unit has answered (colourPage presetTarget). */
                 onLongPress={target ? () => setPainting(target) : undefined}
