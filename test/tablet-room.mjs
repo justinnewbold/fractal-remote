@@ -197,7 +197,7 @@ export function run(test) {
     assert.match(walk, /const grow = \(n\) => \(k === 1 \? n : Math\.round\(n \* k\)\)/)
     const growers = []
     for (const file of phoneFiles()) {
-      for (const m of readFileSync(file, 'utf8').matchAll(/<TipCard\b[^>]*\bk=\{([^}]*)\}/g)) growers.push([file.split('/mobile/')[1], m[1]])
+      for (const m of readFileSync(file, 'utf8').matchAll(/<TipCard\b[^>]*\bk=\{([^}]*)\}/g)) growers.push([file.replaceAll('\\', '/').split('/mobile/')[1], m[1]])
     }
     assert.deepEqual(growers, [['src/screens/Onboarding.js', 'room.k']], 'a card outside the walkthrough is grown')
   })
