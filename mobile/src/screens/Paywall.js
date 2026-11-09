@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Alert, ScrollView, Text, View } from 'react-native'
 
-import { color, font, radius, space } from '../lib/theme'
+/* No font or space from the theme: the page takes them from the room (lib/useRoom), grown on a tablet. */
+import { color, radius } from '../lib/theme'
 import { glassCard } from '../lib/glass'
-import Note from '../components/Note'
-import Press from '../components/Press'
+/* The app's own Note and Press, grown with the page on a tablet and exactly themselves on a phone (components/Roomy). */
+import { RoomNote as Note, RoomPress as Press } from '../components/Roomy'
 import RestoreAsk from '../components/RestoreAsk'
 import Sheet from '../components/Sheet'
 import { buyUnlock, restorePurchase, startTrial, trialOnOffer, usePurchase } from '../lib/purchases'
@@ -18,6 +19,7 @@ import { VP4_SO_FAR } from '../lib/vp4-safety'
 import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
 import { BLUETOOTH_PARTS, BLUETOOTH_PARTS_SHOW, BLUETOOTH_PAYWALL } from '../lib/bluetooth-gear'
 import { askHowToConnect } from '../lib/howConnect'
+import { useRoom } from '../lib/useRoom'
 
 /*
  * The units named on the offer, read off the list the app actually carries.
@@ -49,6 +51,17 @@ const supportedWords =
  * behind the thing that charges them again would be a poor way to treat them.
  */
 export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onMakeAccount, onDeleted, asked = false }) {
+  /*
+   * ROOM ON A TABLET (lib/tabletScale), as the walkthrough has it: "these
+   * screens are not using the space very efficiently. Very small" (Justin,
+   * on an iPad, 9 November 2026). On a tablet `font` and `space` here are
+   * the theme's grown, the sheet comes up wider (`room.sheet`, where it was
+   * a 480-point strip), and the page put in front of the app is a centred
+   * column in the middle of the screen. Every word, price, button and its
+   * order are as they were. On a phone, the theme's own: as it always was.
+   */
+  const room = useRoom()
+  const { font, space } = room
   const purchase = usePurchase()
   const { price, unlocked, available, why, detail, held } = purchase
   const [busy, setBusy] = useState(false)
@@ -238,9 +251,12 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onMakeAc
   const Column = asked ? View : ScrollView
   const columnProps = asked
     ? { style: { gap: space.lg } }
-    : { contentContainerStyle: { padding: space.lg, gap: space.lg }, keyboardShouldPersistTaps: 'handled' }
+    : { contentContainerStyle: { padding: space.lg, gap: space.lg, ...room.page }, keyboardShouldPersistTaps: 'handled' }
+  /* In the middle of a tablet when it is the page: a spring above and below that gives way once the page is taller than the screen (Onboarding.js says why not centring). */
+  const spring = room.tablet && !asked ? <View style={{ flexGrow: 1 }} /> : null
   const body = (
     <Column {...columnProps}>
+      {spring}
       {asked ? null : intro}
 
       {trialOn ? <Note tone="info">{trialRunningWords(purchase.trialEndsAt)}</Note> : null}
@@ -452,12 +468,13 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onMakeAc
           <Press label="Keep my account" disabled={busy} onPress={() => setDeleting(false)} />
         </Sheet>
       ) : null}
+      {spring}
     </Column>
   )
 
   /* Imposed, it IS the screen. Asked for, it lies over the one they were on. */
   return asked ? (
-    <Sheet open tall onClose={() => onBack?.()} title="Unlock" note="One payment, once">
+    <Sheet open tall wide={room.sheet} onClose={() => onBack?.()} title="Unlock" note="One payment, once">
       {body}
     </Sheet>
   ) : (

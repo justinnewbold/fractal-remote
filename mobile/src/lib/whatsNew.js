@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-09",
     "day": "9 November 2026",
-    "version": "1.90.0",
+    "version": "1.90.5",
     "lines": [
+      {
+        "text": "On a tablet, the walkthrough and the Unlock page now fill the screen, with bigger words, pictures and buttons, and the Unlock page opens wider.",
+        "only": null
+      },
       {
         "text": "From version 1.90.0 of the app, Edit opens over Bluetooth on an AM4, FM3, FM9 or Axe-Fx III: turn knobs, change models, switch blocks on and off and pick channels, and a unit on a USB cable does the same. Changes play right away; save on the unit to keep them.",
         "only": null
