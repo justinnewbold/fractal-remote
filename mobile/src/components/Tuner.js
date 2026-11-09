@@ -16,6 +16,8 @@ import { NOT_CONNECTED } from '../lib/relay-rules'
 import { deviceNoun } from '../lib/device-word'
 
 const ofUnitTuner = (s) => s.unitTuner
+const ofTuning = (s) => s.tuning
+const ofTunerOn = (s) => s.tunerOn
 /* In the words on the AM4's own menus, so he can find the setting from here. */
 const NO_UNIT_TUNER = 'The AM4’s own tuner stays as it is: its Tuner setting has no MIDI number (SETUP > MIDI/Remote > Tuner).'
 
@@ -47,46 +49,8 @@ const face = Platform.select(mono)
  * stream lights this up with no change here.
  */
 export default function Tuner({ reading, on, onClose, down = false }) {
-  const [stalled, setStalled] = useState(false)
-  /* Over Bluetooth there is no computer to blame: the unit itself is quiet. */
-  const bluetooth = useBluetoothOn()
-  /* On an FM9 or Axe-Fx III over Bluetooth, the readings come only with the unit's Send Realtime Sysex on: the quiet note says where (shared/bluetooth-gear tunerQuietLine). */
-  const quietLine = tunerQuietLine(useBluetoothUnit())
-  /*
-   * Whether the AM4's own tuner screen came up with this one. The phone opens
-   * it with the number set under the AM4's Tuner setting, the one a MIDI
-   * pedal uses; with none set there, the AM4 stays on its preset and this
-   * says where to set one.
-   */
-  const unitTuner = useRig(ofUnitTuner)
-  const lastAt = useRef(0)
   const { width } = useWindowDimensions()
   const insets = useSafeAreaInsets()
-
-  useEffect(() => {
-    if (!reading) return
-    lastAt.current = Date.now()
-    setStalled(false)
-  }, [reading])
-
-  useEffect(() => {
-    if (!on) {
-      setStalled(false)
-      return undefined
-    }
-    const since = Date.now()
-    const timer = setTimeout(() => {
-      if (lastAt.current < since) setStalled(true)
-    }, 5000)
-    return () => clearTimeout(timer)
-  }, [on])
-
-  const cents = reading?.cents ?? 0
-  const inTune = Math.abs(cents) <= 3
-  /* Clamped to the width of the bar. A string a whole tone flat is off the
-     scale, and pinning the needle at the end is the honest picture of that. */
-  const offset = Math.max(-50, Math.min(50, cents))
-  const ink = inTune ? color.ok : color.signal
 
   /* The dial is as wide as the phone allows, less a comfortable margin. Read
      from the window rather than measured, because this covers the window.
@@ -128,131 +92,205 @@ export default function Tuner({ reading, on, onClose, down = false }) {
             backgroundColor: tint(color.chassis, 0.94)
           }}
         >
-          <View
-            style={{
-              width: dial,
-              alignItems: 'center',
-              gap: space.lg,
-              paddingVertical: space.xl,
-              paddingHorizontal: space.lg,
-              borderRadius: radius.lg * 2,
-              /* A hairline of light along the edge, which is what makes a pane
-                 of glass read as a pane rather than as a stain: the glass's rim,
-                 its light along the top and a soft shadow (lib/glass). The fill
-                 stays the panel's own, opaque, so the reading is never over
-                 anything but the pane. */
-              borderWidth: 1,
-              borderColor: paneRim(),
-              boxShadow: color.glassLift,
-              backgroundColor: color.panel,
-              overflow: 'hidden'
-            }}
-          >
-            {/* ------------------------------------------------------- note */}
-            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-              <Text
-                accessibilityLabel={reading?.note ? `${reading.note}${reading.octave ?? ''}` : 'no note'}
-                accessibilityLiveRegion="polite"
-                style={{
-                  color: reading?.note ? ink : color.silkFaint,
-                  fontSize: Math.min(dial * 0.5, 160),
-                  fontWeight: '800',
-                  lineHeight: Math.min(dial * 0.55, 176)
-                }}
-              >
-                {reading?.note || '—'}
-              </Text>
-              {reading?.octave !== undefined && reading?.note ? (
-                <Text style={{ color: color.silkDim, fontSize: font.hero, fontFamily: face }}>
-                  {reading.octave}
-                </Text>
-              ) : null}
-            </View>
-
-            {/* -------------------------------------------------------- bar */}
-            <View
-              style={{
-                width: '100%',
-                height: 22,
-                borderRadius: radius.pill,
-                backgroundColor: 'rgba(0,0,0,0.35)',
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.12)',
-                justifyContent: 'center'
-              }}
-            >
-              {/* Centre first, so the needle draws over it. */}
-              <View
-                style={{
-                  position: 'absolute',
-                  left: '50%',
-                  width: 2,
-                  marginLeft: -1,
-                  top: 0,
-                  bottom: 0,
-                  backgroundColor: color.silkFaint
-                }}
-              />
-              {/* Nothing to show is the centre, not wherever the last string
-                  left it. */}
-              <View
-                style={{
-                  position: 'absolute',
-                  left: `${50 + (reading?.note ? offset : 0)}%`,
-                  marginLeft: -11,
-                  width: 22,
-                  height: 22,
-                  borderRadius: 11,
-                  backgroundColor: ink
-                }}
-              />
-            </View>
-
-            {/*
-              NOT CONNECTED, IN HERE TOO. "When the link drops, Play says so
-              right away." The word Stage floats over the tiles is drawn
-              under this: the tuner is a modal, over the whole screen and
-              everything on it, the link bar as well. So with the tuner open
-              the needle simply stopped and the screen said "Play a string"
-              to somebody playing one, with no reason given. While the link
-              is down this one line says it instead — the same line, the
-              same size, so nothing in the pane moves when it comes or goes.
-              Stop tuner below stays lit and works: a close always goes.
-            */}
-            <Text
-              numberOfLines={1}
-              accessibilityLiveRegion="polite"
-              style={
-                down
-                  ? { color: color.fault, fontSize: font.lead, fontFamily: face, fontWeight: '700', letterSpacing: 2 }
-                  : { color: color.silk, fontSize: font.lead, fontFamily: face }
-              }
-            >
-              {down ? NOT_CONNECTED : reading?.note ? `${cents > 0 ? '+' : ''}${cents} cents` : 'Play a string'}
-            </Text>
-
-            {stalled && bluetooth && quietLine ? (
-              <Note tone="warn">{quietLine}</Note>
-            ) : stalled && bluetooth ? (
-              <Note tone="warn">
-                The tuner is on, but the unit isn’t sending readings over Bluetooth. Use the unit’s own
-                display for now.
-              </Note>
-            ) : stalled ? (
-              <Note tone="warn">
-                The tuner is running on the unit, but the readings aren’t reaching this {deviceNoun()} — your
-                computer keeps them to itself over a remote link. Use the unit’s own display, or tune at
-                the computer.
-              </Note>
-            ) : null}
-
-            {on && unitTuner === 'none' ? <Note>{NO_UNIT_TUNER}</Note> : null}
-
-            <Press label="Stop tuner" height={TAP} tone="live" onPress={onClose} style={{ alignSelf: 'stretch' }} />
-            <Text style={{ color: color.silkFaint, fontSize: font.micro }}>Tap anywhere to close</Text>
-          </View>
+          <TunerPane dial={dial} reading={reading} on={on} onClose={onClose} down={down} tapToClose />
         </BlurView>
       </Pressable>
     </Modal>
+  )
+}
+
+/**
+ * THE TUNER'S PANE: the note, the bar, the cents and Stop tuner, `dial`
+ * points wide. Over everything on one screen (Tuner, above), and in a side
+ * of its own with two sides up (TunerSide, below): the same pane, word for
+ * word, without "Tap anywhere to close", since in a side Stop tuner is the
+ * way out and a tap beside the pane does nothing.
+ */
+export function TunerPane({ dial, reading, on, onClose, down = false, tapToClose = false }) {
+  const [stalled, setStalled] = useState(false)
+  /* Over Bluetooth there is no computer to blame: the unit itself is quiet. */
+  const bluetooth = useBluetoothOn()
+  /* On an FM9 or Axe-Fx III over Bluetooth, the readings come only with the unit's Send Realtime Sysex on: the quiet note says where (shared/bluetooth-gear tunerQuietLine). */
+  const quietLine = tunerQuietLine(useBluetoothUnit())
+  /*
+   * Whether the AM4's own tuner screen came up with this one. The phone opens
+   * it with the number set under the AM4's Tuner setting, the one a MIDI
+   * pedal uses; with none set there, the AM4 stays on its preset and this
+   * says where to set one.
+   */
+  const unitTuner = useRig(ofUnitTuner)
+  const lastAt = useRef(0)
+
+  useEffect(() => {
+    if (!reading) return
+    lastAt.current = Date.now()
+    setStalled(false)
+  }, [reading])
+
+  useEffect(() => {
+    if (!on) {
+      setStalled(false)
+      return undefined
+    }
+    const since = Date.now()
+    const timer = setTimeout(() => {
+      if (lastAt.current < since) setStalled(true)
+    }, 5000)
+    return () => clearTimeout(timer)
+  }, [on])
+
+  const cents = reading?.cents ?? 0
+  const inTune = Math.abs(cents) <= 3
+  /* Clamped to the width of the bar. A string a whole tone flat is off the
+     scale, and pinning the needle at the end is the honest picture of that. */
+  const offset = Math.max(-50, Math.min(50, cents))
+  const ink = inTune ? color.ok : color.signal
+
+  return (
+    <View
+      style={{
+        width: dial,
+        alignItems: 'center',
+        gap: space.lg,
+        paddingVertical: space.xl,
+        paddingHorizontal: space.lg,
+        borderRadius: radius.lg * 2,
+        /* A hairline of light along the edge, which is what makes a pane
+           of glass read as a pane rather than as a stain: the glass's rim,
+           its light along the top and a soft shadow (lib/glass). The fill
+           stays the panel's own, opaque, so the reading is never over
+           anything but the pane. */
+        borderWidth: 1,
+        borderColor: paneRim(),
+        boxShadow: color.glassLift,
+        backgroundColor: color.panel,
+        overflow: 'hidden'
+      }}
+    >
+      {/* ------------------------------------------------------- note */}
+      <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+        <Text
+          accessibilityLabel={reading?.note ? `${reading.note}${reading.octave ?? ''}` : 'no note'}
+          accessibilityLiveRegion="polite"
+          style={{
+            color: reading?.note ? ink : color.silkFaint,
+            fontSize: Math.min(dial * 0.5, 160),
+            fontWeight: '800',
+            lineHeight: Math.min(dial * 0.55, 176)
+          }}
+        >
+          {reading?.note || '—'}
+        </Text>
+        {reading?.octave !== undefined && reading?.note ? (
+          <Text style={{ color: color.silkDim, fontSize: font.hero, fontFamily: face }}>
+            {reading.octave}
+          </Text>
+        ) : null}
+      </View>
+
+      {/* -------------------------------------------------------- bar */}
+      <View
+        style={{
+          width: '100%',
+          height: 22,
+          borderRadius: radius.pill,
+          backgroundColor: 'rgba(0,0,0,0.35)',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.12)',
+          justifyContent: 'center'
+        }}
+      >
+        {/* Centre first, so the needle draws over it. */}
+        <View
+          style={{
+            position: 'absolute',
+            left: '50%',
+            width: 2,
+            marginLeft: -1,
+            top: 0,
+            bottom: 0,
+            backgroundColor: color.silkFaint
+          }}
+        />
+        {/* Nothing to show is the centre, not wherever the last string
+            left it. */}
+        <View
+          style={{
+            position: 'absolute',
+            left: `${50 + (reading?.note ? offset : 0)}%`,
+            marginLeft: -11,
+            width: 22,
+            height: 22,
+            borderRadius: 11,
+            backgroundColor: ink
+          }}
+        />
+      </View>
+
+      {/*
+        NOT CONNECTED, IN HERE TOO. "When the link drops, Play says so
+        right away." The word Stage floats over the tiles is drawn
+        under this: the tuner is a modal, over the whole screen and
+        everything on it, the link bar as well. So with the tuner open
+        the needle simply stopped and the screen said "Play a string"
+        to somebody playing one, with no reason given. While the link
+        is down this one line says it instead — the same line, the
+        same size, so nothing in the pane moves when it comes or goes.
+        Stop tuner below stays lit and works: a close always goes.
+      */}
+      <Text
+        numberOfLines={1}
+        accessibilityLiveRegion="polite"
+        style={
+          down
+            ? { color: color.fault, fontSize: font.lead, fontFamily: face, fontWeight: '700', letterSpacing: 2 }
+            : { color: color.silk, fontSize: font.lead, fontFamily: face }
+        }
+      >
+        {down ? NOT_CONNECTED : reading?.note ? `${cents > 0 ? '+' : ''}${cents} cents` : 'Play a string'}
+      </Text>
+
+      {stalled && bluetooth && quietLine ? (
+        <Note tone="warn">{quietLine}</Note>
+      ) : stalled && bluetooth ? (
+        <Note tone="warn">
+          The tuner is on, but the unit isn’t sending readings over Bluetooth. Use the unit’s own
+          display for now.
+        </Note>
+      ) : stalled ? (
+        <Note tone="warn">
+          The tuner is running on the unit, but the readings aren’t reaching this {deviceNoun()} — your
+          computer keeps them to itself over a remote link. Use the unit’s own display, or tune at
+          the computer.
+        </Note>
+      ) : null}
+
+      {on && unitTuner === 'none' ? <Note>{NO_UNIT_TUNER}</Note> : null}
+
+      <Press label="Stop tuner" height={TAP} tone="live" onPress={onClose} style={{ alignSelf: 'stretch' }} />
+      {tapToClose ? <Text style={{ color: color.silkFaint, fontSize: font.micro }}>Tap anywhere to close</Text> : null}
+    </View>
+  )
+}
+
+/**
+ * THE TUNER IN A SIDE, with two sides up (lib/twoSides, step 3): the same
+ * pane as the tuner over everything, in the side beside Play, as wide as
+ * the side allows (it is measured, since a side is not the window) and no
+ * wider than the pane ever is. The side's own bar is over it; Stop tuner
+ * turns the tuner off, and the side closes with it (App.js).
+ */
+export function TunerSide({ onClose, down = false }) {
+  const reading = useRig(ofTuning)
+  const on = useRig(ofTunerOn)
+  const [room, setRoom] = useState(0)
+  const dial = Math.min(Math.max(0, room - space.lg * 2), 420)
+  return (
+    <View
+      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.lg, backgroundColor: color.chassis }}
+      onLayout={(e) => setRoom(e.nativeEvent.layout.width)}
+    >
+      {dial > 0 ? <TunerPane dial={dial} reading={reading} on={on} onClose={onClose} down={down} /> : null}
+    </View>
   )
 }

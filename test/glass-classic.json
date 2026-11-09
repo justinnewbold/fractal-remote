@@ -350,8 +350,8 @@
   ],
   "mobile/src/components/Tuner.js": [
    {
-    "decl": "Tuner",
-    "main": "const insets = useSafeAreaInsets();\nconst sides = clearSides(insets, space.xl);\nconst dial = Math.min(width - sides.paddingLeft - sides.paddingRight, 420);\nreturn ({\n              width: dial,\n              alignItems: 'center',\n              gap: space.lg,\n              paddingVertical: space.xl,\n              paddingHorizontal: space.lg,\n              borderRadius: radius.lg * 2,\n              /* A hairline of light along the edge, which is what makes a pane\n                 of glass read as a pane rather than as a stain. */\n              borderWidth: 1,\n              borderColor: 'rgba(255,255,255,0.14)',\n              backgroundColor: color.panel,\n              overflow: 'hidden'\n            })",
+    "decl": "TunerPane",
+    "main": "\nreturn ({\n              width: dial,\n              alignItems: 'center',\n              gap: space.lg,\n              paddingVertical: space.xl,\n              paddingHorizontal: space.lg,\n              borderRadius: radius.lg * 2,\n              /* A hairline of light along the edge, which is what makes a pane\n                 of glass read as a pane rather than as a stain. */\n              borderWidth: 1,\n              borderColor: 'rgba(255,255,255,0.14)',\n              backgroundColor: color.panel,\n              overflow: 'hidden'\n            })",
     "now": "{ width: dial, alignItems: 'center', gap: space.lg, paddingVertical: space.xl, paddingHorizontal: space.lg, borderRadius: radius.lg * 2, borderWidth: 1, borderColor: paneRim(), boxShadow: color.glassLift, backgroundColor: color.panel, overflow: 'hidden' }"
    }
   ],

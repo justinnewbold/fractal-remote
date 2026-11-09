@@ -58,7 +58,7 @@ import Stage from './src/screens/Stage'
 import { hydrate, sync } from './src/lib/store'
 import { keepSetlistsInStep } from './src/lib/cloudSetlists'
 import { keepVp4SetupIn, vp4Here } from './src/lib/device'
-import { clearLinkFault, useRig } from './src/lib/rig'
+import { clearLinkFault, useRig, writeTuner } from './src/lib/rig'
 import { keepLog } from './src/lib/logKeep'
 import { installCrashCapture } from './src/lib/debugLog'
 import { restoreDemo, setDemo, useDemo } from './src/lib/demo'
@@ -88,7 +88,8 @@ import { BENCH, SIDES_FOR_EVERYONE } from './src/lib/features'
 import Sides, { SidesFrame } from './src/components/Sides'
 /* Whose sign-in is kept on this device, for the two sides: the same answer Bluetooth's gate reads. */
 import { useBluetoothAdmin } from './src/lib/bluetooth'
-import { backUnwinds, sideTools, twoSidesOn, whenNarrow } from './src/lib/twoSides'
+import { backUnwinds, sideTools, tunerGoes, tunerStops, twoSidesOn, whenNarrow } from './src/lib/twoSides'
+import { TunerSide } from './src/components/Tuner'
 import { PLAY_ON_RIGHT, keepPlayOnRight, readPlayOnRight } from './src/lib/sidesKeep'
 import Paywall from './src/screens/Paywall'
 import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, trialOnOffer, unlinkAccount, usePurchase } from './src/lib/purchases'
@@ -633,6 +634,8 @@ export default function App() {
    */
 
   const caps = useRig(ofCaps)
+  /* Whether the unit's tuner is on: for the tuner's side, with two sides up. */
+  const tunerOn = useRig(ofTunerOn)
   /*
    * A read that failed, or the computer saying it has NO UNIT: either way
    * the unit has said all it is going to, so Play is drawn, never the
@@ -757,8 +760,8 @@ export default function App() {
       alive = false
     }
   }, [])
-  /* The tool a side can hold, by the screen that is open: Edit only behind the bench's switch, as its route is. */
-  const sideTool = BENCH && screen === 'edit' ? 'edit' : screen === 'setlists' || screen === 'presets' ? screen : null
+  /* The tool a side can hold, by the screen that is open: Edit only behind the bench's switch, as its route is. The tuner is a screen only here, beside Play (step 3). */
+  const sideTool = BENCH && screen === 'edit' ? 'edit' : screen === 'setlists' || screen === 'presets' || screen === 'tuner' ? screen : null
   const twoSidesUp = sidesAllowed && sideTool !== null && (wide || sideFull)
   /* Play is on screen beside the tool; or kept out of sight at no width while the tool fills the window (Stage `awake`). */
   const playBeside = twoSidesUp && !sideFull
@@ -782,12 +785,19 @@ export default function App() {
    */
   const wasBeside = useRef(false)
   const shrunk = useRef(null)
+  /* The tuner's side gave way to one screen, rather than being closed: the tuner stays on, over everything as on a phone (lib/twoSides tunerStops). */
+  const tunerToOne = useRef(false)
   if (wasBeside.current && !wide) {
     const to = whenNarrow({ tool: sideTool, sideFull })
     if (to.screen !== screen) {
       shrunk.current = to.keep
+      if (to.keep === 'tuner') tunerToOne.current = true
       setScreen(to.screen)
     }
+  } else if (screen === 'tuner' && !twoSidesUp) {
+    /* The tuner is a screen only in a side: anywhere else (the sides closed to this account, say) it is Play, with the tuner over it as always. */
+    tunerToOne.current = true
+    setScreen('stage')
   }
   wasBeside.current = playBeside
   /* Wide again: the tool the shrink put away comes back, if Play is still what is showing; gone to Settings meanwhile, it is left for Two sides. */
@@ -795,10 +805,44 @@ export default function App() {
     if (!wide) return
     const back = shrunk.current
     shrunk.current = null
-    if (back && screen === 'stage') setScreen(back)
+    /* The tuner comes back into its side only if it is still on: stopped meanwhile, it stays stopped. */
+    if (back && screen === 'stage' && (back !== 'tuner' || tunerOn)) setScreen(back)
   }, [wide])
+  /*
+   * THE TUNER IN A SIDE (lib/twoSides, step 3). Turned on with two sides up,
+   * from Play's button, the list on a bar, the watch or Siri, it opens in
+   * the side; or when the window widens with it on. Turned off anywhere, its
+   * side closes. And its side closed any way but the window shrinking turns
+   * it off at the unit, which it mutes (tunerStops).
+   */
+  const tunerSeen = useRef({ on: tunerOn, wide })
+  useEffect(() => {
+    const was = tunerSeen.current
+    tunerSeen.current = { on: tunerOn, wide }
+    if (!tunerOn) {
+      if (screen === 'tuner') setScreen('stage')
+      return
+    }
+    const came = !was.on || (wide && !was.wide)
+    if (came && screen !== 'tuner' && tunerGoes({ allowed: sidesAllowed, wide, screen }) === 'side') setScreen('tuner')
+  }, [tunerOn, wide, screen, sidesAllowed])
+  const screenWas = useRef(screen)
+  useEffect(() => {
+    const was = screenWas.current
+    screenWas.current = screen
+    const toOneScreen = tunerToOne.current
+    tunerToOne.current = false
+    if (tunerStops({ was, now: screen, tunerOn, toOneScreen })) writeTuner(false)
+  }, [screen])
+  const tunerBeside = twoSidesUp && sideTool === 'tuner'
   /* What the list on either bar offers now: the same conditions Play's own buttons use. */
-  const toolsOffered = sideTools({ editOpens, presetsOffered: demo || link.link === 'connected' })
+  const toolsOffered = sideTools({
+    editOpens,
+    presetsOffered: demo || link.link === 'connected',
+    tunerOffered: (demo || link.link === 'connected') && caps?.tuner !== false
+  })
+  /* A tool picked from a bar's list, or brought back by Two sides: the tuner by turning it on, which opens its side (above); the rest by their screen. */
+  const openTool = (tool) => (tool === 'tuner' ? writeTuner(true) : setScreen(tool))
   const closeSide = () => setScreen('stage')
   /*
    * And the new-version note only floats over it while the phone is off the
@@ -1948,20 +1992,23 @@ export default function App() {
                 frame={frame}
                 tools={toolsOffered}
                 kept={sideKept}
-                onPick={(tool) => setScreen(tool)}
+                onPick={openTool}
                 onSwap={() => {
                   keepPlayOnRight(!playOnRight)
                   setPlayOnRight(!playOnRight)
                 }}
                 onFull={setSideFull}
                 onPlayFull={closeSide}
-                onTwoSides={() => setScreen(sideKept)}
+                onTwoSides={() => openTool(sideKept)}
                 side={
                   !twoSidesUp ? null : sideTool === 'presets' ? (
                     /* Beside Play the list stays open after a pick (`stay`), so you can keep browsing while the rig plays it. */
                     <Presets onBack={closeSide} stay />
                   ) : sideTool === 'setlists' ? (
                     <Setlists onBack={closeSide} />
+                  ) : sideTool === 'tuner' ? (
+                    /* Stop tuner turns it off, and the side closes with it. */
+                    <TunerSide onClose={() => writeTuner(false)} down={link.down === true && !demo} />
                   ) : (
                     <Edit
                       onBack={closeSide}
@@ -1977,6 +2024,7 @@ export default function App() {
                 /* On one side of two, and asleep while a tool fills the window over it (components/Sides). */
                 inSide={playBeside}
                 awake={!playHidden}
+                tunerBeside={tunerBeside}
                 /* An error on the stage screen can name the fix for it, and
                    Done comes back here rather than to Setup. */
                 onOpenFix={(id) => {
@@ -2076,6 +2124,7 @@ function Arrived({ picked }) {
 }
 
 const ofCaps = (s) => s.capabilities
+const ofTunerOn = (s) => s.tunerOn
 /* The gate's answer from the unit (readFailed, above): a failed read, or the computer saying it has no unit. */
 const ofReadEnded = (s) => s.error || (s.unit === 'missing' ? 'no unit' : null)
 

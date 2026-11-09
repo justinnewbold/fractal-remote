@@ -206,6 +206,12 @@ export default function Stage({
    */
   awake = true,
   /*
+   * AND WHETHER THE TUNER IS IN THE SIDE BESIDE PLAY (lib/twoSides, step 3).
+   * Then it is not drawn over everything here as well: the side has it.
+   * False on every phone, where the tuner covers the screen as it always has.
+   */
+  tunerBeside = false,
+  /*
    * THE COMPUTERS ON THE ACCOUNT, from App (link.js's own word for them):
    * every one that answered, the units on them, the one driven, and a pick
    * that does not answer. With two or more, Play says when the one driven is
@@ -1686,7 +1692,7 @@ export default function Stage({
       </Sheet>
 
       {/* Closing the tuner stops it at the unit, which is what the button does. It says NOT CONNECTED itself: nothing here is drawn over it. */}
-      <Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} down={down} />
+      <Tuner on={tunerOn && !tunerBeside} reading={tuning} onClose={() => writeTuner(false)} down={down} />
 
       {/* The Apple Watch's one-time tip, after the channel tip: a sheet like
           the others, so on the frame with them. */}
