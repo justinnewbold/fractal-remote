@@ -9201,11 +9201,10 @@ export function run(test) {
     /* The guide says the same about the channel, so the app and the guide do not disagree. */
     const guide = readFileSync(new URL('../public/bluetooth-guide.html', import.meta.url), 'utf8').replace(/\s+/g, ' ')
     /* The FM9 and Axe-Fx III have these among their steps since 25 October 2026 (PC_FIRST), with Send Realtime Sysex for the tuner; the FM3 keeps the line for some owners. */
-    assert.match(guide, /FM3, if presets don’t change from the phone:<\/strong> in Setup → MIDI\/Remote, set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping off/)
-    assert.match(guide, /FM9 and Axe-Fx III:<\/strong> in Setup → MIDI\/Remote, also set <strong>Program Change<\/strong> on, the <strong>MIDI channel<\/strong> to 1 or Omni, <strong>PC Mapping<\/strong> off, <strong>MIDI PC Offset<\/strong> to 0, and <strong>Send Realtime Sysex<\/strong> on\./)
+    /* Short since 9 November 2026 (test/limits.mjs holds the rest): the FM9 and Axe-Fx III settings, Send Realtime Sysex among them. */
+    assert.match(guide, /FM9 and Axe-Fx III:<\/strong> in Setup → MIDI\/Remote, also set Program Change on, the MIDI channel to 1 or Omni, PC Mapping off, MIDI PC Offset to 0, and Send Realtime Sysex on\./)
     assert.ok(!/extra blocks \(Amp 2, Cab 2/.test(guide), 'the guide still says the second blocks do not show')
-    assert.match(guide, /FM9:<\/strong> use firmware 7\.00 or later\./)
-    assert.match(guide, /Axe-Fx III:<\/strong> use firmware 25\.00 or later\./)
+    assert.match(guide, /Use FM9 firmware 7\.00 or later, Axe-Fx III firmware 25\.00 or later\./)
     assert.ok(!/Feel the C2MIDI Pro|feel the C2MIDI Pro/.test(guide), 'the guide tells owners of units other than the FM3 to check the heat again')
     assert.match(gear.GEAR_IN_SHORT, /CME WIDI Uhost, a CME C2MIDI Pro, and a phone charger or power bank/)
     assert.match(gear.GEAR_IN_SHORT, /For an AM4 or VP4, also two Type-A MIDI to 3\.5 mm adapters\./)
@@ -9409,7 +9408,14 @@ export function run(test) {
       Object.values(gear.PARTS).flatMap((p) => [p.amazon, p.maker]).filter(Boolean).sort(),
       'the gear file gives an address that is not one of the three parts'
     )
-    for (const p of Object.values(gear.PARTS)) {
+    /*
+     * The parts each unit's simplest way needs are on the guide at the app's
+     * addresses. The other ways (the WIDI Master, the WIDI Jack) are only in
+     * the app since the guide went short (9 November 2026), one tap from its
+     * Bluetooth page.
+     */
+    for (const key of ['uhost', 'c2midi', 'u2midi', 'usbA', 'adapters']) {
+      const p = gear.PARTS[key]
       if (p.amazon) assert.ok(html.includes(`href="${p.amazon}"`), `the guide does not link the ${p.name} where the app does`)
       if (p.maker) assert.ok(html.includes(`href="${p.maker}"`), `the guide does not link CME’s page for the ${p.name} where the gear file does`)
     }
@@ -9546,8 +9552,8 @@ export function run(test) {
     assert.match(gear.FM3_WARNING, /even on USB power/)
     /* The guide and the notes say the same thing. */
     const guide = readFileSync(new URL('../public/bluetooth-guide.html', import.meta.url), 'utf8').replace(/\s+/g, ' ')
-    assert.match(guide, /keep the C2MIDI Pro, the WIDI Master, and any adapter that takes its power from the MIDI OUT jack, off an FM3/)
-    assert.match(guide, /Powering the adapter from USB doesn’t stop it, because the jack is still feeding it\./)
+    assert.match(guide, /never use the C2MIDI Pro or a WIDI Master: both got very hot on one/)
+    assert.match(guide, /Its MIDI OUT runs any adapter that draws power from it hot, even on USB power\./)
     const notes = readFileSync(new URL('../docs/bluetooth-midi.md', import.meta.url), 'utf8').replace(/\s+/g, ' ')
     assert.match(notes, /Every adapter that feeds from MIDI Out runs hot on an FM3/)
     const page = flat('mobile/src/screens/Bluetooth.js')
@@ -10820,7 +10826,6 @@ export function run(test) {
     /* The III's IR Player and NAM are drawn over Bluetooth since 1.89.73 (lib/gen3Catalog OWN): the line no longer names them. */
     assert.equal(gear.missingBlocksLine('axefx3'), 'A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match, Dynamic Distortion) aren’t shown on Play yet.')
     assert.ok(!/IR Player|NAM/.test(gear.missingBlocksLine('axefx3')))
-    assert.match(src('public/bluetooth-guide.html'), /and on\s+the Axe-Fx III Dynamic Distortion\) don’t show on Play yet\./)
     assert.ok(!/IR Player/.test(src('public/bluetooth-guide.html')), 'the guide still says the IR Player is not shown')
     for (const unit of ['am4', 'fm3', null, 'vp5']) {
       assert.equal(gear.missingBlocksLine(unit), null)

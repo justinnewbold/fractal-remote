@@ -3,8 +3,12 @@
     {
       "date": "2026-11-09",
       "day": "9 November 2026",
-      "version": "1.90.11",
+      "version": "1.90.12",
       "lines": [
+        {
+          "text": "The Bluetooth setup guide is now a short page: what to buy for your unit, how to plug it in, its settings, and how to connect.",
+          "only": null
+        },
         {
           "text": "On a tablet or other big screen, Play’s scenes and effects are now square tiles, as big as the screen allows, instead of wide stretched bars.",
           "only": null

@@ -6,83 +6,27 @@
     <title>Bluetooth setup — Fractal Remote</title>
     <meta
       name="description"
-      content="Controlling your Fractal unit from the phone with no computer, through a Bluetooth MIDI adapter: what to buy, how to hook it up, and what to try when it doesn't connect."
+      content="Control your Fractal unit from the app with no computer, through a Bluetooth MIDI adapter: what to buy, how to plug it in, and what to try when it doesn't connect."
     />
     <!--
-      THE BLUETOOTH (BETA) SETUP GUIDE, for everyone with the full version
-      from store version 1.89.0, on every unit: "as long as there's warnings
-      for user that it's in beta and they're free to test it and submit
-      feedback, but it might not work properly" (Justin, 25 October 2026).
-      Written true both before and after 1.89.0 is approved, since a reviewer
-      opens it from the app (Setup guide): earlier versions show the
-      Bluetooth page only on his account, and the page says so. Listed for
-      search engines since the live day (30 October 2026, 1.89.3 in both
-      stores), and linked from /bluetooth.
+      THE BLUETOOTH SETUP GUIDE, the app's Setup guide (GUIDE_URL in
+      shared/bluetooth-gear.mjs), and linked from /bluetooth.
 
-      WHY IT LIVES HERE AND NOT AT /bluetooth. It was written for every
-      customer who had unlocked the app, and was public for one day. Then:
-      "Is there any way to just get the Bluetooth on the developers mode for
-      my own phone? I just feel like it's not ready to have public." (Justin,
-      11 October 2026.) So the app shows Bluetooth (beta) on his account
-      alone, and /bluetooth became a short notice that it was not in the app
-      yet, with no shopping list. This page moved to bluetooth-guide.html,
-      opened from the app's Bluetooth page (Setup guide, GUIDE_URL in
-      shared/bluetooth-gear.mjs). Since 1.89.3 went live in both stores (30
-      October 2026), /bluetooth is the real page again and links here, and
-      search engines may list it.
+      SHORT ON PURPOSE. "This Bluetooth guide is insanely complicated. Can we
+      go through and figure out how to make it about 10 times shorter?"
+      (Justin, 9 November 2026.) It was about 4,000 words; it is now what to
+      buy, four steps to plug it in, the unit's settings, how to connect and
+      five fixes. Every other way to hook up a unit, every fix and what
+      Bluetooth can't do are in the app, one tap from its Bluetooth page, so
+      they are not repeated here.
 
-      "If Bluetooth is ready, let's get it submitted ... let's just say that
-      Bluetooth is beta though in the app and give like a disclaimer saying
-      that Bluetooth might not function correctly, but we also need to
-      provide instructions on how to connect Bluetooth right now I'm using a
-      CME Widi host module. I know that the fractals can't host themselves so
-      you have to have a device that will do the hosting for them. I've only
-      tested it on the AM4 though." (Justin, 10 October 2026.)
-
-      So: the disclaimer first, then what to buy with links, then the
-      hook-up plug by plug, then the app's page in the app's own words (the
-      two steps at the top, the three rows that open under them), then what
-      to try.
-
-      OUT OF BETA, 26 October 2026: "I also think we're ready to get the
-      Bluetooth out of beta so remove anything that says beta on it for
-      Bluetooth" (Justin). So nothing here calls it a beta.
-
-      NOTHING ABOUT WHAT HAS BEEN TRIED, since 31 October 2026: "we don't
-      need to mention really whether or not something has been tested or
-      not, we just need to keep track of it ourselves in the developer
-      menu" (Justin). The record is the app's Developer → App health → Tried
-      (shared/bluetooth-gear TESTED). Not even the FM3's warning says it
-      was tried: it says what happened (the 2 November 2026 audit took out
-      its "When we tried"). And no heat check but the FM3's: "The
-      FM three is the only one that ever has overheating issues" (the WIDI
-      Master and the C2MIDI Pro got very hot on one). The page may say which
-      units can be PICKED, never that one WORKS: "It works with the AM4,
-      FM3, FM9 and Axe-Fx III" once stood here, and test/limits.mjs refuses
-      that shape of sentence.
-
-      NO TESTING TOOLS. The Bluetooth page's Testing tools are a test bench,
-      not a place to send a guitarist, so nothing here quotes them. Every outside link here was checked by hand
-      on 10 October 2026 (the three Amazon pages are the exact parts he
-      bought), and test/limits.mjs refuses any link that is not on that
-      list. The phone's Bluetooth page carries the same three links, from
-      shared/bluetooth-gear.mjs. The "What's different from USB" list is
-      the app's own list (mobile/src/screens/Bluetooth.js, DIFFERENT), word
-      for word, and the same test holds the two together.
-
-      NO RECIPE FOR THE FM3. It said what FM3 owners fit (a resistor on one pin
-      of a home-made adapter, for "someone who solders"); that went from here
-      and from the app on 25 October 2026. A soldering job is nothing this app
-      can stand behind or send a stranger to: the page says what happened,
-      what owners report, and to keep the parts off an FM3.
-
-      NO PRICES, as on the phone: they change, and a price on this page is
-      wrong the day they do. And NO LINKS TO BUY the other adapters at the
-      bottom: nobody has tried them with the app, and a link reads as a
-      recommendation.
-
-      Same look as support.html and privacy.html: the same colours and type,
-      no build step, nothing loaded from anywhere.
+      What stays, whatever else is cut: the FM3's warning and why (the WIDI
+      Master and the C2MIDI Pro got very hot on one; "The FM three is the
+      only one that ever has overheating issues", 31 October 2026), 5 volts
+      only, which plug goes in which jack, the Axe-Fx III's OUT and not
+      THRU, and each unit's settings. No beta, nothing about what has been
+      tried, no prices, and no link that test/limits.mjs has not checked.
+      Same look as support.html and privacy.html, nothing loaded from anywhere.
     -->
     <style>
       :root {
@@ -129,562 +73,107 @@
       .part .buy { margin: 0; font-size: 15px; }
       .black, .white { font-weight: 700; }
       .dim { color: var(--silk-dim); font-size: 15px; }
+      .warn { padding: 12px 16px; border-left: 3px solid #e5534b; background: var(--panel); border-radius: 0 8px 8px 0; }
+      .warn p { margin: 0 0 8px; }
+      .warn p:last-child { margin-bottom: 0; }
     </style>
   </head>
   <body>
     <main>
       <h1>Bluetooth setup</h1>
-      <p class="when">Fractal Remote · last updated 26 October 2026</p>
-
-      <p class="dim">
-        Bluetooth is in the app from version 1.89.0, for everyone with the full version.
-        Earlier versions show it only on the developer’s own account: if Settings → My rig has no
-        Bluetooth row, update the app from the store. Without it, the phone connects through
-        the <a href="/downloads">desktop app</a>.
-      </p>
-
+      <p class="when">Fractal Remote · last updated 9 November 2026</p>
       <div class="lead">
         <p>
-          <strong>Bluetooth lets the phone control your unit with no computer</strong>, through a
-          Bluetooth MIDI adapter plugged into the unit.
+          Control your AM4, FM3, FM9, Axe-Fx III or VP4 from the app with <strong>no computer</strong>,
+          through a Bluetooth MIDI adapter plugged into the unit. You need the full version.
         </p>
+      </div>
+
+      <h2>1. What to buy</h2>
+      <ul>
+        <li>
+          <strong>AM4 or VP4:</strong> a CME WIDI Uhost (<a href="https://www.amazon.com/dp/B09GS326QW">Amazon</a> ·
+          <a href="https://www.cme-pro.com/widi-uhost/">CME</a>), a CME C2MIDI Pro
+          (<a href="https://www.amazon.com/dp/B0GVXTX5D1">Amazon</a> · <a href="https://www.cme-pro.com/c2midi-pro/">CME</a>),
+          two Type-A MIDI to 3.5 mm adapters (<a href="https://www.amazon.com/dp/B0FN83P5P7">Amazon</a>;
+          Type B won’t work), and a phone charger.
+        </li>
+        <li>
+          <strong>FM9 or Axe-Fx III:</strong> the WIDI Uhost, the C2MIDI Pro and a phone charger.
+          Use FM9 firmware 7.00 or later, Axe-Fx III firmware 25.00 or later.
+        </li>
+        <li>
+          <strong>FM3:</strong> the WIDI Uhost, a CME U2MIDI Pro
+          (<a href="https://www.amazon.com/dp/B0BH8DHCLY">Amazon</a> ·
+          <a href="https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/">CME</a>), a USB-C to USB-A adapter
+          (<a href="https://www.amazon.com/dp/B01COOQIKU">Amazon</a>) for its plug, and a phone charger.
+        </li>
+      </ul>
+      <div class="warn" id="fm3">
         <p>
-          <strong>On an FM3, the WIDI Master and the C2MIDI Pro got very hot, and the WIDI Master
-          did not work: use a CME U2MIDI Pro instead</strong> (see <a href="#fm3">FM3</a> below).
-        </p>
-        <p>
-          If something doesn’t work, <strong>Report a Bluetooth problem</strong> on the app’s
-          Bluetooth page sends us a report in one tap.
-        </p>
-        <p>
-          Connecting the other way, with your unit on a USB cable to a computer running the desktop
-          app, keeps working as it always has.
+          <strong>On an FM3, never use the C2MIDI Pro or a WIDI Master: both got very hot on one.</strong>
+          Its MIDI OUT runs any adapter that draws power from it hot, even on USB power. The
+          U2MIDI Pro doesn’t, and stays cool. If anything on an FM3 gets warm, unplug it at once.
         </p>
       </div>
-
       <p class="dim">
-        On this page:
-        <a href="#what">what it is</a> ·
-        <a href="#works">what works</a> ·
-        <a href="#need">what you need</a> ·
-        <a href="#hookup">hooking it up</a> ·
-        <a href="#settings">settings on the unit</a> ·
-        <a href="#connect">connecting in the app</a> ·
-        <a href="#trouble">when it doesn’t work</a> ·
-        <a href="#other">other adapters</a>
+        Before the first time, update the Uhost in CME’s free WIDI app, then close that app.
       </p>
 
-      <h2 id="what">What it is</h2>
-      <p>
-        A Fractal unit has no Bluetooth of its own, and it can’t be the one in charge of a USB
-        connection either. So a small box does that job for it: the <strong>CME WIDI Uhost</strong>.
-        It talks Bluetooth to your phone, and it runs a <strong>CME C2MIDI Pro</strong> cable (on
-        an FM3, a <strong>CME U2MIDI Pro</strong>) whose two plugs go into the unit’s MIDI In and
-        MIDI Out. That is why the Uhost needs power of its
-        own, from a phone charger or a power bank.
-      </p>
-      <p>
-        In the app it is under <strong>Settings → My rig → Bluetooth</strong>, from
-        version 1.89.0, with the full version. You can pick an AM4, FM3, FM9, Axe-Fx III or VP4.
-      </p>
-
-      <h2 id="works">What works over Bluetooth, and what doesn’t</h2>
-      <p>
-        Presets, scenes, names, effects on and off, channels, tempo and the tuner. While Bluetooth
-        is on, the phone doesn’t use the computer at all, and <strong>Stop using Bluetooth</strong>
-        hands it back to the computer.
-      </p>
-      <p>
-        <strong>On a VP4</strong>, Bluetooth changes presets and scenes, the way a MIDI foot
-        controller does, and nothing else. It can’t hear the VP4 that way, so it can’t show its
-        effects or the name of the preset it is on, or check that a preset or scene landed.
-        Through the computer, the app also turns its effects on and off, shows that name, and
-        checks that a preset or scene landed.
-      </p>
-      <p>What’s different from USB, the same list the app shows:</p>
-      <ul>
-        <li>No editing or saving over Bluetooth.</li>
-        <li>Slower to load the preset list.</li>
-        <li>Footswitch changes may take a moment to show.</li>
-        <li>About 30 feet of range.</li>
-        <li>The adapter connects to one thing at a time.</li>
-        <li>On the AM4, scene names take a moment the first time a preset is seen.</li>
-        <li>No looper, volume button, unit metronome click or Footswitches page.</li>
-      </ul>
-      <p class="dim">
-        On the AM4, the phone reads a preset’s scene names once, a few seconds after you stop
-        pressing things, and remembers them; Refresh names reads them again. On an FM9 or
-        Axe-Fx III, a few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match, and on
-        the Axe-Fx III Dynamic Distortion) don’t show on Play yet.
-      </p>
-
-      <h2 id="need">What you need</h2>
-      <p>
-        These are the parts to buy for each unit. The links are plain links
-        to Amazon in the US: Fractal Remote gets nothing from them, and the same parts are sold
-        elsewhere too.
-      </p>
-
-      <h3>AM4</h3>
-      <div class="part">
-        <div class="name">1. CME WIDI Uhost</div>
-        <div class="what">The Bluetooth box, and the one in charge of the USB. Your phone connects to it.</div>
-        <p class="buy">
-          <a href="https://www.amazon.com/dp/B09GS326QW">On Amazon</a> ·
-          <a href="https://www.cme-pro.com/widi-uhost/">CME’s page for it</a>
-        </p>
-      </div>
-      <div class="part">
-        <div class="name">2. CME C2MIDI Pro</div>
-        <div class="what">
-          The cable from the Uhost to the unit: a USB-C plug at one end, and a black and a white
-          MIDI plug at the other.
-        </div>
-        <p class="buy">
-          <a href="https://www.amazon.com/dp/B0GVXTX5D1">On Amazon</a> ·
-          <a href="https://www.cme-pro.com/c2midi-pro/">CME’s page for it</a>
-        </p>
-      </div>
-      <div class="part">
-        <div class="name">3. LOOTOOLS Type-A MIDI to 3.5 mm adapters (a pair)</div>
-        <div class="what">
-          The AM4’s MIDI jacks are small 3.5 mm jacks. These let the C2MIDI Pro’s two plugs fit
-          them, one adapter each. They have to be <strong>Type A</strong>: the AM4 needs Type A,
-          and Type B ones won’t work.
-        </div>
-        <p class="buy"><a href="https://www.amazon.com/dp/B0FN83P5P7">On Amazon</a></p>
-      </div>
-      <div class="part">
-        <div class="name">4. A USB phone charger or a power bank, and a USB-C cable</div>
-        <div class="what">
-          To power the Uhost. An ordinary 5 volt USB charger is right. Never use anything that
-          puts out more than 5 volts.
-        </div>
-      </div>
-
-      <p class="dim">
-        <strong>Or a CME WIDI Master</strong>, in place of the Uhost and the C2MIDI Pro. Its two MIDI plugs go into the two LOOTOOLS adapters, the main plug
-        in MIDI OUT and the small plug on its short lead in MIDI IN, and it needs no charger. Never
-        on an FM3 (below).
-      </p>
-
-      <h3 id="fm3">FM3</h3>
-      <p class="lead">
-        <strong>On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master.</strong>
-        The WIDI Master and the C2MIDI Pro both got very hot on an FM3, and the WIDI Master did not
-        work. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool. If
-        anything on an FM3’s MIDI jack gets hot, unplug it straight away.
-      </p>
-      <div class="part">
-        <div class="name">1. CME WIDI Uhost</div>
-        <div class="what">The same Bluetooth box as for the AM4.</div>
-        <p class="buy">
-          <a href="https://www.amazon.com/dp/B09GS326QW">On Amazon</a> ·
-          <a href="https://www.cme-pro.com/widi-uhost/">CME’s page for it</a>
-        </p>
-      </div>
-      <div class="part">
-        <div class="name">2. CME U2MIDI Pro</div>
-        <div class="what">
-          The cable from the Uhost to the FM3, in place of the C2MIDI Pro: a USB plug at one end,
-          and a black and a white MIDI plug at the other, marked as the C2MIDI Pro’s are. It runs on
-          USB power only. Its USB plug is the larger USB-A kind, so it goes into the Uhost through a
-          small USB-C to USB-A adapter.
-        </div>
-        <p class="buy">
-          <a href="https://www.amazon.com/dp/B0BH8DHCLY">On Amazon</a> ·
-          <a href="https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/">CME’s page for it</a>
-        </p>
-      </div>
-      <div class="part">
-        <div class="name">3. A USB-C to USB-A adapter</div>
-        <div class="what">
-          A short one with a USB-C plug and a USB-A socket, for the U2MIDI Pro’s USB plug to go into
-          the Uhost. Any will do; this is Anker’s.
-        </div>
-        <p class="buy"><a href="https://www.amazon.com/dp/B01COOQIKU">On Amazon</a></p>
-      </div>
-      <div class="part">
-        <div class="name">4. A USB phone charger or a power bank, and a USB-C cable</div>
-        <div class="what">To power the Uhost, as for the AM4. 5 volts only.</div>
-      </div>
-      <p>
-        <strong>Why.</strong> The C2MIDI Pro, like most Bluetooth MIDI adapters, can take its power
-        from the MIDI OUT jack it is plugged into. On most gear a small part inside the unit limits
-        how much power that jack gives. FM3 owners have reported since 2021 that the FM3’s MIDI OUT
-        has no such limit, and that it is still the same on the FM3 Turbo. So adapters that feed
-        from it run hot: CME’s WIDI Master and WIDI Jack, Yamaha’s MD-BT01, and the C2MIDI Pro.
-        Powering the adapter from USB doesn’t stop it, because the jack is still feeding it. The
-        U2MIDI Pro takes no power from the jack: it runs on USB power alone.
-      </p>
-      <p>
-        So keep the C2MIDI Pro, the WIDI Master, and any adapter that takes its power from the MIDI
-        OUT jack, off an FM3.
-      </p>
-
-      <h3>FM9 and Axe-Fx III</h3>
-      <p>
-        The same parts without the adapters: these units have full-size 5-pin MIDI jacks, and the
-        C2MIDI Pro’s plugs go straight in. Owners report CME adapters running cool on these two.
-      </p>
-      <ul>
-        <li>CME WIDI Uhost: <a href="https://www.amazon.com/dp/B09GS326QW">on Amazon</a> ·
-          <a href="https://www.cme-pro.com/widi-uhost/">CME’s page</a></li>
-        <li>CME C2MIDI Pro: <a href="https://www.amazon.com/dp/B0GVXTX5D1">on Amazon</a> ·
-          <a href="https://www.cme-pro.com/c2midi-pro/">CME’s page</a></li>
-        <li>A USB phone charger or power bank, and a USB-C cable for the Uhost</li>
-      </ul>
-      <ul>
-        <li><strong>FM9:</strong> use firmware 7.00 or later. Older firmware may not list its
-          effects, or may lose its settings if MIDI arrives while it starts.</li>
-        <li><strong>Axe-Fx III:</strong> use firmware 25.00 or later. Older firmware may lose its
-          settings if MIDI arrives while it starts.</li>
-      </ul>
-
-      <h3 id="vp4">VP4</h3>
-      <p>
-        The AM4’s parts: the VP4 has the same small 3.5 mm Type A MIDI jacks. Only one adapter is
-        used, in its MIDI IN, because the app only sends to a VP4.
-      </p>
-      <ul>
-        <li>CME WIDI Uhost: <a href="https://www.amazon.com/dp/B09GS326QW">on Amazon</a> ·
-          <a href="https://www.cme-pro.com/widi-uhost/">CME’s page</a></li>
-        <li>CME C2MIDI Pro: <a href="https://www.amazon.com/dp/B0GVXTX5D1">on Amazon</a> ·
-          <a href="https://www.cme-pro.com/c2midi-pro/">CME’s page</a></li>
-        <li>LOOTOOLS Type-A MIDI to 3.5 mm adapters: <a href="https://www.amazon.com/dp/B0FN83P5P7">on Amazon</a></li>
-        <li>A USB phone charger or power bank, and a USB-C cable for the Uhost</li>
-      </ul>
-      <h3>Before the first time: update the Uhost</h3>
-      <p>
-        CME asks for this before first use. Install CME’s free <strong>WIDI</strong> app on your
-        phone, power up the Uhost on its own (with no other WIDI switched on nearby), connect to it
-        in the WIDI app, and update both its USB firmware and its Bluetooth firmware. Each takes
-        about two minutes. Then close the WIDI app: the Uhost connects to one thing at a time, and
-        the WIDI app would keep hold of it.
-      </p>
-
-      <h2 id="hookup">Hooking it up</h2>
-      <p>
-        The C2MIDI Pro’s two MIDI plugs are marked. The <span class="black">black</span> one says
-        <strong>[TO MIDI IN]</strong> and goes to the unit’s MIDI IN. The
-        <span class="white">white</span> one says <strong>[TO MIDI OUT]</strong> and goes to the
-        unit’s MIDI OUT. The Uhost has two USB-C sockets: the <strong>left</strong> one is marked
-        <strong>USB Host/Device</strong>, the <strong>right</strong> one <strong>USB Power</strong>.
-      </p>
-
-      <h3>AM4</h3>
+      <h2>2. Plug it in</h2>
       <ol>
-        <li>Turn the AM4 on and let it finish starting up. Leave the Uhost without power for now.</li>
-        <li>Push one LOOTOOLS adapter’s small plug all the way into the AM4’s
-          <strong>MIDI IN</strong> jack, and the other into its <strong>MIDI OUT</strong> jack.
-          The two adapters are the same, so either can go in either jack.</li>
-        <li>Plug the C2MIDI Pro’s <span class="black">black</span> plug
-          <strong>[TO MIDI IN]</strong> into the adapter in MIDI IN, and its
-          <span class="white">white</span> plug <strong>[TO MIDI OUT]</strong> into the adapter
-          in MIDI OUT.</li>
-        <li>Plug the C2MIDI Pro’s USB-C plug into the Uhost’s <strong>left</strong> socket,
-          <strong>USB Host/Device</strong>.</li>
-        <li>Last, power: a USB-C cable from a phone charger or power bank into the Uhost’s
-          <strong>right</strong> socket, <strong>USB Power</strong>. 5 volts only. The Uhost has no
-          power switch: it starts when the power goes in, and it powers the C2MIDI Pro too.</li>
-        <li>Check the lights. The Uhost’s right light goes <strong>steady green</strong>: it has
-          found the cable and has power. Its left light <strong>flashes blue slowly</strong>: it is
-          waiting for the phone. The C2MIDI Pro’s green light is on.</li>
+        <li>Turn the unit on and let it finish starting up.</li>
+        <li>
+          The cable’s <strong>black plug [TO MIDI IN]</strong> goes in the unit’s MIDI IN, the
+          <strong>white plug [TO MIDI OUT]</strong> in its MIDI OUT (on an Axe-Fx III, OUT, not
+          THRU). On an AM4 or VP4 they go in through the 3.5 mm adapters; a VP4 uses the black
+          plug only.
+        </li>
+        <li>
+          The cable’s USB plug goes in the Uhost’s left socket, <strong>USB Host/Device</strong>;
+          the charger in its right socket, <strong>USB Power</strong>. 5 volts only.
+        </li>
+        <li>The Uhost’s right light goes steady green and its left one flashes blue: it’s ready.</li>
       </ol>
 
-      <h3>FM3</h3>
-      <p class="dim">With the U2MIDI Pro, never the C2MIDI Pro: see <a href="#fm3">FM3</a> above.</p>
-      <ol>
-        <li>Turn the FM3 on and let it finish starting up. Leave the Uhost without power for now.</li>
-        <li>Plug the U2MIDI Pro’s <span class="black">black</span> plug
-          <strong>[TO MIDI IN]</strong> into the FM3’s <strong>MIDI IN</strong>.</li>
-        <li>Plug the <span class="white">white</span> plug <strong>[TO MIDI OUT]</strong> into the
-          FM3’s <strong>MIDI OUT/THRU</strong>.</li>
-        <li>Plug the U2MIDI Pro’s USB plug into the Uhost’s <strong>left</strong> socket,
-          <strong>USB Host/Device</strong>, through a USB-C to USB-A adapter.</li>
-        <li>Last, power: a phone charger or power bank into the Uhost’s <strong>right</strong>
-          socket, <strong>USB Power</strong>. 5 volts only. It powers the U2MIDI Pro too.</li>
-        <li>Check the lights, as for the AM4: steady green on the Uhost’s right, slow blue flashing
-          on its left.</li>
-      </ol>
-
-      <h3>FM9 and Axe-Fx III</h3>
-      <p class="dim">Not the FM3: see <a href="#fm3">FM3</a> above.</p>
-      <ol>
-        <li>Turn the unit on and let it finish starting up before the Uhost gets power. People have
-          reported a unit freezing while it starts up when a MIDI adapter is already live on it.</li>
-        <li>Plug the C2MIDI Pro’s <span class="black">black</span> plug
-          <strong>[TO MIDI IN]</strong> into the unit’s <strong>MIDI IN</strong>.</li>
-        <li>Plug the <span class="white">white</span> plug <strong>[TO MIDI OUT]</strong> into the
-          unit’s MIDI out. On an FM9 that is the jack marked <strong>MIDI OUT/THRU</strong>.
-          On an Axe-Fx III it is <strong>MIDI OUT</strong>, <strong>not</strong> the separate THRU
-          jack beside it: THRU only repeats what goes in, so the phone would hear itself and never
-          the unit.</li>
-        <li>Plug the C2MIDI Pro’s USB-C plug into the Uhost’s <strong>left</strong> socket,
-          <strong>USB Host/Device</strong>.</li>
-        <li>Last, power: a phone charger or power bank into the Uhost’s <strong>right</strong>
-          socket, <strong>USB Power</strong>. 5 volts only.</li>
-        <li>Check the lights, as for the AM4: steady green on the Uhost’s right, slow blue flashing
-          on its left.</li>
-      </ol>
-
-      <h3>VP4</h3>
-      <ol>
-        <li>Turn the VP4 on and let it finish starting up. Leave the Uhost without power for now.</li>
-        <li>Push one LOOTOOLS adapter’s small plug all the way into the VP4’s <strong>MIDI IN</strong>
-          jack.</li>
-        <li>Plug the C2MIDI Pro’s <span class="black">black</span> plug
-          <strong>[TO MIDI IN]</strong> into that adapter. Leave the <span class="white">white</span>
-          plug out: the app only sends to a VP4, and nothing comes back over Bluetooth.</li>
-        <li>Plug the C2MIDI Pro’s USB-C plug into the Uhost’s <strong>left</strong> socket,
-          <strong>USB Host/Device</strong>.</li>
-        <li>Last, power: a phone charger or power bank into the Uhost’s <strong>right</strong>
-          socket, <strong>USB Power</strong>. 5 volts only.</li>
-      </ol>
-      <p class="lead">
-        <strong>One at a time.</strong> While you use Bluetooth, quit the Fractal Remote app on the
-        computer, or unplug the unit’s USB cable, so the unit isn’t driven from two places at once.
-      </p>
-
-      <p class="lead">
-        <strong>About power banks.</strong> All of this draws very little power, and some power
-        banks switch themselves off when that little is drawn, which cuts the Uhost off after a
-        minute or so. A wall charger never does. If you use a power bank, use one with a
-        low-current mode, or one that doesn’t switch itself off.
-      </p>
-
-      <h2 id="settings">Settings on the unit</h2>
+      <h2>3. Settings on the unit</h2>
       <ul>
-        <li><strong>AM4, FM3 and FM9:</strong> Setup → MIDI/Remote → <strong>MIDI Thru: Off</strong>.
-          With it on, the unit sends the phone’s own messages straight back, and the app says
-          “MIDI Thru is on”. Off is the usual setting.</li>
-        <li><strong>Axe-Fx III:</strong> there is no MIDI Thru setting. Just keep the white plug in
-          OUT, not THRU.</li>
-        <li>Nothing else needs changing on the AM4.</li>
-        <li><strong>FM9 and Axe-Fx III:</strong> in Setup → MIDI/Remote, also set
-          <strong>Program Change</strong> on, the <strong>MIDI channel</strong> to 1 or Omni,
-          <strong>PC Mapping</strong> off, <strong>MIDI PC Offset</strong> to 0, and
-          <strong>Send Realtime Sysex</strong> on. On these
-          two the phone changes presets with Program Change, the way Fractal’s manuals give, and
-          the tuner’s readings reach the phone only with Send Realtime Sysex on.</li>
-        <li><strong>VP4:</strong> in SETUP &gt; MIDI/Remote, set <strong>Receive MIDI PC</strong>
-          to ON and the <strong>MIDI Channel</strong> to 1 (or OMNI). For scenes, pick a
-          <strong>Scene Select</strong> number there too, and type the same number in the app,
-          in Settings &gt; VP4 scenes &amp; presets.</li>
-        <li><strong>FM3, if presets don’t change from the phone:</strong> in
-          Setup → MIDI/Remote, set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping
-          off.</li>
-        <li>Leave the C2MIDI Pro’s button alone. A short press switches it to another of its own
-          presets, and holding it for more than 5 seconds resets it.</li>
+        <li><strong>AM4, FM3 and FM9:</strong> Setup → MIDI/Remote → MIDI Thru: Off.</li>
+        <li>
+          <strong>FM9 and Axe-Fx III:</strong> in Setup → MIDI/Remote, also set Program Change on,
+          the MIDI channel to 1 or Omni, PC Mapping off, MIDI PC Offset to 0, and Send Realtime
+          Sysex on.
+        </li>
+        <li><strong>VP4:</strong> in SETUP &gt; MIDI/Remote, set Receive MIDI PC to ON and the MIDI Channel to 1 (or OMNI).</li>
       </ul>
 
-      <h2 id="connect">Connecting in the app</h2>
-      <p>
-        Open <strong>Settings</strong> (the gear at the top right) → <strong>My rig</strong> →
-        <strong>Bluetooth</strong>. The two steps are at the top of the page. While it is
-        on, or when something is wrong, a line over them says so.
-      </p>
-      <p class="q">1 · Pick your unit</p>
-      <p>
-        Tap AM4, FM3, FM9, Axe-Fx III or VP4. To change it later, tap Stop first.
-      </p>
-      <p class="q">2 · Connect</p>
-      <p>
-        Under Connect are a few buttons. <strong>Setup guide</strong> opens this page.
-        <strong>How to connect my Bluetooth device</strong> shows every way to hook up the unit
-        you picked, simplest first, each with what to buy (a <strong>View on Amazon</strong>
-        button for each part) and how it plugs in. <strong>Troubleshooting</strong> lists every
-        fix, <strong>What Bluetooth can’t do</strong> says what is different from the computer,
-        and <strong>Report a Bluetooth problem</strong> sends us a report in one tap.
-      </p>
-
-      <h3>On an iPhone</h3>
+      <h2>4. Connect</h2>
       <ol>
-        <li>Tap <strong>Connect</strong>. The first time, the iPhone asks whether Fractal Remote may
-          use Bluetooth: tap Allow.</li>
-        <li>Apple’s Bluetooth screen opens. Tap your adapter (the Uhost shows up as
-          <strong>WIDI Uhost Bluetooth</strong>), wait until it says <strong>Connected</strong>,
-          then tap <strong>Done</strong>.</li>
-        <li>The phone does the rest. It says “Connecting to …”, then “Connected · asking the AM4…”
-          (or your unit), then <strong>“Connected · AM4 answering”</strong> in blue. That is it
-          working.</li>
+        <li>In the app: Settings (the gear at the top right) → My rig → Bluetooth.</li>
+        <li>Pick your unit, then tap <strong>Connect</strong>.</li>
+        <li>
+          <strong>iPhone or iPad:</strong> allow Bluetooth, tap your adapter on Apple’s screen,
+          wait until it says Connected, then tap Done. Connect it in the app, not in the iPhone’s
+          Settings → Bluetooth. <strong>Android:</strong> allow Nearby devices (Location, switched
+          on, on Android 11 and older).
+        </li>
       </ol>
       <p>
-        <strong>Connect it in the app, not in the iPhone’s Settings → Bluetooth.</strong> A
-        Bluetooth MIDI adapter doesn’t connect from there; Apple’s screen inside the app is the way.
+        It says <strong>Connected · AM4 answering</strong> (or your unit) when it works. Quit the
+        computer app while you use Bluetooth. A VP4 gets presets and scenes only.
       </p>
 
-      <h3>On Android</h3>
-      <ol>
-        <li>Tap <strong>Connect</strong>. The first time, Android asks you to allow
-          <strong>Nearby devices</strong> for Fractal Remote: allow it. On Android 11 and older it
-          asks for <strong>Location</strong> instead, because Android needs that to look for any
-          Bluetooth device: allow it, and make sure Location is switched on. The app uses it only
-          to find the adapter, never to see where you are
-          (<a href="/privacy">privacy page</a>).</li>
-        <li>The phone looks for the adapter for ten seconds, then connects to it. If more than one
-          is nearby, it lists them: tap yours.</li>
-        <li>If Android shows a Bluetooth pairing request, tap it and accept.</li>
-        <li>It says “Connected · AM4 answering” (or your unit) in blue when it is working.</li>
-      </ol>
-      <p>
-        On a VP4 it says <strong>“Connected · sending to the VP4”</strong> instead: the app can’t
-        hear a VP4 over Bluetooth, so that only says the adapter is connected.
-      </p>
-
-      <h3>Next time, and going back to the computer</h3>
+      <h2>Not working?</h2>
       <ul>
-        <li><strong>Connect</strong> uses the adapter from last time: the line under it names it.
-          <strong>Use a different adapter</strong>, under it, picks another, and it is there too
-          while the app is still trying one that isn’t answering.</li>
-        <li><strong>Stop using Bluetooth</strong> goes back to the computer.</li>
+        <li>Swap the two plugs if they are the wrong way round.</li>
+        <li>The adapter takes one thing at a time: close CME’s WIDI app, and Bluetooth on any nearby Mac.</li>
+        <li>Close the app completely (swipe it away) and open it again.</li>
+        <li>Unplug the Uhost’s power for a few seconds, then tap Connect again.</li>
+        <li>
+          Still stuck? Tap <strong>Report a Bluetooth problem</strong> on the app’s Bluetooth page.
+        </li>
       </ul>
-
-      <h2 id="trouble">When it doesn’t work</h2>
-
-      <p class="lead">
-        <strong>On an FM3, anything getting hot:</strong> if a cable or adapter on its MIDI jacks
-        gets more than slightly warm, unplug it at once. That is the known problem described under
-        <a href="#fm3">FM3</a> with anything but the U2MIDI Pro, not a fault in the app or the
-        phone.
-      </p>
-
-      <h3>Check the lights first</h3>
-      <ul>
-        <li><strong>Uhost, right light:</strong> steady green means it has found the C2MIDI Pro (or the
-          U2MIDI Pro) and has power. Off means no power in the <strong>USB Power</strong> socket, or the C2MIDI Pro
-          is in the wrong socket: it goes in the <strong>left</strong> one.</li>
-        <li><strong>Uhost, left light:</strong> a slow blue flash means it is waiting for the phone.
-          Steady blue means it is connected. A fast blue flicker means messages are going through.</li>
-        <li>Left light <strong>light blue (turquoise)</strong>: it has connected itself to another
-          Bluetooth MIDI gadget nearby, such as another WIDI. Switch the other one off.</li>
-        <li>Left light <strong>green</strong>: it is in the middle of a firmware update. Finish the
-          update in CME’s WIDI app.</li>
-        <li>The C2MIDI Pro’s green light should be on, and flickers when messages go through.</li>
-      </ul>
-
-      <h3>“Adapter connected, but the AM4 isn’t answering”</h3>
-      <ul>
-        <li>Check the plugs, and swap them if they are the wrong way round. The
-          <span class="black">black</span> plug <strong>[TO MIDI IN]</strong> goes to the unit’s
-          MIDI IN, the <span class="white">white</span> plug <strong>[TO MIDI OUT]</strong> to its
-          MIDI OUT. The wrong way round, nothing gets through either way.</li>
-        <li>On an AM4, check both adapters are pushed all the way into the jacks, and that they are
-          Type A.</li>
-        <li>On an Axe-Fx III, the white plug goes in MIDI OUT, never THRU.</li>
-        <li>Check MIDI Thru is off on the unit (above).</li>
-      </ul>
-
-      <h3>“An AM4 answered, not the FM3” (or another pair)</h3>
-      <p>The wrong unit is picked in step 1. Tap Stop, pick the right unit, then tap Connect.</p>
-
-      <h3>The phone can’t find the adapter, or can’t connect to it</h3>
-      <ul>
-        <li><strong>Only one phone or computer at a time.</strong> If something else has the
-          adapter, the phone can’t have it: CME’s WIDI app left open, another phone or iPad, or a
-          Mac. A Mac that has connected to it before grabs it again by itself whenever it is
-          nearby: disconnect it on the Mac (Audio MIDI Setup → MIDI Studio → Bluetooth), or turn the
-          Mac’s Bluetooth off.</li>
-        <li><strong>iPhone, keeps failing:</strong> in the iPhone’s Settings → Bluetooth, tap the
-          WIDI and Forget This Device, turn Bluetooth off and on again, then tap Connect in the app
-          once more.</li>
-        <li><strong>iPhone says Bluetooth isn’t allowed:</strong> tap <strong>Open Settings</strong>
-          in the app. It opens Fractal Remote’s own page in the iPhone’s Settings: switch
-          Bluetooth on there, then come back and tap Connect.</li>
-        <li><strong>iPhone says Bluetooth is blocked by Screen Time</strong> (or by whoever manages
-          the phone, such as a school or a company): in the iPhone’s Settings → Screen Time →
-          Content & Privacy Restrictions, allow Bluetooth Sharing, or ask whoever manages the
-          phone. Fractal Remote’s own page in Settings can’t undo this one, which is why the app
-          shows no Open Settings button for it.</li>
-        <li><strong>Still not connecting after unplugging and plugging the adapter back in?</strong>
-          Close the app completely (swipe it away) and open it again.</li>
-        <li><strong>Android finds nothing:</strong> allow Nearby devices for Fractal Remote (on
-          Android 11 and older, allow Location and turn Location on), bring the phone close to the
-          adapter, and tap Connect again.</li>
-      </ul>
-
-      <h3>It worked, then dropped</h3>
-      <ul>
-        <li>When the app has been closed, or left in the background for a while, the phone lets
-          the Bluetooth connection go to save power. Open the app and tap Connect again.</li>
-        <li><strong>Range:</strong> about 30 feet with nothing in the way. Walls, metal and a crowd
-          shorten it. Keep the phone where it can “see” the adapter.</li>
-        <li>On a power bank: it may have switched itself off (see About power banks, above).</li>
-      </ul>
-
-      <h3>Still stuck</h3>
-      <ul>
-        <li>Unplug the Uhost’s power for a few seconds and plug it back in, then tap Stop and
-          Connect in the app.</li>
-        <li>Still not connecting after unplugging and plugging the adapter back in? Close the app
-          completely (swipe it away) and open it again.</li>
-        <li>If the C2MIDI Pro was ever set up with CME’s own software, or acts strangely, hold its
-          button for more than 5 seconds to put it back to how it came.</li>
-        <li>As a last resort, reset the Uhost: hold its button while you plug its power in, and let
-          go after the green light flashes 3 times.</li>
-        <li>Then send a report from the app while it is still connected: tap
-          <strong>Report a Bluetooth problem</strong> on the Bluetooth page, and pick what
-          went wrong. It sends at once, with what the app saw, which is what explains it.</li>
-      </ul>
-
-      <h2 id="other">Other ways to hook it up</h2>
-      <p>
-        The app’s <strong>How to connect my Bluetooth device</strong> page shows these for the unit you
-        pick, simplest first. Whatever you use, it has to plug into <strong>both</strong> of the
-        unit’s MIDI jacks, In and Out: a MIDI jack carries messages one way only, and the app needs
-        the unit’s answers. Update any CME adapter with CME’s free WIDI app first. None of these is
-        for an FM3 (see <a href="#fm3">FM3</a>).
-      </p>
-      <div class="part">
-        <div class="name">CME WIDI Master</div>
-        <div class="what">
-          The adapter and its two MIDI plugs in one piece, and the simplest way. It takes its power
-          from the unit’s MIDI OUT and has no other way to be powered. On an AM4 or VP4 its plugs go
-          into two Type-A MIDI to 3.5 mm adapters (a 5-pin socket on one end, a 3.5 mm plug on the
-          other), such as Eldraqth’s pack of two,
-          <a href="https://www.amazon.com/dp/B0FJRB9KGV">on Amazon</a>.
-        </div>
-        <p class="buy">
-          <a href="https://www.amazon.com/dp/B08F8F57JX">On Amazon</a> ·
-          <a href="https://www.cme-pro.com/widi-master/">CME’s page for it</a>
-        </p>
-      </div>
-      <div class="part">
-        <div class="name">CME WIDI Jack, TRS-35 bundle</div>
-        <div class="what">
-          For the AM4 or VP4: a small box with two cables ending in 3.5 mm plugs. Set its switch to
-          Type A. It takes its power from the unit’s MIDI OUT, or from a charger in its USB-C socket.
-        </div>
-        <p class="buy">
-          <a href="https://www.amazon.com/dp/B08ZZSYKQX">On Amazon</a> ·
-          <a href="https://www.cme-pro.com/widi-jack/">CME’s page for it</a>
-        </p>
-      </div>
-      <div class="part">
-        <div class="name">CME WIDI Jack, 5-pin DIN bundle</div>
-        <div class="what">For the FM9 and Axe-Fx III: the same box, with cables ending in 5-pin MIDI plugs.</div>
-        <p class="buy"><a href="https://www.amazon.com/dp/B08ZZSVM1J">On Amazon</a></p>
-      </div>
-      <p>Other adapters, not linked here:</p>
-      <ul>
-        <li><strong>Yamaha MD-BT01</strong>: two plugs, In and Out, and used by other people with
-          Fractal units for years. It runs only on the MIDI OUT’s power, and on an FM3 it is
-          reported hot about as often as not. Yamaha supports it on iPhone, not officially on
-          Android, and it is hard to find now.</li>
-        <li><strong>A WIDI Uhost plugged straight into the unit’s USB socket</strong>, with no MIDI
-          cable. On an FM3 it can’t work at all, because the FM3’s USB socket doesn’t carry
-          MIDI.</li>
-      </ul>
-
-      <h2>Tell us how it went</h2>
-      <p>
-        Every report helps, and a report that it works on your unit helps most.
-        In the app: <strong>Report a Bluetooth problem</strong>, on the Bluetooth page, one
-        tap, with “It works on my unit” among its answers, or <strong>Settings → Troubleshooting →
-        Feedback</strong>. Or email
-        <a href="mailto:justinnewbold@gmail.com">justinnewbold@gmail.com</a>, saying which unit,
-        which adapter, and which phone. More help is on the <a href="/support">support page</a>.
-      </p>
+      <p class="dim">More ways to hook up, and more fixes, are on the app’s Bluetooth page.</p>
 
       <footer>
         <!-- These words are shared/affiliation.mjs, Fractal Audio's own sentence
@@ -698,7 +187,7 @@
           &ldquo;Fractal Audio&rdquo;, &ldquo;Axe-Fx&rdquo;, &ldquo;FM3&rdquo;, &ldquo;FM9&rdquo;,
           &ldquo;AM4&rdquo; and &ldquo;VP4&rdquo; are trademarks of Fractal Audio Systems, LLC,
           used here only to say which hardware this app works with. Fractal Remote is not connected
-          with CME, LOOTOOLS, Yamaha or any seller named here either. Their product names are theirs.
+          with CME, LOOTOOLS, Anker or any seller named here either. Their product names are theirs.
         </p>
         <p>
           <a href="https://apps.apple.com/app/id6812916461">Get the iPhone app</a> ·

@@ -4320,260 +4320,125 @@ export function run(test) {
     assert.match(page, /<h3 id="free-trial">/, 'Deleting your data points at a free-trial part that is not there')
   })
 
-  test('the Bluetooth guide says nothing of where it was tried, keeps the FM3 warning, names the parts, and links only what was checked', async () => {
+  test('the Bluetooth guide is short, keeps the FM3 warning and every safety line, names the parts, and links only what was checked', async () => {
     /*
-     * "We need to provide as much instructions as possible on how to connect
-     * it and hook it up. So as far as I know, we need a CME Widi host. And
-     * then for the AM4 I use these as well. Maybe we could add these with the
-     * Amazon links on how to buy them? Cause I'm not sure what's needed for
-     * every single device, but it is working with the AM4." (Justin, 10
-     * October 2026.)
+     * public/bluetooth-guide.html, the app's Setup guide (GUIDE_URL), at
+     * https://fractal.newbold.cloud/bluetooth-guide.html, linked from
+     * /bluetooth.
      *
-     * public/bluetooth-guide.html is that page, at
-     * https://fractal.newbold.cloud/bluetooth-guide.html. It was
-     * public/bluetooth.html until 11 October 2026, when Bluetooth went
-     * back to Justin's account alone ("I just feel like it's not ready to
-     * have public"): kept whole for the day it comes back, and for his own
-     * testing, but linked from nowhere on the website. Every check below
-     * still holds it, the FM3 warning included. What this holds it to:
+     * SHORT ON PURPOSE since 9 November 2026: "This Bluetooth guide is
+     * insanely complicated. Can we go through and figure out how to make it
+     * about 10 times shorter?" (Justin). It was about 3,900 words before its
+     * footer; this holds it under 650, so it does not grow back. Every other
+     * way to hook a unit up, every fix and what Bluetooth can't do are one
+     * tap away in the app, so the guide does not repeat them.
      *
-     *   - THE DISCLAIMER, first: a beta that may not work with every unit or
-     *     adapter, tried on one AM4 from an iPhone and not yet on the FM3,
-     *     FM9 or Axe-Fx III or from an Android phone, with the computer way
-     *     untouched.
-     *   - NO CLAIM THE OTHER WAY, anywhere on the page. The labels alone did
-     *     not hold it: "It works with the AM4, FM3, FM9 and Axe-Fx III" sat
-     *     under What it is, three paragraphs below the note saying three of
-     *     those had never been tried, with this test green. So a sentence
-     *     saying Bluetooth works on an FM3, FM9 or Axe-Fx III fails here,
-     *     and the page says which units can be picked instead.
-     *   - THE THREE PARTS, at exactly the Amazon addresses checked on
-     *     amazon.com itself on 10 October 2026 (title, seller and the page's
-     *     own canonical address, read off the live page), as plain /dp/ links
-     *     with nothing on the end. A different number is a different product.
-     *   - NO OTHER OUTSIDE LINK than the ones checked that day, so an address
-     *     nobody looked at cannot be added without this list changing too.
-     *   - THE HOOK-UP where a guess goes wrong: black into MIDI IN, white
-     *     into MIDI OUT, the cable in the Uhost's left socket and 5 volts in
-     *     its right one, the unit started before the Uhost has power, and
-     *     the Axe-Fx III's OUT rather than its THRU.
-     *   - THE APP'S OWN WORDS. The two step headings, the three rows under
-     *     them and View on Amazon, the two Connect hints, the Screen Time
-     *     line and the "What's different from USB" list are read out of the
-     *     app itself, so the app changing them without the guide fails here
-     *     rather than leaving the guide describing another app.
-     *   - NO TESTING TOOLS. They are a test bench folded away at the foot of
-     *     the Bluetooth page, not a place to send a guitarist, so the guide
-     *     neither sends anyone there nor quotes them ("found: Program
-     *     Change" once did).
+     * What stays, however short: the FM3's warning and why, 5 volts only,
+     * which plug goes in which jack, the Axe-Fx III's OUT and not THRU, the
+     * unit started before the adapter, each unit's settings, connecting in
+     * the app rather than the iPhone's Settings, the parts at the addresses
+     * checked by hand, no other outside link, no beta, nothing about what
+     * has been tried, and no unit said to work.
      *
      * Read with the HTML comment taken out, because the comment quotes
-     * Justin and names the links: a search of the whole file finds the
-     * explanation rather than the page (the same trap CLAUDE.md describes
-     * for App.jsx).
+     * Justin: a search of the whole file finds the explanation rather than
+     * the page.
      */
     const html = read('public/bluetooth-guide.html').replace(/<!--[\s\S]*?-->/g, '')
     const words = html
-      .replace(/<[^>]+>/g, '')
-      .replace(/&ldquo;|&rdquo;/g, '"')
+      .slice(html.indexOf('<main>'))
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&gt;/g, '>')
       .replace(/&amp;/g, '&')
       .replace(/\s+/g, ' ')
+      .replace(/ ([.,;:)])/g, '$1')
+    const body = words.slice(0, words.indexOf('Fractal Remote is independently developed'))
 
     assert.match(html, /<title>Bluetooth setup/, 'the guide has lost its title')
-    assert.match(words, /last updated 26 October 2026/i, 'the guide does not say when it was last checked')
-    /* Where the app's Full setup guide goes, and nowhere a search engine sends a customer. */
+    assert.match(words, /last updated \d{1,2} [A-Z][a-z]+ 20\d\d/, 'the guide does not say when it was last checked')
+    assert.ok(body.split(' ').filter(Boolean).length < 650, `the guide has grown back to ${body.split(' ').filter(Boolean).length} words; it is kept short on purpose`)
     const { GUIDE_URL } = await import('../shared/bluetooth-gear.mjs')
     assert.equal(GUIDE_URL, 'https://fractal.newbold.cloud/bluetooth-guide.html', 'the app’s Full setup guide opens somewhere other than the guide')
-    /* Listed since the live day (30 October 2026, 1.89.3 in both stores), and /bluetooth links it. */
-    assert.ok(!/noindex/.test(html), 'the guide still asks search engines not to list it, and Bluetooth is live in both stores')
-    /*
-     * And anybody who lands on it is told which versions have it, in words
-     * true before 1.89.0 is approved and after (written with the 1.89.0
-     * texts, 25 October 2026: a reviewer opens it from the app). Until then
-     * it said Bluetooth (beta) "isn't in the app for customers".
-     */
-    assert.match(words, /Bluetooth is in the app from version 1\.89\.0, for everyone with the full version\. Earlier versions show it only on the developer’s own account: if Settings → My rig has no Bluetooth row, update the app from the store\. Without it, the phone connects through the desktop app\./, 'the guide does not say which versions have Bluetooth')
-    assert.match(html, /<a href="\/downloads">desktop app<\/a>/)
-    assert.ok(!/will come back|comes back in a later/.test(words), 'the guide promises Bluetooth to customers')
-    /*
-     * Where it is in the app, said for who can see it. It said "part of the
-     * full version, so the Bluetooth row shows once the app is
-     * unlocked. If you don’t see it, update the app" — which sent a customer
-     * who has unlocked it looking for a row they will never be shown.
-     */
-    assert.match(words, /In the app it is under Settings → My rig → Bluetooth, from version 1\.89\.0, with the full version\./, 'the guide does not say where the Bluetooth row is, and from which version')
-    assert.ok(!/shows once the app is unlocked/.test(words), 'the guide says the Bluetooth row shows once the app is unlocked, which is not true before 1.89.0')
+    assert.ok(!/noindex/.test(html), 'the guide asks search engines not to list it, and Bluetooth is live in both stores')
 
-    /*
-     * OUT OF BETA, 26 October 2026: "remove anything that says beta on it
-     * for Bluetooth". This held the guide to opening on "Bluetooth is in
-     * beta"; changed on purpose, with the app's note.
-     */
-    assert.ok(!/\bbeta\b/i.test(words), 'the guide still calls Bluetooth a beta')
-    const { REPORT_NOTE, CLOSE_AND_REOPEN } = await import('../shared/bluetooth-gear.mjs')
-    assert.ok(!/tried/.test(REPORT_NOTE), 'the app’s note says where it was tried again')
-    /* The way out he found when unplugging and plugging the adapter back in left it not connecting (26 October 2026), the app's words. */
-    assert.ok(words.includes(CLOSE_AND_REOPEN), 'the guide does not say to close the app completely when it will not connect after the adapter was plugged back in')
-    /*
-     * NOTHING ABOUT WHAT HAS BEEN TRIED, since 31 October 2026: "we don't
-     * need to mention really whether or not something has been tested or
-     * not, we just need to keep track of it ourselves in the developer menu"
-     * (Justin). Changed on purpose: this held the guide to "So far it has
-     * been tried on an AM4 and an FM3…" and "It has not been tried yet on an
-     * FM9 or VP4", and each unit and adapter to a Tried or Not tried yet tag.
-     * The FM3's warning was the one place a try was told ("When we tried the
-     * WIDI Master and the C2MIDI Pro on an FM3") until the 2 November 2026
-     * audit: it says what happened now, and nothing is let through.
-     */
+    /* Nothing a person reads calls it a beta, says where it was tried, or says a unit works. */
+    assert.ok(!/\bbeta\b/i.test(words), 'the guide calls Bluetooth a beta')
     assert.ok(!/\btried\b|\btested\b/i.test(words), `the guide says where it was tried: ${(words.match(/[^.]*\b(tried|tested)\b[^.]*\./i) || [''])[0]}`)
-    assert.ok(!/class="tag"/.test(html.replace(/<!--[\s\S]*?-->/g, '')), 'a Tried or Not tried yet tag is back')
-    assert.match(words, /These are the parts to buy for each unit\./)
-    /*
-     * "The CME C2MIDI Pro got extremely hot on the FM3 and the connection
-     * didn't work." The FM3's MIDI OUT has no current limit and the cable
-     * feeds from it, so the guide says not to plug it in, and why — and lists
-     * nothing to buy for it. Never "straight in": that word was there while a
-     * way round it was offered, and with none any more it read as if there
-     * still were one.
-     */
-    /* Since 26 October 2026: the WIDI Master and the C2MIDI Pro ran very hot on his FM3 and the WIDI Master did not work; the U2MIDI Pro works and stays cool. */
-    assert.match(words, /On an FM3, the WIDI Master and the C2MIDI Pro got very hot, and the WIDI Master did not work: use a CME U2MIDI Pro instead \(see FM3 below\)\./, 'the guide does not warn FM3 owners off what overheated, at the top')
-    assert.match(words, /On an FM3, use the CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master\. The WIDI Master and the C2MIDI Pro both got very hot on an FM3, and the WIDI Master did not work\. The U2MIDI Pro runs on USB power only: on an FM3 it works and stays cool\./, 'the FM3 section does not open on its warning')
-    assert.ok(!/parts plugged straight in|plug straight in|straight into an FM3/i.test(words), 'the guide says not to plug it straight in, as if there were another way')
-    /*
-     * NO HOME-MADE WAY ROUND IT. This held the guide to what FM3 owners fit
-     * (a 220-ohm resistor on pin 4, for "someone who solders"); changed on
-     * purpose on 25 October 2026, here and in the app's warning. What
-     * happened, what owners report, and to keep the parts off an FM3.
-     */
-    assert.ok(!/220-ohm|resistor|solder/i.test(words), 'the guide gives a home-made way round the FM3 again')
-    assert.match(words, /FM3 owners have reported since 2021/, 'the guide says the FM3’s fault as fact rather than what owners report')
-    assert.match(words, /So keep the C2MIDI Pro, the WIDI Master, and any adapter that takes its power from the MIDI OUT jack, off an FM3\./, 'the guide does not say to keep the parts that ran hot off an FM3')
-    assert.match(words, /Powering the adapter from USB doesn’t stop it/)
-    const fm3 = html.slice(html.indexOf('id="fm3"'), html.indexOf('<h3>FM9 and Axe-Fx III'))
-    assert.ok(fm3.length > 200 && !/B0GVXTX5D1|c2midi-pro|widi-master/.test(fm3), 'the FM3 section gives somewhere to buy what overheated')
-    assert.ok(fm3.includes('href="https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/"'), 'the FM3 section does not say where to find the U2MIDI Pro')
-    assert.ok(!/<h3>FM3, FM9/.test(html), 'the FM3 is still grouped with the units the parts suit')
-    /* The heat check is the FM3's alone since 31 October 2026: "The FM three is the only one that ever has overheating issues" (Justin). */
-    assert.match(words, /On an FM3, anything getting hot: if a cable or adapter on its MIDI jacks gets more than slightly warm, unplug it at once\./, 'the guide does not tell FM3 owners to unplug anything that gets hot')
-    assert.ok(!/feel the C2MIDI Pro/i.test(words), 'the guide tells owners of other units to check the C2MIDI Pro for heat')
-    assert.match(words, /Yamaha MD-BT01[^.]*\. It runs only on the MIDI OUT’s power, and on an FM3 it is reported hot about as often as not/, 'the Yamaha is offered to FM3 owners as the way round it')
-    assert.match(words, /USB cable to a computer[^.]*keeps working as it always has/, 'the guide does not say the computer way is untouched')
-    /* The VP4: the AM4's parts, one plug, and only presets and scenes (mobile/src/lib/bleVp4.js). */
-    assert.match(words, /Leave the white plug out: the app only sends to a VP4, and nothing comes back over Bluetooth\./, 'the guide does not keep the white plug off a VP4')
-    assert.match(words, /On a VP4, Bluetooth changes presets and scenes, the way a MIDI foot controller does, and nothing else\./, 'the guide promises a VP4 more than presets and scenes')
-    const { VP4_OVER_BLUETOOTH } = await import('../shared/bluetooth-gear.mjs')
-    assert.ok(words.includes(VP4_OVER_BLUETOOTH.replace(/^Over Bluetooth, the app changes a VP4’s presets and scenes, the way a MIDI foot controller does, and nothing else\. /, '')), 'the guide says something else about a VP4 than the app does')
-    assert.match(words, /VP4: in SETUP (?:>|&gt;) MIDI\/Remote, set Receive MIDI PC to ON and the MIDI Channel to 1 \(or OMNI\)/, 'the guide does not say what to set on a VP4')
-    assert.ok(!/isn’t offered over Bluetooth/.test(words), 'the guide still says the VP4 is not offered')
+    assert.ok(!/\bworks? (on|with)\b[^.]{0,60}\b(AM4|FM3|FM9|Axe-Fx|VP4)\b/.test(words), 'the guide says Bluetooth works on a unit')
+    assert.ok(!/will come back|comes back in a later/.test(words), 'the guide promises Bluetooth to customers')
+    /* No editing promised before both stores have the version that opens it (the live-day rule below). */
+    assert.ok(!/From version 1\.90\.0|editing (works|opens)/i.test(words), 'the guide says what 1.90.0 does')
+    /* Every unit the page offers, named. */
+    for (const unit of ['AM4', 'FM3', 'FM9', 'Axe-Fx III', 'VP4']) assert.ok(body.includes(unit), `the guide does not name the ${unit}`)
+    assert.match(body, /no computer/, 'the guide does not say Bluetooth needs no computer')
+    assert.match(body, /full version/, 'the guide does not say Bluetooth comes with the full version')
 
-    /* And nothing on the page says the reverse. */
-    assert.ok(!/\bworks with the AM4, FM3/.test(words), 'the guide says Bluetooth works with units nobody has tried')
-    assert.ok(!/\bworks? (on|with)\b[^.]{0,60}\b(FM9|VP4)\b/.test(words), 'the guide says Bluetooth works on an FM9 or VP4, and nobody has run it on those')
-    assert.match(words, /You can pick an AM4, FM3, FM9, Axe-Fx III or VP4\./, 'the guide does not say which units can be picked')
+    /* THE FM3: what overheated, never to use it, why, even on USB power, and to unplug. */
+    const fm3 = html.slice(html.indexOf('id="fm3"'), html.indexOf('</div>', html.indexOf('id="fm3"')))
+    assert.ok(fm3.length > 100, 'the FM3 warning has no box of its own')
+    assert.match(body, /On an FM3, never use the C2MIDI Pro or a WIDI Master: both got very hot on one\./, 'the guide does not warn FM3 owners off what overheated')
+    assert.match(body, /Its MIDI OUT runs any adapter that draws power from it hot, even on USB power\./, 'the guide does not say why, or that USB power does not stop it')
+    assert.match(body, /If anything on an FM3 gets warm, unplug it at once\./, 'the guide does not tell FM3 owners to unplug anything that gets hot')
+    assert.ok(!/B0GVXTX5D1|c2midi-pro|widi-master/.test(fm3), 'the FM3 warning gives somewhere to buy what overheated')
+    assert.match(body, /FM3: the WIDI Uhost, a CME U2MIDI Pro/, 'the FM3’s parts are not the U2MIDI Pro')
+    assert.ok(!/220-ohm|resistor|solder/i.test(words), 'the guide gives a home-made way round the FM3')
 
-    /* The parts, at the addresses checked on 10 October 2026. */
+    /* THE PARTS, at the addresses checked by hand, and no other outside link. */
     const PARTS = [
       ['CME WIDI Uhost', 'https://www.amazon.com/dp/B09GS326QW', 'https://www.cme-pro.com/widi-uhost/'],
       ['CME C2MIDI Pro', 'https://www.amazon.com/dp/B0GVXTX5D1', 'https://www.cme-pro.com/c2midi-pro/'],
-      ['LOOTOOLS Type-A MIDI to 3.5 mm adapters', 'https://www.amazon.com/dp/B0FN83P5P7', null],
-      /* The FM3's, since 26 October 2026, and the rest of the ways that day, each Amazon page's title checked. */
+      ['Type-A MIDI to 3.5 mm adapters', 'https://www.amazon.com/dp/B0FN83P5P7', null],
       ['CME U2MIDI Pro', 'https://www.amazon.com/dp/B0BH8DHCLY', 'https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/'],
-      ['USB-C to USB-A adapter', 'https://www.amazon.com/dp/B01COOQIKU', null],
-      ['CME WIDI Master', 'https://www.amazon.com/dp/B08F8F57JX', 'https://www.cme-pro.com/widi-master/'],
-      ['CME WIDI Jack, TRS-35 bundle', 'https://www.amazon.com/dp/B08ZZSYKQX', 'https://www.cme-pro.com/widi-jack/'],
-      ['CME WIDI Jack, 5-pin DIN bundle', 'https://www.amazon.com/dp/B08ZZSVM1J', null],
-      ['Eldraqth', 'https://www.amazon.com/dp/B0FJRB9KGV', null]
+      ['USB-C to USB-A adapter', 'https://www.amazon.com/dp/B01COOQIKU', null]
     ]
     for (const [name, amazon, maker] of PARTS) {
       assert.ok(words.includes(name), `the guide does not name the ${name}`)
-      if (amazon) assert.ok(html.includes(`href="${amazon}"`), `the guide does not link the ${name} at ${amazon}`)
+      assert.ok(html.includes(`href="${amazon}"`), `the guide does not link the ${name} at ${amazon}`)
       if (maker) assert.ok(html.includes(`href="${maker}"`), `the guide does not link CME's own page for the ${name}`)
     }
-    assert.match(words, /They have to be Type A: the AM4 needs Type A, and Type B ones won’t work\./, 'the guide does not say the AM4 adapters must be Type A')
-
-    /* Nothing outside this site that was not checked that day. */
-    const CHECKED = new Set([
-      ...PARTS.flatMap(([, amazon, maker]) => [amazon, maker]).filter(Boolean),
-      'https://apps.apple.com/app/id6812916461'
-    ])
+    assert.match(body, /Type B won’t work/, 'the guide does not say the 3.5 mm adapters must be Type A')
+    const CHECKED = new Set([...PARTS.flatMap(([, amazon, maker]) => [amazon, maker]).filter(Boolean), 'https://apps.apple.com/app/id6812916461'])
     const outside = [...html.matchAll(/href="(https?:[^"]*)"/g)].map((m) => m[1])
     assert.ok(outside.length >= 6, 'the guide links fewer outside pages than it should; this read is probably broken')
     for (const link of outside) assert.ok(CHECKED.has(link), `the guide links ${link}, which nobody checked`)
 
-    /* The hook-up, where a guess goes wrong. */
-    assert.match(words, /black plug \[TO MIDI IN\] into the adapter in MIDI IN, and its white plug \[TO MIDI OUT\] into the adapter in MIDI OUT/, 'the AM4 steps do not say which plug goes where')
-    assert.match(words, /black plug \[TO MIDI IN\] into the unit’s MIDI IN/, 'the 5-pin steps do not say the black plug goes in MIDI IN')
-    assert.match(words, /white plug \[TO MIDI OUT\] into the unit’s MIDI out\. On an FM9 that is the jack marked MIDI OUT\/THRU\. On an Axe-Fx III it is MIDI OUT, not the separate THRU jack/, 'the 5-pin steps do not say which jack the white plug goes in, or keep it out of the Axe-Fx III’s THRU')
-    assert.match(words, /USB-C plug into the Uhost’s left socket, USB Host\/Device/, 'the guide does not say the cable goes in the Uhost’s left socket')
-    assert.match(words, /into the Uhost’s right socket, USB Power\. 5 volts only/, 'the guide does not say the power goes in the right socket, at 5 volts')
-    assert.match(words, /Never use anything that puts out more than 5 volts/, 'the guide does not warn against more than 5 volts')
-    assert.equal((words.match(/let it finish starting up/g) || []).length, 4, 'the hook-up does not start the unit before the Uhost, for the AM4, the FM3, the other 5-pin units and the VP4')
-    assert.match(words, /MIDI Thru: Off/, 'the guide does not say to turn MIDI Thru off')
-    assert.match(words, /FM3, if presets don’t change from the phone: in Setup → MIDI\/Remote, set Program Change on, the MIDI channel to 1 or Omni, and PC Mapping off\./, 'the guide does not say what to set on an FM3 when presets don’t change')
-    /* The FM9 and Axe-Fx III change presets by Program Change alone since 25 October 2026, so for them it is for everybody, with Send Realtime Sysex for the tuner. */
-    assert.match(words, /FM9 and Axe-Fx III: in Setup → MIDI\/Remote, also set Program Change on, the MIDI channel to 1 or Omni, PC Mapping off, MIDI PC Offset to 0, and Send Realtime Sysex on\./, 'the guide does not say what to set on an FM9 or Axe-Fx III')
-    assert.ok(!/Testing tools|found: /i.test(words), 'the guide sends customers to the Testing tools, which are a test bench')
+    /* THE HOOK-UP, where a guess goes wrong. */
+    assert.match(body, /Turn the unit on and let it finish starting up\./, 'the unit is not started before the Uhost')
+    assert.match(body, /black plug \[TO MIDI IN\] goes in the unit’s MIDI IN, the white plug \[TO MIDI OUT\] in its MIDI OUT \(on an Axe-Fx III, OUT, not THRU\)/, 'the guide does not say which plug goes where, or keep it out of the Axe-Fx III’s THRU')
+    assert.match(body, /a VP4 uses the black plug only/, 'the guide does not keep the white plug off a VP4')
+    assert.match(body, /Uhost’s left socket, USB Host\/Device; the charger in its right socket, USB Power\. 5 volts only\./, 'the guide does not say which Uhost socket takes what, at 5 volts')
+    assert.match(body, /update the Uhost in CME’s free WIDI app, then close that app/, 'the guide does not say to update the Uhost first')
+    assert.match(body, /steady green/, 'the guide does not say what the lights show when it is ready')
 
-    /* Connecting, in the app's own words. */
+    /* EACH UNIT'S SETTINGS. */
+    assert.match(body, /AM4, FM3 and FM9: Setup → MIDI\/Remote → MIDI Thru: Off\./, 'the guide does not say to turn MIDI Thru off')
+    assert.match(body, /FM9 and Axe-Fx III: in Setup → MIDI\/Remote, also set Program Change on, the MIDI channel to 1 or Omni, PC Mapping off, MIDI PC Offset to 0, and Send Realtime Sysex on\./, 'the guide does not say what to set on an FM9 or Axe-Fx III')
+    assert.match(body, /VP4: in SETUP > MIDI\/Remote, set Receive MIDI PC to ON and the MIDI Channel to 1 \(or OMNI\)/, 'the guide does not say what to set on a VP4')
+    assert.match(body, /FM9 firmware 7\.00 or later, Axe-Fx III firmware 25\.00 or later/, 'the guide does not give the firmware floors')
+    assert.match(body, /A VP4 gets presets and scenes only\./, 'the guide promises a VP4 more than presets and scenes')
+
+    /* CONNECTING, in the app's words, where the app has them. */
     const app = read('mobile/src/screens/Bluetooth.js')
-    for (const said of [
-      '1 · Pick your unit',
-      'How to connect my Bluetooth device',
-      'Troubleshooting',
-      'View on Amazon',
-      'What Bluetooth can’t do',
-      'Setup guide',
-      '2 · Connect',
-      'wait until it says Connected, then tap Done',
-      /* The app names the device in hand there now (`The ${deviceNoun()} looks…`), the guide "The phone": the rest of the sentence is held. */
-      'looks for the adapter for ten seconds, then connects to it.'
-    ]) {
+    for (const said of ['wait until it says Connected, then tap Done', 'Report a Bluetooth problem']) {
       assert.ok(app.includes(said), `the Bluetooth page no longer says "${said}"; read the guide against it again`)
       assert.ok(words.includes(said), `the guide does not say "${said}" as the app does`)
     }
-    assert.match(words, /Connect it in the app, not in the iPhone’s Settings → Bluetooth\./, 'the guide does not say an iPhone connects the adapter in the app')
-    assert.match(words, /Nearby devices/, 'the guide does not say what Android 12 and later asks for')
-    assert.match(words, /On Android 11 and older it asks for Location instead[^.]*make sure Location is switched on/, 'the guide does not say Android 11 and older need Location on')
-    assert.match(words, /Settings \(the gear at the top right\) → My rig → Bluetooth\./, 'the guide does not say where Bluetooth is in the app, under My rig as the app has it')
+    assert.match(body, /Settings \(the gear at the top right\) → My rig → Bluetooth\./, 'the guide does not say where Bluetooth is in the app')
     assert.ok(read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ').indexOf('<SetupRow title="Bluetooth"') > read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ').indexOf('<Group title="My rig"'), 'the guide sends people to My rig for a row that is not there')
-    /* The report, where the guide sends people: the app's own button. */
-    assert.match(words, /Report a Bluetooth problem, on the Bluetooth page, one tap, with “It works on my unit” among its answers/, 'the guide does not send people to the one-tap report')
-    /* Changed on purpose, 24 October 2026, with the page: Connect at the top, and the reading in rows under it ("a five-year-old could connect it"). */
-    assert.match(words, /The two steps are at the top of the page\. While it is on, or when something is wrong, a line over them says so\./, 'the guide does not say the steps are at the top, as they are in the app')
-    assert.match(words, /Under Connect are a few buttons\. Setup guide opens this page\. How to connect my Bluetooth device shows every way to hook up the unit you picked, simplest first/, 'the guide does not say the buttons sit under Connect, as they do in the app')
-    assert.match(app, /<Heading>1 · Pick your unit<\/Heading>[\s\S]*<Heading>2 · Connect<\/Heading>[\s\S]*label="Setup guide"[\s\S]*label="How to connect my Bluetooth device"[\s\S]*label="Troubleshooting"[\s\S]*label="What Bluetooth can’t do"/, 'the buttons are no longer under the two steps; read the guide against the app again')
-    /* Screen Time: the same place to look as the app's own line for it. */
-    const restricted = read('mobile/src/lib/bluetooth.js').match(/export const RESTRICTED_WORDS =\s*`([^`]+)`/)?.[1] ?? ''
-    assert.ok(restricted.includes('Settings → Screen Time → Content & Privacy Restrictions'), 'the app’s Screen Time line no longer says where to look; read the guide against it again')
-    assert.match(words, /blocked by Screen Time[^.]*Settings → Screen Time → Content & Privacy Restrictions, allow Bluetooth Sharing/, 'the guide does not say what to do when Screen Time blocks Bluetooth')
-    const settings = read('mobile/src/screens/Settings.js')
-    assert.match(settings, /title=\{PAIR_TITLE\}/, 'Settings has no Phone & computer, which the guide names as the row above Bluetooth')
-    assert.match(settings, /const PAIR_TITLE = pairTitle\(\)/, 'the Phone & computer row is not named by pairTitle')
-    assert.match(settings, /title="Bluetooth"/, 'Settings has no Bluetooth row, which the guide sends people to')
+    assert.match(body, /Connect it in the app, not in the iPhone’s Settings → Bluetooth\./, 'the guide does not say an iPhone connects the adapter in the app')
+    assert.match(body, /Nearby devices/, 'the guide does not say what Android 12 and later asks for')
+    assert.match(body, /Location, switched on, on Android 11 and older/, 'the guide does not say Android 11 and older need Location on')
+    assert.match(body, /Quit the computer app while you use Bluetooth\./, 'the guide does not say to quit the computer app')
 
-    /* What's different from USB: the app's list, every line of it. */
-    const different = app.match(/const DIFFERENT = \[([\s\S]*?)\n\]/)?.[1] ?? ''
-    const lines = [...different.matchAll(/^\s*'([^']+)',?$/gm)].map((m) => m[1])
-    assert.ok(lines.length >= 5, 'the Bluetooth page’s list of what is different could not be read')
-    for (const line of lines) assert.ok(words.includes(line), `the guide leaves out "${line}", which the app says`)
-
-    /* One thing driving the unit at a time: the app's own line under the steps (ONE_AT_A_TIME), word for word. */
-    const { ONE_AT_A_TIME } = await import('../shared/bluetooth-gear.mjs')
-    assert.ok(words.includes(ONE_AT_A_TIME), 'the guide does not say what the app says about the computer app and the USB cable while Bluetooth is used')
-
-    /* When it doesn't work. */
-    assert.match(words, /Only one phone or computer at a time\./, 'the guide does not say the adapter takes one phone or computer at a time')
-    assert.match(words, /A Mac that has connected to it before grabs it again by itself/, 'the guide does not say a Mac grabs the adapter first')
-    assert.match(words, /closed, or left in the background for a while, the phone lets the Bluetooth connection go/, 'the guide does not say why it drops after the app has been away')
-    assert.match(words, /steady green means it has found the C2MIDI Pro \(or the U2MIDI Pro\) and has power/, 'the guide does not say what the green light means')
-    assert.match(words, /a slow blue flash means it is waiting for the phone\. Steady blue means it is connected\. A fast blue flicker means messages are going through\./, 'the guide does not say what the blue light means')
-
-    /* Other ways: both jacks, and the ones beyond the app's own list with nothing to buy them by. */
-    assert.match(words, /CME WIDI Master /, 'the WIDI Master is not among the other ways')
-    assert.match(words, /CME WIDI Jack, TRS-35 bundle /, 'the WIDI Jack is not among the other ways')
-    assert.match(words, /Other adapters, not linked here:/, 'the other adapters are linked')
-    assert.match(words, /plug into both of the unit’s MIDI jacks, In and Out/, 'the guide does not say an adapter has to fill both jacks')
+    /* THE FIXES that matter most. */
+    const { CLOSE_AND_REOPEN } = await import('../shared/bluetooth-gear.mjs')
+    assert.match(CLOSE_AND_REOPEN, /Close the app completely \(swipe it away\) and open it again\./, 'the app’s close-and-reopen line changed; read the guide against it again')
+    assert.match(body, /Close the app completely \(swipe it away\) and open it again\./, 'the guide does not say to close the app completely')
+    assert.match(body, /Swap the two plugs/, 'the guide does not say to swap the plugs')
+    assert.match(body, /The adapter takes one thing at a time/, 'the guide does not say the adapter takes one thing at a time')
+    assert.match(body, /Unplug the Uhost’s power for a few seconds/, 'the guide does not say to power the Uhost off and on')
+    assert.match(body, /More ways to hook up, and more fixes, are on the app’s Bluetooth page\./, 'the guide does not send people to the app for the rest')
+    assert.ok(!/Testing tools|found: /i.test(words), 'the guide sends customers to the Testing tools, which are a test bench')
   })
 
   test('/bluetooth says Bluetooth is in the app, the computer first, and leads on to the guide, as the support page does', async () => {
@@ -5731,7 +5596,8 @@ export function run(test) {
        * no 1.90.0 to give.
        */
       assert.doesNotMatch(words('public/whats-new.html') + ' ' + read('shared/whats-new.json'), /\bupdate\b[^.]{0,40}\bfrom (the )?(app store|play store|google play|store)\b|\bfrom the store to get it\b/i, 'What’s new tells players to update from the store before both stores have 1.90.0')
-      assert.match(words('public/bluetooth-guide.html'), /No editing or saving over Bluetooth\./)
+      /* The guide, short since 9 November 2026, says nothing of editing either way (its own test above). */
+      assert.doesNotMatch(words('public/bluetooth-guide.html'), /\bedit/i, 'the guide speaks of editing before both stores have 1.90.0')
       assert.match(words('public/support.html'), /with no editing or saving\./)
     }
     /* And if a store says no, the What's new line that reached every copy by update comes out with the website's words. */
