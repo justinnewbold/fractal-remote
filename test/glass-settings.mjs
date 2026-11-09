@@ -373,7 +373,8 @@ export function run(test) {
     const connect = code(FILES.connect)
     assert.match(connect, /borderRadius: radius\.pill, borderWidth: 1, borderColor: color\.ok, backgroundColor: color\.glassFill, boxShadow: color\.glassLift \}\}/, 'Connect’s pill is not a green capsule of glass')
     assert.match(connect, /padding: space\.lg, gap: space\.lg, borderWidth: 1, \.\.\.glassCard\(\{ bordered: true, classicCorner: radius\.lg \}\) \}\}/, 'Connect’s card is not bordered glass, at its old corner in Classic')
-    assert.match(connect, /width: 64, height: 64, borderRadius: radius\.lg, alignItems: 'center', justifyContent: 'center', backgroundColor: color\.panelHi/, 'Connect’s picture square changed')
+    /* The laptop's square went with the three steps (9 November 2026); each step's number is a solid disc of the app's amber, never glass, so it reads over the card. */
+    assert.match(connect, /width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: color\.signal \}\}/, 'a step’s number is not a solid amber disc')
     assert.equal((connect.match(/<View style=\{\{ flex: 1, height: 1, backgroundColor: color\.glassRim \}\} \/>/g) || []).length, 2, 'the two rules either side of “or” are not the glass’s rim')
 
     const { Row, BluetoothTried } = await bench(FILES.bluetooth, ['function Row(', 'function BluetoothTried('], {

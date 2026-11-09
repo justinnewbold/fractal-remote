@@ -1,32 +1,17 @@
-import { useState } from 'react'
-import { Image, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Image, Linking, ScrollView, Text, TextInput, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { glassCard, glassField } from '../lib/glass'
 import { CONNECT, P6 } from '../lib/onboarding'
-import laptopIcon from '../../assets/icons/laptop.png'
 import mailIcon from '../../assets/icons/mail.png'
 import sendIcon from '../../assets/icons/send.png'
-/*
- * The three computers under "Free • Mac, Windows, Linux" are plain drawings
- * in the icon set's own hand: a laptop, a screen on a stand and a command
- * prompt. They were Apple's logo, Microsoft's Windows logo and Linux's
- * penguin, from the mockup, and Apple's rules for its trademarks say "You
- * may not use the Apple Logo" without Apple's written license, with
- * Microsoft's saying the same of theirs, in an app that goes to Apple's
- * review with every store version. The names are said in words, in the line
- * above them, which is how this app names a computer maker's product (the
- * gear cards' photographs, which show their makers' badges, are the one
- * exception, docs/gear-illustrations.md). test/independent.mjs holds the
- * three old files away.
- */
-import desktopIcon from '../../assets/icons/desktop.png'
-import terminalIcon from '../../assets/icons/terminal.png'
 import CopyAddress from '../components/CopyAddress'
 import Note from '../components/Note'
 import Press from '../components/Press'
-import { DOWNLOADS_URL, sendDownloadLink } from '../lib/downloadLink'
-import { tick } from '../lib/feedback'
+import { sendDownloadLink } from '../lib/downloadLink'
+import { keptAccount } from '../lib/relay'
+import { isPairAccount } from '../lib/pairing'
 import { bluetoothSupported, openForCustomersHere } from '../lib/bluetooth'
 import { GUIDE_URL, HOW_CONNECT } from '../lib/bluetooth-gear'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
@@ -74,13 +59,99 @@ import bluetoothIcon from '../../assets/icons/bluetooth.png'
  * What is left is the address and the email box, at sizes you can read at
  * arm's length. The subtitle went with them: it promised "what it is", and
  * what it is has moved to the page that explains it.
+ *
+ * AND NOW IT IS THREE NUMBERED STEPS. "The screen seems slightly confusing.
+ * Any ideas on how to improve it?" (Justin, 9 November 2026, holding this
+ * page.) It was a row of things with no order: a Bluetooth button bigger than
+ * anything about the computer, a green pill saying SAME ACCOUNT ON BOTH with
+ * nothing to say both of what, the card, the email box, and the three
+ * computers named a second time at the foot. Shown a mockup of the same
+ * things as steps, he said "Yes, build the connect to computer screen".
+ *
+ *   1  Get the free desktop app: the address to type or copy, or the link
+ *      by email. Both ways are this step, so "or" no longer splits the page.
+ *   2  Plug your unit into the computer. One line. It is not the USB
+ *      paragraph that went: it is the step nobody was told came next.
+ *   3  Sign in to the desktop app, with the same account. The pill is here
+ *      now, and where this device knows whose sign-in it holds it names the
+ *      account (lib/relay keptAccount, read off the device, never asked of
+ *      the account service), so "the same account" is one to read off the
+ *      screen. From the sign-in screen nobody is signed in yet, and the pill
+ *      keeps its words.
+ *
+ * Bluetooth stays first, as the 7 November rule has it, but as the question
+ * it answers ("Got a Bluetooth adapter?"), so the page under it reads as the
+ * other way and not as a second thing to do. The foot's "Free • Mac,
+ * Windows, Linux" and its three pictures went: step 1 says free and names
+ * the three, and the pictures opened the page whose address is in that step.
+ *
+ * The browser's page (src/components/ConnectScreen.jsx) is not changed: its
+ * sign-in screen already has the three numbered steps over it (SETUP.steps).
+ * So these words are the phone's, kept here and not in shared/onboarding.mjs,
+ * which the computer app carries: a word changed there is a new computer
+ * release, for a page no computer shows.
  */
+const STEPS = {
+  sub: 'Three steps, done once.',
+  bluetooth: 'Got a Bluetooth adapter?',
+  bluetoothGo: 'Connect over Bluetooth instead',
+  rule: 'WITH A COMPUTER',
+  get: 'Get the free desktop app',
+  getBody: 'On your Mac, Windows or Linux computer, go to:',
+  orEmail: 'Or email yourself the link:',
+  plug: 'Plug your unit into the computer',
+  plugBody: 'With its USB cable.',
+  signIn: 'Sign in to the desktop app',
+  signInAs: 'With the same account as this app:',
+  signInSame: 'With the same account you use in this app.',
+  then: 'Then the app finds your computer by itself, over the internet, from anywhere.'
+}
+
+/* A step's own line: built when drawn, never at load, so it follows the look chosen in Settings. */
+const body = () => ({ color: color.silkDim, fontSize: font.body, lineHeight: 21 })
+
+/** One step: its number in the app's amber, its name beside it, and under them whatever the step needs. */
+function Step({ n, title, children }) {
+  return (
+    <View style={{ gap: space.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+        <View
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          style={{ width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: color.signal }}
+        >
+          <Text style={{ color: color.onSignal, fontSize: font.body, fontWeight: '800' }}>{n}</Text>
+        </View>
+        <Text
+          accessibilityRole="header"
+          accessibilityLabel={`Step ${n}. ${title}`}
+          style={{ flex: 1, color: color.silk, fontSize: font.lead, fontWeight: '700' }}
+        >
+          {title}
+        </Text>
+      </View>
+      {children}
+    </View>
+  )
+}
 
 export default function Connect({ onBack, onBluetooth = null }) {
   const [email, setEmail] = useState('')
   const [said, setSaid] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  /* Whose sign-in this device holds, read off the device: null from the sign-in screen and in the demo, and never a pairing code's account, which is not somebody's email. */
+  const [account, setAccount] = useState(null)
+  useEffect(() => {
+    let alive = true
+    keptAccount()
+      .then((kept) => alive && setAccount(kept?.email && !isPairAccount(kept.email) ? kept.email : null))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+  const bluetoothHere = Boolean(onBluetooth) || (openForCustomersHere() && bluetoothSupported())
 
   const mail = async () => {
     setBusy(true)
@@ -99,18 +170,16 @@ export default function Connect({ onBack, onBluetooth = null }) {
       keyboardShouldPersistTaps="handled"
     >
       {/*
-        HIS MOCKUP, IN THE APP'S OWN COLOURS. "Can we update this screen to
-        look like this? You could change the colors a little bit to match the
-        rest of the app." The purple of the picture is the app's amber here,
-        and the words are shared/onboarding.mjs's CONNECT. The pill, the card
-        and the email box are frosted glass (lib/glass), the pill still green.
+        HIS MOCKUP, IN THE APP'S OWN COLOURS, and since 9 November 2026 in
+        three steps (the note over this screen). The pill, the card and the
+        email box are frosted glass (lib/glass), the pill still green.
       */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.md }}>
         <View style={{ flex: 1, gap: space.sm }}>
           <Text accessibilityRole="header" style={{ color: color.silk, fontSize: font.title + 6, fontWeight: '800' }}>
             {CONNECT.title}
           </Text>
-          <Text style={{ color: color.silkDim, fontSize: font.lead, lineHeight: 24 }}>{CONNECT.sub}</Text>
+          <Text style={{ color: color.silkDim, fontSize: font.lead, lineHeight: 24 }}>{STEPS.sub}</Text>
         </View>
         <Press label="Done" height={40} onPress={onBack} />
       </View>
@@ -125,11 +194,13 @@ export default function Connect({ onBack, onBluetooth = null }) {
         so on a copy that opens Bluetooth to customers (the purchase page's
         gate) the same button opens the website's setup guide instead, which
         anybody may read. Anywhere else, nothing: the page is as it was.
+        Asked as a question since 9 November 2026, so what is under it reads
+        as the other way; its second line says what the tap does.
       */}
       {onBluetooth || (openForCustomersHere() && bluetoothSupported()) ? (
         <Press
-          label="Connect over Bluetooth"
-          sub={onBluetooth ? HOW_CONNECT.bluetoothSub : `${HOW_CONNECT.bluetoothSub} · setup guide`}
+          label={STEPS.bluetooth}
+          sub={onBluetooth ? `${STEPS.bluetoothGo} · ${HOW_CONNECT.bluetoothSub}` : `${HOW_CONNECT.bluetoothSub} · setup guide`}
           icon={bluetoothIcon}
           inkColor={color.ble}
           labelSize={font.lead}
@@ -139,26 +210,14 @@ export default function Connect({ onBack, onBluetooth = null }) {
         />
       ) : null}
 
-      <View
-        style={{
-          alignSelf: 'flex-start',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: space.sm,
-          paddingHorizontal: space.md,
-          paddingVertical: space.sm,
-          borderRadius: radius.pill,
-          borderWidth: 1,
-          borderColor: color.ok,
-          backgroundColor: color.glassFill,
-          boxShadow: color.glassLift
-        }}
-      >
-        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color.ok }} />
-        <Text style={{ color: color.ok, fontSize: font.small, fontWeight: '700', letterSpacing: 1 }}>
-          {CONNECT.pill}
-        </Text>
-      </View>
+      {/* Under the Bluetooth question, and only there: with no question over it the page has one way and needs no name for it. */}
+      {bluetoothHere ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: color.glassRim }} />
+          <Text style={{ color: color.silkDim, fontSize: font.small, letterSpacing: 1.2 }}>{STEPS.rule}</Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: color.glassRim }} />
+        </View>
+      ) : null}
 
       <View
         style={{
@@ -168,104 +227,86 @@ export default function Connect({ onBack, onBluetooth = null }) {
           ...glassCard({ bordered: true, classicCorner: radius.lg })
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg }}>
+        <Step n={1} title={STEPS.get}>
+          <Text style={body()}>{STEPS.getBody}</Text>
+          <CopyAddress row size={font.lead} />
+          <Text style={body()}>{STEPS.orEmail}</Text>
           <View
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: radius.lg,
+              flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: color.panelHi
+              minHeight: TAP + 8,
+              borderWidth: 1,
+              ...glassField()
             }}
           >
-            <Image source={laptopIcon} style={{ width: 34, height: 34, tintColor: color.signal }} />
+            <Image source={mailIcon} style={{ width: 22, height: 22, marginHorizontal: space.md, tintColor: color.silkDim }} />
+            <View style={{ width: 1, alignSelf: 'stretch', marginVertical: space.sm, backgroundColor: color.glassRim }} />
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@example.com"
+              placeholderTextColor={color.silkFaint}
+              accessibilityLabel="Where to send the download link"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              inputMode="email"
+              keyboardType="email-address"
+              returnKeyType="send"
+              onSubmitEditing={() => !busy && email.includes('@') && mail()}
+              style={{ flex: 1, minHeight: TAP, paddingHorizontal: space.md, color: color.silk, fontSize: font.lead }}
+            />
           </View>
-          <View style={{ flex: 1, gap: space.xs }}>
-            <Text style={{ color: color.silk, fontSize: font.title - 2, fontWeight: '800' }}>{CONNECT.card}</Text>
-            <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 21 }}>{CONNECT.cardBody}</Text>
+          <Press
+            label="Send link"
+            icon={sendIcon}
+            tone="signal"
+            on
+            disabled={busy || !email.includes('@')}
+            height={TAP + 8}
+            onPress={mail}
+          />
+          {said ? <Note strong size={font.body}>{said}</Note> : null}
+          {error ? <Note tone="fault">{error}</Note> : null}
+        </Step>
+
+        <Step n={2} title={STEPS.plug}>
+          <Text style={body()}>{STEPS.plugBody}</Text>
+        </Step>
+
+        <Step n={3} title={STEPS.signIn}>
+          <Text style={body()}>{account ? STEPS.signInAs : STEPS.signInSame}</Text>
+          {/* The green pill: the account by name where this device holds one, its own words where it does not. */}
+          <View
+            style={{
+              alignSelf: 'flex-start',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.sm,
+              paddingHorizontal: space.md,
+              paddingVertical: space.sm,
+              borderRadius: radius.pill,
+              borderWidth: 1,
+              borderColor: color.ok,
+              backgroundColor: color.glassFill,
+              boxShadow: color.glassLift
+            }}
+          >
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color.ok }} />
+            {account ? (
+              <Text numberOfLines={1} style={{ flexShrink: 1, color: color.ok, fontSize: font.small, fontWeight: '700' }}>
+                {account}
+              </Text>
+            ) : (
+              <Text style={{ color: color.ok, fontSize: font.small, fontWeight: '700', letterSpacing: 1 }}>
+                {CONNECT.pill}
+              </Text>
+            )}
           </View>
-        </View>
-        <CopyAddress row size={font.lead} />
-      </View>
+        </Step>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-        <View style={{ flex: 1, height: 1, backgroundColor: color.glassRim }} />
-        <Text style={{ color: color.silkDim, fontSize: font.small, letterSpacing: 1.2 }}>{CONNECT.or}</Text>
-        <View style={{ flex: 1, height: 1, backgroundColor: color.glassRim }} />
-      </View>
-
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          minHeight: TAP + 8,
-          borderWidth: 1,
-          ...glassField()
-        }}
-      >
-        <Image source={mailIcon} style={{ width: 22, height: 22, marginHorizontal: space.md, tintColor: color.silkDim }} />
-        <View style={{ width: 1, alignSelf: 'stretch', marginVertical: space.sm, backgroundColor: color.glassRim }} />
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="you@example.com"
-          placeholderTextColor={color.silkFaint}
-          accessibilityLabel="Where to send the download link"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="email"
-          inputMode="email"
-          keyboardType="email-address"
-          returnKeyType="send"
-          onSubmitEditing={() => !busy && email.includes('@') && mail()}
-          style={{ flex: 1, minHeight: TAP, paddingHorizontal: space.md, color: color.silk, fontSize: font.lead }}
-        />
-      </View>
-      <Press
-        label="Send link"
-        icon={sendIcon}
-        tone="signal"
-        on
-        disabled={busy || !email.includes('@')}
-        height={TAP + 8}
-        onPress={mail}
-      />
-      {said ? <Note strong size={font.body}>{said}</Note> : null}
-      {error ? <Note tone="fault">{error}</Note> : null}
-
-      <View style={{ alignItems: 'center', gap: space.sm, paddingTop: space.md }}>
-        <Text style={{ color: color.silkDim, fontSize: font.body }}>{CONNECT.foot}</Text>
-        {/*
-          EACH ONE OPENS THE DOWNLOADS PAGE. "Can we make the icons at the
-          bottom work to take them straight to the download page on
-          fractal.newbold.cloud/downloads." The same page for all three: it
-          lists every computer's download, and opened on the computer itself
-          it puts that one first, so the Mac's picture and the Windows one
-          have nowhere different to go. Opened in the phone's own browser, from
-          where it can be shared or sent on.
-        */}
-        <View style={{ flexDirection: 'row', gap: space.lg }}>
-          {[
-            [laptopIcon, 'Mac'],
-            [desktopIcon, 'Windows'],
-            [terminalIcon, 'Linux']
-          ].map(([src, name]) => (
-            <Pressable
-              key={name}
-              accessibilityRole="link"
-              accessibilityLabel={`${name} download page`}
-              hitSlop={space.sm}
-              onPress={() => {
-                tick()
-                Linking.openURL(`https://${DOWNLOADS_URL}`).catch(() => {})
-              }}
-              style={({ pressed }) => ({ padding: space.sm, opacity: pressed ? 0.5 : 1 })}
-            >
-              <Image source={src} style={{ width: 28, height: 28, tintColor: color.silkDim }} />
-            </Pressable>
-          ))}
-        </View>
+        <Text style={body()}>{STEPS.then}</Text>
       </View>
     </ScrollView>
   )

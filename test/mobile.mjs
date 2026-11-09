@@ -1270,19 +1270,41 @@ export function run(test) {
     assert.match(read('mobile/src/screens/Settings.js'), /title="Feedback"/, 'the notice sends people to a Feedback row that is gone')
   })
 
-  test('the Mac, Windows and Linux icons on Connect a computer open the downloads page', () => {
-    /* "Can we make the icons at the bottom work to take them straight to the
-       download page on fractal.newbold.cloud/downloads." */
-    const connect = read('mobile/src/screens/Connect.js').replace(/\s+/g, ' ')
-    for (const name of ['Mac', 'Windows', 'Linux']) {
-      assert.ok(connect.includes(`'${name}'`), `the ${name} icon is not one of the links`)
-    }
-    assert.match(connect, /accessibilityRole="link"/, 'the icons are pictures rather than links')
-    assert.match(connect, /accessibilityLabel=\{`\$\{name\} download page`\}/, 'a screen reader cannot tell what the icons open')
-    assert.match(connect, /Linking\.openURL\(`https:\/\/\$\{DOWNLOADS_URL\}`\)/, 'the icons open somewhere other than the downloads page')
-    assert.ok(!/accessibilityElementsHidden importantForAccessibility="no-hide-descendants"> \{\[/.test(connect), 'the icons are hidden from screen readers while they do something')
-    const { DOWNLOADS_URL } = { DOWNLOADS_URL: read('mobile/src/lib/downloadLink.js').match(/export const DOWNLOADS_URL = '([^']+)'/)?.[1] }
-    assert.equal(DOWNLOADS_URL, 'fractal.newbold.cloud/downloads', 'the downloads address moved')
+  test('Connect a computer is three numbered steps, and names the three computers once, in step 1', () => {
+    /*
+     * "The screen seems slightly confusing. Any ideas on how to improve it?"
+     * and, shown the same things as three steps, "Yes, build the connect to
+     * computer screen" (Justin, 9 November 2026). Changed on purpose that
+     * day: the foot's "Free • Mac, Windows, Linux" and its three pictures,
+     * which he had asked to open the downloads page ("Can we make the icons
+     * at the bottom work"), went with the mockup he approved. Step 1 says
+     * free and names the three, with the page's address to type, copy or be
+     * sent.
+     */
+    const src = read('mobile/src/screens/Connect.js')
+    const connect = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+    /* The three steps, in order, each with its number. */
+    const at = [1, 2, 3].map((n, i) => connect.indexOf(`<Step n={${n}} title={STEPS.${['get', 'plug', 'signIn'][i]}}>`))
+    assert.ok(at.every((x) => x > 0) && at[0] < at[1] && at[1] < at[2], 'the three steps are not there, or not in order')
+    assert.equal((connect.match(/<Step n=\{/g) || []).length, 3, 'there are more or fewer than three steps')
+    assert.match(connect, /get: 'Get the free desktop app', getBody: 'On your Mac, Windows or Linux computer, go to:',/, 'step 1 does not say free, or which computers')
+    assert.match(connect, /plug: 'Plug your unit into the computer', plugBody: 'With its USB cable\.',/)
+    assert.match(connect, /signIn: 'Sign in to the desktop app',/)
+    /* Step 1 holds both ways to get the address across: to type or copy, and by email. */
+    const one = connect.slice(at[0], at[1])
+    assert.ok(one.indexOf('<CopyAddress row size={font.lead} />') > 0 && one.indexOf('{STEPS.orEmail}') > one.indexOf('<CopyAddress') && one.indexOf('label="Send link"') > one.indexOf('{STEPS.orEmail}'), 'step 1 is not the address, then the link by email')
+    /* Step 3 names the account where this device holds one, read off the device, and never a pairing code's. */
+    const three = connect.slice(at[2])
+    assert.match(connect, /keptAccount\(\) \.then\(\(kept\) => alive && setAccount\(kept\?\.email && !isPairAccount\(kept\.email\) \? kept\.email : null\)\)/, 'the account is asked of the account service, or a pairing code is called an email')
+    assert.ok(!/currentAccount|sessionAccount/.test(connect), 'the page asks the account service, which with no signal answers nobody')
+    assert.match(three, /\{account \? STEPS\.signInAs : STEPS\.signInSame\}/)
+    assert.match(three, /\{account \? \( <Text numberOfLines=\{1\}[^>]*> \{account\} <\/Text> \) : \( <Text [^>]*> \{CONNECT\.pill\} <\/Text> \)\}/, 'the pill does not name the account, or lost its own words where nobody is signed in')
+    /* The foot went: no second naming of the computers, no pictures that open a page. */
+    assert.ok(!/CONNECT\.foot|accessibilityRole="link"|DOWNLOADS_URL/.test(connect), 'the foot and its three pictures are back')
+    assert.equal(read('mobile/src/lib/downloadLink.js').match(/export const DOWNLOADS_URL = '([^']+)'/)?.[1], 'fractal.newbold.cloud/downloads', 'the downloads address moved')
+    /* Never "this phone", and the last line is true of a phone, an iPad and a tablet alike. */
+    assert.match(connect, /then: 'Then the app finds your computer by itself, over the internet, from anywhere\.'/)
+    assert.ok(!/this phone/i.test(connect))
   })
 
   test('the phone cannot ask for anything the computer refuses', async () => {
@@ -7916,13 +7938,14 @@ export function run(test) {
      * Bluetooth first" (Justin). His own site, read by anybody, never a shop.
      */
     const opens = [...screen.matchAll(/Linking\.openURL\(([^)]*)\)/g)].map((m) => m[1])
-    assert.deepEqual(opens, ['GUIDE_URL', '`https://${DOWNLOADS_URL}`'], 'the phone can be sent to a page other than the downloads page and the Bluetooth guide')
+    /* Only the guide since 9 November 2026: the foot's three pictures, which opened the downloads page, went with the three steps. */
+    assert.deepEqual(opens, ['GUIDE_URL'], 'the phone can be sent to a page other than the Bluetooth guide')
     assert.match(screen.replace(/\s+/g, ' '), /onPress=\{onBluetooth \|\| \(\(\) => Linking\.openURL\(GUIDE_URL\)\.catch\(\(\) => \{\}\)\)\}/, 'the guide opens where the Bluetooth page is offered')
     assert.match(screen.replace(/\s+/g, ' '), /\{onBluetooth \|\| \(openForCustomersHere\(\) && bluetoothSupported\(\)\) \? \(/, 'Connect a computer offers Bluetooth on a copy that does not open it')
     assert.ok(!/github/i.test(screen.replace(/\/\*[\s\S]*?\*\//g, ' ')), 'the phone is sent to GitHub again')
     /* His mockup: the card says it is the desktop app, for which computers,
        and the address sits in it with a copy button. */
-    assert.match(screen, /\{CONNECT\.cardBody\}/, 'nothing says which machine the address is for')
+    assert.match(screen, /\{STEPS\.getBody\}/, 'nothing says which machine the address is for')
     assert.match(read('shared/onboarding.mjs'), /cardBody: 'Download for Mac, Windows, or Linux\./, 'the card lost which computers it is for')
     assert.match(screen, /<CopyAddress row size=\{font\.lead\} \/>/, 'the address to type is not shown')
     /* "Can we update this screen to look like this?" — and the browser's
@@ -7961,14 +7984,12 @@ export function run(test) {
       assert.ok(!pattern.test(screen), what)
     }
 
-    /* And what is left is big enough to read at arm's length: the address and
-       the email box at title size, the two labels a step up from micro. */
+    /* And what is left is big enough to read at arm's length: the heading at
+       title size, each step's name and the email box at lead, and no label at
+       the smallest size in the app. */
     assert.ok(!/fontSize: font\.micro/.test(screen), 'a label on this screen is back at the smallest size in the app')
-    assert.equal(
-      (screen.match(/fontSize: font\.title/g) || []).length,
-      2,
-      'the heading and the email box are not both at title size'
-    )
+    assert.equal((screen.match(/fontSize: font\.title/g) || []).length, 1, 'the heading is not the one thing at title size')
+    assert.ok((screen.match(/fontSize: font\.lead/g) || []).length >= 3, 'the steps’ names, the line under the heading and the email box are not at lead size')
 
     assert.match(src, /The Mac app/, 'the route that actually works is not offered')
     /*
@@ -8482,7 +8503,17 @@ export function run(test) {
      * symbol is what is drawn.
      */
     const SPARE = all.includes('assets/icons/bluetooth.png') ? ['wireless.png'] : []
-    const unused = files.filter((f) => !all.includes(`assets/icons/${f}`) && !SPARE.includes(f))
+    /*
+     * And two the browser alone draws, out of this same folder, since 9
+     * November 2026: the screen on a stand and the command prompt, under
+     * "Free • Mac, Windows, Linux" on its Connect a computer
+     * (src/components/ConnectScreen.jsx). The phone's page is three steps
+     * now and names the computers in words. Only while the browser imports
+     * them: a picture neither end draws still fails here.
+     */
+    const web = read('src/components/ConnectScreen.jsx')
+    const WEB_ONLY = ['desktop.png', 'terminal.png'].filter((f) => web.includes(`mobile/assets/icons/${f}`))
+    const unused = files.filter((f) => !all.includes(`assets/icons/${f}`) && !SPARE.includes(f) && !WEB_ONLY.includes(f))
     assert.deepEqual(unused, [], `a picture nothing draws: ${unused.join(', ')}`)
 
     const missing = []

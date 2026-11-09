@@ -636,7 +636,8 @@ export const AREAS = [
       {
         does: 'connect over Bluetooth instead of a computer',
         web: null,
-        phone: 'Connect over Bluetooth',
+        /* Asked as a question since 9 November 2026, over the page's three steps (mobile/src/screens/Connect.js). */
+        phone: 'Got a Bluetooth adapter?',
         /*
          * "Everything that mentions how to connect to a computer also
          * mentions how to connect to Bluetooth and putting Bluetooth first on
