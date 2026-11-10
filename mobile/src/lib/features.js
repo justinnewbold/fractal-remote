@@ -47,12 +47,24 @@ export const BENCH = true
 /**
  * TWO SIDES ON A BIG SCREEN (lib/twoSides, components/Sides), for everyone.
  *
- * OFF: his account only, while it is built in steps (9 November 2026, "How
- * do I put these side by side on the iPad?"). Each step is an ordinary
- * over-the-air update and shows on his account first; this is the one line
- * that opens it to customers once he says it is right, with its line in
- * What's new in the same pull request. Until then nobody else sees a bar,
- * a Swap or a second side: every phone held upright, and every other
- * account on any screen, is drawn exactly as today.
+ * ON since 9 November 2026: "Go ahead and flip the switch though to turn
+ * this on for all users" (Justin, the day Apple put 1.90.0 live, with
+ * steps 2 and 3 on his own iPad: Edit, Setlists, All presets and the tuner
+ * beside Play). It was his account only while it was built in steps ("How
+ * do I put these side by side on the iPad?"). It shows only on a window
+ * wide enough and wider than tall; every phone held upright is drawn
+ * exactly as before. Turned off again, it goes back to his account only.
  */
-export const SIDES_FOR_EVERYONE = false
+export const SIDES_FOR_EVERYONE = true
+
+/**
+ * HOLD A BLOCK FOR ITS KNOBS (step 4, Derek's panel: lib/twoSides holdGoes,
+ * components/BlockSide), for everyone.
+ *
+ * OFF: his account only. It landed the same hour the two sides opened to
+ * everyone and nobody had seen it on a screen yet, so it waits for his own
+ * look, as each step before it did. Everybody else keeps today's channel
+ * pop-up on a hold. This is the one line that opens it, with its line in
+ * What's new in the same pull request.
+ */
+export const HOLD_KNOBS_FOR_EVERYONE = false

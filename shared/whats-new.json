@@ -3,6 +3,13 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-10",
+      "version": "1.90.16",
+      "lines": [
+        "On a tablet turned on its side, or a folding phone opened, Play can now share the screen: tap Edit, Setlists or the preset name and it opens beside Play, and the tuner takes a narrow strip instead of covering everything. Each side has Swap and Full screen, and Two sides brings the other back."
+      ]
+    },
+    {
       "date": "2026-11-09",
       "version": "1.90.15",
       "lines": [

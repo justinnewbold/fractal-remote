@@ -214,7 +214,8 @@ export function run(test) {
     assert.match(stage, /const laneRow = lined \? Math\.max\(0, \(pageRow\(playWidth, space\.lg\) - centre\.left - centre\.right - space\.xl\) \/ 2\) : row\n/)
     assert.match(stage, /maxWidth: PAGE_MAX,\s*alignSelf: 'center',\s*paddingTop: space\.lg,\s*paddingLeft: space\.lg \+ centre\.left,\s*paddingRight: space\.lg \+ centre\.right,/, 'Play’s page is padded by other numbers than the halves are worked out from')
     assert.match(stage, /const LANES = \{ flexDirection: 'row', gap: space\.xl, alignItems: 'flex-start' \}\n/, 'the gap between the halves is not the one their widths leave')
-    assert.match(stage, /style=\{halves \? \(sq \? LANES_SQUARE : LANES\) : \{ gap: tight \? space\.md : space\.lg \}\}/, 'the halves are not side by side lined up, or today’s page moved')
+    /* (Ahead of it, only while a block's knobs are open where the scenes were: Derek's panel, test/two-sides.mjs.) */
+    assert.match(stage, /style=\{knobsLane \? LANES_KNOBS : halves \? \(sq \? LANES_SQUARE : LANES\) : \{ gap: tight \? space\.md : space\.lg \}\}/, 'the halves are not side by side lined up, or today’s page moved')
     /* The preset across the top with Setlists at its end, lined up only. */
     assert.match(stage, /<View style=\{lined \? PRESET_ROW : undefined\}>\s*<Press\s+grow=\{lined\}/)
     assert.match(stage, /\{lined \? <SetlistsPress \{\.\.\.footing\}[^\n]*\/> : null\}/, 'Setlists is out of reach lined up')

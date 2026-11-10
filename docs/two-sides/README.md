@@ -186,13 +186,17 @@ docs/two-sides/
 - Everything in "The tuner" above, whether Play's button, the watch or Siri turns it on.
 - Your account only. Over-the-air update: yes.
 
-### Step 4: Derek's panel (2 sessions)
+### Step 4: Derek's panel (2 sessions) — done, 1.90.15
 
-- Everything in Derek's section above.
+- Everything in Derek's section above, except the unsaved-changes question (Save, Don't save or Stay), which is in step 5.
+- The knobs sit straight under the channel buttons, with the model under them, the way Edit has had them since 1.90.10.
+- Where Play's square tiles have the scenes in a row over the blocks (an 11-inch iPad on its side with eight scenes and seven blocks, say), there is no Scenes column to take. There the panel gets the left of the screen and the blocks are squared again beside it. Where the scenes and the blocks are already side by side, the blocks stay exactly where they are.
+- A panel that took the tuner's side turns the tuner off, and Close then gives the side back to what the tuner had borrowed, since the tuner never turns itself back on.
 - Your account only. Over-the-air update: yes.
 
 ### Step 5: finishing touches (1 session)
 
+- The question before Previous, Next, a preset pick or a song pick throws away unsaved changes from Edit or Derek's panel: Save, Don't save or Stay.
 - Pop-ups (the tempo box, the Looper, the channel pop-up, the watch tip) appear over their own side, not across the fold.
 - The tempo box works with the keyboard on the opened Duo.
 - VoiceOver and TalkBack never read out a hidden side.

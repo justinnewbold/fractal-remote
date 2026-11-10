@@ -6,6 +6,10 @@
  * Duo closed or held tall, and an iPad upright. His account only until
  * features SIDES_FOR_EVERYONE opens it.
  *
+ * And Derek's panel (step 4): a block held on Play opens its knobs where
+ * the scenes were, or in the other side, only where editing works and the
+ * two sides are; everywhere else the hold is today's channel pop-up.
+ *
  * The rule is run as it is (it imports nothing), with lib/playShape beside
  * it for Play's shape in a side; App.js, Sides.js and Stage.js are read for
  * how they draw with it. Nobody here has the Duo: its cases are its window
@@ -32,9 +36,17 @@ async function rules() {
     writeFileSync(join(dir, 'twoSides.js'), sides)
     writeFileSync(join(dir, 'gigSize.js'), read('mobile/src/lib/gigSize.js'))
     writeFileSync(join(dir, 'playShape.js'), read('mobile/src/lib/playShape.js').replace("from './gigSize'", "from './gigSize.js'"))
+    /* For Derek's panel: Play's squares, which the panel takes the scenes' room from, and Edit's door, which it opens behind. Neither imports anything. */
+    for (const f of ['squarePlay', 'editDoor']) {
+      const src = read(`mobile/src/lib/${f}.js`)
+      assert.doesNotMatch(src, /^import /m, `lib/${f} imports something; this check runs it on its own`)
+      writeFileSync(join(dir, `${f}.js`), src)
+    }
     const t = await import(pathToFileURL(join(dir, 'twoSides.js')).href)
     const p = await import(pathToFileURL(join(dir, 'playShape.js')).href)
-    return { ...t, ...p }
+    const q = await import(pathToFileURL(join(dir, 'squarePlay.js')).href)
+    const d = await import(pathToFileURL(join(dir, 'editDoor.js')).href)
+    return { ...t, ...p, ...q, ...d }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -202,10 +214,10 @@ export function run(test) {
     assert.match(app, /tunerOffered: \(demo \|\| link\.link === 'connected'\) && caps\?\.tuner !== false/)
     /* On: into the side. Off: the side closes. Its side gone: off, unless the window shrank. */
     assert.match(app, /if \(!tunerOn\) \{\s*if \(screen === 'tuner'\) setScreen\(tunerGivesBack\(tunerLent\.current\)\)\s*return\s*\}/)
-    assert.match(app, /tunerGoes\(\{ allowed: sidesAllowed, wide, screen \}\) === 'side'\) \{\s*tunerLent\.current = screen\s*setScreen\('tuner'\)\s*\}/)
+    assert.match(app, /tunerGoes\(\{ allowed: sidesAllowed, wide, screen \}\) === 'side'\) \{\s*tunerLent\.current = sideUnder\(screen, \{ blockLent: blockLent\.current \}\)\s*setScreen\('tuner'\)\s*\}/)
     assert.match(app, /if \(tunerStops\(\{ was, now: screen, tunerOn \}\)\) writeTuner\(false\)/)
     /* Folded: what the tuner borrowed comes back when the window widens, never the tuner itself. */
-    assert.match(app, /shrunk\.current = to\.keep === 'tuner' \? tunerLent\.current : to\.keep/)
+    assert.match(app, /shrunk\.current = sideUnder\(to\.keep, \{ tunerLent: tunerLent\.current, blockLent: blockLent\.current \}\)/)
     /* The tuner is a screen only in a side: anywhere else, Play, and it goes off. */
     assert.match(app, /\} else if \(screen === 'tuner' && !twoSidesUp\) \{\s*setScreen\('stage'\)\s*\}/)
     assert.doesNotMatch(app, /alone === 'tuner'/, 'the switch draws a tuner screen of its own')
@@ -281,15 +293,16 @@ export function run(test) {
     const app = code(read('mobile/App.js'))
     const sides = code(read('mobile/src/components/Sides.js'))
     const features = read('mobile/src/lib/features.js')
-    /* Off for customers until step 6. */
-    assert.match(features, /^export const SIDES_FOR_EVERYONE = false$/m, 'the two sides are open to everyone; that is step 6, with its line in What’s new')
+    /* Open to everyone since 9 November 2026 ("flip the switch though to turn this on for all users"); the hold for a block's knobs is still his account's. */
+    assert.match(features, /^export const SIDES_FOR_EVERYONE = true$/m, 'the two sides are closed to customers again')
+    assert.match(features, /^export const HOLD_KNOBS_FOR_EVERYONE = false$/m, 'holding a block for its knobs is open to everyone; that needs his own look first, and its line in What’s new')
     assert.match(app, /const sidesAllowed = SIDES_FOR_EVERYONE \|\| sidesAdmin\n/)
     assert.match(app, /const sidesAdmin = useBluetoothAdmin\(\)\n/, 'his account is not read from the sign-in kept on the phone')
     /* The frame is measured, and the rule asked on it with its memory, only for an account the sides are open to. */
     assert.match(app, /\{sidesAllowed \? <SidesFrame onFrame=\{setFrame\} \/> : null\}/)
     assert.match(app, /const wide = sidesAllowed && twoSidesOn\(frame \|\| \{\}, wideWas\.current\)\n\s*wideWas\.current = wide\n/)
     /* `screen` stays the record: the tool is read off it, Edit behind the bench's switch, and the switch leaves it to the host on two sides. */
-    assert.match(app, /const sideTool = BENCH && screen === 'edit' \? 'edit' : screen === 'setlists' \|\| screen === 'presets' \|\| screen === 'tuner' \? screen : null\n/)
+    assert.match(app, /const sideTool = BENCH && screen === 'edit' \? 'edit' : screen === 'setlists' \|\| screen === 'presets' \|\| screen === 'tuner' \|\| screen === BLOCK \? screen : null\n/)
     assert.match(app, /const twoSidesUp = sidesAllowed && sideTool !== null && \(wide \|\| sideFull\)\n/)
     assert.match(app, /const alone = twoSidesUp \? 'stage' : screen\n/)
     for (const t of ['presets', 'setlists']) assert.match(app, new RegExp(`\\) : alone === '${t}' \\? \\(`), `${t} is drawn by the switch beside the host’s copy`)
@@ -309,13 +322,13 @@ export function run(test) {
     /* Swap is kept on the device; Full screen on Play's bar is Play alone with the tool kept; Two sides brings it back. */
     assert.match(app, /onSwap=\{\(\) => \{\s*keepPlayOnRight\(!playOnRight\)\s*setPlayOnRight\(!playOnRight\)\s*\}\}/)
     assert.match(app, /onPlayFull=\{closeSide\}/)
-    assert.match(app, /if \(sideTool\) setSideKept\(sideTool\)\s*else setSideFull\(false\)/)
+    assert.match(app, /if \(sideTool === BLOCK\) return\s*if \(sideTool\) setSideKept\(sideTool\)\s*else setSideFull\(false\)/)
     /* Nothing reopens at launch: what was kept starts empty, and only which side Play is on is read off the device. */
     assert.match(app, /const \[sideKept, setSideKept\] = useState\(null\)\n/)
     assert.match(app, /readPlayOnRight\(\)\.then/)
     assert.doesNotMatch(app, /readSideKept|AsyncStorage/, 'a tool is read back off the device at launch')
     /* Shrunk to one screen: lib/twoSides says what shows, decided while drawing and only after a render with the tool beside Play; wide again, the tool comes back only onto Play. */
-    assert.match(app, /if \(wasBeside\.current && !wide\) \{\s*const to = whenNarrow\(\{ tool: sideTool, sideFull \}\)\s*if \(to\.screen !== screen\) \{\s*shrunk\.current = to\.keep === 'tuner' \? tunerLent\.current : to\.keep\s*setScreen\(to\.screen\)\s*\}\s*\} else if \(screen === 'tuner' && !twoSidesUp\) \{[^}]*\}\s*wasBeside\.current = playBeside\n/)
+    assert.match(app, /if \(wasBeside\.current && !wide\) \{\s*const to = whenNarrow\(\{ tool: sideTool, sideFull \}\)\s*if \(to\.screen !== screen\) \{\s*shrunk\.current = sideUnder\(to\.keep, \{ tunerLent: tunerLent\.current, blockLent: blockLent\.current \}\)\s*setScreen\(to\.screen\)\s*\}\s*\} else if \(screen === 'tuner' && !twoSidesUp\) \{[^}]*\}\s*wasBeside\.current = playBeside\n/)
     assert.match(app, /if \(back && screen === 'stage'\) setScreen\(back\)/)
     /* Android's back: full screen first, then today's step (the side's Done). */
     assert.match(app, /if \(twoSidesUp && backUnwinds\(\{ tool: sideTool, sideFull \}\) === 'full'\) \{\s*setSideFull\(false\)\s*return true\s*\}\s*if \(screen !== 'stage'\)/)
@@ -366,5 +379,313 @@ export function run(test) {
     /* All presets beside Play stays after a pick; on its own it goes back as it always did. */
     assert.match(presets, /export default function Presets\(\{ onBack, stay = false \}\)/)
     assert.match(presets, /loadPreset\(n\)\s*if \(!stay\) onBack\?\.\(\)/)
+  })
+
+  /* ------------------------------------------------------------------ */
+  /* Step 4: Derek's idea, hold a block and get its panel                */
+  /* ------------------------------------------------------------------ */
+
+  test('Derek’s panel: a hold opens a block’s knobs only where editing works on a window that shows two sides, for an account they are open to; everywhere else it is today’s pop-up', async () => {
+    const r = await rules()
+    const his = { allowed: true, editOpens: true, wide: true }
+    /* Play filling a big screen: where the scenes were. */
+    assert.equal(r.holdGoes({ ...his, screen: 'stage' }), 'lane')
+    /* Two sides showing: Edit jumps to the block; the tuner, Setlists and All presets lend their side; another block's knobs move. */
+    assert.equal(r.holdGoes({ ...his, beside: true, screen: 'edit' }), 'edit')
+    for (const screen of ['tuner', 'setlists', 'presets', r.BLOCK]) assert.equal(r.holdGoes({ ...his, beside: true, screen }), 'side', screen)
+    /* Today's pop-up (null), for every place Play can be held from: */
+    const places = [
+      { screen: 'stage' },
+      { beside: true, screen: 'edit' },
+      { beside: true, screen: 'tuner' },
+      { beside: true, screen: 'setlists' },
+      { beside: true, screen: 'presets' },
+      { beside: true, screen: r.BLOCK }
+    ]
+    for (const place of places) {
+      const at = JSON.stringify(place)
+      assert.equal(r.holdGoes({ ...his, ...place, allowed: false }), null, `an account the two sides are not open to gets the panel: ${at}`)
+      assert.equal(r.holdGoes({ ...his, ...place, editOpens: false }), null, `the panel opens where editing does not work: ${at}`)
+      assert.equal(r.holdGoes({ ...his, ...place, vp4: true }), null, `a VP4 gets a panel of knobs it does not have: ${at}`)
+      assert.equal(r.holdGoes({ ...his, ...place, wide: false }), null, `a phone, or anything held upright, gets the panel: ${at}`)
+      /* Only a plain true opens anything. */
+      assert.equal(r.holdGoes({ ...his, ...place, allowed: 'yes' }), null)
+      assert.equal(r.holdGoes({ ...his, ...place, editOpens: 1 }), null)
+    }
+    /* A tool filling the window has Play out of sight: nothing to hold. And no other screen opens one. */
+    for (const screen of ['edit', 'setlists', 'presets', 'tuner']) assert.equal(r.holdGoes({ ...his, beside: false, screen }), null, screen)
+    for (const screen of ['settings', 'fixes', 'report', 'gear', null, undefined]) assert.equal(r.holdGoes({ ...his, beside: true, screen }), null, String(screen))
+    assert.equal(r.holdGoes({}), null)
+    assert.equal(r.holdGoes(), null)
+
+    /* `wide` is the two sides' own rule, on the frame: every phone upright or on its side, the Duo closed or held tall and an iPad upright are the pop-up; an iPad on its side and the Duo opened are the panel. */
+    const held = (w, h, insets) => r.holdGoes({ allowed: true, editOpens: true, screen: 'stage', wide: r.twoSidesOn(frameOf(w, h, insets)) })
+    for (const [w, h] of [[320, 568], [375, 667], [393, 852], [430, 932], [440, 956]]) {
+      assert.equal(held(w, h), null, `a ${w}-point phone held upright`)
+      assert.equal(held(h, w), null, `a ${w}-point phone on its side`)
+    }
+    assert.equal(held(466, 678, { right: 44 }), null, 'the Duo closed')
+    assert.equal(held(669, 951), null, 'the Duo opened and held tall')
+    assert.equal(held(820, 1180), null, 'an 11-inch iPad upright')
+    assert.equal(held(1024, 1366), null, 'a 13-inch iPad upright')
+    assert.equal(held(1180, 820), 'lane', 'an 11-inch iPad on its side')
+    assert.equal(held(1280, 800), 'lane', 'an Android tablet sideways')
+    assert.equal(held(951, 669, { right: 84 }), 'lane', 'the Duo opened with Play full screen')
+
+    /* `editOpens` is Edit's own door (lib/editDoor), so the panel opens exactly where Edit does. */
+    const door = (ask) => r.holdGoes({ allowed: true, wide: true, screen: 'stage', vp4: ask.vp4 === true, editOpens: r.editDoor({ bench: true, ...ask }).opens })
+    assert.equal(door({ link: 'connected' }), 'lane', 'through the computer')
+    assert.equal(door({ demo: true }), 'lane', 'in the demo')
+    assert.equal(door({ link: 'connected', overBluetooth: true, editOpen: true, built: true }), 'lane', 'over Bluetooth where Edit is open to this account and unit')
+    assert.equal(door({ link: 'connected', overBluetooth: true, editOpen: false, built: true }), null, 'a customer over Bluetooth, where Edit is closed, lost the scenes for a panel')
+    assert.equal(door({ link: 'connected', overBluetooth: true, editOpen: false, built: false }), null)
+    assert.equal(door({ link: 'joining' }), null, 'with nothing answering')
+    assert.equal(door({ link: 'connected', vp4: true }), null, 'a VP4 through the computer')
+    assert.equal(door({ link: 'connected', overBluetooth: true, vp4: true }), null, 'a VP4 over Bluetooth')
+    assert.equal(r.holdGoes({ allowed: true, wide: true, screen: 'stage', editOpens: r.editDoor({ bench: false, link: 'connected' }).opens }), null, 'with Edit switched off')
+  })
+
+  test('Derek’s panel: it stays where it was opened until Close, borrows a side and gives it back, and follows its block to the next preset or closes', async () => {
+    const r = await rules()
+    /* Kept only in the place it was opened. */
+    assert.equal(r.panelKeeps({ screen: 'stage', goes: 'lane', opened: 'lane' }), true)
+    assert.equal(r.panelKeeps({ screen: r.BLOCK, goes: 'side', opened: 'side' }), true)
+    /* Play made full screen with the knobs beside it: they close, they do not hop into the scenes' column. */
+    assert.equal(r.panelKeeps({ screen: 'stage', goes: 'lane', opened: 'side' }), false)
+    /* The window shrunk or the Duo folded, editing shut, the account changed: no place for it. */
+    assert.equal(r.panelKeeps({ screen: 'stage', goes: null, opened: 'lane' }), false)
+    assert.equal(r.panelKeeps({ screen: r.BLOCK, goes: null, opened: 'side' }), false)
+    /* A tool or the tuner took the side, Edit opened beside Play, Settings. */
+    for (const screen of ['tuner', 'setlists', 'presets']) assert.equal(r.panelKeeps({ screen, goes: 'side', opened: 'side' }), false, screen)
+    assert.equal(r.panelKeeps({ screen: 'tuner', goes: 'side', opened: 'lane' }), false)
+    assert.equal(r.panelKeeps({ screen: 'edit', goes: 'edit', opened: 'lane' }), false)
+    assert.equal(r.panelKeeps({ screen: 'settings', goes: null, opened: 'lane' }), false)
+    assert.equal(r.panelKeeps({}), false)
+    assert.equal(r.panelKeeps(), false)
+
+    /* It borrows the side: Close gives back the tool that was there, or Play alone. */
+    for (const t of ['setlists', 'presets', 'edit']) assert.equal(r.blockGivesBack(t), t)
+    for (const t of ['stage', 'tuner', r.BLOCK, null, undefined, 'settings']) assert.equal(r.blockGivesBack(t), 'stage', String(t))
+    /* From the tuner's side: the tuner goes off with its side and never comes back on by itself, so what Close gives back is what the tuner had borrowed. */
+    assert.equal(r.sideUnder('tuner', { tunerLent: 'setlists' }), 'setlists')
+    assert.equal(r.blockGivesBack(r.sideUnder('tuner', { tunerLent: 'stage' })), 'stage')
+    assert.equal(r.blockGivesBack(r.sideUnder('tuner', {})), 'stage')
+    assert.equal(r.tunerStops({ was: 'tuner', now: r.BLOCK, tunerOn: true }), true, 'the tuner stays on at the unit, out of sight, when a block’s knobs take its side')
+    assert.equal(r.sideUnder('presets', { tunerLent: 'setlists' }), 'presets')
+    /* And the tuner turned on beside a block's knobs takes the side from them, with what they had borrowed. */
+    assert.equal(r.tunerGoes({ allowed: true, wide: true, screen: r.BLOCK }), 'side')
+    assert.equal(r.sideUnder(r.BLOCK, { blockLent: 'presets' }), 'presets')
+    assert.equal(r.tunerGivesBack(r.sideUnder(r.BLOCK, { blockLent: null })), 'stage')
+    /* Folded with the knobs beside Play: Play shows, the knobs are not kept, and what they borrowed is what comes back. */
+    assert.deepEqual(r.whenNarrow({ tool: r.BLOCK, sideFull: false }), { screen: 'stage', keep: r.BLOCK })
+    assert.equal(r.sideUnder(r.whenNarrow({ tool: r.BLOCK }).keep, { tunerLent: 'edit', blockLent: 'setlists' }), 'setlists')
+    assert.equal(r.sideUnder(r.whenNarrow({ tool: 'tuner' }).keep, { tunerLent: 'edit', blockLent: 'setlists' }), 'edit')
+    assert.equal(r.sideUnder(r.whenNarrow({ tool: 'presets' }).keep, { tunerLent: 'edit', blockLent: 'setlists' }), 'presets')
+    /* Never on the list, never a tool to bring back, and named Knobs on its bar. */
+    assert.equal(r.BLOCK, 'block')
+    assert.equal(r.BLOCK_NAME, 'Knobs')
+    assert.ok(!r.TOOLS.includes(r.BLOCK) && r.isTool(r.BLOCK) === false, 'a block’s knobs are on the list beside Play')
+    assert.ok(!r.sideTools({ editOpens: true, presetsOffered: true, tunerOffered: true }).includes(r.BLOCK))
+
+    /* A preset change: wait for the new preset's blocks, follow the same block if it is there, close if it is not. */
+    assert.equal(r.panelFollows({ found: true, elsewhere: true, acts: false }), 'wait', 'the last preset’s block is shown under the new preset’s name')
+    assert.equal(r.panelFollows({ found: false, elsewhere: true }), 'wait')
+    assert.equal(r.panelFollows({ found: true, acts: true }), 'show')
+    assert.equal(r.panelFollows({ found: true, acts: false }), 'show', 'a scene change, or a re-read of this preset’s own chain, closes it')
+    assert.equal(r.panelFollows({ found: false, acts: true }), 'close', 'it stays open on a block the new preset does not have')
+    assert.equal(r.panelFollows({ found: false, acts: false }), 'wait', 'an outline drawn ahead of the chain read closes it')
+    assert.equal(r.panelFollows(), 'wait')
+  })
+
+  test('Derek’s panel where the scenes were: the blocks stay exactly where they are, and a chain too long to sit beside its scenes is squared again beside the panel', async () => {
+    const r = await rules()
+    const ASK = { gap: 8, head: 34, between: 16, beside: 24 }
+    assert.equal(r.PANEL_LEAST, 320)
+    assert.ok(r.PANEL_MOST > r.PANEL_LEAST)
+    /* panelLane's own least square is Play's. */
+    assert.equal(r.panelLane({ width: r.PANEL_LEAST + 24 + r.SQUARE_LEAST, sq: { beside: false, sceneCols: 8, chainCols: 1, side: 72 } })?.chain, r.SQUARE_LEAST)
+    assert.equal(r.panelLane({ width: r.PANEL_LEAST + 24 + r.SQUARE_LEAST - 1, sq: { beside: false, sceneCols: 8, chainCols: 1, side: 72 } }), null, 'a panel with no room left for one square beside it')
+    /* Every big screen, with every chain: the panel fits, and whichever way Play's squares lay, nothing runs off the row. */
+    let stayed = 0
+    let squaredAgain = 0
+    for (const [name, width, room] of [
+      ['an 11-inch iPad on its side', 1148, 426],
+      ['a 13-inch iPad on its side', 1148, 660],
+      ['an iPad mini on its side', 1101, 350],
+      ['the Duo with Play full screen', 835, 275],
+      ['a Galaxy Fold opened', 809, 310],
+      ['an Android tablet sideways', 1148, 450]
+    ]) {
+      for (const scenes of [0, 4, 8]) {
+        for (const pedals of [1, 2, 4, 6, 7, 9, 12, 16, 24]) {
+          const at = `${name}, ${scenes} scenes and ${pedals} pedals`
+          const sq = r.squarePlan({ width, room, scenes, pedals, ...ASK })
+          const lane = r.panelLane({ width, sq, gap: ASK.gap, beside: ASK.beside })
+          assert.ok(lane, `${at}: no panel`)
+          assert.ok(lane.panel >= r.PANEL_LEAST, `${at}: a panel ${lane.panel} points across`)
+          if (lane.stays) {
+            stayed++
+            assert.equal(sq.beside, true, `${at}: the blocks are said to stay where there was no column beside them`)
+            assert.equal(lane.chain, null)
+            /* Where the blocks were: centred with the scenes; where they are now: after the panel, from the left edge. The same place. */
+            const scenesWide = r.gridWide(sq.sceneCols, sq.side, ASK.gap)
+            const chainWide = r.gridWide(sq.chainCols, sq.side, ASK.gap)
+            const was = (width - scenesWide - ASK.beside - chainWide) / 2 + scenesWide + ASK.beside
+            assert.ok(Math.abs(lane.panel + ASK.beside - was) < 0.001, `${at}: the blocks were at ${was} and are at ${lane.panel + ASK.beside}`)
+            assert.ok(lane.panel + ASK.beside + chainWide <= width + 0.001, `${at}: the blocks run off the row`)
+          } else {
+            squaredAgain++
+            assert.ok(lane.panel <= r.PANEL_MOST, `${at}: a panel ${lane.panel} points across`)
+            assert.equal(lane.panel + ASK.beside + lane.chain, width, `${at}: the panel and the blocks are not the row`)
+            const again = r.squarePlan({ width: lane.chain, room, scenes: 0, pedals, ...ASK })
+            assert.ok(again && again.side >= r.SQUARE_LEAST, `${at}: no squares beside the panel`)
+            assert.ok(r.gridWide(again.chainCols, again.side, ASK.gap) <= lane.chain + 0.001, `${at}: the blocks beside the panel run off the row`)
+          }
+        }
+      }
+    }
+    assert.ok(stayed > 0 && squaredAgain > 0, 'one of the two ways was never tried')
+    /* Side by side already (a 13-inch iPad, eight scenes and seven pedals; an AM4's four and four): the blocks stay. */
+    for (const [width, room, scenes, pedals] of [[1148, 660, 8, 7], [1148, 426, 4, 4]]) {
+      const sq = r.squarePlan({ width, room, scenes, pedals, ...ASK })
+      assert.equal(sq.beside, true)
+      assert.equal(r.panelLane({ width, sq, gap: ASK.gap, beside: ASK.beside }).stays, true)
+    }
+    /* The scenes over the blocks (an 11-inch iPad on its side with eight scenes in one row over seven pedals): there is no column to take, so the panel gets one and the blocks are squared again beside it. */
+    const long = r.squarePlan({ width: 1148, room: 426, scenes: 8, pedals: 7, ...ASK })
+    assert.equal(long.beside, false, 'eight scenes and seven pedals are side by side on an 11-inch iPad now; pick another for this check')
+    const moved = r.panelLane({ width: 1148, sq: long, gap: ASK.gap, beside: ASK.beside })
+    assert.equal(moved.stays, false)
+    assert.equal(moved.panel, r.PANEL_MOST)
+    assert.equal(moved.panel + ASK.beside + moved.chain, 1148)
+    /* Scenes too narrow to hold three knobs: the same. And no scenes at all. */
+    const thin = r.panelLane({ width: 760, sq: { beside: true, sceneCols: 1, chainCols: 6, side: 100 }, gap: 8, beside: 24 })
+    assert.equal(thin.stays, false)
+    assert.ok(thin.panel >= r.PANEL_LEAST)
+    assert.equal(r.panelLane({ width: 1148, sq: { beside: false, sceneCols: 0, chainCols: 7, side: 150 }, gap: 8, beside: 24 }).stays, false)
+    /* Nothing measured, nothing planned: no panel, never a guess. */
+    assert.equal(r.panelLane({ width: 0, sq: long }), null)
+    assert.equal(r.panelLane({ width: 1148, sq: null }), null)
+    assert.equal(r.panelLane(), null)
+  })
+
+  test('Derek’s panel: the heading says “Hold for its knobs” where the hold opens it and “Hold to switch channels” where it is still the pop-up, and a tap is always on or off', async () => {
+    const r = await rules()
+    const words = await import('../shared/play-words.mjs')
+    const stage = code(read('mobile/src/screens/Stage.js'))
+    assert.equal(r.HOLD_FOR_KNOBS, 'Hold for its knobs')
+    assert.equal(words.HOLD_FOR_CHANNELS, 'Hold to switch channels')
+    assert.equal(r.PANEL_FOOT, 'Hold another block to show its knobs here. One tap on a block still turns it on or off.')
+    /* The phone's own words, not the browser's too: shared/ is inside the computer app, and this is no computer release. */
+    assert.doesNotMatch(read('shared/play-words.mjs'), /knobs/i)
+    /* One line over the blocks, by whether the hold opens knobs here. */
+    assert.match(stage, /\{knobsHere \? HOLD_FOR_KNOBS : HOLD_FOR_CHANNELS\}/)
+    assert.equal(stage.match(/HOLD_FOR_KNOBS/g).length, 2, 'the knobs’ words are said somewhere else on Play')
+    /* Nobody is told about knobs, or given them, unless App says so: the default is the pop-up. */
+    assert.match(stage, /holdOpens = null,\n\s*knobsAt = null,\n\s*onHoldBlock = null,\n\s*onCloseKnobs = null,\n/)
+    assert.match(stage, /const lanePlan = \(holdOpens === 'lane' \|\| knobsAt !== null\) && sqOwn \? panelLane\(\{ width: squareRow, sq: sqOwn, gap: space\.sm, beside: space\.xl \}\) : null\n/)
+    assert.match(stage, /const knobsHere = holdOpens === 'lane' \? lanePlan !== null : Boolean\(holdOpens\)\n/)
+    /* The hold: the knobs where they open, and exactly today's pop-up everywhere else; never on the outline. */
+    assert.match(stage, /onLongPress=\{\s*channels\?\.length > 1 && !chainNow\.outline\s*\? \(\) => \(knobsHere \? holdForKnobs\(idOf\(block\)\) : setPicking\(picking === idOf\(block\) \? null : idOf\(block\)\)\)\s*: undefined\s*\}/)
+    assert.match(stage, /const holdForKnobs = \(eid\) => \{[^}]*\{[^}]*\}\s*onHoldBlock\?\.\(eid\)\s*\}/)
+    assert.match(stage, /<ChannelSheet\s+block=\{chainNow\.elsewhere \|\| chainNow\.outline \? null : blocks\.find\(\(b\) => sameBlock\(b, picking\)\) \|\| null\}\s+channels=\{channels\}\s+onClose=\{\(\) => setPicking\(null\)\}/, 'today’s pop-up changed')
+    /* One tap on a block turns it on or off, panel open or not: the tap knows nothing of the panel. */
+    const tap = stage.match(/onPress=\{\(\) => \{\s*if \(chainNow\.outline && typeof block\.bypassed !== 'boolean'\) return\s*if \(boost\) tapBoost\(idOf\(block\)\)\s*else writeBypass\(idOf\(block\), !block\.bypassed\)\s*\}\}/)
+    assert.ok(tap, 'a tap on a block is not on or off any more')
+    assert.doesNotMatch(tap[0], /knobs|holdOpens|onHoldBlock/i)
+  })
+
+  test('Derek’s panel is Edit’s own block view, without Copy channel, the on/off button or Color, with Level still read-only and nothing new sent to the unit', async () => {
+    const r = await rules()
+    const edit = code(read('mobile/src/screens/Edit.js'))
+    const side = code(read('mobile/src/components/BlockSide.js'))
+    assert.deepEqual(r.PANEL_LEAVES_OUT, ['copy', 'engaged', 'colour'])
+    /* Edit's block view, exported and drawn again with `panel`; Edit's own screen draws it without. */
+    assert.match(edit, /export function BlockPanel\(\{/)
+    assert.match(edit, /overBle = false,\s*panel = false\n\}\) \{/)
+    assert.match(side, /import \{ BLE_NOTE, BlockPanel \} from '\.\.\/screens\/Edit'/)
+    assert.match(side, /<BlockPanel\s+key=\{`\$\{idOf\(block\)\}:\$\{block\.channel \|\| ''\}:\$\{scene\}:\$\{bufferRev\}`\}\s+panel\s/, 'the panel is not Edit’s block view, or is not drawn again at a new channel, scene or preset')
+    assert.equal(edit.match(/<BlockPanel\b/g).length, 1)
+    const own = edit.slice(edit.indexOf('<BlockPanel'), edit.indexOf('/>', edit.indexOf('<BlockPanel')))
+    assert.doesNotMatch(own, /\bpanel\b/, 'the Edit screen draws its block as the panel, without Copy channel or the on/off button')
+    /* What the panel leaves out: the name's row with Color, Copy channel, and Engaged. */
+    const view = edit.slice(edit.indexOf('export function BlockPanel({'), edit.indexOf('function BlockColour('))
+    assert.match(view, /\{panel \? null : \(\s*<View[\s\S]*?\{paintable\(block\.slug\) \? <BlockColour slug=\{block\.slug\} \/> : null\}\s*<\/View>\s*\)\}/)
+    assert.match(view, /\{!panel && channels\?\.length > 1 && block\.channel && !overBle \? \(\s*<ChannelCopy/)
+    assert.match(view, /\{panel \|\| \['input', 'output'\]\.includes\(block\.slug\) \? null : \(\s*<Press\s+label=\{unsure \? 'Turn it off' : engaged \? 'Engaged' : 'Bypassed'\}/)
+    /* And nothing else: `panel` is read in those three places only. */
+    assert.equal(view.match(/\bpanel\b/g).length, 4, 'the panel changes something else in Edit’s block view')
+    /* What it keeps: channels A to D, the knob pages, the model, and Level as a number nobody can turn. */
+    assert.match(view, /const editable = params\.filter\(\(p\) => !isSilencingParam\(p\.name\)\)/, 'Level is a knob')
+    assert.match(view, /<Text[^>]*>read-only<\/Text>/)
+    assert.match(view, /await writeChannel\(eid, ch\)/)
+    assert.match(view, /caption="Model"/)
+    assert.match(view, /pages\.map\(\(pg\) => \(/)
+    /* No second copy of the knob code, and nothing of its own on the wire: the panel only finds the block and hands it to Edit's view, whose senders are all marked as Edit's (lib/device EDITING). */
+    assert.match(side, /import \{ idOf, sameBlock \} from '\.\.\/lib\/device'/)
+    assert.equal(side.match(/from '\.\.\/lib\/device'/g).length, 1)
+    assert.doesNotMatch(side, /setParam|setEnum|setType|blockParams|blockTypes|remoteRequest|writeChannel|writeBlockBypass|writeBypass|<Knob\b|ValueBox|ChannelCopy|BlockColour/, 'the panel reads or writes the unit itself, or draws a control of its own')
+    const device = read('mobile/src/lib/device.js')
+    for (const sender of ['blockParams', 'blockTypes', 'setType', 'setEnum']) assert.match(device, new RegExp(`export const ${sender} = [^\\n]*\\n?[^\\n]*EDITING\\)`), `${sender} is not marked as Edit’s`)
+    assert.match(device, /export async function setParamConfirmed\([\s\S]{0,500}?put\(`\/preset\/blocks\/\$\{eid\}\/params\/\$\{paramId\}`, \{ value: norm, continuous \}, EDITING\)/, 'a knob’s checked write is not marked as Edit’s')
+    /* Save only with something to save on this slot, which only the computer's path marks; no Done, a Close. */
+    assert.match(side, /const pending = !!unsaved && unsaved\.number === preset\?\.number\n/)
+    assert.match(side, /\{pending \? <SaveButton s=\{saveTo\} waiting \/> : null\}/)
+    assert.match(side, /<Press label="Close" height=\{44\} onPress=\{onClose\}/)
+    /* It stays until Close: nothing in it closes it on a timer, and only a preset without the block closes it otherwise. */
+    assert.equal(side.match(/onClose/g).length, 5, 'something else in the panel closes it')
+    assert.doesNotMatch(side.slice(side.indexOf('export function KnobsFollow')), /setTimeout|setInterval/)
+    assert.match(side, /const says = panelFollows\(\{ found, elsewhere: chainNow\.elsewhere, acts: chainActs\(chainNow\.view\) \}\)/)
+    assert.match(side, /if \(says === 'close'\) close\.current\?\.\(\)/)
+    /* As Edit: another preset's blocks, or this one's from memory, are not opened. */
+    assert.match(side, /const chainNow = useChain\(\{ editing: true \}\)\n\s*const block = chainNow\.elsewhere \? null : blocks\.find\(\(b\) => sameBlock\(b, eid\)\) \|\| null\n/)
+    assert.match(side, /\{PANEL_FOOT\}/)
+    /* The panel never draws a second Play. */
+    for (const f of ['mobile/src/components/BlockSide.js', 'mobile/src/screens/Edit.js']) assert.doesNotMatch(code(read(f)), /<Stage\b|screens\/Stage/, `${f} draws Play`)
+  })
+
+  test('App opens Derek’s panel behind Edit’s own door and the two sides’ gate, draws it in the side it borrows or hands it to Play, and closes it with its place', () => {
+    const app = code(read('mobile/App.js'))
+    const stage = code(read('mobile/src/screens/Stage.js'))
+    const sides = code(read('mobile/src/components/Sides.js'))
+    const edit = code(read('mobile/src/screens/Edit.js'))
+    /* The gate: his account, or the two sides' own with HOLD_KNOBS_FOR_EVERYONE, Edit's own door, never a VP4, on a window that shows two sides. */
+    assert.match(app, /const noKnobs = vp4Here\(\) \|\| \(demo && demoUnitNow === 'vp4'\)\n\s*const knobsAllowed = sidesAdmin \|\| \(sidesAllowed && HOLD_KNOBS_FOR_EVERYONE\)\n\s*const holdAsks = \{ allowed: knobsAllowed, vp4: noKnobs, wide, beside: playBeside, screen \}\n\s*const holdOpens = holdGoes\(\{ \.\.\.holdAsks, editOpens \}\)\n/, 'the panel opens on a VP4, or on the demo’s')
+    assert.match(app, /const demoUnitNow = useDemoUnit\(\)\n/)
+    assert.match(app, /const editOpens = editHere\.opens\n/)
+    /* Open, it stays through a blink of the link, and only where it was opened. */
+    assert.match(app, /const blockKept = panelKeeps\(\{ screen, goes: holdGoes\(\{ \.\.\.holdAsks, editOpens: !editHere\.shuts \}\), opened: blockIn\.current \}\)\n/)
+    assert.match(app, /useEffect\(\(\) => \{\s*if \(blockAt !== null \? !blockKept : screen === BLOCK\) closeBlock\(\)\s*\}, \[blockAt, blockKept, screen\]\)/)
+    /* Never at launch: which block is in memory only. */
+    assert.match(app, /const \[blockAt, setBlockAt\] = useState\(null\)\n/)
+    assert.doesNotMatch(app, /AsyncStorage/)
+    /* The hold: Edit jumps; a side is borrowed from what was there, or from what the tuner there had borrowed; another block moves the panel. */
+    assert.match(app, /const holdBlock = \(eid\) => \{\s*if \(holdOpens === 'edit'\) return setEditJump\(\{ eid, at: Date\.now\(\) \}\)\s*if \(!holdOpens\) return undefined\s*blockIn\.current = holdOpens\s*if \(holdOpens === 'side' && screen !== BLOCK\) \{\s*blockLent\.current = sideUnder\(screen, \{ tunerLent: tunerLent\.current \}\)\s*setScreen\(BLOCK\)\s*\}\s*return setBlockAt\(eid\)\s*\}/)
+    /* Close gives the side back. */
+    assert.match(app, /const closeBlock = \(\) => \{\s*setBlockAt\(null\)\s*if \(screen === BLOCK\) setScreen\(blockGivesBack\(blockLent\.current\)\)\s*\}/)
+    /* In the side: the panel, with that Close; Edit told which block to jump to; neither kept for Two sides. */
+    assert.match(app, /\) : sideTool === BLOCK \? \(\s*blockAt !== null \? <BlockSide eid=\{blockAt\} onClose=\{closeBlock\} \/> : null\s*\) : \(\s*<Edit\s+onBack=\{closeSide\}\s+jump=\{editJump\}/)
+    assert.match(app, /useEffect\(\(\) => \{\s*if \(screen !== 'edit'\) setEditJump\(null\)\s*\}, \[screen\]\)/)
+    assert.match(edit, /export default function Edit\(\{ onBack, onOpenGear, jump = null \}\)/)
+    assert.match(edit, /if \(!jumpAt \|\| jump\?\.eid == null\) return\s*setOpenEid\(jump\.eid\)\s*setFocus\(\{ eid: jump\.eid, paramId: null, nonce: jumpAt \}\)/)
+    /* Play is told where a hold opens knobs, and which block only when they are where the scenes were. */
+    assert.match(app, /holdOpens=\{holdOpens\}\s+knobsAt=\{blockKept && screen === 'stage' \? blockAt : null\}\s+onHoldBlock=\{holdBlock\}\s+onCloseKnobs=\{closeBlock\}/)
+    /* And follows its block, wherever it is drawn. */
+    assert.match(app, /\{blockAt !== null \? <KnobsFollow eid=\{blockAt\} onClose=\{closeBlock\} \/> : null\}/)
+    /* Android's back is its Close, before anything else leaves the screen. */
+    assert.match(app, /if \(auth !== 'in'\) return false\s*if \(blockAt !== null\) \{\s*closeBlock\(\)\s*return true\s*\}\s*if \(twoSidesUp && backUnwinds\(/)
+    /* One Save on screen: the panel's own, as Edit's. */
+    assert.match(app, /saveHere=\{screen !== 'edit' && blockAt === null\}/)
+    /* Where the scenes were: the panel in their place, as tall as the room under the preset, the scenes away while it is up, and Play's page still while a knob is held. */
+    assert.match(stage, /const knobsLane = lanePlan && knobsAt !== null && \(lanePlan\.stays \|\| laneAgain\) \? lanePlan : null\n/)
+    assert.match(stage, /const sq = knobsLane \? \{ \.\.\.\(knobsLane\.stays \? sqOwn : laneAgain\), beside: true \} : sqOwn\n/)
+    assert.match(stage, /\{knobsLane \? \(\s*<View style=\{\[KNOBS_BOX, \{ borderColor: color\.rule, width: knobsLane\.panel, height: Math\.max\(0, squareRoom\) \}\]\}>\s*<BlockSide eid=\{knobsAt\} onClose=\{onCloseKnobs\} onScrollLock=\{setKnobHeld\} \/>\s*<\/View>\s*\) : null\}/)
+    assert.match(stage, /\{scenes\.hasScenes && !knobsLane \? \(\s*<View style=\{sceneLane\}>/)
+    assert.match(stage, /scrollEnabled=\{!\(knobHeld && knobsLane\)\}/)
+    assert.match(stage, /const LANES_KNOBS = \{ \.\.\.LANES, justifyContent: 'flex-start' \}\n/)
+    /* The side's bar: named Knobs, no Full screen (Play is where the next block is held), and still nothing for anybody else. */
+    assert.match(sides, /const knobs = tool === BLOCK\n\s*const toolName = knobs \? BLOCK_NAME : TOOL_NAMES\[tool\] \|\| ''\n/)
+    assert.match(sides, /onFull=\{beside && !knobs \? \(\) => onFull\?\.\(true\) : null\}/)
+    assert.match(sides, /if \(!allowed\) return children\n/)
   })
 }

@@ -64,6 +64,14 @@ export const SIDE_WORDS = { swap: 'Swap', full: 'Full screen', two: 'Two sides' 
 
 /** Whether `screen` (App.js's own word for what is open) is a tool a side can hold. */
 export const isTool = (screen) => TOOLS.includes(screen)
+/**
+ * A block's knobs in the side (step 4, below): App.js's word for that
+ * screen. Never on the list, since it is opened by holding a block, and
+ * never kept for Two sides.
+ */
+export const BLOCK = 'block'
+/** Its name on the side's bar. */
+export const BLOCK_NAME = 'Knobs'
 
 const num = (n) => (Number.isFinite(Number(n)) && Number(n) > 0 ? Number(n) : 0)
 
@@ -162,7 +170,7 @@ export function sideTools({ editOpens = false, presetsOffered = false, tunerOffe
  */
 export function tunerGoes({ allowed = false, wide = false, screen = null } = {}) {
   if (!allowed || !wide) return null
-  return screen === 'stage' || isTool(screen) ? 'side' : null
+  return screen === 'stage' || isTool(screen) || screen === BLOCK ? 'side' : null
 }
 
 /**
@@ -202,6 +210,127 @@ export function backUnwinds({ tool = null, sideFull = false } = {}) {
  * can come back when the window is wide again.
  */
 export function whenNarrow({ tool = null, sideFull = false } = {}) {
+  /* A block's knobs beside Play (step 4): Play, and the knobs are not kept. `keep` names them so App brings back what they borrowed, as it does for the tuner. */
+  if (tool === BLOCK) return { screen: 'stage', keep: BLOCK }
   if (!isTool(tool)) return { screen: 'stage', keep: null }
   return sideFull ? { screen: tool, keep: tool } : { screen: 'stage', keep: tool }
+}
+
+/*
+ * DEREK'S IDEA: HOLD A BLOCK, GET ITS PANEL (step 4; docs/two-sides,
+ * "Derek's idea"). On Play a tap turns a block on or off and a hold opens
+ * its channels, A to D, in a small pop-up. On a big screen there is room
+ * for more: the hold opens the block's knobs, with its channels over them,
+ * and Play stays in front of you.
+ *
+ * ONLY WHERE EDITING WORKS, AND ONLY WHERE THE TWO SIDES ARE. The knobs are
+ * Edit's own (components/BlockSide draws Edit's block view), so they open
+ * exactly where Edit opens (lib/editDoor `opens`): through the computer with
+ * the full version, in the demo, and over Bluetooth or a USB cable only for
+ * an account and a unit Edit is open to there. Never on a VP4, which has no
+ * knobs anywhere. And only for an account the two sides are open to, on a
+ * window that shows two sides. Everywhere else (every phone, anything held
+ * upright, a customer over Bluetooth, every other account) the hold is
+ * today's pop-up, exactly.
+ *
+ * WHERE THE PANEL GOES:
+ *   'lane'  Play filling the window: the Scenes column becomes the panel,
+ *           and the blocks stay where they are.
+ *   'edit'  Edit is beside Play: Edit jumps to that block.
+ *   'side'  The tuner, Setlists or All presets are beside Play (or another
+ *           block's knobs already are): the panel takes that side. It
+ *           borrows it: Close gives it back (blockGivesBack). A tuner it
+ *           took the side from goes off with its side, as it always does,
+ *           and never comes back on by itself, so what Close gives back
+ *           then is what the tuner had borrowed.
+ *   null    Today's pop-up.
+ */
+export function holdGoes({ allowed = false, editOpens = false, vp4 = false, wide = false, beside = false, screen = null } = {}) {
+  if (allowed !== true || editOpens !== true || vp4 === true || wide !== true) return null
+  if (screen === 'stage') return 'lane'
+  if (beside !== true) return null
+  if (screen === 'edit') return 'edit'
+  return screen === BLOCK || isTool(screen) ? 'side' : null
+}
+
+/**
+ * Whether an open panel is still where it was opened (`opened`, holdGoes'
+ * answer at the hold: 'lane' or 'side'): in the Scenes column with Play
+ * alone, or in the side as its own screen. `goes` is holdGoes' answer now
+ * (asked with Edit's door not shut, so a blink of the link does not close
+ * it). Anything else (the window shrunk, the Duo folded, a tool or the tuner
+ * taking the side, Play made full screen, Settings, Edit's door shut) and it
+ * closes: it stays until Close, and is never drawn somewhere it was not
+ * opened.
+ */
+export const panelKeeps = ({ screen = null, goes = null, opened = null } = {}) =>
+  goes === opened && ((screen === 'stage' && goes === 'lane') || (screen === BLOCK && goes === 'side'))
+
+/**
+ * What a side is borrowed from, when something takes it: the tool on
+ * `screen`, or what the tuner or a block's knobs there had borrowed
+ * themselves (`tunerLent`, `blockLent`), since neither comes back by itself.
+ */
+export const sideUnder = (screen, { tunerLent = null, blockLent = null } = {}) => (screen === 'tuner' ? tunerLent : screen === BLOCK ? blockLent : screen)
+
+/** What the side borrowed by a block's knobs gives back on Close: the tool that was there, or Play alone. */
+export const blockGivesBack = (lent) => tunerGivesBack(lent)
+
+/**
+ * What the panel shows when the preset or its chain changes under it: it
+ * follows the same block if the new preset has it, and otherwise closes.
+ * 'wait' while the new preset's blocks are not here yet (`elsewhere`,
+ * components/ChainWait, as Edit waits); 'show' with the block `found`;
+ * 'close' only once the chain on screen is this preset's own, read from the
+ * unit (`acts`, lib/chain-view chainActs), and the block is not in it. An
+ * outline of the pedals, drawn ahead of that read, closes nothing.
+ */
+export function panelFollows({ found = false, elsewhere = false, acts = false } = {}) {
+  if (elsewhere === true) return 'wait'
+  if (found === true) return 'show'
+  return acts === true ? 'close' : 'wait'
+}
+
+/** Over the blocks, where holding one opens its knobs; elsewhere Play says shared/play-words HOLD_FOR_CHANNELS, as always. */
+export const HOLD_FOR_KNOBS = 'Hold for its knobs'
+/** At the foot of the panel. */
+export const PANEL_FOOT = 'Hold another block to show its knobs here. One tap on a block still turns it on or off.'
+/** What the panel leaves out of Edit's block view, because one tap on the block already does it (on/off) or it is the bench's work (copying a channel, the block's colour). */
+export const PANEL_LEAVES_OUT = ['copy', 'engaged', 'colour']
+
+/** The least a panel in the Scenes column may be across: a small iPhone's row, so three knobs still sit side by side. */
+export const PANEL_LEAST = 320
+/** And the most it takes when the blocks have to make room for it. */
+export const PANEL_MOST = 480
+
+/**
+ * THE PANEL WHERE THE SCENES WERE: how wide it is, and the squares the
+ * blocks are drawn with beside it. `sq` is Play's own plan for its squares
+ * (lib/squarePlay squarePlan) in a row `width` across; `gap` is between
+ * squares and `beside` between the two halves.
+ *
+ * Side by side already (`sq.beside`), the blocks stay exactly where they
+ * are: the same squares, the same columns, and the panel takes everything
+ * to their left, the scenes' own width and the spare room the two grids
+ * were centred in (`stays` true).
+ *
+ * With the scenes in a row over the blocks (eight scenes and seven pedals
+ * on an 11-inch iPad on its side, or a very long chain), or no scenes at
+ * all, or scenes too narrow to hold three knobs, there is no column to take: the
+ * panel gets one of its own, and the blocks are planned again in what is
+ * left (`chain`, the row for squarePlan with no scenes; `stays` false).
+ * Null when even that leaves no room for a square: the hold is the pop-up.
+ */
+export function panelLane({ width = 0, sq = null, gap = 8, beside = 24, least = 72 } = {}) {
+  const w = num(width)
+  if (!w || !sq) return null
+  const grid = (cols) => (cols > 0 ? cols * sq.side + (cols - 1) * gap : 0)
+  if (sq.beside === true && sq.sceneCols > 0) {
+    const scenes = grid(sq.sceneCols)
+    const spare = Math.max(0, (w - scenes - beside - grid(sq.chainCols)) / 2)
+    if (scenes + spare >= PANEL_LEAST) return { panel: scenes + spare, stays: true, chain: null }
+  }
+  const panel = Math.min(PANEL_MOST, Math.max(PANEL_LEAST, Math.floor(w * 0.45)))
+  const chain = w - panel - beside
+  return chain >= least ? { panel, stays: false, chain } : null
 }

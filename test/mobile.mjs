@@ -19825,7 +19825,8 @@ export function run(test) {
     assert.equal(asked(`POST /preset/blocks/${lastSong}/bypass`), 0)
     /* And the channel hold is not offered on those tiles. */
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(stage, /channels\?\.length > 1 && !chainNow\.outline\s*\? \(\) => setPicking/, 'the stage offers a channel hold on the outline')
+    /* (The hold opens the block's knobs where it does, Derek's panel, and the pop-up everywhere else: neither on the outline.) */
+    assert.match(stage, /channels\?\.length > 1 && !chainNow\.outline\s*\? \(\) => \(knobsHere \? holdForKnobs\(idOf\(block\)\) : setPicking\(/, 'the stage offers a channel hold on the outline')
     assert.match(stage, /block=\{chainNow\.elsewhere \|\| chainNow\.outline \? null/, 'a channel sheet opens over the outline')
     await clock.advance(3000)
     assert.equal(rig.chainViewOf(rig.getState()), 'ready')
