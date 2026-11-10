@@ -285,11 +285,19 @@ rest) stay where a VP4 owner meets them.
   holding a build under review). Fixes go out as before; a big new phone
   feature waits until any review in progress is over.
 
-**1.90.0 is live on the App Store** (9 November 2026, 17:12 UTC by Apple's
-own listing), so Edit over Bluetooth is open to iPhone and iPad customers
-and public/store-versions.json says 1.90.0 for ios. Google Play still
-shows 1.89.36 there until its 1.90.0 is live; the website's editing words
-and the setup email's editing sentence wait for that day.
+**1.90.0 is live in both stores** (the App Store on 9 November 2026, 17:12
+UTC by Apple's own listing; Google Play on 10 November 2026, by its own
+listing and Justin's "Google's 1.9 0.0 is already live"), so Edit over
+Bluetooth is open to every customer on a 1.90.0 copy, iPhone, iPad and
+Android, and public/store-versions.json says 1.90.0 on both. The website's
+editing words went out that day (bluetooth.html and support.html; the
+guide, short since 9 November, says nothing of editing). `EDIT_IN_EMAILS`
+is true in the repository, but THE SETUP EMAILS STILL GO WITH THE OLD
+SENTENCE until the function is redeployed, and it is not redeployed until
+Justin has said the new sentence is right: emails off, redeploy, he reads
+the sample, emails on (supabase/README.md). Nothing deploys it on a merge.
+So do not redeploy setup-reminder for any other reason before that without
+saying it carries the new sentence.
 
 **1.89.3 is live in both stores** (the App Store's listing and Google
 Play both show it, 30 October 2026), so Bluetooth is open to customers, and
@@ -681,11 +689,11 @@ before 1.90.0 (the App Store's 1.89.3, Google Play's 1.89.36) take that
 update and stay closed. Never the VP4. The ledger's row and
 `EDIT_OPENED_AT` come in the first pull request after the build is
 started, and from then on no entry is moved or set back by an update. The
-website's editing words (bluetooth.html, bluetooth-guide.html,
-support.html) and the setup email's editing sentence (`EDIT_IN_EMAILS`)
-wait for the live day in both stores, since a merge publishes them before
-review: they go in the pull request that brings the second store to 1.90.0
-(test/limits.mjs refuses them before). The What's new line is the one
+website's editing words (bluetooth.html and support.html) and the setup
+email's editing sentence (`EDIT_IN_EMAILS`) waited for the live day in
+both stores, since a merge publishes them before review, and went in on 10
+November 2026 with the pull request that brought Google Play to 1.90.0
+(test/limits.mjs refused them before, and holds them now). The What's new line is the one
 exception, by the house rule: it goes in with the build pull request and
 reaches every copy and whats-new.html on that merge, so it says "From
 version 1.90.0 of the app" and never tells a player to update from the
