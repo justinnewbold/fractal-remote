@@ -857,10 +857,16 @@ website shows has it and nothing else on the end: the nine parts in
 `PARTS` (the five he listed and the WIDI Master, the two WIDI Jacks and
 the Master's adapters, on the same tag, since an untagged link beside
 tagged ones only earns nothing), the Bluetooth guide and the Raspberry Pi
-guide. Amazon's sentence, word for word (`AMAZON_DISCLOSURE`), sits
-wherever those links are: under What to buy on both guides and on the
-app's How to connect page. A new Amazon link gets the tag and sits under
-that sentence; tests hold both. The next store version's review notes
+guide. Amazon's sentence, word for word (`AMAZON_DISCLOSURE`), is on
+every page that has those links, once, at the bottom:
+
+> "Just put this in one section at the bottom of the page- not next to
+> every link" (10 November 2026)
+
+So it is a line of its own in the footer of both guides and the last line
+of the app's How to connect page, never under What to buy or beside a
+link (where it sat for a day). A new Amazon link gets the tag, and a new
+page with one gets the sentence at its foot; tests hold both. The next store version's review notes
 must not repeat the old "plain amazon.com pages with no tracking" line
 (docs/app-store.md keeps it in the past blocks, as submitted). His
 Associates account still needs payment and tax details, three sales

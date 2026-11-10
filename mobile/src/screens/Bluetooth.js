@@ -1061,11 +1061,11 @@ export function BluetoothWays() {
       ))}
       {/* The FM3's other way, with no adapter: the same U2MIDI Pro straight into this device, wherever a unit can plug in by cable at all (lib/bluetooth cablesHere). Nothing more to buy. */}
       {b.unit === 'fm3' && cablesHere() ? <Hint>{FM3_CABLE_WAY(deviceNoun())}</Hint> : null}
-      {/* The View on Amazon buttons carry his Associates tag, and Amazon's agreement wants this sentence where they are (shared/bluetooth-gear AMAZON_DISCLOSURE). */}
-      {b.unit && ways.some((w) => w.parts.some((key) => PARTS[key]?.amazon)) ? <Hint>{AMAZON_DISCLOSURE}</Hint> : null}
       {midi ? <Hint>{midi}</Hint> : null}
       {b.unit ? <Hint>{ONE_AT_A_TIME}</Hint> : null}
       {b.unit ? <Hint>{SELLERS_LINE}</Hint> : null}
+      {/* The View on Amazon buttons carry his Associates tag, so the page says Amazon's sentence (shared/bluetooth-gear AMAZON_DISCLOSURE): once, the last line of the page, not beside the buttons (Justin, 10 November 2026). */}
+      {b.unit && ways.some((w) => w.parts.some((key) => PARTS[key]?.amazon)) ? <Hint>{AMAZON_DISCLOSURE}</Hint> : null}
     </View>
   )
 }

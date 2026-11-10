@@ -410,8 +410,11 @@ export const HOW_TWO_WAYS = {
  * line near 'What to buy'" (Justin, 9 November 2026). The tag is his
  * Amazon Associates Store ID with Amazon's own suffix; it follows him, not
  * the app's name. Amazon's agreement wants the sentence below, word for
- * word, wherever such a link is shown: the Bluetooth guide, the Raspberry
- * Pi guide, and the app's own How to connect page. A link with no tag
+ * word, on every page such a link is shown: the Bluetooth guide, the
+ * Raspberry Pi guide, and the app's own How to connect page. Once a page,
+ * at its foot, never beside the links: "Just put this in one section at
+ * the bottom of the page- not next to every link" (Justin, 10 November
+ * 2026; a day earlier it sat under What to buy). A link with no tag
  * earns nothing, so every amazon.com link here and on the website has it
  * (a test holds that), and nothing else is ever put on the end of one.
  */

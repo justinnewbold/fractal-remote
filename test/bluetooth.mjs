@@ -9406,19 +9406,32 @@ export function run(test) {
     assert.ok(shop.some((link) => /amazon\./.test(link)), 'the guide gives nowhere to buy the parts')
     /*
      * His Associates tag is on every Amazon link the website and the app
-     * show, and Amazon's sentence is said wherever they are (Justin, 9
-     * November 2026): the Bluetooth guide, the Raspberry Pi guide, and the
-     * app's How to connect page.
+     * show (Justin, 9 November 2026), and Amazon's sentence is on each page
+     * that has them: the Bluetooth guide, the Raspberry Pi guide, and the
+     * app's How to connect page. Once a page, at its foot, never beside
+     * the links: "Just put this in one section at the bottom of the page-
+     * not next to every link" (10 November 2026).
      */
     for (const page of ['public/bluetooth-guide.html', 'public/raspberry-pi.html']) {
       const text = src(page).replace(/<!--[\s\S]*?-->/g, ' ')
       const links = text.match(/https:\/\/(?:www\.)?amazon\.[a-z.]+\/[^"'\s<>)]*/g) || []
       assert.ok(links.length > 0, `${page} has no Amazon link`)
       for (const link of links) assert.match(link, /^https:\/\/www\.amazon\.com\/dp\/[A-Z0-9]{10}\?tag=justinnewbold-20$/, `${page}: ${link} does not carry his tag`)
-      assert.ok(text.includes(gear.AMAZON_DISCLOSURE), `${page} links Amazon without the Associates sentence`)
+      assert.equal(text.split(gear.AMAZON_DISCLOSURE).length - 1, 1, `${page} says the Associates sentence ${text.split(gear.AMAZON_DISCLOSURE).length - 1} times, not once`)
+      const foot = text.slice(text.indexOf('<footer>'), text.indexOf('</footer>'))
+      assert.ok(foot.includes(`<p>${gear.AMAZON_DISCLOSURE}</p>`), `${page} does not say the Associates sentence in its footer, on a line of its own`)
+      assert.ok(text.lastIndexOf('amazon.com/dp/') < text.indexOf('<footer>'), `${page} has an Amazon link in its footer`)
       assert.ok(!/gets nothing from them|earns nothing/.test(text), `${page} still says the links earn nothing`)
     }
     assert.match(src('mobile/src/screens/Bluetooth.js'), /PARTS\[key\]\?\.amazon\)\) \? <Hint>\{AMAZON_DISCLOSURE\}<\/Hint> : null\}/, 'the app’s View on Amazon buttons are shown without the Associates sentence')
+    {
+      /* In the app: once, and the last line of How to connect, after the sellers' line. */
+      const page = src('mobile/src/screens/Bluetooth.js')
+      assert.equal(page.split('<Hint>{AMAZON_DISCLOSURE}</Hint>').length - 1, 1, 'the app says the Associates sentence more than once, or not at all')
+      const ways = page.slice(page.indexOf('export function BluetoothWays()'))
+      const end = ways.slice(0, ways.indexOf('\n}\n'))
+      assert.match(end, /<Hint>\{SELLERS_LINE\}<\/Hint> : null\}\n(?:\s*\{\/\*[^\n]*\*\/\}\n)?\s*\{b\.unit && [^\n]*<Hint>\{AMAZON_DISCLOSURE\}<\/Hint> : null\}\n\s*<\/View>\n\s*\)\s*$/, 'the Associates sentence is not the last line of How to connect')
+    }
     for (const link of shop) assert.ok(gear.ALL_LINKS.includes(link), `the guide links ${link}, and the gear file does not give it`)
     /* Only the three parts: an untried adapter is named on the guide, never linked to buy. */
     assert.deepEqual(
