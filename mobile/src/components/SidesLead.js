@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { View, useWindowDimensions } from 'react-native'
 import { font, space } from '../lib/theme'
 import { BLOCK, BLOCK_NAME, SIDEWAYS_FULL, SIDE_WORDS, SWAP_WIDE, TOOL_NAMES, chipsFit, fullSays, sideWidths } from '../lib/twoSides'
+import { THIRD_WORDS, threeLead } from '../lib/threeSides'
 import Press from './Press'
 
 /*
@@ -57,6 +58,21 @@ export default function SidesLead({
   /* Play alone on a big screen: what Two sides does (App: the kept tool, or the list). */
   onTwo = null,
   /*
+   * THREE ACROSS ON A VERY WIDE WINDOW (lib/threeSides; App asks its rule,
+   * for an account it is open to). With two sides up and room for a third,
+   * `onAdd` is what Add a side does (App opens the third side's list), and
+   * the button sits with the first tool's own. With three up, `three` is
+   * the tool the third side holds: then the bar is one row of the three
+   * names in the order of the sides, the first tool's Full screen, and
+   * Swap at its end; `onThird` opens the third side's list, where it can
+   * be changed or closed. What gives way when the row is short is
+   * lib/threeSides threeLead's: Full screen first, then Play's own name.
+   * Null everywhere else, and the bar is what it was.
+   */
+  three = null,
+  onAdd = null,
+  onThird = null,
+  /*
    * WHERE THE LINE BETWEEN THE SIDES HAS A HANDLE (components/SidesHandle;
    * the tidier Edit's, for an account it is open to, on a big screen): the
    * handle swaps, so Swap is not drawn here, one Swap and not two. Its room
@@ -105,6 +121,31 @@ export default function SidesLead({
       </View>
     )
   }
+  if (three) {
+    const thirdName = TOOL_NAMES[three] || ''
+    const fills = fullSays(Math.floor((frame?.width || 0) / 3))
+    const says = { first: `${name} ▾`, third: `${thirdName} ▾`, play: `${TOOL_NAMES.play} ▾` }
+    const fits = threeLead({ room: row, ...says, full: knobs ? null : fills, swap: SIDE_WORDS.swap, letter: LETTER * font.small * (fontScale || 1), pad: CHIP_ROUND, gap: space.sm })
+    const firstSide = [
+      toolName,
+      fits.full ? <Press key="full" label={fills} height={HIGH} labelSize={font.small} onPress={() => onFull?.(true)} accessibilityLabel={`${name} fills the screen`} style={CHIP} /> : null
+    ]
+    const thirdSide = (
+      <Press key="third" label={says.third} height={HIGH} labelSize={font.small} onPress={onThird} accessibilityLabel={`${thirdName}, the third side. Choose what it holds, or close it`} style={CHIP} />
+    )
+    const playName = fits.play ? (
+      <Press key="play" label={says.play} height={HIGH} labelSize={font.small} onPress={() => onName?.('play')} accessibilityLabel={`${TOOL_NAMES.play}. Choose what goes beside Play`} style={CHIP} />
+    ) : null
+    return (
+      <View style={ROW} {...measured}>
+        {/* In the order of the sides: Play at the end it has, the first tool at the far end, the third between them. */}
+        {playOnRight ? firstSide : playName}
+        {thirdSide}
+        {playOnRight ? playName : firstSide}
+        <Press key="swap" label={SIDE_WORDS.swap} height={HIGH} labelSize={font.small} onPress={onSwap} accessibilityLabel="Swap the sides: Play to the other end" style={[CHIP, { width: SWAP_WIDE }]} />
+      </View>
+    )
+  }
   const widths = sideWidths({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool, share })
   /* Where the line between the sides falls, from the bar's own left edge; the bar's padding, what is before this row and half of Swap come off the first half. */
   const line = playOnRight ? widths.tool : widths.play
@@ -115,7 +156,9 @@ export default function SidesLead({
   const toolSide = [
     toolName,
     /* A block's knobs never fill the window: Play is where the next block is held. */
-    knobs ? null : <Press key="full" label={fills} height={HIGH} labelSize={font.small} onPress={() => onFull?.(true)} accessibilityLabel={`${name} fills the screen`} style={CHIP} />
+    knobs ? null : <Press key="full" label={fills} height={HIGH} labelSize={font.small} onPress={() => onFull?.(true)} accessibilityLabel={`${name} fills the screen`} style={CHIP} />,
+    /* Room for a third side (lib/threeSides), and none open yet: its way in, with the first tool's own buttons. */
+    onAdd ? <Press key="add" label={THIRD_WORDS.add} height={HIGH} labelSize={font.small} onPress={onAdd} accessibilityLabel="Add a side: a second tool beside Play" style={CHIP} /> : null
   ]
   const playSide = (
     <Press key="play" label={`${TOOL_NAMES.play} ▾`} height={HIGH} labelSize={font.small} onPress={() => onName?.('play')} accessibilityLabel={`${TOOL_NAMES.play}. Choose what goes beside Play`} style={CHIP} />
@@ -124,7 +167,9 @@ export default function SidesLead({
   const after = playOnRight ? playSide : toolSide
   /* What the buttons past Swap say, for whether they fit what the bar has left there (a big screen only). */
   const afterSays = playOnRight ? [`${TOOL_NAMES.play} ▾`] : [`${name} ▾`, knobs ? null : fills]
-  const moved = big && rest !== null && !chipsFit({ room: rest, labels: afterSays, letter: LETTER * font.small * (fontScale || 1), pad: CHIP_ROUND, gap: space.sm })
+  /* And Add a side with them, where it is offered and the tool's buttons are the ones past Swap. */
+  const afterAll = onAdd && !playOnRight ? [...afterSays, THIRD_WORDS.add] : afterSays
+  const moved = big && rest !== null && !chipsFit({ room: rest, labels: afterAll, letter: LETTER * font.small * (fontScale || 1), pad: CHIP_ROUND, gap: space.sm })
   return (
     <View style={ROW} {...measured}>
       <View style={[moved ? HALF_APART : HALF, { width: first }]}>

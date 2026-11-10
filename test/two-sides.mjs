@@ -674,12 +674,12 @@ export function run(test) {
     assert.match(app, /const \[blockAt, setBlockAt\] = useState\(null\)\n/)
     assert.doesNotMatch(app, /AsyncStorage/)
     /* The hold: Edit jumps; a side is borrowed from what was there, or from what the tuner there had borrowed; another block moves the panel. */
-    assert.match(app, /const holdBlock = \(eid\) => \{\s*if \(holdOpens === 'edit'\) return setEditJump\(\{ eid, at: Date\.now\(\) \}\)\s*if \(!holdOpens\) return undefined\s*blockIn\.current = holdOpens\s*if \(holdOpens === 'side' && screen !== BLOCK\) \{\s*blockLent\.current = sideUnder\(screen, \{ tunerLent: tunerLent\.current \}\)\s*setScreen\(BLOCK\)\s*\}\s*return setBlockAt\(eid\)\s*\}/)
+    assert.match(app, /const holdBlock = \(eid\) => \{\s*if \(holdOpens === 'edit' \|\| \(holdOpens && thirdEdit\)\) return setEditJump\(\{ eid, at: Date\.now\(\) \}\)\s*if \(!holdOpens\) return undefined\s*blockIn\.current = holdOpens\s*if \(holdOpens === 'side' && screen !== BLOCK\) \{\s*blockLent\.current = sideUnder\(screen, \{ tunerLent: tunerLent\.current \}\)\s*setScreen\(BLOCK\)\s*\}\s*return setBlockAt\(eid\)\s*\}/)
     /* Close gives the side back. */
     assert.match(app, /const closeBlock = \(\) => \{\s*setBlockAt\(null\)\s*if \(screen === BLOCK\) setScreen\(blockGivesBack\(blockLent\.current\)\)\s*\}/)
     /* In the side: the panel, with that Close; Edit told which block to jump to; neither kept for Two sides. */
     assert.match(app, /\) : sideTool === BLOCK \? \(\s*blockAt !== null \? <BlockSide eid=\{blockAt\} onClose=\{closeBlock\} \/> : null\s*\) : \(\s*<Edit\s+onBack=\{closeSide\}\s+jump=\{editJump\}/)
-    assert.match(app, /useEffect\(\(\) => \{\s*if \(screen !== 'edit'\) setEditJump\(null\)\s*\}, \[screen\]\)/)
+    assert.match(app, /useEffect\(\(\) => \{\s*if \(screen !== 'edit' && third !== 'edit'\) setEditJump\(null\)\s*\}, \[screen, third\]\)/)
     assert.match(edit, /export default function Edit\(\{ onBack, onOpenGear, jump = null, beside = false \}\)/)
     assert.match(edit, /if \(!jumpAt \|\| jump\?\.eid == null\) return\s*setOpenEid\(jump\.eid\)\s*setFocus\(\{ eid: jump\.eid, paramId: null, nonce: jumpAt \}\)/)
     /* Play is told where a hold opens knobs, and which block only when they are where the scenes were. */
@@ -687,9 +687,9 @@ export function run(test) {
     /* And follows its block, wherever it is drawn. */
     assert.match(app, /\{blockAt !== null \? <KnobsFollow eid=\{blockAt\} onClose=\{closeBlock\} \/> : null\}/)
     /* Android's back is its Close, before anything else leaves the screen. */
-    assert.match(app, /if \(auth !== 'in'\) return false\s*if \(blockAt !== null\) \{\s*closeBlock\(\)\s*return true\s*\}\s*if \(twoSidesUp && backUnwinds\(/)
+    assert.match(app, /if \(auth !== 'in'\) return false\s*if \(blockAt !== null\) \{\s*closeBlock\(\)\s*return true\s*\}\s*if \(thirdUp\) \{\s*setThird\(null\)\s*return true\s*\}\s*if \(twoSidesUp && backUnwinds\(/)
     /* One Save on screen: the panel's own, as Edit's. */
-    assert.match(app, /saveHere=\{screen !== 'edit' && blockAt === null\}/)
+    assert.match(app, /saveHere=\{screen !== 'edit' && blockAt === null && !thirdEdit\}/)
     /* Where the scenes were: the panel in their place, as tall as the room under the preset, the scenes away while it is up, and Play's page still while a knob is held. */
     assert.match(stage, /const knobsLane = lanePlan && knobsAt !== null && \(lanePlan\.stays \|\| laneAgain\) \? lanePlan : null\n/)
     assert.match(stage, /const fill = knobsLane \? \{ \.\.\.\(knobsLane\.stays \? fillOwn : laneAgain\), beside: true \} : low \? lowFill : fillOwn\n/)
@@ -900,7 +900,7 @@ export function run(test) {
     assert.match(app, /tools=\{toolsOffered\}\s*onPick=\{openTool\}\s*list=\{sideList\}\s*onList=\{setSideList\}/)
     assert.match(app, /slim=\{low && \(screen === 'stage' \|\| twoSidesUp\)\}\s*lead=\{sideLead\}/)
     /* There the bar's left is the two sides' buttons, or Play's own preset and Setlists; and the account's photo gives way to them only there. */
-    assert.match(app, /const sideLead = !wide \? null : twoSidesUp \? \(\s*<SidesLead frame=\{frame\} tool=\{sideTool\} full=\{sideFull\} playOnRight=\{playOnRight\} big=\{big\} onName=\{setSideList\} onSwap=\{swapSides\} onFull=\{setSideFull\} handle=\{sideHandle\} share=\{sideShare\} \/>\s*\) : low \? \(/, 'the bar carries the sides’ buttons on a window that shows one side')
+    assert.match(app, /const sideLead = !wide \? null : twoSidesUp \? \(\s*<SidesLead frame=\{frame\} tool=\{sideTool\} full=\{sideFull\} playOnRight=\{playOnRight\} big=\{big\} onName=\{setSideList\} onSwap=\{swapSides\} onFull=\{setSideFull\} handle=\{sideHandle\} share=\{sideShare\} three=\{thirdUp \? third : null\} onAdd=\{thirdCanOpen \? openThirdList : null\} onThird=\{openThirdList\} \/>\s*\) : low \? \(/, 'the bar carries the sides’ buttons on a window that shows one side')
     assert.match(app, /\) : low \? \(\s*screen === 'stage' && playHeadUp \? \(\s*<PlayHead onOpenPresets=\{demo \|\| link\.link === 'connected' \? \(\) => setScreen\('presets'\) : null\} onOpenSetlists=\{\(\) => setScreen\('setlists'\)\} \/>\s*\) : null\s*\) : playOnScreen \? \(/, 'the preset in the bar does not open what Play’s own does, or is drawn off a phone on its side')
     assert.match(app, /onOpenAccount=\{low && sideLead \? null : openAccount\}/)
     /* The bar: something on its left in the version's place, and less padding, only when App says. */

@@ -913,10 +913,29 @@ new line in the pull request that sets it true. None has run on a device.
   nothing here changes that file. No log or report can reach them (a test
   holds the list of files that can).
 
-Still to build from that yes: dragging a preset from All presets into a
-setlist, and three across on the big iPad Pro. The three ideas that need
-a build (keyboard and foot-pedal keys, a second screen, widgets) were
-offered, not asked for.
+- **Three across** (`THREE_SIDES_FOR_EVERYONE`; lib/threeSides): on a
+  frame 1290 points or more across (a 13-inch iPad Pro on its side, 1366;
+  never an 11-inch, at most 1210, and never a fold), with a tool beside
+  Play the top bar offers Add a side, and Play has two tools beside it in
+  three even columns. The first tool's state is untouched: the third is an
+  addition (App.js `third`) that closes first when the window narrows and
+  comes back with the room. The tuner and a held block's knobs borrow the
+  FIRST side, as always. No handle with three up; Swap is in the top bar.
+- **Add to setlist from All presets** (`ADD_TO_SETLIST_FOR_EVERYONE`;
+  lib/addToSetlist): a hold on a preset opens one sheet with his setlists,
+  Starred, New setlist, and Give it a color… last (the hold was the colour
+  tag's, which is still what it is for every other account). It adds
+  through the Setlists page's own calls (lib/lists `addTo`, `updateList`),
+  and says "Added" only of a save that reads back. THE REAL DRAG WAS LEFT
+  OUT: a row dragged out of a scrolling list and across the line could not
+  be made dependable without a device to try it on, and a half-working
+  drag is worse than none. He was told (he had been offered "drag a
+  preset ... across the two halves", which two sides cannot show: one is
+  always Play).
+
+That is everything from that yes. The three ideas that need a build
+(keyboard and foot-pedal keys, a second screen, widgets) were offered,
+not asked for.
 
 **In Edit the knobs come first.** "In edit move search bar and amp and
 pedal names to the bottom. Have the Bluetooth warning also move to the

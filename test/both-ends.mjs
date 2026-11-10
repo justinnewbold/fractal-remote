@@ -1387,9 +1387,9 @@ export function run(test) {
     assert.match(rows, /<ColourSheet target=\{painting\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
     const presets = read('mobile/src/screens/Presets.js')
     assert.ok(!/TagButton/.test(presets), 'the phone’s Colour button is back beside the star')
-    assert.match(presets, /onLongPress=\{target \? \(\) => setPainting\(target\) : undefined\}\s+accessibilityHint=\{target \? TAG_HOLD\.hint : undefined\}/, 'a phone row cannot be held for its colour')
+    assert.match(presets, /onLongPress=\{addOpen \? \(\) => hold\(\{ n, words, target \}\) : target \? \(\) => setPainting\(target\) : undefined\}\s+accessibilityHint=\{addOpen \? ADD_WORDS\.hint : target \? TAG_HOLD\.hint : undefined\}/, 'a phone row cannot be held for its colour')
     assert.match(presets, /style=\{tagEdge\(tag\)\}\s*\/>\s*<Star/, 'something sits between the phone’s row and its star again')
-    assert.match(presets, /ListFooterComponent=\{\s*shown\.length && presetTarget\(shown\[0\]\) \? \([\s\S]{0,200}\{TAG_HOLD\.phone\}/, 'the phone’s list does not say how a preset gets its colour')
+    assert.match(presets, /ListFooterComponent=\{\s*shown\.length && \(addOpen \|\| presetTarget\(shown\[0\]\)\) \? \([\s\S]{0,200}\{addOpen \? ADD_WORDS\.hold : TAG_HOLD\.phone\}/, 'the phone’s list does not say how a preset gets its colour')
     assert.match(presets, /<ColourSheet target=\{painting\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
     /* The Press a hold is wired through keeps a hold from loading. */
     assert.match(read('mobile/src/components/Press.js'), /onLongPress=\{\s+onLongPress\s+\? \(\) => \{/)
@@ -3074,7 +3074,7 @@ export function run(test) {
     assert.match(bar, /const canSave = saveHere && \(saveTo\.saving \|\| \(!!unsaved && unsaved\.number === preset\?\.number && saveTo\.can\)\)/, 'the phone’s bar has no Save for changes made on Play')
     assert.match(bar, /Alert\.alert\('Save preset\?', 'This will overwrite the current preset\.'/, 'the bar saves without asking')
     /* (Nor beside a block's knobs open from a hold, Derek's panel, which has its own Save too.) */
-    assert.match(read('mobile/App.js'), /saveHere=\{screen !== 'edit' && blockAt === null\}/, 'Edit shows two Save buttons')
+    assert.match(read('mobile/App.js'), /saveHere=\{screen !== 'edit' && blockAt === null && !thirdEdit\}/, 'Edit shows two Save buttons')
     /* The browser has had one in its bar all along. */
     assert.match(read('src/App.jsx'), /<SaveBar[\s\S]{0,120}dirty=\{dirty\}/, 'the browser lost its Save in the bar')
   })
