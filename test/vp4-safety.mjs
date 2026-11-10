@@ -1659,9 +1659,13 @@ export function run(test) {
     const edit = flat('mobile/src/screens/Edit.js')
     /* The phone: the search box only off a VP4, the hint only off a VP4, the knobs' words once. */
     /* A real VP4, or the demo's, which shows only what a real one gives (vp4Bench, test 'the demo’s VP4'). */
-    assert.match(edit, /\{vp4Bench\(\) \? null : \( <FindControl /, 'the phone’s Edit offers a VP4 the control search')
+    /* Behind the magnifier since 10 November 2026 (test/edit-more.mjs): neither the magnifier nor the box on a VP4. */
+    assert.match(edit, /\{vp4Bench\(\) \? null : \( <RoundButton icon=\{searchIcon\}/, 'the phone’s Edit offers a VP4 the control search')
+    assert.match(edit, /\{finding && !vp4Bench\(\) \? \( <FindControl /, 'the phone’s Edit offers a VP4 the control search')
     assert.equal((edit.match(/<FindControl /g) || []).length, 1, 'the phone’s Edit has another way to the control search')
-    assert.match(edit, /\) : blocks\.length && !chainNow\.elsewhere && !vp4Bench\(\) \? \( <Note>Tap a block to open its controls\.<\/Note> \) : null\}/, 'the phone’s Edit tells a VP4 to tap a block for its controls')
+    assert.match(edit, /\) : !toolShown && blocks\.length && !chainNow\.elsewhere && !vp4Bench\(\) \? \( <Note>Tap a block to open its controls\.<\/Note> \) : null\}/, 'the phone’s Edit tells a VP4 to tap a block for its controls')
+    /* And no block opens by itself on one (lib/editMore firstOpen): there are no knobs to open it for. */
+    assert.match(edit, /if \(chainNow\.elsewhere \|\| vp4Bench\(\) \|\| !blocks\.length \|\| autoFor\.current === presetNumber\) return/, 'Edit opens a block by itself on a VP4')
     assert.match(edit, /\{vp4Bench\(\) && blocks\.length && !chainNow\.elsewhere \? <Note>\{VP4_NO_KNOBS\}<\/Note> : null\}/, 'the phone’s Edit does not say a VP4’s knobs can’t be shown')
     assert.equal((edit.match(/\{VP4_NO_KNOBS\}/g) || []).length, 1, 'the phone’s Edit says the knobs’ words more than once')
     /* An opened block: nothing read, so nothing refused and nothing raised as a fault. */
@@ -1696,12 +1700,10 @@ export function run(test) {
     assert.match(flat('mobile/src/lib/device.js'), /if \(onVp4\) res = vp4ScreenUnit\(res\)/)
     assert.match(flat('src/lib/forgefx.js'), /if \(unitIsVp4\) res = vp4ScreenUnit\(res\)/)
     const edit = flat('mobile/src/screens/Edit.js')
-    assert.match(
-      edit,
-      /\{vp4Bench\(\) \? \( <Note tone="hint">\{VP4_NO_EDITS\}<\/Note> \) : viaBle \? \( <Note tone="hint">\{BLE_NO_CHAIN\}<\/Note> \) : \( <> \{chainNow\.elsewhere \? null : <ChainEditor/,
-      'the phone offers a VP4 Edit chain and Modifiers'
-    )
-    assert.match(edit, /function RenameDoor\(\) \{ const \[open, setOpen\] = useState\(false\) \/\*[^*]*\*\/ if \(vp4Bench\(\)\) return null/, 'the phone offers to rename on a VP4')
+    /* In More since 10 November 2026 (test/edit-more.mjs): its rows by chainTools, modsHere and renameHere, none of them on a VP4, and VP4_NO_EDITS said there instead. */
+    assert.match(edit, /const chainTools = !vp4Bench\(\) && !viaBle && !chainNow\.elsewhere const modsHere = chainTools && modifiersBind const renameHere = !vp4Bench\(\) && !viaBle && !chainNow\.elsewhere/, 'the phone offers a VP4 Edit chain and Modifiers')
+    assert.match(edit, /\{vp4Bench\(\) \? <Note tone="hint">\{VP4_NO_EDITS\}<\/Note> : viaBle \? <Note tone="hint">\{BLE_NO_CHAIN\}<\/Note> : null\}/, 'the phone offers a VP4 Edit chain and Modifiers')
+    assert.match(edit, /function RenameDoor\(\{ onClose \}\) \{ \/\*[^*]*\*\/ if \(vp4Bench\(\)\) return null/, 'the phone offers to rename on a VP4')
     const app = flat('src/App.jsx')
     assert.equal((app.match(/\{vp4Edit \? \( <p className="hint">\{VP4_NO_EDITS\}<\/p> \) : \(/g) || []).length, 2, 'the browser offers a VP4 its chain editor or modifiers')
     assert.match(app, /\{vp4Edit \? null : \( <button type="button" className="chip" disabled=\{busy \|\| status !== 'live'\} onClick=\{\(\) => \{ setSheetBack\('chain'\) setSheet\('scenes'\) \}\} > Rename preset and scenes/)
@@ -1722,7 +1724,8 @@ export function run(test) {
     /* Every check on Edit's screen that takes something away from a VP4 asks the bench; only the unread on/off (a real VP4's alone) asks vp4Here. */
     const code = (text) => text.replace(/\/\*[^]*?\*\//g, '')
     const body = code(edit)
-    assert.equal((body.match(/vp4Bench\(\)/g) || []).length, 6, 'one of Edit’s VP4 checks leaves the demo’s VP4 out, or there is another to hold')
+    /* Ten since 10 November 2026: the block opened by itself, More's rows (chainTools, renameHere), the magnifier and the box behind it, and More's VP4 line (test/edit-more.mjs). */
+    assert.equal((body.match(/vp4Bench\(\)/g) || []).length, 10, 'one of Edit’s VP4 checks leaves the demo’s VP4 out, or there is another to hold')
     assert.equal((body.match(/vp4Here\(\)/g) || []).length, 3, 'Edit asks vp4Here somewhere the demo’s VP4 should be asked too')
     assert.equal((body.match(/const unsure = vp4Here\(\) && typeof (?:b|block)\.bypassed !== 'boolean'/g) || []).length, 2)
     /* Play and the requests: device.js's VP4 is never the demo's, as before. */

@@ -262,6 +262,8 @@ export default function App() {
   const [accountSheet, setAccountSheet] = useState(false)
   /* Where Amp & pedal names goes back to: Settings, or Edit, whichever opened it. */
   const [gearBack, setGearBack] = useState('settings')
+  /* Where Amp & pedal names opens: on a model, from the i beside it in Edit ({ family, name }, lib/editMore gearStart), or its list. */
+  const [gearStart, setGearStart] = useState(null)
   const openSettings = (at = null, sheet = false) => {
     setSettingsAt(at)
     setAccountSheet(sheet)
@@ -2092,7 +2094,8 @@ export default function App() {
             ) : BENCH && alone === 'edit' ? (
               <Edit
                 onBack={() => setScreen('stage')}
-                onOpenGear={() => {
+                onOpenGear={(start) => {
+                  setGearStart(start || null)
                   setGearBack('edit')
                   setScreen('gear')
                 }}
@@ -2100,7 +2103,7 @@ export default function App() {
             ) : screen === 'connect' ? (
               <Connect onBack={() => setScreen('settings')} onBluetooth={bluetoothOffered ? () => openSettings('bluetooth') : null} />
             ) : screen === 'gear' ? (
-              <Gear onBack={() => setScreen(gearBack)} />
+              <Gear onBack={() => setScreen(gearBack)} start={gearStart} />
             ) : screen === 'log' ? (
               /* It sends the log itself now, from the one screen where
                  somebody is already looking at the thing worth sending: Send
@@ -2156,6 +2159,7 @@ export default function App() {
                 /* Works with the Mac off: it is a reference sheet, not a
                    question for the unit. */
                 onOpenGear={() => {
+                  setGearStart(null)
                   setGearBack('settings')
                   setScreen('gear')
                 }}
@@ -2275,7 +2279,8 @@ export default function App() {
                     <Edit
                       onBack={closeThird}
                       jump={editJump}
-                      onOpenGear={() => {
+                      onOpenGear={(start) => {
+                        setGearStart(start || null)
                         setGearBack('edit')
                         setScreen('gear')
                       }}
@@ -2303,7 +2308,8 @@ export default function App() {
                       onBack={closeSide}
                       /* A block held on Play with Edit beside it: Edit jumps to it. */
                       jump={editJump}
-                      onOpenGear={() => {
+                      onOpenGear={(start) => {
+                        setGearStart(start || null)
                         setGearBack('edit')
                         setScreen('gear')
                       }}

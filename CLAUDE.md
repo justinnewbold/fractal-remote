@@ -989,12 +989,32 @@ not asked for.
 
 **In Edit the knobs come first.** "In edit move search bar and amp and
 pedal names to the bottom. Have the Bluetooth warning also move to the
-bottom. We want as many knobs visible in edit." (10 November 2026.) Find a
-control and Amp & pedal names sit under the open block's knobs, and the
-Bluetooth note (and its USB-cable twin) is at the foot of the page; the
-words are unchanged. Nothing new goes above the knobs. Still above them:
-the title row, the chain strip, and inside the block its name, the A to D
-row and the page tabs, which the tidier Edit is to deal with.
+bottom. We want as many knobs visible in edit." (10 November 2026.) Then,
+the same evening: "I kind of want this to mainly be to edit knob presets
+quickly, and I feel like that these four other buttons are just taking up
+space on the screen", and, shown docs/edit-more/: "Yes, I like those. Go
+ahead and implement that." So (mobile/src/lib/editMore.js):
+
+- Edit opens on a block, its knobs already showing: the one last open in
+  that preset, else the amp, else the first that is not an end
+  (`firstOpen`). Never on a VP4, which has no knobs to read.
+- Amp & pedal names, Edit chain, Modifiers and Rename preset and scenes are
+  in More (••• beside Done; ⋮ on Android), by the rules the buttons had,
+  with the beta note and, on a VP4 or over Bluetooth, what Edit cannot do
+  there. A tool opened from More draws under the chain in the open block's
+  place until its Close.
+- Find a control is the magnifier beside More: the box opens at the top of
+  the page with the keyboard, and goes when a result is tapped.
+- The shortcuts: the preset's name renames, the + tile at the end of the
+  chain opens Edit chain, the i beside a model opens Amp & pedal names on
+  that model, and a knob held still (`HOLD_MS`) opens Modifiers on it. The
+  number box under every knob is where a value is typed.
+
+The Bluetooth note (and its USB-cable twin) stays at the foot of the page.
+Nothing new goes above the knobs: over the chain there is only the title
+row, Save's own lines, a fault, what the chain's read says, and the search
+box while the magnifier has asked for it (test/mobile.mjs and
+test/edit-more.mjs hold the order).
 
 **A block's Level in Edit is typed, not read-only (phone, 10 November
 2026).** A player on the Fractal forum (SASouth): "I'm interested in

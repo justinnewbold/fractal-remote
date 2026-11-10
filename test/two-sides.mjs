@@ -615,7 +615,7 @@ export function run(test) {
     assert.deepEqual(r.PANEL_LEAVES_OUT, ['copy', 'engaged', 'colour'])
     /* Edit's block view, exported and drawn again with `panel`; Edit's own screen draws it without. */
     assert.match(edit, /export function BlockPanel\(\{/)
-    assert.match(edit, /overBle = false,\s*panel = false\n\}\) \{/)
+    assert.match(edit, /overBle = false,\s*panel = false,[^]*?onModelInfo = null,\s+onHoldKnob = null\n\}\) \{/)
     assert.match(side, /import \{ BLE_NOTE, BlockPanel \} from '\.\.\/screens\/Edit'/)
     assert.match(side, /<BlockPanel\s+key=\{`\$\{idOf\(block\)\}:\$\{block\.channel \|\| ''\}:\$\{scene\}:\$\{bufferRev\}`\}\s+panel\s/, 'the panel is not Edit’s block view, or is not drawn again at a new channel, scene or preset')
     assert.equal(edit.match(/<BlockPanel\b/g).length, 1)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Keyboard, PanResponder, Platform, ScrollView, Text, TextInput, View } from 'react-native'
+import { Alert, Image, Keyboard, PanResponder, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 import { at as tint } from '../lib/vivid'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
@@ -27,7 +27,7 @@ import { demoUnit, isDemo } from '../lib/demo'
 import { overBluetooth } from '../lib/bleSwitch'
 import { useCableNow } from '../lib/bluetooth'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
-import { bleEditNoteSeen, editBetaNoteSeen, markBleEditNote, markEditBetaNote } from '../lib/coach'
+import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
 import { VP4_NO_EDITS, VP4_NO_KNOBS } from '../lib/vp4-safety'
 import { NO_KNOBS_YET } from '../lib/gen3Catalog'
 import {
@@ -87,6 +87,11 @@ import ColourSheet from '../components/ColourSheet'
 import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 import { HEAD_TALL, headShape, knobCell, knobSize } from '../lib/tidyEdit'
 import { useTidyEdit } from '../lib/useTidyEdit'
+import { CHAIN_TILE, FIND_LABEL, MORE_LABEL, MORE_ROWS, MORE_TITLE, firstOpen, gearStart } from '../lib/editMore'
+import Sheet from '../components/Sheet'
+import searchIcon from '../../assets/icons/search.png'
+import moreIcon from '../../assets/icons/more.png'
+import moreAndroidIcon from '../../assets/icons/more-vertical.png'
 
 const face = Platform.select(mono)
 
@@ -100,6 +105,8 @@ const face = Platform.select(mono)
  * request, keep vp4Here, which is never the demo's.
  */
 const vp4Bench = () => vp4Here() || (isDemo() && demoUnit() === 'vp4')
+/* The block last open in each preset, by preset number, while the app runs: where Edit opens next time (lib/editMore firstOpen). */
+const keptOpen = new Map()
 
 const ofBlocks = (s) => s.allBlocks
 const ofScene = (s) => s.sceneIndex
@@ -246,20 +253,21 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
       alive = false
     }
   }, [viaBle])
-  /* The beta note at the foot, the same way. */
-  const [betaNoteUp, setBetaNoteUp] = useState(false)
-  useEffect(() => {
-    let alive = true
-    editBetaNoteSeen().then((seen) => {
-      if (alive && !seen) setBetaNoteUp(true)
-    })
-    return () => {
-      alive = false
-    }
-  }, [])
 
   const [openEid, setOpenEid] = useState(null)
   const [error, setError] = useState(null)
+  /*
+   * KNOBS FIRST (lib/editMore): Find a control behind the magnifier
+   * (`finding`), the four buttons that sat under the knobs behind More
+   * (`moreOpen`), and the one of them that is open (`tool`: 'chain',
+   * 'modifiers' or 'rename'), drawn under the chain in the open block's
+   * place until its Close. `modStart` is the block and control a held knob
+   * opened Modifiers on.
+   */
+  const [finding, setFinding] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [tool, setTool] = useState(null)
+  const [modStart, setModStart] = useState(null)
   /* SAVE, and it asks twice. The same piece the naming section in Setup
      uses; see components/SaveToSlot. */
   const saveTo = useSaveToSlot()
@@ -317,9 +325,10 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
    * result also scrolls the page to the block it opened, once that block has
    * been laid out, which is the moment its position is known.
    *
-   * SINCE THE SEARCH BOX WENT TO THE FOOT OF THE PAGE (10 November 2026,
-   * below), the block is ABOVE the results, and nothing over it moves when
-   * they go. So a block already drawn may not be laid out again by a pick
+   * WHILE THE SEARCH BOX WAS AT THE FOOT OF THE PAGE (10 November 2026; it
+   * is behind the magnifier at the top since that evening, lib/editMore),
+   * the block was ABOVE the results, and nothing over it moved when they
+   * went. So a block already drawn may not be laid out again by a pick
    * (the same block, or another whose panel is the same height), and the
    * layout alone would leave the page at the search box with the block out
    * of sight above it. Where the panel is already on the page (`panelAt`),
@@ -351,22 +360,6 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
     page.current?.scrollTo({ y, animated: true })
   }
   /*
-   * AND THE SEARCH BOX COMES UP TO THE TOP OF WHAT CAN BE SEEN WHILE IT IS
-   * TYPED IN. It is at the foot of the page now, where the keyboard opens.
-   * The page keeps the box clear of the keyboard by itself (the scroll
-   * view's own keyboard insets on an iPhone or iPad; Android resizes the
-   * window), but only just clear, with its results under the keyboard. So
-   * once the keyboard is up, and again whenever the results change, the page
-   * scrolls the box to the top of the room left, and the results are read
-   * between it and the keyboard, as they were when the box was at the top
-   * of the page. `findAt` is where the box sits on the page, as laid out.
-   */
-  const findAt = useRef(null)
-  const toFind = () => {
-    if (findAt.current === null) return
-    page.current?.scrollTo({ y: Math.max(0, findAt.current - space.md), animated: true })
-  }
-  /*
    * A BLOCK HELD ON PLAY, WITH EDIT BESIDE IT (docs/two-sides, "Derek's
    * idea"; lib/twoSides holdGoes 'edit'): Edit jumps to that block, the way
    * a search result does, naming no control. `jump` is { eid, at }, from
@@ -380,6 +373,49 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
     setFocus({ eid: jump.eid, paramId: null, nonce: jumpAt })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jumpAt])
+
+  /*
+   * A BLOCK OPEN BEFORE ANYTHING IS TAPPED (lib/editMore firstOpen): "I kind
+   * of want this to mainly be to edit knob presets quickly" (Justin, 10
+   * November 2026). Once for each preset this screen sees: the block last
+   * open in it (`keptOpen`, kept while the app runs), else the amp, else the
+   * first that is not an end. A block already open that this preset has too
+   * stays open (a hold's jump among them, set just before this). Closed by
+   * its own tile, it stays closed until the next preset. Never on a VP4,
+   * whose knobs the app cannot read, and never from the last song's chain.
+   */
+  const presetNumber = preset?.number ?? null
+  const autoFor = useRef(undefined)
+  useEffect(() => {
+    if (chainNow.elsewhere || vp4Bench() || !blocks.length || autoFor.current === presetNumber) return
+    autoFor.current = presetNumber
+    setOpenEid((was) =>
+      was !== null && blocks.some((b) => sameBlock(b, was))
+        ? was
+        : firstOpen(
+            blocks.map((b) => ({ id: idOf(b), slug: b.slug })),
+            keptOpen.get(presetNumber)
+          )
+    )
+  }, [blocks, chainNow.elsewhere, presetNumber])
+  useEffect(() => {
+    if (openEid !== null && presetNumber !== null) keptOpen.set(presetNumber, openEid)
+  }, [openEid, presetNumber])
+
+  /* What this preset, this unit and this connection let More offer: the same rules the buttons under the knobs had. */
+  const chainTools = !vp4Bench() && !viaBle && !chainNow.elsewhere
+  const modsHere = chainTools && modifiersBind
+  const renameHere = !vp4Bench() && !viaBle && !chainNow.elsewhere
+  /* One of More's rows, or a shortcut: opened under the chain, with the page brought up to it. */
+  const openTool = (which, start = null) => {
+    setMoreOpen(false)
+    setFinding(false)
+    setModStart(start)
+    setTool(which)
+    page.current?.scrollTo({ y: 0, animated: true })
+  }
+  /* A tool this preset no longer offers (a move to Bluetooth, a chain still on its way) closes. */
+  const toolShown = tool === 'chain' ? chainTools : tool === 'modifiers' ? modsHere : tool === 'rename' ? renameHere : false
 
   return (
     <ScrollView
@@ -439,6 +475,17 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
             second. The buttons beside this are centred on the row, so the
             extra line costs nothing but height.
           */}
+          {/*
+            Tapped, the names rename (`renameHere`): the shortcut to More's
+            Rename preset and scenes, where a player looks for it. A pencil
+            after the preset's name says so.
+          */}
+          <Pressable
+            disabled={!renameHere}
+            accessibilityRole={renameHere ? 'button' : undefined}
+            accessibilityHint={renameHere ? 'Rename the preset and its scenes' : undefined}
+            onPress={() => openTool('rename')}
+          >
           {/* Not beside Play in the tidier Edit (`nameOnPlay`, above): Play says both. */}
           {nameOnPlay ? null : (
           <Text
@@ -448,6 +495,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
             {/* The same dodge the Play screen uses: a preset still being read
                 has no name yet, and "Untitled" for half a second is a lie. */}
             {preset?.pending && !preset?.name ? '…' : presetLabel(preset)}
+            {renameHere ? <Text style={{ color: color.silkFaint, fontWeight: '400' }}>{'  ✎'}</Text> : null}
           </Text>
           )}
           {nameOnPlay || caps?.hasScenes === false ? null : (
@@ -457,6 +505,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
               {`Scene ${scene + 1}${sceneNames[scene] ? ` — ${sceneNames[scene]}` : ''}`}
             </Text>
           )}
+          </Pressable>
         </View>
         <View style={{ flexDirection: 'row', gap: space.sm }}>
           {/*
@@ -480,12 +529,37 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
             Not disabled-but-visible: a greyed button still has to be read and
             ruled out. Absent is read at a glance.
           */}
+          {/* Find a control and More, beside Done (lib/editMore). Not the magnifier on a VP4, whose knobs the app cannot read. */}
+          {vp4Bench() ? null : (
+            <RoundButton icon={searchIcon} label={FIND_LABEL} on={finding} onPress={() => setFinding((was) => !was)} />
+          )}
+          <RoundButton icon={Platform.OS === 'android' ? moreAndroidIcon : moreIcon} label={MORE_LABEL} on={moreOpen} onPress={() => setMoreOpen(true)} />
           {pending ? <SaveButton s={saveTo} waiting /> : null}
           <Press label="Done" height={40} onPress={onBack} />
         </View>
       </View>
 
       <SaveNotes s={saveTo} />
+
+      {/*
+        FIND A CONTROL, BEHIND THE MAGNIFIER (lib/editMore), at the top of
+        the page, where the keyboard leaves it in sight: the box and its
+        results, until a result is tapped or the magnifier is tapped again.
+        NOT ON A VP4, whose knobs the app cannot read (VP4_NO_KNOBS).
+      */}
+      {finding && !vp4Bench() ? (
+        <FindControl
+          autoFocus
+          blocks={blocks}
+          onError={setError}
+          onPick={(eid, paramId) => {
+            setTool(null)
+            setFinding(false)
+            setOpenEid(eid)
+            setFocus({ eid, paramId, nonce: Date.now() })
+          }}
+        />
+      ) : null}
 
       {error ? (
         <Note tone="fault" onDismiss={() => setError(null)}>
@@ -570,7 +644,13 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
               on={open}
               height={TAP}
               haptic={thud}
-              onPress={() => setOpenEid(open ? null : idOf(b))}
+              /* With a tool from More up, a tile closes it and shows that block's knobs. */
+              onPress={() => {
+                if (toolShown) {
+                  setTool(null)
+                  setOpenEid(idOf(b))
+                } else setOpenEid(open ? null : idOf(b))
+              }}
               /* Fixed rather than shared out across the width: in a row that
                  scrolls there is no width to share, and tiles that sized
                  themselves to their own label would make a ragged strip. */
@@ -578,6 +658,20 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
             />
           )
         })}
+        {/* ＋ Chain, the last tile: the shortcut to More's Edit chain, where the chain is. */}
+        {chainTools && blocks.length ? (
+          <Tile
+            label={CHAIN_TILE.label}
+            sub={CHAIN_TILE.sub}
+            quiet
+            on={toolShown && tool === 'chain'}
+            height={TAP}
+            haptic={thud}
+            accessibilityLabel={MORE_ROWS.chain.label}
+            onPress={() => (toolShown && tool === 'chain' ? setTool(null) : openTool('chain'))}
+            style={{ width: 84 }}
+          />
+        ) : null}
       </SideScroll>
 
       {/*
@@ -585,7 +679,19 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
         its knobs rather than instead of them: the knobs are still how the
         loop's level and mix are set.
       */}
-      {block?.slug === 'looper' ? <Looper block={block} /> : null}
+      {/*
+        THE TOOL OPEN FROM MORE, OR FROM ITS SHORTCUT, in the open block's
+        place under the chain (lib/editMore), until its Close: Edit chain,
+        Modifiers (on a held knob's control when a knob opened it), or the
+        rename boxes. Each draws what its door under the knobs opened.
+      */}
+      {toolShown && tool === 'chain' ? <ChainEditor blocks={chainAll} caps={caps} onError={setError} onScrollLock={setHeld} onClose={() => setTool(null)} /> : null}
+      {toolShown && tool === 'modifiers' ? (
+        <Modifiers key={modStart ? `${modStart.eid}:${modStart.paramId}` : 'more'} blocks={blocks} onError={setError} start={modStart} onClose={() => setTool(null)} />
+      ) : null}
+      {toolShown && tool === 'rename' ? <RenameDoor onClose={() => setTool(null)} /> : null}
+
+      {block?.slug === 'looper' && !toolShown ? <Looper block={block} /> : null}
 
       {/*
         A VP4's knobs, said once, in words, where the line below says to tap
@@ -596,7 +702,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
       */}
       {vp4Bench() && blocks.length && !chainNow.elsewhere ? <Note>{VP4_NO_KNOBS}</Note> : null}
 
-      {block ? (
+      {block && !toolShown ? (
         <View onLayout={panelLaid}>
           <BlockPanel
             key={`${idOf(block)}:${block.channel || ''}:${scene}:${bufferRev}`}
@@ -623,82 +729,16 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
             undoSaid={undoSaid && sameBlock(block, undoSaid.eid) && undoSaid.rev === bufferRev ? undoSaid : null}
             onUndoSaid={(said) => setUndoSaid(said ? { ...said, eid: idOf(block), rev: bufferRev } : null)}
             overBle={viaBle}
+            /* The i beside the model: Amp & pedal names, on that model (lib/editMore gearStart). */
+            onModelInfo={onOpenGear ? (start) => onOpenGear(start) : null}
+            /* A knob held still: Modifiers, on that knob (lib/editMore HOLD_MS). Only where More offers Modifiers. */
+            onHoldKnob={modsHere ? (eid, paramId) => openTool('modifiers', { eid, paramId }) : null}
           />
         </View>
-      ) : blocks.length && !chainNow.elsewhere && !vp4Bench() ? (
+      ) : !toolShown && blocks.length && !chainNow.elsewhere && !vp4Bench() ? (
         <Note>Tap a block to open its controls.</Note>
       ) : null}
 
-      {/*
-        FIND A CONTROL, UNDER THE KNOBS (moved from over the chain, above).
-        First of what the page keeps under the open block, since it is the
-        one reached for most. Typed in, the page brings it to the top of the
-        room the keyboard leaves (`toFind`), and a result tapped takes the
-        page back up to the block it opened (`panelAt`).
-
-        NOT ON A VP4, whose knobs the app cannot read. The box offered "gain,
-        mix, presence…" and answered "No control called “gain” in this preset"
-        over a preset with a Drive in it — untrue: the gain is there, the app
-        just cannot see it. VP4_NO_KNOBS says so once, under the chain, where
-        "Tap a block to open its controls" was. The browser does the same.
-      */}
-      {vp4Bench() ? null : (
-        <FindControl
-          blocks={blocks}
-          onError={setError}
-          onPick={(eid, paramId) => {
-            setOpenEid(eid)
-            setFocus({ eid, paramId, nonce: Date.now() })
-          }}
-          onLaid={(y) => {
-            findAt.current = y
-          }}
-          onSeek={toFind}
-        />
-      )}
-
-      {/*
-        WHAT A MODEL REALLY IS, one tap from where models are picked: "add the
-        amps and pedals names as a link in the edit area somewhere so the
-        people can quickly see those from that page". Under the knobs with the
-        search box, since 10 November 2026.
-      */}
-      {onOpenGear ? (
-        <Press label="Amp & pedal names" sub="What each model on your unit really is" height={44} onPress={onOpenGear} />
-      ) : null}
-
-      {/*
-        NOT ON A VP4: moving, adding and removing its effects, its modifiers
-        and renaming are none of them things the app can do on one, and each
-        door offered them. One sentence where the three were (lib/vp4-safety
-        VP4_NO_EDITS); the browser says the same.
-      */}
-      {vp4Bench() ? (
-        <Note tone="hint">{VP4_NO_EDITS}</Note>
-      ) : viaBle ? (
-        <Note tone="hint">{BLE_NO_CHAIN}</Note>
-      ) : (
-        <>
-          {chainNow.elsewhere ? null : <ChainEditor blocks={chainAll} caps={caps} onError={setError} onScrollLock={setHeld} />}
-
-          {/*
-            NOT WHERE THE COMPUTER SAYS THE UNIT CANNOT BIND ONE: an AM4
-            (ForgeFX drivers/am4.ts modBind false, served as
-            capabilities.modifiers.bind by registryCore). The door opened on
-            "This unit doesn't let an app attach a modifier", every time. A
-            computer too old to say keeps the door (`modifiersBind`).
-          */}
-          {modifiersBind ? <Modifiers blocks={blocks} onError={setError} /> : null}
-        </>
-      )}
-
-      {/*
-        RENAME THE PRESET AND ITS SCENES, here beside the preset rather than
-        in Settings: "I think we should move rename presets and scenes out of
-        settings onto the edit screen." Closed until asked for, like the chain
-        editor and the modifiers above it.
-      */}
-      {chainNow.elsewhere || viaBle ? null : <RenameDoor />}
 
       {/*
         WHAT EDIT DOES OVER BLUETOOTH (or on the USB cable), at the foot of
@@ -718,18 +758,33 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
         </Note>
       ) : null}
 
-      {/* Last on the page, under everything it is about, until its cross is pressed. */}
-      {betaNoteUp ? (
-        <Note
-          tone="warn"
-          onDismiss={() => {
-            setBetaNoteUp(false)
-            markEditBetaNote()
-          }}
-        >
-          {BETA_NOTE}
-        </Note>
-      ) : null}
+      {/*
+        MORE (lib/editMore): the four buttons that sat under the knobs until
+        10 November 2026, by the same rules (`chainTools`, `modsHere`,
+        `renameHere`), and what Edit cannot do here said once, where the
+        chain editor's row would be (VP4_NO_EDITS on a VP4, BLE_NO_CHAIN over
+        Bluetooth or a USB cable). And the beta note, which was a box at the
+        foot of the page.
+      */}
+      <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title={MORE_TITLE}>
+        <View style={{ gap: space.sm }}>
+          {chainTools ? <Press label={MORE_ROWS.chain.label} sub={MORE_ROWS.chain.sub} onPress={() => openTool('chain')} /> : null}
+          {modsHere ? <Press label={MORE_ROWS.modifiers.label} sub={MORE_ROWS.modifiers.sub} onPress={() => openTool('modifiers')} /> : null}
+          {renameHere ? <Press label={MORE_ROWS.rename.label} sub={MORE_ROWS.rename.sub} onPress={() => openTool('rename')} /> : null}
+          {onOpenGear ? (
+            <Press
+              label={MORE_ROWS.gear.label}
+              sub={MORE_ROWS.gear.sub}
+              onPress={() => {
+                setMoreOpen(false)
+                onOpenGear(null)
+              }}
+            />
+          ) : null}
+          {vp4Bench() ? <Note tone="hint">{VP4_NO_EDITS}</Note> : viaBle ? <Note tone="hint">{BLE_NO_CHAIN}</Note> : null}
+          <Note tone="warn">{BETA_NOTE}</Note>
+        </View>
+      </Sheet>
     </ScrollView>
   )
 }
@@ -810,7 +865,15 @@ export function BlockPanel({
    * on Play already does that (lib/twoSides PANEL_LEAVES_OUT). False on the
    * Edit screen, which draws everything it always did.
    */
-  panel = false
+  panel = false,
+  /*
+   * ON THE EDIT SCREEN ONLY (lib/editMore): the i beside the model, which
+   * opens Amp & pedal names on it (`onModelInfo`, handed { family, name }),
+   * and a knob held still, which opens Modifiers on it (`onHoldKnob`, handed
+   * the block and the control). Null in every other view of these knobs.
+   */
+  onModelInfo = null,
+  onHoldKnob = null
 }) {
   /* Read once and used everywhere below: see unit.mjs on why this is not
      `block.eid`, and what it cost to find out. */
@@ -1311,6 +1374,9 @@ export function BlockPanel({
   const flip = () => writeBlockBypass(eid, engaged)
   /* The model picker in that row (a panel wide enough): then it is not under the knobs. */
   const modelUp = tidy && headShape(wide).model && models.length > 0
+  /* The i beside the model, for a kind Amp & pedal names has a page for (lib/editMore gearStart): only the Edit screen hands onModelInfo over. */
+  const infoAt = onModelInfo ? gearStart(block.slug, current?.name) : null
+  const modelInfo = infoAt ? () => onModelInfo(infoAt) : null
   const pickChannel = async (ch) => {
     try {
       await writeChannel(eid, ch)
@@ -1555,6 +1621,7 @@ export function BlockPanel({
                 onCommit={(v) => commit(p, v)}
                 onScrollLock={onScrollLock}
                 {...(cell ? { size: knobSize(cell) } : null)}
+                onHold={onHoldKnob ? () => onHoldKnob(eid, p.id) : null}
               />
               <ValueBox param={p} value={valueOf(p)} onCommit={(v) => commit(p, v)} />
               {help?.params?.[p.id]?.blurb ? (
@@ -1650,10 +1717,13 @@ export function BlockPanel({
       )}
       {/* ------------------------------------------------------------ model */}
       {/* With the picker up in the block's row (`modelUp`), what the model is based on still reads here, under the knobs. */}
-      {modelUp && !picking && (gearLine(type) || cabNow?.hint) ? (
-        <View style={{ gap: space.xs }}>
-          {gearLine(type) ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{gearLine(type)}</Text> : null}
-          {cabNow?.hint ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{cabNow.hint}</Text> : null}
+      {modelUp && !picking && (gearLine(type) || cabNow?.hint || modelInfo) ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <View style={{ flex: 1, gap: space.xs }}>
+            {gearLine(type) ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{gearLine(type)}</Text> : null}
+            {cabNow?.hint ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{cabNow.hint}</Text> : null}
+          </View>
+          {modelInfo ? <ModelInfo onPress={modelInfo} /> : null}
         </View>
       ) : null}
       {models.length && !modelUp ? (
@@ -1673,8 +1743,12 @@ export function BlockPanel({
             under the control only ever described the model already chosen,
             which is the one nobody is wondering about.
           */}
-          {!picking && gearLine(type) ? (
-            <Text style={{ color: color.silkDim, fontSize: font.small }}>{gearLine(type)}</Text>
+          {/* With the i beside it (lib/editMore): Amp & pedal names, on this model. */}
+          {!picking && (gearLine(type) || modelInfo) ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+              <Text style={{ flex: 1, color: color.silkDim, fontSize: font.small }}>{gearLine(type) || ''}</Text>
+              {modelInfo ? <ModelInfo onPress={modelInfo} /> : null}
+            </View>
           ) : null}
           {cabNow?.hint ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{cabNow.hint}</Text> : null}
           {/* Instead of a question on every pick: auditioning is many picks
@@ -1756,24 +1830,24 @@ function BlockColour({ slug }) {
  * Folded away until asked for. It is the least-reached-for thing on the bench
  * and the easiest to press by accident.
  */
-/** The rename boxes behind one button, the way Edit chain and Modifiers open. */
-function RenameDoor() {
-  const [open, setOpen] = useState(false)
-  /* Not on a VP4, the demo's included, which the app cannot rename on: VP4_NO_EDITS says so above, where the chain editor was. */
+/** The rename boxes, opened from More or the preset's name (lib/editMore), with their Close. */
+function RenameDoor({ onClose }) {
+  /* Not on a VP4, the demo's included, which the app cannot rename on: More says VP4_NO_EDITS instead. */
   if (vp4Bench()) return null
-  if (!open) {
-    return <Press label="Rename preset and scenes" sub="Names you will know on a dark stage" onPress={() => setOpen(true)} />
-  }
   return (
     <View style={{ gap: space.md }}>
       <RenamePreset />
-      <Press label="Close" height={40} onPress={() => setOpen(false)} />
+      <Press label="Close" height={40} onPress={onClose} />
     </View>
   )
 }
 
-function ChainEditor({ blocks, caps, onError, onScrollLock }) {
-  const [open, setOpen] = useState(false)
+/** The chain editor, opened from More or the ＋ tile at the end of the chain (lib/editMore); its Close is `onClose`. */
+function ChainEditor({ blocks, caps, onError, onScrollLock, onClose }) {
+  const open = true
+  const setOpen = (on) => {
+    if (!on) onClose?.()
+  }
   const [palette, setPalette] = useState(null)
   /* Which card's actions are showing, as "row:col". One at a time. */
   const [acting, setActing] = useState(null)
@@ -1821,10 +1895,6 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
       stop = true
     }
   }, [open, palette])
-
-  if (!open) {
-    return <Press label="Edit chain" sub="Add, move or remove blocks in this preset" onPress={() => setOpen(true)} />
-  }
 
   const where = (row, col) =>
     linear ? `slot ${colLabel(col)}` : `row ${rowLabel(row)}, column ${colLabel(col)}`
@@ -2389,12 +2459,16 @@ function BlockCard({
  * Folded away until asked for. Four pickers and a button is most of a phone
  * screen, and this is the least-reached-for thing on the bench.
  */
-function Modifiers({ blocks, onError }) {
-  const [open, setOpen] = useState(false)
+/** Modifiers, opened from More, or from a knob held still with that block and control already picked (`start`, lib/editMore); its Close is `onClose`. */
+function Modifiers({ blocks, onError, onClose, start = null }) {
+  const open = true
+  const setOpen = (on) => {
+    if (!on) onClose?.()
+  }
   const [model, setModel] = useState(undefined)
   const [slot, setSlot] = useState(1)
-  const [eid, setEid] = useState(null)
-  const [paramId, setParamId] = useState(null)
+  const [eid, setEid] = useState(start?.eid ?? null)
+  const [paramId, setParamId] = useState(start?.paramId ?? null)
   const [source, setSource] = useState(null)
   const [params, setParams] = useState([])
   const [loading, setLoading] = useState(false)
@@ -2438,10 +2512,6 @@ function Modifiers({ blocks, onError }) {
       stop = true
     }
   }, [eid, onError])
-
-  if (!open) {
-    return <Press label="Modifiers" sub="Let a pedal or your playing move a control" onPress={() => setOpen(true)} />
-  }
 
   const ready = eid !== null && paramId !== null && source !== null
 
@@ -2632,7 +2702,7 @@ function afterKeyboard(run) {
  * the block that opened — with the results still up and the keyboard still
  * over the bottom half, the block opened somewhere nobody could see.
  */
-function FindControl({ blocks, onPick, onError, onLaid = null, onSeek = null }) {
+function FindControl({ blocks, onPick, onError, onLaid = null, onSeek = null, autoFocus = false }) {
   const [query, setQuery] = useState('')
   const [index, setIndex] = useState(() => indexFor(blocks))
   const [progress, setProgress] = useState(null)
@@ -2700,6 +2770,7 @@ function FindControl({ blocks, onPick, onError, onLaid = null, onSeek = null }) 
     <View style={{ gap: space.sm }} onLayout={(e) => onLaid?.(e.nativeEvent.layout.y)}>
       <TextInput
         value={query}
+        autoFocus={autoFocus}
         onChangeText={change}
         onFocus={() => setTyping(true)}
         onBlur={() => setTyping(false)}
@@ -2743,6 +2814,66 @@ function FindControl({ blocks, onPick, onError, onLaid = null, onSeek = null }) 
         )
       ) : null}
     </View>
+  )
+}
+
+/**
+ * A round button with a picture and no word, beside Done: Find a control
+ * and More (lib/editMore). The glass of the top bar's round buttons, its rim
+ * in the app's amber while what it opens is open. Named for VoiceOver and
+ * TalkBack by `label`.
+ */
+function RoundButton({ icon, label, on = false, onPress }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ expanded: on }}
+      hitSlop={4}
+      onPress={() => {
+        thud()
+        onPress()
+      }}
+      style={({ pressed }) => ({
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: on ? color.signal : color.glassRim,
+        backgroundColor: pressed ? color.glassFillHi : color.glassFill
+      })}
+    >
+      <Image source={icon} style={{ width: 18, height: 18, tintColor: color.silk }} />
+    </Pressable>
+  )
+}
+
+/** The i beside a model: Amp & pedal names, open on that model (lib/editMore gearStart). */
+function ModelInfo({ onPress }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="What this model really is"
+      hitSlop={6}
+      onPress={() => {
+        thud()
+        onPress()
+      }}
+      style={({ pressed }) => ({
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: color.glassRim,
+        backgroundColor: pressed ? color.glassFillHi : color.glassFill
+      })}
+    >
+      <Text style={{ color: color.signal, fontSize: font.lead, fontWeight: '800', fontStyle: 'italic', fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif' }}>i</Text>
+    </Pressable>
   )
 }
 

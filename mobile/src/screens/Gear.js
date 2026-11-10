@@ -44,16 +44,24 @@ const face = Platform.select(mono)
  * able to tap on the card and open a detailed page like this." So a row opens
  * the model's own page. See GearCard.
  */
-export default function Gear({ onBack }) {
-  const [query, setQuery] = useState('')
-  const [group, setGroup] = useState(GEAR_GROUPS[0].key)
+/*
+ * `start`: opened from the i beside a model in Edit ({ family, name },
+ * lib/editMore gearStart): that kind's tab, with that model's page open
+ * where the printed catalog has it, or the tab found down to its name where
+ * it does not. Back from the page is the list, and Done goes back to Edit.
+ */
+export default function Gear({ onBack, start = null }) {
+  const startGroup = start ? GEAR_GROUPS.find((g) => g.key === start.family) : null
+  const startEntry = startGroup?.entries.find((e) => String(e.name).toLowerCase() === String(start.name).toLowerCase()) || null
+  const [query, setQuery] = useState(startGroup && !startEntry ? String(start.name) : '')
+  const [group, setGroup] = useState(startGroup ? startGroup.key : GEAR_GROUPS[0].key)
   /*
    * Which model is open, as the whole entry rather than a name. A name on its
    * own cannot be looked up — the description and the photograph are per block
    * kind, and "Brit JVM" means nothing without knowing it came from the amp
    * list. The row is holding both already, so it hands over both.
    */
-  const [open, setOpen] = useState(null)
+  const [open, setOpen] = useState(startEntry)
 
   /*
    * What THIS unit has, asked of the unit.

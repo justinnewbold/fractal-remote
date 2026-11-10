@@ -198,7 +198,7 @@ export function run(test) {
     assert.match(panel, /\{channels\?\.length > 1 && !tidy \? \( <View style=\{\{ flexDirection: 'row', gap: space\.sm \}\}>/)
     assert.match(panel, /height=\{tidy \? HEAD_TALL : 44\}/)
     assert.match(panel, /width: cell \|\| '30%'/, 'a knob’s cell is not its old share of the row where the tidier Edit is closed')
-    assert.match(panel, /onScrollLock=\{onScrollLock\} \{\.\.\.\(cell \? \{ size: knobSize\(cell\) \} : null\)\} \/>/)
+    assert.match(panel, /onScrollLock=\{onScrollLock\} \{\.\.\.\(cell \? \{ size: knobSize\(cell\) \} : null\)\} onHold=\{onHoldKnob \? \(\) => onHoldKnob\(eid, p\.id\) : null\} \/>/)
     assert.match(panel, /\{panel \|\| tidy \|\| \['input', 'output'\]\.includes\(block\.slug\) \? null : \( <Press label=\{unsure \? 'Turn it off' : engaged \? 'Engaged' : 'Bypassed'\}/)
     assert.match(panel, /\{models\.length && !modelUp \? \( <View style=\{\{ gap: space\.sm \}\}> <Press caption="Model"/)
     /* The one row has everything the rows it replaces had: the name, the channels (not during an Undo), the on/off (never on the chain's two ends), the model where it fits, and Color under the knobs. */
