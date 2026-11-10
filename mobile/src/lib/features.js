@@ -117,6 +117,7 @@ export const HOLD_POPUP_KNOBS_FOR_EVERYONE = false
  */
 export const TIDY_EDIT_FOR_EVERYONE = false
 
+/**
  * STAGE VIEW (lib/stageView, components/StageView): Play's preset, scene and
  * what comes next, big enough to read from a stand, for everyone.
  *
