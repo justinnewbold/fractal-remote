@@ -15902,3 +15902,337 @@ button.unit-card-how-link {
     padding: var(--s-4);
   }
 }
+
+/* ==================================================================
+   PLAY IN A PHONE'S BROWSER, THE PHONE HELD ON ITS SIDE
+
+   "This is the landscape view on iPhone ... let's split the screen in
+   half kind of like the iPhone duo even though things will be smaller.
+   It'll still look better instead of just stretching everything." And:
+   "Can you make the icons more square looking instead of stretched?"
+   (Justin, 10 November 2026; the screenshot was this page in his
+   iPhone's browser.)
+
+   Everything here hangs on `data-sideways`, which App and Play set only
+   for a phone's browser, in a low wide window, on an account that is let
+   in (lib/sidewaysPlay). Without it not one rule below applies, and the
+   page is what it always was.
+
+   The squares' sides and how many go across come from Play
+   (--side-scene, --side-pedal, --side-scene-cols, --side-chain-cols:
+   lib/sidewaysPlay webSidewaysPlan). The numbers drawn round them are
+   that file's too, and a test holds the two together: 8px between tiles
+   (SIDE_GAP), a 16px heading with 6px under it (SIDE_HEAD, 22), 24px
+   between the halves (SIDE_BESIDE), and a 44px preset row with 8px under
+   it (SIDE_HEAD_ROW, 52).
+   ================================================================== */
+
+/* The page keeps nothing under the bottom row: the row carries the home bar's inset itself. */
+.shell[data-sideways] {
+  padding-bottom: 0;
+}
+
+/* The bar reaches the screen's edges past the notch, and its own row stays inside it. */
+.topbar[data-sideways] {
+  margin-left: calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px)));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* Slimmer, and one height whatever is in it, so the preset's row moving up into it moves nothing else. */
+.topbar[data-sideways] .topbar-row {
+  height: 48px;
+  min-height: 0;
+  padding: 0;
+}
+
+/* The place for the preset's row, beside the version. Nothing while it is empty. */
+.topbar-sidehead {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+}
+.topbar-sidehead:empty {
+  display: none;
+}
+.topbar[data-sideways]:has(.topbar-sidehead:not(:empty)) .topbar-version {
+  flex: 0 0 auto;
+}
+
+/* ---------- the preset's name and Setlists (components/SideHead) ---------- */
+
+.side-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: var(--s-5);
+  height: 44px;
+  margin: 0 0 8px;
+}
+/* Under a card or a note, the gap that card does not bring. */
+.gig[data-sideways] > * + .side-head {
+  margin-top: 8px;
+}
+
+button.side-chip {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-width: 0;
+  height: 44px;
+  min-height: 0;
+  margin: 0;
+  padding: 0 var(--s-3);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  color: var(--silk);
+  text-align: center;
+  line-height: 1.15;
+}
+button.side-preset {
+  border-left: 3px solid var(--signal);
+}
+button.side-chip:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.side-chip-words {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+.side-chip-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: var(--f-4);
+  letter-spacing: 0.02em;
+}
+.side-chip-sub,
+.side-chip-kind {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--f-1);
+  line-height: 1.25;
+  color: var(--silk-dim);
+}
+.side-chip-kind {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--silk-faint);
+}
+.side-chip-pos {
+  font-size: var(--f-1);
+  font-weight: 400;
+  color: var(--silk-faint);
+}
+.side-chip-chevron {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+button.side-chip:disabled .side-chip-sub,
+button.side-chip:disabled .side-chip-chevron {
+  display: none;
+}
+
+/* A setlist is on: the signal's fill, as the button between Previous and Next wears it upright. */
+button.side-setlists.on {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--on-signal);
+}
+button.side-setlists.on .side-chip-kind,
+button.side-setlists.on .side-chip-pos {
+  color: var(--on-signal);
+}
+
+/* Up in the top bar: two chips after the version, each as wide as its words and no wider than its share. */
+.side-head[data-up] {
+  display: flex;
+  gap: var(--s-2);
+  height: 40px;
+  margin: 0;
+  min-width: 0;
+  flex: 1 1 0;
+}
+.side-head[data-up] button.side-chip {
+  height: 40px;
+  flex: 0 1 auto;
+}
+.side-head[data-up] button.side-setlists {
+  flex: 0 0 auto;
+}
+.side-head[data-up] .side-chip-name {
+  font-size: var(--f-3);
+}
+
+/* ---------- the two halves ---------- */
+
+.gig[data-sideways] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: var(--s-5);
+  row-gap: 0;
+  align-items: start;
+  margin-top: var(--s-2);
+}
+
+/* Everything Play says or asks (a card, a note, the tuner) keeps the whole row, in the order it always had, over the halves. */
+.gig[data-sideways] > * {
+  grid-column: 1 / -1;
+}
+
+/* SCENES and CHAIN, each the width of its own squares, over them. What the squares leave of the height is shared above and below. */
+.gig[data-sideways] > .gig-head[data-for='scenes'],
+.gig[data-sideways] > .gig-head[data-for='chain'] {
+  grid-row: 50;
+  justify-self: center;
+  height: 16px;
+  margin: var(--side-above, 0px) 0 6px;
+}
+.gig[data-sideways] > .gig-head[data-for='scenes'] {
+  grid-column: 1;
+  width: clamp(min(100%, 300px), calc(var(--side-scene-cols, 4) * var(--side-scene, 80px) + (var(--side-scene-cols, 4) - 1) * 8px), 100%);
+}
+.gig[data-sideways] > .gig-head[data-for='chain'] {
+  grid-column: 2;
+  width: clamp(min(100%, 300px), calc(var(--side-chain-cols, 4) * var(--side-pedal, 80px) + (var(--side-chain-cols, 4) - 1) * 8px), 100%);
+}
+
+.gig[data-sideways] > .gig-scenes,
+.gig[data-sideways] > .gig-blocks {
+  grid-row: 51;
+  justify-content: center;
+  gap: var(--s-2);
+  margin-top: 0;
+}
+.gig[data-sideways] > .gig-scenes {
+  grid-column: 1;
+  grid-template-columns: repeat(var(--side-scene-cols, 4), var(--side-scene, 80px));
+}
+.gig[data-sideways] > .gig-blocks {
+  grid-column: 2;
+  grid-template-columns: repeat(var(--side-chain-cols, 4), var(--side-pedal, 80px));
+}
+/* The cards that stand where the pedals were while a preset is on its way. */
+.gig[data-sideways] > .gig-blocks-held,
+.gig[data-sideways] > .gig-chain-wait {
+  grid-row: 51;
+  grid-column: 2;
+  margin-top: 0;
+}
+
+/* Only scenes, or only pedals: the one grid has the whole row. */
+.gig[data-sideways][data-one] > .gig-head[data-for='scenes'],
+.gig[data-sideways][data-one] > .gig-head[data-for='chain'],
+.gig[data-sideways][data-one] > .gig-scenes,
+.gig[data-sideways][data-one] > .gig-blocks,
+.gig[data-sideways][data-one] > .gig-blocks-held,
+.gig[data-sideways][data-one] > .gig-chain-wait {
+  grid-column: 1 / -1;
+}
+
+/* Every tile a square. */
+.gig[data-sideways][data-compact] > .gig-scenes button.gig-scene {
+  height: var(--side-scene, 80px);
+  min-height: 0;
+}
+.gig[data-sideways][data-compact] > .gig-blocks .gig-block-cell,
+.gig[data-sideways][data-compact] > .gig-blocks .gig-block-cell button.gig-block {
+  height: var(--side-pedal, 80px);
+  min-height: 0;
+}
+
+/* ---------- Previous, Tuner, Edit, Tap, Next: one row ---------- */
+
+.gig[data-sideways] > .gig-foot {
+  grid-row: 60;
+  display: flex;
+  gap: var(--s-2);
+  margin-top: calc(8px + var(--side-below, 0px));
+  padding: var(--s-2) 0 max(var(--s-2), env(safe-area-inset-bottom, 0px));
+}
+.gig[data-sideways] .gig-nav {
+  display: contents;
+}
+.gig[data-sideways][data-compact] .gig-nav > button.gig-nav-step {
+  order: 0;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 44px;
+  min-height: 0;
+  padding: 0 var(--s-2);
+  font-size: var(--f-3);
+}
+.gig[data-sideways][data-compact] .gig-nav > button.gig-nav-step:last-of-type {
+  order: 2;
+}
+.gig[data-sideways] .gig-bar {
+  order: 1;
+  flex: var(--side-bar, 3) 1 0;
+  min-width: 0;
+  margin-top: 0;
+}
+.gig[data-sideways][data-compact] .gig-bar[data-look='tall'] button.gig-bar-btn {
+  height: 44px;
+  min-height: 0;
+}
+
+/* A pedal's picture and name grow with its square; one too narrow for "REVERB 1" says REV (Play: data-side-abbr). */
+.gig[data-sideways][data-compact] > .gig-blocks .gig-block-cell .gig-block-name {
+  font-size: clamp(var(--f-3), calc(var(--side-pedal, 80px) * 0.14), var(--f-5));
+}
+.gig[data-sideways][data-compact] .gig-block-icon {
+  width: 1.8em;
+  height: 1.8em;
+  margin-bottom: var(--s-1);
+}
+.gig[data-sideways][data-side-abbr] .gig-block-full {
+  display: none;
+}
+.gig[data-sideways][data-side-abbr] .gig-block-abbr {
+  display: inline;
+}
+
+/* The tuner is one strip over the halves (the note, the needle, the cents), so the squares it is tuned beside stay on the screen. */
+.gig[data-sideways] .gig-tuner .tuner-panel {
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr) minmax(72px, auto);
+  align-items: center;
+  gap: var(--s-4);
+  min-height: 56px;
+  margin: 0 0 8px;
+  padding: var(--s-1) var(--s-4);
+}
+.gig[data-sideways] .gig-tuner .tuner-note .note {
+  font-size: 40px;
+}
+.gig[data-sideways] .gig-tuner .tuner-bar {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+.gig[data-sideways] .gig-tuner .tuner-cents {
+  margin-top: 0;
+}
+
+/* Every preset, opened from the preset's chip: the panel under the bar, from one edge of the screen's safe part to the other and no taller than what is left of the window. */
+.topbar[data-sideways] .preset-menu {
+  left: max(16px, env(safe-area-inset-left, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  width: auto;
+  max-height: calc(100vh - 48px - var(--s-2) - max(8px, env(safe-area-inset-bottom, 0px)));
+  max-height: calc(100dvh - 48px - var(--s-2) - max(8px, env(safe-area-inset-bottom, 0px)));
+}

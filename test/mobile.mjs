@@ -8934,7 +8934,8 @@ export function run(test) {
     assert.match(read('src/App.jsx'), /type="radio"\n\s+name="scene-layout"\n\s+checked=\{sceneLayout === l\.id\}/, 'the browser has no way to choose it')
     assert.match(gig, /data-scene-layout=\{sceneLayout !== 'across' \? sceneLayout : undefined\}/, 'the browser grid is never told')
     assert.match(gig, /sceneCols: sceneColsFor\(null, sceneLayout\)/, 'Fit in the browser still counts two across')
-    assert.match(gig, /sceneOrderFor\(sceneLayout, sceneCount, sceneOrder\)\.map\(\(i\) => \(/, 'the browser draws the scenes in their own order')
+    /* On a phone's browser held on its side (lib/sidewaysPlay) the squares read across, since "down the two sides" is an order for two columns; your own order is still your own. */
+    assert.match(gig, /sceneOrderFor\(sideways && sceneLayout !== 'mine' \? 'across' : sceneLayout, sceneCount, sceneOrder\)\.map\(\(i\) => \(/, 'the browser draws the scenes in their own order')
     assert.match(gig, /onClick=\{\(\) => pickScene\(i\)\}/, 'a moved tile in the browser no longer picks its own scene')
     const css = read('src/styles.css')
     assert.match(css, /\.gig\[data-scene-layout='four'\] \.gig-scenes,\nhtml\[data-rail='on'\] \.gig\[data-scene-layout='four'\] \.gig-scenes \{\n\s+grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/, 'the browser grid is not four across at every width')

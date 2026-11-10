@@ -813,7 +813,42 @@ from its strip wider. A Play hidden under a full-screen tool is asleep
   test/two-sides.mjs, and his first look is the real check.
 
 **A phone held on its side splits in two as well: built 10 November 2026,
-HIS ACCOUNT ONLY until he has seen it.**
+HIS ACCOUNT ONLY, and in the phone app IT CANNOT SHOW UNTIL A BUILD LETS
+PHONES TURN.**
+
+THE PHONE APP IS HELD UPRIGHT ON A PHONE, NATIVELY. iPhones by
+`"orientation": "portrait"` in mobile/app.json (iPads turn through
+`supportsTablet`), Android phones by `holdPhonesUpright()` in
+mobile/plugins/withTabletTurns.js (a short side under 600 dp). No update
+can change that. The picture this started from ("This is the landscape
+view on iPhone") was the WEBSITE in his iPhone's browser: the faint PLAY
+and EDIT tabs behind the version are the browser's, and its buttons were
+two rows of three. It was taken for the app, the split was built in the
+app (#850), and "Landscape mode on iPhone is not working" (the same day,
+on 1.90.26, his own account) was the first anybody knew. Check that a
+screen can be reached before building for it, and say before building
+when it needs a build. His answer to the two ways forward was "Do both":
+
+- **The app:** the native work that lets a phone turn waits as a patch in
+  docs/pending (phone-turns), for a build pair he has to say yes to. In
+  it a phone turns only on Play, on what opens beside Play and in Stage
+  view, for an account the sideways layout is open to, and is upright
+  everywhere else; tablets are as they are.
+- **The website:** the browser's Play on a phone held on its side
+  (src/lib/sidewaysPlay.js, components/SideHead.jsx, Gig.jsx, the last
+  section of styles.css behind `data-sideways`): two halves of square
+  tiles, five buttons in one row, the preset and Setlists over the halves
+  or up in the top bar by the same rule as the app's. A window wider than
+  tall, 720 or more across, 250 to under 500 tall, in a browser that
+  calls itself a phone; never the computer app's window, a laptop or a
+  tablet. Its switch is `PHONE_SIDEWAYS_ON_THE_WEB_FOR_EVERYONE` in
+  src/lib/sidewaysPlay.js, false: his account only
+  (`isAdmin(link.account?.id)`). The browser has its own copy of the
+  squares' rule, held equal to the phone's by a test, and nothing under
+  mobile/ imports it. It is in the web app the computer serves, so a
+  change to it makes a computer release.
+
+What follows is what #850 built in the app, which is right and waiting.
 
 > "This is the landscape view on iPhone ... let's split the screen in half
 > kind of like the iPhone duo even though things will be smaller. It'll
