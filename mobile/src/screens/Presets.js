@@ -9,6 +9,10 @@ import { VP4_NO_NAMES, VP4_RELOAD, VP4_UPDATE_COMPUTER, vp4ComputerCan, vp4Prese
 import { jumpsFor } from '../lib/presetJumps'
 import { knownCount, nameOf, namedSlots, readFailed, refresh, useNames, wantOnly } from '../lib/presetNames'
 import { marksFor, toggleFavourite } from '../lib/lists'
+/* Hold a preset to add it to a setlist (lib/addToSetlist), by the Setlists page's own calls: his account until its switch. */
+import { addTo, createList, listsFor, sourceFor, updateList } from '../lib/lists'
+import { ADDED_MS, ADD_WORDS, COLOUR_AFTER_MS, addChoices, addedSays, landedIn } from '../lib/addToSetlist'
+import { useAddToSetlist } from '../lib/useAddToSetlist'
 import { useStored } from '../lib/store'
 import { loadPreset, useRig } from '../lib/rig'
 import { thud, tick } from '../lib/feedback'
@@ -16,6 +20,8 @@ import { TAG_HOLD, presetTag, presetTarget } from '../lib/colourPage'
 import Note from '../components/Note'
 import Press from '../components/Press'
 import ColourSheet from '../components/ColourSheet'
+import Sheet from '../components/Sheet'
+import Toast, { useStillNews } from '../components/Toast'
 import { tagEdge } from '../components/PresetTag'
 
 const face = Platform.select(mono)
@@ -78,6 +84,13 @@ const STRIDE = ROW + GAP
  * never change what the unit is playing — and the bar stays on the row. The
  * line at the end of the list says so, and so does Settings → Colours,
  * which can tag the loaded preset with a tap.
+ *
+ * AND INTO A SETLIST, by the same hold, for an account lib/addToSetlist is
+ * open to (his, until features ADD_TO_SETLIST_FOR_EVERYONE): there the
+ * hold opens a sheet with his setlists on it, a tap adds the preset to the
+ * end of one (the Setlists page's own addTo and updateList), a line says
+ * "Added to …", and the colour is the sheet's last row. Closed to an
+ * account, the hold is the colour tag and nothing else, as above.
  */
 export default function Presets({ onBack, stay = false }) {
   const preset = useRig(ofPreset)
@@ -119,6 +132,58 @@ export default function Presets({ onBack, stay = false }) {
   const [query, setQuery] = useState('')
   /* The preset whose colour tag the colour sheet is open on, or null. */
   const [painting, setPainting] = useState(null)
+  /*
+   * HOLD A PRESET TO ADD IT TO A SETLIST (lib/addToSetlist). `held` is the
+   * row that was held ({ n, words, target }), kept after the sheet shuts so
+   * its words do not empty out while it slides away; `adding` is whether
+   * the sheet is up; `added` the line that says what happened, for a few
+   * seconds. Nothing to file a setlist under before a unit has answered.
+   */
+  const addOpen = useAddToSetlist() && Boolean(device)
+  const [held, setHeld] = useState(null)
+  const [adding, setAdding] = useState(false)
+  const [added, setAdded] = useState(null)
+  const hold = (row) => {
+    setHeld(row)
+    setAdding(true)
+  }
+  const choices = addOpen && held ? addChoices({ lists: listsFor(device), source: sourceFor(device), favourites, slot: held.n }) : []
+  /* The sheet away, and what happened said: "Added to …" only of a save that reads back with the preset in it. */
+  const done = (ok, name) => {
+    setAdding(false)
+    setAdded({ said: ok ? addedSays(name) : ADD_WORDS.failed, tone: ok ? 'hint' : 'fault', at: Date.now() })
+  }
+  /* The Setlists page's own two calls: the preset on the end of the list's, and the list saved. Starred by the star's own call. */
+  const addHere = (choice) => {
+    if (!held || choice.has) return
+    if (choice.kind === 'starred') {
+      const stars = toggleFavourite(device, held.n)
+      done(Array.isArray(stars) && stars.includes(held.n), 'Starred')
+      return
+    }
+    const list = listsFor(device).find((l) => l.id === choice.id)
+    const after = list ? updateList(device, list.id, { presets: addTo(list.presets, held.n) }) : null
+    done(Boolean(list) && landedIn(after, list.id, held.n), list?.name)
+  }
+  /* A new setlist with the preset in it, made the way the Setlists page makes one; Previous and Next keep following what they followed. */
+  const addToNew = () => {
+    if (!held) return
+    const list = createList(device)
+    const after = list ? updateList(device, list.id, { presets: addTo(list.presets, held.n) }) : null
+    done(Boolean(list) && landedIn(after, list.id, held.n), list?.name)
+  }
+  /* The colour tag, which the hold used to open: after this sheet is away, so one sheet is never opened over another closing. */
+  const colourTimer = useRef(null)
+  useEffect(() => () => clearTimeout(colourTimer.current), [])
+  const toColour = () => {
+    const target = held?.target
+    setAdding(false)
+    if (!target) return
+    clearTimeout(colourTimer.current)
+    colourTimer.current = setTimeout(() => setPainting(target), COLOUR_AFTER_MS)
+  }
+  const addedLeft = added ? Math.max(0, added.at + ADDED_MS - Date.now()) : 0
+  const addedNews = useStillNews(added ? added.said : null, added?.at, addedLeft)
 
   /*
    * Refresh: the computer's list again, and the rows on screen read again.
@@ -433,9 +498,9 @@ export default function Presets({ onBack, stay = false }) {
                   loadPreset(n)
                   if (!stay) onBack?.()
                 }}
-                /* Held, its colour tag — nothing to file one under before a unit has answered (colourPage presetTarget). */
-                onLongPress={target ? () => setPainting(target) : undefined}
-                accessibilityHint={target ? TAG_HOLD.hint : undefined}
+                /* Held, its colour tag — nothing to file one under before a unit has answered (colourPage presetTarget). Or, for an account Add to setlist is open to, the sheet that has both (lib/addToSetlist). */
+                onLongPress={addOpen ? () => hold({ n, words, target }) : target ? () => setPainting(target) : undefined}
+                accessibilityHint={addOpen ? ADD_WORDS.hint : target ? TAG_HOLD.hint : undefined}
                 /* Its colour tag, down the left edge: none for a preset without one.
                    Every row is the same flat glass at the bar's corner, tagged or not. */
                 bar
@@ -466,9 +531,9 @@ export default function Presets({ onBack, stay = false }) {
         }
         /* How a preset gets its colour, at the end of the list where it costs no row its width. */
         ListFooterComponent={
-          shown.length && presetTarget(shown[0]) ? (
+          shown.length && (addOpen || presetTarget(shown[0])) ? (
             <Text style={{ color: color.silkFaint, fontSize: font.small, textAlign: 'center', paddingTop: space.sm }}>
-              {TAG_HOLD.phone}
+              {addOpen ? ADD_WORDS.hold : TAG_HOLD.phone}
             </Text>
           ) : null
         }
@@ -476,6 +541,39 @@ export default function Presets({ onBack, stay = false }) {
 
       {/* The colour sheet every colour is chosen on, here for a preset's tag. */}
       <ColourSheet target={painting} onClose={() => setPainting(null)} />
+
+      {/* A held preset's sheet (lib/addToSetlist): his setlists, Starred and a new one, then the colour the hold used to open. Only in the tree of an account it is open to. */}
+      {addOpen ? (
+        <Sheet open={adding && held !== null} onClose={() => setAdding(false)} title={held?.words || ''}>
+          <View style={{ gap: space.sm }}>
+            <Text accessibilityRole="header" style={{ color: color.silkDim, fontSize: font.small, fontWeight: '700' }}>
+              {ADD_WORDS.section}
+            </Text>
+            {choices.map((c) => (
+              <Press
+                key={c.id}
+                label={c.name}
+                sub={c.sub}
+                disabled={c.has}
+                onPress={() => addHere(c)}
+                accessibilityLabel={c.has ? `${c.name}. ${c.sub}` : `Add to ${c.name}. ${c.sub}`}
+              />
+            ))}
+            <Press label={ADD_WORDS.fresh} sub={ADD_WORDS.freshSub} onPress={addToNew} />
+            {held?.target ? <Press label={ADD_WORDS.colour} onPress={toColour} /> : null}
+          </View>
+        </Sheet>
+      ) : null}
+      {/* "Added to Friday gig", floated over the top of this list for a few seconds (components/Toast), so no row moves under a thumb. */}
+      {addOpen ? (
+        <Toast open={addedNews}>
+          {addedNews ? (
+            <Note tone={added.tone} onDismiss={() => setAdded(null)}>
+              {added.said}
+            </Note>
+          ) : null}
+        </Toast>
+      ) : null}
     </View>
   )
 }

@@ -155,3 +155,18 @@ export const SONG_NOTES_FOR_EVERYONE = false
  * its line in What's new in the same pull request.
  */
 export const THREE_SIDES_FOR_EVERYONE = false
+
+/**
+ * A PRESET INTO A SETLIST FROM ALL PRESETS (lib/addToSetlist;
+ * screens/Presets): hold a preset, pick the setlist, for everyone.
+ *
+ * OFF: his account only. One of the ideas he said yes to on 10 November
+ * 2026 ("yes to all your other non build suggestions as well": "Drag a
+ * preset from All presets into a setlist"), built as a hold and not yet
+ * seen on a screen. It changes what a hold on a preset does: closed to an
+ * account, the hold is the preset's colour tag, exactly as it was; open,
+ * the hold is a sheet with his setlists on it and the colour as its last
+ * row. This is the one line that opens it, with its line in What's new in
+ * the same pull request.
+ */
+export const ADD_TO_SETLIST_FOR_EVERYONE = false
