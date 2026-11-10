@@ -15,7 +15,7 @@ export const WHATS_NEW = [
     "version": "1.90.22",
     "lines": [
       {
-        "text": "In Edit, the knobs now start higher up the screen. Find a control and Amp & pedal names moved under the knobs, and the note about editing over Bluetooth or a USB cable moved to the bottom of the page.",
+        "text": "In Edit, the knobs now start higher up the screen. Find a control and Amp & pedal names moved under the knobs, and the note that used to sit at the top moved to the bottom of the page.",
         "only": null
       },
       {
