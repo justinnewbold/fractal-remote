@@ -100,6 +100,10 @@ import { HOLD_POPUP_KNOBS_FOR_EVERYONE } from './src/lib/features'
 import { handleOn } from './src/lib/sidesSplit'
 import { useSidesSplit } from './src/lib/useSidesSplit'
 import { TIDY_EDIT_FOR_EVERYONE } from './src/lib/features'
+/* Three across on a very wide window (lib/threeSides): a second tool beside the first, his account until its switch. */
+import { THREE_SIDES_FOR_EVERYONE } from './src/lib/features'
+import { thirdOffered, thirdShown, thirdStep, thirdTools, threeSidesOn } from './src/lib/threeSides'
+import { SIDES_TALL } from './src/lib/twoSides'
 import { SONG_NOTES_FOR_EVERYONE, STAGE_VIEW_FOR_EVERYONE } from './src/lib/features'
 import { STAGE_VIEW, STAGE_VIEW_NAME, stageViewOn } from './src/lib/stageView'
 import { notesOffered, songNotesOn } from './src/lib/songNotes'
@@ -378,6 +382,11 @@ export default function App() {
     /* A block's knobs open from a hold (Derek's panel): back is its Close, in the side or where the scenes were. */
     if (blockAt !== null) {
       closeBlock()
+      return true
+    }
+    /* Three sides up (lib/threeSides): back closes the third before the first, as its own Done does. */
+    if (thirdUp) {
+      setThird(null)
       return true
     }
     /* With two sides up: a side filling the window goes back beside Play first, then the side itself closes, as its Done does (lib/twoSides backUnwinds). */
@@ -827,6 +836,47 @@ export default function App() {
   const playBeside = twoSidesUp && !sideFull
   const playHidden = twoSidesUp && sideFull
   const alone = twoSidesUp ? 'stage' : screen
+  /*
+   * THREE ACROSS ON A VERY WIDE WINDOW (lib/threeSides): "Three across on
+   * the big iPad Pro: Play, Edit and a list at once" (his yes of 10
+   * November 2026). His account until features THREE_SIDES_FOR_EVERYONE.
+   * Where the frame has room for three (`three`: a 13-inch iPad Pro on its
+   * side; never an 11-inch, a fold or a phone), a second tool can open
+   * beside the first: `third`, one more word kept here and nothing else.
+   * Everything above and below goes on about the FIRST tool (`screen`,
+   * `sideTool`) and knows nothing of it: the tuner and a held block's knobs
+   * borrow the first side as they always have, and the third stays where
+   * it is meanwhile.
+   *
+   * What happens to it as the first side changes is lib/threeSides
+   * thirdStep, asked while drawing (as the shrink below is, and for the
+   * same reason: an effect would draw one frame of the wrong sides first):
+   * the first side taking the third's tool makes the two change places;
+   * the first side closing gives its place to the third; the window
+   * narrowing to one screen keeps it, to come back with the first; and
+   * leaving Play for another screen forgets it. On a window with room for
+   * two but not three it is simply not drawn (`thirdUp`).
+   */
+  const threeAllowed = sidesAdmin || (sidesAllowed && THREE_SIDES_FOR_EVERYONE)
+  const threeWas = useRef(false)
+  const three = threeAllowed && big && threeSidesOn(frame || {}, threeWas.current, SIDES_TALL)
+  threeWas.current = three
+  const [third, setThird] = useState(null)
+  /* Whether the third side's own list is open (components/Sides draws it): from Add a side, or from the third side's name. */
+  const [thirdList, setThirdList] = useState(false)
+  const thirdSeen = useRef(null)
+  /* Whether the third side was on screen at the last draw: only then does it take the first side's place. */
+  const thirdWasUp = useRef(false)
+  const thirdNow = thirdStep({ third: threeAllowed ? third : null, first: sideTool, screen, wide, shown: thirdWasUp.current, seen: thirdSeen.current })
+  thirdSeen.current = thirdNow.seen
+  if (thirdNow.third !== third) setThird(thirdNow.third)
+  /* The first side closed with a third up: the third takes its place. */
+  if (thirdNow.screen && thirdNow.screen !== screen) setScreen(thirdNow.screen)
+  const thirdUp = thirdShown({ three, beside: playBeside, first: sideTool, third })
+  thirdWasUp.current = thirdUp
+  /* Edit is the third side's tool, on screen: a held block opens there, and its own Save is the one Save. */
+  const thirdEdit = thirdUp && third === 'edit'
+  const closeThird = () => setThird(null)
   /* The tool last open, for Two sides in the top bar with Play alone; and a side that fills the window stops doing so when it closes. */
   useEffect(() => {
     /* A block's knobs are never kept for Two sides: they open by a hold, and close for good. */
@@ -915,6 +965,17 @@ export default function App() {
   /* A tool picked from that list, or brought back by Two sides: the tuner by turning it on, which opens its side (above); the rest by their screen. */
   const openTool = (tool) => (tool === 'tuner' ? writeTuner(true) : setScreen(tool))
   const closeSide = () => setScreen('stage')
+  /* What the third side's list offers (lib/threeSides thirdTools: the first side's list, less the tool the first has, the tuner and anything Edit's own switch keeps shut), and whether Add a side is offered at all. */
+  const thirdToolsOffered = thirdTools({ tools: toolsOffered.filter((t) => t !== 'edit' || BENCH), first: sideTool })
+  const thirdCanOpen = thirdOffered({ three, beside: playBeside, first: sideTool, third, tools: thirdToolsOffered })
+  const openThirdList = () => setThirdList(true)
+  /* The third side goes when what it holds does: Edit's door shut under it, or song notes closed to this account. And its list goes with the room for it. */
+  useEffect(() => {
+    if ((third === 'edit' && editHere.shuts) || (third === 'notes' && !notesAllowed)) setThird(null)
+  }, [third, editHere.shuts, notesAllowed])
+  useEffect(() => {
+    if (thirdList && !thirdUp && !thirdCanOpen) setThirdList(false)
+  }, [thirdList, thirdUp, thirdCanOpen])
   /*
    * WHAT THE TOP BAR CARRIES FOR THE TWO SIDES (`sideLead`), wherever the
    * window shows two (`wide`): on a big screen and on a phone held on its
@@ -945,7 +1006,7 @@ export default function App() {
     return sideTool === 'tuner' ? writeTuner(false) : sideTool === BLOCK ? closeBlock() : closeSide()
   }
   const sideLead = !wide ? null : twoSidesUp ? (
-    <SidesLead frame={frame} tool={sideTool} full={sideFull} playOnRight={playOnRight} big={big} onName={setSideList} onSwap={swapSides} onFull={setSideFull} handle={sideHandle} share={sideShare} />
+    <SidesLead frame={frame} tool={sideTool} full={sideFull} playOnRight={playOnRight} big={big} onName={setSideList} onSwap={swapSides} onFull={setSideFull} handle={sideHandle} share={sideShare} three={thirdUp ? third : null} onAdd={thirdCanOpen ? openThirdList : null} onThird={openThirdList} />
   ) : low ? (
     screen === 'stage' && playHeadUp ? (
       <PlayHead onOpenPresets={demo || link.link === 'connected' ? () => setScreen('presets') : null} onOpenSetlists={() => setScreen('setlists')} />
@@ -1010,7 +1071,8 @@ export default function App() {
     if (screen === BLOCK) setScreen(blockGivesBack(blockLent.current))
   }
   const holdBlock = (eid) => {
-    if (holdOpens === 'edit') return setEditJump({ eid, at: Date.now() })
+    /* Edit beside Play jumps to the block; so does Edit in the third side (lib/threeSides), whatever the first side holds. */
+    if (holdOpens === 'edit' || (holdOpens && thirdEdit)) return setEditJump({ eid, at: Date.now() })
     if (!holdOpens) return undefined
     blockIn.current = holdOpens
     if (holdOpens === 'side' && screen !== BLOCK) {
@@ -1025,8 +1087,8 @@ export default function App() {
   }, [blockAt, blockKept, screen])
   /* Edit closed: the block it was told to open is forgotten, so it opens on nothing next time, as always. */
   useEffect(() => {
-    if (screen !== 'edit') setEditJump(null)
-  }, [screen])
+    if (screen !== 'edit' && third !== 'edit') setEditJump(null)
+  }, [screen, third])
   /*
    * And the new-version note only floats over it while the phone is off the
    * rig. Over a connected rig a download can land mid-song, and the note's
@@ -1940,8 +2002,8 @@ export default function App() {
               onUnlock={() => setBuying(true)}
               onOpenUnit={() => (unitGoes === 'demo' ? setPickUnit(true) : unitGoes === 'which' ? setPickLive(true) : openSettings('link'))}
               unitGoes={unitGoes}
-              /* Edit has its own Save; two on one screen would be one too many. So have a block's knobs, open from a hold (Derek's panel). */
-              saveHere={screen !== 'edit' && blockAt === null}
+              /* Edit has its own Save; two on one screen would be one too many. So have a block's knobs, open from a hold (Derek's panel), and so has Edit in the third side (lib/threeSides). */
+              saveHere={screen !== 'edit' && blockAt === null && !thirdEdit}
               /* The photo beside the pill: Settings → your account, its sheet open. Not on a phone held on its side while the bar's left holds the two sides' names or Play's preset (`low`, `sideLead`): Settings still has it. A big screen has the room, and keeps it. */
               onOpenAccount={low && sideLead ? null : openAccount}
               /* A phone held on its side (`low`, above): the bar a little shorter over Play and its sides. */
@@ -2194,6 +2256,33 @@ export default function App() {
                 onSplitReset={split.reset}
                 onShare={split.set}
                 onLetGo={sideLetsGo}
+                /* The third side, where the window has room for three and one is open (`thirdUp`, above): its tool, its own list, and what the list does. */
+                three={three}
+                third={thirdUp ? third : null}
+                thirdTools={thirdToolsOffered}
+                thirdList={thirdList}
+                onThirdList={setThirdList}
+                onPickThird={setThird}
+                onCloseThird={closeThird}
+                thirdSide={
+                  !thirdUp ? null : third === 'presets' ? (
+                    <Presets onBack={closeThird} stay />
+                  ) : third === 'setlists' ? (
+                    <Setlists onBack={closeThird} notes={notesAllowed} />
+                  ) : third === 'notes' ? (
+                    <NotesSide onBack={closeThird} />
+                  ) : (
+                    <Edit
+                      onBack={closeThird}
+                      jump={editJump}
+                      onOpenGear={() => {
+                        setGearBack('edit')
+                        setScreen('gear')
+                      }}
+                      beside
+                    />
+                  )
+                }
                 side={
                   !twoSidesUp ? null : sideTool === 'presets' ? (
                     /* Beside Play the list stays open after a pick (`stay`), so you can keep browsing while the rig plays it. */

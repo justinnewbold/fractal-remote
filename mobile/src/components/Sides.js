@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { cloneElement, useEffect, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { color, space } from '../lib/theme'
 import { PLAY_ALWAYS, SIDE_LEAST, TOOL_NAMES, TUNER_NARROW_AT, sideWidths } from '../lib/twoSides'
 import { resizeOn } from '../lib/sidesSplit'
+import { THIRD_WORDS, threeOrder, threeWidths } from '../lib/threeSides'
 import EdgeBack from './EdgeBack'
 import Press from './Press'
 import Sheet from './Sheet'
@@ -84,6 +85,27 @@ export default function Sides({
   onSplitReset = null,
   onShare = null,
   onLetGo = null,
+  /*
+   * THREE ACROSS ON A VERY WIDE WINDOW (lib/threeSides; App asks its rule,
+   * for an account it is open to): `third` is the second tool, open beside
+   * the first, and `thirdSide` its screen. Then the window is three even
+   * columns, Play keeping the end it has, the first tool the far end and
+   * the third between them; no handle on either line (a second line to
+   * drag is a later pass), so Swap is the top bar's there. `thirdList` is
+   * whether its own list is open (from Add a side, or the third side's
+   * name in the top bar), with what it offers and does. `three` is
+   * whether the window has room for three at all, for an account it is
+   * open to: only there is that list in the tree. Null and false
+   * everywhere else, and the two sides are drawn as they always were.
+   */
+  three = false,
+  third = null,
+  thirdSide = null,
+  thirdTools = [],
+  thirdList = false,
+  onThirdList = null,
+  onPickThird = null,
+  onCloseThird = null,
   onPick,
   /* Which side's name was tapped in the top bar, for the list: 'tool' | 'play' | null, and how it is set. Both App's (components/SidesLead draws the names). */
   list = null,
@@ -119,6 +141,68 @@ export default function Sides({
       <View style={{ flex: 1 }}>{side}</View>
     </View>
   ) : null
+  /* The third side's own list: what it may hold, and its way out. Drawn over all the sides, with two up (Add a side) or three. */
+  const pickThird = (t) => {
+    onThirdList?.(false)
+    onPickThird?.(t)
+  }
+  const thirdSheet = (
+    <Sheet key="third-list" open={thirdList === true} onClose={() => onThirdList?.(false)} title={THIRD_WORDS.title} note={THIRD_WORDS.note}>
+      <View style={{ gap: space.sm }}>
+        {thirdTools.map((t) => (
+          <Press key={t} label={TOOL_NAMES[t]} tone="signal" on={t === third} onPress={() => pickThird(t)} />
+        ))}
+        {third ? (
+          <Press
+            label={THIRD_WORDS.close}
+            onPress={() => {
+              onThirdList?.(false)
+              onCloseThird?.()
+            }}
+          />
+        ) : null}
+      </View>
+    </Sheet>
+  )
+  /*
+   * THREE UP: the same Play, in the same keyed slot, at a third of the
+   * window; the first tool in its own slot (`side`, so adding or closing
+   * the third never draws it afresh); and the third between them.
+   */
+  if (beside && third && thirdSide) {
+    const wide3 = threeWidths({ width: frame?.width })
+    const edge = DIVIDED[playOnRight ? 'left' : 'right']
+    const column = {
+      play: cloneElement(play, { style: { width: wide3.play } }),
+      tool: (
+        <View key="side" style={[{ width: wide3.tool }, edge]}>
+          <View style={{ flex: 1 }}>{side}</View>
+        </View>
+      ),
+      third: (
+        <View key="third" style={[{ width: wide3.third }, edge]}>
+          <View style={{ flex: 1 }}>{thirdSide}</View>
+        </View>
+      )
+    }
+    const [left, middle, right] = threeOrder(playOnRight)
+    return (
+      <View style={{ flex: 1, flexDirection: 'row' }}>
+        {/* Three children of this row, each with its key, never an array of them: Play is found by its key among the row's own children, as with two sides, so it is never drawn afresh. */}
+        {column[left]}
+        {column[middle]}
+        {column[right]}
+        <Sheet open={list !== null} onClose={() => onList?.(null)} title={list === 'play' ? 'Beside Play' : 'This side'} note={PLAY_ALWAYS}>
+          <View style={{ gap: space.sm }}>
+            {tools.map((t) => (
+              <Press key={t} label={TOOL_NAMES[t]} tone="signal" on={t === tool} onPress={() => pick(t)} />
+            ))}
+          </View>
+        </Sheet>
+        {thirdSheet}
+      </View>
+    )
+  }
 
   return (
     <View style={{ flex: 1, flexDirection: 'row' }}>
@@ -146,6 +230,8 @@ export default function Sides({
           ))}
         </View>
       </Sheet>
+      {/* The third side's list, where Add a side opened it with two sides up (lib/threeSides): only on a window with room for three, for an account it is open to. */}
+      {three ? thirdSheet : null}
     </View>
   )
 }

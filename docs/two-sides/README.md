@@ -246,6 +246,33 @@ docs/two-sides/
 - When the tiles do not fit, the whole Play page scrolls, not each half on its own.
 - Holding an effect is the channel pop-up it always was. The knobs panel needs more room than this window has.
 
+## Three across on a very wide window (10 November 2026)
+
+"Three across on the big iPad Pro: Play, Edit and a list at once" was one of the ideas he said yes to ("yes to all your other non build suggestions as well"). Built with no picture, his account first.
+
+**Where**
+
+- A window wide enough for three sides of an iPhone Pro Max each: 1290 points across under the top bar, and as tall as two sides need. A 13-inch iPad Pro on its side is 1366 and gets it (455, 455 and 456). An 11-inch iPad is 1210 at most and stays two.
+- Never on a fold: the line between two sides is the crease, and a third side would put an edge off it. Never a phone.
+- It goes by the measured room, with the same 40-point memory as the two sides (`threeSidesOn` in mobile/src/lib/threeSides.js), and only where the two sides' own rule said yes first.
+- His account first, behind `THREE_SIDES_FOR_EVERYONE` in mobile/src/lib/features.js. Closed, a 13-inch iPad shows two sides as it did.
+
+**How it works**
+
+- With a tool beside Play, the top bar has Add a side beside that tool's own buttons. It opens a list of what the third side can hold: Edit, Setlists, All presets, Notes, less the one already open. Never the tuner.
+- Three even columns: Play keeps the end it has, the first tool the far end, the third opens between them. Swap moves Play to the other end.
+- The top bar names all three, in the order of the sides. Tap the third's name to change it or close it (Close this side); its own Done closes it too.
+- A tool is never open twice. Pick, for the first side, the tool the third has, and the two change places.
+- Close the first side and the third takes its place: Play and one tool.
+- The tuner and a held block's knobs borrow the first side, as always. The third stays where it is meanwhile. With Edit in the third side, holding a block opens it there.
+- Narrow the window to two sides and the third is put away, to come back with the room. Narrow it to one screen and Play shows; wide again, both tools come back.
+- When the bar is short of room, the first side's Full screen goes first, then Play's own name. Each tool's name and Swap are always there.
+
+**Left for later**
+
+- No handle on the lines with three up: three even columns only. Dragging two lines is its own pass.
+- The tuner beside two tools gets a third of the window, not its narrow column.
+
 ## Decisions only you can make
 
 **1. Derek's mockup switches the panel when you tap another block. Should a tap do that, or only turn the block on and off?**

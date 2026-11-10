@@ -220,7 +220,7 @@ export function run(test) {
     assert.match(app, /const tidyAllowed = sidesAdmin \|\| \(sidesAllowed && TIDY_EDIT_FOR_EVERYONE\) const split = useSidesSplit\(\{ allowed: tidyAllowed, big \}\)/)
     assert.match(app, /const sideHandle = handleOn\(\{ allowed: tidyAllowed, big, tool: twoSidesUp \? sideTool : null, full: sideFull \}\) const sideShare = big \? split\.share : null/, 'a phone on its side is handed a dragged share, or the handle is not asked for by its rule')
     assert.match(app, /const sideLetsGo = \(which\) => \{ if \(which === 'play'\) return sideTool === BLOCK \? undefined : setSideFull\(true\) return sideTool === 'tuner' \? writeTuner\(false\) : sideTool === BLOCK \? closeBlock\(\) : closeSide\(\) \}/, 'a side let go does not do what its own Done, Stop tuner or Close does')
-    assert.match(app, /onFull=\{setSideFull\} handle=\{sideHandle\} share=\{sideShare\} \/>/)
+    assert.match(app, /onFull=\{setSideFull\} handle=\{sideHandle\} share=\{sideShare\} three=\{thirdUp \? third : null\}/)
     assert.match(app, /full: sideFull, share: sideShare \}\)/)
     assert.match(app, /handle=\{sideHandle\} share=\{sideShare\} onSwap=\{swapSides\} onSplitReset=\{split\.reset\} onShare=\{split\.set\} onLetGo=\{sideLetsGo\}/)
     assert.match(app, /<Edit onBack=\{closeSide\} jump=\{editJump\}[\s\S]{0,160}beside=\{playBeside\} \/>/)

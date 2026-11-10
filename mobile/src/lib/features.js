@@ -141,3 +141,17 @@ export const STAGE_VIEW_FOR_EVERYONE = false
  * opens it, with its line in What's new in the same pull request.
  */
 export const SONG_NOTES_FOR_EVERYONE = false
+
+/**
+ * THREE ACROSS ON A VERY WIDE WINDOW (lib/threeSides; components/Sides,
+ * components/SidesLead): Play and two tools at once, for everyone.
+ *
+ * OFF: his account only. One of the ideas he said yes to on 10 November
+ * 2026 ("yes to all your other non build suggestions as well": "Three
+ * across on the big iPad Pro: Play, Edit and a list at once"), built with
+ * no picture and not yet seen on a screen. Closed to an account, a 13-inch
+ * iPad on its side shows two sides, exactly as it did: no Add a side in
+ * the top bar, and nothing kept. This is the one line that opens it, with
+ * its line in What's new in the same pull request.
+ */
+export const THREE_SIDES_FOR_EVERYONE = false
