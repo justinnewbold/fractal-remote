@@ -293,23 +293,60 @@ export default function Edit({ onBack, onOpenGear, jump = null }) {
   const block = chainNow.elsewhere ? null : blocks.find((b) => sameBlock(b, openEid)) || null
 
   /*
-   * And brings the page to it. The block's knobs are drawn under the search
-   * results and the row of block tiles, and on a phone with the keyboard up
-   * that is below the bottom of the screen: "it'll pull up the parameters but
-   * then clicking on it does nothing." It did — out of sight. So a tap on a
+   * And brings the page to it. A search result is tapped with the keyboard
+   * up and the page somewhere else: "it'll pull up the parameters but then
+   * clicking on it does nothing." It did — out of sight. So a tap on a
    * result also scrolls the page to the block it opened, once that block has
    * been laid out, which is the moment its position is known.
+   *
+   * SINCE THE SEARCH BOX WENT TO THE FOOT OF THE PAGE (10 November 2026,
+   * below), the block is ABOVE the results, and nothing over it moves when
+   * they go. So a block already drawn may not be laid out again by a pick
+   * (the same block, or another whose panel is the same height), and the
+   * layout alone would leave the page at the search box with the block out
+   * of sight above it. Where the panel is already on the page (`panelAt`),
+   * the page goes to it as soon as the keyboard is out of the way
+   * (afterKeyboard); a panel drawn for the first time, or moved, still
+   * brings the page itself from its layout, as it always did.
    */
   const page = useRef(null)
   const bringTo = useRef(null)
+  /* Where the open block's panel sits on the page, as last laid out; null with none drawn. */
+  const panelAt = useRef(null)
+  if (!block) panelAt.current = null
   useEffect(() => {
     if (focus?.nonce) bringTo.current = focus.nonce
+    const nonce = focus?.nonce
+    if (!nonce || panelAt.current === null) return undefined
+    return afterKeyboard(() => {
+      if (bringTo.current !== nonce || panelAt.current === null) return
+      bringTo.current = null
+      const y = Math.max(0, panelAt.current - space.md)
+      page.current?.scrollTo({ y, animated: true })
+    })
   }, [focus])
   const panelLaid = (e) => {
+    panelAt.current = e.nativeEvent.layout.y
     if (!bringTo.current) return
     bringTo.current = null
     const y = Math.max(0, e.nativeEvent.layout.y - space.md)
     page.current?.scrollTo({ y, animated: true })
+  }
+  /*
+   * AND THE SEARCH BOX COMES UP TO THE TOP OF WHAT CAN BE SEEN WHILE IT IS
+   * TYPED IN. It is at the foot of the page now, where the keyboard opens.
+   * The page keeps the box clear of the keyboard by itself (the scroll
+   * view's own keyboard insets on an iPhone or iPad; Android resizes the
+   * window), but only just clear, with its results under the keyboard. So
+   * once the keyboard is up, and again whenever the results change, the page
+   * scrolls the box to the top of the room left, and the results are read
+   * between it and the keyboard, as they were when the box was at the top
+   * of the page. `findAt` is where the box sits on the page, as laid out.
+   */
+  const findAt = useRef(null)
+  const toFind = () => {
+    if (findAt.current === null) return
+    page.current?.scrollTo({ y: Math.max(0, findAt.current - space.md), animated: true })
   }
   /*
    * A BLOCK HELD ON PLAY, WITH EDIT BESIDE IT (docs/two-sides, "Derek's
@@ -333,6 +370,8 @@ export default function Edit({ onBack, onOpenGear, jump = null }) {
       contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: space.xxl }}
       keyboardShouldPersistTaps="handled"
       scrollEnabled={!held}
+      /* The page makes room for the keyboard itself, so a box typed in near its foot (Find a control, a knob's number, the rename boxes) is never left under it. iPhone and iPad only: Android resizes the window. */
+      automaticallyAdjustKeyboardInsets
       /*
        * NOT the scroll view's cancel-content-touches rule. It was here for the knobs — the
        * native rule that a scroll may not take a touch a child is tracking —
@@ -425,17 +464,6 @@ export default function Edit({ onBack, onOpenGear, jump = null }) {
 
       <SaveNotes s={saveTo} />
 
-      {viaBle && bleNoteUp ? (
-        <Note
-          onDismiss={() => {
-            setBleNoteUp(false)
-            markBleEditNote()
-          }}
-        >
-          {onCable ? CABLE_EDIT_NOTE : BLE_NOTE}
-        </Note>
-      ) : null}
-
       {error ? (
         <Note tone="fault" onDismiss={() => setError(null)}>
           {error}
@@ -454,32 +482,15 @@ export default function Edit({ onBack, onOpenGear, jump = null }) {
       {!chainAll.length && chain === 'ok' && !chainNow.elsewhere ? <Note>This preset is empty.</Note> : null}
 
       {/*
-        NOT ON A VP4, whose knobs the app cannot read. The box offered "gain,
-        mix, presence…" and answered "No control called “gain” in this preset"
-        over a preset with a Drive in it — untrue: the gain is there, the app
-        just cannot see it. VP4_NO_KNOBS says so once, under the chain, where
-        "Tap a block to open its controls" was. The browser does the same.
+        THE KNOBS COME AS HIGH AS THE CHAIN ALLOWS. "In edit move search bar
+        and amp and pedal names to the bottom. Have the Bluetooth warning also
+        move to the bottom. We want as many knobs visible in edit." (Justin,
+        10 November 2026.) The three sat here, over the chain: about 130
+        points on a phone held upright before the first block tile, and about
+        280 over Bluetooth with its note up. They are under the open block now
+        (Find a control and Amp & pedal names) and at the foot of the page
+        (the note); see below.
       */}
-      {vp4Bench() ? null : (
-        <FindControl
-          blocks={blocks}
-          onError={setError}
-          onPick={(eid, paramId) => {
-            setOpenEid(eid)
-            setFocus({ eid, paramId, nonce: Date.now() })
-          }}
-        />
-      )}
-
-      {/*
-        WHAT A MODEL REALLY IS, one tap from where models are picked: "add the
-        amps and pedals names as a link in the edit area somewhere so the
-        people can quickly see those from that page".
-      */}
-      {onOpenGear ? (
-        <Press label="Amp & pedal names" sub="What each model on your unit really is" height={44} onPress={onOpenGear} />
-      ) : null}
-
       {/* ----------------------------------------------------------- chain */}
       {/*
         THE CHAIN READS LEFT TO RIGHT, the way the signal goes and the way the
@@ -596,6 +607,44 @@ export default function Edit({ onBack, onOpenGear, jump = null }) {
       ) : null}
 
       {/*
+        FIND A CONTROL, UNDER THE KNOBS (moved from over the chain, above).
+        First of what the page keeps under the open block, since it is the
+        one reached for most. Typed in, the page brings it to the top of the
+        room the keyboard leaves (`toFind`), and a result tapped takes the
+        page back up to the block it opened (`panelAt`).
+
+        NOT ON A VP4, whose knobs the app cannot read. The box offered "gain,
+        mix, presence…" and answered "No control called “gain” in this preset"
+        over a preset with a Drive in it — untrue: the gain is there, the app
+        just cannot see it. VP4_NO_KNOBS says so once, under the chain, where
+        "Tap a block to open its controls" was. The browser does the same.
+      */}
+      {vp4Bench() ? null : (
+        <FindControl
+          blocks={blocks}
+          onError={setError}
+          onPick={(eid, paramId) => {
+            setOpenEid(eid)
+            setFocus({ eid, paramId, nonce: Date.now() })
+          }}
+          onLaid={(y) => {
+            findAt.current = y
+          }}
+          onSeek={toFind}
+        />
+      )}
+
+      {/*
+        WHAT A MODEL REALLY IS, one tap from where models are picked: "add the
+        amps and pedals names as a link in the edit area somewhere so the
+        people can quickly see those from that page". Under the knobs with the
+        search box, since 10 November 2026.
+      */}
+      {onOpenGear ? (
+        <Press label="Amp & pedal names" sub="What each model on your unit really is" height={44} onPress={onOpenGear} />
+      ) : null}
+
+      {/*
         NOT ON A VP4: moving, adding and removing its effects, its modifiers
         and renaming are none of them things the app can do on one, and each
         door offered them. One sentence where the three were (lib/vp4-safety
@@ -628,6 +677,24 @@ export default function Edit({ onBack, onOpenGear, jump = null }) {
       */}
       {chainNow.elsewhere || viaBle ? null : <RenameDoor />}
 
+      {/*
+        WHAT EDIT DOES OVER BLUETOOTH (or on the USB cable), at the foot of
+        the page since 10 November 2026, where it was the first thing under
+        the title: under the line that says what needs the computer, so the
+        two are read together, and out of the knobs' way. Up until its cross
+        is pressed, once per device, as before.
+      */}
+      {viaBle && bleNoteUp ? (
+        <Note
+          onDismiss={() => {
+            setBleNoteUp(false)
+            markBleEditNote()
+          }}
+        >
+          {onCable ? CABLE_EDIT_NOTE : BLE_NOTE}
+        </Note>
+      ) : null}
+
       {/* Last on the page, under everything it is about, until its cross is pressed. */}
       {betaNoteUp ? (
         <Note
@@ -655,8 +722,10 @@ const BETA_NOTE =
   'Edit is a beta feature. Some blocks and controls may be missing, or may not change the same way they do on your unit yet. If something looks wrong, tell us with Feedback in Settings.'
 
 /*
- * WHAT EDIT DOES OVER BLUETOOTH, said once at the top, and what it leaves to
- * the computer, said once where the chain editor would be.
+ * WHAT EDIT DOES OVER BLUETOOTH, said once at the foot of the page (at the
+ * top until 10 November 2026: "Have the Bluetooth warning also move to the
+ * bottom"), and what it leaves to the computer, said once where the chain
+ * editor would be, just over it.
  *
  * "I have an FM3 and AM4 I can test on." Over Bluetooth the phone reads and
  * turns the unit's knobs itself (bleWire's edit routes, lib/am4-edit.js, and
@@ -694,6 +763,18 @@ export function BlockPanel({
   onRestoring,
   undoSaid,
   onUndoSaid,
+  /*
+   * DRAWN IN PLAY'S HOLD POP-UP (components/PopKnobs; lib/holdPop): "have
+   * the knobs only pop up above the channels" (Justin, 10 November 2026).
+   * The knobs and their pages, read and written by the same code, and
+   * nothing else (lib/holdPop POP_LEAVES_OUT). The pop-up draws it as the
+   * panel below too, which takes out the name's row, Copy channel and the
+   * on/off button, and hands it no channels, since its own are under the
+   * knobs. What `bare` adds is the rest: no model list and no cab state
+   * are asked for, so no model and no IR picker are drawn, and the Level
+   * is left to Edit. False everywhere else.
+   */
+  bare = false,
   overBle = false,
   /*
    * DRAWN AS DEREK'S PANEL (components/BlockSide: a block held on Play, on a
@@ -784,12 +865,13 @@ export function BlockPanel({
       try {
         const [p, t] = await Promise.all([
           blockParams(eid),
-          blockTypes(block.slug).catch(() => [])
+          /* The pop-up's knobs (`bare`) draw no model, so no list of them is asked for. */
+          bare ? [] : blockTypes(block.slug).catch(() => [])
         ])
         /* After the params, not beside them: both are a read of the whole
            block down one relay. And a cab state that cannot be had is the
            panel as it always was, not an error on screen. */
-        const c = block.slug === 'cab' ? await readCab(() => cabState(eid), p) : null
+        const c = bare ? null : block.slug === 'cab' ? await readCab(() => cabState(eid), p) : null
         if (stop) return
         setParams(p?.named || [])
         setLayout(p?.layout || null)
@@ -805,7 +887,7 @@ export function BlockPanel({
     return () => {
       stop = true
     }
-  }, [eid, block.slug, onError, readAgain, knobless])
+  }, [eid, block.slug, onError, readAgain, knobless, bare])
 
   useEffect(() => () => clearTimeout(undoTimer.current), [])
 
@@ -1307,7 +1389,7 @@ export function BlockPanel({
         return h?.blurb ? <Note>{`${open.label || open.name}: ${h.blurb}${h.tip ? ` ${h.tip}` : ''}`}</Note> : null
       })()}
 
-      {level ? (
+      {level && !bare ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>LEVEL</Text>
           <Text style={{ color: color.silk, fontSize: font.body, fontFamily: face }}>
@@ -2328,6 +2410,33 @@ function Pick({ title, options, chosen, onPick, empty }) {
 }
 
 /**
+ * Runs `run` once the keyboard is out of the way: when it has gone (or after
+ * a moment, if the device never says so), and with none up, a few frames
+ * on, so a block whose panel did move has been laid out first and brought
+ * the page itself. Answers a way to call it off. For a scroll the keyboard's
+ * own leaving would otherwise be fighting.
+ */
+function afterKeyboard(run) {
+  let done = false
+  let gone = null
+  const go = () => {
+    if (done) return
+    done = true
+    gone?.remove()
+    clearTimeout(wait)
+    run()
+  }
+  const up = Keyboard.isVisible()
+  if (up) gone = Keyboard.addListener('keyboardDidHide', go)
+  const wait = setTimeout(go, up ? 600 : 80)
+  return () => {
+    done = true
+    gone?.remove()
+    clearTimeout(wait)
+  }
+}
+
+/**
  * Find a control by name, across every block at once.
  *
  * "Where does the presence live" has one good answer per preset and this is it.
@@ -2351,7 +2460,7 @@ function Pick({ title, options, chosen, onPick, empty }) {
  * the block that opened — with the results still up and the keyboard still
  * over the bottom half, the block opened somewhere nobody could see.
  */
-function FindControl({ blocks, onPick, onError }) {
+function FindControl({ blocks, onPick, onError, onLaid = null, onSeek = null }) {
   const [query, setQuery] = useState('')
   const [index, setIndex] = useState(() => indexFor(blocks))
   const [progress, setProgress] = useState(null)
@@ -2383,6 +2492,32 @@ function FindControl({ blocks, onPick, onError }) {
 
   const reading = progress && progress.done < progress.total
 
+  /*
+   * AT THE FOOT OF THE PAGE, WHERE THE KEYBOARD OPENS (Edit, above). While
+   * the box is typed in, the page is asked to bring it to the top of the
+   * room left (`onSeek`): once the keyboard is up, since only then is that
+   * room known, and again whenever what is drawn under the box changes (the
+   * reading line, the results, the line that says there are none), a frame
+   * later so the page has their height. Not for the tap into an empty box
+   * alone: the keyboard's arrival moves the page once, and with a keyboard
+   * that is not on the glass (an iPad's own) nothing covers the box until
+   * there is something under it. `onLaid` says where the box is.
+   */
+  const [typing, setTyping] = useState(false)
+  const seek = useRef(onSeek)
+  seek.current = onSeek
+  const under = reading ? -2 : needle.length >= 2 && index ? hits.length : -1
+  useEffect(() => {
+    if (!typing) return undefined
+    const up = Keyboard.addListener('keyboardDidShow', () => seek.current?.())
+    return () => up.remove()
+  }, [typing])
+  useEffect(() => {
+    if (!typing || under === -1) return undefined
+    const frame = requestAnimationFrame(() => seek.current?.())
+    return () => cancelAnimationFrame(frame)
+  }, [typing, under])
+
   const pick = (eid, paramId) => {
     Keyboard.dismiss()
     setQuery('')
@@ -2390,10 +2525,12 @@ function FindControl({ blocks, onPick, onError }) {
   }
 
   return (
-    <View style={{ gap: space.sm }}>
+    <View style={{ gap: space.sm }} onLayout={(e) => onLaid?.(e.nativeEvent.layout.y)}>
       <TextInput
         value={query}
         onChangeText={change}
+        onFocus={() => setTyping(true)}
+        onBlur={() => setTyping(false)}
         placeholder="Find a control — gain, mix, presence…"
         placeholderTextColor={color.silkFaint}
         autoCorrect={false}

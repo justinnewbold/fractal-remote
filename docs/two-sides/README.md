@@ -31,6 +31,12 @@ docs/two-sides/
 
 - The app's own top bar (version, the Live pill, Unlock, the speaker and Settings) runs across the whole width above both sides, as it does today.
 - Under it, each side has its own bar with three things: its name, Swap and Full screen. The buttons are big enough for a thumb.
+- **Changed 10 November 2026:** the two sides no longer have a bar each. "The play and two sides buttons take up a whole row on iPad" (Justin), so their buttons are in the app's top bar, after the version (mobile/src/components/SidesLead.js):
+  - With something beside Play: its name (tap for the list) and Full screen over its side, Swap on the line between the sides, and Play's name (tap for the list) over Play's.
+  - With something filling the screen: its name and Two sides.
+  - With Play alone: Two sides, which brings back what was beside it, or opens the list when nothing has been yet.
+  - Full screen is the one word Full over a side under 480 points wide (the Duo's sides, the tuner's narrow column). Where the bar has no room left past Swap for a side's buttons (an iPad with the tuner's column on the right, beside the unit's pill), they sit just before Swap instead.
+  - Play has no Full screen of its own in the bar: the Done of whatever is beside it does that.
 
 **Choosing what goes beside Play**
 

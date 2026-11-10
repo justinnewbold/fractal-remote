@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { color, font, space } from '../lib/theme'
-import { BLOCK, BLOCK_NAME, PLAY_ALWAYS, SIDE_WORDS, TOOL_NAMES, sideWidths } from '../lib/twoSides'
+import { color, space } from '../lib/theme'
+import { PLAY_ALWAYS, TOOL_NAMES, sideWidths } from '../lib/twoSides'
 import EdgeBack from './EdgeBack'
 import Press from './Press'
 import Sheet from './Sheet'
@@ -27,15 +27,18 @@ import Sheet from './Sheet'
  * has, drawn in the other slot. Its own Done closes the side as it always
  * closed the screen, and Play fills the window.
  *
- * THE BARS. Each side has one: its name, Swap and Full screen. Tap a name
- * for the list of what can go beside Play (Edit, Setlists, All presets; Play
- * is never on it, because Play is always the other side, and PLAY's own
- * name gives the same list). Full screen makes that side fill the window,
- * and its bar then says Two sides, which brings the other side back as it
- * was. With Play alone on a wide window its bar says PLAY and Two sides:
- * the tool kept from before comes back, or, with none yet, the list opens.
- * No bar at all on a window that shows one side: every phone held upright,
- * the Duo closed, an iPad upright, is exactly today's screen.
+ * THE TWO SIDES' BUTTONS ARE IN THE APP'S TOP BAR (components/SidesLead),
+ * not here. Each side had a bar of its own over it until 10 November 2026
+ * (its name, Swap, Full screen): "The play and two sides buttons take up a
+ * whole row on iPad" (Justin), and a phone held on its side never had the
+ * height for one. So this frame draws the two sides and nothing over them,
+ * and App hands the same buttons to the top bar: tap a side's name there
+ * for the list of what can go beside Play (Edit, Setlists, All presets, the
+ * Tuner; Play is never on it, because Play is always the other side), which
+ * is the one thing still drawn here, over both sides, opened by App (`list`,
+ * `onList`). On a window that shows one side (every phone held upright, the
+ * Duo closed, an iPad upright) there is nothing in the bar either, and the
+ * screen is exactly what it always was.
  *
  * A SIDEWAYS SWIPE ON PLAY NEVER CLOSES THE SIDE. App's EdgeBack, which
  * wraps every screen, takes a rightward drag as "back", and with a tool open
@@ -63,63 +66,22 @@ export default function Sides({
   frame = null,
   /* What the list offers right now (twoSides sideTools). */
   tools = [],
-  /* A tool kept from before, for Two sides on Play's bar. */
-  kept = null,
   onPick,
-  onSwap,
-  onFull,
-  onPlayFull,
-  onTwoSides,
-  /*
-   * A PHONE HELD ON ITS SIDE (lib/twoSides phoneSidewaysOn): no bar over
-   * either side, since that window is too low for a second row of them.
-   * Their buttons are in the app's top bar instead (components/SidesLead),
-   * so the list is opened from there: `list` is which name was tapped and
-   * `onList` sets it, both App's. False, and left out, everywhere else.
-   */
-  low = false,
-  list: listAsked = null,
+  /* Which side's name was tapped in the top bar, for the list: 'tool' | 'play' | null, and how it is set. Both App's (components/SidesLead draws the names). */
+  list = null,
   onList = null,
   children
 }) {
-  /* Which bar's name was tapped, for the list: 'tool' or 'play', or null. */
-  const [listHere, setListHere] = useState(null)
-  const list = low ? listAsked : listHere
-  const setList = low ? (which) => onList?.(which) : setListHere
-  /* Everybody the sides are not open to: Play, and not one View around it, so their tree is today's. (After the hook above, so its count never changes.) */
+  /* Everybody the sides are not open to: Play, and not one View around it, so their tree is today's. */
   if (!allowed) return children
   const widths = sideWidths({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool })
   const beside = two && Boolean(tool) && !full
   const playHidden = Boolean(tool) && full
-  /* A block's knobs, held open from Play (step 4), are a side too: named Knobs, never on the list, and never full screen, since Play is where the next block is held. */
-  const knobs = tool === BLOCK
-  const toolName = knobs ? BLOCK_NAME : TOOL_NAMES[tool] || ''
 
   const pick = (t) => {
-    setList(null)
+    onList?.(null)
     onPick?.(t)
   }
-
-  /* Play's bar: beside a tool, Swap and Full screen; alone on a wide window, Two sides. */
-  const playBar = two && !low ? (
-    <SideBar
-      name={TOOL_NAMES.play}
-      onName={() => setList('play')}
-      onSwap={beside ? onSwap : null}
-      onFull={beside ? onPlayFull : null}
-      onTwo={beside ? null : kept ? onTwoSides : () => setList('play')}
-    />
-  ) : null
-  /* The tool's bar: beside Play, Swap and Full screen; filling a wide window, Two sides. None on a window too narrow for two, where its Done is the way out. */
-  const toolBar = two && tool && !low ? (
-    <SideBar
-      name={toolName}
-      onName={() => setList('tool')}
-      onSwap={beside ? onSwap : null}
-      onFull={beside && !knobs ? () => onFull?.(true) : null}
-      onTwo={beside ? null : () => onFull?.(false)}
-    />
-  ) : null
 
   const play = (
     <View
@@ -128,7 +90,6 @@ export default function Sides({
       accessibilityElementsHidden={playHidden}
       importantForAccessibility={playHidden ? 'no-hide-descendants' : 'auto'}
     >
-      {playBar}
       {/* The same View around Play in every mode (EdgeBack draws one, and with no onBack takes no touch), so Play is never drawn afresh when a side opens. */}
       <EdgeBack onBack={beside ? swallow : null} style={{ flex: 1 }}>
         {children}
@@ -137,7 +98,6 @@ export default function Sides({
   )
   const other = tool ? (
     <View key="side" style={[beside ? { width: widths.tool } : { flex: 1 }, beside ? DIVIDED[playOnRight ? 'left' : 'right'] : null]}>
-      {toolBar}
       <View style={{ flex: 1 }}>{side}</View>
     </View>
   ) : null
@@ -147,7 +107,7 @@ export default function Sides({
       {/* The tool on the left and Play on the right, or swapped: the same two Views, keyed, so a swap moves them and draws neither afresh. */}
       {playOnRight ? other : play}
       {playOnRight ? play : other}
-      <Sheet open={list !== null} onClose={() => setList(null)} title={list === 'play' ? 'Beside Play' : 'This side'} note={PLAY_ALWAYS}>
+      <Sheet open={list !== null} onClose={() => onList?.(null)} title={list === 'play' ? 'Beside Play' : 'This side'} note={PLAY_ALWAYS}>
         <View style={{ gap: space.sm }}>
           {tools.map((t) => (
             <Press key={t} label={TOOL_NAMES[t]} tone="signal" on={t === tool} onPress={() => pick(t)} />
@@ -167,37 +127,6 @@ const HIDDEN = { width: 0, overflow: 'hidden' }
 const DIVIDED = {
   left: { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: color.rule },
   right: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: color.rule }
-}
-
-/** How tall each side's bar is: its 44-point buttons with a little air. */
-export const BAR_TALL = 52
-const BUTTON = 44
-
-/**
- * One side's bar: its name on the left, which opens the list, and on the
- * right Swap and Full screen, or Two sides when this side fills the window.
- */
-function SideBar({ name, onName, onSwap, onFull, onTwo }) {
-  return (
-    <View
-      style={{
-        height: BAR_TALL,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: space.sm,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: color.rule
-      }}
-    >
-      <Press label={`${name} ▾`} height={BUTTON} labelSize={font.small} onPress={onName} accessibilityLabel={`${name}. Choose what goes beside Play`} />
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        {onSwap ? <Press label={SIDE_WORDS.swap} height={BUTTON} labelSize={font.small} onPress={onSwap} accessibilityLabel="Swap the two sides" /> : null}
-        {onFull ? <Press label={SIDE_WORDS.full} height={BUTTON} labelSize={font.small} onPress={onFull} accessibilityLabel={`${name} fills the screen`} /> : null}
-        {onTwo ? <Press label={SIDE_WORDS.two} height={BUTTON} labelSize={font.small} onPress={onTwo} accessibilityLabel="Show two sides" /> : null}
-      </View>
-    </View>
-  )
 }
 
 /**

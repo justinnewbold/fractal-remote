@@ -62,8 +62,10 @@ const face = Platform.select(mono)
  */
 /* The bar on a phone held on its side (`slim`): less over and under its row, laid over the bar's own style. */
 const SLIM = { paddingVertical: space.xs }
+/* What App puts on the bar's left (`lead`), in the version's place and taking the slack it took; with the version kept in front of it on a big screen, the bar's own gap between them. */
+const LEAD_ROW = { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.md }
 
-export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true, onOpenAccount = null, lead = null, slim = false }) {
+export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true, onOpenAccount = null, lead = null, slim = false, leadKeepsVersion = false, leadWide = 0 }) {
   const unit = useRig(ofDeviceName)
   const unitState = useRig(ofUnitState)
   const blocks = useRig(ofAllBlocks)
@@ -303,7 +305,9 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
   const pillNeeds = 2 + 2 * space.sm + (String(pill.status || '').length + String(pill.unit || '').length) * letter + (demo ? 0 : 2 * space.sm + 10)
   /* And its second line, where the computer is ("on Justins MacBook Pro"), in the system font at micro: 0.56 of a letter errs wide, so a long name moves the photo aside rather than being cut by it. */
   const whereNeeds = 2 + 2 * space.sm + String(pill.where || '').length * 0.56 * font.micro * (fontScale || 1)
-  const besidePhoto = across - stripLeft - stripRight - 2 * space.lg - 3 * space.md - 24 - 22 - (hasOutput ? space.md + 24 : 0)
+  /* And less what the two sides' buttons keep on the bar's left on a big screen (`leadWide`, below: from the bar's edge, so its own left padding is already in it). Nothing on any other window. */
+  const leadKeeps = Math.max(0, (Number(leadWide) || 0) - space.lg)
+  const besidePhoto = across - stripLeft - stripRight - 2 * space.lg - 3 * space.md - 24 - 22 - (hasOutput ? space.md + 24 : 0) - leadKeeps
   const showPhoto = Boolean(onOpenAccount) && avatarShown({ demo, account: photo }) && !canSave && Math.max(pillNeeds, whereNeeds) <= besidePhoto
   /*
    * ON A PHONE HELD ON ITS SIDE (App: lib/twoSides phoneSidewaysOn, his
@@ -314,6 +318,15 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    * sides' names and Swap (components/SidesLead) or Play's preset and
    * Setlists (components/PlayHead). App hands no way to the account then,
    * so the photo gives its room up, as it does for Save.
+   *
+   * AND ON A BIG SCREEN, SINCE 10 NOVEMBER 2026, the two sides' buttons are
+   * in this bar too (App `sideLead`): "The play and two sides buttons take
+   * up a whole row on iPad" (Justin). There is room there, so the version
+   * stays in front of them (`leadKeepsVersion`: he reads it to see which
+   * update he is on), the bar keeps its height, and the photo stays where
+   * the pill's words still fit beside what those buttons keep (`leadWide`,
+   * how far they reach from the bar's left edge: to the far edge of Swap,
+   * which sits on the line between the two sides).
    */
 
   return (
@@ -380,8 +393,15 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
       */}
       {/* Out of the way while Save needs the room; it is in Settings too. */}
       {lead ? (
-        /* A row, so what App puts here is as tall as it is and takes the slack across, as the version did. */
-        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' }}>{lead}</View>
+        /* A row, so what App puts here is as tall as it is and takes the slack across, as the version did. On a big screen the version is still first in it, as wide as its words. */
+        <View style={LEAD_ROW}>
+          {leadKeepsVersion ? (
+            <Text numberOfLines={1} style={{ color: color.silkFaint, fontSize: font.micro, fontFamily: face, letterSpacing: 1 }}>
+              {`v${APP_VERSION}`}
+            </Text>
+          ) : null}
+          {lead}
+        </View>
       ) : canSave ? (
         <View style={{ flex: 1 }} />
       ) : (

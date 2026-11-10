@@ -2190,6 +2190,74 @@ export function run(test) {
     assert.match(flat, /if \(!bringTo\.current\) return bringTo\.current = null/)
   })
 
+  test('Edit keeps its knobs high: Find a control and Amp & pedal names under the open block, the Bluetooth note at the foot', () => {
+    /*
+     * "In edit move search bar and amp and pedal names to the bottom. Have
+     * the Bluetooth warning also move to the bottom. We want as many knobs
+     * visible in edit." (Justin, 10 November 2026.) The three sat over the
+     * chain: about 130 points before the first block tile on a phone held
+     * upright, and about 280 over Bluetooth with its note up.
+     */
+    const edit = withoutComments(read('mobile/src/screens/Edit.js')).replace(/\s+/g, ' ')
+    const body = edit.slice(edit.indexOf('export default function Edit('), edit.indexOf('const BETA_NOTE ='))
+    const at = (piece) => {
+      const i = body.indexOf(piece)
+      assert.ok(i !== -1, `Edit lost: ${piece}`)
+      assert.equal(body.indexOf(piece, i + 1), -1, `Edit draws this twice: ${piece}`)
+      return i
+    }
+    const head = at('<SaveNotes s={saveTo} />')
+    const chain = at('<ChainUpdating chain={chainNow} />')
+    const panel = at('<View onLayout={panelLaid}> <BlockPanel')
+    const tap = at('<Note>Tap a block to open its controls.</Note>')
+    const find = at('{vp4Bench() ? null : ( <FindControl ')
+    const names = at('{onOpenGear ? ( <Press label="Amp & pedal names" sub="What each model on your unit really is" height={44} onPress={onOpenGear} /> ) : null}')
+    const doors = at('{vp4Bench() ? ( <Note tone="hint">{VP4_NO_EDITS}</Note> ) : viaBle ? ( <Note tone="hint">{BLE_NO_CHAIN}</Note> ) : (')
+    const rename = at('{chainNow.elsewhere || viaBle ? null : <RenameDoor />}')
+    const ble = at('{viaBle && bleNoteUp ? ( <Note onDismiss={() => { setBleNoteUp(false) markBleEditNote() }} > {onCable ? CABLE_EDIT_NOTE : BLE_NOTE} </Note> ) : null}')
+    const beta = at('{betaNoteUp ? (')
+    const end = at('</ScrollView>')
+    /* Top to bottom: the title and Save, the chain, the open block, then the search box, the names, the doors, the Bluetooth note and the beta note. */
+    const order = [head, chain, panel, tap, find, names, doors, rename, ble, beta, end]
+    assert.deepEqual([...order].sort((a, b) => a - b), order, 'Edit’s page is not in the order: chain, open block, Find a control, Amp & pedal names, the doors, the Bluetooth note, the beta note')
+    /* Over the chain, only what cannot wait: Save's own lines, a fault, and what the chain's read says. No box, no button, no Bluetooth note. */
+    const over = body.slice(head, chain)
+    assert.ok(!/FindControl|Amp & pedal names|BLE_NOTE|CABLE_EDIT_NOTE|<Press|<TextInput/.test(over), 'something is back between the title and the chain, pushing the knobs down')
+    assert.equal((over.match(/<Note\b/g) || []).length, 4, 'a note was added over the chain (a fault, reading, the read failed and an empty preset are the four)')
+    /* The words are the ones they were. */
+    assert.match(read('mobile/src/screens/Edit.js'), /placeholder="Find a control — gain, mix, presence…"/)
+
+    /*
+     * AND THE SEARCH BOX STILL WORKS FROM DOWN THERE, where the keyboard
+     * opens. The page makes room for the keyboard (the scroll view's own
+     * insets on an iPhone or iPad; Android resizes the window), and while
+     * the box is typed in it is brought to the top of the room left, so its
+     * results are read between it and the keyboard.
+     */
+    assert.match(edit, /<ScrollView ref=\{page\} style=\{\{ flex: 1 \}\} contentContainerStyle=\{\{ padding: space\.lg, gap: space\.lg, paddingBottom: space\.xxl \}\} keyboardShouldPersistTaps="handled" scrollEnabled=\{!held\} automaticallyAdjustKeyboardInsets >/, 'Edit’s page does not make room for the keyboard')
+    assert.match(body, /const findAt = useRef\(null\) const toFind = \(\) => \{ if \(findAt\.current === null\) return page\.current\?\.scrollTo\(\{ y: Math\.max\(0, findAt\.current - space\.md\), animated: true \}\) \}/)
+    assert.match(body, /onLaid=\{\(y\) => \{ findAt\.current = y \}\} onSeek=\{toFind\} \/>/)
+    const box = edit.slice(edit.indexOf('function FindControl('), edit.indexOf('function gearLine('))
+    assert.match(box, /function FindControl\(\{ blocks, onPick, onError, onLaid = null, onSeek = null \}\)/)
+    assert.match(box, /<View style=\{\{ gap: space\.sm \}\} onLayout=\{\(e\) => onLaid\?\.\(e\.nativeEvent\.layout\.y\)\}>/, 'the search box does not say where it is on the page')
+    assert.match(box, /onFocus=\{\(\) => setTyping\(true\)\} onBlur=\{\(\) => setTyping\(false\)\}/)
+    /* Once the keyboard is up, and again whenever what is under the box changes: only while it is typed in. */
+    assert.match(box, /useEffect\(\(\) => \{ if \(!typing\) return undefined const up = Keyboard\.addListener\('keyboardDidShow', \(\) => seek\.current\?\.\(\)\) return \(\) => up\.remove\(\) \}, \[typing\]\)/)
+    assert.match(box, /const under = reading \? -2 : needle\.length >= 2 && index \? hits\.length : -1/)
+    assert.match(box, /useEffect\(\(\) => \{ if \(!typing \|\| under === -1\) return undefined const frame = requestAnimationFrame\(\(\) => seek\.current\?\.\(\)\) return \(\) => cancelAnimationFrame\(frame\) \}, \[typing, under\]\)/)
+
+    /*
+     * A RESULT TAPPED TAKES THE PAGE BACK UP TO ITS BLOCK. The block is over
+     * the results now, so nothing above it moves when they go and a block
+     * already drawn may not be laid out again: where the panel is on the
+     * page already, the page goes to it once the keyboard has gone.
+     */
+    assert.match(body, /const panelAt = useRef\(null\) if \(!block\) panelAt\.current = null/)
+    assert.match(body, /const panelLaid = \(e\) => \{ panelAt\.current = e\.nativeEvent\.layout\.y if \(!bringTo\.current\) return/)
+    assert.match(body, /if \(!nonce \|\| panelAt\.current === null\) return undefined return afterKeyboard\(\(\) => \{ if \(bringTo\.current !== nonce \|\| panelAt\.current === null\) return bringTo\.current = null const y = Math\.max\(0, panelAt\.current - space\.md\) page\.current\?\.scrollTo\(\{ y, animated: true \}\) \}\) \}, \[focus\]\)/, 'a result for a block already on the page leaves the page at the search box')
+    assert.match(edit, /function afterKeyboard\(run\) \{ let done = false let gone = null const go = \(\) => \{ if \(done\) return done = true gone\?\.remove\(\) clearTimeout\(wait\) run\(\) \} const up = Keyboard\.isVisible\(\) if \(up\) gone = Keyboard\.addListener\('keyboardDidHide', go\) const wait = setTimeout\(go, up \? 600 : 80\) return \(\) => \{ done = true gone\?\.remove\(\) clearTimeout\(wait\) \} \}/)
+  })
+
   test('a unit that cannot attach a modifier is told so in a sentence', async () => {
     /*
      * THE BROWSER GOT THIS WRONG TWICE and both ways are worth pinning.
@@ -12562,8 +12630,8 @@ export function run(test) {
     const app = withoutComments(read('mobile/App.js')).replace(/\s+/g, ' ')
     assert.match(app, /const openSettings = \(at = null, sheet = false\) => \{ setSettingsAt\(at\) setAccountSheet\(sheet\) setSettingsVisit\(\(n\) => n \+ 1\) setScreen\('settings'\) \}/)
     assert.match(app, /const openAccount = \(\) => openSettings\('account', true\)/)
-    /* (Not while the bar's left holds the two sides' names or Play's preset on a phone held on its side: `sideLead`, test/two-sides.mjs.) */
-    assert.match(app, /onOpenAccount=\{sideLead \? null : openAccount\}/)
+    /* (Not on a phone held on its side while the bar's left holds the two sides' names or Play's preset: `low`, `sideLead`, test/two-sides.mjs. A big screen keeps it.) */
+    assert.match(app, /onOpenAccount=\{low && sideLead \? null : openAccount\}/)
     assert.match(app, /if \(auth === 'checking'\) return undefined let alive = true ;\(auth === 'out' \? Promise\.resolve\(null\) : keptAccount\(\)\) \.then\(\(who\) => alive && showPhotoFor\(who\)\)/, 'the photo is not for whoever the phone says is signed in, or stays after a sign-out')
     assert.match(app, /openAccountSheet=\{accountSheet\} onAccountSheet=\{\(\) => setAccountSheet\(false\)\}/)
 
@@ -12606,8 +12674,11 @@ export function run(test) {
     assert.match(bar, /const pillNeeds = 2 \+ 2 \* space\.sm \+ \(String\(pill\.status \|\| ''\)\.length \+ String\(pill\.unit \|\| ''\)\.length\) \* letter \+ \(demo \? 0 : 2 \* space\.sm \+ 10\)/, 'the bar no longer measures the pill’s first line')
     assert.match(bar, /const \{ left: stripLeft = 0, right: stripRight = 0 \} = useSafeAreaInsets\(\)/, 'the bar takes its width for the window’s, past a side strip (the Duo closed)')
     assert.match(bar, /const whereNeeds = 2 \+ 2 \* space\.sm \+ String\(pill\.where \|\| ''\)\.length \* 0\.56 \* font\.micro \* \(fontScale \|\| 1\)/, 'the bar no longer measures the pill’s second line, where the computer is')
-    assert.match(bar, /const besidePhoto = across - stripLeft - stripRight - 2 \* space\.lg - 3 \* space\.md - 24 - 22 - \(hasOutput \? space\.md \+ 24 : 0\)/, 'the bar no longer works out what the row leaves the pill beside the photo')
+    /* (Less `leadKeeps`, what the two sides' buttons keep on a big screen's bar: 0 on every phone held upright, test/two-sides.mjs.) */
+    assert.match(bar, /const besidePhoto = across - stripLeft - stripRight - 2 \* space\.lg - 3 \* space\.md - 24 - 22 - \(hasOutput \? space\.md \+ 24 : 0\) - leadKeeps /, 'the bar no longer works out what the row leaves the pill beside the photo')
     assert.match(bar, /const showPhoto = [^\n]*&& !canSave && Math\.max\(pillNeeds, whereNeeds\) <= besidePhoto/, 'the photo shows beside Save, or beside words it cuts')
+    assert.match(bar, /leadWide = 0 \}\)/, 'the bar keeps room for the two sides’ buttons on a window that has none')
+    assert.match(bar, /const leadKeeps = Math\.max\(0, \(Number\(leadWide\) \|\| 0\) - space\.lg\) /)
     const shows = (across, status, unit, withSpeaker, scale = 1, where = '', strip = 0) => {
       const letter = 0.602 * font.small * scale
       const needs = 2 + 2 * space.sm + (status.length + unit.length) * letter + 2 * space.sm + 10

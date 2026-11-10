@@ -12,8 +12,20 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-10",
     "day": "10 November 2026",
-    "version": "1.90.17",
+    "version": "1.90.22",
     "lines": [
+      {
+        "text": "In Edit, the knobs now start higher up the screen. Find a control and Amp & pedal names moved under the knobs, and the note that used to sit at the top moved to the bottom of the page.",
+        "only": null
+      },
+      {
+        "text": "On a tablet or other big screen, hold an effect on Play and its knobs open right there, with its channels above them, while Play stays in front of you. One tap still turns the effect on or off.",
+        "only": null
+      },
+      {
+        "text": "On a tablet or other big screen on its side, the Play and Two sides buttons moved up into the top bar, so Play and whatever is beside it get a whole extra row of screen. Swap sits on the line between the two sides.",
+        "only": null
+      },
       {
         "text": "On a tablet or other big screen, Play’s scenes and effects now fill the whole screen, edge to edge and top to bottom, as big tiles as close to square as they fit.",
         "only": null
