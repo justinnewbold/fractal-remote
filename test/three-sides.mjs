@@ -394,7 +394,7 @@ export function run(test) {
 
   test('three across: his account only, and closed to an account nothing is drawn, offered or kept', () => {
     const features = code(read('mobile/src/lib/features.js'))
-    assert.match(features, /export const THREE_SIDES_FOR_EVERYONE = false\n/, 'three across opened to everyone: that needs Justin’s word, and its What’s new line in the same pull request')
+    assert.match(features, /export const THREE_SIDES_FOR_EVERYONE = true\n/, 'three across is closed to customers again')
     const app = flat(read('mobile/App.js'))
     assert.match(app, /import \{ THREE_SIDES_FOR_EVERYONE \} from '\.\/src\/lib\/features'/)
     /* His account, or everyone the two sides are open to once the switch says so; and only where the two sides' own rule said yes on the measured frame. */

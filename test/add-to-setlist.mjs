@@ -151,7 +151,7 @@ export function run(test) {
     assert.equal(r.addToSetlistOn(), false)
     assert.equal(r.addToSetlistOn({ admin: 'yes' }), false, 'only a plain yes')
     const features = code(read('mobile/src/lib/features.js'))
-    assert.match(features, /export const ADD_TO_SETLIST_FOR_EVERYONE = false\n/, 'Add to setlist opened to everyone: that needs Justin’s word, and its What’s new line in the same pull request')
+    assert.match(features, /export const ADD_TO_SETLIST_FOR_EVERYONE = true\n/, 'Add to setlist is closed to customers again')
     const hook = flat(read('mobile/src/lib/useAddToSetlist.js'))
     assert.match(hook, /export const useAddToSetlist = \(\) => addToSetlistOn\(\{ admin: useBluetoothAdmin\(\), everyone: ADD_TO_SETLIST_FOR_EVERYONE \}\)/)
 

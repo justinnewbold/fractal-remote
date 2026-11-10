@@ -178,7 +178,7 @@ export function run(test) {
 
   test('tidier Edit and the handle: his account until the switch, and wired so everybody else’s Edit and sides are untouched', () => {
     const features = read('mobile/src/lib/features.js')
-    assert.match(features, /^export const TIDY_EDIT_FOR_EVERYONE = false$/m, 'the tidier Edit is not behind its switch, or the switch is open before he has seen it')
+    assert.match(features, /^export const TIDY_EDIT_FOR_EVERYONE = true$/m, 'the tidier Edit is not behind its switch, or is closed to customers again')
     const hook = flat(read('mobile/src/lib/useTidyEdit.js'))
     assert.match(hook, /export const useTidyEdit = \(\) => \{ const his = useBluetoothAdmin\(\) return TIDY_EDIT_FOR_EVERYONE \|\| his \}/, 'the tidier Edit is open to somebody other than his account and the switch')
 
