@@ -227,7 +227,9 @@ walk() {
   press 'Get started' walk-start || return 1
   press 'Try the demo' walk-how || return 1
   press 'Play with .+' walk-pick || return 1
-  press 'Open Play' walk-ready || return 1
+  # The walkthrough's last button, "Let’s go" since 8 November 2026 (it was
+  # "Open Play"); the dot takes either apostrophe.
+  press 'Let.s go' walk-ready || return 1
   local try at
   for try in 1 2 3 4 5; do
     if ui play; then
