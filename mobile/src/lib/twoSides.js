@@ -54,9 +54,9 @@ export const LETS_GO = 40
 export const SIDE_LEAST = 360
 
 /** What the other side may hold, in the order the list offers them. */
-export const TOOLS = ['edit', 'setlists', 'presets', 'tuner']
+export const TOOLS = ['edit', 'setlists', 'notes', 'presets', 'tuner']
 /** Each one's name in the app's top bar and in the list, and Play's. */
-export const TOOL_NAMES = { edit: 'Edit', setlists: 'Setlists', presets: 'All presets', tuner: 'Tuner', play: 'Play' }
+export const TOOL_NAMES = { edit: 'Edit', setlists: 'Setlists', notes: 'Notes', presets: 'All presets', tuner: 'Tuner', play: 'Play' }
 /** The footnote under the list: Play is never on it. */
 export const PLAY_ALWAYS = 'Play is always the other side.'
 /** The two sides' buttons in the top bar, by word. */
@@ -258,9 +258,11 @@ export function sideWidths({ width, left = 0, right = 0, playOnRight = true, too
  * (lib/editDoor `opens`); All presets only where Play offers it (the demo,
  * or the unit answering); the Tuner only where the unit has one and is
  * answering (or the demo); Setlists always, since it never needed the rig.
+ * Notes (a setlist song's lyrics, chords or cues: lib/songNotes) only for
+ * an account that has song notes and with a setlist on (`notesOffered`).
  */
-export function sideTools({ editOpens = false, presetsOffered = false, tunerOffered = false } = {}) {
-  const offered = { edit: editOpens, presets: presetsOffered, tuner: tunerOffered }
+export function sideTools({ editOpens = false, presetsOffered = false, tunerOffered = false, notesOffered = false } = {}) {
+  const offered = { edit: editOpens, presets: presetsOffered, tuner: tunerOffered, notes: notesOffered }
   return TOOLS.filter((t) => (t in offered ? offered[t] === true : true))
 }
 

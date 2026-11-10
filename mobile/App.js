@@ -100,6 +100,12 @@ import { HOLD_POPUP_KNOBS_FOR_EVERYONE } from './src/lib/features'
 import { handleOn } from './src/lib/sidesSplit'
 import { useSidesSplit } from './src/lib/useSidesSplit'
 import { TIDY_EDIT_FOR_EVERYONE } from './src/lib/features'
+import { SONG_NOTES_FOR_EVERYONE, STAGE_VIEW_FOR_EVERYONE } from './src/lib/features'
+import { STAGE_VIEW, STAGE_VIEW_NAME, stageViewOn } from './src/lib/stageView'
+import { notesOffered, songNotesOn } from './src/lib/songNotes'
+import { NotesSide } from './src/components/SongNotes'
+import { listsFor, sourceFor } from './src/lib/lists'
+import { useStored } from './src/lib/store'
 import { TunerSide } from './src/components/Tuner'
 import { PLAY_ON_RIGHT, keepPlayOnRight, readPlayOnRight } from './src/lib/sidesKeep'
 import Paywall from './src/screens/Paywall'
@@ -324,6 +330,8 @@ export default function App() {
     presets: 'stage',
     setlists: 'stage',
     edit: 'stage',
+    notes: 'stage',
+    stageview: 'stage',
     connect: 'settings',
     gear: 'settings',
     log: 'settings',
@@ -801,7 +809,19 @@ export default function App() {
     }
   }, [])
   /* The tool a side can hold, by the screen that is open: Edit only behind the bench's switch, as its route is. The tuner is a screen only here, beside Play (step 3). */
-  const sideTool = BENCH && screen === 'edit' ? 'edit' : screen === 'setlists' || screen === 'presets' || screen === 'tuner' || screen === BLOCK ? screen : null
+  const sideTool = BENCH && screen === 'edit' ? 'edit' : screen === 'setlists' || screen === 'presets' || screen === 'tuner' || screen === 'notes' || screen === BLOCK ? screen : null
+  /*
+   * STAGE VIEW AND SONG NOTES (lib/stageView, lib/songNotes): his account
+   * until their switches in lib/features open them. Stage view is Play's
+   * own screen drawn large (screens/Stage draws it over itself), so it has
+   * a word of its own here and is never a side; Notes is a tool beside
+   * Play, on the list only while a setlist is on. Closed, neither has a way
+   * in anywhere, and a screen left on either goes back to Play (below).
+   */
+  useStored()
+  const stageViewAllowed = stageViewOn({ admin: sidesAdmin, everyone: STAGE_VIEW_FOR_EVERYONE })
+  const notesAllowed = songNotesOn({ admin: sidesAdmin, everyone: SONG_NOTES_FOR_EVERYONE })
+  const stageViewUp = stageViewAllowed && screen === STAGE_VIEW
   const twoSidesUp = sidesAllowed && sideTool !== null && (wide || sideFull)
   /* Play is on screen beside the tool; or kept out of sight at no width while the tool fills the window (Stage `awake`). */
   const playBeside = twoSidesUp && !sideFull
@@ -843,6 +863,10 @@ export default function App() {
     setScreen('stage')
   }
   wasBeside.current = playBeside
+  if ((screen === 'notes' && !(twoSidesUp && notesAllowed)) || (screen === STAGE_VIEW && !stageViewAllowed)) {
+    /* Notes is a screen only in a side too, and Stage view only for an account that has it: anywhere else each is Play. */
+    setScreen('stage')
+  }
   /* Wide again: the tool the shrink put away comes back, if Play is still what is showing; gone to Settings meanwhile, it is left for Two sides. */
   useEffect(() => {
     if (!wide) return
@@ -885,7 +909,8 @@ export default function App() {
   const toolsOffered = sideTools({
     editOpens,
     presetsOffered: demo || link.link === 'connected',
-    tunerOffered: (demo || link.link === 'connected') && caps?.tuner !== false
+    tunerOffered: (demo || link.link === 'connected') && caps?.tuner !== false,
+    notesOffered: notesOffered({ allowed: notesAllowed, source: sourceFor(rigSlug), lists: listsFor(rigSlug) })
   })
   /* A tool picked from that list, or brought back by Two sides: the tuner by turning it on, which opens its side (above); the rest by their screen. */
   const openTool = (tool) => (tool === 'tuner' ? writeTuner(true) : setScreen(tool))
@@ -926,7 +951,11 @@ export default function App() {
       <PlayHead onOpenPresets={demo || link.link === 'connected' ? () => setScreen('presets') : null} onOpenSetlists={() => setScreen('setlists')} />
     ) : null
   ) : playOnScreen ? (
-    <SidesLead big onTwo={sideKept ? () => openTool(sideKept) : () => setSideList('play')} />
+    <>
+      {/* Stage view's way in on a big screen, before Two sides: one press from Play, where the name of a tool sits once a side fills the window. */}
+      {stageViewAllowed ? <Press label={STAGE_VIEW_NAME} height={36} labelSize={font.small} onPress={() => setScreen(STAGE_VIEW)} accessibilityLabel="Open Stage view" style={{ paddingHorizontal: space.sm, paddingVertical: 2 }} /> : null}
+      <SidesLead big onTwo={sideKept ? () => openTool(sideKept) : () => setSideList('play')} />
+    </>
   ) : null
   /* How far along the bar those buttons reach on a big screen (lib/twoSides leadReach), which the bar takes out of the room it offers the account's photo. Nothing on a phone on its side, where the photo gives way to them altogether. */
   const sideLeadWide = big && sideLead ? leadReach({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool: twoSidesUp ? sideTool : null, full: sideFull, share: sideShare }) : 0
@@ -1116,7 +1145,7 @@ export default function App() {
    * playElsewhereOf says which is which).
    */
   /* And not elsewhere while it is beside a tool on two sides (playBeside): Play is showing, so a command is for it, not "Open Play". A tool filling the window over it is the tool's screen, and elsewhere. */
-  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen, shareCard: askHow || askShare }) && !playBeside
+  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen: stageViewUp ? 'stage' : screen, shareCard: askHow || askShare }) && !playBeside
   useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
   /*
    * Where the pill on the bar goes, named once, so the tap and what a screen
@@ -1950,7 +1979,7 @@ export default function App() {
             {/* A downloaded update, offered as a restart. Here, in the column,
                 on every screen but Play; on Play it floats (below). When the
                 app takes it by itself instead, see lib/update-rule.js. */}
-            {playOnScreen ? null : <UpdateReady onWhatsNew={openWhatsNew} />}
+            {playOnScreen || stageViewUp ? null : <UpdateReady onWhatsNew={openWhatsNew} />}
             {/* A computer on another account, said on the stage too and not
                 only in Setup — Waking says it for itself while it is up.
                 Not over Bluetooth, where no computer is being looked for. */}
@@ -1997,7 +2026,7 @@ export default function App() {
             ) : alone === 'presets' ? (
               <Presets onBack={() => setScreen('stage')} />
             ) : alone === 'setlists' ? (
-              <Setlists onBack={() => setScreen('stage')} />
+              <Setlists onBack={() => setScreen('stage')} notes={notesAllowed} />
             ) : BENCH && alone === 'edit' ? (
               <Edit
                 onBack={() => setScreen('stage')}
@@ -2050,6 +2079,8 @@ export default function App() {
                 onPage={setSettingsAt}
                 openAccountSheet={accountSheet}
                 onAccountSheet={() => setAccountSheet(false)}
+                /* Stage view's row under Play screen, for an account that has it. */
+                onStageView={stageViewAllowed ? () => setScreen(STAGE_VIEW) : null}
                 onUnlock={() => setBuying(true)}
                 onSignIn={toSignIn}
                 onMakeAccount={toMakeAccount}
@@ -2168,7 +2199,10 @@ export default function App() {
                     /* Beside Play the list stays open after a pick (`stay`), so you can keep browsing while the rig plays it. */
                     <Presets onBack={closeSide} stay />
                   ) : sideTool === 'setlists' ? (
-                    <Setlists onBack={closeSide} />
+                    <Setlists onBack={closeSide} notes={notesAllowed} />
+                  ) : sideTool === 'notes' ? (
+                    /* The setlist song's lyrics, chords or cues, following the song as Play steps. */
+                    <NotesSide onBack={closeSide} />
                   ) : sideTool === 'tuner' ? (
                     /* Stop tuner turns it off, and the side closes with it. */
                     <TunerSide onClose={() => writeTuner(false)} down={link.down === true && !demo} />
@@ -2204,6 +2238,10 @@ export default function App() {
                 onCloseKnobs={closeBlock}
                 /* Where the hold is the channel pop-up, whether the block's knobs sit over the channels in it (above). */
                 popKnobs={popKnobs}
+                /* Stage view: Play drawn large over itself, with Play's own presses under every button; and whether its Notes button is offered. */
+                stageView={stageViewUp}
+                onCloseStageView={() => setScreen('stage')}
+                songNotes={notesAllowed}
                 /* An error on the stage screen can name the fix for it, and
                    Done comes back here rather than to Setup. */
                 onOpenFix={(id) => {

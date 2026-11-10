@@ -6,6 +6,10 @@ import { slotLabel } from '../lib/device'
 import { SCENES, SONG_BPM, songIn, songsWith, songWords, updateList } from '../lib/lists'
 import { useRig } from '../lib/rig'
 import { tick } from '../lib/feedback'
+import { notesFor } from '../lib/notesHere'
+import { NOTES_ADD, NOTES_NAME, notesPeek } from '../lib/songNotes'
+import Press from './Press'
+import { NotesBox } from './SongNotes'
 
 /**
  * WHAT EACH SONG SETS UP — the browser's SongSetup, here.
@@ -14,10 +18,19 @@ import { tick } from '../lib/feedback'
  * song's preset and then put this scene and this tempo on the unit, so one tap
  * is the whole change between songs. Either half may be left as the preset
  * has it. The rules are shared (lib/setlists.js: songsWith, applySong).
+ *
+ * AND ITS NOTES (`notes`: an account that has song notes, from App, his
+ * until features SONG_NOTES_FOR_EVERYONE): lyrics, chords or cues, typed in
+ * the one box they are typed in everywhere (components/SongNotes NotesBox)
+ * and shown beside Play. Kept on this device, apart from the setlist (lib/
+ * songNotes says why), so nothing about them goes through `save` below.
+ * Without `notes` this draws exactly what it always drew.
  */
-export default function SongSetup({ device, list, nameOf, addressing }) {
+export default function SongSetup({ device, list, nameOf, addressing, notes = false }) {
   const bpmNow = useRig((s) => s.bpm)
   const [typing, setTyping] = useState({})
+  /* The slot whose notes are being typed, or null. */
+  const [noting, setNoting] = useState(null)
   if (!list || !list.presets.length) return null
 
   const save = (slot, patch) => {
@@ -107,9 +120,20 @@ export default function SongSetup({ device, list, nameOf, addressing }) {
               />
               {now !== null ? chip(false, `Use ${now}`, () => save(n, { bpm: now }), 'now') : null}
             </View>
+            {notes ? (
+              /* The song's notes: their first line where it has some, and the box they are typed in. */
+              <Press
+                label={notesFor(device, list.id, n) ? NOTES_NAME : NOTES_ADD}
+                sub={notesPeek(notesFor(device, list.id, n)) || 'Lyrics, chords or cues, shown beside Play'}
+                height={TAP}
+                onPress={() => setNoting(n)}
+                accessibilityLabel={`${notesFor(device, list.id, n) ? NOTES_NAME : NOTES_ADD} for ${nameOf(n) || `preset ${n}`}`}
+              />
+            ) : null}
           </View>
         )
       })}
+      {notes ? <NotesBox open={noting !== null} device={device} listId={list.id} slot={noting} title={noting === null ? '' : nameOf(noting) || ''} onClose={() => setNoting(null)} /> : null}
     </View>
   )
 }

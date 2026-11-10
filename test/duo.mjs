@@ -246,6 +246,7 @@ export function run(test) {
         'mobile/src/components/NameBox.js',
         'mobile/src/components/PasswordBox.js',
         'mobile/src/components/Sheet.js',
+        'mobile/src/components/SongNotes.js',
         'mobile/src/components/SongPicker.js',
         'mobile/src/components/TempoBox.js',
         'mobile/src/components/Tuner.js',

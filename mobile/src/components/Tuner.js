@@ -297,3 +297,59 @@ export function TunerSide({ onClose, down = false }) {
     </View>
   )
 }
+
+/**
+ * THE TUNER AS A STRIP, for Stage view (lib/stageView, components/
+ * StageView): "with the tuner as a strip". The same reading the pane
+ * draws, by the pane's own arithmetic (in tune within three cents, the
+ * needle held at the ends of the bar, green in tune and amber out), laid
+ * along one row `tall` points high: the note, the bar, the cents. No Stop
+ * tuner in it: Stage view's own Tuner button is beside it and turns it
+ * off. With the link down it says NOT CONNECTED where the cents were, as
+ * the pane does.
+ */
+export function TunerStrip({ reading, down = false, tall = 72 }) {
+  const cents = reading?.cents ?? 0
+  const inTune = Math.abs(cents) <= 3
+  const offset = Math.max(-50, Math.min(50, cents))
+  const ink = inTune ? color.ok : color.signal
+  const dot = Math.round(tall * 0.36)
+  return (
+    <View
+      accessibilityLabel={down ? NOT_CONNECTED : reading?.note ? `${reading.note}${reading.octave ?? ''}, ${cents > 0 ? '+' : ''}${cents} cents` : 'Tuner, play a string'}
+      accessibilityLiveRegion="polite"
+      style={{
+        height: tall,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.lg,
+        paddingHorizontal: space.lg,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: paneRim(),
+        backgroundColor: color.panel
+      }}
+    >
+      <Text
+        numberOfLines={1}
+        style={{ minWidth: tall, textAlign: 'center', color: reading?.note ? ink : color.silkFaint, fontSize: Math.round(tall * 0.6), fontFamily: face, fontWeight: '700' }}
+      >
+        {reading?.note || '—'}
+      </Text>
+      <View style={{ flex: 1, height: dot, borderRadius: radius.pill, backgroundColor: 'rgba(0,0,0,0.35)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', justifyContent: 'center' }}>
+        <View style={{ position: 'absolute', left: '50%', width: 2, marginLeft: -1, top: 0, bottom: 0, backgroundColor: color.silkFaint }} />
+        <View style={{ position: 'absolute', left: `${50 + (reading?.note ? offset : 0)}%`, marginLeft: -dot / 2, width: dot, height: dot, borderRadius: dot / 2, backgroundColor: ink }} />
+      </View>
+      <Text
+        numberOfLines={1}
+        style={
+          down
+            ? { minWidth: 120, textAlign: 'right', color: color.fault, fontSize: font.small, fontFamily: face, fontWeight: '700', letterSpacing: 1.5 }
+            : { minWidth: 120, textAlign: 'right', color: color.silk, fontSize: font.lead, fontFamily: face }
+        }
+      >
+        {down ? NOT_CONNECTED : reading?.note ? `${cents > 0 ? '+' : ''}${cents} cents` : 'Play a string'}
+      </Text>
+    </View>
+  )
+}

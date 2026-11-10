@@ -36,6 +36,8 @@ import { HOLD_FOR_KNOBS, panelLane } from '../lib/twoSides'
 import { POP_CHANNEL_TALL, popKnobsFor } from '../lib/holdPop'
 import BlockSide from '../components/BlockSide'
 import PopKnobs from '../components/PopKnobs'
+import StageView from '../components/StageView'
+import { setlistOn } from '../lib/songNotes'
 import {
   arrivedCurrent,
   clearError,
@@ -283,6 +285,20 @@ export default function Stage({
    * was. Where the hold opens the panel (`knobsHere`), no pop-up opens.
    */
   popKnobs = false,
+  /*
+   * STAGE VIEW (lib/stageView, components/StageView): the preset, the scene
+   * and what comes next, big enough to read from a stand, laid over this
+   * page while App's screen says so (his account until features
+   * STAGE_VIEW_FOR_EVERYONE). It is drawn from here, with this screen's own
+   * Previous, Next, scene and tuner calls, so a press there is a press
+   * here. `onCloseStageView` is its Done. And `songNotes` is whether this
+   * account has a setlist song's notes (lib/songNotes, features
+   * SONG_NOTES_FOR_EVERYONE), for its Notes button. Both false, and nothing
+   * below is drawn or done differently.
+   */
+  stageView = false,
+  onCloseStageView,
+  songNotes = false,
   /*
    * THE COMPUTERS ON THE ACCOUNT, from App (link.js's own word for them):
    * every one that answered, the units on them, the one driven, and a pick
@@ -1369,6 +1385,21 @@ export default function Stage({
   useEffect(() => () => sayPlayHead(null), [])
 
   /*
+   * STAGE VIEW GONE WITH THE TUNER ON (its Done, Android's back, the swipe
+   * back, Settings): the tuner goes off with it. In Stage view the tuner is
+   * a strip of its own, and on a big screen Play has no tuner over it at
+   * all (`tunerBeside`), so a tuner left on would be the unit muted with
+   * nothing on screen saying why, as a tuner's side that has gone never
+   * leaves it (lib/twoSides tunerStops).
+   */
+  const stageViewWas = useRef(stageView)
+  useEffect(() => {
+    const was = stageViewWas.current
+    stageViewWas.current = stageView
+    if (was && !stageView && tunerOn) writeTuner(false)
+  }, [stageView])
+
+  /*
    * The Apple Watch's four pages, drawn from this screen and worked by its own
    * buttons: the scenes, the pedals, Previous and Next, the tuner. Nothing at
    * all on a build without the watch in it. See lib/watchBridge.
@@ -2013,7 +2044,8 @@ export default function Stage({
       </Sheet>
 
       {/* Closing the tuner stops it at the unit, which is what the button does. It says NOT CONNECTED itself: nothing here is drawn over it. */}
-      <Tuner on={tunerOn && !tunerBeside} reading={tuning} onClose={() => writeTuner(false)} down={down} />
+      {/* Not over Stage view, which has the tuner as a strip of its own (below). */}
+      <Tuner on={tunerOn && !tunerBeside && !stageView} reading={tuning} onClose={() => writeTuner(false)} down={down} />
 
       {/* The Apple Watch's one-time tip, after the channel tip: a sheet like
           the others, so on the frame with them. */}
@@ -2155,6 +2187,42 @@ export default function Stage({
         <Press label="Look for the computer again" height={44} onPress={() => onLookAgain?.()} />
         {onOpenFix ? <Press label="Troubleshooting" height={44} onPress={() => onOpenFix('connect')} /> : null}
       </Toast>
+
+      {/*
+        STAGE VIEW, over all of it (`stageView`, above): what this screen
+        already knows, drawn big, and this screen's own calls. The same
+        `step` Previous and Next press (so a setlist song is set up, and only
+        the newest of two quick presses), the same landing they are greyed
+        by, the same lines under them, writeScene and writeTuner as the
+        tiles and the Tuner button send them, and the Tuner button only
+        where this unit has one, by the rule the button below uses.
+      */}
+      {stageView ? (
+        <StageView
+          presetName={presetSays}
+          presetSlot={presetSlot || ''}
+          presetNumber={preset?.number ?? null}
+          scene={scenes.hasScenes ? scene : null}
+          sceneNames={sceneNames}
+          sceneCount={scenes.hasScenes ? scenes.count : 0}
+          onScene={writeScene}
+          onStep={step}
+          canPrevious={lastAt !== null}
+          canNext={nextAt !== null}
+          behind={behind}
+          ahead={ahead}
+          setlist={setlistOn(source, lists) !== null}
+          bpm={bpm}
+          tunerOffered={caps?.tuner !== false}
+          tunerOn={tunerOn}
+          tuning={tuning}
+          onTuner={() => writeTuner(!tunerOn)}
+          down={down}
+          dim={DOWN_DIM}
+          notes={songNotes && setlistOn(source, lists) !== null}
+          onDone={onCloseStageView}
+        />
+      ) : null}
     </View>
   )
 }

@@ -116,3 +116,27 @@ export const HOLD_POPUP_KNOBS_FOR_EVERYONE = false
  * it, with its line in What's new in the same pull request.
  */
 export const TIDY_EDIT_FOR_EVERYONE = false
+
+ * STAGE VIEW (lib/stageView, components/StageView): Play's preset, scene and
+ * what comes next, big enough to read from a stand, for everyone.
+ *
+ * OFF: his account only. One of the ideas he said yes to on 10 November
+ * 2026 ("yes to all your other non build suggestions as well"), built with
+ * no picture and not yet seen on a screen. Closed to an account there is no
+ * Stage view button in the top bar and no row for it in Settings. This is
+ * the one line that opens it, with its line in What's new in the same pull
+ * request.
+ */
+export const STAGE_VIEW_FOR_EVERYONE = false
+
+/**
+ * SONG NOTES (lib/songNotes, components/SongNotes): lyrics, chords or cues
+ * for each song in a setlist, beside Play, for everyone.
+ *
+ * OFF: his account only, by the same yes and for the same reason. Closed to
+ * an account there is no Notes on the list of what goes beside Play, no
+ * Notes button on a song in Setlists or in Stage view, and whatever notes
+ * the device holds are left exactly as they are. This is the one line that
+ * opens it, with its line in What's new in the same pull request.
+ */
+export const SONG_NOTES_FOR_EVERYONE = false

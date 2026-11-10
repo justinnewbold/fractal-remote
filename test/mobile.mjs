@@ -10605,7 +10605,7 @@ export function run(test) {
     const app = read('mobile/App.js')
     assert.match(app, /useEffect\(\(\) => watchForUpdates\(\), \[\]\)/, 'nothing starts the background check')
     assert.match(app, /const playOnScreen = screen === 'stage' && !settling/)
-    assert.match(app, /\{playOnScreen \? null : <UpdateReady onWhatsNew=\{openWhatsNew\} \/>\}/, 'the note still pushes the play screen down, or is drawn nowhere else')
+    assert.match(app, /\{playOnScreen \|\| stageViewUp \? null : <UpdateReady onWhatsNew=\{openWhatsNew\} \/>\}/, 'the note still pushes the play screen down, or is drawn nowhere else')
     const inside = app.slice(app.indexOf('<EdgeBack onBack={backFrom}>'), app.indexOf('</EdgeBack>'))
     assert.match(inside, /\{readyOverPlay \? <UpdateReady over onWhatsNew=\{openWhatsNew\} \/> : null\}/, 'the note does not float over the play screen')
     /* Never over a connected rig, where a download can land mid-song and Restart now would come up under a thumb. */
