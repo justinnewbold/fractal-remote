@@ -110,6 +110,7 @@ import Colours, { LookUndo } from './components/Colours'
 import { coloursStatus } from './lib/colourPage'
 import { useLooks } from './lib/useLooks'
 import { useAsks } from './lib/asks'
+import { SIDEWAYS_ASKS, phoneBrowser, webSidewaysOn } from './lib/sidewaysPlay'
 import { useHeldLink } from './lib/useHeldLink'
 import {
   SIZES,
@@ -1503,6 +1504,15 @@ export default function App() {
    * takes the LEVEL bar away and shortens the pedals, as the phone app's Play.
    */
   const phoneScreen = (narrow || deviceKind() === 'phone') && !inDesktopApp()
+  /*
+   * A PHONE'S BROWSER, THE PHONE HELD ON ITS SIDE (lib/sidewaysPlay): Play in
+   * two halves of square tiles. The window is asked the way `narrow` is; the
+   * phone is the browser's own word for itself, never the page's role (the
+   * demo borrows the computer's), and never the computer app's own window.
+   * His account only until the switch in that file says everyone.
+   */
+  const lowWide = useAsks(SIDEWAYS_ASKS)
+  const [headSlot, setHeadSlot] = useState(null)
 
   /*
    * Which screens this viewport reaches.
@@ -1768,7 +1778,11 @@ export default function App() {
    */
     /* A row of tabs is worth a row of the screen only when it can take you
      somewhere. On a phone it cannot: Play is the only screen there is. */
-  const tabsWorthShowing = status === 'live' && views.length > 1
+  /* A phone on its side, in its browser, for an account that is let in (lib/sidewaysPlay). */
+  const sidewaysPlay = webSidewaysOn({ lowWide, phone: phoneBrowser({ desktopApp: inDesktopApp() }), accountId: link.account?.id })
+  /* And Play is the screen on show: the bar slims, and the tab row gives its height to the squares, since Play's own Edit button is the way to Edit there (the row is back on Edit, and stays wherever Play has no Edit button). */
+  const sideUp = sidewaysPlay && status === 'live' && view === 'play'
+  const tabsWorthShowing = status === 'live' && views.length > 1 && !(sideUp && chainShows)
   const resize = (by) => {
     const next = clampSize(size + by)
     if (next === size) return
@@ -4656,7 +4670,7 @@ export default function App() {
   )
 
   return (
-    <div className="shell">
+    <div className="shell" data-sideways={sideUp ? 'yes' : undefined}>
       {/*
         NOTHING RENDERS ABOVE THE BAR, which is what lets the bar be pinned.
 
@@ -4719,6 +4733,8 @@ export default function App() {
         link={shownLink}
         onLinkAction={linkAction}
         saveUp={saveUp}
+        sideways={sideUp}
+        headSlot={setHeadSlot}
       >
         {status === 'live' && !onRealVp4 ? (
           <SaveBar
@@ -5146,6 +5162,9 @@ export default function App() {
           }
           /* A phone, or a phone-sized screen (phoneScreen): the pedals shorter than the scenes, three-letter names and no LEVEL bar, as the phone app's Play. */
           phoneScreen={phoneScreen}
+          /* On its side, in a phone's browser: two halves of squares, and the place in the bar for the preset's row. */
+          sideways={sidewaysPlay}
+          headSlot={headSlot}
           /* The hold tip's card over the pedals (components/Coach): due, remembered on Try it or the hold itself, and put away on Skip or Got it. */
           holdTip={holdTipDue}
           onHoldTipSeen={rememberHoldNote}

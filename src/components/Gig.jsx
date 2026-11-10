@@ -76,6 +76,8 @@ import { Tuner } from './Console'
 import TapTempo from './TapTempo'
 import Sheet from './Sheet'
 import { sizeVars, SIZES, fitTiles, sceneColsFor, sceneOrderFor } from '../lib/gigSize'
+import { webSidewaysPlan, SIDE_GAP, SIDE_HEAD, SIDE_HEAD_ROW, SIDE_NAME_ROOM } from '../lib/sidewaysPlay'
+import SideHead from './SideHead'
 import { deviceNoun } from '../../shared/device-word.mjs'
 import { slotCount, slotLabel, stepSlot } from '../lib/slots'
 /* Play's words, the phone's too (shared/play-words.mjs). */
@@ -185,6 +187,15 @@ export default function Gig({
    * three-letter names. Everywhere else keeps what it had.
    */
   phoneScreen = false,
+  /*
+   * A phone's browser with the phone held on its side, for an account that
+   * is let in (App `sidewaysPlay`, lib/sidewaysPlay): Play in two halves of
+   * square tiles, the scenes left and the chain right, and the five buttons
+   * in one row along the bottom. False, and this is the Play it always was.
+   */
+  sideways = false,
+  /* The place in the top bar for the preset's name and Setlists, when moving them up there buys bigger squares (TopBar `headSlot`). */
+  headSlot = null,
   /*
    * The tip about holding a pedal is due (App holdTipDue: never seen, a unit
    * whose blocks have channels, and Play's other one-time notes put away).
@@ -1168,6 +1179,95 @@ export default function Gig({
     }
   }, [fit, hasScenes, sceneCount, fitCount, sceneLayout])
 
+  /*
+   * ON ITS SIDE: THE SQUARES (lib/sidewaysPlay webSidewaysPlan).
+   *
+   * Measured the way Fit is: the window's height, less everything from the
+   * top of the page to the top of the two headings, less the bottom row. The
+   * plan is worked out as if the preset's row were in the page, and says
+   * whether it belongs in the top bar instead (`headUp`), so while it is up
+   * there its height is taken back off what was measured. The headings' own
+   * margin is the room the plan left over, shared above and below, and is
+   * not part of what is measured.
+   */
+  const [sidePlan, setSidePlan] = useState(null)
+  useEffect(() => {
+    if (!sideways) {
+      setSidePlan(null)
+      return undefined
+    }
+    let raf = 0
+    const measure = () => {
+      const el = gigRef.current
+      /* SCENES, or CHAIN where there are no scenes: the two are one row. */
+      const top = el?.querySelector(':scope > .gig-head')
+      if (!el || !top) return
+      const viewport = window.visualViewport?.height || window.innerHeight
+      const foot = footRef.current
+      /* The bottom row and the gap over it; its margin beyond that gap is room the plan left over, and not measured. */
+      const footTall = foot ? foot.offsetHeight + SIDE_GAP : 0
+      const headTop = top.getBoundingClientRect().top + window.scrollY - (parseFloat(getComputedStyle(top).marginTop) || 0)
+      const upNow = el.dataset.headUp === 'yes'
+      const room = viewport - headTop - footTall - (upNow ? SIDE_HEAD_ROW : 0)
+      const next = webSidewaysPlan({
+        width: el.clientWidth,
+        /* Never nothing: with the tuner up there may be no room left at all, and that is a page that scrolls, not a page not measured yet. */
+        room: Math.max(1, room),
+        scenes: hasScenes ? sceneCount : 0,
+        pedals: fitCount,
+        canHeadUp: !!headSlot,
+        headWas: upNow
+      })
+      if (next) {
+        /* What the plan leaves over, down the page: half of it goes above the halves. */
+        const rows = (n, cols) => (cols ? Math.ceil(n / cols) : 0)
+        const tall = (n, cols, side) => (cols ? rows(n, cols) * side + (rows(n, cols) - 1) * SIDE_GAP : 0)
+        const used = SIDE_HEAD + Math.max(tall(hasScenes ? sceneCount : 0, next.sceneCols, next.scene), tall(fitCount, next.chainCols, next.pedal))
+        const spare = next.scrolls ? 0 : Math.max(0, Math.floor(room + (next.headUp ? SIDE_HEAD_ROW : 0) - used))
+        next.above = Math.floor(spare / 2)
+        next.below = spare - next.above
+      }
+      const same = (a, b) => (!a || !b ? a === b : Object.keys(b).every((k) => a[k] === b[k]))
+      setSidePlan((was) => (same(was, next) ? was : next))
+    }
+    const schedule = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(measure)
+    }
+    schedule()
+    window.addEventListener('resize', schedule)
+    window.visualViewport?.addEventListener('resize', schedule)
+    const watch = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
+    for (let box = gigRef.current; watch && box && box !== document.documentElement; box = box.parentElement) {
+      watch.observe(box)
+    }
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', schedule)
+      window.visualViewport?.removeEventListener('resize', schedule)
+      watch?.disconnect()
+    }
+  }, [sideways, hasScenes, sceneCount, fitCount, headSlot])
+  /* The preset's row is in the top bar: only while the bar has the place for it. */
+  const headUp = sideways && !!sidePlan?.headUp && !!headSlot
+  /* The preset's name and Setlists on a phone on its side, wherever they are drawn. */
+  const sideHead = sideways ? (
+    <SideHead
+      up={headUp}
+      name={nameShown}
+      slot={Number.isInteger(here) ? slotLabel(here, capabilities?.presets?.addressing) : null}
+      count={slotCount(capabilities)}
+      tag={presetTag(preset?.number)}
+      said={`Preset ${Number.isInteger(here) ? here : '--'} — ${nameShown} — choose another preset`}
+      onPickPreset={onPickPreset}
+      setlist={order ? sourceName : 'All'}
+      setlistOn={!!order}
+      setlistWhere={sourceWhere}
+      setlistSaid={sourceAria}
+      onSetlists={() => setSetlistOpen(true)}
+    />
+  ) : null
+
   return (
     /*
      * At the smallest step this is not just smaller tiles: the chrome above
@@ -1181,9 +1281,13 @@ export default function Gig({
       ref={gigRef}
       className="gig"
       onClickCapture={keepFocusOnPlay}
-      data-compact={compact ? 'yes' : undefined}
-      data-fit={fit ? 'yes' : undefined}
+      data-compact={compact || sideways ? 'yes' : undefined}
+      data-fit={fit && !sideways ? 'yes' : undefined}
       data-scene-layout={sceneLayout !== 'across' ? sceneLayout : undefined}
+      /* A phone on its side: two halves of squares (styles.css). `data-one` when there are only scenes or only pedals, and the one grid has the whole row. */
+      data-sideways={sideways ? 'yes' : undefined}
+      data-head-up={headUp ? 'yes' : undefined}
+      data-one={sideways && sidePlan && !sidePlan.beside ? 'yes' : undefined}
       /* On a phone, Play as the phone app draws it (phoneScreen): the pedals a little shorter than the scenes, and no LEVEL bar. */
       data-phone={phoneScreen ? 'yes' : undefined}
       /* Three letters on a phone at every size, as the phone app ("DRV, AMP");
@@ -1193,13 +1297,26 @@ export default function Gig({
       data-fx-abbr={phoneScreen || (fitVars?.fxCols ?? SIZES[fit ? 0 : size].fx) >= 4 ? 'yes' : undefined}
       /* A phone's compact pedal too short for its picture and a 15px name (PEDAL_NAME_ROOM). */
       data-fx-tight={pedalTight ? 'yes' : undefined}
+      /* On its side, a square too narrow for "REVERB 1" says REV, as an upright phone's tiles do. */
+      data-side-abbr={sideways && sidePlan && sidePlan.pedal < SIDE_NAME_ROOM ? 'yes' : undefined}
       /* NOT CONNECTED: the stylesheet dims the tiles and the buttons that send, by opacity alone. */
       data-link-down={down ? 'yes' : undefined}
       style={{
         ...sizeVars(fit ? 0 : size),
         ...(fitVars
           ? { '--gig-fit-tile': `${fitVars.tile}px`, '--gig-fx-cols': String(fitVars.fxCols) }
-          : {})
+          : {}),
+        ...(sideways && sidePlan
+          ? {
+              '--side-scene': `${sidePlan.scene}px`,
+              '--side-pedal': `${sidePlan.pedal}px`,
+              '--side-scene-cols': String(sidePlan.sceneCols || 1),
+              '--side-chain-cols': String(sidePlan.chainCols || 1),
+              '--side-above': `${sidePlan.above || 0}px`,
+              '--side-below': `${sidePlan.below || 0}px`
+            }
+          : {}),
+        ...(sideways ? { '--side-bar': String((tunerHere ? 1 : 0) + (onChain ? 1 : 0) + 1) } : {})
       }}
     >
       {/* The first thing on the first screen, as the phone's: where an eye starts. */}
@@ -1269,6 +1386,10 @@ export default function Gig({
         </p>
       ) : null}
 
+      {/* On its side the preset's name and Setlists are one short row (SideHead), here or up in the top bar. */}
+      {sideways && !headUp ? sideHead : null}
+      {sideways && headUp ? createPortal(sideHead, headSlot) : null}
+      {sideways ? null : (
       <div className="gig-preset">
         {/*
           A tile, like the scenes under it, under the phone's line.
@@ -1316,6 +1437,7 @@ export default function Gig({
           and the tile row is the one a thumb crosses between songs.
         */}
       </div>
+      )}
 
       {/* Named. A thin coloured line under the preset tile was the one thing on
           Play that never said what it was. Not on a phone (meterShown). */}
@@ -1418,7 +1540,7 @@ export default function Gig({
         <div className="gig-scenes" role="group" aria-label="Scenes" ref={scenesRef}>
           {/* Drawn in the layout's order; each tile is still its own scene —
               "5" says 5, wears 5's colour and picks scene 5 wherever it sits. */}
-          {sceneOrderFor(sceneLayout, sceneCount, sceneOrder).map((i) => (
+          {sceneOrderFor(sideways && sceneLayout !== 'mine' ? 'across' : sceneLayout, sceneCount, sceneOrder).map((i) => (
             <button
               key={i}
               className={`gig-scene ${i === scene ? 'current' : ''} ${
@@ -1654,6 +1776,8 @@ export default function Gig({
             {behind.shown}
           </span>
         </button>
+        {/* On its side Setlists is in the preset's row (SideHead), and these two stand at the ends of one row of five. */}
+        {sideways ? null : (
         <button
           type="button"
           className={`gig-nav-source ${order ? 'on' : ''}`}
@@ -1669,6 +1793,7 @@ export default function Gig({
           <span className="gig-nav-source-name">{order ? sourceName : 'All'}</span>
           {sourceWhere ? <span className="gig-nav-source-pos mono">{sourceWhere}</span> : null}
         </button>
+        )}
         <button className="gig-nav-step" onClick={() => step(1)} disabled={landing(1) === null && !(noSlotSteps && !order)} aria-label={ahead.said}>
           Next ›
           {/* What Next will load. Always drawn, blank until a name is known, so nothing moves when one arrives. */}

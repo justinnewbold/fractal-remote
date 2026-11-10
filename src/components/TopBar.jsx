@@ -77,6 +77,14 @@ export default function TopBar({
   showPreset = true,
   /* Save, Saving… or ✓ Saved is in the bar: on a phone the version gives it the room, as the phone's does. */
   saveUp = false,
+  /*
+   * A phone's browser on its side, with Play on show (App `sideUp`,
+   * lib/sidewaysPlay): the bar is slimmer, and `headSlot` (a ref) is the
+   * place Play may draw the preset's name and Setlists into, beside the
+   * version, when that buys it bigger squares (components/SideHead).
+   */
+  sideways = false,
+  headSlot = null,
   children
 }) {
   const demo = isDemo()
@@ -141,6 +149,7 @@ export default function TopBar({
     <div className="topbar"
       data-status={demo ? 'demo' : lampState}
       data-preset={presetInBar ? 'yes' : 'no'}
+      data-sideways={sideways ? 'yes' : undefined}
     >
       <div className="topbar-row">
         {/*
@@ -164,6 +173,8 @@ export default function TopBar({
             v{VERSION}
           </span>
         )}
+        {/* Empty until Play puts its preset row here; nothing at all anywhere but a phone on its side. */}
+        {sideways ? <span className="topbar-sidehead" ref={headSlot} /> : null}
 
         {/*
           THE PILL: WHICH UNIT, ON WHICH COMPUTER, AND THE WAY TO ANOTHER.
