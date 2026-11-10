@@ -12,7 +12,7 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-09",
     "day": "9 November 2026",
-    "version": "1.90.15",
+    "version": "1.90.16",
     "lines": [
       {
         "text": "Getting connected is simpler: Connect a computer is now three numbered steps, and the Bluetooth and Raspberry Pi setup guides are short pages with links to what to buy.",
