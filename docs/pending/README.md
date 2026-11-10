@@ -20,8 +20,10 @@ those must still pass the other.
 
 | Patch | What it does | Moves |
 |---|---|---|
+| `phone-turns.patch` | Lets a phone be turned on its side: on Play, on what opens beside Play and in Stage view, for an account the sideways layout is open to (his, until `PHONE_SIDEWAYS_FOR_EVERYONE`). Every other page, every other account and every tablet are as they were. Adds expo-screen-orientation. | **android and ios** (the watch line does not move) |
 
-Nothing is waiting. android-usb-midi was applied on 4 November 2026 in the
+One patch is waiting, phone-turns (10 November 2026); its section is next.
+Before it, android-usb-midi was applied on 4 November 2026 in the
 build pull request for the Android build 1.89.36 (an Android build on its
 own, Justin's "You are good to do the android build on expo go as soon as
 it's ready", since it moves the android line alone), and its file deleted
@@ -37,6 +39,188 @@ deleted in the same change. The four before it
 (watch-name, r8, watch-channels and photo-picker) were applied on 23 October
 2026 for the build pair after 1.87.52 (1.88.0). What each one carried, and
 what goes with it that was not in it, is in its section below.
+
+**phone-turns.patch, and why it waits.** Justin, 10 November 2026, with two
+screenshots of his iPhone held on its side and the app still upright:
+"Landscape mode on iPhone is not working." It could not: the split for a
+phone on its side (lib/twoSides `phoneSidewaysOn`, lib/sidewaysPlay, merged
+that day in #850) was drawn for a window no phone could ever give it. An
+iPhone was held upright by app.json's `"orientation": "portrait"`, and an
+Android phone by plugins/withTabletTurns, which put it back upright at
+every configuration change, and a phone turning is one. (His first
+landscape screenshot, the one the layout was drawn from, was the website in
+the phone's browser.) Asked whether to make the build or do the website
+only, he said: "Do both." Letting a phone turn is in the built-in part of
+the app on both phones, so it waits here for his yes to the build.
+
+**One thing about the patch file itself.** Its first change to
+mobile/app.json starts on the `"orientation"` line with no lines of context
+before it, by hand: the line before it is the app's version, and a patch
+that quotes the version stops applying at the next version number. If the
+patch is ever remade with `git diff`, take those leading lines out again
+(the hunk's header is then `@@ -7,4 +7,4 @@`).
+
+**What it does, in the app.** A phone starts upright and stays upright,
+except that on Play, on what opens beside Play (Edit, Setlists, All
+presets, the tuner in a side, Notes, a held block's knobs) and in Stage
+view it may be held on either side as well as upright, never upside down.
+The startup card, the walkthrough, the sign-in, the purchase page, Settings
+and every page in it, Bluetooth, Troubleshooting, the reports, Gear, How do
+you connect to your unit? and the sharing card stay upright: opening
+Settings from Play on its side turns the screen upright, and going back
+lets it turn again. Only for an account the sideways layout is open to
+(App.js `sidewaysAllowed`: his, until `PHONE_SIDEWAYS_FOR_EVERYONE`), so
+for every customer the app is exactly as it was until that switch opens.
+Only on a phone long enough to split (720 points across on its side: not an
+iPhone SE or a 13 mini), which otherwise stays upright rather than show
+Play stretched. A tablet (an iPad, or a short side of 600 or more) is asked
+for nothing and turns every way, as before. The rule is
+mobile/src/lib/phoneTurns.js, and test/phone-turns.mjs runs it over phones,
+tablets, every screen and both kinds of account.
+
+**What is in it.**
+
+- **The package**, expo-screen-orientation `~57.0.3` (what `npx expo
+  install` gives for Expo 57), in mobile/package.json and
+  mobile/package-lock.json. It is the only way the app's own code can say
+  which way up the screen may be.
+- **The iPhone** (mobile/app.json). `"orientation"` goes from `"portrait"`
+  to `"default"`, and `ios.infoPlist` lists the iPhone's ways itself:
+  `UISupportedInterfaceOrientations` is Portrait, LandscapeLeft and
+  LandscapeRight, with no upside down (Expo's own "default" would add it).
+  The package's plugin, with `initialOrientation: "PORTRAIT_UP"`, writes
+  `EXDefaultScreenOrientationMask` = `UIInterfaceOrientationMaskPortrait`,
+  so an iPhone opens upright before any of the app's code runs. An iPad
+  keeps `UISupportedInterfaceOrientations~ipad` with all four, which Expo
+  writes for `supportsTablet` as it did, and `UIRequiresFullScreen` stays
+  false, which is what makes iPadOS ignore an app's orientation locks
+  altogether. `EXDefaultScreenOrientationMask~ipad` =
+  `UIInterfaceOrientationMaskAll` is a second guard for the iPad: if that
+  start-upright key were ever honoured on one, its own key says every way.
+- **Android phones** (mobile/plugins/withTabletTurns.js). The Kotlin it
+  writes into MainActivity no longer puts a phone upright at every
+  configuration change. A tablet is as before: whatever was asked is set
+  back to "unspecified", which is what Google Play asked for in October
+  2026 and is unchanged. A phone is put upright only while nothing has been
+  asked ("unspecified": every launch, every new MainActivity), and left
+  alone once the app has asked. The app asks "portrait" for upright and
+  "user" where it may turn (the phone's own choice: it follows the phone's
+  auto-rotate switch and is never upside down), and never "unspecified"
+  from a phone, which the Kotlin would take for nothing asked. The manifest
+  is as it was: no `android:screenOrientation` on MainActivity.
+- **The app's own code.** lib/phoneTurns.js (the rule, pure),
+  lib/turnScreen.js (the one file that asks the phone, through expo's
+  `requireOptionalNativeModule`, so a copy without the package logs one
+  line and carries on) and components/PhoneTurns.js (draws nothing; mounted
+  once in App.js over every screen; asks only when the answer changes, asks
+  nothing on a tablet, and asks Android again when the app comes back to
+  the front, since a new MainActivity starts upright).
+- **Two corrections to the sideways layout** that real phones need. An
+  Android phone on its side keeps its camera clear down ONE side; the rule
+  and the line between the sides were worked out as for a fold (the middle
+  of the whole screen), which cut one side short and kept a 780-point
+  phone, 748 across, from splitting at all. `phoneSidewaysOn` now asks for
+  each half of the frame, and App.js puts the line in the middle of the
+  frame there (`sidesFrame`); an iPhone, which keeps the same down both
+  sides, is unchanged. And lib/screenShape's note on pop-ups says what is
+  true now: they were already let turn every way (`ANY_WAY_UP`), and the
+  package answers iOS for the whole app, so a pop-up over Settings stays
+  upright and one over Play turns with Play.
+- **Its tests**: test/phone-turns.mjs (new, in test/run.mjs), and the
+  lines of test/duo.mjs and test/two-sides.mjs that pinned the old lock and
+  the old Kotlin.
+
+**What it moves, and what that costs.** `npm run fingerprint` with the
+patch applied: the android line and the ios line move, and the watch line
+does not (checked 10 November 2026, on main at 1.90.26). So it is a build
+pair, one iOS slot and one Android. From the merge that applies it, updates
+made on main reach only the new copies: the App Store's 1.90.0 and Google
+Play's copies keep the last update made before that merge until their
+owners take the new version. Nothing about it is one phone alone.
+
+**What was checked for free.**
+
+- `npx expo prebuild --no-install --clean` for both phones, in a scratch
+  copy of the tree with the patch in (it runs on Linux; nothing native was
+  left in the repository). Info.plist came out with
+  `UISupportedInterfaceOrientations` Portrait, LandscapeLeft,
+  LandscapeRight; `UISupportedInterfaceOrientations~ipad` all four;
+  `EXDefaultScreenOrientationMask` `UIInterfaceOrientationMaskPortrait`;
+  `UIRequiresFullScreen` false. AndroidManifest's MainActivity has no
+  `android:screenOrientation` and still takes `orientation`, `screenSize`
+  and `smallestScreenSize` itself; MainActivity.kt has `holdPhonesUpright()`
+  before `super.onCreate` and in `onConfigurationChanged`, with the new
+  rule. (Expo says while it runs that it is ignoring `"orientation":
+  default` for iOS because the Info.plist list is given. That is the
+  intent.)
+- `npx expo export` for ios and android with the patch in: both bundle.
+- The whole suite with the patch in, and on main with only the patch file
+  added (test/mobile.mjs tries it against the tree on every change, and
+  web.yml runs the suite a second time with it applied).
+- android-minified.yml runs on any pull request that touches
+  docs/pending/**: it applies the patch and compiles a real minified
+  Android build, so the Kotlin and the package's Android half are compiled
+  at no Expo cost, and it starts the app on a phone emulator held sideways,
+  which must still be drawn upright, past the startup card and into the
+  demo (upright by the rule: the demo has no account the sideways layout is
+  open to). The day `PHONE_SIDEWAYS_FOR_EVERYONE` opens, that check has to
+  change with it, since Play in the demo will then turn.
+- The iPhone's half has one free compile to ask for: duo.yml, started by
+  hand on the branch that carries this file, applies the waiting patches
+  and builds and opens the iPhone app on Xcode 27.1's simulator, the
+  package's Swift with it. It has not been run for this patch yet.
+  watch.yml's `iphone` job builds the iPhone project too, on the build pull
+  request (it runs when mobile/app.json or the package files change).
+
+**What only a real phone can show**, most likely first:
+
+1. An iPhone on Play, turned on its side: the screen turns, and the two
+   halves appear (his account). This is the whole point, and nothing here
+   can see it.
+2. From Play on its side, open Settings: the screen turns upright. Back to
+   Play with the phone still on its side: it should turn back by itself. If
+   it waits until the phone is moved, that is iOS, and the fix is in the
+   app's code (an update), not another build.
+3. The same two on an Android phone, with its auto-rotate on; and with
+   auto-rotate off, where Play stays as the phone is locked.
+4. An iPad and an Android tablet: every way up on every page, exactly as
+   before. The iPad is the one to look at first, since `initialOrientation`
+   is new to it.
+5. Opening the app with an iPhone already on its side: the splash may show
+   sideways for a blink before the app is upright, as an Android phone's
+   has since October 2026. iOS draws the splash from Info.plist before any
+   code runs, and Info.plist now lists the two sides.
+6. The heights. #850's layout measures its own room (the frame under the
+   top bar, the top of the tiles), so nothing in it was a fixed guess, but
+   its tests' frames were: 108 points off the height, 832 by 332 on a Pro
+   Max. The first look says whether the squares, the five buttons along the
+   bottom and the bar's buttons sit as the six pictures show.
+7. A pop-up over Play on its side (hold a block, the tempo box): it should
+   open turned with Play, not upright.
+
+**What goes with it in the build pull request, outside the patch:**
+
+- `(cd mobile && npm install)` after applying it, since it adds a package;
+  if the build job then stops at expo-doctor on Expo's package versions,
+  run it again with keep_packages ticked (CLAUDE.md says why);
+- the review notes for that version (docs/app-store.md), which need one
+  plain sentence on turning, since the layout is in the build whoever it is
+  open to: on an iPhone held on its side, Play and the pages that open
+  beside it turn and show two halves side by side, every other page stays
+  upright, and iPads turn every way as before. Google's notes the same;
+- no What's new line while it is his account only; the line goes in with
+  the pull request that sets `PHONE_SIDEWAYS_FOR_EVERYONE` true, which is
+  an update and needs no build once this one is out;
+- CLAUDE.md's section on a phone held on its side, which says nothing has
+  run on a phone: after the build it should say phones turn only from this
+  version, and that older copies show Play upright whatever the switch
+  says;
+- docs/expo-builds.md's row for the pair.
+
+No store-version key: the code that turns a phone exists only in the new
+build, and a copy built before it has no package to ask (lib/turnScreen
+finds none and says so once in the log), so no update can turn an older
+copy.
 
 **android-usb-midi.patch, and why it waited** (applied for the Android build 1.89.36). Justin, 3 November 2026:
 "let's build out the direct plug to the USB for android. I tried it and it

@@ -1,0 +1,1156 @@
+diff --git a/mobile/App.js b/mobile/App.js
+index c1fa9149..d05bd36c 100644
+--- a/mobile/App.js
++++ b/mobile/App.js
+@@ -1,6 +1,6 @@
+ /* First, so every sentence that names the device knows which one it is on. */
+ import './src/lib/thisDevice'
+-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
++import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+ import { ActivityIndicator, Alert, AppState, Appearance, BackHandler, Linking, ScrollView, Text, View } from 'react-native'
+ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
+ import { StatusBar } from 'expo-status-bar'
+@@ -86,6 +86,7 @@ import { CABLE_LOOK_AGAIN, CABLE_TO_ADAPTER, CABLE_TO_ADAPTER_SUB, CABLE_WAITING
+ import { overBluetooth } from './src/lib/bleSwitch'
+ import { BENCH, HOLD_KNOBS_FOR_EVERYONE, PHONE_SIDEWAYS_FOR_EVERYONE, SIDES_FOR_EVERYONE } from './src/lib/features'
+ import Sides, { SidesFrame } from './src/components/Sides'
++import { PhoneTurns } from './src/components/PhoneTurns'
+ import SidesLead from './src/components/SidesLead'
+ import PlayHead from './src/components/PlayHead'
+ import { usePlayHead } from './src/lib/playHead'
+@@ -800,6 +801,8 @@ export default function App() {
+   const low = sidewaysAllowed && !big && phoneSidewaysOn(frame || {}, lowWas.current)
+   lowWas.current = low
+   const wide = big || low
++  /* On a phone on its side the line between the two sides is the middle of the frame, never a fold's place: an Android phone keeps its camera clear down ONE side, and that is not a crease to put the line on (lib/twoSides splitSides, phoneSidewaysOn). An iPhone keeps the same down both, so nothing on it moves. */
++  const sidesFrame = useMemo(() => (low && frame ? { ...frame, left: 0, right: 0 } : frame), [low, frame])
+   /* Where the line between the sides was dragged to on a big screen (lib/useSidesSplit), for an account the tidier Edit is open to (his, until features TIDY_EDIT_FOR_EVERYONE). Null for everybody else, and the sides are where they always were. */
+   const tidyAllowed = sidesAdmin || (sidesAllowed && TIDY_EDIT_FOR_EVERYONE)
+   const split = useSidesSplit({ allowed: tidyAllowed, big })
+@@ -1006,7 +1009,7 @@ export default function App() {
+     return sideTool === 'tuner' ? writeTuner(false) : sideTool === BLOCK ? closeBlock() : closeSide()
+   }
+   const sideLead = !wide ? null : twoSidesUp ? (
+-    <SidesLead frame={frame} tool={sideTool} full={sideFull} playOnRight={playOnRight} big={big} onName={setSideList} onSwap={swapSides} onFull={setSideFull} handle={sideHandle} share={sideShare} three={thirdUp ? third : null} onAdd={thirdCanOpen ? openThirdList : null} onThird={openThirdList} />
++    <SidesLead frame={sidesFrame} tool={sideTool} full={sideFull} playOnRight={playOnRight} big={big} onName={setSideList} onSwap={swapSides} onFull={setSideFull} handle={sideHandle} share={sideShare} three={thirdUp ? third : null} onAdd={thirdCanOpen ? openThirdList : null} onThird={openThirdList} />
+   ) : low ? (
+     screen === 'stage' && playHeadUp ? (
+       <PlayHead onOpenPresets={demo || link.link === 'connected' ? () => setScreen('presets') : null} onOpenSetlists={() => setScreen('setlists')} />
+@@ -1209,6 +1212,19 @@ export default function App() {
+   /* And not elsewhere while it is beside a tool on two sides (playBeside): Play is showing, so a command is for it, not "Open Play". A tool filling the window over it is the tool's screen, and elsewhere. */
+   const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen: stageViewUp ? 'stage' : screen, shareCard: askHow || askShare }) && !playBeside
+   useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
++  /*
++   * WHICH WAY UP A PHONE MAY BE HELD (lib/phoneTurns; components/PhoneTurns
++   * asks the phone): upright on every page, except that Play, what opens
++   * beside it and Stage view may be turned on either side, for an account
++   * the sideways layout is open to (`sidewaysAllowed`). `turnsInApp` is the
++   * app past everything that stands in front of it: the startup card, the
++   * walkthrough, the sign-in, the purchase page (its own page, and the one
++   * opened over a screen), How do you connect to your unit? and the sharing
++   * card are all upright. The wait for a rig in Play's place counts as Play:
++   * a phone on a stand is not turned upright and back each time its adapter
++   * drops. A tablet is asked for nothing.
++   */
++  const turnsInApp = auth === 'in' && seenWalk === true && !independentDue && !askHow && !askShare && !buying
+   /*
+    * Where the pill on the bar goes, named once, so the tap and what a screen
+    * reader says it does cannot disagree (TopBar unitGoes). Which unit only
+@@ -1642,6 +1658,8 @@ export default function App() {
+ 
+   return (
+     <SafeAreaProvider>
++      {/* Draws nothing: holds a phone upright or lets it turn, by the screen that is up (`turnsInApp`, above). */}
++      <PhoneTurns allowed={sidewaysAllowed} inApp={turnsInApp} onPlay={screen === 'stage'} beside={sideTool !== null} stageView={stageViewUp} frame={frame} />
+       {/* The clock and the battery, which have to be readable against whatever
+           is behind them: light ink on the dark palette, dark on the light one. */}
+       <StatusBar style={isDark() ? 'light' : 'dark'} />
+@@ -2243,7 +2261,7 @@ export default function App() {
+                 tool={twoSidesUp ? sideTool : null}
+                 full={sideFull}
+                 playOnRight={playOnRight}
+-                frame={frame}
++                frame={sidesFrame}
+                 tools={toolsOffered}
+                 onPick={openTool}
+                 /* The list of what goes beside Play, opened from a side's name in the top bar (`sideLead`, above). */
+diff --git a/mobile/app.json b/mobile/app.json
+index 3bcf0efd..c24810ca 100644
+--- a/mobile/app.json
++++ b/mobile/app.json
+@@ -7,4 +7,4 @@
+-    "orientation": "portrait",
++    "orientation": "default",
+     "icon": "./assets/icon.png",
+     "scheme": "fractalremote",
+     "userInterfaceStyle": "automatic",
+@@ -26,6 +26,12 @@
+       "supportsTablet": true,
+       "buildNumber": "1",
+       "infoPlist": {
++        "UISupportedInterfaceOrientations": [
++          "UIInterfaceOrientationPortrait",
++          "UIInterfaceOrientationLandscapeLeft",
++          "UIInterfaceOrientationLandscapeRight"
++        ],
++        "EXDefaultScreenOrientationMask~ipad": "UIInterfaceOrientationMaskAll",
+         "ITSAppUsesNonExemptEncryption": false,
+         "NSBluetoothAlwaysUsageDescription": "Fractal Remote uses Bluetooth to connect to the Bluetooth MIDI adapter on your Fractal unit, so you can change presets and scenes from your phone without a computer."
+       },
+@@ -98,6 +104,12 @@
+       ],
+       "@bacons/apple-targets",
+       "expo-asset",
++      [
++        "expo-screen-orientation",
++        {
++          "initialOrientation": "PORTRAIT_UP"
++        }
++      ],
+       [
+         "expo-build-properties",
+         {
+diff --git a/mobile/package-lock.json b/mobile/package-lock.json
+index 89c69a65..ae55d1db 100644
+--- a/mobile/package-lock.json
++++ b/mobile/package-lock.json
+@@ -7,6 +7,7 @@
+     "": {
+       "name": "fractal-remote",
+       "version": "1.0.0",
++      "hasInstallScript": true,
+       "dependencies": {
+         "@bacons/apple-targets": "^5.0.0",
+         "@react-native-async-storage/async-storage": "2.2.0",
+@@ -23,6 +24,7 @@
+         "expo-image-manipulator": "~57.0.21",
+         "expo-image-picker": "~57.0.20",
+         "expo-keep-awake": "~57.0.2",
++        "expo-screen-orientation": "~57.0.3",
+         "expo-splash-screen": "~57.0.10",
+         "expo-status-bar": "~57.0.1",
+         "expo-updates": "~57.0.26",
+@@ -3787,6 +3789,16 @@
+         "react-native": "*"
+       }
+     },
++    "node_modules/expo-screen-orientation": {
++      "version": "57.0.3",
++      "resolved": "https://registry.npmjs.org/expo-screen-orientation/-/expo-screen-orientation-57.0.3.tgz",
++      "integrity": "sha512-hKtTKAoinahalc5nzMmGfVtj1NfVj4pFJycJGy/HUzrBlu+1rOnHdGUKgaSKkMhr5Mr9GxAxcuLvuM+oyFNFLA==",
++      "license": "MIT",
++      "peerDependencies": {
++        "expo": "*",
++        "react-native": "*"
++      }
++    },
+     "node_modules/expo-server": {
+       "version": "57.0.3",
+       "resolved": "https://registry.npmjs.org/expo-server/-/expo-server-57.0.3.tgz",
+diff --git a/mobile/package.json b/mobile/package.json
+index ae14d843..474e6b61 100644
+--- a/mobile/package.json
++++ b/mobile/package.json
+@@ -26,6 +26,7 @@
+     "expo-image-manipulator": "~57.0.21",
+     "expo-image-picker": "~57.0.20",
+     "expo-keep-awake": "~57.0.2",
++    "expo-screen-orientation": "~57.0.3",
+     "expo-splash-screen": "~57.0.10",
+     "expo-status-bar": "~57.0.1",
+     "expo-updates": "~57.0.26",
+diff --git a/mobile/plugins/withTabletTurns.js b/mobile/plugins/withTabletTurns.js
+index 9ff7a559..c84f7907 100644
+--- a/mobile/plugins/withTabletTurns.js
++++ b/mobile/plugins/withTabletTurns.js
+@@ -1,5 +1,6 @@
+ /**
+- * ANDROID TABLETS TURN SIDEWAYS, AND ANDROID PHONES STAY UPRIGHT.
++ * ANDROID TABLETS TURN SIDEWAYS, AND ANDROID PHONES START UPRIGHT AND STAY
++ * UPRIGHT UNLESS THE APP ITSELF ASKS FOR MORE.
+  *
+  * Google Play, October 2026, on 1.88.0: "Remove resizability and orientation
+  * restrictions in your app to support large screen devices." Justin: "The
+@@ -22,8 +23,39 @@
+  * draws for a large screen, and the app's own TABLET_SIDE
+  * (shared/device-word.mjs), by which the app calls itself a tablet
+  * (mobile/src/lib/thisDevice.js). So the device the app calls a tablet is the
+- * device that turns. app.json keeps "portrait", so an iPhone stays upright as
+- * it always has and an iPad keeps the four ways it has (test/duo.mjs).
++ * device that turns by itself.
++ *
++ * A PHONE MAY TURN WHERE THE APP SAYS SO, since November 2026. "Landscape
++ * mode on iPhone is not working" (Justin, 10 November 2026): Play on a phone
++ * held on its side had been built to split in two (lib/twoSides
++ * phoneSidewaysOn), and no phone could be turned to see it, because this rule
++ * put a phone back upright at every configuration change, and a phone turning
++ * IS a configuration change. So the rule on a phone is now only where it
++ * STARTS:
++ *
++ *   a tablet   every way up, as it has been since October 2026: whatever was
++ *              asked for is set back to "unspecified", which is what Google
++ *              Play asked for and what the app's own code never changes (it
++ *              asks nothing on a tablet).
++ *   a phone    upright while nothing has been asked ("unspecified", which is
++ *              how every launch and every new MainActivity begins), and left
++ *              alone once something has. The asking is the app's own, through
++ *              expo-screen-orientation (mobile/src/lib/turnScreen.js, by the
++ *              rule in mobile/src/lib/phoneTurns.js): upright ("portrait") on
++ *              every page but Play and what opens beside it, and there the
++ *              phone's own choice ("user": it turns if the phone's auto-rotate
++ *              is on, and never upside down). Never "unspecified" from a
++ *              phone, which this rule would take for nothing asked and put
++ *              upright again the moment the phone turned.
++ *
++ * So a phone that never reaches Play (the startup card, the walkthrough, the
++ * sign-in, the purchase page) is upright exactly as before, and an account
++ * the sideways layout is not open to is upright everywhere. A fold shut again
++ * comes back "unspecified" from its time as a tablet, so it starts upright
++ * here and the app asks again. On the iPhone the same rule is applied by the
++ * same code through the same package; app.json lets an iPhone turn to either
++ * side and starts it upright (expo-screen-orientation's initialOrientation),
++ * and an iPad keeps the four ways it has (test/duo.mjs, test/phone-turns.mjs).
+  *
+  * THE SCREEN, NOT THE WINDOW. Google's recipe reads the window
+  * (Configuration.screenWidthDp). This reads the whole screen the app is on:
+@@ -56,8 +88,9 @@
+  * has changed shape, and a guess would build a phone that turns or a tablet
+  * that does not, which only a store build would show.
+  *
+- * Nothing here touches the iPhone app: there is no iOS part. The plugin file
+- * is hashed for both phones all the same, so it moves both fingerprints.
++ * Nothing here touches the iPhone app: there is no iOS part (the iPhone's is
++ * app.json and expo-screen-orientation's own plugin). The plugin file is
++ * hashed for both phones all the same, so it moves both fingerprints.
+  */
+ const { withAndroidManifest, withMainActivity } = require('expo/config-plugins')
+ 
+@@ -70,19 +103,23 @@ const END = '// withTabletTurns: end'
+ const RULE = `
+   ${BEGIN}
+   /*
+-   * Upright on a phone, every way up on a tablet. A screen whose short side
+-   * is under ${TABLET_SIDE} dp is a phone's (TABLET_SIDE in shared/device-word.mjs).
+-   * The whole screen, never the window, so a tablet beside another app is
+-   * still a tablet. Asked at launch and at every configuration change, which
+-   * is how a fold and an unfold arrive.
++   * Every way up on a tablet. On a phone, upright while nothing has been
++   * asked, and left alone once the app has asked (expo-screen-orientation,
++   * by mobile/src/lib/phoneTurns.js: upright on most pages, the phone's own
++   * choice on Play). A screen whose short side is under ${TABLET_SIDE} dp is a
++   * phone's (TABLET_SIDE in shared/device-word.mjs). The whole screen, never
++   * the window, so a tablet beside another app is still a tablet. Asked at
++   * launch and at every configuration change, which is how a fold and an
++   * unfold arrive, and how a phone turning arrives: so a phone that has been
++   * let turn must not be put upright here.
+    */
+   private fun holdPhonesUpright() {
+-    val wanted = if (screenShortSideDp() >= ${TABLET_SIDE}f) {
+-      android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+-    } else {
+-      android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
++    val unspecified = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
++    if (screenShortSideDp() >= ${TABLET_SIDE}f) {
++      if (requestedOrientation != unspecified) requestedOrientation = unspecified
++    } else if (requestedOrientation == unspecified) {
++      requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+     }
+-    if (requestedOrientation != wanted) requestedOrientation = wanted
+   }
+ 
+   @Suppress("DEPRECATION")
+diff --git a/mobile/src/components/PhoneTurns.js b/mobile/src/components/PhoneTurns.js
+new file mode 100644
+index 00000000..c7f35002
+--- /dev/null
++++ b/mobile/src/components/PhoneTurns.js
+@@ -0,0 +1,100 @@
++/*
++ * THE PHONE HELD UPRIGHT, OR LET TURN, AS THE SCREEN CHANGES.
++ *
++ * Draws nothing. It reads what lib/phoneTurns needs from the device (the
++ * whole screen's size, and what the phone keeps clear at its edges), asks
++ * that rule what this screen wants, and tells the phone whenever the answer
++ * changes (lib/turnScreen). App.js mounts it once, over every screen, so the
++ * startup card and the sign-in are held upright by the same rule as
++ * Settings.
++ *
++ * ON A TABLET IT ASKS THE PHONE'S MODULE FOR NOTHING: an iPad, an Android
++ * tablet and a fold opened are exactly as they were. The one thing ever said
++ * there is to let go of what was asked while the screen was a phone's (a
++ * fold opened with the app up).
++ *
++ * WHETHER THE PHONE IS LONG ENOUGH TO SPLIT is worked out while it is
++ * upright, when its insets are the ones the sum is written for, and kept
++ * while it is on its side (a phone that starts on its side is taken at what
++ * it has across then). A phone that turned and measured too narrow all
++ * the same (App's own frame, `frame`) is upright from then on: once, and it
++ * does not turn back and forth.
++ *
++ * ANDROID IS ASKED AGAIN EACH TIME THE APP COMES BACK TO THE FRONT. A new
++ * MainActivity (Android makes one for some setting changes) starts with
++ * nothing asked, and plugins/withTabletTurns starts it upright; the app's
++ * own screen may still be Play. The iPhone's module does this for itself.
++ */
++import { useEffect, useRef, useState } from 'react'
++import { AppState, Dimensions, Platform, useWindowDimensions } from 'react-native'
++import { useSafeAreaInsets } from 'react-native-safe-area-context'
++
++import { RELEASE, TURNS, UPRIGHT, fitsSideways, isTablet, sidewaysAcross, tooNarrow, turnStep, turnsWanted } from '../lib/phoneTurns'
++import { askTurn } from '../lib/turnScreen'
++
++/* The app has the phone's whole length when its window is within this many points of the screen's: not a small window beside another app, whose width says nothing about the phone. */
++const WHOLE_WITHIN = 100
++
++const wholeScreen = () => {
++  try {
++    return Dimensions.get('screen') || {}
++  } catch {
++    return {}
++  }
++}
++
++export function PhoneTurns({ allowed = false, inApp = false, onPlay = false, beside = false, stageView = false, frame = null }) {
++  const insets = useSafeAreaInsets()
++  const win = useWindowDimensions()
++  const [screen, setScreen] = useState(wholeScreen)
++  useEffect(() => {
++    const sub = Dimensions.addEventListener('change', (now) => setScreen(now?.screen || wholeScreen()))
++    return () => sub?.remove?.()
++  }, [])
++  const width = Number(screen.width) || 0
++  const height = Number(screen.height) || 0
++  const long = Math.max(width, height)
++  const tablet = isTablet({ pad: Platform.OS === 'ios' && Platform.isPad === true, width, height })
++
++  /* What this screen would have across on its side, and whether it has measured too narrow: per screen size, so a fold's two screens each have their own. */
++  const size = `${Math.min(width, height)}x${long}`
++  const known = useRef({ size: null, across: 0, upright: false, narrow: false })
++  if (known.current.size !== size) known.current = { size, across: 0, upright: false, narrow: false }
++  if (height > width) {
++    known.current.across = sidewaysAcross({ os: Platform.OS, width, height, top: insets.top, bottom: insets.bottom })
++    known.current.upright = true
++  } else if (!known.current.upright && width > height) {
++    /* Started on its side (the app restarted for an update with Play turned): what it has across is what it has now, until an upright look says better. */
++    known.current.across = Math.max(0, long - insets.left - insets.right)
++  }
++  if (allowed && !tablet && win.width >= long - WHOLE_WITHIN && tooNarrow({ frame, short: Math.min(width, height) })) known.current.narrow = true
++  const fits = fitsSideways(known.current.across) && !known.current.narrow
++
++  const wanted = turnsWanted({ tablet, allowed, fits, inApp, onPlay, beside, stageView })
++  const wants = useRef(wanted)
++  wants.current = wanted
++  /* What the phone was last asked for: UPRIGHT, TURNS, or null for nothing. */
++  const asked = useRef(null)
++  useEffect(() => {
++    const step = turnStep(asked.current, wanted)
++    if (!step) return
++    asked.current = step === RELEASE ? null : step
++    askTurn(step).then((took) => {
++      /* Not taken: nothing is in force, so the next change, or the next return to the front, asks afresh. */
++      if (!took && asked.current === step) asked.current = null
++    })
++  }, [wanted])
++  useEffect(() => {
++    if (Platform.OS !== 'android') return undefined
++    const sub = AppState.addEventListener('change', (state) => {
++      const now = wants.current
++      if (state !== 'active' || (now !== UPRIGHT && now !== TURNS)) return
++      asked.current = now
++      askTurn(now).then((took) => {
++        if (!took && asked.current === now) asked.current = null
++      })
++    })
++    return () => sub?.remove?.()
++  }, [])
++  return null
++}
+diff --git a/mobile/src/lib/phoneTurns.js b/mobile/src/lib/phoneTurns.js
+new file mode 100644
+index 00000000..15067a62
+--- /dev/null
++++ b/mobile/src/lib/phoneTurns.js
+@@ -0,0 +1,138 @@
++/*
++ * WHICH WAY UP A PHONE MAY BE HELD, PAGE BY PAGE.
++ *
++ * "Landscape mode on iPhone is not working." (Justin, 10 November 2026.)
++ * Play on a phone held on its side had been built to split in two (lib/
++ * twoSides phoneSidewaysOn; lib/sidewaysPlay), and no phone could be turned
++ * to see it: an iPhone was held upright by app.json, an Android phone by
++ * plugins/withTabletTurns. The build that carries this file lets a phone
++ * turn, and this is the rule for where:
++ *
++ *   a tablet   NOTHING IS ASKED. An iPad, an Android tablet and a fold
++ *              opened turn every way up, as they always have, and nothing
++ *              here touches them (`turnsWanted` answers null).
++ *   a phone    UPRIGHT, EXCEPT ON PLAY: on Play, on what opens beside Play
++ *              (Edit, Setlists, All presets, the tuner in a side, Notes, a
++ *              held block's knobs) and in Stage view it may be held either
++ *              way on its side as well as upright. Everywhere else it is
++ *              upright, as it was: the startup card, the walkthrough, the
++ *              sign-in, the purchase page, Settings and every page in it,
++ *              Bluetooth, the reports, Troubleshooting, Gear, How do you
++ *              connect to your unit? and the sharing card. Those pages were
++ *              drawn for a phone held upright and nobody has asked for them
++ *              sideways.
++ *
++ * AND ONLY FOR AN ACCOUNT THE SIDEWAYS LAYOUT IS OPEN TO (App.js
++ * `sidewaysAllowed`: his, until features PHONE_SIDEWAYS_FOR_EVERYONE). For
++ * every other account a phone is upright on every page, Play among them, so
++ * the app in their hands is exactly the app it was.
++ *
++ * AND ONLY ON A PHONE LONG ENOUGH TO SPLIT (`fitsSideways`). A phone whose
++ * screen would be under SIDEWAYS_AT across on its side (an iPhone SE, a 13
++ * mini, a small Android) would not split in two there: it would show Play
++ * stretched, which is the screen he objected to ("instead of just stretching
++ * everything"). Such a phone stays upright. What it would have across is
++ * worked out while it is upright (`sidewaysAcross`), and checked against the
++ * frame the app really measures once it is on its side (`tooNarrow`): a
++ * phone that turned and came out under the line goes back upright and stays.
++ *
++ * UPSIDE DOWN IS NEVER ASKED FOR ON A PHONE. On the iPhone "turns" is every
++ * way but upside down; on Android it is the phone's own choice, which is
++ * never upside down on a phone and follows its auto-rotate switch.
++ *
++ * lib/turnScreen asks the phone for what this answers, and components/
++ * PhoneTurns reads the screen for it. Nothing here imports anything, so the
++ * tests run it as it is.
++ */
++
++/** The short side, in points, from which a screen is a tablet's (shared/device-word.mjs TABLET_SIDE; plugins/withTabletTurns writes the same number into Android). A test holds the three together. */
++export const TABLET_SIDE = 600
++/** The frame width from which a phone on its side splits in two (lib/twoSides SIDEWAYS_AT). A test holds the two together. */
++export const SIDEWAYS_AT = 720
++/** An iPhone's top inset over this is a notch or an island, which it keeps down BOTH sides when it is turned; at or under it, it is the clock's bar alone, which goes away. */
++export const NOTCH_OVER = 24
++/** An Android phone's bottom inset from this is its three buttons, which move to the side when it is turned; under it, it is the swipe bar, which stays underneath. */
++export const BUTTONS_FROM = 40
++
++/** Held upright, and nothing else. */
++export const UPRIGHT = 'upright'
++/** Upright or on either side: never upside down. */
++export const TURNS = 'turns'
++/** What a fold opened is told once, if it was held upright or let turn while it was shut: nothing is asked of it any more. */
++export const RELEASE = 'release'
++
++const num = (n) => (Number.isFinite(Number(n)) && Number(n) > 0 ? Number(n) : 0)
++
++/** Whether the whole screen (never the window) is a tablet's: an iPad, or a short side of TABLET_SIDE or more. */
++export const isTablet = ({ pad = false, width = 0, height = 0 } = {}) => pad === true || Math.min(num(width), num(height)) >= TABLET_SIDE
++
++/**
++ * How many points across the app would have on a phone held on its side,
++ * from what it measures now. `width` and `height` are the whole screen's,
++ * either way up; `top` and `bottom` are the insets WHILE IT IS UPRIGHT.
++ *
++ *   an iPhone   a notch or an island (top over NOTCH_OVER) is kept clear down
++ *               both sides, so twice it comes off: an iPhone 17 is 852 less
++ *               59 and 59, a Pro Max 956 less 62 and 62. A Home-button
++ *               iPhone's clock bar goes away, so nothing comes off.
++ *   Android     the camera's cut-out is on one side only, about as deep as
++ *               the bar over the clock (top), and three buttons (bottom from
++ *               BUTTONS_FROM) move to the other side.
++ */
++export function sidewaysAcross({ os = 'ios', width = 0, height = 0, top = 0, bottom = 0 } = {}) {
++  const long = Math.max(num(width), num(height))
++  if (os === 'android') return Math.max(0, long - num(top) - (num(bottom) >= BUTTONS_FROM ? num(bottom) : 0))
++  return Math.max(0, long - (num(top) > NOTCH_OVER ? 2 * num(top) : 0))
++}
++
++/** Whether a phone with that much across on its side would split in two there. */
++export const fitsSideways = (across) => num(across) >= SIDEWAYS_AT
++
++/**
++ * Whether the frame the app really measured (App.js, under the top bar) is a
++ * phone on its side that came out too narrow to split. `short` is the whole
++ * screen's short side.
++ *
++ * ON ITS SIDE IS SAID BY THE WIDTH ALONE: a frame wider than the screen's
++ * short side. Held upright no frame is, and on its side every frame is,
++ * whatever its height. The height is never asked, because the keyboard takes
++ * it: a phone held upright with the keyboard up has a frame wider than it is
++ * tall, and reading that as a small phone on its side would have kept it
++ * upright for good after one search typed in Edit.
++ */
++export function tooNarrow({ frame = null, short = 0 } = {}) {
++  const w = num(frame?.width)
++  const s = num(short)
++  return s > 0 && w > s && w < SIDEWAYS_AT
++}
++
++/**
++ * What this screen wants of the phone: null (a tablet: nothing is asked),
++ * UPRIGHT or TURNS.
++ *
++ *   tablet     the whole screen is a tablet's (isTablet)
++ *   allowed    the sideways layout is open to this account
++ *   fits       the phone is long enough to split on its side
++ *   inApp      past the startup card, the walkthrough, the sign-in, the
++ *              purchase page, How do you connect? and the sharing card
++ *   onPlay     Play is the screen (or the wait for a rig in its place)
++ *   beside     the screen is one that opens beside Play
++ *   stageView  Stage view is up
++ */
++export function turnsWanted({ tablet = false, allowed = false, fits = false, inApp = false, onPlay = false, beside = false, stageView = false } = {}) {
++  if (tablet === true) return null
++  if (allowed !== true || fits !== true || inApp !== true) return UPRIGHT
++  return onPlay === true || beside === true || stageView === true ? TURNS : UPRIGHT
++}
++
++/**
++ * What to ask the phone for now, given what it was last asked (`asked`:
++ * UPRIGHT, TURNS or null for nothing) and what is wanted: UPRIGHT, TURNS,
++ * RELEASE, or null for nothing to ask. On a tablet nothing is ever asked,
++ * except to let go of what this app itself asked while the screen was a
++ * phone's (a fold opened).
++ */
++export function turnStep(asked = null, wanted = null) {
++  if (wanted !== UPRIGHT && wanted !== TURNS) return asked === UPRIGHT || asked === TURNS ? RELEASE : null
++  return asked === wanted ? null : wanted
++}
+diff --git a/mobile/src/lib/screenShape.js b/mobile/src/lib/screenShape.js
+index 2257da93..90edd35d 100644
+--- a/mobile/src/lib/screenShape.js
++++ b/mobile/src/lib/screenShape.js
+@@ -11,7 +11,9 @@
+  * one side of the screen, make neither true.
+  *
+  * Neither changes a phone held upright: it has nothing of its own down its
+- * sides, and it cannot be turned while the app is locked upright.
++ * sides. A phone turns only where lib/phoneTurns lets it (Play and what
++ * opens beside it, for an account the sideways layout is open to), and there
++ * both hold for it as for a tablet.
+  */
+ 
+ /**
+@@ -29,11 +31,12 @@ export const SAFE_EDGES = ['top', 'bottom', 'left', 'right']
+  * An iPhone pop-up turns only upright unless it is told otherwise, whatever
+  * the screen under it is doing (React Native's RCTModalHostViewComponentView);
+  * an iPad's already turns every way, which is what this asks for by name.
+- * A pop-up can only turn the ways the app itself is allowed to (app.json's
+- * "portrait" lock on an iPhone), so an iPhone held upright sees no change.
+- * The one place it can show is an iPhone with a Home button held upside
+- * down, where iOS may now turn an open pop-up the right way up for whoever
+- * is holding it, as an iPad's always has.
++ * A pop-up can only turn the ways the app itself is allowed to at that
++ * moment, which on an iPhone is what lib/phoneTurns last asked for (upright,
++ * or upright and either side on Play; expo-screen-orientation answers iOS
++ * for the whole app, pop-ups included), so a pop-up over Settings stays
++ * upright and one over Play turns with Play. Never upside down on an iPhone:
++ * neither the app's Info.plist nor either lock offers it.
+  */
+ export const ANY_WAY_UP = ['portrait', 'portrait-upside-down', 'landscape-left', 'landscape-right']
+ 
+diff --git a/mobile/src/lib/turnScreen.js b/mobile/src/lib/turnScreen.js
+new file mode 100644
+index 00000000..5fef3991
+--- /dev/null
++++ b/mobile/src/lib/turnScreen.js
+@@ -0,0 +1,76 @@
++/*
++ * ASKING THE PHONE TO STAY UPRIGHT, OR LETTING IT TURN.
++ *
++ * lib/phoneTurns says what is wanted; this is the one place that asks the
++ * phone for it, through expo-screen-orientation. Three things can be asked:
++ *
++ *   upright   held upright, and nothing else (the package's PORTRAIT_UP).
++ *   turns     upright or on either side, never upside down. On the iPhone
++ *             that is the package's DEFAULT (every way but upside down). On
++ *             Android it is NOT: its DEFAULT is "unspecified", which is what
++ *             plugins/withTabletTurns takes for nothing asked, and it would
++ *             put the phone upright again the moment it turned. So Android
++ *             is asked for the phone's own choice ("user", ANDROID_USER):
++ *             it turns if the phone's auto-rotate is on, stays as the phone
++ *             is locked if it is off, and is never upside down on a phone.
++ *   release   nothing asked any more (DEFAULT on both): only ever for a fold
++ *             that was a phone when it was asked and is a tablet now.
++ *
++ * A FAILURE IS A LINE IN THE LOG AND NOTHING ELSE. The package's native part
++ * is reached the way the app reaches every part a build may lack (expo's
++ * requireOptionalNativeModule, as lib/siriPipe and lib/storeVersion do),
++ * never through the package's own front door, which throws while the app is
++ * still loading its files if the part is missing. A copy of the app built
++ * without it cannot be turned, says so once, and carries on as it was built.
++ * A lock the phone refuses is logged and left: the page is still there, the
++ * way up it was.
++ *
++ * The package's own names for the locks are imported from the one file of it
++ * that holds nothing but names, so what is asked for is PORTRAIT_UP and
++ * DEFAULT by name and never a bare number (test/phone-turns.mjs holds this
++ * file to that).
++ */
++import { requireOptionalNativeModule } from 'expo'
++import { OrientationLock } from 'expo-screen-orientation/build/ScreenOrientation.types'
++import { Platform } from 'react-native'
++
++import { logDebug } from './debugLog'
++import { RELEASE, TURNS, UPRIGHT } from './phoneTurns'
++
++/** Android's ActivityInfo.SCREEN_ORIENTATION_USER: the phone's own choice, by its auto-rotate switch. */
++export const ANDROID_USER = 2
++
++/* undefined: not asked for yet. null: not in this copy of the app. */
++let native
++
++function orientation() {
++  if (native !== undefined) return native
++  try {
++    native = requireOptionalNativeModule('ExpoScreenOrientation')
++    if (typeof native?.lockAsync !== 'function') native = null
++  } catch {
++    native = null
++  }
++  if (!native) logDebug('app', 'turning: this copy has no screen orientation module, so it stays as it was built')
++  return native
++}
++
++/**
++ * Ask the phone for UPRIGHT, TURNS or RELEASE. Answers true when the phone
++ * took it, false when it did not (and has said why in the log). Never throws.
++ */
++export async function askTurn(step) {
++  if (step !== UPRIGHT && step !== TURNS && step !== RELEASE) return false
++  const so = orientation()
++  if (!so) return false
++  try {
++    if (step === UPRIGHT) await so.lockAsync(OrientationLock.PORTRAIT_UP)
++    else if (step === TURNS && Platform.OS === 'android') await so.lockPlatformAsync(ANDROID_USER)
++    else await so.lockAsync(OrientationLock.DEFAULT)
++    logDebug('app', `turning: ${step}`)
++    return true
++  } catch (e) {
++    logDebug('app', `turning: the phone would not take "${step}"`, String(e?.message || e))
++    return false
++  }
++}
+diff --git a/mobile/src/lib/twoSides.js b/mobile/src/lib/twoSides.js
+index 0c4f3d0e..a6a463e8 100644
+--- a/mobile/src/lib/twoSides.js
++++ b/mobile/src/lib/twoSides.js
+@@ -132,8 +132,16 @@ export function twoSidesOn({ width, height, left = 0, right = 0 } = {}, was = fa
+  *            or over that line and keep twoSidesOn's answer, untouched.
+  *   tall     at least SIDEWAYS_LOW down, under which two halves of tiles
+  *            are not worth drawing (a phone in a small split window).
+- *   sideways wider than tall, and
+- *   room     each side at least SIDE_LEAST, both as twoSidesOn has them.
++ *   sideways wider than tall, as twoSidesOn has it, and
++ *   room     each HALF OF THE FRAME at least SIDE_LEAST. Not twoSidesOn's
++ *            sides, which are cut where a fold is (the middle of the whole
++ *            screen, `left` and `right` counted): a phone has no fold, and
++ *            an Android phone on its side keeps its camera clear down one
++ *            side only, which that sum took for a crease and cut one side
++ *            short by it, so a 780-point phone with 748 across did not
++ *            split. App.js draws the line in the middle of the frame there
++ *            too (`sidesFrame`). An iPhone keeps the same down both sides,
++ *            and its answer is the one it had.
+  *
+  * Each line goes off LETS_GO past where it came on, as the others do. The
+  * two answers are never both acted on: App.js asks this one only where
+@@ -159,8 +167,7 @@ export function phoneSidewaysOn({ width, height, left = 0, right = 0 } = {}, was
+   const low = h < (was ? SIDES_TALL + LETS_GO : SIDES_TALL)
+   const tall = past(h, SIDEWAYS_LOW, was)
+   const sideways = past(w, h, was)
+-  const { first, second } = splitSides({ width: w, left, right })
+-  const room = past(Math.min(first, second), SIDE_LEAST, was)
++  const room = past(w / 2, SIDE_LEAST, was)
+   return wide && low && tall && sideways && room
+ }
+ 
+diff --git a/test/duo.mjs b/test/duo.mjs
+index 8fd12e5e..46178658 100644
+--- a/test/duo.mjs
++++ b/test/duo.mjs
+@@ -258,18 +258,22 @@ export function run(test) {
+       assert.equal(p.name, 'ANY_WAY_UP', `${p.file}:${p.line} turns only upright on an iPhone`)
+       assert.ok(p.imported, `${p.file}:${p.line} has its own ANY_WAY_UP, not lib/screenShape's`)
+     }
+-    /* The app itself is still locked upright on an iPhone: this is the pop-ups following it, not the lock lifted. */
+-    assert.equal(JSON.parse(read('mobile/app.json')).expo.orientation, 'portrait')
++    /* An iPhone may turn to either side since the phone-turns build, where lib/phoneTurns lets it (test/phone-turns.mjs): a pop-up follows the app there, which is what this is for. */
++    assert.equal(JSON.parse(read('mobile/app.json')).expo.orientation, 'default')
+   })
+ 
+-  test('on Android a tablet turns sideways and a phone stays upright, by the whole screen’s short side, and the iPhone keeps its lock', async () => {
++  test('on Android a tablet turns sideways and a phone starts upright, by the whole screen’s short side, and stays upright until the app asks for more', async () => {
+     /*
+      * Google Play on 1.88.0: "Remove resizability and orientation restrictions
+      * in your app to support large screen devices." Justin: "The large-screen
+      * change is the one most worth doing for reach, since a lot of guitarists
+      * keep a tablet on a music stand." mobile/plugins/withTabletTurns.js takes
+-     * the upright lock out of the Android manifest and holds the app upright
+-     * from MainActivity when the screen is a phone's. Nothing here compiles
++     * the upright lock out of the Android manifest and starts the app upright
++     * from MainActivity when the screen is a phone's, where it stays until the
++     * app's own code asks for more (lib/phoneTurns, test/phone-turns.mjs: only
++     * on Play, and only for an account the sideways layout is open to; before
++     * the phone-turns build it was held upright at every turn, so no phone
++     * could be turned at all). Nothing here compiles
+      * Kotlin, so the plugin is RUN, against stand-ins for Expo's config
+      * plugins and the template's MainActivity, and the Kotlin it writes is
+      * READ. android-minified builds it, and turns it on a phone and a tablet.
+@@ -277,8 +281,8 @@ export function run(test) {
+     const file = 'mobile/plugins/withTabletTurns.js'
+     const app = JSON.parse(read('mobile/app.json')).expo
+     assert.equal(app.plugins.filter((p) => p === './plugins/withTabletTurns').length, 1, 'the plugin is not in app.json, or is there twice')
+-    /* The iPhone keeps its lock, and an iPad its four ways: the plugin is Android's alone. */
+-    assert.equal(app.orientation, 'portrait')
++    /* The plugin is Android's alone: the iPhone's turning is app.json's and expo-screen-orientation's (test/phone-turns.mjs). */
++    assert.equal(app.orientation, 'default')
+ 
+     const mods = []
+     const stand = {
+@@ -345,8 +349,16 @@ export function run(test) {
+     /* The rule: the app's own tablet line, read off the whole screen and never the window. */
+     const rule = made.slice(made.indexOf('// withTabletTurns: begin'), made.indexOf('// withTabletTurns: end')).replace(/\/\*[\s\S]*?\*\//g, ' ')
+     const { TABLET_SIDE, appDevice } = await import('../shared/device-word.mjs')
+-    const side = rule.match(/screenShortSideDp\(\) >= (\d+(?:\.\d+)?)f\) \{\s*android\.content\.pm\.ActivityInfo\.SCREEN_ORIENTATION_UNSPECIFIED\s*\} else \{\s*android\.content\.pm\.ActivityInfo\.SCREEN_ORIENTATION_PORTRAIT\s*\}/)
+-    assert.ok(side, 'a screen at or over the line is not let turn, or one under it is not held upright')
++    /*
++     * A tablet: whatever was asked is set back to "unspecified", every time,
++     * as before. A phone: upright ONLY while nothing has been asked, so what
++     * the app asks for through expo-screen-orientation is left alone, and a
++     * phone turning (a configuration change, which asks this rule again) is
++     * not put upright under the hand that turned it.
++     */
++    const side = rule.match(/val unspecified = android\.content\.pm\.ActivityInfo\.SCREEN_ORIENTATION_UNSPECIFIED\s*if \(screenShortSideDp\(\) >= (\d+(?:\.\d+)?)f\) \{\s*if \(requestedOrientation != unspecified\) requestedOrientation = unspecified\s*\} else if \(requestedOrientation == unspecified\) \{\s*requestedOrientation = android\.content\.pm\.ActivityInfo\.SCREEN_ORIENTATION_PORTRAIT\s*\}/)
++    assert.ok(side, 'a screen at or over the line is not let turn, or one under it does not start upright, or is put upright again after the app asked for more')
++    assert.equal(rule.split('requestedOrientation = ').length - 1, 2, 'the rule sets the orientation somewhere else as well')
+     assert.equal(Number(side[1]), TABLET_SIDE, 'Android turns at a different size from the one at which the app calls itself a tablet')
+     assert.match(rule, /val density = resources\.displayMetrics\.density/)
+     assert.match(rule, /windowManager\.maximumWindowMetrics\.bounds/, 'from Android 11 the rule does not read the whole screen')
+diff --git a/test/phone-turns.mjs b/test/phone-turns.mjs
+new file mode 100644
+index 00000000..256ff31b
+--- /dev/null
++++ b/test/phone-turns.mjs
+@@ -0,0 +1,382 @@
++/**
++ * Which way up a phone may be held: upright everywhere, and on either side
++ * on Play, for an account the sideways layout is open to.
++ *
++ * "Landscape mode on iPhone is not working." (Justin, 10 November 2026.)
++ * Play on a phone held on its side had been built to split in two, and no
++ * phone could be turned to see it: an iPhone was held upright by app.json,
++ * an Android phone by plugins/withTabletTurns at every turn. The build that
++ * carries these files lets a phone turn, by one rule (lib/phoneTurns) that
++ * the app applies itself through expo-screen-orientation (lib/turnScreen,
++ * components/PhoneTurns), and a tablet is asked for nothing.
++ *
++ * Nothing here turns a phone, so the rule is RUN, over phones and tablets,
++ * every screen and both kinds of account; the one file that talks to the
++ * phone is RUN against stand-ins for the phone; and the config, the plugin
++ * and the wiring are READ. What a real phone does with it is the first look
++ * on one (docs/pending/README.md says what to look at).
++ */
++import assert from 'node:assert/strict'
++import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { pathToFileURL } from 'node:url'
++
++const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
++const there = (p) => existsSync(new URL(`../${p}`, import.meta.url))
++/* Comments out, so a check reads the code and not its explanation. */
++const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ')
++const flat = (src) => code(src).replace(/\s+/g, ' ')
++
++/** A phone file run as it is: a copy as .mjs, since the phone's .js is not a module to node. */
++async function load(src, name) {
++  const dir = mkdtempSync(join(tmpdir(), 'phone-turns-'))
++  try {
++    const file = join(dir, `${name}.mjs`)
++    writeFileSync(file, src)
++    return await import(pathToFileURL(file).href)
++  } finally {
++    rmSync(dir, { recursive: true, force: true })
++  }
++}
++
++/** lib/phoneTurns, run. It imports nothing. */
++async function rule() {
++  const src = read('mobile/src/lib/phoneTurns.js')
++  assert.ok(!/^import /m.test(src), 'lib/phoneTurns imports something, and this check runs it alone')
++  return load(src, 'phoneTurns')
++}
++
++/**
++ * lib/turnScreen, run against stand-ins: its four imports are taken out and
++ * handed in, so what it asks the phone for is seen and nothing is turned.
++ * `native` is the package's native part (null: a copy built without it),
++ * `os` the phone. Answers the file's own exports, what was asked and what
++ * was logged.
++ */
++async function talker({ native, os = 'ios', throwsOnFind = false } = {}, r) {
++  const src = read('mobile/src/lib/turnScreen.js')
++  const imports = src.match(/^import [^\n]+$/gm)
++  assert.deepEqual(
++    imports,
++    [
++      "import { requireOptionalNativeModule } from 'expo'",
++      "import { OrientationLock } from 'expo-screen-orientation/build/ScreenOrientation.types'",
++      "import { Platform } from 'react-native'",
++      "import { logDebug } from './debugLog'",
++      "import { RELEASE, TURNS, UPRIGHT } from './phoneTurns'"
++    ],
++    'lib/turnScreen imports something else; hand it in here'
++  )
++  const log = []
++  const finds = []
++  globalThis.__turns = {
++    requireOptionalNativeModule: (name) => {
++      finds.push(name)
++      if (throwsOnFind) throw new Error('no modules at all')
++      return native
++    },
++    OrientationLock: { DEFAULT: 0, PORTRAIT_UP: 3 },
++    Platform: { OS: os },
++    logDebug: (source, message, detail) => log.push({ source, message, detail }),
++    RELEASE: r.RELEASE,
++    TURNS: r.TURNS,
++    UPRIGHT: r.UPRIGHT
++  }
++  const stood = `const { requireOptionalNativeModule, OrientationLock, Platform, logDebug, RELEASE, TURNS, UPRIGHT } = globalThis.__turns\n${src.replace(/^import [^\n]+$/gm, '')}`
++  const made = await load(stood, 'turnScreen')
++  return { ...made, log, finds }
++}
++
++/** A stand-in for the package's native part, which writes down what it is asked. */
++function phone({ refuses = false } = {}) {
++  const asked = []
++  const take = (what) => async (value) => {
++    asked.push([what, value])
++    if (refuses) throw new Error('the phone said no')
++  }
++  return { asked, lockAsync: take('lockAsync'), lockPlatformAsync: take('lockPlatformAsync') }
++}
++
++/* The phones and tablets the rule is asked about: the whole screen in points, upright, with what each keeps clear over and under it there. */
++const IPHONES = [
++  /* name, width, height, top, bottom, across on its side, splits */
++  ['an iPhone 17 Pro Max', 440, 956, 62, 34, 832, true],
++  ['an iPhone 16 Plus', 430, 932, 59, 34, 814, true],
++  ['an iPhone 17', 393, 852, 59, 34, 734, true],
++  ['an iPhone 16e', 390, 844, 47, 34, 750, true],
++  ['an iPhone 13 mini', 375, 812, 50, 34, 712, false],
++  ['an iPhone 8 Plus', 414, 736, 20, 0, 736, true],
++  ['an iPhone SE', 375, 667, 20, 0, 667, false]
++]
++const ANDROIDS = [
++  ['a Pixel 8, swiping', 411.43, 914.29, 38, 24, 876.29, true],
++  ['a Pixel 8, three buttons', 411.43, 914.29, 38, 48, 828.29, true],
++  ['a 780-point Galaxy, swiping', 360, 780, 32, 16, 748, true],
++  ['a 780-point Galaxy, three buttons', 360, 780, 32, 48, 700, false],
++  ['an 800-point Galaxy, three buttons', 360, 800, 32, 48, 720, true],
++  ['a small 640-point phone', 360, 640, 24, 48, 568, false]
++]
++
++export function run(test) {
++  test('phone turns: a tablet is asked for nothing, on any screen, for any account', async () => {
++    const r = await rule()
++    /* The app's own tablet line, the one Android is told, and this rule's: one number. */
++    const { TABLET_SIDE } = await import('../shared/device-word.mjs')
++    assert.equal(r.TABLET_SIDE, TABLET_SIDE, 'this rule calls a screen a tablet at a different size from the app')
++    assert.match(read('mobile/plugins/withTabletTurns.js'), new RegExp(`^const TABLET_SIDE = ${TABLET_SIDE}$`, 'm'), 'Android turns at a different size from this rule')
++    /* An iPad is one whatever its size says; anything else by the whole screen's short side, either way up. */
++    for (const [what, device, tablet] of [
++      ['an iPad mini', { pad: true, width: 744, height: 1133 }, true],
++      ['an iPad in a report with no size', { pad: true }, true],
++      ['an Android tablet upright', { width: 800, height: 1280 }, true],
++      ['an Android tablet on its side', { width: 1280, height: 800 }, true],
++      ['a Galaxy Fold opened', { width: 673, height: 841 }, true],
++      ['a screen exactly at the line', { width: 600, height: 960 }, true],
++      ['a screen a point under it', { width: 599, height: 960 }, false],
++      ['a Galaxy Fold shut', { width: 344, height: 882 }, false],
++      ['an iPhone 17 Pro Max upright', { width: 440, height: 956 }, false],
++      ['an iPhone 17 Pro Max on its side', { width: 956, height: 440 }, false],
++      ['nothing measured', {}, false]
++    ]) {
++      assert.equal(r.isTablet(device), tablet, what)
++    }
++    for (const allowed of [true, false]) {
++      for (const inApp of [true, false]) {
++        for (const [onPlay, beside, stageView] of [
++          [true, false, false],
++          [false, true, false],
++          [false, false, true],
++          [false, false, false]
++        ]) {
++          assert.equal(r.turnsWanted({ tablet: true, allowed, fits: true, inApp, onPlay, beside, stageView }), null, 'something is asked of a tablet')
++        }
++      }
++    }
++    /* And nothing is told to it, except to let go of what was asked while the screen was a phone's (a fold opened with the app up). */
++    assert.equal(r.turnStep(null, null), null)
++    assert.equal(r.turnStep(r.UPRIGHT, null), r.RELEASE)
++    assert.equal(r.turnStep(r.TURNS, null), r.RELEASE)
++  })
++
++  test('phone turns: a phone is upright on every screen but Play, what opens beside it and Stage view, and there only for an account the sideways layout is open to', async () => {
++    const r = await rule()
++    const SCREENS = [
++      /* what, { inApp, onPlay, beside, stageView }, may turn */
++      ['Play', { inApp: true, onPlay: true }, true],
++      ['the wait for a rig in Play’s place', { inApp: true, onPlay: true }, true],
++      ['Edit', { inApp: true, beside: true }, true],
++      ['Setlists', { inApp: true, beside: true }, true],
++      ['All presets', { inApp: true, beside: true }, true],
++      ['the tuner in a side', { inApp: true, beside: true }, true],
++      ['Notes', { inApp: true, beside: true }, true],
++      ['a held block’s knobs', { inApp: true, beside: true }, true],
++      ['Stage view', { inApp: true, stageView: true }, true],
++      ['Settings and every page in it', { inApp: true }, false],
++      ['Bluetooth', { inApp: true }, false],
++      ['Troubleshooting', { inApp: true }, false],
++      ['a report', { inApp: true }, false],
++      ['the log', { inApp: true }, false],
++      ['Gear', { inApp: true }, false],
++      ['Connect a computer', { inApp: true }, false],
++      /* In front of the app: whatever screen is behind them, they are upright. */
++      ['the startup card over Play', { inApp: false, onPlay: true }, false],
++      ['the walkthrough', { inApp: false, onPlay: true }, false],
++      ['the sign-in', { inApp: false, onPlay: true }, false],
++      ['the purchase page', { inApp: false, onPlay: true }, false],
++      ['the purchase page opened over Edit', { inApp: false, beside: true }, false],
++      ['How do you connect to your unit?', { inApp: false, onPlay: true }, false],
++      ['the sharing card', { inApp: false, onPlay: true }, false]
++    ]
++    for (const [what, where, turns] of SCREENS) {
++      /* An account it is open to, on a phone long enough. */
++      assert.equal(r.turnsWanted({ tablet: false, allowed: true, fits: true, ...where }), turns ? r.TURNS : r.UPRIGHT, `${what}, his account`)
++      /* Every other account: upright everywhere, Play among them, as the app was. */
++      assert.equal(r.turnsWanted({ tablet: false, allowed: false, fits: true, ...where }), r.UPRIGHT, `${what}, an account the sideways layout is closed to`)
++      /* And a phone too short to split: upright everywhere, never Play stretched. */
++      assert.equal(r.turnsWanted({ tablet: false, allowed: true, fits: false, ...where }), r.UPRIGHT, `${what}, a phone too short to split`)
++    }
++    /* Asked with nothing: upright, never a guess the other way. */
++    assert.equal(r.turnsWanted(), r.UPRIGHT)
++    assert.equal(r.turnsWanted({}), r.UPRIGHT)
++    /* Only `true` opens anything. */
++    assert.equal(r.turnsWanted({ allowed: 'yes', fits: 1, inApp: 1, onPlay: 1 }), r.UPRIGHT)
++    /* The answers are two words and nothing: never upside down, never "sideways only". */
++    assert.deepEqual([r.UPRIGHT, r.TURNS, r.RELEASE], ['upright', 'turns', 'release'])
++  })
++
++  test('phone turns: the phone is told only when the answer changes, and Settings from Play on its side is upright and back', async () => {
++    const r = await rule()
++    /* The app starts on a phone: upright asked once; the same answer again asks nothing. */
++    assert.equal(r.turnStep(null, r.UPRIGHT), r.UPRIGHT)
++    assert.equal(r.turnStep(r.UPRIGHT, r.UPRIGHT), null)
++    /* Play comes up for his account; Settings opens; back to Play. */
++    assert.equal(r.turnStep(r.UPRIGHT, r.TURNS), r.TURNS)
++    assert.equal(r.turnStep(r.TURNS, r.TURNS), null)
++    assert.equal(r.turnStep(r.TURNS, r.UPRIGHT), r.UPRIGHT)
++    assert.equal(r.turnStep(r.UPRIGHT, r.TURNS), r.TURNS)
++    /* A fold shut again, after its time as a tablet: nothing is in force, so it is asked afresh. */
++    assert.equal(r.turnStep(null, r.TURNS), r.TURNS)
++    /* Anything that is not one of the two words is a tablet's nothing. */
++    assert.equal(r.turnStep(null, 'sideways'), null)
++    assert.equal(r.turnStep(r.TURNS, undefined), r.RELEASE)
++  })
++
++  test('phone turns: only a phone long enough to split turns, worked out upright and checked against what it measures on its side', async () => {
++    const r = await rule()
++    /* The line is the one a phone on its side splits at. */
++    const sides = read('mobile/src/lib/twoSides.js')
++    assert.match(sides, new RegExp(`^export const SIDEWAYS_AT = ${r.SIDEWAYS_AT}$`, 'm'), 'this rule turns a phone at a different width from the one it splits at')
++    for (const [what, width, height, top, bottom, across, splits] of IPHONES) {
++      assert.equal(r.sidewaysAcross({ os: 'ios', width, height, top, bottom }), across, `${what}: across on its side`)
++      /* Asked while it is on its side with the same numbers, the long side is still the long side. */
++      assert.equal(r.sidewaysAcross({ os: 'ios', width: height, height: width, top, bottom }), across)
++      assert.equal(r.fitsSideways(across), splits, what)
++    }
++    for (const [what, width, height, top, bottom, across, splits] of ANDROIDS) {
++      assert.ok(Math.abs(r.sidewaysAcross({ os: 'android', width, height, top, bottom }) - across) < 0.01, `${what}: across on its side`)
++      assert.equal(r.fitsSideways(across), splits, what)
++    }
++    /* What the sum says is what lib/twoSides then splits: the same phones, the same answer, with the room the sides tests take off the height. */
++    const two = await load(read('mobile/src/lib/twoSides.js'), 'twoSides')
++    for (const [what, width, height, top, bottom, across, splits] of [...IPHONES, ...ANDROIDS]) {
++      assert.equal(two.phoneSidewaysOn({ width: across, height: width - 108 }), splits, `${what} turns and does not split, or splits and is not let turn`)
++    }
++    /* Nothing measured: nothing across, so upright. */
++    assert.equal(r.sidewaysAcross(), 0)
++    assert.equal(r.fitsSideways(0), false)
++    assert.equal(r.fitsSideways(undefined), false)
++    /*
++     * The check on its side: a frame wider than the screen's short side (so
++     * the phone is on its side) and under the line. The height is never
++     * asked: the keyboard takes it, upright as well as on its side.
++     */
++    assert.equal(r.tooNarrow({ frame: { width: 700, height: 252 }, short: 360 }), true, 'a 780-point Galaxy with three buttons, on its side')
++    assert.equal(r.tooNarrow({ frame: { width: 719.9, height: 300 }, short: 375 }), true)
++    assert.equal(r.tooNarrow({ frame: { width: 720, height: 300 }, short: 360 }), false)
++    assert.equal(r.tooNarrow({ frame: { width: 832, height: 332 }, short: 440 }), false)
++    assert.equal(r.tooNarrow({ frame: { width: 832, height: 60 }, short: 440 }), false, 'the keyboard up on a big phone on its side is taken for a small phone')
++    assert.equal(r.tooNarrow({ frame: { width: 440, height: 800 }, short: 440 }), false, 'a phone held upright is taken for one too narrow on its side')
++    assert.equal(r.tooNarrow({ frame: { width: 360, height: 300 }, short: 360 }), false, 'a phone held upright with the keyboard up, its frame wider than tall, is taken for a small phone on its side')
++    assert.equal(r.tooNarrow({ frame: { width: 393, height: 350 }, short: 393 }), false)
++    /* Nothing measured, or no screen to measure it against: no. */
++    assert.equal(r.tooNarrow({ frame: null, short: 393 }), false)
++    assert.equal(r.tooNarrow({ frame: { width: 700, height: 252 } }), false)
++    assert.equal(r.tooNarrow(), false)
++  })
++
++  test('phone turns: the phone is asked by name through the package’s native part, Android never for "unspecified", and a failure is a log line', async () => {
++    const r = await rule()
++    /* The iPhone: upright is PORTRAIT_UP (3), turning is DEFAULT (0: every way but upside down), and so is letting go. */
++    const ios = phone()
++    const onIos = await talker({ native: ios, os: 'ios' }, r)
++    assert.equal(await onIos.askTurn(r.UPRIGHT), true)
++    assert.equal(await onIos.askTurn(r.TURNS), true)
++    assert.equal(await onIos.askTurn(r.RELEASE), true)
++    assert.deepEqual(ios.asked, [
++      ['lockAsync', 3],
++      ['lockAsync', 0],
++      ['lockAsync', 0]
++    ])
++    assert.deepEqual(onIos.finds, ['ExpoScreenOrientation'], 'the native part is looked for more than once, or by another name')
++    /*
++     * Android: turning is the phone's own choice ("user", 2), NEVER DEFAULT.
++     * DEFAULT there is "unspecified", which plugins/withTabletTurns takes
++     * for nothing asked: it would put the phone upright again the moment it
++     * turned, which is the bug this build is for.
++     */
++    const android = phone()
++    const onAndroid = await talker({ native: android, os: 'android' }, r)
++    assert.equal(onAndroid.ANDROID_USER, 2, 'not ActivityInfo.SCREEN_ORIENTATION_USER')
++    await onAndroid.askTurn(r.UPRIGHT)
++    await onAndroid.askTurn(r.TURNS)
++    await onAndroid.askTurn(r.RELEASE)
++    assert.deepEqual(android.asked, [
++      ['lockAsync', 3],
++      ['lockPlatformAsync', 2],
++      ['lockAsync', 0]
++    ])
++    /* Anything else is not asked at all. */
++    assert.equal(await onAndroid.askTurn('sideways'), false)
++    assert.equal(await onAndroid.askTurn(null), false)
++    assert.equal(android.asked.length, 3)
++    /* A copy built without the package: false, said once in the log, and nothing thrown, however often it is asked. */
++    for (const missing of [{ native: null }, { native: {} }, { native: null, throwsOnFind: true }]) {
++      const none = await talker(missing, r)
++      assert.equal(await none.askTurn(r.UPRIGHT), false)
++      assert.equal(await none.askTurn(r.TURNS), false)
++      assert.equal(none.log.length, 1, 'a copy without the module says so at every ask, or not at all')
++      assert.match(none.log[0].message, /no screen orientation module/)
++      assert.equal(none.finds.length, 1)
++    }
++    /* A phone that refuses: false, a line that says what was asked and why, and nothing thrown. */
++    const no = phone({ refuses: true })
++    const refused = await talker({ native: no, os: 'ios' }, r)
++    assert.equal(await refused.askTurn(r.TURNS), false)
++    assert.equal(refused.log.length, 1)
++    assert.match(refused.log[0].message, /would not take "turns"/)
++    assert.equal(refused.log[0].detail, 'the phone said no')
++    /* Never the package's own front door, which throws while the app loads if the native part is missing; and no bare number where the package has a name. */
++    const src = code(read('mobile/src/lib/turnScreen.js'))
++    assert.doesNotMatch(src, /from 'expo-screen-orientation'|require\(/)
++    assert.doesNotMatch(src, /lockAsync\(\d/)
++    /* The names are the installed package's own, wherever it is installed (a checkout without the phone's packages has nothing to read). */
++    const types = 'mobile/node_modules/expo-screen-orientation/build/ScreenOrientation.types.js'
++    if (there(types)) {
++      const names = read(types)
++      assert.match(names, /OrientationLock\[OrientationLock\["DEFAULT"\] = 0\]/)
++      assert.match(names, /OrientationLock\[OrientationLock\["PORTRAIT_UP"\] = 3\]/)
++    }
++  })
++
++  test('phone turns: the config lets an iPhone turn to either side and starts it upright, an iPad keeps its four ways, and the app applies the rule over every screen', async () => {
++    const app = JSON.parse(read('mobile/app.json')).expo
++    const pkg = JSON.parse(read('mobile/package.json'))
++    assert.ok(pkg.dependencies['expo-screen-orientation'], 'the package is not installed')
++    assert.equal(JSON.parse(read('mobile/package-lock.json')).packages['node_modules/expo-screen-orientation']?.version?.split('.')[0], pkg.dependencies.expo.replace(/^\D+/, '').split('.')[0], 'the package is not the one this Expo version wants')
++    /* An iPhone: upright and either side, never upside down. Written out, so Expo's "default" (which lists upside down) is not what the iPhone gets. */
++    assert.equal(app.orientation, 'default')
++    assert.deepEqual(app.ios.infoPlist.UISupportedInterfaceOrientations, ['UIInterfaceOrientationPortrait', 'UIInterfaceOrientationLandscapeLeft', 'UIInterfaceOrientationLandscapeRight'])
++    /* An iPad: Expo's own four, which it writes for a tablet-supporting app that does not ask for the whole screen; nothing here narrows them. */
++    assert.equal(app.ios.supportsTablet, true)
++    assert.equal(app.ios.requireFullScreen, undefined, 'an iPad that takes the whole screen can be locked, and loses Split View')
++    assert.equal(app.ios.infoPlist['UISupportedInterfaceOrientations~ipad'], undefined)
++    /* It starts upright (the startup card, the sign-in), before any of the app's own code runs; an iPad starts every way up. */
++    const plugins = app.plugins.filter((p) => (Array.isArray(p) ? p[0] : p) === 'expo-screen-orientation')
++    assert.deepEqual(plugins, [['expo-screen-orientation', { initialOrientation: 'PORTRAIT_UP' }]])
++    assert.equal(app.ios.infoPlist['EXDefaultScreenOrientationMask~ipad'], 'UIInterfaceOrientationMaskAll')
++    /* Android's part is the plugin's (test/duo.mjs runs it): still in, once. */
++    assert.equal(app.plugins.filter((p) => p === './plugins/withTabletTurns').length, 1)
++
++    /* App.js: mounted once, over every screen (outside the frame that picks one), and told exactly these things. */
++    const main = read('mobile/App.js')
++    const tree = flat(main)
++    assert.match(main, /^import \{ PhoneTurns \} from '\.\/src\/components\/PhoneTurns'$/m)
++    assert.equal(tree.split('<PhoneTurns ').length - 1, 1, 'the phone is told which way up from two places')
++    assert.match(tree, /<SafeAreaProvider> \{ \} <PhoneTurns allowed=\{sidewaysAllowed\} inApp=\{turnsInApp\} onPlay=\{screen === 'stage'\} beside=\{sideTool !== null\} stageView=\{stageViewUp\} frame=\{frame\} \/>/, 'the rule is not over every screen, or is told something else')
++    assert.match(tree, /const turnsInApp = auth === 'in' && seenWalk === true && !independentDue && !askHow && !askShare && !buying /, 'a page in front of the app can be turned')
++    /* The same switch as the layout it turns for: his account until the switch opens it. */
++    assert.match(tree, /const sidewaysAllowed = sidesAdmin \|\| \(sidesAllowed && PHONE_SIDEWAYS_FOR_EVERYONE\) /)
++
++    /* The component: the whole screen (never the window) says tablet, the rule says what is wanted, and only a change is told. */
++    const part = flat(read('mobile/src/components/PhoneTurns.js'))
++    assert.match(part, /const tablet = isTablet\(\{ pad: Platform\.OS === 'ios' && Platform\.isPad === true, width, height \}\)/)
++    assert.match(part, /Dimensions\.get\('screen'\)/)
++    assert.match(part, /const wanted = turnsWanted\(\{ tablet, allowed, fits, inApp, onPlay, beside, stageView \}\)/)
++    assert.match(part, /const step = turnStep\(asked\.current, wanted\) if \(!step\) return/)
++    assert.match(part, /\}, \[wanted\]\)/)
++    /* Across is worked out only while upright, and kept on its side. */
++    assert.match(part, /if \(height > width\) \{ known\.current\.across = sidewaysAcross\(\{ os: Platform\.OS, width, height, top: insets\.top, bottom: insets\.bottom \}\) known\.current\.upright = true \}/)
++    assert.match(part, /tooNarrow\(\{ frame, short: Math\.min\(width, height\) \}\)/, 'the frame is not measured against the screen’s short side, so the keyboard up could read as a small phone')
++    /* Android alone is asked again when the app comes back to the front, and never on a tablet (the rule's null). */
++    assert.match(part, /if \(Platform\.OS !== 'android'\) return undefined const sub = AppState\.addEventListener\('change', \(state\) => \{ const now = wants\.current if \(state !== 'active' \|\| \(now !== UPRIGHT && now !== TURNS\)\) return/)
++    /* It draws nothing, and reaches the phone only through lib/turnScreen. */
++    assert.match(part, /return null \} ?$/)
++    assert.doesNotMatch(part, /expo-screen-orientation|requireOptionalNativeModule|<View|<Text/)
++    /* And nothing else in the app turns the phone. */
++    assert.deepEqual(
++      ['mobile/App.js', 'mobile/src/screens/Stage.js', 'mobile/src/components/Sides.js', 'mobile/src/components/TopBar.js'].filter((f) => /askTurn|ExpoScreenOrientation/.test(read(f))),
++      []
++    )
++  })
++}
+diff --git a/test/run.mjs b/test/run.mjs
+index ad3c33d8..fb530b88 100644
+--- a/test/run.mjs
++++ b/test/run.mjs
+@@ -6815,6 +6815,10 @@ console.log('\nTwo sides on a big screen: Play beside Edit, Setlists or All pres
+ const { run: twoSides } = await import('./two-sides.mjs')
+ twoSides(test)
+ 
++console.log('\nwhich way up a phone may be held: upright everywhere, either side on Play, and a tablet asked for nothing')
++const { run: phoneTurns } = await import('./phone-turns.mjs')
++phoneTurns(test)
++
+ console.log('\nthe hold pop-up: the block’s knobs over its channels, his account only')
+ const { run: holdPop } = await import('./hold-pop.mjs')
+ holdPop(test)
+diff --git a/test/two-sides.mjs b/test/two-sides.mjs
+index 391bd666..5eefd28d 100644
+--- a/test/two-sides.mjs
++++ b/test/two-sides.mjs
+@@ -726,6 +726,18 @@ export function run(test) {
+     assert.deepEqual(frameOf(956, 440, { left: 62, right: 62 }), { width: 832, height: 332, left: 62, right: 62 })
+     assert.deepEqual(r.splitSides({ width: 832, left: 62, right: 62 }), { first: 416, second: 416 })
+     assert.deepEqual(r.splitSides({ width: 734, left: 59, right: 59 }), { first: 367, second: 367 })
++    /*
++     * An Android phone on its side keeps its camera clear down ONE side, and
++     * that is no fold: it splits down the middle of its own frame (App.js
++     * `sidesFrame`), so a 780-point phone with 748 across is two halves of
++     * 374. Cut where a fold would be, one side came out 358 and it did not
++     * split at all. Its three buttons down the other side leave it 700, and
++     * that is one screen.
++     */
++    assert.equal(side(780, 360, { left: 32 }), true, 'a 780-point Android phone on its side, its camera down one side')
++    assert.equal(side(780, 360, { right: 32 }), true, 'the same phone turned the other way')
++    assert.equal(side(780, 360, { left: 32, right: 48 }), false, 'the same phone with three buttons down its other side: 700 across')
++    assert.match(code(read('mobile/App.js')), /const sidesFrame = useMemo\(\(\) => \(low && frame \? \{ \.\.\.frame, left: 0, right: 0 \} : frame\), \[low, frame\]\)/, 'the line between a phone’s two sides is put where a fold would be')
+     /* Too narrow for two halves: one screen, as today. */
+     assert.equal(side(812, 375, { left: 50, right: 50 }), false, 'an iPhone 13 mini on its side: 712 across')
+     assert.equal(side(667, 375), false, 'an iPhone SE on its side')
+@@ -900,7 +912,7 @@ export function run(test) {
+     assert.match(app, /tools=\{toolsOffered\}\s*onPick=\{openTool\}\s*list=\{sideList\}\s*onList=\{setSideList\}/)
+     assert.match(app, /slim=\{low && \(screen === 'stage' \|\| twoSidesUp\)\}\s*lead=\{sideLead\}/)
+     /* There the bar's left is the two sides' buttons, or Play's own preset and Setlists; and the account's photo gives way to them only there. */
+-    assert.match(app, /const sideLead = !wide \? null : twoSidesUp \? \(\s*<SidesLead frame=\{frame\} tool=\{sideTool\} full=\{sideFull\} playOnRight=\{playOnRight\} big=\{big\} onName=\{setSideList\} onSwap=\{swapSides\} onFull=\{setSideFull\} handle=\{sideHandle\} share=\{sideShare\} three=\{thirdUp \? third : null\} onAdd=\{thirdCanOpen \? openThirdList : null\} onThird=\{openThirdList\} \/>\s*\) : low \? \(/, 'the bar carries the sides’ buttons on a window that shows one side')
++    assert.match(app, /const sideLead = !wide \? null : twoSidesUp \? \(\s*<SidesLead frame=\{sidesFrame\} tool=\{sideTool\} full=\{sideFull\} playOnRight=\{playOnRight\} big=\{big\} onName=\{setSideList\} onSwap=\{swapSides\} onFull=\{setSideFull\} handle=\{sideHandle\} share=\{sideShare\} three=\{thirdUp \? third : null\} onAdd=\{thirdCanOpen \? openThirdList : null\} onThird=\{openThirdList\} \/>\s*\) : low \? \(/, 'the bar carries the sides’ buttons on a window that shows one side')
+     assert.match(app, /\) : low \? \(\s*screen === 'stage' && playHeadUp \? \(\s*<PlayHead onOpenPresets=\{demo \|\| link\.link === 'connected' \? \(\) => setScreen\('presets'\) : null\} onOpenSetlists=\{\(\) => setScreen\('setlists'\)\} \/>\s*\) : null\s*\) : playOnScreen \? \(/, 'the preset in the bar does not open what Play’s own does, or is drawn off a phone on its side')
+     assert.match(app, /onOpenAccount=\{low && sideLead \? null : openAccount\}/)
+     /* The bar: something on its left in the version's place, and less padding, only when App says. */
