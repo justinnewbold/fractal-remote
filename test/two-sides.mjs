@@ -36,7 +36,7 @@ async function rules() {
     writeFileSync(join(dir, 'twoSides.js'), sides)
     writeFileSync(join(dir, 'gigSize.js'), read('mobile/src/lib/gigSize.js'))
     writeFileSync(join(dir, 'playShape.js'), read('mobile/src/lib/playShape.js').replace("from './gigSize'", "from './gigSize.js'"))
-    /* For Derek's panel: Play's squares, which the panel takes the scenes' room from, and Edit's door, which it opens behind. Neither imports anything. */
+    /* For Derek's panel: Play's tiles filling a big screen, which the panel takes the scenes' room from, and Edit's door, which it opens behind. Neither imports anything. */
     for (const f of ['squarePlay', 'editDoor']) {
       const src = read(`mobile/src/lib/${f}.js`)
       assert.doesNotMatch(src, /^import /m, `lib/${f} imports something; this check runs it on its own`)
@@ -497,15 +497,16 @@ export function run(test) {
     assert.equal(r.panelFollows(), 'wait')
   })
 
-  test('Derek’s panel where the scenes were: the blocks stay exactly where they are, and a chain too long to sit beside its scenes is squared again beside the panel', async () => {
+  test('Derek’s panel where the scenes were: the blocks stay exactly where they are, and a chain that sat under its scenes fills what is left beside the panel', async () => {
     const r = await rules()
     const ASK = { gap: 8, head: 34, between: 16, beside: 24 }
     assert.equal(r.PANEL_LEAST, 320)
     assert.ok(r.PANEL_MOST > r.PANEL_LEAST)
-    /* panelLane's own least square is Play's. */
-    assert.equal(r.panelLane({ width: r.PANEL_LEAST + 24 + r.SQUARE_LEAST, sq: { beside: false, sceneCols: 8, chainCols: 1, side: 72 } })?.chain, r.SQUARE_LEAST)
-    assert.equal(r.panelLane({ width: r.PANEL_LEAST + 24 + r.SQUARE_LEAST - 1, sq: { beside: false, sceneCols: 8, chainCols: 1, side: 72 } }), null, 'a panel with no room left for one square beside it')
-    /* Every big screen, with every chain: the panel fits, and whichever way Play's squares lay, nothing runs off the row. */
+    /* panelLane's own least tile is Play's. */
+    const least = { beside: false, sceneCols: 8, chainCols: 1, scene: { wide: 72, high: 72 }, pedal: { wide: 72, high: 72 } }
+    assert.equal(r.panelLane({ width: r.PANEL_LEAST + 24 + r.SQUARE_LEAST, plan: least })?.chain, r.SQUARE_LEAST)
+    assert.equal(r.panelLane({ width: r.PANEL_LEAST + 24 + r.SQUARE_LEAST - 1, plan: least }), null, 'a panel with no room left for one tile beside it')
+    /* Every big screen, with every chain: the panel fits, and whichever way Play's tiles lay, nothing runs off the row. */
     let stayed = 0
     let squaredAgain = 0
     for (const [name, width, room] of [
@@ -519,17 +520,17 @@ export function run(test) {
       for (const scenes of [0, 4, 8]) {
         for (const pedals of [1, 2, 4, 6, 7, 9, 12, 16, 24]) {
           const at = `${name}, ${scenes} scenes and ${pedals} pedals`
-          const sq = r.squarePlan({ width, room, scenes, pedals, ...ASK })
-          const lane = r.panelLane({ width, sq, gap: ASK.gap, beside: ASK.beside })
+          const plan = r.tilePlan({ width, room, scenes, pedals, ...ASK })
+          const lane = r.panelLane({ width, plan, gap: ASK.gap, beside: ASK.beside })
           assert.ok(lane, `${at}: no panel`)
           assert.ok(lane.panel >= r.PANEL_LEAST, `${at}: a panel ${lane.panel} points across`)
           if (lane.stays) {
             stayed++
-            assert.equal(sq.beside, true, `${at}: the blocks are said to stay where there was no column beside them`)
+            assert.equal(plan.beside, true, `${at}: the blocks are said to stay where there was no column beside them`)
             assert.equal(lane.chain, null)
             /* Where the blocks were: centred with the scenes; where they are now: after the panel, from the left edge. The same place. */
-            const scenesWide = r.gridWide(sq.sceneCols, sq.side, ASK.gap)
-            const chainWide = r.gridWide(sq.chainCols, sq.side, ASK.gap)
+            const scenesWide = r.gridWide(plan.sceneCols, plan.scene.wide, ASK.gap)
+            const chainWide = r.gridWide(plan.chainCols, plan.pedal.wide, ASK.gap)
             const was = (width - scenesWide - ASK.beside - chainWide) / 2 + scenesWide + ASK.beside
             assert.ok(Math.abs(lane.panel + ASK.beside - was) < 0.001, `${at}: the blocks were at ${was} and are at ${lane.panel + ASK.beside}`)
             assert.ok(lane.panel + ASK.beside + chainWide <= width + 0.001, `${at}: the blocks run off the row`)
@@ -537,9 +538,14 @@ export function run(test) {
             squaredAgain++
             assert.ok(lane.panel <= r.PANEL_MOST, `${at}: a panel ${lane.panel} points across`)
             assert.equal(lane.panel + ASK.beside + lane.chain, width, `${at}: the panel and the blocks are not the row`)
-            const again = r.squarePlan({ width: lane.chain, room, scenes: 0, pedals, ...ASK })
-            assert.ok(again && again.side >= r.SQUARE_LEAST, `${at}: no squares beside the panel`)
-            assert.ok(r.gridWide(again.chainCols, again.side, ASK.gap) <= lane.chain + 0.001, `${at}: the blocks beside the panel run off the row`)
+            const again = r.tilePlan({ width: lane.chain, room, scenes: 0, pedals, ...ASK })
+            assert.ok(again && again.pedal.wide >= r.SQUARE_LEAST && again.pedal.high >= r.SQUARE_LEAST, `${at}: no tiles beside the panel`)
+            assert.ok(r.gridWide(again.chainCols, again.pedal.wide, ASK.gap) <= lane.chain + 0.001, `${at}: the blocks beside the panel run off the row`)
+            /* And they fill what is left: to its right-hand edge, and down the room, unless they are held back from being banners or the page scrolls. */
+            if (!again.capped) assert.ok(r.gridWide(again.chainCols, again.pedal.wide, ASK.gap) >= lane.chain * 0.95, `${at}: the blocks beside the panel stop short of the edge`)
+            const down = ASK.head + r.gridTall(Math.ceil(pedals / again.chainCols), again.pedal.high, ASK.gap)
+            if (!again.scrolls) assert.ok(down <= room + 0.001, `${at}: the blocks beside the panel run off the bottom`)
+            if (!again.scrolls && !again.capped) assert.ok(down >= room * 0.95, `${at}: the blocks beside the panel stop short of the bottom`)
           }
         }
       }
@@ -547,25 +553,28 @@ export function run(test) {
     assert.ok(stayed > 0 && squaredAgain > 0, 'one of the two ways was never tried')
     /* Side by side already (a 13-inch iPad, eight scenes and seven pedals; an AM4's four and four): the blocks stay. */
     for (const [width, room, scenes, pedals] of [[1148, 660, 8, 7], [1148, 426, 4, 4]]) {
-      const sq = r.squarePlan({ width, room, scenes, pedals, ...ASK })
-      assert.equal(sq.beside, true)
-      assert.equal(r.panelLane({ width, sq, gap: ASK.gap, beside: ASK.beside }).stays, true)
+      const plan = r.tilePlan({ width, room, scenes, pedals, ...ASK })
+      assert.equal(plan.beside, true)
+      assert.equal(r.panelLane({ width, plan, gap: ASK.gap, beside: ASK.beside }).stays, true)
     }
-    /* The scenes over the blocks (an 11-inch iPad on its side with eight scenes in one row over seven pedals): there is no column to take, so the panel gets one and the blocks are squared again beside it. */
-    const long = r.squarePlan({ width: 1148, room: 426, scenes: 8, pedals: 7, ...ASK })
+    /* The scenes over the blocks (an 11-inch iPad on its side with eight scenes in one row over seven pedals): there is no column to take, so the panel gets one and the blocks fill what is left beside it. */
+    const long = r.tilePlan({ width: 1148, room: 426, scenes: 8, pedals: 7, ...ASK })
     assert.equal(long.beside, false, 'eight scenes and seven pedals are side by side on an 11-inch iPad now; pick another for this check')
-    const moved = r.panelLane({ width: 1148, sq: long, gap: ASK.gap, beside: ASK.beside })
+    const moved = r.panelLane({ width: 1148, plan: long, gap: ASK.gap, beside: ASK.beside })
     assert.equal(moved.stays, false)
     assert.equal(moved.panel, r.PANEL_MOST)
     assert.equal(moved.panel + ASK.beside + moved.chain, 1148)
     /* Scenes too narrow to hold three knobs: the same. And no scenes at all. */
-    const thin = r.panelLane({ width: 760, sq: { beside: true, sceneCols: 1, chainCols: 6, side: 100 }, gap: 8, beside: 24 })
+    const thin = r.panelLane({ width: 760, plan: { beside: true, sceneCols: 1, chainCols: 6, scene: { wide: 100, high: 100 }, pedal: { wide: 100, high: 100 } }, gap: 8, beside: 24 })
     assert.equal(thin.stays, false)
     assert.ok(thin.panel >= r.PANEL_LEAST)
-    assert.equal(r.panelLane({ width: 1148, sq: { beside: false, sceneCols: 0, chainCols: 7, side: 150 }, gap: 8, beside: 24 }).stays, false)
+    assert.equal(r.panelLane({ width: 1148, plan: { beside: false, sceneCols: 0, chainCols: 7, scene: { wide: 0, high: 0 }, pedal: { wide: 150, high: 150 } }, gap: 8, beside: 24 }).stays, false)
+    /* The scenes' column is measured by the scenes' own tiles, which need not be the pedals' size now: two scenes 277 across, whatever the pedals are. */
+    const wide = r.panelLane({ width: 1148, plan: { beside: true, sceneCols: 2, chainCols: 2, scene: { wide: 277, high: 192 }, pedal: { wide: 277, high: 392 } }, gap: 8, beside: 24 })
+    assert.deepEqual(wide, { panel: 562, stays: true, chain: null })
     /* Nothing measured, nothing planned: no panel, never a guess. */
-    assert.equal(r.panelLane({ width: 0, sq: long }), null)
-    assert.equal(r.panelLane({ width: 1148, sq: null }), null)
+    assert.equal(r.panelLane({ width: 0, plan: long }), null)
+    assert.equal(r.panelLane({ width: 1148, plan: null }), null)
     assert.equal(r.panelLane(), null)
   })
 
@@ -583,7 +592,7 @@ export function run(test) {
     assert.equal(stage.match(/HOLD_FOR_KNOBS/g).length, 2, 'the knobs’ words are said somewhere else on Play')
     /* Nobody is told about knobs, or given them, unless App says so: the default is the pop-up. */
     assert.match(stage, /holdOpens = null,\n\s*knobsAt = null,\n\s*onHoldBlock = null,\n\s*onCloseKnobs = null,\n/)
-    assert.match(stage, /const lanePlan = \(holdOpens === 'lane' \|\| knobsAt !== null\) && sqOwn \? panelLane\(\{ width: squareRow, sq: sqOwn, gap: space\.sm, beside: space\.xl \}\) : null\n/)
+    assert.match(stage, /const lanePlan = \(holdOpens === 'lane' \|\| knobsAt !== null\) && fillOwn \? panelLane\(\{ width: fillRow, plan: fillOwn, gap: space\.sm, beside: space\.xl \}\) : null\n/)
     assert.match(stage, /const knobsHere = holdOpens === 'lane' \? lanePlan !== null : Boolean\(holdOpens\)\n/)
     /* The hold: the knobs where they open, and exactly today's pop-up everywhere else; never on the outline. */
     assert.match(stage, /onLongPress=\{\s*channels\?\.length > 1 && !chainNow\.outline\s*\? \(\) => \(knobsHere \? holdForKnobs\(idOf\(block\)\) : setPicking\(picking === idOf\(block\) \? null : idOf\(block\)\)\)\s*: undefined\s*\}/)
@@ -678,8 +687,10 @@ export function run(test) {
     assert.match(app, /saveHere=\{screen !== 'edit' && blockAt === null\}/)
     /* Where the scenes were: the panel in their place, as tall as the room under the preset, the scenes away while it is up, and Play's page still while a knob is held. */
     assert.match(stage, /const knobsLane = lanePlan && knobsAt !== null && \(lanePlan\.stays \|\| laneAgain\) \? lanePlan : null\n/)
-    assert.match(stage, /const sq = knobsLane \? \{ \.\.\.\(knobsLane\.stays \? sqOwn : laneAgain\), beside: true \} : sqOwn\n/)
-    assert.match(stage, /\{knobsLane \? \(\s*<View style=\{\[KNOBS_BOX, \{ borderColor: color\.rule, width: knobsLane\.panel, height: Math\.max\(0, squareRoom\) \}\]\}>\s*<BlockSide eid=\{knobsAt\} onClose=\{onCloseKnobs\} onScrollLock=\{setKnobHeld\} \/>\s*<\/View>\s*\) : null\}/)
+    assert.match(stage, /const fill = knobsLane \? \{ \.\.\.\(knobsLane\.stays \? fillOwn : laneAgain\), beside: true \} : fillOwn\n/)
+    /* The blocks beside a panel with a column of its own are planned in what is left of the row, for the whole room, with no scenes. */
+    assert.match(stage, /const laneAgain =\s*lanePlan && knobsAt !== null && !lanePlan\.stays\s*\? tilePlan\(\{\s*width: lanePlan\.chain,\s*room: fillRoom,\s*scenes: 0,\s*pedals: fitBlocks,\s*\.\.\.fillAsk\s*\}\)\s*: null\n/)
+    assert.match(stage, /\{knobsLane \? \(\s*<View style=\{\[KNOBS_BOX, \{ borderColor: color\.rule, width: knobsLane\.panel, height: Math\.max\(0, fillRoom\) \}\]\}>\s*<BlockSide eid=\{knobsAt\} onClose=\{onCloseKnobs\} onScrollLock=\{setKnobHeld\} \/>\s*<\/View>\s*\) : null\}/)
     assert.match(stage, /\{scenes\.hasScenes && !knobsLane \? \(\s*<View style=\{sceneLane\}>/)
     assert.match(stage, /scrollEnabled=\{!\(knobHeld && knobsLane\)\}/)
     assert.match(stage, /const LANES_KNOBS = \{ \.\.\.LANES, justifyContent: 'flex-start' \}\n/)

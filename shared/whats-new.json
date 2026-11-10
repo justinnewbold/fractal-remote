@@ -4,17 +4,17 @@
   "days": [
     {
       "date": "2026-11-10",
-      "version": "1.90.16",
+      "version": "1.90.17",
       "lines": [
         "On a tablet turned on its side, or a folding phone opened, Play can now share the screen: tap Edit, Setlists or the preset name and it opens beside Play, and the tuner takes a narrow strip instead of covering everything. Each side has Swap and Full screen, and Two sides brings the other back."
       ]
     },
     {
       "date": "2026-11-09",
-      "version": "1.90.15",
+      "version": "1.90.17",
       "lines": [
         "Getting connected is simpler: Connect a computer is now three numbered steps, and the Bluetooth and Raspberry Pi setup guides are short pages with links to what to buy.",
-        "On a tablet or other big screen, Play’s scenes and effects are now square tiles that spread across the screen, instead of wide stretched bars.",
+        "On a tablet or other big screen, Play’s scenes and effects now fill the whole screen as big tiles, as close to square as they fit, instead of wide stretched bars.",
         "In Edit, a block’s knobs now come straight under its channel buttons, with Copy channel, on and off, and the model below the knobs.",
         "On the Bluetooth page, a USB MIDI cable that’s plugged in, like the U2MIDI Pro on an FM3, now has its own Use the USB cable button, even while the app is still trying a Bluetooth adapter. The FM3’s note now says that cable plugs straight into your phone or tablet.",
         "On a tablet, the walkthrough and the Unlock page now fill the screen, with bigger words, pictures and buttons, and the Unlock page opens wider.",
