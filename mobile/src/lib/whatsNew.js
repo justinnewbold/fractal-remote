@@ -12,14 +12,14 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-09",
     "day": "9 November 2026",
-    "version": "1.90.14",
+    "version": "1.90.15",
     "lines": [
       {
         "text": "Getting connected is simpler: Connect a computer is now three numbered steps, and the Bluetooth and Raspberry Pi setup guides are short pages with links to what to buy.",
         "only": null
       },
       {
-        "text": "On a tablet or other big screen, Play’s scenes and effects are now square tiles, as big as the screen allows, instead of wide stretched bars.",
+        "text": "On a tablet or other big screen, Play’s scenes and effects are now square tiles that spread across the screen, instead of wide stretched bars.",
         "only": null
       },
       {
