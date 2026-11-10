@@ -89,8 +89,10 @@ once a day and tells a phone whose store copy is older that a newer one is
 in the store (mobile/src/lib/store-rule.js). A number moved early sends
 people to a store that does not have it yet; one never moved leaves the old
 copies, which stop getting updates once the new build changes what an update
-needs, with nothing telling them. It says 1.87.11 for both since 13 October
-2026.
+needs, with nothing telling them. It said 1.87.11 for both from 13 October
+2026, and says 1.90.0 for both since 10 November 2026: the App Store's
+number moved on 9 November, and Google Play's on the 10th, the day its own
+listing showed 1.90.0 (Justin: "Google's 1.9 0.0 is already live").
 
 ## October 2026
 

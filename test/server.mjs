@@ -1120,7 +1120,7 @@ export function run(test) {
   })
 
   test('with the switch on, both emails offer both ways: Bluetooth first for every unit from 1.89.0, then the computer, and help still a reply to Justin', async () => {
-    const { setupEmail, BLUETOOTH_FROM } = await setupWords()
+    const { setupEmail, BLUETOOTH_FROM, EDIT_FROM } = await setupWords()
     /*
      * "Having trouble getting connected? Here's how to set up the computer or
      * connect with Bluetooth" (Justin, 1 November 2026): each way under a
@@ -1137,8 +1137,27 @@ export function run(test) {
       /* Since 31 October nothing of where it has been tried (the Developer page's), and the FM3's warning alone. */
       'On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one.'
     const allSet = 'Already up and running? Then you’re all set, and you can ignore this email.'
-    const first = setupEmail('first', 'fan@example.com', { bluetooth: true })
-    const reminder = setupEmail('reminder', 'fan@example.com', { bluetooth: true })
+    /*
+     * Asked for with editing off, by name: this is the paragraph every copy
+     * before 1.90.0 was true of. Since 10 November 2026 the switch
+     * (EDIT_IN_EMAILS) is on, 1.90.0 being live in both stores, so the
+     * emails as they go carry the editing sentence in the same place, under
+     * the same heading; that wording is held here too, after this one, and
+     * word for word by the editing test below.
+     */
+    const first = setupEmail('first', 'fan@example.com', { bluetooth: true, editing: false })
+    const reminder = setupEmail('reminder', 'fan@example.com', { bluetooth: true, editing: false })
+    const secondWithEdit = second.replace(
+      ', with no editing or saving. ',
+      `. From version ${EDIT_FROM} you can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself). `
+    )
+    assert.notEqual(secondWithEdit, second, 'the Bluetooth paragraph no longer ends its units sentence where the editing sentence goes')
+    for (const kind of ['first', 'reminder']) {
+      const e = setupEmail(kind, 'fan@example.com', { bluetooth: true, editing: true })
+      assert.ok(e.text.includes(`\nBluetooth (no computer needed):\n\n${secondWithEdit}\n\nOr the computer (about five minutes):\n\n1. `), `with editing in it, the ${kind} email does not say Bluetooth under its own heading, then the computer’s`)
+      assert.ok(e.html.includes(`<p style="margin:0 0 16px">${secondWithEdit}</p>`), `with editing in it, the ${kind} email’s HTML does not say the Bluetooth way`)
+      assert.equal((e.text.match(/\bfree\b/gi) || []).length, 1, `with editing in it, the ${kind} email says free more than once`)
+    }
     for (const [which, e, help] of [
       ['first', first, 'If you get stuck anywhere, just reply to this email.'],
       ['reminder', reminder, 'If something got in the way, reply and tell me what you see']
@@ -1295,7 +1314,9 @@ export function run(test) {
     const at = readme.indexOf('### Editing in the emails, from 1.90.0')
     assert.ok(at > readme.indexOf('### Bluetooth in the emails, from 1.89.0'), 'supabase/README.md does not say how the editing sentence goes on')
     const section = readme.slice(at, readme.indexOf('## ', at + 4))
-    assert.match(section, /`EDIT_IN_EMAILS = false`/)
+    /* On in the repository since 10 November 2026 (1.90.0 live in both stores); the README says so, and that the deployed function still changes only by its steps. */
+    assert.match(section, /It is \*\*on in the repository since 10 November 2026\*\*: `EDIT_IN_EMAILS = true`/)
+    assert.match(section, /The deployed function changes only when it is redeployed/)
     const steps = ['set `EDIT_IN_EMAILS = true`', 'Turn the setup emails off', '`supabase functions deploy setup-reminder --no-verify-jwt`', 'Send me a sample of both emails', 'Turn the setup emails on again'].map((s) => section.indexOf(s))
     assert.ok(steps.every((i) => i > 0), 'the README’s editing steps leave one out')
     assert.deepEqual([...steps].sort((a, b) => a - b), steps, 'the README redeploys before the setup emails are off, or turns them on before the sample is read')
