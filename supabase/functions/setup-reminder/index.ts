@@ -134,7 +134,14 @@ export const BLUETOOTH_FROM = '1.89.0'
 export const EDIT_FROM = '1.90.0'
 /*
  * EDITING IN THE BLUETOOTH PARAGRAPH, OFF UNTIL THE STORE VERSION THAT OPENS
- * IT IS IN BOTH STORES. The same rule as BLUETOOTH_IN_EMAILS above, for the
+ * IT IS IN BOTH STORES, AND ON SINCE 10 NOVEMBER 2026: the App Store has
+ * had 1.90.0 since 9 November, and Google Play's own listing showed 1.90.0
+ * on the 10th (Justin: "Google's 1.9 0.0 is already live"). This line is
+ * the repository's; the function that sends is the deployed one, which
+ * changes only when it is redeployed, with the emails off and Justin
+ * reading the sample first (supabase/README.md).
+ *
+ * The same rule as BLUETOOTH_IN_EMAILS above, for the
  * one sentence that says Edit opens over Bluetooth: the email goes to every
  * buyer whatever store copy they hold, and a 1.89.3 or 1.89.36 copy keeps
  * Edit closed over Bluetooth, so the sentence goes on only once EDIT_FROM is
@@ -145,7 +152,7 @@ export const EDIT_FROM = '1.90.0'
  * supabase/README.md, "Editing in the emails, from 1.90.0", says the day's
  * order: emails off, redeploy, Justin reads the sample, emails on.
  */
-export const EDIT_IN_EMAILS = false
+export const EDIT_IN_EMAILS = true
 /** A run's most. The backlog on the first day is about a dozen. */
 const AT_MOST = 25
 /* Resend takes a couple of requests a second; one at a time with a gap stays under it. */

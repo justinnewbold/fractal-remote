@@ -545,11 +545,17 @@ scope, and then "From version 1.90.0 you can also edit over it on an AM4,
 FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving
 (save on the unit itself)." Never the VP4.
 
-It is **off**: `EDIT_IN_EMAILS = false` at the top of
-`functions/setup-reminder/index.ts`, beside `EDIT_FROM = '1.90.0'`, which
-is the number the sentence says and has to be the one `EDIT_FROM_STORE`
-keys every unit it names to, on both phones (test/server.mjs holds the two
-together).
+It is **on in the repository since 10 November 2026**: `EDIT_IN_EMAILS = true`
+at the top of `functions/setup-reminder/index.ts`, beside
+`EDIT_FROM = '1.90.0'`, which is the number the sentence says and has to be
+the one `EDIT_FROM_STORE` keys every unit it names to, on both phones
+(test/server.mjs holds the two together). That day 1.90.0 was live in both
+stores: the App Store since 9 November, and Google Play by its own listing
+on the 10th (Justin: "Google's 1.9 0.0 is already live"), so steps 1 and 2
+below are done. **The deployed function changes only when it is
+redeployed**: until steps 3 to 6 are done, with Justin reading the sample,
+the emails that go are still the deployed function's, "with no editing or
+saving". (Until that day the switch was off: `EDIT_IN_EMAILS = false`.)
 
 **Switch it on the day 1.90.0 is live on the App Store and on Google Play,
 both, and only if 1.90.0 is the build that opened Edit over Bluetooth on
