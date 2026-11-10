@@ -81,3 +81,19 @@ export const HOLD_KNOBS_FOR_EVERYONE = false
  * new in the same pull request.
  */
 export const PHONE_SIDEWAYS_FOR_EVERYONE = false
+
+/**
+ * THE HOLD POP-UP CARRIES THE BLOCK'S KNOBS, OVER ITS CHANNELS (lib/holdPop,
+ * components/PopKnobs), for everyone.
+ *
+ * OFF: his account only. "Also when not in landscape mode on all devices
+ * and screens instead of just having channels pop up to change have the
+ * knobs only pop up above the channels so some one can quick change a
+ * setting" (Justin, 10 November 2026), built the same day and not yet seen
+ * on a phone. Every other account's pop-up is the channels alone, as it
+ * was. Where it opens it still needs Edit's own door (lib/editDoor) and is
+ * never a VP4's, so this line opens no editing anywhere Edit is closed.
+ * This is the one line that opens it, with its line in What's new in the
+ * same pull request.
+ */
+export const HOLD_POPUP_KNOBS_FOR_EVERYONE = false

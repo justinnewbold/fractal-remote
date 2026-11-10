@@ -763,6 +763,18 @@ export function BlockPanel({
   onRestoring,
   undoSaid,
   onUndoSaid,
+  /*
+   * DRAWN IN PLAY'S HOLD POP-UP (components/PopKnobs; lib/holdPop): "have
+   * the knobs only pop up above the channels" (Justin, 10 November 2026).
+   * The knobs and their pages, read and written by the same code, and
+   * nothing else (lib/holdPop POP_LEAVES_OUT). The pop-up draws it as the
+   * panel below too, which takes out the name's row, Copy channel and the
+   * on/off button, and hands it no channels, since its own are under the
+   * knobs. What `bare` adds is the rest: no model list and no cab state
+   * are asked for, so no model and no IR picker are drawn, and the Level
+   * is left to Edit. False everywhere else.
+   */
+  bare = false,
   overBle = false,
   /*
    * DRAWN AS DEREK'S PANEL (components/BlockSide: a block held on Play, on a
@@ -853,12 +865,13 @@ export function BlockPanel({
       try {
         const [p, t] = await Promise.all([
           blockParams(eid),
-          blockTypes(block.slug).catch(() => [])
+          /* The pop-up's knobs (`bare`) draw no model, so no list of them is asked for. */
+          bare ? [] : blockTypes(block.slug).catch(() => [])
         ])
         /* After the params, not beside them: both are a read of the whole
            block down one relay. And a cab state that cannot be had is the
            panel as it always was, not an error on screen. */
-        const c = block.slug === 'cab' ? await readCab(() => cabState(eid), p) : null
+        const c = bare ? null : block.slug === 'cab' ? await readCab(() => cabState(eid), p) : null
         if (stop) return
         setParams(p?.named || [])
         setLayout(p?.layout || null)
@@ -874,7 +887,7 @@ export function BlockPanel({
     return () => {
       stop = true
     }
-  }, [eid, block.slug, onError, readAgain, knobless])
+  }, [eid, block.slug, onError, readAgain, knobless, bare])
 
   useEffect(() => () => clearTimeout(undoTimer.current), [])
 
@@ -1376,7 +1389,7 @@ export function BlockPanel({
         return h?.blurb ? <Note>{`${open.label || open.name}: ${h.blurb}${h.tip ? ` ${h.tip}` : ''}`}</Note> : null
       })()}
 
-      {level ? (
+      {level && !bare ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>LEVEL</Text>
           <Text style={{ color: color.silk, fontSize: font.body, fontFamily: face }}>

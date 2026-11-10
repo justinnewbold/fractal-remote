@@ -184,7 +184,7 @@ export function run(test) {
 
   test('tablet room: only the Unlock sheet comes up wider, and a sheet without `wide` is exactly the sheet it was', () => {
     const sheet = flat(read('mobile/src/components/Sheet.js'))
-    assert.match(sheet, /export default function Sheet\(\{ open, onClose, title, note, head, foot, tall = false, wide = null, children \}\)/)
+    assert.match(sheet, /export default function Sheet\(\{ open, onClose, title, note, head, foot, tall = false, wide = null, still = false, children \}\)/)
     assert.match(sheet, /\}, wide \? \{ width: '100%', maxWidth: wide, alignSelf: 'center' \} : null\]\}/, 'a sheet without `wide` is drawn with something more')
     const users = []
     for (const file of phoneFiles()) {

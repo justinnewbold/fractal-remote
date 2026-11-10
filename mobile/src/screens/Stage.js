@@ -33,7 +33,9 @@ import { bigTilesOn, gridWide, tilePlan } from '../lib/squarePlay'
 import { sidewaysPlan } from '../lib/sidewaysPlay'
 import { sayPlayHead } from '../lib/playHead'
 import { HOLD_FOR_KNOBS, panelLane } from '../lib/twoSides'
+import { POP_CHANNEL_TALL, popKnobsFor } from '../lib/holdPop'
 import BlockSide from '../components/BlockSide'
+import PopKnobs from '../components/PopKnobs'
 import {
   arrivedCurrent,
   clearError,
@@ -271,6 +273,16 @@ export default function Stage({
   knobsAt = null,
   onHoldBlock = null,
   onCloseKnobs = null,
+  /*
+   * THE HOLD POP-UP CARRIES THE BLOCK'S KNOBS, OVER ITS CHANNELS (lib/holdPop
+   * popKnobsOn, asked by App): "have the knobs only pop up above the
+   * channels so some one can quick change a setting" (Justin, 10 November
+   * 2026). True only where Edit's door opens and the account is one it is
+   * open to (his, until features HOLD_POPUP_KNOBS_FOR_EVERYONE). False
+   * everywhere else, and the pop-up is the channels alone, exactly as it
+   * was. Where the hold opens the panel (`knobsHere`), no pop-up opens.
+   */
+  popKnobs = false,
   /*
    * THE COMPUTERS ON THE ACCOUNT, from App (link.js's own word for them):
    * every one that answered, the units on them, the one driven, and a pick
@@ -1993,6 +2005,7 @@ export default function Stage({
           writeChannel(picking, ch)
           setPicking(null)
         }}
+        knobs={popKnobs}
       />
 
       <Sheet open={looping && !!looperHere && !chainNow.elsewhere} onClose={() => setLooping(false)} title="Looper">
@@ -2448,8 +2461,60 @@ const FOOT_ROW = { flexDirection: 'row', gap: space.sm }
  *
  * The same words the browser uses, because they are the same fact.
  */
-function ChannelSheet({ block, channels, onClose, onPick }) {
+function ChannelSheet({ block, channels, onClose, onPick, knobs = false }) {
   const name = block?.name || block?.slug || ''
+  /*
+   * WITH THE BLOCK'S KNOBS OVER THE CHANNELS (`knobs`, from Stage's popKnobs;
+   * lib/holdPop): "have the knobs only pop up above the channels so some one
+   * can quick change a setting" (Justin, 10 November 2026). The knobs scroll
+   * in the sheet (components/PopKnobs, Edit's own); the channels are its
+   * foot, so they are under a thumb the moment it opens and never scroll
+   * away, a little shorter than alone so the knobs have the height. A pick
+   * still writes the channel and closes the sheet, as it always has. Not
+   * for a block the wire has no knobs for (popKnobsFor), and with `knobs`
+   * false the sheet below is the one it always was.
+   */
+  const withKnobs = popKnobsFor(knobs, block)
+  /* A knob has the finger: the sheet holds still under it (components/Knob). Let go with the knobs. */
+  const [held, setHeld] = useState(false)
+  useEffect(() => {
+    if (!withKnobs) setHeld(false)
+  }, [withKnobs])
+  if (withKnobs) {
+    return (
+      <Sheet
+        open={!!block && channels?.length > 1}
+        onClose={onClose}
+        title={name}
+        note="Knobs and channel"
+        tall
+        still={held}
+        foot={
+          <View style={{ flexDirection: 'row', gap: space.sm }} accessibilityRole="radiogroup">
+            {(channels || []).map((ch) => (
+              <Press
+                key={ch}
+                grow
+                label={ch}
+                height={POP_CHANNEL_TALL}
+                tone="live"
+                on={block?.channel === ch}
+                accessibilityLabel={`Channel ${ch}`}
+                onPress={() => onPick(ch)}
+              />
+            ))}
+          </View>
+        }
+      >
+        <PopKnobs block={block} onScrollLock={setHeld} />
+        <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 20 }}>
+          {block?.channel ? `${name} is on channel ${block.channel}. ` : ''}
+          Each channel keeps its own model and settings; the scene remembers which one this block
+          plays.
+        </Text>
+      </Sheet>
+    )
+  }
   return (
     <Sheet open={!!block && channels?.length > 1} onClose={onClose} title={name} note="Channel">
       <View style={{ flexDirection: 'row', gap: space.sm }} accessibilityRole="radiogroup">

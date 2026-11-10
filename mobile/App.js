@@ -93,6 +93,9 @@ import { usePlayHead } from './src/lib/playHead'
 import { useBluetoothAdmin } from './src/lib/bluetooth'
 import { BLOCK, backUnwinds, blockGivesBack, holdGoes, panelKeeps, phoneSidewaysOn, sideTools, sideUnder, tunerGivesBack, tunerGoes, tunerStops, twoSidesOn, whenNarrow } from './src/lib/twoSides'
 import BlockSide, { KnobsFollow } from './src/components/BlockSide'
+/* The hold pop-up's knobs, over its channels: the rule, and the switch that opens it past his account. */
+import { popKnobsOn } from './src/lib/holdPop'
+import { HOLD_POPUP_KNOBS_FOR_EVERYONE } from './src/lib/features'
 import { TunerSide } from './src/components/Tuner'
 import { PLAY_ON_RIGHT, keepPlayOnRight, readPlayOnRight } from './src/lib/sidesKeep'
 import Paywall from './src/screens/Paywall'
@@ -938,6 +941,16 @@ export default function App() {
   const knobsAllowed = sidesAdmin || (sidesAllowed && HOLD_KNOBS_FOR_EVERYONE)
   const holdAsks = { allowed: knobsAllowed, vp4: noKnobs, wide: big, beside: playBeside, screen }
   const holdOpens = holdGoes({ ...holdAsks, editOpens })
+  /*
+   * AND WHERE THE HOLD IS THE POP-UP, THE POP-UP CARRIES THE BLOCK'S KNOBS
+   * OVER ITS CHANNELS (lib/holdPop; components/PopKnobs): "have the knobs
+   * only pop up above the channels so some one can quick change a setting"
+   * (Justin, 10 November 2026). Behind Edit's own door and never on a VP4.
+   * His account until features HOLD_POPUP_KNOBS_FOR_EVERYONE; every other
+   * account's pop-up is the channels alone, as it was. Where the hold opens
+   * the panel instead (`holdOpens`), no pop-up opens at all.
+   */
+  const popKnobs = popKnobsOn({ allowed: sidesAdmin || HOLD_POPUP_KNOBS_FOR_EVERYONE, editOpens, vp4: noKnobs })
   /* Open, it stays through a blink of the link: asked with Edit's door not shut, as Edit itself stays (editShut). */
   const blockIn = useRef(null)
   const blockKept = panelKeeps({ screen, goes: holdGoes({ ...holdAsks, editOpens: !editHere.shuts }), opened: blockIn.current })
@@ -2162,6 +2175,8 @@ export default function App() {
                 knobsAt={blockKept && screen === 'stage' ? blockAt : null}
                 onHoldBlock={holdBlock}
                 onCloseKnobs={closeBlock}
+                /* Where the hold is the channel pop-up, whether the block's knobs sit over the channels in it (above). */
+                popKnobs={popKnobs}
                 /* An error on the stage screen can name the fix for it, and
                    Done comes back here rather than to Setup. */
                 onOpenFix={(id) => {

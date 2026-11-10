@@ -67,8 +67,13 @@ let lastFrame = null
  * the Unlock page's (screens/Paywall, lib/tabletScale), which was a 480-point
  * strip down the middle of an iPad. Still centred, and never wider than the
  * screen. null, which every other sheet and every phone is, changes nothing.
+ *
+ * `still` holds the scrolling part where it is while something in it has
+ * the finger: a knob in Play's hold pop-up turns on a drag up and down
+ * (components/Knob), and the sheet must not scroll under it. False, which
+ * every other sheet is, and it scrolls as it always did.
  */
-export default function Sheet({ open, onClose, title, note, head, foot, tall = false, wide = null, children }) {
+export default function Sheet({ open, onClose, title, note, head, foot, tall = false, wide = null, still = false, children }) {
   const { width: across, height } = useWindowDimensions()
   const { top, bottom, left, right } = useSafeAreaInsets()
   /* Tall: everything but the status bar and a strip of glass to tap out on. */
@@ -195,6 +200,7 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
             <ScrollView
               contentContainerStyle={{ padding: space.lg, paddingTop: head ? space.sm : space.lg, gap: space.md }}
               keyboardShouldPersistTaps="handled"
+              scrollEnabled={!still}
             >
               {children}
             </ScrollView>
