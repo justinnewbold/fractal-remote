@@ -293,8 +293,9 @@ export function run(test) {
     const app = code(read('mobile/App.js'))
     const sides = code(read('mobile/src/components/Sides.js'))
     const features = read('mobile/src/lib/features.js')
-    /* Off for customers until step 6. */
-    assert.match(features, /^export const SIDES_FOR_EVERYONE = false$/m, 'the two sides are open to everyone; that is step 6, with its line in What’s new')
+    /* Open to everyone since 9 November 2026 ("flip the switch though to turn this on for all users"); the hold for a block's knobs is still his account's. */
+    assert.match(features, /^export const SIDES_FOR_EVERYONE = true$/m, 'the two sides are closed to customers again')
+    assert.match(features, /^export const HOLD_KNOBS_FOR_EVERYONE = false$/m, 'holding a block for its knobs is open to everyone; that needs his own look first, and its line in What’s new')
     assert.match(app, /const sidesAllowed = SIDES_FOR_EVERYONE \|\| sidesAdmin\n/)
     assert.match(app, /const sidesAdmin = useBluetoothAdmin\(\)\n/, 'his account is not read from the sign-in kept on the phone')
     /* The frame is measured, and the rule asked on it with its memory, only for an account the sides are open to. */
@@ -648,8 +649,8 @@ export function run(test) {
     const stage = code(read('mobile/src/screens/Stage.js'))
     const sides = code(read('mobile/src/components/Sides.js'))
     const edit = code(read('mobile/src/screens/Edit.js'))
-    /* The gate: the two sides' own (his account, or SIDES_FOR_EVERYONE), Edit's own door, never a VP4, on a window that shows two sides. */
-    assert.match(app, /const noKnobs = vp4Here\(\) \|\| \(demo && demoUnitNow === 'vp4'\)\n\s*const holdAsks = \{ allowed: sidesAllowed, vp4: noKnobs, wide, beside: playBeside, screen \}\n\s*const holdOpens = holdGoes\(\{ \.\.\.holdAsks, editOpens \}\)\n/, 'the panel opens on a VP4, or on the demo’s')
+    /* The gate: his account, or the two sides' own with HOLD_KNOBS_FOR_EVERYONE, Edit's own door, never a VP4, on a window that shows two sides. */
+    assert.match(app, /const noKnobs = vp4Here\(\) \|\| \(demo && demoUnitNow === 'vp4'\)\n\s*const knobsAllowed = sidesAdmin \|\| \(sidesAllowed && HOLD_KNOBS_FOR_EVERYONE\)\n\s*const holdAsks = \{ allowed: knobsAllowed, vp4: noKnobs, wide, beside: playBeside, screen \}\n\s*const holdOpens = holdGoes\(\{ \.\.\.holdAsks, editOpens \}\)\n/, 'the panel opens on a VP4, or on the demo’s')
     assert.match(app, /const demoUnitNow = useDemoUnit\(\)\n/)
     assert.match(app, /const editOpens = editHere\.opens\n/)
     /* Open, it stays through a blink of the link, and only where it was opened. */

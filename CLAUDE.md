@@ -285,6 +285,12 @@ rest) stay where a VP4 owner meets them.
   holding a build under review). Fixes go out as before; a big new phone
   feature waits until any review in progress is over.
 
+**1.90.0 is live on the App Store** (9 November 2026, 17:12 UTC by Apple's
+own listing), so Edit over Bluetooth is open to iPhone and iPad customers
+and public/store-versions.json says 1.90.0 for ios. Google Play still
+shows 1.89.36 there until its 1.90.0 is live; the website's editing words
+and the setup email's editing sentence wait for that day.
+
 **1.89.3 is live in both stores** (the App Store's listing and Google
 Play both show it, 30 October 2026), so Bluetooth is open to customers, and
 public/store-versions.json says 1.89.3 on both. What follows about waiting
@@ -758,34 +764,53 @@ what the computer sends for the same edit, and a test holds it there.
   lines follow the same switch (`editingLine`, `limitsLine`): closed, its
   words are exactly what every customer copy has always shown.
 
-**Two sides on a big screen: the plan is docs/two-sides/README.md, step 2
-is in, his account only.**
+**Two sides on a big screen: open to everyone since 9 November 2026; the
+plan is docs/two-sides/README.md.**
 
 > "How do I put these side by side on the iPad?" and "Check the side by
 > side stuff is optimized for iPhone Duo also." (9 November 2026)
 
+> "Go ahead and flip the switch though to turn this on for all users"
+> (9 November 2026, the day Apple put 1.90.0 live)
+
 The plan (8 November 2026) and its nine mockups are in docs/two-sides/.
-Step 1 (Play first on the Bluetooth line, bleWire) and step 2 (#838,
-1.90.7) are merged. Since step 2, on a window wide enough and wider than
-tall (mobile/src/lib/twoSides.js: an iPad on its side, the opened iPhone
-Duo held sideways, Android tablets and folds sideways; every phone
-upright, an iPad upright and the Duo closed or opened upright stay one
-screen) Play keeps one half and Edit, Setlists or All presets opens in the
-other (mobile/src/components/Sides.js), each half with a bar: its name
-(tap for the list), Swap, Full screen; Two sides brings the other back.
-The Duo's divider sits on the fold, the side away from its strip wider.
-A Play hidden under a full-screen tool is asleep (`picture.awake`). The
-gate is his account (the kept sign-in, as the Bluetooth gate) or
-`SIDES_FOR_EVERYONE` in mobile/src/lib/features.js, false until step 6:
-nobody else sees anything, so no What's new line yet. Steps left: 3 the
-tuner in a side (it is still today's pop-up), 4 Derek's block panel
-(hold a block, the Scenes column becomes its knobs), 5 polish (icons on
-the bars instead of the words Swap / Full screen / Two sides, pop-ups
-over their own side, VoiceOver), 6 open it to customers. Nobody here has
-a Duo: its numbers come from the plan and are held by test/two-sides.mjs,
-and his first look is the real check. Unsettled: whether the Duo's half
-should get the one-row five-button foot of the mockups (it has the
-iPhone's two-row foot, which is proven to fit 393).
+On a window wide enough and wider than tall (mobile/src/lib/twoSides.js:
+an iPad on its side, the opened iPhone Duo held sideways, Android tablets
+and folds sideways; every phone upright, an iPad upright and the Duo
+closed or opened upright stay one screen) Play keeps one half and Edit,
+Setlists or All presets opens in the other (mobile/src/components/
+Sides.js), each half with a bar: its name (tap for the list), Swap, Full
+screen; Two sides brings the other back. With two sides up the tuner
+borrows a side (a narrow column on an iPad, half on the Duo) instead of
+the big pop-up (#840). The Duo's divider sits on the fold, the side away
+from its strip wider. A Play hidden under a full-screen tool is asleep
+(`picture.awake`).
+
+- **The switch** is `SIDES_FOR_EVERYONE` in mobile/src/lib/features.js,
+  true since his word above. Off, it is his account only again (the kept
+  sign-in, as the Bluetooth gate).
+- **Hold a block for its knobs** (step 4, Derek's panel:
+  components/BlockSide.js, lib/twoSides `holdGoes`) is built and still HIS
+  ACCOUNT ONLY, behind its own switch `HOLD_KNOBS_FOR_EVERYONE` (false):
+  it landed the hour the sides opened and nobody had seen it on a screen.
+  It opens to customers when he says so, with its What's new line.
+  Everybody else keeps the channel pop-up on a hold.
+- **Left:** step 5 (the Save / Don't save / Stay question before a preset
+  change, icons on the bars in place of the words, pop-ups over their own
+  side, VoiceOver), and the tidier Edit beside Play he asked for the same
+  day ("it just feels a little clunky still ... more like the real ax edit
+  software": how it works, never how it looks; mockups first).
+- Nobody here has a Duo: its numbers come from the plan and are held by
+  test/two-sides.mjs, and his first look is the real check.
+
+**On a big screen Play's tiles take the whole screen.** "It would be
+better if they looked like square boxes as much as possible" (9 November
+2026, #841, mobile/src/lib/squarePlay.js), and then, shown an AM4's four
+scenes and four pedals as two thin towers on an iPad upright: "it should
+be taking full advantage of the iPad screen and all scenarios." So the
+arrangement is chosen for how well it fills the row, never for the
+biggest square alone (#844), and filling wins over squareness where the
+two pull apart. A phone held upright is never asked.
 
 **On a tablet, a new screen takes its sizes from the room.** "These
 screens are not using the space very efficiently. Very small." (9

@@ -84,7 +84,7 @@ import { BLUETOOTH_WAYS_SHORT, REPORT_BUTTON } from './src/lib/bluetooth-gear'
 import bluetoothIcon from './assets/icons/bluetooth.png'
 import { CABLE_LOOK_AGAIN, CABLE_TO_ADAPTER, CABLE_TO_ADAPTER_SUB, CABLE_WAITING } from './src/lib/cableWords'
 import { overBluetooth } from './src/lib/bleSwitch'
-import { BENCH, SIDES_FOR_EVERYONE } from './src/lib/features'
+import { BENCH, HOLD_KNOBS_FOR_EVERYONE, SIDES_FOR_EVERYONE } from './src/lib/features'
 import Sides, { SidesFrame } from './src/components/Sides'
 /* Whose sign-in is kept on this device, for the two sides: the same answer Bluetooth's gate reads. */
 import { useBluetoothAdmin } from './src/lib/bluetooth'
@@ -724,12 +724,12 @@ export default function App() {
    * iPad on its side, an Android tablet sideways or the iPhone Duo opened,
    * Play keeps one side and Edit, Setlists or All presets takes the other.
    *
-   * HIS ACCOUNT ONLY, while it is built in steps (features SIDES_FOR_EVERYONE
-   * opens it to customers): the sign-in kept on this device is his
-   * (useBluetoothAdmin, isAdmin of the same session that lets the phone in,
-   * never the account server, which with no signal answers nobody). For
-   * everybody else, and on every window that shows one screen, nothing
-   * below is drawn and the app is exactly as today.
+   * FOR EVERYONE since 9 November 2026 (features SIDES_FOR_EVERYONE; before
+   * that, and again if it is ever turned off, his account only: the sign-in
+   * kept on this device is his, useBluetoothAdmin, isAdmin of the same
+   * session that lets the phone in, never the account server, which with no
+   * signal answers nobody). On every window that shows one screen, nothing
+   * below is drawn and the app is exactly as it was.
    *
    * `screen` STAYS THE RECORD OF WHAT IS OPEN. A tool beside Play is still
    * `screen === 'edit'` (or 'setlists', 'presets'): Play's own buttons open
@@ -881,7 +881,9 @@ export default function App() {
   /* A VP4 has no knobs anywhere, and the demo's VP4 shows its owner what a real one gives (Edit's vp4Bench): no panel on either. */
   const demoUnitNow = useDemoUnit()
   const noKnobs = vp4Here() || (demo && demoUnitNow === 'vp4')
-  const holdAsks = { allowed: sidesAllowed, vp4: noKnobs, wide, beside: playBeside, screen }
+  /* His account until he has seen it (features HOLD_KNOBS_FOR_EVERYONE), though the two sides are everyone's. */
+  const knobsAllowed = sidesAdmin || (sidesAllowed && HOLD_KNOBS_FOR_EVERYONE)
+  const holdAsks = { allowed: knobsAllowed, vp4: noKnobs, wide, beside: playBeside, screen }
   const holdOpens = holdGoes({ ...holdAsks, editOpens })
   /* Open, it stays through a blink of the link: asked with Edit's door not shut, as Edit itself stays (editShut). */
   const blockIn = useRef(null)

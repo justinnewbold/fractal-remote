@@ -10,9 +10,20 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-10",
+    "day": "10 November 2026",
+    "version": "1.90.16",
+    "lines": [
+      {
+        "text": "On a tablet turned on its side, or a folding phone opened, Play can now share the screen: tap Edit, Setlists or the preset name and it opens beside Play, and the tuner takes a narrow strip instead of covering everything. Each side has Swap and Full screen, and Two sides brings the other back.",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-09",
     "day": "9 November 2026",
-    "version": "1.90.16",
+    "version": "1.90.15",
     "lines": [
       {
         "text": "Getting connected is simpler: Connect a computer is now three numbered steps, and the Bluetooth and Raspberry Pi setup guides are short pages with links to what to buy.",

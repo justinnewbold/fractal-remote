@@ -3,8 +3,15 @@
   "shownInApp": 10,
   "days": [
     {
-      "date": "2026-11-09",
+      "date": "2026-11-10",
       "version": "1.90.16",
+      "lines": [
+        "On a tablet turned on its side, or a folding phone opened, Play can now share the screen: tap Edit, Setlists or the preset name and it opens beside Play, and the tuner takes a narrow strip instead of covering everything. Each side has Swap and Full screen, and Two sides brings the other back."
+      ]
+    },
+    {
+      "date": "2026-11-09",
+      "version": "1.90.15",
       "lines": [
         "Getting connected is simpler: Connect a computer is now three numbered steps, and the Bluetooth and Raspberry Pi setup guides are short pages with links to what to buy.",
         "On a tablet or other big screen, Play’s scenes and effects are now square tiles that spread across the screen, instead of wide stretched bars.",
