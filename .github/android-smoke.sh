@@ -185,11 +185,24 @@ shot() {
 # The last dump's file is deleted first: uiautomator dump exits 0 and writes
 # nothing when the screen will not settle ("could not get idle state"), and
 # the last screen's file would be read as this one.
+#
+# Android's own "<another app> isn't responding" box can sit over the app on a
+# slow runner (run 42880387749: "Pixel Launcher isn't responding" over the
+# startup card on the tablet, whose OK was then nowhere in the dump). That is
+# the emulator's, not ours: its Wait is pressed and the screen read again. One
+# that names Fractal Remote is left exactly where it is, to be found.
 ui() {
-  local try
-  for try in 1 2 3; do
+  local try at
+  for try in 1 2 3 4 5; do
     adb shell rm -f /sdcard/ui.xml > /dev/null 2>&1
     if adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1 && adb pull /sdcard/ui.xml "$out/$1.xml" > /dev/null 2>&1; then
+      if helper has "$out/$1.xml" '(?!Fractal Remote).+ isn.t responding' && at="$(helper find "$out/$1.xml" 'Wait')"; then
+        # shellcheck disable=SC2086
+        adb shell input tap $at
+        echo "Android said another app isn't responding; pressed Wait at $at"
+        sleep 3
+        continue
+      fi
       return 0
     fi
     sleep 2
@@ -227,7 +240,9 @@ walk() {
   press 'Get started' walk-start || return 1
   press 'Try the demo' walk-how || return 1
   press 'Play with .+' walk-pick || return 1
-  press 'Open Play' walk-ready || return 1
+  # The walkthrough's last button, "Let’s go" since 8 November 2026 (it was
+  # "Open Play"); the dot takes either apostrophe.
+  press 'Let.s go' walk-ready || return 1
   local try at
   for try in 1 2 3 4 5; do
     if ui play; then
