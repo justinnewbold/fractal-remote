@@ -926,8 +926,10 @@ mobile/src/lib/features.js: the hold pop-up's knobs (above), and the five
 below. Each still has its own switch, so one can be closed again (his
 account only) without the others. The Developer pages are not behind these
 switches: they are his account's (`isAdmin`), and stay so. NOT opened: a
-phone on its side (`PHONE_SIDEWAYS_FOR_EVERYONE`), which no account can
-see until a build lets a phone turn, and which he has not seen. The rule
+phone on its side, in the app (`PHONE_SIDEWAYS_FOR_EVERYONE`), which no
+account can see until a build lets a phone turn, and on the website
+(`PHONE_SIDEWAYS_ON_THE_WEB_FOR_EVERYONE`), which was merged after he said
+this and which he has not seen. The rule
 for the next new thing is unchanged: his account first, behind its own
 switch, and open when he says.
 
