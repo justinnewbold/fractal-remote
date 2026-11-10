@@ -13,12 +13,21 @@
  * side of two (`inSide`, the Duo's half among them). Never on a phone held
  * upright, whose Play is exactly what it always was.
  *
- * WHAT. Every scene and every pedal is the same square, as big as Play's
- * room allows, never stretched to fill a row. The arrangement is whichever
- * gives the biggest squares: the scenes and the chain side by side (the
- * scenes on the left, as Play lined up has them), or one over the other,
- * with as many to a row as suits. Ties go to the order tried: side by side
- * first, fewer to a row first.
+ * WHAT. Every scene and every pedal is the same square, never stretched to
+ * fill a row. The arrangement is the one whose squares are biggest FOR HOW
+ * WELL THEY FILL THE ROW: the scenes and the chain side by side (the scenes
+ * on the left, as Play lined up has them), or one over the other, with as
+ * many to a row as suits. Ties go to the order tried: side by side first,
+ * fewer to a row first.
+ *
+ * ACROSS THE ROW, NOT THE BIGGEST SQUARE ALONE. "I'm on my iPad. We need to
+ * fix this view. That's not right." (Justin, 9 November 2026, an AM4 on an
+ * iPad held upright.) The biggest squares alone put its four scenes in one
+ * column and its four pedals in another: two thin towers in the middle of
+ * the screen with nothing either side of them. So a square's size is
+ * counted for as much of the row as its arrangement fills (`fill`, below):
+ * four scenes across over four pedals across beats the towers, and room
+ * left over goes under the tiles, where a page's room belongs.
  *
  * `room` is the height from the top of the scenes' heading to the bottom of
  * Play's page, `width` the page's row; HEAD is each heading with the gap
@@ -60,8 +69,35 @@ export function squarePlan({ width = 0, room = 0, scenes = 0, pedals = 0, gap = 
   const parts = [s, p].filter((n) => n > 0)
   const heads = parts.length * head
   let best = null
+  /*
+   * How well a plan's squares fill the row, from 0 to 1, at the size they
+   * would be drawn (never past SQUARE_MOST): how far across they reach (one
+   * over the other, each grid's own reach, averaged, so four scenes are not
+   * left two by two over four pedals in a row), times how full their rows
+   * are (side by side, a column of four scenes beside two rows of pedals is
+   * half empty).
+   */
+  const fill = (plan) => {
+    const side = Math.min(SQUARE_MOST, plan.side)
+    const sr = plan.sceneCols ? Math.ceil(s / plan.sceneCols) : 0
+    const cr = plan.chainCols ? Math.ceil(p / plan.chainCols) : 0
+    if (plan.beside) {
+      const across = gridWide(plan.sceneCols, side, gap) + beside + gridWide(plan.chainCols, side, gap)
+      return (across / w) * ((s + p) / (Math.max(sr, cr) * (plan.sceneCols + plan.chainCols)))
+    }
+    const grids = [plan.sceneCols, plan.chainCols].filter((cols) => cols > 0)
+    const across = grids.reduce((sum, cols) => sum + gridWide(cols, side, gap), 0) / grids.length
+    return (across / w) * ((s + p) / (sr * plan.sceneCols + cr * plan.chainCols))
+  }
   const keep = (plan) => {
-    if (plan.side > 0 && (!best || plan.side > best.side + 0.5)) best = plan
+    if (!(plan.side >= SQUARE_LEAST)) {
+      /* Too small to draw: kept only to say nothing fits, below. */
+      if (plan.side > 0 && !best) best = { ...plan, score: 0 }
+      return
+    }
+    /* The square's size, counted for as much of the row as its arrangement fills. */
+    const score = Math.min(SQUARE_MOST, plan.side) * fill(plan)
+    if (!best || best.score === 0 || score > best.score + 0.5) best = { ...plan, score }
   }
   /* Side by side: only with both to show. */
   if (s && p) {
@@ -85,7 +121,10 @@ export function squarePlan({ width = 0, room = 0, scenes = 0, pedals = 0, gap = 
       keep({ beside: false, sceneCols: sc, chainCols: cc, side: Math.min(across, down) })
     }
   }
-  if (best && best.side >= SQUARE_LEAST) return { ...best, side: Math.floor(Math.min(SQUARE_MOST, best.side)) }
+  if (best && best.side >= SQUARE_LEAST) {
+    const { score, ...plan } = best
+    return { ...plan, side: Math.floor(Math.min(SQUARE_MOST, plan.side)) }
+  }
   /* Too long to fit: the least square, one over the other, as many to a row as the width takes, and the page scrolls. */
   const fits = (n) => Math.max(1, Math.min(n, Math.floor((w + gap) / (SQUARE_LEAST + gap))))
   return { beside: false, sceneCols: s ? fits(s) : 0, chainCols: p ? fits(p) : 0, side: SQUARE_LEAST }
