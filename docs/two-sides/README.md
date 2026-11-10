@@ -209,6 +209,37 @@ docs/two-sides/
 - If Apple or Google is reviewing a store version that day (1.90.0, say), the update waits until the review is done.
 - Over-the-air update: yes.
 
+## A phone on its side (10 November 2026)
+
+"This is the landscape view on iPhone ... let's split the screen in half kind of like the iPhone duo even though things will be smaller. It'll still look better instead of just stretching everything." And, shown the first pictures: "Can you make the icons more square looking instead of stretched?" He approved the six pictures in this folder (phone-sideways-01 to 06: an FM3 in 01 to 04, an AM4 in 05 and 06) with "Yes build them".
+
+**Where**
+
+- A phone held on its side whose screen is wide enough for two halves of an iPhone each: an iPhone 17 and bigger, most Android phones. An iPhone SE or mini on its side stays one screen.
+- It goes by the size of the room under the top bar, never by the kind of device (`phoneSidewaysOn` in mobile/src/lib/twoSides.js): at least 720 across, wider than tall, and under the height where a tablet starts. A tablet, a Fold and the Duo keep the big-screen rule, untouched.
+- His account first, behind `PHONE_SIDEWAYS_FOR_EVERYONE` in mobile/src/lib/features.js. Everybody else's Play on a phone on its side is what it was.
+
+**Play on its own (pictures 01 and 05)**
+
+- Two halves: the scenes on the left, the effects on the right. Every tile is a square, as big as its half allows; room a grid does not need is left round it. An FM3's eight scenes and eight effects are four across by two in each half. An AM4's four and four are two by two.
+- The preset's name and Setlists are one short row over the halves. Where that row is what holds the squares down (an AM4), it goes up into the top bar instead. One rule decides, by how much bigger it makes the squares (15% or more), never by the unit (`sidewaysPlan` in mobile/src/lib/sidewaysPlay.js).
+- Previous, Tuner, Edit, Tap and Next are one row along the bottom.
+- More tiles than fit as squares of a thumb's size: Play's page scrolls. Nothing shrinks under that.
+
+**Something beside Play (pictures 02, 03, 04 and 06)**
+
+- Tap the preset's name, Setlists, Edit or Tuner and it opens in the other half, as on the Duo. Turn the phone upright and Play is what shows; turn it back and the other half returns.
+- There is no second row of bars. Each half's name (tap it for the list), Swap and Full are in the app's top bar, Swap on the line between the halves (mobile/src/components/SidesLead.js).
+- In its half, Play has the preset's row with Setlists at its end, the scenes as squares over the effects, and the five buttons with short words: Prev, Tuner, Edit, Tap, Next.
+
+**Built differently from the pictures, on purpose**
+
+- Each tool keeps its own header with its own Done, Save and More. The pictures drew those up in the top bar; that waits for the tidier Edit.
+- Edit in a half is today's Edit. Picture 03's layout is the tidier Edit, a later pass.
+- The swap button is the word Swap, and the five short buttons have no pictures: icons on the bars are step 5.
+- When the tiles do not fit, the whole Play page scrolls, not each half on its own.
+- Holding an effect is the channel pop-up it always was. The knobs panel needs more room than this window has.
+
 ## Decisions only you can make
 
 **1. Derek's mockup switches the panel when you tap another block. Should a tap do that, or only turn the block on and off?**

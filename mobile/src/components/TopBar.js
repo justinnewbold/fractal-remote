@@ -60,7 +60,10 @@ const face = Platform.select(mono)
  * The words come from shared/link-word.mjs rather than from here, so the two
  * apps cannot drift into saying different things about the same link.
  */
-export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true, onOpenAccount = null }) {
+/* The bar on a phone held on its side (`slim`): less over and under its row, laid over the bar's own style. */
+const SLIM = { paddingVertical: space.xs }
+
+export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true, onOpenAccount = null, lead = null, slim = false }) {
   const unit = useRig(ofDeviceName)
   const unitState = useRig(ofUnitState)
   const blocks = useRig(ofAllBlocks)
@@ -302,6 +305,16 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
   const whereNeeds = 2 + 2 * space.sm + String(pill.where || '').length * 0.56 * font.micro * (fontScale || 1)
   const besidePhoto = across - stripLeft - stripRight - 2 * space.lg - 3 * space.md - 24 - 22 - (hasOutput ? space.md + 24 : 0)
   const showPhoto = Boolean(onOpenAccount) && avatarShown({ demo, account: photo }) && !canSave && Math.max(pillNeeds, whereNeeds) <= besidePhoto
+  /*
+   * ON A PHONE HELD ON ITS SIDE (App: lib/twoSides phoneSidewaysOn, his
+   * account until features PHONE_SIDEWAYS_FOR_EVERYONE), two things from
+   * App, and nothing on any other screen or account: `slim`, the bar a
+   * little shorter, since that window is about 330 points tall under it;
+   * and `lead`, what takes the version's place on the left, either the two
+   * sides' names and Swap (components/SidesLead) or Play's preset and
+   * Setlists (components/PlayHead). App hands no way to the account then,
+   * so the photo gives its room up, as it does for Save.
+   */
 
   return (
     /*
@@ -326,7 +339,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
       intensity={40}
       tint={isDark() ? 'dark' : 'light'}
       experimentalBlurMethod="dimezisBlurView"
-      style={{
+      style={[{
         flexDirection: 'row',
         alignItems: 'center',
         gap: space.md,
@@ -350,7 +363,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
          * (MetronomeBeat's zIndex), and a sheet is a Modal of its own.
          */
         zIndex: 3
-      }}
+      }, slim ? SLIM : null]}
     >
       {/*
         The version, where it can be read without opening anything.
@@ -366,7 +379,10 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
         row that can give.
       */}
       {/* Out of the way while Save needs the room; it is in Settings too. */}
-      {canSave ? (
+      {lead ? (
+        /* A row, so what App puts here is as tall as it is and takes the slack across, as the version did. */
+        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' }}>{lead}</View>
+      ) : canSave ? (
         <View style={{ flex: 1 }} />
       ) : (
         <Text

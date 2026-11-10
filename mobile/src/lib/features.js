@@ -68,3 +68,16 @@ export const SIDES_FOR_EVERYONE = true
  * What's new in the same pull request.
  */
 export const HOLD_KNOBS_FOR_EVERYONE = false
+
+/**
+ * A PHONE HELD ON ITS SIDE SPLITS IN TWO (lib/twoSides phoneSidewaysOn,
+ * lib/sidewaysPlay), for everyone the two sides are open to.
+ *
+ * OFF: his account only. "This is the landscape view on iPhone ... let's
+ * split the screen in half kind of like the iPhone duo" (Justin, 10
+ * November 2026), built from pictures he approved the same day and not yet
+ * seen on a phone. Every other account's Play on a phone on its side is
+ * what it was. This is the one line that opens it, with its line in What's
+ * new in the same pull request.
+ */
+export const PHONE_SIDEWAYS_FOR_EVERYONE = false

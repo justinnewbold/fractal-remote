@@ -92,8 +92,12 @@ export function run(test) {
     const bar = code(FILES.bar)
     /* One blur, counted in the file as written (comments too: test/glass.mjs counts them so). */
     assert.equal((raw.match(/<BlurView\b/g) || []).length, 1, 'the top bar has more than one blur, or none')
-    assert.match(bar, /<BlurView accessibilityLiveRegion="polite" intensity=\{40\} tint=\{isDark\(\) \? 'dark' : 'light'\} experimentalBlurMethod="dimezisBlurView" style=\{\{/, 'the bar’s blur lost a prop it is pinned to')
-    const style = bar.slice(bar.indexOf('<BlurView'), bar.indexOf('}}', bar.indexOf('<BlurView'))).trim()
+    assert.match(bar, /<BlurView accessibilityLiveRegion="polite" intensity=\{40\} tint=\{isDark\(\) \? 'dark' : 'light'\} experimentalBlurMethod="dimezisBlurView" style=\{\[\{/, 'the bar’s blur lost a prop it is pinned to')
+    /* Its own style first, and over it only the slimmer padding of a phone held on its side (`slim`, test/two-sides.mjs). */
+    assert.match(bar, /zIndex: 3 \}, slim \? SLIM : null\]\} >/, 'something other than the slim padding is laid over the bar’s style')
+    assert.match(bar, /const SLIM = \{ paddingVertical: space\.xs \}/)
+    /* The bar's own style: from the blur to where the slim padding is laid over it. */
+    const style = bar.slice(bar.indexOf('<BlurView'), bar.indexOf('}, slim ? SLIM : null]}', bar.indexOf('<BlurView'))).trim()
     assert.match(style, /borderBottomWidth: 1, borderBottomColor: color\.glassRim, backgroundColor: classic\(\) \? at\(color\.panel, 0\.55\) : color\.glassBar, zIndex: 3$/, 'the bar is not the frosted bar over its soft rim (the panel at 0.55 in Classic, as it was), or its zIndex moved')
     assert.doesNotMatch(style, /boxShadow|elevation|shadow/, 'the bar casts a shadow: it is the top of the screen, not a float')
     assert.doesNotMatch(style.replace('classic() ? at(color.panel, 0.55) :', ''), /at\(color\.panel, 0\.55\)/, 'the bar is drawn from the panel again outside Classic, so the Sunlight look cannot make it solid')
@@ -200,7 +204,8 @@ export function run(test) {
     assert.ok(!/<BlurView\b|expo-blur/.test(read(FILES.stage)), 'Play has a blur of its own: on an older Android phone it costs every frame')
     assert.match(
       stage,
-      /\{shape\.footFixed \? \( <View style=\{\{ borderTopWidth: StyleSheet\.hairlineWidth, borderTopColor: color\.glassRim, backgroundColor: color\.glassBar, boxShadow: color\.glassTop, paddingTop: space\.sm, paddingBottom: tight \? space\.lg : space\.xxl \}\} >/,
+      /* (Its own style first; over it, on a phone held on its side only, less padding over and under: `low`, test/two-sides.mjs.) */
+      /\{shape\.footFixed \? \( <View style=\{\[\{ borderTopWidth: StyleSheet\.hairlineWidth, borderTopColor: color\.glassRim, backgroundColor: color\.glassBar, boxShadow: color\.glassTop, paddingTop: space\.sm, paddingBottom: tight \? space\.lg : space\.xxl \}, low \? LOW_STRIP : null\]\} >/,
       'the fixed strip is not the frosted bar under its rim with the light along its top, or gained a size or a padding'
     )
     /* NOT CONNECTED and the dropped tap: opaque over the tiles (a see-through one would fail over a white scene), with the light along the top. */

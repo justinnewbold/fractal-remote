@@ -10071,7 +10071,7 @@ export function run(test) {
     const bar = flat('mobile/src/components/TopBar.js')
     /* And, since 6 November 2026, the Bluetooth page for a USB cable's Use a Bluetooth adapter instead (onBluetoothPage, App's gate). */
     /* And, since 7 November 2026, the account's photo beside the pill (onOpenAccount, App's openAccount). */
-    assert.match(bar, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true, onOpenAccount = null \}\)/)
+    assert.match(bar, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, onReport = null, onBluetoothPage = null, connectFirst = false, saveHere: saveWanted = true, onOpenAccount = null, lead = null, slim = false \}\)/)
     const ble = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
     /* `quiet` since 7 November 2026: Connect again, its own button too. */
     assert.match(ble, /function Which\(\{ link, cable = false, quiet = false, onClose, onReport = null, onBluetoothPage = null \}\)/)
