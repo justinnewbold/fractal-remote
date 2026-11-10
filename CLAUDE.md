@@ -790,11 +790,20 @@ from its strip wider. A Play hidden under a full-screen tool is asleep
   true since his word above. Off, it is his account only again (the kept
   sign-in, as the Bluetooth gate).
 - **Hold a block for its knobs** (step 4, Derek's panel:
-  components/BlockSide.js, lib/twoSides `holdGoes`) is built and still HIS
-  ACCOUNT ONLY, behind its own switch `HOLD_KNOBS_FOR_EVERYONE` (false):
-  it landed the hour the sides opened and nobody had seen it on a screen.
-  It opens to customers when he says so, with its What's new line.
-  Everybody else keeps the channel pop-up on a hold.
+  components/BlockSide.js, lib/twoSides `holdGoes`) is open to everyone
+  the sides are open to since 10 November 2026: "Activate the other hold
+  for knobs i checked it." Its switch is `HOLD_KNOBS_FOR_EVERYONE`, true.
+  Where the panel does not open (every phone, anything upright), a hold is
+  the channel pop-up, which can carry knobs too (below).
+- **The sides' buttons are in the app's top bar on every window, since 10
+  November 2026.** "The play and two sides buttons take up a whole row on
+  iPad. What other options for those?" ... "Yes do that now." So no side
+  has a bar of its own any more: components/SidesLead draws the names,
+  Swap (on the line between the sides) and Full screen or Two sides in the
+  top bar, after the version on a big screen (TopBar `leadKeepsVersion`,
+  `leadWide`). Play alone on a big screen has one button there, Two sides,
+  which brings the last tool back or opens the list. Play has no Full
+  screen of its own: the Done of what is beside it does that.
 - **Left:** step 5 (the Save / Don't save / Stay question before a preset
   change, icons on the bars in place of the words, pop-ups over their own
   side, VoiceOver), and the tidier Edit beside Play he asked for the same
@@ -850,6 +859,33 @@ The six pictures he approved are docs/two-sides/phone-sideways-01…06.png
   run on a phone: the top bar's room with a tool beside Play on a small
   iPhone, Swap landing on the divider, and the real heights are the first
   things his look will settle.
+
+**The hold pop-up can carry the block's knobs: built 10 November 2026,
+HIS ACCOUNT ONLY until he has seen it.**
+
+> "Also when not in landscape mode on all devices and screens instead of
+> just having channels pop up to change have the knobs only pop up above
+> the channels so some one can quick change a setting." (10 November 2026)
+
+Wherever a hold opens the channel pop-up (`holdGoes` answers null), and
+Edit's door opens for this account, unit and connection (`editOpens`;
+never a VP4), the pop-up shows the block's knobs and pages over the A to
+D channels, which stay fixed at its foot (mobile/src/lib/holdPop.js
+`popKnobsOn`, components/PopKnobs.js; the knobs are Edit's own
+`BlockPanel`, drawn `bare`). The switch is
+`HOLD_POPUP_KNOBS_FOR_EVERYONE` in features.js, false: his account only.
+It opens with its What's new line when he says so. Closed to an account,
+the pop-up is exactly the channels it always was. A preset change still
+closes it, and so does picking a channel.
+
+**In Edit the knobs come first.** "In edit move search bar and amp and
+pedal names to the bottom. Have the Bluetooth warning also move to the
+bottom. We want as many knobs visible in edit." (10 November 2026.) Find a
+control and Amp & pedal names sit under the open block's knobs, and the
+Bluetooth note (and its USB-cable twin) is at the foot of the page; the
+words are unchanged. Nothing new goes above the knobs. Still above them:
+the title row, the chain strip, and inside the block its name, the A to D
+row and the page tabs, which the tidier Edit is to deal with.
 
 **On a big screen Play's tiles take the whole screen.** "It would be
 better if they looked like square boxes as much as possible" (9 November
