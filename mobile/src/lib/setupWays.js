@@ -103,3 +103,39 @@ export const piTrouble = (noun) => [
 
 /** At the page's foot, as the guide says it. */
 export const PI_TRADEMARK = 'Raspberry Pi is a trademark of Raspberry Pi Ltd. Fractal Remote is not connected with Raspberry Pi Ltd.'
+
+/* --------------------------------------------------------- troubleshooting */
+
+/*
+ * TROUBLESHOOTING, BY HOW YOU'RE CONNECTED. The same four ways, in the same
+ * order, each opening only the fixes for that way: the Bluetooth adapter's
+ * and the USB cable's (the Bluetooth page's own troubleshooting, told which),
+ * the computer's (Fixes), and the Pi's. The way in use now says so. The log
+ * and Feedback come after, under Still stuck?.
+ */
+export const TROUBLE_ASK = 'How are you connected?'
+export const IN_USE = 'In use now'
+export const STILL_STUCK = 'Still stuck?'
+
+/** What each way's fixes are about, a line each. */
+export const troubleWays = () => [
+  { key: 'adapter', title: 'Bluetooth adapter', sub: 'Lights, pairing and MIDI settings' },
+  { key: 'cable', title: 'USB cable', sub: 'Plugs, cables and adapters' },
+  { key: 'computer', title: 'A computer', sub: 'The app, the account and the cable' },
+  { key: 'pi', title: 'Raspberry Pi', sub: 'It doesn’t show up, or can’t find your unit' }
+]
+
+/** Which way is in use now, for its row; null when nothing is connected. */
+export function wayInUse({ bluetooth = false, cable = false, link = null } = {}) {
+  if (cable) return 'cable'
+  if (bluetooth) return 'adapter'
+  if (link === 'connected') return 'computer'
+  return null
+}
+
+/** The Pi's troubleshooting page: its title, and the guide's own list of fixes. */
+export const PI_TROUBLE_PAGE = 'Raspberry Pi not working?'
+export const PI_TROUBLE_URL = `${PI_GUIDE_URL}#trouble`
+export const PI_MORE = 'All the fixes in the guide'
+export const PI_COMPUTER_FIXES = 'Computer fixes'
+export const PI_COMPUTER_FIXES_SUB = 'The Pi is a computer too: these help as well'

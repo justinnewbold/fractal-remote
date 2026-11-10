@@ -6,10 +6,14 @@ import {
   CONNECT_ASK,
   PI_BUY,
   PI_BUY_URL,
+  PI_COMPUTER_FIXES,
+  PI_COMPUTER_FIXES_SUB,
   PI_GUIDE,
   PI_GUIDE_URL,
+  PI_MORE,
   PI_TRADEMARK,
   PI_TROUBLE_TITLE,
+  PI_TROUBLE_URL,
   connectWays,
   piLead,
   piSteps,
@@ -69,14 +73,43 @@ export function PiSetup() {
         <Text accessibilityRole="header" style={{ color: color.silk, fontSize: font.lead, fontWeight: '700' }}>
           {PI_TROUBLE_TITLE}
         </Text>
-        {piTrouble(noun).map((t) => (
-          <View key={t.problem} style={{ gap: 2 }}>
-            <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '600' }}>{t.problem}</Text>
-            <Text style={lead()}>{t.fix}</Text>
-          </View>
-        ))}
+        <PiFixes />
       </View>
-      <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>{PI_TRADEMARK}</Text>
+      <Trademark />
+    </View>
+  )
+}
+
+/** The three things that go wrong most on a Pi, a problem and its fix each. */
+function PiFixes() {
+  return (
+    <View style={{ gap: space.md }}>
+      {piTrouble(deviceNoun()).map((t) => (
+        <View key={t.problem} style={{ gap: 2 }}>
+          <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '600' }}>{t.problem}</Text>
+          <Text style={lead()}>{t.fix}</Text>
+        </View>
+      ))}
+    </View>
+  )
+}
+
+const Trademark = () => <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>{PI_TRADEMARK}</Text>
+
+/**
+ * Troubleshooting → Raspberry Pi: the Pi's own three, the guide's whole
+ * list one tap away, and the computer's fixes, which a Pi needs as well
+ * (`onComputerFixes`, Fixes; not drawn when there is none).
+ */
+export function PiTrouble({ onComputerFixes = null }) {
+  return (
+    <View style={{ gap: space.xl }}>
+      <PiFixes />
+      <View style={{ gap: space.sm }}>
+        <Press label={PI_MORE} onPress={() => Linking.openURL(PI_TROUBLE_URL)} />
+        {onComputerFixes ? <Press label={PI_COMPUTER_FIXES} sub={PI_COMPUTER_FIXES_SUB} onPress={onComputerFixes} /> : null}
+      </View>
+      <Trademark />
     </View>
   )
 }

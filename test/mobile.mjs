@@ -3432,7 +3432,8 @@ export function run(test) {
     const trouble = settings.slice(settings.indexOf("{page === 'trouble' ?"), settings.indexOf("{page === 'link' ?"))
     assert.ok(trouble.length > 200, 'the Troubleshooting page moved; this check reads it')
     for (const [inside, why] of [
-      [/onPress=\{onOpenFixes\}/, 'the fixes'],
+      /* The computer's way of the four (test/setup-ways.mjs), drawn from troubleOpens, which is read where it is set. */
+      [/onPress=\{troubleOpens\[w\.key\]\}/, 'the fixes'],
       [/onPress=\{onOpenLog\}/, 'the log'],
       [/onPress=\{onOpenReport\}/, 'the feedback form']
     ]) {
@@ -3625,7 +3626,8 @@ export function run(test) {
      */
     const setup = read('mobile/src/screens/Settings.js')
     assert.match(setup, /onPress=\{onOpenLog\}/, 'Setup has no way into the log')
-    assert.match(setup, /onPress=\{onOpenFixes\}/, 'Setup has no way into the fixes')
+    /* Through Troubleshooting's A computer since 10 November 2026 (test/setup-ways.mjs). */
+    assert.match(setup, /computer: onOpenFixes \|\| null,/, 'Setup has no way into the fixes')
     assert.match(setup, /onPress=\{onOpenReport\}/, 'Setup has no way to send a report')
   })
 
@@ -9541,10 +9543,10 @@ export function run(test) {
       /* "A section where a user can edit the colors": beside the other choices about how Play looks. */
       'Colors'
     ], 'the Setup rows are not in the order he asked for')
-    /* Stop the looper, with the fixes: on the Troubleshooting page, after Fixes and before the log. */
+    /* Stop the looper, with the fixes: on the Troubleshooting page, first under Still stuck?, before the log. The fixes are the four ways over it since 10 November 2026 (test/setup-ways.mjs). */
     const trouble = settings.slice(settings.indexOf("{page === 'trouble' ? ("), settings.indexOf("{page === 'link' ? ("))
     const troubleRows = [...trouble.matchAll(/title="([^"]+)"/g)].map((m) => m[1])
-    assert.deepEqual(troubleRows, ['Fixes', 'Stop the looper', 'Log', 'Feedback'], 'Stop the looper is not with the fixes under Troubleshooting')
+    assert.deepEqual(troubleRows, ['Stop the looper', 'Log', 'Feedback'], 'Stop the looper is not with the fixes under Troubleshooting')
     /* And the names are a tap from Edit too: "add the amps and pedals names as a link in the edit area". */
     assert.match(read('mobile/src/screens/Edit.js'), /<Press label="Amp & pedal names"[^>]*onPress=\{onOpenGear\}/, 'Edit has no way to the amp and pedal names')
     assert.match(read('mobile/App.js'), /<Gear onBack=\{\(\) => setScreen\(gearBack\)\} \/>/, 'the names go back to Settings even when Edit opened them')
@@ -14800,8 +14802,9 @@ export function run(test) {
        2 November 2026 About and Developer opened onto their rows on the front
        of Settings, with no page between, so their pages go back to Settings.
        And on 10 November 2026 'pi', the Raspberry Pi's steps, a child of
-       Connect your unit (test/setup-ways.mjs). */
-    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', pi: 'setup' \}/, 'a page goes back somewhere it did not come from')
+       Connect your unit, and 'pi-trouble', its fixes, a child of
+       Troubleshooting (test/setup-ways.mjs). */
+    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', pi: 'setup', 'pi-trouble': 'trouble' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')

@@ -81,7 +81,7 @@ export function run(test) {
     assert.match(s, /computer: onOpenConnect \|\| \(\(\) => setPage\('link'\)\),/)
     assert.match(s, /pi: \(\) => setPage\('pi'\)/)
     assert.match(s, /\{page === 'pi' \? \( <> \{head\(PI_TITLE, 'back'\)\} <PiSetup \/>/)
-    assert.match(s, /pi: 'setup' \}/, 'the Pi page’s back does not go to Connect your unit')
+    assert.match(s, /pi: 'setup', 'pi-trouble': 'trouble' \}/, 'the Pi page’s back does not go to Connect your unit')
     const ways = read('mobile/src/components/SetupWays.js')
     assert.match(ways, /filter\(\(w\) => typeof open\[w\.key\] === 'function'\)/, 'a way with nothing to open is drawn')
   })
@@ -96,5 +96,46 @@ export function run(test) {
     const ways = read('mobile/src/components/SetupWays.js')
     assert.match(ways, /const ICONS = \{ adapter: bluetoothIcon, cable: usbIcon, computer: laptopIcon, pi: boardIcon \}/)
     assert.doesNotMatch(ways, /icons\/(apple|windows|linux|raspberry|android)/i)
+  })
+
+  test('Troubleshooting asks how you are connected: the same four ways, in the same order, each to its own fixes, the one in use said', async () => {
+    const w = await words()
+    assert.deepEqual(w.troubleWays().map((x) => x.key), w.connectWays('phone').map((x) => x.key), 'Troubleshooting’s ways are not Connect your unit’s, in its order')
+    assert.deepEqual(w.troubleWays().map((x) => x.title), w.connectWays('phone').map((x) => x.title))
+    assert.equal(w.wayInUse({ bluetooth: true, cable: true }), 'cable')
+    assert.equal(w.wayInUse({ bluetooth: true }), 'adapter')
+    assert.equal(w.wayInUse({ link: 'connected' }), 'computer')
+    assert.equal(w.wayInUse({ link: 'no-answer' }), null)
+    assert.equal(w.PI_TROUBLE_URL, 'https://fractal.newbold.cloud/raspberry-pi#trouble')
+    assert.match(read('public/raspberry-pi.html'), /id="trouble"/, 'If something goes wrong on the guide has lost its anchor')
+    const s = flat(code(read('mobile/src/screens/Settings.js')))
+    const trouble = s.slice(s.indexOf("{page === 'trouble' ? ("), s.indexOf("{page === 'link' ? ("))
+    assert.match(trouble, /\{troubleWays\(\) \.filter\(\(w\) => troubleOpens\[w\.key\]\) \.map\(\(w\) => \( <SetupRow key=\{w\.key\} title=\{w\.title\} status=\{w\.key === inUse \? `\$\{IN_USE\} · \$\{w\.sub\}` : w\.sub\} onPress=\{troubleOpens\[w\.key\]\} \/>/)
+    assert.ok(trouble.indexOf('TROUBLE_ASK') < trouble.indexOf('STILL_STUCK') && trouble.indexOf('STILL_STUCK') < trouble.indexOf('onPress={onOpenLog}'), 'the four ways are not first, then Still stuck? with the log')
+    /* The adapter and the cable behind the Bluetooth gate, each telling the page which; the computer's are Fixes; the Pi its own page. */
+    assert.match(s, /adapter: bluetoothOffered \? \(\) => \(setTroubleWay\('adapter'\), setPage\('bt-trouble'\)\) : null,/)
+    assert.match(s, /cable: bluetoothOffered \? \(\) => \(setTroubleWay\('cable'\), setPage\('bt-trouble'\)\) : null,/)
+    assert.match(s, /computer: onOpenFixes \|\| null, pi: \(\) => setPage\('pi-trouble'\)/)
+    assert.match(s, /const inUse = demo \? null : wayInUse\(\{ bluetooth, cable, link \}\)/)
+    /* Back from the Bluetooth page's troubleshooting goes where it was opened from, and the way is let go of off that page. */
+    assert.match(s, /const upFrom = \(p\) => \(p === 'bt-trouble' && troubleWay \? 'trouble' : PARENT\[p\] \|\| null\)/)
+    assert.match(s, /if \(page !== 'bt-trouble'\) setTroubleWay\(null\)/)
+    assert.match(s, /\{page === 'pi-trouble' \? \( <> \{head\(PI_TROUBLE_PAGE, 'back'\)\} <PiTrouble onComputerFixes=\{onOpenFixes \|\| null\} \/>/)
+    /* The cable's steps when asked about the cable, the adapter's when asked about the adapter, the kept way's otherwise; Forget stays the kept one's. */
+    const page = flat(code(read('mobile/src/screens/Bluetooth.js')))
+    assert.match(page, /export function BluetoothTrouble\(\{ onReport = null, way = null \}\)/)
+    assert.match(page, /const cableWay = way === 'cable' \|\| \(way !== 'adapter' && cable\) const steps = cableWay \?/)
+  })
+
+  test('the shared fixes are short: no step past forty words, and the browser draws the same ones', async () => {
+    const { FIXES } = await import('../shared/troubleshooting.mjs')
+    for (const fix of FIXES) {
+      assert.ok(fix.when.split(/\s+/).length <= 14, `“${fix.title}” has a long line under it`)
+      for (const step of fix.steps) {
+        /* The two shared lines (quit the editor, Windows' driver) are the setup steps' too, and held there. */
+        if (/^Quit FM3-Edit|^Windows only:/.test(step)) continue
+        assert.ok(step.split(/\s+/).length <= 40, `a step of “${fix.title}” is long: ${step}`)
+      }
+    }
   })
 }
