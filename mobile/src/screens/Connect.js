@@ -111,7 +111,7 @@ const STEPS = {
 const body = () => ({ color: color.silkDim, fontSize: font.body, lineHeight: 21 })
 
 /** One step: its number in the app's amber, its name beside it, and under them whatever the step needs. */
-function Step({ n, title, children }) {
+export function Step({ n, title, children }) {
   return (
     <View style={{ gap: space.sm }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>

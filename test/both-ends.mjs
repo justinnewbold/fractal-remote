@@ -1110,6 +1110,9 @@ export function run(test) {
        * apps? Settings menus?"): the browser has the two rows now, and Stop
        * the looper is under its Troubleshooting, as on the phone.
        */
+      /* CONNECT_ROW: "Connect your unit" (mobile/src/lib/setupWays.js). */
+      CONNECT_ROW:
+        'phone only, for now: the four ways (Bluetooth adapter, USB cable, a computer, a Raspberry Pi), Bluetooth first, each opening its own steps, from 10 November 2026. Two of the four are Bluetooth, which a browser cannot do, and the browser opens on its own connect page, which already says the computer way and that Bluetooth is in the apps (BLUETOOTH_IN_APPS)',
       /* STAGE_VIEW_NAME: "Stage view" (mobile/src/lib/stageView.js). */
       STAGE_VIEW_NAME:
         'phone only, for now: Play drawn large to read from a stand, his account only until STAGE_VIEW_FOR_EVERYONE (mobile/src/lib/features.js); the browser has no such view yet, and the row is not drawn for an account without it (App.js hands Settings no onStageView)',

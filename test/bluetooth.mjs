@@ -5877,7 +5877,9 @@ export function run(test) {
     const rig = front.indexOf('<Group title="My rig"')
     assert.notEqual(pair, -1, 'the Settings list has no Phone & computer row; this check reads it')
     assert.ok(row > rig && rig > -1 && row < pair, 'the row is not first in My rig, over Phone & computer')
-    assert.equal((front.slice(rig, row).match(/<SetupRow\b/g) || []).length, 1, 'something is drawn in My rig over the Bluetooth row')
+    /* Only Connect your unit over it, since 10 November 2026: the four ways, Bluetooth first among them (test/setup-ways.mjs). */
+    assert.equal((front.slice(rig, row).match(/<SetupRow\b/g) || []).length, 2, 'something is drawn in My rig over the Bluetooth row')
+    assert.match(front.slice(rig, row), /<SetupRow\s+title=\{CONNECT_ROW\}/, 'something other than Connect your unit is drawn in My rig over the Bluetooth row')
     /* Phone & computer, which the Live pill opens, has one button to the page (26 October 2026), behind the row's gate as one name. */
     const link = settings.slice(settings.indexOf("{page === 'link' ? ("), settings.indexOf("{page === 'bluetooth'"))
     assert.equal((link.match(/setPage\('bluetooth'\)/g) || []).length, 1, 'Phone & computer opens Bluetooth from more than one button')
@@ -6794,7 +6796,9 @@ export function run(test) {
      * one on Playing with no internet, the last two behind the same three as
      * one name.
      */
-    assert.equal((settings.match(/setPage\('bluetooth'\)/g) || []).length, 3, 'something else on Settings opens the Bluetooth page')
+    /* Five since 10 November 2026: Connect your unit's Bluetooth adapter and USB cable, both behind it too (below). */
+    assert.equal((settings.match(/setPage\('bluetooth'\)/g) || []).length, 5, 'something else on Settings opens the Bluetooth page')
+    for (const way of ['adapter', 'cable']) assert.ok(settings.includes(`${way}: bluetoothOffered ? () => setPage('bluetooth') : null,`), `Connect your unit’s ${way} opens the Bluetooth page from behind another gate`)
     assert.ok(settings.includes("{bluetoothOffered && !bluetooth ? <Press label={NO_SIGNAL_BLUETOOTH.go} tone=\"signal\" height={TAP} onPress={() => setPage('bluetooth')} /> : null}"), 'Playing with no internet opens the Bluetooth page from behind another gate')
     assert.ok(settings.includes(`const bluetoothOffered = ${GATE}`), 'Phone & computer’s Bluetooth button is behind another gate')
     assert.match(settings, /\{bluetoothOffered && !demo \? \( <Press label=\{bluetooth \? 'Bluetooth' : 'Connect over Bluetooth'\}[^}]*\}[^]*?onPress=\{\(\) => setPage\('bluetooth'\)\}/, 'the button on Phone & computer is not behind the gate')
