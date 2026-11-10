@@ -29,7 +29,7 @@ import { nameOf, useNamesHeard } from '../lib/presetNames'
 import { SIZES, loadFit, loadIcons, loadSceneLayout, loadSceneOrder, loadSize, sceneOrderFor } from '../lib/gigSize'
 import { PAGE_MAX, fitWide, foldInset, pageRow, playShape } from '../lib/playShape'
 import { linedName, linedOn, linedPlan, linedRowsTall, linedTile } from '../lib/linedPlay'
-import { gridWide, squarePlan, squaresOn } from '../lib/squarePlay'
+import { bigTilesOn, gridWide, tilePlan } from '../lib/squarePlay'
 import { HOLD_FOR_KNOBS, panelLane } from '../lib/twoSides'
 import BlockSide from '../components/BlockSide'
 import {
@@ -163,16 +163,19 @@ const LANES = { flexDirection: 'row', gap: space.xl, alignItems: 'flex-start' }
  */
 const LANE = { flexGrow: 1, flexShrink: 1, gap: space.sm }
 const LANE_HEADING = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: LANE_HEAD }
-/* As squares (lib/squarePlay): side by side, the two grids centred in the row; one over the other, each grid centred under its heading. */
-const LANES_SQUARE = { ...LANES, justifyContent: 'center' }
+/* Filling the screen (lib/squarePlay): side by side, the two grids centred in the row, which they reach across but for a point or two of rounding; one over the other, each grid centred under its heading. */
+const LANES_FILL = { ...LANES, justifyContent: 'center' }
 /* With a block's knobs where the scenes were: the panel from the page's left edge, the blocks after it, where they were (lib/twoSides panelLane). */
 const LANES_KNOBS = { ...LANES, justifyContent: 'flex-start' }
 /* The panel's own frame: a card, so it reads as one thing beside the blocks. */
 const KNOBS_BOX = { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, overflow: 'hidden' }
-const SQUARE_LANE = { gap: space.sm }
+const FILL_LANE = { gap: space.sm }
 const CENTRED = { alignSelf: 'center' }
-/* The least width of a grid of squares with the chain's hold line beside its heading. */
+/* The least width of a grid of tiles with the chain's hold line beside its heading. */
 const HOLD_LINE_ROOM = 320
+/* What sits round the pedals, measured (`round`, in Stage): a measure that changes more than this many times, with less than this long between changes, only ever grows from there. */
+const ROUND_MOVES = 6
+const ROUND_QUIET_MS = 1000
 /* The raw words a computer with nothing plugged in answers every unit read with (ForgeFX, registryCore). */
 const NO_DEVICE = /no fractal device found/i
 /* The fault for the card at the top, but not those words while Play says where the unit is instead. */
@@ -691,30 +694,67 @@ export default function Stage({
   const sceneAcross = lined ? plan.sceneCols : sceneCols
   const pedalsAcross = lined ? plan.chainCols : fxCols
   /*
-   * PLAY'S TILES AS SQUARES ON A BIG SCREEN (lib/squarePlay): "it would be
-   * better if they looked like square boxes as much as possible" (Justin, 9
-   * November 2026). Opened up or in a side, every scene and pedal is the
-   * same square, as big as the room under the preset allows, side by side
-   * or one over the other, whichever makes them bigger. Asked once Play has
+   * PLAY'S TILES FILL THE SCREEN ON A BIG SCREEN (lib/squarePlay): "it should
+   * be taking full advantage of the iPad screen and all scenarios" (Justin, 9
+   * November 2026). Opened up or in a side, the scenes and the pedals fill
+   * the room under the preset, across and down, side by side or one over the
+   * other, whichever leaves the tiles closest to square. Asked once Play has
    * measured its height and where the scenes start; until then, and on every
    * phone held upright, the tiles are drawn as they always were.
    */
-  const squares = squaresOn({ wide: shape.wide, inSide })
-  const squareEdge = lined ? foldInset(insets.left, insets.right) : fold
-  const squareRow = Math.max(0, pageRow(playWidth, space.lg) - squareEdge.left - squareEdge.right)
+  const bigTiles = bigTilesOn({ wide: shape.wide, inSide })
+  const fillEdge = lined ? foldInset(insets.left, insets.right) : fold
+  const fillRow = Math.max(0, pageRow(playWidth, space.lg) - fillEdge.left - fillEdge.right)
+  /* The page's own padding under the tiles: the ScrollView's paddingBottom, below, by the same two questions. */
+  const pageFoot = shape.wide ? (tight ? space.md : space.lg) : tight ? space.lg : space.xxl
   /* The height from the top of the scenes' heading to the bottom of Play's page. */
-  const squareRoom = viewport - lanesAt - (tight ? space.md : space.lg)
-  const sqOwn =
-    squares && viewport > 0 && lanesAt > 0
-      ? squarePlan({
-          width: squareRow,
-          room: squareRoom,
+  const fillRoom = viewport - lanesAt - pageFoot
+  /*
+   * WHAT SITS ROUND THE PEDALS THAT A PLAN CANNOT KNOW, MEASURED. Tiles that
+   * end at the bottom of the page leave no room for anything else in the
+   * chain's half: the quick tip or a note over the pedals, a VP4's sentence
+   * under them, or with no pedals at all the chain's heading and its note.
+   * So where the pedals start under their heading (`head`), how tall the
+   * VP4's sentence is (`foot`) and how tall a chain with no pedals is
+   * (`alone`) are measured as drawn, and taken out of the room the tiles
+   * share. None of the three moves with the tiles' size; but a note wraps by
+   * its half's width, and that is the plan's to change, so a measure that
+   * keeps going back and forth (ROUND_MOVES changes with no ROUND_QUIET_MS
+   * between them) only ever grows from there, and it stops.
+   */
+  const round = useRef({ head: null, foot: null, alone: null, at: 0, moves: 0 })
+  const [, drawRound] = useState(0)
+  const noteRound = (part, value) => {
+    const r = round.current
+    if (r[part] != null && Math.abs(r[part] - value) < 0.5) return
+    const now = Date.now()
+    if (now - r.at > ROUND_QUIET_MS) r.moves = 0
+    r.at = now
+    r.moves += 1
+    if (r.moves > ROUND_MOVES && r[part] != null && value < r[part]) return
+    r[part] = value
+    drawRound((n) => n + 1)
+  }
+  /* A VP4's sentence under its pedals (lib/vp4-safety VP4_ON_OFF_UNKNOWN), where it is drawn. */
+  const vp4Says = vp4Here() && blocks.length > 0 && !chainNow.elsewhere
+  const fillAsk = {
+    gap: space.sm,
+    head: LANE_HEAD + space.sm,
+    between: tight ? space.md : space.lg,
+    beside: space.xl,
+    chainHead: round.current.head ?? LANE_HEAD + space.sm,
+    chainFoot: vp4Says && round.current.foot != null ? round.current.foot + space.sm : 0
+  }
+  /* With no pedals the chain's half is still drawn, under the scenes: its heading and its note, or the cards of a first load. */
+  const chainAlone = fitBlocks > 0 ? 0 : (tight ? space.md : space.lg) + (round.current.alone ?? LANE_HEAD)
+  const fillOwn =
+    bigTiles && viewport > 0 && lanesAt > 0
+      ? tilePlan({
+          width: fillRow,
+          room: fillRoom - chainAlone,
           scenes: scenes.hasScenes ? scenes.count : 0,
           pedals: fitBlocks,
-          gap: space.sm,
-          head: LANE_HEAD + space.sm,
-          between: tight ? space.md : space.lg,
-          beside: space.xl
+          ...fillAsk
         })
       : null
   /*
@@ -723,61 +763,81 @@ export default function Stage({
    * blocks stay exactly where they are and the panel takes everything to
    * their left. With the scenes in a row over the blocks (eight scenes and
    * seven pedals on an 11-inch iPad on its side, or a very long chain) there
-   * is no column to take, so the panel gets one and the blocks are squared
-   * again in what is left. `knobsHere` is whether a hold opens knobs at all,
+   * is no column to take, so the panel gets one and the blocks fill what is
+   * left beside it. `knobsHere` is whether a hold opens knobs at all,
    * for the hold itself and the words over the blocks. An open panel
    * (`knobsAt`) is planned for whether or not a hold would open one this
    * moment: App keeps it through a blink of the link, when it would not.
    */
-  const lanePlan = (holdOpens === 'lane' || knobsAt !== null) && sqOwn ? panelLane({ width: squareRow, sq: sqOwn, gap: space.sm, beside: space.xl }) : null
+  const lanePlan = (holdOpens === 'lane' || knobsAt !== null) && fillOwn ? panelLane({ width: fillRow, plan: fillOwn, gap: space.sm, beside: space.xl }) : null
   const knobsHere = holdOpens === 'lane' ? lanePlan !== null : Boolean(holdOpens)
   const laneAgain =
     lanePlan && knobsAt !== null && !lanePlan.stays
-      ? squarePlan({
+      ? tilePlan({
           width: lanePlan.chain,
-          room: squareRoom,
+          room: fillRoom,
           scenes: 0,
           pedals: fitBlocks,
-          gap: space.sm,
-          head: LANE_HEAD + space.sm,
-          between: tight ? space.md : space.lg,
-          beside: space.xl
+          ...fillAsk
         })
       : null
   /* The panel's place, while one is open here: null everywhere else, and Play is drawn as it always was. */
   const knobsLane = lanePlan && knobsAt !== null && (lanePlan.stays || laneAgain) ? lanePlan : null
-  /* The squares everything below is drawn with: Play's own, or with the panel open, the blocks beside it. */
-  const sq = knobsLane ? { ...(knobsLane.stays ? sqOwn : laneAgain), beside: true } : sqOwn
+  /* The tiles everything below is drawn with: Play's own, or with the panel open, the blocks beside it. */
+  const fill = knobsLane ? { ...(knobsLane.stays ? fillOwn : laneAgain), beside: true } : fillOwn
   /* A knob in the panel has the finger: Play's page does not scroll under it (components/Knob). */
   const [knobHeld, setKnobHeld] = useState(false)
-  /** The scenes and the chain side by side: as squares that fit better so, or lined up. */
-  const halves = sq ? sq.beside : lined
-  /** A grid of squares' box: its own width, centred under its heading when one is over the other. */
-  const squareGrid = (cols) => [SQUARE_LANE, sq.beside ? null : CENTRED, { width: gridWide(cols, sq.side, space.sm) }]
+  /** The scenes and the chain side by side: filling the screen that way, or lined up. */
+  const halves = fill ? fill.beside : lined
+  /** A grid's box, filling the screen: its tiles' own width (the whole row for a half with no tiles), centred under its heading when one is over the other. */
+  const fillGrid = (cols, wide) => [FILL_LANE, fill.beside ? null : CENTRED, { width: cols > 0 ? gridWide(cols, wide, space.sm) : fillRow }]
   /* The chain's frame: a scroll the scenes' height when the chain has more rows than they do, lined up; a plain box otherwise. */
-  const chainScrolls = lined && !sq && plan.scrolls
+  const chainScrolls = lined && !fill && plan.scrolls
   const ChainFrame = chainScrolls ? ScrollView : View
+  /*
+   * The three measures of `round`, above, taken only where the tiles fill
+   * the screen: on a phone held upright nothing here is listened for, and
+   * Play is laid out and drawn exactly as it always was. Where the pedals
+   * start is not taken while "Updating…" stands over them for a moment: it
+   * goes, and the tiles would have moved for it twice.
+   */
+  const noteChainHead = bigTiles
+    ? (e) => {
+        if (!chainNow.late) noteRound('head', e.nativeEvent.layout.y)
+      }
+    : undefined
+  const noteChainFoot = bigTiles ? (e) => noteRound('foot', e.nativeEvent.layout.height) : undefined
+  const noteChainAlone = bigTiles
+    ? (e) => {
+        if (fitBlocks === 0) noteRound('alone', e.nativeEvent.layout.height)
+      }
+    : undefined
   const chainFrame = chainScrolls
     ? { style: { height: linedRowsTall(plan.rows, cell, space.sm) }, nestedScrollEnabled: true, contentContainerStyle: { paddingBottom: 0 } }
-    : {}
+    : noteChainHead
+      ? { onLayout: noteChainHead }
+      : {}
   /* And Play centered on the screen, so the Duo's fold runs down the gap between the halves. */
   const centre = lined ? foldInset(insets.left, insets.right) : fold
   /* The row each half's tiles share, lined up: half the page less the gap between the halves, worked out rather than measured, so the first frame after a switch is already the right width. */
   const laneRow = lined ? Math.max(0, (pageRow(playWidth, space.lg) - centre.left - centre.right - space.xl) / 2) : row
   /** Each half, lined up: its own width, never flex's share of the row (LANE says why). */
   const laneBox = lined ? [LANE, { width: laneRow }] : null
-  /* A pedal's name a size up on a big tile, lined up only. */
-  const pedalWords = sq ? linedName({ height: sq.side, width: sq.side }) : lined ? linedName({ height: cell, width: tileWidth(laneRow, pedalsAcross) }) : undefined
-  /** Each tile's height and width as drawn: the square, or as they always were. */
-  const sceneHigh = sq ? sq.side : sceneTall
-  const pedalHigh = sq ? sq.side : pedalTall
-  const sceneWide = sq ? sq.side : tileWidth(laneRow, sceneAcross)
-  const pedalWide = sq ? sq.side : tileWidth(laneRow, pedalsAcross)
-  /** Each half's box: its squares' own width, lined up's half, or the phone's column. */
-  const sceneLane = sq ? squareGrid(sq.sceneCols) : lined ? laneBox : { gap: space.sm }
-  const chainLane = sq ? squareGrid(sq.chainCols) : lined ? laneBox : { gap: space.sm }
-  /* Over a narrow grid of squares the chain's heading has no room for its hold line beside it. */
-  const holdRoom = !sq || gridWide(sq.chainCols, sq.side, space.sm) >= HOLD_LINE_ROOM
+  /* Which tiles the plan sized: a kind it has none of (no pedals yet, with the cards of a first load in their place) is drawn as it always was. */
+  const fillScenes = fill && fill.sceneCols > 0 ? fill.scene : null
+  const fillPedals = fill && fill.chainCols > 0 ? fill.pedal : null
+  /* A pedal's name a size up on a big tile: by the tile's shorter side, so a long tile's name is never stretched with it. */
+  const pedalWords = fillPedals ? linedName({ height: fillPedals.high, width: fillPedals.wide }) : lined ? linedName({ height: cell, width: tileWidth(laneRow, pedalsAcross) }) : undefined
+  /** Each tile's height and width as drawn: the plan's, or as they always were. */
+  const sceneHigh = fillScenes ? fillScenes.high : sceneTall
+  const pedalHigh = fillPedals ? fillPedals.high : pedalTall
+  const sceneWide = fillScenes ? fillScenes.wide : tileWidth(laneRow, sceneAcross)
+  const pedalWide = fillPedals ? fillPedals.wide : tileWidth(laneRow, pedalsAcross)
+  /** Each half's box: its tiles' own width, lined up's half, or the phone's column. */
+  const sceneLane = fill ? fillGrid(fill.sceneCols, fill.scene.wide) : lined ? laneBox : { gap: space.sm }
+  const chainLane = fill ? fillGrid(fill.chainCols, fill.pedal.wide) : lined ? laneBox : { gap: space.sm }
+  /* Over a narrow grid the chain's heading has no room for its hold line beside it. */
+  const holdRoom = !fill || gridWide(fill.chainCols, fill.pedal.wide, space.sm) >= HOLD_LINE_ROOM
   /*
    * ONE SIZE FOR EVERY SCENE'S NAME (lib/name-fit `together`): each tile says
    * the biggest size its name fits at, and every tile draws the smallest of
@@ -1410,13 +1470,13 @@ export default function Stage({
         {/* The scenes and the chain: one under the other, as always, or lined up side by side (`lined`). */}
         <View
           onLayout={(e) => setLanesAt(e.nativeEvent.layout.y)}
-          style={knobsLane ? LANES_KNOBS : halves ? (sq ? LANES_SQUARE : LANES) : { gap: tight ? space.md : space.lg }}
+          style={knobsLane ? LANES_KNOBS : halves ? (fill ? LANES_FILL : LANES) : { gap: tight ? space.md : space.lg }}
         >
 
         {/* ----------------------------------------------------- a block's knobs */}
         {/* Derek's panel, where the scenes were (`knobsLane`): as tall as the room under the preset, with its own scroll, so the blocks beside it never move for it. */}
         {knobsLane ? (
-          <View style={[KNOBS_BOX, { borderColor: color.rule, width: knobsLane.panel, height: Math.max(0, squareRoom) }]}>
+          <View style={[KNOBS_BOX, { borderColor: color.rule, width: knobsLane.panel, height: Math.max(0, fillRoom) }]}>
             <BlockSide eid={knobsAt} onClose={onCloseKnobs} onScrollLock={setKnobHeld} />
           </View>
         ) : null}
@@ -1442,7 +1502,7 @@ export default function Stage({
               refresh them." Beside the heading, the size of the heading: a thing
               reached for now and then, not a control on the stage.
             */}
-            <View style={lined || sq ? LANE_HEADING : { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={lined || fill ? LANE_HEADING : { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Label>Scenes</Label>
               {/*
                 On an AM4 over Bluetooth too, now. "It does say refresh names
@@ -1506,8 +1566,8 @@ export default function Stage({
 
         {/* ---------------------------------------------------------- blocks */}
         {/* Lined up with no scenes, the chain keeps its own half. */}
-        {lined && !sq && !scenes.hasScenes ? <View style={laneBox} /> : null}
-        <View style={chainLane}>
+        {lined && !fill && !scenes.hasScenes ? <View style={laneBox} /> : null}
+        <View onLayout={noteChainAlone} style={chainLane}>
           {/*
             "Where it says chain above the pedals, also put hold to switch
             channels. So users know that they can just hold the things to switch
@@ -1515,7 +1575,7 @@ export default function Stage({
             own size, the way Refresh names sits beside Scenes. Only when a hold
             does something: a unit with no channels has nothing to switch.
           */}
-          <View style={lined || sq ? LANE_HEADING : { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={lined || fill ? LANE_HEADING : { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Label icon={chainIcon}>{chainHeading(chain)}</Label>
             {channels?.length > 1 && blocks.length && holdRoom ? (
               <Text style={{ color: color.silkDim, fontSize: font.micro, letterSpacing: 1.5, textTransform: 'uppercase' }}>
@@ -1688,7 +1748,7 @@ export default function Stage({
           {/* Why a real VP4's pedals say nothing until tapped. Always there on
               a VP4, so nothing moves when it would go; the browser says the same. */}
           {vp4Here() && blocks.length && !chainNow.elsewhere ? (
-            <Text style={{ color: color.silkDim, fontSize: font.small }}>{VP4_ON_OFF_UNKNOWN}</Text>
+            <Text onLayout={noteChainFoot} style={{ color: color.silkDim, fontSize: font.small }}>{VP4_ON_OFF_UNKNOWN}</Text>
           ) : null}
 
         </View>

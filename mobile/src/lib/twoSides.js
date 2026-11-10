@@ -304,30 +304,31 @@ export const PANEL_LEAST = 320
 export const PANEL_MOST = 480
 
 /**
- * THE PANEL WHERE THE SCENES WERE: how wide it is, and the squares the
- * blocks are drawn with beside it. `sq` is Play's own plan for its squares
- * (lib/squarePlay squarePlan) in a row `width` across; `gap` is between
- * squares and `beside` between the two halves.
+ * THE PANEL WHERE THE SCENES WERE: how wide it is, and where that leaves the
+ * blocks beside it. `plan` is Play's own plan for its tiles (lib/squarePlay
+ * tilePlan: the scenes' and the pedals' own sizes, filling the screen) in a
+ * row `width` across; `gap` is between tiles and `beside` between the two
+ * halves.
  *
- * Side by side already (`sq.beside`), the blocks stay exactly where they
- * are: the same squares, the same columns, and the panel takes everything
- * to their left, the scenes' own width and the spare room the two grids
- * were centred in (`stays` true).
+ * Side by side already (`plan.beside`), the blocks stay exactly where they
+ * are: the same tiles, the same columns, and the panel takes everything
+ * to their left, the scenes' own width and any room the two grids were
+ * centred in (`stays` true).
  *
- * With the scenes in a row over the blocks (eight scenes and seven pedals
+ * With the scenes in a row over the blocks (eight scenes over twelve pedals
  * on an 11-inch iPad on its side, or a very long chain), or no scenes at
  * all, or scenes too narrow to hold three knobs, there is no column to take: the
  * panel gets one of its own, and the blocks are planned again in what is
- * left (`chain`, the row for squarePlan with no scenes; `stays` false).
- * Null when even that leaves no room for a square: the hold is the pop-up.
+ * left (`chain`, the row for tilePlan with no scenes; `stays` false).
+ * Null when even that leaves no room for a tile: the hold is the pop-up.
  */
-export function panelLane({ width = 0, sq = null, gap = 8, beside = 24, least = 72 } = {}) {
+export function panelLane({ width = 0, plan = null, gap = 8, beside = 24, least = 72 } = {}) {
   const w = num(width)
-  if (!w || !sq) return null
-  const grid = (cols) => (cols > 0 ? cols * sq.side + (cols - 1) * gap : 0)
-  if (sq.beside === true && sq.sceneCols > 0) {
-    const scenes = grid(sq.sceneCols)
-    const spare = Math.max(0, (w - scenes - beside - grid(sq.chainCols)) / 2)
+  if (!w || !plan) return null
+  const grid = (cols, wide) => (cols > 0 ? cols * num(wide) + (cols - 1) * gap : 0)
+  if (plan.beside === true && plan.sceneCols > 0) {
+    const scenes = grid(plan.sceneCols, plan.scene?.wide)
+    const spare = Math.max(0, (w - scenes - beside - grid(plan.chainCols, plan.pedal?.wide)) / 2)
     if (scenes + spare >= PANEL_LEAST) return { panel: scenes + spare, stays: true, chain: null }
   }
   const panel = Math.min(PANEL_MOST, Math.max(PANEL_LEAST, Math.floor(w * 0.45)))
