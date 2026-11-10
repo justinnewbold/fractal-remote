@@ -867,6 +867,15 @@ Associates account still needs payment and tax details, three sales
 within 180 days, and the app and the website on its list of sites; those
 are his to do in Associates Central.
 
+A bare `link.amazon/…` link from him is his own Associates short link for
+a product he wants linked. It redirects to an amazon.com/dp/ address with
+his tag; read the ten-character product number from there, find what it is
+by search (Amazon's own pages do not open from a cloud session), and write
+it the house way, `/dp/<number>?tag=justinnewbold-20`, never the short
+link, which the tests would refuse. The first, on 10 November 2026, was
+the Raspberry Pi guide's kit: the CanaKit Raspberry Pi 5 Essentials
+Starter Kit, 4 GB (B0CVQTWGBX).
+
 **Fractal Audio wrote on 18 October 2026, and the app does what it asked,
 except the name.** Their letter on Approved Vendor status asked for a clear
 statement at startup, no logos or product artwork, products named in plain
