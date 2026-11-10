@@ -1924,9 +1924,9 @@ export function run(test) {
 
     /* WHAT TO BUY, at the addresses matched to their listings, and no other outside link. */
     const PARTS = [
-      ['CanaKit Raspberry Pi 5 Starter Kit, 4 GB, with the official case', 'https://www.amazon.com/dp/B0CVQRCMLY'],
-      ['Raspberry Pi 5, 4 GB', 'https://www.amazon.com/dp/B0CK3L9WD3'],
-      ['Raspberry Pi 27W USB-C Power Supply', 'https://www.amazon.com/dp/B0HJPK4Z77']
+      ['CanaKit Raspberry Pi 5 Starter Kit, 4 GB, with the official case', 'https://www.amazon.com/dp/B0CVQRCMLY?tag=justinnewbold-20'],
+      ['Raspberry Pi 5, 4 GB', 'https://www.amazon.com/dp/B0CK3L9WD3?tag=justinnewbold-20'],
+      ['Raspberry Pi 27W USB-C Power Supply', 'https://www.amazon.com/dp/B0HJPK4Z77?tag=justinnewbold-20']
     ]
     for (const [name, link] of PARTS) {
       assert.ok(words.includes(name), `the guide does not name the ${name}`)
@@ -3740,11 +3740,11 @@ export function run(test) {
 
     /* THE PARTS, at the addresses checked by hand, and no other outside link. */
     const PARTS = [
-      ['CME WIDI Uhost', 'https://www.amazon.com/dp/B09GS326QW', 'https://www.cme-pro.com/widi-uhost/'],
-      ['CME C2MIDI Pro', 'https://www.amazon.com/dp/B0GVXTX5D1', 'https://www.cme-pro.com/c2midi-pro/'],
-      ['Type-A MIDI to 3.5 mm adapters', 'https://www.amazon.com/dp/B0FN83P5P7', null],
-      ['CME U2MIDI Pro', 'https://www.amazon.com/dp/B0BH8DHCLY', 'https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/'],
-      ['USB-C to USB-A adapter', 'https://www.amazon.com/dp/B01COOQIKU', null]
+      ['CME WIDI Uhost', 'https://www.amazon.com/dp/B09GS326QW?tag=justinnewbold-20', 'https://www.cme-pro.com/widi-uhost/'],
+      ['CME C2MIDI Pro', 'https://www.amazon.com/dp/B0GVXTX5D1?tag=justinnewbold-20', 'https://www.cme-pro.com/c2midi-pro/'],
+      ['Type-A MIDI to 3.5 mm adapters', 'https://www.amazon.com/dp/B0FN83P5P7?tag=justinnewbold-20', null],
+      ['CME U2MIDI Pro', 'https://www.amazon.com/dp/B0BH8DHCLY?tag=justinnewbold-20', 'https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/'],
+      ['USB-C to USB-A adapter', 'https://www.amazon.com/dp/B01COOQIKU?tag=justinnewbold-20', null]
     ]
     for (const [name, amazon, maker] of PARTS) {
       assert.ok(words.includes(name), `the guide does not name the ${name}`)

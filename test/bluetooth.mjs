@@ -9005,17 +9005,17 @@ export function run(test) {
     assert.deepEqual(
       Object.fromEntries(Object.entries(gear.PARTS).map(([key, p]) => [key, p.amazon])),
       {
-        uhost: 'https://www.amazon.com/dp/B09GS326QW',
-        c2midi: 'https://www.amazon.com/dp/B0GVXTX5D1',
+        uhost: 'https://www.amazon.com/dp/B09GS326QW?tag=justinnewbold-20',
+        c2midi: 'https://www.amazon.com/dp/B0GVXTX5D1?tag=justinnewbold-20',
         /* The rest checked against their Amazon pages on 26 October 2026, each title matching. */
-        u2midi: 'https://www.amazon.com/dp/B0BH8DHCLY',
-        usbA: 'https://www.amazon.com/dp/B01COOQIKU',
-        adapters: 'https://www.amazon.com/dp/B0FN83P5P7',
-        master: 'https://www.amazon.com/dp/B08F8F57JX',
-        jackTrs: 'https://www.amazon.com/dp/B08ZZSYKQX',
-        jackDin: 'https://www.amazon.com/dp/B08ZZSVM1J',
+        u2midi: 'https://www.amazon.com/dp/B0BH8DHCLY?tag=justinnewbold-20',
+        usbA: 'https://www.amazon.com/dp/B01COOQIKU?tag=justinnewbold-20',
+        adapters: 'https://www.amazon.com/dp/B0FN83P5P7?tag=justinnewbold-20',
+        master: 'https://www.amazon.com/dp/B08F8F57JX?tag=justinnewbold-20',
+        jackTrs: 'https://www.amazon.com/dp/B08ZZSYKQX?tag=justinnewbold-20',
+        jackDin: 'https://www.amazon.com/dp/B08ZZSVM1J?tag=justinnewbold-20',
         /* The pair the WIDI Master was tried with on his AM4 (Justin, 26 October 2026). */
-        masterAdapters: 'https://www.amazon.com/dp/B0FJRB9KGV'
+        masterAdapters: 'https://www.amazon.com/dp/B0FJRB9KGV?tag=justinnewbold-20'
       }
     )
     /*

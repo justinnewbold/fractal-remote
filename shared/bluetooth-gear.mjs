@@ -400,19 +400,33 @@ export const HOW_TWO_WAYS = {
 }
 
 
+/**
+ * THE AMAZON LINKS CARRY HIS ASSOCIATES TAG, and say so. "Replace all the
+ * links for the devices with these ... with your tag added" and "Put this
+ * line near 'What to buy'" (Justin, 9 November 2026). The tag is his
+ * Amazon Associates Store ID with Amazon's own suffix; it follows him, not
+ * the app's name. Amazon's agreement wants the sentence below, word for
+ * word, wherever such a link is shown: the Bluetooth guide, the Raspberry
+ * Pi guide, and the app's own How to connect page. A link with no tag
+ * earns nothing, so every amazon.com link here and on the website has it
+ * (a test holds that), and nothing else is ever put on the end of one.
+ */
+export const AMAZON_TAG = 'justinnewbold-20'
+export const AMAZON_DISCLOSURE = 'As an Amazon Associate I earn from qualifying purchases.'
+
 /** The parts, by the name printed on the box, each with what it is for in a line. */
 export const PARTS = {
   uhost: {
     name: 'CME WIDI Uhost',
     /* What the player's phone, iPad or tablet connects to: partsFor fills the noun in. */
     does: (noun = 'phone') => `The Bluetooth adapter. Your ${noun} connects to it.`,
-    amazon: 'https://www.amazon.com/dp/B09GS326QW',
+    amazon: 'https://www.amazon.com/dp/B09GS326QW?tag=justinnewbold-20',
     maker: 'https://www.cme-pro.com/widi-uhost/'
   },
   c2midi: {
     name: 'CME C2MIDI Pro',
     does: 'The cable from the Uhost to the unit’s MIDI jacks: one USB-C plug, a black MIDI plug and a white one.',
-    amazon: 'https://www.amazon.com/dp/B0GVXTX5D1',
+    amazon: 'https://www.amazon.com/dp/B0GVXTX5D1?tag=justinnewbold-20',
     maker: 'https://www.cme-pro.com/c2midi-pro/'
   },
   /*
@@ -425,7 +439,7 @@ export const PARTS = {
   u2midi: {
     name: 'CME U2MIDI Pro',
     does: 'For an FM3, in place of the C2MIDI Pro: the cable from the Uhost to the FM3’s MIDI jacks, with a black MIDI plug and a white one. It runs on USB power only, and stays cool on an FM3. Its USB plug is USB-A, so it goes into the Uhost through a small USB-C to USB-A adapter.',
-    amazon: 'https://www.amazon.com/dp/B0BH8DHCLY',
+    amazon: 'https://www.amazon.com/dp/B0BH8DHCLY?tag=justinnewbold-20',
     maker: 'https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/'
   },
   /*
@@ -437,7 +451,7 @@ export const PARTS = {
   usbA: {
     name: 'USB-C to USB-A adapter',
     does: 'For the FM3: the U2MIDI Pro’s USB plug is the larger USB-A kind, and this lets it go into the Uhost’s USB-C socket. Any small USB-C (plug) to USB-A (socket) adapter does; this one is Anker’s.',
-    amazon: 'https://www.amazon.com/dp/B01COOQIKU',
+    amazon: 'https://www.amazon.com/dp/B01COOQIKU?tag=justinnewbold-20',
     maker: null
   },
   /*
@@ -449,7 +463,7 @@ export const PARTS = {
   master: {
     name: 'CME WIDI Master',
     does: (noun = 'phone') => `The Bluetooth adapter and its MIDI plugs in one piece. Your ${noun} connects to it. It takes its power from the unit’s MIDI OUT, so there is nothing else to plug in.`,
-    amazon: 'https://www.amazon.com/dp/B08F8F57JX',
+    amazon: 'https://www.amazon.com/dp/B08F8F57JX?tag=justinnewbold-20',
     maker: 'https://www.cme-pro.com/widi-master/'
   },
   /*
@@ -462,19 +476,19 @@ export const PARTS = {
   jackTrs: {
     name: 'CME WIDI Jack, TRS-35 bundle',
     does: (noun = 'phone') => `The Bluetooth adapter, with two cables that end in 3.5 mm plugs for the unit’s MIDI jacks. Your ${noun} connects to it.`,
-    amazon: 'https://www.amazon.com/dp/B08ZZSYKQX',
+    amazon: 'https://www.amazon.com/dp/B08ZZSYKQX?tag=justinnewbold-20',
     maker: 'https://www.cme-pro.com/widi-jack/'
   },
   jackDin: {
     name: 'CME WIDI Jack, 5-pin DIN bundle',
     does: (noun = 'phone') => `The Bluetooth adapter, with two cables that end in 5-pin MIDI plugs. Your ${noun} connects to it.`,
-    amazon: 'https://www.amazon.com/dp/B08ZZSVM1J',
+    amazon: 'https://www.amazon.com/dp/B08ZZSVM1J?tag=justinnewbold-20',
     maker: 'https://www.cme-pro.com/widi-jack/'
   },
   adapters: {
     name: 'Two Type-A MIDI to 3.5 mm adapters',
     does: 'For an AM4 or VP4: their MIDI jacks are small 3.5 mm ones. Each adapter has a 5-pin MIDI socket (female) on one end and a 3.5 mm plug (male) on the other. They must be Type A. This is a pack of two (LOOTOOLS).',
-    amazon: 'https://www.amazon.com/dp/B0FN83P5P7',
+    amazon: 'https://www.amazon.com/dp/B0FN83P5P7?tag=justinnewbold-20',
     maker: null
   },
   /*
@@ -487,7 +501,7 @@ export const PARTS = {
   masterAdapters: {
     name: 'Two Type-A MIDI to 3.5 mm adapters',
     does: 'For an AM4 or VP4, between the WIDI Master and the unit: a 5-pin MIDI socket (female) on one end for the WIDI Master’s plug, and a 3.5 mm plug (male) on the other for the unit’s jack. They must be Type A. This is a pack of two (Eldraqth).',
-    amazon: 'https://www.amazon.com/dp/B0FJRB9KGV',
+    amazon: 'https://www.amazon.com/dp/B0FJRB9KGV?tag=justinnewbold-20',
     maker: null
   }
 }
