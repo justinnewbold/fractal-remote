@@ -30,6 +30,8 @@ import { SIZES, loadFit, loadIcons, loadSceneLayout, loadSceneOrder, loadSize, s
 import { PAGE_MAX, fitWide, foldInset, pageRow, playShape } from '../lib/playShape'
 import { linedName, linedOn, linedPlan, linedRowsTall, linedTile } from '../lib/linedPlay'
 import { gridWide, squarePlan, squaresOn } from '../lib/squarePlay'
+import { HOLD_FOR_KNOBS, panelLane } from '../lib/twoSides'
+import BlockSide from '../components/BlockSide'
 import {
   arrivedCurrent,
   clearError,
@@ -163,6 +165,10 @@ const LANE = { flexGrow: 1, flexShrink: 1, gap: space.sm }
 const LANE_HEADING = { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: LANE_HEAD }
 /* As squares (lib/squarePlay): side by side, the two grids centred in the row; one over the other, each grid centred under its heading. */
 const LANES_SQUARE = { ...LANES, justifyContent: 'center' }
+/* With a block's knobs where the scenes were: the panel from the page's left edge, the blocks after it, where they were (lib/twoSides panelLane). */
+const LANES_KNOBS = { ...LANES, justifyContent: 'flex-start' }
+/* The panel's own frame: a card, so it reads as one thing beside the blocks. */
+const KNOBS_BOX = { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, overflow: 'hidden' }
 const SQUARE_LANE = { gap: space.sm }
 const CENTRED = { alignSelf: 'center' }
 /* The least width of a grid of squares with the chain's hold line beside its heading. */
@@ -218,6 +224,20 @@ export default function Stage({
    * False on every phone, where the tuner covers the screen as it always has.
    */
   tunerBeside = false,
+  /*
+   * DEREK'S IDEA: HOLD A BLOCK, GET ITS KNOBS (lib/twoSides holdGoes;
+   * components/BlockSide). Where a hold opens a block's knobs, from App:
+   * 'lane' is here, where the scenes were, with Play filling a big screen;
+   * 'edit' and 'side' are the other side of two, which App draws. Null
+   * everywhere else (every phone, anything held upright, where editing does
+   * not work, a VP4, an account the two sides are not open to), and the hold
+   * is the channel pop-up it always was.
+   */
+  holdOpens = null,
+  /* The block whose knobs are open where the scenes were, by its effect id, or null. */
+  knobsAt = null,
+  onHoldBlock = null,
+  onCloseKnobs = null,
   /*
    * THE COMPUTERS ON THE ACCOUNT, from App (link.js's own word for them):
    * every one that answered, the units on them, the one driven, and a pick
@@ -682,11 +702,13 @@ export default function Stage({
   const squares = squaresOn({ wide: shape.wide, inSide })
   const squareEdge = lined ? foldInset(insets.left, insets.right) : fold
   const squareRow = Math.max(0, pageRow(playWidth, space.lg) - squareEdge.left - squareEdge.right)
-  const sq =
+  /* The height from the top of the scenes' heading to the bottom of Play's page. */
+  const squareRoom = viewport - lanesAt - (tight ? space.md : space.lg)
+  const sqOwn =
     squares && viewport > 0 && lanesAt > 0
       ? squarePlan({
           width: squareRow,
-          room: viewport - lanesAt - (tight ? space.md : space.lg),
+          room: squareRoom,
           scenes: scenes.hasScenes ? scenes.count : 0,
           pedals: fitBlocks,
           gap: space.sm,
@@ -695,6 +717,39 @@ export default function Stage({
           beside: space.xl
         })
       : null
+  /*
+   * A BLOCK'S KNOBS WHERE THE SCENES WERE (Derek's idea, `holdOpens` 'lane';
+   * lib/twoSides panelLane). With the scenes and the blocks side by side, the
+   * blocks stay exactly where they are and the panel takes everything to
+   * their left. With the scenes in a row over the blocks (eight scenes and
+   * seven pedals on an 11-inch iPad on its side, or a very long chain) there
+   * is no column to take, so the panel gets one and the blocks are squared
+   * again in what is left. `knobsHere` is whether a hold opens knobs at all,
+   * for the hold itself and the words over the blocks. An open panel
+   * (`knobsAt`) is planned for whether or not a hold would open one this
+   * moment: App keeps it through a blink of the link, when it would not.
+   */
+  const lanePlan = (holdOpens === 'lane' || knobsAt !== null) && sqOwn ? panelLane({ width: squareRow, sq: sqOwn, gap: space.sm, beside: space.xl }) : null
+  const knobsHere = holdOpens === 'lane' ? lanePlan !== null : Boolean(holdOpens)
+  const laneAgain =
+    lanePlan && knobsAt !== null && !lanePlan.stays
+      ? squarePlan({
+          width: lanePlan.chain,
+          room: squareRoom,
+          scenes: 0,
+          pedals: fitBlocks,
+          gap: space.sm,
+          head: LANE_HEAD + space.sm,
+          between: tight ? space.md : space.lg,
+          beside: space.xl
+        })
+      : null
+  /* The panel's place, while one is open here: null everywhere else, and Play is drawn as it always was. */
+  const knobsLane = lanePlan && knobsAt !== null && (lanePlan.stays || laneAgain) ? lanePlan : null
+  /* The squares everything below is drawn with: Play's own, or with the panel open, the blocks beside it. */
+  const sq = knobsLane ? { ...(knobsLane.stays ? sqOwn : laneAgain), beside: true } : sqOwn
+  /* A knob in the panel has the finger: Play's page does not scroll under it (components/Knob). */
+  const [knobHeld, setKnobHeld] = useState(false)
   /** The scenes and the chain side by side: as squares that fit better so, or lined up. */
   const halves = sq ? sq.beside : lined
   /** A grid of squares' box: its own width, centred under its heading when one is over the other. */
@@ -905,6 +960,14 @@ export default function Stage({
       setCoachStage('done')
     }
   }, [picking, coach, coachStage])
+  /* A hold where it opens the block's knobs (`knobsHere`, below): App opens them, and the quick tip hears the hold as it does the pop-up's. */
+  const holdForKnobs = (eid) => {
+    if (coach && coachStage !== 'done') {
+      markCoach()
+      setCoachStage('done')
+    }
+    onHoldBlock?.(eid)
+  }
 
   /*
    * `arriving` is the screen being shown again rather than pulled down, and
@@ -1228,6 +1291,8 @@ export default function Stage({
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => reload()} tintColor={color.silkDim} />
         }
+        /* Only ever off while a knob in the panel where the scenes were is held (`knobsLane`); everywhere else it is on, as always. */
+        scrollEnabled={!(knobHeld && knobsLane)}
       >
         {/* The first thing on the first screen, because the top of it is where
             an eye starts. A fault is not in here any more: it floats over the
@@ -1345,8 +1410,16 @@ export default function Stage({
         {/* The scenes and the chain: one under the other, as always, or lined up side by side (`lined`). */}
         <View
           onLayout={(e) => setLanesAt(e.nativeEvent.layout.y)}
-          style={halves ? (sq ? LANES_SQUARE : LANES) : { gap: tight ? space.md : space.lg }}
+          style={knobsLane ? LANES_KNOBS : halves ? (sq ? LANES_SQUARE : LANES) : { gap: tight ? space.md : space.lg }}
         >
+
+        {/* ----------------------------------------------------- a block's knobs */}
+        {/* Derek's panel, where the scenes were (`knobsLane`): as tall as the room under the preset, with its own scroll, so the blocks beside it never move for it. */}
+        {knobsLane ? (
+          <View style={[KNOBS_BOX, { borderColor: color.rule, width: knobsLane.panel, height: Math.max(0, squareRoom) }]}>
+            <BlockSide eid={knobsAt} onClose={onCloseKnobs} onScrollLock={setKnobHeld} />
+          </View>
+        ) : null}
 
         {/* ---------------------------------------------------------- scenes */}
         {/*
@@ -1362,7 +1435,7 @@ export default function Stage({
           The number stays, small, above the name. It is what the unit calls the
           scene and what a setlist written on paper says.
         */}
-        {scenes.hasScenes ? (
+        {scenes.hasScenes && !knobsLane ? (
           <View style={sceneLane}>
             {/*
               "Keep having issues showing the scene names on the AM4. Have a way to
@@ -1446,7 +1519,7 @@ export default function Stage({
             <Label icon={chainIcon}>{chainHeading(chain)}</Label>
             {channels?.length > 1 && blocks.length && holdRoom ? (
               <Text style={{ color: color.silkDim, fontSize: font.micro, letterSpacing: 1.5, textTransform: 'uppercase' }}>
-                {HOLD_FOR_CHANNELS}
+                {knobsHere ? HOLD_FOR_KNOBS : HOLD_FOR_CHANNELS}
               </Text>
             ) : null}
           </View>
@@ -1567,7 +1640,7 @@ export default function Stage({
                   /* Not on the outline: a channel waits for the chain read. */
                   onLongPress={
                     channels?.length > 1 && !chainNow.outline
-                      ? () => setPicking(picking === idOf(block) ? null : idOf(block))
+                      ? () => (knobsHere ? holdForKnobs(idOf(block)) : setPicking(picking === idOf(block) ? null : idOf(block)))
                       : undefined
                   }
                   style={{ width: pedalWide }}

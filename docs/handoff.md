@@ -51,11 +51,19 @@ over-the-air updates: no Expo build was started today.
 - His first look at two sides on the iPad and the Duo (nobody here has a
   Duo). Unsettled: the Duo half's foot (one row of five as in the mockup,
   or the iPhone's two rows it has now), and icons on the side bars.
+- His first look at Derek's panel (hold a block on the iPad on its side).
+  Nothing here can draw it: it bundles and its rules are tested, and the
+  screen itself is his to see. On an 11-inch iPad eight scenes sit in one
+  row over seven blocks, so there the panel takes the left of the screen
+  and the blocks are squared again beside it (they stay put only where the
+  scenes and blocks were already side by side).
 
 ## Next in line (not started)
 
-- Two sides step 3 (the tuner in a side), 4 (Derek's block panel), 5
-  (polish), 6 (open to customers: `SIDES_FOR_EVERYONE`).
+- Two sides step 5 (polish, and the Save / Don't save / Stay question
+  before Play throws away unsaved changes from Edit or Derek's panel),
+  6 (open to customers: `SIDES_FOR_EVERYONE`). Steps 3 (the tuner in a
+  side, 1.90.10) and 4 (Derek's block panel, 1.90.15) are in.
 - Play listing (#56 in the old task list): confirm Grok's update, sync
   store/google-play, delete UNCHECKED.
 - Later, from docs/later.md: NAM through the computer, VP4 opt-in editing

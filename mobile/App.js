@@ -61,7 +61,7 @@ import { keepVp4SetupIn, vp4Here } from './src/lib/device'
 import { clearLinkFault, useRig, writeTuner } from './src/lib/rig'
 import { keepLog } from './src/lib/logKeep'
 import { installCrashCapture } from './src/lib/debugLog'
-import { restoreDemo, setDemo, useDemo } from './src/lib/demo'
+import { restoreDemo, setDemo, useDemo, useDemoUnit } from './src/lib/demo'
 import {
   ALLOW_WORDS,
   APPLE_SCREEN_OPENS,
@@ -88,7 +88,8 @@ import { BENCH, SIDES_FOR_EVERYONE } from './src/lib/features'
 import Sides, { SidesFrame } from './src/components/Sides'
 /* Whose sign-in is kept on this device, for the two sides: the same answer Bluetooth's gate reads. */
 import { useBluetoothAdmin } from './src/lib/bluetooth'
-import { backUnwinds, sideTools, tunerGivesBack, tunerGoes, tunerStops, twoSidesOn, whenNarrow } from './src/lib/twoSides'
+import { BLOCK, backUnwinds, blockGivesBack, holdGoes, panelKeeps, sideTools, sideUnder, tunerGivesBack, tunerGoes, tunerStops, twoSidesOn, whenNarrow } from './src/lib/twoSides'
+import BlockSide, { KnobsFollow } from './src/components/BlockSide'
 import { TunerSide } from './src/components/Tuner'
 import { PLAY_ON_RIGHT, keepPlayOnRight, readPlayOnRight } from './src/lib/sidesKeep'
 import Paywall from './src/screens/Paywall'
@@ -356,6 +357,11 @@ export default function App() {
       return true
     }
     if (auth !== 'in') return false
+    /* A block's knobs open from a hold (Derek's panel): back is its Close, in the side or where the scenes were. */
+    if (blockAt !== null) {
+      closeBlock()
+      return true
+    }
     /* With two sides up: a side filling the window goes back beside Play first, then the side itself closes, as its Done does (lib/twoSides backUnwinds). */
     if (twoSidesUp && backUnwinds({ tool: sideTool, sideFull }) === 'full') {
       setSideFull(false)
@@ -761,7 +767,7 @@ export default function App() {
     }
   }, [])
   /* The tool a side can hold, by the screen that is open: Edit only behind the bench's switch, as its route is. The tuner is a screen only here, beside Play (step 3). */
-  const sideTool = BENCH && screen === 'edit' ? 'edit' : screen === 'setlists' || screen === 'presets' || screen === 'tuner' ? screen : null
+  const sideTool = BENCH && screen === 'edit' ? 'edit' : screen === 'setlists' || screen === 'presets' || screen === 'tuner' || screen === BLOCK ? screen : null
   const twoSidesUp = sidesAllowed && sideTool !== null && (wide || sideFull)
   /* Play is on screen beside the tool; or kept out of sight at no width while the tool fills the window (Stage `awake`). */
   const playBeside = twoSidesUp && !sideFull
@@ -769,6 +775,8 @@ export default function App() {
   const alone = twoSidesUp ? 'stage' : screen
   /* The tool last open, for Two sides on Play's bar; and a side that fills the window stops doing so when it closes. */
   useEffect(() => {
+    /* A block's knobs are never kept for Two sides: they open by a hold, and close for good. */
+    if (sideTool === BLOCK) return
     if (sideTool) setSideKept(sideTool)
     else setSideFull(false)
   }, [sideTool])
@@ -787,11 +795,13 @@ export default function App() {
   const shrunk = useRef(null)
   /* What the tuner's side borrowed: the tool that was there before it (lib/twoSides tunerGivesBack), or null for Play alone. */
   const tunerLent = useRef(null)
+  /* And what a block's knobs borrowed, the same way (Derek's panel, below). */
+  const blockLent = useRef(null)
   if (wasBeside.current && !wide) {
     const to = whenNarrow({ tool: sideTool, sideFull })
     if (to.screen !== screen) {
       /* Folded with the tuner beside Play: the tuner goes off (its side went, below), and what it borrowed is what comes back when the window widens. */
-      shrunk.current = to.keep === 'tuner' ? tunerLent.current : to.keep
+      shrunk.current = sideUnder(to.keep, { tunerLent: tunerLent.current, blockLent: blockLent.current })
       setScreen(to.screen)
     }
   } else if (screen === 'tuner' && !twoSidesUp) {
@@ -824,7 +834,8 @@ export default function App() {
     }
     const came = !was.on || (wide && !was.wide)
     if (came && screen !== 'tuner' && tunerGoes({ allowed: sidesAllowed, wide, screen }) === 'side') {
-      tunerLent.current = screen
+      /* From a block's knobs, what they had borrowed: the knobs do not come back by themselves. */
+      tunerLent.current = sideUnder(screen, { blockLent: blockLent.current })
       setScreen('tuner')
     }
   }, [tunerOn, wide, screen, sidesAllowed])
@@ -845,6 +856,58 @@ export default function App() {
   /* A tool picked from a bar's list, or brought back by Two sides: the tuner by turning it on, which opens its side (above); the rest by their screen. */
   const openTool = (tool) => (tool === 'tuner' ? writeTuner(true) : setScreen(tool))
   const closeSide = () => setScreen('stage')
+  /*
+   * DEREK'S IDEA: HOLD A BLOCK, GET ITS PANEL (lib/twoSides, step 4;
+   * docs/two-sides, "Derek's idea"; components/BlockSide). Where Edit opens
+   * for this unit and connection (`editOpens`, the one rule in lib/editDoor),
+   * never on a VP4, and only on a window that shows two sides for an account
+   * they are open to, holding a block on Play opens its knobs (`holdOpens`):
+   * where the scenes were with Play alone ('lane', drawn by Play itself); in
+   * Edit, when Edit is beside Play ('edit': it jumps to the block); or in the
+   * side that the tuner, Setlists or All presets had ('side': the screen
+   * becomes BLOCK, and what was there is given back on Close). Everywhere
+   * else `holdOpens` is null and the hold is the channel pop-up it always was.
+   *
+   * `blockAt` is the block whose knobs are open, by its effect id, in memory
+   * only: nothing opens by itself at launch. It closes when its place goes
+   * (`panelKeeps`, by where it was opened, `blockIn`: the window shrunk or
+   * the Duo folded, a tool or the tuner taking the side, Play made full
+   * screen, Settings, Edit's door shut for good), and when a preset without
+   * that block loads (KnobsFollow).
+   */
+  const [blockAt, setBlockAt] = useState(null)
+  /* The block Edit is told to open, with the moment it was held: { eid, at }. */
+  const [editJump, setEditJump] = useState(null)
+  /* A VP4 has no knobs anywhere, and the demo's VP4 shows its owner what a real one gives (Edit's vp4Bench): no panel on either. */
+  const demoUnitNow = useDemoUnit()
+  const noKnobs = vp4Here() || (demo && demoUnitNow === 'vp4')
+  const holdAsks = { allowed: sidesAllowed, vp4: noKnobs, wide, beside: playBeside, screen }
+  const holdOpens = holdGoes({ ...holdAsks, editOpens })
+  /* Open, it stays through a blink of the link: asked with Edit's door not shut, as Edit itself stays (editShut). */
+  const blockIn = useRef(null)
+  const blockKept = panelKeeps({ screen, goes: holdGoes({ ...holdAsks, editOpens: !editHere.shuts }), opened: blockIn.current })
+  const closeBlock = () => {
+    setBlockAt(null)
+    if (screen === BLOCK) setScreen(blockGivesBack(blockLent.current))
+  }
+  const holdBlock = (eid) => {
+    if (holdOpens === 'edit') return setEditJump({ eid, at: Date.now() })
+    if (!holdOpens) return undefined
+    blockIn.current = holdOpens
+    if (holdOpens === 'side' && screen !== BLOCK) {
+      /* The side is borrowed: from the tool there, or from what the tuner there had borrowed, since the tuner goes off with its side (tunerStops) and never comes back on by itself. */
+      blockLent.current = sideUnder(screen, { tunerLent: tunerLent.current })
+      setScreen(BLOCK)
+    }
+    return setBlockAt(eid)
+  }
+  useEffect(() => {
+    if (blockAt !== null ? !blockKept : screen === BLOCK) closeBlock()
+  }, [blockAt, blockKept, screen])
+  /* Edit closed: the block it was told to open is forgotten, so it opens on nothing next time, as always. */
+  useEffect(() => {
+    if (screen !== 'edit') setEditJump(null)
+  }, [screen])
   /*
    * And the new-version note only floats over it while the phone is off the
    * rig. Over a connected rig a download can land mid-song, and the note's
@@ -1758,8 +1821,8 @@ export default function App() {
               onUnlock={() => setBuying(true)}
               onOpenUnit={() => (unitGoes === 'demo' ? setPickUnit(true) : unitGoes === 'which' ? setPickLive(true) : openSettings('link'))}
               unitGoes={unitGoes}
-              /* Edit has its own Save; two on one screen would be one too many. */
-              saveHere={screen !== 'edit'}
+              /* Edit has its own Save; two on one screen would be one too many. So have a block's knobs, open from a hold (Derek's panel). */
+              saveHere={screen !== 'edit' && blockAt === null}
               /* The photo beside the pill: Settings → your account, its sheet open. */
               onOpenAccount={openAccount}
             />
@@ -2010,9 +2073,14 @@ export default function App() {
                   ) : sideTool === 'tuner' ? (
                     /* Stop tuner turns it off, and the side closes with it. */
                     <TunerSide onClose={() => writeTuner(false)} down={link.down === true && !demo} />
+                  ) : sideTool === BLOCK ? (
+                    /* A block held on Play: its knobs, in the side it borrowed; Close gives the side back. */
+                    blockAt !== null ? <BlockSide eid={blockAt} onClose={closeBlock} /> : null
                   ) : (
                     <Edit
                       onBack={closeSide}
+                      /* A block held on Play with Edit beside it: Edit jumps to it. */
+                      jump={editJump}
                       onOpenGear={() => {
                         setGearBack('edit')
                         setScreen('gear')
@@ -2026,6 +2094,11 @@ export default function App() {
                 inSide={playBeside}
                 awake={!playHidden}
                 tunerBeside={tunerBeside}
+                /* Where holding a block opens its knobs, and the block whose knobs are open where the scenes were, for as long as that is their place (Derek's panel, above). */
+                holdOpens={holdOpens}
+                knobsAt={blockKept && screen === 'stage' ? blockAt : null}
+                onHoldBlock={holdBlock}
+                onCloseKnobs={closeBlock}
                 /* An error on the stage screen can name the fix for it, and
                    Done comes back here rather than to Setup. */
                 onOpenFix={(id) => {
@@ -2091,6 +2164,8 @@ export default function App() {
             {playOnScreen ? <CablePlugIn /> : null}
             {/* Play's Edit tapped where Edit does not open over Bluetooth or a cable: why, in one line (editExplained, above). */}
             {playOnScreen && editExplained ? <EditWhy at={editWhyAt} cable={cableNow} onDismiss={() => setEditWhyAt(0)} /> : null}
+            {/* An open panel follows its block to the next preset, or closes when that preset has not got it. Draws nothing. */}
+            {blockAt !== null ? <KnobsFollow eid={blockAt} onClose={closeBlock} /> : null}
             </EdgeBack>
           </>
         )}

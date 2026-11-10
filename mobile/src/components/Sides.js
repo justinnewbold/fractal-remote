@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { color, font, space } from '../lib/theme'
-import { PLAY_ALWAYS, SIDE_WORDS, TOOL_NAMES, sideWidths } from '../lib/twoSides'
+import { BLOCK, BLOCK_NAME, PLAY_ALWAYS, SIDE_WORDS, TOOL_NAMES, sideWidths } from '../lib/twoSides'
 import EdgeBack from './EdgeBack'
 import Press from './Press'
 import Sheet from './Sheet'
@@ -52,7 +52,7 @@ export default function Sides({
   allowed = false,
   /* Whether the window shows two sides at all (lib/twoSides twoSidesOn, asked by App on the measured frame). */
   two = false,
-  /* The tool on the other side: 'edit' | 'setlists' | 'presets', or null for Play alone. */
+  /* The tool on the other side: 'edit' | 'setlists' | 'presets' | 'tuner', or a block's knobs ('block'), or null for Play alone. */
   tool = null,
   /* That tool's screen, drawn in its side. */
   side = null,
@@ -79,7 +79,9 @@ export default function Sides({
   const widths = sideWidths({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool })
   const beside = two && Boolean(tool) && !full
   const playHidden = Boolean(tool) && full
-  const toolName = TOOL_NAMES[tool] || ''
+  /* A block's knobs, held open from Play (step 4), are a side too: named Knobs, never on the list, and never full screen, since Play is where the next block is held. */
+  const knobs = tool === BLOCK
+  const toolName = knobs ? BLOCK_NAME : TOOL_NAMES[tool] || ''
 
   const pick = (t) => {
     setList(null)
@@ -102,7 +104,7 @@ export default function Sides({
       name={toolName}
       onName={() => setList('tool')}
       onSwap={beside ? onSwap : null}
-      onFull={beside ? () => onFull?.(true) : null}
+      onFull={beside && !knobs ? () => onFull?.(true) : null}
       onTwo={beside ? null : () => onFull?.(false)}
     />
   ) : null

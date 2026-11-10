@@ -169,7 +169,7 @@ const modelNote = (name) =>
  * knob turned here writes into the scene that is live, and a footswitch on the
  * floor changes every value on this screen without touching anything in it.
  */
-export default function Edit({ onBack, onOpenGear }) {
+export default function Edit({ onBack, onOpenGear, jump = null }) {
   /*
    * Whether a knob has the finger, and the screen therefore must not scroll.
    *
@@ -311,6 +311,20 @@ export default function Edit({ onBack, onOpenGear }) {
     const y = Math.max(0, e.nativeEvent.layout.y - space.md)
     page.current?.scrollTo({ y, animated: true })
   }
+  /*
+   * A BLOCK HELD ON PLAY, WITH EDIT BESIDE IT (docs/two-sides, "Derek's
+   * idea"; lib/twoSides holdGoes 'edit'): Edit jumps to that block, the way
+   * a search result does, naming no control. `jump` is { eid, at }, from
+   * App; each hold has its own `at`, so holding the block already open
+   * brings the page back to it.
+   */
+  const jumpAt = jump?.at
+  useEffect(() => {
+    if (!jumpAt || jump?.eid == null) return
+    setOpenEid(jump.eid)
+    setFocus({ eid: jump.eid, paramId: null, nonce: jumpAt })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpAt])
 
   return (
     <ScrollView
@@ -668,7 +682,7 @@ export const BLE_NO_CHAIN = 'Moving, adding and removing blocks, modifiers and r
  * identity, and keying on that threw the knobs away and read them again for
  * nothing, once per knob.
  */
-function BlockPanel({
+export function BlockPanel({
   block,
   channels,
   focus,
@@ -680,7 +694,16 @@ function BlockPanel({
   onRestoring,
   undoSaid,
   onUndoSaid,
-  overBle = false
+  overBle = false,
+  /*
+   * DRAWN AS DEREK'S PANEL (components/BlockSide: a block held on Play, on a
+   * big screen). The same channels, knobs, Level and model, read and written
+   * by the same code; without the name's row (the panel has its own, with
+   * Close), Copy channel and the on/off button, because one tap on the block
+   * on Play already does that (lib/twoSides PANEL_LEAVES_OUT). False on the
+   * Edit screen, which draws everything it always did.
+   */
+  panel = false
 }) {
   /* Read once and used everywhere below: see unit.mjs on why this is not
      `block.eid`, and what it cost to find out. */
@@ -1154,6 +1177,8 @@ function BlockPanel({
 
   return (
     <View style={{ gap: space.md }}>
+      {/* Not in Derek's panel, which has the name in its own row beside Close, and no Color. */}
+      {panel ? null : (
       <View
         style={{
           flexDirection: 'row',
@@ -1176,6 +1201,7 @@ function BlockPanel({
         */}
         {paintable(block.slug) ? <BlockColour slug={block.slug} /> : null}
       </View>
+      )}
 
       {/* ------------------------------------------------ channel and state */}
       {channels?.length > 1 ? (
@@ -1298,8 +1324,8 @@ function BlockPanel({
         2026): the knobs are what a player opens a block for, so they come
         straight under the channel buttons, and these follow them.
       */}
-      {/* Copy this channel onto another — see ChannelCopy below. Not over Bluetooth, where it is not built yet. */}
-      {channels?.length > 1 && block.channel && !overBle ? (
+      {/* Copy this channel onto another — see ChannelCopy below. Not over Bluetooth, where it is not built yet. Not in Derek's panel. */}
+      {!panel && channels?.length > 1 && block.channel && !overBle ? (
         <ChannelCopy
           eid={eid}
           block={block}
@@ -1318,7 +1344,8 @@ function BlockPanel({
         The block itself, always: on an AM4 the amp's pedal on Play is its
         boost (lib/am4-boost), so this is where its real on and off is.
       */}
-      {['input', 'output'].includes(block.slug) ? null : (
+      {/* Nor in Derek's panel: one tap on the block on Play turns it on and off. */}
+      {panel || ['input', 'output'].includes(block.slug) ? null : (
         <Press
           label={unsure ? 'Turn it off' : engaged ? 'Engaged' : 'Bypassed'}
           tone="signal"

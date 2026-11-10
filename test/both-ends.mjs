@@ -3069,7 +3069,8 @@ export function run(test) {
     const bar = read('mobile/src/components/TopBar.js')
     assert.match(bar, /const canSave = saveHere && \(saveTo\.saving \|\| \(!!unsaved && unsaved\.number === preset\?\.number && saveTo\.can\)\)/, 'the phone’s bar has no Save for changes made on Play')
     assert.match(bar, /Alert\.alert\('Save preset\?', 'This will overwrite the current preset\.'/, 'the bar saves without asking')
-    assert.match(read('mobile/App.js'), /saveHere=\{screen !== 'edit'\}/, 'Edit shows two Save buttons')
+    /* (Nor beside a block's knobs open from a hold, Derek's panel, which has its own Save too.) */
+    assert.match(read('mobile/App.js'), /saveHere=\{screen !== 'edit' && blockAt === null\}/, 'Edit shows two Save buttons')
     /* The browser has had one in its bar all along. */
     assert.match(read('src/App.jsx'), /<SaveBar[\s\S]{0,120}dirty=\{dirty\}/, 'the browser lost its Save in the bar')
   })
@@ -3681,7 +3682,8 @@ export function run(test) {
     assert.match(read('shared/play-words.mjs'), /export const HOLD_FOR_CHANNELS = 'Hold to switch channels'/)
     assert.match(stage, /^import \{[^}]*\bHOLD_FOR_CHANNELS\b[^}]*\} from '\.\.\/lib\/play-words'$/m, 'the phone says the hold in words of its own')
     assert.ok(!/export const HOLD_FOR_CHANNELS/.test(stage), 'the phone keeps a second copy of the words')
-    assert.match(stage, /\{channels\?\.length > 1 && blocks\.length && holdRoom \? \(\s*<Text[^>]*>\s*\{HOLD_FOR_CHANNELS\}/, 'the words are not beside CHAIN, or show on a unit with no channels')
+    /* (Where the hold opens the block's knobs instead, Derek's panel on a big screen, the phone says that: test/two-sides.mjs.) */
+    assert.match(stage, /\{channels\?\.length > 1 && blocks\.length && holdRoom \? \(\s*<Text[^>]*>\s*\{knobsHere \? HOLD_FOR_KNOBS : HOLD_FOR_CHANNELS\}/, 'the words are not beside CHAIN, or show on a unit with no channels')
     /* The same condition as the hold itself, so the words never promise a hold that does nothing. */
     assert.match(stage, /onLongPress=\{\s*channels\?\.length > 1/)
     const gig = read('src/components/Gig.jsx')
