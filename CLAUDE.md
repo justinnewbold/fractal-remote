@@ -996,6 +996,22 @@ words are unchanged. Nothing new goes above the knobs. Still above them:
 the title row, the chain strip, and inside the block its name, the A to D
 row and the page tabs, which the tidier Edit is to deal with.
 
+**A block's Level in Edit is typed, not read-only (phone, 10 November
+2026).** A player on the Fractal forum (SASouth): "I'm interested in
+knowing why levels in the output blocks are marked read-only. I often want
+to tweak the volume of a preset without changing the amps gain." Justin:
+"Yes, do an update for that right now, please." So the phone has the
+browser's rule (mobile/src/lib/blockLevel.js): the level stays out of the
+knobs (a level under a thumb dragged to the bottom is a silent preset), and
+the number under them is a box to type into, decibels only, never below
+-20 dB (`LEVEL_FLOOR_DB`, lib/guardrails' own number) and never over the
+level's own top. On the Output block it is the setting called exactly
+"Level", not a row's or a scene's. A level in anything but decibels still
+says read-only. Over Bluetooth the Output block is not in Edit's chain at
+all (bleWire `OFF_STAGE`), so there it reaches the amp's and the other
+blocks' levels, not the preset's own; the speaker button on Play, which
+moves the Output block's Level, is the computer's too.
+
 **On a big screen Play's tiles take the whole screen.** "It would be
 better if they looked like square boxes as much as possible" (9 November
 2026, #841, mobile/src/lib/squarePlay.js), and then, shown an AM4's four

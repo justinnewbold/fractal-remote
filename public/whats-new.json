@@ -3,14 +3,14 @@
     {
       "date": "2026-11-10",
       "day": "10 November 2026",
-      "version": "1.90.28",
+      "version": "1.90.30",
       "lines": [
         {
           "text": "New in Settings, under My rig: Connect your unit. Pick a Bluetooth adapter, USB cable, computer or Raspberry Pi and get short steps for that one (the Raspberry Pi’s are in the app now). Troubleshooting asks the same, so you see only the fixes for your way in, and they’re shorter.",
           "only": null
         },
         {
-          "text": "Edit shows more knobs at once: they start higher up, the block’s name, channels and on/off are one row, and the knobs fill the width of the screen. Find a control and Amp & pedal names moved under the knobs, and the note that used to sit at the top moved to the bottom of the page.",
+          "text": "Edit shows more knobs at once: they start higher up, the block’s name, channels and on/off are one row, and the knobs fill the width of the screen. And a block’s Level, the Output block’s too, is no longer read-only: tap the number under the knobs and type a new one, never below -20 dB.",
           "only": null
         },
         {
