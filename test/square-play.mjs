@@ -40,7 +40,7 @@ export function run(test) {
     assert.equal(r.squaresOn({ wide: 'yes' }), false, 'only a plain true')
   })
 
-  test('squares: the biggest that fit, side by side or one over the other, and every one inside the room', async () => {
+  test('squares: side by side or one over the other, and every one inside the room', async () => {
     const r = await rule()
     const rooms = [
       ['half an iPad on its side', 558, 620],
@@ -70,6 +70,30 @@ export function run(test) {
     const upright = r.squarePlan({ width: 788, room: 880, scenes: 8, pedals: 7, ...ASK })
     assert.equal(upright.beside, false)
     assert.ok(upright.side > half.side, 'an iPad upright has smaller squares than half of one on its side')
+  })
+
+  test('squares: they reach across the row, never two thin towers with nothing either side', async () => {
+    const r = await rule()
+    const across = (plan, width) =>
+      (plan.beside
+        ? r.gridWide(plan.sceneCols, plan.side, ASK.gap) + ASK.beside + r.gridWide(plan.chainCols, plan.side, ASK.gap)
+        : Math.max(r.gridWide(plan.sceneCols, plan.side, ASK.gap), r.gridWide(plan.chainCols, plan.side, ASK.gap))) / width
+    /* His report (9 November 2026): an AM4's four scenes and four pedals on an iPad held upright were one column each, 57% of the row. */
+    const am4 = r.squarePlan({ width: 780, room: 898, scenes: 4, pedals: 4, ...ASK })
+    assert.deepEqual([am4.beside, am4.sceneCols, am4.chainCols], [false, 4, 4], 'an AM4 on an iPad upright is not four scenes across over four pedals across')
+    assert.ok(across(am4, 780) >= 0.95, `its squares reach ${across(am4, 780).toFixed(2)} of the row`)
+    assert.ok(fits(r, am4, { width: 780, room: 898, scenes: 4, pedals: 4 }))
+    /* And on every big screen, any rig with at least three tiles reaches across at least three quarters of the row, or is at the largest square. */
+    const rooms = [[558, 620], [788, 620], [788, 880], [780, 898], [360, 420], [1148, 560], [809, 520], [568, 760], [970, 1070]]
+    for (const [width, room] of rooms) {
+      for (const [scenes, pedals] of [[4, 4], [8, 7], [4, 5], [8, 12], [2, 3], [8, 4], [4, 1]]) {
+        const plan = r.squarePlan({ width, room, scenes, pedals, ...ASK })
+        if (plan.side === r.SQUARE_LEAST) continue
+        assert.ok(across(plan, width) >= 0.75, `${scenes} scenes and ${pedals} pedals in ${width} by ${room}: the squares reach only ${across(plan, width).toFixed(2)} of the row`)
+        /* One over the other, neither grid is left narrow beside a full one when it has the tiles to match it. */
+        if (!plan.beside && scenes >= plan.chainCols && pedals >= plan.sceneCols) assert.ok(Math.abs(plan.sceneCols - plan.chainCols) <= 1, `${scenes}+${pedals} in ${width}: ${plan.sceneCols} scenes across over ${plan.chainCols} pedals`)
+      }
+    }
   })
 
   test('squares: nothing to draw or nothing measured is no plan, and a chain too long scrolls at the least square', async () => {
