@@ -212,7 +212,8 @@ export function run(test) {
     /* Picked from a bar, or brought back: by turning the tuner on, never by a tuner screen with the unit off. */
     assert.match(app, /const openTool = \(tool\) => \(tool === 'tuner' \? writeTuner\(true\) : setScreen\(tool\)\)\n/)
     assert.match(app, /onPick=\{openTool\}/)
-    assert.match(app, /onTwoSides=\{\(\) => openTool\(sideKept\)\}/)
+    /* (Two sides, in the top bar with Play alone on a big screen: the tool that was beside it, or the list.) */
+    assert.match(app, /onTwo=\{sideKept \? \(\) => openTool\(sideKept\) : \(\) => setSideList\('play'\)\}/)
     assert.match(app, /tunerOffered: \(demo \|\| link\.link === 'connected'\) && caps\?\.tuner !== false/)
     /* On: into the side. Off: the side closes. Its side gone: off, unless the window shrank. */
     assert.match(app, /if \(!tunerOn\) \{\s*if \(screen === 'tuner'\) setScreen\(tunerGivesBack\(tunerLent\.current\)\)\s*return\s*\}/)
@@ -295,9 +296,9 @@ export function run(test) {
     const app = code(read('mobile/App.js'))
     const sides = code(read('mobile/src/components/Sides.js'))
     const features = read('mobile/src/lib/features.js')
-    /* Open to everyone since 9 November 2026 ("flip the switch though to turn this on for all users"); the hold for a block's knobs is still his account's. */
+    /* Open to everyone since 9 November 2026 ("flip the switch though to turn this on for all users"); the hold for a block's knobs since the 10th ("Activate the other hold for knobs i checked it"). */
     assert.match(features, /^export const SIDES_FOR_EVERYONE = true$/m, 'the two sides are closed to customers again')
-    assert.match(features, /^export const HOLD_KNOBS_FOR_EVERYONE = false$/m, 'holding a block for its knobs is open to everyone; that needs his own look first, and its line in What’s new')
+    assert.match(features, /^export const HOLD_KNOBS_FOR_EVERYONE = true$/m, 'holding a block for its knobs is closed to customers again')
     assert.match(app, /const sidesAllowed = SIDES_FOR_EVERYONE \|\| sidesAdmin\n/)
     assert.match(app, /const sidesAdmin = useBluetoothAdmin\(\)\n/, 'his account is not read from the sign-in kept on the phone')
     /* The frame is measured, and the rule asked on it with its memory, only for an account the sides are open to. */
@@ -322,9 +323,9 @@ export function run(test) {
     /* Play's own buttons keep their handlers: Edit opens 'edit', the preset name 'presets', Setlists 'setlists', and the host draws them beside Play. */
     assert.match(app, /onOpenEdit=\{editOpens \? \(\) => setScreen\('edit'\)/)
     assert.match(app, /onOpenSetlists=\{\(\) => setScreen\('setlists'\)\}/)
-    /* Swap is kept on the device; Full screen on Play's bar is Play alone with the tool kept; Two sides brings it back. */
-    assert.match(app, /onSwap=\{\(\) => \{\s*keepPlayOnRight\(!playOnRight\)\s*setPlayOnRight\(!playOnRight\)\s*\}\}/)
-    assert.match(app, /onPlayFull=\{closeSide\}/)
+    /* Swap is kept on the device; the tool's Done is Play alone with the tool kept; Two sides brings it back. (The buttons are in the top bar since 10 November 2026: the test at the end of this file.) */
+    assert.match(app, /const swapSides = \(\) => \{\s*keepPlayOnRight\(!playOnRight\)\s*setPlayOnRight\(!playOnRight\)\s*\}\n/)
+    assert.match(app, /onSwap=\{swapSides\}/)
     assert.match(app, /if \(sideTool === BLOCK\) return\s*if \(sideTool\) setSideKept\(sideTool\)\s*else setSideFull\(false\)/)
     /* Nothing reopens at launch: what was kept starts empty, and only which side Play is on is read off the device. */
     assert.match(app, /const \[sideKept, setSideKept\] = useState\(null\)\n/)
@@ -697,9 +698,10 @@ export function run(test) {
     assert.match(stage, /\{scenes\.hasScenes && !knobsLane \? \(\s*<View style=\{sceneLane\}>/)
     assert.match(stage, /scrollEnabled=\{!\(knobHeld && knobsLane\)\}/)
     assert.match(stage, /const LANES_KNOBS = \{ \.\.\.LANES, justifyContent: 'flex-start' \}\n/)
-    /* The side's bar: named Knobs, no Full screen (Play is where the next block is held), and still nothing for anybody else. */
-    assert.match(sides, /const knobs = tool === BLOCK\n\s*const toolName = knobs \? BLOCK_NAME : TOOL_NAMES\[tool\] \|\| ''\n/)
-    assert.match(sides, /onFull=\{beside && !knobs \? \(\) => onFull\?\.\(true\) : null\}/)
+    /* The side's buttons, in the top bar: named Knobs, no Full screen (Play is where the next block is held), and still nothing for anybody else. */
+    const lead = code(read('mobile/src/components/SidesLead.js'))
+    assert.match(lead, /const knobs = tool === BLOCK\n\s*const name = knobs \? BLOCK_NAME : TOOL_NAMES\[tool\] \|\| ''\n/)
+    assert.match(lead, /knobs \? null : <Press key="full" label=\{fills\}/)
     assert.match(sides, /if \(!allowed\) return children\n/)
   })
 
@@ -892,22 +894,28 @@ export function run(test) {
     assert.match(app, /const sidewaysAllowed = sidesAdmin \|\| \(sidesAllowed && PHONE_SIDEWAYS_FOR_EVERYONE\)\n/)
     /* Asked only where the big-screen rule said no, with its own memory; and `wide` is either. */
     assert.match(app, /const low = sidewaysAllowed && !big && phoneSidewaysOn\(frame \|\| \{\}, lowWas\.current\)\n\s*lowWas\.current = low\n\s*const wide = big \|\| low\n/)
-    /* Play is told, the sides drop their bars, and the bar carries them: all three by `low`. */
+    /* Play is told by `low`; the sides have no bar of their own on any window (since 10 November 2026, the next test), and the top bar carries their buttons. */
     assert.match(app, /inSide=\{playBeside\}\s*awake=\{!playHidden\}\s*tunerBeside=\{tunerBeside\}\s*low=\{low\}/)
-    assert.match(app, /onTwoSides=\{\(\) => openTool\(sideKept\)\}\s*low=\{low\}\s*list=\{sideList\}\s*onList=\{setSideList\}/)
+    assert.match(app, /tools=\{toolsOffered\}\s*onPick=\{openTool\}\s*list=\{sideList\}\s*onList=\{setSideList\}/)
     assert.match(app, /slim=\{low && \(screen === 'stage' \|\| twoSidesUp\)\}\s*lead=\{sideLead\}/)
-    assert.match(app, /const sideLead = !low \? null : twoSidesUp \? \(\s*<SidesLead/, 'the bar carries the sides’ names on a window that is no phone on its side')
-    assert.match(app, /\) : screen === 'stage' && playHeadUp \? \(\s*<PlayHead onOpenPresets=\{demo \|\| link\.link === 'connected' \? \(\) => setScreen\('presets'\) : null\} onOpenSetlists=\{\(\) => setScreen\('setlists'\)\} \/>\s*\) : null\n/, 'the preset in the bar does not open what Play’s own does')
-    /* The sides: no bar over either there, the list opened from the top bar; with `low` false, exactly the bars and the list they had. */
-    assert.match(sides, /const playBar = two && !low \? \(/)
-    assert.match(sides, /const toolBar = two && tool && !low \? \(/)
-    assert.match(sides, /const list = low \? listAsked : listHere\n\s*const setList = low \? \(which\) => onList\?\.\(which\) : setListHere\n/)
+    /* There the bar's left is the two sides' buttons, or Play's own preset and Setlists; and the account's photo gives way to them only there. */
+    assert.match(app, /const sideLead = !wide \? null : twoSidesUp \? \(\s*<SidesLead frame=\{frame\} tool=\{sideTool\} full=\{sideFull\} playOnRight=\{playOnRight\} big=\{big\} onName=\{setSideList\} onSwap=\{swapSides\} onFull=\{setSideFull\} \/>\s*\) : low \? \(/, 'the bar carries the sides’ buttons on a window that shows one side')
+    assert.match(app, /\) : low \? \(\s*screen === 'stage' && playHeadUp \? \(\s*<PlayHead onOpenPresets=\{demo \|\| link\.link === 'connected' \? \(\) => setScreen\('presets'\) : null\} onOpenSetlists=\{\(\) => setScreen\('setlists'\)\} \/>\s*\) : null\s*\) : playOnScreen \? \(/, 'the preset in the bar does not open what Play’s own does, or is drawn off a phone on its side')
+    assert.match(app, /onOpenAccount=\{low && sideLead \? null : openAccount\}/)
     /* The bar: something on its left in the version's place, and less padding, only when App says. */
-    assert.match(bar, /onOpenAccount = null, lead = null, slim = false \}\)/)
-    assert.match(bar, /\{lead \? \(\s*<View style=\{\{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' \}\}>\{lead\}<\/View>\s*\) : canSave \? \(/)
-    /* The two sides' buttons there: the names for the list, Swap between them, Full or Two sides; a block's knobs never fill the window. */
-    assert.match(lead, /if \(!tool\) return null\n/)
-    assert.match(lead, /knobs \? null : <Press key="full" label=\{SIDEWAYS_FULL\}/)
+    assert.match(bar, /onOpenAccount = null, lead = null, slim = false, leadKeepsVersion = false, leadWide = 0 \}\)/)
+    assert.match(bar, /\{lead \? \(\s*<View style=\{LEAD_ROW\}>\s*\{leadKeepsVersion \? \(/)
+    assert.match(bar, /const LEAD_ROW = \{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space\.md \}\n/)
+    /* The two sides' buttons there: the names for the list, Swap between them, Full or Two sides; a block's knobs never fill the window. Every line a big screen changes is behind `big`, so with it false this is what #850 drew. */
+    assert.match(lead, /if \(!tool\) \{\s*if \(!big\) return null\n/, 'Play alone on a phone on its side has something in the bar from the sides')
+    assert.match(lead, /const measured = big\s*\? \{\s*onLayout: \(e\) => \{\s*setAt\(Math\.round\(e\.nativeEvent\.layout\.x\)\)\s*setRow\(Math\.round\(e\.nativeEvent\.layout\.width\)\)\s*\}\s*\}\s*: null\n/, 'a phone on its side measures its row, which nothing is in front of')
+    assert.match(lead, /const reach = Math\.max\(0, line - space\.lg - \(big \? at : 0\) - SWAP_WIDE \/ 2 - space\.sm\)\n/, 'Swap is off the line between the sides on a phone on its side')
+    assert.match(lead, /const first = big && row !== null \? Math\.min\(reach, Math\.max\(0, row - SWAP_WIDE - space\.sm\)\) : reach\n/, 'Swap can be drawn under the pill on a big screen, or is held short of the line on a phone on its side')
+    assert.match(lead, /const fills = big \? fullSays\(widths\.tool\) : SIDEWAYS_FULL\n/, 'a phone on its side says more than Full, which its bar has no room for')
+    assert.match(lead, /knobs \? null : <Press key="full" label=\{fills\}/)
+    assert.match(lead, /const moved = big && rest !== null && !chipsFit\(/)
+    assert.match(lead, /\{big \? \(\s*<View style=\{REST_ALL\} onLayout=\{\(e\) => setRest\(Math\.round\(e\.nativeEvent\.layout\.width\)\)\}>\s*\{moved \? null : after\}\s*<\/View>\s*\) : \(\s*<View style=\{REST\}>\{after\}<\/View>\s*\)\}/)
+    assert.match(lead, /const REST = \{ flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space\.sm \}\n/)
     assert.match(lead, /<Press label=\{SIDE_WORDS\.two\}[^\n]*onPress=\{\(\) => onFull\?\.\(false\)\}/)
     assert.match(lead, /<Press label=\{SIDE_WORDS\.swap\}[^\n]*onPress=\{onSwap\}/)
     /* Play's preset and Setlists in the bar: nothing while Play has them in its page. */
@@ -940,5 +948,101 @@ export function run(test) {
       if (/^const [A-Z_]+ = /.test(line) || /^\s*const lowFill =$/.test(line)) continue
       assert.match(line, /\blow\b|\bshort\b|lowTop|headTall|inSide \? PRESET_ROW : PRESET_HALVES|style=\{inSide \? SETLISTS_IN_HALF : LOW_PRESS\}|style=\{\[LOW_PRESET,|height=\{LOW_HEAD\}|room: viewport - lowTop|\{shortOf\(previous, SHORT_PREVIOUS\)\}/, `Play reads a phone-on-its-side size outside its branch: ${line.trim()}`)
     }
+  })
+
+  /*
+   * THE TWO SIDES' BUTTONS ARE IN THE APP'S TOP BAR ON A BIG SCREEN TOO
+   * (10 November 2026): "The play and two sides buttons take up a whole row
+   * on iPad. What other options for those?" (Justin, on his iPad; offered
+   * the top bar: "Yes do that now"). For everyone the two sides are open to:
+   * it moves buttons that were there, and adds none.
+   */
+  test('on a big screen the two sides have no bar of their own: their names, Swap and Full screen or Two sides are in the app’s top bar, Swap on the line between them', async () => {
+    const r = await rules()
+    /* The words: whole over a side with room for them, short over a narrow one, as on every phone. */
+    assert.equal(r.FULL_WORDS_AT, 480)
+    const ipad = frameOf(1180, 820)
+    const duo = frameOf(951, 669, { left: 84 })
+    const fold = frameOf(841, 720)
+    const max = frameOf(956, 440, { left: 62, right: 62 })
+    const toolWide = (frame, more) => r.sideWidths({ ...frame, ...more }).tool
+    assert.equal(r.fullSays(toolWide(ipad, { tool: 'edit' })), 'Full screen', 'an iPad on its side has the room and says Full')
+    assert.equal(r.fullSays(toolWide(frameOf(1366, 1024), { tool: 'presets' })), 'Full screen')
+    assert.equal(r.fullSays(toolWide(ipad, { tool: 'tuner' })), 'Full', 'the tuner’s narrow column is 360: two words do not fit over it')
+    for (const playOnRight of [true, false]) assert.equal(r.fullSays(toolWide(duo, { tool: 'edit', playOnRight })), 'Full', 'the Duo’s sides are about an iPhone wide')
+    assert.equal(r.fullSays(toolWide(fold, { tool: 'setlists' })), 'Full')
+    assert.equal(r.fullSays(toolWide(max, { tool: 'edit' })), 'Full', 'a phone on its side')
+    assert.equal(r.fullSays(0), 'Full')
+    assert.equal(r.fullSays(undefined), 'Full')
+    /* How far the buttons reach along the bar: to the far edge of Swap, which is centred on the real line between the sides. */
+    assert.equal(r.SWAP_WIDE, 64)
+    assert.equal(r.leadReach({ ...ipad, tool: 'edit' }), 590 + 32)
+    assert.equal(r.leadReach({ ...ipad, tool: 'edit', playOnRight: false }), 590 + 32)
+    /* The tuner's column: 360 on the tool's side, wherever that is. */
+    assert.equal(r.leadReach({ ...ipad, tool: 'tuner' }), 360 + 32)
+    assert.equal(r.leadReach({ ...ipad, tool: 'tuner', playOnRight: false }), 1180 - 360 + 32)
+    /* The Duo: the fold, not the frame's middle (475.5 and 391.5 with the strip on the left). */
+    assert.equal(r.leadReach({ ...duo, tool: 'presets' }), 391.5 + 32)
+    assert.equal(r.leadReach({ ...duo, tool: 'presets', playOnRight: false }), 391.5 + 32)
+    assert.equal(r.leadReach({ ...frameOf(951, 669, { right: 84 }), tool: 'presets' }), 475.5 + 32)
+    /* Always where the sides themselves are divided. */
+    for (const frame of [ipad, duo, fold, frameOf(1366, 1024), frameOf(1280, 800)]) {
+      for (const tool of ['edit', 'setlists', 'presets', 'tuner', r.BLOCK]) {
+        for (const playOnRight of [true, false]) {
+          const w = r.sideWidths({ ...frame, tool, playOnRight })
+          assert.equal(r.leadReach({ ...frame, tool, playOnRight }), (playOnRight ? w.tool : w.play) + r.SWAP_WIDE / 2, `${frame.width} ${tool} ${playOnRight}`)
+        }
+      }
+    }
+    /* A tool filling the window, or Play alone: room for a name and Two sides. */
+    assert.equal(r.leadReach({ ...ipad, tool: 'edit', full: true }), r.LEAD_ALONE)
+    assert.equal(r.leadReach({ ...ipad, tool: null }), r.LEAD_ALONE)
+    assert.equal(r.leadReach(), r.LEAD_ALONE)
+    /* Whether a side's buttons fit what the bar has left past Swap; where they do not, they are moved before Swap, never cut. */
+    assert.equal(r.chipsFit({ room: 300, labels: ['Play ▾'] }), true)
+    assert.equal(r.chipsFit({ room: 60, labels: ['Tuner ▾', 'Full'] }), false, 'the tuner’s buttons are said to fit beside the pill in 60 points')
+    assert.equal(r.chipsFit({ room: 0, labels: ['Play ▾'] }), false)
+    assert.equal(r.chipsFit({ room: 0, labels: [] }), true)
+    assert.equal(r.chipsFit({ room: 0, labels: [null, ''] }), true, 'a button that is not drawn needs room')
+    /* 7 letters at 8 with 24 round them is 80, and 4 at 8 with 24 is 56, with 8 between: 144. */
+    assert.equal(r.chipsFit({ room: 144, labels: ['Tuner ▾', null, 'Full'] }), true)
+    assert.equal(r.chipsFit({ room: 143, labels: ['Tuner ▾', null, 'Full'] }), false)
+    assert.equal(r.chipsFit({ room: 143, labels: ['Tuner ▾', 'Full'], letter: 7 }), true)
+
+    const app = code(read('mobile/App.js'))
+    const sides = code(read('mobile/src/components/Sides.js'))
+    const bar = code(read('mobile/src/components/TopBar.js'))
+    const lead = code(read('mobile/src/components/SidesLead.js'))
+    /* The sides draw no bar and keep no list of their own: both are App's and the top bar's now. */
+    assert.doesNotMatch(sides, /SideBar|BAR_TALL|useState|SIDE_WORDS/, 'a side has a bar of its own again')
+    assert.match(sides, /onPick,\s*list = null,\s*onList = null,\s*children\s*\}\) \{\s*if \(!allowed\) return children\n/)
+    assert.match(sides, /<Sheet open=\{list !== null\} onClose=\{\(\) => onList\?\.\(null\)\} title=\{list === 'play' \? 'Beside Play' : 'This side'\} note=\{PLAY_ALWAYS\}>/)
+    assert.match(sides, /const pick = \(t\) => \{\s*onList\?\.\(null\)\s*onPick\?\.\(t\)\s*\}/)
+    /* Play's slot holds Play and nothing over it, in every mode. */
+    assert.match(sides, /importantForAccessibility=\{playHidden \? 'no-hide-descendants' : 'auto'\}\s*>\s*\{\s*\}\s*<EdgeBack onBack=\{beside \? swallow : null\} style=\{\{ flex: 1 \}\}>/)
+    assert.match(sides, /<View key="side" style=\{\[beside \? \{ width: widths\.tool \} : \{ flex: 1 \}, beside \? DIVIDED\[playOnRight \? 'left' : 'right'\] : null\]\}>\s*<View style=\{\{ flex: 1 \}\}>\{side\}<\/View>/)
+    /* App: the lead wherever the window shows two; with Play alone on a big screen, Two sides, which brings the kept tool back or opens the list. */
+    assert.match(app, /\) : playOnScreen \? \(\s*<SidesLead big onTwo=\{sideKept \? \(\) => openTool\(sideKept\) : \(\) => setSideList\('play'\)\} \/>\s*\) : null\n/, 'Play alone on a big screen has no way to bring the other side back, or has it off Play')
+    assert.match(app, /const playOnScreen = screen === 'stage' && !settling\n/)
+    /* The version stays in front on a big screen, the bar is told how far the buttons reach, and the photo keeps its way in. */
+    assert.match(app, /lead=\{sideLead\}\s*leadKeepsVersion=\{big\}\s*leadWide=\{sideLeadWide\}/)
+    assert.match(app, /const sideLeadWide = big && sideLead \? leadReach\(\{ width: frame\?\.width, left: frame\?\.left, right: frame\?\.right, playOnRight, tool: twoSidesUp \? sideTool : null, full: sideFull \}\) : 0\n/)
+    assert.match(app, /onOpenAccount=\{low && sideLead \? null : openAccount\}/, 'the account’s photo is taken off a big screen’s bar, which has the room for it')
+    /* The list closes with the window's second side, and a side's own list with that side; Play's list stays open over Play alone. */
+    assert.match(app, /if \(!wide \|\| \(sideList === 'tool' && !twoSidesUp\)\) setSideList\(null\)\n\s*\}, \[wide, twoSidesUp, sideList\]\)/)
+    /* The bar: the version, as wide as its words, then the buttons; and the photo only where the pill still fits beside what they keep. */
+    assert.match(bar, /\{leadKeepsVersion \? \(\s*<Text numberOfLines=\{1\} style=\{\{ color: color\.silkFaint, fontSize: font\.micro, fontFamily: face, letterSpacing: 1 \}\}>\s*\{`v\$\{APP_VERSION\}`\}\s*<\/Text>\s*\) : null\}\s*\{lead\}/)
+    assert.match(bar, /const leadKeeps = Math\.max\(0, \(Number\(leadWide\) \|\| 0\) - space\.lg\)\n/)
+    assert.match(bar, /\(hasOutput \? space\.md \+ 24 : 0\) - leadKeeps\n/)
+    /* Only `slim` is laid over the bar's style: its height on a big screen is what it was. */
+    assert.match(bar, /zIndex: 3\s*\}, slim \? SLIM : null\]\}/)
+    /* The buttons: Play alone, Two sides; a tool filling the window, its name and Two sides; beside Play, measured from where the row starts so Swap is on the line. */
+    assert.match(lead, /if \(!tool\) \{\s*if \(!big\) return null\s*return \(\s*<View style=\{ROW\} \{\.\.\.measured\}>\s*<Press label=\{SIDE_WORDS\.two\} height=\{HIGH\} labelSize=\{font\.small\} onPress=\{onTwo\} accessibilityLabel="Show two sides" style=\{CHIP\} \/>/)
+    assert.match(lead, /const \[at, setAt\] = useState\(big \? VERSION_ROOM : 0\)\n/)
+    assert.match(lead, /const line = playOnRight \? widths\.tool : widths\.play\n/)
+    assert.match(lead, /style=\{\[CHIP, \{ width: SWAP_WIDE \}\]\}/)
+    /* Moved: both sides' buttons in the first half, the far side's at its end beside Swap, and nothing past Swap. */
+    assert.match(lead, /<View style=\{\[moved \? HALF_APART : HALF, \{ width: first \}\]\}>\s*\{moved \? <View style=\{HALF\}>\{before\}<\/View> : before\}\s*\{moved \? <View style=\{HALF\}>\{after\}<\/View> : null\}\s*<\/View>/)
+    assert.match(lead, /const afterSays = playOnRight \? \[`\$\{TOOL_NAMES\.play\} ▾`\] : \[`\$\{name\} ▾`, knobs \? null : fills\]\n/)
   })
 }

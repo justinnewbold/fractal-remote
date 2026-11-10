@@ -12562,8 +12562,8 @@ export function run(test) {
     const app = withoutComments(read('mobile/App.js')).replace(/\s+/g, ' ')
     assert.match(app, /const openSettings = \(at = null, sheet = false\) => \{ setSettingsAt\(at\) setAccountSheet\(sheet\) setSettingsVisit\(\(n\) => n \+ 1\) setScreen\('settings'\) \}/)
     assert.match(app, /const openAccount = \(\) => openSettings\('account', true\)/)
-    /* (Not while the bar's left holds the two sides' names or Play's preset on a phone held on its side: `sideLead`, test/two-sides.mjs.) */
-    assert.match(app, /onOpenAccount=\{sideLead \? null : openAccount\}/)
+    /* (Not on a phone held on its side while the bar's left holds the two sides' names or Play's preset: `low`, `sideLead`, test/two-sides.mjs. A big screen keeps it.) */
+    assert.match(app, /onOpenAccount=\{low && sideLead \? null : openAccount\}/)
     assert.match(app, /if \(auth === 'checking'\) return undefined let alive = true ;\(auth === 'out' \? Promise\.resolve\(null\) : keptAccount\(\)\) \.then\(\(who\) => alive && showPhotoFor\(who\)\)/, 'the photo is not for whoever the phone says is signed in, or stays after a sign-out')
     assert.match(app, /openAccountSheet=\{accountSheet\} onAccountSheet=\{\(\) => setAccountSheet\(false\)\}/)
 
@@ -12606,8 +12606,11 @@ export function run(test) {
     assert.match(bar, /const pillNeeds = 2 \+ 2 \* space\.sm \+ \(String\(pill\.status \|\| ''\)\.length \+ String\(pill\.unit \|\| ''\)\.length\) \* letter \+ \(demo \? 0 : 2 \* space\.sm \+ 10\)/, 'the bar no longer measures the pill’s first line')
     assert.match(bar, /const \{ left: stripLeft = 0, right: stripRight = 0 \} = useSafeAreaInsets\(\)/, 'the bar takes its width for the window’s, past a side strip (the Duo closed)')
     assert.match(bar, /const whereNeeds = 2 \+ 2 \* space\.sm \+ String\(pill\.where \|\| ''\)\.length \* 0\.56 \* font\.micro \* \(fontScale \|\| 1\)/, 'the bar no longer measures the pill’s second line, where the computer is')
-    assert.match(bar, /const besidePhoto = across - stripLeft - stripRight - 2 \* space\.lg - 3 \* space\.md - 24 - 22 - \(hasOutput \? space\.md \+ 24 : 0\)/, 'the bar no longer works out what the row leaves the pill beside the photo')
+    /* (Less `leadKeeps`, what the two sides' buttons keep on a big screen's bar: 0 on every phone held upright, test/two-sides.mjs.) */
+    assert.match(bar, /const besidePhoto = across - stripLeft - stripRight - 2 \* space\.lg - 3 \* space\.md - 24 - 22 - \(hasOutput \? space\.md \+ 24 : 0\) - leadKeeps /, 'the bar no longer works out what the row leaves the pill beside the photo')
     assert.match(bar, /const showPhoto = [^\n]*&& !canSave && Math\.max\(pillNeeds, whereNeeds\) <= besidePhoto/, 'the photo shows beside Save, or beside words it cuts')
+    assert.match(bar, /leadWide = 0 \}\)/, 'the bar keeps room for the two sides’ buttons on a window that has none')
+    assert.match(bar, /const leadKeeps = Math\.max\(0, \(Number\(leadWide\) \|\| 0\) - space\.lg\) /)
     const shows = (across, status, unit, withSpeaker, scale = 1, where = '', strip = 0) => {
       const letter = 0.602 * font.small * scale
       const needs = 2 + 2 * space.sm + (status.length + unit.length) * letter + 2 * space.sm + 10

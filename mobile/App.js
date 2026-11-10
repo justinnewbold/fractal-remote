@@ -91,7 +91,7 @@ import PlayHead from './src/components/PlayHead'
 import { usePlayHead } from './src/lib/playHead'
 /* Whose sign-in is kept on this device, for the two sides: the same answer Bluetooth's gate reads. */
 import { useBluetoothAdmin } from './src/lib/bluetooth'
-import { BLOCK, backUnwinds, blockGivesBack, holdGoes, panelKeeps, phoneSidewaysOn, sideTools, sideUnder, tunerGivesBack, tunerGoes, tunerStops, twoSidesOn, whenNarrow } from './src/lib/twoSides'
+import { BLOCK, backUnwinds, blockGivesBack, holdGoes, leadReach, panelKeeps, phoneSidewaysOn, sideTools, sideUnder, tunerGivesBack, tunerGoes, tunerStops, twoSidesOn, whenNarrow } from './src/lib/twoSides'
 import BlockSide, { KnobsFollow } from './src/components/BlockSide'
 import { TunerSide } from './src/components/Tuner'
 import { PLAY_ON_RIGHT, keepPlayOnRight, readPlayOnRight } from './src/lib/sidesKeep'
@@ -766,17 +766,17 @@ export default function App() {
    * until features PHONE_SIDEWAYS_FOR_EVERYONE, and asked only where the
    * big-screen rule said no, so a tablet and the Duo keep that answer.
    * There (`low`) the window shows two sides as a big one does (`wide`),
-   * with three differences: Play lays itself out in two halves of square
-   * tiles (Stage `low`), the two bars' buttons are in the app's top bar
-   * (components/SidesLead) since the window is too low for a second row,
-   * and holding a block is the channel pop-up it always was.
+   * the two sides' buttons in the app's top bar on both (components/
+   * SidesLead, `sideLead` below), with two differences: Play lays itself
+   * out in two halves of square tiles (Stage `low`), and holding a block is
+   * the channel pop-up it always was.
    */
   const sidewaysAllowed = sidesAdmin || (sidesAllowed && PHONE_SIDEWAYS_FOR_EVERYONE)
   const lowWas = useRef(false)
   const low = sidewaysAllowed && !big && phoneSidewaysOn(frame || {}, lowWas.current)
   lowWas.current = low
   const wide = big || low
-  /* Which side's name was tapped in the top bar there, for the list components/Sides draws: 'tool' | 'play' | null. */
+  /* Which side's name was tapped in the top bar, for the list components/Sides draws: 'tool' | 'play' | null. */
   const [sideList, setSideList] = useState(null)
   /* Whether Play has its preset and Setlists up in the top bar there (lib/playHead; lib/sidewaysPlay `headUp`). */
   const playHeadUp = usePlayHead() !== null
@@ -797,7 +797,7 @@ export default function App() {
   const playBeside = twoSidesUp && !sideFull
   const playHidden = twoSidesUp && sideFull
   const alone = twoSidesUp ? 'stage' : screen
-  /* The tool last open, for Two sides on Play's bar; and a side that fills the window stops doing so when it closes. */
+  /* The tool last open, for Two sides in the top bar with Play alone; and a side that fills the window stops doing so when it closes. */
   useEffect(() => {
     /* A block's knobs are never kept for Two sides: they open by a hold, and close for good. */
     if (sideTool === BLOCK) return
@@ -871,44 +871,51 @@ export default function App() {
   }, [screen])
   /* Never the big pop-up while two sides can show: the tuner is in its side (docs/two-sides, critic 3). */
   const tunerBeside = wide || (twoSidesUp && sideTool === 'tuner')
-  /* What the list on either bar offers now: the same conditions Play's own buttons use. */
+  /* What the list under either side's name offers now: the same conditions Play's own buttons use. */
   const toolsOffered = sideTools({
     editOpens,
     presetsOffered: demo || link.link === 'connected',
     tunerOffered: (demo || link.link === 'connected') && caps?.tuner !== false
   })
-  /* A tool picked from a bar's list, or brought back by Two sides: the tuner by turning it on, which opens its side (above); the rest by their screen. */
+  /* A tool picked from that list, or brought back by Two sides: the tuner by turning it on, which opens its side (above); the rest by their screen. */
   const openTool = (tool) => (tool === 'tuner' ? writeTuner(true) : setScreen(tool))
   const closeSide = () => setScreen('stage')
   /*
-   * WHAT THE TOP BAR CARRIES ON ITS LEFT ON A PHONE HELD ON ITS SIDE (`low`):
-   * with a tool beside Play or filling the window, the two sides' names,
-   * Swap and Full or Two sides (components/SidesLead), which a big screen
-   * has in a bar over each side; with Play alone, its preset and Setlists
-   * where Play has sent them up for the height (components/PlayHead), doing
-   * what they do on Play. Null on every other window and account, and the
-   * bar has its version there as always.
+   * WHAT THE TOP BAR CARRIES FOR THE TWO SIDES (`sideLead`), wherever the
+   * window shows two (`wide`): on a big screen and on a phone held on its
+   * side. "The play and two sides buttons take up a whole row on iPad"
+   * (Justin, 10 November 2026), so neither window has a bar over each side
+   * any more; their buttons are here (components/SidesLead).
+   *
+   * With a tool beside Play or filling the window: the two sides' names,
+   * Swap and Full screen or Two sides. With Play alone, on a big screen
+   * (`big`): Two sides, which brings back the tool that was beside it or,
+   * with none yet, opens the list, as Play's own bar did. With Play alone on
+   * a phone on its side (`low`): Play's preset and Setlists where Play has
+   * sent them up for the height (components/PlayHead), doing what they do
+   * on Play. Null on every window that shows one side, for every account
+   * the sides are closed to, and off Play: the bar has its version there as
+   * always.
    */
-  const sideLead = !low ? null : twoSidesUp ? (
-    <SidesLead
-      frame={frame}
-      tool={sideTool}
-      full={sideFull}
-      playOnRight={playOnRight}
-      onName={setSideList}
-      onSwap={() => {
-        keepPlayOnRight(!playOnRight)
-        setPlayOnRight(!playOnRight)
-      }}
-      onFull={setSideFull}
-    />
-  ) : screen === 'stage' && playHeadUp ? (
-    <PlayHead onOpenPresets={demo || link.link === 'connected' ? () => setScreen('presets') : null} onOpenSetlists={() => setScreen('setlists')} />
+  const swapSides = () => {
+    keepPlayOnRight(!playOnRight)
+    setPlayOnRight(!playOnRight)
+  }
+  const sideLead = !wide ? null : twoSidesUp ? (
+    <SidesLead frame={frame} tool={sideTool} full={sideFull} playOnRight={playOnRight} big={big} onName={setSideList} onSwap={swapSides} onFull={setSideFull} />
+  ) : low ? (
+    screen === 'stage' && playHeadUp ? (
+      <PlayHead onOpenPresets={demo || link.link === 'connected' ? () => setScreen('presets') : null} onOpenSetlists={() => setScreen('setlists')} />
+    ) : null
+  ) : playOnScreen ? (
+    <SidesLead big onTwo={sideKept ? () => openTool(sideKept) : () => setSideList('play')} />
   ) : null
-  /* The list goes with its side: closed when the side does, or when the phone is turned upright. */
+  /* How far along the bar those buttons reach on a big screen (lib/twoSides leadReach), which the bar takes out of the room it offers the account's photo. Nothing on a phone on its side, where the photo gives way to them altogether. */
+  const sideLeadWide = big && sideLead ? leadReach({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool: twoSidesUp ? sideTool : null, full: sideFull }) : 0
+  /* The list goes with what opened it: closed when the window shows one side again (the Duo folded, a phone turned upright), and a side's own list when that side closes. */
   useEffect(() => {
-    if (!low || !twoSidesUp) setSideList(null)
-  }, [low, twoSidesUp])
+    if (!wide || (sideList === 'tool' && !twoSidesUp)) setSideList(null)
+  }, [wide, twoSidesUp, sideList])
   /*
    * DEREK'S IDEA: HOLD A BLOCK, GET ITS PANEL (lib/twoSides, step 4;
    * docs/two-sides, "Derek's idea"; components/BlockSide). Where Edit opens
@@ -934,7 +941,7 @@ export default function App() {
   /* A VP4 has no knobs anywhere, and the demo's VP4 shows its owner what a real one gives (Edit's vp4Bench): no panel on either. */
   const demoUnitNow = useDemoUnit()
   const noKnobs = vp4Here() || (demo && demoUnitNow === 'vp4')
-  /* His account until he has seen it (features HOLD_KNOBS_FOR_EVERYONE), though the two sides are everyone's. */
+  /* Everyone the two sides are open to, since he tried it (features HOLD_KNOBS_FOR_EVERYONE, 10 November 2026); his account whatever the switches say. */
   const knobsAllowed = sidesAdmin || (sidesAllowed && HOLD_KNOBS_FOR_EVERYONE)
   const holdAsks = { allowed: knobsAllowed, vp4: noKnobs, wide: big, beside: playBeside, screen }
   const holdOpens = holdGoes({ ...holdAsks, editOpens })
@@ -1878,11 +1885,14 @@ export default function App() {
               unitGoes={unitGoes}
               /* Edit has its own Save; two on one screen would be one too many. So have a block's knobs, open from a hold (Derek's panel). */
               saveHere={screen !== 'edit' && blockAt === null}
-              /* The photo beside the pill: Settings → your account, its sheet open. Not while the bar's left holds the two sides' names or Play's preset (`sideLead`, a phone held on its side): Settings still has it. */
-              onOpenAccount={sideLead ? null : openAccount}
-              /* A phone held on its side (`low`, above): the bar a little shorter over Play and its sides, and on its left the two sides' names and Swap, or Play's own preset and Setlists where Play has sent them up. */
+              /* The photo beside the pill: Settings → your account, its sheet open. Not on a phone held on its side while the bar's left holds the two sides' names or Play's preset (`low`, `sideLead`): Settings still has it. A big screen has the room, and keeps it. */
+              onOpenAccount={low && sideLead ? null : openAccount}
+              /* A phone held on its side (`low`, above): the bar a little shorter over Play and its sides. */
               slim={low && (screen === 'stage' || twoSidesUp)}
+              /* The two sides' names, Swap and Full screen or Two sides, wherever the window shows two; or, on a phone on its side, Play's own preset and Setlists where Play has sent them up. On a big screen the version stays in front of them, and the bar is told how far they reach. */
               lead={sideLead}
+              leadKeepsVersion={big}
+              leadWide={sideLeadWide}
             />
             <DemoUnit open={pickUnit} onClose={() => setPickUnit(false)} />
             <LiveUnit
@@ -2103,7 +2113,8 @@ export default function App() {
                * everybody but his account the host draws Play and nothing
                * else; for his, on a window wide enough, the tool the switch
                * above left to it (twoSidesUp) is drawn beside Play, or over
-               * it when it fills the window, with a bar over each.
+               * it when it fills the window. Their names, Swap and Full
+               * screen are in the app's top bar (`sideLead`, above).
                */
               <Sides
                 allowed={sidesAllowed}
@@ -2113,16 +2124,8 @@ export default function App() {
                 playOnRight={playOnRight}
                 frame={frame}
                 tools={toolsOffered}
-                kept={sideKept}
                 onPick={openTool}
-                onSwap={() => {
-                  keepPlayOnRight(!playOnRight)
-                  setPlayOnRight(!playOnRight)
-                }}
-                onFull={setSideFull}
-                onPlayFull={closeSide}
-                onTwoSides={() => openTool(sideKept)}
-                low={low}
+                /* The list of what goes beside Play, opened from a side's name in the top bar (`sideLead`, above). */
                 list={sideList}
                 onList={setSideList}
                 side={

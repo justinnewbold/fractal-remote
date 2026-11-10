@@ -61,13 +61,15 @@ export const SIDES_FOR_EVERYONE = true
  * HOLD A BLOCK FOR ITS KNOBS (step 4, Derek's panel: lib/twoSides holdGoes,
  * components/BlockSide), for everyone.
  *
- * OFF: his account only. It landed the same hour the two sides opened to
- * everyone and nobody had seen it on a screen yet, so it waits for his own
- * look, as each step before it did. Everybody else keeps today's channel
- * pop-up on a hold. This is the one line that opens it, with its line in
- * What's new in the same pull request.
+ * ON since 10 November 2026: "Activate the other hold for knobs i checked
+ * it" (Justin, after trying it on his own iPad). It landed the same hour
+ * the two sides opened to everyone, so it was his account only until he
+ * had seen it on a screen, as each step before it was. It opens only
+ * where the two sides show on a big screen and where Edit opens for the
+ * unit and connection (never a VP4); everywhere else a hold is still the
+ * channel pop-up. Turned off again, it goes back to his account only.
  */
-export const HOLD_KNOBS_FOR_EVERYONE = false
+export const HOLD_KNOBS_FOR_EVERYONE = true
 
 /**
  * A PHONE HELD ON ITS SIDE SPLITS IN TWO (lib/twoSides phoneSidewaysOn,
