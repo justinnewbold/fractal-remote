@@ -844,6 +844,29 @@ Connect → Product Page Information → Header and Search Results himself.
 "iPhone" keeps its casing inside the capitals; no price, "free", URL or
 logo, ever.
 
+**Every Amazon link carries his Associates tag, and says so.**
+
+> "Replace all the links for the devices with these ... with your tag
+> added" and "Put this line near 'What to buy': 'As an Amazon Associate I
+> earn from qualifying purchases.'" (9 November 2026)
+
+His Amazon Associates Store ID is justinnewbold, and the tag on a link is
+`?tag=justinnewbold-20` (`AMAZON_TAG` in shared/bluetooth-gear.mjs); it
+follows him, not the app's name. Every amazon.com link the app or the
+website shows has it and nothing else on the end: the nine parts in
+`PARTS` (the five he listed and the WIDI Master, the two WIDI Jacks and
+the Master's adapters, on the same tag, since an untagged link beside
+tagged ones only earns nothing), the Bluetooth guide and the Raspberry Pi
+guide. Amazon's sentence, word for word (`AMAZON_DISCLOSURE`), sits
+wherever those links are: under What to buy on both guides and on the
+app's How to connect page. A new Amazon link gets the tag and sits under
+that sentence; tests hold both. The next store version's review notes
+must not repeat the old "plain amazon.com pages with no tracking" line
+(docs/app-store.md keeps it in the past blocks, as submitted). His
+Associates account still needs payment and tax details, three sales
+within 180 days, and the app and the website on its list of sites; those
+are his to do in Associates Central.
+
 **Fractal Audio wrote on 18 October 2026, and the app does what it asked,
 except the name.** Their letter on Approved Vendor status asked for a clear
 statement at startup, no logos or product artwork, products named in plain

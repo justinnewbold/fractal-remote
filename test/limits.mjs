@@ -1924,9 +1924,9 @@ export function run(test) {
 
     /* WHAT TO BUY, at the addresses matched to their listings, and no other outside link. */
     const PARTS = [
-      ['CanaKit Raspberry Pi 5 Starter Kit, 4 GB, with the official case', 'https://www.amazon.com/dp/B0CVQRCMLY'],
-      ['Raspberry Pi 5, 4 GB', 'https://www.amazon.com/dp/B0CK3L9WD3'],
-      ['Raspberry Pi 27W USB-C Power Supply', 'https://www.amazon.com/dp/B0HJPK4Z77']
+      ['CanaKit Raspberry Pi 5 Starter Kit, 4 GB, with the official case', 'https://www.amazon.com/dp/B0CVQRCMLY?tag=justinnewbold-20'],
+      ['Raspberry Pi 5, 4 GB', 'https://www.amazon.com/dp/B0CK3L9WD3?tag=justinnewbold-20'],
+      ['Raspberry Pi 27W USB-C Power Supply', 'https://www.amazon.com/dp/B0HJPK4Z77?tag=justinnewbold-20']
     ]
     for (const [name, link] of PARTS) {
       assert.ok(words.includes(name), `the guide does not name the ${name}`)
@@ -1934,7 +1934,9 @@ export function run(test) {
     }
     const CHECKED = new Set([...PARTS.map(([, link]) => link), 'https://www.raspberrypi.com/software/', 'https://connect.raspberrypi.com/', 'https://apps.apple.com/app/id6812916461'])
     for (const link of [...html.matchAll(/href="(https?:[^"]*)"/g)].map((m) => m[1])) assert.ok(CHECKED.has(link), `the guide links ${link}, which nobody checked`)
-    assert.match(words, /Fractal Remote gets nothing from them\./, 'the guide does not say the links earn nothing')
+    /* The links carry his Amazon Associates tag since 9 November 2026, so the guide says Amazon's own sentence, never that they earn nothing. */
+    assert.match(words, /As an Amazon Associate I earn from qualifying purchases\./, 'the guide links Amazon without the Associates sentence')
+    assert.doesNotMatch(words, /gets nothing from them|earns nothing/, 'the guide still says the links earn nothing')
     assert.match(words, /a case with a fan/i)
     assert.match(words, /microSD card of 32 GB or more/)
     assert.match(words, /USB-A to USB-B \(a [“"]printer cable[”"]\) for an FM3, FM9 or Axe-Fx III, or USB-A to USB-C for an AM4\. It has to be a data cable, not a charge-only one\./, 'the guide does not say which USB cable each unit takes, or that it must carry data')
@@ -3740,11 +3742,11 @@ export function run(test) {
 
     /* THE PARTS, at the addresses checked by hand, and no other outside link. */
     const PARTS = [
-      ['CME WIDI Uhost', 'https://www.amazon.com/dp/B09GS326QW', 'https://www.cme-pro.com/widi-uhost/'],
-      ['CME C2MIDI Pro', 'https://www.amazon.com/dp/B0GVXTX5D1', 'https://www.cme-pro.com/c2midi-pro/'],
-      ['Type-A MIDI to 3.5 mm adapters', 'https://www.amazon.com/dp/B0FN83P5P7', null],
-      ['CME U2MIDI Pro', 'https://www.amazon.com/dp/B0BH8DHCLY', 'https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/'],
-      ['USB-C to USB-A adapter', 'https://www.amazon.com/dp/B01COOQIKU', null]
+      ['CME WIDI Uhost', 'https://www.amazon.com/dp/B09GS326QW?tag=justinnewbold-20', 'https://www.cme-pro.com/widi-uhost/'],
+      ['CME C2MIDI Pro', 'https://www.amazon.com/dp/B0GVXTX5D1?tag=justinnewbold-20', 'https://www.cme-pro.com/c2midi-pro/'],
+      ['Type-A MIDI to 3.5 mm adapters', 'https://www.amazon.com/dp/B0FN83P5P7?tag=justinnewbold-20', null],
+      ['CME U2MIDI Pro', 'https://www.amazon.com/dp/B0BH8DHCLY?tag=justinnewbold-20', 'https://www.cme-pro.com/u2midi-pro-usb-to-midi-cable/'],
+      ['USB-C to USB-A adapter', 'https://www.amazon.com/dp/B01COOQIKU?tag=justinnewbold-20', null]
     ]
     for (const [name, amazon, maker] of PARTS) {
       assert.ok(words.includes(name), `the guide does not name the ${name}`)
