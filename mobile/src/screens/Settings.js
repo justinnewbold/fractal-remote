@@ -135,6 +135,8 @@ import {
 import WhatsNew, { latestLine } from './WhatsNew'
 import { WHATS_NEW_PAGE } from '../lib/whats-new-rule'
 import { STAGE_VIEW_NAME, STAGE_VIEW_SUB } from '../lib/stageView'
+import { CONNECT_ROW, PI_TITLE, connectRowStatus } from '../lib/setupWays'
+import { ConnectWays, PiSetup } from '../components/SetupWays'
 
 /* "Phone & computer", or "iPad & computer" on an iPad (device-word.mjs). Read
    once: App.js says which device this is before this file is loaded. */
@@ -603,8 +605,8 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', updating: 'link', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth' }
-  const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, bluetooth: '‹ Bluetooth' }
+  const PARENT = { offline: 'link', updating: 'link', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', pi: 'setup' }
+  const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, bluetooth: '‹ Bluetooth', setup: `‹ ${CONNECT_ROW}` }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
 
@@ -693,6 +695,20 @@ export default function Settings({
           />
 
           <Group title="My rig" hint={pairStatus}>
+            {/*
+              CONNECT YOUR UNIT, FIRST, since 10 November 2026: "easier for a
+              user to select which device they're setting up and get the
+              proper instructions for it" (Justin). One row, the four ways on
+              its page, Bluetooth first, each with its own short steps
+              (lib/setupWays, components/SetupWays). The Bluetooth row and
+              Phone & computer stay under it, because the store texts, the
+              guides and the setup email name Settings → My rig → Bluetooth.
+            */}
+            <SetupRow
+              title={CONNECT_ROW}
+              status={connectRowStatus({ bluetooth, cable, link, macName, offered: bluetoothOffered })}
+              onPress={() => setPage('setup')}
+            />
             {/*
               BLUETOOTH (BETA), ITS OWN ROW. "Move the Bluetooth card from the
               phone and computer menu to its own menu under the settings menu.
@@ -1350,6 +1366,27 @@ export default function Settings({
             card's answer (components/GearShareNotice), off unless Yes.
           */}
           <GearShareSwitch />
+        </>
+      ) : null}
+
+      {/* ------------------------------------------- connect your unit, the Pi */}
+      {page === 'setup' ? (
+        <>
+          {head(CONNECT_ROW, 'back')}
+          <ConnectWays
+            open={{
+              adapter: bluetoothOffered ? () => setPage('bluetooth') : null,
+              cable: bluetoothOffered ? () => setPage('bluetooth') : null,
+              computer: onOpenConnect || (() => setPage('link')),
+              pi: () => setPage('pi')
+            }}
+          />
+        </>
+      ) : null}
+      {page === 'pi' ? (
+        <>
+          {head(PI_TITLE, 'back')}
+          <PiSetup />
         </>
       ) : null}
 

@@ -3,8 +3,12 @@
     {
       "date": "2026-11-10",
       "day": "10 November 2026",
-      "version": "1.90.22",
+      "version": "1.90.25",
       "lines": [
+        {
+          "text": "Settings has a new first row under My rig, Connect your unit: pick how you connect (a Bluetooth adapter, a USB cable, a computer or a Raspberry Pi) and get the short steps for that one. The Raspberry Pi steps are in the app now, with a link to the full guide.",
+          "only": null
+        },
         {
           "text": "In Edit, the knobs now start higher up the screen. Find a control and Amp & pedal names moved under the knobs, and the note that used to sit at the top moved to the bottom of the page.",
           "only": null

@@ -14798,8 +14798,10 @@ export function run(test) {
        the three pages that group the rest, all children of Developer. And
        on 1 November 2026 'whats-new', What’s new, a child of About. And on
        2 November 2026 About and Developer opened onto their rows on the front
-       of Settings, with no page between, so their pages go back to Settings. */
-    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth' \}/, 'a page goes back somewhere it did not come from')
+       of Settings, with no page between, so their pages go back to Settings.
+       And on 10 November 2026 'pi', the Raspberry Pi's steps, a child of
+       Connect your unit (test/setup-ways.mjs). */
+    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', pi: 'setup' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')
