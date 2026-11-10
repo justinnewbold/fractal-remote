@@ -1112,7 +1112,7 @@ function Way({ way, unit }) {
  * know, in the order they are worth trying, for the unit picked, and the
  * report button at the foot.
  */
-export function BluetoothTrouble({ onReport = null }) {
+export function BluetoothTrouble({ onReport = null, way = null }) {
   const b = useBluetooth()
   const settings = b.unit ? (hookupFor(b.unit, deviceNoun()) || []).at(-1) : null
   const midi = midiSettingsFor(b.unit, deviceNoun())
@@ -1127,7 +1127,9 @@ export function BluetoothTrouble({ onReport = null }) {
    */
   const cable = isCable(b.adapter)
   const jacks = cable && midiJacks(b.adapter)
-  const steps = cable
+  /* `way`: Troubleshooting asked about the adapter or the cable by name, whatever is kept; left out, the way kept decides. The Forget buttons stay the kept one's. */
+  const cableWay = way === 'cable' || (way !== 'adapter' && cable)
+  const steps = cableWay
     ? [...cableSteps(deviceNoun(), { jacks }), ...(jacks ? [settings, midi] : []), fm3, ANOTHER_UNIT].filter(Boolean)
     : [
         TROUBLE_LIT,

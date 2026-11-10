@@ -12,10 +12,10 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-10",
     "day": "10 November 2026",
-    "version": "1.90.25",
+    "version": "1.90.26",
     "lines": [
       {
-        "text": "Settings has a new first row under My rig, Connect your unit: pick how you connect (a Bluetooth adapter, a USB cable, a computer or a Raspberry Pi) and get the short steps for that one. The Raspberry Pi steps are in the app now, with a link to the full guide.",
+        "text": "New in Settings, under My rig: Connect your unit. Pick a Bluetooth adapter, USB cable, computer or Raspberry Pi and get short steps for that one (the Raspberry Pi’s are in the app now). Troubleshooting asks the same, so you see only the fixes for your way in, and they’re shorter.",
         "only": null
       },
       {

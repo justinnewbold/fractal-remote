@@ -9325,7 +9325,8 @@ export function run(test) {
     const settings = flat('mobile/src/screens/Settings.js')
     assert.match(settings, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} onReport=\{onReportBluetooth\} onOpen=\{setPage\} onConnected=\{onBack\} \/>/)
     assert.match(settings, /\{head\('How to connect my Bluetooth device', 'back'\)\} <BluetoothWays \/>/)
-    assert.match(settings, /\{head\('Troubleshooting Bluetooth', 'back'\)\} <BluetoothTrouble onReport=\{onReportBluetooth\} \/>/)
+    /* Told which way when Troubleshooting opened it (the adapter's or the cable's, test/setup-ways.mjs); from the page, as it was. */
+    assert.match(settings, /\{head\(troubleWay === 'cable' \? 'Troubleshooting the USB cable' : 'Troubleshooting Bluetooth', 'back'\)\} <BluetoothTrouble onReport=\{onReportBluetooth\} way=\{troubleWay\} \/>/)
     assert.match(settings, /\{head\('What Bluetooth can’t do', 'back'\)\} <BluetoothLimits \/>/)
     assert.match(settings, /bluetooth: '‹ Bluetooth'/)
 

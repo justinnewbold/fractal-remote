@@ -22,60 +22,60 @@ export const FIXES = [
   {
     id: 'frozen',
     title: 'The unit stopped answering',
-    when: 'Everything was working, and now nothing moves.',
+    when: 'It was working, and now nothing moves.',
     steps: [
-      'Turn the unit off, wait five seconds, and turn it back on. An FM3 or AM4 does occasionally lock up; this clears it and costs nothing.',
-      'Give it about ten seconds to finish starting before expecting this app to find it again.',
-      'If the app still says nothing is connected, unplug the USB cable at both ends and plug it back in.'
+      'Turn the unit off, wait five seconds, and turn it back on.',
+      'Give it about ten seconds to start up before expecting the app to find it.',
+      'Still nothing? Unplug the USB cable at both ends and plug it back in.'
     ]
   },
   {
     id: 'connect',
     title: 'It will not connect at all',
-    when: 'The app has never found the unit, or stopped finding it after a restart.',
+    when: 'The app has never found the unit, or stopped after a restart.',
     /* Read when the guide is opened, so the last step names the device in
        hand, or "phone or tablet" on the computer (device-word.mjs). */
     get steps() {
       return [
-        'Check the USB cable is a data cable. A charge-only cable fits perfectly and carries nothing — this is the single most common cause.',
-        'Try a different USB port, straight into the computer rather than through a hub.',
+        'Use a USB data cable. A charge-only cable fits but carries nothing, and it’s the most common cause.',
+        'Plug straight into the computer, not through a hub.',
         /* The other common one: Fractal's own editor already has the unit. */
         quitEditor(null),
         /* The one a new Windows user can hit before any of the above. */
         WINDOWS_DRIVER,
-        'Make sure the computer app is actually running. On a Mac it lives in the menu bar at the top of the screen, not the Dock. On Windows it sits by the clock, sometimes behind the ^ arrow. On Linux it is an ordinary window.',
+        'Check the Fractal Remote app is running on the computer: in the menu bar on a Mac, by the clock on Windows (maybe behind the ^ arrow), a window on Linux.',
         /* "I think it's connected to a different account on the computer." A
            computer on another account never hears this app, and looks exactly
            like one that is switched off. */
-        'Make sure the Fractal Remote app is signed into the same account here and on the computer with your unit. Settings on each one shows which account it is using.',
+        'Check the app is signed into the same account here and on the computer. Settings on each shows which one.',
         /* Over the internet the wifi is not the question: the phone and the
            computer can be in different cities. What stops it is a computer that
            is asleep or offline, or something on it blocking the app. */
-        `If your ${deviceNoun()} still cannot reach the computer, check the computer is awake and online (a closed laptop lid usually puts it to sleep), and that a firewall or a VPN on the computer is not blocking the Fractal Remote app. Your ${deviceNoun()} and the computer do not need to be on the same wifi.`
+        `If your ${deviceNoun()} still cannot reach the computer, check it’s awake and online (a closed laptop lid puts it to sleep) and no firewall or VPN blocks the app. The same wifi isn’t needed.`
       ]
     }
   },
   {
     id: 'versions',
     title: 'The app and the computer disagree',
-    when: 'Things half-work: a screen is blank, a button does nothing, or something that worked yesterday does not.',
+    when: 'Things half-work: a blank screen, or a button that does nothing.',
     steps: [
       /* Not "the same number" any more: a computer version is made only when
          the computer's own part changes, so the computer app is usually a
          few numbers behind this one and that is fine. */
-      'Check the line below. The computer app does not need the same number as this app, only one new enough for it, and the line says whether it is.',
-      'If the computer app is behind, let it update — it checks on its own, and there is an Updates panel in Settings.',
-      'Reload this page, or force-quit and reopen the app on your phone or tablet, once the computer has updated.'
+      'Check the line below. The computer app doesn’t need the same number as this one, just one new enough.',
+      'If it’s behind, let it update: it checks by itself, and its Settings has an Updates panel.',
+      'Then reload this page, or close and reopen the app on your phone or tablet.'
     ]
   },
   {
     id: 'preset',
     title: 'A preset will not load, or loads wrong',
-    when: 'The name is stale, the blocks are from the preset before, or nothing changes when you pick one.',
+    when: 'The name or blocks are from the last preset, or nothing changes.',
     steps: [
-      'Pick the preset again. The computer holds what it last read for a few seconds, and asking twice gets past it.',
-      'Use Read the unit again, under Settings, to throw away everything cached and start from the hardware.',
-      'If the names in the list are wrong or missing, scan the preset list again from the preset sheet.'
+      'Pick the preset again. Asking twice gets past what the computer last read.',
+      'Use Read the unit again in Settings to start fresh from the unit.',
+      'Names wrong or missing? Scan the preset list again from the preset sheet.'
     ]
   }
 ]

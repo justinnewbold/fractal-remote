@@ -135,8 +135,8 @@ import {
 import WhatsNew, { latestLine } from './WhatsNew'
 import { WHATS_NEW_PAGE } from '../lib/whats-new-rule'
 import { STAGE_VIEW_NAME, STAGE_VIEW_SUB } from '../lib/stageView'
-import { CONNECT_ROW, PI_TITLE, connectRowStatus } from '../lib/setupWays'
-import { ConnectWays, PiSetup } from '../components/SetupWays'
+import { CONNECT_ROW, IN_USE, PI_TITLE, PI_TROUBLE_PAGE, STILL_STUCK, TROUBLE_ASK, connectRowStatus, troubleWays, wayInUse } from '../lib/setupWays'
+import { ConnectWays, PiSetup, PiTrouble } from '../components/SetupWays'
 
 /* "Phone & computer", or "iPad & computer" on an iPad (device-word.mjs). Read
    once: App.js says which device this is before this file is loaded. */
@@ -497,6 +497,23 @@ export default function Settings({
    * and whether it answers, which Mac the phone is on, what size the tiles are.
    */
   const demo = useDemo()
+  /*
+   * Troubleshooting's four ways (the page, below). The Bluetooth page's
+   * troubleshooting, told which way it was asked about (`troubleWay`: the
+   * adapter's steps or the cable's, whichever is kept), goes back to
+   * Troubleshooting; reached from the Bluetooth page it is as it was.
+   */
+  const [troubleWay, setTroubleWay] = useState(null)
+  useEffect(() => {
+    if (page !== 'bt-trouble') setTroubleWay(null)
+  }, [page])
+  const troubleOpens = {
+    adapter: bluetoothOffered ? () => (setTroubleWay('adapter'), setPage('bt-trouble')) : null,
+    cable: bluetoothOffered ? () => (setTroubleWay('cable'), setPage('bt-trouble')) : null,
+    computer: onOpenFixes || null,
+    pi: () => setPage('pi-trouble')
+  }
+  const inUse = demo ? null : wayInUse({ bluetooth, cable, link })
   /* Where the unit's own click can be switched from here: not over Bluetooth, not on an AM4, not in the demo. */
   const clickHere = { bluetooth: bluetooth && !demo, demo }
   const unitCan = unitClick(rigSlug, clickHere)
@@ -605,10 +622,11 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', updating: 'link', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', pi: 'setup' }
-  const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, bluetooth: '‹ Bluetooth', setup: `‹ ${CONNECT_ROW}` }
-  const upFrom = (p) => PARENT[p] || null
-  const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
+  const PARENT = { offline: 'link', updating: 'link', 'bt-ways': 'bluetooth', 'bt-trouble': 'bluetooth', 'bt-limits': 'bluetooth', pi: 'setup', 'pi-trouble': 'trouble' }
+  const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, bluetooth: '‹ Bluetooth', setup: `‹ ${CONNECT_ROW}`, trouble: '‹ Troubleshooting' }
+  /* The Bluetooth page's troubleshooting opened from Troubleshooting goes back there (`troubleWay`, below), not to the Bluetooth page. */
+  const upFrom = (p) => (p === 'bt-trouble' && troubleWay ? 'trouble' : PARENT[p] || null)
+  const upLabel = (p) => UP_LABEL[upFrom(p)] || '‹ Settings'
 
   const head = (title, onDone) =>
     onDone === 'back' ? (
@@ -1313,17 +1331,24 @@ export default function Settings({
       {page === 'trouble' ? (
         <>
           {head('Troubleshooting', 'back')}
-          <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 20 }}>
-            Try Fixes first, then the Log, then Feedback.
+          {/*
+            BY HOW YOU'RE CONNECTED, since 10 November 2026 ("limiting the
+            amount of text for troubleshooting steps", Justin): Connect your
+            unit's four ways (lib/setupWays), each opening only its own
+            fixes, the one in use saying so. The computer's are Fixes.
+          */}
+          <Text style={{ color: color.silk, fontSize: font.lead, fontWeight: '600' }}>{TROUBLE_ASK}</Text>
+          <View style={{ gap: 0 }}>
+            {troubleWays()
+              .filter((w) => troubleOpens[w.key])
+              .map((w) => (
+                <SetupRow key={w.key} title={w.title} status={w.key === inUse ? `${IN_USE} · ${w.sub}` : w.sub} onPress={troubleOpens[w.key]} />
+              ))}
+          </View>
+          <Text accessibilityRole="header" style={{ color: color.silk, fontSize: font.lead, fontWeight: '600' }}>
+            {STILL_STUCK}
           </Text>
           <View style={{ gap: 0 }}>
-            {onOpenFixes ? (
-              <SetupRow
-                title="Fixes"
-                status="What to try when it isn’t working"
-                onPress={onOpenFixes}
-              />
-            ) : null}
             {/*
               THE LOOPER'S EMERGENCY STOP. "There needs to be something in
               settings … for when it keeps playing." It carries on across a
@@ -1366,27 +1391,6 @@ export default function Settings({
             card's answer (components/GearShareNotice), off unless Yes.
           */}
           <GearShareSwitch />
-        </>
-      ) : null}
-
-      {/* ------------------------------------------- connect your unit, the Pi */}
-      {page === 'setup' ? (
-        <>
-          {head(CONNECT_ROW, 'back')}
-          <ConnectWays
-            open={{
-              adapter: bluetoothOffered ? () => setPage('bluetooth') : null,
-              cable: bluetoothOffered ? () => setPage('bluetooth') : null,
-              computer: onOpenConnect || (() => setPage('link')),
-              pi: () => setPage('pi')
-            }}
-          />
-        </>
-      ) : null}
-      {page === 'pi' ? (
-        <>
-          {head(PI_TITLE, 'back')}
-          <PiSetup />
         </>
       ) : null}
 
@@ -1736,8 +1740,8 @@ export default function Settings({
       ) : null}
       {page === 'bt-trouble' && bluetoothOffered ? (
         <>
-          {head('Troubleshooting Bluetooth', 'back')}
-          <BluetoothTrouble onReport={onReportBluetooth} />
+          {head(troubleWay === 'cable' ? 'Troubleshooting the USB cable' : 'Troubleshooting Bluetooth', 'back')}
+          <BluetoothTrouble onReport={onReportBluetooth} way={troubleWay} />
         </>
       ) : null}
       {page === 'bt-limits' && bluetoothOffered ? (
@@ -1748,6 +1752,33 @@ export default function Settings({
       ) : null}
 
       {/* ------------------------------------------------------- metronome */}
+      {/* ------------------------------------------- connect your unit, the Pi */}
+      {page === 'setup' ? (
+        <>
+          {head(CONNECT_ROW, 'back')}
+          <ConnectWays
+            open={{
+              adapter: bluetoothOffered ? () => setPage('bluetooth') : null,
+              cable: bluetoothOffered ? () => setPage('bluetooth') : null,
+              computer: onOpenConnect || (() => setPage('link')),
+              pi: () => setPage('pi')
+            }}
+          />
+        </>
+      ) : null}
+      {page === 'pi' ? (
+        <>
+          {head(PI_TITLE, 'back')}
+          <PiSetup />
+        </>
+      ) : null}
+      {page === 'pi-trouble' ? (
+        <>
+          {head(PI_TROUBLE_PAGE, 'back')}
+          <PiTrouble onComputerFixes={onOpenFixes || null} />
+        </>
+      ) : null}
+
       {page === 'metronome' ? (
         <>
           {head('Metronome', 'back')}
