@@ -3545,6 +3545,32 @@ texts above, and is Waiting for Review: what is left is E.
 
 ### Live day for 1.90.0
 
+**Done on 10 November 2026.** The App Store's pull request moved its number
+on 9 November (#845). Google Play's own listing showed 1.90.0 on the 10th
+(Justin: "Google's 1.9 0.0 is already live"), and that day's pull request
+moved public/store-versions.json to 1.90.0 for android, put the words below
+on public/bluetooth.html and public/support.html, and set `EDIT_IN_EMAILS`
+to true in the repository. Three things about how it went:
+
+- **The cable sentences say "into your iPhone or iPad".** The record of
+  what has been tried (shared/bluetooth-gear.mjs `TRIED_NOTES`) has an AM4
+  by USB cable from an iPhone only, so the rule in the list below applies;
+  test/limits.mjs lets "phone or tablet" in only once that record says an
+  Android phone has run a unit by cable.
+- **public/bluetooth-guide.html was not changed.** It was cut to a tenth on
+  9 November 2026 ("This Bluetooth guide is insanely complicated"), and the
+  list its editing bullet was written for (*What's different from USB*) is
+  gone: what Bluetooth can't do is one tap away in the app. So the guide
+  says nothing of editing, either way, and test/limits.mjs holds it there.
+  The bullet below is kept as it was written, as a record.
+- **The setup emails still go out with the old sentence** until the
+  deployed function is redeployed: emails off, redeploy, Justin reads the
+  sample, emails on (supabase/README.md, *Editing in the emails, from
+  1.90.0*, steps 3 to 6).
+
+What the section said before that day, which is still the rule for the
+next version that waits on two stores:
+
 Not before: every merge publishes the website at once, before either store
 has reviewed 1.90.0, and until 1.90.0 is live in both stores these pages are
 true of every copy a customer can get as they stand. **A pull request for

@@ -3725,8 +3725,8 @@ export function run(test) {
     assert.ok(!/\btried\b|\btested\b/i.test(words), `the guide says where it was tried: ${(words.match(/[^.]*\b(tried|tested)\b[^.]*\./i) || [''])[0]}`)
     assert.ok(!/\bworks? (on|with)\b[^.]{0,60}\b(AM4|FM3|FM9|Axe-Fx|VP4)\b/.test(words), 'the guide says Bluetooth works on a unit')
     assert.ok(!/will come back|comes back in a later/.test(words), 'the guide promises Bluetooth to customers')
-    /* No editing promised before both stores have the version that opens it (the live-day rule below). */
-    assert.ok(!/From version 1\.90\.0|editing (works|opens)/i.test(words), 'the guide says what 1.90.0 does')
+    /* Nothing of editing, either way: until 10 November 2026 because no store but one had the version that opens it, and since then because the guide is short on purpose and what Bluetooth does is /bluetooth's and the app's (the live-day rule below). */
+    assert.ok(!/From version 1\.90\.0|editing (works|opens)/i.test(words), 'the guide says what 1.90.0 does, which is /bluetooth’s to say')
     /* Every unit the page offers, named. */
     for (const unit of ['AM4', 'FM3', 'FM9', 'Axe-Fx III', 'VP4']) assert.ok(body.includes(unit), `the guide does not name the ${unit}`)
     assert.match(body, /no computer/, 'the guide does not say Bluetooth needs no computer')
@@ -3812,7 +3812,7 @@ export function run(test) {
      * tried, which is the Developer page's), the FM3's warning, and the
      * guide for what to buy. Short, because the parts are the guide's.
      */
-    const { BLUETOOTH_WAYS, NOT_FOR_FM3 } = await import('../shared/bluetooth-gear.mjs')
+    const { BLUETOOTH_WAYS, NOT_FOR_FM3, TRIED_NOTES } = await import('../shared/bluetooth-gear.mjs')
     const notice = read('public/bluetooth.html')
     const page = notice.replace(/<!--[\s\S]*?-->/g, '')
     const said = page.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ')
@@ -3822,9 +3822,28 @@ export function run(test) {
     assert.ok(said.includes(BLUETOOTH_WAYS), '/bluetooth does not say the two ways in the app’s own sentence')
     assert.ok(said.indexOf(BLUETOOTH_WAYS) < said.indexOf('What it does'), '/bluetooth says what Bluetooth does before it says the two ways')
     assert.ok(!/best (?:one|way)|more lag and fewer features/i.test(said), '/bluetooth still ranks the computer first')
-    assert.match(said, /No editing or saving over Bluetooth/, '/bluetooth does not say editing and saving need the computer')
-    /* And not for a VP4, which the computer does not edit or save either (VP4_SO_FAR). */
-    assert.match(said, /No editing or saving over Bluetooth: for those, use the desktop app , on any unit but the VP4, which the app doesn’t edit or save either way\./, '/bluetooth sends a VP4 owner to the computer for editing and saving, which it does not get there either')
+    /*
+     * EDITING, SINCE THE DAY 1.90.0 WAS LIVE IN BOTH STORES (10 November
+     * 2026; docs/app-store.md, Live day for 1.90.0). Until then this held
+     * the page to "No editing or saving over Bluetooth: for those, use the
+     * desktop app", which was true of every copy before 1.90.0. Now Edit
+     * opens over Bluetooth from 1.90.0 on the four units whose Edit is
+     * built, never the VP4, and what still needs the computer is saving,
+     * moving blocks and renaming.
+     */
+    const editLine = (said.match(/From version 1\.90\.0 of the app, Edit opens over Bluetooth[^.]*\./) || [''])[0]
+    assert.equal(editLine, 'From version 1.90.0 of the app, Edit opens over Bluetooth on an AM4, FM3, FM9 or Axe-Fx III too: turn knobs, change models and switch blocks on and off.', '/bluetooth does not say Edit opens over Bluetooth from 1.90.0, or names other units than the four whose Edit is built')
+    assert.ok(!/VP4/.test(editLine), '/bluetooth says a VP4 edits over Bluetooth')
+    assert.match(said, /Changes play right away; to keep one, save it on the unit itself\./, '/bluetooth does not say an edit is kept by saving on the unit')
+    assert.ok(!/No editing or saving over Bluetooth|with no editing or saving/.test(said), '/bluetooth still says there is no editing over Bluetooth, with 1.90.0 live in both stores')
+    assert.ok(!/\bworks? (on|with)\b[^.]{0,60}\b(AM4|FM3|FM9|Axe-Fx|VP4)\b/.test(said), '/bluetooth says editing works on a unit')
+    /* Saving is still the computer's. And not for a VP4, which the computer does not edit or save either (VP4_SO_FAR). */
+    assert.match(said, /No saving over Bluetooth: for saving, moving blocks and renaming, use the desktop app , on any unit but the VP4, which the app doesn’t edit or save either way\./, '/bluetooth sends a VP4 owner to the computer for editing and saving, which it does not get there either, or no longer says saving needs the computer')
+    /* The USB cable, in a section of its own after Which units: the AM4's, with what Bluetooth does, Edit included, and never the FM3's own USB port. */
+    assert.ok(page.indexOf('<h2>USB cable</h2>') > page.indexOf('<h2>Which units</h2>') && page.indexOf('<h2>USB cable</h2>') < page.indexOf('<h2>Setting it up</h2>'), '/bluetooth has no USB cable section after Which units')
+    assert.match(said, /An AM4 can also plug straight into your (iPhone or iPad|phone or tablet) with a USB cable: no computer and no adapter, with the same features as Bluetooth, Edit included\. Plug it in, then Settings → My rig → Bluetooth\. The FM3 can’t plug in this way, because its USB port isn’t MIDI\./, '/bluetooth does not say the AM4’s USB cable, or says the FM3’s own USB port plugs in')
+    /* "Phone or tablet" only once an Android phone has run a unit by cable from a Play build, which the record of what has been tried says (TRIED_NOTES, the Developer page's). */
+    if (!/cable from an Android/i.test(TRIED_NOTES.am4)) assert.ok(!/into your phone or tablet/.test(said + ' ' + read('public/support.html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')), 'a website page says the USB cable for an Android phone, and the record has no Android phone running a unit by cable')
     assert.match(said, /on a VP4, presets and scenes/, '/bluetooth promises a VP4 more than presets and scenes')
     assert.match(said, /It is offered on the AM4, FM3, FM9, Axe-Fx III and VP4\./, '/bluetooth does not say which units it is offered on')
     assert.ok(!/\btried\b|\btested\b/i.test(said), '/bluetooth says where it was tried')
@@ -3857,6 +3876,9 @@ export function run(test) {
     assert.match(supportWords, /Bluetooth is in the iPhone, iPad and Android apps only: a web browser connects through a computer\./, 'the support page does not say a browser has no Bluetooth, or leaves the iPad out')
     assert.match(support, /href="\/bluetooth"/, 'the support page does not lead on to /bluetooth')
     assert.match(supportWords, /From version 1\.89\.0/, 'the support page does not say which versions have Bluetooth')
+    /* And editing, from the same day as /bluetooth: from 1.90.0 on the four units, saved on the unit, the AM4's cable doing the same; never the VP4. */
+    assert.match(supportWords, /lets the app control it directly, and from version 1\.90\.0 Edit opens over it on an AM4, FM3, FM9 or Axe-Fx III, with no saving: save on the unit itself\. An AM4 can also plug straight into your (iPhone or iPad|phone or tablet) with a USB cable, and does the same\./, 'the support page does not say Edit opens over Bluetooth from 1.90.0, or still says no editing')
+    assert.ok(!/with no editing or saving/.test(supportWords), 'the support page still says there is no editing over Bluetooth')
     /* The Android page is about getting the app, and still says nothing about Bluetooth. */
     assert.ok(!/bluetooth/i.test(read('public/android.html')), 'the Android page mentions Bluetooth')
   })
@@ -4943,8 +4965,8 @@ export function run(test) {
     assert.match(live, /\*\*The App Store promotional text\*\* went with 1\.90\.0/, 'the live day still waits to write a promotional text that went with the version')
     const stores = JSON.parse(read('public/store-versions.json'))
     const before = (v) => { const a = String(v).split('.').map(Number), b = [1, 90, 0]; for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false }
+    const words = (f) => flat(read(f).replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, ' '))
     if (before(stores.ios) || before(stores.android)) {
-      const words = (f) => flat(read(f).replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, ' '))
       assert.ok(!/From version 1\.90\.0/.test(words('public/bluetooth.html') + words('public/bluetooth-guide.html') + words('public/support.html')), 'a website page says what 1.90.0 does before both stores have it: a merge publishes the website before review')
       /*
        * What's new is the one place the 1.90.0 words go before the live day:
@@ -4958,6 +4980,25 @@ export function run(test) {
       /* The guide, short since 9 November 2026, says nothing of editing either way (its own test above). */
       assert.doesNotMatch(words('public/bluetooth-guide.html'), /\bedit/i, 'the guide speaks of editing before both stores have 1.90.0')
       assert.match(words('public/support.html'), /with no editing or saving\./)
+    } else {
+      /*
+       * BOTH STORES HAVE 1.90.0 (the App Store since 9 November 2026,
+       * Google Play since the 10th, by its own listing and Justin's
+       * "Google's 1.9 0.0 is already live"), so the pages say what 1.90.0
+       * does, in the live day's own words. The branch above stays for a
+       * store number set back: with either store older, the pages must go
+       * back to "no editing" with it.
+       */
+      const web = words('public/bluetooth.html') + ' ' + words('public/support.html')
+      assert.match(words('public/bluetooth.html'), /From version 1\.90\.0 of the app, Edit opens over Bluetooth on an AM4, FM3, FM9 or Axe-Fx III too/, '/bluetooth does not say what 1.90.0 does, with 1.90.0 live in both stores')
+      assert.match(words('public/support.html'), /from version 1\.90\.0 Edit opens over it on an AM4, FM3, FM9 or Axe-Fx III, with no saving: save on the unit itself\./, 'the support page does not say what 1.90.0 does, with 1.90.0 live in both stores')
+      assert.ok(!/no editing or saving/i.test(web), 'a website page still says there is no editing over Bluetooth, with 1.90.0 live in both stores')
+      for (const line of web.match(/[^.]*\bEdit opens over[^.]*\./g) || []) assert.ok(!/VP4/.test(line), `a website page says a VP4 edits over Bluetooth: ${line}`)
+      /* The guide is short since 9 November 2026 and no longer has the list the editing bullet was written for: it still says nothing of editing, either way. */
+      assert.doesNotMatch(words('public/bluetooth-guide.html'), /\bedit/i, 'the guide speaks of editing; that is /bluetooth’s and the app’s')
+      assert.match(live, /\*\*Done on 10 November 2026\.\*\*/, 'the live day does not say it was done')
+      /* The email's sentence goes on in the repository the same day; the deployed function is the README's steps. */
+      assert.match(read('supabase/functions/setup-reminder/index.ts'), /^export const EDIT_IN_EMAILS = true$/m, 'both stores have 1.90.0 and the setup emails’ editing sentence is still off in the repository')
     }
     /* And if a store says no, the What's new line that reached every copy by update comes out with the website's words. */
     assert.match(flat(section.slice(section.indexOf('### If Apple or Google says no to Edit'))), /the 9 November line in shared\/whats-new\.json, which says Edit opens from 1\.90\.0, comes out/)
