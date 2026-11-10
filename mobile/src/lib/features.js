@@ -88,85 +88,93 @@ export const PHONE_SIDEWAYS_FOR_EVERYONE = false
  * THE HOLD POP-UP CARRIES THE BLOCK'S KNOBS, OVER ITS CHANNELS (lib/holdPop,
  * components/PopKnobs), for everyone.
  *
- * OFF: his account only. "Also when not in landscape mode on all devices
- * and screens instead of just having channels pop up to change have the
- * knobs only pop up above the channels so some one can quick change a
- * setting" (Justin, 10 November 2026), built the same day and not yet seen
- * on a phone. Every other account's pop-up is the channels alone, as it
- * was. Where it opens it still needs Edit's own door (lib/editDoor) and is
- * never a VP4's, so this line opens no editing anywhere Edit is closed.
- * This is the one line that opens it, with its line in What's new in the
- * same pull request.
+ * ON, for everyone, since 10 November 2026: "Activate all of the features that were just on my account to all the
+ * other accounts obviously besides the developer portal" (Justin, 10
+ * November 2026).
+ * He asked for it the same day ("Also when not in landscape mode on all
+ * devices and screens instead of just having channels pop up to change have
+ * the knobs only pop up above the channels so some one can quick change a
+ * setting") and had it on his own account first. Where it opens it still
+ * needs Edit's own door (lib/editDoor) and is never a VP4's, so this line
+ * opens no editing anywhere Edit is closed: there the pop-up is the
+ * channels alone, as it was. Off, it is his account only again.
  */
-export const HOLD_POPUP_KNOBS_FOR_EVERYONE = false
+export const HOLD_POPUP_KNOBS_FOR_EVERYONE = true
 
 /**
  * THE TIDIER EDIT, AND THE HANDLE ON THE LINE BETWEEN THE TWO SIDES
  * (lib/tidyEdit, lib/sidesSplit, components/SidesHandle), for everyone.
  *
- * OFF: his account only. "What can we do to improve the edit screen to
- * make it more like the real ax edit software" (Justin, 9 November 2026,
- * Edit beside Play on his iPad), built from the pictures sent that day
- * after his "yes to all your other non build suggestions" on the 10th, and
- * not yet seen on a screen. One switch for both halves of it: Edit's
- * denser rows (the block's name, channels and on/off in one row, the model
- * beside them where there is room, the knobs as many across as fit) and
- * the handle that swaps and resizes the two sides. Every other account's
- * Edit and two sides are what they were. This is the one line that opens
- * it, with its line in What's new in the same pull request.
+ * ON, for everyone, since 10 November 2026: "Activate all of the features that were just on my account to all the
+ * other accounts obviously besides the developer portal" (Justin, 10
+ * November 2026).
+ * It began with "What can we do to improve the edit screen to make it more
+ * like the real ax edit software" (9 November 2026, Edit beside Play on his
+ * iPad), built after his "yes to all your other non build suggestions" on
+ * the 10th and on his own account first. One switch for both halves of it:
+ * Edit's denser rows (the block's name, channels and on/off in one row, the
+ * model beside them where there is room, the knobs as many across as fit)
+ * and the handle that swaps and resizes the two sides. Off, it is his
+ * account only again, and every other account's Edit and two sides are
+ * what they were before.
  */
-export const TIDY_EDIT_FOR_EVERYONE = false
+export const TIDY_EDIT_FOR_EVERYONE = true
 
 /**
  * STAGE VIEW (lib/stageView, components/StageView): Play's preset, scene and
  * what comes next, big enough to read from a stand, for everyone.
  *
- * OFF: his account only. One of the ideas he said yes to on 10 November
- * 2026 ("yes to all your other non build suggestions as well"), built with
- * no picture and not yet seen on a screen. Closed to an account there is no
- * Stage view button in the top bar and no row for it in Settings. This is
- * the one line that opens it, with its line in What's new in the same pull
- * request.
+ * ON, for everyone, since 10 November 2026: "Activate all of the features that were just on my account to all the
+ * other accounts obviously besides the developer portal" (Justin, 10
+ * November 2026).
+ * One of the ideas he said yes to that day ("yes to all your other non
+ * build suggestions as well"), on his own account first. Off, it is his
+ * account only again: closed to an account there is no Stage view button
+ * in the top bar and no row for it in Settings.
  */
-export const STAGE_VIEW_FOR_EVERYONE = false
+export const STAGE_VIEW_FOR_EVERYONE = true
 
 /**
  * SONG NOTES (lib/songNotes, components/SongNotes): lyrics, chords or cues
  * for each song in a setlist, beside Play, for everyone.
  *
- * OFF: his account only, by the same yes and for the same reason. Closed to
- * an account there is no Notes on the list of what goes beside Play, no
- * Notes button on a song in Setlists or in Stage view, and whatever notes
- * the device holds are left exactly as they are. This is the one line that
- * opens it, with its line in What's new in the same pull request.
+ * ON, for everyone, since 10 November 2026, by the same words as Stage
+ * view above. Off, it is his account only again: closed to an account
+ * there is no Notes on the list of what goes beside Play, no Notes button
+ * on a song in Setlists or in Stage view, and whatever notes the device
+ * holds are left exactly as they are.
  */
-export const SONG_NOTES_FOR_EVERYONE = false
+export const SONG_NOTES_FOR_EVERYONE = true
 
 /**
  * THREE ACROSS ON A VERY WIDE WINDOW (lib/threeSides; components/Sides,
  * components/SidesLead): Play and two tools at once, for everyone.
  *
- * OFF: his account only. One of the ideas he said yes to on 10 November
- * 2026 ("yes to all your other non build suggestions as well": "Three
- * across on the big iPad Pro: Play, Edit and a list at once"), built with
- * no picture and not yet seen on a screen. Closed to an account, a 13-inch
- * iPad on its side shows two sides, exactly as it did: no Add a side in
- * the top bar, and nothing kept. This is the one line that opens it, with
- * its line in What's new in the same pull request.
+ * ON, for everyone the two sides are open to, since 10 November 2026:
+ * "Activate all of the features that were just on my account to all the
+ * other accounts obviously besides the developer portal" (Justin, 10
+ * November 2026).
+ * One of the ideas he said yes to that day ("yes to all your other non
+ * build suggestions as well": "Three across on the big iPad Pro: Play,
+ * Edit and a list at once"), on his own account first. Off, it is his
+ * account only again: closed to an account, a 13-inch iPad on its side
+ * shows two sides, exactly as it did, with no Add a side in the top bar
+ * and nothing kept.
  */
-export const THREE_SIDES_FOR_EVERYONE = false
+export const THREE_SIDES_FOR_EVERYONE = true
 
 /**
  * A PRESET INTO A SETLIST FROM ALL PRESETS (lib/addToSetlist;
  * screens/Presets): hold a preset, pick the setlist, for everyone.
  *
- * OFF: his account only. One of the ideas he said yes to on 10 November
- * 2026 ("yes to all your other non build suggestions as well": "Drag a
- * preset from All presets into a setlist"), built as a hold and not yet
- * seen on a screen. It changes what a hold on a preset does: closed to an
- * account, the hold is the preset's colour tag, exactly as it was; open,
- * the hold is a sheet with his setlists on it and the colour as its last
- * row. This is the one line that opens it, with its line in What's new in
- * the same pull request.
+ * ON, for everyone, since 10 November 2026: "Activate all of the features that were just on my account to all the
+ * other accounts obviously besides the developer portal" (Justin, 10
+ * November 2026).
+ * One of the ideas he said yes to that day ("yes to all your other non
+ * build suggestions as well": "Drag a preset from All presets into a
+ * setlist"), built as a hold and on his own account first. It changes what
+ * a hold on a preset does: the hold is a sheet with the player's setlists
+ * on it and the colour as its last row. Off, it is his account only again,
+ * and every other account's hold is the preset's colour tag, as it was.
  */
-export const ADD_TO_SETLIST_FOR_EVERYONE = false
+export const ADD_TO_SETLIST_FOR_EVERYONE = true

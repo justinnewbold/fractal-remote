@@ -895,8 +895,8 @@ The six pictures he approved are docs/two-sides/phone-sideways-01…06.png
   iPhone, Swap landing on the divider, and the real heights are the first
   things his look will settle.
 
-**The hold pop-up can carry the block's knobs: built 10 November 2026,
-HIS ACCOUNT ONLY until he has seen it.**
+**The hold pop-up carries the block's knobs: built 10 November 2026, open
+to everyone the same day.**
 
 > "Also when not in landscape mode on all devices and screens instead of
 > just having channels pop up to change have the knobs only pop up above
@@ -908,15 +908,28 @@ never a VP4), the pop-up shows the block's knobs and pages over the A to
 D channels, which stay fixed at its foot (mobile/src/lib/holdPop.js
 `popKnobsOn`, components/PopKnobs.js; the knobs are Edit's own
 `BlockPanel`, drawn `bare`). The switch is
-`HOLD_POPUP_KNOBS_FOR_EVERYONE` in features.js, false: his account only.
-It opens with its What's new line when he says so. Closed to an account,
-the pop-up is exactly the channels it always was. A preset change still
-closes it, and so does picking a channel.
+`HOLD_POPUP_KNOBS_FOR_EVERYONE` in features.js, true since his word below
+(off, it is his account only again). Where Edit's door is shut (a VP4, or
+Bluetooth on a copy older than 1.90.0), the pop-up is exactly the channels
+it always was. A preset change still closes it, and so does picking a
+channel.
 
-**Built on 10 November 2026 and HIS ACCOUNT ONLY until he says each is
-right** ("yes to all your other non build suggestions as well"). Each has
-one switch in mobile/src/lib/features.js, false, and opens with its What's
-new line in the pull request that sets it true. None has run on a device.
+**Built on 10 November 2026** ("yes to all your other non build suggestions
+as well"), on his account first, **and open to everyone since that
+evening:**
+
+> "Activate all of the features that were just on my account to all the
+> other accounts obviously besides the developer portal" (10 November 2026)
+
+So the six switches for what he had in the app are true in
+mobile/src/lib/features.js: the hold pop-up's knobs (above), and the five
+below. Each still has its own switch, so one can be closed again (his
+account only) without the others. The Developer pages are not behind these
+switches: they are his account's (`isAdmin`), and stay so. NOT opened: a
+phone on its side (`PHONE_SIDEWAYS_FOR_EVERYONE`), which no account can
+see until a build lets a phone turn, and which he has not seen. The rule
+for the next new thing is unchanged: his account first, behind its own
+switch, and open when he says.
 
 - **The tidier Edit and the handle on the line between the sides**
   (`TIDY_EDIT_FOR_EVERYONE`; lib/tidyEdit, lib/sidesSplit,

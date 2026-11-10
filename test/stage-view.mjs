@@ -67,11 +67,11 @@ function filesUnder(dir) {
 }
 
 export function run(test) {
-  test('Stage view and song notes are his account’s only: both switches are shut, and only a plain true opens either', async () => {
+  test('Stage view and song notes are open to everyone: both switches are on, and only a plain true opens either', async () => {
     const { stageView: s, songNotes: n } = await rules()
     const features = code(read('mobile/src/lib/features.js'))
-    assert.match(features, /export const STAGE_VIEW_FOR_EVERYONE = false\n/, 'Stage view is open to everyone')
-    assert.match(features, /export const SONG_NOTES_FOR_EVERYONE = false\n/, 'song notes are open to everyone')
+    assert.match(features, /export const STAGE_VIEW_FOR_EVERYONE = true\n/, 'Stage view is closed to customers again')
+    assert.match(features, /export const SONG_NOTES_FOR_EVERYONE = true\n/, 'song notes are closed to customers again')
     for (const on of [s.stageViewOn, n.songNotesOn]) {
       assert.equal(on({ admin: true, everyone: false }), true, 'his account does not have it')
       assert.equal(on({ admin: false, everyone: true }), true, 'the switch does not open it')
