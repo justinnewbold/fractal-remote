@@ -55,6 +55,7 @@ import { colLabel, doubtfulWrite, gapCols, gridShape, isSplitChain, laneItems, l
 import { NEW_BLOCK_NAME, NEW_BLOCK_NOTE, knownBlocks } from '../lib/new-block'
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
 import { isSilencingParam } from '../lib/guardrails'
+import { blockLevel, levelFloor, levelToSend, levelTypes, LEVEL_HINT } from '../lib/blockLevel'
 import { editPages, pageFor, pageHolding } from '../lib/editPages'
 import { withUnit } from '../lib/param-fixes'
 import { asOnPages, buildParamIndex, findControls, indexFor } from '../lib/paramIndex'
@@ -950,19 +951,20 @@ export function BlockPanel({
   }, [cab])
 
   /*
-   * Levels are read, never turned.
+   * Levels are kept out of the knobs, and typed instead.
    *
    * The same rule the browser holds, and it is not about tidiness: a block
    * level set to -60 dB makes a preset that looks right and is silent, and the
-   * one place that is easy to do by accident is a knob under a thumb. Gain
-   * staging is still something you need to be able to READ, so the level sits
-   * under the deck as a number.
+   * one place that is easy to do by accident is a knob under a thumb. So the
+   * level sits under the deck as a number. It was read-only there; since 10
+   * November 2026 a level in decibels can be typed, never below the floor
+   * (lib/blockLevel, which says who asked and what the rule is).
    */
   /* And a cab's IR numbers and banks, which are choices out of a list rather
      than knobs — found by the ids the cab state names. */
   const offDeck = cabHidden(cab)
   const editable = params.filter((p) => !isSilencingParam(p.name)).filter((p) => !offDeck.has(p.id))
-  const level = params.find((p) => /^.*\bLevel$/i.test(p.name) && !/boost|input/i.test(p.name))
+  const level = blockLevel(params)
 
   /* Split into the pages Fractal's editor uses, where the unit says what
      they are — see lib/editPages.js. */
@@ -1576,10 +1578,31 @@ export function BlockPanel({
       {level && !bare ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>LEVEL</Text>
-          <Text style={{ color: color.silk, fontSize: font.body, fontFamily: face }}>
-            {`${fmt(level.value)}${level.unit ? ` ${level.unit}` : ''}`}
-          </Text>
-          <Text style={{ color: color.silkFaint, fontSize: font.micro }}>read-only</Text>
+          {levelTypes(level) ? (
+            <>
+              {/* Typed, never dragged, and held at the floor on its way out (lib/blockLevel). The box shows dB where the unit says nothing; what is sent is the level as it was read. */}
+              <View style={{ width: 104 }}>
+                <ValueBox
+                  param={{ ...level, min: levelFloor(level), unit: level.unit || 'dB' }}
+                  value={valueOf(level)}
+                  onCommit={(v) => {
+                    const next = levelToSend(level, v)
+                    if (restoring || next === null) return
+                    setLocal((prev) => ({ ...prev, [level.id]: next }))
+                    commit(level, next)
+                  }}
+                />
+              </View>
+              <Text style={{ color: color.silkFaint, fontSize: font.micro }}>{LEVEL_HINT}</Text>
+            </>
+          ) : (
+            <>
+              <Text style={{ color: color.silk, fontSize: font.body, fontFamily: face }}>
+                {`${fmt(level.value)}${level.unit ? ` ${level.unit}` : ''}`}
+              </Text>
+              <Text style={{ color: color.silkFaint, fontSize: font.micro }}>read-only</Text>
+            </>
+          )}
         </View>
       ) : null}
 

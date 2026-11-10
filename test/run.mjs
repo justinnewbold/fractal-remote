@@ -6819,6 +6819,9 @@ console.log('\nthe hold pop-up: the block’s knobs over its channels, his accou
 const { run: holdPop } = await import('./hold-pop.mjs')
 holdPop(test)
 
+const { run: blockLevelRule } = await import('./block-level.mjs')
+blockLevelRule(test)
+
 /* The tidier Edit and the handle on the line between the two sides (his account until features TIDY_EDIT_FOR_EVERYONE). */
 const { run: tidyEdit } = await import('./tidy-edit.mjs')
 tidyEdit(test)
