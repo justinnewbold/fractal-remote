@@ -1934,8 +1934,10 @@ export function run(test) {
     }
     const CHECKED = new Set([...PARTS.map(([, link]) => link), 'https://www.raspberrypi.com/software/', 'https://connect.raspberrypi.com/', 'https://apps.apple.com/app/id6812916461'])
     for (const link of [...html.matchAll(/href="(https?:[^"]*)"/g)].map((m) => m[1])) assert.ok(CHECKED.has(link), `the guide links ${link}, which nobody checked`)
-    /* The links carry his Amazon Associates tag since 9 November 2026, so the guide says Amazon's own sentence, never that they earn nothing. */
-    assert.match(words, /As an Amazon Associate I earn from qualifying purchases\./, 'the guide links Amazon without the Associates sentence')
+    /* The links carry his Amazon Associates tag since 9 November 2026, so the guide says Amazon's own sentence, never that they earn nothing: once, in the footer (10 November 2026), with where the links go said beside them. */
+    assert.doesNotMatch(words, /Amazon Associate/, 'the Associates sentence is back beside the links: it goes once, at the foot of the page')
+    assert.ok(html.slice(html.indexOf('<footer>'), html.indexOf('</footer>')).includes('<p>As an Amazon Associate I earn from qualifying purchases.</p>'), 'the guide does not say the Associates sentence in its footer')
+    assert.match(html.slice(0, html.indexOf('<footer>')), /<p class="dim">The links go to Amazon in the US\.<\/p>/, 'the guide does not say where its links go')
     assert.doesNotMatch(words, /gets nothing from them|earns nothing/, 'the guide still says the links earn nothing')
     assert.match(words, /a case with a fan/i)
     assert.match(words, /microSD card of 32 GB or more/)
