@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-10",
     "day": "10 November 2026",
-    "version": "1.90.16",
+    "version": "1.90.17",
     "lines": [
+      {
+        "text": "On a tablet or other big screen, Play’s scenes and effects now fill the whole screen, edge to edge and top to bottom, as big tiles as close to square as they fit.",
+        "only": null
+      },
       {
         "text": "On a tablet turned on its side, or a folding phone opened, Play can now share the screen: tap Edit, Setlists or the preset name and it opens beside Play, and the tuner takes a narrow strip instead of covering everything. Each side has Swap and Full screen, and Two sides brings the other back.",
         "only": null

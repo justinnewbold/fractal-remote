@@ -189,16 +189,16 @@ export function run(test) {
     assert.match(stage, /const pedalTall = lined \? cell : Math\.max\(tight \|\| fitted \? 44 : TAP, tileH - 12\)\n/)
     assert.match(stage, /const sceneAcross = lined \? plan\.sceneCols : sceneCols\n/)
     assert.match(stage, /const pedalsAcross = lined \? plan\.chainCols : fxCols\n/)
-    assert.match(stage, /const pedalWords = sq \? linedName\(\{ height: sq\.side, width: sq\.side \}\) : lined \? linedName\([^\n]*\) : undefined\n/)
+    assert.match(stage, /const pedalWords = fillPedals \? linedName\(\{ height: fillPedals\.high, width: fillPedals\.wide \}\) : lined \? linedName\(\{ height: cell, width: tileWidth\(laneRow, pedalsAcross\) \}\) : undefined\n/)
     assert.match(stage, /const lined = linedOn\(\{ wide: shape\.wide, tall: viewport \+ footSpare, across: playWidth \}, linedWas\.current\)\n/, 'lined up is decided by something other than Play’s own size')
     assert.match(stage, /const plan = linedPlan\(\{ scenes: scenes\.hasScenes \? scenes\.count : 0, pedals: fitBlocks \}\)\n/, 'the rows do not count the looper, or the cards while a preset loads')
     /* Both halves start level: each heading the same height. */
-    assert.equal(stage.match(/style=\{lined \|\| sq \? LANE_HEADING : /g).length, 2, 'the two headings are not one height lined up')
-    /* Each half's box: the squares' own width (lib/squarePlay), lined up's half, or the phone's column. */
-    assert.match(stage, /const sceneLane = sq \? squareGrid\(sq\.sceneCols\) : lined \? laneBox : \{ gap: space\.sm \}\n/, 'the scenes are not a half lined up')
-    assert.match(stage, /const chainLane = sq \? squareGrid\(sq\.chainCols\) : lined \? laneBox : \{ gap: space\.sm \}\n/, 'the chain is not a half lined up')
+    assert.equal(stage.match(/style=\{lined \|\| fill \? LANE_HEADING : /g).length, 2, 'the two headings are not one height lined up')
+    /* Each half's box: its tiles' own width where they fill a big screen (lib/squarePlay), lined up's half, or the phone's column. */
+    assert.match(stage, /const sceneLane = fill \? fillGrid\(fill\.sceneCols, fill\.scene\.wide\) : lined \? laneBox : \{ gap: space\.sm \}\n/, 'the scenes are not a half lined up')
+    assert.match(stage, /const chainLane = fill \? fillGrid\(fill\.chainCols, fill\.pedal\.wide\) : lined \? laneBox : \{ gap: space\.sm \}\n/, 'the chain is not a half lined up')
     assert.match(stage, /<View style=\{sceneLane\}>/)
-    assert.match(stage, /<View style=\{chainLane\}>/)
+    assert.match(stage, /<View onLayout=\{noteChainAlone\} style=\{chainLane\}>/)
     /*
      * Each half its own width, never flex: on an iPad Pro on its side
      * (7 November 2026) flex: 1 came out 661 points for the scenes and 463
@@ -209,13 +209,13 @@ export function run(test) {
     assert.match(stage, /const LANE = \{ flexGrow: 1, flexShrink: 1, gap: space\.sm \}\n/, 'a half is left to flex or a flex basis, which Yoga keeps from the stacked first frame')
     assert.doesNotMatch(stage.slice(stage.indexOf('const LANE ='), stage.indexOf('const LANE_HEADING')), /\bflex:|flexBasis/, 'a half has a flex or a flex basis again')
     assert.match(stage, /const laneBox = lined \? \[LANE, \{ width: laneRow \}\] : null\n/, 'the halves are not each the row their tiles were sized from')
-    assert.match(stage, /\{lined && !sq && !scenes\.hasScenes \? <View style=\{laneBox\} \/> : null\}/, 'with no scenes the chain does not keep its own half')
+    assert.match(stage, /\{lined && !fill && !scenes\.hasScenes \? <View style=\{laneBox\} \/> : null\}/, 'with no scenes the chain does not keep its own half')
     /* And the two widths and the gap are exactly the page inside its padding, the padding the page is drawn with. */
     assert.match(stage, /const laneRow = lined \? Math\.max\(0, \(pageRow\(playWidth, space\.lg\) - centre\.left - centre\.right - space\.xl\) \/ 2\) : row\n/)
     assert.match(stage, /maxWidth: PAGE_MAX,\s*alignSelf: 'center',\s*paddingTop: space\.lg,\s*paddingLeft: space\.lg \+ centre\.left,\s*paddingRight: space\.lg \+ centre\.right,/, 'Play’s page is padded by other numbers than the halves are worked out from')
     assert.match(stage, /const LANES = \{ flexDirection: 'row', gap: space\.xl, alignItems: 'flex-start' \}\n/, 'the gap between the halves is not the one their widths leave')
     /* (Ahead of it, only while a block's knobs are open where the scenes were: Derek's panel, test/two-sides.mjs.) */
-    assert.match(stage, /style=\{knobsLane \? LANES_KNOBS : halves \? \(sq \? LANES_SQUARE : LANES\) : \{ gap: tight \? space\.md : space\.lg \}\}/, 'the halves are not side by side lined up, or today’s page moved')
+    assert.match(stage, /style=\{knobsLane \? LANES_KNOBS : halves \? \(fill \? LANES_FILL : LANES\) : \{ gap: tight \? space\.md : space\.lg \}\}/, 'the halves are not side by side lined up, or today’s page moved')
     /* The preset across the top with Setlists at its end, lined up only. */
     assert.match(stage, /<View style=\{lined \? PRESET_ROW : undefined\}>\s*<Press\s+grow=\{lined\}/)
     assert.match(stage, /\{lined \? <SetlistsPress \{\.\.\.footing\}[^\n]*\/> : null\}/, 'Setlists is out of reach lined up')
@@ -230,7 +230,7 @@ export function run(test) {
     assert.match(stage, /const centre = lined \? foldInset\(insets\.left, insets\.right\) : fold\n/)
     assert.doesNotMatch(stage, /Platform\.isPad|isTablet|orientation|Dimensions\.get/)
     /* The chain scrolls inside itself past the scenes' rows, and only lined up. */
-    assert.match(stage, /const chainScrolls = lined && !sq && plan\.scrolls\n/)
+    assert.match(stage, /const chainScrolls = lined && !fill && plan\.scrolls\n/)
     assert.match(stage, /<ChainFrame \{\.\.\.chainFrame\}>/)
   })
 }

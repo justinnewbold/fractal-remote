@@ -210,11 +210,12 @@ export default function Tile({
    */
   full,
   /*
-   * THE NAME'S SIZE ON A BIG TILE: a pedal on Play lined up (lib/linedPlay
-   * linedName), where a tile can be a quarter of an iPad. The name, whole or
-   * three letters, is drawn at it, and the whole name's twin measured at it,
-   * and the picture may grow to 40. Left out, as it is everywhere else, the
-   * tile is exactly what it was.
+   * THE NAME'S SIZE ON A BIG TILE: a pedal on a Play that fills a big screen
+   * (lib/squarePlay) or is lined up (lib/linedPlay linedName), where a tile
+   * can be a quarter of an iPad. The name, whole or three letters, is drawn
+   * at it, and the whole name's twin measured at it, and the picture may
+   * grow to 40, by the tile's shorter side. Left out, as it is everywhere
+   * else, the tile is exactly what it was.
    */
   nameSize,
   fill,
@@ -372,8 +373,16 @@ export default function Tile({
    * never under 14 so it is still a picture, never over 28 so a roomy tile
    * does not turn into a billboard. With On/Off and the channel moved up
    * into the corners, the 44pt tile of a squeezed chain has room for both.
+   *
+   * On a big tile (`nameSize`) it is a third of the tile's SHORTER side: a
+   * tile that fills a big screen (lib/squarePlay) can be taller than it is
+   * wide, and a picture sized for its height alone was one for a square that
+   * tall. The name's size is already taken from the shorter side (lib/
+   * linedPlay linedName), so the two keep their proportion and neither is
+   * ever stretched with the tile. Everywhere else, the height, as always.
    */
-  const picture = icon ? Math.max(14, Math.min(nameSize ? 40 : 28, Math.round(height * 0.32))) : 0
+  const shortSide = nameSize && typeof tileWide === 'number' ? Math.min(height, tileWide) : height
+  const picture = icon ? Math.max(14, Math.min(nameSize ? 40 : 28, Math.round(shortSide * 0.32))) : 0
   const cornered = !!(topLeft || topRight)
 
   /*
