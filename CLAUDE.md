@@ -808,9 +808,12 @@ better if they looked like square boxes as much as possible" (9 November
 2026, #841, mobile/src/lib/squarePlay.js), and then, shown an AM4's four
 scenes and four pedals as two thin towers on an iPad upright: "it should
 be taking full advantage of the iPad screen and all scenarios." So the
-arrangement is chosen for how well it fills the row, never for the
-biggest square alone (#844), and filling wins over squareness where the
-two pull apart. A phone held upright is never asked.
+tiles fill all the room Play has, width and height, and the arrangement
+chosen is the one whose tiles are closest to square (`tilePlan`; no tile
+more than twice as long as it is wide or tall, none under 72 points, past
+which the page scrolls). Filling wins over squareness where the two pull
+apart: an AM4 on an iPad upright is its four scenes two by two over its
+four pedals in a row. A phone held upright is never asked.
 
 **On a tablet, a new screen takes its sizes from the room.** "These
 screens are not using the space very efficiently. Very small." (9

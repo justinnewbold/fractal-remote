@@ -6,6 +6,10 @@
       "version": "1.90.17",
       "lines": [
         {
+          "text": "On a tablet or other big screen, Play’s scenes and effects now fill the whole screen, edge to edge and top to bottom, as big tiles as close to square as they fit.",
+          "only": null
+        },
+        {
           "text": "On a tablet turned on its side, or a folding phone opened, Play can now share the screen: tap Edit, Setlists or the preset name and it opens beside Play, and the tuner takes a narrow strip instead of covering everything. Each side has Swap and Full screen, and Two sides brings the other back.",
           "only": null
         }
@@ -14,14 +18,14 @@
     {
       "date": "2026-11-09",
       "day": "9 November 2026",
-      "version": "1.90.17",
+      "version": "1.90.15",
       "lines": [
         {
           "text": "Getting connected is simpler: Connect a computer is now three numbered steps, and the Bluetooth and Raspberry Pi setup guides are short pages with links to what to buy.",
           "only": null
         },
         {
-          "text": "On a tablet or other big screen, Play’s scenes and effects now fill the whole screen as big tiles, as close to square as they fit, instead of wide stretched bars.",
+          "text": "On a tablet or other big screen, Play’s scenes and effects are now square tiles that spread across the screen, instead of wide stretched bars.",
           "only": null
         },
         {
