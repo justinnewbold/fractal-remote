@@ -1924,7 +1924,7 @@ export function run(test) {
 
     /* WHAT TO BUY, at the addresses matched to their listings, and no other outside link. */
     const PARTS = [
-      ['CanaKit Raspberry Pi 5 Starter Kit, 4 GB, with the official case', 'https://www.amazon.com/dp/B0CVQRCMLY?tag=justinnewbold-20'],
+      ['CanaKit Raspberry Pi 5 Essentials Starter Kit, 4 GB', 'https://www.amazon.com/dp/B0CVQTWGBX?tag=justinnewbold-20'],
       ['Raspberry Pi 5, 4 GB', 'https://www.amazon.com/dp/B0CK3L9WD3?tag=justinnewbold-20'],
       ['Raspberry Pi 27W USB-C Power Supply', 'https://www.amazon.com/dp/B0HJPK4Z77?tag=justinnewbold-20']
     ]
