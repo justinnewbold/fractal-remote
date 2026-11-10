@@ -87,7 +87,7 @@ export function run(test) {
 
   test('hold pop-up: App asks the rule with Edit’s own door, his account until the switch, and Play is told only that', () => {
     const features = read('mobile/src/lib/features.js')
-    assert.match(features, /^export const HOLD_POPUP_KNOBS_FOR_EVERYONE = false$/m, 'the pop-up’s knobs are open to everyone; that needs his own look first, and its line in What’s new')
+    assert.match(features, /^export const HOLD_POPUP_KNOBS_FOR_EVERYONE = true$/m, 'the pop-up’s knobs are closed to customers again')
     const app = code(read('mobile/App.js'))
     assert.match(app, /import \{ popKnobsOn \} from '\.\/src\/lib\/holdPop'/)
     assert.match(app, /import \{ HOLD_POPUP_KNOBS_FOR_EVERYONE \} from '\.\/src\/lib\/features'/)

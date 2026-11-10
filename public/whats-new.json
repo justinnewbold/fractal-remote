@@ -3,30 +3,30 @@
     {
       "date": "2026-11-10",
       "day": "10 November 2026",
-      "version": "1.90.26",
+      "version": "1.90.28",
       "lines": [
         {
           "text": "New in Settings, under My rig: Connect your unit. Pick a Bluetooth adapter, USB cable, computer or Raspberry Pi and get short steps for that one (the Raspberry Pi’s are in the app now). Troubleshooting asks the same, so you see only the fixes for your way in, and they’re shorter.",
           "only": null
         },
         {
-          "text": "In Edit, the knobs now start higher up the screen. Find a control and Amp & pedal names moved under the knobs, and the note that used to sit at the top moved to the bottom of the page.",
+          "text": "Edit shows more knobs at once: they start higher up, the block’s name, channels and on/off are one row, and the knobs fill the width of the screen. Find a control and Amp & pedal names moved under the knobs, and the note that used to sit at the top moved to the bottom of the page.",
           "only": null
         },
         {
-          "text": "On a tablet or other big screen, hold an effect on Play and its knobs open right there, with its channels above them, while Play stays in front of you. One tap still turns the effect on or off.",
+          "text": "Hold an effect on Play and its knobs now come up above the A to D channels, so you can make a quick change without opening Edit. On a tablet or other big screen on its side they open beside Play instead. One tap still turns the effect on or off.",
           "only": null
         },
         {
-          "text": "On a tablet or other big screen on its side, the Play and Two sides buttons moved up into the top bar, so Play and whatever is beside it get a whole extra row of screen. Swap sits on the line between the two sides.",
+          "text": "New: Stage view shows your preset, scene and what’s next, big enough to read from a stand, with the tuner as a strip. Open it from Settings → Play screen. And on a tablet or other big screen, Play’s scenes and effects now fill the whole screen as big tiles, as close to square as they fit.",
           "only": null
         },
         {
-          "text": "On a tablet or other big screen, Play’s scenes and effects now fill the whole screen, edge to edge and top to bottom, as big tiles as close to square as they fit.",
+          "text": "Setlists: in All presets, hold a preset to add it to a setlist (its color is on the same sheet). And each setlist song can carry notes, such as lyrics, chords or cues, shown beside Play and in Stage view. Notes stay on the device you wrote them on.",
           "only": null
         },
         {
-          "text": "On a tablet turned on its side, or a folding phone opened, Play can now share the screen: tap Edit, Setlists or the preset name and it opens beside Play, and the tuner takes a narrow strip instead of covering everything. Each side has Swap and Full screen, and Two sides brings the other back.",
+          "text": "On a tablet turned on its side, or a folding phone opened, Play can now share the screen: tap Edit, Setlists or the preset name and it opens beside Play. Its buttons are in the top bar. Drag the handle on the line between the sides to resize, or tap it to swap. A very wide screen can add a third side.",
           "only": null
         }
       ]
