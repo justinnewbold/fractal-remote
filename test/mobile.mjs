@@ -12562,7 +12562,8 @@ export function run(test) {
     const app = withoutComments(read('mobile/App.js')).replace(/\s+/g, ' ')
     assert.match(app, /const openSettings = \(at = null, sheet = false\) => \{ setSettingsAt\(at\) setAccountSheet\(sheet\) setSettingsVisit\(\(n\) => n \+ 1\) setScreen\('settings'\) \}/)
     assert.match(app, /const openAccount = \(\) => openSettings\('account', true\)/)
-    assert.match(app, /onOpenAccount=\{openAccount\}/)
+    /* (Not while the bar's left holds the two sides' names or Play's preset on a phone held on its side: `sideLead`, test/two-sides.mjs.) */
+    assert.match(app, /onOpenAccount=\{sideLead \? null : openAccount\}/)
     assert.match(app, /if \(auth === 'checking'\) return undefined let alive = true ;\(auth === 'out' \? Promise\.resolve\(null\) : keptAccount\(\)\) \.then\(\(who\) => alive && showPhotoFor\(who\)\)/, 'the photo is not for whoever the phone says is signed in, or stays after a sign-out')
     assert.match(app, /openAccountSheet=\{accountSheet\} onAccountSheet=\{\(\) => setAccountSheet\(false\)\}/)
 

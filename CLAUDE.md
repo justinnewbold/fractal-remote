@@ -803,6 +803,54 @@ from its strip wider. A Play hidden under a full-screen tool is asleep
 - Nobody here has a Duo: its numbers come from the plan and are held by
   test/two-sides.mjs, and his first look is the real check.
 
+**A phone held on its side splits in two as well: built 10 November 2026,
+HIS ACCOUNT ONLY until he has seen it.**
+
+> "This is the landscape view on iPhone ... let's split the screen in half
+> kind of like the iPhone duo even though things will be smaller. It'll
+> still look better instead of just stretching everything give me some
+> mock ups." Then: "Can you make the icons more square looking instead of
+> stretched?", "What would the screens look like on an AM4?", and "Yes
+> build them." (10 November 2026)
+
+The six pictures he approved are docs/two-sides/phone-sideways-01…06.png
+(FM3 and AM4), and docs/two-sides/README.md has "A phone on its side".
+
+- **The rule** is `phoneSidewaysOn` in mobile/src/lib/twoSides.js: a frame
+  wider than tall, at least 720 across (each half 360 or more: an iPhone
+  17 on its side is 734, a Pro Max 832), and UNDER `SIDES_TALL`, which is
+  what keeps every tablet and the Duo on `twoSidesOn`, untouched. App.js
+  asks it only where the big-screen rule said no (`low`).
+- **The switch** is `PHONE_SIDEWAYS_FOR_EVERYONE` in
+  mobile/src/lib/features.js, false: his account only (the kept sign-in).
+  It opens to everyone the two sides are open to when he says so, with its
+  What's new line in that pull request. Every other account's Play on a
+  phone on its side is what it always was.
+- **Squares win over filling here**, the opposite of a tablet's `tilePlan`:
+  mobile/src/lib/sidewaysPlay.js (`sidewaysPlan`). Play alone is two
+  halves, scenes left and chain right, each grid centred in its half (an
+  FM3's 8 and 8 are four across by two; an AM4's 4 and 4 are two by two),
+  with Previous, Tuner, Edit, Tap and Next in one row along the bottom.
+  No square under 64 points: past that the page scrolls.
+- **The preset and Setlists go up into the top bar when that buys bigger
+  squares** (`headUp`: 15% or more, or a scroll saved; the AM4's picture),
+  and sit over the halves otherwise (the FM3's). By the size it buys,
+  never by the unit's name. Play says the words (lib/playHead), the bar
+  draws them (components/PlayHead), App owns what they open.
+- **Beside a tool there is no second row of bars**: each side's name, Swap
+  and Full or Two sides are in the app's top bar (components/SidesLead;
+  TopBar `lead` and `slim`). The tools keep their own headers and their
+  own Done. Play in a half has its preset row with Setlists at the end,
+  the scenes as squares, the chain under them, and five short buttons
+  (Prev, Tuner, Edit, Tap, Next).
+- **A held block is today's channel pop-up there** (`holdAsks` gets
+  `wide: big`): the knobs panel needs room this window does not have.
+- **Not built yet:** the tidier Edit of picture 03 (ten knobs, five
+  across). Edit in a half is today's Edit, as on the Duo. And nothing has
+  run on a phone: the top bar's room with a tool beside Play on a small
+  iPhone, Swap landing on the divider, and the real heights are the first
+  things his look will settle.
+
 **On a big screen Play's tiles take the whole screen.** "It would be
 better if they looked like square boxes as much as possible" (9 November
 2026, #841, mobile/src/lib/squarePlay.js), and then, shown an AM4's four

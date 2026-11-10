@@ -70,10 +70,22 @@ export default function Sides({
   onFull,
   onPlayFull,
   onTwoSides,
+  /*
+   * A PHONE HELD ON ITS SIDE (lib/twoSides phoneSidewaysOn): no bar over
+   * either side, since that window is too low for a second row of them.
+   * Their buttons are in the app's top bar instead (components/SidesLead),
+   * so the list is opened from there: `list` is which name was tapped and
+   * `onList` sets it, both App's. False, and left out, everywhere else.
+   */
+  low = false,
+  list: listAsked = null,
+  onList = null,
   children
 }) {
   /* Which bar's name was tapped, for the list: 'tool' or 'play', or null. */
-  const [list, setList] = useState(null)
+  const [listHere, setListHere] = useState(null)
+  const list = low ? listAsked : listHere
+  const setList = low ? (which) => onList?.(which) : setListHere
   /* Everybody the sides are not open to: Play, and not one View around it, so their tree is today's. (After the hook above, so its count never changes.) */
   if (!allowed) return children
   const widths = sideWidths({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool })
@@ -89,7 +101,7 @@ export default function Sides({
   }
 
   /* Play's bar: beside a tool, Swap and Full screen; alone on a wide window, Two sides. */
-  const playBar = two ? (
+  const playBar = two && !low ? (
     <SideBar
       name={TOOL_NAMES.play}
       onName={() => setList('play')}
@@ -99,7 +111,7 @@ export default function Sides({
     />
   ) : null
   /* The tool's bar: beside Play, Swap and Full screen; filling a wide window, Two sides. None on a window too narrow for two, where its Done is the way out. */
-  const toolBar = two && tool ? (
+  const toolBar = two && tool && !low ? (
     <SideBar
       name={toolName}
       onName={() => setList('tool')}

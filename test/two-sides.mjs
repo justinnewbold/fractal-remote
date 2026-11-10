@@ -37,7 +37,7 @@ async function rules() {
     writeFileSync(join(dir, 'gigSize.js'), read('mobile/src/lib/gigSize.js'))
     writeFileSync(join(dir, 'playShape.js'), read('mobile/src/lib/playShape.js').replace("from './gigSize'", "from './gigSize.js'"))
     /* For Derek's panel: Play's tiles filling a big screen, which the panel takes the scenes' room from, and Edit's door, which it opens behind. Neither imports anything. */
-    for (const f of ['squarePlay', 'editDoor']) {
+    for (const f of ['squarePlay', 'editDoor', 'sidewaysPlay']) {
       const src = read(`mobile/src/lib/${f}.js`)
       assert.doesNotMatch(src, /^import /m, `lib/${f} imports something; this check runs it on its own`)
       writeFileSync(join(dir, `${f}.js`), src)
@@ -46,7 +46,9 @@ async function rules() {
     const p = await import(pathToFileURL(join(dir, 'playShape.js')).href)
     const q = await import(pathToFileURL(join(dir, 'squarePlay.js')).href)
     const d = await import(pathToFileURL(join(dir, 'editDoor.js')).href)
-    return { ...t, ...p, ...q, ...d }
+    /* A phone held on its side: its squares (the test at the end of this file). */
+    const w = await import(pathToFileURL(join(dir, 'sidewaysPlay.js')).href)
+    return { ...t, ...p, ...q, ...d, ...w }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -300,7 +302,8 @@ export function run(test) {
     assert.match(app, /const sidesAdmin = useBluetoothAdmin\(\)\n/, 'his account is not read from the sign-in kept on the phone')
     /* The frame is measured, and the rule asked on it with its memory, only for an account the sides are open to. */
     assert.match(app, /\{sidesAllowed \? <SidesFrame onFrame=\{setFrame\} \/> : null\}/)
-    assert.match(app, /const wide = sidesAllowed && twoSidesOn\(frame \|\| \{\}, wideWas\.current\)\n\s*wideWas\.current = wide\n/)
+    /* (`big` is that answer; `wide` is it or a phone held on its side, the test at the end of this file.) */
+    assert.match(app, /const big = sidesAllowed && twoSidesOn\(frame \|\| \{\}, wideWas\.current\)\n\s*wideWas\.current = big\n/)
     /* `screen` stays the record: the tool is read off it, Edit behind the bench's switch, and the switch leaves it to the host on two sides. */
     assert.match(app, /const sideTool = BENCH && screen === 'edit' \? 'edit' : screen === 'setlists' \|\| screen === 'presets' \|\| screen === 'tuner' \|\| screen === BLOCK \? screen : null\n/)
     assert.match(app, /const twoSidesUp = sidesAllowed && sideTool !== null && \(wide \|\| sideFull\)\n/)
@@ -659,7 +662,7 @@ export function run(test) {
     const sides = code(read('mobile/src/components/Sides.js'))
     const edit = code(read('mobile/src/screens/Edit.js'))
     /* The gate: his account, or the two sides' own with HOLD_KNOBS_FOR_EVERYONE, Edit's own door, never a VP4, on a window that shows two sides. */
-    assert.match(app, /const noKnobs = vp4Here\(\) \|\| \(demo && demoUnitNow === 'vp4'\)\n\s*const knobsAllowed = sidesAdmin \|\| \(sidesAllowed && HOLD_KNOBS_FOR_EVERYONE\)\n\s*const holdAsks = \{ allowed: knobsAllowed, vp4: noKnobs, wide, beside: playBeside, screen \}\n\s*const holdOpens = holdGoes\(\{ \.\.\.holdAsks, editOpens \}\)\n/, 'the panel opens on a VP4, or on the demo’s')
+    assert.match(app, /const noKnobs = vp4Here\(\) \|\| \(demo && demoUnitNow === 'vp4'\)\n\s*const knobsAllowed = sidesAdmin \|\| \(sidesAllowed && HOLD_KNOBS_FOR_EVERYONE\)\n\s*const holdAsks = \{ allowed: knobsAllowed, vp4: noKnobs, wide: big, beside: playBeside, screen \}\n\s*const holdOpens = holdGoes\(\{ \.\.\.holdAsks, editOpens \}\)\n/, 'the panel opens on a VP4, or on the demo’s')
     assert.match(app, /const demoUnitNow = useDemoUnit\(\)\n/)
     assert.match(app, /const editOpens = editHere\.opens\n/)
     /* Open, it stays through a blink of the link, and only where it was opened. */
@@ -687,7 +690,7 @@ export function run(test) {
     assert.match(app, /saveHere=\{screen !== 'edit' && blockAt === null\}/)
     /* Where the scenes were: the panel in their place, as tall as the room under the preset, the scenes away while it is up, and Play's page still while a knob is held. */
     assert.match(stage, /const knobsLane = lanePlan && knobsAt !== null && \(lanePlan\.stays \|\| laneAgain\) \? lanePlan : null\n/)
-    assert.match(stage, /const fill = knobsLane \? \{ \.\.\.\(knobsLane\.stays \? fillOwn : laneAgain\), beside: true \} : fillOwn\n/)
+    assert.match(stage, /const fill = knobsLane \? \{ \.\.\.\(knobsLane\.stays \? fillOwn : laneAgain\), beside: true \} : low \? lowFill : fillOwn\n/)
     /* The blocks beside a panel with a column of its own are planned in what is left of the row, for the whole room, with no scenes. */
     assert.match(stage, /const laneAgain =\s*lanePlan && knobsAt !== null && !lanePlan\.stays\s*\? tilePlan\(\{\s*width: lanePlan\.chain,\s*room: fillRoom,\s*scenes: 0,\s*pedals: fitBlocks,\s*\.\.\.fillAsk\s*\}\)\s*: null\n/)
     assert.match(stage, /\{knobsLane \? \(\s*<View style=\{\[KNOBS_BOX, \{ borderColor: color\.rule, width: knobsLane\.panel, height: Math\.max\(0, fillRoom\) \}\]\}>\s*<BlockSide eid=\{knobsAt\} onClose=\{onCloseKnobs\} onScrollLock=\{setKnobHeld\} \/>\s*<\/View>\s*\) : null\}/)
@@ -698,5 +701,244 @@ export function run(test) {
     assert.match(sides, /const knobs = tool === BLOCK\n\s*const toolName = knobs \? BLOCK_NAME : TOOL_NAMES\[tool\] \|\| ''\n/)
     assert.match(sides, /onFull=\{beside && !knobs \? \(\) => onFull\?\.\(true\) : null\}/)
     assert.match(sides, /if \(!allowed\) return children\n/)
+  })
+
+  /*
+   * A PHONE HELD ON ITS SIDE (10 November 2026): "let's split the screen in
+   * half kind of like the iPhone duo even though things will be smaller.
+   * It'll still look better instead of just stretching everything", and
+   * "Can you make the icons more square looking instead of stretched?"
+   * (Justin, on an iPhone 17 Pro Max on its side). Its own answer beside
+   * twoSidesOn, his account until features PHONE_SIDEWAYS_FOR_EVERYONE.
+   */
+  test('a phone held on its side is its own answer: the big iPhones and the 17, never a phone upright, a small phone, a tablet or the Duo, whose own answer does not move', async () => {
+    const r = await rules()
+    const side = (w, h, insets) => r.phoneSidewaysOn(frameOf(w, h, insets))
+    assert.equal(r.SIDEWAYS_AT, 2 * r.SIDE_LEAST, 'a phone on its side splits under two sides of the least a side may be')
+    /* On its side, wide enough for two halves of at least SIDE_LEAST. */
+    assert.equal(side(956, 440, { left: 62, right: 62 }), true, 'an iPhone 17 Pro Max on its side')
+    assert.equal(side(932, 430, { left: 59, right: 59 }), true, 'an iPhone 16 Plus on its side')
+    assert.equal(side(852, 393, { left: 59, right: 59 }), true, 'an iPhone 17 on its side')
+    assert.equal(side(914.29, 411.43), true, 'an Android phone on its side')
+    assert.deepEqual(frameOf(956, 440, { left: 62, right: 62 }), { width: 832, height: 332, left: 62, right: 62 })
+    assert.deepEqual(r.splitSides({ width: 832, left: 62, right: 62 }), { first: 416, second: 416 })
+    assert.deepEqual(r.splitSides({ width: 734, left: 59, right: 59 }), { first: 367, second: 367 })
+    /* Too narrow for two halves: one screen, as today. */
+    assert.equal(side(812, 375, { left: 50, right: 50 }), false, 'an iPhone 13 mini on its side: 712 across')
+    assert.equal(side(667, 375), false, 'an iPhone SE on its side')
+    assert.equal(side(568, 320), false, 'the smallest iPhone on its side')
+    /* Held upright: never. */
+    for (const [w, h] of [
+      [320, 568],
+      [375, 667],
+      [390, 844],
+      [393, 852],
+      [411.43, 914.29],
+      [430, 932],
+      [440, 956]
+    ]) {
+      assert.equal(side(w, h), false, `a ${w}-point phone held upright`)
+      /* And the big-screen rule still says no to it either way up, exactly as before. */
+      assert.equal(r.twoSidesOn(frameOf(w, h)), false)
+      assert.equal(r.twoSidesOn(frameOf(h, w)), false)
+    }
+    /* A tablet, a Fold and the Duo are not phones on their sides: their own answer stands, and this one is no. */
+    for (const [w, h, insets, two, what] of [
+      [951, 669, { right: 84 }, true, 'the iPhone Duo opened like a book'],
+      [669, 951, {}, false, 'the Duo opened and held tall'],
+      [466, 678, { right: 44 }, false, 'the Duo closed'],
+      [1180, 820, {}, true, 'an 11-inch iPad on its side'],
+      [820, 1180, {}, false, 'an 11-inch iPad upright'],
+      [1133, 744, {}, true, 'an iPad mini on its side'],
+      [744, 1133, {}, false, 'an iPad mini upright'],
+      [1366, 1024, {}, true, 'a 13-inch iPad on its side'],
+      [841, 673, {}, true, 'a Galaxy Fold opened'],
+      [1280, 800, {}, true, 'an Android tablet sideways'],
+      [590, 820, {}, false, 'half an iPad']
+    ]) {
+      assert.equal(side(w, h, insets), false, `${what} is taken for a phone on its side`)
+      assert.equal(r.twoSidesOn(frameOf(w, h, insets)), two, `${what}: the big-screen rule’s own answer moved`)
+    }
+    /* Nothing measured yet: one screen, never a guess. */
+    assert.equal(r.phoneSidewaysOn({}), false)
+    assert.equal(r.phoneSidewaysOn({ width: 0, height: 0 }), false)
+    assert.equal(r.phoneSidewaysOn(), false)
+  })
+
+  test('a phone on its side: each line goes off 40 past where it came on, and it is never a window as tall as a tablet', async () => {
+    const r = await rules()
+    const at = (width, height, was) => r.phoneSidewaysOn({ width, height }, was)
+    /* Across. */
+    assert.equal(at(r.SIDEWAYS_AT - 1, 330, false), false)
+    assert.equal(at(r.SIDEWAYS_AT, 330, false), true)
+    assert.equal(at(r.SIDEWAYS_AT - r.LETS_GO, 330, true), true)
+    assert.equal(at(r.SIDEWAYS_AT - r.LETS_GO - 1, 330, true), false)
+    /* Tall enough to be worth it. */
+    assert.equal(at(800, r.SIDEWAYS_LOW - 1, false), false)
+    assert.equal(at(800, r.SIDEWAYS_LOW, false), true)
+    assert.equal(at(800, r.SIDEWAYS_LOW - r.LETS_GO, true), true)
+    assert.equal(at(800, r.SIDEWAYS_LOW - r.LETS_GO - 1, true), false)
+    /* And UNDER the big screens' line: at it, the answer is theirs. */
+    assert.equal(at(800, r.SIDES_TALL - 1, false), true)
+    assert.equal(at(800, r.SIDES_TALL, false), false)
+    assert.equal(at(800, r.SIDES_TALL + r.LETS_GO - 1, true), true)
+    assert.equal(at(800, r.SIDES_TALL + r.LETS_GO, true), false)
+    /* No size is ever both, asked fresh: where the big-screen rule says yes, this says no. */
+    for (let w = 300; w <= 1400; w += 20) {
+      for (let h = 200; h <= 1100; h += 20) {
+        const f = { width: w, height: h }
+        assert.ok(!(r.twoSidesOn(f) && r.phoneSidewaysOn(f)), `${w} by ${h} is a big screen and a phone on its side at once`)
+        if (r.phoneSidewaysOn(f)) assert.ok(w > h && w / 2 >= r.SIDE_LEAST && h < r.SIDES_TALL, `${w} by ${h} is no phone on its side`)
+      }
+    }
+    /* Holding a block there is the channel pop-up: App asks holdGoes with the big-screen answer, never this one. */
+    assert.equal(r.holdGoes({ allowed: true, editOpens: true, wide: false, screen: 'stage' }), null)
+    assert.equal(r.holdGoes({ allowed: true, editOpens: true, wide: false, beside: true, screen: 'presets' }), null)
+  })
+
+  test('on a phone on its side every tile is a square: an FM3’s eight and eight are four across by two in each half, an AM4’s four and four are two by two, and nothing shrinks under a thumb', async () => {
+    const r = await rules()
+    /* Play alone on an iPhone 17 Pro Max on its side: a row of 800, about 230 under the preset's row, which with its gap is 52. */
+    const alone = { width: 800, room: 230, headRow: 52, canHeadUp: true }
+    const fm3 = r.sidewaysPlan({ ...alone, scenes: 8, pedals: 8 })
+    assert.deepEqual([fm3.beside, fm3.sceneCols, fm3.chainCols, fm3.scrolls, fm3.headUp], [true, 4, 4, false, false], 'an FM3 is not four across by two in each half, its preset’s row over them')
+    assert.deepEqual(fm3.scene, { wide: 91, high: 91 })
+    assert.deepEqual(fm3.pedal, fm3.scene)
+    const am4 = r.sidewaysPlan({ ...alone, scenes: 4, pedals: 4 })
+    assert.deepEqual([am4.beside, am4.sceneCols, am4.chainCols, am4.scrolls, am4.headUp], [true, 2, 2, false, true], 'an AM4 is not two by two in each half, its preset’s row up in the top bar')
+    assert.deepEqual(am4.scene, { wide: 124, high: 124 })
+    /* The row goes up by what it buys, never by the unit: the AM4's squares are 98 with the row in the page. */
+    const am4Down = r.sidewaysPlan({ ...alone, canHeadUp: false, scenes: 4, pedals: 4 })
+    assert.deepEqual([am4Down.headUp, am4Down.scene.wide], [false, 98])
+    assert.ok(am4.scene.wide >= r.HEAD_UP_BUYS * am4Down.scene.wide)
+    /* And once up it stays while it still buys a little, so a point of measuring does not send it up and down. */
+    assert.ok(r.HEAD_UP_KEEPS > 1 && r.HEAD_UP_KEEPS < r.HEAD_UP_BUYS)
+    const edge = { width: 800, room: 230, scenes: 4, pedals: 4, canHeadUp: true, headRow: 26 }
+    assert.equal(r.sidewaysPlan(edge).headUp, false, 'a row that buys under HEAD_UP_BUYS goes up')
+    assert.equal(r.sidewaysPlan({ ...edge, headWas: true }).headUp, true, 'a row already up comes down for a few points')
+    /* On an iPhone 17 on its side, the same shapes a little smaller. */
+    const small = { width: 702, room: 190, headRow: 52, canHeadUp: true }
+    assert.deepEqual(r.sidewaysPlan({ ...small, scenes: 8, pedals: 8 }).scene, { wide: 78, high: 78 })
+    assert.deepEqual([r.sidewaysPlan({ ...small, scenes: 4, pedals: 4 }).sceneCols, r.sidewaysPlan({ ...small, scenes: 4, pedals: 4 }).headUp], [2, true])
+    /* In a half beside a tool: the scenes over the chain, never side by side, and the row never up (the bar holds the sides' names). */
+    const half = { width: 384, room: 260, split: false }
+    const am4Half = r.sidewaysPlan({ ...half, scenes: 4, pedals: 4 })
+    assert.deepEqual([am4Half.beside, am4Half.sceneCols, am4Half.chainCols, am4Half.scrolls, am4Half.headUp], [false, 4, 4, false, false], 'an AM4 in a half is not a row of four over a row of four with no scroll')
+    const fm3Half = r.sidewaysPlan({ ...half, scenes: 8, pedals: 8 })
+    assert.deepEqual([fm3Half.beside, fm3Half.sceneCols, fm3Half.scrolls], [false, 4, true], 'an FM3 in a half is not four across, its chain a scroll under its scenes')
+    assert.equal(r.sidewaysPlan({ ...half, scenes: 8, pedals: 8, canHeadUp: true, headRow: 52, split: false }).beside, false)
+    /* Only pedals (a unit with no scenes): one grid, the whole row. */
+    const only = r.sidewaysPlan({ ...alone, scenes: 0, pedals: 4 })
+    assert.deepEqual([only.beside, only.sceneCols, only.chainCols], [false, 0, 4])
+    /* Nothing to draw, nothing measured: null, and Play draws as it did. */
+    assert.equal(r.sidewaysPlan({ ...alone, scenes: 0, pedals: 0 }), null)
+    assert.equal(r.sidewaysPlan({ width: 0, room: 230, scenes: 8, pedals: 8 }), null)
+    assert.equal(r.sidewaysPlan({ width: 800, room: 0, scenes: 8, pedals: 8 }), null)
+    assert.equal(r.sidewaysPlan(), null)
+
+    /* Every rig, every phone on its side: squares, never under a thumb, never over SQUARE_BIGGEST, and what is said to fit does fit. */
+    const gap = 8
+    const head = 26
+    const tall = (n, cols, side) => (cols ? Math.ceil(n / cols) * side + (Math.ceil(n / cols) - 1) * gap : 0)
+    for (const width of [640, 702, 760, 800, 880]) {
+      for (const room of [150, 190, 230, 280]) {
+        for (let scenes = 0; scenes <= 8; scenes += 4) {
+          for (let pedals = 0; pedals <= 24; pedals++) {
+            if (!scenes && !pedals) continue
+            for (const split of [true, false]) {
+              const w = split ? width : (width - 24) / 2 - 16
+              const plan = r.sidewaysPlan({ width: w, room, scenes, pedals, gap, head, beside: 24, between: 16, headRow: 52, split, canHeadUp: split })
+              const said = `${scenes} scenes and ${pedals} pedals in ${w} by ${room}${split ? '' : ' (a half)'}`
+              for (const [kind, n, cols] of [
+                [plan.scene, scenes, plan.sceneCols],
+                [plan.pedal, pedals, plan.chainCols]
+              ]) {
+                if (!n) {
+                  assert.deepEqual([kind, cols], [{ wide: 0, high: 0 }, 0], said)
+                  continue
+                }
+                assert.equal(kind.wide, kind.high, `${said}: a tile is not a square`)
+                assert.ok(kind.wide >= r.SQUARE_SMALLEST && kind.wide <= r.SQUARE_BIGGEST, `${said}: a ${kind.wide}-point square`)
+                assert.ok(cols >= 1 && cols <= n, said)
+              }
+              assert.equal(plan.capped, false)
+              if (!split) assert.equal(plan.headUp, false, `${said}: the preset’s row went up from a half`)
+              if (plan.scrolls) continue
+              const has = room + (plan.headUp ? 52 : 0)
+              const halfWide = plan.beside ? (w - 24) / 2 : w
+              if (scenes) assert.ok(plan.sceneCols * plan.scene.wide + (plan.sceneCols - 1) * gap <= halfWide + 0.001, `${said}: the scenes are wider than their half`)
+              if (pedals) assert.ok(plan.chainCols * plan.pedal.wide + (plan.chainCols - 1) * gap <= halfWide + 0.001, `${said}: the pedals are wider than their half`)
+              const needs = plan.beside
+                ? head + Math.max(tall(scenes, plan.sceneCols, plan.scene.high), tall(pedals, plan.chainCols, plan.pedal.high))
+                : (scenes ? head + tall(scenes, plan.sceneCols, plan.scene.high) : 0) + (scenes && pedals ? 16 : 0) + (pedals ? head + tall(pedals, plan.chainCols, plan.pedal.high) : 0)
+              assert.ok(needs <= has + 0.001, `${said}: said to fit, and is ${needs} in ${has}`)
+            }
+          }
+        }
+      }
+    }
+  })
+
+  test('App, the top bar, the sides and Play draw a phone on its side for his account only, and each thing they change is a branch beside the one that was there', () => {
+    const app = code(read('mobile/App.js'))
+    const stage = code(read('mobile/src/screens/Stage.js'))
+    const sides = code(read('mobile/src/components/Sides.js'))
+    const bar = code(read('mobile/src/components/TopBar.js'))
+    const lead = code(read('mobile/src/components/SidesLead.js'))
+    const head = code(read('mobile/src/components/PlayHead.js'))
+    const features = read('mobile/src/lib/features.js')
+    /* His account until he has seen it on a phone; then everyone the two sides are open to. */
+    assert.match(features, /^export const PHONE_SIDEWAYS_FOR_EVERYONE = false$/m, 'a phone on its side splits in two for everyone; that needs his own look first, and its line in What’s new')
+    assert.match(app, /const sidewaysAllowed = sidesAdmin \|\| \(sidesAllowed && PHONE_SIDEWAYS_FOR_EVERYONE\)\n/)
+    /* Asked only where the big-screen rule said no, with its own memory; and `wide` is either. */
+    assert.match(app, /const low = sidewaysAllowed && !big && phoneSidewaysOn\(frame \|\| \{\}, lowWas\.current\)\n\s*lowWas\.current = low\n\s*const wide = big \|\| low\n/)
+    /* Play is told, the sides drop their bars, and the bar carries them: all three by `low`. */
+    assert.match(app, /inSide=\{playBeside\}\s*awake=\{!playHidden\}\s*tunerBeside=\{tunerBeside\}\s*low=\{low\}/)
+    assert.match(app, /onTwoSides=\{\(\) => openTool\(sideKept\)\}\s*low=\{low\}\s*list=\{sideList\}\s*onList=\{setSideList\}/)
+    assert.match(app, /slim=\{low && \(screen === 'stage' \|\| twoSidesUp\)\}\s*lead=\{sideLead\}/)
+    assert.match(app, /const sideLead = !low \? null : twoSidesUp \? \(\s*<SidesLead/, 'the bar carries the sides’ names on a window that is no phone on its side')
+    assert.match(app, /\) : screen === 'stage' && playHeadUp \? \(\s*<PlayHead onOpenPresets=\{demo \|\| link\.link === 'connected' \? \(\) => setScreen\('presets'\) : null\} onOpenSetlists=\{\(\) => setScreen\('setlists'\)\} \/>\s*\) : null\n/, 'the preset in the bar does not open what Play’s own does')
+    /* The sides: no bar over either there, the list opened from the top bar; with `low` false, exactly the bars and the list they had. */
+    assert.match(sides, /const playBar = two && !low \? \(/)
+    assert.match(sides, /const toolBar = two && tool && !low \? \(/)
+    assert.match(sides, /const list = low \? listAsked : listHere\n\s*const setList = low \? \(which\) => onList\?\.\(which\) : setListHere\n/)
+    /* The bar: something on its left in the version's place, and less padding, only when App says. */
+    assert.match(bar, /onOpenAccount = null, lead = null, slim = false \}\)/)
+    assert.match(bar, /\{lead \? \(\s*<View style=\{\{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center' \}\}>\{lead\}<\/View>\s*\) : canSave \? \(/)
+    /* The two sides' buttons there: the names for the list, Swap between them, Full or Two sides; a block's knobs never fill the window. */
+    assert.match(lead, /if \(!tool\) return null\n/)
+    assert.match(lead, /knobs \? null : <Press key="full" label=\{SIDEWAYS_FULL\}/)
+    assert.match(lead, /<Press label=\{SIDE_WORDS\.two\}[^\n]*onPress=\{\(\) => onFull\?\.\(false\)\}/)
+    assert.match(lead, /<Press label=\{SIDE_WORDS\.swap\}[^\n]*onPress=\{onSwap\}/)
+    /* Play's preset and Setlists in the bar: nothing while Play has them in its page. */
+    assert.match(head, /const head = usePlayHead\(\)\n\s*if \(!head\) return null\n/)
+
+    /* PLAY. The squares take the place of the plan only there. */
+    assert.match(stage, /\n  low = false,\n/)
+    assert.match(stage, /const lowFill =\s*low && viewport > 0 && lowTop >= 0\s*\? sidewaysPlan\(\{/)
+    assert.match(stage, /split: !inSide,\s*canHeadUp: !inSide && awake,\s*headWas: headWas\.current/)
+    assert.match(stage, /const headUp = low && lowFill\?\.headUp === true\n/)
+    assert.match(stage, /const fill = knobsLane \? \{ \.\.\.\(knobsLane\.stays \? fillOwn : laneAgain\), beside: true \} : low \? lowFill : fillOwn\n/)
+    /* One row of five, 44 tall, short in a half: laid over the list every other Play is handed. */
+    assert.match(stage, /if \(low\) Object\.assign\(footing, \{ lined: true, foot: LOW_HEAD, short: inSide \}\)\n/)
+    assert.match(stage, /if \(lined && short\) \{\s*return \(\s*<View style=\{FOOT_ROW\}>\s*\{shortOf\(previous, SHORT_PREVIOUS\)\}\s*\{shortOf\(tuner, \{ label: tunerOn \? 'Stop' : 'Tuner' \}\)\}\s*\{shortOf\(edit\)\}\s*\{shortOf\(tap\)\}\s*\{shortOf\(next\)\}/)
+    assert.match(stage, /const shortOf = \(button, more\) => \(button \? cloneElement\(button, \{ \.\.\.SHORT, \.\.\.more, style: \[button\.props\.style, SHORT_PAD\] \}\) : null\)\n/, 'a short button is not the button itself with fewer things in it')
+    /* The page, the halves and the strip: each its own, said after or over the one that was there. */
+    assert.match(stage, /\{\.\.\.\(low \? \{ contentContainerStyle: shape\.wide \? \[LOW_PAGE_WIDE, \{ paddingLeft: space\.lg \+ centre\.left, paddingRight: space\.lg \+ centre\.right \}\] : LOW_PAGE \} : null\)\}/)
+    assert.match(stage, /\{\.\.\.\(low && !inSide && halves && fill \? \{ style: LANES_LOW \} : null\)\}/)
+    assert.match(stage, /\}, low \? LOW_STRIP : null\]\}/)
+    /* The preset's row: its own there, or none while it is up in the bar; everywhere else the block that was always drawn. */
+    assert.match(stage, /\{low \? <View collapsable=\{false\} onLayout=\{\(e\) => setLowTop\(e\.nativeEvent\.layout\.y\)\} style=\{LOW_MARK\} \/> : null\}\s*\{low \? \(\s*headUp \? null : \(/)
+    assert.match(stage, /\)\s*\) : \(\s*<View style=\{\{ gap: space\.sm \}\}>\s*<View style=\{\{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' \}\}>\s*<Text style=\{\{ color: color\.silkFaint, fontSize: font\.micro, letterSpacing: 1\.5 \}\}>/, 'off a phone on its side, the preset is not the block it always was')
+    /* Said to the bar only while it is up there, and taken out when Play goes. */
+    assert.match(stage, /sayPlayHead\(\s*headUp\s*\?/)
+    assert.match(stage, /useEffect\(\(\) => \(\) => sayPlayHead\(null\), \[\]\)\n/)
+    /* Nothing in Play reads a LOW_ size, the squares or the short buttons but behind `low` (or `short`, which only `low` sets). */
+    const body = stage.slice(stage.indexOf('export default function Stage('))
+    for (const line of body.split('\n')) {
+      if (!/\b(LOW_[A-Z_]+|lowFill|LANES_LOW|PRESET_HALVES|SETLISTS_IN_HALF|SHORT_PREVIOUS)\b/.test(line)) continue
+      if (/^const [A-Z_]+ = /.test(line) || /^\s*const lowFill =$/.test(line)) continue
+      assert.match(line, /\blow\b|\bshort\b|lowTop|headTall|inSide \? PRESET_ROW : PRESET_HALVES|style=\{inSide \? SETLISTS_IN_HALF : LOW_PRESS\}|style=\{\[LOW_PRESET,|height=\{LOW_HEAD\}|room: viewport - lowTop|\{shortOf\(previous, SHORT_PREVIOUS\)\}/, `Play reads a phone-on-its-side size outside its branch: ${line.trim()}`)
+    }
   })
 }

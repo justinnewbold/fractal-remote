@@ -108,6 +108,65 @@ export function twoSidesOn({ width, height, left = 0, right = 0 } = {}, was = fa
   return wide && tall && sideways && room
 }
 
+/*
+ * A PHONE HELD ON ITS SIDE SPLITS IN TWO AS WELL (10 November 2026).
+ *
+ * "This is the landscape view on iPhone ... let's split the screen in half
+ * kind of like the iPhone duo even though things will be smaller. It'll
+ * still look better instead of just stretching everything." (Justin, on an
+ * iPhone 17 Pro Max on its side, where Play was the upright Play pulled
+ * 830 points wide.) So a phone on its side is its own answer beside
+ * twoSidesOn, on the same measured frame, and what it answers is asked for
+ * separately by App.js (his account until features PHONE_SIDEWAYS_FOR_
+ * EVERYONE): Play laid out in two halves with square tiles (lib/
+ * sidewaysPlay), a tool beside Play in the other half, and the two bars'
+ * buttons up in the app's top bar, since a window this low has no room for
+ * a second row of them.
+ *
+ *   wide     at least SIDEWAYS_AT across, so each half is at least
+ *            SIDE_LEAST: an iPhone 17 on its side is about 734 (852 less 59
+ *            down each side), a Pro Max 832; an iPhone SE (667) and a 13
+ *            mini (712) are under it and stay one screen.
+ *   low      UNDER SIDES_TALL. That is what makes it a phone on its side
+ *            and nothing else: a tablet, a Fold and the Duo opened are at
+ *            or over that line and keep twoSidesOn's answer, untouched.
+ *   tall     at least SIDEWAYS_LOW down, under which two halves of tiles
+ *            are not worth drawing (a phone in a small split window).
+ *   sideways wider than tall, and
+ *   room     each side at least SIDE_LEAST, both as twoSidesOn has them.
+ *
+ * Each line goes off LETS_GO past where it came on, as the others do. The
+ * two answers are never both acted on: App.js asks this one only where
+ * twoSidesOn said no.
+ */
+
+/** From this frame width (points), a phone on its side splits in two: twice the least a side may be. */
+export const SIDEWAYS_AT = 720
+/** And only from this frame height. */
+export const SIDEWAYS_LOW = 250
+
+/**
+ * Whether a frame `width` by `height` (the room under the app's top bar,
+ * with the phone's own `left` and `right` down its sides) is a phone held
+ * on its side; `was` is the last answer, for the lines' memory. Every phone
+ * held upright, every tablet, the Duo opened or closed upright: false.
+ */
+export function phoneSidewaysOn({ width, height, left = 0, right = 0 } = {}, was = false) {
+  const w = num(width)
+  const h = num(height)
+  if (!w || !h) return false
+  const wide = past(w, SIDEWAYS_AT, was)
+  const low = h < (was ? SIDES_TALL + LETS_GO : SIDES_TALL)
+  const tall = past(h, SIDEWAYS_LOW, was)
+  const sideways = past(w, h, was)
+  const { first, second } = splitSides({ width: w, left, right })
+  const room = past(Math.min(first, second), SIDE_LEAST, was)
+  return wide && low && tall && sideways && room
+}
+
+/** On a phone on its side the tool's bar button says this, not SIDE_WORDS.full: the top bar has no room for two words. */
+export const SIDEWAYS_FULL = 'Full'
+
 /** From this frame width the tuner's side is a narrow column (TUNER_COLUMN), not half: an iPad on its side and wider. */
 export const TUNER_NARROW_AT = 1000
 /** The tuner's column there: the least a side may be, so Play keeps the rest. */

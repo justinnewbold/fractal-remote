@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { cloneElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Image, PixelRatio, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useKeepAwake } from 'expo-keep-awake'
@@ -30,6 +30,8 @@ import { SIZES, loadFit, loadIcons, loadSceneLayout, loadSceneOrder, loadSize, s
 import { PAGE_MAX, fitWide, foldInset, pageRow, playShape } from '../lib/playShape'
 import { linedName, linedOn, linedPlan, linedRowsTall, linedTile } from '../lib/linedPlay'
 import { bigTilesOn, gridWide, tilePlan } from '../lib/squarePlay'
+import { sidewaysPlan } from '../lib/sidewaysPlay'
+import { sayPlayHead } from '../lib/playHead'
 import { HOLD_FOR_KNOBS, panelLane } from '../lib/twoSides'
 import BlockSide from '../components/BlockSide'
 import {
@@ -173,6 +175,18 @@ const FILL_LANE = { gap: space.sm }
 const CENTRED = { alignSelf: 'center' }
 /* The least width of a grid of tiles with the chain's hold line beside its heading. */
 const HOLD_LINE_ROOM = 320
+/* On a phone held on its side: how tall the preset's row and the five buttons are (a thumb's 44), and the gap over, under and between Play's parts there. */
+const LOW_HEAD = 44
+const LOW_GAP = space.sm
+/* Play's page there, opened up (its own row, the fold's padding added where it is drawn) and in a half: the page's own, with LOW_GAP over, under and between. */
+const LOW_PAGE_WIDE = { width: '100%', maxWidth: PAGE_MAX, alignSelf: 'center', paddingTop: LOW_GAP, gap: LOW_GAP, paddingBottom: LOW_GAP }
+const LOW_PAGE = { padding: space.lg, paddingTop: LOW_GAP, gap: LOW_GAP, paddingBottom: LOW_GAP }
+/* The mark over the preset's row there: no height, and the page's gap under it taken back, so it moves nothing. */
+const LOW_MARK = { height: 0, marginBottom: -LOW_GAP }
+/* The strip of buttons there: less over and under them, laid over the strip's own style. */
+const LOW_STRIP = { paddingTop: space.xs, paddingBottom: LOW_GAP }
+/* The two halves there, each grid in the middle of its own half. */
+const LANES_LOW = { ...LANES, justifyContent: 'space-around' }
 /* What sits round the pedals, measured (`round`, in Stage): a measure that changes more than this many times, with less than this long between changes, only ever grows from there. */
 const ROUND_MOVES = 6
 const ROUND_QUIET_MS = 1000
@@ -210,6 +224,22 @@ export default function Stage({
    * fold padding (lib/playShape `inSide`). False on every phone.
    */
   inSide = false,
+  /*
+   * A PHONE HELD ON ITS SIDE (lib/twoSides phoneSidewaysOn; App asks it, for
+   * his account until features PHONE_SIDEWAYS_FOR_EVERYONE): "let's split
+   * the screen in half kind of like the iPhone duo ... instead of just
+   * stretching everything", and "make the icons more square looking instead
+   * of stretched" (Justin, 10 November 2026). There Play is two halves of
+   * SQUARE tiles (lib/sidewaysPlay): the scenes on the left and the chain
+   * on the right with Play alone, the scenes over the chain in a half
+   * beside a tool; its preset and Setlists in one short row, or up in the
+   * app's top bar where that buys bigger squares; and Previous, Tuner,
+   * Edit, Tap and Next in one row along the bottom. False on every phone
+   * held upright, every tablet and every other account, and there every
+   * line below draws what it always drew: each thing it changes is its own
+   * `low` branch beside the one that was there.
+   */
+  low = false,
   /*
    * AND WHETHER ANYBODY CAN SEE IT. False while a tool fills the window and
    * Play is kept beside it at no width: then the quick tip, the colours line
@@ -758,6 +788,44 @@ export default function Stage({
         })
       : null
   /*
+   * ON A PHONE HELD ON ITS SIDE (`low`), SQUARES IN PLACE OF THAT PLAN
+   * (lib/sidewaysPlay): square wins over filling there. With Play alone the
+   * scenes take the left half and the chain the right; in a half beside a
+   * tool the scenes are over the chain.
+   *
+   * Asked on the room the tiles have WITH the preset's row in the page,
+   * and never on where the tiles happen to start: the plan itself decides
+   * whether that row is in the page or up in the app's top bar (`headUp`),
+   * so a room measured under the row would move with the answer. `lowTop`
+   * is where the row starts (a mark of no height drawn just over it,
+   * measured), and `headTall` the row's own height with the gap under it,
+   * as last measured; the tiles' room is what is left under the two.
+   * `headUp` only with Play alone and on screen, since beside a tool the
+   * top bar holds the two sides' names (components/SidesLead).
+   */
+  const [lowTop, setLowTop] = useState(-1)
+  const [headTall, setHeadTall] = useState(LOW_HEAD + LOW_GAP)
+  const headWas = useRef(false)
+  const lowFill =
+    low && viewport > 0 && lowTop >= 0
+      ? sidewaysPlan({
+          width: fillRow,
+          room: viewport - lowTop - headTall - LOW_GAP - chainAlone,
+          scenes: scenes.hasScenes ? scenes.count : 0,
+          pedals: fitBlocks,
+          gap: space.sm,
+          head: LANE_HEAD + space.sm,
+          between: tight ? space.md : space.lg,
+          beside: space.xl,
+          headRow: headTall,
+          split: !inSide,
+          canHeadUp: !inSide && awake,
+          headWas: headWas.current
+        })
+      : null
+  const headUp = low && lowFill?.headUp === true
+  headWas.current = headUp
+  /*
    * A BLOCK'S KNOBS WHERE THE SCENES WERE (Derek's idea, `holdOpens` 'lane';
    * lib/twoSides panelLane). With the scenes and the blocks side by side, the
    * blocks stay exactly where they are and the panel takes everything to
@@ -784,7 +852,7 @@ export default function Stage({
   /* The panel's place, while one is open here: null everywhere else, and Play is drawn as it always was. */
   const knobsLane = lanePlan && knobsAt !== null && (lanePlan.stays || laneAgain) ? lanePlan : null
   /* The tiles everything below is drawn with: Play's own, or with the panel open, the blocks beside it. */
-  const fill = knobsLane ? { ...(knobsLane.stays ? fillOwn : laneAgain), beside: true } : fillOwn
+  const fill = knobsLane ? { ...(knobsLane.stays ? fillOwn : laneAgain), beside: true } : low ? lowFill : fillOwn
   /* A knob in the panel has the finger: Play's page does not scroll under it (components/Knob). */
   const [knobHeld, setKnobHeld] = useState(false)
   /** The scenes and the chain side by side: filling the screen that way, or lined up. */
@@ -1252,6 +1320,41 @@ export default function Stage({
     bpm,
     setTyping
   }
+  /*
+   * ON A PHONE HELD ON ITS SIDE (`low`): one row of five, as lined up, since
+   * Setlists is in the preset's row there or up in the top bar; a thumb's 44
+   * tall, where every point of height is the tiles'; and in a half beside a
+   * tool, short words with no pictures (PlayFoot `short`), so five fit a row
+   * about 350 across. Laid over the same list, so everywhere else it is the
+   * list above, untouched.
+   */
+  if (low) Object.assign(footing, { lined: true, foot: LOW_HEAD, short: inSide })
+
+  /*
+   * THE PRESET'S ROW THERE, in the words Play's own button uses: its name,
+   * and under it the slot with the way to all presets, since the line over
+   * the button is not drawn. Said to the app's top bar too while the row is
+   * up there for the height (`headUp`; lib/playHead, components/PlayHead),
+   * and taken back out of it when the row comes down or Play goes.
+   */
+  const presetSays = (preset?.pending && !preset?.name) || (!preset && unitState === 'unknown') ? '…' : presetLabel(preset)
+  const presetSlot = Number.isInteger(preset?.number) ? slotLabel(preset.number, caps?.presets?.addressing) : null
+  const presetUnder = [presetSlot, onOpenPresets ? ALL_PRESETS : null].filter(Boolean).join(' · ') || undefined
+  useEffect(() => {
+    sayPlayHead(
+      headUp
+        ? {
+            preset: presetSays,
+            sub: presetUnder || '',
+            edge: tagEdge(presetTag(preset?.number)) || null,
+            setlists: order ? sourceLabel(source, { favourites, lists }) : 'All',
+            where: where || '',
+            on: Boolean(order)
+          }
+        : null
+    )
+  })
+  useEffect(() => () => sayPlayHead(null), [])
 
   /*
    * The Apple Watch's four pages, drawn from this screen and worked by its own
@@ -1348,6 +1451,8 @@ export default function Stage({
                 paddingBottom: tight ? space.lg : space.xxl
               }
         }
+        /* On a phone held on its side, the same page with less over, under and between (LOW_GAP): said after the page's own, so it takes its place there and nowhere else. */
+        {...(low ? { contentContainerStyle: shape.wide ? [LOW_PAGE_WIDE, { paddingLeft: space.lg + centre.left, paddingRight: space.lg + centre.right }] : LOW_PAGE } : null)}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => reload()} tintColor={color.silkDim} />
         }
@@ -1387,6 +1492,27 @@ export default function Stage({
         {whereCard ? <ComputerCard words={whereCard.words} buttons={whereCard.buttons.map((b) => ({ key: b.name, label: b.short, sub: b.sub, onPress: () => chooseHost(b.name) }))} /> : null}
 
         {/* ---------------------------------------------------------- preset */}
+        {/* On a phone held on its side (`low`): a mark of no height where the preset's row starts, measured for the tiles' room; then the row itself, the preset over the scenes' half and Setlists over the chain's with Play alone, Setlists at the row's end in a half, and no row at all while it is up in the app's top bar (`headUp`). */}
+        {low ? <View collapsable={false} onLayout={(e) => setLowTop(e.nativeEvent.layout.y)} style={LOW_MARK} /> : null}
+        {low ? (
+          headUp ? null : (
+            <View onLayout={(e) => setHeadTall(Math.round(e.nativeEvent.layout.height) + LOW_GAP)} style={inSide ? PRESET_ROW : PRESET_HALVES}>
+              <Press
+                grow
+                label={presetSays}
+                sub={presetUnder}
+                after={onOpenPresets ? chevronIcon : undefined}
+                labelSize={font.lead}
+                height={LOW_HEAD}
+                disabled={!onOpenPresets}
+                onPress={onOpenPresets}
+                bar
+                style={[LOW_PRESET, tagEdge(presetTag(preset?.number))]}
+              />
+              <SetlistsPress {...footing} grow={!inSide} height={LOW_HEAD} style={inSide ? SETLISTS_IN_HALF : LOW_PRESS} />
+            </View>
+          )
+        ) : (
         <View style={{ gap: space.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>
@@ -1466,11 +1592,14 @@ export default function Stage({
           </View>
 
         </View>
+        )}
 
         {/* The scenes and the chain: one under the other, as always, or lined up side by side (`lined`). */}
         <View
           onLayout={(e) => setLanesAt(e.nativeEvent.layout.y)}
           style={knobsLane ? LANES_KNOBS : halves ? (fill ? LANES_FILL : LANES) : { gap: tight ? space.md : space.lg }}
+          /* On a phone held on its side with Play alone, each grid in the middle of its own half, whatever room its squares leave. */
+          {...(low && !inSide && halves && fill ? { style: LANES_LOW } : null)}
         >
 
         {/* ----------------------------------------------------- a block's knobs */}
@@ -1792,7 +1921,7 @@ export default function Stage({
       */}
       {shape.footFixed ? (
         <View
-          style={{
+          style={[{
             borderTopWidth: StyleSheet.hairlineWidth,
             /* The bottom bar of glass: the top bar's frosted fill and the light along its top, under its soft rim. No blur: nothing scrolls under it. */
             borderTopColor: color.glassRim,
@@ -1800,7 +1929,7 @@ export default function Stage({
             boxShadow: color.glassTop,
             paddingTop: space.sm,
             paddingBottom: tight ? space.lg : space.xxl
-          }}
+          }, low ? LOW_STRIP : null]}
         >
           <View
             style={{
@@ -2061,6 +2190,8 @@ const tileWidth = (width, n) => tileWidthIn(width, n, space.sm, PixelRatio.get()
 function PlayFoot({
   oneRow,
   lined = false,
+  /* In a half on a phone held on its side: each button's word alone (shortOf, below), so five fit a row about 350 across. */
+  short = false,
   foot,
   dimmed,
   behind,
@@ -2194,6 +2325,23 @@ function PlayFoot({
    * Tuner, Edit and Tap in the middle, Next at the far right, Justin's A1.
    * Setlists is at the end of the preset's row there, so it is not here.
    */
+  /*
+   * AND IN A HALF ON A PHONE HELD ON ITS SIDE (`short`), the same five with
+   * the word alone: the buttons above, each given SHORT over what it had
+   * (shortOf), so what a press does, what it says to a screen reader and
+   * when it is dimmed are the button's own.
+   */
+  if (lined && short) {
+    return (
+      <View style={FOOT_ROW}>
+        {shortOf(previous, SHORT_PREVIOUS)}
+        {shortOf(tuner, { label: tunerOn ? 'Stop' : 'Tuner' })}
+        {shortOf(edit)}
+        {shortOf(tap)}
+        {shortOf(next)}
+      </View>
+    )
+  }
   if (lined) {
     return (
       <View style={FOOT_ROW}>
@@ -2266,6 +2414,20 @@ function SetlistsPress({ grow = false, order, source, favourites, lists, where, 
 /* Lined up, the preset's row: the preset growing to fill it, Setlists at its end. */
 const PRESET_ROW = { flexDirection: 'row', gap: space.sm }
 const SETLISTS_BESIDE = { minWidth: 150 }
+/* On a phone held on its side with Play alone: the preset over the scenes' half and Setlists over the chain's, the halves' own gap between them. */
+const PRESET_HALVES = { flexDirection: 'row', gap: space.xl }
+/* The row's two buttons keep to their 44 with two lines in them. */
+const LOW_PRESS = { paddingVertical: space.xs }
+const LOW_PRESET = { paddingHorizontal: space.lg, paddingVertical: space.xs }
+/* In a half there, Setlists at the end of the preset's row, as wide as its words. */
+const SETLISTS_IN_HALF = { minWidth: 86, paddingVertical: space.xs }
+/* What Previous, Tuner, Edit, Tap and Next say in a half there (PlayFoot `short`): the word alone, a size down, with no picture and no preset's name under it. Laid over each button's own list, so it is the button it always was with fewer things in it. */
+const SHORT = { icon: undefined, after: undefined, under: undefined, labelSize: font.small }
+const SHORT_PREVIOUS = { ...SHORT, label: 'Prev' }
+/* And less padding down each side of the word, beside whatever the button's own style was. */
+const SHORT_PAD = { paddingHorizontal: space.xs }
+/** One of Play's buttons with the word alone: itself, with SHORT (and `more`) laid over what it had. Nothing for a button this unit does not have. */
+const shortOf = (button, more) => (button ? cloneElement(button, { ...SHORT, ...more, style: [button.props.style, SHORT_PAD] }) : null)
 
 /* The spread layout's one row of buttons, in two halves with the gap between them in the middle. */
 const FOOT_ONE_ROW = { flexDirection: 'row', gap: space.sm }
