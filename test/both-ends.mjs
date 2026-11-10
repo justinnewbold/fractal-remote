@@ -262,14 +262,14 @@ export const AREAS = [
       {
         does: 'open the chain editor',
         web: null,
-        phone: 'Edit chain',
-        why: 'in the browser the chain is a section of the page under its own heading, so there is nothing to open'
+        phone: null,
+        why: 'in the browser the chain is a section of the page under its own heading, so there is nothing to open; on the phone it is Edit chain in More, or the + tile at the end of the chain (lib/editMore), named from a constant this list cannot read'
       },
       {
         does: 'open the modifiers panel',
         web: null,
-        phone: 'Modifiers',
-        why: 'as above — a section of the page in the browser, a sheet on the phone'
+        phone: null,
+        why: 'as above — a section of the page in the browser; on the phone, Modifiers in More, or a knob held still (lib/editMore), named from a constant this list cannot read'
       },
       {
         does: 'show whether a block is bypassed, and switch it',
@@ -4788,7 +4788,9 @@ export function run(test) {
     for (const older of [{}, { modifiers: {} }, { modifiers: null }, null, undefined]) assert.equal(asked(older), true, 'an older computer loses Modifiers')
     const edit = flat('mobile/src/screens/Edit.js')
     assert.match(edit, /const modifiersBind = caps\?\.modifiers\?\.bind !== false/)
-    assert.match(edit, /\{modifiersBind \? <Modifiers blocks=\{blocks\} onError=\{setError\} \/> : null\}/, 'the phone’s Edit offers Modifiers whatever the computer says')
+    /* From More or a held knob since 10 November 2026, by modsHere, which asks modifiersBind (test/edit-more.mjs). */
+    assert.match(edit, /const modsHere = chainTools && modifiersBind/, 'the phone’s Edit offers Modifiers whatever the computer says')
+    assert.match(edit, /\{toolShown && tool === 'modifiers' \? \( <Modifiers /, 'the phone’s Edit offers Modifiers whatever the computer says')
     assert.equal((edit.match(/<Modifiers /g) || []).length, 1, 'the phone has another way to Modifiers')
     const app = flat('src/App.jsx')
     assert.match(app, /const modifiersBind = device\?\.capabilities\?\.modifiers\?\.bind !== false/)

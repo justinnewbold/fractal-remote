@@ -1252,20 +1252,20 @@ export function run(test) {
     }
   })
 
-  test('the Edit screen says it is a beta, by its name and at the foot of the page', () => {
+  test('the Edit screen says it is a beta, by its name and in More', () => {
     /* "I don't feel like the edit screen is ready yet can we add to the screen
        that it's a beta feature. Next to edit on the edit screen have (Beta)
-       then have a notice at the bottom of the page." */
+       then have a notice at the bottom of the page." The notice moved into
+       More on 10 November 2026, with the four buttons that sat over it
+       ("these four other buttons are just taking up space on the screen"):
+       test/edit-more.mjs. */
     const edit = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
     assert.match(edit, /Edit <Text style=\{[^}]*\}\}>\(Beta\)<\/Text>/, 'the Edit title lost its (Beta)')
     assert.match(edit, /accessibilityLabel="Edit, beta"/, 'a screen reader hears the title without the beta')
     assert.match(edit, /const BETA_NOTE = 'Edit is a beta feature\./, 'the beta notice is gone')
-    /* At the foot: after the last thing on the page, and before it closes. */
-    const foot = edit.slice(edit.indexOf('<RenameDoor />'), edit.indexOf('</ScrollView>', edit.indexOf('<RenameDoor />')))
-    /* Until its cross is pressed: "Same with the notice at the bottom of the screen that says edit is a beta feature." */
-    assert.match(foot, /\{betaNoteUp \? \( <Note tone="warn" onDismiss=\{\(\) => \{ setBetaNoteUp\(false\) markEditBetaNote\(\) \}\} > \{BETA_NOTE\} <\/Note> \) : null\}/, 'the beta notice is not at the bottom of the page, or has no cross')
-    assert.match(edit, /const \[betaNoteUp, setBetaNoteUp\] = useState\(false\)/, 'the beta notice flashes up before storage has said it was put away')
-    assert.match(edit, /editBetaNoteSeen\(\)\.then\(\(seen\) => \{ if \(alive && !seen\) setBetaNoteUp\(true\) \}\)/)
+    /* In More, last, under the rows it is about. */
+    const more = edit.slice(edit.indexOf('<Sheet open={moreOpen}'), edit.indexOf('</Sheet>'))
+    assert.match(more, /<Note tone="warn">\{BETA_NOTE\}<\/Note> <\/View> $/, 'the beta notice is not the last thing in More')
     /* And it points at a way to say what is wrong that exists. */
     assert.match(read('mobile/src/screens/Settings.js'), /title="Feedback"/, 'the notice sends people to a Feedback row that is gone')
   })
@@ -2190,13 +2190,16 @@ export function run(test) {
     assert.match(flat, /if \(!bringTo\.current\) return bringTo\.current = null/)
   })
 
-  test('Edit keeps its knobs high: Find a control and Amp & pedal names under the open block, the Bluetooth note at the foot', () => {
+  test('Edit keeps its knobs high: the chain, the open block, the Bluetooth note at the foot, and the rest behind the magnifier and More', () => {
     /*
      * "In edit move search bar and amp and pedal names to the bottom. Have
      * the Bluetooth warning also move to the bottom. We want as many knobs
-     * visible in edit." (Justin, 10 November 2026.) The three sat over the
-     * chain: about 130 points before the first block tile on a phone held
-     * upright, and about 280 over Bluetooth with its note up.
+     * visible in edit." (Justin, 10 November 2026.) And that evening: "I kind
+     * of want this to mainly be to edit knob presets quickly, and I feel like
+     * that these four other buttons are just taking up space on the screen".
+     * So nothing is drawn between the title and the chain but what cannot
+     * wait, and the search box (behind the magnifier) only while it is asked
+     * for; the four buttons and the beta note are in More (test/edit-more.mjs).
      */
     const edit = withoutComments(read('mobile/src/screens/Edit.js')).replace(/\s+/g, ' ')
     const body = edit.slice(edit.indexOf('export default function Edit('), edit.indexOf('const BETA_NOTE ='))
@@ -2207,51 +2210,33 @@ export function run(test) {
       return i
     }
     const head = at('<SaveNotes s={saveTo} />')
+    const find = at('{finding && !vp4Bench() ? ( <FindControl autoFocus ')
     const chain = at('<ChainUpdating chain={chainNow} />')
+    const tools = at("{toolShown && tool === 'chain' ? <ChainEditor ")
     const panel = at('<View onLayout={panelLaid}> <BlockPanel')
     const tap = at('<Note>Tap a block to open its controls.</Note>')
-    const find = at('{vp4Bench() ? null : ( <FindControl ')
-    const names = at('{onOpenGear ? ( <Press label="Amp & pedal names" sub="What each model on your unit really is" height={44} onPress={onOpenGear} /> ) : null}')
-    const doors = at('{vp4Bench() ? ( <Note tone="hint">{VP4_NO_EDITS}</Note> ) : viaBle ? ( <Note tone="hint">{BLE_NO_CHAIN}</Note> ) : (')
-    const rename = at('{chainNow.elsewhere || viaBle ? null : <RenameDoor />}')
     const ble = at('{viaBle && bleNoteUp ? ( <Note onDismiss={() => { setBleNoteUp(false) markBleEditNote() }} > {onCable ? CABLE_EDIT_NOTE : BLE_NOTE} </Note> ) : null}')
-    const beta = at('{betaNoteUp ? (')
+    const more = at('<Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title={MORE_TITLE}>')
     const end = at('</ScrollView>')
-    /* Top to bottom: the title and Save, the chain, the open block, then the search box, the names, the doors, the Bluetooth note and the beta note. */
-    const order = [head, chain, panel, tap, find, names, doors, rename, ble, beta, end]
-    assert.deepEqual([...order].sort((a, b) => a - b), order, 'Edit’s page is not in the order: chain, open block, Find a control, Amp & pedal names, the doors, the Bluetooth note, the beta note')
-    /* Over the chain, only what cannot wait: Save's own lines, a fault, and what the chain's read says. No box, no button, no Bluetooth note. */
+    const order = [head, find, chain, tools, panel, tap, ble, more, end]
+    assert.deepEqual([...order].sort((a, b) => a - b), order, 'Edit’s page is not in the order: the title, the search box when asked for, the chain, a tool from More, the open block, the Bluetooth note, More')
+    /* Over the chain, only what cannot wait: Save's own lines, a fault, what the chain's read says, and the search box the magnifier asked for. No button, no Bluetooth note. */
     const over = body.slice(head, chain)
-    assert.ok(!/FindControl|Amp & pedal names|BLE_NOTE|CABLE_EDIT_NOTE|<Press|<TextInput/.test(over), 'something is back between the title and the chain, pushing the knobs down')
+    assert.ok(!/Amp & pedal names|BLE_NOTE|CABLE_EDIT_NOTE|<Press|<TextInput/.test(over), 'something is back between the title and the chain, pushing the knobs down')
+    assert.equal((over.match(/<FindControl /g) || []).length, 1)
     assert.equal((over.match(/<Note\b/g) || []).length, 4, 'a note was added over the chain (a fault, reading, the read failed and an empty preset are the four)')
     /* The words are the ones they were. */
     assert.match(read('mobile/src/screens/Edit.js'), /placeholder="Find a control — gain, mix, presence…"/)
-
-    /*
-     * AND THE SEARCH BOX STILL WORKS FROM DOWN THERE, where the keyboard
-     * opens. The page makes room for the keyboard (the scroll view's own
-     * insets on an iPhone or iPad; Android resizes the window), and while
-     * the box is typed in it is brought to the top of the room left, so its
-     * results are read between it and the keyboard.
-     */
     assert.match(edit, /<ScrollView ref=\{page\} style=\{\{ flex: 1 \}\} contentContainerStyle=\{\{ padding: space\.lg, gap: space\.lg, paddingBottom: space\.xxl \}\} \{\.\.\.\(tidy \? \{ contentContainerStyle: PAGE_TIDY \} : null\)\} keyboardShouldPersistTaps="handled" scrollEnabled=\{!held\} automaticallyAdjustKeyboardInsets >/, 'Edit’s page does not make room for the keyboard')
-    assert.match(body, /const findAt = useRef\(null\) const toFind = \(\) => \{ if \(findAt\.current === null\) return page\.current\?\.scrollTo\(\{ y: Math\.max\(0, findAt\.current - space\.md\), animated: true \}\) \}/)
-    assert.match(body, /onLaid=\{\(y\) => \{ findAt\.current = y \}\} onSeek=\{toFind\} \/>/)
     const box = edit.slice(edit.indexOf('function FindControl('), edit.indexOf('function gearLine('))
-    assert.match(box, /function FindControl\(\{ blocks, onPick, onError, onLaid = null, onSeek = null \}\)/)
-    assert.match(box, /<View style=\{\{ gap: space\.sm \}\} onLayout=\{\(e\) => onLaid\?\.\(e\.nativeEvent\.layout\.y\)\}>/, 'the search box does not say where it is on the page')
-    assert.match(box, /onFocus=\{\(\) => setTyping\(true\)\} onBlur=\{\(\) => setTyping\(false\)\}/)
-    /* Once the keyboard is up, and again whenever what is under the box changes: only while it is typed in. */
-    assert.match(box, /useEffect\(\(\) => \{ if \(!typing\) return undefined const up = Keyboard\.addListener\('keyboardDidShow', \(\) => seek\.current\?\.\(\)\) return \(\) => up\.remove\(\) \}, \[typing\]\)/)
-    assert.match(box, /const under = reading \? -2 : needle\.length >= 2 && index \? hits\.length : -1/)
-    assert.match(box, /useEffect\(\(\) => \{ if \(!typing \|\| under === -1\) return undefined const frame = requestAnimationFrame\(\(\) => seek\.current\?\.\(\)\) return \(\) => cancelAnimationFrame\(frame\) \}, \[typing, under\]\)/)
+    assert.match(box, /function FindControl\(\{ blocks, onPick, onError, onLaid = null, onSeek = null, autoFocus = false \}\)/)
+    assert.match(box, /<TextInput value=\{query\} autoFocus=\{autoFocus\} onChangeText=\{change\}/, 'the search box does not take the keyboard when the magnifier opens it')
 
     /*
-     * A RESULT TAPPED TAKES THE PAGE BACK UP TO ITS BLOCK. The block is over
-     * the results now, so nothing above it moves when they go and a block
-     * already drawn may not be laid out again: where the panel is on the
-     * page already, the page goes to it once the keyboard has gone.
+     * A RESULT TAPPED CLOSES THE SEARCH AND TAKES THE PAGE TO ITS BLOCK:
+     * where the panel is on the page already, once the keyboard has gone.
      */
+    assert.match(body, /onPick=\{\(eid, paramId\) => \{ setTool\(null\) setFinding\(false\) setOpenEid\(eid\) setFocus\(\{ eid, paramId, nonce: Date\.now\(\) \}\) \}\}/)
     assert.match(body, /const panelAt = useRef\(null\) if \(!block\) panelAt\.current = null/)
     assert.match(body, /const panelLaid = \(e\) => \{ panelAt\.current = e\.nativeEvent\.layout\.y if \(!bringTo\.current\) return/)
     assert.match(body, /if \(!nonce \|\| panelAt\.current === null\) return undefined return afterKeyboard\(\(\) => \{ if \(bringTo\.current !== nonce \|\| panelAt\.current === null\) return bringTo\.current = null const y = Math\.max\(0, panelAt\.current - space\.md\) page\.current\?\.scrollTo\(\{ y, animated: true \}\) \}\) \}, \[focus\]\)/, 'a result for a block already on the page leaves the page at the search box')
@@ -2405,7 +2390,8 @@ export function run(test) {
     /* Tapping still OPENS the block rather than toggling it — the difference
        between this screen and the stage, and the half of the request that was
        already right. */
-    assert.match(edit, /onPress=\{\(\) => setOpenEid\(open \? null : idOf\(b\)\)\}/, 'a tap on the bench no longer opens the block')
+    /* And with a tool from More up, it closes the tool first (test/edit-more.mjs). */
+    assert.match(edit, /else setOpenEid\(open \? null : idOf\(b\)\)/, 'a tap on the bench no longer opens the block')
   })
 
   test('changing preset does not take the old preset back from an early answer, and deletes nothing', () => {
@@ -3205,7 +3191,9 @@ export function run(test) {
     const settings = read('mobile/src/components/RenamePreset.js')
     const stage = read('mobile/src/screens/Stage.js')
     /* Not over Bluetooth, where renaming is not built (Edit's BLE_NO_CHAIN says so). */
-    assert.match(read('mobile/src/screens/Edit.js'), /\{chainNow\.elsewhere \|\| viaBle \? null : <RenameDoor \/>\}/, 'the Edit screen has no way to rename the preset')
+    /* From More, or the preset's name, since 10 November 2026 (test/edit-more.mjs): renameHere is the old rule, and a VP4 is left out by it too. */
+    assert.match(read('mobile/src/screens/Edit.js'), /const renameHere = !vp4Bench\(\) && !viaBle && !chainNow\.elsewhere/, 'the Edit screen has no way to rename the preset')
+    assert.match(read('mobile/src/screens/Edit.js'), /\{toolShown && tool === 'rename' \? <RenameDoor onClose=\{\(\) => setTool\(null\)\} \/> : null\}/, 'the Edit screen has no way to rename the preset')
     assert.ok(!/RenamePreset|setPresetName/.test(read('mobile/src/screens/Settings.js')), 'renaming is still in Settings as well')
 
     assert.match(settings, /await setPresetName\(wanted\)/, 'the preset cannot be renamed from the phone')
@@ -3782,9 +3770,10 @@ export function run(test) {
       /onStartShouldSetPanResponderCapture: \(\) => \{\s*\n\s*live\.current\.onScrollLock\?\.\(true\)/,
       'the lock is not set in the capture phase, so the scroll view can start scrolling first'
     )
+    /* Three since 10 November 2026: a knob held still for Modifiers lets the page go too (lib/editMore HOLD_MS). */
     assert.equal(
       (knob.match(/live\.current\.onScrollLock\?\.\(false\)/g) || []).length,
-      2,
+      3,
       'the knob does not release the screen on both the end and the termination of a drag'
     )
     /* A screen left locked by a drag that never released will not scroll again
@@ -4698,7 +4687,9 @@ export function run(test) {
     /* Vertical only. Circular tracking sounds right and isn't: the finger
        leaves the knob, and small movements near the centre jump. */
     assert.match(knob, /gesture\.dy/, 'the knob no longer turns on a vertical drag')
-    assert.ok(!/gesture\.dx/.test(knob), 'the knob turns on horizontal movement, which no hardware editor does')
+    /* gesture.dx is read once, for the hold's slop (a finger that moved sideways is not holding still), never to turn. */
+    assert.ok(!/origin\.current - [^\n]*dx/.test(knob), 'the knob turns on horizontal movement, which no hardware editor does')
+    assert.equal((knob.match(/gesture\.dx/g) || []).length, 1, 'the knob reads horizontal movement for something other than the hold')
   })
 
   test('a VoiceOver swipe on a knob writes the value it reached, once the swipes stop', () => {
@@ -9549,8 +9540,9 @@ export function run(test) {
     const troubleRows = [...trouble.matchAll(/title="([^"]+)"/g)].map((m) => m[1])
     assert.deepEqual(troubleRows, ['Stop the looper', 'Log', 'Feedback'], 'Stop the looper is not with the fixes under Troubleshooting')
     /* And the names are a tap from Edit too: "add the amps and pedals names as a link in the edit area". */
-    assert.match(read('mobile/src/screens/Edit.js'), /<Press label="Amp & pedal names"[^>]*onPress=\{onOpenGear\}/, 'Edit has no way to the amp and pedal names')
-    assert.match(read('mobile/App.js'), /<Gear onBack=\{\(\) => setScreen\(gearBack\)\} \/>/, 'the names go back to Settings even when Edit opened them')
+    /* In More, and the i beside a model, since 10 November 2026 (test/edit-more.mjs). */
+    assert.match(read('mobile/src/screens/Edit.js').replace(/\s+/g, ' '), /<Press label=\{MORE_ROWS\.gear\.label\} sub=\{MORE_ROWS\.gear\.sub\} onPress=\{\(\) => \{ setMoreOpen\(false\) onOpenGear\(null\) \}\} \/>/, 'Edit has no way to the amp and pedal names')
+    assert.match(read('mobile/App.js'), /<Gear onBack=\{\(\) => setScreen\(gearBack\)\} start=\{gearStart\} \/>/, 'the names go back to Settings even when Edit opened them')
 
     /*
      * AND THE OTHER THREE ARE INSIDE ABOUT, not under it.
@@ -12749,7 +12741,9 @@ export function run(test) {
   test('the way into the chain editor is called Edit chain', () => {
     /* "Change label for add or move blocks to edit chain." */
     const edit = read('mobile/src/screens/Edit.js')
-    assert.match(edit, /<Press label="Edit chain" sub="Add, move or remove blocks in this preset"/, 'the chain editor button is not called Edit chain')
+    /* More's row since 10 November 2026 (lib/editMore MORE_ROWS). */
+    assert.match(read('mobile/src/lib/editMore.js'), /chain: \{ label: 'Edit chain', sub: 'Add, move or remove blocks in this preset' \}/, 'the chain editor button is not called Edit chain')
+    assert.match(edit, /<Press label=\{MORE_ROWS\.chain\.label\} sub=\{MORE_ROWS\.chain\.sub\} onPress=\{\(\) => openTool\('chain'\)\} \/>/, 'the chain editor button is not called Edit chain')
     assert.doesNotMatch(edit, /Add or move blocks/)
   })
 
@@ -12884,7 +12878,7 @@ export function run(test) {
     assert.match(editor, /<Grip label=\{`Drag \$\{block\.name\}`\}/, 'there is no grip to drag a card by')
     assert.match(read('mobile/src/components/Grip.js'), /onPanResponderTerminationRequest: \(\) => false/, 'the grip hands the touch back to the page')
     assert.match(editor, /const dragStart = \(row, index\) => \{ onScrollLock\?\.\(true\)/, 'the page can scroll under a drag')
-    assert.match(editor, /<ChainEditor blocks=\{chainAll\} caps=\{caps\} onError=\{setError\} onScrollLock=\{setHeld\} \/>/, 'the chain editor is not wired to the scroll lock')
+    assert.match(editor, /<ChainEditor blocks=\{chainAll\} caps=\{caps\} onError=\{setError\} onScrollLock=\{setHeld\} onClose=\{\(\) => setTool\(null\)\} \/>/, 'the chain editor is not wired to the scroll lock')
     assert.match(editor, /const free = \(lane\.gaps \|\| \[\]\)\.filter\(\(c\) => c > col\)/, 'Add does not put the new block after the card it was pressed on')
   })
 
@@ -20565,7 +20559,9 @@ export function run(test) {
     assert.match(edit, /\{chainNow\.elsewhere \? <ChainWait chain=\{chainNow\} height=\{TAP\} \/> : null\}/, 'the bench says nothing about a chain on its way')
     assert.match(edit, /display: chainNow\.elsewhere \? 'none' : 'flex'/, 'the bench draws the last song’s tiles under this song’s name')
     assert.match(edit, /const block = chainNow\.elsewhere \? null : blocks\.find/, 'the last song’s block stays open, its knobs writing to this song')
-    assert.match(edit, /\{chainNow\.elsewhere \? null : <ChainEditor /, 'the chain editor offers Remove on the last song’s blocks')
+    /* Opened only through chainTools, which is false while the chain is the last song's (test/edit-more.mjs). */
+    assert.match(edit, /const chainTools = !vp4Bench\(\) && !viaBle && !chainNow\.elsewhere/, 'the chain editor offers Remove on the last song’s blocks')
+    assert.match(edit, /\{toolShown && tool === 'chain' \? <ChainEditor /, 'the chain editor offers Remove on the last song’s blocks')
     const wait = read('mobile/src/components/ChainWait.js')
     assert.match(wait, /from '\.\.\/lib\/chain-view'/, 'the phone words its own wait')
     assert.match(wait, /setTimeout\(\(\) => setLate\(true\), UPDATING_AFTER_MS\)/, '“Updating…” flickers up on every Add')

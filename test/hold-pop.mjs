@@ -201,7 +201,7 @@ export function run(test) {
      */
     const edit = code(read('mobile/src/screens/Edit.js'))
     const panel = edit.slice(edit.indexOf('export function BlockPanel('), edit.indexOf('function BlockColour('))
-    assert.match(panel, /onUndoSaid,\s+bare = false,\s+overBle = false,\s+panel = false\n\}\) \{/)
+    assert.match(panel, /onUndoSaid,\s+bare = false,\s+overBle = false,\s+panel = false,[^]*?onModelInfo = null,\s+onHoldKnob = null\n\}\) \{/)
     assert.match(panel, /\{channels\?\.length > 1 && !tidy \? \(\s+<View style=\{\{ flexDirection: 'row', gap: space\.sm \}\}>\s+\{channels\.map\(/, 'Edit’s channel row is drawn with no channels handed to it')
     assert.match(panel, /bare \? \[\] : blockTypes\(block\.slug\)\.catch\(\(\) => \[\]\)/, 'the pop-up asks for the model list')
     assert.match(panel, /setModels\(t \|\| \[\]\)/)

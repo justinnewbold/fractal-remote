@@ -5,6 +5,7 @@ import { color, font, mono } from '../lib/theme'
 import { fromNormalized, toNormalized } from '../lib/scale'
 import { tick } from '../lib/feedback'
 import { keyTarget, settleWrites } from '../lib/knob-keys'
+import { HOLD_MS, HOLD_SLOP } from '../lib/editMore'
 
 const face = Platform.select(mono)
 
@@ -47,15 +48,29 @@ const ROTOR = [{ name: 'increment' }, { name: 'decrement' }]
  * `live` holds the current props for the responder, which is created once. Not
  * a micro-optimisation — a responder rebuilt mid-drag is a drag that stops.
  */
-export default function Knob({ param, value, onChange, onCommit, size = 64, label, onScrollLock }) {
+/*
+ * `onHold`: a knob held still (lib/editMore HOLD_MS, moving no more than
+ * HOLD_SLOP), on Edit only, where it opens Modifiers on this knob. The
+ * value is untouched and nothing is written for it. Left out, as it is in
+ * every other view of the knobs, a hold is the start of a turn as ever.
+ */
+export default function Knob({ param, value, onChange, onCommit, size = 64, label, onScrollLock, onHold = null }) {
   const [dragging, setDragging] = useState(false)
 
   const norm = clamp01(toNormalized(value, param) ?? 0)
 
-  const live = useRef({ norm, param, onChange, onCommit, onScrollLock })
+  const live = useRef({ norm, param, onChange, onCommit, onScrollLock, onHold })
   useEffect(() => {
-    live.current = { norm, param, onChange, onCommit, onScrollLock }
+    live.current = { norm, param, onChange, onCommit, onScrollLock, onHold }
   })
+  /* The hold's wait, and whether this touch became a hold (then its release writes nothing). */
+  const holdWait = useRef(null)
+  const holding = useRef(false)
+  const stopHold = () => {
+    if (holdWait.current) clearTimeout(holdWait.current)
+    holdWait.current = null
+  }
+  useEffect(() => stopHold, [])
 
   /* A screen left locked by a drag that never released will not scroll again. */
   useEffect(() => () => onScrollLock?.(false), [onScrollLock])
@@ -118,8 +133,23 @@ export default function Knob({ param, value, onChange, onCommit, size = 64, labe
         origin.current = live.current.norm
         setDragging(true)
         tick()
+        holding.current = false
+        stopHold()
+        if (live.current.onHold) {
+          holdWait.current = setTimeout(() => {
+            holdWait.current = null
+            holding.current = true
+            setDragging(false)
+            live.current.onScrollLock?.(false)
+            tick()
+            live.current.onHold?.()
+          }, HOLD_MS)
+        }
       },
       onPanResponderMove: (_, gesture) => {
+        /* Moved: a turn, not a hold. Held: nothing more moves this knob. */
+        if (holdWait.current && (Math.abs(gesture.dy) > HOLD_SLOP || Math.abs(gesture.dx) > HOLD_SLOP)) stopHold()
+        if (holding.current) return
         const { param: p, onChange: change } = live.current
         /*
          * 260 points of travel covers the whole range. Longer than the
@@ -133,13 +163,25 @@ export default function Knob({ param, value, onChange, onCommit, size = 64, labe
         change?.(v)
       },
       onPanResponderRelease: () => {
+        stopHold()
         setDragging(false)
         live.current.onScrollLock?.(false)
+        if (holding.current) {
+          holding.current = false
+          dragged.current = undefined
+          return
+        }
         release()
       },
       onPanResponderTerminate: () => {
+        stopHold()
         setDragging(false)
         live.current.onScrollLock?.(false)
+        if (holding.current) {
+          holding.current = false
+          dragged.current = undefined
+          return
+        }
         release()
       }
     })
