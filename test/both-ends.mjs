@@ -276,7 +276,8 @@ export const AREAS = [
         web: null,
         phone: 'Bypassed',
         /* "Turn it off" on a real VP4, whose on/off nothing reads: the press says what it does, not a state nobody read (shared/vp4-safety.mjs). */
-        also: ['Engaged', 'Turn it off'],
+        /* "On" and "Off" in the tidier Edit's one row for the block (lib/tidyEdit), where the long words have no room. */
+        also: ['Engaged', 'Turn it off', 'On', 'Off'],
         why: 'the browser says a block’s on or off on the play screen instead, beside the block'
       },
       {

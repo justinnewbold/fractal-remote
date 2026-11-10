@@ -202,16 +202,18 @@ export function run(test) {
     const edit = code(read('mobile/src/screens/Edit.js'))
     const panel = edit.slice(edit.indexOf('export function BlockPanel('), edit.indexOf('function BlockColour('))
     assert.match(panel, /onUndoSaid,\s+bare = false,\s+overBle = false,\s+panel = false\n\}\) \{/)
-    assert.match(panel, /\{channels\?\.length > 1 \? \(\s+<View style=\{\{ flexDirection: 'row', gap: space\.sm \}\}>\s+\{channels\.map\(/, 'Edit’s channel row is drawn with no channels handed to it')
+    assert.match(panel, /\{channels\?\.length > 1 && !tidy \? \(\s+<View style=\{\{ flexDirection: 'row', gap: space\.sm \}\}>\s+\{channels\.map\(/, 'Edit’s channel row is drawn with no channels handed to it')
     assert.match(panel, /bare \? \[\] : blockTypes\(block\.slug\)\.catch\(\(\) => \[\]\)/, 'the pop-up asks for the model list')
     assert.match(panel, /setModels\(t \|\| \[\]\)/)
-    assert.match(panel, /\{models\.length \? \(\s+<View style=\{\{ gap: space\.sm \}\}>\s+<Press\s+caption="Model"/, 'the model is drawn with no models to choose from')
+    assert.match(panel, /\{models\.length && !modelUp \? \(\s+<View style=\{\{ gap: space\.sm \}\}>\s+<Press\s+caption="Model"/, 'the model is drawn with no models to choose from')
     assert.match(panel, /const c = bare \? null : block\.slug === 'cab' \? await readCab\(\(\) => cabState\(eid\), p\) : null/, 'the pop-up asks for the cab state')
     assert.match(panel, /const irList = cab && block\.slug === 'cab' && irs \? irBanks\(cab, irs, \{ named: params \}\) : \[\]/)
     assert.match(panel, /\{irHere && irList\.length \? \(/)
     assert.match(panel, /\{level && !bare \? \(/, 'the pop-up draws the Level')
     /* And `bare` is read in those three places only (and the effect that reads the block, which asks again if it changes). */
-    assert.equal(panel.match(/\bbare\b/g).length, 5, '`bare` changes something else in Edit’s block view')
+    /* And once more where the tidier Edit's one row is ruled out for a bare view, which draws no name and no on and off. */
+    assert.match(panel, /const tidy = tidyOn && !panel && !bare && !knobless\n/)
+    assert.equal(panel.match(/\bbare\b/g).length, 6, '`bare` changes something else in Edit’s block view')
     /* The knobs themselves, and the pages, are not behind `bare` at all: the same lines Edit draws. */
     assert.match(panel, /\{pages\.length > 1 \? \(\s+<SideScroll/)
     assert.match(panel, /<Knob\s+param=\{p\}\s+label=\{p\.label \|\| p\.name\}\s+value=\{valueOf\(p\)\}/)

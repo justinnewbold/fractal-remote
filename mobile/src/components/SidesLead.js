@@ -55,7 +55,18 @@ export default function SidesLead({
   onSwap,
   onFull,
   /* Play alone on a big screen: what Two sides does (App: the kept tool, or the list). */
-  onTwo = null
+  onTwo = null,
+  /*
+   * WHERE THE LINE BETWEEN THE SIDES HAS A HANDLE (components/SidesHandle;
+   * the tidier Edit's, for an account it is open to, on a big screen): the
+   * handle swaps, so Swap is not drawn here, one Swap and not two. Its room
+   * is kept, empty, so each side's buttons stay over their own side. And
+   * `share` is Play's share of the window from the last drag, so they
+   * follow the line where it was dragged to. False and null everywhere
+   * else.
+   */
+  handle = false,
+  share = null
 }) {
   const { fontScale = 1 } = useWindowDimensions()
   /* Where this row starts along the bar, past the version: measured on a big screen, nothing before it on a phone. */
@@ -94,7 +105,7 @@ export default function SidesLead({
       </View>
     )
   }
-  const widths = sideWidths({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool })
+  const widths = sideWidths({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool, share })
   /* Where the line between the sides falls, from the bar's own left edge; the bar's padding, what is before this row and half of Swap come off the first half. */
   const line = playOnRight ? widths.tool : widths.play
   const reach = Math.max(0, line - space.lg - (big ? at : 0) - SWAP_WIDE / 2 - space.sm)
@@ -120,7 +131,11 @@ export default function SidesLead({
         {moved ? <View style={HALF}>{before}</View> : before}
         {moved ? <View style={HALF}>{after}</View> : null}
       </View>
-      <Press label={SIDE_WORDS.swap} height={HIGH} labelSize={font.small} onPress={onSwap} accessibilityLabel="Swap the two sides" style={[CHIP, { width: SWAP_WIDE }]} />
+      {handle ? (
+        <View style={{ width: SWAP_WIDE }} />
+      ) : (
+        <Press label={SIDE_WORDS.swap} height={HIGH} labelSize={font.small} onPress={onSwap} accessibilityLabel="Swap the two sides" style={[CHIP, { width: SWAP_WIDE }]} />
+      )}
       {big ? (
         /* All the bar has left past Swap, measured, so the buttons there are moved before they are cut. */
         <View style={REST_ALL} onLayout={(e) => setRest(Math.round(e.nativeEvent.layout.width))}>

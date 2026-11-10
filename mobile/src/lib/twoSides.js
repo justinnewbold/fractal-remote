@@ -195,9 +195,9 @@ export const fullSays = (toolWide) => (num(toolWide) >= FULL_WORDS_AT ? SIDE_WOR
  * sides. The top bar takes it out of what it offers the account's photo.
  */
 export const LEAD_ALONE = 260
-export function leadReach({ width, left = 0, right = 0, playOnRight = true, tool = null, full = false } = {}) {
+export function leadReach({ width, left = 0, right = 0, playOnRight = true, tool = null, full = false, share = null } = {}) {
   if (!tool || full === true) return LEAD_ALONE
-  const sides = sideWidths({ width, left, right, playOnRight, tool })
+  const sides = sideWidths({ width, left, right, playOnRight, tool, share })
   return (playOnRight ? sides.tool : sides.play) + SWAP_WIDE / 2
 }
 
@@ -232,9 +232,22 @@ export const TUNER_COLUMN = SIDE_LEAST
  * 6); on the Duo, the Fold and anything under TUNER_NARROW_AT it is half,
  * on the fold, like every other tool.
  */
-export function sideWidths({ width, left = 0, right = 0, playOnRight = true, tool = null } = {}) {
+export function sideWidths({ width, left = 0, right = 0, playOnRight = true, tool = null, share = null } = {}) {
   const w = num(width)
   if (tool === 'tuner' && w >= TUNER_NARROW_AT) return { play: w - TUNER_COLUMN, tool: TUNER_COLUMN }
+  /*
+   * THE LINE DRAGGED (lib/sidesSplit: the handle on the line between the
+   * sides, the tidier Edit's): `share` is Play's share of the frame, kept
+   * from the last drag. Never on a fold, where the line is the crease
+   * (the phone keeps more down one side than the other), and never with
+   * either side under SIDE_LEAST. Not given, which is every window and
+   * account without the handle, the sides are where they always were.
+   */
+  const kept = Number(share)
+  if (share !== null && Number.isFinite(kept) && kept > 0 && kept < 1 && Math.abs(num(left) - num(right)) <= 0.5 && w >= 2 * SIDE_LEAST) {
+    const play = Math.min(w - SIDE_LEAST, Math.max(SIDE_LEAST, Math.round(w * kept)))
+    return { play, tool: w - play }
+  }
   const { first, second } = splitSides({ width, left, right })
   return playOnRight ? { play: second, tool: first } : { play: first, tool: second }
 }

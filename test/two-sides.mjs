@@ -235,7 +235,7 @@ export function run(test) {
     assert.match(tuner, /\{tapToClose \? <Text[^>]*>Tap anywhere to close<\/Text> : null\}/)
     assert.match(tuner, /export function TunerSide\(\{ onClose, down = false \}\)/)
     assert.match(tuner, /footnote=\{TUNER_MUTES\}/, 'the tuner side does not say the unit decides whether it mutes')
-    assert.match(code(read('mobile/src/components/Sides.js')), /sideWidths\(\{ width: frame\?\.width, left: frame\?\.left, right: frame\?\.right, playOnRight, tool \}\)/)
+    assert.match(code(read('mobile/src/components/Sides.js')), /sideWidths\(\{ width: frame\?\.width, left: frame\?\.left, right: frame\?\.right, playOnRight, tool, share \}\)/)
     assert.match(tuner, /onLayout=\{\(e\) => setRoom\(e\.nativeEvent\.layout\.width\)\}/)
     assert.equal(tuner.match(/<Press label="Stop tuner"/g).length, 1, 'the pane is drawn twice over, so the two drift apart')
   })
@@ -344,7 +344,7 @@ export function run(test) {
     assert.match(sides, /const HIDDEN = \{ width: 0, overflow: 'hidden' \}/)
     assert.match(sides, /accessibilityElementsHidden=\{playHidden\}/)
     assert.match(sides, /importantForAccessibility=\{playHidden \? 'no-hide-descendants' : 'auto'\}/)
-    assert.match(sides, /sideWidths\(\{ width: frame\?\.width, left: frame\?\.left, right: frame\?\.right, playOnRight, tool \}\)/)
+    assert.match(sides, /sideWidths\(\{ width: frame\?\.width, left: frame\?\.left, right: frame\?\.right, playOnRight, tool, share \}\)/)
     /* Keyed, so Swap moves the two Views and draws neither afresh. */
     assert.match(sides, /key="play"/)
     assert.match(sides, /key="side"/)
@@ -623,11 +623,12 @@ export function run(test) {
     assert.doesNotMatch(own, /\bpanel\b/, 'the Edit screen draws its block as the panel, without Copy channel or the on/off button')
     /* What the panel leaves out: the name's row with Color, Copy channel, and Engaged. */
     const view = edit.slice(edit.indexOf('export function BlockPanel({'), edit.indexOf('function BlockColour('))
-    assert.match(view, /\{panel \? null : \(\s*<View[\s\S]*?\{paintable\(block\.slug\) \? <BlockColour slug=\{block\.slug\} \/> : null\}\s*<\/View>\s*\)\}/)
+    assert.match(view, /\{panel \|\| tidy \? null : \(\s*<View[\s\S]*?\{paintable\(block\.slug\) \? <BlockColour slug=\{block\.slug\} \/> : null\}\s*<\/View>\s*\)\}/)
     assert.match(view, /\{!panel && channels\?\.length > 1 && block\.channel && !overBle \? \(\s*<ChannelCopy/)
-    assert.match(view, /\{panel \|\| \['input', 'output'\]\.includes\(block\.slug\) \? null : \(\s*<Press\s+label=\{unsure \? 'Turn it off' : engaged \? 'Engaged' : 'Bypassed'\}/)
-    /* And nothing else: `panel` is read in those three places only. */
-    assert.equal(view.match(/\bpanel\b/g).length, 4, 'the panel changes something else in Edit’s block view')
+    assert.match(view, /\{panel \|\| tidy \|\| \['input', 'output'\]\.includes\(block\.slug\) \? null : \(\s*<Press\s+label=\{unsure \? 'Turn it off' : engaged \? 'Engaged' : 'Bypassed'\}/)
+    /* And nothing else: `panel` is read in those three places only, and once more where the tidier Edit's one row is ruled out for a panel. */
+    assert.match(view, /const tidy = tidyOn && !panel && !bare && !knobless\n/)
+    assert.equal(view.match(/\bpanel\b/g).length, 5, 'the panel changes something else in Edit’s block view')
     /* What it keeps: channels A to D, the knob pages, the model, and Level as a number nobody can turn. */
     assert.match(view, /const editable = params\.filter\(\(p\) => !isSilencingParam\(p\.name\)\)/, 'Level is a knob')
     assert.match(view, /<Text[^>]*>read-only<\/Text>/)
@@ -679,7 +680,7 @@ export function run(test) {
     /* In the side: the panel, with that Close; Edit told which block to jump to; neither kept for Two sides. */
     assert.match(app, /\) : sideTool === BLOCK \? \(\s*blockAt !== null \? <BlockSide eid=\{blockAt\} onClose=\{closeBlock\} \/> : null\s*\) : \(\s*<Edit\s+onBack=\{closeSide\}\s+jump=\{editJump\}/)
     assert.match(app, /useEffect\(\(\) => \{\s*if \(screen !== 'edit'\) setEditJump\(null\)\s*\}, \[screen\]\)/)
-    assert.match(edit, /export default function Edit\(\{ onBack, onOpenGear, jump = null \}\)/)
+    assert.match(edit, /export default function Edit\(\{ onBack, onOpenGear, jump = null, beside = false \}\)/)
     assert.match(edit, /if \(!jumpAt \|\| jump\?\.eid == null\) return\s*setOpenEid\(jump\.eid\)\s*setFocus\(\{ eid: jump\.eid, paramId: null, nonce: jumpAt \}\)/)
     /* Play is told where a hold opens knobs, and which block only when they are where the scenes were. */
     assert.match(app, /holdOpens=\{holdOpens\}\s+knobsAt=\{blockKept && screen === 'stage' \? blockAt : null\}\s+onHoldBlock=\{holdBlock\}\s+onCloseKnobs=\{closeBlock\}/)
@@ -899,7 +900,7 @@ export function run(test) {
     assert.match(app, /tools=\{toolsOffered\}\s*onPick=\{openTool\}\s*list=\{sideList\}\s*onList=\{setSideList\}/)
     assert.match(app, /slim=\{low && \(screen === 'stage' \|\| twoSidesUp\)\}\s*lead=\{sideLead\}/)
     /* There the bar's left is the two sides' buttons, or Play's own preset and Setlists; and the account's photo gives way to them only there. */
-    assert.match(app, /const sideLead = !wide \? null : twoSidesUp \? \(\s*<SidesLead frame=\{frame\} tool=\{sideTool\} full=\{sideFull\} playOnRight=\{playOnRight\} big=\{big\} onName=\{setSideList\} onSwap=\{swapSides\} onFull=\{setSideFull\} \/>\s*\) : low \? \(/, 'the bar carries the sides’ buttons on a window that shows one side')
+    assert.match(app, /const sideLead = !wide \? null : twoSidesUp \? \(\s*<SidesLead frame=\{frame\} tool=\{sideTool\} full=\{sideFull\} playOnRight=\{playOnRight\} big=\{big\} onName=\{setSideList\} onSwap=\{swapSides\} onFull=\{setSideFull\} handle=\{sideHandle\} share=\{sideShare\} \/>\s*\) : low \? \(/, 'the bar carries the sides’ buttons on a window that shows one side')
     assert.match(app, /\) : low \? \(\s*screen === 'stage' && playHeadUp \? \(\s*<PlayHead onOpenPresets=\{demo \|\| link\.link === 'connected' \? \(\) => setScreen\('presets'\) : null\} onOpenSetlists=\{\(\) => setScreen\('setlists'\)\} \/>\s*\) : null\s*\) : playOnScreen \? \(/, 'the preset in the bar does not open what Play’s own does, or is drawn off a phone on its side')
     assert.match(app, /onOpenAccount=\{low && sideLead \? null : openAccount\}/)
     /* The bar: something on its left in the version's place, and less padding, only when App says. */
@@ -1026,7 +1027,7 @@ export function run(test) {
     assert.match(app, /const playOnScreen = screen === 'stage' && !settling\n/)
     /* The version stays in front on a big screen, the bar is told how far the buttons reach, and the photo keeps its way in. */
     assert.match(app, /lead=\{sideLead\}\s*leadKeepsVersion=\{big\}\s*leadWide=\{sideLeadWide\}/)
-    assert.match(app, /const sideLeadWide = big && sideLead \? leadReach\(\{ width: frame\?\.width, left: frame\?\.left, right: frame\?\.right, playOnRight, tool: twoSidesUp \? sideTool : null, full: sideFull \}\) : 0\n/)
+    assert.match(app, /const sideLeadWide = big && sideLead \? leadReach\(\{ width: frame\?\.width, left: frame\?\.left, right: frame\?\.right, playOnRight, tool: twoSidesUp \? sideTool : null, full: sideFull, share: sideShare \}\) : 0\n/)
     assert.match(app, /onOpenAccount=\{low && sideLead \? null : openAccount\}/, 'the account’s photo is taken off a big screen’s bar, which has the room for it')
     /* The list closes with the window's second side, and a side's own list with that side; Play's list stays open over Play alone. */
     assert.match(app, /if \(!wide \|\| \(sideList === 'tool' && !twoSidesUp\)\) setSideList\(null\)\n\s*\}, \[wide, twoSidesUp, sideList\]\)/)

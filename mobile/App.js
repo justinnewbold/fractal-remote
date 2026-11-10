@@ -96,6 +96,10 @@ import BlockSide, { KnobsFollow } from './src/components/BlockSide'
 /* The hold pop-up's knobs, over its channels: the rule, and the switch that opens it past his account. */
 import { popKnobsOn } from './src/lib/holdPop'
 import { HOLD_POPUP_KNOBS_FOR_EVERYONE } from './src/lib/features'
+/* The handle on the line between the two sides (lib/sidesSplit; components/SidesHandle), the tidier Edit's: his account until its switch. */
+import { handleOn } from './src/lib/sidesSplit'
+import { useSidesSplit } from './src/lib/useSidesSplit'
+import { TIDY_EDIT_FOR_EVERYONE } from './src/lib/features'
 import { TunerSide } from './src/components/Tuner'
 import { PLAY_ON_RIGHT, keepPlayOnRight, readPlayOnRight } from './src/lib/sidesKeep'
 import Paywall from './src/screens/Paywall'
@@ -779,6 +783,9 @@ export default function App() {
   const low = sidewaysAllowed && !big && phoneSidewaysOn(frame || {}, lowWas.current)
   lowWas.current = low
   const wide = big || low
+  /* Where the line between the sides was dragged to on a big screen (lib/useSidesSplit), for an account the tidier Edit is open to (his, until features TIDY_EDIT_FOR_EVERYONE). Null for everybody else, and the sides are where they always were. */
+  const tidyAllowed = sidesAdmin || (sidesAllowed && TIDY_EDIT_FOR_EVERYONE)
+  const split = useSidesSplit({ allowed: tidyAllowed, big })
   /* Which side's name was tapped in the top bar, for the list components/Sides draws: 'tool' | 'play' | null. */
   const [sideList, setSideList] = useState(null)
   /* Whether Play has its preset and Setlists up in the top bar there (lib/playHead; lib/sidewaysPlay `headUp`). */
@@ -904,8 +911,16 @@ export default function App() {
     keepPlayOnRight(!playOnRight)
     setPlayOnRight(!playOnRight)
   }
+  /* The handle on the line (lib/sidesSplit handleOn): a big screen, a tool beside Play, an account it is open to. And the share of the window Play was dragged to, only there. */
+  const sideHandle = handleOn({ allowed: tidyAllowed, big, tool: twoSidesUp ? sideTool : null, full: sideFull })
+  const sideShare = big ? split.share : null
+  /* A side's edge dragged past its least (components/SidesHandle): the tool's lets go as its own Done, Stop tuner or Close would; Play's, and the tool fills the window (never a block's knobs, which never do). */
+  const sideLetsGo = (which) => {
+    if (which === 'play') return sideTool === BLOCK ? undefined : setSideFull(true)
+    return sideTool === 'tuner' ? writeTuner(false) : sideTool === BLOCK ? closeBlock() : closeSide()
+  }
   const sideLead = !wide ? null : twoSidesUp ? (
-    <SidesLead frame={frame} tool={sideTool} full={sideFull} playOnRight={playOnRight} big={big} onName={setSideList} onSwap={swapSides} onFull={setSideFull} />
+    <SidesLead frame={frame} tool={sideTool} full={sideFull} playOnRight={playOnRight} big={big} onName={setSideList} onSwap={swapSides} onFull={setSideFull} handle={sideHandle} share={sideShare} />
   ) : low ? (
     screen === 'stage' && playHeadUp ? (
       <PlayHead onOpenPresets={demo || link.link === 'connected' ? () => setScreen('presets') : null} onOpenSetlists={() => setScreen('setlists')} />
@@ -914,7 +929,7 @@ export default function App() {
     <SidesLead big onTwo={sideKept ? () => openTool(sideKept) : () => setSideList('play')} />
   ) : null
   /* How far along the bar those buttons reach on a big screen (lib/twoSides leadReach), which the bar takes out of the room it offers the account's photo. Nothing on a phone on its side, where the photo gives way to them altogether. */
-  const sideLeadWide = big && sideLead ? leadReach({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool: twoSidesUp ? sideTool : null, full: sideFull }) : 0
+  const sideLeadWide = big && sideLead ? leadReach({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool: twoSidesUp ? sideTool : null, full: sideFull, share: sideShare }) : 0
   /* The list goes with what opened it: closed when the window shows one side again (the Duo folded, a phone turned upright), and a side's own list when that side closes. */
   useEffect(() => {
     if (!wide || (sideList === 'tool' && !twoSidesUp)) setSideList(null)
@@ -2141,6 +2156,13 @@ export default function App() {
                 /* The list of what goes beside Play, opened from a side's name in the top bar (`sideLead`, above). */
                 list={sideList}
                 onList={setSideList}
+                /* The handle on the line between the sides, where it is open (`sideHandle`, above): swap, resize, let a side go. */
+                handle={sideHandle}
+                share={sideShare}
+                onSwap={swapSides}
+                onSplitReset={split.reset}
+                onShare={split.set}
+                onLetGo={sideLetsGo}
                 side={
                   !twoSidesUp ? null : sideTool === 'presets' ? (
                     /* Beside Play the list stays open after a pick (`stay`), so you can keep browsing while the rig plays it. */
@@ -2162,6 +2184,8 @@ export default function App() {
                         setGearBack('edit')
                         setScreen('gear')
                       }}
+                      /* Beside Play, not filling the window: the tidier Edit leaves the preset's name to Play there. */
+                      beside={playBeside}
                     />
                   )
                 }

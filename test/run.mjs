@@ -6819,6 +6819,10 @@ console.log('\nthe hold pop-up: the block’s knobs over its channels, his accou
 const { run: holdPop } = await import('./hold-pop.mjs')
 holdPop(test)
 
+/* The tidier Edit and the handle on the line between the two sides (his account until features TIDY_EDIT_FOR_EVERYONE). */
+const { run: tidyEdit } = await import('./tidy-edit.mjs')
+tidyEdit(test)
+
 console.log('\nPlay’s tiles as squares on a big screen, and a phone held upright as it was')
 const { run: squarePlay } = await import('./square-play.mjs')
 squarePlay(test)

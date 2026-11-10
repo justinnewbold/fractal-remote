@@ -99,3 +99,20 @@ export const PHONE_SIDEWAYS_FOR_EVERYONE = false
  * same pull request.
  */
 export const HOLD_POPUP_KNOBS_FOR_EVERYONE = false
+
+/**
+ * THE TIDIER EDIT, AND THE HANDLE ON THE LINE BETWEEN THE TWO SIDES
+ * (lib/tidyEdit, lib/sidesSplit, components/SidesHandle), for everyone.
+ *
+ * OFF: his account only. "What can we do to improve the edit screen to
+ * make it more like the real ax edit software" (Justin, 9 November 2026,
+ * Edit beside Play on his iPad), built from the pictures sent that day
+ * after his "yes to all your other non build suggestions" on the 10th, and
+ * not yet seen on a screen. One switch for both halves of it: Edit's
+ * denser rows (the block's name, channels and on/off in one row, the model
+ * beside them where there is room, the knobs as many across as fit) and
+ * the handle that swaps and resizes the two sides. Every other account's
+ * Edit and two sides are what they were. This is the one line that opens
+ * it, with its line in What's new in the same pull request.
+ */
+export const TIDY_EDIT_FOR_EVERYONE = false

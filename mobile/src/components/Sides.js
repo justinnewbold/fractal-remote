@@ -2,10 +2,12 @@ import { useEffect, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { color, space } from '../lib/theme'
-import { PLAY_ALWAYS, TOOL_NAMES, sideWidths } from '../lib/twoSides'
+import { PLAY_ALWAYS, SIDE_LEAST, TOOL_NAMES, TUNER_NARROW_AT, sideWidths } from '../lib/twoSides'
+import { resizeOn } from '../lib/sidesSplit'
 import EdgeBack from './EdgeBack'
 import Press from './Press'
 import Sheet from './Sheet'
+import SidesHandle from './SidesHandle'
 
 /*
  * TWO SIDES ON A BIG SCREEN: the frame that holds Play on one side and Edit,
@@ -66,6 +68,22 @@ export default function Sides({
   frame = null,
   /* What the list offers right now (twoSides sideTools). */
   tools = [],
+  /*
+   * THE HANDLE ON THE LINE BETWEEN THE SIDES (components/SidesHandle;
+   * lib/sidesSplit), for an account the tidier Edit is open to, on a big
+   * screen: `handle` is whether it is drawn at all (App: lib/sidesSplit
+   * handleOn), `share` Play's share of the window from the last drag (null
+   * for the window's own split), and the four things it does are App's:
+   * swap the sides, put the line back, keep a new share, and let a side go
+   * ('play' | 'tool') when its edge is dragged past its least. False and
+   * null everywhere else, and the two sides are where they always were.
+   */
+  handle = false,
+  share = null,
+  onSwap = null,
+  onSplitReset = null,
+  onShare = null,
+  onLetGo = null,
   onPick,
   /* Which side's name was tapped in the top bar, for the list: 'tool' | 'play' | null, and how it is set. Both App's (components/SidesLead draws the names). */
   list = null,
@@ -74,7 +92,7 @@ export default function Sides({
 }) {
   /* Everybody the sides are not open to: Play, and not one View around it, so their tree is today's. */
   if (!allowed) return children
-  const widths = sideWidths({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool })
+  const widths = sideWidths({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool, share })
   const beside = two && Boolean(tool) && !full
   const playHidden = Boolean(tool) && full
 
@@ -107,6 +125,20 @@ export default function Sides({
       {/* The tool on the left and Play on the right, or swapped: the same two Views, keyed, so a swap moves them and draws neither afresh. */}
       {playOnRight ? other : play}
       {playOnRight ? play : other}
+      {/* On the line between them, over both: tap to swap, drag to resize where the line may move (not on the Duo's fold, not the tuner's narrow column). */}
+      {handle && beside ? (
+        <SidesHandle
+          line={playOnRight ? widths.tool : widths.play}
+          width={frame?.width || 0}
+          resize={resizeOn({ width: frame?.width, left: frame?.left, right: frame?.right, tool, least: SIDE_LEAST, narrowAt: TUNER_NARROW_AT })}
+          moved={share !== null}
+          playOnRight={playOnRight}
+          onSwap={onSwap}
+          onReset={onSplitReset}
+          onShare={onShare}
+          onLetGo={onLetGo}
+        />
+      ) : null}
       <Sheet open={list !== null} onClose={() => onList?.(null)} title={list === 'play' ? 'Beside Play' : 'This side'} note={PLAY_ALWAYS}>
         <View style={{ gap: space.sm }}>
           {tools.map((t) => (
