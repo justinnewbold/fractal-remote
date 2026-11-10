@@ -2234,7 +2234,7 @@ export function run(test) {
      * the box is typed in it is brought to the top of the room left, so its
      * results are read between it and the keyboard.
      */
-    assert.match(edit, /<ScrollView ref=\{page\} style=\{\{ flex: 1 \}\} contentContainerStyle=\{\{ padding: space\.lg, gap: space\.lg, paddingBottom: space\.xxl \}\} keyboardShouldPersistTaps="handled" scrollEnabled=\{!held\} automaticallyAdjustKeyboardInsets >/, 'Edit’s page does not make room for the keyboard')
+    assert.match(edit, /<ScrollView ref=\{page\} style=\{\{ flex: 1 \}\} contentContainerStyle=\{\{ padding: space\.lg, gap: space\.lg, paddingBottom: space\.xxl \}\} \{\.\.\.\(tidy \? \{ contentContainerStyle: PAGE_TIDY \} : null\)\} keyboardShouldPersistTaps="handled" scrollEnabled=\{!held\} automaticallyAdjustKeyboardInsets >/, 'Edit’s page does not make room for the keyboard')
     assert.match(body, /const findAt = useRef\(null\) const toFind = \(\) => \{ if \(findAt\.current === null\) return page\.current\?\.scrollTo\(\{ y: Math\.max\(0, findAt\.current - space\.md\), animated: true \}\) \}/)
     assert.match(body, /onLaid=\{\(y\) => \{ findAt\.current = y \}\} onSeek=\{toFind\} \/>/)
     const box = edit.slice(edit.indexOf('function FindControl('), edit.indexOf('function gearLine('))
@@ -10605,7 +10605,7 @@ export function run(test) {
     const app = read('mobile/App.js')
     assert.match(app, /useEffect\(\(\) => watchForUpdates\(\), \[\]\)/, 'nothing starts the background check')
     assert.match(app, /const playOnScreen = screen === 'stage' && !settling/)
-    assert.match(app, /\{playOnScreen \? null : <UpdateReady onWhatsNew=\{openWhatsNew\} \/>\}/, 'the note still pushes the play screen down, or is drawn nowhere else')
+    assert.match(app, /\{playOnScreen \|\| stageViewUp \? null : <UpdateReady onWhatsNew=\{openWhatsNew\} \/>\}/, 'the note still pushes the play screen down, or is drawn nowhere else')
     const inside = app.slice(app.indexOf('<EdgeBack onBack={backFrom}>'), app.indexOf('</EdgeBack>'))
     assert.match(inside, /\{readyOverPlay \? <UpdateReady over onWhatsNew=\{openWhatsNew\} \/> : null\}/, 'the note does not float over the play screen')
     /* Never over a connected rig, where a download can land mid-song and Restart now would come up under a thumb. */

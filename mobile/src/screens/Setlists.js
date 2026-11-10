@@ -72,7 +72,7 @@ const ofSlug = (s) => s.deviceSlug
  * They are filed under the same per-unit key, derived by the same shared rule,
  * so the two ends have something to match on when the account syncs them.
  */
-export default function Setlists({ onBack }) {
+export default function Setlists({ onBack, notes = false }) {
   const preset = useRig(ofPreset)
   const caps = useRig(ofCaps)
   const device = useRig(ofSlug)
@@ -392,12 +392,13 @@ export default function Setlists({ onBack }) {
             {chosen.presets.length ? (
               <Press
                 label={settingUp ? 'Done setting up songs' : 'Set up each song…'}
-                sub="The scene and tempo each song switches to"
+                /* With song notes (`notes`, from App: lib/songNotes), they are written here too. */
+                sub={notes ? 'The scene and tempo each song switches to, and its notes' : 'The scene and tempo each song switches to'}
                 on={settingUp}
                 onPress={() => setSettingUp((v) => !v)}
               />
             ) : null}
-            {settingUp ? <SongSetup device={device} list={chosen} nameOf={nameOfSlot} addressing={addressing} /> : null}
+            {settingUp ? <SongSetup device={device} list={chosen} nameOf={nameOfSlot} addressing={addressing} notes={notes} /> : null}
             <SongPicker
               open={adding}
               listName={chosen.name}

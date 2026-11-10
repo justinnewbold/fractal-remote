@@ -99,3 +99,45 @@ export const PHONE_SIDEWAYS_FOR_EVERYONE = false
  * same pull request.
  */
 export const HOLD_POPUP_KNOBS_FOR_EVERYONE = false
+
+/**
+ * THE TIDIER EDIT, AND THE HANDLE ON THE LINE BETWEEN THE TWO SIDES
+ * (lib/tidyEdit, lib/sidesSplit, components/SidesHandle), for everyone.
+ *
+ * OFF: his account only. "What can we do to improve the edit screen to
+ * make it more like the real ax edit software" (Justin, 9 November 2026,
+ * Edit beside Play on his iPad), built from the pictures sent that day
+ * after his "yes to all your other non build suggestions" on the 10th, and
+ * not yet seen on a screen. One switch for both halves of it: Edit's
+ * denser rows (the block's name, channels and on/off in one row, the model
+ * beside them where there is room, the knobs as many across as fit) and
+ * the handle that swaps and resizes the two sides. Every other account's
+ * Edit and two sides are what they were. This is the one line that opens
+ * it, with its line in What's new in the same pull request.
+ */
+export const TIDY_EDIT_FOR_EVERYONE = false
+
+/**
+ * STAGE VIEW (lib/stageView, components/StageView): Play's preset, scene and
+ * what comes next, big enough to read from a stand, for everyone.
+ *
+ * OFF: his account only. One of the ideas he said yes to on 10 November
+ * 2026 ("yes to all your other non build suggestions as well"), built with
+ * no picture and not yet seen on a screen. Closed to an account there is no
+ * Stage view button in the top bar and no row for it in Settings. This is
+ * the one line that opens it, with its line in What's new in the same pull
+ * request.
+ */
+export const STAGE_VIEW_FOR_EVERYONE = false
+
+/**
+ * SONG NOTES (lib/songNotes, components/SongNotes): lyrics, chords or cues
+ * for each song in a setlist, beside Play, for everyone.
+ *
+ * OFF: his account only, by the same yes and for the same reason. Closed to
+ * an account there is no Notes on the list of what goes beside Play, no
+ * Notes button on a song in Setlists or in Stage view, and whatever notes
+ * the device holds are left exactly as they are. This is the one line that
+ * opens it, with its line in What's new in the same pull request.
+ */
+export const SONG_NOTES_FOR_EVERYONE = false

@@ -134,6 +134,7 @@ import {
 } from '../lib/settings-words'
 import WhatsNew, { latestLine } from './WhatsNew'
 import { WHATS_NEW_PAGE } from '../lib/whats-new-rule'
+import { STAGE_VIEW_NAME, STAGE_VIEW_SUB } from '../lib/stageView'
 
 /* "Phone & computer", or "iPad & computer" on an iPad (device-word.mjs). Read
    once: App.js says which device this is before this file is loaded. */
@@ -193,7 +194,9 @@ export default function Settings({
   onPage,
   /* Opened from the top bar's photo: Your account's sheet comes up on its own, once (App's openAccount), and App is told it has. */
   openAccountSheet = false,
-  onAccountSheet
+  onAccountSheet,
+  /* Stage view (lib/stageView), for an account that has it: App's own way in, or null and no row. */
+  onStageView = null
 }) {
   const deviceName = useRig(ofDeviceName)
   const firmware = useRig(ofFirmware)
@@ -920,6 +923,8 @@ export default function Settings({
             <View style={{ paddingVertical: space.md }}>
               <Appearance />
             </View>
+            {/* Play read from a stand: its way in on every screen, since only a big window has room for it in the top bar. */}
+            {onStageView ? <SetupRow title={STAGE_VIEW_NAME} status={STAGE_VIEW_SUB} onPress={onStageView} /> : null}
           </Group>
         </>
       ) : null}

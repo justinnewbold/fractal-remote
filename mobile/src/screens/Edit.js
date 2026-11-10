@@ -84,6 +84,8 @@ import { SaveButton, SaveNotes, useSaveToSlot } from '../components/SaveToSlot'
 import Tile from '../components/Tile'
 import ColourSheet from '../components/ColourSheet'
 import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
+import { HEAD_TALL, headShape, knobCell, knobSize } from '../lib/tidyEdit'
+import { useTidyEdit } from '../lib/useTidyEdit'
 
 const face = Platform.select(mono)
 
@@ -169,7 +171,22 @@ const modelNote = (name) =>
  * knob turned here writes into the scene that is live, and a footswitch on the
  * floor changes every value on this screen without touching anything in it.
  */
-export default function Edit({ onBack, onOpenGear, jump = null }) {
+export default function Edit({ onBack, onOpenGear, jump = null, beside = false }) {
+  /*
+   * `beside`: beside Play on a big screen or a phone on its side (App:
+   * `playBeside`), not filling the window. False everywhere else.
+   *
+   * THE TIDIER EDIT (lib/tidyEdit; his account until features
+   * TIDY_EDIT_FOR_EVERYONE): the page a little closer set, and beside Play
+   * the title row without the preset's name and the scene, which Play is
+   * showing a hand's width away ("it just feels a little clunky still",
+   * Justin, 9 November 2026: the preset and the scene were named on both
+   * sides). Full screen and on a phone, Edit still says which preset it is
+   * editing. The open block's own rows are BlockPanel's, below. Closed to
+   * an account, every line here draws what it drew.
+   */
+  const tidy = useTidyEdit()
+  const nameOnPlay = tidy && beside
   /*
    * Whether a knob has the finger, and the screen therefore must not scroll.
    *
@@ -368,6 +385,8 @@ export default function Edit({ onBack, onOpenGear, jump = null }) {
       ref={page}
       style={{ flex: 1 }}
       contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: space.xxl }}
+      /* The tidier Edit: the same page with less between its rows, said after the page's own so it takes its place there and nowhere else. */
+      {...(tidy ? { contentContainerStyle: PAGE_TIDY } : null)}
       keyboardShouldPersistTaps="handled"
       scrollEnabled={!held}
       /* The page makes room for the keyboard itself, so a box typed in near its foot (Find a control, a knob's number, the rename boxes) is never left under it. iPhone and iPad only: Android resizes the window. */
@@ -419,6 +438,8 @@ export default function Edit({ onBack, onOpenGear, jump = null }) {
             second. The buttons beside this are centred on the row, so the
             extra line costs nothing but height.
           */}
+          {/* Not beside Play in the tidier Edit (`nameOnPlay`, above): Play says both. */}
+          {nameOnPlay ? null : (
           <Text
             numberOfLines={1}
             style={{ color: color.silk, fontSize: font.small, fontWeight: '600' }}
@@ -427,7 +448,8 @@ export default function Edit({ onBack, onOpenGear, jump = null }) {
                 has no name yet, and "Untitled" for half a second is a lie. */}
             {preset?.pending && !preset?.name ? '…' : presetLabel(preset)}
           </Text>
-          {caps?.hasScenes === false ? null : (
+          )}
+          {nameOnPlay || caps?.hasScenes === false ? null : (
             /* Two lines for the scene: "Scene names cut short." The name
                is the only part of this line that identifies anything. */
             <Text numberOfLines={2} style={{ color: color.silkDim, fontSize: font.small }}>
@@ -711,6 +733,9 @@ export default function Edit({ onBack, onOpenGear, jump = null }) {
   )
 }
 
+/* The tidier Edit's page: the page's own padding, with the smaller gap between its rows. */
+const PAGE_TIDY = { padding: space.lg, gap: space.md, paddingBottom: space.xxl }
+
 /**
  * What the foot of the Edit screen says, while it is a beta.
  *
@@ -789,6 +814,28 @@ export function BlockPanel({
   /* Read once and used everywhere below: see unit.mjs on why this is not
      `block.eid`, and what it cost to find out. */
   const eid = idOf(block)
+  /*
+   * THE TIDIER EDIT (lib/tidyEdit; lib/useTidyEdit: his account until
+   * features TIDY_EDIT_FOR_EVERYONE). "We want as many knobs visible in
+   * edit" (Justin, 10 November 2026). Two things, both by this panel's own
+   * measured width (`wide`) and never by the kind of device:
+   *
+   *   the knobs, in every view of this panel (Edit, Derek's panel, the hold
+   *   pop-up): as many across as fit, three on a phone held upright, five
+   *   in half an iPad on its side, eight across the whole of it;
+   *
+   *   and on the Edit screen itself (`tidy`, below: not `panel`, not
+   *   `bare`, not a block with no knobs to read), ONE row for the block:
+   *   its name, its channels and its on/off, with the model picker in it
+   *   too where the panel is wide enough (headShape). The pages' row is
+   *   shorter, and Color goes under the knobs with Copy channel.
+   *
+   * Closed to an account, and until the panel is measured, every line
+   * below draws what it always drew.
+   */
+  const tidyOn = useTidyEdit()
+  const [wide, setWide] = useState(0)
+  const cell = tidyOn ? knobCell(wide, space.md) : 0
   const [params, setParams] = useState([])
   /* The editor's own pages for this block, as the unit sent them. */
   const [layout, setLayout] = useState(null)
@@ -1256,11 +1303,145 @@ export function BlockPanel({
     : models
   const matches = found.slice(0, 40)
   const more = found.length - matches.length
+  /* The block's one row, on the Edit screen only (the tidier Edit, at the top of this panel): never Derek's panel, the hold pop-up, or a block with no knobs to read. */
+  const tidy = tidyOn && !panel && !bare && !knobless
+  /* The row's own on and off (the button under the knobs is not drawn then). */
+  const flip = () => writeBlockBypass(eid, engaged)
+  /* The model picker in that row (a panel wide enough): then it is not under the knobs. */
+  const modelUp = tidy && headShape(wide).model && models.length > 0
+  const pickChannel = async (ch) => {
+    try {
+      await writeChannel(eid, ch)
+    } catch (err) {
+      onError(err.message)
+    }
+  }
+  /*
+   * The models to pick from, with their find box: drawn under the Model
+   * button where that is under the knobs, and straight under the block's
+   * row where the model picker is up there (`modelUp`), so the list opens
+   * beside the button that opened it.
+   */
+  const modelList = !picking ? null : (
+            <View style={{ gap: space.sm }}>
+              {/*
+                A find box, because an amp block offers three hundred and
+                thirty-one models. The browser scrolls its list to the one you
+                are on and lets you read; a thumb cannot read three hundred
+                rows, and drawing them all is a screen that stutters while you
+                try.
+              */}
+              <TextInput
+                value={hunt}
+                onChangeText={setHunt}
+                placeholder="Find a model"
+                placeholderTextColor={color.silkFaint}
+                autoCorrect={false}
+                autoCapitalize="none"
+                accessibilityLabel="Find a model"
+                style={{
+                  minHeight: TAP,
+                  paddingHorizontal: space.md,
+                  borderWidth: 1,
+                  /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
+                  ...glassField(),
+                  color: color.silk,
+                  fontSize: font.body
+                }}
+              />
+              {matches.map((m) => (
+                <Press
+                  key={m.value}
+                  label={m.name}
+                  /* The amp beside the name, in the list where the choosing
+                     happens. The maker alone is deliberately not used here: as
+                     a suffix on forty rows it would say "Mesa/Boogie" beside
+                     all of them and tell nobody which one is the Rectifier. */
+                  sub={m.basedOn || modelNote(m.name) || undefined}
+                  tone="signal"
+                  on={m.value === current?.value}
+                  onPress={() => swap(m.value)}
+                />
+              ))}
+              {more > 0 ? (
+                <Text style={{ color: color.silkDim, fontSize: font.micro }}>
+                  {`${more} more — type to narrow it down.`}
+                </Text>
+              ) : null}
+              {!matches.length ? <Note>Nothing named like that.</Note> : null}
+            </View>
+  )
 
   return (
-    <View style={{ gap: space.md }}>
-      {/* Not in Derek's panel, which has the name in its own row beside Close, and no Color. */}
-      {panel ? null : (
+    <View style={{ gap: space.md }} {...(tidyOn ? { onLayout: (e) => setWide(Math.round(e.nativeEvent.layout.width)) } : null)}>
+      {/*
+        THE BLOCK'S ONE ROW (the tidier Edit, above): its name, the model
+        where there is room, its channels and its on/off. A long name takes
+        a second line sooner than it is cut. The two ends of the chain have
+        no on/off, as below.
+      */}
+      {tidy ? (
+        <View style={TIDY_HEAD}>
+          <View style={[TIDY_NAME, { borderLeftColor: hue.fill }]}>
+            <Text accessibilityRole="header" numberOfLines={2} style={{ color: color.silk, fontSize: font.lead, fontWeight: '700' }}>
+              {block.name}
+            </Text>
+          </View>
+          {modelUp ? (
+            <Press
+              label={current?.name || `${models.length} to choose from`}
+              height={HEAD_TALL}
+              labelSize={font.small}
+              on={picking}
+              accessibilityLabel={`Model: ${current?.name || 'not read yet'}. ${picking ? 'Close the list' : 'Tap to change'}`}
+              onPress={() => {
+                if (!restoring) setPicking((v) => !v)
+              }}
+              style={TIDY_MODEL}
+            />
+          ) : null}
+          {channels?.length > 1 ? (
+            <View style={TIDY_CHANNELS}>
+              {channels.map((ch) => (
+                <Press
+                  key={ch}
+                  label={ch}
+                  tone="signal"
+                  on={block.channel === ch}
+                  height={HEAD_TALL}
+                  labelSize={font.small}
+                  accessibilityLabel={`Channel ${ch}`}
+                  /* Not while an Undo is putting this channel's settings back, as below. */
+                  disabled={!!restoring}
+                  onPress={() => pickChannel(ch)}
+                  style={TIDY_CHIP}
+                />
+              ))}
+            </View>
+          ) : null}
+          {['input', 'output'].includes(block.slug) ? null : (
+            <Press
+              label={unsure ? 'Turn it off' : engaged ? 'On' : 'Off'}
+              tone="signal"
+              on={engaged && !unsure}
+              height={HEAD_TALL}
+              labelSize={font.small}
+              accessibilityLabel={`${block.name} is ${engaged ? 'on' : 'off'}. Turn it ${engaged ? 'off' : 'on'}`}
+              onPress={flip}
+              style={TIDY_CHIP}
+            />
+          )}
+        </View>
+      ) : null}
+      {/* And the models, straight under that row, while its picker is open. */}
+      {modelUp && picking ? (
+        <View style={{ gap: space.sm }}>
+          {!(cab && block.slug === 'cab') ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{MODEL_HINT}</Text> : null}
+          {modelList}
+        </View>
+      ) : null}
+      {/* Not in Derek's panel, which has the name in its own row beside Close, and no Color. Nor in the tidier Edit, whose one row above has the name. */}
+      {panel || tidy ? null : (
       <View
         style={{
           flexDirection: 'row',
@@ -1286,7 +1467,8 @@ export function BlockPanel({
       )}
 
       {/* ------------------------------------------------ channel and state */}
-      {channels?.length > 1 ? (
+      {/* (In the block's one row in the tidier Edit, above.) */}
+      {channels?.length > 1 && !tidy ? (
         <View style={{ flexDirection: 'row', gap: space.sm }}>
           {channels.map((ch) => (
             <Press
@@ -1325,7 +1507,7 @@ export function BlockPanel({
               label={pg.name}
               tone="signal"
               on={pg.key === onPage?.key}
-              height={44}
+              height={tidy ? HEAD_TALL : 44}
               onPress={() => setTab(pg.key)}
             />
           ))}
@@ -1349,7 +1531,8 @@ export function BlockPanel({
             <View
               key={p.id}
               style={{
-                width: '30%',
+                /* Three to a row, as always; in the tidier Edit, as many as the panel's measured width takes (lib/tidyEdit knobCell). */
+                width: cell || '30%',
                 alignItems: 'center',
                 gap: space.xs,
                 /* The one you searched for, said with a ring for a couple of
@@ -1369,6 +1552,7 @@ export function BlockPanel({
                 }}
                 onCommit={(v) => commit(p, v)}
                 onScrollLock={onScrollLock}
+                {...(cell ? { size: knobSize(cell) } : null)}
               />
               <ValueBox param={p} value={valueOf(p)} onCommit={(v) => commit(p, v)} />
               {help?.params?.[p.id]?.blurb ? (
@@ -1426,8 +1610,14 @@ export function BlockPanel({
         The block itself, always: on an AM4 the amp's pedal on Play is its
         boost (lib/am4-boost), so this is where its real on and off is.
       */}
-      {/* Nor in Derek's panel: one tap on the block on Play turns it on and off. */}
-      {panel || ['input', 'output'].includes(block.slug) ? null : (
+      {/* Its colour, which the tidier Edit's one row has no room for: here, under the knobs. */}
+      {tidy && paintable(block.slug) ? (
+        <View style={{ alignSelf: 'flex-start' }}>
+          <BlockColour slug={block.slug} />
+        </View>
+      ) : null}
+      {/* Nor in Derek's panel: one tap on the block on Play turns it on and off. Nor in the tidier Edit, whose one row above has it. */}
+      {panel || tidy || ['input', 'output'].includes(block.slug) ? null : (
         <Press
           label={unsure ? 'Turn it off' : engaged ? 'Engaged' : 'Bypassed'}
           tone="signal"
@@ -1436,7 +1626,14 @@ export function BlockPanel({
         />
       )}
       {/* ------------------------------------------------------------ model */}
-      {models.length ? (
+      {/* With the picker up in the block's row (`modelUp`), what the model is based on still reads here, under the knobs. */}
+      {modelUp && !picking && (gearLine(type) || cabNow?.hint) ? (
+        <View style={{ gap: space.xs }}>
+          {gearLine(type) ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{gearLine(type)}</Text> : null}
+          {cabNow?.hint ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{cabNow.hint}</Text> : null}
+        </View>
+      ) : null}
+      {models.length && !modelUp ? (
         <View style={{ gap: space.sm }}>
           <Press
             caption="Model"
@@ -1463,55 +1660,7 @@ export function BlockPanel({
           {picking && !(cab && block.slug === 'cab') ? (
             <Text style={{ color: color.silkDim, fontSize: font.small }}>{MODEL_HINT}</Text>
           ) : null}
-          {picking ? (
-            <View style={{ gap: space.sm }}>
-              {/*
-                A find box, because an amp block offers three hundred and
-                thirty-one models. The browser scrolls its list to the one you
-                are on and lets you read; a thumb cannot read three hundred
-                rows, and drawing them all is a screen that stutters while you
-                try.
-              */}
-              <TextInput
-                value={hunt}
-                onChangeText={setHunt}
-                placeholder="Find a model"
-                placeholderTextColor={color.silkFaint}
-                autoCorrect={false}
-                autoCapitalize="none"
-                accessibilityLabel="Find a model"
-                style={{
-                  minHeight: TAP,
-                  paddingHorizontal: space.md,
-                  borderWidth: 1,
-                  /* A frosted glass field (lib/glass): rounded like a card, rimmed, no shadow. */
-                  ...glassField(),
-                  color: color.silk,
-                  fontSize: font.body
-                }}
-              />
-              {matches.map((m) => (
-                <Press
-                  key={m.value}
-                  label={m.name}
-                  /* The amp beside the name, in the list where the choosing
-                     happens. The maker alone is deliberately not used here: as
-                     a suffix on forty rows it would say "Mesa/Boogie" beside
-                     all of them and tell nobody which one is the Rectifier. */
-                  sub={m.basedOn || modelNote(m.name) || undefined}
-                  tone="signal"
-                  on={m.value === current?.value}
-                  onPress={() => swap(m.value)}
-                />
-              ))}
-              {more > 0 ? (
-                <Text style={{ color: color.silkDim, fontSize: font.micro }}>
-                  {`${more} more — type to narrow it down.`}
-                </Text>
-              ) : null}
-              {!matches.length ? <Note>Nothing named like that.</Note> : null}
-            </View>
-          ) : null}
+          {picking ? modelList : null}
         </View>
       ) : null}
 
@@ -2668,6 +2817,16 @@ function Label({ children }) {
  */
 /* Knob help per kind of block, kept while the app is open. */
 const KNOB_HELP = new Map()
+
+/* THE TIDIER EDIT'S ONE ROW FOR THE OPEN BLOCK (lib/tidyEdit): the name takes what the rest leaves, and the rest keep their own widths. */
+const TIDY_HEAD = { flexDirection: 'row', alignItems: 'center', gap: space.sm }
+const TIDY_NAME = { flex: 1, minWidth: 0, borderLeftWidth: 4, paddingLeft: space.sm, minHeight: HEAD_TALL, justifyContent: 'center' }
+/* The channels, close together so they read as one control. */
+const TIDY_CHANNELS = { flexDirection: 'row', gap: space.xs }
+/* A channel's letter, or On / Off: as wide as a thumb with little round the word. */
+const TIDY_CHIP = { minWidth: 38, paddingHorizontal: space.sm, paddingVertical: 2 }
+/* The model's name: its own width, up to a share of the row, so a long one is cut before it takes the block's name off the row. */
+const TIDY_MODEL = { maxWidth: '38%', paddingHorizontal: space.md, paddingVertical: 2 }
 
 /**
  * COPY THIS CHANNEL ONTO ANOTHER — the browser's ChannelCopy, on the phone.

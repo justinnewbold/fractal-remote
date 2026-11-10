@@ -3397,7 +3397,7 @@ export function run(test) {
      * content (test/duo.mjs), and is taken out here all the same in case it
      * ever comes back in.
      */
-    const tunerTag = '<Tuner on={tunerOn && !tunerBeside} reading={tuning} onClose={() => writeTuner(false)} down={down} />'
+    const tunerTag = '<Tuner on={tunerOn && !tunerBeside && !stageView} reading={tuning} onClose={() => writeTuner(false)} down={down} />'
     assert.ok(stage.includes(tunerTag), 'the open tuner is not told the link is down')
     /* The page, and the six buttons, which are drawn in it under 621 points of row and in their strip under it from there (PlayFoot). */
     const footAt = stage.indexOf('function PlayFoot(')

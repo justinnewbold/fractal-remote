@@ -54,9 +54,9 @@ export const LETS_GO = 40
 export const SIDE_LEAST = 360
 
 /** What the other side may hold, in the order the list offers them. */
-export const TOOLS = ['edit', 'setlists', 'presets', 'tuner']
+export const TOOLS = ['edit', 'setlists', 'notes', 'presets', 'tuner']
 /** Each one's name in the app's top bar and in the list, and Play's. */
-export const TOOL_NAMES = { edit: 'Edit', setlists: 'Setlists', presets: 'All presets', tuner: 'Tuner', play: 'Play' }
+export const TOOL_NAMES = { edit: 'Edit', setlists: 'Setlists', notes: 'Notes', presets: 'All presets', tuner: 'Tuner', play: 'Play' }
 /** The footnote under the list: Play is never on it. */
 export const PLAY_ALWAYS = 'Play is always the other side.'
 /** The two sides' buttons in the top bar, by word. */
@@ -195,9 +195,9 @@ export const fullSays = (toolWide) => (num(toolWide) >= FULL_WORDS_AT ? SIDE_WOR
  * sides. The top bar takes it out of what it offers the account's photo.
  */
 export const LEAD_ALONE = 260
-export function leadReach({ width, left = 0, right = 0, playOnRight = true, tool = null, full = false } = {}) {
+export function leadReach({ width, left = 0, right = 0, playOnRight = true, tool = null, full = false, share = null } = {}) {
   if (!tool || full === true) return LEAD_ALONE
-  const sides = sideWidths({ width, left, right, playOnRight, tool })
+  const sides = sideWidths({ width, left, right, playOnRight, tool, share })
   return (playOnRight ? sides.tool : sides.play) + SWAP_WIDE / 2
 }
 
@@ -232,9 +232,22 @@ export const TUNER_COLUMN = SIDE_LEAST
  * 6); on the Duo, the Fold and anything under TUNER_NARROW_AT it is half,
  * on the fold, like every other tool.
  */
-export function sideWidths({ width, left = 0, right = 0, playOnRight = true, tool = null } = {}) {
+export function sideWidths({ width, left = 0, right = 0, playOnRight = true, tool = null, share = null } = {}) {
   const w = num(width)
   if (tool === 'tuner' && w >= TUNER_NARROW_AT) return { play: w - TUNER_COLUMN, tool: TUNER_COLUMN }
+  /*
+   * THE LINE DRAGGED (lib/sidesSplit: the handle on the line between the
+   * sides, the tidier Edit's): `share` is Play's share of the frame, kept
+   * from the last drag. Never on a fold, where the line is the crease
+   * (the phone keeps more down one side than the other), and never with
+   * either side under SIDE_LEAST. Not given, which is every window and
+   * account without the handle, the sides are where they always were.
+   */
+  const kept = Number(share)
+  if (share !== null && Number.isFinite(kept) && kept > 0 && kept < 1 && Math.abs(num(left) - num(right)) <= 0.5 && w >= 2 * SIDE_LEAST) {
+    const play = Math.min(w - SIDE_LEAST, Math.max(SIDE_LEAST, Math.round(w * kept)))
+    return { play, tool: w - play }
+  }
   const { first, second } = splitSides({ width, left, right })
   return playOnRight ? { play: second, tool: first } : { play: first, tool: second }
 }
@@ -245,9 +258,11 @@ export function sideWidths({ width, left = 0, right = 0, playOnRight = true, too
  * (lib/editDoor `opens`); All presets only where Play offers it (the demo,
  * or the unit answering); the Tuner only where the unit has one and is
  * answering (or the demo); Setlists always, since it never needed the rig.
+ * Notes (a setlist song's lyrics, chords or cues: lib/songNotes) only for
+ * an account that has song notes and with a setlist on (`notesOffered`).
  */
-export function sideTools({ editOpens = false, presetsOffered = false, tunerOffered = false } = {}) {
-  const offered = { edit: editOpens, presets: presetsOffered, tuner: tunerOffered }
+export function sideTools({ editOpens = false, presetsOffered = false, tunerOffered = false, notesOffered = false } = {}) {
+  const offered = { edit: editOpens, presets: presetsOffered, tuner: tunerOffered, notes: notesOffered }
   return TOOLS.filter((t) => (t in offered ? offered[t] === true : true))
 }
 

@@ -1321,7 +1321,7 @@ export function run(test) {
     assert.match(app, /useEffect\(\(\) => startSiri\(\), \[\]\)/, 'Siri is not listened for from the start, so Tuner off works only on Play')
     assert.match(app, /import \{ playElsewhereOf \} from '\.\/src\/lib\/siri-rule'/)
     /* And How do you connect to your unit? since 7 November 2026, drawn in Play's place the same way (components/HowConnect). */
-    assert.match(app, /const playElsewhere = playElsewhereOf\(\{ auth, seenWalk, independentDue, screen, shareCard: askHow \|\| askShare \}\)/, 'Siri takes the sharing card, or How do you connect, for Play')
+    assert.match(app, /const playElsewhere = playElsewhereOf\(\{ auth, seenWalk, independentDue, screen: stageViewUp \? 'stage' : screen, shareCard: askHow \|\| askShare \}\)/, 'Siri takes the sharing card, or How do you connect, for Play')
     assert.match(app, /useEffect\(\(\) => siriElsewhere\(playElsewhere\), \[playElsewhere\]\)/)
     const siri = withoutComments(read(`${LIB}/siri.js`))
     assert.ok(!/isDemo|from '\.\/demo'/.test(siri), 'Siri takes another road in the demo than on a rig, so the reviewer would try something customers do not have')

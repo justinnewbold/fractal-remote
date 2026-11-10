@@ -276,7 +276,8 @@ export const AREAS = [
         web: null,
         phone: 'Bypassed',
         /* "Turn it off" on a real VP4, whose on/off nothing reads: the press says what it does, not a state nobody read (shared/vp4-safety.mjs). */
-        also: ['Engaged', 'Turn it off'],
+        /* "On" and "Off" in the tidier Edit's one row for the block (lib/tidyEdit), where the long words have no room. */
+        also: ['Engaged', 'Turn it off', 'On', 'Off'],
         why: 'the browser says a block’s on or off on the play screen instead, beside the block'
       },
       {
@@ -1109,6 +1110,9 @@ export function run(test) {
        * apps? Settings menus?"): the browser has the two rows now, and Stop
        * the looper is under its Troubleshooting, as on the phone.
        */
+      /* STAGE_VIEW_NAME: "Stage view" (mobile/src/lib/stageView.js). */
+      STAGE_VIEW_NAME:
+        'phone only, for now: Play drawn large to read from a stand, his account only until STAGE_VIEW_FOR_EVERYONE (mobile/src/lib/features.js); the browser has no such view yet, and the row is not drawn for an account without it (App.js hands Settings no onStageView)',
       'Get it on your phone or tablet': 'browser only, and only at the computer end (the computer app’s window, and the demo on a computer that could host the rig): a phone or tablet, in the app or in its browser, has no use for a way to get itself onto a phone, and the browser leaves it out there (phoneEnd). At the computer it stays on the front page rather than inside About because "somebody who has a rig connected and wants the remote in their pocket is the likeliest buyer there is"'
       /* 'Unlock the full version' was here as phone-only — "the browser has
          nothing to sell". Web Billing changed that, and the row is at both

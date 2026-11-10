@@ -878,6 +878,46 @@ It opens with its What's new line when he says so. Closed to an account,
 the pop-up is exactly the channels it always was. A preset change still
 closes it, and so does picking a channel.
 
+**Built on 10 November 2026 and HIS ACCOUNT ONLY until he says each is
+right** ("yes to all your other non build suggestions as well"). Each has
+one switch in mobile/src/lib/features.js, false, and opens with its What's
+new line in the pull request that sets it true. None has run on a device.
+
+- **The tidier Edit and the handle on the line between the sides**
+  (`TIDY_EDIT_FOR_EVERYONE`; lib/tidyEdit, lib/sidesSplit,
+  components/SidesHandle). Edit's open block is one row (name, A to D,
+  On/Off, and the model where the panel is 520 points or wider), the tabs
+  one short row, and the knobs as many across as the measured width takes
+  (three on a phone upright, five in half an 11-inch iPad, eight full
+  screen). Beside Play, Edit's title drops the preset's name. On a big
+  screen the handle swaps on a tap, resizes on a drag (neither side under
+  360; past that the side closes), and two taps or turning the device put
+  the line back; no resize on the Duo's fold or beside the tuner's column.
+  The top bar's Swap is not drawn where the handle is. No More button: the
+  rows it would hold are under the knobs. How an editor works, never how
+  one looks.
+- **Stage view** (`STAGE_VIEW_FOR_EVERYONE`; lib/stageView,
+  components/StageView): the preset, the scene and what is next, sized
+  from the room, with Previous and Next as the screen's edges on a wide
+  window, the scenes as one row of big buttons, and the tuner as a strip.
+  It sends only what Play sends. Ways in: a button in the top bar before
+  Two sides on a big screen with Play alone, and a row in Settings → Play
+  screen on every device.
+- **Song notes** (`SONG_NOTES_FOR_EVERYONE`; lib/songNotes, lib/notesHere,
+  components/SongNotes): each setlist song can carry up to 4,000
+  characters of lyrics, chords or cues, written from Setlists → Set up
+  each song, shown as the Notes tool beside Play (only while a setlist is
+  on) and over the lower part of Stage view. KEPT ON THE DEVICE ONLY,
+  under their own key: the setlist's own songs are cleaned by the file the
+  browser and the computer app share, which would drop a notes field, and
+  nothing here changes that file. No log or report can reach them (a test
+  holds the list of files that can).
+
+Still to build from that yes: dragging a preset from All presets into a
+setlist, and three across on the big iPad Pro. The three ideas that need
+a build (keyboard and foot-pedal keys, a second screen, widgets) were
+offered, not asked for.
+
 **In Edit the knobs come first.** "In edit move search bar and amp and
 pedal names to the bottom. Have the Bluetooth warning also move to the
 bottom. We want as many knobs visible in edit." (10 November 2026.) Find a
