@@ -1934,7 +1934,9 @@ export function run(test) {
     }
     const CHECKED = new Set([...PARTS.map(([, link]) => link), 'https://www.raspberrypi.com/software/', 'https://connect.raspberrypi.com/', 'https://apps.apple.com/app/id6812916461'])
     for (const link of [...html.matchAll(/href="(https?:[^"]*)"/g)].map((m) => m[1])) assert.ok(CHECKED.has(link), `the guide links ${link}, which nobody checked`)
-    assert.match(words, /Fractal Remote gets nothing from them\./, 'the guide does not say the links earn nothing')
+    /* The links carry his Amazon Associates tag since 9 November 2026, so the guide says Amazon's own sentence, never that they earn nothing. */
+    assert.match(words, /As an Amazon Associate I earn from qualifying purchases\./, 'the guide links Amazon without the Associates sentence')
+    assert.doesNotMatch(words, /gets nothing from them|earns nothing/, 'the guide still says the links earn nothing')
     assert.match(words, /a case with a fan/i)
     assert.match(words, /microSD card of 32 GB or more/)
     assert.match(words, /USB-A to USB-B \(a [“"]printer cable[”"]\) for an FM3, FM9 or Axe-Fx III, or USB-A to USB-C for an AM4\. It has to be a data cable, not a charge-only one\./, 'the guide does not say which USB cable each unit takes, or that it must carry data')

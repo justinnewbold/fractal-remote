@@ -9001,7 +9001,9 @@ export function run(test) {
      * Bluetooth page, which only his account opens, links it.
      */
     assert.equal(gear.GUIDE_URL, `${SITE}/bluetooth-guide.html`)
-    /* The three he bought, as checked on amazon.com on 10 October 2026, and nothing on the end of them. */
+    /* The three he bought, as checked on amazon.com on 10 October 2026, each with his Associates tag since 9 November 2026. */
+    assert.equal(gear.AMAZON_TAG, 'justinnewbold-20')
+    assert.equal(gear.AMAZON_DISCLOSURE, 'As an Amazon Associate I earn from qualifying purchases.')
     assert.deepEqual(
       Object.fromEntries(Object.entries(gear.PARTS).map(([key, p]) => [key, p.amazon])),
       {
@@ -9038,8 +9040,9 @@ export function run(test) {
     assert.equal(gear.PARTS.uhost.maker, 'https://www.cme-pro.com/widi-uhost/')
     assert.equal(gear.PARTS.c2midi.maker, 'https://www.cme-pro.com/c2midi-pro/')
     for (const url of gear.ALL_LINKS) {
-      assert.match(url, /^https:\/\/[^?#\s]+$/, `${url} carries tracking or is not a plain address`)
-      if (/amazon\.com/.test(url)) assert.match(url, /^https:\/\/www\.amazon\.com\/dp\/[A-Z0-9]{10}$/, `${url} is not the plain /dp/ form`)
+      /* An Amazon link carries his Associates tag and nothing else on the end (Justin, 9 November 2026); every other link is a plain address. */
+      if (/amazon\.com/.test(url)) assert.match(url, /^https:\/\/www\.amazon\.com\/dp\/[A-Z0-9]{10}\?tag=justinnewbold-20$/, `${url} is not the /dp/ form with his tag`)
+      else assert.match(url, /^https:\/\/[^?#\s]+$/, `${url} carries tracking or is not a plain address`)
     }
     /* The 3.5 mm adapters are for the AM4 and the VP4 (both Type A, docs/bluetooth-midi.md): the others have the 5-pin jacks the C2MIDI Pro plugs into. */
     assert.deepEqual(gear.partsFor('am4').map((p) => p.key), ['uhost', 'c2midi', 'adapters'])
@@ -9401,6 +9404,21 @@ export function run(test) {
     const html = readFileSync(at, 'utf8')
     const shop = html.match(/https:\/\/(?:www\.)?(?:amazon\.[a-z.]+|cme-pro\.com)\/[^"'\s<>)]*/g) || []
     assert.ok(shop.some((link) => /amazon\./.test(link)), 'the guide gives nowhere to buy the parts')
+    /*
+     * His Associates tag is on every Amazon link the website and the app
+     * show, and Amazon's sentence is said wherever they are (Justin, 9
+     * November 2026): the Bluetooth guide, the Raspberry Pi guide, and the
+     * app's How to connect page.
+     */
+    for (const page of ['public/bluetooth-guide.html', 'public/raspberry-pi.html']) {
+      const text = src(page).replace(/<!--[\s\S]*?-->/g, ' ')
+      const links = text.match(/https:\/\/(?:www\.)?amazon\.[a-z.]+\/[^"'\s<>)]*/g) || []
+      assert.ok(links.length > 0, `${page} has no Amazon link`)
+      for (const link of links) assert.match(link, /^https:\/\/www\.amazon\.com\/dp\/[A-Z0-9]{10}\?tag=justinnewbold-20$/, `${page}: ${link} does not carry his tag`)
+      assert.ok(text.includes(gear.AMAZON_DISCLOSURE), `${page} links Amazon without the Associates sentence`)
+      assert.ok(!/gets nothing from them|earns nothing/.test(text), `${page} still says the links earn nothing`)
+    }
+    assert.match(src('mobile/src/screens/Bluetooth.js'), /PARTS\[key\]\?\.amazon\)\) \? <Hint>\{AMAZON_DISCLOSURE\}<\/Hint> : null\}/, 'the app’s View on Amazon buttons are shown without the Associates sentence')
     for (const link of shop) assert.ok(gear.ALL_LINKS.includes(link), `the guide links ${link}, and the gear file does not give it`)
     /* Only the three parts: an untried adapter is named on the guide, never linked to buy. */
     assert.deepEqual(
