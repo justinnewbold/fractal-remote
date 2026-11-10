@@ -1,34 +1,86 @@
-import { View } from 'react-native'
+import { useState } from 'react'
+import { View, useWindowDimensions } from 'react-native'
 import { font, space } from '../lib/theme'
-import { BLOCK, BLOCK_NAME, SIDEWAYS_FULL, SIDE_WORDS, TOOL_NAMES, sideWidths } from '../lib/twoSides'
+import { BLOCK, BLOCK_NAME, SIDEWAYS_FULL, SIDE_WORDS, SWAP_WIDE, TOOL_NAMES, chipsFit, fullSays, sideWidths } from '../lib/twoSides'
 import Press from './Press'
 
 /*
- * THE TWO SIDES' BARS, IN THE APP'S TOP BAR, on a phone held on its side
- * (lib/twoSides phoneSidewaysOn).
+ * THE TWO SIDES' BUTTONS, IN THE APP'S TOP BAR: on a phone held on its side
+ * (lib/twoSides phoneSidewaysOn) and, since 10 November 2026, on a big
+ * screen too (`big`: an iPad on its side, the Duo opened, a tablet or a
+ * fold sideways).
  *
- * On a tablet each side has a bar of its own under the app's (components/
- * Sides SideBar): its name, Swap, Full screen. A phone on its side is about
- * 330 points tall under the top bar, and a second row of bars would take a
- * sixth of that from the tiles. So there the same buttons sit in the top
- * bar itself, each side's over its own half:
+ * Each side used to have a bar of its own under the app's on a big screen:
+ * its name, Swap, Full screen. "The play and two sides buttons take up a
+ * whole row on iPad" (Justin), and a phone on its side never had the height
+ * for one. So the same buttons sit in the top bar itself, each side's over
+ * its own side:
  *
  *   beside   the tool's name (tap for the list of what can go beside Play)
- *            and Full over the tool's half, Play's name over Play's, and
- *            Swap on the line between them.
+ *            and Full screen over the tool's side, Play's name over Play's,
+ *            and Swap on the line between them.
  *   full     the tool fills the window: its name and Two sides.
+ *   alone    Play alone on a big screen: Two sides, which brings back the
+ *            tool that was beside it or, with none yet, opens the list.
+ *            Nothing at all on a phone on its side, where Play's own
+ *            buttons (the preset, Setlists, Edit, Tuner) open each tool.
  *
  * Play's own Full screen is not here: it is the tool's Done, which every
- * tool keeps in its own header. With Play alone nothing is drawn at all,
- * since Play's own buttons (the preset, Setlists, Edit, Tuner) open each
- * tool beside it.
+ * tool keeps in its own header.
  *
  * `frame` is the room under the bar as App measured it; the bar starts at
  * the same left edge, so the line between the sides is at the same place
- * in both, and Swap is centred on it.
+ * in both, and Swap is centred on it. On a big screen the bar keeps its
+ * version in front of these buttons, so where they start is measured
+ * (`at`), and Swap still lands on the line.
+ *
+ * ON A BIG SCREEN THE WORDS ARE WHOLE WHERE THEY FIT: Full screen over a
+ * side of 480 points or more, Full over a narrower one (the Duo's sides,
+ * the tuner's narrow column), as on every phone (lib/twoSides fullSays).
+ * And the side of the bar past Swap is shared with the account's photo, the
+ * unit's pill, the speaker and Settings: where that leaves no room for a
+ * side's buttons (an iPad with the tuner's column on that side), they sit
+ * just before Swap instead of being cut (`moved`). And Swap itself is
+ * never drawn under them: in the one tight case (that column, and Save up
+ * beside the pill) it stops short of the line by what the bar lacks.
  */
-export default function SidesLead({ frame = null, tool = null, full = false, playOnRight = true, onName, onSwap, onFull }) {
-  if (!tool) return null
+export default function SidesLead({
+  frame = null,
+  tool = null,
+  full = false,
+  playOnRight = true,
+  /* A big screen, not a phone on its side: the version before these, whole words where they fit, and Two sides with Play alone. */
+  big = false,
+  onName,
+  onSwap,
+  onFull,
+  /* Play alone on a big screen: what Two sides does (App: the kept tool, or the list). */
+  onTwo = null
+}) {
+  const { fontScale = 1 } = useWindowDimensions()
+  /* Where this row starts along the bar, past the version: measured on a big screen, nothing before it on a phone. */
+  const [at, setAt] = useState(big ? VERSION_ROOM : 0)
+  /* How much of the bar is left past Swap, measured on a big screen. */
+  const [rest, setRest] = useState(null)
+  /* How wide this row is, measured on a big screen: what the bar gives it, beside the photo, the pill, Save, the speaker and Settings. */
+  const [row, setRow] = useState(null)
+  /* Measured on every shape of this row, so Swap is on the line from the frame a tool opens in. */
+  const measured = big
+    ? {
+        onLayout: (e) => {
+          setAt(Math.round(e.nativeEvent.layout.x))
+          setRow(Math.round(e.nativeEvent.layout.width))
+        }
+      }
+    : null
+  if (!tool) {
+    if (!big) return null
+    return (
+      <View style={ROW} {...measured}>
+        <Press label={SIDE_WORDS.two} height={HIGH} labelSize={font.small} onPress={onTwo} accessibilityLabel="Show two sides" style={CHIP} />
+      </View>
+    )
+  }
   const knobs = tool === BLOCK
   const name = knobs ? BLOCK_NAME : TOOL_NAMES[tool] || ''
   const toolName = (
@@ -36,37 +88,62 @@ export default function SidesLead({ frame = null, tool = null, full = false, pla
   )
   if (full) {
     return (
-      <View style={ROW}>
+      <View style={ROW} {...measured}>
         {toolName}
         <Press label={SIDE_WORDS.two} height={HIGH} labelSize={font.small} onPress={() => onFull?.(false)} accessibilityLabel="Show two sides" style={CHIP} />
       </View>
     )
   }
   const widths = sideWidths({ width: frame?.width, left: frame?.left, right: frame?.right, playOnRight, tool })
-  /* Where the line between the sides falls, from the bar's own left edge; the bar's padding and half of Swap come off the first half. */
+  /* Where the line between the sides falls, from the bar's own left edge; the bar's padding, what is before this row and half of Swap come off the first half. */
   const line = playOnRight ? widths.tool : widths.play
-  const first = Math.max(0, line - space.lg - SWAP_WIDE / 2 - space.sm)
+  const reach = Math.max(0, line - space.lg - (big ? at : 0) - SWAP_WIDE / 2 - space.sm)
+  /* And on a big screen never past what the bar gives this row: with the tuner's column on the far side and Save up beside the pill, Swap stops short of the line sooner than it is drawn under the pill. */
+  const first = big && row !== null ? Math.min(reach, Math.max(0, row - SWAP_WIDE - space.sm)) : reach
+  const fills = big ? fullSays(widths.tool) : SIDEWAYS_FULL
   const toolSide = [
     toolName,
     /* A block's knobs never fill the window: Play is where the next block is held. */
-    knobs ? null : <Press key="full" label={SIDEWAYS_FULL} height={HIGH} labelSize={font.small} onPress={() => onFull?.(true)} accessibilityLabel={`${name} fills the screen`} style={CHIP} />
+    knobs ? null : <Press key="full" label={fills} height={HIGH} labelSize={font.small} onPress={() => onFull?.(true)} accessibilityLabel={`${name} fills the screen`} style={CHIP} />
   ]
   const playSide = (
     <Press key="play" label={`${TOOL_NAMES.play} ▾`} height={HIGH} labelSize={font.small} onPress={() => onName?.('play')} accessibilityLabel={`${TOOL_NAMES.play}. Choose what goes beside Play`} style={CHIP} />
   )
+  const before = playOnRight ? toolSide : playSide
+  const after = playOnRight ? playSide : toolSide
+  /* What the buttons past Swap say, for whether they fit what the bar has left there (a big screen only). */
+  const afterSays = playOnRight ? [`${TOOL_NAMES.play} ▾`] : [`${name} ▾`, knobs ? null : fills]
+  const moved = big && rest !== null && !chipsFit({ room: rest, labels: afterSays, letter: LETTER * font.small * (fontScale || 1), pad: CHIP_ROUND, gap: space.sm })
   return (
-    <View style={ROW}>
-      <View style={[HALF, { width: first }]}>{playOnRight ? toolSide : playSide}</View>
+    <View style={ROW} {...measured}>
+      <View style={[moved ? HALF_APART : HALF, { width: first }]}>
+        {moved ? <View style={HALF}>{before}</View> : before}
+        {moved ? <View style={HALF}>{after}</View> : null}
+      </View>
       <Press label={SIDE_WORDS.swap} height={HIGH} labelSize={font.small} onPress={onSwap} accessibilityLabel="Swap the two sides" style={[CHIP, { width: SWAP_WIDE }]} />
-      <View style={REST}>{playOnRight ? playSide : toolSide}</View>
+      {big ? (
+        /* All the bar has left past Swap, measured, so the buttons there are moved before they are cut. */
+        <View style={REST_ALL} onLayout={(e) => setRest(Math.round(e.nativeEvent.layout.width))}>
+          {moved ? null : after}
+        </View>
+      ) : (
+        <View style={REST}>{after}</View>
+      )}
     </View>
   )
 }
 
 /* Under a thumb's 44 on purpose: the bar is 48, and Press reaches 44 by its own hit slop. */
 const HIGH = 36
-const SWAP_WIDE = 64
 const CHIP = { paddingHorizontal: space.sm, paddingVertical: 2 }
 const ROW = { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.sm }
 const HALF = { flexDirection: 'row', alignItems: 'center', gap: space.sm }
+/* The first half with the far side's buttons moved into it: its own at the start, theirs at the end, beside Swap. */
+const HALF_APART = { ...HALF, justifyContent: 'space-between' }
 const REST = { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.sm }
+const REST_ALL = { flex: 1, minWidth: 0, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: space.sm }
+/* The version's room before this row on a big screen, until it is measured: "v1.90.21" in the bar's small type, and the gap after it. */
+const VERSION_ROOM = 72
+/* A letter of a button's words, as a share of its type size, erring wide; and what is round the words: the padding, the border, and slack. */
+const LETTER = 0.62
+const CHIP_ROUND = 2 * space.sm + 2 + 6

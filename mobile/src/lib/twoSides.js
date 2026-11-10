@@ -55,11 +55,11 @@ export const SIDE_LEAST = 360
 
 /** What the other side may hold, in the order the list offers them. */
 export const TOOLS = ['edit', 'setlists', 'presets', 'tuner']
-/** Each one's name on its bar and in the list, and Play's. */
+/** Each one's name in the app's top bar and in the list, and Play's. */
 export const TOOL_NAMES = { edit: 'Edit', setlists: 'Setlists', presets: 'All presets', tuner: 'Tuner', play: 'Play' }
 /** The footnote under the list: Play is never on it. */
 export const PLAY_ALWAYS = 'Play is always the other side.'
-/** The two bars' buttons, by word. */
+/** The two sides' buttons in the top bar, by word. */
 export const SIDE_WORDS = { swap: 'Swap', full: 'Full screen', two: 'Two sides' }
 
 /** Whether `screen` (App.js's own word for what is open) is a tool a side can hold. */
@@ -70,7 +70,7 @@ export const isTool = (screen) => TOOLS.includes(screen)
  * never kept for Two sides.
  */
 export const BLOCK = 'block'
-/** Its name on the side's bar. */
+/** Its name in the top bar. */
 export const BLOCK_NAME = 'Knobs'
 
 const num = (n) => (Number.isFinite(Number(n)) && Number(n) > 0 ? Number(n) : 0)
@@ -167,6 +167,56 @@ export function phoneSidewaysOn({ width, height, left = 0, right = 0 } = {}, was
 /** On a phone on its side the tool's bar button says this, not SIDE_WORDS.full: the top bar has no room for two words. */
 export const SIDEWAYS_FULL = 'Full'
 
+/*
+ * THE TWO SIDES' BUTTONS ARE IN THE APP'S TOP BAR ON A BIG SCREEN TOO
+ * (10 November 2026). "The play and two sides buttons take up a whole row
+ * on iPad. What other options for those?" (Justin, on his iPad; offered the
+ * top bar, "Yes do that now".) Each side had a bar of its own under the
+ * app's: 52 points of every big screen for a name and two buttons, beside a
+ * top bar that was mostly empty. So the names, Swap and Full screen or Two
+ * sides sit in the top bar there, as they do on a phone held on its side
+ * (components/SidesLead), and Play and the tool beside it get the row back.
+ * What follows is what the bar needs to know that a row of its own did not.
+ */
+
+/** How wide Swap is in the top bar; the line between the sides runs through its middle. */
+export const SWAP_WIDE = 64
+/** From this width of the tool's own side, its button says SIDE_WORDS.full; under it (the Duo's sides, the tuner's narrow column, every phone on its side), SIDEWAYS_FULL. */
+export const FULL_WORDS_AT = 480
+/** What the tool's fill-the-window button says in the top bar, by how wide the tool's side is. */
+export const fullSays = (toolWide) => (num(toolWide) >= FULL_WORDS_AT ? SIDE_WORDS.full : SIDEWAYS_FULL)
+
+/**
+ * How far along the top bar the two sides' buttons reach, from the frame's
+ * left edge: with a tool beside Play, to the far edge of Swap, which sits on
+ * the line between the sides (sideWidths, so the tuner's narrow column and
+ * the Duo's fold are where the sides themselves have them); with a tool
+ * filling the window or Play alone, LEAD_ALONE, room for a name and Two
+ * sides. The top bar takes it out of what it offers the account's photo.
+ */
+export const LEAD_ALONE = 260
+export function leadReach({ width, left = 0, right = 0, playOnRight = true, tool = null, full = false } = {}) {
+  if (!tool || full === true) return LEAD_ALONE
+  const sides = sideWidths({ width, left, right, playOnRight, tool })
+  return (playOnRight ? sides.tool : sides.play) + SWAP_WIDE / 2
+}
+
+/**
+ * Whether buttons saying `labels` fit `room` points of the top bar, side by
+ * side: each its words at `letter` points a letter with `pad` round them,
+ * `gap` between. Erring wide, so a button is moved to the other side of
+ * Swap before it is cut. The side of the bar past Swap also holds the
+ * account's photo, the unit's pill, the speaker and Settings, so on an iPad
+ * with the tuner's narrow column on that side there is no room left for
+ * the tuner's own name: then its buttons sit just before Swap instead.
+ */
+export function chipsFit({ room = 0, labels = [], letter = 8, pad = 24, gap = 8 } = {}) {
+  const words = labels.filter((l) => typeof l === 'string' && l.length > 0)
+  if (!words.length) return true
+  const needs = words.reduce((sum, l) => sum + l.length * letter + pad, 0) + (words.length - 1) * gap
+  return num(room) >= needs
+}
+
 /** From this frame width the tuner's side is a narrow column (TUNER_COLUMN), not half: an iPad on its side and wider. */
 export const TUNER_NARROW_AT = 1000
 /** The tuner's column there: the least a side may be, so Play keeps the rest. */
@@ -206,7 +256,7 @@ export function sideTools({ editOpens = false, presetsOffered = false, tunerOffe
  * because tuning is all you are doing. With two sides up there is room to
  * tune and still see Play, so the tuner opens in the other side instead:
  * Play's Tuner button (or the watch, or Siri) turning it on puts it there,
- * and the list on either bar offers it too.
+ * and the list under either side's name offers it too.
  *
  * THE TUNER BORROWS THE SIDE (docs/two-sides, "The tuner"). Whatever was
  * there (Edit, Setlists or All presets) comes back when the tuner goes off;
