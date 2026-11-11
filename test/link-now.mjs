@@ -1041,7 +1041,7 @@ async function watchOnABench() {
     /* sameBlock and writeChannel are docs/pending/watch-channels.patch's, so this bench still runs once it is applied. */
     'stub.mjs': stub(['blockColor = () => ({})', 'idOf = (b) => b?.id', 'sameBlock = () => false', 'shortBlock = () => ""', 'metronome = () => ({ on: false })', 'boostPedals = (chain) => chain || []',
       /* lib/watchPages, for a watch that has not said it takes its pages from the phone: nothing kept, nothing sent. */
-      'noteWatchKnows = () => {}', 'pagesToSend = () => null', 'useWatchPages = () => ({ order: [], hidden: [], can: false })', 'watchHasTempo = () => false',
+      'noteWatchKnows = () => {}', 'pagesToSend = () => null', 'useWatchPages = () => ({ order: [], hidden: [], can: false })', 'watchHasTempo = () => false', 'tunerStaysToSend = () => null',
       /* lib/metronome's two for the Tempo page, which that watch never asks for. */
       'setWatchTap = () => {}', 'useMetronome = () => ({})']),
     'debugLog.mjs': "import { bench } from './bench.mjs'\nexport const logDebug = (...a) => { bench.log.push(a.join(' ')) }\n",
@@ -3744,7 +3744,8 @@ export function run(test) {
     const root = read('mobile/targets/watch/FractalWatchApp.swift').replace(/\s+/g, ' ')
     assert.match(root, /if let state = link\.state, state\.linked, !state\.tooNew, !link\.away \{ TabView/)
     const pages = read('mobile/targets/watch/Pages.swift').replace(/\s+/g, ' ')
-    assert.match(pages, /\.onDisappear \{ if state\.tuner\.on \{ link\.send\(\.tuner\(on: false\)\) \} \}/)
+    /* (Or, from the build that lets the iPhone say the tuner stays on, by that rule: test/watch-pages.mjs.) */
+    assert.match(pages, /\.onDisappear \{ if (state\.tuner\.on|watchTunerStopsOnLeaving\(tunerOn: state\.tuner\.on, stays: state\.tunerStays\)) \{ link\.send\(\.tuner\(on: false\)\) \} \}/)
     const stage = read('mobile/src/screens/Stage.js')
     assert.match(stage, /linked: Number\.isInteger\(preset\?\.number\) && \(!down \|\| tunerOn\),/, 'NOT CONNECTED takes the watch’s Tuner page away while it is tuning')
     /* And a tap on the pages it keeps is still refused at once while the link is down: the rig asks before anything goes. */

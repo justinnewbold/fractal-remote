@@ -17744,7 +17744,8 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.match(bridge, /untilConnected\(Math\.max\(0, deadline - Date\.now\(\)\)\)/, 'a woken watch tap waits the old eight seconds and lands late')
   /* The tuner mutes the unit: the watch never turns it on by being swiped to. */
   const pages = readSrc(new URL('../mobile/targets/watch/Pages.swift', import.meta.url), 'utf8')
-  assert.match(pages, /\.onDisappear \{\s*if state\.tuner\.on \{ link\.send\(\.tuner\(on: false\)\) \}/)
+  /* (The second form is the watch's from the build that lets the iPhone say the tuner stays on: docs/pending/watch-page-order.patch, test/watch-pages.mjs.) */
+  assert.match(pages, /\.onDisappear \{\s*if (state\.tuner\.on|watchTunerStopsOnLeaving\(tunerOn: state\.tuner\.on, stays: state\.tunerStays\)) \{ link\.send\(\.tuner\(on: false\)\) \}/)
   assert.ok(!/onAppear[^}]*tuner\(on: true\)/.test(pages), 'the tuner turns on by being swiped to')
   /* The hold is the phone's hold, and only the watch says so: the phone's tips
      reach every phone by an update, a watch from before this build cannot do it. */
@@ -17789,7 +17790,8 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.match(bridge, /if \(!up \|\| Date\.now\(\) >= deadline\) \{ logDebug\('watch', `\$\{cmd\.do\} not sent: the phone could not reach the rig in time after waking`\) return undefined \}/, 'a woken tap is no longer dropped at its deadline: the watch tip says it may be, and could say more')
   assert.match(bridge, /const howLines = \(\) => \(watchWakes\(\) \? \[WATCH_HOW_LOCKED, \.\.\.WATCH_HOW\.slice\(1\)\] : WATCH_HOW\)/)
   /* A watch with the Tempo page is told of five pages; any other, what it always was (test/watch-pages.mjs holds the words). */
-  assert.match(bridge, /return watchHasTempo\(\) \? \[lines\[0\], WATCH_HOW_PAGES_TEMPO, lines\[2\], WATCH_HOW_TEMPO, \.\.\.lines\.slice\(3\)\] : lines/)
+  assert.match(bridge, /return watchHasTempo\(\) \? \[lines\[0\], WATCH_HOW_PAGES_TEMPO, lines\[2\], WATCH_HOW_TEMPO, tuner\] : \[\.\.\.lines\.slice\(0, 3\), tuner\]/)
+  assert.equal((bridge.slice(bridge.indexOf('export const WATCH_HOW = ['), bridge.indexOf('/** Whether this build wakes on a watch tap')).match(/^  (WATCH_HOW_OPEN|'[^\n]*'),?$/gm) || []).length, 4, 'the watch tips grew or shrank, and watchHow places them by number')
   const wf = readSrc(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')
   for (const step of ['swift test', 'xcodegen generate', '-sdk watchsimulator', 'screens.sh', 'watch-screens']) assert.ok(wf.includes(step), `the watch check has no ${step}`)
 })

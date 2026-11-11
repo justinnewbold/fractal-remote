@@ -13,7 +13,7 @@ import { createWatchSender, watchCommand, watchState, watchTapInTime } from './w
 import { metronome, setWatchTap, useMetronome } from './metronome'
 import { boostPedals } from './am4-boost'
 import { boostNow, pedalSlug } from './rig'
-import { noteWatchKnows, pagesToSend, useWatchPages, watchHasTempo } from './watchPages'
+import { noteWatchKnows, pagesToSend, tunerStaysToSend, useWatchPages, watchHasTempo } from './watchPages'
 
 /*
  * THE APPLE WATCH, FROM THE PHONE'S SIDE.
@@ -34,12 +34,13 @@ import { noteWatchKnows, pagesToSend, useWatchPages, watchHasTempo } from './wat
 
 /*
  * THE PICTURE FOR THE WATCH THAT IS THERE. What Play gave (`from`), with the
- * two things only a watch that has said it knows them is sent: its pages
- * (lib/watchPages pagesToSend) and its Tempo page's tempo (watchHasTempo).
- * To any other watch neither is in the picture at all, and it is field for
- * field what it always was.
+ * things only a watch that has said it knows them is sent: its pages
+ * (lib/watchPages pagesToSend), its Tempo page's tempo (watchHasTempo) and
+ * the tuner's "stays on when you swipe away" switch (tunerStaysToSend). To
+ * any other watch none of them is in the picture at all, and it is field
+ * for field what it always was.
  */
-const pictured = (from) => watchState({ ...from, tempo: watchHasTempo() ? from.tempo : null, ...pagesToSend() })
+const pictured = (from) => watchState({ ...from, tempo: watchHasTempo() ? from.tempo : null, tunerStays: tunerStaysToSend(), ...pagesToSend() })
 
 let native
 function link() {
@@ -110,9 +111,12 @@ const howLines = () => (watchWakes() ? [WATCH_HOW_LOCKED, ...WATCH_HOW.slice(1)]
  */
 export const WATCH_HOW_PAGES_TEMPO = 'Swipe up or down on the watch, or turn the Digital Crown, to move between its pages: Scenes, Pedals, Presets, Tempo and Tuner.'
 export const WATCH_HOW_TEMPO = 'Tempo shows the tempo. Tap its button in time to set a new one.'
+/* And the tuner's line, where its "stays on when you swipe away" switch is on (components/WatchTunerStays, on the same page): WATCH_HOW's says it turns off when its page is left, which that switch undoes. */
+export const WATCH_HOW_TUNER_STAYS = 'The tuner starts only when you tap it. Leaving its page doesn’t stop it, as you chose above: tap Stop tuning.'
 export function watchHow() {
   const lines = howLines()
-  return watchHasTempo() ? [lines[0], WATCH_HOW_PAGES_TEMPO, lines[2], WATCH_HOW_TEMPO, ...lines.slice(3)] : lines
+  const tuner = tunerStaysToSend() === true ? WATCH_HOW_TUNER_STAYS : lines[3]
+  return watchHasTempo() ? [lines[0], WATCH_HOW_PAGES_TEMPO, lines[2], WATCH_HOW_TEMPO, tuner] : [...lines.slice(0, 3), tuner]
 }
 
 /** A watch is paired with this phone and has the watch app on it. False on any doubt. */

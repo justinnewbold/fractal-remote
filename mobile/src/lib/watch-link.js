@@ -101,9 +101,45 @@ export const WATCH_PAGE_NAMES = { scenes: 'Scenes', pedals: 'Pedals', presets: '
  *            the picture says.
  *   `tempo`  it has the Tempo page: it reads the picture's `tempo` and may
  *            ask for a tap and for the wrist's metronome switch (below).
- * One build of the watch brought both, so a watch that says one says both.
+ *   `stay`   it reads the picture's `tunerStays`, and with it true does
+ *            not turn the tuner off when its page is left (THE TUNER, AND
+ *            LEAVING ITS PAGE, below).
+ * One build of the watch brought all three, so a watch that says one says
+ * them all.
  */
-export const WATCH_KNOWS = ['pages', 'tempo']
+export const WATCH_KNOWS = ['pages', 'tempo', 'stay']
+
+/*
+ * THE TUNER, AND LEAVING ITS PAGE. Leaving the watch's tuner page turns the
+ * tuner off: a unit set to mute while it tunes must not be left muted
+ * because a page was swiped away. Justin, 11 November 2026: "Can we make a
+ * setting in the Watch app settings, where a user can decide whether or not
+ * the tuner stays on when they exit or was it turned off some people wanna
+ * play while their tuner stays up on their screen ... Could we make out a
+ * setting? That they turn on and off?"
+ *
+ * So the iPhone keeps one switch (Settings → Apple Watch, under the pages),
+ * OFF unless it is turned on, and says it in the picture as `tunerStays`,
+ * only to a watch that has said it knows `stay`. Absent is off, which is
+ * every watch and every phone before this. Two rules, here and word for
+ * word on the watch (Model.swift), held to the same answers by the fixture:
+ *
+ *   leaving  (watchTunerStopsOnLeaving) leaving the tuner's page turns the
+ *            tuner off, unless the picture says it stays.
+ *   hiding   (watchTunerStopsOnHiding) the tuner's page hidden in the list
+ *            while the tuner is on turns it off WHATEVER THE SWITCH SAYS:
+ *            there would be no page left on the watch to stop it from.
+ *
+ * With the switch on the tuner is stopped by Stop tuning on the watch, from
+ * the iPhone or at the unit; the watch does nothing else to it.
+ */
+
+/** Whether leaving the tuner's page turns the tuner off: it does while the tuner is on, unless the iPhone has said it stays. */
+export const watchTunerStopsOnLeaving = (tunerOn, stays) => tunerOn === true && stays !== true
+
+/** Whether a change in the pages shown turns the tuner off: its page was shown and is not now, with the tuner on. Whatever the switch says. */
+export const watchTunerStopsOnHiding = (was, now, tunerOn) =>
+  tunerOn === true && Array.isArray(was) && was.includes('tuner') && Array.isArray(now) && !now.includes('tuner')
 
 /*
  * THE TEMPO PAGE. The tempo as a big number, one Tap button, and the switch
@@ -289,6 +325,8 @@ export function watchState({
   hidden = null,
   /* The Tempo page's picture, for a watch that has said it has one; none (null) for any other, and then the field is not sent at all. */
   tempo = null,
+  /* Whether the watch leaves the tuner on when its page is left, for a watch that has said it knows how; none (null) for any other, and then the field is not sent at all. */
+  tunerStays = null,
   at = Date.now()
 } = {}) {
   const count = int(sceneCount) && sceneCount > 0 ? Math.min(sceneCount, 8) : 0
@@ -345,6 +383,10 @@ export function watchState({
     /* The Tempo page (tempoForWatch, above), only where the caller gives
        one, which is only to a watch that has said it has that page. */
     ...(tempo === null || tempo === undefined ? null : { tempo: tempoForWatch(tempo) }),
+    /* The iPhone's "stays on when you swipe away" switch (THE TUNER, AND
+       LEAVING ITS PAGE), true only when it is on; sent only where the
+       caller says, which is only to a watch that knows what to do with it. */
+    ...(tunerStays === null || tunerStays === undefined ? null : { tunerStays: tunerStays === true }),
     /* The pages in the order chosen on the iPhone, always every one
        (watchPageOrder), and those of them not to draw, never every one
        (watchPagesHidden). Sent only where the caller says an order, which

@@ -54,7 +54,19 @@ const TEMPO = { bpm: 121.4, why: '', wrist: true, running: false }
  *   node -e "import('./test/watch-pages.mjs').then(async (m) => console.log(JSON.stringify(await m.pagesFixture(), null, 2)))" > mobile/watch-ci/Tests/WatchModelTests/pages.json
  */
 export async function pagesFixture() {
-  const { watchState, watchPageOrder, watchPagesHidden, watchPagesShown } = await link()
+  const { watchState, watchPageOrder, watchPagesHidden, watchPagesShown, watchTunerStopsOnLeaving, watchTunerStopsOnHiding } = await link()
+  /* The tuner and leaving its page: every tuner on or off with the switch on, off or not said; and its page shown, hidden, or hidden already. */
+  const leaving = [true, false].flatMap((on) => [true, false, null].map((stays) => ({ on, stays, stops: watchTunerStopsOnLeaving(on, stays) })))
+  const hiding = [
+    [ALL, ['scenes', 'pedals', 'presets', 'tempo'], true],
+    [ALL, ['scenes', 'pedals', 'presets', 'tempo'], false],
+    [CHOSEN, ['scenes'], true],
+    [ALL, CHOSEN, true],
+    [ALL, ['tuner'], true],
+    [['scenes', 'pedals'], ['scenes'], true],
+    [['scenes'], ALL, true],
+    [['tuner'], ['tempo'], true]
+  ].map(([was, now, on]) => ({ was, now, on, stops: watchTunerStopsOnHiding(was, now, on) }))
   const given = [
     [null, null],
     [[], []],
@@ -89,9 +101,11 @@ export async function pagesFixture() {
       sceneNames: ['Clean', 'Crunch', 'Lead'],
       sceneCount: 8,
       tempo: TEMPO,
+      tunerStays: true,
       pages: CHOSEN,
       hidden: CHOSEN_HIDDEN
     }),
+    tuner: { leaving, hiding },
     cases: given.map(([pages, hidden]) => ({
       pages,
       hidden,
@@ -246,7 +260,8 @@ export function run(test) {
     assert.equal('pages' in plain, false, 'a watch that has not said it knows is sent an order')
     assert.equal('hidden' in plain, false, 'a watch that has not said it knows is sent hidden pages')
     assert.equal('tempo' in plain, false, 'a watch that has not said it has the Tempo page is sent a tempo')
-    for (const none of [{ pages: null }, { pages: undefined }, { pages: null, hidden: ['tuner'] }, { hidden: ['tuner'] }, { tempo: null }, { tempo: undefined }]) {
+    assert.equal('tunerStays' in plain, false, 'a watch that has not said it knows how is sent the tuner’s switch')
+    for (const none of [{ pages: null }, { pages: undefined }, { pages: null, hidden: ['tuner'] }, { hidden: ['tuner'] }, { tempo: null }, { tempo: undefined }, { tunerStays: null }, { tunerStays: undefined }]) {
       assert.deepEqual(watchState({ ...input, ...none }), plain, `${JSON.stringify(none)} changed the picture`)
     }
     /* Given an order: both fields, repaired, last in the picture, and nothing else moved. */
@@ -272,13 +287,14 @@ export function run(test) {
 
   test('watch pages: a watch says what it knows in its hello, and one that says nothing is asked nothing new', async () => {
     const { watchCommand, watchKnows, WATCH_KNOWS } = await link()
-    assert.deepEqual(WATCH_KNOWS, ['pages', 'tempo'])
+    assert.deepEqual(WATCH_KNOWS, ['pages', 'tempo', 'stay'])
     /* A watch from before: the one word it always was. */
     assert.deepEqual(watchCommand({ do: 'hello' }, null), { do: 'hello' })
     assert.deepEqual(watchCommand({ do: 'hello', knows: 'pages' }, null), { do: 'hello' }, 'a hello whose knows is not a list was taken for one')
     /* One that says so, and only what this phone knows of: never passed on as it came. */
+    assert.deepEqual(watchCommand({ do: 'hello', knows: ['pages', 'tempo', 'stay'] }, null), { do: 'hello', knows: ['pages', 'tempo', 'stay'] })
+    assert.deepEqual(watchCommand({ do: 'hello', knows: ['stay', 'tempo', 'pages', 'looper', 7, 'pages'] }, null), { do: 'hello', knows: ['pages', 'tempo', 'stay'] })
     assert.deepEqual(watchCommand({ do: 'hello', knows: ['pages', 'tempo'] }, null), { do: 'hello', knows: ['pages', 'tempo'] })
-    assert.deepEqual(watchCommand({ do: 'hello', knows: ['tempo', 'pages', 'looper', 7, 'pages'] }, null), { do: 'hello', knows: ['pages', 'tempo'] })
     assert.deepEqual(watchCommand({ do: 'hello', knows: ['pages'] }, null), { do: 'hello', knows: ['pages'] })
     assert.deepEqual(watchCommand({ do: 'hello', knows: [] }, null), { do: 'hello', knows: [] })
     assert.deepEqual(watchCommand({ do: 'hello', knows: ['looper'] }, null), { do: 'hello', knows: [] })
@@ -386,7 +402,7 @@ export function run(test) {
     /* THE PICTURE: Play's number, Play's own test for where Tap sends nothing with Play's sentence, and the metronome's setting as it is. */
     assert.match(bridge, /const tempo = \{ bpm: getState\(\)\.bpm, why: noTapTempo\(\), wrist: beat\.watch === true, running: beat\.on === true \}/)
     /* Sent only to a watch that has said it has the page, by the one function both pictures are made with. */
-    assert.match(bridge, /const pictured = \(from\) => watchState\(\{ \.\.\.from, tempo: watchHasTempo\(\) \? from\.tempo : null, \.\.\.pagesToSend\(\) \}\)/)
+    assert.match(bridge, /const pictured = \(from\) => watchState\(\{ \.\.\.from, tempo: watchHasTempo\(\) \? from\.tempo : null, /)
     assert.match(code(read('mobile/src/lib/watchPages.js')), /export const watchHasTempo = \(\) => knows\.includes\('tempo'\)/)
     /* And the metronome's setting is watched, so the switch is in the next picture. */
     assert.match(bridge, /\n  useMetronome\(\)\n/)
@@ -439,7 +455,7 @@ export function run(test) {
     assert.doesNotMatch(kept, /watchPaired|Platform\.|isAdmin|features/, 'whether the watch takes its pages is guessed from something other than the watch saying so')
 
     const bridge = code(read('mobile/src/lib/watchBridge.js'))
-    assert.match(bridge, /import \{ noteWatchKnows, pagesToSend, useWatchPages, watchHasTempo \} from '\.\/watchPages'/)
+    assert.match(bridge, /import \{ noteWatchKnows, pagesToSend, tunerStaysToSend, useWatchPages, watchHasTempo \} from '\.\/watchPages'/)
     /* The hello: what it knows is kept first, and the picture it is answered with is made with it. */
     assert.match(
       bridge.replace(/\s+/g, ' '),
@@ -509,6 +525,90 @@ export function run(test) {
     assert.match(drawn, /<Text[^>]*>\{name\}<\/Text>\s+<Text[^>]*>\{WATCH_ORDER_HIDDEN\}<\/Text>/)
   })
 
+  test('watch tuner: leaving its page turns it off unless the iPhone says it stays, and hiding its page turns it off whatever the iPhone says', async () => {
+    const { watchState, sameWatchState, watchTunerStopsOnLeaving, watchTunerStopsOnHiding } = await link()
+    /* LEAVING. Off is the default and is what the watch has always done: only a plain `true` keeps the tuner on. */
+    assert.equal(watchTunerStopsOnLeaving(true, false), true)
+    for (const notSaid of [undefined, null, 0, 1, 'yes', 'true', {}]) assert.equal(watchTunerStopsOnLeaving(true, notSaid), true, `a tuner was left on behind a swipe by ${JSON.stringify(notSaid)}`)
+    assert.equal(watchTunerStopsOnLeaving(true, true), false, 'the tuner was turned off by a swipe with the switch on')
+    /* Nothing to turn off, nothing sent. */
+    for (const stays of [true, false, null]) assert.equal(watchTunerStopsOnLeaving(false, stays), false)
+    assert.equal(watchTunerStopsOnLeaving('on', false), false)
+
+    /* HIDING. Its page was shown, is not now, and the tuner is on: off. The switch is no part of the question. */
+    assert.equal(watchTunerStopsOnHiding.length, 3, 'hiding the tuner’s page asks something besides the pages and the tuner')
+    assert.equal(watchTunerStopsOnHiding(ALL, ['scenes', 'pedals', 'presets', 'tempo'], true), true, 'a tuner was left on with no page on the watch to stop it from')
+    assert.equal(watchTunerStopsOnHiding(ALL, ['scenes', 'pedals', 'presets', 'tempo'], false), false)
+    /* Its page still there (a new order, another page hidden), or hidden already: not this. */
+    assert.equal(watchTunerStopsOnHiding(ALL, CHOSEN, true), false)
+    assert.equal(watchTunerStopsOnHiding(ALL, ['tuner'], true), false)
+    assert.equal(watchTunerStopsOnHiding(['scenes', 'pedals'], ['scenes'], true), false)
+    assert.equal(watchTunerStopsOnHiding(['scenes'], ALL, true), false)
+    for (const none of [null, undefined, 'tuner', 7]) {
+      assert.equal(watchTunerStopsOnHiding(none, ['scenes'], true), false)
+      assert.equal(watchTunerStopsOnHiding(ALL, none, true), false)
+    }
+
+    /* THE PICTURE: the switch only when it is given one, and true only for a plain true. */
+    const input = { at: 5, linked: true, sceneCount: 4 }
+    assert.equal(watchState({ ...input, tunerStays: true }).tunerStays, true)
+    assert.equal(watchState({ ...input, tunerStays: false }).tunerStays, false, 'the switch turned off is not said, so a watch could not be put back')
+    for (const odd of [1, 'yes', {}, []]) assert.equal(watchState({ ...input, tunerStays: odd }).tunerStays, false, String(odd))
+    assert.equal(sameWatchState(watchState({ ...input, tunerStays: true }), watchState({ ...input, tunerStays: false })), false, 'the switch moved and the picture was not sent')
+  })
+
+  test('watch tuner: the phone keeps the switch off unless it is turned on, offers and sends it only to a watch that knows how, and says the catch', () => {
+    const kept = code(read('mobile/src/lib/watchPages.js'))
+    assert.match(kept, /const STAYS_KEY = 'fractal\.watch\.tunerStays'/)
+    /* Off to start, and on only for a kept, plain true. */
+    assert.match(kept, /let stays = false\n/)
+    assert.match(kept, /stays = read\(STAYS_KEY\) === true/)
+    assert.match(kept.replace(/\s+/g, ' '), /export function setTunerStays\(on\) \{ const next = on === true if \(next === stays\) return stays = next announce\(\) AsyncStorage\.setItem\(STAYS_KEY, JSON\.stringify\(stays\)\)\.catch\(\(\) => \{\}\) \}/)
+    /* Shown and sent only to a watch that has said `stay`. */
+    assert.match(kept, /canStay: knows\.includes\('stay'\)/)
+    assert.match(kept, /export const tunerStaysToSend = \(\) => \(knows\.includes\('stay'\) \? stays : null\)/, 'the tuner’s switch is sent to a watch that has not said it knows how')
+    const bridge = code(read('mobile/src/lib/watchBridge.js'))
+    assert.match(bridge, /const pictured = \(from\) => watchState\(\{ \.\.\.from, tempo: watchHasTempo\(\) \? from\.tempo : null, tunerStays: tunerStaysToSend\(\), \.\.\.pagesToSend\(\) \}\)/)
+    /* The phone does nothing else with it: no request from the watch reads it, and nothing here turns a tuner on or off by it. */
+    assert.equal((bridge.match(/tunerStaysToSend\(/g) || []).length, 2, 'the tuner’s switch is read somewhere besides the picture and the tips')
+
+    const rows = read('mobile/src/components/WatchTunerStays.js')
+    assert.match(code(rows), /const \{ stays, canStay \} = useWatchPages\(\)\s+if \(!canStay\) return null/, 'the tuner’s switch is drawn for a watch that cannot do it')
+    assert.match(code(rows), /<Press label=\{stays \? WATCH_TUNER_STAYS_ON : WATCH_TUNER_STAYS_OFF\} tone="live" on=\{stays\} onPress=\{\(\) => setTunerStays\(!stays\)\} \/>/)
+    assert.match(code(rows), /\{stays \? WATCH_TUNER_NOTE_ON : WATCH_TUNER_NOTE_OFF\}/)
+    /* The phone's own sentence for it: the line under Stop tuner beside Play. */
+    const mutes = /^export const TUNER_MUTES = '([^']+)'$/m.exec(read('mobile/src/lib/twoSides.js'))[1]
+    assert.equal(mutes, 'Your unit’s own Tuner setting decides if the sound mutes.')
+    assert.match(rows, /^import \{ TUNER_MUTES \} from '\.\.\/lib\/twoSides'$/m, 'the catch is not said in the phone’s own sentence for it')
+    const said = Object.fromEntries([...rows.matchAll(/^export const (WATCH_TUNER_\w+) = ['`]([^'`]+)['`]$/gm)].map((m) => [m[1], m[2].replace('${TUNER_MUTES}', mutes)]))
+    assert.deepEqual(said, {
+      WATCH_TUNER_HEAD: 'Tuner on your watch',
+      WATCH_TUNER_STAYS_ON: 'Stays on when you swipe away: on',
+      WATCH_TUNER_STAYS_OFF: 'Stays on when you swipe away: off',
+      WATCH_TUNER_NOTE_OFF: 'Off: swiping away from the Tuner page on your watch stops the tuner.',
+      WATCH_TUNER_NOTE_ON:
+        'On: swiping to another page on your watch doesn’t stop the tuner. Stop it with Stop tuning on the watch, or from your iPhone or the unit. Your unit’s own Tuner setting decides if the sound mutes. If it does, your sound stays muted until the tuner is stopped. Hiding the Tuner page still stops it.'
+    })
+    /* The catch, plainly, and no more than happens: never that the tuner stays on for good, or that the watch keeps showing the note. */
+    assert.match(said.WATCH_TUNER_NOTE_ON, /stays muted until the tuner is stopped/)
+    assert.match(said.WATCH_TUNER_NOTE_ON, /Hiding the Tuner page still stops it\./)
+    for (const line of Object.values(said)) {
+      assert.ok(!/this (phone|iPhone|device)/i.test(line), `“${line}” says this phone`)
+      assert.ok(!/\b(always|forever|never turns off|keeps showing|locked|stays on until)\b/i.test(line), `“${line}” promises more than happens`)
+    }
+    /* On the Apple Watch page, once, under the pages. */
+    const settings = read('mobile/src/screens/Settings.js')
+    const page = settings.slice(settings.indexOf("{page === 'watch' ? ("), settings.indexOf("{page === 'siri' && siriOpen ? ("))
+    assert.equal((settings.match(/<WatchTunerStays \/>/g) || []).length, 1)
+    assert.ok(page.indexOf('<WatchTunerStays />') > page.indexOf('<WatchPageOrder />') && page.indexOf('<WatchPageOrder />') > 0, 'the tuner’s switch is not on the Apple Watch page, under the pages')
+    /* And the tips there stop saying the tuner turns off when its page is left, while the switch is on. */
+    const words = read('mobile/src/lib/watchBridge.js')
+    assert.match(words, /^export const WATCH_HOW_TUNER_STAYS = 'The tuner starts only when you tap it\. Leaving its page doesn’t stop it, as you chose above: tap Stop tuning\.'$/m)
+    assert.match(words, /const tuner = tunerStaysToSend\(\) === true \? WATCH_HOW_TUNER_STAYS : lines\[3\]/)
+    assert.match(words, /'The tuner starts only when you tap it, and turns off when you leave its page\.'/)
+    assert.match(code(settings), /const clickSetting = useMetronome\(\)\s+useWatchPages\(\)/, 'the Apple Watch page’s tips are not drawn again when the switch moves')
+  })
+
   test('watch tuner: the mockup Justin picked is on record, with the day he picked it', () => {
     assert.ok(existsSync(at('docs/watch/tuner-start-stop.png')), 'the picture the tuner page was chosen from is not in the repository')
     const png = readFileSync(at('docs/watch/tuner-start-stop.png'))
@@ -529,7 +629,7 @@ export function run(test) {
 
     if (!patched) {
       /* THE TREE AS MAIN HAS IT: the watch untouched, so its line of the fingerprint is where it was, and the Swift half listed as waiting. */
-      assert.doesNotMatch(model, /WatchPage\b|watchPageOrder|watchPagesHidden|WatchTempo|"knows"|"do":"tap"/, 'part of the watch’s half is in the tree, which moves the watch’s fingerprint, and part is not')
+      assert.doesNotMatch(model, /WatchPage\b|watchPageOrder|watchPagesHidden|WatchTempo|tunerStays|"knows"|"do":"tap"/, 'part of the watch’s half is in the tree, which moves the watch’s fingerprint, and part is not')
       assert.match(root, /@State private var page = Launch\.number\("page"\)/)
       assert.match(root.replace(/\s+/g, ' '), /ScenesPage\(state: state\)\.tag\(0\) PedalsPage\(state: state\)\.tag\(1\) PresetsPage\(state: state\)\.tag\(2\) TunerPage\(state: state\)\.tag\(3\)/)
       assert.doesNotMatch(read('mobile/targets/watch/Pages.swift'), /TempoPage/)
@@ -595,12 +695,14 @@ export function run(test) {
     assert.match(flat, /func watchPageOnShow\(_ swiped: WatchPage\?, _ shown: \[WatchPage\]\) -> WatchPage \{ if let swiped, shown\.contains\(swiped\) \{ return swiped \} return shown\.first \?\? \.scenes \}/)
     assert.match(view, /case \.scenes: ScenesPage\(state: state\) case \.pedals: PedalsPage\(state: state\) case \.presets: PresetsPage\(state: state\) case \.tempo: TempoPage\(state: state\) case \.tuner: TunerPage\(state: state\)/)
     assert.doesNotMatch(view, /\.tag\(\d\)/, 'a page is still drawn at a fixed place')
-    /* A page hidden under the watch: back to the first shown page, and a tuner left that way is turned off, as leaving its page does. */
+    /* A page hidden under the watch: a tuner whose page has just gone is turned off, whatever the switch says, and the watch is back on the first shown page. */
     assert.match(
       view,
-      /\.onChange\(of: link\.state\?\.shown\) \{ was, now in guard let now else \{ return \} let wasOn = watchPageOnShow\(page, was \?\? WatchPage\.usual\) if watchTunerLeftByHiding\(wasOn: wasOn, shown: now, tunerOn: link\.state\?\.tuner\.on == true\) \{ link\.send\(\.tuner\(on: false\)\) \} if let swiped = page, !now\.contains\(swiped\) \{ page = nil \} \}/
+      /\.onChange\(of: link\.state\?\.shown\) \{ was, now in guard let now else \{ return \} if watchTunerStopsOnHiding\(was: was \?\? WatchPage\.usual, now: now, tunerOn: link\.state\?\.tuner\.on == true\) \{ link\.send\(\.tuner\(on: false\)\) \} if let swiped = page, !now\.contains\(swiped\) \{ page = nil \} \}/
     )
-    assert.match(flat, /func watchTunerLeftByHiding\(wasOn: WatchPage, shown: \[WatchPage\], tunerOn: Bool\) -> Bool \{ wasOn == \.tuner && tunerOn && !shown\.contains\(\.tuner\) \}/)
+    assert.match(flat, /func watchTunerStopsOnHiding\(was: \[WatchPage\], now: \[WatchPage\], tunerOn: Bool\) -> Bool \{ tunerOn && was\.contains\(\.tuner\) && !now\.contains\(\.tuner\) \}/)
+    assert.match(flat, /func watchTunerStopsOnLeaving\(tunerOn: Bool, stays: Bool\?\) -> Bool \{ tunerOn && stays != true \}/)
+    assert.match(model, /var tunerStays: Bool\? = nil/)
     /* CI's -page N is the page it has always been, by name: 3 is the tuner wherever it is drawn, and Tempo, which came later, is 4. */
     assert.match(view, /@State private var page: WatchPage\? = Launch\.value\("page"\) == nil \? nil : WatchPage\.numbered\(Launch\.number\("page"\)\)/)
     assert.match(model, /static let numbers: \[WatchPage\] = \[\.scenes, \.pedals, \.presets, \.tuner, \.tempo\]/)
@@ -612,7 +714,8 @@ export function run(test) {
     /* The tuner's own rules go with its page wherever it sits: nothing until tapped, and off when the page is left. */
     const pages = read('mobile/targets/watch/Pages.swift')
     const drawnPages = pages.replace(/\s+/g, ' ')
-    assert.match(drawnPages, /\.onDisappear \{ if state\.tuner\.on \{ link\.send\(\.tuner\(on: false\)\) \} \}/)
+    assert.match(drawnPages, /\.onDisappear \{ if watchTunerStopsOnLeaving\(tunerOn: state\.tuner\.on, stays: state\.tunerStays\) \{ link\.send\(\.tuner\(on: false\)\) \} \}/, 'leaving the tuner’s page does not ask whether the iPhone says it stays')
+    assert.equal((drawnPages.match(/link\.send\(\.tuner\(on: false\)\)/g) || []).length, 2, 'the tuner is turned off from the watch’s pages somewhere besides Stop tuning and leaving its page')
     assert.match(drawnPages, /link\.send\(\.tuner\(on: true\)\) \} label:/)
 
     /*
@@ -666,7 +769,8 @@ export function run(test) {
       'testThePagesAreDrawnInTheOrderThePhoneSends',
       'testAListThatIsNotQuiteRightIsStillPagesToDraw',
       'testAPageHiddenUnderTheWatchGoesToTheFirstShown',
-      'testHidingTheTunersPageWhileOnItTurnsTheTunerOff',
+      'testHidingTheTunersPageTurnsTheTunerOffWhateverTheSwitchSays',
+      'testLeavingTheTunersPageTurnsItOffUnlessTheIPhoneSaysItStays',
       'testTheWatchSaysWhatItKnows',
       'testTheTempoPageSaysWhatThePhoneSays',
       'testATapIsSentOnceAndTheSwitchIsOnlyTheWrists',

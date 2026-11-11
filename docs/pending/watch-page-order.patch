@@ -1,8 +1,8 @@
 diff --git a/mobile/targets/watch/FractalWatchApp.swift b/mobile/targets/watch/FractalWatchApp.swift
-index 807c1e54..49330aa1 100644
+index 807c1e54..50265e3c 100644
 --- a/mobile/targets/watch/FractalWatchApp.swift
 +++ b/mobile/targets/watch/FractalWatchApp.swift
-@@ -13,19 +13,37 @@ struct FractalWatchApp: App {
+@@ -13,19 +13,39 @@ struct FractalWatchApp: App {
  }
  
  /*
@@ -24,8 +24,10 @@ index 807c1e54..49330aa1 100644
 - * Launched with -page N (CI's screenshots) it opens on that page instead.
 + * The tuner does nothing until it is tapped, wherever its page sits: a unit
 + * set to mute while it tunes would otherwise go quiet because a page was
-+ * swiped past. Leaving the tuner page turns it back off, and so does hiding
-+ * that page while the watch is on it (Model.swift watchTunerLeftByHiding).
++ * swiped past. Leaving the tuner page turns it back off, unless the iPhone
++ * has said the tuner stays on (Pages.swift TunerPage, Model.swift
++ * watchTunerStopsOnLeaving); and hiding that page in the iPhone's list
++ * turns it off whatever the iPhone has said (watchTunerStopsOnHiding).
 + *
 + * `page` is the page the wearer has swiped to, by name, and nil until they
 + * have swiped: until then the first shown page is the one on show, so pages
@@ -47,7 +49,7 @@ index 807c1e54..49330aa1 100644
      /* The metronome's tap: see Metronome.swift. */
      @State private var wrist = WristMetronome()
  
-@@ -34,11 +52,10 @@ struct RootView: View {
+@@ -34,11 +54,10 @@ struct RootView: View {
              /* The pages stay up through a moment out of reach (see PhoneLink.away),
                 with the taps held back and a word at the top saying why. */
              if let state = link.state, state.linked, !state.tooNew, !link.away {
@@ -63,15 +65,14 @@ index 807c1e54..49330aa1 100644
                  }
                  .tabViewStyle(.verticalPage)
                  .disabled(!link.reachable)
-@@ -63,5 +80,28 @@ struct RootView: View {
+@@ -63,5 +82,27 @@ struct RootView: View {
          .onChange(of: link.state?.metronome) { _, now in
              if phase == .active { wrist.follow(now) }
          }
-+        /* The pages shown changed under the watch: if the one it was on is gone, it is on the first shown page, and a tuner left that way is turned off. */
++        /* The pages shown changed under the watch: a tuner whose page has just been hidden is turned off, and if the page the watch was on is gone it is on the first shown page. */
 +        .onChange(of: link.state?.shown) { was, now in
 +            guard let now else { return }
-+            let wasOn = watchPageOnShow(page, was ?? WatchPage.usual)
-+            if watchTunerLeftByHiding(wasOn: wasOn, shown: now, tunerOn: link.state?.tuner.on == true) { link.send(.tuner(on: false)) }
++            if watchTunerStopsOnHiding(was: was ?? WatchPage.usual, now: now, tunerOn: link.state?.tuner.on == true) { link.send(.tuner(on: false)) }
 +            if let swiped = page, !now.contains(swiped) { page = nil }
 +        }
 +    }
@@ -93,7 +94,7 @@ index 807c1e54..49330aa1 100644
      }
  }
 diff --git a/mobile/targets/watch/Model.swift b/mobile/targets/watch/Model.swift
-index ca41efac..e861481a 100644
+index ca41efac..34da15f4 100644
 --- a/mobile/targets/watch/Model.swift
 +++ b/mobile/targets/watch/Model.swift
 @@ -5,7 +5,7 @@ import Foundation
@@ -105,7 +106,7 @@ index ca41efac..e861481a 100644
   * (watchCommand there), and the phone drops anything else.
   *
   * No SwiftUI and no WatchConnectivity in this file, on purpose: it is the part
-@@ -70,6 +70,133 @@ struct WatchMetronome: Codable, Equatable {
+@@ -70,6 +70,148 @@ struct WatchMetronome: Codable, Equatable {
      var bpm: Double
  }
  
@@ -225,26 +226,43 @@ index ca41efac..e861481a 100644
 +}
 +
 +/*
-+ * HIDING THE TUNER'S PAGE WHILE THE WATCH IS ON IT IS LEAVING IT, and
-+ * leaving the tuner's page turns the tuner off (Pages.swift TunerPage). So:
-+ * the page that was on show is the tuner's, it is not drawn any more, and
-+ * the tuner is on. A tuner that is on while the watch is on some other page
-+ * was not turned on from here (leaving turned this one off), and is left
-+ * alone, as it is when the tuner's page is merely not the one on show.
++ * THE TUNER, AND LEAVING ITS PAGE. Two rules, each its namesake in
++ * shared/watch-link.mjs word for word and held to the same answers by
++ * pages.json.
++ *
++ * watchTunerStopsOnLeaving: leaving the tuner's page turns the tuner off (a
++ * unit set to mute while it tunes must not be left muted by a swipe),
++ * unless the iPhone has said it stays: "Can we make a setting ... where a
++ * user can decide whether or not the tuner stays on when they exit ... some
++ * people wanna play while their tuner stays up on their screen" (Justin, 11
++ * November 2026). The switch is on the iPhone (Settings → Apple Watch) and
++ * comes in the picture as `tunerStays`; absent is off, which is what the
++ * watch has always done.
 + */
-+func watchTunerLeftByHiding(wasOn: WatchPage, shown: [WatchPage], tunerOn: Bool) -> Bool {
-+    wasOn == .tuner && tunerOn && !shown.contains(.tuner)
++func watchTunerStopsOnLeaving(tunerOn: Bool, stays: Bool?) -> Bool {
++    tunerOn && stays != true
++}
++
++/*
++ * watchTunerStopsOnHiding: the tuner's page hidden in the iPhone's list
++ * while the tuner is on turns it off WHATEVER THE SWITCH SAYS: there would
++ * be no page left on the watch to stop it from.
++ */
++func watchTunerStopsOnHiding(was: [WatchPage], now: [WatchPage], tunerOn: Bool) -> Bool {
++    tunerOn && was.contains(.tuner) && !now.contains(.tuner)
 +}
 +
  struct WatchState: Codable, Equatable {
      /** WATCH_LINK_VERSION in shared/watch-link.mjs. */
      static let linkVersion = 1
-@@ -86,6 +213,23 @@ struct WatchState: Codable, Equatable {
+@@ -86,6 +228,25 @@ struct WatchState: Codable, Equatable {
      var tuner: WatchTuner
      /** Optional: a phone older than the metronome sends none, and that is "off". */
      var metronome: WatchMetronome? = nil
 +    /** The Tempo page's picture. Optional: only a phone that has heard this watch say it has that page (`knows`, below) sends one, and none is a dash with Tap switched off. */
 +    var tempo: WatchTempo? = nil
++    /** The iPhone's "stays on when you swipe away" switch for the tuner (watchTunerStopsOnLeaving, above). Optional: none is off, the tuner turned off when its page is left, as it always was. */
++    var tunerStays: Bool? = nil
 +    /*
 +     * The pages in the order chosen on the iPhone, by name, and those of
 +     * them not to draw. Optional, like the metronome: a phone that has not
@@ -263,7 +281,7 @@ index ca41efac..e861481a 100644
  
      static func decode(_ json: String) -> WatchState? {
          guard let data = json.data(using: .utf8) else { return nil }
-@@ -126,13 +270,31 @@ struct WatchState: Codable, Equatable {
+@@ -126,13 +287,33 @@ struct WatchState: Codable, Equatable {
              WatchPedal(id: 70, short: "DLY", name: "Delay 1", on: false, fill: "#2e86ab", ink: "#ffffff", channel: "C", channels: abcd),
              WatchPedal(id: 66, short: "REV", name: "Reverb 1", on: true, fill: "#8e44ad", ink: "#ffffff", channel: "A", channels: abcd)
          ],
@@ -281,13 +299,15 @@ index ca41efac..e861481a 100644
 +     * shared/watch-link.mjs). "pages": it draws the pages the picture says
 +     * are shown, in the order the picture says. "tempo": it has the Tempo
 +     * page, reads the picture's `tempo`, and may ask for a tap and for the
-+     * wrist's switch. The phone shows the Watch pages setting, and sends an
-+     * order, a hidden page or a tempo at all, only to a watch that has said
-+     * so: a watch from before this build draws its four pages in the usual
++     * wrist's switch. "stay": it reads `tunerStays`, and with it true does
++     * not turn the tuner off when its page is left. The phone shows the
++     * Watch pages setting and the tuner's switch, and sends an order, a
++     * hidden page, a tempo or `tunerStays` at all, only to a watch that has
++     * said so: a watch from before this build draws its four pages in the usual
 +     * order whatever it is sent, and a setting that does nothing is worse
 +     * than none.
 +     */
-+    static let knows = ["pages", "tempo"]
++    static let knows = ["pages", "tempo", "stay"]
 +
      case hello
 +    /** One tap of the iPhone's own Tap button: the Tempo page's button. */
@@ -297,7 +317,7 @@ index ca41efac..e861481a 100644
      case scene(Int)
      case pedal(id: Int, on: Bool)
      case preset(step: Int)
-@@ -140,10 +302,23 @@ enum WatchCommand: Equatable {
+@@ -140,10 +321,23 @@ enum WatchCommand: Equatable {
      /** That block onto that channel, by the letter the phone sent ("B"). */
      case channel(id: Int, channel: String)
  
@@ -316,13 +336,13 @@ index ca41efac..e861481a 100644
      var json: String {
          switch self {
 -        case .hello: return #"{"do":"hello"}"#
-+        case .hello: return #"{"do":"hello","knows":["pages","tempo"]}"#
++        case .hello: return #"{"do":"hello","knows":["pages","tempo","stay"]}"#
 +        case .tap: return #"{"do":"tap"}"#
 +        case .wrist(let on): return #"{"do":"wrist","on":\#(on)}"#
          case .scene(let index): return #"{"do":"scene","index":\#(index)}"#
          case .pedal(let id, let on): return #"{"do":"pedal","id":\#(id),"on":\#(on)}"#
          case .preset(let step): return #"{"do":"preset","step":\#(step < 0 ? -1 : 1)}"#
-@@ -232,6 +407,19 @@ func grownSize(_ tall: Double, share: Double, least: Double, most: Double) -> Do
+@@ -232,6 +426,19 @@ func grownSize(_ tall: Double, share: Double, least: Double, most: Double) -> Do
      max(least, min(most, (tall * share).rounded(.down)))
  }
  
@@ -342,7 +362,7 @@ index ca41efac..e861481a 100644
  /** Where the tuner's needle sits, -1 (50 cents flat) to 1 (50 sharp). */
  func needleOffset(cents: Int) -> Double {
      Double(max(-50, min(50, cents))) / 50
-@@ -296,6 +484,11 @@ extension WatchState {
+@@ -296,6 +503,11 @@ extension WatchState {
          switch command {
          case .hello:
              break
@@ -355,10 +375,10 @@ index ca41efac..e861481a 100644
              if index >= 0 && index < scenes.count { next.scene = index }
          case .pedal(let id, let on):
 diff --git a/mobile/targets/watch/Pages.swift b/mobile/targets/watch/Pages.swift
-index e25777c5..ed394d1e 100644
+index e25777c5..56a0f9f8 100644
 --- a/mobile/targets/watch/Pages.swift
 +++ b/mobile/targets/watch/Pages.swift
-@@ -532,6 +532,78 @@ struct PresetsPage: View {
+@@ -532,17 +532,118 @@ struct PresetsPage: View {
      }
  }
  
@@ -437,7 +457,15 @@ index e25777c5..ed394d1e 100644
  // MARK: - Tuner
  
  /*
-@@ -542,7 +614,33 @@ struct PresetsPage: View {
+- * Off until tapped, and off again when the page is left. Whether the unit
++ * Off until tapped, and off again when the page is left, unless the iPhone
++ * has said it stays on (its "Stays on when you swipe away" switch, the
++ * picture's `tunerStays`; Model.swift watchTunerStopsOnLeaving): then
++ * leaving does nothing, and the page shows it on, with Stop tuning, when it
++ * is come back to. Whether the unit
+  * mutes while it tunes is the unit's own setting (Setup, Tuner, Mute), never
+  * the app's: "We don't want the unit to mute while the tuner is on, unless
+  * they set that in settings somewhere." Tapped rather than on arrival so a
   * unit that IS set to mute is never muted by a swipe past. The note in big
   * letters, a needle for how far off, green within three cents, as on the
   * phone.
@@ -456,9 +484,8 @@ index e25777c5..ed394d1e 100644
 + *        tuning", red, where "Tuner off" was.
 + *
 + * Never "Tuner on" or "Tuner off" as a button's words again (the words are
-+ * TunerWords in Model.swift, which the tests hold). Nothing it does changed:
-+ * the same two requests, nothing until tapped, and off when the page is
-+ * left or hidden. VoiceOver reads the buttons by their words and "Off" as
++ * TunerWords in Model.swift, which the tests hold). Nothing it does changed
++ * with the words: the same two requests, and nothing until tapped. VoiceOver reads the buttons by their words and "Off" as
 + * "Tuner is off"; the small TUNER over it is not read twice.
   */
 +
@@ -471,7 +498,7 @@ index e25777c5..ed394d1e 100644
  struct TunerPage: View {
      let state: WatchState
      @EnvironmentObject private var link: PhoneLink
-@@ -560,22 +658,34 @@ struct TunerPage: View {
+@@ -560,26 +661,38 @@ struct TunerPage: View {
                  Text(tuner.note.isEmpty ? "Play a string" : "\(tuner.cents > 0 ? "+" : "")\(tuner.cents) cents")
                      .font(.footnote)
                      .foregroundStyle(.secondary)
@@ -513,6 +540,11 @@ index e25777c5..ed394d1e 100644
              }
          }
          .onDisappear {
+-            if state.tuner.on { link.send(.tuner(on: false)) }
++            if watchTunerStopsOnLeaving(tunerOn: state.tuner.on, stays: state.tunerStays) { link.send(.tuner(on: false)) }
+         }
+     }
+ }
 diff --git a/mobile/targets/watch/PhoneLink.swift b/mobile/targets/watch/PhoneLink.swift
 index 2d40776f..43ed5484 100644
 --- a/mobile/targets/watch/PhoneLink.swift
@@ -542,7 +574,7 @@ index 05571339..900f45e7 100644
      ]
  )
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
-index 1b1532ec..71d52717 100644
+index 1b1532ec..c99250ce 100644
 --- a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
 +++ b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
 @@ -122,7 +122,10 @@ final class WatchModelTests: XCTestCase {
@@ -550,14 +582,14 @@ index 1b1532ec..71d52717 100644
  
      func testTheRequestsAreThePhonesWords() {
 -        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello"}"#)
-+        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello","knows":["pages","tempo"]}"#)
++        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello","knows":["pages","tempo","stay"]}"#)
 +        XCTAssertEqual(WatchCommand.tap.json, #"{"do":"tap"}"#)
 +        XCTAssertEqual(WatchCommand.wrist(on: true).json, #"{"do":"wrist","on":true}"#)
 +        XCTAssertEqual(WatchCommand.wrist(on: false).json, #"{"do":"wrist","on":false}"#)
          XCTAssertEqual(WatchCommand.scene(2).json, #"{"do":"scene","index":2}"#)
          XCTAssertEqual(WatchCommand.pedal(id: 50, on: false).json, #"{"do":"pedal","id":50,"on":false}"#)
          XCTAssertEqual(WatchCommand.preset(step: -1).json, #"{"do":"preset","step":-1}"#)
-@@ -132,6 +135,202 @@ final class WatchModelTests: XCTestCase {
+@@ -132,6 +135,244 @@ final class WatchModelTests: XCTestCase {
          XCTAssertEqual(WatchCommand.channel(id: 50, channel: #"a"b"#).json, #"{"do":"channel","id":50,"channel":"a\"b"}"#, "a channel is sent as JSON, not pasted in")
      }
  
@@ -577,7 +609,24 @@ index 1b1532ec..71d52717 100644
 +            var off: [String]
 +            var shown: [String]
 +        }
++        /* The tuner and leaving its page: what the phone's two rules answer. */
++        struct Leaving: Decodable {
++            var on: Bool
++            var stays: Bool?
++            var stops: Bool
++        }
++        struct Hiding: Decodable {
++            var was: [String]
++            var now: [String]
++            var on: Bool
++            var stops: Bool
++        }
++        struct Tuner: Decodable {
++            var leaving: [Leaving]
++            var hiding: [Hiding]
++        }
 +        var cases: [Case]
++        var tuner: Tuner
 +    }
 +
 +    private func pagesData() throws -> Data {
@@ -669,19 +718,44 @@ index 1b1532ec..71d52717 100644
 +        XCTAssertEqual(watchPageOnShow(WatchPage.numbered(3), [.tuner, .scenes, .presets, .pedals]), .tuner, "-page 3 is not the tuner in another order")
 +    }
 +
-+    func testHidingTheTunersPageWhileOnItTurnsTheTunerOff() {
-+        /* On the tuner's page, tuner on, and the page is hidden: left, so off. */
-+        XCTAssertTrue(watchTunerLeftByHiding(wasOn: .tuner, shown: [.scenes, .pedals, .presets], tunerOn: true))
-+        /* Nothing to turn off. */
-+        XCTAssertFalse(watchTunerLeftByHiding(wasOn: .tuner, shown: [.scenes, .pedals, .presets], tunerOn: false))
-+        /* The tuner's page is still there: a new order, or another page hidden, is not leaving it. */
-+        XCTAssertFalse(watchTunerLeftByHiding(wasOn: .tuner, shown: [.scenes, .tuner], tunerOn: true))
-+        /* On another page: a tuner that is on was not turned on from here, and is left alone. */
-+        XCTAssertFalse(watchTunerLeftByHiding(wasOn: .scenes, shown: [.scenes, .pedals, .presets], tunerOn: true))
++    func testHidingTheTunersPageTurnsTheTunerOffWhateverTheSwitchSays() throws {
++        let hiding = try JSONDecoder().decode(PagesFixture.self, from: try pagesData()).tuner.hiding
++        XCTAssertGreaterThanOrEqual(hiding.count, 6, "the fixture lost its cases")
++        let pages = { (names: [String]) in names.compactMap { WatchPage(rawValue: $0) } }
++        for c in hiding {
++            XCTAssertEqual(watchTunerStopsOnHiding(was: pages(c.was), now: pages(c.now), tunerOn: c.on), c.stops, "the tuner \(c.on ? "on" : "off"), its pages from \(c.was) to \(c.now)")
++        }
++        /* The tuner's page was shown, is not now, and the tuner is on: off, there being no page left to stop it from. */
++        XCTAssertTrue(watchTunerStopsOnHiding(was: WatchPage.usual, now: [.scenes, .pedals, .presets, .tempo], tunerOn: true))
++        /* Nothing to turn off; or its page is still there (a new order, another page hidden); or it was hidden already. */
++        XCTAssertFalse(watchTunerStopsOnHiding(was: WatchPage.usual, now: [.scenes], tunerOn: false))
++        XCTAssertFalse(watchTunerStopsOnHiding(was: WatchPage.usual, now: [.tuner, .scenes], tunerOn: true))
++        XCTAssertFalse(watchTunerStopsOnHiding(was: [.scenes], now: [.scenes, .pedals], tunerOn: true))
++    }
++
++    /* "Some people wanna play while their tuner stays up on their screen": the iPhone's switch, off unless it says on. */
++    func testLeavingTheTunersPageTurnsItOffUnlessTheIPhoneSaysItStays() throws {
++        let leaving = try JSONDecoder().decode(PagesFixture.self, from: try pagesData()).tuner.leaving
++        XCTAssertEqual(leaving.count, 6, "the fixture lost its cases")
++        for c in leaving {
++            XCTAssertEqual(watchTunerStopsOnLeaving(tunerOn: c.on, stays: c.stays), c.stops, "the tuner \(c.on ? "on" : "off"), stays \(String(describing: c.stays))")
++        }
++        /* Said here as well: on and not told to stay, off; told to stay, left alone; nothing to turn off, nothing sent. */
++        XCTAssertTrue(watchTunerStopsOnLeaving(tunerOn: true, stays: nil), "a phone that says nothing left the tuner on behind a swipe")
++        XCTAssertTrue(watchTunerStopsOnLeaving(tunerOn: true, stays: false))
++        XCTAssertFalse(watchTunerStopsOnLeaving(tunerOn: true, stays: true))
++        XCTAssertFalse(watchTunerStopsOnLeaving(tunerOn: false, stays: nil))
++
++        /* In the picture: pages.json's says it stays; one that says nothing (every phone, to a watch that has not said it knows) is off. */
++        XCTAssertEqual(try XCTUnwrap(WatchState.decode(try pagesPicture())).tunerStays, true)
++        XCTAssertNil(try XCTUnwrap(WatchState.decode(try fixture())).tunerStays)
++        XCTAssertNil(WatchState.sample.tunerStays, "the demo, which CI pictures, leaves the tuner on behind a swipe")
++        let odd = try picture { p in p["tunerStays"] = false }
++        XCTAssertEqual(try XCTUnwrap(WatchState.decode(odd)).tunerStays, false)
 +    }
 +
 +    func testTheWatchSaysWhatItKnows() throws {
-+        XCTAssertEqual(WatchCommand.knows, ["pages", "tempo"])
++        XCTAssertEqual(WatchCommand.knows, ["pages", "tempo", "stay"])
 +        let hello = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(WatchCommand.hello.json.utf8)) as? [String: Any])
 +        XCTAssertEqual(hello["do"] as? String, "hello")
 +        XCTAssertEqual(hello["knows"] as? [String], WatchCommand.knows, "the hello does not say what the watch knows, so the phone never offers its pages")
@@ -762,10 +836,10 @@ index 1b1532ec..71d52717 100644
          XCTAssertEqual(needleOffset(cents: 25), 0.5)
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/pages.json b/mobile/watch-ci/Tests/WatchModelTests/pages.json
 new file mode 100644
-index 00000000..da8a0314
+index 00000000..83f451f9
 --- /dev/null
 +++ b/mobile/watch-ci/Tests/WatchModelTests/pages.json
-@@ -0,0 +1,593 @@
+@@ -0,0 +1,745 @@
 +{
 +  "state": {
 +    "v": 1,
@@ -808,6 +882,7 @@ index 00000000..da8a0314
 +      "wrist": true,
 +      "running": false
 +    },
++    "tunerStays": true,
 +    "pages": [
 +      "tuner",
 +      "scenes",
@@ -817,6 +892,157 @@ index 00000000..da8a0314
 +    ],
 +    "hidden": [
 +      "presets"
++    ]
++  },
++  "tuner": {
++    "leaving": [
++      {
++        "on": true,
++        "stays": true,
++        "stops": false
++      },
++      {
++        "on": true,
++        "stays": false,
++        "stops": true
++      },
++      {
++        "on": true,
++        "stays": null,
++        "stops": true
++      },
++      {
++        "on": false,
++        "stays": true,
++        "stops": false
++      },
++      {
++        "on": false,
++        "stays": false,
++        "stops": false
++      },
++      {
++        "on": false,
++        "stays": null,
++        "stops": false
++      }
++    ],
++    "hiding": [
++      {
++        "was": [
++          "scenes",
++          "pedals",
++          "presets",
++          "tempo",
++          "tuner"
++        ],
++        "now": [
++          "scenes",
++          "pedals",
++          "presets",
++          "tempo"
++        ],
++        "on": true,
++        "stops": true
++      },
++      {
++        "was": [
++          "scenes",
++          "pedals",
++          "presets",
++          "tempo",
++          "tuner"
++        ],
++        "now": [
++          "scenes",
++          "pedals",
++          "presets",
++          "tempo"
++        ],
++        "on": false,
++        "stops": false
++      },
++      {
++        "was": [
++          "tuner",
++          "scenes",
++          "presets",
++          "tempo",
++          "pedals"
++        ],
++        "now": [
++          "scenes"
++        ],
++        "on": true,
++        "stops": true
++      },
++      {
++        "was": [
++          "scenes",
++          "pedals",
++          "presets",
++          "tempo",
++          "tuner"
++        ],
++        "now": [
++          "tuner",
++          "scenes",
++          "presets",
++          "tempo",
++          "pedals"
++        ],
++        "on": true,
++        "stops": false
++      },
++      {
++        "was": [
++          "scenes",
++          "pedals",
++          "presets",
++          "tempo",
++          "tuner"
++        ],
++        "now": [
++          "tuner"
++        ],
++        "on": true,
++        "stops": false
++      },
++      {
++        "was": [
++          "scenes",
++          "pedals"
++        ],
++        "now": [
++          "scenes"
++        ],
++        "on": true,
++        "stops": false
++      },
++      {
++        "was": [
++          "scenes"
++        ],
++        "now": [
++          "scenes",
++          "pedals",
++          "presets",
++          "tempo",
++          "tuner"
++        ],
++        "on": true,
++        "stops": false
++      },
++      {
++        "was": [
++          "tuner"
++        ],
++        "now": [
++          "tempo"
++        ],
++        "on": true,
++        "stops": true
++      }
 +    ]
 +  },
 +  "cases": [

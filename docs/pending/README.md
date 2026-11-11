@@ -21,7 +21,7 @@ those must still pass the other.
 | Patch | What it does | Moves |
 |---|---|---|
 | `phone-turns.patch` | Lets a phone be turned on its side: on Play, on what opens beside Play and in Stage view, for an account the sideways layout is open to (his, until `PHONE_SIDEWAYS_FOR_EVERYONE`). Every other page, every other account and every tablet are as they were. Adds expo-screen-orientation. | **android and ios** (the watch line does not move) |
-| `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), and says in its hello that it can do both. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
+| `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), has a tuner page that says Off / Start tuning / Stop tuning, can leave the tuner on when its page is left if the iPhone's switch says so, and says in its hello what it can do. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
 
 Two patches are waiting: phone-turns (10 November 2026), whose section is
 next, and watch-page-order (11 November 2026), whose section follows it.
@@ -245,11 +245,12 @@ picture the phone sends, `pages` and `hidden`. All of it is INERT until a
 watch says it can do this: a watch from before this patch draws all four
 pages in the usual order whatever it is sent, and a setting that does
 nothing is worse than none. So the watch says what it knows in its hello
-(`"knows":["pages","tempo"]`, new in this patch; a hello from an older watch
-has no `knows`), the phone keeps the last answer on the device, and until it
-has heard `pages` it draws no rows in Settings and sends neither field, and
-until it has heard `tempo` it sends no tempo and refuses both of the Tempo
-page's requests. For every watch out today the phone's picture is byte for
+(`"knows":["pages","tempo","stay"]`, new in this patch; a hello from an
+older watch has no `knows`), the phone keeps the last answer on the device,
+and until it has heard `pages` it draws no rows in Settings and sends
+neither field, until it has heard `tempo` it sends no tempo and refuses both
+of the Tempo page's requests, and until it has heard `stay` it neither shows
+nor sends the tuner's switch. For every watch out today the phone's picture is byte for
 byte what it was.
 
 **What the patch does, on the watch.**
@@ -262,12 +263,12 @@ byte what it was.
   is always drawn: a list that hides all four hides none (the phone refuses
   to hide the last one as well, and its Hide button is switched off).
 - A page hidden while the watch is on it: the watch goes to the first shown
-  page. If that page was the tuner's and the tuner was on, the tuner is
-  turned off, as leaving the tuner's page always has (TunerPage's own
-  `onDisappear` is unchanged, and the root view sends the same request, so
-  the phone may get "tuner off" twice; the second finds it off and does
-  nothing). A tuner that is on while the watch is on some other page was
-  not turned on from the watch and is left alone.
+  page. And the tuner's page hidden while the tuner is on turns the tuner
+  off, whichever page the watch is on and whatever the switch below says:
+  there would be no page left on the watch to stop it from. (With the
+  switch off, the page's own leave rule sends the same request, so the
+  phone may get "tuner off" twice; the second finds it off and does
+  nothing.)
 - The tuner still does nothing until tapped, wherever its page sits.
 - A new order sent while the app is open never moves the page under the
   thumb: the watch stays on the page it was swiped to for as long as that
@@ -345,6 +346,56 @@ docs/watch/tuner-start-stop.png, with docs/watch/README.md beside it).
   App Store Connect (the watch-screenshots release), and after the build
   those two are of a page the app no longer has. See "What goes with it".
 
+**A switch for whether the tuner stays on when its page is left.** Justin,
+11 November 2026: "Can we make a setting in the Watch app settings, where a
+user can decide whether or not the tuner stays on when they exit or was it
+turned off some people wanna play while their tuner stays up on their
+screen ... Could we make out a setting? That they turn on and off?"
+
+- On the iPhone, Settings → Apple Watch, under the pages: **Tuner on your
+  watch**, one switch, "Stays on when you swipe away: off". OFF unless it is
+  turned on, and off is what the watch has always done.
+- ON: swiping away from the watch's Tuner page no longer sends the tuner
+  off. It is stopped by Stop tuning on the watch (the page shows it on when
+  it is come back to), from the iPhone, or at the unit.
+- Whatever the switch says, hiding the Tuner page in the list while the
+  tuner is on turns it off.
+- The words under it say the catch with the phone's own sentence for it
+  (lib/twoSides `TUNER_MUTES`, the line under Stop tuner beside Play): "Your
+  unit's own Tuner setting decides if the sound mutes. If it does, your
+  sound stays muted until the tuner is stopped."
+- It is the picture's `tunerStays`, optional, absent meaning off, sent only
+  to a watch that has said `stay`. The two rules (leaving, hiding) are in
+  shared/watch-link.mjs and Model.swift word for word, held to the same
+  answers by pages.json.
+
+**What the phone does about a tuner the watch turned on, today, and so what
+the switch does not promise.** Looked for, 11 November 2026, so the words
+would not say more than happens:
+
+- Nothing on the phone turns the tuner off on the watch's behalf by a
+  timer: not the watch going out of reach (the watch dims its pages and
+  says Reconnecting…, and sends nothing), and not the end of the 25 seconds
+  the iPhone is held awake after a watch request (FractalWatchModule
+  `WAKE_SECONDS`). When that ends with the iPhone locked, the app sleeps:
+  the tuner stays as it is at the unit, and no more readings reach the
+  watch, so its note and needle stop where they were until the iPhone is
+  awake again. The tips on the Apple Watch page already say "The live
+  tuner needs the phone open."
+- One unit lets go by itself: an AM4 through a computer holds its own tuner
+  screen on a lease the phone renews only while the app is on screen
+  (lib/rig `keepUnitTuner`). With the iPhone locked the renewing stops, and
+  the AM4 leaves its tuner about 15 seconds after the lease runs out.
+- A Stop tuning that wakes a locked iPhone is the one request that is
+  never dropped: it waits for the connection and is tried once more (within
+  20 seconds, `WATCH_CLOSE_WINDOW_MS`).
+- On the iPhone itself the tuner goes off with Play's own Stop tuner, when
+  Stage view is left, and when the tuner's side beside Play is closed.
+
+So the words say a swipe "doesn't stop the tuner" and how to stop it. They
+do not say it stays on for good, and they do not say the watch keeps
+showing the note. The wake window is not changed by this switch.
+
 **It has not been compiled.** Nothing on a Linux box compiles Swift, and
 watch.yml runs on the tree, which does not have the patch (it does run on
 the pull request that brought this file, because that changes
@@ -352,7 +403,7 @@ shared/watch-link.mjs, and all it proves there is that the watch as it is
 still reads the phone's picture). The free check is watch.yml started by
 hand on a branch that carries this file, with **Apply the watch patches
 waiting in docs/pending first** ticked: it applies this patch, runs the
-watch's own tests (the seven new ones among them), builds the watch app for
+watch's own tests (the new ones among them), builds the watch app for
 a simulated watch and takes its pictures, which should be the same pages as
 ever, with tempo.png new. It has not been run yet. duo.yml, also started by hand, applies every
 waiting patch and builds the iPhone and watch apps for a real device on
@@ -390,7 +441,14 @@ Xcode 27.1, compile only. Both are GitHub's Macs and spend no Expo build.
    tap and the phone to count by those (the watch's half is Swift, so that
    would be another build). And with the iPhone locked, the first taps wake
    it and are refused until the link to the unit is back.
-8. Whether the Tempo page fits a small watch without scrolling, and how the
+8. The tuner's switch: on, start tuning on the watch, swipe to Scenes, and
+   the tuner should still be on at the unit; swipe back and the page shows
+   the note with Stop tuning. Then hide Tuner on the iPhone with it on: it
+   should go off. Whether SwiftUI tells the page it has "disappeared" at
+   any moment other than a swipe away (the wrist dropping, the page list
+   being redrawn) is the part only a watch shows: with the switch off that
+   would stop a tuner early, as it would today.
+9. Whether the Tempo page fits a small watch without scrolling, and how the
    phone's sentence reads under a switched-off Tap (a VP4 is the way to see
    it).
 
@@ -404,7 +462,11 @@ Xcode 27.1, compile only. Both are GitHub's Macs and spend no Expo build.
   always shown." And one for the new page: "The watch app has a new Tempo
   page: it shows the unit's tempo, its Tap button does what the Tap button
   on the iPhone's Play screen does, and a switch turns the metronome's tap
-  on the wrist on or off." What's New may say the same in fewer words;
+  on the wrist on or off." And for the tuner: "The watch's tuner page now
+  says Off with a Start tuning button, and Stop tuning while it is on; a
+  switch in Settings → Apple Watch on the iPhone chooses whether the tuner
+  stays on when its page is left." What's New may say the same in fewer
+  words;
 - a What's new line (`only: 'ios'`) in that pull request, since from that
   build on a wearer can see it: "Apple Watch: choose which pages your watch
   shows, and their order, in Settings → Apple Watch. And a new Tempo page,

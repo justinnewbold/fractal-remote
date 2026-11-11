@@ -23,14 +23,20 @@ import { logDebug } from './debugLog'
  *   what the    the last thing the watch said it knows, in its hello
  *   watch knows (lib/watchBridge takes it there). `pages` among them is the
  *               watch saying it draws the pages it is told, in the order it
- *               is told; `tempo`, that it has the Tempo page.
+ *               is told; `tempo`, that it has the Tempo page; `stay`, that
+ *               it can leave the tuner on when its page is left.
+ *   stays       the "stays on when you swipe away" switch for the watch's
+ *               tuner (Settings → Apple Watch, components/WatchTunerStays).
+ *               Off unless it is turned on.
  *
  * INERT UNTIL A WATCH SAYS SO. A watch from before the build that carries
  * this draws its four pages in the usual order whatever it is sent, and says
  * nothing of what it knows. So until one says `pages`, Settings shows
  * nothing for this (`can` is false) and the picture carries neither field
- * (pagesToSend is null), and until one says `tempo` it carries no tempo
- * either (watchHasTempo): for everybody today, nothing here does anything.
+ * (pagesToSend is null), until one says `tempo` it carries no tempo
+ * either (watchHasTempo), and until one says `stay` the tuner's switch is
+ * neither shown nor sent (tunerStaysToSend is null): for everybody today,
+ * nothing here does anything.
  *
  * Kept on the device, like the metronome's setting: the watch is paired with
  * this iPhone, not with the account.
@@ -39,15 +45,17 @@ import { logDebug } from './debugLog'
 const ORDER_KEY = 'fractal.watch.pages'
 const HIDDEN_KEY = 'fractal.watch.hidden'
 const KNOWS_KEY = 'fractal.watch.knows'
+const STAYS_KEY = 'fractal.watch.tunerStays'
 
 let order = WATCH_PAGES
 let hidden = []
 let knows = []
-let both = { order, hidden, can: false }
+let stays = false
+let both = { order, hidden, can: false, stays, canStay: false }
 const watchers = new Set()
 
 const announce = () => {
-  both = { order, hidden, can: knows.includes('pages') }
+  both = { order, hidden, can: knows.includes('pages'), stays, canStay: knows.includes('stay') }
   for (const fn of watchers) fn()
 }
 
@@ -56,7 +64,7 @@ const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i])
 /* Whether a hello has been heard since the app started: its answer is newer than anything kept. */
 let heard = false
 
-AsyncStorage.multiGet([ORDER_KEY, HIDDEN_KEY, KNOWS_KEY])
+AsyncStorage.multiGet([ORDER_KEY, HIDDEN_KEY, KNOWS_KEY, STAYS_KEY])
   .then((kept) => {
     const read = (key) => {
       try {
@@ -66,6 +74,8 @@ AsyncStorage.multiGet([ORDER_KEY, HIDDEN_KEY, KNOWS_KEY])
       }
     }
     ;({ order, hidden } = watchPagesKept(read(ORDER_KEY), read(HIDDEN_KEY)))
+    /* On only if it was kept as on: anything else, and nothing kept, is off. */
+    stays = read(STAYS_KEY) === true
     /* A hello that came in before the read finished is newer than what was kept. */
     if (!heard) knows = watchKnows(read(KNOWS_KEY))
     announce()
@@ -81,7 +91,19 @@ export const watchHasTempo = () => knows.includes('tempo')
 /** What goes in the picture: the order and the hidden pages, for a watch that has said it does this; null, and neither field, for any other. */
 export const pagesToSend = () => (watchOrdersPages() ? { pages: order, hidden } : null)
 
-/** { order, hidden, can }: the pages as chosen, and whether the watch can take them. Settings draws from it, and the bridge sends from it. */
+/** What goes in the picture for the tuner's switch: on or off, for a watch that has said it knows `stay`; null, and no field, for any other. */
+export const tunerStaysToSend = () => (knows.includes('stay') ? stays : null)
+
+/** The tuner's "stays on when you swipe away" switch, on or off. Kept on the device, like the pages. */
+export function setTunerStays(on) {
+  const next = on === true
+  if (next === stays) return
+  stays = next
+  announce()
+  AsyncStorage.setItem(STAYS_KEY, JSON.stringify(stays)).catch(() => {})
+}
+
+/** { order, hidden, can, stays, canStay }: the pages as chosen and the tuner's switch, and whether the watch can take each. Settings draws from it, and the bridge sends from it. */
 export function useWatchPages() {
   return useSyncExternalStore(
     (fn) => {

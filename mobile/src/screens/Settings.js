@@ -73,6 +73,8 @@ import { siriRow } from '../lib/siri-help'
 import { siriPresent } from '../lib/siriPipe'
 import SiriHelp from '../components/SiriHelp'
 import WatchPageOrder from '../components/WatchPageOrder'
+import WatchTunerStays from '../components/WatchTunerStays'
+import { useWatchPages } from '../lib/watchPages'
 import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn, useCableNow, useMidiJacks } from '../lib/bluetooth'
 import { CABLE_LOOK_AGAIN, CABLE_NO_SIGNAL, CABLE_PAGE_SUB, CABLE_ROW_ON, cableChain, cableComputerNote, cableRowWord } from '../lib/cableWords'
 import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH } from '../lib/bluetooth-gear'
@@ -397,6 +399,8 @@ export default function Settings({
 
   const conflict = hostConflict(hosts, chosen)
   const clickSetting = useMetronome()
+  /* The watch's pages and its tuner's switch (lib/watchPages), read here so the tips on the Apple Watch page (watchHow) are drawn again when one changes. */
+  useWatchPages()
   const rigSlug = useRig((s) => s.deviceSlug)
   const rigBpm = useRig((s) => s.bpm)
   const [clickSaid, setClickSaid] = useState(null)
@@ -2006,6 +2010,11 @@ export default function Settings({
                 pages from the phone, which only a watch from the build that
                 carries it does (components/WatchPageOrder). */}
             <WatchPageOrder />
+            {/* And whether its tuner stays on when its page is left: "Could we
+                make out a setting? That they turn on and off?" (the same
+                day). Draws nothing until the watch has said it knows how
+                (components/WatchTunerStays). */}
+            <WatchTunerStays />
 
             <Section>What it does</Section>
             <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 24 }}>
