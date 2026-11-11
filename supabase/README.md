@@ -541,9 +541,12 @@ version (`EDIT_FROM_STORE` in mobile/src/lib/ble-rule.js). The Bluetooth
 paragraph of both emails still says "with no editing or saving", which is
 true of every copy before 1.90.0. So the function carries one more
 sentence, behind a switch of its own: the units sentence ends at the VP4's
-scope, and then "From version 1.90.0 you can also edit over it on an AM4,
-FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving
-(save on the unit itself)." Never the VP4.
+scope, and then "You can also edit over it on an AM4, FM3, FM9 or Axe-Fx
+III: knobs, models and blocks on and off, with no saving (save on the unit
+itself)." Never the VP4. Neither sentence says a version number any more
+(Justin, 11 November 2026, shown the sentence: "Yeah, that's fine. You
+probably just leave out the version numbers though."); "Update the app",
+two sentences before, covers an older store copy.
 
 It is **on in the repository since 10 November 2026**: `EDIT_IN_EMAILS = true`
 at the top of `functions/setup-reminder/index.ts`, beside

@@ -297,7 +297,14 @@ SENTENCE until the function is redeployed, and it is not redeployed until
 Justin has said the new sentence is right: emails off, redeploy, he reads
 the sample, emails on (supabase/README.md). Nothing deploys it on a merge.
 So do not redeploy setup-reminder for any other reason before that without
-saying it carries the new sentence.
+saying it carries the new sentence. He said it on 11 November 2026, shown
+the sentence: "Yeah, that's fine. You probably just leave out the version
+numbers though." So the email's Bluetooth paragraph names no version: it
+says Bluetooth "is offered on" the five units and "You can also edit over
+it" on the four, and "Update the app" before them covers an older copy
+(`BLUETOOTH_FROM` and `EDIT_FROM` stay in the function as what the
+switches are checked against, not as words). That is about the EMAIL: the
+website's pages and What's new keep "From version 1.90.0".
 
 **1.89.3 is live in both stores** (the App Store's listing and Google
 Play both show it, 30 October 2026), so Bluetooth is open to customers, and

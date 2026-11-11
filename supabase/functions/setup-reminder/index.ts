@@ -306,12 +306,21 @@ export function setupEmail(
    *
    * WITH EDITING (EDIT_IN_EMAILS, from the day 1.90.0 is live in both
    * stores): the units sentence ends at the VP4's scope, and one sentence
-   * after it says Edit opens over it from EDIT_FROM on the four units whose
-   * Edit is built, with no saving. Never the VP4, and never "works".
+   * after it says Edit opens over it on the four units whose Edit is built,
+   * with no saving. Never the VP4, and never "works".
+   *
+   * NO VERSION NUMBERS IN THE WORDS, since 11 November 2026. Shown the
+   * sentence as it was ("Bluetooth is offered from version 1.89.0 of the
+   * app ... From version 1.90.0 you can also edit over it"), Justin: "Yeah,
+   * that's fine. You probably just leave out the version numbers though."
+   * "Update the app" two sentences before is what covers an older store
+   * copy. BLUETOOTH_FROM and EDIT_FROM stay above: they are what the
+   * switches' rule is checked against (test/server.mjs), not words in the
+   * email any more.
    */
-  const units = `Bluetooth is offered from version ${BLUETOOTH_FROM} of the app, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only)`
+  const units = 'Bluetooth is offered on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only)'
   const edits = editing === true
-    ? `${units}. From version ${EDIT_FROM} you can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself).`
+    ? `${units}. You can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself).`
     : `${units}, with no editing or saving.`
   const secondWay = `You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. ${edits} On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one.`
   /* Somebody who got going since the account server last heard (a phone that has not had the update that tells it): no harm done. */

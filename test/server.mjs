@@ -1133,7 +1133,8 @@ export function run(test) {
      */
     const second =
       'You’ll need a Bluetooth MIDI adapter plugged into your unit’s MIDI jacks. Update the app, then open Settings → My rig → Bluetooth: it says what to buy and how to plug it in. Then pick your unit and tap Connect. ' +
-      `Bluetooth is offered from version ${BLUETOOTH_FROM} of the app, on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only), with no editing or saving. ` +
+      /* No version numbers in the words since 11 November 2026: "You probably just leave out the version numbers though" (Justin). */
+      'Bluetooth is offered on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only), with no editing or saving. ' +
       /* Since 31 October nothing of where it has been tried (the Developer page's), and the FM3's warning alone. */
       'On an FM3, use a CME U2MIDI Pro, never the C2MIDI Pro or a WIDI Master, which got very hot on one.'
     const allSet = 'Already up and running? Then you’re all set, and you can ignore this email.'
@@ -1149,7 +1150,7 @@ export function run(test) {
     const reminder = setupEmail('reminder', 'fan@example.com', { bluetooth: true, editing: false })
     const secondWithEdit = second.replace(
       ', with no editing or saving. ',
-      `. From version ${EDIT_FROM} you can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself). `
+      '. You can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself). '
     )
     assert.notEqual(secondWithEdit, second, 'the Bluetooth paragraph no longer ends its units sentence where the editing sentence goes')
     for (const kind of ['first', 'reminder']) {
@@ -1187,7 +1188,7 @@ export function run(test) {
     const supported = read('docs/app-store.md').match(/\nSUPPORTED UNITS\n([^\n]+)\n/)?.[1] || ''
     assert.equal(supported, 'FM3, FM9, Axe-Fx III and AM4, and the VP4 in part.', 'SUPPORTED UNITS changed; the email names the units Bluetooth is for, from that list')
     const units = (list) => list.split(/,\s*(?:and\s+)?(?:the\s+)?|\s+(?:and|or)\s+(?:the\s+)?/).map((u) => u.replace(/^(the|an?) /, '').replace(/ in part\.?$|\.$/, '').trim()).filter(Boolean).sort()
-    const named = second.match(/, on (an AM4[^(]+) \(/)?.[1] || ''
+    const named = second.match(/Bluetooth is offered on (an AM4[^(]+) \(/)?.[1] || ''
     assert.deepEqual(units(named), units(supported), `the email names ${named} as the units Bluetooth is for; SUPPORTED UNITS is ${units(supported).join(', ')}`)
     /* And in Justin's words, with nothing of which unit has been tried, and what a VP4 gets. */
     assert.ok(!/\bbeta\b/i.test(second), 'the email still calls Bluetooth a beta')
@@ -1267,7 +1268,7 @@ export function run(test) {
     assert.match(fn, /^export const EDIT_IN_EMAILS = (true|false)$/m, 'the editing switch is not a plain true or false')
 
     /* The sentence, exactly, and the units it names. */
-    const editLine = `From version ${EDIT_FROM} you can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself).`
+    const editLine = 'You can also edit over it on an AM4, FM3, FM9 or Axe-Fx III: knobs, models and blocks on and off, with no saving (save on the unit itself).'
     const on = setupEmail('first', 'fan@example.com', { bluetooth: true, editing: true })
     const off = setupEmail('first', 'fan@example.com', { bluetooth: true, editing: false })
     assert.ok(on.text.includes(`on an AM4, FM3, FM9, Axe-Fx III or VP4 (on a VP4, presets and scenes only). ${editLine} On an FM3, use a CME U2MIDI Pro`), 'the Bluetooth paragraph with editing is not the planned sentence, after the VP4’s scope and before the FM3’s warning')
