@@ -236,7 +236,10 @@ export function run(test) {
 
   test('preset wheel: it clicks only under a thumb or its flick, and only where the tick box says so', () => {
     const wheel = flat(read('mobile/src/components/PresetWheel.js'))
-    assert.match(wheel, /onScrollBeginDrag=\{\(\) => \{ moving\.current = true \}\}/)
+    assert.match(wheel, /onScrollBeginDrag=\{\(\) => \{ dragging\.current = true moving\.current = true \}\}/)
+    /* A thumb that pauses on the glass and carries on is one drag: it keeps clicking, and stops only once the thumb is up and the flick has run out. */
+    assert.match(wheel, /onScrollEndDrag=\{\(\) => \{ dragging\.current = false settle\(\) \}\}/)
+    assert.match(wheel, /if \(!dragging\.current\) moving\.current = false/, 'a pause under the thumb ends the clicks for the rest of the drag')
     assert.match(wheel, /if \(!moving\.current \|\| !clicking\.current\) return/, 'a jump the app makes is not somebody turning the wheel')
     assert.match(wheel, /if \(!clickDue\(now, lastClick\.current\)\) return/)
     assert.match(wheel, /if \(!clicks\) return undefined openWheelClick\(\) return closeWheelClick/, 'no sound is loaded for a wheel that does not click')

@@ -68,11 +68,17 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
    * the list jumping to the preset being played when it opens, or back to
    * the top of a search, is not somebody turning the wheel.
    *
+   * A thumb that stops on the glass and then carries on is still one drag
+   * (`dragging`), and the list says it began only once: so the wheel is
+   * moving for as long as the thumb is down, however still it holds, and
+   * after it lifts until the flick has run out.
+   *
    * And the names around the middle are asked for once the wheel rests,
    * never during a flick: each name is a read of the unit (lib/presetNames).
    */
   const centre = useRef(first)
   const moving = useRef(false)
+  const dragging = useRef(false)
   const lastClick = useRef(0)
   const rest = useRef(null)
   const around = useRef(onAround)
@@ -85,7 +91,7 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
   const settle = useCallback(() => {
     clearTimeout(rest.current)
     rest.current = setTimeout(() => {
-      moving.current = false
+      if (!dragging.current) moving.current = false
       around.current?.(wheelAround(centre.current, counted.current))
     }, WHEEL_REST_MS)
   }, [])
@@ -161,7 +167,13 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
           scrollEventThrottle={16}
           onScroll={onScroll}
           onScrollBeginDrag={() => {
+            dragging.current = true
             moving.current = true
+          }}
+          onScrollEndDrag={() => {
+            /* The thumb is up: moving until the flick runs out, or at once if there is none. */
+            dragging.current = false
+            settle()
           }}
           renderItem={({ item, index }) => (
             <WheelRow y={y} index={index}>
