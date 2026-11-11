@@ -323,6 +323,28 @@ puts whatever is missing after them, so Tempo simply appears, shown.
   `wrist`, `running`), only to a watch that has said `tempo`.
 - The watch may now ask for eight things, not six.
 
+**The tuner page says what the tuner is, and its buttons say what a tap
+does.** The off screen was one button that said "Tuner on" while the tuner
+was off, and Justin read it as the state: "where it says tuner on I feel
+like that means it on." Of three mockups he picked the second, "Go with
+option B for the watch I like that one" (11 November 2026;
+docs/watch/tuner-start-stop.png, with docs/watch/README.md beside it).
+
+- Off: TUNER, small; "Off", big and grey; one large green button with the
+  tuning fork, "Start tuning". No "Tap to tune.", and nothing on the screen
+  says "on".
+- On: the note, the needle and the cents as they were, then "Stop tuning",
+  red, where "Tuner off" was.
+- Never "Tuner on" or "Tuner off" as a button's words again. VoiceOver reads
+  the buttons by their words and "Off" as "Tuner is off".
+- What it does is unchanged: the same two requests, nothing until tapped.
+- CI's pictures of this page change with it (watch.yml's page-3.png and
+  tuner-on.png). Nothing compares them with an older picture, so nothing
+  has to be updated for the check to pass; but the same run, started by
+  hand without the patch box, is what makes the Apple Watch screenshots for
+  App Store Connect (the watch-screenshots release), and after the build
+  those two are of a page the app no longer has. See "What goes with it".
+
 **It has not been compiled.** Nothing on a Linux box compiles Swift, and
 watch.yml runs on the tree, which does not have the patch (it does run on
 the pull request that brought this file, because that changes
@@ -387,6 +409,10 @@ Xcode 27.1, compile only. Both are GitHub's Macs and spend no Expo build.
   build on a wearer can see it: "Apple Watch: choose which pages your watch
   shows, and their order, in Settings → Apple Watch. And a new Tempo page,
   with Tap and the metronome on your wrist.";
+- the App Store's Apple Watch screenshots: once the patch is in main, start
+  watch.yml by hand on main (patch box unticked) so the watch-screenshots
+  release has the new tuner page, and tell Justin the two tuner pictures in
+  App Store Connect are his to replace (he sets the listing himself);
 - docs/expo-builds.md's row for the pair.
 
 No store-version key: the rows wait for the watch's own word, and only a

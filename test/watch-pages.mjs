@@ -509,6 +509,17 @@ export function run(test) {
     assert.match(drawn, /<Text[^>]*>\{name\}<\/Text>\s+<Text[^>]*>\{WATCH_ORDER_HIDDEN\}<\/Text>/)
   })
 
+  test('watch tuner: the mockup Justin picked is on record, with the day he picked it', () => {
+    assert.ok(existsSync(at('docs/watch/tuner-start-stop.png')), 'the picture the tuner page was chosen from is not in the repository')
+    const png = readFileSync(at('docs/watch/tuner-start-stop.png'))
+    assert.deepEqual([...png.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 'tuner-start-stop.png is not a picture')
+    const note = read('docs/watch/README.md')
+    assert.match(note, /!\[[^\]]*\]\(tuner-start-stop\.png\)/)
+    assert.match(note, /`tuner-start-stop\.png` is the mockup Justin picked on 11 November 2026/)
+    assert.match(note, /"Go with option B for the watch I like that one\."/)
+    for (const words of ['"Start tuning"', '"Stop tuning"', '"Off"', '"Tuner is off"']) assert.ok(note.includes(words), `docs/watch/README.md does not say ${words}`)
+  })
+
   test('watch pages: the watch’s half waits as a patch, and with it in the watch draws the shown pages in the order sent, has its Tempo page, and still opens CI’s pages by name', async () => {
     const { WATCH_PAGES, WATCH_KNOWS } = await link()
     const model = read('mobile/targets/watch/Model.swift')
@@ -604,6 +615,28 @@ export function run(test) {
     assert.match(drawnPages, /\.onDisappear \{ if state\.tuner\.on \{ link\.send\(\.tuner\(on: false\)\) \} \}/)
     assert.match(drawnPages, /link\.send\(\.tuner\(on: true\)\) \} label:/)
 
+    /*
+     * THE TUNER PAGE'S WORDS: option B, the mockup Justin picked (docs/watch).
+     * "Where it says tuner on I feel like that means it on": the screen says
+     * what the tuner IS, the buttons say what a tap will DO.
+     */
+    assert.match(flat, /enum TunerWords \{ static let off = "Off" static let offSpoken = "Tuner is off" static let start = "Start tuning" static let stop = "Stop tuning" \}/)
+    const tunerPage = drawnPages.slice(drawnPages.indexOf('struct TunerPage: View {'), drawnPages.indexOf('private struct Needle: View {'))
+    assert.ok(tunerPage.length > 200)
+    /* Off: TUNER (not read twice), "Off" read as "Tuner is off", and Start tuning on the app's green with the tuning fork. */
+    assert.match(tunerPage, /Text\("TUNER"\)\.font\(\.caption2\)\.foregroundStyle\(\.secondary\)\.accessibilityHidden\(true\) Text\(TunerWords\.off\) \.font\(\.system\(size: 26, weight: \.heavy\)\) \.foregroundStyle\(\.secondary\) \.accessibilityLabel\(TunerWords\.offSpoken\)/)
+    assert.match(tunerPage, /link\.send\(\.tuner\(on: true\)\) \} label: \{ Label\(TunerWords\.start, systemImage: "tuningfork"\) \.font\(\.body\.weight\(\.bold\)\) \.foregroundStyle\(startInk\) \.frame\(maxWidth: \.infinity, minHeight: 52\) \.background\(signal, in: Capsule\(\)\) \}/)
+    /* On: the note, the needle and the cents as they were, then Stop tuning, red. */
+    assert.match(tunerPage, /Needle\(cents: tuner\.cents, live: !tuner\.note\.isEmpty, inTune: tuner\.inTune\)/)
+    assert.match(tunerPage, /link\.send\(\.tuner\(on: false\)\) \} label: \{ Text\(TunerWords\.stop\) \.font\(\.body\.weight\(\.bold\)\) \.foregroundStyle\(stopInk\) \.frame\(maxWidth: \.infinity, minHeight: 40\) \.background\(stopFill, in: Capsule\(\)\) \}/)
+    /* The mockup's colours. */
+    assert.match(pages, /private let startInk = Color\(red: 0\.024, green: 0\.129, blue: 0\.055\)/)
+    assert.match(pages, /private let stopInk = Color\(red: 1, green: 0\.412, blue: 0\.38\)/)
+    assert.match(pages, /private let stopFill = Color\(red: 1, green: 0\.271, blue: 0\.227\)\.opacity\(0\.28\)/)
+    assert.match(pages, /private let signal = Color\(red: 0\.36, green: 0\.85, blue: 0\.47\)/)
+    /* Never a button that reads as the state, and no "Tap to tune." */
+    assert.doesNotMatch(code(pages), /"Tuner on"|"Tuner off"|Tap to tune/, 'the tuner page has a button that reads as what the tuner is')
+
     /* THE TEMPO PAGE. The picture's fields by the phone's names, and the two requests in the phone's words. */
     for (const field of ['bpm: Double? = nil', 'tap: Bool', 'why: String? = nil', 'wrist: Bool? = nil', 'running: Bool? = nil']) {
       assert.ok(new RegExp(`struct WatchTempo: Codable, Equatable \\{[^}]*\\bvar ${field.replace(/[?.]/g, '\\$&')}\\b`).test(model), `the watch does not read the tempo’s ${field}`)
@@ -636,7 +669,8 @@ export function run(test) {
       'testHidingTheTunersPageWhileOnItTurnsTheTunerOff',
       'testTheWatchSaysWhatItKnows',
       'testTheTempoPageSaysWhatThePhoneSays',
-      'testATapIsSentOnceAndTheSwitchIsOnlyTheWrists'
+      'testATapIsSentOnceAndTheSwitchIsOnlyTheWrists',
+      'testTheTunerPagesWordsSayWhatATapDoes'
     ]) {
       assert.ok(tests.includes(`func ${name}(`), `the watch’s own tests have no ${name}`)
     }

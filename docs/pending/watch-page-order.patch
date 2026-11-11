@@ -93,7 +93,7 @@ index 807c1e54..49330aa1 100644
      }
  }
 diff --git a/mobile/targets/watch/Model.swift b/mobile/targets/watch/Model.swift
-index ca41efac..29600513 100644
+index ca41efac..e861481a 100644
 --- a/mobile/targets/watch/Model.swift
 +++ b/mobile/targets/watch/Model.swift
 @@ -5,7 +5,7 @@ import Foundation
@@ -322,7 +322,27 @@ index ca41efac..29600513 100644
          case .scene(let index): return #"{"do":"scene","index":\#(index)}"#
          case .pedal(let id, let on): return #"{"do":"pedal","id":\#(id),"on":\#(on)}"#
          case .preset(let step): return #"{"do":"preset","step":\#(step < 0 ? -1 : 1)}"#
-@@ -296,6 +471,11 @@ extension WatchState {
+@@ -232,6 +407,19 @@ func grownSize(_ tall: Double, share: Double, least: Double, most: Double) -> Do
+     max(least, min(most, (tall * share).rounded(.down)))
+ }
+ 
++/*
++ * THE TUNER PAGE'S WORDS (Pages.swift TunerPage, option B, picked 11
++ * November 2026). The screen says what the tuner IS, the buttons say what a
++ * tap will DO, and no button is ever "Tuner on" or "Tuner off" again: those
++ * read as the state. `offSpoken` is what VoiceOver says for "Off".
++ */
++enum TunerWords {
++    static let off = "Off"
++    static let offSpoken = "Tuner is off"
++    static let start = "Start tuning"
++    static let stop = "Stop tuning"
++}
++
+ /** Where the tuner's needle sits, -1 (50 cents flat) to 1 (50 sharp). */
+ func needleOffset(cents: Int) -> Double {
+     Double(max(-50, min(50, cents))) / 50
+@@ -296,6 +484,11 @@ extension WatchState {
          switch command {
          case .hello:
              break
@@ -335,7 +355,7 @@ index ca41efac..29600513 100644
              if index >= 0 && index < scenes.count { next.scene = index }
          case .pedal(let id, let on):
 diff --git a/mobile/targets/watch/Pages.swift b/mobile/targets/watch/Pages.swift
-index e25777c5..429da88a 100644
+index e25777c5..ed394d1e 100644
 --- a/mobile/targets/watch/Pages.swift
 +++ b/mobile/targets/watch/Pages.swift
 @@ -532,6 +532,78 @@ struct PresetsPage: View {
@@ -417,6 +437,82 @@ index e25777c5..429da88a 100644
  // MARK: - Tuner
  
  /*
+@@ -542,7 +614,33 @@ struct PresetsPage: View {
+  * unit that IS set to mute is never muted by a swipe past. The note in big
+  * letters, a needle for how far off, green within three cents, as on the
+  * phone.
++ *
++ * THE SCREEN SAYS WHAT THE TUNER IS; THE BUTTONS SAY WHAT A TAP WILL DO.
++ * The off screen used to be one button that said "Tuner on" while the tuner
++ * was off, and Justin read it as the state: "where it says tuner on I feel
++ * like that means it on." Of three mockups he picked the second, "Go with
++ * option B for the watch I like that one" (11 November 2026; the picture is
++ * docs/watch/tuner-start-stop.png):
++ *
++ *   off  TUNER, small, then "Off", big and grey, then one large green
++ *        button with the tuning fork: "Start tuning". No "Tap to tune.",
++ *        and nothing on the screen says "on".
++ *   on   the note, the needle and the cents as they were, then "Stop
++ *        tuning", red, where "Tuner off" was.
++ *
++ * Never "Tuner on" or "Tuner off" as a button's words again (the words are
++ * TunerWords in Model.swift, which the tests hold). Nothing it does changed:
++ * the same two requests, nothing until tapped, and off when the page is
++ * left or hidden. VoiceOver reads the buttons by their words and "Off" as
++ * "Tuner is off"; the small TUNER over it is not read twice.
+  */
++
++/** Start tuning's words on the green: near black (#06210E), as the mockup. */
++private let startInk = Color(red: 0.024, green: 0.129, blue: 0.055)
++/** Stop tuning: red words (#FF6961) on a red-tinted fill (255, 69, 58 at 28%), as a button that ends something reads on the watch. */
++private let stopInk = Color(red: 1, green: 0.412, blue: 0.38)
++private let stopFill = Color(red: 1, green: 0.271, blue: 0.227).opacity(0.28)
++
+ struct TunerPage: View {
+     let state: WatchState
+     @EnvironmentObject private var link: PhoneLink
+@@ -560,22 +658,34 @@ struct TunerPage: View {
+                 Text(tuner.note.isEmpty ? "Play a string" : "\(tuner.cents > 0 ? "+" : "")\(tuner.cents) cents")
+                     .font(.footnote)
+                     .foregroundStyle(.secondary)
+-                Button("Tuner off") {
++                Button {
+                     tap()
+                     link.send(.tuner(on: false))
++                } label: {
++                    Text(TunerWords.stop)
++                        .font(.body.weight(.bold))
++                        .foregroundStyle(stopInk)
++                        .frame(maxWidth: .infinity, minHeight: 40)
++                        .background(stopFill, in: Capsule())
+                 }
++                .buttonStyle(.plain)
+             } else {
+-                Text("TUNER").font(.caption2).foregroundStyle(.secondary)
++                Text("TUNER").font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
++                Text(TunerWords.off)
++                    .font(.system(size: 26, weight: .heavy))
++                    .foregroundStyle(.secondary)
++                    .accessibilityLabel(TunerWords.offSpoken)
+                 Button {
+                     tap()
+                     link.send(.tuner(on: true))
+                 } label: {
+-                    Label("Tuner on", systemImage: "tuningfork").frame(maxWidth: .infinity, minHeight: 56)
++                    Label(TunerWords.start, systemImage: "tuningfork")
++                        .font(.body.weight(.bold))
++                        .foregroundStyle(startInk)
++                        .frame(maxWidth: .infinity, minHeight: 52)
++                        .background(signal, in: Capsule())
+                 }
+-                Text("Tap to tune.")
+-                    .font(.footnote)
+-                    .foregroundStyle(.secondary)
+-                    .multilineTextAlignment(.center)
++                .buttonStyle(.plain)
+             }
+         }
+         .onDisappear {
 diff --git a/mobile/targets/watch/PhoneLink.swift b/mobile/targets/watch/PhoneLink.swift
 index 2d40776f..43ed5484 100644
 --- a/mobile/targets/watch/PhoneLink.swift
@@ -446,7 +542,7 @@ index 05571339..900f45e7 100644
      ]
  )
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
-index 1b1532ec..fb6d279e 100644
+index 1b1532ec..71d52717 100644
 --- a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
 +++ b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
 @@ -122,7 +122,10 @@ final class WatchModelTests: XCTestCase {
@@ -461,7 +557,7 @@ index 1b1532ec..fb6d279e 100644
          XCTAssertEqual(WatchCommand.scene(2).json, #"{"do":"scene","index":2}"#)
          XCTAssertEqual(WatchCommand.pedal(id: 50, on: false).json, #"{"do":"pedal","id":50,"on":false}"#)
          XCTAssertEqual(WatchCommand.preset(step: -1).json, #"{"do":"preset","step":-1}"#)
-@@ -132,6 +135,187 @@ final class WatchModelTests: XCTestCase {
+@@ -132,6 +135,202 @@ final class WatchModelTests: XCTestCase {
          XCTAssertEqual(WatchCommand.channel(id: 50, channel: #"a"b"#).json, #"{"do":"channel","id":50,"channel":"a\"b"}"#, "a channel is sent as JSON, not pasted in")
      }
  
@@ -644,6 +740,21 @@ index 1b1532ec..fb6d279e 100644
 +        XCTAssertEqual(s.answering(.wrist(on: true)).answering(.wrist(on: false)), s)
 +        XCTAssertEqual(s.answering(.tap), s)
 +        XCTAssertEqual(s.answering(.wrist(on: true)).metronome, s.metronome, "the wrist's switch started the metronome")
++    }
++
++    /* "Where it says tuner on I feel like that means it on": the screen says the state, the buttons say what a tap does. */
++    func testTheTunerPagesWordsSayWhatATapDoes() {
++        XCTAssertEqual(TunerWords.off, "Off")
++        XCTAssertEqual(TunerWords.offSpoken, "Tuner is off")
++        XCTAssertEqual(TunerWords.start, "Start tuning")
++        XCTAssertEqual(TunerWords.stop, "Stop tuning")
++        /* A button's words are never a state, and nothing on the off screen says "on". */
++        for words in [TunerWords.start, TunerWords.stop] {
++            XCTAssertFalse(words.hasPrefix("Tuner"), "“\(words)” reads as what the tuner is, not what a tap does")
++        }
++        for words in [TunerWords.off, TunerWords.offSpoken, TunerWords.start] {
++            XCTAssertFalse(words.lowercased().split(separator: " ").contains("on"), "“\(words)” says on while the tuner is off")
++        }
 +    }
 +
      func testTheNeedleAndTheColours() {
