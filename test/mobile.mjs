@@ -3897,8 +3897,7 @@ export function run(test) {
      * `gap`, so the error would compound down the list — fine at the top and
      * useless at the bottom.
      */
-    /* (`tall` is the preset wheel's row, which the wheel places itself: test/preset-wheel.mjs.) */
-    assert.match(presets, /marginBottom: tall \? 0 : GAP/, 'the rows are spaced by something the jump cannot account for')
+    assert.match(presets, /marginBottom: GAP/, 'the rows are spaced by something the jump cannot account for')
     assert.ok(
       !/contentContainerStyle=\{\{[^}]*gap:/.test(presets),
       'the list is spaced with `gap`, which getItemLayout cannot see'

@@ -4701,7 +4701,7 @@ export default function App() {
            Exit demo for somebody who has. As on the phone. */
         onUnlock={isDemo() && paid.checked && !paid.unlocked ? openUnlock : null}
         unlockPrice={webPriceText}
-        /* "Try it on your rig free for 7 days" over Unlock, where the trial is offered (shared/trial-words.mjs). */
+        /* "7 Day Free Trial" over Unlock, where the trial is offered (shared/trial-words.mjs). */
         unlockTrial={trialHere ? DEMO_TRIAL_PILL : null}
         onExitDemo={isDemo() && paid.unlocked ? () => linkAction('leave-demo') : null}
         device={device}

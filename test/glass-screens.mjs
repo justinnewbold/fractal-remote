@@ -134,13 +134,12 @@ export function run(test) {
     assert.doesNotMatch(row, /glass|boxShadow|backgroundColor|borderRadius/, 'the preset row draws its own glass; Press does it')
     /* Every row a bar can go down, so a tagged row and an untagged one are the same shape and glass; flat, as a long list is. */
     assert.match(row, / bar flat style=\{tagEdge\(tag\)\}/, 'a preset row takes its shape from whether it has a tag, or casts a drop in a long list')
-    /* ROW tall in the list; the preset wheel's row is its own height (test/preset-wheel.mjs). */
-    assert.match(row, /grow height=\{tallRow\}/, 'the preset row is not ROW tall')
-    assert.match(all, /const tallRow = tall \? WHEEL_ROW : ROW\b/, 'the preset row is not ROW tall')
-    assert.match(all, /renderItem=\{\(\{ item: n \}\) => rowOf\(n\)\}/, 'the list draws a tall row')
+    assert.match(row, /grow height=\{ROW\}/, 'the preset row is not ROW tall')
+    /* The list draws the row as it is; the preset wheel's is another (test/preset-wheel.mjs). */
+    assert.match(all, /renderItem=\{\(\{ item: n \}\) => rowOf\(n\)\}/, 'the list draws the wheel\'s row')
     assert.match(src, /const ROW = TAP/)
     assert.match(src, /const STRIDE = ROW \+ GAP/)
-    assert.match(src, /marginBottom: tall \? 0 : GAP/)
+    assert.match(src, /marginBottom: GAP/)
 
     /* Play's preset name is the other button a preset's tag goes down: the bar's corner and glass, tagged or not. */
     const stage = flat(read('mobile/src/screens/Stage.js'))

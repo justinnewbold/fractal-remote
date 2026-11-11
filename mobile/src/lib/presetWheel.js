@@ -23,9 +23,9 @@
  * PRESET_WHEEL_FOR_EVERYONE (`presetWheelOn`), as every new thing is.
  *
  * What follows is the arithmetic, kept apart so it can be tested: how big a
- * row is at each step from the middle, how far it is moved so the smaller
- * rows close up, which row is in the middle for a place in the scroll, and
- * when a click is due. Nothing here imports anything.
+ * row is at each step from the middle, which row is in the middle for a
+ * place in the scroll, and when a click is due. Nothing here imports
+ * anything.
  */
 
 /** Whether an account is offered the wheel at all: his, or everyone once the switch is on. */
@@ -80,65 +80,66 @@ export const WHEEL_WORDS = Object.freeze({
 
 /* ----------------------------------------------------------- the geometry */
 
-/** How tall the middle row is drawn. Every row is laid out this tall and drawn smaller, never larger: type scaled down stays sharp. */
-export const WHEEL_ROW = 84
+/*
+ * EVERY ROW MOVES EXACTLY AS FAR AS THE THUMB DOES. The first wheel drew its
+ * rows closer together the further they were from the middle, by moving
+ * them, so a preset under a thumb slid at half the thumb's speed, in tall
+ * boxes that took most of a thumb's travel each. Justin, on his own phone
+ * (11 November 2026): "It's very clunky doesn't match up with the clicks
+ * properly. I think on that we probably want to remove the boxes around the
+ * outside edge of the presets as well and make the size of the preset names
+ * a little smaller."
+ *
+ * So a row is never moved: it is only drawn smaller and fainter the further
+ * it is from the middle, in the place the scroll puts it. The rows are names
+ * with no box round them, a short slot each, and two faint lines mark the
+ * middle slot: a name crossing a line is the click.
+ */
+
+/** How tall a row is drawn in the middle. Every row is laid out this tall and drawn smaller, never larger: type scaled down stays sharp. */
+export const WHEEL_ROW = 50
 /** How much of the scroll one preset takes: the row and the space under it. */
-export const WHEEL_SLOT = 92
+export const WHEEL_SLOT = 54
+/** How big a preset's name is in the middle (the list's is 15). */
+export const WHEEL_NAME = 19
 
 /*
- * A ROW AT EACH STEP FROM THE MIDDLE: how big it is drawn (a share of
- * WHEEL_ROW), how bright, and the gap left before it. Step 0 is the middle.
- * Past the last step a row keeps the last step's size and brightness, so a
- * tall tablet has small faint rows to its edges rather than nothing.
+ * A ROW AT EACH STEP FROM THE MIDDLE: how big it is drawn (a share of its
+ * size in the middle) and how bright. Step 0 is the middle. Past the last
+ * step a row keeps the last step's size and brightness, so a tall tablet
+ * has small faint names to its edges rather than nothing.
  */
 export const WHEEL_STEPS = Object.freeze([
-  Object.freeze({ scale: 1, opacity: 1, gap: 0 }),
-  Object.freeze({ scale: 0.72, opacity: 0.85, gap: 8 }),
-  Object.freeze({ scale: 0.58, opacity: 0.6, gap: 7 }),
-  Object.freeze({ scale: 0.48, opacity: 0.42, gap: 6 }),
-  Object.freeze({ scale: 0.42, opacity: 0.3, gap: 6 }),
-  Object.freeze({ scale: 0.38, opacity: 0.22, gap: 6 }),
-  Object.freeze({ scale: 0.36, opacity: 0.18, gap: 6 })
+  Object.freeze({ scale: 1, opacity: 1 }),
+  Object.freeze({ scale: 0.86, opacity: 0.8 }),
+  Object.freeze({ scale: 0.76, opacity: 0.6 }),
+  Object.freeze({ scale: 0.69, opacity: 0.44 }),
+  Object.freeze({ scale: 0.64, opacity: 0.32 }),
+  Object.freeze({ scale: 0.6, opacity: 0.24 }),
+  Object.freeze({ scale: 0.58, opacity: 0.2 })
 ])
 
-/** How far from the middle a row's centre is DRAWN at each step, in points: half of each row on the way and the gaps between. */
-export const WHEEL_PLACES = Object.freeze(
-  WHEEL_STEPS.reduce((places, step, k) => {
-    if (k === 0) return [0]
-    const before = WHEEL_STEPS[k - 1]
-    return [...places, places[k - 1] + (before.scale * WHEEL_ROW) / 2 + step.gap + (step.scale * WHEEL_ROW) / 2]
-  }, [])
-)
-
 /**
- * WHAT A ROW IS TOLD, as three curves over the scroll's place.
+ * WHAT A ROW IS TOLD, as two curves over the scroll's place: its size and
+ * its brightness, given at each whole step either side of the place where it
+ * is in the middle (index × WHEEL_SLOT, wheelOffset). Nothing here moves a
+ * row: where it is, is the scroll's to say, and only the scroll's.
  *
- * Row `index` is in the middle when the list has scrolled index × WHEEL_SLOT
- * (wheelOffset). The curves are given at each whole step either side of that:
- * its size, its brightness, and how far it is moved toward the middle, since
- * a row laid out a whole slot from its neighbour and drawn at half the size
- * would otherwise leave a hole. A scroll PAST a row's place means the row is
- * above the middle, so it is moved down (a positive shift); before it, up.
- *
- * `input` always rises, which is what the animation asks of it. Size and
- * brightness stop at the last step (clamp); the shift carries on at the last
- * step's rate (extend), so rows further out stay evenly spaced.
+ * `input` always rises, which is what the animation asks of it, and both
+ * curves stop at the last step.
  */
 export function wheelCurve(index, slot = WHEEL_SLOT) {
   const last = WHEEL_STEPS.length - 1
   const input = []
   const scale = []
   const opacity = []
-  const shift = []
   for (let k = -last; k <= last; k += 1) {
     const step = WHEEL_STEPS[Math.abs(k)]
     input.push((index + k) * slot)
     scale.push(step.scale)
     opacity.push(step.opacity)
-    /* Laid out |k| slots away, drawn WHEEL_PLACES[|k|] away: the difference, toward the middle. */
-    shift.push(Math.sign(k) * (Math.abs(k) * slot - WHEEL_PLACES[Math.abs(k)]))
   }
-  return { input, scale, opacity, shift }
+  return { input, scale, opacity }
 }
 
 /** Where the list is scrolled to with row `index` in the middle. */

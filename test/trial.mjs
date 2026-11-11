@@ -237,7 +237,10 @@ export function run(test) {
     assert.match(code(read('supabase/functions/trial/index.ts')), /from '\.\.\/_shared\/trial-rule\.mjs'/, 'the server function works the end out some other way')
     /* No second number for the length anywhere it is said. */
     assert.equal(TRIAL_BUTTON, 'Start 7-day free trial')
-    assert.equal(DEMO_TRIAL_PILL, 'Try it on your rig free for 7 days')
+    /* "Change the top line to say '7 Day Free Trial' ... And make the text slightly bigger." (Justin, 11 November 2026.) */
+    assert.equal(DEMO_TRIAL_PILL, '7 Day Free Trial')
+    assert.match(read('src/styles.css').replace(/\s+/g, ' '), /\.topbar-pill-trial \{ display: block; max-width: 9\.5rem; font-size: 0\.82em;/, 'the website’s trial line is back to its small type')
+    assert.match(read('mobile/src/components/TopBar.js'), /const TRIAL_PILL_SIZE = font\.micro \+ 2\b/, 'the phone’s trial line is back to its small type')
     assert.equal(DEMO_TRIAL_NUDGE, 'Like it? Plug in your unit and try everything free for 7 days.')
     assert.ok(DEMO_NUDGE_AFTER_MS >= 60000 && DEMO_NUDGE_AFTER_MS <= 10 * 60000, 'the demo’s card comes too soon or too late to be "after a few minutes"')
   })

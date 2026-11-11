@@ -1,26 +1,35 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import { Animated, View } from 'react-native'
+import { Animated, Platform, Pressable, Text, View } from 'react-native'
 
-import { color, radius, space, TAP } from '../lib/theme'
-import { WHEEL_REST_MS, WHEEL_ROW, WHEEL_SLOT, clickDue, wheelAround, wheelCentre, wheelCurve, wheelOffset, wheelPad } from '../lib/presetWheel'
+import { color, font, mono, space } from '../lib/theme'
+import { WHEEL_NAME, WHEEL_REST_MS, WHEEL_ROW, WHEEL_SLOT, clickDue, wheelAround, wheelCentre, wheelCurve, wheelOffset, wheelPad } from '../lib/presetWheel'
 import { closeWheelClick, openWheelClick, wheelClick } from '../lib/wheelClick'
+import { thud, tick } from '../lib/feedback'
+import { fire, said } from '../lib/tapped'
+
+const face = Platform.select(mono)
+
+/* How wide the star's place is at the end of a row, and the colour tag's at its start: a thumb's 44, so the name between them is in the middle of the screen. */
+const WHEEL_END = 44
 
 /**
  * ALL PRESETS AS A WHEEL (lib/presetWheel has the why and the arithmetic).
  *
- * The rows are the list's own rows, drawn by screens/Presets exactly as it
- * draws them for the list, only taller: this component decides where each
- * one sits and how big and bright it is, from how far it is from the middle
- * of the room, and nothing else. A tap, a hold and the star all go where
- * they go in the list, and NOTHING LOADS UNTIL A ROW IS TAPPED.
+ * The rows are names with no box round them (WheelPreset, below, handed
+ * what screens/Presets hands its list's rows): this component decides how
+ * big and bright each one is, from how far it is from the middle of the
+ * room, and nothing else. A tap, a hold and the star all go where they go
+ * in the list, and NOTHING LOADS UNTIL A ROW IS TAPPED.
  *
  * HOW IT IS LAID OUT. Every row has one slot of the scroll (WHEEL_SLOT), and
  * the space over the first and under the last is half the room, so row i is
  * in the middle when the list has scrolled i slots: a whole number, which is
  * what lets the list stop on a row (snapToInterval) and lets "go to row i"
- * be one multiplication. The sizes and the closing-up are transforms driven
- * straight from the scroll, so they keep up with a thumb without waiting for
- * a render.
+ * be one multiplication. A ROW IS NEVER MOVED from where the scroll puts it,
+ * so it follows a thumb exactly; only its size and brightness change, as
+ * transforms driven straight from the scroll, so they keep up without
+ * waiting for a render. Two faint lines mark the middle slot, and a name
+ * crossing one is the click.
  *
  * `listRef` is given the two things the screen asks of its list: toRow(i)
  * and toTop().
@@ -144,23 +153,12 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
           showsVerticalScrollIndicator={false}
           initialNumToRender={15}
           maxToRenderPerBatch={20}
-          /* Rows drawn small sit closer than they are laid out, so more of them are on screen than the list would guess. */
-          windowSize={11}
+          windowSize={7}
           getItemLayout={(_, i) => ({ length: WHEEL_SLOT, offset: WHEEL_SLOT * i, index: i })}
           initialScrollIndex={count ? first : undefined}
           onScrollToIndexFailed={() => {
             /* Only while the list is still measuring: it stays where it is. */
           }}
-          /*
-           * A row drawn away from where it is laid out still has to be seen
-           * and pressed there. Android's list takes rows out of the screen
-           * by where they are LAID OUT, which would take out the small rows
-           * drawn in from beyond the edges; and a row's cell, left as a
-           * target of its own, would swallow a press meant for the row drawn
-           * over it from the next slot (Cell, below).
-           */
-          removeClippedSubviews={false}
-          CellRendererComponent={Cell}
           /* It stops on a row, like the wheel it is named for. */
           snapToInterval={WHEEL_SLOT}
           decelerationRate="normal"
@@ -184,57 +182,90 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
           ListFooterComponent={footer}
         />
       ) : null}
+      {/* The middle slot, marked by a faint line over it and one under it. They stay put while the names go by, and are never in the way of a press. */}
+      {room && count ? (
+        <View pointerEvents="none" style={{ position: 'absolute', left: space.lg, right: space.lg, top: room / 2 - WHEEL_SLOT / 2, height: WHEEL_SLOT, borderTopWidth: 1, borderBottomWidth: 1, borderColor: color.rule }} />
+      ) : null}
     </View>
   )
 }
 
 /**
- * A row's place in the list, which is never itself what a finger lands on:
- * only the row drawn in it, or over it, is.
- */
-function Cell({ style, onLayout, children }) {
-  return (
-    <View style={style} onLayout={onLayout} pointerEvents="box-none">
-      {children}
-    </View>
-  )
-}
-
-/**
- * One row of the wheel: its slot of the scroll, and the three things the
- * scroll tells it (how big, how bright, how far toward the middle), with a
- * bright edge that comes up as it reaches the middle and goes as it leaves.
+ * One row of the wheel: its slot of the scroll, and the two things the
+ * scroll tells it, how big and how bright. Never where it is.
  */
 function WheelRow({ y, index, children }) {
   const drawn = useMemo(() => {
     const curve = wheelCurve(index)
-    const at = wheelOffset(index)
     return {
       scale: y.interpolate({ inputRange: curve.input, outputRange: curve.scale, extrapolate: 'clamp' }),
-      opacity: y.interpolate({ inputRange: curve.input, outputRange: curve.opacity, extrapolate: 'clamp' }),
-      /* Carried on past the last step at its rate, so rows further out stay evenly spaced. */
-      shift: y.interpolate({ inputRange: curve.input, outputRange: curve.shift, extrapolate: 'extend' }),
-      lit: y.interpolate({ inputRange: [at - WHEEL_SLOT / 2, at, at + WHEEL_SLOT / 2], outputRange: [0, 1, 0], extrapolate: 'clamp' })
+      opacity: y.interpolate({ inputRange: curve.input, outputRange: curve.opacity, extrapolate: 'clamp' })
     }
   }, [y, index])
+  return <Animated.View style={{ height: WHEEL_SLOT, justifyContent: 'center', opacity: drawn.opacity, transform: [{ scale: drawn.scale }] }}>{children}</Animated.View>
+}
+
+/**
+ * A PRESET ON THE WHEEL: its name and its slot, with no box round them.
+ *
+ * "We probably want to remove the boxes around the outside edge of the
+ * presets as well and make the size of the preset names a little smaller"
+ * (Justin, 11 November 2026). So it is two lines of type: the name
+ * (WHEEL_NAME, drawn smaller only when it would not fit) and the slot under
+ * it. The one being played is amber and says "Playing", as its row in the
+ * list does; a colour tag is a short bar before the name; the star is the
+ * star alone, on a thumb's worth of its own at the end, away from the part
+ * that loads the preset.
+ *
+ * It does what the list's row does and nothing of its own: screens/Presets
+ * hands it the same press, hold and star it hands the list's.
+ */
+export function WheelPreset({ label, sub, here = false, bar = null, starred = false, starLabel, hint, onPress, onLongPress, onStar }) {
+  const ink = here ? color.signal : color.silk
   return (
-    <Animated.View pointerEvents="box-none" style={{ height: WHEEL_SLOT, justifyContent: 'center', opacity: drawn.opacity, transform: [{ translateY: drawn.shift }, { scale: drawn.scale }] }}>
-      {children}
-      {/* The middle row's bright edge, over the preset's button and not its star. Never in the way of a press. */}
-      <Animated.View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: TAP + space.sm,
-          top: (WHEEL_SLOT - WHEEL_ROW) / 2,
-          height: WHEEL_ROW,
-          borderRadius: radius.md,
-          borderWidth: 2,
-          borderColor: color.silk,
-          opacity: drawn.lit
+    <View style={{ flexDirection: 'row', alignItems: 'center', height: WHEEL_ROW }}>
+      <View style={{ width: WHEEL_END, alignItems: 'center' }}>
+        {bar ? <View style={{ width: 4, height: WHEEL_ROW - 22, borderRadius: 2, backgroundColor: bar }} /> : null}
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ selected: here }}
+        accessibilityLabel={[label, sub].filter(Boolean).join(', ')}
+        accessibilityHint={hint}
+        onPress={() => {
+          thud()
+          fire(`press ${said(label)}`, onPress)
         }}
-      />
-    </Animated.View>
+        onLongPress={
+          onLongPress
+            ? () => {
+                thud()
+                fire(`hold ${said(label)}`, onLongPress)
+              }
+            : undefined
+        }
+        delayLongPress={450}
+        style={({ pressed }) => ({ flex: 1, height: WHEEL_ROW, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
+      >
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ color: ink, fontSize: WHEEL_NAME, fontWeight: '700', textAlign: 'center' }}>
+          {label}
+        </Text>
+        <Text numberOfLines={1} style={{ color: here ? color.signal : color.silkDim, fontSize: font.micro, fontFamily: face, textAlign: 'center', marginTop: 1 }}>
+          {sub}
+        </Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ selected: starred }}
+        accessibilityLabel={starLabel}
+        onPress={() => {
+          tick()
+          onStar?.()
+        }}
+        style={({ pressed }) => ({ width: WHEEL_END, height: WHEEL_ROW, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
+      >
+        <Text style={{ color: starred ? color.signal : color.silkFaint, fontSize: font.lead + 2, fontFamily: face }}>{starred ? '★' : '☆'}</Text>
+      </Pressable>
+    </View>
   )
 }

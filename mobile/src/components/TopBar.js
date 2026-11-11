@@ -36,6 +36,9 @@ import { avatarShown } from '../lib/profile-photo'
 
 const face = Platform.select(mono)
 
+/* The trial's line over Unlock: "make the text slightly bigger" (Justin, 11 November 2026). One step over the button's own micro. */
+const TRIAL_PILL_SIZE = font.micro + 2
+
 /**
  * One line, above everything, in every state — the browser's bar, on a phone.
  *
@@ -158,7 +161,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
    * to be findable.
    */
   const canBuy = Boolean(onUnlock) && shouldOffer({ demo }) && !trialRunning(purchase.trialEndsAt)
-  /* And the free trial over it, where this copy offers one: "Try it on your rig free for 7 days", with Unlock under it (7 November 2026). */
+  /* And the free trial over it, where this copy offers one: "7 Day Free Trial", with Unlock under it (7 November 2026; the words and their size, 11 November). */
   const offerTrial = Boolean(onUnlock) && shouldOffer({ demo }) && trialOnOffer(purchase)
   /*
    * THE WAY OUT, FOR SOMEBODY WHO HAS ALREADY PAID.
@@ -618,7 +621,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onU
               has the computer under the unit: "Unlock $9.99" in one line
               took the demo unit's name off a 360-wide phone. */}
           {offerTrial ? (
-            <Text numberOfLines={2} style={{ color: color.onSignal, fontSize: font.micro, fontWeight: '700', textAlign: 'center', maxWidth: 140 }}>
+            <Text numberOfLines={2} style={{ color: color.onSignal, fontSize: TRIAL_PILL_SIZE, fontWeight: '700', textAlign: 'center', maxWidth: 140 }}>
               {DEMO_TRIAL_PILL}
             </Text>
           ) : null}
