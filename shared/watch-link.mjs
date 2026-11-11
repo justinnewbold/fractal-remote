@@ -8,7 +8,7 @@
  * relay is, so every tap goes watch → phone → computer → unit, over Apple's
  * own watch-to-phone link (WatchConnectivity). The phone is the only thing
  * that knows the rig; the watch draws what it is told and asks for one of
- * eight things.
+ * nine things.
  *
  * This file is both halves of that conversation, in words the watch's Swift
  * can read without knowing anything about the app: `watchState` is what the
@@ -100,10 +100,52 @@ export const WATCH_PAGE_NAMES = { scenes: 'Scenes', pedals: 'Pedals', presets: '
  *   `stay`   it reads the picture's `tunerStays`, and with it true does
  *            not turn the tuner off when its page is left (THE TUNER, AND
  *            LEAVING ITS PAGE, below).
- * One build of the watch brought all three, so a watch that says one says
+ *   `here`   it checks in while it is on screen (THE CHECK-IN, below), so
+ *            the iPhone is held awake for as long as the watch is looked at.
+ * One build of the watch brought all four, so a watch that says one says
  * them all.
  */
-export const WATCH_KNOWS = ['pages', 'tempo', 'stay']
+export const WATCH_KNOWS = ['pages', 'tempo', 'stay', 'here']
+
+/*
+ * THE CHECK-IN. A request from the watch wakes the iPhone app with the phone
+ * locked, and the phone holds itself awake for 25 seconds after it
+ * (FractalWatchModule WAKE_SECONDS) and then sleeps. From then on the
+ * watch's picture goes stale (a scene changed by a footswitch, the tuner's
+ * reading) until the next tap. Justin, 11 November 2026, of keeping the
+ * phone awake while the watch is in use: "Yes, add that to the build."
+ *
+ * So while the watch app is ON ITS SCREEN with its pages up, it says
+ * { do: 'here' } whenever WATCH_HERE_MS has gone by since it last sent the
+ * phone anything. That is all it is: it REACHES THE UNIT AS NOTHING, EVER.
+ * The phone's native half renews its 25 seconds on any message from the
+ * watch, as it does for a tap, so the iPhone stays awake only while the
+ * watch's screen is on and sleeps 25 seconds after the last one.
+ *
+ * It stops the moment the watch app leaves the screen (the wrist down), on
+ * the waiting page, and in the demo. No new background mode on the iPhone,
+ * no silent audio, and no workout or extended session on the watch: only
+ * the wake a message already gives, renewed.
+ *
+ * WHEN ONE IS DUE is one rule (watchHereDue), here and word for word on the
+ * watch (Model.swift), with the clock handed in, and held to the same
+ * answers by the fixture. The watch asks it every WATCH_HERE_TICK_MS, so a
+ * check-in goes at most that long after it is due, and the two together
+ * must stay well inside the phone's 25 seconds (a test holds them to it).
+ */
+
+/** How long after the watch last sent the phone anything a check-in is due. */
+export const WATCH_HERE_MS = 20000
+/** How often the watch asks whether one is due. */
+export const WATCH_HERE_TICK_MS = 2000
+
+/**
+ * Whether a check-in is due at `now`: the watch app on its screen, its
+ * pages up (not the waiting page), not the demo, and WATCH_HERE_MS or more
+ * since anything was last sent (or nothing sent yet). Times in milliseconds.
+ */
+export const watchHereDue = ({ onScreen = false, pages = false, demo = false, lastSent = null, now = 0 } = {}) =>
+  onScreen === true && pages === true && demo !== true && (lastSent === null || !Number.isFinite(lastSent) || now - lastSent >= WATCH_HERE_MS)
 
 /*
  * THE TUNER, AND LEAVING ITS PAGE. Leaving the watch's tuner page turns the
@@ -401,7 +443,7 @@ function metronomeForWatch(m) {
 }
 
 /**
- * A message from the watch, as one of the eight things it may ask, or null.
+ * A message from the watch, as one of the nine things it may ask, or null.
  *
  *   { do: 'scene', index }      — switch to that scene (0-based)
  *   { do: 'pedal', id, on }     — that block on or off
@@ -413,6 +455,8 @@ function metronomeForWatch(m) {
  *                                 knows: see WATCH_KNOWS)
  *   { do: 'tap' }               — one tap of Play's Tap button (THE TEMPO PAGE)
  *   { do: 'wrist', on }         — the metronome's tap on the wrist, on or off
+ *   { do: 'here' }              — the watch is on screen: nothing to do but
+ *                                 stay awake (THE CHECK-IN)
  *
  * `state` is the last picture sent, so a scene or a pedal the watch could not
  * have been shown is refused rather than sent to the unit — and so is a
@@ -422,6 +466,9 @@ function metronomeForWatch(m) {
 export function watchCommand(msg, state) {
   if (!msg || typeof msg !== 'object') return null
   switch (msg.do) {
+    /* The check-in: one word, with nothing in it to carry and nothing to check it against. */
+    case 'here':
+      return { do: 'here' }
     case 'hello':
       /* A watch from before `knows` says none, and its hello is the one word it always was. */
       return Array.isArray(msg.knows) ? { do: 'hello', knows: watchKnows(msg.knows) } : { do: 'hello' }

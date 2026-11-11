@@ -85,6 +85,9 @@ AsyncStorage.multiGet([ORDER_KEY, HIDDEN_KEY, KNOWS_KEY, STAYS_KEY])
 /** Whether the watch has said it draws the pages it is told, in the order it is told. */
 export const watchOrdersPages = () => knows.includes('pages')
 
+/** Whether the watch has said it checks in while it is on screen (its hello's `here`), so the iPhone is held awake while the watch is looked at. */
+export const watchChecksIn = () => knows.includes('here')
+
 /** Whether the watch has said it has the Tempo page (its hello's `tempo`): the picture's `tempo` is for that watch only. */
 export const watchHasTempo = () => knows.includes('tempo')
 

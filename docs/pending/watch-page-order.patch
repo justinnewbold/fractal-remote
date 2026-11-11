@@ -1,5 +1,5 @@
 diff --git a/mobile/targets/watch/FractalWatchApp.swift b/mobile/targets/watch/FractalWatchApp.swift
-index 807c1e54..50265e3c 100644
+index 807c1e54..c308ef48 100644
 --- a/mobile/targets/watch/FractalWatchApp.swift
 +++ b/mobile/targets/watch/FractalWatchApp.swift
 @@ -13,19 +13,39 @@ struct FractalWatchApp: App {
@@ -65,7 +65,14 @@ index 807c1e54..50265e3c 100644
                  }
                  .tabViewStyle(.verticalPage)
                  .disabled(!link.reachable)
-@@ -63,5 +82,27 @@ struct RootView: View {
+@@ -58,10 +77,36 @@ struct RootView: View {
+         }
+         .onChange(of: phase) { _, now in
+             if now == .active { link.woke() }
++            /* The check-in runs only while the app is on screen (PhoneLink.onScreen): started by the wrist coming up, ended by its going down. */
++            link.onScreen(now == .active)
+             if now != .active { wrist.stop() } else { wrist.follow(link.state?.metronome) }
+         }
          .onChange(of: link.state?.metronome) { _, now in
              if phase == .active { wrist.follow(now) }
          }
@@ -75,6 +82,8 @@ index 807c1e54..50265e3c 100644
 +            if watchTunerStopsOnHiding(was: was ?? WatchPage.usual, now: now, tunerOn: link.state?.tuner.on == true) { link.send(.tuner(on: false)) }
 +            if let swiped = page, !now.contains(swiped) { page = nil }
 +        }
++        /* And at launch, when the phase may already be active and so never "changes" to it. */
++        .onAppear { link.onScreen(phase == .active) }
 +    }
 +
 +    /* The page on show: the one swiped to while it is still shown, or the first shown page (Model.swift watchPageOnShow). */
@@ -94,7 +103,7 @@ index 807c1e54..50265e3c 100644
      }
  }
 diff --git a/mobile/targets/watch/Model.swift b/mobile/targets/watch/Model.swift
-index ca41efac..34da15f4 100644
+index ca41efac..d61aa1fa 100644
 --- a/mobile/targets/watch/Model.swift
 +++ b/mobile/targets/watch/Model.swift
 @@ -5,7 +5,7 @@ import Foundation
@@ -102,7 +111,7 @@ index ca41efac..34da15f4 100644
   * The Swift reading of shared/watch-link.mjs, field for field. The phone sends
   * the whole picture each time (watchState there), so a watch that missed a
 - * message is right again on the next; the watch asks for one of six things
-+ * message is right again on the next; the watch asks for one of eight things
++ * message is right again on the next; the watch asks for one of nine things
   * (watchCommand there), and the phone drops anything else.
   *
   * No SwiftUI and no WatchConnectivity in this file, on purpose: it is the part
@@ -281,7 +290,7 @@ index ca41efac..34da15f4 100644
  
      static func decode(_ json: String) -> WatchState? {
          guard let data = json.data(using: .utf8) else { return nil }
-@@ -126,13 +287,33 @@ struct WatchState: Codable, Equatable {
+@@ -126,13 +287,62 @@ struct WatchState: Codable, Equatable {
              WatchPedal(id: 70, short: "DLY", name: "Delay 1", on: false, fill: "#2e86ab", ink: "#ffffff", channel: "C", channels: abcd),
              WatchPedal(id: 66, short: "REV", name: "Reverb 1", on: true, fill: "#8e44ad", ink: "#ffffff", channel: "A", channels: abcd)
          ],
@@ -292,7 +301,33 @@ index ca41efac..34da15f4 100644
  }
  
 -/** The six things the watch may ask. watchCommand in shared/watch-link.mjs. */
-+/** The eight things the watch may ask. watchCommand in shared/watch-link.mjs. */
++/*
++ * THE CHECK-IN (watchHereDue in shared/watch-link.mjs, word for word, and
++ * held to the same answers by pages.json). A request from the watch wakes
++ * the iPhone app with the phone locked, and the phone holds itself awake
++ * for 25 seconds after it and then sleeps, so the watch's picture went
++ * stale until the next tap. "Yes, add that to the build" (Justin, 11
++ * November 2026): while the watch app is ON ITS SCREEN with its pages up, it
++ * says "here" whenever `watchHereSeconds` have gone by since it last sent
++ * the phone anything. The phone renews its 25 seconds on any message, so
++ * the iPhone stays awake only while the watch's screen is on.
++ *
++ * Never from the waiting page, never in the demo, and it stops the moment
++ * the app leaves the screen (PhoneLink.onScreen): no workout, no extended
++ * session, nothing that keeps the watch app running with the wrist down.
++ * The rule takes the clock, so the tests hand it one.
++ */
++let watchHereSeconds: Double = 20
++/** How often PhoneLink asks whether a check-in is due: one goes at most this long after it is. */
++let watchHereTick: Double = 2
++
++func watchHereDue(onScreen: Bool, pagesUp: Bool, demo: Bool, lastSent: Date?, now: Date) -> Bool {
++    guard onScreen, pagesUp, !demo else { return false }
++    guard let lastSent else { return true }
++    return now.timeIntervalSince(lastSent) >= watchHereSeconds
++}
++
++/** The nine things the watch may ask. watchCommand in shared/watch-link.mjs. */
  enum WatchCommand: Equatable {
 +    /*
 +     * WHAT THIS WATCH KNOWS, said in its hello (WATCH_KNOWS in
@@ -300,16 +335,19 @@ index ca41efac..34da15f4 100644
 +     * are shown, in the order the picture says. "tempo": it has the Tempo
 +     * page, reads the picture's `tempo`, and may ask for a tap and for the
 +     * wrist's switch. "stay": it reads `tunerStays`, and with it true does
-+     * not turn the tuner off when its page is left. The phone shows the
++     * not turn the tuner off when its page is left. "here": it checks in
++     * while it is on screen (watchHereDue, above). The phone shows the
 +     * Watch pages setting and the tuner's switch, and sends an order, a
 +     * hidden page, a tempo or `tunerStays` at all, only to a watch that has
 +     * said so: a watch from before this build draws its four pages in the usual
 +     * order whatever it is sent, and a setting that does nothing is worse
 +     * than none.
 +     */
-+    static let knows = ["pages", "tempo", "stay"]
++    static let knows = ["pages", "tempo", "stay", "here"]
 +
      case hello
++    /** The check-in: the watch app is on screen. Nothing for the phone to do but stay awake. */
++    case here
 +    /** One tap of the iPhone's own Tap button: the Tempo page's button. */
 +    case tap
 +    /** The metronome's tap on the wrist, on or off: the Tempo page's switch. */
@@ -317,7 +355,7 @@ index ca41efac..34da15f4 100644
      case scene(Int)
      case pedal(id: Int, on: Bool)
      case preset(step: Int)
-@@ -140,10 +321,23 @@ enum WatchCommand: Equatable {
+@@ -140,10 +350,27 @@ enum WatchCommand: Equatable {
      /** That block onto that channel, by the letter the phone sent ("B"). */
      case channel(id: Int, channel: String)
  
@@ -325,27 +363,36 @@ index ca41efac..34da15f4 100644
 +     * SENT ONCE OR NOT AT ALL. A request that did not go is tried once more
 +     * a second later (PhoneLink.send), which is right for a scene and wrong
 +     * for a tap: a tap is a beat, and one that lands a second late is a
-+     * beat that was never played.
++     * beat that was never played. And a check-in has no need of it: the
++     * next one is two seconds off.
 +     */
 +    var once: Bool {
-+        if case .tap = self { return true }
-+        return false
++        switch self {
++        case .tap, .here: return true
++        default: return false
++        }
 +    }
 +
      /** Written by hand, so the order of the keys never changes under the tests. */
      var json: String {
          switch self {
 -        case .hello: return #"{"do":"hello"}"#
-+        case .hello: return #"{"do":"hello","knows":["pages","tempo","stay"]}"#
++        case .hello: return #"{"do":"hello","knows":["pages","tempo","stay","here"]}"#
++        case .here: return #"{"do":"here"}"#
 +        case .tap: return #"{"do":"tap"}"#
 +        case .wrist(let on): return #"{"do":"wrist","on":\#(on)}"#
          case .scene(let index): return #"{"do":"scene","index":\#(index)}"#
          case .pedal(let id, let on): return #"{"do":"pedal","id":\#(id),"on":\#(on)}"#
          case .preset(let step): return #"{"do":"preset","step":\#(step < 0 ? -1 : 1)}"#
-@@ -232,6 +426,19 @@ func grownSize(_ tall: Double, share: Double, least: Double, most: Double) -> Do
+@@ -232,6 +459,24 @@ func grownSize(_ tall: Double, share: Double, least: Double, most: Double) -> Do
      max(least, min(most, (tall * share).rounded(.down)))
  }
  
++/** Under "Open Fractal Remote on your iPhone" on the waiting page: the watch's taps and check-ins wake an iPhone app that is asleep, and cannot put one that was swiped closed back on its Play screen. */
++enum WaitingWords {
++    static let closed = "If it was swiped closed, open it again."
++}
++
 +/*
 + * THE TUNER PAGE'S WORDS (Pages.swift TunerPage, option B, picked 11
 + * November 2026). The screen says what the tuner IS, the buttons say what a
@@ -362,20 +409,23 @@ index ca41efac..34da15f4 100644
  /** Where the tuner's needle sits, -1 (50 cents flat) to 1 (50 sharp). */
  func needleOffset(cents: Int) -> Double {
      Double(max(-50, min(50, cents))) / 50
-@@ -296,6 +503,11 @@ extension WatchState {
+@@ -294,8 +539,13 @@ extension WatchState {
+     func answering(_ command: WatchCommand) -> WatchState {
+         var next = self
          switch command {
-         case .hello:
-             break
+-        case .hello:
++        case .hello, .here:
++            break
 +        case .tap:
 +            /* The demo has no unit to count a tap, so the number stays. */
-+            break
+             break
 +        case .wrist(let on):
 +            next.tempo?.wrist = on
          case .scene(let index):
              if index >= 0 && index < scenes.count { next.scene = index }
          case .pedal(let id, let on):
 diff --git a/mobile/targets/watch/Pages.swift b/mobile/targets/watch/Pages.swift
-index e25777c5..56a0f9f8 100644
+index e25777c5..24686e44 100644
 --- a/mobile/targets/watch/Pages.swift
 +++ b/mobile/targets/watch/Pages.swift
 @@ -532,17 +532,118 @@ struct PresetsPage: View {
@@ -545,21 +595,98 @@ index e25777c5..56a0f9f8 100644
          }
      }
  }
+@@ -627,6 +740,13 @@ struct WaitingPage: View {
+             )
+             .font(.footnote)
+             .multilineTextAlignment(.center)
++            /* The watch wakes an iPhone app that is asleep, not one that is not on Play at all: said where the wearer is told to open it. */
++            if !tooNew, !phoneOnly {
++                Text(WaitingWords.closed)
++                    .font(.caption2)
++                    .foregroundStyle(.secondary)
++                    .multilineTextAlignment(.center)
++            }
+         }
+         .padding(.horizontal, 4)
+     }
 diff --git a/mobile/targets/watch/PhoneLink.swift b/mobile/targets/watch/PhoneLink.swift
-index 2d40776f..43ed5484 100644
+index 2d40776f..dcdd4c26 100644
 --- a/mobile/targets/watch/PhoneLink.swift
 +++ b/mobile/targets/watch/PhoneLink.swift
-@@ -85,7 +85,10 @@ final class PhoneLink: NSObject, ObservableObject {
+@@ -52,6 +52,25 @@ final class PhoneLink: NSObject, ObservableObject {
+     private var awayTimer: Task<Void, Never>?
+     let demo: Bool
+ 
++    /*
++     * THE CHECK-IN (Model.swift watchHereDue). While the watch app is on its
++     * screen, a timer asks every `watchHereTick` seconds whether one is due
++     * and sends "here" when it is: twenty seconds since anything was last
++     * sent, with the pages up. `lastSent` is the last time a request really
++     * went (a tap counts, so somebody tapping away sends none). The timer
++     * exists only while the app is on screen: onScreen(false), from the
++     * root view when the wrist goes down, ends it at once.
++     */
++    private var lastSent: Date?
++    private var screenOn = false
++    private var hereTimer: Timer?
++
++    /** Whether the pages are up rather than the waiting page: the root view's own test. */
++    private var pagesUp: Bool {
++        guard let state else { return false }
++        return state.linked && !state.tooNew && !away
++    }
++
+     private let session: WCSession? = WCSession.isSupported() ? WCSession.default : nil
+ 
+     init(demo: Bool = Launch.flag("demo")) {
+@@ -79,13 +98,18 @@ final class PhoneLink: NSObject, ObservableObject {
+             return
+         }
+         guard let session, session.activationState == .activated, session.isReachable else { return }
++        /* Anything sent holds the iPhone awake for its 25 seconds, so the next check-in is counted from here. */
++        lastSent = Date()
+         /*
+          * The message wakes the iPhone app in the background if it is asleep
+          * (the phone locked in a pocket), and the phone answers when it has it.
           * Waking can miss the first time; one more try a second later.
           */
          let body: [String: Any] = ["json": command.json]
-+        /* A tap is sent once or not at all (WatchCommand.once): a second try would be a second, late beat. */
++        /* A tap is sent once or not at all (WatchCommand.once): a second try would be a second, late beat. A check-in too: the next is two seconds off. */
 +        let once = command.once
          session.sendMessage(body, replyHandler: { _ in }, errorHandler: { _ in
 +            guard !once else { return }
              DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                  guard session.isReachable else { return }
                  session.sendMessage(body, replyHandler: { _ in }, errorHandler: nil)
+@@ -116,6 +140,28 @@ final class PhoneLink: NSObject, ObservableObject {
+         }
+     }
+ 
++    /*
++     * The watch app came on its screen (true) or left it (false: the wrist
++     * down, another app, the clock face). On: a check-in now if one is due,
++     * which it is after any pause, and the timer that asks from then on.
++     * Off: the timer gone, and nothing more sent until the wrist is raised.
++     */
++    func onScreen(_ on: Bool) {
++        screenOn = on
++        hereTimer?.invalidate()
++        hereTimer = nil
++        guard on, !demo else { return }
++        checkIn()
++        hereTimer = Timer.scheduledTimer(withTimeInterval: watchHereTick, repeats: true) { [weak self] _ in
++            Task { @MainActor [weak self] in self?.checkIn() }
++        }
++    }
++
++    private func checkIn() {
++        guard watchHereDue(onScreen: screenOn, pagesUp: pagesUp, demo: demo, lastSent: lastSent, now: Date()) else { return }
++        send(.here)
++    }
++
+     /* Asked again whenever the app comes back to the front: the wrist raised. */
+     func woke() {
+         guard !demo, let session else { return }
 diff --git a/mobile/watch-ci/Package.swift b/mobile/watch-ci/Package.swift
 index 05571339..900f45e7 100644
 --- a/mobile/watch-ci/Package.swift
@@ -574,22 +701,23 @@ index 05571339..900f45e7 100644
      ]
  )
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
-index 1b1532ec..c99250ce 100644
+index 1b1532ec..b301f886 100644
 --- a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
 +++ b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
-@@ -122,7 +122,10 @@ final class WatchModelTests: XCTestCase {
+@@ -122,7 +122,11 @@ final class WatchModelTests: XCTestCase {
      }
  
      func testTheRequestsAreThePhonesWords() {
 -        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello"}"#)
-+        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello","knows":["pages","tempo","stay"]}"#)
++        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello","knows":["pages","tempo","stay","here"]}"#)
++        XCTAssertEqual(WatchCommand.here.json, #"{"do":"here"}"#)
 +        XCTAssertEqual(WatchCommand.tap.json, #"{"do":"tap"}"#)
 +        XCTAssertEqual(WatchCommand.wrist(on: true).json, #"{"do":"wrist","on":true}"#)
 +        XCTAssertEqual(WatchCommand.wrist(on: false).json, #"{"do":"wrist","on":false}"#)
          XCTAssertEqual(WatchCommand.scene(2).json, #"{"do":"scene","index":2}"#)
          XCTAssertEqual(WatchCommand.pedal(id: 50, on: false).json, #"{"do":"pedal","id":50,"on":false}"#)
          XCTAssertEqual(WatchCommand.preset(step: -1).json, #"{"do":"preset","step":-1}"#)
-@@ -132,6 +135,244 @@ final class WatchModelTests: XCTestCase {
+@@ -132,6 +136,296 @@ final class WatchModelTests: XCTestCase {
          XCTAssertEqual(WatchCommand.channel(id: 50, channel: #"a"b"#).json, #"{"do":"channel","id":50,"channel":"a\"b"}"#, "a channel is sent as JSON, not pasted in")
      }
  
@@ -625,8 +753,23 @@ index 1b1532ec..c99250ce 100644
 +            var leaving: [Leaving]
 +            var hiding: [Hiding]
 +        }
++        /* The check-in: when one is due, by the phone's own rule. Times in milliseconds. */
++        struct Due: Decodable {
++            var onScreen: Bool
++            var pages: Bool
++            var demo: Bool
++            var lastSent: Double?
++            var now: Double
++            var due: Bool
++        }
++        struct Here: Decodable {
++            var everyMs: Double
++            var tickMs: Double
++            var cases: [Due]
++        }
 +        var cases: [Case]
 +        var tuner: Tuner
++        var here: Here
 +    }
 +
 +    private func pagesData() throws -> Data {
@@ -755,7 +898,7 @@ index 1b1532ec..c99250ce 100644
 +    }
 +
 +    func testTheWatchSaysWhatItKnows() throws {
-+        XCTAssertEqual(WatchCommand.knows, ["pages", "tempo", "stay"])
++        XCTAssertEqual(WatchCommand.knows, ["pages", "tempo", "stay", "here"])
 +        let hello = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(WatchCommand.hello.json.utf8)) as? [String: Any])
 +        XCTAssertEqual(hello["do"] as? String, "hello")
 +        XCTAssertEqual(hello["knows"] as? [String], WatchCommand.knows, "the hello does not say what the watch knows, so the phone never offers its pages")
@@ -802,6 +945,7 @@ index 1b1532ec..c99250ce 100644
 +    func testATapIsSentOnceAndTheSwitchIsOnlyTheWrists() {
 +        /* A tap is a beat: never tried a second time, a second late. Everything else may be. */
 +        XCTAssertTrue(WatchCommand.tap.once)
++        XCTAssertTrue(WatchCommand.here.once, "a check-in that did not go is tried again, when the next is two seconds off")
 +        for other in [WatchCommand.hello, .scene(1), .pedal(id: 50, on: true), .preset(step: 1), .tuner(on: false), .channel(id: 50, channel: "B"), .wrist(on: true)] {
 +            XCTAssertFalse(other.once, "\(other.json) is sent once only")
 +        }
@@ -831,15 +975,51 @@ index 1b1532ec..c99250ce 100644
 +        }
 +    }
 +
++    // MARK: - The check-in
++
++    /* While the watch app is on its screen it says "here" every twenty seconds, so the iPhone stays awake while it is looked at. */
++    func testACheckInIsDueOnlyOnScreenWithThePagesUp() throws {
++        let here = try JSONDecoder().decode(PagesFixture.self, from: try pagesData()).here
++        XCTAssertEqual(here.everyMs, watchHereSeconds * 1000, "the watch and the phone count the check-in differently")
++        XCTAssertEqual(here.tickMs, watchHereTick * 1000)
++        XCTAssertGreaterThanOrEqual(here.cases.count, 12, "the fixture lost its cases")
++        let at = { (ms: Double) in Date(timeIntervalSince1970: ms / 1000) }
++        for c in here.cases {
++            XCTAssertEqual(
++                watchHereDue(onScreen: c.onScreen, pagesUp: c.pages, demo: c.demo, lastSent: c.lastSent.map(at), now: at(c.now)),
++                c.due,
++                "on screen \(c.onScreen), pages \(c.pages), demo \(c.demo), last sent \(String(describing: c.lastSent)), now \(c.now)"
++            )
++        }
++        /* Said here as well, with the clock handed in. */
++        let start = Date(timeIntervalSince1970: 1_000_000)
++        let due = { (onScreen: Bool, pagesUp: Bool, demo: Bool, after: Double?) in
++            watchHereDue(onScreen: onScreen, pagesUp: pagesUp, demo: demo, lastSent: after == nil ? nil : start, now: start.addingTimeInterval(after ?? 0))
++        }
++        XCTAssertFalse(due(true, true, false, 19.9), "a check-in went before its twenty seconds")
++        XCTAssertTrue(due(true, true, false, 20))
++        XCTAssertTrue(due(true, true, false, 600), "a wrist raised after ten minutes sends none")
++        XCTAssertTrue(due(true, true, false, nil), "nothing sent yet, and none is due")
++        /* THE WRIST DOWN: never, however long it has been. So the iPhone sleeps 25 seconds after the watch's screen goes off. */
++        XCTAssertFalse(due(false, true, false, 600), "the watch checks in with its screen off, and the iPhone never sleeps")
++        /* The waiting page, and the demo: never. */
++        XCTAssertFalse(due(true, false, false, 600))
++        XCTAssertFalse(due(true, true, true, 600))
++        /* The demo answers one with nothing. */
++        XCTAssertEqual(WatchState.sample.answering(.here), WatchState.sample)
++        /* And the waiting page's line for an app that was swiped closed. */
++        XCTAssertEqual(WaitingWords.closed, "If it was swiped closed, open it again.")
++    }
++
      func testTheNeedleAndTheColours() {
          XCTAssertEqual(needleOffset(cents: 0), 0)
          XCTAssertEqual(needleOffset(cents: 25), 0.5)
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/pages.json b/mobile/watch-ci/Tests/WatchModelTests/pages.json
 new file mode 100644
-index 00000000..83f451f9
+index 00000000..e72b0816
 --- /dev/null
 +++ b/mobile/watch-ci/Tests/WatchModelTests/pages.json
-@@ -0,0 +1,745 @@
+@@ -0,0 +1,863 @@
 +{
 +  "state": {
 +    "v": 1,
@@ -1042,6 +1222,124 @@ index 00000000..83f451f9
 +        ],
 +        "on": true,
 +        "stops": true
++      }
++    ]
++  },
++  "here": {
++    "everyMs": 20000,
++    "tickMs": 2000,
++    "cases": [
++      {
++        "onScreen": true,
++        "pages": true,
++        "demo": false,
++        "lastSent": 1759363200000,
++        "now": 1759363200000,
++        "due": false
++      },
++      {
++        "onScreen": true,
++        "pages": true,
++        "demo": false,
++        "lastSent": 1759363200000,
++        "now": 1759363219999,
++        "due": false
++      },
++      {
++        "onScreen": true,
++        "pages": true,
++        "demo": false,
++        "lastSent": 1759363200000,
++        "now": 1759363220000,
++        "due": true
++      },
++      {
++        "onScreen": true,
++        "pages": true,
++        "demo": false,
++        "lastSent": 1759363200000,
++        "now": 1759363222000,
++        "due": true
++      },
++      {
++        "onScreen": true,
++        "pages": true,
++        "demo": false,
++        "lastSent": 1759363200000,
++        "now": 1759363800000,
++        "due": true
++      },
++      {
++        "onScreen": true,
++        "pages": true,
++        "demo": false,
++        "lastSent": null,
++        "now": 1759363200000,
++        "due": true
++      },
++      {
++        "onScreen": false,
++        "pages": true,
++        "demo": false,
++        "lastSent": 1759363200000,
++        "now": 1759363800000,
++        "due": false
++      },
++      {
++        "onScreen": false,
++        "pages": true,
++        "demo": false,
++        "lastSent": null,
++        "now": 1759363200000,
++        "due": false
++      },
++      {
++        "onScreen": true,
++        "pages": false,
++        "demo": false,
++        "lastSent": 1759363200000,
++        "now": 1759363800000,
++        "due": false
++      },
++      {
++        "onScreen": true,
++        "pages": false,
++        "demo": false,
++        "lastSent": null,
++        "now": 1759363200000,
++        "due": false
++      },
++      {
++        "onScreen": true,
++        "pages": true,
++        "demo": true,
++        "lastSent": 1759363200000,
++        "now": 1759363800000,
++        "due": false
++      },
++      {
++        "onScreen": true,
++        "pages": true,
++        "demo": true,
++        "lastSent": null,
++        "now": 1759363200000,
++        "due": false
++      },
++      {
++        "onScreen": false,
++        "pages": false,
++        "demo": true,
++        "lastSent": 1759363200000,
++        "now": 1759363800000,
++        "due": false
++      },
++      {
++        "onScreen": true,
++        "pages": true,
++        "demo": false,
++        "lastSent": 1759363205000,
++        "now": 1759363200000,
++        "due": false
 +      }
 +    ]
 +  },

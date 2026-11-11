@@ -17580,7 +17580,7 @@ test('the computer app carries the server that sends an AM4 amp’s boost tap at
 /*
  * THE APPLE WATCH. "Maybe three different screens that you can swipe between
  * … just simple actions from the watch." The phone sends the whole picture;
- * the watch asks for one of eight things, and anything else is dropped.
+ * the watch asks for one of nine things, and anything else is dropped.
  *
  * Changed on purpose, 13 October 2026: five things became six, and each pedal
  * carries its channel and what a hold may switch it to. Justin: "Can I add the
@@ -17595,7 +17595,7 @@ test('the computer app carries the server that sends an AM4 amp’s boost tap at
  * it, '' for every other pedal. The fixture got a third pedal, an AM4's amp
  * at Boost off, written again from this input; nothing else in it moved.
  */
-test('the watch is sent the stage as one small picture, and may ask for only eight things', async () => {
+test('the watch is sent the stage as one small picture, and may ask for only nine things', async () => {
   const { watchState, watchCommand, sameWatchState, WATCH_PEDALS_MAX } = await import('../shared/watch-link.mjs')
   const fixture = JSON.parse(readSrc(new URL('../mobile/watch-ci/Tests/WatchModelTests/state.json', import.meta.url), 'utf8'))
   const again = watchState({ at: 1759363200000, linked: true, preset: { number: 12, name: 'Crunch Rhythm' }, label: '012', scene: 1,
@@ -17628,7 +17628,7 @@ test('the watch is sent the stage as one small picture, and may ask for only eig
   assert.equal(watchState({ tunerOn: true, tuning: { note: 'A', cents: 300 } }).tuner.cents, 50)
   assert.equal(watchState({ pedals: Array.from({ length: 30 }, (_, i) => ({ id: i, name: 'x' })) }).pedals.length, WATCH_PEDALS_MAX)
 
-  /* The first six requests, and only the ones the watch could have been shown. (The Tempo page's two, tap and wrist, are test/watch-pages.mjs's.) */
+  /* The first six requests, and only the ones the watch could have been shown. (The Tempo page's two, tap and wrist, and the check-in, here, are test/watch-pages.mjs's.) */
   const shown = watchState({ sceneCount: 4, pedals: [{ id: 50, name: 'Drive' }] })
   assert.deepEqual(watchCommand({ do: 'scene', index: 3 }, shown), { do: 'scene', index: 3 })
   assert.equal(watchCommand({ do: 'scene', index: 4 }, shown), null)
@@ -17788,7 +17788,7 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.match(coach, /const WATCH_TIP_KEY = 'fractal\.coach\.watch\.v2'/, 'the watch tip’s words were reversed and its once-shown key was not moved, so nobody who read “lock it and put it away” sees the new words on Play')
   assert.ok(!/this (phone|iPhone)/i.test(lockedTip), 'the watch tip says “this phone”')
   assert.match(bridge, /if \(!up \|\| Date\.now\(\) >= deadline\) \{ logDebug\('watch', `\$\{cmd\.do\} not sent: the phone could not reach the rig in time after waking`\) return undefined \}/, 'a woken tap is no longer dropped at its deadline: the watch tip says it may be, and could say more')
-  assert.match(bridge, /const howLines = \(\) => \(watchWakes\(\) \? \[WATCH_HOW_LOCKED, \.\.\.WATCH_HOW\.slice\(1\)\] : WATCH_HOW\)/)
+  assert.match(bridge, /const howLines = \(\) => \(watchWakes\(\) \? \[watchChecksIn\(\) \? WATCH_HOW_LOCKED_HERE : WATCH_HOW_LOCKED, \.\.\.WATCH_HOW\.slice\(1\)\] : WATCH_HOW\)/)
   /* A watch with the Tempo page is told of five pages; any other, what it always was (test/watch-pages.mjs holds the words). */
   assert.match(bridge, /return watchHasTempo\(\) \? \[lines\[0\], WATCH_HOW_PAGES_TEMPO, lines\[2\], WATCH_HOW_TEMPO, tuner\] : \[\.\.\.lines\.slice\(0, 3\), tuner\]/)
   assert.equal((bridge.slice(bridge.indexOf('export const WATCH_HOW = ['), bridge.indexOf('/** Whether this build wakes on a watch tap')).match(/^  (WATCH_HOW_OPEN|'[^\n]*'),?$/gm) || []).length, 4, 'the watch tips grew or shrank, and watchHow places them by number')

@@ -21,7 +21,7 @@ those must still pass the other.
 | Patch | What it does | Moves |
 |---|---|---|
 | `phone-turns.patch` | Lets a phone be turned on its side: on Play, on what opens beside Play and in Stage view, for an account the sideways layout is open to (his, until `PHONE_SIDEWAYS_FOR_EVERYONE`). Every other page, every other account and every tablet are as they were. Adds expo-screen-orientation. | **android and ios** (the watch line does not move) |
-| `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), has a tuner page that says Off / Start tuning / Stop tuning, can leave the tuner on when its page is left if the iPhone's switch says so, and says in its hello what it can do. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
+| `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), has a tuner page that says Off / Start tuning / Stop tuning, can leave the tuner on when its page is left if the iPhone's switch says so, checks in every 20 seconds while it is on screen so a locked iPhone stays awake while the watch is looked at, and says in its hello what it can do. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
 
 Two patches are waiting: phone-turns (10 November 2026), whose section is
 next, and watch-page-order (11 November 2026), whose section follows it.
@@ -245,12 +245,13 @@ picture the phone sends, `pages` and `hidden`. All of it is INERT until a
 watch says it can do this: a watch from before this patch draws all four
 pages in the usual order whatever it is sent, and a setting that does
 nothing is worse than none. So the watch says what it knows in its hello
-(`"knows":["pages","tempo","stay"]`, new in this patch; a hello from an
+(`"knows":["pages","tempo","stay","here"]`, new in this patch; a hello from an
 older watch has no `knows`), the phone keeps the last answer on the device,
 and until it has heard `pages` it draws no rows in Settings and sends
 neither field, until it has heard `tempo` it sends no tempo and refuses both
-of the Tempo page's requests, and until it has heard `stay` it neither shows
-nor sends the tuner's switch. For every watch out today the phone's picture is byte for
+of the Tempo page's requests, until it has heard `stay` it neither shows
+nor sends the tuner's switch, and until it has heard `here` its tips say
+what they always said about a locked iPhone. For every watch out today the phone's picture is byte for
 byte what it was.
 
 **What the patch does, on the watch.**
@@ -322,7 +323,8 @@ puts whatever is missing after them, so Tempo simply appears, shown.
   your iPhone."
 - The phone sends the page its picture as `tempo` (`bpm`, `tap`, `why`,
   `wrist`, `running`), only to a watch that has said `tempo`.
-- The watch may now ask for eight things, not six.
+- With these two and the check-in below, the watch may now ask for nine
+  things, not six.
 
 **The tuner page says what the tuner is, and its buttons say what a tap
 does.** The off screen was one button that said "Tuner on" while the tuner
@@ -396,6 +398,96 @@ So the words say a swipe "doesn't stop the tuner" and how to stop it. They
 do not say it stays on for good, and they do not say the watch keeps
 showing the note. The wake window is not changed by this switch.
 
+**The check-in, which keeps a locked iPhone awake while the watch is
+looked at.** A request from the watch wakes the iPhone app with the phone
+locked, and the phone holds itself awake for 25 seconds
+(FractalWatchModule `WAKE_SECONDS`) and then sleeps, so the watch's picture
+goes stale until the next tap. Justin, 11 November 2026: "Yes, add that to
+the build."
+
+- While the watch app is ON ITS SCREEN with its pages up, it sends
+  `{"do":"here"}` whenever 20 seconds have gone by since it last sent the
+  phone anything (a tap counts, so somebody tapping away sends none). A
+  timer asks every 2 seconds whether one is due, so it goes 20 to 22
+  seconds after the last message: inside the phone's 25, with three to
+  spare (a test holds the three numbers to each other).
+- It starts when the watch app comes on screen (the wrist raised, or the
+  app opened): one goes at once if 20 seconds have passed. It stops the
+  moment the app leaves the screen (the wrist down, the clock face, another
+  app), on the waiting page, and in the demo. The iPhone then sleeps 25
+  seconds after the last one.
+- It reaches the unit as nothing. On the phone it is a word in
+  watchCommand's allow-list that does nothing on a phone that is awake; one
+  it finds asleep is set to rejoin its connection, as the hello does today
+  (a rejoin reads the unit, as any rejoin does; the check-in itself sends
+  nothing).
+- No new background mode on the iPhone, no silent audio, no workout or
+  extended session on the watch: only the wake a message already gives,
+  renewed.
+
+**The iPhone's native half is not changed, so the ios line does not move.**
+Read for this, 11 November 2026 (mobile/modules/fractal-watch/ios):
+
+- `arrived` calls `stayAwake()` for ANY message from the watch, before the
+  JavaScript sees it, so a check-in renews the window exactly as a tap
+  does. Nothing to add.
+- It holds ONE background task and renews by cancelling its own timer and
+  setting a new one for 25 seconds on; it does not start a task per
+  message. That is right: iOS does not give more time for more tasks. iOS
+  allows an app a short stretch in the background (about half a minute in
+  recent versions; Apple gives no fixed number, only
+  `backgroundTimeRemaining`) and then calls the task's expiration handler,
+  which here ends the task (`sleep()`), as it must: a task not ended has
+  iOS close the app. The next message from the watch finds no task and
+  starts a fresh one. The reload case in that file's comments (OnDestroy
+  ends the task, `gone` stops a new one) is untouched.
+- What that means, and what only a real watch and a locked iPhone can
+  show: if iOS counts that half minute afresh each time a watch message
+  wakes the app, the iPhone stays awake unbroken while the watch is looked
+  at. If it does not, iOS ends the task after about half a minute, the app
+  naps, and the next check-in (20 seconds at most) wakes it again: awake
+  in stretches rather than unbroken, with the connection to the computer
+  having to come back each time. Nothing here can tell which.
+
+**What the phone's JavaScript does while it is awake in the background.**
+Looked for, so as not to guess:
+
+- The picture: nothing stops it. lib/watchBridge sends the watch a new
+  picture every time Play draws again, in the background as in front, for
+  as long as Play is mounted (and awake, with two sides up).
+- What feeds it is thinner off screen, on purpose, and this patch does not
+  change it. Through a computer, what the unit does by itself (a scene by
+  footswitch, a tempo, the tuner's readings) is pushed to the phone and
+  still arrives while the connection is up (lib/rig `handleEvent`). The
+  phone's own timed look at the unit (every 30 seconds, lib/rig
+  `watchUnit`) stops when the app leaves the screen (lib/link's AppState
+  handler: "a phone in a pocket has no screen to be wrong on"). Over
+  Bluetooth there is nothing pushed, and its polls stop in the background
+  too (lib/bleLink `screen`, bleWire `screenOff`): so over Bluetooth a
+  locked iPhone kept awake by the check-in still does not notice a scene
+  changed at the unit. An AM4's own tuner lease is not renewed off screen
+  either (above).
+- So the check-in's gain is: taps from the wrist land without the first one
+  being lost to a sleeping phone, and through a computer the watch follows
+  what the unit does. Making the phone look at the unit while a watch is
+  checking in (the timed look, the Bluetooth polls) would be JavaScript, an
+  update, and is a choice about how much a locked phone should talk to the
+  unit, an FM3's adapter among them. Not made here.
+
+**What it costs, in plain words.** While the watch app is on the watch's
+screen, the iPhone app stays awake with the phone locked, which uses more
+of the iPhone's battery than a locked phone does; it goes back to sleep 25
+seconds after the watch's screen goes off. The tips on Settings → Apple
+Watch say so for a watch that checks in (lib/watchBridge
+`WATCH_HOW_LOCKED_HERE`), with the rest: the first tap after the wrist has
+been down may not go through, the live tuner needs the phone open, and an
+app that has been swiped closed has to be opened again. The watch's
+waiting page says that last one too, under "Open Fractal Remote on your
+iPhone": "If it was swiped closed, open it again." (Whether iOS will start
+a swiped-closed app for a watch message at all is not something this
+could check; either way it would not be on Play, which is where the watch
+is answered from, so the words say only what to do.)
+
 **It has not been compiled.** Nothing on a Linux box compiles Swift, and
 watch.yml runs on the tree, which does not have the patch (it does run on
 the pull request that brought this file, because that changes
@@ -448,7 +540,14 @@ Xcode 27.1, compile only. Both are GitHub's Macs and spend no Expo build.
    any moment other than a swipe away (the wrist dropping, the page list
    being redrawn) is the part only a watch shows: with the switch off that
    would stop a tuner early, as it would today.
-9. Whether the Tempo page fits a small watch without scrolling, and how the
+9. The check-in, with the iPhone locked in a pocket and through a
+   computer: keep the watch app on the wrist's screen for a minute or two
+   and change scene at the unit. Does the watch follow, all the way
+   through, or in stretches with gaps? (The phone's log says "here: the
+   watch is on screen (kept the phone awake)" each time one finds it
+   asleep.) Lower the wrist for a minute, raise it: the first tap. And
+   what it does to the iPhone's battery over a rehearsal.
+10. Whether the Tempo page fits a small watch without scrolling, and how the
    phone's sentence reads under a switched-off Tap (a VP4 is the way to see
    it).
 
@@ -465,8 +564,12 @@ Xcode 27.1, compile only. Both are GitHub's Macs and spend no Expo build.
   on the wrist on or off." And for the tuner: "The watch's tuner page now
   says Off with a Start tuning button, and Stop tuning while it is on; a
   switch in Settings → Apple Watch on the iPhone chooses whether the tuner
-  stays on when its page is left." What's New may say the same in fewer
-  words;
+  stays on when its page is left." And for the check-in: "While the watch
+  app is on the watch's screen it sends the iPhone app a short message
+  about every 20 seconds, which keeps the iPhone app awake in the
+  background so taps from the watch go through with the iPhone locked; it
+  stops when the watch's screen turns off, and the app uses no background
+  mode." What's New may say the same in fewer words;
 - a What's new line (`only: 'ios'`) in that pull request, since from that
   build on a wearer can see it: "Apple Watch: choose which pages your watch
   shows, and their order, in Settings → Apple Watch. And a new Tempo page,

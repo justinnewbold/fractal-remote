@@ -13,12 +13,12 @@ import { createWatchSender, watchCommand, watchState, watchTapInTime } from './w
 import { metronome, setWatchTap, useMetronome } from './metronome'
 import { boostPedals } from './am4-boost'
 import { boostNow, pedalSlug } from './rig'
-import { noteWatchKnows, pagesToSend, tunerStaysToSend, useWatchPages, watchHasTempo } from './watchPages'
+import { noteWatchKnows, pagesToSend, tunerStaysToSend, useWatchPages, watchChecksIn, watchHasTempo } from './watchPages'
 
 /*
  * THE APPLE WATCH, FROM THE PHONE'S SIDE.
  *
- * The watch draws what the phone tells it and asks for one of eight things —
+ * The watch draws what the phone tells it and asks for one of nine things —
  * see lib/watch-link (shared/watch-link.mjs) for both halves of that. This is
  * the phone keeping its end: a fresh picture whenever the stage screen's
  * changes, and each request carried out with the same calls the stage
@@ -84,6 +84,18 @@ export const WATCH_CLOSE_WINDOW_MS = 20000
  */
 export const WATCH_HOW_OPEN = 'Keep the Play screen open on your iPhone while you use the watch. The watch works through this app, so it stops when the app is closed or the phone locks.'
 export const WATCH_HOW_LOCKED = 'For every tap on the watch to land, keep your iPhone unlocked with this app on the Play screen. With the iPhone locked, the first tap after a long pause may not go through; tap again straight away and it usually does. The live tuner needs the phone open.'
+/*
+ * AND FOR A WATCH THAT CHECKS IN (its hello's `here`, lib/watchPages
+ * watchChecksIn): while the watch app is on the watch's screen it keeps
+ * this app awake on a locked iPhone, so the "long pause" of
+ * WATCH_HOW_LOCKED is now the wrist being down. Said with what it costs
+ * (the iPhone awake, so more of its battery) and no more than happens: the
+ * watch app stops when the wrist goes down, the iPhone sleeps about half a
+ * minute after (FractalWatchModule's 25 seconds), and an app that has been
+ * swiped closed is not on Play for the watch to reach.
+ */
+export const WATCH_HOW_LOCKED_HERE =
+  'For every tap on the watch to land, keep your iPhone unlocked with this app on the Play screen. With the iPhone locked, the watch keeps this app awake while the watch app is on the watch’s screen, which uses more of the iPhone’s battery. Lower your wrist and the iPhone goes back to sleep about half a minute later; the first tap after that may not go through, so tap again straight away. The live tuner needs the phone open. If this app has been swiped closed on the iPhone, open it again: the watch can’t.'
 export const WATCH_HOW = [
   WATCH_HOW_OPEN,
   'Swipe up or down on the watch, or turn the Digital Crown, to move between its four pages: Scenes, Pedals, Presets and Tuner.',
@@ -101,7 +113,7 @@ export function watchWakes() {
 }
 
 /** How the watch is used, in this build's words: the first line depends on wake on tap. */
-const howLines = () => (watchWakes() ? [WATCH_HOW_LOCKED, ...WATCH_HOW.slice(1)] : WATCH_HOW)
+const howLines = () => (watchWakes() ? [watchChecksIn() ? WATCH_HOW_LOCKED_HERE : WATCH_HOW_LOCKED, ...WATCH_HOW.slice(1)] : WATCH_HOW)
 
 /*
  * AND IN THIS WATCH'S: one that has the Tempo page (its hello's `tempo`,
@@ -192,6 +204,23 @@ export function useWatchBridge(picture, step) {
        */
       const receivedAt = Number.isFinite(event?.at) ? Math.min(event.at, Date.now()) : Date.now()
       const asleep = AppState.currentState !== 'active'
+      /*
+       * THE CHECK-IN (watch-link THE CHECK-IN): the watch is on screen, and
+       * says so every twenty seconds so the iPhone stays awake while it is
+       * looked at. The holding awake is the native half's, which renews its
+       * 25 seconds on any message; here it is NOTHING: no request to the
+       * unit, no setting, no log line every twenty seconds on a phone that
+       * is awake anyway. One thing only: a phone it found asleep is set to
+       * rejoin its connection, as the hello does, so what the unit does
+       * next can reach the watch.
+       */
+      if (cmd.do === 'here') {
+        if (asleep) {
+          logDebug('watch', 'here', 'the watch is on screen (kept the phone awake)')
+          probeNow()
+        }
+        return
+      }
       logDebug('watch', cmd.do, `${JSON.stringify(cmd)}${asleep ? ' (woke the phone)' : ''}`)
       if (cmd.do === 'hello') {
         /*

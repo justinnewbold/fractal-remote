@@ -1041,7 +1041,7 @@ async function watchOnABench() {
     /* sameBlock and writeChannel are docs/pending/watch-channels.patch's, so this bench still runs once it is applied. */
     'stub.mjs': stub(['blockColor = () => ({})', 'idOf = (b) => b?.id', 'sameBlock = () => false', 'shortBlock = () => ""', 'metronome = () => ({ on: false })', 'boostPedals = (chain) => chain || []',
       /* lib/watchPages, for a watch that has not said it takes its pages from the phone: nothing kept, nothing sent. */
-      'noteWatchKnows = () => {}', 'pagesToSend = () => null', 'useWatchPages = () => ({ order: [], hidden: [], can: false })', 'watchHasTempo = () => false', 'tunerStaysToSend = () => null',
+      'noteWatchKnows = () => {}', 'pagesToSend = () => null', 'useWatchPages = () => ({ order: [], hidden: [], can: false })', 'watchHasTempo = () => false', 'tunerStaysToSend = () => null', 'watchChecksIn = () => false',
       /* lib/metronome's two for the Tempo page, which that watch never asks for. */
       'setWatchTap = () => {}', 'useMetronome = () => ({})']),
     'debugLog.mjs': "import { bench } from './bench.mjs'\nexport const logDebug = (...a) => { bench.log.push(a.join(' ')) }\n",

@@ -54,7 +54,25 @@ const TEMPO = { bpm: 121.4, why: '', wrist: true, running: false }
  *   node -e "import('./test/watch-pages.mjs').then(async (m) => console.log(JSON.stringify(await m.pagesFixture(), null, 2)))" > mobile/watch-ci/Tests/WatchModelTests/pages.json
  */
 export async function pagesFixture() {
-  const { watchState, watchPageOrder, watchPagesHidden, watchPagesShown, watchTunerStopsOnLeaving, watchTunerStopsOnHiding } = await link()
+  const { watchState, watchPageOrder, watchPagesHidden, watchPagesShown, watchTunerStopsOnLeaving, watchTunerStopsOnHiding, watchHereDue, WATCH_HERE_MS, WATCH_HERE_TICK_MS } = await link()
+  /* The check-in: on screen or not, the pages up or the waiting page, the demo or not, and the clock either side of its twenty seconds. Times in milliseconds. */
+  const T = 1759363200000
+  const due = [
+    [true, true, false, T, T],
+    [true, true, false, T, T + WATCH_HERE_MS - 1],
+    [true, true, false, T, T + WATCH_HERE_MS],
+    [true, true, false, T, T + WATCH_HERE_MS + WATCH_HERE_TICK_MS],
+    [true, true, false, T, T + 600000],
+    [true, true, false, null, T],
+    [false, true, false, T, T + 600000],
+    [false, true, false, null, T],
+    [true, false, false, T, T + 600000],
+    [true, false, false, null, T],
+    [true, true, true, T, T + 600000],
+    [true, true, true, null, T],
+    [false, false, true, T, T + 600000],
+    [true, true, false, T + 5000, T]
+  ].map(([onScreen, pages, demo, lastSent, now]) => ({ onScreen, pages, demo, lastSent, now, due: watchHereDue({ onScreen, pages, demo, lastSent, now }) }))
   /* The tuner and leaving its page: every tuner on or off with the switch on, off or not said; and its page shown, hidden, or hidden already. */
   const leaving = [true, false].flatMap((on) => [true, false, null].map((stays) => ({ on, stays, stops: watchTunerStopsOnLeaving(on, stays) })))
   const hiding = [
@@ -106,6 +124,7 @@ export async function pagesFixture() {
       hidden: CHOSEN_HIDDEN
     }),
     tuner: { leaving, hiding },
+    here: { everyMs: WATCH_HERE_MS, tickMs: WATCH_HERE_TICK_MS, cases: due },
     cases: given.map(([pages, hidden]) => ({
       pages,
       hidden,
@@ -287,13 +306,13 @@ export function run(test) {
 
   test('watch pages: a watch says what it knows in its hello, and one that says nothing is asked nothing new', async () => {
     const { watchCommand, watchKnows, WATCH_KNOWS } = await link()
-    assert.deepEqual(WATCH_KNOWS, ['pages', 'tempo', 'stay'])
+    assert.deepEqual(WATCH_KNOWS, ['pages', 'tempo', 'stay', 'here'])
     /* A watch from before: the one word it always was. */
     assert.deepEqual(watchCommand({ do: 'hello' }, null), { do: 'hello' })
     assert.deepEqual(watchCommand({ do: 'hello', knows: 'pages' }, null), { do: 'hello' }, 'a hello whose knows is not a list was taken for one')
     /* One that says so, and only what this phone knows of: never passed on as it came. */
-    assert.deepEqual(watchCommand({ do: 'hello', knows: ['pages', 'tempo', 'stay'] }, null), { do: 'hello', knows: ['pages', 'tempo', 'stay'] })
-    assert.deepEqual(watchCommand({ do: 'hello', knows: ['stay', 'tempo', 'pages', 'looper', 7, 'pages'] }, null), { do: 'hello', knows: ['pages', 'tempo', 'stay'] })
+    assert.deepEqual(watchCommand({ do: 'hello', knows: ['pages', 'tempo', 'stay', 'here'] }, null), { do: 'hello', knows: ['pages', 'tempo', 'stay', 'here'] })
+    assert.deepEqual(watchCommand({ do: 'hello', knows: ['here', 'stay', 'tempo', 'pages', 'looper', 7, 'pages'] }, null), { do: 'hello', knows: ['pages', 'tempo', 'stay', 'here'] })
     assert.deepEqual(watchCommand({ do: 'hello', knows: ['pages', 'tempo'] }, null), { do: 'hello', knows: ['pages', 'tempo'] })
     assert.deepEqual(watchCommand({ do: 'hello', knows: ['pages'] }, null), { do: 'hello', knows: ['pages'] })
     assert.deepEqual(watchCommand({ do: 'hello', knows: [] }, null), { do: 'hello', knows: [] })
@@ -363,8 +382,8 @@ export function run(test) {
     assert.equal(watchCommand({ do: 'wrist', on: true }, null), null)
     assert.equal(watchCommand({ do: 'wrist', on: true }, { tempo: 'yes' }), null)
 
-    /* EIGHT THINGS, and nothing else: no way to set a tempo by number, start the metronome or choose where it clicks from the wrist. */
-    const asked = ['hello', 'scene', 'pedal', 'channel', 'preset', 'tuner', 'tap', 'wrist']
+    /* NINE THINGS, and nothing else: no way to set a tempo by number, start the metronome or choose where it clicks from the wrist. */
+    const asked = ['hello', 'scene', 'pedal', 'channel', 'preset', 'tuner', 'tap', 'wrist', 'here']
     const door = code(read('shared/watch-link.mjs'))
     const cases = [...door.slice(door.indexOf('export function watchCommand(')).matchAll(/case '([a-z]+)':/g)].map((m) => m[1])
     assert.deepEqual([...cases].sort(), [...asked].sort(), 'the watch’s door takes a request this list does not name')
@@ -455,7 +474,7 @@ export function run(test) {
     assert.doesNotMatch(kept, /watchPaired|Platform\.|isAdmin|features/, 'whether the watch takes its pages is guessed from something other than the watch saying so')
 
     const bridge = code(read('mobile/src/lib/watchBridge.js'))
-    assert.match(bridge, /import \{ noteWatchKnows, pagesToSend, tunerStaysToSend, useWatchPages, watchHasTempo \} from '\.\/watchPages'/)
+    assert.match(bridge, /import \{ noteWatchKnows, pagesToSend, [^}]*\buseWatchPages\b[^}]*\} from '\.\/watchPages'/)
     /* The hello: what it knows is kept first, and the picture it is answered with is made with it. */
     assert.match(
       bridge.replace(/\s+/g, ' '),
@@ -523,6 +542,73 @@ export function run(test) {
     assert.match(drawn, /accessibilityLabel=\{`Move \$\{name\} down`\}/)
     /* A hidden row says its name and that it is hidden, with no number: it is not one of the watch's pages just now. */
     assert.match(drawn, /<Text[^>]*>\{name\}<\/Text>\s+<Text[^>]*>\{WATCH_ORDER_HIDDEN\}<\/Text>/)
+  })
+
+  test('watch check-in: while the watch is on screen it says “here” every twenty seconds, which keeps the iPhone awake and reaches the unit as nothing', async () => {
+    const { watchCommand, watchState, watchHereDue, WATCH_HERE_MS, WATCH_HERE_TICK_MS } = await link()
+    /* The word: itself and nothing else, whatever rides in on it, with or without a picture. */
+    assert.deepEqual(watchCommand({ do: 'here' }, null), { do: 'here' })
+    assert.deepEqual(watchCommand({ do: 'here', scene: 3, tuner: true, on: true, index: 1, bpm: 200 }, watchState({ sceneCount: 4 })), { do: 'here' }, 'a check-in carried something to the phone besides itself')
+
+    /* WHEN ONE IS DUE, with the clock handed in. */
+    assert.equal(WATCH_HERE_MS, 20000)
+    assert.equal(WATCH_HERE_TICK_MS, 2000)
+    const at = 1_000_000
+    const due = (over) => watchHereDue({ onScreen: true, pages: true, demo: false, lastSent: at, now: at + WATCH_HERE_MS, ...over })
+    assert.equal(due({}), true)
+    assert.equal(due({ now: at + WATCH_HERE_MS - 1 }), false, 'a check-in went before its twenty seconds')
+    assert.equal(due({ now: at + 600000 }), true, 'a wrist raised after ten minutes sends none')
+    assert.equal(due({ lastSent: null }), true)
+    assert.equal(due({ lastSent: undefined }), true)
+    assert.equal(due({ lastSent: at + 5000, now: at }), false)
+    /* THE WRIST DOWN: never, however long it has been. That is what lets the iPhone go back to sleep. */
+    assert.equal(due({ onScreen: false, now: at + 600000 }), false, 'the watch checks in with its screen off, and the iPhone never sleeps')
+    /* The waiting page, and the demo: never. */
+    assert.equal(due({ pages: false, now: at + 600000 }), false)
+    assert.equal(due({ demo: true, now: at + 600000 }), false)
+    /* Only a plain yes is a yes. */
+    for (const odd of [1, 'yes', null, undefined]) {
+      assert.equal(due({ onScreen: odd }), false, String(odd))
+      assert.equal(due({ pages: odd }), false, String(odd))
+    }
+    assert.equal(watchHereDue(), false)
+
+    /*
+     * INSIDE THE PHONE'S AWAKE WINDOW, with room to spare: a check-in goes
+     * at most one tick after it is due, and the phone sleeps WAKE_SECONDS
+     * after the last message it heard. Three seconds for the message to
+     * cross, or the phone would nod off between two of them.
+     */
+    const native = read('mobile/modules/fractal-watch/ios/FractalWatchModule.swift')
+    const wake = Number(/private static let WAKE_SECONDS: Double = (\d+)/.exec(native)?.[1]) * 1000
+    assert.ok(wake > 0, 'the phone’s awake window is not where this test reads it')
+    assert.ok(WATCH_HERE_MS + WATCH_HERE_TICK_MS + 3000 <= wake, `a check-in every ${WATCH_HERE_MS / 1000} s, up to ${WATCH_HERE_TICK_MS / 1000} s late, does not fit the ${wake / 1000} s the phone stays awake`)
+    /* THE PHONE'S NATIVE HALF NEEDS NO CHANGE: any message from the watch renews the window, one task held, ended by the timer or by iOS's own expiry. */
+    const flat = native.replace(/\s+/g, ' ')
+    assert.match(flat, /private func arrived\(_ json: String, _ at: Date\) \{ stayAwake\(\)/, 'a message from the watch no longer renews the phone’s awake window before anything else')
+    assert.match(flat, /if awake == \.invalid \{ awake = UIApplication\.shared\.beginBackgroundTask\(withName: "watch tap"\) \{ \[weak self\] in self\?\.sleep\(\) \} \} sleepAt\?\.cancel\(\)/, 'the awake window is no longer one task, renewed, and ended when iOS says its time is up')
+    assert.match(flat, /private func sleep\(\) \{ sleepAt\?\.cancel\(\) sleepAt = nil if awake != \.invalid \{ UIApplication\.shared\.endBackgroundTask\(awake\) awake = \.invalid \} \}/)
+    assert.doesNotMatch(native, /UIBackgroundModes|AVAudioSession|HKWorkoutSession|WKExtendedRuntimeSession/, 'the phone is kept awake some other way than the wake a watch message gives')
+    assert.doesNotMatch(JSON.stringify(JSON.parse(read('mobile/app.json')).expo.ios.infoPlist || {}), /UIBackgroundModes/, 'the iPhone app has a background mode')
+
+    /* THE PHONE'S JAVASCRIPT: nothing for the unit. A phone found asleep rejoins its connection, as the hello's does; an awake one does nothing at all. */
+    const bridge = code(read('mobile/src/lib/watchBridge.js')).replace(/\s+/g, ' ')
+    assert.match(bridge, /if \(cmd\.do === 'here'\) \{ if \(asleep\) \{ logDebug\('watch', 'here', 'the watch is on screen \(kept the phone awake\)'\) probeNow\(\) \} return \}/)
+    const run = bridge.slice(bridge.indexOf('const run = () => {'), bridge.indexOf('if (!asleep) {'))
+    assert.ok(run.length > 100 && !/'here'/.test(run), 'a check-in reaches the requests that are sent to the unit')
+    assert.ok(bridge.indexOf("if (cmd.do === 'here')") < bridge.indexOf("if (cmd.do === 'hello')"), 'a check-in is not answered first, before anything that sends')
+
+    /* THE WORDS, for a watch that checks in: what it costs, when it stops, and no more than happens. */
+    const words = read('mobile/src/lib/watchBridge.js')
+    const tip = /^export const WATCH_HOW_LOCKED_HERE =\n  '([^']+)'$/m.exec(words)?.[1]
+    assert.equal(
+      tip,
+      'For every tap on the watch to land, keep your iPhone unlocked with this app on the Play screen. With the iPhone locked, the watch keeps this app awake while the watch app is on the watch’s screen, which uses more of the iPhone’s battery. Lower your wrist and the iPhone goes back to sleep about half a minute later; the first tap after that may not go through, so tap again straight away. The live tuner needs the phone open. If this app has been swiped closed on the iPhone, open it again: the watch can’t.'
+    )
+    assert.ok(!/this (phone|device)\b/i.test(tip), 'the tip says this phone')
+    assert.ok(!/\b(always|never miss|every tap lands|stays in step|follows your unit)\b/i.test(tip.replace('For every tap on the watch to land, keep your iPhone unlocked', '')), 'the tip promises more than a locked iPhone does')
+    assert.match(words, /const howLines = \(\) => \(watchWakes\(\) \? \[watchChecksIn\(\) \? WATCH_HOW_LOCKED_HERE : WATCH_HOW_LOCKED, \.\.\.WATCH_HOW\.slice\(1\)\] : WATCH_HOW\)/, 'a watch that does not check in is told its iPhone is kept awake')
+    assert.match(code(read('mobile/src/lib/watchPages.js')), /export const watchChecksIn = \(\) => knows\.includes\('here'\)/)
   })
 
   test('watch tuner: leaving its page turns it off unless the iPhone says it stays, and hiding its page turns it off whatever the iPhone says', async () => {
@@ -629,7 +715,7 @@ export function run(test) {
 
     if (!patched) {
       /* THE TREE AS MAIN HAS IT: the watch untouched, so its line of the fingerprint is where it was, and the Swift half listed as waiting. */
-      assert.doesNotMatch(model, /WatchPage\b|watchPageOrder|watchPagesHidden|WatchTempo|tunerStays|"knows"|"do":"tap"/, 'part of the watch’s half is in the tree, which moves the watch’s fingerprint, and part is not')
+      assert.doesNotMatch(model, /WatchPage\b|watchPageOrder|watchPagesHidden|WatchTempo|tunerStays|watchHereDue|"knows"|"do":"tap"|"do":"here"/, 'part of the watch’s half is in the tree, which moves the watch’s fingerprint, and part is not')
       assert.match(root, /@State private var page = Launch\.number\("page"\)/)
       assert.match(root.replace(/\s+/g, ' '), /ScenesPage\(state: state\)\.tag\(0\) PedalsPage\(state: state\)\.tag\(1\) PresetsPage\(state: state\)\.tag\(2\) TunerPage\(state: state\)\.tag\(3\)/)
       assert.doesNotMatch(read('mobile/targets/watch/Pages.swift'), /TempoPage/)
@@ -748,7 +834,6 @@ export function run(test) {
     assert.ok(model.includes('case .tap: return #"{"do":"tap"}"#'), 'the watch cannot ask for a tap')
     assert.ok(model.includes('case .wrist(let on): return #"{"do":"wrist","on":\\#(on)}"#'), 'the watch cannot ask for the wrist’s switch')
     /* A tap is sent once or not at all. */
-    assert.match(flat, /var once: Bool \{ if case \.tap = self \{ return true \} return false \}/)
     assert.match(read('mobile/targets/watch/PhoneLink.swift').replace(/\s+/g, ' '), /let once = command\.once session\.sendMessage\(body, replyHandler: \{ _ in \}, errorHandler: \{ _ in guard !once else \{ return \} DispatchQueue\.main\.asyncAfter/, 'a tap that did not go is tried again a second later: a second, late beat')
     /* The page: the number, Tap, the phone's sentence where Tap is not offered, and the wrist's switch. Nothing decided on the watch. */
     const tempoPage = drawnPages.slice(drawnPages.indexOf('struct TempoPage: View {'), drawnPages.indexOf('// MARK: - Tuner'))
@@ -763,6 +848,32 @@ export function run(test) {
     assert.equal((tempoPage.match(/link\.send\(/g) || []).length, 2, 'the Tempo page asks the phone for something besides a tap and the wrist’s switch')
     assert.match(flat, /func tempoNumber\(_ bpm: Double\?\) -> String \{ guard let bpm, bpm\.isFinite, bpm > 0 else \{ return "—" \} return String\(Int\(bpm\.rounded\(\)\)\) \}/)
 
+    /* THE CHECK-IN. The rule in the phone's steps, the word, and a timer that exists only while the app is on screen. */
+    assert.match(flat, /let watchHereSeconds: Double = 20\b/)
+    assert.match(flat, /let watchHereTick: Double = 2\b/)
+    assert.match(flat, /func watchHereDue\(onScreen: Bool, pagesUp: Bool, demo: Bool, lastSent: Date\?, now: Date\) -> Bool \{ guard onScreen, pagesUp, !demo else \{ return false \} guard let lastSent else \{ return true \} return now\.timeIntervalSince\(lastSent\) >= watchHereSeconds \}/)
+    assert.ok(model.includes('case .here: return #"{"do":"here"}"#'), 'the watch cannot check in')
+    assert.match(flat, /var once: Bool \{ switch self \{ case \.tap, \.here: return true default: return false \} \}/)
+    const phoneLink = read('mobile/targets/watch/PhoneLink.swift').replace(/\s+/g, ' ')
+    assert.match(
+      phoneLink,
+      /func onScreen\(_ on: Bool\) \{ screenOn = on hereTimer\?\.invalidate\(\) hereTimer = nil guard on, !demo else \{ return \} checkIn\(\) hereTimer = Timer\.scheduledTimer\(withTimeInterval: watchHereTick, repeats: true\) \{ \[weak self\] _ in Task \{ @MainActor \[weak self\] in self\?\.checkIn\(\) \} \} \}/,
+      'the check-in’s timer is not ended the moment the watch app leaves the screen'
+    )
+    assert.match(phoneLink, /private func checkIn\(\) \{ guard watchHereDue\(onScreen: screenOn, pagesUp: pagesUp, demo: demo, lastSent: lastSent, now: Date\(\)\) else \{ return \} send\(\.here\) \}/)
+    assert.match(phoneLink, /private var pagesUp: Bool \{ guard let state else \{ return false \} return state\.linked && !state\.tooNew && !away \}/, 'the check-in runs on the waiting page')
+    assert.match(phoneLink, /session\.isReachable else \{ return \} \/\*[^*]*\*\/ lastSent = Date\(\)/, 'a check-in is not counted from the last thing really sent')
+    assert.equal((phoneLink.match(/send\(\.here\)/g) || []).length, 1)
+    /* Started by the wrist coming up and ended by its going down, and nothing else keeps the watch app running. */
+    assert.match(view, /\.onChange\(of: phase\) \{ _, now in if now == \.active \{ link\.woke\(\) \} \/\*[^*]*\*\/ link\.onScreen\(now == \.active\)/)
+    assert.match(view, /\.onAppear \{ link\.onScreen\(phase == \.active\) \}/)
+    for (const f of ['Model.swift', 'PhoneLink.swift', 'FractalWatchApp.swift', 'Pages.swift', 'Metronome.swift']) {
+      assert.doesNotMatch(code(read(`mobile/targets/watch/${f}`)), /WKExtendedRuntimeSession|HKWorkoutSession|WKApplicationRefreshBackgroundTask|scheduleBackgroundRefresh/, `${f} keeps the watch app running with the wrist down`)
+    }
+    /* The waiting page's line for an app that was swiped closed, under "Open Fractal Remote on your iPhone". */
+    assert.match(flat, /enum WaitingWords \{ static let closed = "If it was swiped closed, open it again\." \}/)
+    assert.match(drawnPages, /if !tooNew, !phoneOnly \{ Text\(WaitingWords\.closed\)/)
+
     /* And the Swift tests ask the fixture's own questions. */
     const tests = read('mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift')
     for (const name of [
@@ -774,7 +885,8 @@ export function run(test) {
       'testTheWatchSaysWhatItKnows',
       'testTheTempoPageSaysWhatThePhoneSays',
       'testATapIsSentOnceAndTheSwitchIsOnlyTheWrists',
-      'testTheTunerPagesWordsSayWhatATapDoes'
+      'testTheTunerPagesWordsSayWhatATapDoes',
+      'testACheckInIsDueOnlyOnScreenWithThePagesUp'
     ]) {
       assert.ok(tests.includes(`func ${name}(`), `the watch’s own tests have no ${name}`)
     }
