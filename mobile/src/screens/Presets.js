@@ -15,9 +15,9 @@ import { ADDED_MS, ADD_WORDS, COLOUR_AFTER_MS, addChoices, addedSays, landedIn }
 import { useAddToSetlist } from '../lib/useAddToSetlist'
 import { sync, useStored } from '../lib/store'
 /* All presets as a wheel, where Settings has chosen it (lib/presetWheel): the same rows, drawn by components/PresetWheel. */
-import { WHEEL_ROW, wheelSetting } from '../lib/presetWheel'
+import { wheelSetting } from '../lib/presetWheel'
 import { usePresetWheelOffered } from '../lib/usePresetWheel'
-import PresetWheel from '../components/PresetWheel'
+import PresetWheel, { WheelPreset } from '../components/PresetWheel'
 import { loadPreset, useRig } from '../lib/rig'
 import { thud, tick } from '../lib/feedback'
 import { TAG_HOLD, presetTag, presetTarget } from '../lib/colourPage'
@@ -50,8 +50,6 @@ const ofSlug = (s) => s.deviceSlug
 const ROW = TAP
 const GAP = 8
 const STRIDE = ROW + GAP
-/* How big a preset's name is on the wheel's rows, which are drawn at full size only in the middle. */
-const WHEEL_NAME = 22
 
 /**
  * Every slot on the unit, by name, so you can get to one.
@@ -100,10 +98,12 @@ const WHEEL_NAME = 22
  *
  * AND AS A WHEEL, where Settings → Tiles & scenes → Preset list says so
  * (lib/presetWheel, his account until features PRESET_WHEEL_FOR_EVERYONE):
- * the same rows, the middle one big and the rest shrinking away from it,
- * with a click as each crosses the middle. Everything a row does is what it
- * does in the list; only how the rows are laid out and scrolled is the
- * wheel's (components/PresetWheel). The list is the list it always was.
+ * the same presets as names with no box round them, the middle one big and
+ * the rest shrinking away from it, with a click as each crosses the middle.
+ * Everything a row does is what it does in the list (one press, one hold,
+ * one star, made once in rowOf and handed to both); only how it is drawn
+ * and scrolled is the wheel's (components/PresetWheel). The list is the
+ * list it always was.
  */
 export default function Presets({ onBack, stay = false }) {
   const preset = useRig(ofPreset)
@@ -366,12 +366,13 @@ export default function Presets({ onBack, stay = false }) {
   }
 
   /*
-   * ONE PRESET'S ROW, for the list and for the wheel. `tall` is the wheel's:
-   * the same button, star, hold and colour bar at the wheel's height, with
-   * the name bigger and fitted to the button, and no space under the row
-   * (the wheel places its rows itself). Only the button and the star take a
-   * press there, never the row around them, which the wheel draws over its
-   * neighbour's place (components/PresetWheel Cell).
+   * ONE PRESET'S ROW, for the list and for the wheel.
+   *
+   * THE LIST'S ROW IS WORD FOR WORD WHAT IT WAS BEFORE THERE WAS A WHEEL:
+   * "let's make sure we don't touch the other ones" (Justin, 11 November
+   * 2026). The wheel's (`tall`) is the same preset as a name with no box
+   * round it (components/PresetWheel WheelPreset), handed the same words,
+   * press, hold and star; test/preset-wheel.mjs holds the two to each other.
    */
   const rowOf = (n, tall = false) => {
     const name = nameHere(n)
@@ -381,9 +382,29 @@ export default function Presets({ onBack, stay = false }) {
     /* What the colour sheet calls it: "012 Lead Rig", or the slot alone before its name is known. */
     const words = typeof name === 'string' && name.trim() ? `${slotLabel(n, addressing)} ${name.trim()}` : slotLabel(n, addressing)
     const target = presetTarget(n, { words })
-    const tallRow = tall ? WHEEL_ROW : ROW
+    if (tall) {
+      return (
+        <WheelPreset
+          label={typeof name === 'string' ? (name || 'Empty') : `Slot ${slotLabel(n, addressing)}`}
+          sub={here ? `${slotLabel(n, addressing)} · Playing` : slotLabel(n, addressing)}
+          here={here}
+          /* Its colour tag, a short bar before the name: the colour the list's bar is. */
+          bar={tagEdge(tag)?.borderLeftColor || null}
+          starred={starred}
+          starLabel={`${starred ? 'Unstar' : 'Star'} ${name || `slot ${slotLabel(n, addressing)}`}`}
+          hint={addOpen ? ADD_WORDS.hint : target ? TAG_HOLD.hint : undefined}
+          /* The list's own press, word for word: not awaited, and beside Play the wheel stays open after a pick. */
+          onPress={() => {
+            loadPreset(n)
+            if (!stay) onBack?.()
+          }}
+          onLongPress={addOpen ? () => hold({ n, words, target }) : target ? () => setPainting(target) : undefined}
+          onStar={() => toggleFavourite(device, n)}
+        />
+      )
+    }
     return (
-      <View pointerEvents={tall ? 'box-none' : undefined} style={{ flexDirection: 'row', alignItems: tall ? 'center' : undefined, gap: space.sm, height: tallRow, marginBottom: tall ? 0 : GAP }}>
+      <View style={{ flexDirection: 'row', gap: space.sm, height: ROW, marginBottom: GAP }}>
         {/*
           The one you are on, in the amber this app uses for "this is
           live" everywhere else — the lit scene, the engaged block. It was
@@ -395,10 +416,7 @@ export default function Presets({ onBack, stay = false }) {
         */}
         <Press
           grow
-          height={tallRow}
-          /* On the wheel the name is the headline, drawn smaller only when it would not fit. */
-          labelSize={tall ? WHEEL_NAME : undefined}
-          fit={tall || undefined}
+          height={ROW}
           label={typeof name === 'string' ? (name || 'Empty') : `Slot ${slotLabel(n, addressing)}`}
           /* Two lines on every row, always: a third one on the current
              row alone would make it taller than ROW and put the jump to
@@ -573,7 +591,7 @@ export default function Presets({ onBack, stay = false }) {
       ) : null}
 
       {wheel ? (
-        /* The wheel (lib/presetWheel), opened on the preset being played: the same rows, taller, and nothing loads until one is tapped. */
+        /* The wheel (lib/presetWheel), opened on the preset being played: the same presets as names, and nothing loads until one is tapped. */
         <PresetWheel
           listRef={wheelRef}
           data={shown}

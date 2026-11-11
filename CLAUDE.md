@@ -1074,23 +1074,46 @@ tick box, Click and tap as presets pass). Kept on the device
   only, and every other account's All presets is the list whatever the
   device has kept. It opens when he says so, with its What's new line in
   that pull request (it has none yet).
-- **The rows are the list's own** (screens/Presets `rowOf`, drawn `tall`):
-  one press, hold, star and colour bar for both, and NOTHING LOADS UNTIL A
-  ROW IS TAPPED. The middle is where the eye is, never what the unit plays.
+- **Reworked the same day, on his phone's word.** "I tried out the scroll
+  wheel. It's very clunky doesn't match up with the clicks properly. I
+  think on that we probably want to remove the boxes around the outside
+  edge of the presets as well and make the size of the preset names a
+  little smaller. But let's make sure we don't touch the other ones so far
+  just only the new version that's on mine." So:
+  - *A row is never moved.* The first wheel drew its rows closer together
+    away from the middle by moving them, so a preset under a thumb slid at
+    half the thumb's speed. Now a row is only drawn smaller and fainter
+    (`WHEEL_STEPS`, scale and brightness alone), in a short slot (54
+    points, a row 50), and follows the thumb exactly. No translate, ever.
+  - *No boxes.* A preset on the wheel is its name and its slot as two
+    lines of type (components/PresetWheel `WheelPreset`), amber and
+    "Playing" for the one being played, a short bar for a colour tag, the
+    star alone at the end. Two faint lines mark the middle slot, and a
+    name crossing one is the click.
+  - *Smaller names*: `WHEEL_NAME` 19 (it was 22; the list's is 15).
+  - *The click is ready before it is needed* (lib/wheelClick.js): on an
+    iPhone four players take turns and each is rewound two clicks ahead
+    of its turn, and the device's sound is kept awake while a wheel is on
+    screen. The first try rewound and played in one breath and let the
+    sound sleep between clicks, which is what put the click late.
+  - *The list is not touched.* Its row in screens/Presets is word for word
+    what it was before there was a wheel; the wheel's is a separate early
+    return in `rowOf`, handed the same words, press, hold and star (a test
+    counts each twice). Keep it that way: never bend the list's row to
+    share code with the wheel's.
+- **NOTHING LOADS UNTIL A ROW IS TAPPED.** The middle is where the eye is,
+  never what the unit plays.
 - **The arithmetic** is mobile/src/lib/presetWheel.js (imports nothing):
-  each step from the middle is smaller and fainter (`WHEEL_STEPS`), rows
-  are moved toward the middle so the small ones close up, and row i is in
-  the middle at i slots of scroll, so the list stops on a row. The drawing
-  is components/PresetWheel.js, driven straight from the scroll.
-- **The click** (lib/wheelClick.js) is the system's picker tap and the
-  metronome's click played quietly: silent in silent mode, over a backing
-  track rather than stopping it, only under a thumb or its flick, and
-  never more than one every 32 ms. The metronome's own out-loud mode is
-  never set back by it (lib/audioMode.js).
-- **Nothing has run on a device.** How the click sounds, how the wheel
-  feels under a thumb, whether a row drawn away from its place takes a
-  press on both phones, and the names filling in around the middle are
-  the first things his look will settle. A picture drawn here is no proof.
+  row i is in the middle at i slots of scroll, so the list stops on a row.
+  The drawing is components/PresetWheel.js, driven straight from the
+  scroll.
+- **The click** is the system's picker tap and the metronome's click
+  played quietly: silent in silent mode, over a backing track rather than
+  stopping it, only under a thumb or its flick, and never more than one
+  every 32 ms. The metronome's own out-loud mode is never set back by it
+  (lib/audioMode.js).
+- **The rework has not run on a device either.** Whether it now feels
+  right under a thumb and the click lands on the line are his to say.
 
 **In Edit the knobs come first.** "In edit move search bar and amp and
 pedal names to the bottom. Have the Bluetooth warning also move to the
