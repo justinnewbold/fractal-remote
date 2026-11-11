@@ -13,7 +13,11 @@ import { marksFor, toggleFavourite } from '../lib/lists'
 import { addTo, createList, listsFor, sourceFor, updateList } from '../lib/lists'
 import { ADDED_MS, ADD_WORDS, COLOUR_AFTER_MS, addChoices, addedSays, landedIn } from '../lib/addToSetlist'
 import { useAddToSetlist } from '../lib/useAddToSetlist'
-import { useStored } from '../lib/store'
+import { sync, useStored } from '../lib/store'
+/* All presets as a wheel, where Settings has chosen it (lib/presetWheel): the same rows, drawn by components/PresetWheel. */
+import { WHEEL_ROW, wheelSetting } from '../lib/presetWheel'
+import { usePresetWheelOffered } from '../lib/usePresetWheel'
+import PresetWheel from '../components/PresetWheel'
 import { loadPreset, useRig } from '../lib/rig'
 import { thud, tick } from '../lib/feedback'
 import { TAG_HOLD, presetTag, presetTarget } from '../lib/colourPage'
@@ -46,6 +50,8 @@ const ofSlug = (s) => s.deviceSlug
 const ROW = TAP
 const GAP = 8
 const STRIDE = ROW + GAP
+/* How big a preset's name is on the wheel's rows, which are drawn at full size only in the middle. */
+const WHEEL_NAME = 22
 
 /**
  * Every slot on the unit, by name, so you can get to one.
@@ -91,6 +97,13 @@ const STRIDE = ROW + GAP
  * end of one (the Setlists page's own addTo and updateList), a line says
  * "Added to …", and the colour is the sheet's last row. Closed to an
  * account, the hold is the colour tag and nothing else, as above.
+ *
+ * AND AS A WHEEL, where Settings → Tiles & scenes → Preset list says so
+ * (lib/presetWheel, his account until features PRESET_WHEEL_FOR_EVERYONE):
+ * the same rows, the middle one big and the rest shrinking away from it,
+ * with a click as each crosses the middle. Everything a row does is what it
+ * does in the list; only how the rows are laid out and scrolled is the
+ * wheel's (components/PresetWheel). The list is the list it always was.
  */
 export default function Presets({ onBack, stay = false }) {
   const preset = useRig(ofPreset)
@@ -128,6 +141,13 @@ export default function Presets({ onBack, stay = false }) {
   /* Re-renders when a star is pressed — here or on the setlist sheet. */
   useStored()
   const favourites = marksFor(device).favourites
+
+  /* The wheel in place of the list: offered to this account, and chosen on this device. Read on every render, so the choice made in Settings is the list's the next time it draws. */
+  const wheelOffered = usePresetWheelOffered()
+  const wheelKept = wheelSetting(sync)
+  const wheel = wheelOffered && wheelKept.on
+  /* What the screen asks of the wheel: go to a row, go to the top (components/PresetWheel). */
+  const wheelRef = useRef(null)
 
   const [query, setQuery] = useState('')
   /* The preset whose colour tag the colour sheet is open on, or null. */
@@ -229,6 +249,18 @@ export default function Presets({ onBack, stay = false }) {
   const seen = useCallback(({ viewableItems }) => {
     wantOnly(viewableItems.map((v) => v.item).filter((n) => typeof n === 'number'))
   }, [])
+  /*
+   * The wheel's own asking, by the rows around its middle once it rests
+   * (PresetWheel `onAround`): the list's "what is on screen" goes by where
+   * rows are laid out, and the wheel draws its small rows closer than that.
+   */
+  /* The list's own measure of "on screen". Made here, not where the list is drawn: the list is not drawn while the wheel is. */
+  const viewability = useRef({ itemVisiblePercentThreshold: 10 }).current
+  const shownNow = useRef(shown)
+  shownNow.current = shown
+  const around = useCallback((indexes) => {
+    wantOnly(indexes.map((i) => shownNow.current[i]).filter((n) => typeof n === 'number'))
+  }, [])
 
   /*
    * Open on the preset you are playing, in the middle of the screen.
@@ -277,6 +309,12 @@ export default function Presets({ onBack, stay = false }) {
   useEffect(() => {
     if (!hunting && !searchedBefore.current) return
     const id = requestAnimationFrame(() => {
+      /* The wheel's two moves are its own: the first match in the middle, or the preset being played. */
+      if (wheel) {
+        if (hunting) wheelRef.current?.toTop()
+        else if (slots && Number.isInteger(preset?.number)) wheelRef.current?.toRow(Math.min(preset.number, slots - 1))
+        return
+      }
       try {
         if (hunting) list.current?.scrollToOffset({ offset: 0, animated: false })
         else if (slots && Number.isInteger(preset?.number)) {
@@ -315,12 +353,110 @@ export default function Presets({ onBack, stay = false }) {
    */
   const jumpLabels = jumps.map(String)
   const jumpTo = (n) => {
+    /* On the wheel the stop lands in the middle, where the eye is. */
+    if (wheel) {
+      wheelRef.current?.toRow(Math.min(n, (slots || 1) - 1), true)
+      return
+    }
     try {
       list.current?.scrollToIndex({ index: Math.min(n, (slots || 1) - 1), viewPosition: 0, animated: true })
     } catch {
       /* Only while the list is still measuring; the next tap works. */
     }
   }
+
+  /*
+   * ONE PRESET'S ROW, for the list and for the wheel. `tall` is the wheel's:
+   * the same button, star, hold and colour bar at the wheel's height, with
+   * the name bigger and fitted to the button, and no space under the row
+   * (the wheel places its rows itself). Only the button and the star take a
+   * press there, never the row around them, which the wheel draws over its
+   * neighbour's place (components/PresetWheel Cell).
+   */
+  const rowOf = (n, tall = false) => {
+    const name = nameHere(n)
+    const here = n === preset?.number
+    const starred = favourites.includes(n)
+    const tag = presetTag(n)
+    /* What the colour sheet calls it: "012 Lead Rig", or the slot alone before its name is known. */
+    const words = typeof name === 'string' && name.trim() ? `${slotLabel(n, addressing)} ${name.trim()}` : slotLabel(n, addressing)
+    const target = presetTarget(n, { words })
+    const tallRow = tall ? WHEEL_ROW : ROW
+    return (
+      <View pointerEvents={tall ? 'box-none' : undefined} style={{ flexDirection: 'row', alignItems: tall ? 'center' : undefined, gap: space.sm, height: tallRow, marginBottom: tall ? 0 : GAP }}>
+        {/*
+          The one you are on, in the amber this app uses for "this is
+          live" everywhere else — the lit scene, the engaged block. It was
+          already marked; the trouble was that the list opened five
+          hundred slots away from it, so nobody ever saw the mark.
+
+          The caption says so in a word as well as in a colour, because
+          amber on its own is a thing to learn and "Playing" is not.
+        */}
+        <Press
+          grow
+          height={tallRow}
+          /* On the wheel the name is the headline, drawn smaller only when it would not fit. */
+          labelSize={tall ? WHEEL_NAME : undefined}
+          fit={tall || undefined}
+          label={typeof name === 'string' ? (name || 'Empty') : `Slot ${slotLabel(n, addressing)}`}
+          /* Two lines on every row, always: a third one on the current
+             row alone would make it taller than ROW and put the jump to
+             slot 99 somewhere near slot 99. */
+          sub={here ? `${slotLabel(n, addressing)} · Playing` : slotLabel(n, addressing)}
+          tone="signal"
+          on={here}
+          haptic={thud}
+          /*
+           * Not awaited, deliberately. The rig shows the new slot on the
+           * press and confirms it behind this screen; waiting here is
+           * what put two seconds between the tap and anything happening.
+           */
+          onPress={() => {
+            /* Beside Play (components/Sides, `stay`) the list stays open after a pick, so you can keep browsing while the rig plays it; on its own it goes back to Play, as it always has. */
+            loadPreset(n)
+            if (!stay) onBack?.()
+          }}
+          /* Held, its colour tag — nothing to file one under before a unit has answered (colourPage presetTarget). Or, for an account Add to setlist is open to, the sheet that has both (lib/addToSetlist). */
+          onLongPress={addOpen ? () => hold({ n, words, target }) : target ? () => setPainting(target) : undefined}
+          accessibilityHint={addOpen ? ADD_WORDS.hint : target ? TAG_HOLD.hint : undefined}
+          /* Its colour tag, down the left edge: none for a preset without one.
+             Every row is the same flat glass at the bar's corner, tagged or not. */
+          bar
+          flat
+          style={tagEdge(tag)}
+        />
+        <Star
+          on={starred}
+          label={`${starred ? 'Unstar' : 'Star'} ${name || `slot ${slotLabel(n, addressing)}`}`}
+          onPress={() => toggleFavourite(device, n)}
+        />
+      </View>
+    )
+        
+  }
+
+  /* What the list says with no rows, and the line at its end: the wheel's too. */
+  const emptyRows =
+    /* Nothing under the update note: there is nothing to wait for (vp4Old). */
+    vp4Old ? null : slots ? (
+      <Note>
+        {knownCount() >= slots || noNames
+          ? 'Nothing matches that.'
+          : 'Nothing matches that among the names known so far. Tap Refresh to get the rest from the computer.'}
+      </Note>
+    ) : (
+      <View style={{ alignItems: 'center', paddingVertical: space.xl }}>
+        <ActivityIndicator color={color.silkDim} />
+      </View>
+    )
+  /* How a preset gets its colour, at the end of the list where it costs no row its width. */
+  const lastLine =
+    shown.length && (addOpen || presetTarget(shown[0])) ? (
+      <Text style={{ color: color.silkFaint, fontSize: font.small, textAlign: 'center', paddingTop: space.sm }}>
+        {addOpen ? ADD_WORDS.hold : TAG_HOLD.phone}
+      </Text>
+    ) : null
 
   return (
     <View style={{ flex: 1 }}>
@@ -436,108 +572,46 @@ export default function Presets({ onBack, stay = false }) {
         </View>
       ) : null}
 
-      <FlatList
-        ref={list}
-        data={shown}
-        keyExtractor={(n) => String(n)}
-        contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl }}
-        initialNumToRender={20}
-        windowSize={5}
-        onViewableItemsChanged={seen}
-        viewabilityConfig={useRef({ itemVisiblePercentThreshold: 10 }).current}
-        /* Fixed rows, so the list can be told to go to one without having drawn
-           the ones before it. See ROW. */
-        getItemLayout={(_, i) => ({ length: STRIDE, offset: STRIDE * i, index: i })}
-        initialScrollIndex={
-          !hunting && slots && Number.isInteger(preset?.number)
-            ? Math.min(preset.number, slots - 1)
-            : undefined
-        }
-        onScrollToIndexFailed={() => {
-          /* Only reachable while the list is still measuring. The centring
-             effect has already run by then; the list simply stays where it is,
-             which is the top — the behaviour this replaced. */
-        }}
-        renderItem={({ item: n }) => {
-          const name = nameHere(n)
-          const here = n === preset?.number
-          const starred = favourites.includes(n)
-          const tag = presetTag(n)
-          /* What the colour sheet calls it: "012 Lead Rig", or the slot alone before its name is known. */
-          const words = typeof name === 'string' && name.trim() ? `${slotLabel(n, addressing)} ${name.trim()}` : slotLabel(n, addressing)
-          const target = presetTarget(n, { words })
-          return (
-            <View style={{ flexDirection: 'row', gap: space.sm, height: ROW, marginBottom: GAP }}>
-              {/*
-                The one you are on, in the amber this app uses for "this is
-                live" everywhere else — the lit scene, the engaged block. It was
-                already marked; the trouble was that the list opened five
-                hundred slots away from it, so nobody ever saw the mark.
-
-                The caption says so in a word as well as in a colour, because
-                amber on its own is a thing to learn and "Playing" is not.
-              */}
-              <Press
-                grow
-                height={ROW}
-                label={typeof name === 'string' ? (name || 'Empty') : `Slot ${slotLabel(n, addressing)}`}
-                /* Two lines on every row, always: a third one on the current
-                   row alone would make it taller than ROW and put the jump to
-                   slot 99 somewhere near slot 99. */
-                sub={here ? `${slotLabel(n, addressing)} · Playing` : slotLabel(n, addressing)}
-                tone="signal"
-                on={here}
-                haptic={thud}
-                /*
-                 * Not awaited, deliberately. The rig shows the new slot on the
-                 * press and confirms it behind this screen; waiting here is
-                 * what put two seconds between the tap and anything happening.
-                 */
-                onPress={() => {
-                  /* Beside Play (components/Sides, `stay`) the list stays open after a pick, so you can keep browsing while the rig plays it; on its own it goes back to Play, as it always has. */
-                  loadPreset(n)
-                  if (!stay) onBack?.()
-                }}
-                /* Held, its colour tag — nothing to file one under before a unit has answered (colourPage presetTarget). Or, for an account Add to setlist is open to, the sheet that has both (lib/addToSetlist). */
-                onLongPress={addOpen ? () => hold({ n, words, target }) : target ? () => setPainting(target) : undefined}
-                accessibilityHint={addOpen ? ADD_WORDS.hint : target ? TAG_HOLD.hint : undefined}
-                /* Its colour tag, down the left edge: none for a preset without one.
-                   Every row is the same flat glass at the bar's corner, tagged or not. */
-                bar
-                flat
-                style={tagEdge(tag)}
-              />
-              <Star
-                on={starred}
-                label={`${starred ? 'Unstar' : 'Star'} ${name || `slot ${slotLabel(n, addressing)}`}`}
-                onPress={() => toggleFavourite(device, n)}
-              />
-            </View>
-          )
-        }}
-        ListEmptyComponent={
-          /* Nothing under the update note: there is nothing to wait for (vp4Old). */
-          vp4Old ? null : slots ? (
-            <Note>
-              {knownCount() >= slots || noNames
-                ? 'Nothing matches that.'
-                : 'Nothing matches that among the names known so far. Tap Refresh to get the rest from the computer.'}
-            </Note>
-          ) : (
-            <View style={{ alignItems: 'center', paddingVertical: space.xl }}>
-              <ActivityIndicator color={color.silkDim} />
-            </View>
-          )
-        }
-        /* How a preset gets its colour, at the end of the list where it costs no row its width. */
-        ListFooterComponent={
-          shown.length && (addOpen || presetTarget(shown[0])) ? (
-            <Text style={{ color: color.silkFaint, fontSize: font.small, textAlign: 'center', paddingTop: space.sm }}>
-              {addOpen ? ADD_WORDS.hold : TAG_HOLD.phone}
-            </Text>
-          ) : null
-        }
-      />
+      {wheel ? (
+        /* The wheel (lib/presetWheel), opened on the preset being played: the same rows, taller, and nothing loads until one is tapped. */
+        <PresetWheel
+          listRef={wheelRef}
+          data={shown}
+          row={(n) => rowOf(n, true)}
+          startAt={!hunting && slots && Number.isInteger(preset?.number) ? Math.min(preset.number, slots - 1) : 0}
+          clicks={wheelKept.clicks}
+          onAround={around}
+          empty={emptyRows}
+          footer={lastLine}
+        />
+      ) : (
+        <FlatList
+          ref={list}
+          data={shown}
+          keyExtractor={(n) => String(n)}
+          contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl }}
+          initialNumToRender={20}
+          windowSize={5}
+          onViewableItemsChanged={seen}
+          viewabilityConfig={viewability}
+          /* Fixed rows, so the list can be told to go to one without having drawn
+             the ones before it. See ROW. */
+          getItemLayout={(_, i) => ({ length: STRIDE, offset: STRIDE * i, index: i })}
+          initialScrollIndex={
+            !hunting && slots && Number.isInteger(preset?.number)
+              ? Math.min(preset.number, slots - 1)
+              : undefined
+          }
+          onScrollToIndexFailed={() => {
+            /* Only reachable while the list is still measuring. The centring
+               effect has already run by then; the list simply stays where it is,
+               which is the top — the behaviour this replaced. */
+          }}
+          renderItem={({ item: n }) => rowOf(n)}
+          ListEmptyComponent={emptyRows}
+          ListFooterComponent={lastLine}
+        />
+      )}
 
       {/* The colour sheet every colour is chosen on, here for a preset's tag. */}
       <ColourSheet target={painting} onClose={() => setPainting(null)} />

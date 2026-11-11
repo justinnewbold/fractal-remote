@@ -177,6 +177,8 @@ async function clickOnTheBench(os = 'ios') {
     `,
     'metronome-rules.js': read('mobile/src/lib/metronome-rules.js'),
     'device-word.js': read('mobile/src/lib/device-word.js'),
+    /* Who has set how the device plays sound (the metronome marks it, the preset wheel's click reads it): as it is. */
+    'audioMode.js': read('mobile/src/lib/audioMode.js'),
     'metronome.js': ("import * as __clock from './clock.js'\n" + esm(read('mobile/src/lib/metronome.js')))
       .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
       .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
@@ -3895,7 +3897,8 @@ export function run(test) {
      * `gap`, so the error would compound down the list — fine at the top and
      * useless at the bottom.
      */
-    assert.match(presets, /marginBottom: GAP/, 'the rows are spaced by something the jump cannot account for')
+    /* (`tall` is the preset wheel's row, which the wheel places itself: test/preset-wheel.mjs.) */
+    assert.match(presets, /marginBottom: tall \? 0 : GAP/, 'the rows are spaced by something the jump cannot account for')
     assert.ok(
       !/contentContainerStyle=\{\{[^}]*gap:/.test(presets),
       'the list is spaced with `gap`, which getItemLayout cannot see'
@@ -5402,7 +5405,9 @@ export function run(test) {
     assert.match(src, /const jumps = jumpsFor\(slots\)/, 'the phone’s jumps are not sized to the unit')
     assert.match(src, /\{jumps\.length && !hunting \?/, 'the jumps stay up over search results they cannot jump through')
     /* They scroll, never load: a tap on 300 mid-set must not change the sound. */
-    const jump = src.slice(src.indexOf('const jumpTo = (n) =>'), src.indexOf('return ( <View style={{ flex: 1 }}>'))
+    /* Up to the row, which is drawn after it and is what does load a preset. */
+    const jump = src.slice(src.indexOf('const jumpTo = (n) =>'), src.indexOf('const rowOf = (n, tall = false) =>'))
+    assert.ok(jump.length > 100 && jump.length < 2000, 'the jump is not where this looks for it')
     assert.match(jump, /scrollToIndex/, 'a jump does not move the list')
     assert.ok(!/load|choose|select|setPreset/i.test(jump.replace(/\/\*[\s\S]*?\*\//g, '')), 'a jump loads a preset')
   })

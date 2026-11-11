@@ -6837,6 +6837,10 @@ console.log('\nhold a preset to add it to a setlist, his account only')
 const { run: addToSetlist } = await import('./add-to-setlist.mjs')
 addToSetlist(test)
 
+console.log('\nall presets as a wheel, a choice beside the list, his account only')
+const { run: presetWheel } = await import('./preset-wheel.mjs')
+presetWheel(test)
+
 console.log('\nPlay’s tiles as squares on a big screen, and a phone held upright as it was')
 const { run: squarePlay } = await import('./square-play.mjs')
 squarePlay(test)

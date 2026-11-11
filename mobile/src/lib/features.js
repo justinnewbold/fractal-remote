@@ -178,3 +178,19 @@ export const THREE_SIDES_FOR_EVERYONE = true
  * and every other account's hold is the preset's colour tag, as it was.
  */
 export const ADD_TO_SETLIST_FOR_EVERYONE = true
+
+/**
+ * ALL PRESETS AS A WHEEL (lib/presetWheel; components/PresetWheel,
+ * screens/Presets), a choice in Settings beside the list.
+ *
+ * "Can we do preset scrolling option a as a setting? So we can have both
+ * the original and that one." (Justin, 11 November 2026, of the three
+ * pictures he was shown of "a clicking and a vibration kind of like the old
+ * iPod wheels did".) Built on his account first, as every new thing is: it
+ * has never run on a device, and how the click sounds and how the wheel
+ * feels under a thumb are his to say. Off, the choice is drawn for his
+ * account only, and every other account's All presets is the list it has
+ * always been, whatever the device has kept. It opens to everyone when he
+ * says so, with its What's new line in that pull request.
+ */
+export const PRESET_WHEEL_FOR_EVERYONE = false
