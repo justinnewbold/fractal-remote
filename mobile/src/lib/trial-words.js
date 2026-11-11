@@ -110,8 +110,13 @@ export function trialRefusal(why) {
  * only point at the trial.
  */
 
-/** The demo's top-bar button: this over "Unlock". */
-export const DEMO_TRIAL_PILL = `Try it on your rig free for ${TRIAL_DAYS} days`
+/**
+ * The demo's top-bar button: this over "Unlock". It was "Try it on your rig
+ * free for 7 days", in type too small for a button: "Change the top line to
+ * say '7 Day Free Trial' instead of try on your rig free for seven days.
+ * And make the text slightly bigger." (Justin, 11 November 2026.)
+ */
+export const DEMO_TRIAL_PILL = `${TRIAL_DAYS} Day Free Trial`
 
 /** The one card after a few minutes in the demo, put away with its ×. */
 export const DEMO_TRIAL_NUDGE = `Like it? Plug in your unit and try everything free for ${TRIAL_DAYS} days.`

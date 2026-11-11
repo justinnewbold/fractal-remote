@@ -15795,11 +15795,13 @@ button.unit-card-how-link {
  * THE FREE TRIAL (7 November 2026). Over Unlock in the demo's bar, the
  * trial's words in two short lines at most; on Play, the days left as a
  * chip in amber, tappable to the unlock page, as the phone's TrialLine.
+ * The words are four short ones since 11 November 2026 ("7 Day Free
+ * Trial"), and slightly bigger for it: 0.82em, where the long line was 0.68.
  */
 .topbar-pill-trial {
   display: block;
   max-width: 9.5rem;
-  font-size: 0.68em;
+  font-size: 0.82em;
   line-height: 1.15;
   text-align: center;
   white-space: normal;

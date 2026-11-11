@@ -43,7 +43,7 @@ export default function TopBar({
      costs. Null when there is nothing to sell them. */
   onUnlock = null,
   unlockPrice = null,
-  /* "Try it on your rig free for 7 days", over Unlock, where the free trial is offered; null elsewhere. */
+  /* "7 Day Free Trial", over Unlock, where the free trial is offered; null elsewhere. */
   unlockTrial = null,
   /* In the demo, for somebody who HAS paid: the way back to their own rig. */
   onExitDemo = null,
