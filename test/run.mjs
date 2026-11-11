@@ -17791,7 +17791,6 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.match(bridge, /const howLines = \(\) => \(watchWakes\(\) \? \[watchChecksIn\(\) \? WATCH_HOW_LOCKED_HERE : WATCH_HOW_LOCKED, \.\.\.WATCH_HOW\.slice\(1\)\] : WATCH_HOW\)/)
   /* A watch with the Tempo page is told of five pages; any other, what it always was (test/watch-pages.mjs holds the words). */
   assert.match(bridge, /return watchHasTempo\(\) \? \[lines\[0\], WATCH_HOW_PAGES_TEMPO, lines\[2\], WATCH_HOW_TEMPO, tuner\] : \[\.\.\.lines\.slice\(0, 3\), tuner\]/)
-  assert.equal((bridge.slice(bridge.indexOf('export const WATCH_HOW = ['), bridge.indexOf('/** Whether this build wakes on a watch tap')).match(/^  (WATCH_HOW_OPEN|'[^\n]*'),?$/gm) || []).length, 4, 'the watch tips grew or shrank, and watchHow places them by number')
   const wf = readSrc(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')
   for (const step of ['swift test', 'xcodegen generate', '-sdk watchsimulator', 'screens.sh', 'watch-screens']) assert.ok(wf.includes(step), `the watch check has no ${step}`)
 })

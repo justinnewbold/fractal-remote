@@ -425,10 +425,10 @@ index ca41efac..d61aa1fa 100644
              if index >= 0 && index < scenes.count { next.scene = index }
          case .pedal(let id, let on):
 diff --git a/mobile/targets/watch/Pages.swift b/mobile/targets/watch/Pages.swift
-index e25777c5..24686e44 100644
+index e25777c5..639fbbe1 100644
 --- a/mobile/targets/watch/Pages.swift
 +++ b/mobile/targets/watch/Pages.swift
-@@ -532,17 +532,118 @@ struct PresetsPage: View {
+@@ -532,17 +532,120 @@ struct PresetsPage: View {
      }
  }
  
@@ -463,10 +463,12 @@ index e25777c5..24686e44 100644
 +        let tempo = state.tempo
 +        let canTap = tempo?.tap == true
 +        let why = tempo?.why ?? ""
++        let number = tempoNumber(tempo?.bpm)
++        let spoken: String = number == "—" ? "No tempo yet" : "\(number) beats per minute"
 +        ScrollView {
 +            VStack(spacing: 6) {
 +                HStack(alignment: .firstTextBaseline, spacing: 4) {
-+                    Text(tempoNumber(tempo?.bpm))
++                    Text(number)
 +                        .font(.system(size: 44, weight: .bold, design: .rounded))
 +                        .lineLimit(1)
 +                        .minimumScaleFactor(0.6)
@@ -474,7 +476,7 @@ index e25777c5..24686e44 100644
 +                }
 +                .frame(maxWidth: .infinity, minHeight: 48)
 +                .accessibilityElement(children: .ignore)
-+                .accessibilityLabel(tempoNumber(tempo?.bpm) == "—" ? "No tempo yet" : "\(tempoNumber(tempo?.bpm)) beats per minute")
++                .accessibilityLabel(spoken)
 +                Button {
 +                    tap()
 +                    link.send(.tap)
@@ -548,7 +550,7 @@ index e25777c5..24686e44 100644
  struct TunerPage: View {
      let state: WatchState
      @EnvironmentObject private var link: PhoneLink
-@@ -560,26 +661,38 @@ struct TunerPage: View {
+@@ -560,26 +663,38 @@ struct TunerPage: View {
                  Text(tuner.note.isEmpty ? "Play a string" : "\(tuner.cents > 0 ? "+" : "")\(tuner.cents) cents")
                      .font(.footnote)
                      .foregroundStyle(.secondary)
@@ -595,7 +597,7 @@ index e25777c5..24686e44 100644
          }
      }
  }
-@@ -627,6 +740,13 @@ struct WaitingPage: View {
+@@ -627,6 +742,13 @@ struct WaitingPage: View {
              )
              .font(.footnote)
              .multilineTextAlignment(.center)

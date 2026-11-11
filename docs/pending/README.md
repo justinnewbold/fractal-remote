@@ -257,11 +257,11 @@ byte what it was.
 **What the patch does, on the watch.**
 
 - Draws the pages the phone says are shown, in the order it says, and opens
-  on the first of them. `pages` is the four names in order; `hidden` is the
-  names not to draw. With neither (an older phone, the demo, CI) it is all
-  four in the usual order, Scenes first, as before.
+  on the first of them. `pages` is every page's name in order; `hidden` is
+  the names not to draw. With neither (an older phone, the demo, CI) it is
+  every page in the usual order, Scenes first.
 - A hidden page is not drawn, so it cannot be swiped to. At least one page
-  is always drawn: a list that hides all four hides none (the phone refuses
+  is always drawn: a list that hides every page hides none (the phone refuses
   to hide the last one as well, and its Hide button is switched off).
 - A page hidden while the watch is on it: the watch goes to the first shown
   page. And the tuner's page hidden while the tuner is on turns the tuner
