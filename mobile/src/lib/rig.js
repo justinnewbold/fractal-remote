@@ -3148,19 +3148,29 @@ const sendTempo = tempoSender(
   () => Date.now()
 )
 
+/**
+ * WHERE TAP SENDS NOTHING, AND WHAT PLAY SAYS FOR IT: the sentence, or ''
+ * where Tap is a tap. A unit that has said it has no tempo the app can set;
+ * and a VP4 from the first tap, as the browser: no computer app sets one, so
+ * nothing is sent to find that out.
+ *
+ * tapTempo asks this before it counts a tap, and the Apple Watch's Tempo
+ * page is told the same answer in its picture (lib/watchBridge), so the
+ * wrist never offers a Tap that Play would refuse, and says why in Play's
+ * own words.
+ */
+export const noTapTempo = () => (device.vp4Here?.() || device.refusedAlready('POST', '/tempo') ? noTempo(null) : '')
+
 export async function tapTempo() {
   /* The link down: nothing counted, nothing shown, nothing waiting to go —
      and the read-back of the last burst left to finish. */
   if (refusedNow('tap tempo')) return false
   pressed()
   clearTimeout(reread)
-  /*
-   * A unit that has said it has no tempo the app can set: say so, send
-   * nothing. And a VP4 from the first tap, as the browser: no computer app
-   * sets one, so nothing is sent to find that out.
-   */
-  if (device.vp4Here?.() || device.refusedAlready('POST', '/tempo')) {
-    set(faultFrom({ message: noTempo(null) }))
+  /* Where Tap sends nothing (noTapTempo, above): say so, send nothing. */
+  const no = noTapTempo()
+  if (no) {
+    set(faultFrom({ message: no }))
     return false
   }
   /*

@@ -7,17 +7,18 @@ import { logDebug } from './debugLog'
 import { idOf, sameBlock } from './device'
 import { probeNow, untilConnected } from './link'
 import { shortBlock } from './shortName'
-import { getState, tunerAskWaits, tunerAsksWaiting, writeBypass, writeChannel, writeScene, writeTuner } from './rig'
+import { getState, noTapTempo, tapTempo, tunerAskWaits, tunerAsksWaiting, writeBypass, writeChannel, writeScene, writeTuner } from './rig'
 import { tapDeadline } from './relay-rules'
-import { createWatchSender, watchCommand, watchState } from './watch-link'
-import { metronome } from './metronome'
+import { createWatchSender, watchCommand, watchState, watchTapInTime } from './watch-link'
+import { metronome, setWatchTap, useMetronome } from './metronome'
 import { boostPedals } from './am4-boost'
 import { boostNow, pedalSlug } from './rig'
+import { noteWatchKnows, pagesToSend, tunerStaysToSend, useWatchPages, watchChecksIn, watchHasTempo } from './watchPages'
 
 /*
  * THE APPLE WATCH, FROM THE PHONE'S SIDE.
  *
- * The watch draws what the phone tells it and asks for one of six things —
+ * The watch draws what the phone tells it and asks for one of nine things —
  * see lib/watch-link (shared/watch-link.mjs) for both halves of that. This is
  * the phone keeping its end: a fresh picture whenever the stage screen's
  * changes, and each request carried out with the same calls the stage
@@ -30,6 +31,16 @@ import { boostNow, pedalSlug } from './rig'
  * null and every line below does nothing, so this can ship in an ordinary
  * update ahead of that build.
  */
+
+/*
+ * THE PICTURE FOR THE WATCH THAT IS THERE. What Play gave (`from`), with the
+ * things only a watch that has said it knows them is sent: its pages
+ * (lib/watchPages pagesToSend), its Tempo page's tempo (watchHasTempo) and
+ * the tuner's "stays on when you swipe away" switch (tunerStaysToSend). To
+ * any other watch none of them is in the picture at all, and it is field
+ * for field what it always was.
+ */
+const pictured = (from) => watchState({ ...from, tempo: watchHasTempo() ? from.tempo : null, tunerStays: tunerStaysToSend(), ...pagesToSend() })
 
 let native
 function link() {
@@ -73,6 +84,18 @@ export const WATCH_CLOSE_WINDOW_MS = 20000
  */
 export const WATCH_HOW_OPEN = 'Keep the Play screen open on your iPhone while you use the watch. The watch works through this app, so it stops when the app is closed or the phone locks.'
 export const WATCH_HOW_LOCKED = 'For every tap on the watch to land, keep your iPhone unlocked with this app on the Play screen. With the iPhone locked, the first tap after a long pause may not go through; tap again straight away and it usually does. The live tuner needs the phone open.'
+/*
+ * AND FOR A WATCH THAT CHECKS IN (its hello's `here`, lib/watchPages
+ * watchChecksIn): while the watch app is on the watch's screen it keeps
+ * this app awake on a locked iPhone, so the "long pause" of
+ * WATCH_HOW_LOCKED is now the wrist being down. Said with what it costs
+ * (the iPhone awake, so more of its battery) and no more than happens: the
+ * watch app stops when the wrist goes down, the iPhone sleeps about half a
+ * minute after (FractalWatchModule's 25 seconds), and an app that has been
+ * swiped closed is not on Play for the watch to reach.
+ */
+export const WATCH_HOW_LOCKED_HERE =
+  'For every tap on the watch to land, keep your iPhone unlocked with this app on the Play screen. With the iPhone locked, the watch keeps this app awake while the watch app is on the watch’s screen, which uses more of the iPhone’s battery. Lower your wrist and the iPhone goes back to sleep about half a minute later; the first tap after that may not go through, so tap again straight away. The live tuner needs the phone open. If this app has been swiped closed on the iPhone, open it again: the watch can’t.'
 export const WATCH_HOW = [
   WATCH_HOW_OPEN,
   'Swipe up or down on the watch, or turn the Digital Crown, to move between its four pages: Scenes, Pedals, Presets and Tuner.',
@@ -90,7 +113,23 @@ export function watchWakes() {
 }
 
 /** How the watch is used, in this build's words: the first line depends on wake on tap. */
-export const watchHow = () => (watchWakes() ? [WATCH_HOW_LOCKED, ...WATCH_HOW.slice(1)] : WATCH_HOW)
+const howLines = () => (watchWakes() ? [watchChecksIn() ? WATCH_HOW_LOCKED_HERE : WATCH_HOW_LOCKED, ...WATCH_HOW.slice(1)] : WATCH_HOW)
+
+/*
+ * AND IN THIS WATCH'S: one that has the Tempo page (its hello's `tempo`,
+ * lib/watchPages) has five pages, not the four WATCH_HOW names, and a line
+ * for the new one. A watch from before that build is told what it always
+ * was, since those are the pages it has.
+ */
+export const WATCH_HOW_PAGES_TEMPO = 'Swipe up or down on the watch, or turn the Digital Crown, to move between its pages: Scenes, Pedals, Presets, Tempo and Tuner.'
+export const WATCH_HOW_TEMPO = 'Tempo shows the tempo. Tap its button in time to set a new one.'
+/* And the tuner's line, where its "stays on when you swipe away" switch is on (components/WatchTunerStays, on the same page): WATCH_HOW's says it turns off when its page is left, which that switch undoes. */
+export const WATCH_HOW_TUNER_STAYS = 'The tuner starts only when you tap it. Leaving its page doesn’t stop it, as you chose above: tap Stop tuning.'
+export function watchHow() {
+  const lines = howLines()
+  const tuner = tunerStaysToSend() === true ? WATCH_HOW_TUNER_STAYS : lines[3]
+  return watchHasTempo() ? [lines[0], WATCH_HOW_PAGES_TEMPO, lines[2], WATCH_HOW_TEMPO, tuner] : [...lines.slice(0, 3), tuner]
+}
 
 /** A watch is paired with this phone and has the watch app on it. False on any doubt. */
 export function watchPaired() {
@@ -121,8 +160,14 @@ export function useWatchBridge(picture, step) {
   const awake = picture.awake !== false
   const sender = useRef(null)
   const last = useRef(null)
+  /* What the last picture was made from, so it can be made again the moment the watch says what it knows (the hello, below). */
+  const lastFrom = useRef(null)
   const stepRef = useRef(step)
   stepRef.current = step
+  /* The watch's pages as chosen and whether the watch takes them (lib/watchPages): read here so a change to either draws this again, and the picture below goes out with it. */
+  useWatchPages()
+  /* And the metronome's setting, so the wrist's own switch (a `wrist` request, below) is in the next picture and not the one after something else moves. */
+  useMetronome()
 
   /* One sender and one listener for the life of the screen, and none while
      Play is kept out of sight beside a tool that fills the window (`awake`
@@ -159,10 +204,68 @@ export function useWatchBridge(picture, step) {
        */
       const receivedAt = Number.isFinite(event?.at) ? Math.min(event.at, Date.now()) : Date.now()
       const asleep = AppState.currentState !== 'active'
+      /*
+       * THE CHECK-IN (watch-link THE CHECK-IN): the watch is on screen, and
+       * says so every twenty seconds so the iPhone stays awake while it is
+       * looked at. The holding awake is the native half's, which renews its
+       * 25 seconds on any message; here it is NOTHING: no request to the
+       * unit, no setting, no log line every twenty seconds on a phone that
+       * is awake anyway. One thing only: a phone it found asleep is set to
+       * rejoin its connection, as the hello does, so what the unit does
+       * next can reach the watch.
+       */
+      if (cmd.do === 'here') {
+        if (asleep) {
+          logDebug('watch', 'here', 'the watch is on screen (kept the phone awake)')
+          probeNow()
+        }
+        return
+      }
       logDebug('watch', cmd.do, `${JSON.stringify(cmd)}${asleep ? ' (woke the phone)' : ''}`)
       if (cmd.do === 'hello') {
+        /*
+         * WHAT THE WATCH KNOWS, said in its hello (watch-link WATCH_KNOWS):
+         * kept, and the picture it is about to be sent made again with it,
+         * so a watch that takes its pages from the phone opens on the ones
+         * chosen rather than on the usual four for a quarter of a second. A watch from
+         * before says nothing, the answer is "nothing", and its picture is
+         * the one it always had.
+         */
+        noteWatchKnows(cmd.knows)
+        if (lastFrom.current) last.current = pictured(lastFrom.current)
         sender.current?.flush(last.current)
         if (asleep) probeNow()
+        return
+      }
+      /*
+       * THE TEMPO PAGE'S SWITCH: the metronome's "Tap on the watch", on or
+       * off (lib/metronome setWatchTap). A setting kept on the phone, with
+       * nothing to send to the unit, so it needs no connection and is the
+       * same whether the phone was awake or woken by it.
+       */
+      if (cmd.do === 'wrist') {
+        setWatchTap(cmd.on)
+        return
+      }
+      /*
+       * THE TEMPO PAGE'S TAP: one press of Play's own Tap button, by the
+       * function that button calls (rig.tapTempo), so the same count, the
+       * same range, the same limits and the same refusals. Not through the
+       * woken phone's wait below: A TAP IS A BEAT, and one held until the
+       * connection is back would be counted at the wrong moment. So it is
+       * pressed as it arrives or not at all: a tap the app comes to more
+       * than WATCH_TAP_LATE_MS after the phone heard it is not counted, and
+       * one that finds the link down is refused by tapTempo itself, as
+       * Play's is ("nothing counted, nothing shown"). A phone woken by it
+       * is set to rejoin, so the taps after it have a link to go by.
+       */
+      if (cmd.do === 'tap') {
+        if (!watchTapInTime(receivedAt)) {
+          logDebug('watch', 'tap not counted: it was held too long on its way')
+          return
+        }
+        if (asleep) probeNow()
+        tapTempo()
         return
       }
       const run = () => {
@@ -304,7 +407,10 @@ export function useWatchBridge(picture, step) {
     const pedals = (chain || []).map((b) => ({ id: idOf(b), name: b.name, short: shortBlock(b), on: !b.bypassed, ...blockColor(b.slug), channel: b.channel, channels, word: b.word }))
     /* The metronome's tap, when the watch's switch is on: see lib/metronome. */
     const beat = metronome()
-    const state = watchState({ ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm } })
+        /* And the Tempo page: the tempo Play's Tap button shows, whether that button sends anything here and Play's sentence where it does not (rig.noTapTempo), the wrist's switch, and whether the metronome is running at all. */
+    const tempo = { bpm: getState().bpm, why: noTapTempo(), wrist: beat.watch === true, running: beat.on === true }
+    lastFrom.current = { ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm }, tempo }
+    const state = pictured(lastFrom.current)
     last.current = state
     sender.current.push(state)
   })

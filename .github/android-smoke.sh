@@ -189,19 +189,34 @@ shot() {
 # Android's own "<another app> isn't responding" box can sit over the app on a
 # slow runner (run 42880387749: "Pixel Launcher isn't responding" over the
 # startup card on the tablet, whose OK was then nowhere in the dump). That is
-# the emulator's, not ours: its Wait is pressed and the screen read again. One
-# that names Fractal Remote is left exactly where it is, to be found.
+# the emulator's, not ours. The first time, its Wait is pressed and the screen
+# read again. A launcher that is really stuck brings the box back every few
+# seconds (run 43070072351: six Waits, and Get started was never reached), so
+# from the second time its Close app is pressed instead: Android starts the
+# launcher again behind the app, and the box stays away. One that names
+# Fractal Remote is left exactly where it is, to be found.
+hung=0
 ui() {
   local try at
   for try in 1 2 3 4 5; do
     adb shell rm -f /sdcard/ui.xml > /dev/null 2>&1
     if adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1 && adb pull /sdcard/ui.xml "$out/$1.xml" > /dev/null 2>&1; then
-      if helper has "$out/$1.xml" '(?!Fractal Remote).+ isn.t responding' && at="$(helper find "$out/$1.xml" 'Wait')"; then
-        # shellcheck disable=SC2086
-        adb shell input tap $at
-        echo "Android said another app isn't responding; pressed Wait at $at"
-        sleep 3
-        continue
+      if helper has "$out/$1.xml" '(?!Fractal Remote).+ isn.t responding'; then
+        hung=$((hung + 1))
+        if [ "$hung" -ge 2 ] && at="$(helper find "$out/$1.xml" 'Close app')"; then
+          # shellcheck disable=SC2086
+          adb shell input tap $at
+          echo "Android said another app isn't responding again; pressed Close app at $at"
+          sleep 4
+          continue
+        fi
+        if at="$(helper find "$out/$1.xml" 'Wait')"; then
+          # shellcheck disable=SC2086
+          adb shell input tap $at
+          echo "Android said another app isn't responding; pressed Wait at $at"
+          sleep 3
+          continue
+        fi
       fi
       return 0
     fi

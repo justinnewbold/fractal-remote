@@ -6846,6 +6846,9 @@ webSideways(test)
 console.log('\nthe walkthrough and the Unlock page on a tablet: grown to fill it, and a phone exactly as it was')
 const { run: tabletRoom } = await import('./tablet-room.mjs')
 tabletRoom(test)
+console.log('\nthe Apple Watch’s pages: shown, hidden and ordered on the iPhone, only for a watch that says it can')
+const { run: watchPages } = await import('./watch-pages.mjs')
+watchPages(test)
 console.log('\nConnect your unit: the four ways, Bluetooth first, and the Raspberry Pi’s steps in the app')
 const { run: setupWays } = await import('./setup-ways.mjs')
 setupWays(test)
@@ -17577,7 +17580,7 @@ test('the computer app carries the server that sends an AM4 amp’s boost tap at
 /*
  * THE APPLE WATCH. "Maybe three different screens that you can swipe between
  * … just simple actions from the watch." The phone sends the whole picture;
- * the watch asks for one of six things, and anything else is dropped.
+ * the watch asks for one of nine things, and anything else is dropped.
  *
  * Changed on purpose, 13 October 2026: five things became six, and each pedal
  * carries its channel and what a hold may switch it to. Justin: "Can I add the
@@ -17592,7 +17595,7 @@ test('the computer app carries the server that sends an AM4 amp’s boost tap at
  * it, '' for every other pedal. The fixture got a third pedal, an AM4's amp
  * at Boost off, written again from this input; nothing else in it moved.
  */
-test('the watch is sent the stage as one small picture, and may ask for only six things', async () => {
+test('the watch is sent the stage as one small picture, and may ask for only nine things', async () => {
   const { watchState, watchCommand, sameWatchState, WATCH_PEDALS_MAX } = await import('../shared/watch-link.mjs')
   const fixture = JSON.parse(readSrc(new URL('../mobile/watch-ci/Tests/WatchModelTests/state.json', import.meta.url), 'utf8'))
   const again = watchState({ at: 1759363200000, linked: true, preset: { number: 12, name: 'Crunch Rhythm' }, label: '012', scene: 1,
@@ -17625,7 +17628,7 @@ test('the watch is sent the stage as one small picture, and may ask for only six
   assert.equal(watchState({ tunerOn: true, tuning: { note: 'A', cents: 300 } }).tuner.cents, 50)
   assert.equal(watchState({ pedals: Array.from({ length: 30 }, (_, i) => ({ id: i, name: 'x' })) }).pedals.length, WATCH_PEDALS_MAX)
 
-  /* The six requests, and only the ones the watch could have been shown. */
+  /* The first six requests, and only the ones the watch could have been shown. (The Tempo page's two, tap and wrist, and the check-in, here, are test/watch-pages.mjs's.) */
   const shown = watchState({ sceneCount: 4, pedals: [{ id: 50, name: 'Drive' }] })
   assert.deepEqual(watchCommand({ do: 'scene', index: 3 }, shown), { do: 'scene', index: 3 })
   assert.equal(watchCommand({ do: 'scene', index: 4 }, shown), null)
@@ -17635,7 +17638,7 @@ test('the watch is sent the stage as one small picture, and may ask for only six
   assert.equal(watchCommand({ do: 'preset', step: 5 }, shown), null)
   assert.deepEqual(watchCommand({ do: 'tuner', on: true }, shown), { do: 'tuner', on: true })
   assert.deepEqual(watchCommand({ do: 'hello' }, null), { do: 'hello' })
-  for (const bad of [null, 'scene', { do: 'save' }, { do: 'select', number: 5 }, { do: 'tuner', on: 'yes' }]) assert.equal(watchCommand(bad, shown), null)
+  for (const bad of [null, 'scene', { do: 'save' }, { do: 'select', number: 5 }, { do: 'tuner', on: 'yes' }, { do: 'tap' }, { do: 'wrist', on: true }, { do: 'tempo', bpm: 120 }]) assert.equal(watchCommand(bad, shown), null)
 
   /* A pedal held: only a channel that pedal was offered in the last picture,
      which is none where the Play screen's own hold does nothing. */
@@ -17662,7 +17665,7 @@ test('the watch is sent the stage as one small picture, and may ask for only six
   assert.equal(one({}).word, '', 'a pedal with no word went without the field, for the watch to guess at')
   assert.ok(one({ word: 'x'.repeat(40) }).word.length <= 12, 'a word too long for a tile was sent whole')
 
-  /* The watch's own words for them are these same six. */
+  /* The watch's own words for those six are the same. */
   for (const [msg] of [[{ do: 'hello' }], [{ do: 'scene', index: 2 }], [{ do: 'pedal', id: 50, on: false }], [{ do: 'channel', id: 50, channel: 'B' }], [{ do: 'preset', step: -1 }], [{ do: 'tuner', on: true }]]) {
     assert.ok(swift.includes(`"do":"${msg.do}"`), `the watch cannot ask for ${msg.do}`)
   }
@@ -17741,7 +17744,8 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.match(bridge, /untilConnected\(Math\.max\(0, deadline - Date\.now\(\)\)\)/, 'a woken watch tap waits the old eight seconds and lands late')
   /* The tuner mutes the unit: the watch never turns it on by being swiped to. */
   const pages = readSrc(new URL('../mobile/targets/watch/Pages.swift', import.meta.url), 'utf8')
-  assert.match(pages, /\.onDisappear \{\s*if state\.tuner\.on \{ link\.send\(\.tuner\(on: false\)\) \}/)
+  /* (The second form is the watch's from the build that lets the iPhone say the tuner stays on: docs/pending/watch-page-order.patch, test/watch-pages.mjs.) */
+  assert.match(pages, /\.onDisappear \{\s*if (state\.tuner\.on|watchTunerStopsOnLeaving\(tunerOn: state\.tuner\.on, stays: state\.tunerStays\)) \{ link\.send\(\.tuner\(on: false\)\) \}/)
   assert.ok(!/onAppear[^}]*tuner\(on: true\)/.test(pages), 'the tuner turns on by being swiped to')
   /* The hold is the phone's hold, and only the watch says so: the phone's tips
      reach every phone by an update, a watch from before this build cannot do it. */
@@ -17784,7 +17788,9 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.match(coach, /const WATCH_TIP_KEY = 'fractal\.coach\.watch\.v2'/, 'the watch tip’s words were reversed and its once-shown key was not moved, so nobody who read “lock it and put it away” sees the new words on Play')
   assert.ok(!/this (phone|iPhone)/i.test(lockedTip), 'the watch tip says “this phone”')
   assert.match(bridge, /if \(!up \|\| Date\.now\(\) >= deadline\) \{ logDebug\('watch', `\$\{cmd\.do\} not sent: the phone could not reach the rig in time after waking`\) return undefined \}/, 'a woken tap is no longer dropped at its deadline: the watch tip says it may be, and could say more')
-  assert.match(bridge, /export const watchHow = \(\) => \(watchWakes\(\) \? \[WATCH_HOW_LOCKED, \.\.\.WATCH_HOW\.slice\(1\)\] : WATCH_HOW\)/)
+  assert.match(bridge, /const howLines = \(\) => \(watchWakes\(\) \? \[watchChecksIn\(\) \? WATCH_HOW_LOCKED_HERE : WATCH_HOW_LOCKED, \.\.\.WATCH_HOW\.slice\(1\)\] : WATCH_HOW\)/)
+  /* A watch with the Tempo page is told of five pages; any other, what it always was (test/watch-pages.mjs holds the words). */
+  assert.match(bridge, /return watchHasTempo\(\) \? \[lines\[0\], WATCH_HOW_PAGES_TEMPO, lines\[2\], WATCH_HOW_TEMPO, tuner\] : \[\.\.\.lines\.slice\(0, 3\), tuner\]/)
   const wf = readSrc(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')
   for (const step of ['swift test', 'xcodegen generate', '-sdk watchsimulator', 'screens.sh', 'watch-screens']) assert.ok(wf.includes(step), `the watch check has no ${step}`)
 })

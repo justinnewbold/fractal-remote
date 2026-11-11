@@ -2,13 +2,13 @@
  * WHAT THE PHONE TELLS THE WATCH, AND WHAT THE WATCH MAY ASK.
  *
  * "Maybe three different screens that you can swipe between … nothing else,
- * just simple actions from the watch." The watch has four pages — the tuner,
- * the scenes, the pedals and the presets — and it does not talk to the
+ * just simple actions from the watch." The watch has five pages — the scenes,
+ * the pedals, the presets, the tempo and the tuner — and it does not talk to the
  * computer itself: Apple keeps a watch app off the kind of connection the
  * relay is, so every tap goes watch → phone → computer → unit, over Apple's
  * own watch-to-phone link (WatchConnectivity). The phone is the only thing
  * that knows the rig; the watch draws what it is told and asks for one of
- * six things.
+ * nine things.
  *
  * This file is both halves of that conversation, in words the watch's Swift
  * can read without knowing anything about the app: `watchState` is what the
@@ -38,6 +38,285 @@ export const WATCH_IN_TUNE_CENTS = 3
 
 /** The most channels a pedal offers on the watch: A to D, as on every unit today. */
 export const WATCH_CHANNELS_MAX = 4
+
+/*
+ * THE WATCH'S PAGES: WHICH ARE SHOWN, AND IN WHAT ORDER, CHOSEN ON THE
+ * IPHONE. Justin, 11 November 2026: "On the watch, can we add a way for a
+ * user to select which order their pages show up in on the Watch app?" And,
+ * asked whether a page could be hidden as well: "Yes, add hiding pages."
+ *
+ * The watch had four pages, and it drew them all in one order, opening on
+ * the first. Now the iPhone keeps an order and which pages are hidden
+ * (Settings → Apple Watch → Watch pages) and sends both in the picture:
+ * `pages`, every page's name in the order chosen, and `hidden`, the names of
+ * those not to draw. The watch draws the ones shown in that
+ * order and opens on the first of them.
+ *
+ * ONLY TO A WATCH THAT HAS SAID IT DOES THIS. Watch code reaches a wrist
+ * inside an iPhone build and nowhere else, so for as long as a watch runs
+ * the copy from before that build it draws its four in the usual order
+ * whatever it is sent. A setting that does nothing is worse than none: so
+ * the watch says what it knows in its hello (`knows`, WATCH_KNOWS), the
+ * phone keeps the last answer, and the Settings rows and both fields wait
+ * for it. A hello with no `knows` is a watch from before, and takes the
+ * answer back.
+ *
+ * ONE RULE FOR EACH LIST, here and, word for word, on the watch
+ * (Model.swift), held to the same answers by one fixture both read:
+ *
+ *   the order   (watchPageOrder) the names it knows, each once, in the
+ *               order given; then whatever is missing, in the usual order.
+ *               Always every page.
+ *   hidden      (watchPagesHidden) the names it knows, each once. Naming
+ *               every page is naming none: A WATCH ALWAYS HAS A PAGE. So is
+ *               no list, an empty one, or one of names nobody knows.
+ *   shown       (watchPagesShown) the order with the hidden ones left out:
+ *               never empty, and what the watch draws.
+ *
+ * So a name misspelt, one twice or none at all is still every page, and
+ * nothing a phone or a watch ever keeps can leave a watch with no page to
+ * open on.
+ *
+ * AND THE LIST GROWS BY THE SAME RULE. Tempo is the fifth page ("OK, well
+ * let's add that as well then", the same day), fourth in the usual order,
+ * with the tuner still last. An order kept from before it existed names
+ * four pages, so Tempo is "whatever is missing": it comes in after the ones
+ * that were chosen, shown. Nobody's kept order is thrown away for a new
+ * page, and a new page is never hidden by an old list.
+ */
+
+/** The watch's pages in the usual order: what it draws with none said, and what CI's `-page N` counts by. */
+export const WATCH_PAGES = ['scenes', 'pedals', 'presets', 'tempo', 'tuner']
+
+/** Each page's name as the watch and the iPhone's Settings say it. */
+export const WATCH_PAGE_NAMES = { scenes: 'Scenes', pedals: 'Pedals', presets: 'Presets', tempo: 'Tempo', tuner: 'Tuner' }
+
+/**
+ * What a watch may say it knows in its hello.
+ *   `pages`  it draws the pages the picture says are shown, in the order
+ *            the picture says.
+ *   `tempo`  it has the Tempo page: it reads the picture's `tempo` and may
+ *            ask for a tap and for the wrist's metronome switch (below).
+ *   `stay`   it reads the picture's `tunerStays`, and with it true does
+ *            not turn the tuner off when its page is left (THE TUNER, AND
+ *            LEAVING ITS PAGE, below).
+ *   `here`   it checks in while it is on screen (THE CHECK-IN, below), so
+ *            the iPhone is held awake for as long as the watch is looked at.
+ * One build of the watch brought all four, so a watch that says one says
+ * them all.
+ */
+export const WATCH_KNOWS = ['pages', 'tempo', 'stay', 'here']
+
+/*
+ * THE CHECK-IN. A request from the watch wakes the iPhone app with the phone
+ * locked, and the phone holds itself awake for 25 seconds after it
+ * (FractalWatchModule WAKE_SECONDS) and then sleeps. From then on the
+ * watch's picture goes stale (a scene changed by a footswitch, the tuner's
+ * reading) until the next tap. Justin, 11 November 2026, of keeping the
+ * phone awake while the watch is in use: "Yes, add that to the build."
+ *
+ * So while the watch app is ON ITS SCREEN with its pages up, it says
+ * { do: 'here' } whenever WATCH_HERE_MS has gone by since it last sent the
+ * phone anything. That is all it is: it REACHES THE UNIT AS NOTHING, EVER.
+ * The phone's native half renews its 25 seconds on any message from the
+ * watch, as it does for a tap, so the iPhone stays awake only while the
+ * watch's screen is on and sleeps 25 seconds after the last one.
+ *
+ * It stops the moment the watch app leaves the screen (the wrist down), on
+ * the waiting page, and in the demo. No new background mode on the iPhone,
+ * no silent audio, and no workout or extended session on the watch: only
+ * the wake a message already gives, renewed.
+ *
+ * WHEN ONE IS DUE is one rule (watchHereDue), here and word for word on the
+ * watch (Model.swift), with the clock handed in, and held to the same
+ * answers by the fixture. The watch asks it every WATCH_HERE_TICK_MS, so a
+ * check-in goes at most that long after it is due, and the two together
+ * must stay well inside the phone's 25 seconds (a test holds them to it).
+ */
+
+/** How long after the watch last sent the phone anything a check-in is due. */
+export const WATCH_HERE_MS = 20000
+/** How often the watch asks whether one is due. */
+export const WATCH_HERE_TICK_MS = 2000
+
+/**
+ * Whether a check-in is due at `now`: the watch app on its screen, its
+ * pages up (not the waiting page), not the demo, and WATCH_HERE_MS or more
+ * since anything was last sent (or nothing sent yet). Times in milliseconds.
+ */
+export const watchHereDue = ({ onScreen = false, pages = false, demo = false, lastSent = null, now = 0 } = {}) =>
+  onScreen === true && pages === true && demo !== true && (lastSent === null || !Number.isFinite(lastSent) || now - lastSent >= WATCH_HERE_MS)
+
+/*
+ * THE TUNER, AND LEAVING ITS PAGE. Leaving the watch's tuner page turns the
+ * tuner off: a unit set to mute while it tunes must not be left muted
+ * because a page was swiped away. Justin, 11 November 2026: "Can we make a
+ * setting in the Watch app settings, where a user can decide whether or not
+ * the tuner stays on when they exit or was it turned off some people wanna
+ * play while their tuner stays up on their screen ... Could we make out a
+ * setting? That they turn on and off?"
+ *
+ * So the iPhone keeps one switch (Settings → Apple Watch, under the pages),
+ * OFF unless it is turned on, and says it in the picture as `tunerStays`,
+ * only to a watch that has said it knows `stay`. Absent is off, which is
+ * every watch and every phone before this. Two rules, here and word for
+ * word on the watch (Model.swift), held to the same answers by the fixture:
+ *
+ *   leaving  (watchTunerStopsOnLeaving) leaving the tuner's page turns the
+ *            tuner off, unless the picture says it stays.
+ *   hiding   (watchTunerStopsOnHiding) the tuner's page hidden in the list
+ *            while the tuner is on turns it off WHATEVER THE SWITCH SAYS:
+ *            there would be no page left on the watch to stop it from.
+ *
+ * With the switch on the tuner is stopped by Stop tuning on the watch, from
+ * the iPhone or at the unit; the watch does nothing else to it.
+ */
+
+/** Whether leaving the tuner's page turns the tuner off: it does while the tuner is on, unless the iPhone has said it stays. */
+export const watchTunerStopsOnLeaving = (tunerOn, stays) => tunerOn === true && stays !== true
+
+/** Whether a change in the pages shown turns the tuner off: its page was shown and is not now, with the tuner on. Whatever the switch says. */
+export const watchTunerStopsOnHiding = (was, now, tunerOn) =>
+  tunerOn === true && Array.isArray(was) && was.includes('tuner') && Array.isArray(now) && !now.includes('tuner')
+
+/*
+ * THE TEMPO PAGE. The tempo as a big number, one Tap button, and the switch
+ * for the metronome's tap on the wrist. The phone says all of it in the
+ * picture's `tempo` (only to a watch that has said it knows `tempo`), and the
+ * watch never guesses:
+ *
+ *   bpm      the unit's tempo as Play's Tap button shows it, or null where
+ *            none is known (the watch draws a dash, and Tap still taps).
+ *   tap      whether Play's own Tap sends anything for this unit on this
+ *            connection. False on a VP4, and on a unit that has already
+ *            said the app cannot set its tempo (lib/rig noTapTempo, the very
+ *            test Play's Tap makes before it counts a tap).
+ *   why      where it does not, the sentence Play says for it, word for
+ *            word; '' otherwise.
+ *   wrist    the metronome's own "Tap on the watch" switch (shared/
+ *            metronome.mjs, the setting's `watch`).
+ *   running  whether the metronome is on at all: the wrist taps only while
+ *            it is, so a watch with its switch on and nothing tapping can
+ *            say why.
+ *
+ * AND TWO REQUESTS, each refused unless the last picture carried `tempo`:
+ *
+ *   { do: 'tap' }        one tap of Play's Tap button, and nothing else:
+ *                        the phone calls the function that button calls.
+ *                        Refused where the picture said `tap` is false.
+ *   { do: 'wrist', on }  the metronome's "Tap on the watch" switch, on or
+ *                        off: that one setting, never the metronome itself
+ *                        and never the unit's click.
+ *
+ * A TAP IS A BEAT, AND A LATE BEAT IS A WRONG ONE. The phone counts a tap
+ * when it hears it, so one that was held on the way is dropped rather than
+ * counted late: one older than WATCH_TAP_LATE_MS when the app comes to it
+ * is not counted, and one that finds the link to the unit down is refused
+ * as Play's own is, never kept for when it is back. The watch, for its
+ * part, never sends a tap a second time.
+ */
+
+/** A tap this old when the phone comes to it is not counted: it was held somewhere, and its beat has gone. */
+export const WATCH_TAP_LATE_MS = 400
+
+/** The longest sentence the watch is sent for why Tap is not offered. */
+const WATCH_WHY_MAX = 160
+
+function tempoForWatch(t) {
+  const bpm = Number(t?.bpm)
+  const why = typeof t?.why === 'string' ? t.why.slice(0, WATCH_WHY_MAX) : ''
+  return {
+    bpm: t?.bpm !== null && t?.bpm !== undefined && Number.isFinite(bpm) && bpm > 0 ? Math.round(bpm * 10) / 10 : null,
+    tap: !why,
+    why,
+    wrist: t?.wrist === true,
+    running: t?.running === true
+  }
+}
+
+/** Whether a tap heard at `heardAt` is still worth counting at `now`. */
+export const watchTapInTime = (heardAt, now = Date.now()) => Number.isFinite(heardAt) && now - heardAt <= WATCH_TAP_LATE_MS
+
+/**
+ * A full order of the four pages out of anything: the names known, each
+ * once, in the order given, then the rest in the usual order.
+ */
+export function watchPageOrder(list) {
+  const out = []
+  for (const name of Array.isArray(list) ? list : []) {
+    if (typeof name === 'string' && WATCH_PAGES.includes(name) && !out.includes(name)) out.push(name)
+  }
+  for (const name of WATCH_PAGES) if (!out.includes(name)) out.push(name)
+  return out
+}
+
+/**
+ * The hidden pages out of anything: the names known, each once, told in the
+ * usual order (so the same pages hidden are the same list, whatever order
+ * they were hidden in). All four is none: a watch always has a page.
+ */
+export function watchPagesHidden(list) {
+  const said = Array.isArray(list) ? list : []
+  const out = WATCH_PAGES.filter((name) => said.includes(name))
+  return out.length < WATCH_PAGES.length ? out : []
+}
+
+/** What the watch draws: the order with the hidden pages left out. Never empty; the first is the page it opens on. */
+export function watchPagesShown(order, hidden) {
+  const off = watchPagesHidden(hidden)
+  return watchPageOrder(order).filter((name) => !off.includes(name))
+}
+
+/**
+ * The two lists as the iPhone keeps and draws them: `order` is the shown
+ * pages in their order and then the hidden ones, so the list in Settings
+ * reads top to bottom as the watch does, with what is hidden at its foot.
+ */
+export function watchPagesKept(order, hidden) {
+  const off = watchPagesHidden(hidden)
+  const all = watchPageOrder(order)
+  return { order: [...all.filter((name) => !off.includes(name)), ...all.filter((name) => off.includes(name))], hidden: off }
+}
+
+/** Whether it is the usual order with nothing hidden, once repaired. */
+export const watchPagesUsual = (order, hidden) => watchPageOrder(order).join() === WATCH_PAGES.join() && watchPagesHidden(hidden).length === 0
+
+/**
+ * One shown page moved a place up (-1) or down (+1) among the shown ones;
+ * the same lists back where it cannot move (the first up, the last down, a
+ * hidden page, a name not known).
+ */
+export function watchPageMoved(order, hidden, name, by) {
+  const kept = watchPagesKept(order, hidden)
+  const shown = kept.order.length - kept.hidden.length
+  const at = kept.order.indexOf(name)
+  const to = at + (by < 0 ? -1 : 1)
+  if (!by || at < 0 || at >= shown || to < 0 || to >= shown) return kept
+  kept.order[at] = kept.order[to]
+  kept.order[to] = name
+  return kept
+}
+
+/**
+ * One page hidden (`hide` true) or shown again. The last shown page cannot
+ * be hidden: the same lists back. A page shown again comes back as the last
+ * of the shown ones, where the list in Settings puts it.
+ */
+export function watchPageHid(order, hidden, name, hide) {
+  const kept = watchPagesKept(order, hidden)
+  if (!WATCH_PAGES.includes(name) || kept.hidden.includes(name) === !!hide) return kept
+  const shown = kept.order.filter((p) => !kept.hidden.includes(p))
+  if (hide && shown.length <= 1) return kept
+  const off = hide ? [...kept.hidden, name] : kept.hidden.filter((p) => p !== name)
+  const rest = kept.order.filter((p) => p !== name)
+  const firstHidden = rest.findIndex((p) => kept.hidden.includes(p))
+  /* Hidden: to the foot of the list. Shown: after the last shown page, before what is still hidden. */
+  const next = hide || firstHidden < 0 ? [...rest, name] : [...rest.slice(0, firstHidden), name, ...rest.slice(firstHidden)]
+  return watchPagesKept(next, off)
+}
+
+/** What a hello's `knows` comes to: the things this phone knows of, and nothing else; [] for a watch that says none. */
+export const watchKnows = (list) => (Array.isArray(list) ? WATCH_KNOWS.filter((k) => list.includes(k)) : [])
 
 const int = (n) => Number.isInteger(n)
 const text = (s, max = 40) => (typeof s === 'string' ? s.slice(0, max) : '')
@@ -79,6 +358,13 @@ export function watchState({
   canPrevious = false,
   canNext = false,
   metronome = null,
+  /* The order of the watch's pages and which are hidden, for a watch that has said it does this; no order (null) for any other, and then neither field is sent at all. */
+  pages = null,
+  hidden = null,
+  /* The Tempo page's picture, for a watch that has said it has one; none (null) for any other, and then the field is not sent at all. */
+  tempo = null,
+  /* Whether the watch leaves the tuner on when its page is left, for a watch that has said it knows how; none (null) for any other, and then the field is not sent at all. */
+  tunerStays = null,
   at = Date.now()
 } = {}) {
   const count = int(sceneCount) && sceneCount > 0 ? Math.min(sceneCount, 8) : 0
@@ -131,7 +417,21 @@ export function watchState({
       inTune: !!note && Math.abs(cents) <= WATCH_IN_TUNE_CENTS
     },
     /* Tap on every beat, at this tempo — or not. See shared/metronome.mjs. */
-    metronome: metronomeForWatch(metronome)
+    metronome: metronomeForWatch(metronome),
+    /* The Tempo page (tempoForWatch, above), only where the caller gives
+       one, which is only to a watch that has said it has that page. */
+    ...(tempo === null || tempo === undefined ? null : { tempo: tempoForWatch(tempo) }),
+    /* The iPhone's "stays on when you swipe away" switch (THE TUNER, AND
+       LEAVING ITS PAGE), true only when it is on; sent only where the
+       caller says, which is only to a watch that knows what to do with it. */
+    ...(tunerStays === null || tunerStays === undefined ? null : { tunerStays: tunerStays === true }),
+    /* The pages in the order chosen on the iPhone, always every one
+       (watchPageOrder), and those of them not to draw, never every one
+       (watchPagesHidden). Sent only where the caller says an order, which
+       is only to a watch that has said it does this: to any other the
+       picture is exactly what it was, field for field, and the version
+       stays 1, because nothing a watch already reads changed meaning. */
+    ...(pages === null || pages === undefined ? null : { pages: watchPageOrder(pages), hidden: watchPagesHidden(hidden) })
   }
 }
 
@@ -143,7 +443,7 @@ function metronomeForWatch(m) {
 }
 
 /**
- * A message from the watch, as one of the six things it may ask, or null.
+ * A message from the watch, as one of the nine things it may ask, or null.
  *
  *   { do: 'scene', index }      — switch to that scene (0-based)
  *   { do: 'pedal', id, on }     — that block on or off
@@ -151,6 +451,12 @@ function metronomeForWatch(m) {
  *   { do: 'preset', step }      — Previous (-1) or Next (+1), as the stage screen steps
  *   { do: 'tuner', on }         — the tuner page opened or closed
  *   { do: 'hello' }             — the watch app opened: send the picture now
+ *                                 (with `knows`, from a watch that says what it
+ *                                 knows: see WATCH_KNOWS)
+ *   { do: 'tap' }               — one tap of Play's Tap button (THE TEMPO PAGE)
+ *   { do: 'wrist', on }         — the metronome's tap on the wrist, on or off
+ *   { do: 'here' }              — the watch is on screen: nothing to do but
+ *                                 stay awake (THE CHECK-IN)
  *
  * `state` is the last picture sent, so a scene or a pedal the watch could not
  * have been shown is refused rather than sent to the unit — and so is a
@@ -160,8 +466,12 @@ function metronomeForWatch(m) {
 export function watchCommand(msg, state) {
   if (!msg || typeof msg !== 'object') return null
   switch (msg.do) {
+    /* The check-in: one word, with nothing in it to carry and nothing to check it against. */
+    case 'here':
+      return { do: 'here' }
     case 'hello':
-      return { do: 'hello' }
+      /* A watch from before `knows` says none, and its hello is the one word it always was. */
+      return Array.isArray(msg.knows) ? { do: 'hello', knows: watchKnows(msg.knows) } : { do: 'hello' }
     case 'scene': {
       const count = Array.isArray(state?.scenes) ? state.scenes.length : 0
       return int(msg.index) && msg.index >= 0 && msg.index < count ? { do: 'scene', index: msg.index } : null
@@ -181,6 +491,11 @@ export function watchCommand(msg, state) {
       return msg.step === 1 || msg.step === -1 ? { do: 'preset', step: msg.step } : null
     case 'tuner':
       return typeof msg.on === 'boolean' ? { do: 'tuner', on: msg.on } : null
+    /* The Tempo page's two (THE TEMPO PAGE, above): only from a watch the last picture gave that page to, and a tap only where it offered one. */
+    case 'tap':
+      return state?.tempo?.tap === true ? { do: 'tap' } : null
+    case 'wrist':
+      return state?.tempo && typeof state.tempo === 'object' && typeof msg.on === 'boolean' ? { do: 'wrist', on: msg.on } : null
     default:
       return null
   }
