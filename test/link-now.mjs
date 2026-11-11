@@ -1039,7 +1039,9 @@ async function watchOnABench() {
     'react-native.mjs': "import { bench } from './bench.mjs'\nexport const AppState = { currentState: 'active' }\nbench.AppState = AppState\n",
     'expo.mjs': "import { bench } from './bench.mjs'\nexport const requireOptionalNativeModule = () => ({ addListener: (name, fn) => { if (name === 'onCommand') bench.listener = fn; return { remove() {} } }, sendState() {} })\n",
     /* sameBlock and writeChannel are docs/pending/watch-channels.patch's, so this bench still runs once it is applied. */
-    'stub.mjs': stub(['blockColor = () => ({})', 'idOf = (b) => b?.id', 'sameBlock = () => false', 'shortBlock = () => ""', 'metronome = () => ({ on: false })', 'boostPedals = (chain) => chain || []']),
+    'stub.mjs': stub(['blockColor = () => ({})', 'idOf = (b) => b?.id', 'sameBlock = () => false', 'shortBlock = () => ""', 'metronome = () => ({ on: false })', 'boostPedals = (chain) => chain || []',
+      /* lib/watchPages, for a watch that has not said it takes its pages from the phone: nothing kept, nothing sent. */
+      'noteWatchKnows = () => {}', 'pagesToSend = () => null', 'useWatchPages = () => ({ order: [], hidden: [], can: false })']),
     'debugLog.mjs': "import { bench } from './bench.mjs'\nexport const logDebug = (...a) => { bench.log.push(a.join(' ')) }\n",
     /* untilConnected as link.js's: true at once while the link is up, else when it comes back, or false once `ms` (8 s if not said) is up. */
     'link.mjs': "import * as clock from './clock.mjs'\nimport { bench } from './bench.mjs'\nexport const probeNow = () => { bench.probes++ }\nexport const untilConnected = (ms = 8000) => (bench.gate ? Promise.race([bench.gate.promise, new Promise((r) => clock.setTimeout(() => r(false), ms))]) : Promise.resolve(true))\n",
@@ -1091,7 +1093,8 @@ async function watchOnABench() {
     ["from './relay-rules'", "from './relay-rules.mjs'"],
     ["from './watch-link'", "from './watch-link.mjs'"],
     ["from './metronome'", "from './stub.mjs'"],
-    ["from './am4-boost'", "from './stub.mjs'"]
+    ["from './am4-boost'", "from './stub.mjs'"],
+    ["from './watchPages'", "from './stub.mjs'"]
   ]) {
     assert.ok(src.includes(from), `lib/watchBridge no longer imports ${from}: the bench needs telling`)
     src = src.replace(from, to)

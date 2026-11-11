@@ -72,6 +72,7 @@ import { useSiriLinksOpen } from '../lib/siri'
 import { siriRow } from '../lib/siri-help'
 import { siriPresent } from '../lib/siriPipe'
 import SiriHelp from '../components/SiriHelp'
+import WatchPageOrder from '../components/WatchPageOrder'
 import { APPLE_SCREEN_OPENS, bluetoothSupported, lookForAdapterAgain, opensApplesScreen, useBluetoothAdmin, useBluetoothAllowed, useBluetoothOn, useCableNow, useMidiJacks } from '../lib/bluetooth'
 import { CABLE_LOOK_AGAIN, CABLE_NO_SIGNAL, CABLE_PAGE_SUB, CABLE_ROW_ON, cableChain, cableComputerNote, cableRowWord } from '../lib/cableWords'
 import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH } from '../lib/bluetooth-gear'
@@ -1997,6 +1998,14 @@ export default function Settings({
                 ? 'Fractal Remote is on your Apple Watch.'
                 : 'No Apple Watch with Fractal Remote on it is paired with this iPhone yet.'}
             </Note>
+
+            {/* The watch's pages, which are shown and in what order: "can we
+                add a way for a user to select which order their pages show up
+                in on the Watch app?" and "Yes, add hiding pages." (11 November
+                2026). Draws nothing until the watch has said it takes its
+                pages from the phone, which only a watch from the build that
+                carries it does (components/WatchPageOrder). */}
+            <WatchPageOrder />
 
             <Section>What it does</Section>
             <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 24 }}>

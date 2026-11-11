@@ -21,9 +21,11 @@ those must still pass the other.
 | Patch | What it does | Moves |
 |---|---|---|
 | `phone-turns.patch` | Lets a phone be turned on its side: on Play, on what opens beside Play and in Stage view, for an account the sideways layout is open to (his, until `PHONE_SIDEWAYS_FOR_EVERYONE`). Every other page, every other account and every tablet are as they were. Adds expo-screen-orientation. | **android and ios** (the watch line does not move) |
+| `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, and says in its hello that it can. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
 
-One patch is waiting, phone-turns (10 November 2026); its section is next.
-Before it, android-usb-midi was applied on 4 November 2026 in the
+Two patches are waiting: phone-turns (10 November 2026), whose section is
+next, and watch-page-order (11 November 2026), whose section follows it.
+Before them, android-usb-midi was applied on 4 November 2026 in the
 build pull request for the Android build 1.89.36 (an Android build on its
 own, Justin's "You are good to do the android build on expo go as soon as
 it's ready", since it moves the android line alone), and its file deleted
@@ -221,6 +223,130 @@ No store-version key: the code that turns a phone exists only in the new
 build, and a copy built before it has no package to ask (lib/turnScreen
 finds none and says so once in the log), so no update can turn an older
 copy.
+
+**watch-page-order.patch, and why it waits.** Justin, 11 November 2026: "On
+the watch, can we add a way for a user to select which order their pages
+show up in on the Watch app?" And, asked whether a page could be hidden as
+well: "Yes, add hiding pages." The watch app is Swift built into the iPhone
+app, so it reaches a wrist only with the next iPhone build; it rides the
+next build pair and costs nothing of its own. It moves the watch line of
+`npm run fingerprint` and neither phone's, and the watch's line is not what
+updates are matched on, so on its own it would strand nobody; it waits here
+all the same, because main is what the next build is made from and a watch
+app nobody has should not be in it by accident.
+
+**It is in two halves, and the phone's is already merged.** The phone's
+half is ordinary JavaScript and went to main with this file: the rules
+(shared/watch-link.mjs `watchPageOrder`, `watchPagesHidden`,
+`watchPagesShown`), the pages as chosen kept on the iPhone
+(mobile/src/lib/watchPages.js), the rows on Settings → Apple Watch
+(mobile/src/components/WatchPageOrder.js) and two optional fields in the
+picture the phone sends, `pages` and `hidden`. All of it is INERT until a
+watch says it can do this: a watch from before this patch draws all four
+pages in the usual order whatever it is sent, and a setting that does
+nothing is worse than none. So the watch says what it knows in its hello
+(`"knows":["pages"]`, new in this patch; a hello from an older watch has no
+`knows`), the phone keeps the last answer on the device, and until it has
+heard `pages` it draws no rows in Settings and sends neither field. For
+every watch out today the phone's picture is byte for byte what it was.
+
+**What the patch does, on the watch.**
+
+- Draws the pages the phone says are shown, in the order it says, and opens
+  on the first of them. `pages` is the four names in order; `hidden` is the
+  names not to draw. With neither (an older phone, the demo, CI) it is all
+  four in the usual order, Scenes first, as before.
+- A hidden page is not drawn, so it cannot be swiped to. At least one page
+  is always drawn: a list that hides all four hides none (the phone refuses
+  to hide the last one as well, and its Hide button is switched off).
+- A page hidden while the watch is on it: the watch goes to the first shown
+  page. If that page was the tuner's and the tuner was on, the tuner is
+  turned off, as leaving the tuner's page always has (TunerPage's own
+  `onDisappear` is unchanged, and the root view sends the same request, so
+  the phone may get "tuner off" twice; the second finds it off and does
+  nothing). A tuner that is on while the watch is on some other page was
+  not turned on from the watch and is left alone.
+- The tuner still does nothing until tapped, wherever its page sits.
+- A new order sent while the app is open never moves the page under the
+  thumb: the watch stays on the page it was swiped to for as long as that
+  page is shown.
+- CI's `-page N` still opens the same page: N counts along the USUAL order
+  (Scenes 0, Pedals 1, Presets 2, Tuner 3), by name, whatever order is
+  chosen. mobile/watch-ci/screens.sh is unchanged, and so are its pictures.
+- The rules for a list that is not quite right (a name the watch does not
+  know, one twice, a short list, none) are the phone's word for word, and
+  both are held to one fixture, mobile/watch-ci/Tests/WatchModelTests/
+  pages.json, which the patch adds: test/watch-pages.mjs writes it from the
+  phone's rules (`pagesFixture`; the command is in its comment) and the
+  watch's Swift tests read it. While the patch waits, that test checks the
+  copy inside the patch is still what the rules give; change a rule and it
+  says to make the patch again:
+
+      git apply docs/pending/watch-page-order.patch
+      node -e "import('./test/watch-pages.mjs').then(async (m) => console.log(JSON.stringify(await m.pagesFixture(), null, 2)))" > mobile/watch-ci/Tests/WatchModelTests/pages.json
+      git add -N mobile/watch-ci/Tests/WatchModelTests/pages.json
+      git diff -- mobile/targets/watch mobile/watch-ci > docs/pending/watch-page-order.patch
+      git reset -q mobile/watch-ci/Tests/WatchModelTests/pages.json
+      git checkout -- mobile/targets/watch mobile/watch-ci
+      rm mobile/watch-ci/Tests/WatchModelTests/pages.json
+
+**It has not been compiled.** Nothing on a Linux box compiles Swift, and
+watch.yml runs on the tree, which does not have the patch (it does run on
+the pull request that brought this file, because that changes
+shared/watch-link.mjs, and all it proves there is that the watch as it is
+still reads the phone's picture). The free check is watch.yml started by
+hand on a branch that carries this file, with **Apply the watch patches
+waiting in docs/pending first** ticked: it applies this patch, runs the
+watch's own tests (the five new ones among them), builds the watch app for
+a simulated watch and takes its pictures, which should be the same pages as
+ever. It has not been run yet. duo.yml, also started by hand, applies every
+waiting patch and builds the iPhone and watch apps for a real device on
+Xcode 27.1, compile only. Both are GitHub's Macs and spend no Expo build.
+
+**What only a real watch can show**, most likely first:
+
+1. That the rows appear at all. Settings → Apple Watch on the iPhone shows
+   Watch pages only after the watch app from the new build has been opened
+   once within reach of the phone with Play open (that is when its hello
+   says `knows`). If they never appear, the hello's `knows` is not arriving
+   (the phone's log says "the watch says it knows pages" when it does).
+2. Move a page, hide one, and look at the watch: the pages are the shown
+   ones, in order, and swiping or the Digital Crown stops at the last. A
+   SwiftUI page view whose pages change under it is the part no test here
+   can see: whether it redraws cleanly, keeps the page under the thumb, and
+   lands on the first shown page when the one on show is hidden.
+3. Close the watch app and open it: it opens on the first shown page. For
+   a blink it may show Scenes first if the phone's picture arrives after
+   the app is drawn from its last one; the last picture is kept, so
+   usually not.
+4. On the watch's tuner page with the tuner on, hide Tuner on the iPhone:
+   the watch leaves for the first shown page and the tuner goes off on the
+   unit.
+5. When a change lands. The phone sends the watch its picture from the
+   Play screen, so a change made in Settings reaches the watch when Play is
+   next open (the rows say so). If it should be at once, that is the
+   phone's half, an update.
+6. Hide all but one page: the last one's Hide is switched off, with "Your
+   watch always keeps one page, so the last one stays." under the list.
+
+**What goes with it in the build pull request, outside the patch:**
+
+- nothing to install: it adds no package and no permission;
+- the review notes for that version (docs/app-store.md), one plain
+  sentence: "On an iPhone paired with an Apple Watch, Settings → Apple
+  Watch → Watch pages chooses which of the watch app's four pages (Scenes,
+  Pedals, Presets, Tuner) are shown and their order; one page is always
+  shown." What's New may say the same in fewer words;
+- a What's new line (`only: 'ios'`) in that pull request, since from that
+  build on a wearer can see it: "Apple Watch: choose which pages your watch
+  shows, and their order, in Settings → Apple Watch.";
+- the watch tips on that Settings page (lib/watchBridge `WATCH_HOW`) say
+  "its four pages"; true of every watch until a page is hidden, and worth
+  a look once this is on a wrist;
+- docs/expo-builds.md's row for the pair.
+
+No store-version key: the rows wait for the watch's own word, and only a
+watch from the new build says it.
 
 **android-usb-midi.patch, and why it waited** (applied for the Android build 1.89.36). Justin, 3 November 2026:
 "let's build out the direct plug to the USB for android. I tried it and it

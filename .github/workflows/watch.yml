@@ -31,6 +31,17 @@ on:
       - 'shared/watch-link.mjs'
       - '.github/workflows/watch.yml'
   workflow_dispatch:
+    inputs:
+      # A watch change that waits for a build lives in docs/pending as a
+      # patch, so nothing here ever compiled it: this job runs on the tree,
+      # and the tree does not have it. Ticked, the `watch` job applies the
+      # waiting patches that touch the watch app or its tests first, so the
+      # Swift is compiled, its own tests run and its pages pictured on a
+      # GitHub Mac before any build is asked for. Free, like the rest of it.
+      pending:
+        description: 'Apply the watch patches waiting in docs/pending first'
+        type: boolean
+        default: false
 
 jobs:
   watch:
@@ -41,6 +52,20 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
+      # Only the patches that touch the watch app or its tests, in the
+      # README's order: one for the phones (a package, a plugin) is not this
+      # job's to try. See the `pending` box above.
+      - name: The waiting watch patches, applied
+        if: github.event_name == 'workflow_dispatch' && inputs.pending
+        run: |
+          set -euo pipefail
+          for P in $(grep -oE '^\| `[^`]+\.patch`' docs/pending/README.md | tr -d '|` '); do
+            if grep -qE '^diff --git a/mobile/(targets/watch|watch-ci)/' "docs/pending/$P"; then
+              echo "::notice::Applying docs/pending/$P, which waits for the next build"
+              git apply "docs/pending/$P"
+            fi
+          done
 
       - name: Which Xcode
         run: xcodebuild -version
@@ -81,8 +106,10 @@ jobs:
       # they come: a 46mm watch simulator, full resolution. Artifacts can only
       # be fetched when signed in to GitHub, so a manual run also puts them on
       # the Releases page, where a plain link downloads them.
+      # Never from a run with the waiting patches in: those are pictures of a
+      # watch app nobody has yet.
       - name: The watch screenshots, for App Store Connect
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && !inputs.pending
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

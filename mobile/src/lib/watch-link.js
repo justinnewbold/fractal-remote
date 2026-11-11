@@ -43,6 +43,135 @@ export const WATCH_IN_TUNE_CENTS = 3
 /** The most channels a pedal offers on the watch: A to D, as on every unit today. */
 export const WATCH_CHANNELS_MAX = 4
 
+/*
+ * THE WATCH'S PAGES: WHICH ARE SHOWN, AND IN WHAT ORDER, CHOSEN ON THE
+ * IPHONE. Justin, 11 November 2026: "On the watch, can we add a way for a
+ * user to select which order their pages show up in on the Watch app?" And,
+ * asked whether a page could be hidden as well: "Yes, add hiding pages."
+ *
+ * The watch has four pages, and it drew them all in one order (WATCH_PAGES,
+ * below), opening on the first. Now the iPhone keeps an order and which
+ * pages are hidden (Settings → Apple Watch → Watch pages) and sends both in
+ * the picture: `pages`, the four names in the order chosen, and `hidden`,
+ * the names of those not to draw. The watch draws the ones shown in that
+ * order and opens on the first of them.
+ *
+ * ONLY TO A WATCH THAT HAS SAID IT DOES THIS. Watch code reaches a wrist
+ * inside an iPhone build and nowhere else, so for as long as a watch runs
+ * the copy from before that build it draws all four in the usual order
+ * whatever it is sent. A setting that does nothing is worse than none: so
+ * the watch says what it knows in its hello (`knows`, WATCH_KNOWS), the
+ * phone keeps the last answer, and the Settings rows and both fields wait
+ * for it. A hello with no `knows` is a watch from before, and takes the
+ * answer back.
+ *
+ * ONE RULE FOR EACH LIST, here and, word for word, on the watch
+ * (Model.swift), held to the same answers by one fixture both read:
+ *
+ *   the order   (watchPageOrder) the names it knows, each once, in the
+ *               order given; then whatever is missing, in the usual order.
+ *               Always all four.
+ *   hidden      (watchPagesHidden) the names it knows, each once. Naming
+ *               all four is naming none: A WATCH ALWAYS HAS A PAGE. So is
+ *               no list, an empty one, or one of names nobody knows.
+ *   shown       (watchPagesShown) the order with the hidden ones left out:
+ *               never empty, and what the watch draws.
+ *
+ * So an order kept from before a page was added, a name misspelt, one twice
+ * or none at all is still the four pages, and nothing a phone or a watch
+ * ever keeps can leave a watch with no page to open on.
+ */
+
+/** The watch's pages in the usual order: what it draws with none said, and what CI's `-page N` counts by. */
+export const WATCH_PAGES = ['scenes', 'pedals', 'presets', 'tuner']
+
+/** Each page's name as the watch and the iPhone's Settings say it. */
+export const WATCH_PAGE_NAMES = { scenes: 'Scenes', pedals: 'Pedals', presets: 'Presets', tuner: 'Tuner' }
+
+/** What a watch may say it knows in its hello. `pages`: it draws the pages the picture says are shown, in the order the picture says. */
+export const WATCH_KNOWS = ['pages']
+
+/**
+ * A full order of the four pages out of anything: the names known, each
+ * once, in the order given, then the rest in the usual order.
+ */
+export function watchPageOrder(list) {
+  const out = []
+  for (const name of Array.isArray(list) ? list : []) {
+    if (typeof name === 'string' && WATCH_PAGES.includes(name) && !out.includes(name)) out.push(name)
+  }
+  for (const name of WATCH_PAGES) if (!out.includes(name)) out.push(name)
+  return out
+}
+
+/**
+ * The hidden pages out of anything: the names known, each once, told in the
+ * usual order (so the same pages hidden are the same list, whatever order
+ * they were hidden in). All four is none: a watch always has a page.
+ */
+export function watchPagesHidden(list) {
+  const said = Array.isArray(list) ? list : []
+  const out = WATCH_PAGES.filter((name) => said.includes(name))
+  return out.length < WATCH_PAGES.length ? out : []
+}
+
+/** What the watch draws: the order with the hidden pages left out. Never empty; the first is the page it opens on. */
+export function watchPagesShown(order, hidden) {
+  const off = watchPagesHidden(hidden)
+  return watchPageOrder(order).filter((name) => !off.includes(name))
+}
+
+/**
+ * The two lists as the iPhone keeps and draws them: `order` is the shown
+ * pages in their order and then the hidden ones, so the list in Settings
+ * reads top to bottom as the watch does, with what is hidden at its foot.
+ */
+export function watchPagesKept(order, hidden) {
+  const off = watchPagesHidden(hidden)
+  const all = watchPageOrder(order)
+  return { order: [...all.filter((name) => !off.includes(name)), ...all.filter((name) => off.includes(name))], hidden: off }
+}
+
+/** Whether it is the usual order with nothing hidden, once repaired. */
+export const watchPagesUsual = (order, hidden) => watchPageOrder(order).join() === WATCH_PAGES.join() && watchPagesHidden(hidden).length === 0
+
+/**
+ * One shown page moved a place up (-1) or down (+1) among the shown ones;
+ * the same lists back where it cannot move (the first up, the last down, a
+ * hidden page, a name not known).
+ */
+export function watchPageMoved(order, hidden, name, by) {
+  const kept = watchPagesKept(order, hidden)
+  const shown = kept.order.length - kept.hidden.length
+  const at = kept.order.indexOf(name)
+  const to = at + (by < 0 ? -1 : 1)
+  if (!by || at < 0 || at >= shown || to < 0 || to >= shown) return kept
+  kept.order[at] = kept.order[to]
+  kept.order[to] = name
+  return kept
+}
+
+/**
+ * One page hidden (`hide` true) or shown again. The last shown page cannot
+ * be hidden: the same lists back. A page shown again comes back as the last
+ * of the shown ones, where the list in Settings puts it.
+ */
+export function watchPageHid(order, hidden, name, hide) {
+  const kept = watchPagesKept(order, hidden)
+  if (!WATCH_PAGES.includes(name) || kept.hidden.includes(name) === !!hide) return kept
+  const shown = kept.order.filter((p) => !kept.hidden.includes(p))
+  if (hide && shown.length <= 1) return kept
+  const off = hide ? [...kept.hidden, name] : kept.hidden.filter((p) => p !== name)
+  const rest = kept.order.filter((p) => p !== name)
+  const firstHidden = rest.findIndex((p) => kept.hidden.includes(p))
+  /* Hidden: to the foot of the list. Shown: after the last shown page, before what is still hidden. */
+  const next = hide || firstHidden < 0 ? [...rest, name] : [...rest.slice(0, firstHidden), name, ...rest.slice(firstHidden)]
+  return watchPagesKept(next, off)
+}
+
+/** What a hello's `knows` comes to: the things this phone knows of, and nothing else; [] for a watch that says none. */
+export const watchKnows = (list) => (Array.isArray(list) ? WATCH_KNOWS.filter((k) => list.includes(k)) : [])
+
 const int = (n) => Number.isInteger(n)
 const text = (s, max = 40) => (typeof s === 'string' ? s.slice(0, max) : '')
 /** A channel as the phone's own channel write takes it: one capital letter, or '' for none said. */
@@ -83,6 +212,9 @@ export function watchState({
   canPrevious = false,
   canNext = false,
   metronome = null,
+  /* The order of the watch's pages and which are hidden, for a watch that has said it does this; no order (null) for any other, and then neither field is sent at all. */
+  pages = null,
+  hidden = null,
   at = Date.now()
 } = {}) {
   const count = int(sceneCount) && sceneCount > 0 ? Math.min(sceneCount, 8) : 0
@@ -135,7 +267,14 @@ export function watchState({
       inTune: !!note && Math.abs(cents) <= WATCH_IN_TUNE_CENTS
     },
     /* Tap on every beat, at this tempo — or not. See shared/metronome.mjs. */
-    metronome: metronomeForWatch(metronome)
+    metronome: metronomeForWatch(metronome),
+    /* The four pages in the order chosen on the iPhone, always all four
+       (watchPageOrder), and those of them not to draw, never all four
+       (watchPagesHidden). Sent only where the caller says an order, which
+       is only to a watch that has said it does this: to any other the
+       picture is exactly what it was, field for field, and the version
+       stays 1, because nothing a watch already reads changed meaning. */
+    ...(pages === null || pages === undefined ? null : { pages: watchPageOrder(pages), hidden: watchPagesHidden(hidden) })
   }
 }
 
@@ -155,6 +294,8 @@ function metronomeForWatch(m) {
  *   { do: 'preset', step }      — Previous (-1) or Next (+1), as the stage screen steps
  *   { do: 'tuner', on }         — the tuner page opened or closed
  *   { do: 'hello' }             — the watch app opened: send the picture now
+ *                                 (with `knows`, from a watch that says what it
+ *                                 knows: see WATCH_KNOWS)
  *
  * `state` is the last picture sent, so a scene or a pedal the watch could not
  * have been shown is refused rather than sent to the unit — and so is a
@@ -165,7 +306,8 @@ export function watchCommand(msg, state) {
   if (!msg || typeof msg !== 'object') return null
   switch (msg.do) {
     case 'hello':
-      return { do: 'hello' }
+      /* A watch from before `knows` says none, and its hello is the one word it always was. */
+      return Array.isArray(msg.knows) ? { do: 'hello', knows: watchKnows(msg.knows) } : { do: 'hello' }
     case 'scene': {
       const count = Array.isArray(state?.scenes) ? state.scenes.length : 0
       return int(msg.index) && msg.index >= 0 && msg.index < count ? { do: 'scene', index: msg.index } : null

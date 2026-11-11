@@ -1,0 +1,853 @@
+diff --git a/mobile/targets/watch/FractalWatchApp.swift b/mobile/targets/watch/FractalWatchApp.swift
+index 807c1e54..69a89da7 100644
+--- a/mobile/targets/watch/FractalWatchApp.swift
++++ b/mobile/targets/watch/FractalWatchApp.swift
+@@ -13,19 +13,36 @@ struct FractalWatchApp: App {
+ }
+ 
+ /*
+- * FOUR PAGES, SWIPED UP AND DOWN: Scenes, Pedals, Presets, Tuner.
++ * UP TO FOUR PAGES, SWIPED UP AND DOWN: Scenes, Pedals, Presets, Tuner.
+  *
+- * It opens on Scenes, the one reached for most mid-song. The tuner is last and
+- * does nothing until it is tapped: a unit set to mute while it tunes would
+- * otherwise go quiet because a page was swiped past. Leaving the tuner page
+- * turns it back off.
++ * THE ONES SHOWN, IN THE ORDER CHOSEN ON THE IPHONE (Settings → Apple Watch
++ * → Watch pages), which the phone sends in the picture (Model.swift,
++ * WatchState.shown), and all four in the usual order above when it sends
++ * nothing. A hidden page is not drawn, so it cannot be swiped to. It opens
++ * on the first of those shown: Scenes in the usual order, the one reached
++ * for most mid-song.
+  *
+- * Launched with -page N (CI's screenshots) it opens on that page instead.
++ * The tuner does nothing until it is tapped, wherever its page sits: a unit
++ * set to mute while it tunes would otherwise go quiet because a page was
++ * swiped past. Leaving the tuner page turns it back off, and so does hiding
++ * that page while the watch is on it (Model.swift watchTunerLeftByHiding).
++ *
++ * `page` is the page the wearer has swiped to, by name, and nil until they
++ * have swiped: until then the first shown page is the one on show, so pages
++ * that arrive a moment after the app opens are the ones it opens on, and a
++ * new order sent while it is open never moves the page under the thumb. A
++ * page hidden while the watch is on it sets it back to nil: the first shown
++ * page again.
++ *
++ * Launched with -page N (CI's screenshots) it opens on that page instead:
++ * the Nth of the USUAL order, whatever order is chosen, so CI's pictures
++ * are of the same pages they always were. (CI sends no order and hides
++ * nothing.)
+  */
+ struct RootView: View {
+     @EnvironmentObject private var link: PhoneLink
+     @Environment(\.scenePhase) private var phase
+-    @State private var page = Launch.number("page")
++    @State private var page: WatchPage? = Launch.value("page") == nil ? nil : WatchPage.numbered(Launch.number("page"))
+     /* The metronome's tap: see Metronome.swift. */
+     @State private var wrist = WristMetronome()
+ 
+@@ -34,11 +51,10 @@ struct RootView: View {
+             /* The pages stay up through a moment out of reach (see PhoneLink.away),
+                with the taps held back and a word at the top saying why. */
+             if let state = link.state, state.linked, !state.tooNew, !link.away {
+-                TabView(selection: $page) {
+-                    ScenesPage(state: state).tag(0)
+-                    PedalsPage(state: state).tag(1)
+-                    PresetsPage(state: state).tag(2)
+-                    TunerPage(state: state).tag(3)
++                TabView(selection: onShow(state.shown)) {
++                    ForEach(state.shown, id: \.self) { which in
++                        drawn(which, state).tag(which)
++                    }
+                 }
+                 .tabViewStyle(.verticalPage)
+                 .disabled(!link.reachable)
+@@ -63,5 +79,27 @@ struct RootView: View {
+         .onChange(of: link.state?.metronome) { _, now in
+             if phase == .active { wrist.follow(now) }
+         }
++        /* The pages shown changed under the watch: if the one it was on is gone, it is on the first shown page, and a tuner left that way is turned off. */
++        .onChange(of: link.state?.shown) { was, now in
++            guard let now else { return }
++            let wasOn = watchPageOnShow(page, was ?? WatchPage.usual)
++            if watchTunerLeftByHiding(wasOn: wasOn, shown: now, tunerOn: link.state?.tuner.on == true) { link.send(.tuner(on: false)) }
++            if let swiped = page, !now.contains(swiped) { page = nil }
++        }
++    }
++
++    /* The page on show: the one swiped to while it is still shown, or the first shown page (Model.swift watchPageOnShow). */
++    private func onShow(_ shown: [WatchPage]) -> Binding<WatchPage> {
++        Binding(get: { watchPageOnShow(page, shown) }, set: { page = $0 })
++    }
++
++    @ViewBuilder
++    private func drawn(_ which: WatchPage, _ state: WatchState) -> some View {
++        switch which {
++        case .scenes: ScenesPage(state: state)
++        case .pedals: PedalsPage(state: state)
++        case .presets: PresetsPage(state: state)
++        case .tuner: TunerPage(state: state)
++        }
+     }
+ }
+diff --git a/mobile/targets/watch/Model.swift b/mobile/targets/watch/Model.swift
+index ca41efac..99613577 100644
+--- a/mobile/targets/watch/Model.swift
++++ b/mobile/targets/watch/Model.swift
+@@ -70,6 +70,89 @@ struct WatchMetronome: Codable, Equatable {
+     var bpm: Double
+ }
+ 
++/*
++ * THE WATCH'S FOUR PAGES: WHICH ARE DRAWN, AND IN WHAT ORDER. Justin, 11
++ * November 2026: "On the watch, can we add a way for a user to select which
++ * order their pages show up in on the Watch app?" and, asked about hiding
++ * one, "Yes, add hiding pages." Both are chosen on the iPhone (Settings →
++ * Apple Watch → Watch pages) and sent in the picture: `pages`, the four
++ * names in the order chosen, and `hidden`, the names of those not to draw.
++ * The watch draws the ones shown in that order and opens on the first.
++ *
++ * The names are WATCH_PAGES in shared/watch-link.mjs, and `usual` is its
++ * order: what the watch draws when the phone says none (a phone from before
++ * this, and the demo), and what CI's `-page N` has always counted by, so
++ * `-page 2` is Presets wherever Presets is drawn.
++ */
++enum WatchPage: String, CaseIterable, Equatable {
++    case scenes, pedals, presets, tuner
++
++    /** The usual order: Scenes, Pedals, Presets, Tuner. */
++    static let usual: [WatchPage] = [.scenes, .pedals, .presets, .tuner]
++
++    /** The page CI's `-page N` asks for: its place in the usual order, never in the order chosen. Nil for a number that is no page. */
++    static func numbered(_ n: Int) -> WatchPage? {
++        usual.indices.contains(n) ? usual[n] : nil
++    }
++}
++
++/*
++ * THREE RULES, each its namesake in shared/watch-link.mjs word for word, and
++ * held to the same answers (pages.json, written by that file's rules and
++ * read by this one's tests).
++ *
++ * watchPageOrder: a full order of the four pages out of anything the phone
++ * sent: the names it knows, each once, in the order given, then whatever is
++ * missing in the usual order. Always all four.
++ */
++func watchPageOrder(_ names: [String]?) -> [WatchPage] {
++    var out: [WatchPage] = []
++    for name in names ?? [] {
++        if let page = WatchPage(rawValue: name), !out.contains(page) { out.append(page) }
++    }
++    for page in WatchPage.usual where !out.contains(page) { out.append(page) }
++    return out
++}
++
++/*
++ * watchPagesHidden: the hidden pages out of anything: the names it knows,
++ * each once, told in the usual order. ALL FOUR IS NONE: a watch always has
++ * a page. So is no list, an empty one, or one of names nobody knows.
++ */
++func watchPagesHidden(_ names: [String]?) -> [WatchPage] {
++    let said = names ?? []
++    let out = WatchPage.usual.filter { said.contains($0.rawValue) }
++    return out.count < WatchPage.usual.count ? out : []
++}
++
++/** watchPagesShown: what the watch draws, the order with the hidden pages left out. Never empty; the first is the page it opens on. */
++func watchPagesShown(_ pages: [String]?, _ hidden: [String]?) -> [WatchPage] {
++    let off = watchPagesHidden(hidden)
++    return watchPageOrder(pages).filter { !off.contains($0) }
++}
++
++/*
++ * THE PAGE ON SHOW: the one the wearer swiped to (or CI's -page N asked
++ * for) while it is still drawn, and the first drawn page otherwise: before
++ * any swipe, and when the page they were on has just been hidden.
++ */
++func watchPageOnShow(_ swiped: WatchPage?, _ shown: [WatchPage]) -> WatchPage {
++    if let swiped, shown.contains(swiped) { return swiped }
++    return shown.first ?? .scenes
++}
++
++/*
++ * HIDING THE TUNER'S PAGE WHILE THE WATCH IS ON IT IS LEAVING IT, and
++ * leaving the tuner's page turns the tuner off (Pages.swift TunerPage). So:
++ * the page that was on show is the tuner's, it is not drawn any more, and
++ * the tuner is on. A tuner that is on while the watch is on some other page
++ * was not turned on from here (leaving turned this one off), and is left
++ * alone, as it is when the tuner's page is merely not the one on show.
++ */
++func watchTunerLeftByHiding(wasOn: WatchPage, shown: [WatchPage], tunerOn: Bool) -> Bool {
++    wasOn == .tuner && tunerOn && !shown.contains(.tuner)
++}
++
+ struct WatchState: Codable, Equatable {
+     /** WATCH_LINK_VERSION in shared/watch-link.mjs. */
+     static let linkVersion = 1
+@@ -86,6 +169,21 @@ struct WatchState: Codable, Equatable {
+     var tuner: WatchTuner
+     /** Optional: a phone older than the metronome sends none, and that is "off". */
+     var metronome: WatchMetronome? = nil
++    /*
++     * The pages in the order chosen on the iPhone, by name, and those of
++     * them not to draw. Optional, like the metronome: a phone that has not
++     * had the update that sends them sends neither, and so does one that
++     * has not yet heard this watch say it takes them (`knows`, below), and
++     * neither is all four in the usual order.
++     */
++    var pages: [String]? = nil
++    var hidden: [String]? = nil
++
++    /** The four pages in the order chosen: `pages` repaired, or the usual order. */
++    var order: [WatchPage] { watchPageOrder(pages) }
++
++    /** The pages to draw, in order: `order` with the hidden ones left out. Never empty. */
++    var shown: [WatchPage] { watchPagesShown(pages, hidden) }
+ 
+     static func decode(_ json: String) -> WatchState? {
+         guard let data = json.data(using: .utf8) else { return nil }
+@@ -132,6 +230,17 @@ struct WatchState: Codable, Equatable {
+ 
+ /** The six things the watch may ask. watchCommand in shared/watch-link.mjs. */
+ enum WatchCommand: Equatable {
++    /*
++     * WHAT THIS WATCH KNOWS, said in its hello (WATCH_KNOWS in
++     * shared/watch-link.mjs). "pages": it draws the pages the picture says
++     * are shown, in the order the picture says. The phone shows the Watch
++     * pages setting, and sends an order or a hidden page at all, only to a
++     * watch that has said so: a watch from before this build draws all four
++     * in the usual order whatever it is sent, and a setting that does
++     * nothing is worse than none.
++     */
++    static let knows = ["pages"]
++
+     case hello
+     case scene(Int)
+     case pedal(id: Int, on: Bool)
+@@ -143,7 +252,7 @@ enum WatchCommand: Equatable {
+     /** Written by hand, so the order of the keys never changes under the tests. */
+     var json: String {
+         switch self {
+-        case .hello: return #"{"do":"hello"}"#
++        case .hello: return #"{"do":"hello","knows":["pages"]}"#
+         case .scene(let index): return #"{"do":"scene","index":\#(index)}"#
+         case .pedal(let id, let on): return #"{"do":"pedal","id":\#(id),"on":\#(on)}"#
+         case .preset(let step): return #"{"do":"preset","step":\#(step < 0 ? -1 : 1)}"#
+diff --git a/mobile/watch-ci/Package.swift b/mobile/watch-ci/Package.swift
+index 05571339..900f45e7 100644
+--- a/mobile/watch-ci/Package.swift
++++ b/mobile/watch-ci/Package.swift
+@@ -14,7 +14,7 @@ let package = Package(
+             name: "WatchModelTests",
+             dependencies: ["WatchModel"],
+             path: "Tests/WatchModelTests",
+-            resources: [.copy("state.json")]
++            resources: [.copy("state.json"), .copy("pages.json")]
+         )
+     ]
+ )
+diff --git a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
+index 1b1532ec..49420fcc 100644
+--- a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
++++ b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
+@@ -122,7 +122,7 @@ final class WatchModelTests: XCTestCase {
+     }
+ 
+     func testTheRequestsAreThePhonesWords() {
+-        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello"}"#)
++        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello","knows":["pages"]}"#)
+         XCTAssertEqual(WatchCommand.scene(2).json, #"{"do":"scene","index":2}"#)
+         XCTAssertEqual(WatchCommand.pedal(id: 50, on: false).json, #"{"do":"pedal","id":50,"on":false}"#)
+         XCTAssertEqual(WatchCommand.preset(step: -1).json, #"{"do":"preset","step":-1}"#)
+@@ -132,6 +132,127 @@ final class WatchModelTests: XCTestCase {
+         XCTAssertEqual(WatchCommand.channel(id: 50, channel: #"a"b"#).json, #"{"do":"channel","id":50,"channel":"a\"b"}"#, "a channel is sent as JSON, not pasted in")
+     }
+ 
++    // MARK: - The watch's pages: which are shown, and in what order
++
++    /*
++     * pages.json is written by the phone's own rules (shared/watch-link.mjs,
++     * through pagesFixture in test/watch-pages.mjs, which also checks the file
++     * still is what they give). So the answers below are the phone's, and a
++     * rule changed on one side fails here or there, never on a wrist.
++     */
++    private struct PagesFixture: Decodable {
++        struct Case: Decodable {
++            var pages: [String]?
++            var hidden: [String]?
++            var order: [String]
++            var off: [String]
++            var shown: [String]
++        }
++        var cases: [Case]
++    }
++
++    private func pagesData() throws -> Data {
++        let url = try XCTUnwrap(Bundle.module.url(forResource: "pages", withExtension: "json"))
++        return try Data(contentsOf: url)
++    }
++
++    private func pagesPicture() throws -> String {
++        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: try pagesData()) as? [String: Any])
++        let state = try XCTUnwrap(object["state"] as? [String: Any])
++        return try XCTUnwrap(String(data: try JSONSerialization.data(withJSONObject: state), encoding: .utf8))
++    }
++
++    func testThePagesAreDrawnInTheOrderThePhoneSends() throws {
++        let state = try XCTUnwrap(WatchState.decode(try pagesPicture()), "a picture with pages in it was not read at all")
++        XCTAssertEqual(state.pages, ["tuner", "scenes", "presets", "pedals"])
++        XCTAssertEqual(state.hidden, ["presets"])
++        XCTAssertEqual(state.order, [.tuner, .scenes, .presets, .pedals])
++        XCTAssertEqual(state.shown, [.tuner, .scenes, .pedals], "a hidden page is drawn, or the order is not the one sent")
++        XCTAssertEqual(watchPageOnShow(nil, state.shown), .tuner, "it does not open on the first page of the order chosen")
++        /* The rest of the picture is read as it always was. */
++        XCTAssertTrue(state.linked)
++        XCTAssertEqual(state.nameLine, "Crunch Rhythm")
++        XCTAssertEqual(state.scenes.count, 8)
++
++        /* A phone that sends neither (every phone, to a watch that has not said it knows): all four, the usual order, Scenes first. */
++        let plain = try XCTUnwrap(WatchState.decode(try fixture()))
++        XCTAssertNil(plain.pages)
++        XCTAssertNil(plain.hidden)
++        XCTAssertEqual(plain.order, WatchPage.usual)
++        XCTAssertEqual(plain.shown, [.scenes, .pedals, .presets, .tuner])
++        XCTAssertEqual(watchPageOnShow(nil, plain.shown), .scenes)
++        /* And so does the demo, which CI's pictures are taken of. */
++        XCTAssertEqual(WatchState.sample.shown, WatchPage.usual)
++    }
++
++    func testAListThatIsNotQuiteRightIsStillPagesToDraw() throws {
++        let cases = try JSONDecoder().decode(PagesFixture.self, from: try pagesData()).cases
++        XCTAssertGreaterThanOrEqual(cases.count, 12, "the fixture lost its cases")
++        for c in cases {
++            let said = "pages \(c.pages ?? ["none"]) hidden \(c.hidden ?? ["none"])"
++            XCTAssertEqual(watchPageOrder(c.pages).map(\.rawValue), c.order, "the order of \(said)")
++            XCTAssertEqual(watchPagesHidden(c.hidden).map(\.rawValue), c.off, "the hidden pages of \(said)")
++            XCTAssertEqual(watchPagesShown(c.pages, c.hidden).map(\.rawValue), c.shown, "the pages drawn for \(said)")
++            XCTAssertEqual(Set(watchPageOrder(c.pages)), Set(WatchPage.allCases), "\(said) lost a page from the order, or drew one twice")
++            XCTAssertEqual(watchPageOrder(c.pages).count, 4)
++            XCTAssertFalse(watchPagesShown(c.pages, c.hidden).isEmpty, "\(said) left the watch with no page")
++        }
++        /* The ones that matter most, said here as well as in the fixture. */
++        XCTAssertEqual(watchPagesShown(nil, ["scenes", "pedals", "presets", "tuner"]), WatchPage.usual, "hiding all four is hiding none: a watch always has a page")
++        XCTAssertEqual(watchPagesShown(["tuner"], ["scenes", "scenes", "looper"]), [.tuner, .pedals, .presets])
++        XCTAssertEqual(watchPagesHidden(["tuner", "scenes"]), [.scenes, .tuner], "the hidden pages are told in the usual order")
++        XCTAssertEqual(watchPagesHidden(["Tuner", " tuner", ""]), [], "a name that is not exactly a page's was taken for one")
++
++        /* And through a picture: names the watch does not know are dropped, never the picture. */
++        let raw = try picture { p in
++            p["pages"] = ["tuner", "looper", "tuner"]
++            p["hidden"] = ["scenes", "nope", "scenes"]
++        }
++        let state = try XCTUnwrap(WatchState.decode(raw), "a picture with a page the watch does not know was not drawn at all")
++        XCTAssertEqual(state.shown, [.tuner, .pedals, .presets])
++        let all = try picture { p in p["hidden"] = ["scenes", "pedals", "presets", "tuner"] }
++        XCTAssertEqual(try XCTUnwrap(WatchState.decode(all)).shown, WatchPage.usual)
++    }
++
++    func testAPageHiddenUnderTheWatchGoesToTheFirstShown() {
++        /* Still shown: the page swiped to stays, wherever a new order puts it. */
++        XCTAssertEqual(watchPageOnShow(.presets, [.tuner, .presets, .scenes]), .presets)
++        XCTAssertEqual(watchPageOnShow(.scenes, [.tuner, .scenes]), .scenes)
++        /* Hidden while on it, and before any swipe: the first shown page. */
++        XCTAssertEqual(watchPageOnShow(.presets, [.tuner, .scenes]), .tuner)
++        XCTAssertEqual(watchPageOnShow(nil, [.pedals, .scenes]), .pedals)
++        XCTAssertEqual(watchPageOnShow(nil, []), .scenes, "no list at all still has a page to name")
++        /* CI's -page N is the Nth of the usual order, whatever order is chosen. */
++        XCTAssertEqual(WatchPage.numbered(0), .scenes)
++        XCTAssertEqual(WatchPage.numbered(1), .pedals)
++        XCTAssertEqual(WatchPage.numbered(2), .presets)
++        XCTAssertEqual(WatchPage.numbered(3), .tuner)
++        XCTAssertNil(WatchPage.numbered(4))
++        XCTAssertNil(WatchPage.numbered(-1))
++        XCTAssertEqual(watchPageOnShow(WatchPage.numbered(3), [.tuner, .scenes, .presets, .pedals]), .tuner, "-page 3 is not the tuner in another order")
++    }
++
++    func testHidingTheTunersPageWhileOnItTurnsTheTunerOff() {
++        /* On the tuner's page, tuner on, and the page is hidden: left, so off. */
++        XCTAssertTrue(watchTunerLeftByHiding(wasOn: .tuner, shown: [.scenes, .pedals, .presets], tunerOn: true))
++        /* Nothing to turn off. */
++        XCTAssertFalse(watchTunerLeftByHiding(wasOn: .tuner, shown: [.scenes, .pedals, .presets], tunerOn: false))
++        /* The tuner's page is still there: a new order, or another page hidden, is not leaving it. */
++        XCTAssertFalse(watchTunerLeftByHiding(wasOn: .tuner, shown: [.scenes, .tuner], tunerOn: true))
++        /* On another page: a tuner that is on was not turned on from here, and is left alone. */
++        XCTAssertFalse(watchTunerLeftByHiding(wasOn: .scenes, shown: [.scenes, .pedals, .presets], tunerOn: true))
++    }
++
++    func testTheWatchSaysWhatItKnows() throws {
++        XCTAssertEqual(WatchCommand.knows, ["pages"])
++        let hello = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(WatchCommand.hello.json.utf8)) as? [String: Any])
++        XCTAssertEqual(hello["do"] as? String, "hello")
++        XCTAssertEqual(hello["knows"] as? [String], WatchCommand.knows, "the hello does not say what the watch knows, so the phone never offers its pages")
++        /* No other request says it. */
++        XCTAssertFalse(WatchCommand.tuner(on: true).json.contains("knows"))
++        XCTAssertFalse(WatchCommand.scene(0).json.contains("knows"))
++    }
++
+     func testTheNeedleAndTheColours() {
+         XCTAssertEqual(needleOffset(cents: 0), 0)
+         XCTAssertEqual(needleOffset(cents: 25), 0.5)
+diff --git a/mobile/watch-ci/Tests/WatchModelTests/pages.json b/mobile/watch-ci/Tests/WatchModelTests/pages.json
+new file mode 100644
+index 00000000..78058bf5
+--- /dev/null
++++ b/mobile/watch-ci/Tests/WatchModelTests/pages.json
+@@ -0,0 +1,458 @@
++{
++  "state": {
++    "v": 1,
++    "at": 1759363200000,
++    "linked": true,
++    "preset": {
++      "number": 12,
++      "label": "012",
++      "name": "Crunch Rhythm"
++    },
++    "canPrevious": false,
++    "canNext": false,
++    "scene": 1,
++    "scenes": [
++      "Clean",
++      "Crunch",
++      "Lead",
++      "Scene 4",
++      "Scene 5",
++      "Scene 6",
++      "Scene 7",
++      "Scene 8"
++    ],
++    "pedals": [],
++    "tuner": {
++      "on": false,
++      "note": "",
++      "octave": -1,
++      "cents": 0,
++      "inTune": false
++    },
++    "metronome": {
++      "on": false,
++      "bpm": 0
++    },
++    "pages": [
++      "tuner",
++      "scenes",
++      "presets",
++      "pedals"
++    ],
++    "hidden": [
++      "presets"
++    ]
++  },
++  "cases": [
++    {
++      "pages": null,
++      "hidden": null,
++      "order": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "off": [],
++      "shown": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ]
++    },
++    {
++      "pages": [],
++      "hidden": [],
++      "order": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "off": [],
++      "shown": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ]
++    },
++    {
++      "pages": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "hidden": [],
++      "order": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "off": [],
++      "shown": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ]
++    },
++    {
++      "pages": [
++        "tuner",
++        "scenes",
++        "presets",
++        "pedals"
++      ],
++      "hidden": [
++        "presets"
++      ],
++      "order": [
++        "tuner",
++        "scenes",
++        "presets",
++        "pedals"
++      ],
++      "off": [
++        "presets"
++      ],
++      "shown": [
++        "tuner",
++        "scenes",
++        "pedals"
++      ]
++    },
++    {
++      "pages": [
++        "tuner",
++        "scenes",
++        "presets",
++        "pedals"
++      ],
++      "hidden": null,
++      "order": [
++        "tuner",
++        "scenes",
++        "presets",
++        "pedals"
++      ],
++      "off": [],
++      "shown": [
++        "tuner",
++        "scenes",
++        "presets",
++        "pedals"
++      ]
++    },
++    {
++      "pages": [
++        "tuner"
++      ],
++      "hidden": null,
++      "order": [
++        "tuner",
++        "scenes",
++        "pedals",
++        "presets"
++      ],
++      "off": [],
++      "shown": [
++        "tuner",
++        "scenes",
++        "pedals",
++        "presets"
++      ]
++    },
++    {
++      "pages": [
++        "presets",
++        "presets",
++        "scenes"
++      ],
++      "hidden": [
++        "pedals"
++      ],
++      "order": [
++        "presets",
++        "scenes",
++        "pedals",
++        "tuner"
++      ],
++      "off": [
++        "pedals"
++      ],
++      "shown": [
++        "presets",
++        "scenes",
++        "tuner"
++      ]
++    },
++    {
++      "pages": [
++        "tuner",
++        "looper",
++        "pedals"
++      ],
++      "hidden": [
++        "looper"
++      ],
++      "order": [
++        "tuner",
++        "pedals",
++        "scenes",
++        "presets"
++      ],
++      "off": [],
++      "shown": [
++        "tuner",
++        "pedals",
++        "scenes",
++        "presets"
++      ]
++    },
++    {
++      "pages": [
++        "Tuner",
++        "TUNER",
++        " tuner",
++        ""
++      ],
++      "hidden": [
++        "Tuner",
++        " tuner",
++        ""
++      ],
++      "order": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "off": [],
++      "shown": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ]
++    },
++    {
++      "pages": [
++        "pedals",
++        "scenes",
++        "presets",
++        "tuner",
++        "scenes",
++        "setlists"
++      ],
++      "hidden": [
++        "tuner",
++        "scenes"
++      ],
++      "order": [
++        "pedals",
++        "scenes",
++        "presets",
++        "tuner"
++      ],
++      "off": [
++        "scenes",
++        "tuner"
++      ],
++      "shown": [
++        "pedals",
++        "presets"
++      ]
++    },
++    {
++      "pages": [
++        "setlists",
++        "looper"
++      ],
++      "hidden": [
++        "setlists"
++      ],
++      "order": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "off": [],
++      "shown": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ]
++    },
++    {
++      "pages": null,
++      "hidden": [
++        "tuner"
++      ],
++      "order": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "off": [
++        "tuner"
++      ],
++      "shown": [
++        "scenes",
++        "pedals",
++        "presets"
++      ]
++    },
++    {
++      "pages": null,
++      "hidden": [
++        "tuner",
++        "tuner",
++        "tuner"
++      ],
++      "order": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "off": [
++        "tuner"
++      ],
++      "shown": [
++        "scenes",
++        "pedals",
++        "presets"
++      ]
++    },
++    {
++      "pages": null,
++      "hidden": [
++        "presets",
++        "scenes",
++        "pedals"
++      ],
++      "order": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "off": [
++        "scenes",
++        "pedals",
++        "presets"
++      ],
++      "shown": [
++        "tuner"
++      ]
++    },
++    {
++      "pages": [
++        "tuner",
++        "scenes",
++        "presets",
++        "pedals"
++      ],
++      "hidden": [
++        "scenes",
++        "pedals",
++        "tuner"
++      ],
++      "order": [
++        "tuner",
++        "scenes",
++        "presets",
++        "pedals"
++      ],
++      "off": [
++        "scenes",
++        "pedals",
++        "tuner"
++      ],
++      "shown": [
++        "presets"
++      ]
++    },
++    {
++      "pages": null,
++      "hidden": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "order": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "off": [],
++      "shown": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ]
++    },
++    {
++      "pages": [
++        "tuner",
++        "scenes",
++        "presets",
++        "pedals"
++      ],
++      "hidden": [
++        "tuner",
++        "presets",
++        "pedals",
++        "scenes"
++      ],
++      "order": [
++        "tuner",
++        "scenes",
++        "presets",
++        "pedals"
++      ],
++      "off": [],
++      "shown": [
++        "tuner",
++        "scenes",
++        "presets",
++        "pedals"
++      ]
++    },
++    {
++      "pages": [
++        "scenes"
++      ],
++      "hidden": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner",
++        "looper"
++      ],
++      "order": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "off": [],
++      "shown": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ]
++    }
++  ]
++}

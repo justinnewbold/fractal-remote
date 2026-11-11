@@ -13,6 +13,7 @@ import { createWatchSender, watchCommand, watchState } from './watch-link'
 import { metronome } from './metronome'
 import { boostPedals } from './am4-boost'
 import { boostNow, pedalSlug } from './rig'
+import { noteWatchKnows, pagesToSend, useWatchPages } from './watchPages'
 
 /*
  * THE APPLE WATCH, FROM THE PHONE'S SIDE.
@@ -121,8 +122,12 @@ export function useWatchBridge(picture, step) {
   const awake = picture.awake !== false
   const sender = useRef(null)
   const last = useRef(null)
+  /* What the last picture was made from, so it can be made again the moment the watch says what it knows (the hello, below). */
+  const lastFrom = useRef(null)
   const stepRef = useRef(step)
   stepRef.current = step
+  /* The watch's pages as chosen and whether the watch takes them (lib/watchPages): read here so a change to either draws this again, and the picture below goes out with it. */
+  useWatchPages()
 
   /* One sender and one listener for the life of the screen, and none while
      Play is kept out of sight beside a tool that fills the window (`awake`
@@ -161,6 +166,16 @@ export function useWatchBridge(picture, step) {
       const asleep = AppState.currentState !== 'active'
       logDebug('watch', cmd.do, `${JSON.stringify(cmd)}${asleep ? ' (woke the phone)' : ''}`)
       if (cmd.do === 'hello') {
+        /*
+         * WHAT THE WATCH KNOWS, said in its hello (watch-link WATCH_KNOWS):
+         * kept, and the picture it is about to be sent made again with it,
+         * so a watch that takes its pages from the phone opens on the ones
+         * chosen rather than on the usual four for a quarter of a second. A watch from
+         * before says nothing, the answer is "nothing", and its picture is
+         * the one it always had.
+         */
+        noteWatchKnows(cmd.knows)
+        if (lastFrom.current) last.current = watchState({ ...lastFrom.current, ...pagesToSend() })
         sender.current?.flush(last.current)
         if (asleep) probeNow()
         return
@@ -304,7 +319,9 @@ export function useWatchBridge(picture, step) {
     const pedals = (chain || []).map((b) => ({ id: idOf(b), name: b.name, short: shortBlock(b), on: !b.bypassed, ...blockColor(b.slug), channel: b.channel, channels, word: b.word }))
     /* The metronome's tap, when the watch's switch is on: see lib/metronome. */
     const beat = metronome()
-    const state = watchState({ ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm } })
+    /* And its pages, in order and which are hidden, only for a watch that has said it takes them (lib/watchPages pagesToSend): null, and neither field, for any other. */
+    lastFrom.current = { ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm } }
+    const state = watchState({ ...lastFrom.current, ...pagesToSend() })
     last.current = state
     sender.current.push(state)
   })
