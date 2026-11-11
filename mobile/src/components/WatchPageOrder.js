@@ -17,20 +17,21 @@ import Press from './Press'
  * order, numbered, each with Hide beside its name and Move up and Move down
  * under it; then the hidden ones, faint, each with Show. The first in the
  * list is the page the watch opens on, and the list says so. Once anything
- * has been changed there is one button back to all four in the usual order.
+ * has been changed there is one button back to every page in the usual
+ * order.
  *
  * THE LAST SHOWN PAGE CANNOT BE HIDDEN: its Hide is switched off, and a line
  * says why. (The rule refuses it as well, lib/watch-link watchPageHid, and
- * the watch reads "all four hidden" as none.)
+ * the watch reads "every page hidden" as none.)
  *
  * DRAWN ONLY FOR A WATCH THAT HAS SAID IT DOES THIS (lib/watchPages `can`,
  * from the watch's own hello). A watch from before the build that carries
- * this draws all four in the usual order whatever it is sent, and a setting
+ * this draws its four in the usual order whatever it is sent, and a setting
  * that does nothing is worse than none: for that watch this draws nothing
  * at all.
  *
  * Buttons, never a drag: a row dragged up a page that scrolls is the thing
- * that goes wrong under a thumb, and four rows are few enough to step.
+ * that goes wrong under a thumb, and five rows are few enough to step.
  *
  * The words are these, in one place, so the tests can hold them
  * (test/watch-pages.mjs).
@@ -44,7 +45,7 @@ export const WATCH_ORDER_HIDE = 'Hide'
 export const WATCH_ORDER_SHOW = 'Show'
 export const WATCH_ORDER_HIDDEN = 'Hidden'
 export const WATCH_ORDER_LAST = 'Your watch always keeps one page, so the last one stays.'
-export const WATCH_ORDER_USUAL = 'Show all four in the usual order'
+export const WATCH_ORDER_USUAL = 'Show every page in the usual order'
 export const WATCH_ORDER_WHEN = 'Your watch takes a change the next time the Play screen is open on your iPhone.'
 
 /* The Hide and Show buttons: beside the page's name, one width so the names line up. */

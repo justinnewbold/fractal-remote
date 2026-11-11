@@ -6698,7 +6698,9 @@ export function run(test) {
     /* On a VP4 from the first tap, in its own words (test/vp4-safety.mjs); NO_TEMPO on every other unit. */
     assert.match(read('src/components/TapTempo.jsx'), /if \(vp4Here\(\) \|\| refusedAlready\('POST', '\/tempo'\)\) \{\s*onError\(noTempo\(null\)\)\s*return/)
     assert.match(read('src/components/TapTempo.jsx'), /const noTempo = \(err\) => \(aboutVp4\(err\) \? err\.message : vp4Here\(\) \? VP4_NO_TEMPO : NO_TEMPO\)/)
-    assert.match(read('mobile/src/lib/rig.js'), /if \(device\.vp4Here\?\.\(\) \|\| device\.refusedAlready\('POST', '\/tempo'\)\) \{\s*set\(faultFrom\(\{ message: noTempo\(null\) \}\)\)\s*return false/)
+    /* The phone's rule has a name, because the Apple Watch's Tempo page is told the same answer (lib/watchBridge): Tap asks it before it counts a tap. */
+    assert.match(read('mobile/src/lib/rig.js'), /export const noTapTempo = \(\) => \(device\.vp4Here\?\.\(\) \|\| device\.refusedAlready\('POST', '\/tempo'\) \? noTempo\(null\) : ''\)/)
+    assert.match(read('mobile/src/lib/rig.js'), /clearTimeout\(reread\)\s+\/\*[^*]*\*\/\s+const no = noTapTempo\(\)\s+if \(no\) \{\s*set\(faultFrom\(\{ message: no \}\)\)\s*return false/)
     /* The two ends' words for it are one rule: a VP4's own sentence on a VP4, NO_TEMPO elsewhere. */
     assert.match(read('mobile/src/lib/rig.js'), /const noTempo = \(err\) => \(aboutVp4\(err\) \? err\.message : device\.vp4Here\?\.\(\) \? VP4_NO_TEMPO : NO_TEMPO\)/)
     /* Unnamed scenes are an answer: no second dump to learn the same nothing. */

@@ -1041,7 +1041,9 @@ async function watchOnABench() {
     /* sameBlock and writeChannel are docs/pending/watch-channels.patch's, so this bench still runs once it is applied. */
     'stub.mjs': stub(['blockColor = () => ({})', 'idOf = (b) => b?.id', 'sameBlock = () => false', 'shortBlock = () => ""', 'metronome = () => ({ on: false })', 'boostPedals = (chain) => chain || []',
       /* lib/watchPages, for a watch that has not said it takes its pages from the phone: nothing kept, nothing sent. */
-      'noteWatchKnows = () => {}', 'pagesToSend = () => null', 'useWatchPages = () => ({ order: [], hidden: [], can: false })']),
+      'noteWatchKnows = () => {}', 'pagesToSend = () => null', 'useWatchPages = () => ({ order: [], hidden: [], can: false })', 'watchHasTempo = () => false',
+      /* lib/metronome's two for the Tempo page, which that watch never asks for. */
+      'setWatchTap = () => {}', 'useMetronome = () => ({})']),
     'debugLog.mjs': "import { bench } from './bench.mjs'\nexport const logDebug = (...a) => { bench.log.push(a.join(' ')) }\n",
     /* untilConnected as link.js's: true at once while the link is up, else when it comes back, or false once `ms` (8 s if not said) is up. */
     'link.mjs': "import * as clock from './clock.mjs'\nimport { bench } from './bench.mjs'\nexport const probeNow = () => { bench.probes++ }\nexport const untilConnected = (ms = 8000) => (bench.gate ? Promise.race([bench.gate.promise, new Promise((r) => clock.setTimeout(() => r(false), ms))]) : Promise.resolve(true))\n",
@@ -1052,6 +1054,8 @@ async function watchOnABench() {
       export const boostNow = () => null
       export const pedalSlug = () => null
       export const writeChannel = () => true
+      export const tapTempo = () => true
+      export const noTapTempo = () => ''
       export function tunerAskWaits() {
         bench.waiting++
         let open = true

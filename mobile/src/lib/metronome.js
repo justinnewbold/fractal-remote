@@ -160,6 +160,21 @@ export async function setMetronome(patch, slug, here = {}) {
 }
 
 /**
+ * THE TAP ON THE WRIST ALONE, on or off: the setting's `watch`, and nothing
+ * else. The Apple Watch's Tempo page asks for it with its own switch
+ * (lib/watchBridge, a `wrist` request), which is this page's "Tap on the
+ * watch" from the wrist. Never the metronome itself, and never the unit:
+ * its click is no part of `watch`, so nothing is written to it from here.
+ */
+export function setWatchTap(on) {
+  const next = metronomeSetting({ ...setting, watch: on === true })
+  if (next.watch === setting.watch) return
+  setting = next
+  announce()
+  AsyncStorage.setItem(KEY, JSON.stringify(setting)).catch(() => {})
+}
+
+/**
  * Tell a unit that has just arrived, when its click is meant to be on.
  *
  * A unit switched on after the phone, or the other unit picked under Which

@@ -13,23 +13,24 @@ import { logDebug } from './debugLog'
  * (shared/watch-link.mjs, THE WATCH'S PAGES); this is the phone keeping
  * three things on the device:
  *
- *   the order   the four pages as chosen in Settings → Apple Watch → Watch
- *               pages, repaired to all four whatever was kept: the shown
+ *   the order   the pages as chosen in Settings → Apple Watch → Watch
+ *               pages, repaired to every page whatever was kept: the shown
  *               ones in their order, then the hidden ones. The first is the
  *               page the watch opens on.
- *   hidden      the pages not drawn on the watch. Never all four: the last
- *               shown page cannot be hidden, and a kept list that names all
- *               four is read as none.
+ *   hidden      the pages not drawn on the watch. Never every one: the last
+ *               shown page cannot be hidden, and a kept list that names
+ *               them all is read as none.
  *   what the    the last thing the watch said it knows, in its hello
  *   watch knows (lib/watchBridge takes it there). `pages` among them is the
  *               watch saying it draws the pages it is told, in the order it
- *               is told.
+ *               is told; `tempo`, that it has the Tempo page.
  *
  * INERT UNTIL A WATCH SAYS SO. A watch from before the build that carries
- * this draws all four pages in the usual order whatever it is sent, and says
+ * this draws its four pages in the usual order whatever it is sent, and says
  * nothing of what it knows. So until one says `pages`, Settings shows
  * nothing for this (`can` is false) and the picture carries neither field
- * (pagesToSend is null): for everybody today, nothing here does anything.
+ * (pagesToSend is null), and until one says `tempo` it carries no tempo
+ * either (watchHasTempo): for everybody today, nothing here does anything.
  *
  * Kept on the device, like the metronome's setting: the watch is paired with
  * this iPhone, not with the account.
@@ -74,6 +75,9 @@ AsyncStorage.multiGet([ORDER_KEY, HIDDEN_KEY, KNOWS_KEY])
 /** Whether the watch has said it draws the pages it is told, in the order it is told. */
 export const watchOrdersPages = () => knows.includes('pages')
 
+/** Whether the watch has said it has the Tempo page (its hello's `tempo`): the picture's `tempo` is for that watch only. */
+export const watchHasTempo = () => knows.includes('tempo')
+
 /** What goes in the picture: the order and the hidden pages, for a watch that has said it does this; null, and neither field, for any other. */
 export const pagesToSend = () => (watchOrdersPages() ? { pages: order, hidden } : null)
 
@@ -106,7 +110,7 @@ export const moveWatchPage = (name, by) => keep(watchPageMoved(order, hidden, na
 /** One page hidden (true) or shown again (false). The last shown page stays. */
 export const hideWatchPage = (name, hide) => keep(watchPageHid(order, hidden, name, hide))
 
-/** All four pages, in the usual order. */
+/** Every page, in the usual order. */
 export const usualWatchPages = () => keep({ order: WATCH_PAGES, hidden: [] })
 
 /**

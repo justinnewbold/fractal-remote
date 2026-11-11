@@ -21,7 +21,7 @@ those must still pass the other.
 | Patch | What it does | Moves |
 |---|---|---|
 | `phone-turns.patch` | Lets a phone be turned on its side: on Play, on what opens beside Play and in Stage view, for an account the sideways layout is open to (his, until `PHONE_SIDEWAYS_FOR_EVERYONE`). Every other page, every other account and every tablet are as they were. Adds expo-screen-orientation. | **android and ios** (the watch line does not move) |
-| `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, and says in its hello that it can. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
+| `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), and says in its hello that it can do both. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
 
 Two patches are waiting: phone-turns (10 November 2026), whose section is
 next, and watch-page-order (11 November 2026), whose section follows it.
@@ -245,10 +245,12 @@ picture the phone sends, `pages` and `hidden`. All of it is INERT until a
 watch says it can do this: a watch from before this patch draws all four
 pages in the usual order whatever it is sent, and a setting that does
 nothing is worse than none. So the watch says what it knows in its hello
-(`"knows":["pages"]`, new in this patch; a hello from an older watch has no
-`knows`), the phone keeps the last answer on the device, and until it has
-heard `pages` it draws no rows in Settings and sends neither field. For
-every watch out today the phone's picture is byte for byte what it was.
+(`"knows":["pages","tempo"]`, new in this patch; a hello from an older watch
+has no `knows`), the phone keeps the last answer on the device, and until it
+has heard `pages` it draws no rows in Settings and sends neither field, and
+until it has heard `tempo` it sends no tempo and refuses both of the Tempo
+page's requests. For every watch out today the phone's picture is byte for
+byte what it was.
 
 **What the patch does, on the watch.**
 
@@ -270,9 +272,10 @@ every watch out today the phone's picture is byte for byte what it was.
 - A new order sent while the app is open never moves the page under the
   thumb: the watch stays on the page it was swiped to for as long as that
   page is shown.
-- CI's `-page N` still opens the same page: N counts along the USUAL order
-  (Scenes 0, Pedals 1, Presets 2, Tuner 3), by name, whatever order is
-  chosen. mobile/watch-ci/screens.sh is unchanged, and so are its pictures.
+- CI's `-page N` still opens the same page, by name, whatever order is
+  chosen: Scenes 0, Pedals 1, Presets 2, Tuner 3, and Tempo, which came
+  later, 4 (Model.swift `WatchPage.numbers`). mobile/watch-ci/screens.sh
+  takes the pictures it always took, and one more, tempo.png.
 - The rules for a list that is not quite right (a name the watch does not
   know, one twice, a short list, none) are the phone's word for word, and
   both are held to one fixture, mobile/watch-ci/Tests/WatchModelTests/
@@ -290,6 +293,36 @@ every watch out today the phone's picture is byte for byte what it was.
       git checkout -- mobile/targets/watch mobile/watch-ci
       rm mobile/watch-ci/Tests/WatchModelTests/pages.json
 
+**The fifth page, Tempo.** "OK, well let's add that as well then" (Justin,
+the same day). Fourth in the usual order (Scenes, Pedals, Presets, Tempo,
+Tuner), and in the list on the iPhone like the rest: it can be moved and
+hidden. An order kept from before it existed names four pages, and the rule
+puts whatever is missing after them, so Tempo simply appears, shown.
+
+- It shows the tempo as a big number with BPM beside it (a dash where the
+  phone knows none), one big **Tap** button, and a switch, **Wrist
+  metronome**.
+- **Tap** asks the phone for one press of Play's own Tap button (`{"do":
+  "tap"}`): the phone calls the very function that button calls
+  (lib/rig `tapTempo`), so the count, the range and the limits are Play's,
+  and there is no other way from the wrist to the unit's tempo. A tap is a
+  beat, so it is never sent twice by the watch, and the phone does not count
+  one it comes to more than 400 ms after it heard it; one that finds the
+  link to the unit down is refused, as Play's own is.
+- Where Play's Tap sends nothing (a VP4, or a unit that has already said
+  the app cannot set its tempo: lib/rig `noTapTempo`, the test Play's Tap
+  makes itself) the phone says so in the picture, the button is switched
+  off, and Play's own sentence is under it. The watch never decides that.
+- **Wrist metronome** is the "Tap on the watch" switch from Settings →
+  Metronome, from the wrist (`{"do":"wrist","on":true}`, lib/metronome
+  `setWatchTap`): that one setting. It does not start the metronome and
+  never touches the unit's click. So with the switch on and the phone's
+  metronome off nothing taps, and the page says "The metronome is off on
+  your iPhone."
+- The phone sends the page its picture as `tempo` (`bpm`, `tap`, `why`,
+  `wrist`, `running`), only to a watch that has said `tempo`.
+- The watch may now ask for eight things, not six.
+
 **It has not been compiled.** Nothing on a Linux box compiles Swift, and
 watch.yml runs on the tree, which does not have the patch (it does run on
 the pull request that brought this file, because that changes
@@ -297,9 +330,9 @@ shared/watch-link.mjs, and all it proves there is that the watch as it is
 still reads the phone's picture). The free check is watch.yml started by
 hand on a branch that carries this file, with **Apply the watch patches
 waiting in docs/pending first** ticked: it applies this patch, runs the
-watch's own tests (the five new ones among them), builds the watch app for
+watch's own tests (the seven new ones among them), builds the watch app for
 a simulated watch and takes its pictures, which should be the same pages as
-ever. It has not been run yet. duo.yml, also started by hand, applies every
+ever, with tempo.png new. It has not been run yet. duo.yml, also started by hand, applies every
 waiting patch and builds the iPhone and watch apps for a real device on
 Xcode 27.1, compile only. Both are GitHub's Macs and spend no Expo build.
 
@@ -328,21 +361,32 @@ Xcode 27.1, compile only. Both are GitHub's Macs and spend no Expo build.
    phone's half, an update.
 6. Hide all but one page: the last one's Hide is switched off, with "Your
    watch always keeps one page, so the last one stays." under the list.
+7. Tap on the Tempo page, in time. The phone counts each tap when it hears
+   it, and how evenly taps cross from the wrist to the phone is something
+   only the real link shows. If the number wanders more than it does on the
+   phone's own button, the fix is for the watch to send the time of each
+   tap and the phone to count by those (the watch's half is Swift, so that
+   would be another build). And with the iPhone locked, the first taps wake
+   it and are refused until the link to the unit is back.
+8. Whether the Tempo page fits a small watch without scrolling, and how the
+   phone's sentence reads under a switched-off Tap (a VP4 is the way to see
+   it).
 
 **What goes with it in the build pull request, outside the patch:**
 
 - nothing to install: it adds no package and no permission;
 - the review notes for that version (docs/app-store.md), one plain
   sentence: "On an iPhone paired with an Apple Watch, Settings → Apple
-  Watch → Watch pages chooses which of the watch app's four pages (Scenes,
-  Pedals, Presets, Tuner) are shown and their order; one page is always
-  shown." What's New may say the same in fewer words;
+  Watch → Watch pages chooses which of the watch app's pages (Scenes,
+  Pedals, Presets, Tempo, Tuner) are shown and their order; one page is
+  always shown." And one for the new page: "The watch app has a new Tempo
+  page: it shows the unit's tempo, its Tap button does what the Tap button
+  on the iPhone's Play screen does, and a switch turns the metronome's tap
+  on the wrist on or off." What's New may say the same in fewer words;
 - a What's new line (`only: 'ios'`) in that pull request, since from that
   build on a wearer can see it: "Apple Watch: choose which pages your watch
-  shows, and their order, in Settings → Apple Watch.";
-- the watch tips on that Settings page (lib/watchBridge `WATCH_HOW`) say
-  "its four pages"; true of every watch until a page is hidden, and worth
-  a look once this is on a wrist;
+  shows, and their order, in Settings → Apple Watch. And a new Tempo page,
+  with Tap and the metronome on your wrist.";
 - docs/expo-builds.md's row for the pair.
 
 No store-version key: the rows wait for the watch's own word, and only a

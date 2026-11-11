@@ -7,18 +7,18 @@ import { logDebug } from './debugLog'
 import { idOf, sameBlock } from './device'
 import { probeNow, untilConnected } from './link'
 import { shortBlock } from './shortName'
-import { getState, tunerAskWaits, tunerAsksWaiting, writeBypass, writeChannel, writeScene, writeTuner } from './rig'
+import { getState, noTapTempo, tapTempo, tunerAskWaits, tunerAsksWaiting, writeBypass, writeChannel, writeScene, writeTuner } from './rig'
 import { tapDeadline } from './relay-rules'
-import { createWatchSender, watchCommand, watchState } from './watch-link'
-import { metronome } from './metronome'
+import { createWatchSender, watchCommand, watchState, watchTapInTime } from './watch-link'
+import { metronome, setWatchTap, useMetronome } from './metronome'
 import { boostPedals } from './am4-boost'
 import { boostNow, pedalSlug } from './rig'
-import { noteWatchKnows, pagesToSend, useWatchPages } from './watchPages'
+import { noteWatchKnows, pagesToSend, useWatchPages, watchHasTempo } from './watchPages'
 
 /*
  * THE APPLE WATCH, FROM THE PHONE'S SIDE.
  *
- * The watch draws what the phone tells it and asks for one of six things —
+ * The watch draws what the phone tells it and asks for one of eight things —
  * see lib/watch-link (shared/watch-link.mjs) for both halves of that. This is
  * the phone keeping its end: a fresh picture whenever the stage screen's
  * changes, and each request carried out with the same calls the stage
@@ -31,6 +31,15 @@ import { noteWatchKnows, pagesToSend, useWatchPages } from './watchPages'
  * null and every line below does nothing, so this can ship in an ordinary
  * update ahead of that build.
  */
+
+/*
+ * THE PICTURE FOR THE WATCH THAT IS THERE. What Play gave (`from`), with the
+ * two things only a watch that has said it knows them is sent: its pages
+ * (lib/watchPages pagesToSend) and its Tempo page's tempo (watchHasTempo).
+ * To any other watch neither is in the picture at all, and it is field for
+ * field what it always was.
+ */
+const pictured = (from) => watchState({ ...from, tempo: watchHasTempo() ? from.tempo : null, ...pagesToSend() })
 
 let native
 function link() {
@@ -91,7 +100,20 @@ export function watchWakes() {
 }
 
 /** How the watch is used, in this build's words: the first line depends on wake on tap. */
-export const watchHow = () => (watchWakes() ? [WATCH_HOW_LOCKED, ...WATCH_HOW.slice(1)] : WATCH_HOW)
+const howLines = () => (watchWakes() ? [WATCH_HOW_LOCKED, ...WATCH_HOW.slice(1)] : WATCH_HOW)
+
+/*
+ * AND IN THIS WATCH'S: one that has the Tempo page (its hello's `tempo`,
+ * lib/watchPages) has five pages, not the four WATCH_HOW names, and a line
+ * for the new one. A watch from before that build is told what it always
+ * was, since those are the pages it has.
+ */
+export const WATCH_HOW_PAGES_TEMPO = 'Swipe up or down on the watch, or turn the Digital Crown, to move between its pages: Scenes, Pedals, Presets, Tempo and Tuner.'
+export const WATCH_HOW_TEMPO = 'Tempo shows the tempo. Tap its button in time to set a new one.'
+export function watchHow() {
+  const lines = howLines()
+  return watchHasTempo() ? [lines[0], WATCH_HOW_PAGES_TEMPO, lines[2], WATCH_HOW_TEMPO, ...lines.slice(3)] : lines
+}
 
 /** A watch is paired with this phone and has the watch app on it. False on any doubt. */
 export function watchPaired() {
@@ -128,6 +150,8 @@ export function useWatchBridge(picture, step) {
   stepRef.current = step
   /* The watch's pages as chosen and whether the watch takes them (lib/watchPages): read here so a change to either draws this again, and the picture below goes out with it. */
   useWatchPages()
+  /* And the metronome's setting, so the wrist's own switch (a `wrist` request, below) is in the next picture and not the one after something else moves. */
+  useMetronome()
 
   /* One sender and one listener for the life of the screen, and none while
      Play is kept out of sight beside a tool that fills the window (`awake`
@@ -175,9 +199,40 @@ export function useWatchBridge(picture, step) {
          * the one it always had.
          */
         noteWatchKnows(cmd.knows)
-        if (lastFrom.current) last.current = watchState({ ...lastFrom.current, ...pagesToSend() })
+        if (lastFrom.current) last.current = pictured(lastFrom.current)
         sender.current?.flush(last.current)
         if (asleep) probeNow()
+        return
+      }
+      /*
+       * THE TEMPO PAGE'S SWITCH: the metronome's "Tap on the watch", on or
+       * off (lib/metronome setWatchTap). A setting kept on the phone, with
+       * nothing to send to the unit, so it needs no connection and is the
+       * same whether the phone was awake or woken by it.
+       */
+      if (cmd.do === 'wrist') {
+        setWatchTap(cmd.on)
+        return
+      }
+      /*
+       * THE TEMPO PAGE'S TAP: one press of Play's own Tap button, by the
+       * function that button calls (rig.tapTempo), so the same count, the
+       * same range, the same limits and the same refusals. Not through the
+       * woken phone's wait below: A TAP IS A BEAT, and one held until the
+       * connection is back would be counted at the wrong moment. So it is
+       * pressed as it arrives or not at all: a tap the app comes to more
+       * than WATCH_TAP_LATE_MS after the phone heard it is not counted, and
+       * one that finds the link down is refused by tapTempo itself, as
+       * Play's is ("nothing counted, nothing shown"). A phone woken by it
+       * is set to rejoin, so the taps after it have a link to go by.
+       */
+      if (cmd.do === 'tap') {
+        if (!watchTapInTime(receivedAt)) {
+          logDebug('watch', 'tap not counted: it was held too long on its way')
+          return
+        }
+        if (asleep) probeNow()
+        tapTempo()
         return
       }
       const run = () => {
@@ -319,9 +374,10 @@ export function useWatchBridge(picture, step) {
     const pedals = (chain || []).map((b) => ({ id: idOf(b), name: b.name, short: shortBlock(b), on: !b.bypassed, ...blockColor(b.slug), channel: b.channel, channels, word: b.word }))
     /* The metronome's tap, when the watch's switch is on: see lib/metronome. */
     const beat = metronome()
-    /* And its pages, in order and which are hidden, only for a watch that has said it takes them (lib/watchPages pagesToSend): null, and neither field, for any other. */
-    lastFrom.current = { ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm } }
-    const state = watchState({ ...lastFrom.current, ...pagesToSend() })
+        /* And the Tempo page: the tempo Play's Tap button shows, whether that button sends anything here and Play's sentence where it does not (rig.noTapTempo), the wrist's switch, and whether the metronome is running at all. */
+    const tempo = { bpm: getState().bpm, why: noTapTempo(), wrist: beat.watch === true, running: beat.on === true }
+    lastFrom.current = { ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm }, tempo }
+    const state = pictured(lastFrom.current)
     last.current = state
     sender.current.push(state)
   })

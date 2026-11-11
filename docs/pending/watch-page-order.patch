@@ -1,13 +1,14 @@
 diff --git a/mobile/targets/watch/FractalWatchApp.swift b/mobile/targets/watch/FractalWatchApp.swift
-index 807c1e54..69a89da7 100644
+index 807c1e54..49330aa1 100644
 --- a/mobile/targets/watch/FractalWatchApp.swift
 +++ b/mobile/targets/watch/FractalWatchApp.swift
-@@ -13,19 +13,36 @@ struct FractalWatchApp: App {
+@@ -13,19 +13,37 @@ struct FractalWatchApp: App {
  }
  
  /*
 - * FOUR PAGES, SWIPED UP AND DOWN: Scenes, Pedals, Presets, Tuner.
-+ * UP TO FOUR PAGES, SWIPED UP AND DOWN: Scenes, Pedals, Presets, Tuner.
++ * UP TO FIVE PAGES, SWIPED UP AND DOWN: Scenes, Pedals, Presets, Tempo,
++ * Tuner.
   *
 - * It opens on Scenes, the one reached for most mid-song. The tuner is last and
 - * does nothing until it is tapped: a unit set to mute while it tunes would
@@ -15,7 +16,7 @@ index 807c1e54..69a89da7 100644
 - * turns it back off.
 + * THE ONES SHOWN, IN THE ORDER CHOSEN ON THE IPHONE (Settings → Apple Watch
 + * → Watch pages), which the phone sends in the picture (Model.swift,
-+ * WatchState.shown), and all four in the usual order above when it sends
++ * WatchState.shown), and all five in the usual order above when it sends
 + * nothing. A hidden page is not drawn, so it cannot be swiped to. It opens
 + * on the first of those shown: Scenes in the usual order, the one reached
 + * for most mid-song.
@@ -33,10 +34,10 @@ index 807c1e54..69a89da7 100644
 + * page hidden while the watch is on it sets it back to nil: the first shown
 + * page again.
 + *
-+ * Launched with -page N (CI's screenshots) it opens on that page instead:
-+ * the Nth of the USUAL order, whatever order is chosen, so CI's pictures
-+ * are of the same pages they always were. (CI sends no order and hides
-+ * nothing.)
++ * Launched with -page N (CI's screenshots) it opens on that page instead,
++ * by the number CI has always called it (Model.swift WatchPage.numbers: 3
++ * is the tuner, wherever the tuner is drawn), so CI's pictures are of the
++ * same pages they always were. (CI sends no order and hides nothing.)
   */
  struct RootView: View {
      @EnvironmentObject private var link: PhoneLink
@@ -46,7 +47,7 @@ index 807c1e54..69a89da7 100644
      /* The metronome's tap: see Metronome.swift. */
      @State private var wrist = WristMetronome()
  
-@@ -34,11 +51,10 @@ struct RootView: View {
+@@ -34,11 +52,10 @@ struct RootView: View {
              /* The pages stay up through a moment out of reach (see PhoneLink.away),
                 with the taps held back and a word at the top saying why. */
              if let state = link.state, state.linked, !state.tooNew, !link.away {
@@ -62,7 +63,7 @@ index 807c1e54..69a89da7 100644
                  }
                  .tabViewStyle(.verticalPage)
                  .disabled(!link.reachable)
-@@ -63,5 +79,27 @@ struct RootView: View {
+@@ -63,5 +80,28 @@ struct RootView: View {
          .onChange(of: link.state?.metronome) { _, now in
              if phase == .active { wrist.follow(now) }
          }
@@ -86,41 +87,95 @@ index 807c1e54..69a89da7 100644
 +        case .scenes: ScenesPage(state: state)
 +        case .pedals: PedalsPage(state: state)
 +        case .presets: PresetsPage(state: state)
++        case .tempo: TempoPage(state: state)
 +        case .tuner: TunerPage(state: state)
 +        }
      }
  }
 diff --git a/mobile/targets/watch/Model.swift b/mobile/targets/watch/Model.swift
-index ca41efac..99613577 100644
+index ca41efac..29600513 100644
 --- a/mobile/targets/watch/Model.swift
 +++ b/mobile/targets/watch/Model.swift
-@@ -70,6 +70,89 @@ struct WatchMetronome: Codable, Equatable {
+@@ -5,7 +5,7 @@ import Foundation
+  *
+  * The Swift reading of shared/watch-link.mjs, field for field. The phone sends
+  * the whole picture each time (watchState there), so a watch that missed a
+- * message is right again on the next; the watch asks for one of six things
++ * message is right again on the next; the watch asks for one of eight things
+  * (watchCommand there), and the phone drops anything else.
+  *
+  * No SwiftUI and no WatchConnectivity in this file, on purpose: it is the part
+@@ -70,6 +70,133 @@ struct WatchMetronome: Codable, Equatable {
      var bpm: Double
  }
  
 +/*
-+ * THE WATCH'S FOUR PAGES: WHICH ARE DRAWN, AND IN WHAT ORDER. Justin, 11
++ * THE TEMPO PAGE'S PICTURE (tempoForWatch in shared/watch-link.mjs): the
++ * tempo as a big number, whether Tap is offered, and the switch for the
++ * metronome's tap on the wrist. All of it is the phone's word; the watch
++ * never guesses.
++ *
++ *   bpm      the unit's tempo as the iPhone's Tap button shows it; none
++ *            where none is known (a dash, and Tap still taps).
++ *   tap      whether the iPhone's own Tap sends anything for this unit on
++ *            this connection. Where it does not, the button is switched
++ *            off and `why` is said under it.
++ *   why      the iPhone's sentence for that, word for word.
++ *   wrist    the metronome's "Tap on the watch" switch.
++ *   running  whether the metronome is on at all: the wrist taps only while
++ *            it is.
++ *
++ * Every field but `tap` optional, for the reason the channels are: one
++ * missing must not lose the whole picture.
++ */
++struct WatchTempo: Codable, Equatable {
++    var bpm: Double? = nil
++    var tap: Bool
++    var why: String? = nil
++    var wrist: Bool? = nil
++    var running: Bool? = nil
++}
++
++/** The tempo as the page writes it: the whole number the iPhone's Tap button shows, or a dash for none. */
++func tempoNumber(_ bpm: Double?) -> String {
++    guard let bpm, bpm.isFinite, bpm > 0 else { return "—" }
++    return String(Int(bpm.rounded()))
++}
++
++/*
++ * THE WATCH'S PAGES: WHICH ARE DRAWN, AND IN WHAT ORDER. Justin, 11
 + * November 2026: "On the watch, can we add a way for a user to select which
 + * order their pages show up in on the Watch app?" and, asked about hiding
 + * one, "Yes, add hiding pages." Both are chosen on the iPhone (Settings →
-+ * Apple Watch → Watch pages) and sent in the picture: `pages`, the four
-+ * names in the order chosen, and `hidden`, the names of those not to draw.
-+ * The watch draws the ones shown in that order and opens on the first.
++ * Apple Watch → Watch pages) and sent in the picture: `pages`, every
++ * page's name in the order chosen, and `hidden`, the names of those not to
++ * draw. The watch draws the ones shown in that order and opens on the first.
 + *
-+ * The names are WATCH_PAGES in shared/watch-link.mjs, and `usual` is its
-+ * order: what the watch draws when the phone says none (a phone from before
-+ * this, and the demo), and what CI's `-page N` has always counted by, so
-+ * `-page 2` is Presets wherever Presets is drawn.
++ * FIVE PAGES: Tempo came the same day ("OK, well let's add that as well
++ * then"), fourth in the usual order, with the tuner still last. The names
++ * are WATCH_PAGES in shared/watch-link.mjs, and `usual` is its order: what
++ * the watch draws when the phone says none (a phone from before this, and
++ * the demo). An order kept from before Tempo names four pages, and the rule
++ * below puts whatever is missing after them, so Tempo simply appears.
 + */
 +enum WatchPage: String, CaseIterable, Equatable {
-+    case scenes, pedals, presets, tuner
++    case scenes, pedals, presets, tempo, tuner
 +
-+    /** The usual order: Scenes, Pedals, Presets, Tuner. */
-+    static let usual: [WatchPage] = [.scenes, .pedals, .presets, .tuner]
++    /** The usual order: Scenes, Pedals, Presets, Tempo, Tuner. */
++    static let usual: [WatchPage] = [.scenes, .pedals, .presets, .tempo, .tuner]
 +
-+    /** The page CI's `-page N` asks for: its place in the usual order, never in the order chosen. Nil for a number that is no page. */
++    /*
++     * THE PAGES BY THE NUMBERS CI HAS ALWAYS CALLED THEM (-page N, for its
++     * screenshots): 0 Scenes, 1 Pedals, 2 Presets, 3 Tuner, and Tempo, which
++     * came later, 4. By name, never by place: -page 3 is the tuner wherever
++     * the tuner is drawn, in the usual order or any other, so CI's pictures
++     * are of the pages they always were.
++     */
++    static let numbers: [WatchPage] = [.scenes, .pedals, .presets, .tuner, .tempo]
++
++    /** The page CI's `-page N` asks for. Nil for a number that is no page. */
 +    static func numbered(_ n: Int) -> WatchPage? {
-+        usual.indices.contains(n) ? usual[n] : nil
++        numbers.indices.contains(n) ? numbers[n] : nil
 +    }
 +}
 +
@@ -131,7 +186,7 @@ index ca41efac..99613577 100644
 + *
 + * watchPageOrder: a full order of the four pages out of anything the phone
 + * sent: the names it knows, each once, in the order given, then whatever is
-+ * missing in the usual order. Always all four.
++ * missing in the usual order. Always every page.
 + */
 +func watchPageOrder(_ names: [String]?) -> [WatchPage] {
 +    var out: [WatchPage] = []
@@ -144,8 +199,8 @@ index ca41efac..99613577 100644
 +
 +/*
 + * watchPagesHidden: the hidden pages out of anything: the names it knows,
-+ * each once, told in the usual order. ALL FOUR IS NONE: a watch always has
-+ * a page. So is no list, an empty one, or one of names nobody knows.
++ * each once, told in the usual order. EVERY PAGE IS NONE: a watch always
++ * has a page. So is no list, an empty one, or one of names nobody knows.
 + */
 +func watchPagesHidden(_ names: [String]?) -> [WatchPage] {
 +    let said = names ?? []
@@ -184,10 +239,12 @@ index ca41efac..99613577 100644
  struct WatchState: Codable, Equatable {
      /** WATCH_LINK_VERSION in shared/watch-link.mjs. */
      static let linkVersion = 1
-@@ -86,6 +169,21 @@ struct WatchState: Codable, Equatable {
+@@ -86,6 +213,23 @@ struct WatchState: Codable, Equatable {
      var tuner: WatchTuner
      /** Optional: a phone older than the metronome sends none, and that is "off". */
      var metronome: WatchMetronome? = nil
++    /** The Tempo page's picture. Optional: only a phone that has heard this watch say it has that page (`knows`, below) sends one, and none is a dash with Tap switched off. */
++    var tempo: WatchTempo? = nil
 +    /*
 +     * The pages in the order chosen on the iPhone, by name, and those of
 +     * them not to draw. Optional, like the metronome: a phone that has not
@@ -206,33 +263,175 @@ index ca41efac..99613577 100644
  
      static func decode(_ json: String) -> WatchState? {
          guard let data = json.data(using: .utf8) else { return nil }
-@@ -132,6 +230,17 @@ struct WatchState: Codable, Equatable {
+@@ -126,13 +270,31 @@ struct WatchState: Codable, Equatable {
+             WatchPedal(id: 70, short: "DLY", name: "Delay 1", on: false, fill: "#2e86ab", ink: "#ffffff", channel: "C", channels: abcd),
+             WatchPedal(id: 66, short: "REV", name: "Reverb 1", on: true, fill: "#8e44ad", ink: "#ffffff", channel: "A", channels: abcd)
+         ],
+-        tuner: WatchTuner(on: false, note: "", octave: -1, cents: 0, inTune: false)
++        tuner: WatchTuner(on: false, note: "", octave: -1, cents: 0, inTune: false),
++        tempo: WatchTempo(bpm: 120, tap: true, why: "", wrist: false, running: false)
+     )
+ }
  
- /** The six things the watch may ask. watchCommand in shared/watch-link.mjs. */
+-/** The six things the watch may ask. watchCommand in shared/watch-link.mjs. */
++/** The eight things the watch may ask. watchCommand in shared/watch-link.mjs. */
  enum WatchCommand: Equatable {
 +    /*
 +     * WHAT THIS WATCH KNOWS, said in its hello (WATCH_KNOWS in
 +     * shared/watch-link.mjs). "pages": it draws the pages the picture says
-+     * are shown, in the order the picture says. The phone shows the Watch
-+     * pages setting, and sends an order or a hidden page at all, only to a
-+     * watch that has said so: a watch from before this build draws all four
-+     * in the usual order whatever it is sent, and a setting that does
-+     * nothing is worse than none.
++     * are shown, in the order the picture says. "tempo": it has the Tempo
++     * page, reads the picture's `tempo`, and may ask for a tap and for the
++     * wrist's switch. The phone shows the Watch pages setting, and sends an
++     * order, a hidden page or a tempo at all, only to a watch that has said
++     * so: a watch from before this build draws its four pages in the usual
++     * order whatever it is sent, and a setting that does nothing is worse
++     * than none.
 +     */
-+    static let knows = ["pages"]
++    static let knows = ["pages", "tempo"]
 +
      case hello
++    /** One tap of the iPhone's own Tap button: the Tempo page's button. */
++    case tap
++    /** The metronome's tap on the wrist, on or off: the Tempo page's switch. */
++    case wrist(on: Bool)
      case scene(Int)
      case pedal(id: Int, on: Bool)
-@@ -143,7 +252,7 @@ enum WatchCommand: Equatable {
+     case preset(step: Int)
+@@ -140,10 +302,23 @@ enum WatchCommand: Equatable {
+     /** That block onto that channel, by the letter the phone sent ("B"). */
+     case channel(id: Int, channel: String)
+ 
++    /*
++     * SENT ONCE OR NOT AT ALL. A request that did not go is tried once more
++     * a second later (PhoneLink.send), which is right for a scene and wrong
++     * for a tap: a tap is a beat, and one that lands a second late is a
++     * beat that was never played.
++     */
++    var once: Bool {
++        if case .tap = self { return true }
++        return false
++    }
++
      /** Written by hand, so the order of the keys never changes under the tests. */
      var json: String {
          switch self {
 -        case .hello: return #"{"do":"hello"}"#
-+        case .hello: return #"{"do":"hello","knows":["pages"]}"#
++        case .hello: return #"{"do":"hello","knows":["pages","tempo"]}"#
++        case .tap: return #"{"do":"tap"}"#
++        case .wrist(let on): return #"{"do":"wrist","on":\#(on)}"#
          case .scene(let index): return #"{"do":"scene","index":\#(index)}"#
          case .pedal(let id, let on): return #"{"do":"pedal","id":\#(id),"on":\#(on)}"#
          case .preset(let step): return #"{"do":"preset","step":\#(step < 0 ? -1 : 1)}"#
+@@ -296,6 +471,11 @@ extension WatchState {
+         switch command {
+         case .hello:
+             break
++        case .tap:
++            /* The demo has no unit to count a tap, so the number stays. */
++            break
++        case .wrist(let on):
++            next.tempo?.wrist = on
+         case .scene(let index):
+             if index >= 0 && index < scenes.count { next.scene = index }
+         case .pedal(let id, let on):
+diff --git a/mobile/targets/watch/Pages.swift b/mobile/targets/watch/Pages.swift
+index e25777c5..429da88a 100644
+--- a/mobile/targets/watch/Pages.swift
++++ b/mobile/targets/watch/Pages.swift
+@@ -532,6 +532,78 @@ struct PresetsPage: View {
+     }
+ }
+ 
++// MARK: - Tempo
++
++/*
++ * The tempo as a big number, one Tap button, and the metronome's tap on the
++ * wrist. "OK, well let's add that as well then" (Justin, 11 November 2026).
++ *
++ * TAP IS THE IPHONE'S OWN TAP BUTTON: each press asks the phone for one tap
++ * of it (WatchCommand.tap) and the phone counts them as it counts its own,
++ * so the number that comes back is the one its Tap button shows. With no
++ * tempo known the number is a dash and the button still taps. Where the
++ * iPhone's Tap sends nothing for this unit or this connection the phone
++ * says so in the picture (`tap` false, with its own sentence in `why`): the
++ * button is switched off and the sentence is under it. The watch never
++ * decides that for itself.
++ *
++ * THE SWITCH is the metronome's "Tap on the watch" from the iPhone's
++ * Settings, and only that: it does not start the metronome, which is the
++ * iPhone's to start. So with the switch on and the metronome off nothing
++ * taps, and the page says which.
++ *
++ * In a ScrollView because the phone's sentence can be four lines on a small
++ * watch; with nothing to say it fits and does not move.
++ */
++struct TempoPage: View {
++    let state: WatchState
++    @EnvironmentObject private var link: PhoneLink
++
++    var body: some View {
++        let tempo = state.tempo
++        let canTap = tempo?.tap == true
++        let why = tempo?.why ?? ""
++        ScrollView {
++            VStack(spacing: 6) {
++                HStack(alignment: .firstTextBaseline, spacing: 4) {
++                    Text(tempoNumber(tempo?.bpm))
++                        .font(.system(size: 44, weight: .bold, design: .rounded))
++                        .lineLimit(1)
++                        .minimumScaleFactor(0.6)
++                    Text("BPM").font(.caption2).foregroundStyle(.secondary)
++                }
++                .frame(maxWidth: .infinity, minHeight: 48)
++                .accessibilityElement(children: .ignore)
++                .accessibilityLabel(tempoNumber(tempo?.bpm) == "—" ? "No tempo yet" : "\(tempoNumber(tempo?.bpm)) beats per minute")
++                Button {
++                    tap()
++                    link.send(.tap)
++                } label: {
++                    Label("Tap", systemImage: "metronome").frame(maxWidth: .infinity, minHeight: 56)
++                }
++                .disabled(!canTap)
++                .accessibilityLabel("Tap tempo")
++                if !canTap, !why.isEmpty {
++                    Text(why)
++                        .font(.footnote)
++                        .foregroundStyle(.secondary)
++                        .multilineTextAlignment(.center)
++                        .fixedSize(horizontal: false, vertical: true)
++                }
++                Toggle("Wrist metronome", isOn: Binding(get: { tempo?.wrist == true }, set: { link.send(.wrist(on: $0)) }))
++                    .disabled(tempo == nil)
++                if tempo?.wrist == true, tempo?.running != true {
++                    Text("The metronome is off on your iPhone.")
++                        .font(.footnote)
++                        .foregroundStyle(.secondary)
++                        .multilineTextAlignment(.center)
++                        .fixedSize(horizontal: false, vertical: true)
++                }
++            }
++        }
++    }
++}
++
+ // MARK: - Tuner
+ 
+ /*
+diff --git a/mobile/targets/watch/PhoneLink.swift b/mobile/targets/watch/PhoneLink.swift
+index 2d40776f..43ed5484 100644
+--- a/mobile/targets/watch/PhoneLink.swift
++++ b/mobile/targets/watch/PhoneLink.swift
+@@ -85,7 +85,10 @@ final class PhoneLink: NSObject, ObservableObject {
+          * Waking can miss the first time; one more try a second later.
+          */
+         let body: [String: Any] = ["json": command.json]
++        /* A tap is sent once or not at all (WatchCommand.once): a second try would be a second, late beat. */
++        let once = command.once
+         session.sendMessage(body, replyHandler: { _ in }, errorHandler: { _ in
++            guard !once else { return }
+             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                 guard session.isReachable else { return }
+                 session.sendMessage(body, replyHandler: { _ in }, errorHandler: nil)
 diff --git a/mobile/watch-ci/Package.swift b/mobile/watch-ci/Package.swift
 index 05571339..900f45e7 100644
 --- a/mobile/watch-ci/Package.swift
@@ -247,19 +446,22 @@ index 05571339..900f45e7 100644
      ]
  )
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
-index 1b1532ec..49420fcc 100644
+index 1b1532ec..fb6d279e 100644
 --- a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
 +++ b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
-@@ -122,7 +122,7 @@ final class WatchModelTests: XCTestCase {
+@@ -122,7 +122,10 @@ final class WatchModelTests: XCTestCase {
      }
  
      func testTheRequestsAreThePhonesWords() {
 -        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello"}"#)
-+        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello","knows":["pages"]}"#)
++        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello","knows":["pages","tempo"]}"#)
++        XCTAssertEqual(WatchCommand.tap.json, #"{"do":"tap"}"#)
++        XCTAssertEqual(WatchCommand.wrist(on: true).json, #"{"do":"wrist","on":true}"#)
++        XCTAssertEqual(WatchCommand.wrist(on: false).json, #"{"do":"wrist","on":false}"#)
          XCTAssertEqual(WatchCommand.scene(2).json, #"{"do":"scene","index":2}"#)
          XCTAssertEqual(WatchCommand.pedal(id: 50, on: false).json, #"{"do":"pedal","id":50,"on":false}"#)
          XCTAssertEqual(WatchCommand.preset(step: -1).json, #"{"do":"preset","step":-1}"#)
-@@ -132,6 +132,127 @@ final class WatchModelTests: XCTestCase {
+@@ -132,6 +135,187 @@ final class WatchModelTests: XCTestCase {
          XCTAssertEqual(WatchCommand.channel(id: 50, channel: #"a"b"#).json, #"{"do":"channel","id":50,"channel":"a\"b"}"#, "a channel is sent as JSON, not pasted in")
      }
  
@@ -295,22 +497,22 @@ index 1b1532ec..49420fcc 100644
 +
 +    func testThePagesAreDrawnInTheOrderThePhoneSends() throws {
 +        let state = try XCTUnwrap(WatchState.decode(try pagesPicture()), "a picture with pages in it was not read at all")
-+        XCTAssertEqual(state.pages, ["tuner", "scenes", "presets", "pedals"])
++        XCTAssertEqual(state.pages, ["tuner", "scenes", "presets", "tempo", "pedals"])
 +        XCTAssertEqual(state.hidden, ["presets"])
-+        XCTAssertEqual(state.order, [.tuner, .scenes, .presets, .pedals])
-+        XCTAssertEqual(state.shown, [.tuner, .scenes, .pedals], "a hidden page is drawn, or the order is not the one sent")
++        XCTAssertEqual(state.order, [.tuner, .scenes, .presets, .tempo, .pedals])
++        XCTAssertEqual(state.shown, [.tuner, .scenes, .tempo, .pedals], "a hidden page is drawn, or the order is not the one sent")
 +        XCTAssertEqual(watchPageOnShow(nil, state.shown), .tuner, "it does not open on the first page of the order chosen")
 +        /* The rest of the picture is read as it always was. */
 +        XCTAssertTrue(state.linked)
 +        XCTAssertEqual(state.nameLine, "Crunch Rhythm")
 +        XCTAssertEqual(state.scenes.count, 8)
 +
-+        /* A phone that sends neither (every phone, to a watch that has not said it knows): all four, the usual order, Scenes first. */
++        /* A phone that sends neither (every phone, to a watch that has not said it knows): every page, the usual order, Scenes first. */
 +        let plain = try XCTUnwrap(WatchState.decode(try fixture()))
 +        XCTAssertNil(plain.pages)
 +        XCTAssertNil(plain.hidden)
 +        XCTAssertEqual(plain.order, WatchPage.usual)
-+        XCTAssertEqual(plain.shown, [.scenes, .pedals, .presets, .tuner])
++        XCTAssertEqual(plain.shown, [.scenes, .pedals, .presets, .tempo, .tuner])
 +        XCTAssertEqual(watchPageOnShow(nil, plain.shown), .scenes)
 +        /* And so does the demo, which CI's pictures are taken of. */
 +        XCTAssertEqual(WatchState.sample.shown, WatchPage.usual)
@@ -325,12 +527,17 @@ index 1b1532ec..49420fcc 100644
 +            XCTAssertEqual(watchPagesHidden(c.hidden).map(\.rawValue), c.off, "the hidden pages of \(said)")
 +            XCTAssertEqual(watchPagesShown(c.pages, c.hidden).map(\.rawValue), c.shown, "the pages drawn for \(said)")
 +            XCTAssertEqual(Set(watchPageOrder(c.pages)), Set(WatchPage.allCases), "\(said) lost a page from the order, or drew one twice")
-+            XCTAssertEqual(watchPageOrder(c.pages).count, 4)
++            XCTAssertEqual(watchPageOrder(c.pages).count, 5)
 +            XCTAssertFalse(watchPagesShown(c.pages, c.hidden).isEmpty, "\(said) left the watch with no page")
 +        }
 +        /* The ones that matter most, said here as well as in the fixture. */
-+        XCTAssertEqual(watchPagesShown(nil, ["scenes", "pedals", "presets", "tuner"]), WatchPage.usual, "hiding all four is hiding none: a watch always has a page")
-+        XCTAssertEqual(watchPagesShown(["tuner"], ["scenes", "scenes", "looper"]), [.tuner, .pedals, .presets])
++        XCTAssertEqual(watchPagesShown(nil, ["scenes", "pedals", "presets", "tempo", "tuner"]), WatchPage.usual, "hiding every page is hiding none: a watch always has a page")
++        XCTAssertEqual(watchPagesShown(["tuner"], ["scenes", "scenes", "looper"]), [.tuner, .pedals, .presets, .tempo])
++        /* AN ORDER KEPT FROM BEFORE TEMPO WAS A PAGE names four: Tempo is what is missing, so it comes in after them, shown. */
++        XCTAssertEqual(watchPageOrder(["tuner", "scenes", "presets", "pedals"]), [.tuner, .scenes, .presets, .pedals, .tempo])
++        XCTAssertEqual(watchPagesShown(["tuner", "scenes", "presets", "pedals"], ["presets"]), [.tuner, .scenes, .pedals, .tempo])
++        /* And the four old names hidden, by a list from before it, leave the new page rather than none. */
++        XCTAssertEqual(watchPagesShown(nil, ["scenes", "pedals", "presets", "tuner"]), [.tempo])
 +        XCTAssertEqual(watchPagesHidden(["tuner", "scenes"]), [.scenes, .tuner], "the hidden pages are told in the usual order")
 +        XCTAssertEqual(watchPagesHidden(["Tuner", " tuner", ""]), [], "a name that is not exactly a page's was taken for one")
 +
@@ -340,8 +547,8 @@ index 1b1532ec..49420fcc 100644
 +            p["hidden"] = ["scenes", "nope", "scenes"]
 +        }
 +        let state = try XCTUnwrap(WatchState.decode(raw), "a picture with a page the watch does not know was not drawn at all")
-+        XCTAssertEqual(state.shown, [.tuner, .pedals, .presets])
-+        let all = try picture { p in p["hidden"] = ["scenes", "pedals", "presets", "tuner"] }
++        XCTAssertEqual(state.shown, [.tuner, .pedals, .presets, .tempo])
++        let all = try picture { p in p["hidden"] = ["scenes", "pedals", "presets", "tempo", "tuner"] }
 +        XCTAssertEqual(try XCTUnwrap(WatchState.decode(all)).shown, WatchPage.usual)
 +    }
 +
@@ -353,13 +560,16 @@ index 1b1532ec..49420fcc 100644
 +        XCTAssertEqual(watchPageOnShow(.presets, [.tuner, .scenes]), .tuner)
 +        XCTAssertEqual(watchPageOnShow(nil, [.pedals, .scenes]), .pedals)
 +        XCTAssertEqual(watchPageOnShow(nil, []), .scenes, "no list at all still has a page to name")
-+        /* CI's -page N is the Nth of the usual order, whatever order is chosen. */
++        /* CI's -page N is the page it has always been, by name, whatever order is chosen: 3 is still the tuner, and Tempo, which came later, is 4. */
 +        XCTAssertEqual(WatchPage.numbered(0), .scenes)
 +        XCTAssertEqual(WatchPage.numbered(1), .pedals)
 +        XCTAssertEqual(WatchPage.numbered(2), .presets)
 +        XCTAssertEqual(WatchPage.numbered(3), .tuner)
-+        XCTAssertNil(WatchPage.numbered(4))
++        XCTAssertEqual(WatchPage.numbered(4), .tempo)
++        XCTAssertNil(WatchPage.numbered(5))
 +        XCTAssertNil(WatchPage.numbered(-1))
++        XCTAssertEqual(Set(WatchPage.numbers), Set(WatchPage.allCases), "a page has no number for CI to ask for it by")
++        XCTAssertEqual(WatchPage.usual.last, .tuner, "the tuner is no longer last in the usual order")
 +        XCTAssertEqual(watchPageOnShow(WatchPage.numbered(3), [.tuner, .scenes, .presets, .pedals]), .tuner, "-page 3 is not the tuner in another order")
 +    }
 +
@@ -375,7 +585,7 @@ index 1b1532ec..49420fcc 100644
 +    }
 +
 +    func testTheWatchSaysWhatItKnows() throws {
-+        XCTAssertEqual(WatchCommand.knows, ["pages"])
++        XCTAssertEqual(WatchCommand.knows, ["pages", "tempo"])
 +        let hello = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(WatchCommand.hello.json.utf8)) as? [String: Any])
 +        XCTAssertEqual(hello["do"] as? String, "hello")
 +        XCTAssertEqual(hello["knows"] as? [String], WatchCommand.knows, "the hello does not say what the watch knows, so the phone never offers its pages")
@@ -384,15 +594,67 @@ index 1b1532ec..49420fcc 100644
 +        XCTAssertFalse(WatchCommand.scene(0).json.contains("knows"))
 +    }
 +
++    // MARK: - The Tempo page
++
++    func testTheTempoPageSaysWhatThePhoneSays() throws {
++        /* pages.json's picture carries one: 121.4, Tap offered, the wrist's switch on, the metronome not running. */
++        let state = try XCTUnwrap(WatchState.decode(try pagesPicture()))
++        XCTAssertEqual(state.tempo, WatchTempo(bpm: 121.4, tap: true, why: "", wrist: true, running: false))
++        XCTAssertEqual(tempoNumber(state.tempo?.bpm), "121", "the number is not the whole one the iPhone's Tap button shows")
++        /* No tempo known: a dash, never a nought. */
++        XCTAssertEqual(tempoNumber(nil), "—")
++        XCTAssertEqual(tempoNumber(0), "—")
++        XCTAssertEqual(tempoNumber(-4), "—")
++        XCTAssertEqual(tempoNumber(.nan), "—")
++        XCTAssertEqual(tempoNumber(.infinity), "—")
++        XCTAssertEqual(tempoNumber(89.6), "90")
++
++        /* A phone that sends none (any phone, to a watch that has not said it has the page): no tempo, and nothing lost. */
++        let plain = try XCTUnwrap(WatchState.decode(try fixture()))
++        XCTAssertNil(plain.tempo)
++        XCTAssertEqual(tempoNumber(plain.tempo?.bpm), "—")
++
++        /* Where the iPhone's Tap sends nothing: the phone says so, with its sentence, and no tempo is a null. */
++        let none = try picture { p in
++            p["tempo"] = ["bpm": NSNull(), "tap": false, "why": "The app can’t set this unit’s tempo yet. Tap tempo on the unit itself for now.", "wrist": false, "running": true] as [String: Any]
++        }
++        let refused = try XCTUnwrap(WatchState.decode(none), "a picture with no tempo number was not drawn at all")
++        XCTAssertEqual(refused.tempo?.tap, false)
++        XCTAssertNil(refused.tempo?.bpm)
++        XCTAssertEqual(refused.tempo?.why, "The app can’t set this unit’s tempo yet. Tap tempo on the unit itself for now.")
++        XCTAssertEqual(refused.tempo?.running, true)
++        /* A field the watch has not heard of yet, and ones a later phone leaves out: still read. */
++        let bare = try picture { p in p["tempo"] = ["tap": true, "somethingNewer": 1] as [String: Any] }
++        let read = try XCTUnwrap(WatchState.decode(bare), "a tempo with fields missing lost the whole picture")
++        XCTAssertEqual(read.tempo, WatchTempo(tap: true))
++    }
++
++    func testATapIsSentOnceAndTheSwitchIsOnlyTheWrists() {
++        /* A tap is a beat: never tried a second time, a second late. Everything else may be. */
++        XCTAssertTrue(WatchCommand.tap.once)
++        for other in [WatchCommand.hello, .scene(1), .pedal(id: 50, on: true), .preset(step: 1), .tuner(on: false), .channel(id: 50, channel: "B"), .wrist(on: true)] {
++            XCTAssertFalse(other.once, "\(other.json) is sent once only")
++        }
++        /* The demo: the switch moves the wrist's setting and nothing else; a tap moves nothing, there being no unit to count it. */
++        let s = WatchState.sample
++        XCTAssertEqual(s.tempo, WatchTempo(bpm: 120, tap: true, why: "", wrist: false, running: false))
++        var on = s
++        on.tempo?.wrist = true
++        XCTAssertEqual(s.answering(.wrist(on: true)), on)
++        XCTAssertEqual(s.answering(.wrist(on: true)).answering(.wrist(on: false)), s)
++        XCTAssertEqual(s.answering(.tap), s)
++        XCTAssertEqual(s.answering(.wrist(on: true)).metronome, s.metronome, "the wrist's switch started the metronome")
++    }
++
      func testTheNeedleAndTheColours() {
          XCTAssertEqual(needleOffset(cents: 0), 0)
          XCTAssertEqual(needleOffset(cents: 25), 0.5)
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/pages.json b/mobile/watch-ci/Tests/WatchModelTests/pages.json
 new file mode 100644
-index 00000000..78058bf5
+index 00000000..da8a0314
 --- /dev/null
 +++ b/mobile/watch-ci/Tests/WatchModelTests/pages.json
-@@ -0,0 +1,458 @@
+@@ -0,0 +1,593 @@
 +{
 +  "state": {
 +    "v": 1,
@@ -428,10 +690,18 @@ index 00000000..78058bf5
 +      "on": false,
 +      "bpm": 0
 +    },
++    "tempo": {
++      "bpm": 121.4,
++      "tap": true,
++      "why": "",
++      "wrist": true,
++      "running": false
++    },
 +    "pages": [
 +      "tuner",
 +      "scenes",
 +      "presets",
++      "tempo",
 +      "pedals"
 +    ],
 +    "hidden": [
@@ -446,6 +716,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ],
 +      "off": [],
@@ -453,6 +724,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ]
 +    },
@@ -463,6 +735,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ],
 +      "off": [],
@@ -470,6 +743,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ]
 +    },
@@ -478,6 +752,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ],
 +      "hidden": [],
@@ -485,6 +760,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ],
 +      "off": [],
@@ -492,7 +768,61 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
++      ]
++    },
++    {
++      "pages": [
++        "tuner",
++        "scenes",
++        "presets",
++        "tempo",
++        "pedals"
++      ],
++      "hidden": [
++        "presets"
++      ],
++      "order": [
++        "tuner",
++        "scenes",
++        "presets",
++        "tempo",
++        "pedals"
++      ],
++      "off": [
++        "presets"
++      ],
++      "shown": [
++        "tuner",
++        "scenes",
++        "tempo",
++        "pedals"
++      ]
++    },
++    {
++      "pages": [
++        "tuner",
++        "scenes",
++        "presets",
++        "tempo",
++        "pedals"
++      ],
++      "hidden": null,
++      "order": [
++        "tuner",
++        "scenes",
++        "presets",
++        "tempo",
++        "pedals"
++      ],
++      "off": [],
++      "shown": [
++        "tuner",
++        "scenes",
++        "presets",
++        "tempo",
++        "pedals"
 +      ]
 +    },
 +    {
@@ -509,7 +839,8 @@ index 00000000..78058bf5
 +        "tuner",
 +        "scenes",
 +        "presets",
-+        "pedals"
++        "pedals",
++        "tempo"
 +      ],
 +      "off": [
 +        "presets"
@@ -517,7 +848,8 @@ index 00000000..78058bf5
 +      "shown": [
 +        "tuner",
 +        "scenes",
-+        "pedals"
++        "pedals",
++        "tempo"
 +      ]
 +    },
 +    {
@@ -532,14 +864,46 @@ index 00000000..78058bf5
 +        "tuner",
 +        "scenes",
 +        "presets",
-+        "pedals"
++        "pedals",
++        "tempo"
 +      ],
 +      "off": [],
 +      "shown": [
 +        "tuner",
 +        "scenes",
 +        "presets",
-+        "pedals"
++        "pedals",
++        "tempo"
++      ]
++    },
++    {
++      "pages": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "hidden": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "order": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner",
++        "tempo"
++      ],
++      "off": [
++        "scenes",
++        "pedals",
++        "presets",
++        "tuner"
++      ],
++      "shown": [
++        "tempo"
 +      ]
 +    },
 +    {
@@ -551,14 +915,16 @@ index 00000000..78058bf5
 +        "tuner",
 +        "scenes",
 +        "pedals",
-+        "presets"
++        "presets",
++        "tempo"
 +      ],
 +      "off": [],
 +      "shown": [
 +        "tuner",
 +        "scenes",
 +        "pedals",
-+        "presets"
++        "presets",
++        "tempo"
 +      ]
 +    },
 +    {
@@ -574,6 +940,7 @@ index 00000000..78058bf5
 +        "presets",
 +        "scenes",
 +        "pedals",
++        "tempo",
 +        "tuner"
 +      ],
 +      "off": [
@@ -582,6 +949,7 @@ index 00000000..78058bf5
 +      "shown": [
 +        "presets",
 +        "scenes",
++        "tempo",
 +        "tuner"
 +      ]
 +    },
@@ -598,14 +966,16 @@ index 00000000..78058bf5
 +        "tuner",
 +        "pedals",
 +        "scenes",
-+        "presets"
++        "presets",
++        "tempo"
 +      ],
 +      "off": [],
 +      "shown": [
 +        "tuner",
 +        "pedals",
 +        "scenes",
-+        "presets"
++        "presets",
++        "tempo"
 +      ]
 +    },
 +    {
@@ -624,6 +994,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ],
 +      "off": [],
@@ -631,6 +1002,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ]
 +    },
@@ -651,7 +1023,8 @@ index 00000000..78058bf5
 +        "pedals",
 +        "scenes",
 +        "presets",
-+        "tuner"
++        "tuner",
++        "tempo"
 +      ],
 +      "off": [
 +        "scenes",
@@ -659,7 +1032,8 @@ index 00000000..78058bf5
 +      ],
 +      "shown": [
 +        "pedals",
-+        "presets"
++        "presets",
++        "tempo"
 +      ]
 +    },
 +    {
@@ -674,6 +1048,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ],
 +      "off": [],
@@ -681,6 +1056,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ]
 +    },
@@ -693,6 +1069,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ],
 +      "off": [
@@ -701,7 +1078,8 @@ index 00000000..78058bf5
 +      "shown": [
 +        "scenes",
 +        "pedals",
-+        "presets"
++        "presets",
++        "tempo"
 +      ]
 +    },
 +    {
@@ -715,6 +1093,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ],
 +      "off": [
@@ -723,7 +1102,8 @@ index 00000000..78058bf5
 +      "shown": [
 +        "scenes",
 +        "pedals",
-+        "presets"
++        "presets",
++        "tempo"
 +      ]
 +    },
 +    {
@@ -731,18 +1111,21 @@ index 00000000..78058bf5
 +      "hidden": [
 +        "presets",
 +        "scenes",
-+        "pedals"
++        "pedals",
++        "tempo"
 +      ],
 +      "order": [
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ],
 +      "off": [
 +        "scenes",
 +        "pedals",
-+        "presets"
++        "presets",
++        "tempo"
 +      ],
 +      "shown": [
 +        "tuner"
@@ -753,22 +1136,26 @@ index 00000000..78058bf5
 +        "tuner",
 +        "scenes",
 +        "presets",
++        "tempo",
 +        "pedals"
 +      ],
 +      "hidden": [
 +        "scenes",
 +        "pedals",
-+        "tuner"
++        "tuner",
++        "tempo"
 +      ],
 +      "order": [
 +        "tuner",
 +        "scenes",
 +        "presets",
++        "tempo",
 +        "pedals"
 +      ],
 +      "off": [
 +        "scenes",
 +        "pedals",
++        "tempo",
 +        "tuner"
 +      ],
 +      "shown": [
@@ -781,12 +1168,14 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ],
 +      "order": [
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ],
 +      "off": [],
@@ -794,6 +1183,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ]
 +    },
@@ -802,18 +1192,21 @@ index 00000000..78058bf5
 +        "tuner",
 +        "scenes",
 +        "presets",
++        "tempo",
 +        "pedals"
 +      ],
 +      "hidden": [
 +        "tuner",
 +        "presets",
 +        "pedals",
++        "tempo",
 +        "scenes"
 +      ],
 +      "order": [
 +        "tuner",
 +        "scenes",
 +        "presets",
++        "tempo",
 +        "pedals"
 +      ],
 +      "off": [],
@@ -821,6 +1214,7 @@ index 00000000..78058bf5
 +        "tuner",
 +        "scenes",
 +        "presets",
++        "tempo",
 +        "pedals"
 +      ]
 +    },
@@ -832,6 +1226,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner",
 +        "looper"
 +      ],
@@ -839,6 +1234,7 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ],
 +      "off": [],
@@ -846,8 +1242,25 @@ index 00000000..78058bf5
 +        "scenes",
 +        "pedals",
 +        "presets",
++        "tempo",
 +        "tuner"
 +      ]
 +    }
 +  ]
 +}
+diff --git a/mobile/watch-ci/screens.sh b/mobile/watch-ci/screens.sh
+index b14cec75..dd1c1a39 100755
+--- a/mobile/watch-ci/screens.sh
++++ b/mobile/watch-ci/screens.sh
+@@ -32,6 +32,11 @@ for page in 0 1 2 3; do
+ done
+ shoot -page 3 -tunerDemo YES
+ xcrun simctl io "$UDID" screenshot "screens/tuner-on.png"
++# The Tempo page, which came after the four above and so is page 4: the
++# number, Tap and the wrist's switch. For looking at a pull request only;
++# watch.yml's App Store list does not take it.
++shoot -page 4
++xcrun simctl io "$UDID" screenshot "screens/tempo.png"
+ # A pedal held: Drive 1's channels, B lit (-pick takes a demo pedal's id). For
+ # looking at a pull request only; watch.yml's App Store list does not take it.
+ # Three seconds more than the others: the sheet opens 0.8 s after the page
