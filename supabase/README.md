@@ -556,9 +556,14 @@ the one `EDIT_FROM_STORE` keys every unit it names to, on both phones
 stores: the App Store since 9 November, and Google Play by its own listing
 on the 10th (Justin: "Google's 1.9 0.0 is already live"), so steps 1 and 2
 below are done. **The deployed function changes only when it is
-redeployed**: until steps 3 to 6 are done, with Justin reading the sample,
-the emails that go are still the deployed function's, "with no editing or
-saving". (Until that day the switch was off: `EDIT_IN_EMAILS = false`.)
+redeployed, and it was on 11 November 2026**: version 3, on Justin's word
+("you're good to complete the email set up like you suggested"), read back
+from the server and the same as main's file byte for byte, so the emails
+that go carry the editing sentence. The emails were not turned off for it:
+the words had his yes that day, and the sample in Developer → Paid but no
+computer yet is where he reads them (the order below is still the order
+for the next change to the words). Before that day the emails that went were the 3
+November function's, "with no editing or saving". (Until that day the switch was off: `EDIT_IN_EMAILS = false`.)
 
 **Switch it on the day 1.90.0 is live on the App Store and on Google Play,
 both, and only if 1.90.0 is the build that opened Edit over Bluetooth on

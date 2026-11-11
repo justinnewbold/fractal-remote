@@ -13,6 +13,7 @@ import { isDemo } from './demo'
 import { tick } from './feedback'
 import { logDebug } from './debugLog'
 import { isUnsupported } from './unsupported'
+import { markLoud } from './audioMode'
 
 /**
  * THE METRONOME SETTING, and the two things it drives.
@@ -309,6 +310,8 @@ let releaseTimer = null
 function prepareClick() {
   if (!preparing) {
     preparing = (async () => {
+      /* Said first, so the preset wheel's click never sets the quiet mode back over this one (lib/audioMode). */
+      markLoud()
       await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'mixWithOthers' }).catch(() => {})
       players = IOS
         ? [createAudioPlayer(clickSound, { keepAudioSessionActive: true }), createAudioPlayer(clickSound, { keepAudioSessionActive: true })]

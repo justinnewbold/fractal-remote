@@ -1587,7 +1587,8 @@ export function run(test) {
     assert.doesNotMatch(v.VP4_NO_NAMES, /the one the VP4 is on/i, 'the list promises the name of the preset the VP4 is on, which no row has at the start')
     const src = read('mobile/src/screens/Presets.js')
     const phone = src.replace(/\s+/g, ' ')
-    assert.match(phone, /renderItem=\{\(\{ item: n \}\) => \{ const name = nameHere\(n\)/, 'the phone’s row does not name the preset the VP4 is on')
+    /* One row for the list and for the preset wheel (rowOf), so both name it. */
+    assert.match(phone, /const rowOf = \(n, tall = false\) => \{ const name = nameHere\(n\)/, 'the phone’s row does not name the preset the VP4 is on')
     assert.match(phone, /label=\{typeof name === 'string' \? \(name \|\| 'Empty'\) : `Slot \$\{slotLabel\(n, addressing\)\}`\}/)
     assert.match(phone, /const name = nameHere\(n\) const q = query\.trim\(\)\.toLowerCase\(\)/, 'the phone’s search does not find the preset the VP4 is on by its name')
     /* Run: the rule that picks the name, out of the screen as written. */
@@ -1776,7 +1777,10 @@ export function run(test) {
     assert.match(phone, /const vp4Old = noNames && !vp4ComputerCan\(caps\)/)
     assert.match(phone, /<Text[^>]*>\{vp4Old \? VP4_UPDATE_COMPUTER : VP4_NO_NAMES\}<\/Text>/, 'the phone’s list on an old computer does not say to update it')
     assert.match(phone, /\{vp4Here\(\) && !vp4Old \? \( <View[^>]*> <Note tone="hint">\{VP4_RELOAD\}<\/Note>/, 'the phone warns of reloading a preset it cannot send')
-    assert.match(phone, /ListEmptyComponent=\{ \/\*[^*]*\*\/ vp4Old \? null : slots \? \(/, 'the phone’s list on an old computer spins for ever')
+    /* What the list says with no rows is one thing, the list's and the preset wheel's. */
+    assert.match(phone, /const emptyRows = \/\*[^*]*\*\/ vp4Old \? null : slots \? \(/, 'the phone’s list on an old computer spins for ever')
+    assert.match(phone, /ListEmptyComponent=\{emptyRows\}/, 'the phone’s list on an old computer spins for ever')
+    assert.match(phone, /<PresetWheel [\s\S]{0,400}?empty=\{emptyRows\}/, 'the phone’s wheel on an old computer spins for ever')
     assert.match(phone, /\{vp4Old \? null : \( <View[^>]*> <TextInput/, 'the phone offers a search of a list that has no rows')
     const web = flat('src/components/Console.jsx')
     assert.match(web, /const vp4Old = noNames && !vp4ComputerCan\(vp4Capabilities\(\)\)/)

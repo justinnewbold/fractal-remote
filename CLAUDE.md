@@ -292,13 +292,14 @@ Bluetooth is open to every customer on a 1.90.0 copy, iPhone, iPad and
 Android, and public/store-versions.json says 1.90.0 on both. The website's
 editing words went out that day (bluetooth.html and support.html; the
 guide, short since 9 November, says nothing of editing). `EDIT_IN_EMAILS`
-is true in the repository, but THE SETUP EMAILS STILL GO WITH THE OLD
-SENTENCE until the function is redeployed, and it is not redeployed until
-Justin has said the new sentence is right: emails off, redeploy, he reads
-the sample, emails on (supabase/README.md). Nothing deploys it on a merge.
-So do not redeploy setup-reminder for any other reason before that without
-saying it carries the new sentence. He said it on 11 November 2026, shown
-the sentence: "Yeah, that's fine. You probably just leave out the version
+is true, and THE DEPLOYED FUNCTION CARRIES IT SINCE 11 NOVEMBER 2026:
+setup-reminder version 3, put up with the Supabase deploy tool on his word
+("Also, you're good to complete the email set up like you suggested"), read
+back from the server and the same as main's file byte for byte. Nothing
+deploys it on a merge, so a later change to its words still needs his yes
+and a redeploy (supabase/README.md; Send me a sample of both emails, in
+Developer → Paid but no computer yet, is how he reads what goes out). He
+had said the sentence was right the same day, shown it: "Yeah, that's fine. You probably just leave out the version
 numbers though." So the email's Bluetooth paragraph names no version: it
 says Bluetooth "is offered on" the five units and "You can also edit over
 it" on the four, and "Update the app" before them covers an older copy
@@ -1051,6 +1052,45 @@ asked for once, when he says the list is whole. Waiting there now:
 - **Offered, not yet answered:** keyboard and foot-pedal keys, lining the
   Expo packages up, the photo permission sentence naming the profile
   photo.
+
+**All presets as a wheel, a choice beside the list: built 11 November
+2026, HIS ACCOUNT ONLY.**
+
+> "One thing I was thinking on the iPhone app is when they're scrolling
+> through the presets. It makes like a clicking and a vibration kind of
+> like the old iPod wheels did and maybe make some a little bigger and
+> smaller as you're scrolling through them ... to kinda highlight the
+> prominent one in the middle." Then, shown three pictures: "Can we do
+> preset scrolling option a as a setting? So we can have both the original
+> and that one." (11 November 2026)
+
+So the list is untouched, and the wheel is a choice: Settings → Play screen
+→ Tiles & scenes → Preset list (List or Wheel, and while Wheel is chosen a
+tick box, Click and tap as presets pass). Kept on the device
+(`fractal.presetWheel`), the list until somebody chooses.
+
+- **The switch** is `PRESET_WHEEL_FOR_EVERYONE` in
+  mobile/src/lib/features.js, false: the choice is drawn for his account
+  only, and every other account's All presets is the list whatever the
+  device has kept. It opens when he says so, with its What's new line in
+  that pull request (it has none yet).
+- **The rows are the list's own** (screens/Presets `rowOf`, drawn `tall`):
+  one press, hold, star and colour bar for both, and NOTHING LOADS UNTIL A
+  ROW IS TAPPED. The middle is where the eye is, never what the unit plays.
+- **The arithmetic** is mobile/src/lib/presetWheel.js (imports nothing):
+  each step from the middle is smaller and fainter (`WHEEL_STEPS`), rows
+  are moved toward the middle so the small ones close up, and row i is in
+  the middle at i slots of scroll, so the list stops on a row. The drawing
+  is components/PresetWheel.js, driven straight from the scroll.
+- **The click** (lib/wheelClick.js) is the system's picker tap and the
+  metronome's click played quietly: silent in silent mode, over a backing
+  track rather than stopping it, only under a thumb or its flick, and
+  never more than one every 32 ms. The metronome's own out-loud mode is
+  never set back by it (lib/audioMode.js).
+- **Nothing has run on a device.** How the click sounds, how the wheel
+  feels under a thumb, whether a row drawn away from its place takes a
+  press on both phones, and the names filling in around the middle are
+  the first things his look will settle. A picture drawn here is no proof.
 
 **In Edit the knobs come first.** "In edit move search bar and amp and
 pedal names to the bottom. Have the Bluetooth warning also move to the

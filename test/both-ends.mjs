@@ -1392,7 +1392,10 @@ export function run(test) {
     assert.ok(!/TagButton/.test(presets), 'the phone’s Colour button is back beside the star')
     assert.match(presets, /onLongPress=\{addOpen \? \(\) => hold\(\{ n, words, target \}\) : target \? \(\) => setPainting\(target\) : undefined\}\s+accessibilityHint=\{addOpen \? ADD_WORDS\.hint : target \? TAG_HOLD\.hint : undefined\}/, 'a phone row cannot be held for its colour')
     assert.match(presets, /style=\{tagEdge\(tag\)\}\s*\/>\s*<Star/, 'something sits between the phone’s row and its star again')
-    assert.match(presets, /ListFooterComponent=\{\s*shown\.length && \(addOpen \|\| presetTarget\(shown\[0\]\)\) \? \([\s\S]{0,200}\{addOpen \? ADD_WORDS\.hold : TAG_HOLD\.phone\}/, 'the phone’s list does not say how a preset gets its colour')
+    /* One last line, the list's and the preset wheel's. */
+    assert.match(presets, /const lastLine =\s*shown\.length && \(addOpen \|\| presetTarget\(shown\[0\]\)\) \? \([\s\S]{0,200}\{addOpen \? ADD_WORDS\.hold : TAG_HOLD\.phone\}/, 'the phone’s list does not say how a preset gets its colour')
+    assert.match(presets, /ListFooterComponent=\{lastLine\}/, 'the phone’s list does not say how a preset gets its colour')
+    assert.match(presets, /footer=\{lastLine\}/, 'the phone’s wheel does not say how a preset gets its colour')
     assert.match(presets, /<ColourSheet target=\{painting\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
     /* The Press a hold is wired through keeps a hold from loading. */
     assert.match(read('mobile/src/components/Press.js'), /onLongPress=\{\s+onLongPress\s+\? \(\) => \{/)
