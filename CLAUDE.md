@@ -1002,6 +1002,56 @@ That is everything from that yes. The three ideas that need a build
 (keyboard and foot-pedal keys, a second screen, widgets) were offered,
 not asked for.
 
+**The next build pair is being collected, and NOTHING IS BUILT until he
+says so.**
+
+> "Before doing another build, let's make sure we have any native change
+> set up that we want done first." (10 November 2026) And, the next day:
+> "Don't build anything yet. I'm still going through the Watch to see if
+> there's any other tweaks I want you to make before we do another build.
+> And if there's any other native changes to make to the iPhone app."
+
+So native work goes into docs/pending as it is finished, and the build is
+asked for once, when he says the list is whole. Waiting there now:
+
+- **phone-turns** (above): a phone may be turned on its side on Play.
+- **watch-page-order** (11 November 2026), everything he asked of the
+  Apple Watch that day, in one patch that moves the watch line only:
+  - *Which pages, and their order.* "Can we add a way for a user to select
+    which order their pages show up in on the Watch app?" and "Yes, add
+    hiding pages." Chosen on the iPhone (Settings → Apple Watch → Watch
+    pages: Move up, Move down, Hide, Show; one page always stays), sent in
+    the picture as `pages` and `hidden`, repaired by one rule on both
+    sides (shared/watch-link.mjs). The watch opens on the first shown.
+  - *A fifth page, Tempo*: the BPM, Tap, and a switch for the wrist's
+    metronome. He thought the watch had tap tempo already; it only tapped
+    the beat. "OK, well let's add that as well then." Tap is Play's own
+    `tapTempo()` and nothing else; where Play has no Tap, the watch says
+    Play's sentence.
+  - *The tuner page says what it is and what a tap does.* "Where it says
+    tuner on I feel like that means it on." He picked mockup B
+    (docs/watch/tuner-start-stop.png): "Off" with Start tuning, then Stop
+    tuning. Never "Tuner on" / "Tuner off" as a button's words again.
+  - *Tuner stays on when you swipe away*, a switch on the iPhone, off by
+    default: "Some people wanna play while their tuner stays up on their
+    screen." Hiding the Tuner page still stops it.
+  - *A check-in* (`here`, about every 20 seconds while the watch app is on
+    the watch's screen) that keeps a locked iPhone's app awake by renewing
+    the existing 25-second wake: "Yes, add that to the build." No
+    background mode, no native iPhone change. Over Bluetooth a phone kept
+    awake this way still does not see a scene changed at the unit.
+  The iPhone's half is merged and inert: its Settings rows and the new
+  picture fields show only once the paired watch's hello says what it
+  knows (mobile/src/lib/watchPages.js), which no watch does before the
+  build. The Swift has never been compiled; watch.yml, started by hand
+  with "Apply the watch patches waiting in docs/pending first", compiles
+  and tests it for free.
+- **Not in, by his word:** a second screen and home-screen widgets ("go
+  ahead and skip the second screen and the widgets for now").
+- **Offered, not yet answered:** keyboard and foot-pedal keys, lining the
+  Expo packages up, the photo permission sentence naming the profile
+  photo.
+
 **In Edit the knobs come first.** "In edit move search bar and amp and
 pedal names to the bottom. Have the Bluetooth warning also move to the
 bottom. We want as many knobs visible in edit." (10 November 2026.) Then,
