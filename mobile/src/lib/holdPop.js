@@ -47,6 +47,17 @@ export function popKnobsOn({ allowed = false, editOpens = false, vp4 = false } =
 }
 
 /**
+ * What Play says beside CHAIN where a hold opens this pop-up with knobs in
+ * it. "On the gig screen where it says, hold the switch channels, have it
+ * say hold for quick edit" (Justin, 12 November 2026). Where the pop-up is
+ * the channels alone (a VP4, or Bluetooth on a copy from before Edit opened
+ * over it) Play still says shared/play-words HOLD_FOR_CHANNELS, because
+ * there a hold edits nothing; the browser says that too, and its words are
+ * not touched (shared/ is inside the computer app).
+ */
+export const HOLD_FOR_QUICK_EDIT = 'Hold for quick edit'
+
+/**
  * And for one block, once the pop-up is open on it: not a block the wire
  * has no knobs for (`knobs: false`, an Axe-Fx III's NAM and IR Player over
  * Bluetooth), whose pop-up stays its channels. Nothing held: no.

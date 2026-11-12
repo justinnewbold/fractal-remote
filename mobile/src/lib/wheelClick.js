@@ -1,12 +1,16 @@
 /*
  * THE WHEEL'S CLICK: a tick you hear and a small tap you feel, for each
- * preset that crosses the middle of the preset wheel (lib/presetWheel).
+ * preset that comes under the bar of the preset wheel (lib/presetWheel).
+ * Fired by the same line that moves the list (components/PresetWheel
+ * `put`), turning or coasting, and never more than about thirty a second:
+ * a fast spin is a purr that thins back into single clicks as it slows.
  *
  * "It makes like a clicking and a vibration kind of like the old iPod wheels
  * did" (Justin, 11 November 2026).
  *
  * THE TAP is the system's own selection tap, the one a date picker gives:
- * made for exactly this, and lighter than the tap a button gives.
+ * made for exactly this, and lighter than the tap a button gives. (On
+ * Android, the tick a clock's dial gives as it is turned.)
  *
  * THE SOUND is the metronome's click, played quietly. It is a nicety, so it
  * is silent when the device is (the ringer switch off, or silent mode), and
@@ -85,9 +89,12 @@ export function closeWheelClick() {
   if (IOS && !isLoud()) quietly(() => setIsAudioActiveAsync(false))
 }
 
+/* The tap. An iPhone's is the picker's own. Android has one made for exactly this, the tick of a clock's dial being turned, which the phone plays itself with nothing to wait for; an Android too old to have it gets the picker's. */
+const tap = () => (!IOS && Haptics.performAndroidHapticsAsync && Haptics.AndroidHaptics?.Clock_Tick ? Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Clock_Tick) : Haptics.selectionAsync())
+
 /** One click: the tap, and the sound if the players are there. */
 export function wheelClick() {
-  quietly(() => Haptics.selectionAsync())
+  quietly(tap)
   if (!players) return
   quietly(() => {
     if (!IOS) {

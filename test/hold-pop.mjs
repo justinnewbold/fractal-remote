@@ -115,7 +115,7 @@ export function run(test) {
     const sheet = bare.slice(bare.indexOf('function ChannelSheet('), bare.indexOf('export const DOWN_DIM'))
     assert.match(sheet, /^function ChannelSheet\(\{ block, channels, onClose, onPick, knobs = false \}\) \{/)
     assert.match(sheet, /const withKnobs = popKnobsFor\(knobs, block\)/)
-    assert.match(bare, /import \{ POP_CHANNEL_TALL, popKnobsFor \} from '\.\.\/lib\/holdPop'/)
+    assert.match(bare, /import \{ HOLD_FOR_QUICK_EDIT, POP_CHANNEL_TALL, popKnobsFor \} from '\.\.\/lib\/holdPop'/)
     assert.match(bare, /import PopKnobs from '\.\.\/components\/PopKnobs'/)
 
     /* WITHOUT THE KNOBS: today's sheet, to the letter. The one return after the knobs' own. */

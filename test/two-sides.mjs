@@ -592,7 +592,11 @@ export function run(test) {
     /* The phone's own words, not the browser's too: shared/ is inside the computer app, and this is no computer release. */
     assert.doesNotMatch(read('shared/play-words.mjs'), /knobs/i)
     /* One line over the blocks, by whether the hold opens knobs here. */
-    assert.match(stage, /\{knobsHere \? HOLD_FOR_KNOBS : HOLD_FOR_CHANNELS\}/)
+    assert.match(stage, /\{knobsHere \? HOLD_FOR_KNOBS : popKnobs \? HOLD_FOR_QUICK_EDIT : HOLD_FOR_CHANNELS\}/)
+    /* "Have it say hold for quick edit": where the pop-up carries the knobs, and only there. A VP4, or a copy whose Edit is shut over Bluetooth, edits nothing by a hold and still says channels. */
+    assert.match(read('mobile/src/lib/holdPop.js'), /^export const HOLD_FOR_QUICK_EDIT = 'Hold for quick edit'$/m)
+    assert.equal(stage.match(/HOLD_FOR_QUICK_EDIT/g).length, 2, 'quick edit is said somewhere a hold may not edit')
+    assert.doesNotMatch(read('shared/play-words.mjs'), /quick edit/i, 'the browser, whose hold is the channels alone, says quick edit')
     assert.equal(stage.match(/HOLD_FOR_KNOBS/g).length, 2, 'the knobs’ words are said somewhere else on Play')
     /* Nobody is told about knobs, or given them, unless App says so: the default is the pop-up. */
     assert.match(stage, /holdOpens = null,\n\s*knobsAt = null,\n\s*onHoldBlock = null,\n\s*onCloseKnobs = null,\n/)

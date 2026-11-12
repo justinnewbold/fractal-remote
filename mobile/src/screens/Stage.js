@@ -33,7 +33,7 @@ import { bigTilesOn, gridWide, tilePlan } from '../lib/squarePlay'
 import { sidewaysPlan } from '../lib/sidewaysPlay'
 import { sayPlayHead } from '../lib/playHead'
 import { HOLD_FOR_KNOBS, panelLane } from '../lib/twoSides'
-import { POP_CHANNEL_TALL, popKnobsFor } from '../lib/holdPop'
+import { HOLD_FOR_QUICK_EDIT, POP_CHANNEL_TALL, popKnobsFor } from '../lib/holdPop'
 import BlockSide from '../components/BlockSide'
 import PopKnobs from '../components/PopKnobs'
 import StageView from '../components/StageView'
@@ -1746,12 +1746,14 @@ export default function Stage({
             between channels, A B C and D." Beside the heading, in the heading's
             own size, the way Refresh names sits beside Scenes. Only when a hold
             does something: a unit with no channels has nothing to switch.
+            Where the hold's pop-up carries the block's knobs it says "Hold for
+            quick edit" (lib/holdPop), his words of 12 November 2026.
           */}
           <View style={lined || fill ? LANE_HEADING : { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Label icon={chainIcon}>{chainHeading(chain)}</Label>
             {channels?.length > 1 && blocks.length && holdRoom ? (
               <Text style={{ color: color.silkDim, fontSize: font.micro, letterSpacing: 1.5, textTransform: 'uppercase' }}>
-                {knobsHere ? HOLD_FOR_KNOBS : HOLD_FOR_CHANNELS}
+                {knobsHere ? HOLD_FOR_KNOBS : popKnobs ? HOLD_FOR_QUICK_EDIT : HOLD_FOR_CHANNELS}
               </Text>
             ) : null}
           </View>
