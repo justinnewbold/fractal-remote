@@ -10,6 +10,17 @@ export const SHOWN_IN_APP = 10
 
 export const WHATS_NEW = [
   {
+    "date": "2026-11-12",
+    "day": "12 November 2026",
+    "version": "1.90.38",
+    "lines": [
+      {
+        "text": "On a tablet or other big screen, the button that puts a second screen beside Play is now called Split View (it was Two sides).",
+        "only": null
+      }
+    ]
+  },
+  {
     "date": "2026-11-10",
     "day": "10 November 2026",
     "version": "1.90.31",

@@ -1038,7 +1038,7 @@ export function run(test) {
     /* Only `slim` is laid over the bar's style: its height on a big screen is what it was. */
     assert.match(bar, /zIndex: 3\s*\}, slim \? SLIM : null\]\}/)
     /* The buttons: Play alone, Two sides; a tool filling the window, its name and Two sides; beside Play, measured from where the row starts so Swap is on the line. */
-    assert.match(lead, /if \(!tool\) \{\s*if \(!big\) return null\s*return \(\s*<View style=\{ROW\} \{\.\.\.measured\}>\s*<Press label=\{SIDE_WORDS\.two\} height=\{HIGH\} labelSize=\{font\.small\} onPress=\{onTwo\} accessibilityLabel="Show two sides" style=\{CHIP\} \/>/)
+    assert.match(lead, /if \(!tool\) \{\s*if \(!big\) return null\s*return \(\s*<View style=\{ROW\} \{\.\.\.measured\}>\s*<Press label=\{SIDE_WORDS\.two\} height=\{HIGH\} labelSize=\{font\.small\} onPress=\{onTwo\} accessibilityLabel="Show Split View" style=\{CHIP\} \/>/)
     assert.match(lead, /const \[at, setAt\] = useState\(big \? VERSION_ROOM : 0\)\n/)
     assert.match(lead, /const line = playOnRight \? widths\.tool : widths\.play\n/)
     assert.match(lead, /style=\{\[CHIP, \{ width: SWAP_WIDE \}\]\}/)

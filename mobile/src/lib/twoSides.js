@@ -59,8 +59,13 @@ export const TOOLS = ['edit', 'setlists', 'notes', 'presets', 'tuner']
 export const TOOL_NAMES = { edit: 'Edit', setlists: 'Setlists', notes: 'Notes', presets: 'All presets', tuner: 'Tuner', play: 'Play' }
 /** The footnote under the list: Play is never on it. */
 export const PLAY_ALWAYS = 'Play is always the other side.'
-/** The two sides' buttons in the top bar, by word. */
-export const SIDE_WORDS = { swap: 'Swap', full: 'Full screen', two: 'Two sides' }
+/**
+ * The two sides' buttons in the top bar, by word. The one that brings the
+ * second side back was "Two sides": "On iPads/tablets change the name 'two
+ * sides:' to Split View" (Justin, 12 November 2026), which is also what a
+ * tablet's own system calls it.
+ */
+export const SIDE_WORDS = { swap: 'Swap', full: 'Full screen', two: 'Split View' }
 
 /** Whether `screen` (App.js's own word for what is open) is a tool a side can hold. */
 export const isTool = (screen) => TOOLS.includes(screen)
