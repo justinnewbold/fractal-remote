@@ -19,6 +19,10 @@ What it finds out, in order:
 cable it normally uses; FM3-Edit; your phone with Fractal Remote; about an
 hour.
 
+(Have an Axe-Fx III as well? It is the better unit for the recording part:
+see "With an Axe-Fx III, instead or as well", near the end, before you
+start.)
+
 **What changes on your FM3:** one switch's ring colour and one switch's
 label, on one layout, and which layout is on. All three are put back by
 hand in step 6. Nothing else is touched, no preset is saved, and you back
@@ -201,6 +205,49 @@ Put fc-part1 from the Desktop, the screen recording (.mov), your
 screenshots and your notes with the two tables into one Google Drive or
 Dropbox folder, and send the link. The backup from step 1.5 stays with you;
 it isn't needed.
+
+## With an Axe-Fx III, instead or as well
+
+"I also have an Axe-FX III coming today so we could use that as well if we
+want instead of the FM3 or both either way." (Justin, 12 November 2026.)
+
+Both is best, and each gives something the other can't:
+
+- **The FM3** is the only unit the app reads the live footswitch setup
+  from today, so the before and after screenshots (steps 2 and 5) only
+  work there.
+- **The Axe-Fx III** is the one the recorder should actually see. Unlike
+  the FM3, it shows up on a Mac as a MIDI device, and that is how its
+  editor, Axe-Edit III, talks to it. So this is the unit most likely to
+  show what an editor sends when it changes a switch, which is the one
+  thing editing in the app is waiting for.
+
+If there's only time for one, do the Axe-Fx III.
+
+The steps are the same, with these differences:
+
+1. Everywhere this guide says FM3-Edit, use **Axe-Edit III**. Fractal-Bot
+   is in its Tools menu too; back up System and the presets first (step
+   1.5), the same way.
+2. The FC6 plugs into the Axe-Fx III's FASLINK II socket with the same XLR
+   cable. Switch the Axe-Fx III off before plugging it in.
+3. **Skip step 2, and 5.1 and 5.5:** the app's Footswitches page doesn't
+   show the live setup on an Axe-Fx III yet. Instead, take a phone photo of
+   the FC6 before, after the changes, and after switching the Axe-Fx III
+   off and on.
+4. In step 3.5, look for an **Axe-Fx III** line under "MIDI sources" and
+   under "Spy on output to destinations", and tick every one. If it's
+   there, the recording will have what we need. If it isn't, write "MIDI
+   Monitor saw no Axe-Fx III" and carry on, as with the FM3.
+5. The Axe-Fx III has no footswitches of its own, so every "look at the
+   FM3" is "look at the FC6", and the second table in step 7 is left out.
+   To find which layout it is on, look for FC Controllers under SETUP on
+   the front panel, or use what Axe-Edit III shows.
+6. Name the saved recording **fc-axefx3** instead of fc-part1, so the two
+   units' files can't be mixed up, and write down the Axe-Fx III's
+   firmware and Axe-Edit III's version as in step 1.6.
+
+Do one unit at a time, with the other one unplugged from the Mac.
 
 ## If something goes wrong
 
