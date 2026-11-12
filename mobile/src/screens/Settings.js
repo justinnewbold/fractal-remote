@@ -722,6 +722,21 @@ export default function Settings({
             }}
           />
 
+          {/*
+            AMP & PEDAL NAMES, ITS OWN BUTTON, RIGHT UNDER THE PROFILE. "Let's
+            move the amp and pedal button out of the Help menu and make it its
+            own button in the settings menu. Put it right below the profile
+            menu." (Justin, 12 November 2026.) It was the third row inside
+            Help, two taps away and behind a heading that does not say it. It
+            is looked up while playing, so it is one tap from Settings now:
+            the row it always was, in a card of its own, in no section.
+          */}
+          {onOpenGear ? (
+            <GlassCard clip bare>
+              <SetupRow title="Amp & pedal names" status="What each model on your unit really is" onPress={onOpenGear} />
+            </GlassCard>
+          ) : null}
+
           <Group title="My rig" hint={pairStatus}>
             {/*
               CONNECT YOUR UNIT, FIRST, since 10 November 2026: "easier for a
@@ -819,11 +834,6 @@ export default function Settings({
             */}
             {onOpenReport ? (
               <SetupRow title="Feedback" status={FEEDBACK_LINE} onPress={onOpenReport} />
-            ) : null}
-            {/* What each model on the unit really is — something to look up
-                while playing, so it sits with the help rather than first. */}
-            {onOpenGear ? (
-              <SetupRow title="Amp & pedal names" status="What each model on your unit really is" onPress={onOpenGear} />
             ) : null}
             {onReplay ? <SetupRow title={REPLAY} status={REPLAY_LINE} onPress={onReplay} /> : null}
             {/* "Add a watch section to the iOS app so that people know how to

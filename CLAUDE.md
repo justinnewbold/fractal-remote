@@ -1222,6 +1222,16 @@ tick box, Click and tap as the wheel turns). Kept on the device
   `WHEEL_GAIN_MOST`, `WHEEL_ROWS_MOST`, `WHEEL_DRAG`, `WHEEL_GRIP`,
   `wheelLayout`).
 
+**Amp & pedal names is its own button on the front of Settings, right
+under the profile, at both ends** (12 November 2026): "Let's move the amp
+and pedal button out of the Help menu and make it its own button in the
+settings menu. Put it right below the profile menu." It was the third row
+inside Help. Now it is the same row in a card of its own, in no section,
+between the account card and My rig, on the phone (screens/Settings) and
+on the website and the computer's window (src/App.jsx, `.setup-door`),
+because a test holds the two ends' lists to each other. The website's half
+is inside the computer app, so this made a computer release.
+
 **In Edit the knobs come first.** "In edit move search bar and amp and
 pedal names to the bottom. Have the Bluetooth warning also move to the
 bottom. We want as many knobs visible in edit." (10 November 2026.) Then,

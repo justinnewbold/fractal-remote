@@ -6,6 +6,7 @@
       "date": "2026-11-12",
       "version": "1.90.41",
       "lines": [
+        "Amp & pedal names is now its own button at the top of Settings, right under your profile, instead of inside Help.",
         "Bluetooth → What Bluetooth can’t do now lists everything that still needs the computer: saving, moving blocks, modifiers, renaming, copying a channel, and choosing a cab on an FM3, FM9 or Axe-Fx III.",
         "On Play, the line beside Chain now says Hold for quick edit: hold an effect and its knobs come up over the A to D channels.",
         "On a tablet or other big screen, the button that puts a second screen beside Play is now called Split View (it was Two sides)."

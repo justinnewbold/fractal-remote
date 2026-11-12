@@ -14299,6 +14299,12 @@ button.setup-account-card.out .setup-account-who {
   margin: var(--s-4) 0 var(--s-1);
 }
 
+/* A row on the front of Settings that is in no section (Amp & pedal names, under the account card): a list of one, with the headings' corners and fill, so it reads as one more door in the same list. */
+.setup-rows.setup-door {
+  border-radius: var(--r-2);
+  background: var(--panel-hi);
+}
+
 /* A section's heading is a heading holding a button, so it is said as both. */
 .setup-section-heading {
   margin: 0;

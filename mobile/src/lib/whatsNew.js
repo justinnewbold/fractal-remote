@@ -15,6 +15,10 @@ export const WHATS_NEW = [
     "version": "1.90.41",
     "lines": [
       {
+        "text": "Amp & pedal names is now its own button at the top of Settings, right under your profile, instead of inside Help.",
+        "only": null
+      },
+      {
         "text": "Bluetooth → What Bluetooth can’t do now lists everything that still needs the computer: saving, moving blocks, modifiers, renaming, copying a channel, and choosing a cab on an FM3, FM9 or Axe-Fx III.",
         "only": null
       },

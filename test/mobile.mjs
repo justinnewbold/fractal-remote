@@ -9566,6 +9566,13 @@ export function run(test) {
      * one row, on his account only.
      */
     assert.deepEqual(order, [
+      /*
+       * "Let's move the amp and pedal button out of the Help menu and make
+       * it its own button in the settings menu. Put it right below the
+       * profile menu." (12 November 2026.) Its own button, in no section,
+       * first under the account card.
+       */
+      'Amp & pedal names',
       '# My rig',
       /*
        * "Move the Bluetooth card from the phone and computer menu to its own
@@ -9589,7 +9596,6 @@ export function run(test) {
        * which keeps its own Feedback row too.
        */
       'Feedback',
-      'Amp & pedal names',
       'REPLAY',
       'Apple Watch',
       /* "When you click on that, it shows the sub menus instead of just another
