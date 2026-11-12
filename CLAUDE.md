@@ -930,6 +930,15 @@ Bluetooth on a copy older than 1.90.0), the pop-up is exactly the channels
 it always was. A preset change still closes it, and so does picking a
 channel.
 
+Beside CHAIN, where the hold opens that pop-up with knobs, Play says "Hold
+for quick edit" (`HOLD_FOR_QUICK_EDIT` in lib/holdPop.js): "On the gig
+screen where it says, hold the switch channels, have it say hold for quick
+edit" (12 November 2026). Where the pop-up is the channels alone it still
+says "Hold to switch channels", because there a hold edits nothing, and so
+does the browser, whose words (shared/play-words.mjs) were not touched: a
+change there is a computer release. Where the hold opens the panel beside
+Play it says "Hold for its knobs", as before.
+
 **Built on 10 November 2026** ("yes to all your other non build suggestions
 as well"), on his account first, **and open to everyone since that
 evening:**

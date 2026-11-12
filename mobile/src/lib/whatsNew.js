@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-12",
     "day": "12 November 2026",
-    "version": "1.90.38",
+    "version": "1.90.39",
     "lines": [
+      {
+        "text": "On Play, the line beside Chain now says Hold for quick edit: hold an effect and its knobs come up over the A to D channels.",
+        "only": null
+      },
       {
         "text": "On a tablet or other big screen, the button that puts a second screen beside Play is now called Split View (it was Two sides).",
         "only": null
