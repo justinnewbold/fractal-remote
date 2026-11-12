@@ -540,10 +540,10 @@ index ca41efac..b887e878 100644
              if index >= 0 && index < scenes.count { next.scene = index }
          case .pedal(let id, let on):
 diff --git a/mobile/targets/watch/Pages.swift b/mobile/targets/watch/Pages.swift
-index e25777c5..639fbbe1 100644
+index e25777c5..92196410 100644
 --- a/mobile/targets/watch/Pages.swift
 +++ b/mobile/targets/watch/Pages.swift
-@@ -532,17 +532,120 @@ struct PresetsPage: View {
+@@ -532,17 +532,122 @@ struct PresetsPage: View {
      }
  }
  
@@ -609,6 +609,8 @@ index e25777c5..639fbbe1 100644
 +                }
 +                Toggle("Wrist metronome", isOn: Binding(get: { tempo?.wrist == true }, set: { link.send(.wrist(on: $0)) }))
 +                    .disabled(tempo == nil)
++                    /* In from the sides: its words began on the very edge of the screen, under the metronome's light. */
++                    .padding(.horizontal, 10)
 +                if tempo?.wrist == true, tempo?.running != true {
 +                    Text("The metronome is off on your iPhone.")
 +                        .font(.footnote)
@@ -665,7 +667,7 @@ index e25777c5..639fbbe1 100644
  struct TunerPage: View {
      let state: WatchState
      @EnvironmentObject private var link: PhoneLink
-@@ -560,26 +663,38 @@ struct TunerPage: View {
+@@ -560,26 +665,38 @@ struct TunerPage: View {
                  Text(tuner.note.isEmpty ? "Play a string" : "\(tuner.cents > 0 ? "+" : "")\(tuner.cents) cents")
                      .font(.footnote)
                      .foregroundStyle(.secondary)
@@ -712,7 +714,7 @@ index e25777c5..639fbbe1 100644
          }
      }
  }
-@@ -627,6 +742,13 @@ struct WaitingPage: View {
+@@ -627,6 +744,13 @@ struct WaitingPage: View {
              )
              .font(.footnote)
              .multilineTextAlignment(.center)
