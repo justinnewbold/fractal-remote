@@ -1,5 +1,5 @@
 diff --git a/mobile/targets/watch/FractalWatchApp.swift b/mobile/targets/watch/FractalWatchApp.swift
-index 807c1e54..db182212 100644
+index 807c1e54..bf10b59a 100644
 --- a/mobile/targets/watch/FractalWatchApp.swift
 +++ b/mobile/targets/watch/FractalWatchApp.swift
 @@ -13,32 +13,53 @@ struct FractalWatchApp: App {
@@ -68,7 +68,7 @@ index 807c1e54..db182212 100644
                  }
                  .tabViewStyle(.verticalPage)
                  .disabled(!link.reachable)
-@@ -56,12 +77,93 @@ struct RootView: View {
+@@ -56,12 +77,92 @@ struct RootView: View {
                  WaitingPage(tooNew: link.state?.tooNew == true, phoneOnly: link.reachable && link.state?.linked == false)
              }
          }
@@ -90,10 +90,9 @@ index 807c1e54..db182212 100644
 +            if let swiped = page, !now.contains(swiped) { page = nil }
 +        }
 +        /* And at launch, when the phase may already be active and so never "changes" to it. */
-+        .onAppear {
-+            link.onScreen(phase == .active)
-+            wrist.onBeat = { lightTheEdge() }
-+        }
++        .onAppear { link.onScreen(phase == .active) }
++        /* The metronome hands every beat it taps to the light on the edge of the screen (EdgeBeat, below). */
++        .onAppear { wrist.onBeat = { lightTheEdge() } }
 +    }
 +
 +    /* Lit at once on the beat, and let go a moment later: on and fading in one breath would be drawn as never lit at all. */
