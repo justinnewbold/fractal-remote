@@ -197,7 +197,7 @@ index f9cdb34e..be92f155 100644
          let elapsed = Date().timeIntervalSince(started)
          let next = (floor(elapsed / step) + 1) * step - elapsed
 diff --git a/mobile/targets/watch/Model.swift b/mobile/targets/watch/Model.swift
-index ca41efac..b887e878 100644
+index ca41efac..4a9dba59 100644
 --- a/mobile/targets/watch/Model.swift
 +++ b/mobile/targets/watch/Model.swift
 @@ -5,7 +5,7 @@ import Foundation
@@ -205,11 +205,11 @@ index ca41efac..b887e878 100644
   * The Swift reading of shared/watch-link.mjs, field for field. The phone sends
   * the whole picture each time (watchState there), so a watch that missed a
 - * message is right again on the next; the watch asks for one of six things
-+ * message is right again on the next; the watch asks for one of nine things
++ * message is right again on the next; the watch asks for one of eleven things
   * (watchCommand there), and the phone drops anything else.
   *
   * No SwiftUI and no WatchConnectivity in this file, on purpose: it is the part
-@@ -70,6 +70,148 @@ struct WatchMetronome: Codable, Equatable {
+@@ -70,6 +70,293 @@ struct WatchMetronome: Codable, Equatable {
      var bpm: Double
  }
  
@@ -355,10 +355,155 @@ index ca41efac..b887e878 100644
 +    tunerOn && was.contains(.tuner) && !now.contains(.tuner)
 +}
 +
++/*
++ * QUICK EDIT (shared/watch-link.mjs, QUICK EDIT ON THE WRIST). Justin, 12
++ * November 2026: "On the watch, we have pushed to hold on the channels to
++ * switch amps. Can we set up quick edits on that as well? And change the
++ * name to hold to quick edit?" Of three pictures he chose the second: "For
++ * the watch, mock up B." A pedal held opens its channels in one row and,
++ * under them, a list of the block's knobs, a name and a value to a row; a
++ * tap picks one and the Digital Crown turns it (Pages.swift, QuickSheet).
++ *
++ * The knobs are the iPhone's: the ones its own Edit page draws first for
++ * that block, read and written by the iPhone as Edit reads and writes
++ * them. The watch never decides what is a knob, and never a value the
++ * iPhone has not been asked for.
++ *
++ * ONE KNOB, as the picture carries it:
++ *
++ *   key      which knob, in the iPhone's own word, sent back with a turn.
++ *   at       where it sits in its range, 0 to 1.
++ *   name     what the row calls it.
++ *   text     its value as the iPhone's Edit page writes it ("6.20", "-3.00
++ *            dB").
++ *   min, max, log, unit
++ *            its range, whether its scale is logarithmic (a frequency),
++ *            and its unit: enough for the watch to write the number as
++ *            the Crown turns, without waiting for the iPhone to answer.
++ *
++ * Only the key and the place are needed to read one; every other field is
++ * optional, for the reason the channels are: one missing must not lose the
++ * whole picture. With no range the row says the iPhone's own words, and the
++ * number moves when the iPhone answers.
++ */
++struct WatchKnob: Codable, Equatable {
++    var key: String
++    var at: Double
++    var name: String? = nil
++    var text: String? = nil
++    var min: Double? = nil
++    var max: Double? = nil
++    var log: Bool? = nil
++    var unit: String? = nil
++
++    /*
++     * What its row says for its value: the iPhone's own words while the
++     * Crown has not moved it (`turned` nil), and, while the Crown is ahead
++     * of the iPhone, the number worked out here by the iPhone's own rule
++     * (watchKnobValue, watchKnobText). With no range to work it out from,
++     * the iPhone's words stay until it answers.
++     */
++    func shown(turned: Double?) -> String {
++        guard let turned, let value = watchKnobValue(at: turned, low: min, high: max, curved: log) else { return text ?? "" }
++        return watchKnobText(value, unit: unit)
++    }
++
++    /** Where it sits, 0 to 1: where the Crown has put it, or where the iPhone says it is. */
++    func place(turned: Double?) -> Double {
++        watchKnobAt(turned ?? at)
++    }
++}
++
++/** The open sheet's knobs: the pedal they are for, and up to eight of them. None is a block with no knobs to show, or one the iPhone could not read: its sheet is its channels. */
++struct WatchQuick: Codable, Equatable {
++    var id: Int
++    var knobs: [WatchKnob]? = nil
++}
++
++/*
++ * FIVE RULES, each its namesake in shared/watch-link.mjs word for word, and
++ * held to the same answers by pages.json.
++ *
++ * watchKnobAt: a place in a knob's range, 0 to 1, to three places: what the
++ * watch sends and the iPhone takes.
++ */
++func watchKnobAt(_ x: Double) -> Double {
++    guard x.isFinite else { return 0 }
++    return (min(1, max(0, x)) * 1000 + 0.5).rounded(.down) / 1000
++}
++
++/*
++ * watchKnobValue: the value a place in a knob's range comes to, by the
++ * scale the iPhone's Edit page uses (a straight line, or a logarithmic one
++ * for a frequency), to three places. Nil for a knob with no range.
++ */
++func watchKnobValue(at: Double, low: Double?, high: Double?, curved: Bool?) -> Double? {
++    guard at.isFinite, let low, let high, low.isFinite, high.isFinite, high > low else { return nil }
++    let t = min(1, max(0, at))
++    let v: Double = (curved == true && low > 0) ? exp(log(low) + t * (log(high) - log(low))) : low + t * (high - low)
++    return (v * 1000 + 0.5).rounded(.down) / 1000
++}
++
++/*
++ * watchKnobText: a value as the iPhone's Edit page writes it under a knob:
++ * two places, or a whole number from a thousand up, then the unit after a
++ * space. A dash for no number. (A value that ends in exactly half a
++ * hundredth may round the other way here than on the iPhone, for the
++ * moment the Crown is ahead; the iPhone's own words replace it.)
++ */
++func watchKnobText(_ value: Double?, unit: String?) -> String {
++    var number = "—"
++    if let value, value.isFinite, abs(value) < 1e15 {
++        number = abs(value) >= 1000 ? String(Int((value + 0.5).rounded(.down))) : String(format: "%.2f", value)
++    }
++    if let unit, !unit.isEmpty { return "\(number) \(unit)" }
++    return number
++}
++
++/** How often a turn of the Crown may cross to the iPhone: about ten a second (WATCH_KNOB_MS). */
++let watchKnobSeconds: Double = 0.1
++/** How long after the last turn the watch shows its own number before the iPhone's (WATCH_KNOB_SETTLE_MS). */
++let watchKnobSettle: Double = 1.5
++/** How long a sheet waits for its knobs before it asks again, and how many times it asks (WATCH_KNOBS_ASK_MS, WATCH_KNOBS_ASKS): the first ask may be the one that woke the iPhone. */
++let watchKnobsAskSeconds: Double = 2.5
++let watchKnobsAsks = 4
++
++/** watchKnobWait: how long before a turn may go, in seconds: nothing when the last went a tenth of a second ago or more, or none has gone. */
++func watchKnobWait(lastSent: Date?, now: Date) -> Double {
++    guard let lastSent else { return 0 }
++    return max(0, min(watchKnobSeconds, watchKnobSeconds - now.timeIntervalSince(lastSent)))
++}
++
++/*
++ * THE WORDS UNDER THE PEDALS: what a hold does (watchHoldLine in
++ * shared/watch-link.mjs). "Hold a pedal for quick edit." only where the
++ * iPhone's picture offers quick edit; the words it always had otherwise.
++ */
++enum PedalWords {
++    static let channels = "Hold a pedal for its channels."
++    static let quick = "Hold a pedal for quick edit."
++}
++
++func pedalHoldLine(quickEdit: Bool?) -> String {
++    quickEdit == true ? PedalWords.quick : PedalWords.channels
++}
++
++/** The open sheet's knobs for this pedal as the iPhone last said them: nil while it has not (still reading, or another pedal's). */
++func watchQuickFor(_ quick: WatchQuick?, pedal id: Int) -> WatchQuick? {
++    guard let quick, quick.id == id else { return nil }
++    return quick
++}
++
++/** The knob the Crown turns: the one tapped while it is still listed, and the first otherwise. Nil with none. */
++func watchKnobPicked(_ knobs: [WatchKnob], _ key: String?) -> WatchKnob? {
++    if let key, let chosen = knobs.first(where: { $0.key == key }) { return chosen }
++    return knobs.first
++}
++
  struct WatchState: Codable, Equatable {
      /** WATCH_LINK_VERSION in shared/watch-link.mjs. */
      static let linkVersion = 1
-@@ -86,6 +228,25 @@ struct WatchState: Codable, Equatable {
+@@ -86,6 +373,34 @@ struct WatchState: Codable, Equatable {
      var tuner: WatchTuner
      /** Optional: a phone older than the metronome sends none, and that is "off". */
      var metronome: WatchMetronome? = nil
@@ -375,6 +520,15 @@ index ca41efac..b887e878 100644
 +     */
 +    var pages: [String]? = nil
 +    var hidden: [String]? = nil
++    /*
++     * Quick edit (WatchKnob, above): whether a pedal held offers it, and
++     * the open sheet's knobs once the iPhone has read them. Optional, like
++     * the pages: only a phone that has heard this watch say it knows
++     * `quick` sends either, none is "a hold opens the channels alone", and
++     * a missing one never loses the picture.
++     */
++    var quickEdit: Bool? = nil
++    var quick: WatchQuick? = nil
 +
 +    /** The four pages in the order chosen: `pages` repaired, or the usual order. */
 +    var order: [WatchPage] { watchPageOrder(pages) }
@@ -384,7 +538,7 @@ index ca41efac..b887e878 100644
  
      static func decode(_ json: String) -> WatchState? {
          guard let data = json.data(using: .utf8) else { return nil }
-@@ -126,13 +287,62 @@ struct WatchState: Codable, Equatable {
+@@ -126,29 +441,107 @@ struct WatchState: Codable, Equatable {
              WatchPedal(id: 70, short: "DLY", name: "Delay 1", on: false, fill: "#2e86ab", ink: "#ffffff", channel: "C", channels: abcd),
              WatchPedal(id: 66, short: "REV", name: "Reverb 1", on: true, fill: "#8e44ad", ink: "#ffffff", channel: "A", channels: abcd)
          ],
@@ -421,7 +575,7 @@ index ca41efac..b887e878 100644
 +    return now.timeIntervalSince(lastSent) >= watchHereSeconds
 +}
 +
-+/** The nine things the watch may ask. watchCommand in shared/watch-link.mjs. */
++/** The eleven things the watch may ask. watchCommand in shared/watch-link.mjs. */
  enum WatchCommand: Equatable {
 +    /*
 +     * WHAT THIS WATCH KNOWS, said in its hello (WATCH_KNOWS in
@@ -430,14 +584,16 @@ index ca41efac..b887e878 100644
 +     * page, reads the picture's `tempo`, and may ask for a tap and for the
 +     * wrist's switch. "stay": it reads `tunerStays`, and with it true does
 +     * not turn the tuner off when its page is left. "here": it checks in
-+     * while it is on screen (watchHereDue, above). The phone shows the
++     * while it is on screen (watchHereDue, above). "quick": a pedal held
++     * opens quick edit; it reads `quickEdit` and `quick`, and may ask for a
++     * block's knobs and turn one. The phone shows the
 +     * Watch pages setting and the tuner's switch, and sends an order, a
 +     * hidden page, a tempo or `tunerStays` at all, only to a watch that has
 +     * said so: a watch from before this build draws its four pages in the usual
 +     * order whatever it is sent, and a setting that does nothing is worse
 +     * than none.
 +     */
-+    static let knows = ["pages", "tempo", "stay", "here"]
++    static let knows = ["pages", "tempo", "stay", "here", "quick"]
 +
      case hello
 +    /** The check-in: the watch app is on screen. Nothing for the phone to do but stay awake. */
@@ -449,36 +605,51 @@ index ca41efac..b887e878 100644
      case scene(Int)
      case pedal(id: Int, on: Bool)
      case preset(step: Int)
-@@ -140,10 +350,27 @@ enum WatchCommand: Equatable {
+     case tuner(on: Bool)
      /** That block onto that channel, by the letter the phone sent ("B"). */
      case channel(id: Int, channel: String)
- 
++    /** Quick edit: a held pedal's sheet opened, so its knobs are wanted; nil when it closes. */
++    case knobs(id: Int?)
++    /** Quick edit: that knob of that pedal to that place in its range, 0 to 1. */
++    case knob(id: Int, key: String, at: Double)
++
 +    /*
 +     * SENT ONCE OR NOT AT ALL. A request that did not go is tried once more
 +     * a second later (PhoneLink.send), which is right for a scene and wrong
 +     * for a tap: a tap is a beat, and one that lands a second late is a
 +     * beat that was never played. And a check-in has no need of it: the
-+     * next one is two seconds off.
++     * next one is two seconds off. Nor quick edit's two: a turn that went
++     * a second late would land over a newer one, and a sheet that has not
++     * been answered asks again by itself (Pages.swift, QuickSheet).
 +     */
 +    var once: Bool {
 +        switch self {
-+        case .tap, .here: return true
++        case .tap, .here, .knobs, .knob: return true
 +        default: return false
 +        }
 +    }
-+
+ 
      /** Written by hand, so the order of the keys never changes under the tests. */
      var json: String {
          switch self {
 -        case .hello: return #"{"do":"hello"}"#
-+        case .hello: return #"{"do":"hello","knows":["pages","tempo","stay","here"]}"#
++        case .hello: return #"{"do":"hello","knows":["pages","tempo","stay","here","quick"]}"#
 +        case .here: return #"{"do":"here"}"#
 +        case .tap: return #"{"do":"tap"}"#
 +        case .wrist(let on): return #"{"do":"wrist","on":\#(on)}"#
          case .scene(let index): return #"{"do":"scene","index":\#(index)}"#
          case .pedal(let id, let on): return #"{"do":"pedal","id":\#(id),"on":\#(on)}"#
          case .preset(let step): return #"{"do":"preset","step":\#(step < 0 ? -1 : 1)}"#
-@@ -208,6 +435,19 @@ func sceneColumns(_ count: Int) -> Int { count <= 1 ? 1 : 2 }
+         case .tuner(let on): return #"{"do":"tuner","on":\#(on)}"#
+         case .channel(let id, let channel): return #"{"do":"channel","id":\#(id),"channel":\#(jsonText(channel))}"#
++        case .knobs(let id):
++            let which = id.map { String($0) } ?? "null"
++            return #"{"do":"knobs","id":\#(which)}"#
++        case .knob(let id, let key, let at): return #"{"do":"knob","id":\#(id),"key":\#(jsonText(key)),"at":\#(watchKnobAt(at))}"#
+         }
+     }
+ }
+@@ -208,6 +601,19 @@ func sceneColumns(_ count: Int) -> Int { count <= 1 ? 1 : 2 }
  /** Pedals two across when there are four or fewer (an AM4's, a VP4's), like the scenes, and one alone across the whole page; three across otherwise, as they always were. */
  func pedalColumns(_ count: Int) -> Int { count <= 1 ? 1 : count <= 4 ? 2 : 3 }
  
@@ -498,7 +669,7 @@ index ca41efac..b887e878 100644
  /*
   * THE BIGGEST SIZE AT WHICH A NAME'S LONGEST WORD FITS ITS TILE'S WIDTH, so
   * that a grown name never breaks a word in two ("Overdriv" over "e", or "Big
-@@ -232,6 +472,24 @@ func grownSize(_ tall: Double, share: Double, least: Double, most: Double) -> Do
+@@ -232,6 +638,24 @@ func grownSize(_ tall: Double, share: Double, least: Double, most: Double) -> Do
      max(least, min(most, (tall * share).rounded(.down)))
  }
  
@@ -523,7 +694,32 @@ index ca41efac..b887e878 100644
  /** Where the tuner's needle sits, -1 (50 cents flat) to 1 (50 sharp). */
  func needleOffset(cents: Int) -> Double {
      Double(max(-50, min(50, cents))) / 50
-@@ -294,8 +552,13 @@ extension WatchState {
+@@ -291,11 +715,38 @@ extension WatchState {
+         return next
+     }
+ 
++    /*
++     * CI's picture of quick edit (screens.sh: -quickDemo YES): the sample
++     * with quick edit offered, as an iPhone that offers it would say. The
++     * sample itself offers none, so every other picture is of the pages as
++     * they are without it.
++     */
++    var quickDemo: WatchState {
++        var next = self
++        next.quickEdit = true
++        return next
++    }
++
++    /** The demo's knobs for a held pedal: four of a drive's, one of them a frequency, as an iPhone would list them. */
++    static func demoQuick(id: Int) -> WatchQuick {
++        WatchQuick(id: id, knobs: [
++            WatchKnob(key: "1", at: 0.62, name: "Drive", text: "6.20", min: 0, max: 10, log: false, unit: ""),
++            WatchKnob(key: "2", at: 0.5, name: "Tone", text: "5.00", min: 0, max: 10, log: false, unit: ""),
++            WatchKnob(key: "3", at: 1, name: "Mix", text: "100.00 %", min: 0, max: 100, log: false, unit: "%"),
++            WatchKnob(key: "4", at: 0.5, name: "Low Cut", text: "632.46 Hz", min: 20, max: 20000, log: true, unit: "Hz")
++        ])
++    }
++
      func answering(_ command: WatchCommand) -> WatchState {
          var next = self
          switch command {
@@ -538,11 +734,396 @@ index ca41efac..b887e878 100644
          case .scene(let index):
              if index >= 0 && index < scenes.count { next.scene = index }
          case .pedal(let id, let on):
+@@ -319,6 +770,26 @@ extension WatchState {
+             next.tuner = on
+                 ? WatchTuner(on: true, note: "E", octave: 2, cents: -6, inTune: false)
+                 : WatchTuner(on: false, note: "", octave: -1, cents: 0, inTune: false)
++        case .knobs(let id):
++            /* Only where quick edit is offered, and only a pedal a hold opens, as the phone answers only those; closing lets them go. */
++            if let id, quickEdit == true, pedals.contains(where: { $0.id == id && $0.canPickChannel }) {
++                next.quick = WatchState.demoQuick(id: id)
++            } else {
++                next.quick = nil
++            }
++        case .knob(let id, let key, let at):
++            /* Only a knob the open sheet lists for that pedal: put there, and its words written by the watch's own rule. */
++            if var open = next.quick, open.id == id {
++                open.knobs = (open.knobs ?? []).map { k in
++                    var q = k
++                    if q.key == key {
++                        q.at = watchKnobAt(at)
++                        q.text = q.shown(turned: q.at)
++                    }
++                    return q
++                }
++                next.quick = open
++            }
+         }
+         return next
+     }
 diff --git a/mobile/targets/watch/Pages.swift b/mobile/targets/watch/Pages.swift
-index e25777c5..92196410 100644
+index e25777c5..07d2ba74 100644
 --- a/mobile/targets/watch/Pages.swift
 +++ b/mobile/targets/watch/Pages.swift
-@@ -532,17 +532,122 @@ struct PresetsPage: View {
+@@ -13,6 +13,8 @@ extension Color {
+ 
+ /** The app's own green: lit, in tune. */
+ private let signal = Color(red: 0.36, green: 0.85, blue: 0.47)
++/** Quick edit's amber (#F5A623): the outline of the knob the Crown turns, and its value, as the mockup. */
++private let amber = Color(red: 0.961, green: 0.651, blue: 0.137)
+ 
+ /*
+  * A PAGE OF FEW TILES TAKES HALF THE WATCH'S BOTTOM MARGIN. The first try left
+@@ -152,6 +154,17 @@ struct ScenesPage: View {
+  * from before this build cannot do it. This line is only ever on a watch
+  * that can.
+  *
++ * AND WHERE THE IPHONE OFFERS QUICK EDIT, THE HOLD IS QUICK EDIT. Justin, 12
++ * November 2026: "On the watch, we have pushed to hold on the channels to
++ * switch amps. Can we set up quick edits on that as well? And change the
++ * name to hold to quick edit?" and, of three pictures, "For the watch, mock
++ * up B." Where the picture says `quickEdit`, the line reads "Hold a pedal
++ * for quick edit." and the hold opens QuickSheet, below: the channels in
++ * one row, then the block's knobs. Where it does not (a phone that has not
++ * had the update, a unit or connection the iPhone's own Edit page is closed
++ * on, a VP4, an account it is not open to), the line and the sheet are the
++ * ones they always were: the same hold, the same pedals (canPickChannel).
++ *
+  * AN AM4'S AMP SAYS ITS BOOST under its name, in Play's own words: Boost on,
+  * Boost off, or Amp off when the amp itself is off in that scene, and nothing
+  * until the unit has said (the word is the phone's, WatchPedal.word). Its
+@@ -230,7 +243,7 @@ struct PedalsPage: View {
+                         if state.pedals.isEmpty {
+                             Text("No pedals to show yet.").font(.footnote).foregroundStyle(.secondary)
+                         } else if footed {
+-                            Text("Hold a pedal for its channels.").font(.footnote).foregroundStyle(.secondary)
++                            Text(pedalHoldLine(quickEdit: state.quickEdit)).font(.footnote).foregroundStyle(.secondary)
+                         }
+                     }
+                 }
+@@ -240,10 +253,18 @@ struct PedalsPage: View {
+            or its channels go, and lights what the phone says it is on. */
+         .sheet(item: $picking, onDismiss: { held = false }) { picked in
+             if let pedal = offered(picked.id) {
+-                ChannelsSheet(pedal: pedal, lit: pendingChannel[pedal.id] ?? pedal.channel) { name in
+-                    choose(name, for: pedal)
++                if state.quickEdit == true {
++                    /* Quick edit, where the iPhone offers it: the same channels, in one row, over the block's knobs. */
++                    QuickSheet(pedal: pedal, lit: pendingChannel[pedal.id] ?? pedal.channel, quick: watchQuickFor(state.quick, pedal: pedal.id)) { name in
++                        choose(name, for: pedal)
++                    }
++                    .environmentObject(link)
++                } else {
++                    ChannelsSheet(pedal: pedal, lit: pendingChannel[pedal.id] ?? pedal.channel) { name in
++                        choose(name, for: pedal)
++                    }
++                    .environmentObject(link)
+                 }
+-                .environmentObject(link)
+             }
+         }
+         .onChange(of: state.pedals) { _, _ in
+@@ -293,7 +314,7 @@ struct PedalsPage: View {
+                 }
+             }
+             if footed {
+-                Text("Hold a pedal for its channels.").font(.footnote).foregroundStyle(.secondary)
++                Text(pedalHoldLine(quickEdit: state.quickEdit)).font(.footnote).foregroundStyle(.secondary)
+             }
+         }
+         .padding(.bottom, -extra)
+@@ -488,6 +509,290 @@ private struct ChannelsSheet: View {
+     }
+ }
+ 
++/*
++ * QUICK EDIT: a pedal held, where the iPhone offers it. Mockup B, which
++ * Justin picked ("For the watch, mock up B", 12 November 2026): the block's
++ * name, its channels in ONE row of four (the one it is on lit green, as
++ * ever), then a list of its knobs, a name and a value to a row. A tap picks
++ * a row (an amber outline, its value amber) and the Digital Crown turns the
++ * picked knob; the first is picked when the sheet opens. The list is moved
++ * with a finger, since the Crown is the knob's.
++ *
++ * THE KNOBS ARE THE IPHONE'S (Model.swift, WatchKnob). The sheet asks for
++ * them when it opens (`knobs`) and says when it closes; until they come it
++ * says it is reading, and a block with none, or one the iPhone could not
++ * read, is its channels alone. The first ask may be the one that woke the
++ * iPhone and was dropped, so a sheet not yet answered asks again every two
++ * and a half seconds, four times in all, and once more whenever the watch
++ * app comes back on screen.
++ *
++ * A TURN IS SHOWN AT ONCE AND SENT AT MOST TEN TIMES A SECOND, the last one
++ * always (watchKnobWait). While the Crown is ahead of the iPhone the row's
++ * number is worked out here by the iPhone's own rule; a second and a half
++ * after the last turn the iPhone's numbers are the ones shown again, so
++ * what the unit really holds is the last word. A turn is never sent twice
++ * (WatchCommand.once).
++ *
++ * WHAT IS A TURN: the Crown's number rounding to another place than the
++ * picked knob is shown at. The sheet itself puts the Crown where the picked
++ * knob is whenever that moves for any other reason (another row tapped, the
++ * iPhone's answer, the knobs arriving), and that is never a turn, because
++ * then the two agree.
++ *
++ * A channel picked closes the sheet, as it always did: each channel has
++ * its own settings, and the knobs read were the old channel's.
++ */
++private struct QuickSheet: View {
++    let pedal: WatchPedal
++    let lit: String?
++    /** This pedal's knobs as the iPhone last said them; nil while it has not. */
++    let quick: WatchQuick?
++    let pick: (String) -> Void
++    @EnvironmentObject private var link: PhoneLink
++    @Environment(\.scenePhase) private var phase
++    /** The knob tapped, by its key; none tapped yet is the first. */
++    @State private var chosen: String?
++    /** Where the Crown has put a knob, ahead of the iPhone: by key, 0 to 1. */
++    @State private var turned: [String: Double] = [:]
++    /** The last place sent to the iPhone for each knob, so the last turn is never left unsent. */
++    @State private var went: [String: Double] = [:]
++    /** The Crown's own number, 0 to 1. */
++    @State private var crown: Double = 0
++    /** When a turn last went, and the knob whose newest turn is waiting its tenth of a second. */
++    @State private var lastSent: Date?
++    @State private var owed: String?
++    /** Counts the turns, so only the last one's settling hands the numbers back to the iPhone. */
++    @State private var turns = 0
++    /** Counts the asks for the knobs, how many are left, and whether the sheet is still waiting for them. */
++    @State private var ask = 0
++    @State private var asksLeft = watchKnobsAsks
++    @State private var waiting = true
++    @FocusState private var crownOn: Bool
++
++    private var knobs: [WatchKnob] { quick?.knobs ?? [] }
++    private var picked: WatchKnob? { watchKnobPicked(knobs, chosen) }
++
++    /** Where a knob is shown: where the Crown has put it, or where the iPhone says it is. */
++    private func place(_ knob: WatchKnob) -> Double {
++        knob.place(turned: turned[knob.key])
++    }
++
++    var body: some View {
++        /* Where the picked knob is shown: when it moves for any reason but the Crown, the Crown is put there (setCrown). */
++        let target: Double? = picked.map { place($0) }
++        ScrollView {
++            VStack(alignment: .leading, spacing: 4) {
++                Text(pedal.name)
++                    .font(.system(size: 15, weight: .semibold))
++                    .lineLimit(1)
++                    .minimumScaleFactor(0.7)
++                HStack(spacing: 4) {
++                    ForEach(pedal.channels ?? [], id: \.self) { name in
++                        Button {
++                            pick(name)
++                        } label: {
++                            Text(name)
++                                .font(.system(size: 17, weight: .bold, design: .rounded))
++                                .frame(maxWidth: .infinity, minHeight: 36)
++                                .foregroundStyle(name == lit ? Color.black : Color.white)
++                                .background(name == lit ? signal : Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
++                        }
++                        .buttonStyle(.plain)
++                        .accessibilityLabel("Channel \(name)")
++                        .accessibilityAddTraits(name == lit ? .isSelected : [])
++                    }
++                }
++                if !knobs.isEmpty {
++                    VStack(spacing: 4) {
++                        ForEach(knobs, id: \.key) { knob in
++                            KnobRow(
++                                knob: knob,
++                                value: knob.shown(turned: turned[knob.key]),
++                                on: knob.key == picked?.key,
++                                tap: { choose(knob) },
++                                step: { by in move(knob, to: place(knob) + by) }
++                            )
++                        }
++                    }
++                    /* The Crown is the picked knob's while this has the focus, which the sheet gives it when the knobs come and at every tap on a row. */
++                    .focusable(true)
++                    .focused($crownOn)
++                    .digitalCrownRotation($crown, from: 0, through: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
++                    .focusEffectDisabled()
++                } else if waiting, quick == nil {
++                    Text("Reading \(pedal.name)…").font(.footnote).foregroundStyle(.secondary)
++                }
++            }
++        }
++        .disabled(!link.reachable)
++        .opacity(link.reachable ? 1 : 0.55)
++        .onAppear {
++            setCrown()
++            crownOn = true
++            askForKnobs()
++        }
++        .onChange(of: ask) { _, _ in askForKnobs() }
++        .onChange(of: target) { _, _ in setCrown() }
++        .onChange(of: crown) { _, now in
++            if let knob = picked { move(knob, to: now) }
++        }
++        .onChange(of: knobs.isEmpty) { _, none in
++            if !none { crownOn = true }
++        }
++        /* The wrist raised again with the sheet still open: the iPhone may have let the knobs go meanwhile, so it is asked afresh. */
++        .onChange(of: phase) { _, now in
++            guard now == .active else { return }
++            asksLeft = watchKnobsAsks
++            waiting = true
++            ask += 1
++        }
++        .onDisappear {
++            sendUnsent()
++            link.send(.knobs(id: nil))
++        }
++    }
++
++    /** Ask the iPhone for this pedal's knobs, unless it has said them or has been asked enough; and again in a while, in case this one woke it and was dropped. */
++    private func askForKnobs() {
++        guard quick == nil else { return }
++        guard asksLeft > 0 else {
++            waiting = false
++            return
++        }
++        asksLeft -= 1
++        link.send(.knobs(id: pedal.id))
++        Task { @MainActor in
++            try? await Task.sleep(nanoseconds: UInt64(watchKnobsAskSeconds * 1_000_000_000))
++            ask += 1
++        }
++    }
++
++    /*
++     * The Crown's number put where the picked knob is shown: never a turn,
++     * since the two then agree. Left alone while it is within a rounding of
++     * there already (a place is kept to three figures, so the Crown's own
++     * number is up to half a thousandth off it mid-turn), or every move of
++     * the Crown would be answered by a nudge back.
++     */
++    private func setCrown() {
++        guard let knob = picked else { return }
++        let at = place(knob)
++        if abs(crown - at) > 0.0006 { crown = at }
++    }
++
++    /** A row tapped: the Crown is its knob's from here. Whatever the last knob was owed goes first. */
++    private func choose(_ knob: WatchKnob) {
++        tap()
++        sendUnsent()
++        chosen = knob.key
++        crownOn = true
++    }
++
++    /*
++     * A knob to a place, 0 to 1, by the Crown or by VoiceOver's up and
++     * down: shown at once, sent now if a tenth of a second has gone by
++     * since the last one and otherwise when it has, and the iPhone's
++     * numbers put back a second and a half after the last move. Nothing
++     * for a place it is already shown at.
++     */
++    private func move(_ knob: WatchKnob, to now: Double) {
++        let at = watchKnobAt(now)
++        guard at != place(knob) else { return }
++        let key = knob.key
++        turned[key] = at
++        turns += 1
++        let mine = turns
++        let wait = watchKnobWait(lastSent: lastSent, now: Date())
++        if wait <= 0 {
++            send(key)
++        } else if owed == nil {
++            owed = key
++            Task { @MainActor in
++                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
++                sendOwed()
++            }
++        }
++        Task { @MainActor in
++            try? await Task.sleep(nanoseconds: UInt64(watchKnobSettle * 1_000_000_000))
++            guard turns == mine else { return }
++            sendUnsent()
++            turned = [:]
++            went = [:]
++        }
++    }
++
++    /** The turn that waited its tenth of a second. */
++    private func sendOwed() {
++        guard let key = owed else { return }
++        owed = nil
++        send(key)
++    }
++
++    /** Every knob whose last place has not gone to the iPhone yet: before another knob is picked, before the numbers are handed back, and before the sheet closes. */
++    private func sendUnsent() {
++        owed = nil
++        for (key, at) in turned where went[key] != at {
++            send(key)
++        }
++    }
++
++    /** One knob's newest place to the iPhone. */
++    private func send(_ key: String) {
++        guard let at = turned[key] else { return }
++        lastSent = Date()
++        went[key] = at
++        link.send(.knob(id: pedal.id, key: key, at: at))
++    }
++}
++
++/*
++ * One knob's row: its name on the left, its value on the right; picked, an
++ * amber outline and an amber value. The whole row takes the tap. VoiceOver
++ * reads the name and the value, and its up and down move the knob a
++ * hundredth of its range, since the Crown is VoiceOver's while it is on.
++ */
++private struct KnobRow: View {
++    let knob: WatchKnob
++    /** Its value as the row writes it: the iPhone's words, or the Crown's own number while it is ahead of the iPhone. */
++    let value: String
++    let on: Bool
++    let tap: () -> Void
++    let step: (Double) -> Void
++
++    var body: some View {
++        Button(action: tap) {
++            HStack(spacing: 6) {
++                Text(knob.name ?? "")
++                    .font(.system(size: 15))
++                    .lineLimit(1)
++                    .minimumScaleFactor(0.7)
++                Spacer(minLength: 4)
++                Text(value)
++                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
++                    .lineLimit(1)
++                    .minimumScaleFactor(0.7)
++                    .foregroundStyle(on ? amber : Color.white.opacity(0.8))
++            }
++            .padding(.horizontal, 8)
++            .frame(maxWidth: .infinity, minHeight: 36)
++            .contentShape(RoundedRectangle(cornerRadius: 8))
++            .background(on ? amber.opacity(0.2) : Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
++            .overlay(RoundedRectangle(cornerRadius: 8).stroke(amber, lineWidth: on ? 1.5 : 0))
++        }
++        .buttonStyle(.plain)
++        .accessibilityLabel(knob.name ?? "")
++        .accessibilityValue(value)
++        .accessibilityAddTraits(on ? .isSelected : [])
++        .accessibilityAdjustableAction { direction in
++            switch direction {
++            case .increment: step(0.01)
++            case .decrement: step(-0.01)
++            @unknown default: break
++            }
++        }
++    }
++}
++
+ // MARK: - Presets
+ 
+ /*
+@@ -532,17 +837,122 @@ struct PresetsPage: View {
      }
  }
  
@@ -666,7 +1247,7 @@ index e25777c5..92196410 100644
  struct TunerPage: View {
      let state: WatchState
      @EnvironmentObject private var link: PhoneLink
-@@ -560,26 +665,38 @@ struct TunerPage: View {
+@@ -560,26 +970,38 @@ struct TunerPage: View {
                  Text(tuner.note.isEmpty ? "Play a string" : "\(tuner.cents > 0 ? "+" : "")\(tuner.cents) cents")
                      .font(.footnote)
                      .foregroundStyle(.secondary)
@@ -713,7 +1294,7 @@ index e25777c5..92196410 100644
          }
      }
  }
-@@ -627,6 +744,13 @@ struct WaitingPage: View {
+@@ -627,6 +1049,13 @@ struct WaitingPage: View {
              )
              .font(.footnote)
              .multilineTextAlignment(.center)
@@ -728,7 +1309,7 @@ index e25777c5..92196410 100644
          .padding(.horizontal, 4)
      }
 diff --git a/mobile/targets/watch/PhoneLink.swift b/mobile/targets/watch/PhoneLink.swift
-index 2d40776f..dcdd4c26 100644
+index 2d40776f..1f849c98 100644
 --- a/mobile/targets/watch/PhoneLink.swift
 +++ b/mobile/targets/watch/PhoneLink.swift
 @@ -52,6 +52,25 @@ final class PhoneLink: NSObject, ObservableObject {
@@ -757,7 +1338,15 @@ index 2d40776f..dcdd4c26 100644
      private let session: WCSession? = WCSession.isSupported() ? WCSession.default : nil
  
      init(demo: Bool = Launch.flag("demo")) {
-@@ -79,13 +98,18 @@ final class PhoneLink: NSObject, ObservableObject {
+@@ -62,6 +81,7 @@ final class PhoneLink: NSObject, ObservableObject {
+             if Launch.flag("tunerDemo") { sample = sample.answering(.tuner(on: true)) }
+             if Launch.flag("boostDemo") { sample = sample.boostDemo }
+             if Launch.flag("am4Demo") { sample = sample.am4Demo }
++            if Launch.flag("quickDemo") { sample = sample.quickDemo }
+             state = sample
+             reachable = true
+             return
+@@ -79,13 +99,18 @@ final class PhoneLink: NSObject, ObservableObject {
              return
          }
          guard let session, session.activationState == .activated, session.isReachable else { return }
@@ -776,7 +1365,7 @@ index 2d40776f..dcdd4c26 100644
              DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                  guard session.isReachable else { return }
                  session.sendMessage(body, replyHandler: { _ in }, errorHandler: nil)
-@@ -116,6 +140,28 @@ final class PhoneLink: NSObject, ObservableObject {
+@@ -116,6 +141,28 @@ final class PhoneLink: NSObject, ObservableObject {
          }
      }
  
@@ -819,7 +1408,7 @@ index 05571339..900f45e7 100644
      ]
  )
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
-index 1b1532ec..1bb63ac0 100644
+index 1b1532ec..0fd81c6a 100644
 --- a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
 +++ b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
 @@ -122,7 +122,11 @@ final class WatchModelTests: XCTestCase {
@@ -827,7 +1416,7 @@ index 1b1532ec..1bb63ac0 100644
  
      func testTheRequestsAreThePhonesWords() {
 -        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello"}"#)
-+        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello","knows":["pages","tempo","stay","here"]}"#)
++        XCTAssertEqual(WatchCommand.hello.json, #"{"do":"hello","knows":["pages","tempo","stay","here","quick"]}"#)
 +        XCTAssertEqual(WatchCommand.here.json, #"{"do":"here"}"#)
 +        XCTAssertEqual(WatchCommand.tap.json, #"{"do":"tap"}"#)
 +        XCTAssertEqual(WatchCommand.wrist(on: true).json, #"{"do":"wrist","on":true}"#)
@@ -835,10 +1424,18 @@ index 1b1532ec..1bb63ac0 100644
          XCTAssertEqual(WatchCommand.scene(2).json, #"{"do":"scene","index":2}"#)
          XCTAssertEqual(WatchCommand.pedal(id: 50, on: false).json, #"{"do":"pedal","id":50,"on":false}"#)
          XCTAssertEqual(WatchCommand.preset(step: -1).json, #"{"do":"preset","step":-1}"#)
-@@ -132,6 +136,296 @@ final class WatchModelTests: XCTestCase {
+@@ -130,6 +134,489 @@ final class WatchModelTests: XCTestCase {
+         XCTAssertEqual(WatchCommand.tuner(on: true).json, #"{"do":"tuner","on":true}"#)
+         XCTAssertEqual(WatchCommand.channel(id: 50, channel: "B").json, #"{"do":"channel","id":50,"channel":"B"}"#)
          XCTAssertEqual(WatchCommand.channel(id: 50, channel: #"a"b"#).json, #"{"do":"channel","id":50,"channel":"a\"b"}"#, "a channel is sent as JSON, not pasted in")
-     }
- 
++        /* Quick edit's two: a held pedal's knobs wanted, or let go; and one knob to a place, to three figures. */
++        XCTAssertEqual(WatchCommand.knobs(id: 50).json, #"{"do":"knobs","id":50}"#)
++        XCTAssertEqual(WatchCommand.knobs(id: nil).json, #"{"do":"knobs","id":null}"#)
++        XCTAssertEqual(WatchCommand.knob(id: 50, key: "12", at: 0.62).json, #"{"do":"knob","id":50,"key":"12","at":0.62}"#)
++        XCTAssertEqual(WatchCommand.knob(id: 50, key: "12", at: 0.12345).json, #"{"do":"knob","id":50,"key":"12","at":0.123}"#)
++        XCTAssertEqual(WatchCommand.knob(id: 50, key: #"a"b"#, at: 7).json, #"{"do":"knob","id":50,"key":"a\"b","at":1.0}"#, "a place past the end of the range was sent, or a key pasted in")
++    }
++
 +    // MARK: - The watch's pages: which are shown, and in what order
 +
 +    /*
@@ -885,9 +1482,39 @@ index 1b1532ec..1bb63ac0 100644
 +            var tickMs: Double
 +            var cases: [Due]
 +        }
++        /* Quick edit: the phone's own answers for where a knob sits, what its value is and how it is written, and how long a turn waits. Times in milliseconds. */
++        struct KnobCase: Decodable {
++            var at: Double
++            var min: Double?
++            var max: Double?
++            var log: Bool?
++            var unit: String?
++            var place: Double
++            var value: Double?
++            var text: String
++        }
++        struct WaitCase: Decodable {
++            var lastSent: Double?
++            var now: Double
++            var wait: Double
++        }
++        struct HoldWords: Decodable {
++            var channels: String
++            var quick: String
++        }
++        struct Quick: Decodable {
++            var everyMs: Double
++            var settleMs: Double
++            var askMs: Double
++            var asks: Int
++            var hold: HoldWords
++            var knobs: [KnobCase]
++            var waits: [WaitCase]
++        }
 +        var cases: [Case]
 +        var tuner: Tuner
 +        var here: Here
++        var quick: Quick
 +    }
 +
 +    private func pagesData() throws -> Data {
@@ -1016,7 +1643,7 @@ index 1b1532ec..1bb63ac0 100644
 +    }
 +
 +    func testTheWatchSaysWhatItKnows() throws {
-+        XCTAssertEqual(WatchCommand.knows, ["pages", "tempo", "stay", "here"])
++        XCTAssertEqual(WatchCommand.knows, ["pages", "tempo", "stay", "here", "quick"])
 +        let hello = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(WatchCommand.hello.json.utf8)) as? [String: Any])
 +        XCTAssertEqual(hello["do"] as? String, "hello")
 +        XCTAssertEqual(hello["knows"] as? [String], WatchCommand.knows, "the hello does not say what the watch knows, so the phone never offers its pages")
@@ -1067,6 +1694,10 @@ index 1b1532ec..1bb63ac0 100644
 +        for other in [WatchCommand.hello, .scene(1), .pedal(id: 50, on: true), .preset(step: 1), .tuner(on: false), .channel(id: 50, channel: "B"), .wrist(on: true)] {
 +            XCTAssertFalse(other.once, "\(other.json) is sent once only")
 +        }
++        /* Quick edit's two as well: a turn tried again a second later would land over a newer one, and an unanswered sheet asks again by itself. */
++        XCTAssertTrue(WatchCommand.knob(id: 50, key: "1", at: 0.5).once, "a turn that did not go is tried again a second later, over a newer one")
++        XCTAssertTrue(WatchCommand.knobs(id: 50).once)
++        XCTAssertTrue(WatchCommand.knobs(id: nil).once)
 +        /* The demo: the switch moves the wrist's setting and nothing else; a tap moves nothing, there being no unit to count it. */
 +        let s = WatchState.sample
 +        XCTAssertEqual(s.tempo, WatchTempo(bpm: 120, tap: true, why: "", wrist: false, running: false))
@@ -1129,10 +1760,161 @@ index 1b1532ec..1bb63ac0 100644
 +        XCTAssertEqual(WaitingWords.closed, "If it was swiped closed, open it again.")
 +    }
 +
++    // MARK: - Quick edit
++
++    /* "Can we set up quick edits on that as well? And change the name to hold to quick edit?" The line under the pedals says so only where the iPhone offers it. */
++    func testTheLineUnderThePedalsSaysQuickEditOnlyWhereTheIPhoneOffersIt() throws {
++        let words = try JSONDecoder().decode(PagesFixture.self, from: try pagesData()).quick.hold
++        XCTAssertEqual(PedalWords.channels, words.channels, "the watch and the phone say the hold differently")
++        XCTAssertEqual(PedalWords.quick, words.quick)
++        XCTAssertEqual(PedalWords.channels, "Hold a pedal for its channels.")
++        XCTAssertEqual(PedalWords.quick, "Hold a pedal for quick edit.")
++        XCTAssertEqual(pedalHoldLine(quickEdit: true), "Hold a pedal for quick edit.")
++        /* Not offered, or not said at all (every phone, to a watch that has not said it knows): the words it always had. */
++        XCTAssertEqual(pedalHoldLine(quickEdit: false), "Hold a pedal for its channels.")
++        XCTAssertEqual(pedalHoldLine(quickEdit: nil), "Hold a pedal for its channels.")
++        XCTAssertEqual(pedalHoldLine(quickEdit: WatchState.sample.quickEdit), "Hold a pedal for its channels.", "the demo, which CI pictures, says quick edit without being asked to")
++        XCTAssertEqual(pedalHoldLine(quickEdit: WatchState.sample.quickDemo.quickEdit), "Hold a pedal for quick edit.")
++    }
++
++    func testTheQuickEditSheetReadsThePhonesKnobs() throws {
++        /* pages.json's picture offers quick edit, with Drive 1's sheet open on two knobs. */
++        let state = try XCTUnwrap(WatchState.decode(try pagesPicture()), "a picture with quick edit in it was not read at all")
++        XCTAssertEqual(state.quickEdit, true)
++        let open = try XCTUnwrap(state.quick)
++        XCTAssertEqual(open.id, 50)
++        XCTAssertEqual(open.knobs?.map(\.key), ["11", "12"])
++        XCTAssertEqual(open.knobs?.map(\.name), ["Drive", "Low Cut"])
++        XCTAssertEqual(open.knobs?.map(\.text), ["6.20", "632.46 Hz"])
++        XCTAssertEqual(open.knobs?.first, WatchKnob(key: "11", at: 0.62, name: "Drive", text: "6.20", min: 0, max: 10, log: false, unit: ""))
++        XCTAssertEqual(open.knobs?.last?.log, true)
++        /* Only for the pedal it is for: another pedal's sheet is still reading. */
++        XCTAssertEqual(watchQuickFor(state.quick, pedal: 50), open)
++        XCTAssertNil(watchQuickFor(state.quick, pedal: 70))
++        XCTAssertNil(watchQuickFor(nil, pedal: 50))
++
++        /* A phone that says nothing of it (every phone, to a watch that has not said it knows): no quick edit, and nothing lost. */
++        let plain = try XCTUnwrap(WatchState.decode(try fixture()))
++        XCTAssertNil(plain.quickEdit)
++        XCTAssertNil(plain.quick)
++        XCTAssertNil(WatchState.sample.quickEdit)
++
++        /* Fields a later phone leaves out, and ones the watch has not heard of: still read, never the whole picture lost. */
++        let bare = try picture { p in
++            p["quickEdit"] = true
++            p["quick"] = ["id": 50, "somethingNewer": 1, "knobs": [["key": "3", "at": 0.25, "somethingNewer": "x"] as [String: Any]]] as [String: Any]
++        }
++        let read = try XCTUnwrap(WatchState.decode(bare), "a knob with fields missing lost the whole picture")
++        XCTAssertEqual(read.quick?.knobs, [WatchKnob(key: "3", at: 0.25)])
++        XCTAssertEqual(read.quick?.knobs?.first?.shown(turned: nil), "", "a knob with no words was given some")
++        XCTAssertEqual(read.quick?.knobs?.first?.shown(turned: 0.5), "", "a knob with no range was given a number the watch made up")
++        let none = try picture { p in
++            p["quickEdit"] = true
++            p["quick"] = ["id": 50] as [String: Any]
++        }
++        XCTAssertNil(try XCTUnwrap(WatchState.decode(none)).quick?.knobs)
++        let empty = try picture { p in
++            p["quickEdit"] = false
++            p["quick"] = ["id": 50, "knobs": [] as [Any]] as [String: Any]
++        }
++        XCTAssertEqual(try XCTUnwrap(WatchState.decode(empty)).quick?.knobs, [])
++    }
++
++    /* The number beside a knob while the Crown is ahead of the iPhone is worked out by the iPhone's own rule. */
++    func testAKnobsNumberIsWrittenAsThePhoneWritesIt() throws {
++        let quick = try JSONDecoder().decode(PagesFixture.self, from: try pagesData()).quick
++        XCTAssertGreaterThanOrEqual(quick.knobs.count, 14, "the fixture lost its cases")
++        for c in quick.knobs {
++            let said = "at \(c.at) in \(String(describing: c.min)) to \(String(describing: c.max)), log \(String(describing: c.log)), unit \(String(describing: c.unit))"
++            XCTAssertEqual(watchKnobAt(c.at), c.place, accuracy: 0.0000001, "the place of \(said)")
++            let value = watchKnobValue(at: c.at, low: c.min, high: c.max, curved: c.log)
++            if let want = c.value {
++                XCTAssertEqual(try XCTUnwrap(value, "no value for \(said)"), want, accuracy: 0.0000001, "the value of \(said)")
++            } else {
++                XCTAssertNil(value, "a value for \(said), which has no range")
++            }
++            XCTAssertEqual(watchKnobText(value, unit: c.unit), c.text, "the words for \(said)")
++            /* And through a knob's own row: turned there it says the same; with no range, the iPhone's words stay. */
++            let knob = WatchKnob(key: "k", at: 0, name: "Knob", text: "as the iPhone said", min: c.min, max: c.max, log: c.log, unit: c.unit)
++            XCTAssertEqual(knob.shown(turned: c.at), c.value == nil ? "as the iPhone said" : c.text, "the row for \(said)")
++            XCTAssertEqual(knob.shown(turned: nil), "as the iPhone said")
++            XCTAssertEqual(knob.place(turned: c.at), c.place, accuracy: 0.0000001)
++        }
++        /* Said here as well. */
++        XCTAssertEqual(watchKnobText(6.2, unit: ""), "6.20")
++        XCTAssertEqual(watchKnobText(-3, unit: "dB"), "-3.00 dB")
++        XCTAssertEqual(watchKnobText(100, unit: "%"), "100.00 %")
++        XCTAssertEqual(watchKnobText(20000, unit: "Hz"), "20000 Hz")
++        XCTAssertEqual(watchKnobText(nil, unit: nil), "—")
++        XCTAssertEqual(watchKnobText(.nan, unit: "dB"), "— dB")
++        XCTAssertEqual(watchKnobAt(-4), 0)
++        XCTAssertEqual(watchKnobAt(4), 1)
++        XCTAssertEqual(watchKnobAt(.nan), 0)
++        XCTAssertNil(watchKnobValue(at: 0.5, low: 3, high: 3, curved: false), "a knob with no room in its range was given a value")
++        XCTAssertNil(watchKnobValue(at: 0.5, low: nil, high: 10, curved: nil))
++        XCTAssertEqual(watchKnobValue(at: 0.5, low: 0, high: 10, curved: true), 5, "a logarithmic scale from nought is a straight line, as on the iPhone")
++    }
++
++    func testTheCrownTurnsThePickedKnobAndATurnGoesAtMostTenTimesASecond() throws {
++        let quick = try JSONDecoder().decode(PagesFixture.self, from: try pagesData()).quick
++        XCTAssertEqual(quick.everyMs, watchKnobSeconds * 1000, "the watch and the phone pace a turn differently")
++        XCTAssertEqual(quick.settleMs, watchKnobSettle * 1000)
++        XCTAssertEqual(quick.askMs, watchKnobsAskSeconds * 1000)
++        XCTAssertEqual(quick.asks, watchKnobsAsks)
++        XCTAssertGreaterThanOrEqual(quick.waits.count, 6, "the fixture lost its cases")
++        let at = { (ms: Double) in Date(timeIntervalSince1970: ms / 1000) }
++        for c in quick.waits {
++            XCTAssertEqual(watchKnobWait(lastSent: c.lastSent.map(at), now: at(c.now)) * 1000, c.wait, accuracy: 0.5, "last sent \(String(describing: c.lastSent)), now \(c.now)")
++        }
++        /* Said here as well: none sent yet goes now; one just sent waits its tenth of a second and no longer. */
++        let start = Date(timeIntervalSince1970: 1_000_000)
++        XCTAssertEqual(watchKnobWait(lastSent: nil, now: start), 0)
++        XCTAssertEqual(watchKnobWait(lastSent: start, now: start), 0.1, accuracy: 0.0001)
++        XCTAssertEqual(watchKnobWait(lastSent: start, now: start.addingTimeInterval(0.2)), 0)
++        XCTAssertEqual(watchKnobWait(lastSent: start.addingTimeInterval(5), now: start), 0.1, accuracy: 0.0001, "a clock put back holds a turn for longer than a tenth of a second")
++
++        /* THE PICKED KNOB: the first when the sheet opens, the one tapped while it is still listed, and the first again when it is not. */
++        let knobs = WatchState.demoQuick(id: 50).knobs ?? []
++        XCTAssertEqual(knobs.map(\.name), ["Drive", "Tone", "Mix", "Low Cut"])
++        XCTAssertEqual(watchKnobPicked(knobs, nil)?.key, "1", "the first knob is not picked when the sheet opens")
++        XCTAssertEqual(watchKnobPicked(knobs, "3")?.name, "Mix")
++        XCTAssertEqual(watchKnobPicked(knobs, "99")?.key, "1")
++        XCTAssertNil(watchKnobPicked([], "1"))
++        /* The demo's own words are what the rule writes, so CI's picture is of numbers a real iPhone would send. */
++        for knob in knobs {
++            XCTAssertEqual(knob.shown(turned: knob.at), knob.text, "the demo's \(knob.name ?? "") says a number the rule would not write")
++        }
++    }
++
++    func testTheDemoAnswersQuickEditAsThePhoneWould() {
++        /* Not offered: asking for a pedal's knobs gets none, as a phone that does not offer it refuses. */
++        let s = WatchState.sample
++        XCTAssertNil(s.answering(.knobs(id: 50)).quick)
++        /* Offered (CI's -quickDemo): a held pedal's knobs, only for a pedal a hold opens, let go when the sheet closes. */
++        let q = s.quickDemo
++        XCTAssertEqual(q.quickEdit, true)
++        XCTAssertNil(q.quick, "the knobs are there before any pedal is held")
++        let open = q.answering(.knobs(id: 50))
++        XCTAssertEqual(open.quick?.id, 50)
++        XCTAssertEqual(open.quick?.knobs?.count, 4)
++        XCTAssertNil(q.answering(.knobs(id: 99)).quick, "a pedal that is not there")
++        XCTAssertNil(open.answering(.knobs(id: nil)).quick)
++        /* A turn: that knob only, to that place, with its number written by the rule. */
++        let turned = open.answering(.knob(id: 50, key: "1", at: 0.8))
++        XCTAssertEqual(turned.quick?.knobs?.first?.at, 0.8)
++        XCTAssertEqual(turned.quick?.knobs?.first?.text, "8.00")
++        XCTAssertEqual(turned.quick?.knobs?.dropFirst().map(\.text), ["5.00", "100.00 %", "632.46 Hz"], "a turn moved another knob")
++        XCTAssertEqual(open.answering(.knob(id: 50, key: "4", at: 1)).quick?.knobs?.last?.text, "20000 Hz")
++        XCTAssertEqual(open.answering(.knob(id: 50, key: "99", at: 0.1)), open, "a knob the sheet does not list")
++        XCTAssertEqual(open.answering(.knob(id: 70, key: "1", at: 0.1)), open, "a knob of a pedal whose sheet is not open")
++        XCTAssertEqual(q.answering(.knob(id: 50, key: "1", at: 0.1)), q, "a turn with no sheet open")
++        /* And nothing else moved: the pedals, their channels and the rest of the picture. */
++        XCTAssertEqual(turned.pedals, s.pedals)
++        XCTAssertEqual(turned.scene, s.scene)
+     }
+ 
      func testTheNeedleAndTheColours() {
-         XCTAssertEqual(needleOffset(cents: 0), 0)
-         XCTAssertEqual(needleOffset(cents: 25), 0.5)
-@@ -166,6 +460,17 @@ final class WatchModelTests: XCTestCase {
+@@ -166,6 +653,17 @@ final class WatchModelTests: XCTestCase {
          XCTAssertEqual(boosted.pedals.filter { $0.wordLine != nil }.count, 1, "a pedal other than the amp was given a word")
      }
  
@@ -1152,10 +1934,10 @@ index 1b1532ec..1bb63ac0 100644
          /* Four scenes, two rows of two, in a page with 180 points under the heading: (180 - 4) / 2. */
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/pages.json b/mobile/watch-ci/Tests/WatchModelTests/pages.json
 new file mode 100644
-index 00000000..e72b0816
+index 00000000..84cd8eca
 --- /dev/null
 +++ b/mobile/watch-ci/Tests/WatchModelTests/pages.json
-@@ -0,0 +1,863 @@
+@@ -0,0 +1,1145 @@
 +{
 +  "state": {
 +    "v": 1,
@@ -1179,7 +1961,24 @@ index 00000000..e72b0816
 +      "Scene 7",
 +      "Scene 8"
 +    ],
-+    "pedals": [],
++    "pedals": [
++      {
++        "id": 50,
++        "short": "DRV",
++        "name": "Drive 1",
++        "on": true,
++        "fill": "#c0392b",
++        "ink": "#ffffff",
++        "channel": "B",
++        "channels": [
++          "A",
++          "B",
++          "C",
++          "D"
++        ],
++        "word": ""
++      }
++    ],
 +    "tuner": {
 +      "on": false,
 +      "note": "",
@@ -1208,7 +2007,33 @@ index 00000000..e72b0816
 +    ],
 +    "hidden": [
 +      "presets"
-+    ]
++    ],
++    "quickEdit": true,
++    "quick": {
++      "id": 50,
++      "knobs": [
++        {
++          "key": "11",
++          "name": "Drive",
++          "text": "6.20",
++          "at": 0.62,
++          "min": 0,
++          "max": 10,
++          "log": false,
++          "unit": ""
++        },
++        {
++          "key": "12",
++          "name": "Low Cut",
++          "text": "632.46 Hz",
++          "at": 0.5,
++          "min": 20,
++          "max": 20000,
++          "log": true,
++          "unit": "Hz"
++        }
++      ]
++    }
 +  },
 +  "tuner": {
 +    "leaving": [
@@ -1476,6 +2301,245 @@ index 00000000..e72b0816
 +        "lastSent": 1759363205000,
 +        "now": 1759363200000,
 +        "due": false
++      }
++    ]
++  },
++  "quick": {
++    "everyMs": 100,
++    "settleMs": 1500,
++    "askMs": 2500,
++    "asks": 4,
++    "hold": {
++      "channels": "Hold a pedal for its channels.",
++      "quick": "Hold a pedal for quick edit."
++    },
++    "knobs": [
++      {
++        "at": 0.62,
++        "min": 0,
++        "max": 10,
++        "log": false,
++        "unit": "",
++        "place": 0.62,
++        "value": 6.2,
++        "text": "6.20"
++      },
++      {
++        "at": 0.5,
++        "min": 0,
++        "max": 10,
++        "log": false,
++        "unit": "",
++        "place": 0.5,
++        "value": 5,
++        "text": "5.00"
++      },
++      {
++        "at": 1,
++        "min": 0,
++        "max": 100,
++        "log": false,
++        "unit": "%",
++        "place": 1,
++        "value": 100,
++        "text": "100.00 %"
++      },
++      {
++        "at": 0.25,
++        "min": -80,
++        "max": 20,
++        "log": false,
++        "unit": "dB",
++        "place": 0.25,
++        "value": -55,
++        "text": "-55.00 dB"
++      },
++      {
++        "at": 0.4,
++        "min": -12,
++        "max": 12,
++        "log": false,
++        "unit": "dB",
++        "place": 0.4,
++        "value": -2.4,
++        "text": "-2.40 dB"
++      },
++      {
++        "at": 0.5,
++        "min": 20,
++        "max": 20000,
++        "log": true,
++        "unit": "Hz",
++        "place": 0.5,
++        "value": 632.456,
++        "text": "632.46 Hz"
++      },
++      {
++        "at": 0,
++        "min": 20,
++        "max": 20000,
++        "log": true,
++        "unit": "Hz",
++        "place": 0,
++        "value": 20,
++        "text": "20.00 Hz"
++      },
++      {
++        "at": 1,
++        "min": 20,
++        "max": 20000,
++        "log": true,
++        "unit": "Hz",
++        "place": 1,
++        "value": 20000,
++        "text": "20000 Hz"
++      },
++      {
++        "at": 0.75,
++        "min": 20,
++        "max": 20000,
++        "log": true,
++        "unit": "Hz",
++        "place": 0.75,
++        "value": 3556.559,
++        "text": "3557 Hz"
++      },
++      {
++        "at": 0.333,
++        "min": 0,
++        "max": 10,
++        "log": false,
++        "unit": "",
++        "place": 0.333,
++        "value": 3.33,
++        "text": "3.33"
++      },
++      {
++        "at": 0.1234,
++        "min": 0,
++        "max": 10,
++        "log": false,
++        "unit": "",
++        "place": 0.123,
++        "value": 1.234,
++        "text": "1.23"
++      },
++      {
++        "at": 0.5,
++        "min": 0,
++        "max": 1,
++        "log": false,
++        "unit": "",
++        "place": 0.5,
++        "value": 0.5,
++        "text": "0.50"
++      },
++      {
++        "at": 0.5,
++        "min": 1000,
++        "max": 5000,
++        "log": false,
++        "unit": "ms",
++        "place": 0.5,
++        "value": 3000,
++        "text": "3000 ms"
++      },
++      {
++        "at": -0.2,
++        "min": 0,
++        "max": 10,
++        "log": false,
++        "unit": "",
++        "place": 0,
++        "value": 0,
++        "text": "0.00"
++      },
++      {
++        "at": 1.7,
++        "min": 0,
++        "max": 10,
++        "log": false,
++        "unit": "",
++        "place": 1,
++        "value": 10,
++        "text": "10.00"
++      },
++      {
++        "at": 0.5,
++        "min": 0,
++        "max": 10,
++        "log": true,
++        "unit": "",
++        "place": 0.5,
++        "value": 5,
++        "text": "5.00"
++      },
++      {
++        "at": 0.5,
++        "min": null,
++        "max": null,
++        "log": false,
++        "unit": "dB",
++        "place": 0.5,
++        "value": null,
++        "text": "— dB"
++      },
++      {
++        "at": 0.5,
++        "min": 3,
++        "max": 3,
++        "log": false,
++        "unit": "",
++        "place": 0.5,
++        "value": null,
++        "text": "—"
++      },
++      {
++        "at": 0.5,
++        "min": 0,
++        "max": 10,
++        "log": null,
++        "unit": null,
++        "place": 0.5,
++        "value": 5,
++        "text": "5.00"
++      }
++    ],
++    "waits": [
++      {
++        "lastSent": null,
++        "now": 1759363200000,
++        "wait": 0
++      },
++      {
++        "lastSent": 1759363200000,
++        "now": 1759363200000,
++        "wait": 100
++      },
++      {
++        "lastSent": 1759363200000,
++        "now": 1759363200040,
++        "wait": 60
++      },
++      {
++        "lastSent": 1759363200000,
++        "now": 1759363200099,
++        "wait": 1
++      },
++      {
++        "lastSent": 1759363200000,
++        "now": 1759363200100,
++        "wait": 0
++      },
++      {
++        "lastSent": 1759363200000,
++        "now": 1759363205000,
++        "wait": 0
++      },
++      {
++        "lastSent": 1759363200050,
++        "now": 1759363200000,
++        "wait": 100
 +      }
 +    ]
 +  },
@@ -2020,7 +3084,7 @@ index 00000000..e72b0816
 +  ]
 +}
 diff --git a/mobile/watch-ci/screens.sh b/mobile/watch-ci/screens.sh
-index b14cec75..0beff211 100755
+index b14cec75..2395636a 100755
 --- a/mobile/watch-ci/screens.sh
 +++ b/mobile/watch-ci/screens.sh
 @@ -32,6 +32,15 @@ for page in 0 1 2 3; do
@@ -2039,3 +3103,18 @@ index b14cec75..0beff211 100755
  # A pedal held: Drive 1's channels, B lit (-pick takes a demo pedal's id). For
  # looking at a pull request only; watch.yml's App Store list does not take it.
  # Three seconds more than the others: the sheet opens 0.8 s after the page
+@@ -40,6 +49,14 @@ xcrun simctl io "$UDID" screenshot "screens/tuner-on.png"
+ shoot -page 1 -pick 50
+ sleep 3
+ xcrun simctl io "$UDID" screenshot "screens/channels.png"
++# Quick edit, where the iPhone offers it (-quickDemo): the line under the
++# pedals, and Drive 1 held, its channels in one row over its knobs with the
++# first picked. For looking at a pull request only, like the channels.
++shoot -page 1 -quickDemo YES
++xcrun simctl io "$UDID" screenshot "screens/quick-line.png"
++shoot -page 1 -pick 50 -quickDemo YES
++sleep 3
++xcrun simctl io "$UDID" screenshot "screens/quick.png"
+ # An AM4's amp saying its boost under its name, dark with "Boost off", as the
+ # phone sends it for an AM4 (the demo is an FM3, which has no words). For
+ # looking at a pull request only, like the channels.

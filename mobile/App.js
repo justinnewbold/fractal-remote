@@ -96,6 +96,9 @@ import BlockSide, { KnobsFollow } from './src/components/BlockSide'
 /* The hold pop-up's knobs, over its channels: the rule, and the switch that opens it past his account. */
 import { popKnobsOn } from './src/lib/holdPop'
 import { HOLD_POPUP_KNOBS_FOR_EVERYONE } from './src/lib/features'
+/* And on the Apple Watch, where a held pedal's channels carry its knobs too: the rule, and the switch that opens it past his account. */
+import { watchQuickOn } from './src/lib/watchQuick'
+import { WATCH_QUICK_EDIT_FOR_EVERYONE } from './src/lib/features'
 /* The handle on the line between the two sides (lib/sidesSplit; components/SidesHandle), the tidier Edit's: his account until its switch. */
 import { handleOn } from './src/lib/sidesSplit'
 import { useSidesSplit } from './src/lib/useSidesSplit'
@@ -1065,6 +1068,16 @@ export default function App() {
    * the panel instead (`holdOpens`), no pop-up opens at all.
    */
   const popKnobs = popKnobsOn({ allowed: sidesAdmin || HOLD_POPUP_KNOBS_FOR_EVERYONE, editOpens, vp4: noKnobs })
+  /*
+   * AND A PEDAL HELD ON THE APPLE WATCH (lib/watchQuick; lib/watchQuickEdit):
+   * "On the watch, we have pushed to hold on the channels to switch amps.
+   * Can we set up quick edits on that as well?" (Justin, 12 November 2026).
+   * Only where the pop-up above carries knobs (so behind Edit's own door,
+   * and never on a VP4), and his account until features
+   * WATCH_QUICK_EDIT_FOR_EVERYONE. The watch is told only if it has said it
+   * knows how (lib/watchPages), which none does before the next build.
+   */
+  const watchQuick = watchQuickOn({ allowed: sidesAdmin || WATCH_QUICK_EDIT_FOR_EVERYONE, popKnobs })
   /* Open, it stays through a blink of the link: asked with Edit's door not shut, as Edit itself stays (editShut). */
   const blockIn = useRef(null)
   const blockKept = panelKeeps({ screen, goes: holdGoes({ ...holdAsks, editOpens: !editHere.shuts }), opened: blockIn.current })
@@ -2333,6 +2346,8 @@ export default function App() {
                 onCloseKnobs={closeBlock}
                 /* Where the hold is the channel pop-up, whether the block's knobs sit over the channels in it (above). */
                 popKnobs={popKnobs}
+                /* And whether a pedal held on the Apple Watch offers quick edit (above). */
+                watchQuick={watchQuick}
                 /* Stage view: Play drawn large over itself, with Play's own presses under every button; and whether its Notes button is offered. */
                 stageView={stageViewUp}
                 onCloseStageView={() => setScreen('stage')}

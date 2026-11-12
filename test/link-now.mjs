@@ -1043,7 +1043,9 @@ async function watchOnABench() {
       /* lib/watchPages, for a watch that has not said it takes its pages from the phone: nothing kept, nothing sent. */
       'noteWatchKnows = () => {}', 'pagesToSend = () => null', 'useWatchPages = () => ({ order: [], hidden: [], can: false })', 'watchHasTempo = () => false', 'tunerStaysToSend = () => null', 'watchChecksIn = () => false',
       /* lib/metronome's two for the Tempo page, which that watch never asks for. */
-      'setWatchTap = () => {}', 'useMetronome = () => ({})']),
+      'setWatchTap = () => {}', 'useMetronome = () => ({})',
+      /* lib/watchQuickEdit, for a watch that has not said it knows quick edit: nothing sent, nothing kept, nothing asked. */
+      'onQuickChange = () => {}', 'quickAsked = () => {}', 'quickFollows = () => {}', 'quickHeard = () => {}', 'quickToSend = () => null']),
     'debugLog.mjs': "import { bench } from './bench.mjs'\nexport const logDebug = (...a) => { bench.log.push(a.join(' ')) }\n",
     /* untilConnected as link.js's: true at once while the link is up, else when it comes back, or false once `ms` (8 s if not said) is up. */
     'link.mjs': "import * as clock from './clock.mjs'\nimport { bench } from './bench.mjs'\nexport const probeNow = () => { bench.probes++ }\nexport const untilConnected = (ms = 8000) => (bench.gate ? Promise.race([bench.gate.promise, new Promise((r) => clock.setTimeout(() => r(false), ms))]) : Promise.resolve(true))\n",
@@ -1098,7 +1100,8 @@ async function watchOnABench() {
     ["from './watch-link'", "from './watch-link.mjs'"],
     ["from './metronome'", "from './stub.mjs'"],
     ["from './am4-boost'", "from './stub.mjs'"],
-    ["from './watchPages'", "from './stub.mjs'"]
+    ["from './watchPages'", "from './stub.mjs'"],
+    ["from './watchQuickEdit'", "from './stub.mjs'"]
   ]) {
     assert.ok(src.includes(from), `lib/watchBridge no longer imports ${from}: the bench needs telling`)
     src = src.replace(from, to)

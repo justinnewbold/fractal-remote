@@ -8,7 +8,7 @@
  * relay is, so every tap goes watch → phone → computer → unit, over Apple's
  * own watch-to-phone link (WatchConnectivity). The phone is the only thing
  * that knows the rig; the watch draws what it is told and asks for one of
- * nine things.
+ * eleven things.
  *
  * This file is both halves of that conversation, in words the watch's Swift
  * can read without knowing anything about the app: `watchState` is what the
@@ -102,10 +102,13 @@ export const WATCH_PAGE_NAMES = { scenes: 'Scenes', pedals: 'Pedals', presets: '
  *            LEAVING ITS PAGE, below).
  *   `here`   it checks in while it is on screen (THE CHECK-IN, below), so
  *            the iPhone is held awake for as long as the watch is looked at.
- * One build of the watch brought all four, so a watch that says one says
+ *   `quick`  a pedal held on it opens quick edit: it reads the picture's
+ *            `quickEdit` and `quick`, and may ask for a block's knobs and
+ *            turn one (QUICK EDIT ON THE WRIST, below).
+ * One build of the watch brings all five, so a watch that says one says
  * them all.
  */
-export const WATCH_KNOWS = ['pages', 'tempo', 'stay', 'here']
+export const WATCH_KNOWS = ['pages', 'tempo', 'stay', 'here', 'quick']
 
 /*
  * THE CHECK-IN. A request from the watch wakes the iPhone app with the phone
@@ -324,6 +327,135 @@ const text = (s, max = 40) => (typeof s === 'string' ? s.slice(0, max) : '')
 const letter = (c) => (typeof c === 'string' && /^[A-Z]$/.test(c) ? c : '')
 
 /*
+ * QUICK EDIT ON THE WRIST. Justin, 12 November 2026: "On the watch, we have
+ * pushed to hold on the channels to switch amps. Can we set up quick edits
+ * on that as well? And change the name to hold to quick edit?" Of three
+ * pictures he chose the second: "For the watch, mock up B." Holding a pedal
+ * opens its channels in one row and, under them, a list of the block's
+ * knobs, a name and a value to a row. A tap picks a row, and the Digital
+ * Crown turns the picked knob.
+ *
+ * IT IS THE PHONE'S OWN QUICK EDIT, FROM THE WRIST. On Play a hold opens a
+ * pop-up with the block's knobs over its channels (lib/holdPop), and those
+ * knobs are Edit's: read and written by Edit's own senders. The watch's are
+ * the same knobs by the same senders (lib/watchQuickEdit), so nothing goes
+ * to a unit from the wrist that Edit could not send from the screen, and
+ * never a block's Level, which Edit keeps out of the knobs. No saving.
+ *
+ * THE PHONE SAYS, in the picture, and only to a watch that has said it
+ * knows `quick`:
+ *
+ *   quickEdit  whether a hold offers quick edit at all: where the phone's
+ *              own pop-up would carry knobs (Edit's door open for this
+ *              account, unit and connection; never a VP4) and the account
+ *              is one the watch's is open to. False, and the watch's hold is
+ *              the channels alone, with the words it always had.
+ *   quick      while a held pedal's sheet is open and its knobs have been
+ *              read: { id, knobs }, the pedal and up to WATCH_QUICK_MAX
+ *              knobs, each { key, name, text, at, min, max, log, unit }.
+ *              `text` is the value as Edit writes it under the knob and
+ *              `at` where it sits in its range, 0 to 1. The range, the
+ *              scale and the unit are there so the watch can write the
+ *              number as the Crown turns, without waiting on the phone
+ *              (watchKnobValue, watchKnobText: one rule here and, word for
+ *              word, in Model.swift). An empty list is a block with no
+ *              knobs to show, or one the phone could not read: the sheet
+ *              is its channels. Not there at all while the phone is still
+ *              reading.
+ *
+ * AND THE WATCH MAY ASK two things more, each refused unless the last
+ * picture offered quick edit:
+ *
+ *   { do: 'knobs', id }         the sheet opened on that pedal: read its
+ *                               knobs. { do: 'knobs', id: null } when it
+ *                               closes, and the phone lets them go.
+ *   { do: 'knob', id, key, at } that knob to that place in its range, 0 to
+ *                               1. Only a knob the last picture listed for
+ *                               that pedal.
+ *
+ * The watch sends a turn at most every WATCH_KNOB_MS and always the last
+ * one, never a second time (a late old value would land over a newer one).
+ * It shows its own number for WATCH_KNOB_SETTLE_MS after the last turn and
+ * the phone's after that, so the unit's word is the last word. A sheet
+ * that has not been answered asks again every WATCH_KNOBS_ASK_MS, up to
+ * WATCH_KNOBS_ASKS times: the first ask may be the one that woke the phone.
+ */
+
+/** The most knobs a held pedal lists on the watch: the first ones Edit's own panel shows. */
+export const WATCH_QUICK_MAX = 8
+/** How often a turn of the Crown may cross to the phone: about ten a second. */
+export const WATCH_KNOB_MS = 100
+/** How long after the last turn the watch shows its own number before the phone's. */
+export const WATCH_KNOB_SETTLE_MS = 1500
+/** How long a sheet waits for its knobs before it asks again, and how many times it asks. */
+export const WATCH_KNOBS_ASK_MS = 2500
+export const WATCH_KNOBS_ASKS = 4
+
+/** What the watch says under its pedals: what a hold does. The second only where the picture offers quick edit. */
+export const WATCH_HOLD_CHANNELS = 'Hold a pedal for its channels.'
+export const WATCH_HOLD_QUICK = 'Hold a pedal for quick edit.'
+export const watchHoldLine = (quickEdit) => (quickEdit === true ? WATCH_HOLD_QUICK : WATCH_HOLD_CHANNELS)
+
+const num = (n) => typeof n === 'number' && Number.isFinite(n)
+
+/** A knob's place in its range, 0 to 1, to three places: what the watch sends and the phone takes. */
+export const watchKnobAt = (x) => (num(x) ? Math.floor(Math.min(1, Math.max(0, x)) * 1000 + 0.5) / 1000 : 0)
+
+/**
+ * The value a place in a knob's range comes to: Edit's own scale (lib/scale
+ * fromNormalized: a straight line, or a logarithmic one for a frequency),
+ * rounded to three places as Edit's knob rounds what it sends. Null for a
+ * knob with no range to place it in.
+ */
+export function watchKnobValue(at, { min, max, log } = {}) {
+  if (!num(at) || !num(min) || !num(max) || !(max > min)) return null
+  const t = Math.min(1, Math.max(0, at))
+  const v = log === true && min > 0 ? Math.exp(Math.log(min) + t * (Math.log(max) - Math.log(min))) : min + t * (max - min)
+  return Math.floor(v * 1000 + 0.5) / 1000
+}
+
+/**
+ * A knob's value as Edit writes it under the knob (components/Knob `fmt`,
+ * then the unit after a space): two places, or a whole number from a
+ * thousand up. A dash for no number.
+ */
+export function watchKnobText(value, unit) {
+  const n = num(value) && Math.abs(value) < 1e15 ? (Math.abs(value) >= 1000 ? String(Math.floor(value + 0.5)) : value.toFixed(2)) : '—'
+  return typeof unit === 'string' && unit ? `${n} ${unit}` : n
+}
+
+/** How long the watch waits before a turn may go, in milliseconds: nothing when the last went WATCH_KNOB_MS ago or more, or none has gone. */
+export const watchKnobWait = (lastSent, now) => (num(lastSent) && num(now) ? Math.max(0, Math.min(WATCH_KNOB_MS, lastSent + WATCH_KNOB_MS - now)) : 0)
+
+/** One knob for the picture, or null for one the watch could not place or turn: no key, no place, or no range. */
+function knobForWatch(k) {
+  const key = typeof k?.key === 'string' ? k.key : ''
+  if (!key || key.length > 24 || !num(k.at) || !num(k.min) || !num(k.max) || !(k.max > k.min)) return null
+  return {
+    key,
+    name: text(k.name, 24),
+    text: text(k.text, 16),
+    at: watchKnobAt(k.at),
+    min: k.min,
+    max: k.max,
+    log: k.log === true && k.min > 0,
+    unit: text(k.unit, 8)
+  }
+}
+
+/** The open sheet's knobs for the picture: only for a pedal the picture shows, each knob once, and no more than WATCH_QUICK_MAX. */
+function quickForWatch(q, pedals) {
+  if (!q || !int(q.id) || !pedals.some((p) => p.id === q.id)) return null
+  const knobs = []
+  for (const k of Array.isArray(q.knobs) ? q.knobs : []) {
+    if (knobs.length >= WATCH_QUICK_MAX) break
+    const one = knobForWatch(k)
+    if (one && !knobs.some((x) => x.key === one.key)) knobs.push(one)
+  }
+  return { id: q.id, knobs }
+}
+
+/*
  * WHAT HOLDING A PEDAL OFFERS. Justin, 13 October 2026: "Can I add the tap to
  * hold on the effects switches on the watch where you can switch through the
  * channels?" The letters the Play screen's own hold offers (Stage.js, the
@@ -365,11 +497,16 @@ export function watchState({
   tempo = null,
   /* Whether the watch leaves the tuner on when its page is left, for a watch that has said it knows how; none (null) for any other, and then the field is not sent at all. */
   tunerStays = null,
+  /* Whether a held pedal offers quick edit, and the open sheet's knobs (QUICK EDIT ON THE WRIST), for a watch that has said it knows how; none (null) for any other, and then neither field is sent at all. */
+  quickEdit = null,
+  quick = null,
   at = Date.now()
 } = {}) {
   const count = int(sceneCount) && sceneCount > 0 ? Math.min(sceneCount, 8) : 0
   const note = tunerOn && tuning && typeof tuning.note === 'string' && tuning.note ? tuning.note.slice(0, 3) : ''
   const cents = note && Number.isFinite(tuning.cents) ? Math.max(-50, Math.min(50, Math.round(tuning.cents))) : 0
+  /* The open sheet's knobs, only where quick edit is offered and only for a pedal this picture shows. */
+  const open = quickEdit === true ? quickForWatch(quick, (Array.isArray(pedals) ? pedals : []).filter((p) => p && int(p.id)).slice(0, WATCH_PEDALS_MAX)) : null
   return {
     v: WATCH_LINK_VERSION,
     at,
@@ -431,7 +568,12 @@ export function watchState({
        is only to a watch that has said it does this: to any other the
        picture is exactly what it was, field for field, and the version
        stays 1, because nothing a watch already reads changed meaning. */
-    ...(pages === null || pages === undefined ? null : { pages: watchPageOrder(pages), hidden: watchPagesHidden(hidden) })
+    ...(pages === null || pages === undefined ? null : { pages: watchPageOrder(pages), hidden: watchPagesHidden(hidden) }),
+    /* Quick edit (QUICK EDIT ON THE WRIST): whether a hold offers it, true
+       only for a plain true, and the open sheet's knobs once they are read.
+       Sent only where the caller says, which is only to a watch that has
+       said it knows `quick`: to any other the picture has neither field. */
+    ...(quickEdit === null || quickEdit === undefined ? null : { quickEdit: quickEdit === true, ...(open ? { quick: open } : null) })
   }
 }
 
@@ -443,7 +585,7 @@ function metronomeForWatch(m) {
 }
 
 /**
- * A message from the watch, as one of the nine things it may ask, or null.
+ * A message from the watch, as one of the eleven things it may ask, or null.
  *
  *   { do: 'scene', index }      — switch to that scene (0-based)
  *   { do: 'pedal', id, on }     — that block on or off
@@ -457,6 +599,10 @@ function metronomeForWatch(m) {
  *   { do: 'wrist', on }         — the metronome's tap on the wrist, on or off
  *   { do: 'here' }              — the watch is on screen: nothing to do but
  *                                 stay awake (THE CHECK-IN)
+ *   { do: 'knobs', id }         — a held pedal's sheet opened: read its knobs;
+ *                                 id null when it closes (QUICK EDIT ON THE WRIST)
+ *   { do: 'knob', id, key, at } — that knob of that pedal to that place in its
+ *                                 range, 0 to 1
  *
  * `state` is the last picture sent, so a scene or a pedal the watch could not
  * have been shown is refused rather than sent to the unit — and so is a
@@ -496,6 +642,19 @@ export function watchCommand(msg, state) {
       return state?.tempo?.tap === true ? { do: 'tap' } : null
     case 'wrist':
       return state?.tempo && typeof state.tempo === 'object' && typeof msg.on === 'boolean' ? { do: 'wrist', on: msg.on } : null
+    /* Quick edit's two (QUICK EDIT ON THE WRIST, above): only where the last picture offered it. The knobs of a pedal that picture showed and a hold opens (one with channels to choose), or of none, when the sheet closes. */
+    case 'knobs': {
+      if (state?.quickEdit !== true) return null
+      if (msg.id === null) return { do: 'knobs', id: null }
+      const pedal = int(msg.id) ? (state.pedals || []).find((p) => p.id === msg.id) : null
+      return pedal && Array.isArray(pedal.channels) && pedal.channels.length > 1 ? { do: 'knobs', id: msg.id } : null
+    }
+    /* A turn: only a knob the last picture listed for that pedal, to a place inside its range. */
+    case 'knob': {
+      const open = state?.quickEdit === true && state.quick && typeof state.quick === 'object' ? state.quick : null
+      const listed = open && int(msg.id) && msg.id === open.id && typeof msg.key === 'string' && Array.isArray(open.knobs) && open.knobs.some((k) => k.key === msg.key)
+      return listed && num(msg.at) && msg.at >= 0 && msg.at <= 1 ? { do: 'knob', id: msg.id, key: msg.key, at: watchKnobAt(msg.at) } : null
+    }
     default:
       return null
   }

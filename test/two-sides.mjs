@@ -375,7 +375,8 @@ export function run(test) {
     assert.match(stage, /tuning,\s*awake,/)
     assert.match(bridge, /export function useWatchBridge\(picture, step\)/)
     assert.match(bridge, /const awake = picture\.awake !== false\n/)
-    assert.match(bridge, /const \{ chain, channels, awake: seen, \.\.\.rest \} = picture\n/, 'awake is sent to the watch as part of its picture')
+    /* (`quickEdit` is taken out beside it since 12 November 2026: Play's answer for quick edit on the wrist, which goes to the watch only through lib/watchQuickEdit; test/watch-quick.mjs.) */
+    assert.match(bridge, /const \{ chain, channels, awake: seen, quickEdit, \.\.\.rest \} = picture\n/, 'awake is sent to the watch as part of its picture')
     assert.match(bridge, /if \(!watch\) return undefined\s*if \(!awake\) return undefined/)
     assert.match(bridge, /sender\.current = null\s*\}\s*\}, \[awake\]\)/)
     /* The screen stays awake. */

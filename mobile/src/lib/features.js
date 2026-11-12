@@ -208,3 +208,23 @@ export const PRESET_WHEEL_FOR_EVERYONE = false
  * its What's new line in that pull request.
  */
 export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false
+
+/**
+ * QUICK EDIT ON THE APPLE WATCH (lib/watchQuick, lib/watchQuickEdit): a
+ * pedal held on the watch opens its channels with a list of the block's
+ * knobs under them, and the Digital Crown turns the one picked.
+ *
+ * "On the watch, we have pushed to hold on the channels to switch amps. Can
+ * we set up quick edits on that as well? And change the name to hold to
+ * quick edit?" Then, of three pictures: "For the watch, mock up B."
+ * (Justin, 12 November 2026.) Built on his account first, as every new
+ * thing is, and it cannot show anywhere until an iPhone build carries the
+ * watch's half (docs/pending/watch-page-order.patch): the phone says
+ * nothing of it to a watch that has not said it knows how. Where it opens
+ * it still needs the hold pop-up's own knobs (lib/holdPop popKnobsOn: Edit's
+ * door, never a VP4), so this line opens no editing anywhere Edit is
+ * closed. Off, it is his account only, and every other account's watch
+ * opens a held pedal's channels alone, as it always has. It opens to
+ * everyone when he says so, with its What's new line in that pull request.
+ */
+export const WATCH_QUICK_EDIT_FOR_EVERYONE = false

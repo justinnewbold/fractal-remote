@@ -6855,6 +6855,9 @@ tabletRoom(test)
 console.log('\nthe Apple Watch’s pages: shown, hidden and ordered on the iPhone, only for a watch that says it can')
 const { run: watchPages } = await import('./watch-pages.mjs')
 watchPages(test)
+console.log('\nquick edit on the Apple Watch: a held pedal’s knobs under its channels, his account only')
+const { run: watchQuick } = await import('./watch-quick.mjs')
+watchQuick(test)
 console.log('\nConnect your unit: the four ways, Bluetooth first, and the Raspberry Pi’s steps in the app')
 const { run: setupWays } = await import('./setup-ways.mjs')
 setupWays(test)
@@ -17586,7 +17589,7 @@ test('the computer app carries the server that sends an AM4 amp’s boost tap at
 /*
  * THE APPLE WATCH. "Maybe three different screens that you can swipe between
  * … just simple actions from the watch." The phone sends the whole picture;
- * the watch asks for one of nine things, and anything else is dropped.
+ * the watch asks for one of eleven things, and anything else is dropped.
  *
  * Changed on purpose, 13 October 2026: five things became six, and each pedal
  * carries its channel and what a hold may switch it to. Justin: "Can I add the
@@ -17601,7 +17604,7 @@ test('the computer app carries the server that sends an AM4 amp’s boost tap at
  * it, '' for every other pedal. The fixture got a third pedal, an AM4's amp
  * at Boost off, written again from this input; nothing else in it moved.
  */
-test('the watch is sent the stage as one small picture, and may ask for only nine things', async () => {
+test('the watch is sent the stage as one small picture, and may ask for only eleven things', async () => {
   const { watchState, watchCommand, sameWatchState, WATCH_PEDALS_MAX } = await import('../shared/watch-link.mjs')
   const fixture = JSON.parse(readSrc(new URL('../mobile/watch-ci/Tests/WatchModelTests/state.json', import.meta.url), 'utf8'))
   const again = watchState({ at: 1759363200000, linked: true, preset: { number: 12, name: 'Crunch Rhythm' }, label: '012', scene: 1,
@@ -17759,7 +17762,12 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.match(tile, /delayLongPress=\{450\}/)
   assert.match(pages, /LongPressGesture\(minimumDuration: 0\.45\)/, 'the watch’s hold is not the phone’s 450 ms')
   assert.match(pages, /including: pedal\.canPickChannel \? \.all : \.subviews/, 'a pedal with nothing to choose can be held')
-  assert.ok(pages.includes('Text("Hold a pedal for its channels.")'), 'the watch does not say a pedal can be held')
+  /* (The second form is the watch's from the build with quick edit, where the same line says "Hold a pedal for quick edit." only where the iPhone offers it: docs/pending/watch-page-order.patch, test/watch-quick.mjs.) */
+  assert.ok(
+    pages.includes('Text("Hold a pedal for its channels.")') ||
+      (pages.includes('Text(pedalHoldLine(quickEdit: state.quickEdit))') && readSrc(new URL('../mobile/targets/watch/Model.swift', import.meta.url), 'utf8').includes('static let channels = "Hold a pedal for its channels."')),
+    'the watch does not say a pedal can be held'
+  )
   /* An AM4 amp's word, under its name: the phone's own (shared/am4-boost.mjs
      boostWord), never one the watch works out, and not under a tap still on
      its way to the phone, where it would say the old boost under the new light,

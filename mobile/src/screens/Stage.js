@@ -286,6 +286,17 @@ export default function Stage({
    */
   popKnobs = false,
   /*
+   * AND ON THE APPLE WATCH (lib/watchQuick watchQuickOn, asked by App): "On
+   * the watch, we have pushed to hold on the channels to switch amps. Can
+   * we set up quick edits on that as well?" (Justin, 12 November 2026).
+   * True only where that pop-up carries knobs here and the account is one
+   * the watch's quick edit is open to (his, until features
+   * WATCH_QUICK_EDIT_FOR_EVERYONE). It goes in the watch's picture and
+   * nowhere else on this screen; false, a pedal held on the watch opens
+   * its channels alone, as it always did.
+   */
+  watchQuick = false,
+  /*
    * STAGE VIEW (lib/stageView, components/StageView): the preset, the scene
    * and what comes next, big enough to read from a stand, laid over this
    * page while App's screen says so (his account until features
@@ -1417,6 +1428,8 @@ export default function Stage({
          here, so none on the outline (see the tiles' onLongPress) and none
          while another preset's chain is up. */
       channels: channels?.length > 1 && !chainNow.outline && !chainNow.elsewhere ? channels : [],
+      /* And whether that hold offers quick edit on the wrist, the block's knobs under its channels (`watchQuick`, above): sent only to a watch that has said it knows how. */
+      quickEdit: watchQuick,
       tunerOn,
       tuning,
       /* Down while Play is kept out of sight beside a tool filling the window (components/Sides), as when Play is not open at all. */

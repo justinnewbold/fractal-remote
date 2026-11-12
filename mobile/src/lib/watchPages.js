@@ -24,7 +24,8 @@ import { logDebug } from './debugLog'
  *   watch knows (lib/watchBridge takes it there). `pages` among them is the
  *               watch saying it draws the pages it is told, in the order it
  *               is told; `tempo`, that it has the Tempo page; `stay`, that
- *               it can leave the tuner on when its page is left.
+ *               it can leave the tuner on when its page is left; `quick`,
+ *               that a pedal held on it opens quick edit.
  *   stays       the "stays on when you swipe away" switch for the watch's
  *               tuner (Settings → Apple Watch, components/WatchTunerStays).
  *               Off unless it is turned on.
@@ -34,9 +35,10 @@ import { logDebug } from './debugLog'
  * nothing of what it knows. So until one says `pages`, Settings shows
  * nothing for this (`can` is false) and the picture carries neither field
  * (pagesToSend is null), until one says `tempo` it carries no tempo
- * either (watchHasTempo), and until one says `stay` the tuner's switch is
- * neither shown nor sent (tunerStaysToSend is null): for everybody today,
- * nothing here does anything.
+ * either (watchHasTempo), until one says `stay` the tuner's switch is
+ * neither shown nor sent (tunerStaysToSend is null), and until one says
+ * `quick` the picture says nothing of quick edit (watchKnowsQuick): for
+ * everybody today, nothing here does anything.
  *
  * Kept on the device, like the metronome's setting: the watch is paired with
  * this iPhone, not with the account.
@@ -90,6 +92,9 @@ export const watchChecksIn = () => knows.includes('here')
 
 /** Whether the watch has said it has the Tempo page (its hello's `tempo`): the picture's `tempo` is for that watch only. */
 export const watchHasTempo = () => knows.includes('tempo')
+
+/** Whether the watch has said a pedal held on it opens quick edit (its hello's `quick`): the picture's `quickEdit` and `quick` are for that watch only (lib/watchQuickEdit). */
+export const watchKnowsQuick = () => knows.includes('quick')
 
 /** What goes in the picture: the order and the hidden pages, for a watch that has said it does this; null, and neither field, for any other. */
 export const pagesToSend = () => (watchOrdersPages() ? { pages: order, hidden } : null)
