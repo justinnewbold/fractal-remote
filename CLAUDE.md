@@ -1074,39 +1074,65 @@ tick box, Click and tap as the wheel turns). Kept on the device
   only, and every other account's All presets is the list whatever the
   device has kept. It opens when he says so, with its What's new line in
   that pull request (it has none yet).
-- **It is a real click wheel, the third version (12 November 2026).** The
-  first two were a scrolling list that clicked, and both felt wrong on his
-  phone: first "very clunky doesn't match up with the clicks properly ...
-  remove the boxes around the outside edge of the presets as well and make
-  the size of the preset names a little smaller", then, after the rows
-  were made to follow the thumb, "it still needs. Research how the iPod
-  touch used to scroll through the songs, but I wanna make it like a wheel
-  right now it doesn't feel like a touch wheel.. and the haptics and the
-  sound still are not matching up properly so when you scroll fast, it
-  doesn't click at the right time when it slows down or at all sometimes".
-  Shown a ring to spin (A) and a drum to drag (B): "let's do number A".
-  - *Why a list could never click on time:* a flicked list coasts on its
-    own and the app can only watch it and click after the fact. The music
-    player this is named for had a ring the thumb ran round; the list
-    moved only while the thumb did, a notch at a time, each notch a click;
-    and a long fast spin geared up. Nothing coasted. DO NOT GO BACK TO A
-    SCROLLING LIST WITH CLICKS ON IT: a test fails on one.
-  - *What it is* (components/PresetWheel.js): a ring under a short list.
-    A notch (15 degrees, 24 to a turn) moves a light bar one preset, and
-    the bar moving, the click and the tap are one step of the same code
-    (`step`). A sustained fast spin is worth two, five, then ten presets a
-    notch (`wheelGear`), so 512 presets are about four turns. The middle
+- **It is a click wheel that glides, the fourth version (12 November
+  2026).** The first two were a scrolling list that clicked, and both felt
+  wrong on his phone: first "very clunky doesn't match up with the clicks
+  properly ... remove the boxes around the outside edge of the presets as
+  well and make the size of the preset names a little smaller", then,
+  after the rows were made to follow the thumb, "it still needs. Research
+  how the iPod touch used to scroll through the songs, but I wanna make it
+  like a wheel right now it doesn't feel like a touch wheel.. and the
+  haptics and the sound still are not matching up properly so when you
+  scroll fast, it doesn't click at the right time when it slows down or at
+  all sometimes". Shown a ring to spin (A) and a drum to drag (B): "let's
+  do number A". The third was that ring, moving a bar one whole row a
+  notch, with nothing coasting: on time, but stiff. "It just still needs a
+  lot of work do some more research. Let's figure out how to get it
+  smoother and maybe like momentum where if I flicked it, it would go fast
+  if I went slow, it go slow, kinda like that kind of like an original
+  iPod would."
+  - *The rule that survives all four:* THE APP MOVES THE LIST ITSELF. A
+    list the system scrolls coasts on its own, and the app can only watch
+    it and click after the fact. Here where the list is is the app's own
+    number, and the one function that sets it (components/PresetWheel
+    `put`) fires the click and the tap the moment a new preset comes under
+    the bar, whether a thumb or a coast moved it. DO NOT GO BACK TO A
+    SCROLLING LIST, OR HAND THE MOVE TO AN ANIMATION, WITH CLICKS ON TOP:
+    a test fails on either.
+  - *What the music player did* (its maker's patents on accelerated
+    scrolling, and the open firmware written for it): a slow turn is one
+    item a notch; past a turning speed the same turn is worth more, the
+    faster the more, up to a most; a pause puts it back to one.
+  - *What it is* (components/PresetWheel.js): a ring under a short list
+    that slides under a fixed light bar. Turned slowly, 15 degrees is one
+    preset and the list moves with the thumb, part of a row for part of a
+    notch. Turned faster than two thirds of a turn a second, the same turn
+    is worth more, rising smoothly with the speed (`wheelGain`), held to
+    what the list is long enough to want and to 240 presets a second.
+    Lifting a thumb that is still turning lets the list coast from the
+    speed it had, slow like a wheel with a little friction, and stop
+    exactly on a row (`wheelCoast`); lifting one that had stopped settles
+    on the nearest row. The rows can be dragged and flicked the same way.
+    A thumb landing on the ring or the rows stops a coast. The list is
+    never settled under a thumb that has only paused (a slow, careful
+    thumb would lose the part of a notch it had turned). The middle
     button, Load, loads the preset under the bar by that row's own press;
-    a row can be tapped too, and the rows dragged a row for a row, with
-    no coasting.
-  - *No boxes, smaller names:* a preset is its name, slot and star on one
-    line; the row under the bar is the bar (light, dark ink); the one
-    being played is amber and says "Playing". Names 19 under the bar, 17
-    round it. Drawn in the plain colours, never the glass, so Classic is
-    the same.
-  - *The click is ready before it is needed* (lib/wheelClick.js): on an
+    a row can be tapped too.
+  - *Why it is smooth:* the rows are one strip slid by one number, set
+    straight from the move, and are drawn again only every few rows
+    (`WHEEL_REDRAW`), never for each preset that passes. The bar is fixed;
+    the same strip is drawn inside it in dark ink, so a name turns dark as
+    it slides in. Names are one size (18) under the bar and round it, or a
+    name half in the bar would be two sizes at once.
+  - *No boxes:* a preset is its name, slot and star on one line; the one
+    being played is amber and says "Playing". Drawn in the plain colours,
+    never the glass, so Classic is the same.
+  - *The click* (lib/wheelClick.js) is ready before it is needed: on an
     iPhone four players take turns, each rewound two clicks ahead of its
     turn, and the device's sound is kept awake while a wheel is on screen.
+    At most about thirty a second: a thumb looking for a preset hears
+    every one, and a spin or a coast is a purr that thins into single
+    clicks as it slows. Android's tap is its own dial tick.
   - *The list is not touched.* Its row in screens/Presets is word for word
     what it was before there was a wheel ("let's make sure we don't touch
     the other ones"); for the wheel, `rowOf(n, true)` answers what the
@@ -1115,17 +1141,25 @@ tick box, Click and tap as the wheel turns). Kept on the device
 - **NOTHING LOADS UNTIL LOAD OR A ROW IS PRESSED.** The bar is where the
   eye is, never what the unit plays.
 - **The arithmetic** is mobile/src/lib/presetWheel.js (imports nothing):
-  the turn of a thumb into notches (`wheelSpin`), the gears, the bar's
-  place, and how the room is shared between ring and rows.
+  what a turn is worth at the speed it is made (`wheelFlow`), the coast
+  and where it lands, which preset is under the bar, and how the room is
+  shared between ring and rows.
 - **The click** is the system's picker tap and the metronome's click
   played quietly: silent in silent mode, over a backing track rather than
-  stopping it, and one for every notch. The metronome's own out-loud mode
-  is never set back by it (lib/audioMode.js).
-- **None of the three has run on a device here.** How far a notch should
-  be, how soon the gears come in, the ring's size and whether the click
-  lands with the notch on his phone are his to say; they are single
-  numbers in lib/presetWheel.js (`WHEEL_NOTCH_DEG`, `WHEEL_GEARS`,
-  `WHEEL_FAST_MS`, `wheelLayout`).
+  stopping it. The metronome's own out-loud mode is never set back by it
+  (lib/audioMode.js).
+- **What an update cannot do:** the tap and the click are asked for
+  through Expo's own haptics and sound, which answer a few hundredths of
+  a second after they are asked. Making them land dead on the row needs a
+  small native piece (the system's tap made ready ahead of time, and a
+  sound played from memory), which is a build. Offered to him for the
+  next build list; not built.
+- **None of the four has run on a device here.** How far a notch is, how
+  soon and how hard the speed-up comes in, how long a flick carries and
+  the ring's size are his to say; they are single numbers in
+  lib/presetWheel.js (`WHEEL_NOTCH_DEG`, `WHEEL_EASY_DEG_S`,
+  `WHEEL_GAIN_MOST`, `WHEEL_ROWS_MOST`, `WHEEL_DRAG`, `WHEEL_GRIP`,
+  `wheelLayout`).
 
 **In Edit the knobs come first.** "In edit move search bar and amp and
 pedal names to the bottom. Have the Bluetooth warning also move to the

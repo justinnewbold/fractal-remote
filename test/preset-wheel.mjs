@@ -5,16 +5,18 @@
  * screens/Settings.js).
  *
  * "Can we do preset scrolling option a as a setting? So we can have both
- * the original and that one." (Justin, 11 November 2026.) Made three times
- * on his phone's word; the third is a real click wheel: a ring to run a
- * thumb round, a bar that moves one preset a notch with a click and a tap,
- * and a middle button that loads the preset under the bar. His account
+ * the original and that one." (Justin, 11 November 2026.) Made four times
+ * on his phone's word: a ring to run a thumb round, a list that glides
+ * under a bar as it turns, faster the faster the thumb goes and coasting
+ * after a flick, a click and a tap for each preset that passes, and a
+ * middle button that loads the preset under the bar. His account
  * until features PRESET_WHEEL_FOR_EVERYONE; for every other account, and
  * for a device that has not chosen it, All presets is the list it always
  * was.
  *
  * The rule file imports nothing and is run as it is. The rest is read for
- * how it is wired: nothing here can scroll a list.
+ * how it is wired: the app moves the list itself, and nothing here is a
+ * scrolling list.
  */
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -83,7 +85,7 @@ export function run(test) {
     assert.match(r.WHEEL_KEY, /^fractal\./)
   })
 
-  test('preset wheel: a turn of the ring is notches, the same from anywhere on it, and crossing nine o’clock is not a spin backward', async () => {
+  test('preset wheel: turned slowly a notch is a preset, the same from anywhere on the ring, and crossing nine o’clock is not a spin backward', async () => {
     const r = await rules()
     assert.equal(360 / r.WHEEL_NOTCH_DEG, 24, 'twenty-four notches to a turn')
     /* Where a touch is round the middle: 0 at three o'clock, rising clockwise on a screen. */
@@ -101,77 +103,167 @@ export function run(test) {
     assert.equal(r.onWheelRing(10, 10, 125, 48), false, 'the middle button is not the ring')
     assert.equal(r.onWheelRing(130, 0, 125, 48), false)
 
-    /* Slow turning adds up: seven and a half degrees twice is one notch, and nothing is lost between moves. */
-    let s = r.wheelSpinStart(0, 0)
-    let out = r.wheelSpin(s, 7.5, 300)
-    assert.deepEqual([out.notches, out.moves], [0, 0])
-    out = r.wheelSpin(out.state, 15, 600)
-    assert.deepEqual([out.notches, out.moves], [1, 1])
-    /* The same turn is the same notches wherever on the ring it starts. */
+    /* Slow turning is the list moving with the thumb, part of a row for part of a notch: nothing waits for a whole notch, and nothing is lost. */
+    let out = r.wheelFlow(r.wheelFlowStart(0, 0), 7.5, 300)
+    assert.equal(out.rows, 0.5)
+    out = r.wheelFlow(out.state, 15, 600)
+    assert.equal(out.rows, 0.5)
+    /* The same turn is the same rows wherever on the ring it starts. */
     for (const from of [-170, -90, 0, 90, 170]) {
-      const turned = r.wheelSpin(r.wheelSpinStart(from, 0), ((from + 45 + 180) % 360) - 180, 500)
-      assert.deepEqual([turned.notches, turned.moves], [3, 3], `from ${from}`)
+      const turned = r.wheelFlow(r.wheelFlowStart(from, 0), ((from + 45 + 180) % 360) - 180, 500)
+      assert.deepEqual([turned.turned, turned.rows], [45, 3], `from ${from}`)
     }
     /* Anticlockwise goes back up the list. */
-    out = r.wheelSpin(r.wheelSpinStart(0, 0), -30, 500)
-    assert.deepEqual([out.notches, out.moves], [-2, -2])
+    assert.equal(r.wheelFlow(r.wheelFlowStart(0, 0), -30, 500).rows, -2)
   })
 
-  test('preset wheel: slowly it is one preset a notch, and a long fast spin gears up so five hundred presets are a few turns', async () => {
+  test('preset wheel: "if I flicked it, it would go fast if I went slow, it go slow": the faster the thumb, the more a turn is worth, smoothly', async () => {
     const r = await rules()
-    const spinFor = (notches, every, { from = 0, at = 0, state = null, t = 0 } = {}) => {
-      let s = state || r.wheelSpinStart(0, t)
-      let angle = 0
-      let where = from
-      let now = t
-      let clicks = 0
-      for (let i = 0; i < notches; i += 1) {
+    /* A thumb going round at a steady speed, a touch every sixteenth of a second or so, as a screen reports it. */
+    const spin = (degreesASecond, turns, count = 512, every = 16) => {
+      let state = r.wheelFlowStart(0, 0)
+      let [angle, now, rows] = [0, 0, 0]
+      const each = (degreesASecond * every) / 1000
+      for (let gone = 0; gone < turns * 360 - 1e-6; gone += Math.abs(each)) {
         now += every
-        angle += r.WHEEL_NOTCH_DEG
-        const out = r.wheelSpin(s, ((angle + 180) % 360) - 180, now)
-        s = out.state
-        if (out.moves) clicks += 1
-        where = r.wheelMove(where, out.moves, 512)
+        angle += each
+        const out = r.wheelFlow(state, ((angle + 180) % 360) - 180, now, count)
+        state = out.state
+        rows += out.rows
       }
-      return { where, state: s, now, clicks }
+      return { rows, state, now, notches: angle / r.WHEEL_NOTCH_DEG }
     }
-    /* Slow: a notch is a preset, for as long as you like. */
-    const slow = spinFor(60, 200)
-    assert.equal(slow.where, 60)
-    assert.equal(slow.clicks, 60, 'a click for every notch')
-    assert.equal(slow.state.run, 0)
-    /* Fast: the first turn is still about one a notch, then it gears up, and four turns reach the far end of 512. */
-    const oneTurn = spinFor(24, 30)
-    assert.ok(oneTurn.where >= 24 && oneTurn.where <= 30, `the first fast turn runs away: ${oneTurn.where}`)
-    const fourTurns = spinFor(96, 30)
-    assert.ok(fourTurns.where >= 400, `four fast turns only reach ${fourTurns.where}`)
-    assert.equal(fourTurns.clicks, 96, 'still one click a notch, whatever a notch is worth')
-    /* Slowing down, turning back, or a new touch puts it back to one a notch. */
-    const eased = r.wheelSpin(fourTurns.state, r.wheelTurn(0, fourTurns.state.angle + r.WHEEL_NOTCH_DEG), fourTurns.now + r.WHEEL_SLOW_MS + 1)
-    assert.deepEqual([eased.notches, eased.moves, eased.state.run], [1, 1, 0], 'a pause keeps the gear')
-    const back = r.wheelSpin(fourTurns.state, fourTurns.state.angle - r.WHEEL_NOTCH_DEG, fourTurns.now + 20)
-    assert.deepEqual([back.notches, back.moves, back.state.run], [-1, -1, 0], 'turning back keeps the gear')
-    assert.equal(r.wheelSpinStart(0, 0).run, 0)
-    /* The gears only rise, and start at one. */
-    assert.equal(r.wheelGear(0), 1)
-    assert.ok(r.WHEEL_GEARS.every((g, i) => i === 0 || (g.from > r.WHEEL_GEARS[i - 1].from && g.worth > r.WHEEL_GEARS[i - 1].worth)))
-    assert.ok(r.WHEEL_GEARS[1].from >= 18, 'a gear before most of a turn would make one preset hard to land on')
-    assert.ok(r.WHEEL_FAST_MS < r.WHEEL_SLOW_MS)
+    const near = (got, want, what) => assert.ok(Math.abs(got - want) < 1e-6, `${what}: ${got}, not ${want}`)
+    /* Looking for a preset: a notch is a preset, for as long as you like, right up to the easy speed. */
+    near(spin(90, 2).rows, 48, 'two slow turns')
+    const easy = spin(r.WHEEL_EASY_DEG_S, 3)
+    assert.ok(easy.notches >= 72)
+    near(easy.rows, easy.notches, 'three turns at the easy speed')
+    assert.equal(r.wheelGain(0), 1)
+    assert.equal(r.wheelGain(r.WHEEL_EASY_DEG_S), 1)
+    /* Over it, a turn is worth more the faster it is made: no step, no waiting for a long spin first. */
+    const aTurn = [240, 300, 360, 480, 600, 720].map((speed) => spin(speed, 4).rows / 4)
+    for (let i = 1; i < aTurn.length; i += 1) assert.ok(aTurn[i] > aTurn[i - 1], `a turn at a faster speed is worth no more: ${aTurn.join(', ')}`)
+    assert.ok(aTurn[1] < 24 * 1.25, `a little faster is a great deal more: ${aTurn[1]} presets a turn at 300`)
+    assert.ok(r.wheelGain(260) - r.wheelGain(240) < 0.05, 'the speed-up comes in with a jump')
+    /* A real spin flies: four turns at two a second reach the far end of 512. */
+    assert.ok(spin(720, 4).rows >= 400, `four fast turns only reach ${spin(720, 4).rows}`)
+    /* Never a blur past reading, and never slower for a faster thumb. */
+    let before = 0
+    for (const speed of [120, 240, 480, 720, 1000, 1500, 3000]) {
+      const went = spin(speed, 6)
+      const aSecond = went.rows / (went.now / 1000)
+      /* (A twentieth over, for the moment the thumb's speed is still being read as it gets going.) */
+      assert.ok(aSecond <= r.WHEEL_ROWS_MOST * 1.05, `${speed} degrees a second is ${aSecond} presets a second`)
+      assert.ok(aSecond >= before - 1, `a faster thumb moved the list slower at ${speed}`)
+      before = aSecond
+    }
+    /* A short list is not thrown from end to end: a full turn at the most is never more than half of it. */
+    assert.equal(r.wheelGainMost(24), 1)
+    assert.ok(spin(1000, 1, 104).rows <= 52 + 1e-6, `a turn of an AM4's 104 went ${spin(1000, 1, 104).rows}`)
+    assert.ok(r.wheelGainMost(512) > 8 && r.wheelGainMost(100000) === r.WHEEL_GAIN_MOST)
+    /* A pause puts it back to one a notch, and so does turning back: none of the last spin is carried on. */
+    const fast = spin(720, 2)
+    assert.ok(Math.abs(fast.state.speed - 720) < 30, `the thumb's speed is read as ${fast.state.speed}`)
+    const after = r.wheelFlow(fast.state, fast.state.angle + r.WHEEL_NOTCH_DEG, fast.now + r.WHEEL_STILL_MS + 200)
+    near(after.rows, 1, 'a notch after a pause')
+    const back = r.wheelFlow(fast.state, fast.state.angle - 3, fast.now + 16)
+    near(back.rows, -3 / r.WHEEL_NOTCH_DEG, 'the first move back')
+    assert.ok(back.state.speed < 0 && back.state.speed > -r.WHEEL_EASY_DEG_S)
+    /* One late touch is not a spin: a single sudden move from rest is worth what it turned and no more. */
+    near(r.wheelFlow(r.wheelFlowStart(0, 0), 15, 4).rows, 1, 'one sudden move')
+    /* Lifting the thumb: the list is going as fast as the thumb had it, and not at all if the thumb had stopped first. */
+    near(r.wheelLetGo(fast.state, fast.now + 8, 512), (fast.state.speed / r.WHEEL_NOTCH_DEG) * r.wheelGain(fast.state.speed, 512), 'the speed at letting go')
+    assert.ok(r.wheelLetGo(fast.state, fast.now + 8, 512) > 150)
+    assert.equal(r.wheelLetGo(fast.state, fast.now + r.WHEEL_STILL_MS + 1, 512), 0, 'a thumb that stopped and then lifted flicked the list')
+    assert.equal(r.wheelLetGo(null, 0, 512), 0)
+    const up = spin(-720, 2)
+    assert.ok(up.rows < -48 && r.wheelLetGo(up.state, up.now, 512) < -150, 'a flick back up the list')
   })
 
-  test('preset wheel: the bar never leaves the list, and a dragged row is a row of list with nothing carried away', async () => {
+  test('preset wheel: the list never leaves its ends, and the preset under the bar does not chatter on the line between two', async () => {
     const r = await rules()
+    assert.equal(r.wheelPlace(5.4, 512), 5.4, 'between two rows is a place')
+    assert.equal(r.wheelPlace(-3, 512), 0)
+    assert.equal(r.wheelPlace(600, 512), 511)
+    assert.equal(r.wheelPlace(2, 0), -1)
+    assert.equal(r.wheelPlace(undefined, 4), 0)
+    assert.equal(r.wheelRow(5.4, 512), 5)
+    assert.equal(r.wheelRow(5.6, 512), 6)
+    assert.equal(r.wheelRow(99, 4), 3, 'a list that shrank keeps the bar on a row it has')
+    assert.equal(r.wheelRow(0, 0), -1)
     assert.equal(r.wheelMove(5, 3, 512), 8)
     assert.equal(r.wheelMove(5, -9, 512), 0)
     assert.equal(r.wheelMove(510, 10, 512), 511)
-    assert.equal(r.wheelMove(99, 0, 4), 3, 'a list that shrank keeps the bar on a row it has')
     assert.equal(r.wheelMove(0, 1, 0), -1)
-    assert.equal(r.wheelMove(undefined, 0, 4), 0)
-    /* Down the screen is back up the list, a whole row at a time, and the rest is carried. */
-    assert.deepEqual(r.wheelDrag(0, 100), { carry: 100 - 2 * r.WHEEL_ROW, moves: -2 })
-    assert.deepEqual(r.wheelDrag(0, -50), { carry: -50 + r.WHEEL_ROW, moves: 1 })
-    assert.deepEqual(r.wheelDrag(30, 10), { carry: 40, moves: 0 })
-    assert.deepEqual(r.wheelDrag(40, 10), { carry: 50 - r.WHEEL_ROW, moves: -1 })
+    /* The one under the bar stays under it until the list is a little past half-way to the next, in either direction. */
+    assert.equal(r.wheelUnder(5.5, 5, 512), 5)
+    assert.equal(r.wheelUnder(5.55, 5, 512), 5)
+    assert.equal(r.wheelUnder(5.65, 5, 512), 6)
+    assert.equal(r.wheelUnder(5.45, 6, 512), 6)
+    assert.equal(r.wheelUnder(5.35, 6, 512), 5)
+    assert.equal(r.wheelUnder(9.2, 5, 512), 9, 'a list that has moved on names the row it is at')
+    assert.equal(r.wheelUnder(3.4, -1, 512), 3)
+    assert.equal(r.wheelUnder(3, 900, 512), 3)
+    assert.equal(r.wheelUnder(1, 0, 0), -1)
+    assert.ok(r.WHEEL_STICK > 0 && r.WHEEL_STICK <= 0.2)
+  })
+
+  test('preset wheel: a flick coasts from the speed it had, slows like a wheel, and comes to rest exactly on a row', async () => {
+    const r = await rules()
+    /* Not a flick: the list settles on the nearest row, quickly, and a list already on a row does nothing. */
+    const settle = r.wheelCoast(100.3, 2, 512)
+    assert.deepEqual([settle.kind, settle.to, settle.ms], ['settle', 100, r.WHEEL_SETTLE_MS])
+    assert.equal(r.wheelCoast(100.7, 0, 512).to, 101)
+    assert.equal(r.wheelCoast(100, 0, 512).ms, 0)
+    assert.equal(r.wheelCoast(5, 50, 0), null)
+    assert.equal(r.wheelGlideAt(settle, 0), 100.3)
+    assert.equal(r.wheelGlideAt(settle, r.WHEEL_SETTLE_MS), 100)
+    assert.ok(r.wheelGlideAt(settle, r.WHEEL_SETTLE_MS / 2) < 100.15, 'settling is quick at first and soft at the end')
+    assert.ok(r.WHEEL_SETTLE_MS <= 200)
+
+    let farthest = 0
+    assert.equal(r.wheelCoast(100, r.WHEEL_COAST_LEAST - 1, 2000).kind, 'settle', 'a thumb lifted from a slow turn sends the list on')
+    for (const speed of [8, 10, 20, 45, 100, 240]) {
+      const coast = r.wheelCoast(100, speed, 2000)
+      assert.equal(coast.kind, 'coast', `${speed} a second is not a flick`)
+      assert.ok(Number.isInteger(coast.to), `a coast from ${speed} stops between two rows`)
+      assert.ok(coast.to - 100 >= farthest && coast.to > 100, `a faster flick went no farther: ${speed}`)
+      farthest = coast.to - 100
+      assert.ok(coast.ms > 100 && coast.ms <= 2500, `a coast from ${speed} takes ${coast.ms} ms`)
+      /* It sets off at the speed it was let go at, near enough that the thumb leaving is not felt. */
+      const first = (r.wheelGlideAt(coast, 20) - 100) / 0.02
+      assert.ok(first > speed * 0.6 && first < speed * 1.4, `let go at ${speed}, it set off at ${first}`)
+      /* It only ever goes the way it was going, slower and slower, and is still from its end on. */
+      let [at, stride] = [100, Infinity]
+      for (let ms = 100; ms <= coast.ms + 300; ms += 100) {
+        const now = r.wheelGlideAt(coast, ms)
+        assert.ok(now >= at && now <= coast.to, `it turned back or overshot at ${ms} ms`)
+        assert.ok(now - at <= stride + 1e-9, `it sped up at ${ms} ms`)
+        stride = now - at
+        at = now
+      }
+      assert.equal(r.wheelGlideAt(coast, coast.ms), coast.to)
+      assert.equal(r.wheelGlideAt(coast, coast.ms + 5000), coast.to)
+      /* And the same back up the list. */
+      assert.equal(1000 - r.wheelCoast(1000, -speed, 2000).to, coast.to - 100)
+    }
+    /* A list flick's feel: let go at 45 presets a second it carries on for ten to twenty-five of them. */
+    const flick = r.wheelCoast(100, 45, 2000)
+    assert.ok(flick.to - 100 >= 10 && flick.to - 100 <= 25, `a flick at 45 went ${flick.to - 100}`)
+    /* The last row is not a creep: the list is within a third of a row of rest well before the end. */
+    let slow = flick.ms
+    while (r.wheelGlideAt(flick, slow - 10) > flick.to - 1) slow -= 10
+    assert.ok(flick.ms - slow < 500, `the last row takes ${flick.ms - slow} ms`)
+    /* The end of the list is a wall: it gets there still moving and stops, and never passes it. */
+    const wall = r.wheelCoast(500, 100, 512)
+    assert.deepEqual([wall.kind, wall.to], ['coast', 511])
+    assert.ok(wall.ms < r.wheelCoast(100, 100, 2000).ms)
+    assert.ok(r.wheelGlideAt(wall, wall.ms - 10) > 510 && r.wheelGlideAt(wall, wall.ms - 10) <= 511)
+    assert.equal(r.wheelCoast(3, -100, 512).to, 0)
+    /* Nothing is let go faster than can be read. */
+    assert.equal(r.wheelCoast(100, 5000, 2000).speed, r.WHEEL_ROWS_MOST)
+    assert.equal(r.wheelCoast(100, 5000, 2000).to, r.wheelCoast(100, r.WHEEL_ROWS_MOST, 2000).to)
   })
 
   test('preset wheel: the ring gets a thumb’s room, and the list over it is a whole odd number of rows with the bar on the middle one', async () => {
@@ -188,16 +280,20 @@ export function run(test) {
     /* A phone's room: the ring and at least five rows fit in it. */
     const phone = r.wheelLayout(390, 500)
     assert.ok(phone.rows >= 5 && phone.rows * r.WHEEL_ROW + phone.ring + 2 * r.WHEEL_GAP <= 500)
-    /* Which presets the rows show: the bar's own in the middle, blanks past either end. */
-    assert.deepEqual(r.wheelWindow(1, 7, 512), [null, null, 0, 1, 2, 3, 4])
-    assert.deepEqual(r.wheelWindow(511, 5, 512), [509, 510, 511, null, null])
-    assert.deepEqual(r.wheelWindow(0, 3, 1), [null, 0, null])
-    /* "Make the size of the preset names a little smaller": under the first wheel's 22, over the list's 15. */
-    assert.ok(r.WHEEL_NAME < 22 && r.WHEEL_NAME > 15 && r.WHEEL_NAME_ROUND <= r.WHEEL_NAME && r.WHEEL_NAME_ROUND > 15)
+    /* Which presets are on the strip: the rows round the one they were last drawn round, inside the list. */
+    assert.deepEqual(r.wheelDrawn(1, 3, 512), [0, 1, 2, 3, 4])
+    assert.deepEqual(r.wheelDrawn(511, 2, 512), [509, 510, 511])
+    assert.deepEqual(r.wheelDrawn(0, 1, 1), [0])
+    assert.deepEqual(r.wheelDrawn(-1, 3, 0), [])
+    /* They are drawn again before the bar can reach the last of them, with rows to spare for a list that is moving. */
+    assert.ok(r.WHEEL_REDRAW >= 2 && r.WHEEL_SPARE >= r.WHEEL_REDRAW + 4)
+    /* "Make the size of the preset names a little smaller": under the first wheel's 22, over the list's 15. One size under the bar and round it, or a name half in the bar is two sizes at once. */
+    assert.ok(r.WHEEL_NAME < 22 && r.WHEEL_NAME > 15)
+    assert.equal(r.WHEEL_NAME_ROUND, r.WHEEL_NAME)
     assert.ok(r.WHEEL_ROW >= 44, 'a row is a thumb tall')
   })
 
-  test('preset wheel: the names asked for are the rows around the bar, inside the list, and a click is never held back from a notch', async () => {
+  test('preset wheel: the names asked for are the rows around the bar, inside the list, and a thumb looking for a preset hears every one', async () => {
     const r = await rules()
     assert.deepEqual(r.wheelAround(5, 512, 2), [3, 4, 5, 6, 7])
     assert.deepEqual(r.wheelAround(0, 512, 2), [0, 1, 2])
@@ -206,10 +302,12 @@ export function run(test) {
     assert.equal(r.wheelAround(200, 512).length, 2 * r.WHEEL_REACH + 1)
     assert.ok(r.WHEEL_REACH >= 6 && r.WHEEL_REACH <= 16, 'each name is a read of the unit: a couple of dozen at rest, never hundreds')
     assert.ok(r.WHEEL_REST_MS >= 80 && r.WHEEL_REST_MS <= 400)
-    /* The fastest a thumb turns is about fifty notches a second: no click may be dropped at that. */
+    /* Up to the easy speed every preset that passes clicks; a spin or a coast faster than that is a purr, never a buzz. */
     assert.equal(r.clickDue(1000, 0), true)
     assert.equal(r.clickDue(1000, 1000 - r.WHEEL_CLICK_GAP_MS), true)
-    assert.ok(r.WHEEL_CLICK_GAP_MS <= 16, 'a click is dropped from a fast spin')
+    assert.equal(r.clickDue(1000, 1000 - r.WHEEL_CLICK_GAP_MS + 1), false)
+    assert.ok(r.WHEEL_CLICK_GAP_MS < 1000 / (r.WHEEL_EASY_DEG_S / r.WHEEL_NOTCH_DEG) - 10, 'a click is dropped from a thumb looking for a preset')
+    assert.ok(r.WHEEL_CLICK_GAP_MS >= 25, 'more than forty clicks a second is a buzz')
   })
 
   test('preset wheel: the list is untouched for an account the wheel is not offered to, and for a device that has not chosen it', () => {
@@ -241,7 +339,7 @@ export function run(test) {
   test('preset wheel: nothing loads until the middle button or a row is pressed, and both are the list\'s own press', () => {
     const src = read('mobile/src/components/PresetWheel.js')
     const wheel = code(src)
-    assert.doesNotMatch(wheel, /loadPreset|lib\/rig|lib\/device|lib\/lists/, 'the wheel draws and counts notches; it never loads, stars or saves')
+    assert.doesNotMatch(wheel, /loadPreset|lib\/rig|lib\/device|lib\/lists/, 'the wheel draws and moves; it never loads, stars or saves')
     const presets = flat(read('mobile/src/screens/Presets.js'))
     /* The same words, press, hold and star, once for the list's row and once for the wheel's. */
     const twice = (what, pattern) => assert.equal(presets.match(pattern)?.length, 2, `${what} is not the same for the list and the wheel`)
@@ -253,53 +351,116 @@ export function run(test) {
     twice('the star\'s words', /`\$\{starred \? 'Unstar' : 'Star'\} \$\{name \|\| `slot \$\{slotLabel\(n, addressing\)\}`\}`/g)
     twice('the star', /\(\) => toggleFavourite\(device, n\)/g)
     assert.equal(presets.match(/loadPreset\(/g)?.length, 2, 'a third thing on this screen loads a preset')
-    /* The middle button presses the row under the bar, and nothing else: no load of its own. */
+    /* The middle button presses the row under the bar as it is that instant, and nothing else: no load of its own. Pressed on a list still coasting, it stops the list on that row first. */
     const flatWheel = flat(src)
-    assert.match(flatWheel, /const under = at >= 0 && at < count \? row\(data\[at\]\) : null/)
-    assert.match(flatWheel, /onPress=\{\(\) => \{ thud\(\) fire\(`press \$\{said\(WHEEL_LOAD, under\?\.label\)\}`, under\?\.onPress\) \}\}/, 'the middle button does something other than the row\'s own press')
+    assert.match(
+      flatWheel,
+      /onPress=\{\(\) => \{ thud\(\) if \(stop\(\)\) \{ put\(on\.current, false\) calm\(\) \} const under = on\.current >= 0 && on\.current < count \? row\(data\[on\.current\]\) : null fire\(`press \$\{said\(WHEEL_LOAD, under\?\.label\)\}`, under\?\.onPress\) \}\}/,
+      'the middle button does something other than the row\'s own press'
+    )
     assert.match(src, /export const WHEEL_LOAD = 'Load'/)
-    /* Turning the ring only moves the bar. */
-    const step = flatWheel.slice(flatWheel.indexOf('const step = useCallback('), flatWheel.indexOf('const spin = useRef(null)'))
-    assert.ok(step.length > 200)
-    assert.doesNotMatch(step, /onPress|row\(/, 'a notch presses something')
+    /* Moving the list, by a turn, a drag or a coast, presses nothing. */
+    const moving = flatWheel.slice(flatWheel.indexOf('const put = useCallback('), flatWheel.indexOf('const nudge = useCallback('))
+    assert.ok(moving.length > 2500, 'the code that moves the list is not where this looks for it')
+    assert.doesNotMatch(moving, /\bonPress\b|\brow\(|look\.current/, 'moving the list presses something')
   })
 
-  test('preset wheel: the bar moving, the click and the tap are one step, with no scrolling list to fall behind', () => {
+  test('preset wheel: the app moves the list itself, and the click and the tap are in the line that moves it, turning or coasting', () => {
     const src = read('mobile/src/components/PresetWheel.js')
     const wheel = flat(src)
-    /* "When you scroll fast, it doesn't click at the right time when it slows down or at all sometimes": nothing scrolls and nothing coasts any more. */
-    assert.doesNotMatch(code(src), /FlatList|ScrollView|onScroll|snapToInterval|decelerationRate|Animated\.event/, 'a scrolling list is back under the clicks')
-    const step = wheel.slice(wheel.indexOf('const step = useCallback('), wheel.indexOf('const spin = useRef(null)'))
-    assert.match(step, /const next = wheelMove\(where\.current, moves, counted\.current\) if \(next === where\.current \|\| next < 0\) return where\.current = next setAt\(next\)/, 'the bar moves from where the code knows it is, and a wheel that moved nothing stops there')
-    assert.match(step, /if \(clicking\.current && clickDue\(now, lastClick\.current\)\) \{ lastClick\.current = now wheelClick\(\) \}/, 'the click is not in the same step as the bar')
-    /* The ring reads the thumb itself, and nothing takes it from a thumb that is turning it. */
-    assert.match(wheel, /const turned = wheelSpin\(spin\.current, angle, Date\.now\(\)\) spin\.current = turned\.state dot\.setValue\(angle\) if \(turned\.moves\) step\(turned\.moves\)/)
+    /*
+     * "When you scroll fast, it doesn't click at the right time when it slows
+     * down or at all sometimes": that was a list the system scrolled and the
+     * app watched. Nothing here scrolls on its own, and nothing is handed to
+     * an animation to move while the app is not looking.
+     */
+    assert.doesNotMatch(code(src), /FlatList|ScrollView|onScroll|snapToInterval|decelerationRate|Animated\.event|Animated\.decay|Animated\.spring|Animated\.timing|useNativeDriver/, 'something other than the app\'s own code is moving the list')
+    const put = wheel.slice(wheel.indexOf('const put = useCallback('), wheel.indexOf('const glide = useRef(null)'))
+    assert.match(
+      put,
+      /const next = wheelPlace\(place, counted\.current\) if \(next < 0\) return where\.current = next slide\.setValue\(-next \* WHEEL_ROW\) const under = wheelUnder\(next, on\.current, counted\.current\) if \(under === on\.current\) return on\.current = under if \(loud && clicking\.current\) \{ const now = Date\.now\(\) if \(clickDue\(now, lastClick\.current\)\) \{ lastClick\.current = now wheelClick\(\) \} \}/,
+      'the click is not in the same line as the move'
+    )
+    assert.equal(wheel.match(/wheelClick\(\)/g)?.length, 1, 'something else clicks')
+    assert.equal(wheel.match(/slide\.setValue\(/g)?.length, 2, 'the strip is slid from somewhere other than a move and a jump')
+    /* A coast and a settle are that same move, a frame at a time, from the plan of where the list is at each moment. */
+    const run = wheel.slice(wheel.indexOf('const run = useCallback('), wheel.indexOf('const go = useCallback('))
+    assert.match(run, /const place = wheelGlideAt\(course, ms\) roll\(\(\(place - going\.last\) \* WHEEL_NOTCH_DEG\) \/ per\) going\.last = place put\(place\) if \(ms >= course\.ms\) \{ glide\.current = null calm\(\) return \} going\.frame = requestAnimationFrame\(frame\)/)
+    assert.match(wheel, /useEffect\(\(\) => stop, \[stop\]\)/, 'a coast outlives the wheel')
+    /* The ring reads the thumb itself, at the speed it turns; a thumb landing stops a coast, and nothing takes the ring from a thumb that is turning it. */
+    assert.match(wheel, /const turned = wheelFlow\(flow\.current, angle, stamp\(e\), counted\.current\) flow\.current = turned\.state dot\.setValue\(angle\) roll\(turned\.turned\) if \(turned\.rows\) put\(where\.current \+ turned\.rows\)/)
+    assert.match(wheel, /onPanResponderGrant: \(e\) => \{ stop\(\) const d = size\.current\.ring/)
+    assert.match(wheel, /flow\.current = wheelFlowStart\(angle, stamp\(e\)\)/, 'a new touch carries the last one\'s speed')
     assert.match(wheel, /onPanResponderTerminationRequest: \(\) => false/)
-    assert.match(wheel, /spin\.current = wheelSpinStart\(angle, Date\.now\(\)\)/, 'a new touch carries the last one\'s gear')
-    /* Opening, a jump and a search move the bar without a click: nobody turned the wheel. */
+    /* Lifted while turning, the list coasts from the thumb's own speed; taken away, it only settles. */
+    assert.match(wheel, /const speed = flick \? wheelLetGo\(flow\.current, stamp\(e\), counted\.current\) : 0 const per = wheelGain\(flow\.current\?\.speed, counted\.current\) flow\.current = null run\(wheelCoast\(where\.current, speed, counted\.current\), per\)/)
+    assert.match(wheel, /onPanResponderRelease: \(e\) => letGo\(e, true\), onPanResponderTerminate: \(e\) => letGo\(e, false\)/)
+    /* "If I went slow, it go slow": the list is never settled under a thumb that has only paused, which would throw away the part of a notch already turned. */
+    const ring = wheel.slice(wheel.indexOf('const flow = useRef(null)'), wheel.indexOf('const pull = useRef('))
+    assert.ok(ring.length > 800)
+    assert.doesNotMatch(ring, /setTimeout|wheelSettle/, 'the ring settles the list while the thumb is still on it')
+    /* Opening, a jump and a search move the list without a click: nobody turned the wheel. */
     const go = wheel.slice(wheel.indexOf('const go = useCallback('), wheel.indexOf('useImperativeHandle('))
     assert.ok(go.length > 80)
-    assert.doesNotMatch(go, /wheelClick/)
+    assert.doesNotMatch(go, /wheelClick|\bput\(/)
+    assert.match(go, /stop\(\)/, 'a jump is carried off by a coast')
     assert.match(wheel, /useImperativeHandle\(listRef, \(\) => \(\{ toRow: \(index\) => go\(index\), toTop: \(\) => go\(0\) \}\), \[go\]\)/)
-    /* The rows can be dragged, a row for a row, by the same step; a tap is still the row's. */
+    /* The rows can be dragged, a row for a row, and flicked; a touch on a coasting list stops it and presses nothing; a tap on a list at rest is still the row's. */
+    assert.match(wheel, /onStartShouldSetPanResponderCapture: \(\) => glide\.current\?\.course\.kind === 'coast'/)
     assert.match(wheel, /onMoveShouldSetPanResponder: \(_, g\) => Math\.abs\(g\.dy\) > 8 && Math\.abs\(g\.dy\) > Math\.abs\(g\.dx\)/)
-    assert.match(wheel, /const moved = wheelDrag\(pull\.current\.carry, g\.dy - pull\.current\.last\) pull\.current = \{ carry: moved\.carry, last: g\.dy \} if \(moved\.moves\) step\(moved\.moves\)/)
+    assert.match(wheel, /put\(pull\.current\.from - \(g\.dy - pull\.current\.base\) \/ WHEEL_ROW\)/)
+    assert.match(wheel, /onPanResponderRelease: \(_, g\) => run\(wheelCoast\(where\.current, Date\.now\(\) - pull\.current\.at > WHEEL_STILL_MS \? 0 : \(-g\.vy \* 1000\) \/ WHEEL_ROW, counted\.current\)\)/, 'a thumb that stopped before it lifted flicks the list with a speed it no longer has')
     /* No sound is loaded for a wheel that does not click. */
     assert.match(wheel, /if \(!clicks\) return undefined openWheelClick\(\) return closeWheelClick/)
     assert.match(flat(read('mobile/src/screens/Presets.js')), /clicks=\{wheelKept\.clicks\}/)
     /* A screen reader turns it a preset at a time. */
     assert.match(wheel, /accessibilityRole="adjustable"/)
-    assert.match(wheel, /onAccessibilityAction=\{\(e\) => step\(e\.nativeEvent\.actionName === 'increment' \? 1 : -1\)\}/)
+    assert.match(wheel, /const nudge = useCallback\( \(by\) => \{ stop\(\) put\(on\.current \+ by\) calm\(\) \}/)
+    assert.match(wheel, /onAccessibilityAction=\{\(e\) => nudge\(e\.nativeEvent\.actionName === 'increment' \? 1 : -1\)\}/)
   })
 
-  test('preset wheel: a preset on the wheel has no box round it, the row under the bar is the bar, and nothing is drawn in the glass', () => {
+  test('preset wheel: the list is one strip slid under a fixed bar, drawn again only every few rows, and a name turns dark as it slides into the bar', () => {
     const src = read('mobile/src/components/PresetWheel.js')
-    const preset = flat(src.slice(src.indexOf('export function WheelPreset(')))
+    const wheel = flat(src)
+    /* "Let's figure out how to get it smoother": the rows are not drawn again for every preset that passes. The strip is slid by one number, set straight from the move. */
+    assert.match(
+      wheel,
+      /<Animated\.View style=\{\{ position: 'absolute', left: space\.lg, right: space\.lg, top: plan\.middle \* WHEEL_ROW, height: count \* WHEEL_ROW, transform: \[\{ translateY: slide \}\] \}\}> \{strip\.map\(\(index\) => \( <WheelSlot key=\{index % pool\} index=\{index\} item=\{data\[index\]\} look=\{look\} handed=\{handed\.current\} \/> \)\)\}/
+    )
+    assert.match(wheel, /if \(Math\.abs\(under - drawn\.current\) >= WHEEL_REDRAW\) \{ drawn\.current = under setCentre\(under\) \}/)
+    assert.equal(wheel.match(/setCentre\(/g)?.length, 2, 'the rows are drawn again somewhere other than every few rows and at rest')
+    assert.match(wheel, /const reach = plan\.middle \+ WHEEL_SPARE const strip = wheelDrawn\(centre, reach, count\) const pool = 2 \* reach \+ 1/)
+    /* A place on the strip is kept and handed the next preset, and is drawn again only for a new preset or new rows from the screen. */
+    assert.match(wheel, /const WheelSlot = memo\(function WheelSlot\(\{ index, item, look, under = false \}\) \{ const says = look\.current\(item\)/)
+    assert.match(wheel, /if \(look\.current !== row\) \{ look\.current = row handed\.current \+= 1 \}/)
+    assert.match(wheel, /top: index \* WHEEL_ROW, height: WHEEL_ROW \}\}>\{under \? <WheelName \{\.\.\.says\} \/> : <WheelPreset \{\.\.\.says\} \/>\}/)
+    /* The bar is fixed on the middle row and takes no touch (a tap on it is the row's under it); the same strip is inside it in dark ink, slid by the same number. */
+    assert.match(
+      wheel,
+      /<View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style=\{\{ position: 'absolute', left: space\.lg, right: space\.lg, top: plan\.middle \* WHEEL_ROW, height: WHEEL_ROW, borderRadius: 10, backgroundColor: color\.silk, overflow: 'hidden' \}\} > <Animated\.View style=\{\{ position: 'absolute', left: 0, right: 0, top: 0, height: count \* WHEEL_ROW, transform: \[\{ translateY: slide \}\] \}\}> \{wheelDrawn\(centre, WHEEL_SPARE, count\)\.map\(\(index\) => \( <WheelSlot key=\{index % \(2 \* WHEEL_SPARE \+ 1\)\} index=\{index\} item=\{data\[index\]\} look=\{look\} handed=\{handed\.current\} under \/> \)\)\}/
+    )
+    /* The names around the bar are asked for when the list rests, never during a spin or a coast. */
+    const calm = wheel.slice(wheel.indexOf('const calm = useCallback('), wheel.indexOf('const lastClick = useRef(0)'))
+    assert.match(calm, /rest\.current = setTimeout\(\(\) => around\.current\?\.\(wheelAround\(on\.current, counted\.current\)\), WHEEL_REST_MS\)/)
+    assert.equal(wheel.match(/around\.current\?\.\(/g)?.length, 1)
+    /* The marks on the ring go round with the thumb and with a coast, and are never what a thumb lands on. */
+    assert.match(wheel, /<Animated\.View pointerEvents="none" style=\{\{ position: 'absolute', left: 0, top: 0, width: d, height: d, transform: \[\{ rotate: marks\.interpolate\(\{ inputRange: \[0, 360\], outputRange: \['0deg', '360deg'\] \}\) \}\] \}\}>/)
+  })
+
+  test('preset wheel: a preset on the wheel has no box round it, the bar shows the same line in dark ink, and nothing is drawn in the glass', () => {
+    const src = read('mobile/src/components/PresetWheel.js')
+    const preset = flat(src.slice(src.indexOf('export function WheelPreset('), src.indexOf('export function WheelName(')))
     /* "Remove the boxes around the outside edge of the presets." */
-    assert.doesNotMatch(preset, /borderWidth|borderColor|boxShadow|<Press\b/, 'a box is back round a preset on the wheel')
-    assert.match(preset, /backgroundColor: under \? color\.silk : 'transparent'/, 'the bar is the row under it, and no other row has a ground')
-    assert.match(preset, /const ink = under \? color\.chassis : here \? color\.signal : color\.silk/, 'the one being played is amber, as its row in the list is; the one under the bar is dark on the bar')
-    assert.match(preset, /fontSize: under \? WHEEL_NAME : WHEEL_NAME_ROUND, fontWeight: '700'/)
+    assert.doesNotMatch(preset, /borderWidth|borderColor|boxShadow|<Press\b|backgroundColor: (?!bar\b)/, 'a box is back round a preset on the wheel')
+    assert.match(preset, /const ink = here \? color\.signal : color\.silk/, 'the one being played is amber, as its row in the list is')
+    assert.match(preset, /fontSize: WHEEL_NAME_ROUND, fontWeight: '700'/)
+    /* The bar's copy: dark ink for the light bar, laid out the same to the point, and nothing to press. */
+    const name = flat(src.slice(src.indexOf('export function WheelName(')))
+    assert.doesNotMatch(name, /Pressable|onPress|onLongPress|borderWidth|backgroundColor: (?!bar\b)/)
+    assert.match(name, /color: color\.chassis, fontSize: WHEEL_NAME, fontWeight: '700'/)
+    for (const same of ["flex: 1, height: WHEEL_ROW, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.md", "width: WHEEL_END, height: WHEEL_ROW, alignItems: 'center', justifyContent: 'center'", "<Text numberOfLines={1} style={{ flex: 1, color: ", 'fontSize: font.small, fontFamily: face', 'fontSize: font.lead, fontFamily: face']) {
+      assert.ok(preset.includes(same) && name.includes(same), `a preset and its copy in the bar are laid out differently: ${same}`)
+    }
     assert.match(preset, /\{bar \? <View style=\{\{ width: 4, height: WHEEL_ROW - 20, borderRadius: 2, backgroundColor: bar \}\} \/> : null\}/)
     /* It does what it is handed, with the tap you feel, and writes the press down as every button does. */
     assert.match(preset, /onPress=\{\(\) => \{ thud\(\) fire\(`press \$\{said\(label\)\}`, onPress\) \}\}/)
@@ -318,6 +479,7 @@ export function run(test) {
     const click = flat(read('mobile/src/lib/wheelClick.js'))
     assert.match(click, /if \(!isLoud\(\)\) setAudioModeAsync\(\{ playsInSilentMode: false, interruptionMode: 'mixWithOthers' \}\)/, 'silent when the device is, over a backing track, and only while the metronome has not asked otherwise')
     assert.match(click, /Haptics\.selectionAsync\(\)/, 'the system\'s own picker tap')
+    assert.match(click, /Haptics\.performAndroidHapticsAsync\(Haptics\.AndroidHaptics\.Clock_Tick\)/, 'Android\'s own tick for a dial being turned')
     assert.match(click, /const VOLUME = 0\.\d+/, 'quieter than the metronome\'s beat')
     assert.match(click, /player\.volume = VOLUME/)
     assert.match(click, /player\.remove\(\)/, 'let go when the wheel closes')
@@ -349,7 +511,7 @@ export function run(test) {
           export const setAudioModeAsync = async (m) => { said.push('mode ' + JSON.stringify(m)) }
           export const setIsAudioActiveAsync = async (on) => { said.push('session ' + on) }
         `,
-        'haptics.js': 'export let taps = 0\nexport const selectionAsync = async () => { taps++ }\n',
+        'haptics.js': 'export let taps = 0\nexport let ticks = 0\nexport const selectionAsync = async () => { taps++ }\nexport const AndroidHaptics = { Clock_Tick: "clock-tick" }\nexport const performAndroidHapticsAsync = async (kind) => { if (kind === "clock-tick") ticks++ }\n',
         'rn.js': `export const Platform = { OS: ${JSON.stringify(os)} }\n`,
         'click.js': 'export default "click"\n',
         'click-pad.js': 'export default "click-pad"\n',
@@ -371,7 +533,7 @@ export function run(test) {
     try {
       const ios = await bench('ios')
       ios.click.wheelClick()
-      assert.equal(ios.haptics.taps, 1, 'the tap is felt even with no sound loaded')
+      assert.deepEqual([ios.haptics.taps, ios.haptics.ticks], [1, 0], 'the tap is felt even with no sound loaded')
       assert.deepEqual(ios.audio.said, [], 'a sound before a wheel has opened')
 
       ios.click.openWheelClick()
@@ -415,6 +577,7 @@ export function run(test) {
       android.click.wheelClick()
       android.click.wheelClick()
       assert.deepEqual(android.audio.said, ['seek 0', 'play 0', 'seek 0', 'play 0'])
+      assert.deepEqual([android.haptics.taps, android.haptics.ticks], [0, 2], 'Android feels the tick of a dial')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -432,6 +595,7 @@ export function run(test) {
     assert.match(r.WHEEL_WORDS.wheelSub, /Nothing loads until you do\./)
     assert.match(r.WHEEL_WORDS.wheelSub, /Load/)
     assert.match(r.WHEEL_WORDS.clicksSub, /silent mode/)
+    assert.match(r.WHEEL_WORDS.wheelSub, /slowly[^.]*flick/, 'the choice does not say that speed matters')
     /* The house rules for words on a screen. */
     assert.doesNotMatch(words, /this phone|your phone|\bbeta\b|\btried\b|official|iPod/i)
   })

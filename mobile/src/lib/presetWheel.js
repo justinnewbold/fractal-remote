@@ -13,10 +13,11 @@
  *
  * So the list is untouched and stays what a player gets. The wheel is a
  * setting (Settings → Play screen → Tiles & scenes → Preset list). What it
- * is has been made three times, each on his phone's word, and the third is
- * a real click wheel: a ring the thumb runs round, a bar that moves one
- * preset a notch with a click and a tap, and a button in the middle that
- * loads the preset under the bar ("the wheel", below, has the why).
+ * is has been made four times, each on his phone's word: a ring the thumb
+ * runs round, a list that glides under a bar as it turns, faster the faster
+ * the thumb goes and coasting on after a flick, a click and a tap for each
+ * preset that passes the bar, and a button in the middle that loads the
+ * preset under the bar ("the wheel", below, has the why).
  * NOTHING LOADS UNTIL THAT BUTTON OR A ROW IS PRESSED, exactly as in the
  * list: the bar is where the eye is, not what the unit is playing.
  *
@@ -24,8 +25,9 @@
  * PRESET_WHEEL_FOR_EVERYONE (`presetWheelOn`), as every new thing is.
  *
  * What follows is the arithmetic, kept apart so it can be tested: what a
- * turn of the ring is worth, where the bar goes, how the room is shared,
- * and when a click is due. Nothing here imports anything.
+ * turn of the ring is worth at the speed it is turned, how a flick coasts
+ * and where it lands, how the room is shared, and when a click is due.
+ * Nothing here imports anything.
  */
 
 /** Whether an account is offered the wheel at all: his, or everyone once the switch is on. */
@@ -73,55 +75,63 @@ export const WHEEL_WORDS = Object.freeze({
   list: 'List',
   listSub: 'Every preset the same size, as it has always been.',
   wheel: 'Wheel',
-  wheelSub: 'Run your thumb round the wheel to move through your presets a click at a time, then press Load. Nothing loads until you do.',
+  wheelSub: 'Run your thumb round the wheel to move through your presets, slowly for one at a time or with a flick to fly through them, then press Load. Nothing loads until you do.',
   clicks: 'Click and tap as the wheel turns',
-  clicksSub: 'A click you hear and a small tap you feel for each notch of the wheel. No sound in silent mode.'
+  clicksSub: 'A click you hear and a small tap you feel for each preset that passes. No sound in silent mode.'
 })
 
 /* -------------------------------------------------------------- the wheel */
 
 /*
- * A REAL CLICK WHEEL. Two tries at a scrolling list that clicked both felt
- * wrong on his phone, the second after its rows were made to follow the
- * thumb: "I just tried the scroll wheel and it still needs. Research how
- * the iPod touch used to scroll through the songs, but I wanna make it like
- * a wheel right now it doesn't feel like a touch wheel.. and the haptics and
- * the sound still are not matching up properly so when you scroll fast, it
- * doesn't click at the right time when it slows down or at all sometimes"
- * (Justin, 11 November 2026). Shown a ring to spin and a drum to drag, he
- * took the ring: "let's do number A".
+ * A CLICK WHEEL THAT GLIDES. Two tries at a scrolling list that clicked
+ * felt wrong on his phone, and he took a ring to spin over a drum to drag
+ * ("let's do number A", 11 November 2026). The third was that ring, moving
+ * a bar one whole row a notch: on time, but stiff. "It just still needs a
+ * lot of work do some more research. Let's figure out how to get it
+ * smoother and maybe like momentum where if I flicked it, it would go fast
+ * if I went slow, it go slow, kinda like that kind of like an original
+ * iPod would." (Justin, 12 November 2026.)
  *
- * WHY THE LIST COULD NEVER CLICK ON TIME. A flicked list coasts on its own,
- * and the app can only watch it go by and click after the fact: late when
- * it is busy drawing rows, and not at all past the fastest it may click.
- * The music player this is named for did not work that way. Its wheel was a
- * ring the thumb ran round; the list moved only while the thumb did, one
- * notch at a time, each notch a click; the same turn moved the same amount
- * wherever on the ring it started; and a long fast spin geared up, which is
- * how thousands of songs were in reach. Nothing coasted.
+ * WHAT THE MUSIC PLAYER DID, from its maker's patents on accelerated
+ * scrolling and from the open firmware written for it: the ring reports
+ * how far the thumb has turned; a slow turn is one item a notch; past a
+ * turning speed the same turn is worth more, the faster the more, up to a
+ * most; and a pause puts it back to one.
  *
- * So here: the thumb's turn is read by the app itself (`wheelSpin`), a
- * notch is worked out there, and the bar moving, the click and the tap are
- * one step of the same code. There is no flick and nothing to fall behind.
+ * WHY THE FIRST TWO COULD NEVER CLICK ON TIME: a flicked list coasted on
+ * the system's own, and the app could only watch it go by and click after
+ * the fact. So the rule that the third try found is kept: THE APP MOVES
+ * THE LIST ITSELF. Where the list is (`place`, in rows, and not only whole
+ * ones) is a number this code owns; the thumb's turn adds to it
+ * (`wheelFlow`), a flick carries on from the thumb's own speed and slows
+ * to rest on a row (`wheelCoast`), and every time a new preset comes under
+ * the bar the click and the tap are fired by the same line that moved it.
+ * There is still no scrolling list here, and nothing to fall behind.
  *
- *   - `WHEEL_NOTCH_DEG` of turn is one notch: clockwise goes down the list.
- *   - A notch moves one preset, until the spin has been fast for a while
- *     (`wheelGear`): then two, five and ten, so five hundred presets are a
- *     few turns. Slowing down, stopping, turning back or lifting the thumb
- *     puts it back to one.
+ *   - `WHEEL_NOTCH_DEG` of turn is one preset, turned slowly: clockwise
+ *     goes down the list.
+ *   - Turned faster than `WHEEL_EASY_DEG_S`, the same turn is worth more,
+ *     rising smoothly with the speed (`wheelGain`), never more than the
+ *     list is long enough to want, and never a blur past reading
+ *     (`WHEEL_ROWS_MOST` a second).
+ *   - Lifting the thumb while it is still turning lets the list coast: it
+ *     starts at the speed it had, slows like a wheel with a little
+ *     friction, and comes to rest exactly on a row. Lifting a thumb that
+ *     had stopped settles on the nearest row. While the thumb is down the
+ *     list stays wherever the thumb has it, so a slow thumb loses nothing.
+ *   - The rows can be dragged and flicked too, a row of thumb for a row of
+ *     list, and coast the same way.
  *   - The middle button loads the preset under the bar. NOTHING LOADS
  *     UNTIL IT, OR A ROW, IS PRESSED.
- *   - The rows can be dragged too, a row of the list for a row of thumb,
- *     with the same click and no coasting (`wheelDrag`).
  */
 
 /** How tall one row of the wheel's list is. */
 export const WHEEL_ROW = 44
-/** How big the name under the bar is, and the names round it (the list's is 15). */
-export const WHEEL_NAME = 19
-export const WHEEL_NAME_ROUND = 17
+/** How big a name is on the wheel (the list's is 15). One size under the bar and round it, so a name gliding into the bar does not change shape half-way. */
+export const WHEEL_NAME = 18
+export const WHEEL_NAME_ROUND = 18
 
-/** How much turn is one notch: twenty-four to a turn. */
+/** How much turn is one preset, turned slowly: twenty-four to a turn. */
 export const WHEEL_NOTCH_DEG = 15
 
 /** Where a touch is round the middle of the ring, in degrees: 0 at three o'clock, rising clockwise on a screen (y grows downward). */
@@ -141,64 +151,174 @@ export const onWheelRing = (dx, dy, outer, inner) => {
   return r >= inner && r <= outer
 }
 
-/*
- * THE GEARS. A notch that comes within WHEEL_FAST_MS of the one before, in
- * the same direction, adds to the run; one slower than WHEEL_SLOW_MS, or
- * the other way, ends it. What a notch is worth by how long the run is:
- */
-export const WHEEL_FAST_MS = 70
-export const WHEEL_SLOW_MS = 160
-export const WHEEL_GEARS = Object.freeze([
-  Object.freeze({ from: 0, worth: 1 }),
-  Object.freeze({ from: 20, worth: 2 }),
-  Object.freeze({ from: 40, worth: 5 }),
-  Object.freeze({ from: 64, worth: 10 })
-])
-export const wheelGear = (run) => WHEEL_GEARS.reduce((worth, g) => ((Number(run) || 0) >= g.from ? g.worth : worth), 1)
+const rowsOf = (count) => Math.max(0, Math.floor(Number(count)) || 0)
 
-/** A thumb has landed on the ring at `angle`. */
-export const wheelSpinStart = (angle, now = 0) => ({ angle: Number(angle) || 0, carry: 0, run: 0, dir: 0, at: Number(now) || 0 })
+/** Where the list is, held inside a list of `count`: any place from its first row to its last, whole or between two. -1 with no presets. */
+export function wheelPlace(place, count) {
+  const rows = rowsOf(count)
+  if (!rows) return -1
+  return Math.min(rows - 1, Math.max(0, Number(place) || 0))
+}
+
+/** The preset under the bar with the list at `place`: the nearest row. -1 with no presets. */
+export const wheelRow = (place, count) => (rowsOf(count) ? Math.round(wheelPlace(place, count)) : -1)
 
 /**
- * The thumb has moved to `angle`. Answers the spin as it now stands, how
- * many notches that was (signed: clockwise is down the list) and how many
- * presets they are worth. Turn short of a notch is carried to the next
- * move, so slow turning adds up and nothing is lost.
+ * WHICH PRESET IS UNDER THE BAR as the list moves: the nearest row, but a
+ * preset that is under it stays under it until the list is WHEEL_STICK of a
+ * row past half-way to the next. Without that, a thumb resting on the line
+ * between two would click back and forth with every tremble.
  */
-export function wheelSpin(state, angle, now = 0) {
-  const was = state || wheelSpinStart(angle, now)
-  const turned = wheelTurn(was.angle, angle)
-  let carry = was.carry + turned
-  const notches = Math.trunc(carry / WHEEL_NOTCH_DEG)
-  carry -= notches * WHEEL_NOTCH_DEG
-  if (!notches) return { state: { ...was, angle: Number(angle) || 0, carry }, notches: 0, moves: 0 }
-  const dir = Math.sign(notches)
-  const gap = (Number(now) || 0) - was.at
-  /* The run carries on only the same way round and quickly; a notch in between the two speeds neither adds to it nor ends it. */
-  let run = was.run
-  if (dir !== was.dir || gap > WHEEL_SLOW_MS) run = 0
-  else if (gap <= WHEEL_FAST_MS * Math.abs(notches)) run += Math.abs(notches)
-  const moves = notches * wheelGear(run)
-  return { state: { angle: Number(angle) || 0, carry, run, dir, at: Number(now) || 0 }, notches, moves }
+export const WHEEL_STICK = 0.1
+export function wheelUnder(place, was, count) {
+  const rows = rowsOf(count)
+  if (!rows) return -1
+  const at = wheelPlace(place, rows)
+  if (was >= 0 && was < rows && Math.abs(at - was) < 0.5 + WHEEL_STICK) return was
+  return Math.round(at)
 }
 
 /** The bar after `moves` presets, never past either end of a list of `count`. -1 with no presets. */
 export function wheelMove(at, moves, count) {
-  const rows = Math.max(0, Math.floor(Number(count)) || 0)
+  const rows = rowsOf(count)
   if (!rows) return -1
   const next = (Math.floor(Number(at)) || 0) + (Math.trunc(Number(moves)) || 0)
   return Math.min(rows - 1, Math.max(0, next))
 }
 
-/**
- * The rows dragged instead: `dy` is how far the thumb has moved since the
- * last time, and a whole row of thumb is a row of list (down the screen is
- * back up the list, as a list is). What is short of a row is carried.
+/*
+ * HOW FAST IS WORTH HOW MUCH. Under WHEEL_EASY_DEG_S (two thirds of a turn
+ * a second) a notch is a preset, however long the thumb keeps going: that
+ * is the speed of looking for one. Over it the worth rises with the square
+ * of how far over, so a little quicker is a little more and a real spin
+ * flies. It is held to what the list is long enough to want (a full turn
+ * at the most is never more than half the list) and to WHEEL_ROWS_MOST
+ * presets a second, past which nothing can be read anyway.
  */
-export function wheelDrag(carry, dy, row = WHEEL_ROW) {
-  const total = (Number(carry) || 0) + (Number(dy) || 0)
-  const rows = Math.trunc(total / row)
-  return { carry: total - rows * row, moves: rows ? -rows : 0 }
+export const WHEEL_EASY_DEG_S = 240
+export const WHEEL_GAIN_MOST = 12
+export const WHEEL_ROWS_MOST = 240
+
+/** The most a notch is ever worth in a list of `count`. */
+export const wheelGainMost = (count = Infinity) => Math.max(1, Math.min(WHEEL_GAIN_MOST, (Number(count) || 0) / ((2 * 360) / WHEEL_NOTCH_DEG)))
+
+/** What a notch is worth with the thumb turning at `speed` degrees a second. */
+export function wheelGain(speed, count = Infinity) {
+  const fast = Math.abs(Number(speed) || 0)
+  const over = (fast - WHEEL_EASY_DEG_S) / WHEEL_EASY_DEG_S
+  if (!(over > 0)) return 1
+  const most = Math.max(1, Math.min(wheelGainMost(count), (WHEEL_ROWS_MOST * WHEEL_NOTCH_DEG) / fast))
+  return Math.min(most, 1 + over * over)
+}
+
+/** How long the thumb's speed is averaged over: long enough that one late touch does not kick the list, short enough to follow a thumb that slows. */
+export const WHEEL_SPEED_MS = 60
+/** A thumb that has not moved for this long has stopped: lifting it then is not a flick, and the list settles on the nearest row. */
+export const WHEEL_STILL_MS = 110
+
+/** A thumb has landed on the ring at `angle`. */
+export const wheelFlowStart = (angle, now = 0) => ({ angle: Number(angle) || 0, at: Number(now) || 0, speed: 0 })
+
+/**
+ * The thumb has moved to `angle`. Answers the turn as it now stands (with
+ * the thumb's speed, in degrees a second, signed), how far it turned, and
+ * how many rows of list that is worth, signed and not only whole ones:
+ * clockwise is down the list.
+ */
+export function wheelFlow(state, angle, now = 0, count = Infinity) {
+  const was = state || wheelFlowStart(angle, now)
+  const to = Number(angle) || 0
+  const at = Number(now) || 0
+  const turned = wheelTurn(was.angle, to)
+  const gap = Math.max(1, at - was.at)
+  const just = (turned / gap) * 1000
+  let speed
+  const weight = 1 - Math.exp(-gap / WHEEL_SPEED_MS)
+  /* After a pause, or turning back, the speed starts again from nothing: none of the last spin is carried into this one, and one sudden move is not a spin. */
+  if (gap > WHEEL_STILL_MS || (just && was.speed && Math.sign(just) !== Math.sign(was.speed))) speed = just * weight
+  else speed = was.speed + (just - was.speed) * weight
+  /* What this move is worth: by the thumb's averaged speed, and never so much that this one move, at the speed it was itself made, outruns the most the list may go. */
+  const worth = Math.min(wheelGain(speed, count), Math.max(1, (WHEEL_ROWS_MOST * WHEEL_NOTCH_DEG) / Math.max(1, Math.abs(just))))
+  const rows = (turned / WHEEL_NOTCH_DEG) * worth
+  return { state: { angle: to, at, speed }, turned, rows }
+}
+
+/** The thumb has lifted. How fast the list was going, in rows a second (signed): nothing if the thumb had stopped first. */
+export function wheelLetGo(state, now = 0, count = Infinity) {
+  if (!state || (Number(now) || 0) - state.at > WHEEL_STILL_MS) return 0
+  return (state.speed / WHEEL_NOTCH_DEG) * wheelGain(state.speed, count)
+}
+
+/*
+ * THE COAST. A list let go at `speed` rows a second slows as a wheel with
+ * a little friction does: mostly in proportion to its speed (WHEEL_DRAG a
+ * second, about what the system's own lists use), and by a small steady
+ * amount on top (WHEEL_GRIP rows a second, every second), which is what
+ * brings it to a stop in a moment instead of creeping for seconds. How far
+ * that takes it is known at once, so the stop is moved to the nearest row
+ * and the whole coast scaled to end there: it never stops between two and
+ * shuffles. A list that would run off its end stops at the end.
+ */
+export const WHEEL_DRAG = 2.2
+export const WHEEL_GRIP = 14
+/** Slower than this when let go is not a flick: the list settles on the nearest row. */
+export const WHEEL_COAST_LEAST = 7
+/** How long settling on the nearest row takes. */
+export const WHEEL_SETTLE_MS = 130
+
+const HOLD = WHEEL_GRIP / WHEEL_DRAG
+/* How far a coast that began at `v` rows a second has gone after `t` seconds, before it stops. */
+const coasted = (v, t) => ((v + HOLD) * (1 - Math.exp(-WHEEL_DRAG * t))) / WHEEL_DRAG - HOLD * t
+
+/** The list easing from `from` onto the nearest row. */
+export function wheelSettle(from, count) {
+  if (!rowsOf(count)) return null
+  const at = wheelPlace(from, count)
+  const to = Math.round(at)
+  return { kind: 'settle', from: at, to, ms: at === to ? 0 : WHEEL_SETTLE_MS }
+}
+
+/** The list let go at `from`, going `speed` rows a second (signed). Answers the plan of what it does next: a coast, or a settle if that was no flick. Null with no presets. */
+export function wheelCoast(from, speed, count) {
+  const rows = rowsOf(count)
+  if (!rows) return null
+  const at = wheelPlace(from, rows)
+  const v = Math.min(WHEEL_ROWS_MOST, Math.abs(Number(speed) || 0))
+  const dir = Math.sign(Number(speed) || 0)
+  if (!dir || v < WHEEL_COAST_LEAST) return wheelSettle(at, rows)
+  const time = Math.log(1 + v / HOLD) / WHEEL_DRAG
+  const far = coasted(v, time)
+  const end = dir > 0 ? rows - 1 : 0
+  const room = Math.abs(end - at)
+  if (far >= room) {
+    /* It reaches the end of the list still moving, and stops there: when, by halving. */
+    let lo = 0
+    let hi = time
+    for (let i = 0; i < 30; i += 1) {
+      const mid = (lo + hi) / 2
+      if (coasted(v, mid) < room) lo = mid
+      else hi = mid
+    }
+    return { kind: 'coast', from: at, to: end, dir, speed: v, scale: 1, ms: Math.round(hi * 1000) }
+  }
+  const to = Math.round(at + dir * far)
+  const reach = Math.abs(to - at)
+  if (!reach) return wheelSettle(at, rows)
+  return { kind: 'coast', from: at, to, dir, speed: v, scale: reach / far, ms: Math.round(time * 1000) }
+}
+
+/** Where a plan has the list `ms` after it began: at its end, and still, from the plan's own time on. */
+export function wheelGlideAt(plan, ms) {
+  if (!plan) return 0
+  const t = Number(ms) || 0
+  if (!(plan.ms > 0) || t >= plan.ms) return plan.to
+  if (t <= 0) return plan.from
+  if (plan.kind === 'settle') {
+    const left = 1 - t / plan.ms
+    return plan.to - (plan.to - plan.from) * left * left * left
+  }
+  const gone = plan.from + plan.dir * coasted(plan.speed, t / 1000) * plan.scale
+  return plan.dir > 0 ? Math.min(plan.to, gone) : Math.max(plan.to, gone)
 }
 
 /*
@@ -222,33 +342,42 @@ export function wheelLayout(width, height) {
   return { ring, rows, middle: (rows - 1) / 2, inner: Math.round(ring * 0.19) }
 }
 
-/** Which presets the rows show with the bar on `at`: null for a row past either end. */
-export function wheelWindow(at, rows, count) {
-  const half = (rows - 1) / 2
-  return Array.from({ length: rows }, (_, k) => {
-    const i = at - half + k
-    return i >= 0 && i < count ? i : null
-  })
+/*
+ * WHICH ROWS ARE DRAWN. The list is one strip that slides under the bar,
+ * and only the rows near the bar are on it: `reach` either side of the row
+ * they were last drawn round. They are drawn again once the bar has moved
+ * WHEEL_REDRAW rows from there, never for every row that passes, which is
+ * what lets the strip slide without waiting for the drawing.
+ */
+export const WHEEL_SPARE = 8
+export const WHEEL_REDRAW = 3
+
+/** The presets drawn with the rows last centred on `centre`: `reach` either side, inside the list. */
+export function wheelDrawn(centre, reach, count) {
+  const rows = rowsOf(count)
+  if (!rows || !(centre >= 0)) return []
+  const from = Math.max(0, centre - reach)
+  const to = Math.min(rows - 1, centre + reach)
+  return Array.from({ length: Math.max(0, to - from + 1) }, (_, i) => from + i)
 }
 
 /** The presets drawn around the bar, whose names are worth asking the unit for: `reach` either side. */
-export function wheelAround(at, count, reach = WHEEL_REACH) {
-  const rows = Math.max(0, Math.floor(Number(count)) || 0)
-  if (!rows || !(at >= 0)) return []
-  const from = Math.max(0, at - reach)
-  const to = Math.min(rows - 1, at + reach)
-  return Array.from({ length: to - from + 1 }, (_, i) => from + i)
-}
+export const wheelAround = (at, count, reach = WHEEL_REACH) => wheelDrawn(at, reach, count)
 /** Rows either side of the bar that a screen shows, with a few to spare. */
 export const WHEEL_REACH = 8
 
 /* -------------------------------------------------------------- the click */
 
-/** The least time between two clicks: two notches worked out in the same instant are one click, and nothing a thumb can do is faster than this. */
-export const WHEEL_CLICK_GAP_MS = 12
+/**
+ * The least time between two clicks. A thumb looking for a preset passes
+ * far fewer than this allows, so every one of those clicks; a spin or a
+ * coast that passes more is a purr at this rate, which thins back into
+ * single clicks as it slows.
+ */
+export const WHEEL_CLICK_GAP_MS = 32
 
-/** Whether a click is due: the middle row changed, and the last click was long enough ago. */
+/** Whether a click is due: a new preset is under the bar, and the last click was long enough ago. */
 export const clickDue = (now, last, gap = WHEEL_CLICK_GAP_MS) => !(last > 0) || now - last >= gap
 
-/** How long after the last notch the wheel counts as at rest: the names around the bar are asked for then, never during a spin. */
+/** How long after the list comes to rest the names around the bar are asked for: never during a spin or a coast. */
 export const WHEEL_REST_MS = 140
