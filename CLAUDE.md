@@ -1069,6 +1069,23 @@ asked for once, when he says the list is whole. Waiting there now:
     the existing 25-second wake: "Yes, add that to the build." No
     background mode, no native iPhone change. Over Bluetooth a phone kept
     awake this way still does not see a scene changed at the unit.
+  - *Quick edit on a held pedal* (12 November 2026): "On the watch, we
+    have pushed to hold on the channels to switch amps. Can we set up quick
+    edits on that as well? And change the name to hold to quick edit?" and,
+    of three mockups, "For the watch, mock up B"
+    (docs/watch/quick-edit-list.png). Where the iPhone offers it, the line
+    under the pedals reads "Hold a pedal for quick edit." and a hold opens
+    the channels in one row over a list of the block's knobs; a tap picks
+    one and the Digital Crown turns it. HIS ACCOUNT ONLY
+    (`WATCH_QUICK_EDIT_FOR_EVERYONE` in features.js, false), and only
+    where Play's own hold pop-up carries knobs (`popKnobsOn`: Edit's door,
+    never a VP4). The knobs are Edit's: listed by lib/watchQuick, read and
+    written by lib/watchQuickEdit through `blockParams` and
+    `setParamConfirmed` and nothing else, so a block's Level is never on
+    the wrist and nothing is saved. Where it is not offered the watch says
+    "Hold a pedal for its channels." and opens the channel picker it
+    always did. It opens to everyone when he says so, with its What's new
+    line (`only: 'ios'`) in that pull request.
   The iPhone's half is merged and inert: its Settings rows and the new
   picture fields show only once the paired watch's hello says what it
   knows (mobile/src/lib/watchPages.js), which no watch does before the

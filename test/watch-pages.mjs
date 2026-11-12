@@ -55,6 +55,7 @@ const TEMPO = { bpm: 121.4, why: '', wrist: true, running: false }
  */
 export async function pagesFixture() {
   const { watchState, watchPageOrder, watchPagesHidden, watchPagesShown, watchTunerStopsOnLeaving, watchTunerStopsOnHiding, watchHereDue, WATCH_HERE_MS, WATCH_HERE_TICK_MS } = await link()
+  const { watchKnobAt, watchKnobValue, watchKnobText, watchKnobWait, WATCH_KNOB_MS, WATCH_KNOB_SETTLE_MS, WATCH_KNOBS_ASK_MS, WATCH_KNOBS_ASKS, WATCH_HOLD_CHANNELS, WATCH_HOLD_QUICK } = await link()
   /* The check-in: on screen or not, the pages up or the waiting page, the demo or not, and the clock either side of its twenty seconds. Times in milliseconds. */
   const T = 1759363200000
   const due = [
@@ -109,6 +110,47 @@ export async function pagesFixture() {
     [CHOSEN, ['tuner', 'presets', 'pedals', 'tempo', 'scenes']],
     [['scenes'], [...ALL, 'looper']]
   ]
+  /*
+   * Quick edit (test/watch-quick.mjs has the rest): where a knob sits, the
+   * value that place comes to and how it is written, for a straight scale
+   * and a logarithmic one, a unit and none, a place past either end, and a
+   * knob with no range to place it in. And how long a turn waits to go.
+   * No value here ends in exactly half a hundredth, where the phone's
+   * rounding and the watch's are allowed to differ for a moment.
+   */
+  const knobCases = [
+    [0.62, 0, 10, false, ''],
+    [0.5, 0, 10, false, ''],
+    [1, 0, 100, false, '%'],
+    [0.25, -80, 20, false, 'dB'],
+    [0.4, -12, 12, false, 'dB'],
+    [0.5, 20, 20000, true, 'Hz'],
+    [0, 20, 20000, true, 'Hz'],
+    [1, 20, 20000, true, 'Hz'],
+    [0.75, 20, 20000, true, 'Hz'],
+    [0.333, 0, 10, false, ''],
+    [0.1234, 0, 10, false, ''],
+    [0.5, 0, 1, false, ''],
+    [0.5, 1000, 5000, false, 'ms'],
+    [-0.2, 0, 10, false, ''],
+    [1.7, 0, 10, false, ''],
+    [0.5, 0, 10, true, ''],
+    [0.5, null, null, false, 'dB'],
+    [0.5, 3, 3, false, ''],
+    [0.5, 0, 10, null, null]
+  ].map(([at, min, max, log, unit]) => {
+    const value = watchKnobValue(at, { min, max, log })
+    return { at, min, max, log, unit, place: watchKnobAt(at), value, text: watchKnobText(value, unit) }
+  })
+  const waits = [
+    [null, T],
+    [T, T],
+    [T, T + 40],
+    [T, T + WATCH_KNOB_MS - 1],
+    [T, T + WATCH_KNOB_MS],
+    [T, T + 5000],
+    [T + 50, T]
+  ].map(([lastSent, now]) => ({ lastSent, now, wait: watchKnobWait(lastSent, now) }))
   return {
     state: watchState({
       at: 1759363200000,
@@ -118,6 +160,16 @@ export async function pagesFixture() {
       scene: 1,
       sceneNames: ['Clean', 'Crunch', 'Lead'],
       sceneCount: 8,
+      /* One pedal, held, with quick edit offered and its sheet's knobs read: a drive's Drive, and a frequency. */
+      pedals: [{ id: 50, name: 'Drive 1', short: 'DRV', on: true, fill: '#c0392b', ink: '#ffffff', channel: 'B', channels: ['A', 'B', 'C', 'D'] }],
+      quickEdit: true,
+      quick: {
+        id: 50,
+        knobs: [
+          { key: '11', name: 'Drive', text: '6.20', at: 0.62, min: 0, max: 10, log: false, unit: '' },
+          { key: '12', name: 'Low Cut', text: '632.46 Hz', at: 0.5, min: 20, max: 20000, log: true, unit: 'Hz' }
+        ]
+      },
       tempo: TEMPO,
       tunerStays: true,
       pages: CHOSEN,
@@ -125,6 +177,15 @@ export async function pagesFixture() {
     }),
     tuner: { leaving, hiding },
     here: { everyMs: WATCH_HERE_MS, tickMs: WATCH_HERE_TICK_MS, cases: due },
+    quick: {
+      everyMs: WATCH_KNOB_MS,
+      settleMs: WATCH_KNOB_SETTLE_MS,
+      askMs: WATCH_KNOBS_ASK_MS,
+      asks: WATCH_KNOBS_ASKS,
+      hold: { channels: WATCH_HOLD_CHANNELS, quick: WATCH_HOLD_QUICK },
+      knobs: knobCases,
+      waits
+    },
     cases: given.map(([pages, hidden]) => ({
       pages,
       hidden,
@@ -306,12 +367,14 @@ export function run(test) {
 
   test('watch pages: a watch says what it knows in its hello, and one that says nothing is asked nothing new', async () => {
     const { watchCommand, watchKnows, WATCH_KNOWS } = await link()
-    assert.deepEqual(WATCH_KNOWS, ['pages', 'tempo', 'stay', 'here'])
+    /* `quick` is the fifth (12 November 2026: a pedal held opens quick edit; test/watch-quick.mjs). The same waiting build brings all five. */
+    assert.deepEqual(WATCH_KNOWS, ['pages', 'tempo', 'stay', 'here', 'quick'])
     /* A watch from before: the one word it always was. */
     assert.deepEqual(watchCommand({ do: 'hello' }, null), { do: 'hello' })
     assert.deepEqual(watchCommand({ do: 'hello', knows: 'pages' }, null), { do: 'hello' }, 'a hello whose knows is not a list was taken for one')
     /* One that says so, and only what this phone knows of: never passed on as it came. */
-    assert.deepEqual(watchCommand({ do: 'hello', knows: ['pages', 'tempo', 'stay', 'here'] }, null), { do: 'hello', knows: ['pages', 'tempo', 'stay', 'here'] })
+    assert.deepEqual(watchCommand({ do: 'hello', knows: ['pages', 'tempo', 'stay', 'here', 'quick'] }, null), { do: 'hello', knows: ['pages', 'tempo', 'stay', 'here', 'quick'] })
+    assert.deepEqual(watchCommand({ do: 'hello', knows: ['pages', 'tempo', 'stay', 'here'] }, null), { do: 'hello', knows: ['pages', 'tempo', 'stay', 'here'] }, 'a watch that does not say quick was taken to know it')
     assert.deepEqual(watchCommand({ do: 'hello', knows: ['here', 'stay', 'tempo', 'pages', 'looper', 7, 'pages'] }, null), { do: 'hello', knows: ['pages', 'tempo', 'stay', 'here'] })
     assert.deepEqual(watchCommand({ do: 'hello', knows: ['pages', 'tempo'] }, null), { do: 'hello', knows: ['pages', 'tempo'] })
     assert.deepEqual(watchCommand({ do: 'hello', knows: ['pages'] }, null), { do: 'hello', knows: ['pages'] })
@@ -382,8 +445,8 @@ export function run(test) {
     assert.equal(watchCommand({ do: 'wrist', on: true }, null), null)
     assert.equal(watchCommand({ do: 'wrist', on: true }, { tempo: 'yes' }), null)
 
-    /* NINE THINGS, and nothing else: no way to set a tempo by number, start the metronome or choose where it clicks from the wrist. */
-    const asked = ['hello', 'scene', 'pedal', 'channel', 'preset', 'tuner', 'tap', 'wrist', 'here']
+    /* ELEVEN THINGS, and nothing else: no way to set a tempo by number, start the metronome or choose where it clicks from the wrist. (The last two are quick edit's, 12 November 2026: a held pedal's knobs read, and one turned; test/watch-quick.mjs holds what each may carry.) */
+    const asked = ['hello', 'scene', 'pedal', 'channel', 'preset', 'tuner', 'tap', 'wrist', 'here', 'knobs', 'knob']
     const door = code(read('shared/watch-link.mjs'))
     const cases = [...door.slice(door.indexOf('export function watchCommand(')).matchAll(/case '([a-z]+)':/g)].map((m) => m[1])
     assert.deepEqual([...cases].sort(), [...asked].sort(), 'the watch’s door takes a request this list does not name')
@@ -654,7 +717,8 @@ export function run(test) {
     assert.match(kept, /canStay: knows\.includes\('stay'\)/)
     assert.match(kept, /export const tunerStaysToSend = \(\) => \(knows\.includes\('stay'\) \? stays : null\)/, 'the tuner’s switch is sent to a watch that has not said it knows how')
     const bridge = code(read('mobile/src/lib/watchBridge.js'))
-    assert.match(bridge, /const pictured = \(from\) => watchState\(\{ \.\.\.from, tempo: watchHasTempo\(\) \? from\.tempo : null, tunerStays: tunerStaysToSend\(\), \.\.\.pagesToSend\(\) \}\)/)
+    /* (Quick edit's two fields ride last, from lib/watchQuickEdit, which sends nothing to a watch that has not said `quick`: test/watch-quick.mjs.) */
+    assert.match(bridge, /const pictured = \(from\) => watchState\(\{ \.\.\.from, tempo: watchHasTempo\(\) \? from\.tempo : null, tunerStays: tunerStaysToSend\(\), \.\.\.pagesToSend\(\), \.\.\.quickToSend\(from\.quickOffered\) \}\)/)
     /* The phone does nothing else with it: no request from the watch reads it, and nothing here turns a tuner on or off by it. */
     assert.equal((bridge.match(/tunerStaysToSend\(/g) || []).length, 2, 'the tuner’s switch is read somewhere besides the picture and the tips')
 
@@ -859,7 +923,8 @@ export function run(test) {
     assert.match(flat, /let watchHereTick: Double = 2\b/)
     assert.match(flat, /func watchHereDue\(onScreen: Bool, pagesUp: Bool, demo: Bool, lastSent: Date\?, now: Date\) -> Bool \{ guard onScreen, pagesUp, !demo else \{ return false \} guard let lastSent else \{ return true \} return now\.timeIntervalSince\(lastSent\) >= watchHereSeconds \}/)
     assert.ok(model.includes('case .here: return #"{"do":"here"}"#'), 'the watch cannot check in')
-    assert.match(flat, /var once: Bool \{ switch self \{ case \.tap, \.here: return true default: return false \} \}/)
+    /* (Quick edit's two are sent once as well, 12 November 2026: test/watch-quick.mjs says why.) */
+    assert.match(flat, /var once: Bool \{ switch self \{ case \.tap, \.here, \.knobs, \.knob: return true default: return false \} \}/)
     const phoneLink = read('mobile/targets/watch/PhoneLink.swift').replace(/\s+/g, ' ')
     assert.match(
       phoneLink,

@@ -14,11 +14,12 @@ import { metronome, setWatchTap, useMetronome } from './metronome'
 import { boostPedals } from './am4-boost'
 import { boostNow, pedalSlug } from './rig'
 import { noteWatchKnows, pagesToSend, tunerStaysToSend, useWatchPages, watchChecksIn, watchHasTempo } from './watchPages'
+import { onQuickChange, quickAsked, quickFollows, quickHeard, quickToSend } from './watchQuickEdit'
 
 /*
  * THE APPLE WATCH, FROM THE PHONE'S SIDE.
  *
- * The watch draws what the phone tells it and asks for one of nine things —
+ * The watch draws what the phone tells it and asks for one of eleven things —
  * see lib/watch-link (shared/watch-link.mjs) for both halves of that. This is
  * the phone keeping its end: a fresh picture whenever the stage screen's
  * changes, and each request carried out with the same calls the stage
@@ -35,12 +36,14 @@ import { noteWatchKnows, pagesToSend, tunerStaysToSend, useWatchPages, watchChec
 /*
  * THE PICTURE FOR THE WATCH THAT IS THERE. What Play gave (`from`), with the
  * things only a watch that has said it knows them is sent: its pages
- * (lib/watchPages pagesToSend), its Tempo page's tempo (watchHasTempo) and
- * the tuner's "stays on when you swipe away" switch (tunerStaysToSend). To
+ * (lib/watchPages pagesToSend), its Tempo page's tempo (watchHasTempo), the
+ * tuner's "stays on when you swipe away" switch (tunerStaysToSend), and
+ * quick edit: whether a hold offers it here (`quickOffered`, Play's own
+ * answer) and the open sheet's knobs (lib/watchQuickEdit quickToSend). To
  * any other watch none of them is in the picture at all, and it is field
  * for field what it always was.
  */
-const pictured = (from) => watchState({ ...from, tempo: watchHasTempo() ? from.tempo : null, tunerStays: tunerStaysToSend(), ...pagesToSend() })
+const pictured = (from) => watchState({ ...from, tempo: watchHasTempo() ? from.tempo : null, tunerStays: tunerStaysToSend(), ...pagesToSend(), ...quickToSend(from.quickOffered) })
 
 let native
 function link() {
@@ -180,6 +183,17 @@ export function useWatchBridge(picture, step) {
     sender.current = createWatchSender({
       send: (state, { urgent }) => watch.sendState(JSON.stringify(state), urgent)
     })
+    /*
+     * QUICK EDIT'S KNOBS MOVED (lib/watchQuickEdit): read, read again, a
+     * turn taken or the sheet closed, none of which draws Play. So the
+     * picture is made again from what Play last gave and goes out at the
+     * usual pace.
+     */
+    onQuickChange(() => {
+      if (!lastFrom.current || !sender.current) return
+      last.current = pictured(lastFrom.current)
+      sender.current.push(last.current)
+    })
     const sub = watch.addListener?.('onCommand', (event) => {
       let msg = null
       try {
@@ -189,6 +203,8 @@ export function useWatchBridge(picture, step) {
       }
       const cmd = watchCommand(msg, last.current)
       if (!cmd) return
+      /* Anything the watch asks says it is there, which is how long an open quick edit sheet's knobs are kept (lib/watchQuick WATCH_QUICK_IDLE_MS). */
+      quickHeard()
       /*
        * WHEN THE PHONE HEARD IT, which is as near the wrist as this end can
        * know: a request carries no time, and the watch's own retry can make
@@ -268,6 +284,15 @@ export function useWatchBridge(picture, step) {
         tapTempo()
         return
       }
+      /*
+       * A QUICK EDIT SHEET CLOSING on the wrist (lib/watchQuickEdit): the
+       * phone lets its knobs go. Nothing for the unit, so it waits for no
+       * connection and is the same from a phone awake or woken.
+       */
+      if (cmd.do === 'knobs' && cmd.id === null) {
+        quickAsked(cmd)
+        return
+      }
       const run = () => {
         if (cmd.do === 'scene') return writeScene(cmd.index, receivedAt)
         if (cmd.do === 'pedal') return writeBypass(cmd.id, !cmd.on, receivedAt)
@@ -288,6 +313,16 @@ export function useWatchBridge(picture, step) {
           return here ? writeChannel(cmd.id, cmd.channel, receivedAt) : undefined
         }
         if (cmd.do === 'tuner' && getState().tunerOn !== cmd.on) return writeTuner(cmd.on, receivedAt)
+        /*
+         * QUICK EDIT, from a pedal held on the wrist (lib/watchQuickEdit):
+         * its knobs read when the sheet opens, and one of them put where
+         * the Digital Crown says. Both by Edit's own read and Edit's own
+         * checked write and by nothing else, so the guards that hold a knob
+         * turned on the screen hold these. Each was checked against the
+         * last picture already: only where it offered quick edit, and a
+         * turn only of a knob it listed for that pedal.
+         */
+        if (cmd.do === 'knobs' || cmd.do === 'knob') return quickAsked(cmd)
         return undefined
       }
       if (!asleep) {
@@ -391,6 +426,7 @@ export function useWatchBridge(picture, step) {
     })
     return () => {
       sub?.remove?.()
+      onQuickChange(null)
       sender.current?.stop()
       sender.current = null
     }
@@ -399,7 +435,7 @@ export function useWatchBridge(picture, step) {
   /* Every render of the stage screen is a chance the picture moved. */
   useEffect(() => {
     if (!sender.current) return
-    const { chain, channels, awake: seen, ...rest } = picture
+    const { chain, channels, awake: seen, quickEdit, ...rest } = picture
     /* Each pedal with its channel and what a hold may switch it to: the
        stage screen's own list, empty wherever its own hold does nothing.
        And its word: an AM4 amp's Boost on, Boost off or Amp off, as Play's
@@ -409,7 +445,9 @@ export function useWatchBridge(picture, step) {
     const beat = metronome()
         /* And the Tempo page: the tempo Play's Tap button shows, whether that button sends anything here and Play's sentence where it does not (rig.noTapTempo), the wrist's switch, and whether the metronome is running at all. */
     const tempo = { bpm: getState().bpm, why: noTapTempo(), wrist: beat.watch === true, running: beat.on === true }
-    lastFrom.current = { ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm }, tempo }
+    lastFrom.current = { ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm }, tempo, quickOffered: quickEdit === true }
+    /* Quick edit: whether a hold offers it here (Stage's `quickEdit`, from App, above), and an open sheet's knobs kept only while it does and its pedal is still drawn, and read again when the block is not what was read (another scene, another channel). */
+    quickFollows(quickEdit === true, pedals)
     const state = pictured(lastFrom.current)
     last.current = state
     sender.current.push(state)

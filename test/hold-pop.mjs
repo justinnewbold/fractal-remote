@@ -97,7 +97,9 @@ export function run(test) {
     assert.match(app, /const editOpens = editHere\.opens/)
     assert.match(app, /const noKnobs = vp4Here\(\) \|\| \(demo && demoUnitNow === 'vp4'\)/)
     assert.match(app, /onCloseKnobs=\{closeBlock\}\s+popKnobs=\{popKnobs\}/, 'Play is not told whether its pop-up has the knobs')
-    assert.equal((app.match(/\bpopKnobs\b/g) || []).length, 3, 'the answer goes somewhere other than Play')
+    /* And to one more place since 12 November 2026: the Apple Watch's quick edit asks the same answer (lib/watchQuick; test/watch-quick.mjs), so the wrist never offers knobs where this pop-up has none. */
+    assert.match(app, /const watchQuick = watchQuickOn\(\{ allowed: sidesAdmin \|\| WATCH_QUICK_EDIT_FOR_EVERYONE, popKnobs \}\)/)
+    assert.equal((app.match(/\bpopKnobs\b/g) || []).length, 4, 'the answer goes somewhere other than Play and the watch’s rule')
   })
 
   test('hold pop-up: with the knobs it is the knobs over the channels, the channels its foot; without, the sheet it always was', () => {

@@ -21,7 +21,7 @@ those must still pass the other.
 | Patch | What it does | Moves |
 |---|---|---|
 | `phone-turns.patch` | Lets a phone be turned on its side: on Play, on what opens beside Play and in Stage view, for an account the sideways layout is open to (his, until `PHONE_SIDEWAYS_FOR_EVERYONE`). Every other page, every other account and every tablet are as they were. Adds expo-screen-orientation. | **android and ios** (the watch line does not move) |
-| `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), lights the edge of its screen on every beat its metronome taps, has a tuner page that says Off / Start tuning / Stop tuning, can leave the tuner on when its page is left if the iPhone's switch says so, checks in every 20 seconds while it is on screen so a locked iPhone stays awake while the watch is looked at, and says in its hello what it can do. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
+| `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), lights the edge of its screen on every beat its metronome taps, has a tuner page that says Off / Start tuning / Stop tuning, can leave the tuner on when its page is left if the iPhone's switch says so, checks in every 20 seconds while it is on screen so a locked iPhone stays awake while the watch is looked at, opens quick edit on a held pedal where the iPhone offers it (its channels in one row over a list of the block's knobs, the Digital Crown turning the one picked; "Hold a pedal for quick edit." under the pedals), and says in its hello what it can do. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
 
 Two patches are waiting: phone-turns (10 November 2026), whose section is
 next, and watch-page-order (11 November 2026), whose section follows it.
@@ -245,13 +245,14 @@ picture the phone sends, `pages` and `hidden`. All of it is INERT until a
 watch says it can do this: a watch from before this patch draws all four
 pages in the usual order whatever it is sent, and a setting that does
 nothing is worse than none. So the watch says what it knows in its hello
-(`"knows":["pages","tempo","stay","here"]`, new in this patch; a hello from an
+(`"knows":["pages","tempo","stay","here","quick"]`, new in this patch; a hello from an
 older watch has no `knows`), the phone keeps the last answer on the device,
 and until it has heard `pages` it draws no rows in Settings and sends
 neither field, until it has heard `tempo` it sends no tempo and refuses both
 of the Tempo page's requests, until it has heard `stay` it neither shows
-nor sends the tuner's switch, and until it has heard `here` its tips say
-what they always said about a locked iPhone. For every watch out today the phone's picture is byte for
+nor sends the tuner's switch, until it has heard `here` its tips say
+what they always said about a locked iPhone, and until it has heard `quick`
+it says nothing of quick edit and refuses both of its requests. For every watch out today the phone's picture is byte for
 byte what it was.
 
 **What the patch does, on the watch.**
@@ -312,6 +313,84 @@ the iPhone's "Tap on the watch", and it runs when that runs: while the
 metronome is on on the iPhone and the watch app is on the watch's screen.
 CI's pictures gain tempo-beat.png, the Tempo page with the light held lit
 (`-beatDemo YES`). Nothing in the phone's JavaScript changed for it.
+
+**Quick edit on a held pedal (12 November 2026).** "On the watch, we have
+pushed to hold on the channels to switch amps. Can we set up quick edits on
+that as well? And change the name to hold to quick edit? give me some
+mockups of that." He was shown three and chose the second: "For the watch,
+mock up B." The picture is docs/watch/quick-edit-list.png (docs/watch/
+README.md says what the other two were).
+
+- **What the wearer sees.** Under the pedals the line reads "Hold a pedal
+  for quick edit." A hold opens a sheet: the block's name, its channels A
+  to D in ONE row (the one it is on lit green, as ever), then a list of the
+  block's knobs, a name on the left and a value on the right. A tap picks a
+  row (an amber outline, its value amber) and the Digital Crown turns the
+  picked knob; the first is picked when the sheet opens. The list is moved
+  with a finger, since the Crown is the knob's. A channel picked still
+  closes the sheet.
+- **Only where the iPhone offers it**, which it says in the picture
+  (`quickEdit`). Not offered, the line is "Hold a pedal for its channels."
+  and the sheet is the channel picker exactly as it was (Pages.swift keeps
+  ChannelsSheet untouched and adds QuickSheet beside it). The iPhone offers
+  it where its own hold pop-up on Play carries knobs (lib/holdPop
+  `popKnobsOn`: Edit's door open for this account, unit and connection,
+  never a VP4) AND the account is one the watch's is open to: his, until
+  `WATCH_QUICK_EDIT_FOR_EVERYONE` in mobile/src/lib/features.js (false).
+- **The knobs are Edit's own.** The phone lists the first eight knobs its
+  Edit panel would draw for the block (lib/watchQuick `quickParams`: Edit's
+  pages, Edit's names, and Edit's rule for what is never a knob, so a
+  block's Level is not on the wrist, though the mockup drew one). It reads
+  them with Edit's read (lib/device `blockParams`) and writes a turn with
+  Edit's checked write (`setParamConfirmed`), from lib/watchQuickEdit and
+  nowhere else. Both are marked as Edit's inside lib/device, so over
+  Bluetooth or a USB cable every frame is held by the guards that hold a
+  knob turned on the screen. No model, no on or off of its own, no saving.
+- **The protocol** (shared/watch-link.mjs, QUICK EDIT ON THE WRIST). The
+  picture gains `quickEdit` (true or false) and, while a sheet is open and
+  read, `quick`: `{ id, knobs: [{ key, name, text, at, min, max, log, unit }] }`,
+  `text` the value as Edit writes it and `at` its place in its range, 0 to
+  1. The watch may ask two things more, eleven in all: `{"do":"knobs","id":50}`
+  when the sheet opens (`"id":null` when it closes), and
+  `{"do":"knob","id":50,"key":"11","at":0.62}` for a turn. Each is refused
+  unless the last picture offered quick edit, and a turn unless that
+  picture listed that knob for that pedal.
+- **A turn never lands on another channel's settings.** The phone keeps
+  what the block was when it heard the turn (preset, scene, channel, a
+  reload) and drops the turn if the block is something else when its write
+  would go. When the block moves under an open sheet the phone reads it
+  again and shows nothing of the old one meanwhile. A sheet the watch has
+  said nothing about for a minute is let go.
+- **The number moves with the Crown.** The range, the scale and the unit
+  ride in the picture so the watch can write the value as it turns, by the
+  phone's own rule (Model.swift `watchKnobValue`, `watchKnobText`; held to
+  the phone's answers by pages.json). It sends a turn at most ten times a
+  second and always the last one, never a second time, and shows the
+  iPhone's own numbers again a second and a half after the last turn.
+- **CI's pictures** gain quick-line.png and quick.png (`-quickDemo YES`):
+  the line under the pedals, and Drive 1 held with four demo knobs.
+
+**What only a real watch can show for quick edit**, most likely first:
+
+1. Whether the Crown turns the picked knob at all, or scrolls the list
+   instead. The sheet gives the list of knobs the focus when it opens and at
+   every tap on a row (`.focusable`, `.focused`, `.digitalCrownRotation`
+   inside a ScrollView); if the Crown scrolls the page, the focus is not
+   being taken, and the fix is in Pages.swift (QuickSheet).
+2. How far one turn of the Crown moves a knob. It runs the whole range,
+   nought to one, at the system's low sensitivity with no detents. If it is
+   too fast or too slow to land on a number, the sensitivity or a step is
+   one line.
+3. How quickly the unit follows, through a computer and over Bluetooth. A
+   turn is Edit's checked write (written, read back) and then a read of the
+   block, one at a time with only the newest waiting, so the wrist's number
+   is ahead of the unit by that much.
+4. With the iPhone locked: the first hold after the wrist has been down may
+   find the phone asleep. The sheet asks for its knobs again every two and
+   a half seconds, four times; until they come it says "Reading Drive 1…",
+   and after that it is the channels alone until it is opened again.
+5. Whether the rows fit a small watch, and whether four channels in one
+   row are easy enough to hit.
 
 **The fifth page, Tempo.** "OK, well let's add that as well then" (Justin,
 the same day). Fourth in the usual order (Scenes, Pedals, Presets, Tempo,
@@ -587,7 +666,14 @@ Xcode 27.1, compile only. Both are GitHub's Macs and spend no Expo build.
   about every 20 seconds, which keeps the iPhone app awake in the
   background so taps from the watch go through with the iPhone locked; it
   stops when the watch's screen turns off, and the app uses no background
-  mode." What's New may say the same in fewer words;
+  mode." And for quick edit: "On the Apple Watch, holding a pedal opens
+  its channels and a short list of that block's knobs; tapping a knob and
+  turning the Digital Crown changes it, the same change the iPhone's own
+  Edit page makes. It is offered only where editing is available on the
+  iPhone for that unit and connection." (Only once
+  `WATCH_QUICK_EDIT_FOR_EVERYONE` is true; while it is his account alone
+  the notes still describe it, since it is in the build.) What's New may
+  say the same in fewer words;
 - a What's new line (`only: 'ios'`) in that pull request, since from that
   build on a wearer can see it: "Apple Watch: choose which pages your watch
   shows, and their order, in Settings → Apple Watch. And a new Tempo page,
