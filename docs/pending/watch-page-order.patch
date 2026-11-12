@@ -1,8 +1,8 @@
 diff --git a/mobile/targets/watch/FractalWatchApp.swift b/mobile/targets/watch/FractalWatchApp.swift
-index 807c1e54..c308ef48 100644
+index 807c1e54..db182212 100644
 --- a/mobile/targets/watch/FractalWatchApp.swift
 +++ b/mobile/targets/watch/FractalWatchApp.swift
-@@ -13,19 +13,39 @@ struct FractalWatchApp: App {
+@@ -13,32 +13,53 @@ struct FractalWatchApp: App {
  }
  
  /*
@@ -48,8 +48,11 @@ index 807c1e54..c308ef48 100644
 +    @State private var page: WatchPage? = Launch.value("page") == nil ? nil : WatchPage.numbered(Launch.number("page"))
      /* The metronome's tap: see Metronome.swift. */
      @State private var wrist = WristMetronome()
++    /* Whether the edge of the screen is lit this instant: on every beat the wrist taps, then let go (EdgeBeat, below). Launched with -beatDemo YES it stays lit, for CI's picture of it. */
++    @State private var beatLit = Launch.flag("beatDemo")
  
-@@ -34,11 +54,10 @@ struct RootView: View {
+     var body: some View {
+         Group {
              /* The pages stay up through a moment out of reach (see PhoneLink.away),
                 with the taps held back and a word at the top saying why. */
              if let state = link.state, state.linked, !state.tooNew, !link.away {
@@ -65,8 +68,12 @@ index 807c1e54..c308ef48 100644
                  }
                  .tabViewStyle(.verticalPage)
                  .disabled(!link.reachable)
-@@ -58,10 +77,36 @@ struct RootView: View {
+@@ -56,12 +77,93 @@ struct RootView: View {
+                 WaitingPage(tooNew: link.state?.tooNew == true, phoneOnly: link.reachable && link.state?.linked == false)
+             }
          }
++        /* Over every page, and taking no touch: the beat is seen whichever page the wrist is on. */
++        .overlay { EdgeBeat(lit: beatLit) }
          .onChange(of: phase) { _, now in
              if now == .active { link.woke() }
 +            /* The check-in runs only while the app is on screen (PhoneLink.onScreen): started by the wrist coming up, ended by its going down. */
@@ -83,7 +90,21 @@ index 807c1e54..c308ef48 100644
 +            if let swiped = page, !now.contains(swiped) { page = nil }
 +        }
 +        /* And at launch, when the phase may already be active and so never "changes" to it. */
-+        .onAppear { link.onScreen(phase == .active) }
++        .onAppear {
++            link.onScreen(phase == .active)
++            wrist.onBeat = { lightTheEdge() }
++        }
++    }
++
++    /* Lit at once on the beat, and let go a moment later: on and fading in one breath would be drawn as never lit at all. */
++    private func lightTheEdge() {
++        beatLit = true
++        /* CI's picture of it is of it lit. */
++        if Launch.flag("beatDemo") { return }
++        Task { @MainActor in
++            try? await Task.sleep(nanoseconds: UInt64(EdgeBeatLook.heldMs) * 1_000_000)
++            withAnimation(.easeOut(duration: EdgeBeatLook.fade)) { beatLit = false }
++        }
 +    }
 +
 +    /* The page on show: the one swiped to while it is still shown, or the first shown page (Model.swift watchPageOnShow). */
@@ -100,10 +121,84 @@ index 807c1e54..c308ef48 100644
 +        case .tempo: TempoPage(state: state)
 +        case .tuner: TunerPage(state: state)
 +        }
++    }
++}
++
++/*
++ * THE BEAT, ON THE EDGE OF THE WATCH.
++ *
++ * "Same thing if we can have the watch outside edge flash with the same as
++ * the tempo" (Justin, 12 November 2026): the iPhone lights a frame round
++ * its whole screen on every beat (components/MetronomeBeat), and this is
++ * the watch's. A green line round the edge of the screen, lit on every beat
++ * the wrist's metronome taps and gone before the next. It is drawn over
++ * every page and takes no touch, so it never comes between a thumb and a
++ * button, and VoiceOver is told nothing of it.
++ *
++ * The corners follow the screen's own as nearly as its width tells
++ * (Model.swift watchEdgeRadius), and the line is soft at its edges, so a
++ * corner a point or two off is not seen.
++ */
++enum EdgeBeatLook {
++    /** How thick the line is. */
++    static let line: CGFloat = 6
++    /** How long it is held fully lit, in milliseconds, and how long it takes to fade, in seconds. */
++    static let heldMs = 40
++    static let fade = 0.16
++}
++
++struct EdgeBeat: View {
++    let lit: Bool
++
++    var body: some View {
++        GeometryReader { box in
++            RoundedRectangle(cornerRadius: CGFloat(watchEdgeRadius(width: Double(box.size.width))), style: .continuous)
++                .strokeBorder(Color.green, lineWidth: EdgeBeatLook.line)
++                .blur(radius: 1.5)
++                .opacity(lit ? 1 : 0)
++        }
++        .ignoresSafeArea()
++        .allowsHitTesting(false)
++        .accessibilityHidden(true)
      }
  }
+diff --git a/mobile/targets/watch/Metronome.swift b/mobile/targets/watch/Metronome.swift
+index f9cdb34e..be92f155 100644
+--- a/mobile/targets/watch/Metronome.swift
++++ b/mobile/targets/watch/Metronome.swift
+@@ -9,6 +9,13 @@ import WatchKit
+  * from shared/metronome.mjs's setting), and this taps on every beat: the
+  * system's click, which is a tap you feel and a tick you hear.
+  *
++ * AND A LIGHT YOU SEE. "I also wanna make it so the watch can do a light up
++ * type function as well on the metronome ... have the watch outside edge
++ * flash with the same as the tempo" (Justin, 12 November 2026). `onBeat` is
++ * handed every beat as it is tapped, and the app lights the edge of the
++ * screen on it (FractalWatchApp.swift, EdgeBeat): the same beat as the tap,
++ * never a clock of its own.
++ *
+  * Counted from when it started rather than from the last beat, the same rule
+  * as the phone's (nextBeat in shared/metronome.mjs), so a late timer once does
+  * not push every beat after it. It only runs while the watch app is on the
+@@ -20,6 +27,8 @@ final class WristMetronome {
+     private var timer: Timer?
+     private var bpm: Double = 0
+     private var started = Date()
++    /** Handed every beat, as it is tapped: the edge of the screen lights on it. */
++    var onBeat: (() -> Void)?
+ 
+     /** Follow the phone's word: on at this tempo, or off. Restarts only when the tempo moves. */
+     func follow(_ metronome: WatchMetronome?) {
+@@ -40,6 +49,7 @@ final class WristMetronome {
+ 
+     private func beat() {
+         WKInterfaceDevice.current().play(.click)
++        onBeat?()
+         let step = 60.0 / bpm
+         let elapsed = Date().timeIntervalSince(started)
+         let next = (floor(elapsed / step) + 1) * step - elapsed
 diff --git a/mobile/targets/watch/Model.swift b/mobile/targets/watch/Model.swift
-index ca41efac..d61aa1fa 100644
+index ca41efac..b887e878 100644
 --- a/mobile/targets/watch/Model.swift
 +++ b/mobile/targets/watch/Model.swift
 @@ -5,7 +5,7 @@ import Foundation
@@ -384,7 +479,27 @@ index ca41efac..d61aa1fa 100644
          case .scene(let index): return #"{"do":"scene","index":\#(index)}"#
          case .pedal(let id, let on): return #"{"do":"pedal","id":\#(id),"on":\#(on)}"#
          case .preset(let step): return #"{"do":"preset","step":\#(step < 0 ? -1 : 1)}"#
-@@ -232,6 +459,24 @@ func grownSize(_ tall: Double, share: Double, least: Double, most: Double) -> Do
+@@ -208,6 +435,19 @@ func sceneColumns(_ count: Int) -> Int { count <= 1 ? 1 : 2 }
+ /** Pedals two across when there are four or fewer (an AM4's, a VP4's), like the scenes, and one alone across the whole page; three across otherwise, as they always were. */
+ func pedalColumns(_ count: Int) -> Int { count <= 1 ? 1 : count <= 4 ? 2 : 3 }
+ 
++/*
++ * HOW ROUND THE CORNERS OF THE SCREEN ARE, near enough, from how wide it
++ * is: about a fifth of the width on every Apple Watch this runs on. The
++ * metronome's light on the edge of the screen follows them (EdgeBeat in
++ * FractalWatchApp.swift); its line is soft, so a point or two either way is
++ * not seen. Never less than a line's own roundness, and nothing for a
++ * width that is not one.
++ */
++func watchEdgeRadius(width: Double) -> Double {
++    guard width.isFinite, width > 0 else { return 0 }
++    return max(12, (width * 0.2).rounded())
++}
++
+ /*
+  * THE BIGGEST SIZE AT WHICH A NAME'S LONGEST WORD FITS ITS TILE'S WIDTH, so
+  * that a grown name never breaks a word in two ("Overdriv" over "e", or "Big
+@@ -232,6 +472,24 @@ func grownSize(_ tall: Double, share: Double, least: Double, most: Double) -> Do
      max(least, min(most, (tall * share).rounded(.down)))
  }
  
@@ -409,7 +524,7 @@ index ca41efac..d61aa1fa 100644
  /** Where the tuner's needle sits, -1 (50 cents flat) to 1 (50 sharp). */
  func needleOffset(cents: Int) -> Double {
      Double(max(-50, min(50, cents))) / 50
-@@ -294,8 +539,13 @@ extension WatchState {
+@@ -294,8 +552,13 @@ extension WatchState {
      func answering(_ command: WatchCommand) -> WatchState {
          var next = self
          switch command {
@@ -703,7 +818,7 @@ index 05571339..900f45e7 100644
      ]
  )
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
-index 1b1532ec..b301f886 100644
+index 1b1532ec..1bb63ac0 100644
 --- a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
 +++ b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
 @@ -122,7 +122,11 @@ final class WatchModelTests: XCTestCase {
@@ -1016,6 +1131,24 @@ index 1b1532ec..b301f886 100644
      func testTheNeedleAndTheColours() {
          XCTAssertEqual(needleOffset(cents: 0), 0)
          XCTAssertEqual(needleOffset(cents: 25), 0.5)
+@@ -166,6 +460,17 @@ final class WatchModelTests: XCTestCase {
+         XCTAssertEqual(boosted.pedals.filter { $0.wordLine != nil }.count, 1, "a pedal other than the amp was given a word")
+     }
+ 
++    /* "Have the watch outside edge flash with the same as the tempo": the light follows the screen's corners, near enough, on every size of watch. */
++    func testTheBeatsLightFollowsTheScreensCorners() {
++        XCTAssertEqual(watchEdgeRadius(width: 162), 32, "a 40 mm watch")
++        XCTAssertEqual(watchEdgeRadius(width: 198), 40, "a 45 mm watch")
++        XCTAssertEqual(watchEdgeRadius(width: 205), 41, "an Ultra")
++        XCTAssertEqual(watchEdgeRadius(width: 20), 12, "never sharper than the line is thick")
++        XCTAssertEqual(watchEdgeRadius(width: 0), 0)
++        XCTAssertEqual(watchEdgeRadius(width: .nan), 0)
++        XCTAssertTrue(watchEdgeRadius(width: 208) >= watchEdgeRadius(width: 184), "a wider screen is no sharper")
++    }
++
+     /* "We're only using about half the space": an AM4's four share the page, an FM3's eight stay as they were. */
+     func testFewTilesShareThePage() {
+         /* Four scenes, two rows of two, in a page with 180 points under the heading: (180 - 4) / 2. */
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/pages.json b/mobile/watch-ci/Tests/WatchModelTests/pages.json
 new file mode 100644
 index 00000000..e72b0816
@@ -1886,10 +2019,10 @@ index 00000000..e72b0816
 +  ]
 +}
 diff --git a/mobile/watch-ci/screens.sh b/mobile/watch-ci/screens.sh
-index b14cec75..dd1c1a39 100755
+index b14cec75..0beff211 100755
 --- a/mobile/watch-ci/screens.sh
 +++ b/mobile/watch-ci/screens.sh
-@@ -32,6 +32,11 @@ for page in 0 1 2 3; do
+@@ -32,6 +32,15 @@ for page in 0 1 2 3; do
  done
  shoot -page 3 -tunerDemo YES
  xcrun simctl io "$UDID" screenshot "screens/tuner-on.png"
@@ -1898,6 +2031,10 @@ index b14cec75..dd1c1a39 100755
 +# watch.yml's App Store list does not take it.
 +shoot -page 4
 +xcrun simctl io "$UDID" screenshot "screens/tempo.png"
++# And with the metronome's light round the edge of the screen held lit
++# (-beatDemo), which on a wrist is there for a blink on every beat.
++shoot -page 4 -beatDemo YES
++xcrun simctl io "$UDID" screenshot "screens/tempo-beat.png"
  # A pedal held: Drive 1's channels, B lit (-pick takes a demo pedal's id). For
  # looking at a pull request only; watch.yml's App Store list does not take it.
  # Three seconds more than the others: the sheet opens 0.8 s after the page

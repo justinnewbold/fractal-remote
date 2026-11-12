@@ -1038,6 +1038,13 @@ asked for once, when he says the list is whole. Waiting there now:
     the beat. "OK, well let's add that as well then." Tap is Play's own
     `tapTempo()` and nothing else; where Play has no Tap, the watch says
     Play's sentence.
+  - *The metronome lights the edge of the watch* (12 November 2026): "I
+    also wanna make it so the watch can do a light up type function as
+    well on the metronome ... have the watch outside edge flash with the
+    same as the tempo." A soft green line round the edge of the screen on
+    every beat the wrist's metronome taps, over every page, taking no
+    touch. No switch of its own: it is part of the wrist's metronome,
+    which still runs only while the metronome is on on the iPhone.
   - *The tuner page says what it is and what a tap does.* "Where it says
     tuner on I feel like that means it on." He picked mockup B
     (docs/watch/tuner-start-stop.png): "Off" with Start tuning, then Stop
@@ -1061,6 +1068,39 @@ asked for once, when he says the list is whole. Waiting there now:
 - **Offered, not yet answered:** keyboard and foot-pedal keys, lining the
   Expo packages up, the photo permission sentence naming the profile
   photo.
+
+**The metronome's flash round the edge of the screen is a choice: built
+12 November 2026, HIS ACCOUNT ONLY.**
+
+> "Also on the metronome, can we set it where it can run the metronome on
+> the device and the phone at the same time or either one? And then on the
+> phone have an option for the screen to flash somewhere like the outside
+> edge of the screen." (12 November 2026)
+
+The first half was there already and he was told so: Settings → Metronome
+→ Where it clicks is Unit, the device, or Both (shared/metronome.mjs;
+only the device over Bluetooth, on an AM4 or in the demo, where the app
+cannot switch the unit's click). The edge of the screen had always flashed
+with the device's own click (components/MetronomeBeat). What is new is the
+choice (mobile/src/lib/edgeFlash.js, which imports nothing): a switch on
+that page, Flash the edge of the screen. Off, the click and the tap carry
+on unlit. On with the click on the unit alone, the edge lights on every
+beat and the device makes no sound and no tap, and opens no audio.
+
+- **The switch** is `METRONOME_FLASH_CHOICE_FOR_EVERYONE` in
+  mobile/src/lib/features.js, false: the choice is drawn for his account
+  only, and for every other account the edge flashes with the device's own
+  click and never without it, whatever the device has kept. It opens when
+  he says so, with its What's new line in that pull request.
+- **The light keeps the unit's tempo, not its beat.** The unit does not
+  tell the app when its beats fall, so the light and the unit's click can
+  be part of a beat apart; a press of Tap starts both together. The page
+  says so where the unit clicks. Do not promise they are locked.
+- **Axiom** (justinnewbold/Axiom-Fractal-Grok, which he pointed at) has
+  the same three places, Phone / Pedal / Both, and a green light by Tap,
+  and no flash round the screen: the edge flash is this app's own.
+  Nothing in Axiom was changed.
+- **The watch's light** is native and waits in watch-page-order (above).
 
 **All presets as a wheel, a choice beside the list: built 11 November
 2026, HIS ACCOUNT ONLY.**

@@ -21,7 +21,7 @@ those must still pass the other.
 | Patch | What it does | Moves |
 |---|---|---|
 | `phone-turns.patch` | Lets a phone be turned on its side: on Play, on what opens beside Play and in Stage view, for an account the sideways layout is open to (his, until `PHONE_SIDEWAYS_FOR_EVERYONE`). Every other page, every other account and every tablet are as they were. Adds expo-screen-orientation. | **android and ios** (the watch line does not move) |
-| `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), has a tuner page that says Off / Start tuning / Stop tuning, can leave the tuner on when its page is left if the iPhone's switch says so, checks in every 20 seconds while it is on screen so a locked iPhone stays awake while the watch is looked at, and says in its hello what it can do. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
+| `watch-page-order.patch` | The Apple Watch draws the pages its iPhone says are shown, in the order it says (Settings → Apple Watch → Watch pages), opens on the first of them, has a fifth page, Tempo (the tempo, Tap, and the metronome's tap on the wrist), lights the edge of its screen on every beat its metronome taps, has a tuner page that says Off / Start tuning / Stop tuning, can leave the tuner on when its page is left if the iPhone's switch says so, checks in every 20 seconds while it is on screen so a locked iPhone stays awake while the watch is looked at, and says in its hello what it can do. The phone's half is already in the tree and does nothing until a watch says so. | **the watch only** (android and ios do not move) |
 
 Two patches are waiting: phone-turns (10 November 2026), whose section is
 next, and watch-page-order (11 November 2026), whose section follows it.
@@ -294,6 +294,24 @@ byte what it was.
       git reset -q mobile/watch-ci/Tests/WatchModelTests/pages.json
       git checkout -- mobile/targets/watch mobile/watch-ci
       rm mobile/watch-ci/Tests/WatchModelTests/pages.json
+
+**The metronome's light on the edge of the watch (12 November 2026).** "I
+also wanna make it so the watch can do a light up type function as well on
+the metronome and make a metronome for the watch. Same thing if we can have
+the watch outside edge flash with the same as the tempo." The iPhone has
+always lit a frame round its screen on its own click; this is the watch's.
+The wrist's metronome (Metronome.swift) hands every beat it taps to the app
+(`onBeat`), and the app lights a soft green line round the edge of the
+screen on it and lets it go before the next (FractalWatchApp.swift
+`EdgeBeat`, `lightTheEdge`): the same beat as the tap and the tick, never a
+clock of its own, over every page, taking no touch, and nothing for
+VoiceOver. Its corners follow the screen's by its width (Model.swift
+`watchEdgeRadius`, in the watch's own tests). There is no switch for it:
+it is part of the wrist's metronome, which is the Tempo page's switch and
+the iPhone's "Tap on the watch", and it runs when that runs: while the
+metronome is on on the iPhone and the watch app is on the watch's screen.
+CI's pictures gain tempo-beat.png, the Tempo page with the light held lit
+(`-beatDemo YES`). Nothing in the phone's JavaScript changed for it.
 
 **The fifth page, Tempo.** "OK, well let's add that as well then" (Justin,
 the same day). Fourth in the usual order (Scenes, Pedals, Presets, Tempo,

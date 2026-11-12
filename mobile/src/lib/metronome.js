@@ -8,12 +8,14 @@ import clickPadded from '../../assets/click-pad.wav'
 import { readUnitMetronome, setUnitMetronome } from './device'
 import { DEFAULT_METRONOME, beatMs, clicks, flashLead, flashNudge, followSwitch, metronomeSetting, nextBeat, unitClick } from './metronome-rules'
 import { useRig } from './rig'
-import { useBluetoothOn } from './bluetooth'
+import { useBluetoothAdmin, useBluetoothOn } from './bluetooth'
 import { isDemo } from './demo'
 import { tick } from './feedback'
 import { logDebug } from './debugLog'
 import { isUnsupported } from './unsupported'
 import { markLoud } from './audioMode'
+import { EDGE_KEY, edgeBeat, edgeChoiceOn, edgeKept, edgeToKeep } from './edgeFlash'
+import { METRONOME_FLASH_CHOICE_FOR_EVERYONE } from './features'
 
 /**
  * THE METRONOME SETTING, and the two things it drives.
@@ -241,6 +243,37 @@ export function useFlashTiming() {
 }
 
 /*
+ * THE FLASH ROUND THE EDGE, AS A CHOICE (lib/edgeFlash has the why): kept
+ * on the device, on until somebody switches it off, and read only for an
+ * account the choice is offered to.
+ */
+let edge = true
+AsyncStorage.getItem(EDGE_KEY)
+  .then((raw) => {
+    edge = edgeKept(raw)
+    announce()
+  })
+  .catch(() => {})
+export function setEdgeFlash(on) {
+  edge = on === true
+  announce()
+  AsyncStorage.setItem(EDGE_KEY, edgeToKeep(edge)).catch(() => {})
+}
+/** The choice, and whether whoever is signed in here is offered it: `{ offered, on }`. */
+export function useEdgeFlash() {
+  const offered = edgeChoiceOn({ admin: useBluetoothAdmin(), everyone: METRONOME_FLASH_CHOICE_FOR_EVERYONE })
+  const on = useSyncExternalStore(
+    (fn) => {
+      watchers.add(fn)
+      return () => watchers.delete(fn)
+    },
+    () => edge,
+    () => edge
+  )
+  return { offered, on }
+}
+
+/*
  * Every beat the phone clicks, for anything else that lights on it — the
  * green dot on Tap — so it lights with the click and the edge flash rather
  * than on a clock of its own.
@@ -420,15 +453,25 @@ function probeLag(player, lags, lead, asked) {
  * a timer that runs late once does not drag every beat after it. `onBeat` is
  * handed each beat so a screen can flash with it.
  *
- * Answers whether it is clicking right now: the setting says the phone clicks
- * AND there is a tempo to click at. MetronomeBeat keeps the screen awake on
- * that, and on nothing wider, so a phone with the click switched on but no
- * tempo yet still sleeps as it always has.
+ * Answers whether it is keeping time right now: the setting says the phone
+ * clicks, or lights its edge in silence, AND there is a tempo to keep.
+ * MetronomeBeat keeps the screen awake on that, and on nothing wider, so a
+ * phone with the click switched on but no tempo yet still sleeps as it
+ * always has.
+ *
+ * `onBeat` is called only on a beat the edge of the screen is to light on
+ * (lib/edgeFlash edgeBeat): with the choice switched off the click and the
+ * tap carry on and nothing lights; with the click on the unit alone, for an
+ * account offered the choice, the beat runs here in silence, no sound and no
+ * tap, only for the light.
  */
 export function usePhoneClick(bpm, onBeat) {
   const s = useMetronome()
   const { can, heard: heardOn } = useUnitCan()
-  const on = clicks(s, can, heardOn).phone
+  const sound = clicks(s, can, heardOn).phone
+  const choice = useEdgeFlash()
+  const { flash, silent } = edgeBeat({ offered: choice.offered, edge: choice.on, metronomeOn: s.on, deviceClicks: sound })
+  const on = sound || silent
   const beat = beatMs(bpm)
   const running = Boolean(on && beat)
   useEffect(() => {
@@ -443,24 +486,30 @@ export function usePhoneClick(bpm, onBeat) {
     const step = () => {
       if (!alive) return
       const asked = Date.now()
-      const sounding = click()
-      if (n++ >= 2) probeLag(sounding, lags, flashLead(Platform.OS, nudge), asked)
-      /* The flash and the tap wait for the sound: see FLASH_LEAD. Read each beat, so Flash timing moves it at once. */
-      const t = setTimeout(() => {
-        later.delete(t)
-        if (!alive) return
-        tick()
-        onBeat?.()
-        for (const fn of beatWatchers) fn()
-      }, flashLead(Platform.OS, nudge))
+      const sounding = sound ? click() : null
+      if (sound && n++ >= 2) probeLag(sounding, lags, flashLead(Platform.OS, nudge), asked)
+      /* The flash and the tap wait for the sound: see FLASH_LEAD. Read each beat, so Flash timing moves it at once. In silence there is no sound to wait for. */
+      const t = setTimeout(
+        () => {
+          later.delete(t)
+          if (!alive) return
+          if (sound) tick()
+          if (flash) onBeat?.()
+          for (const fn of beatWatchers) fn()
+        },
+        sound ? flashLead(Platform.OS, nudge) : 0
+      )
       later.add(t)
       const due = nextBeat(startedAt, Date.now(), beat)
       timer = setTimeout(step, Math.max(0, due - Date.now()))
     }
-    clearTimeout(releaseTimer)
-    releaseTimer = null
+    if (sound) {
+      clearTimeout(releaseTimer)
+      releaseTimer = null
+    }
     setClicking(true)
-    prepareClick().finally(() => {
+    /* The sound is made ready only where there is one: a beat kept in silence opens no audio. */
+    ;(sound ? prepareClick() : Promise.resolve()).finally(() => {
       if (!alive) return
       startedAt = Date.now()
       step()
@@ -471,8 +520,8 @@ export function usePhoneClick(bpm, onBeat) {
       for (const t of later) clearTimeout(t)
       later.clear()
       setClicking(false)
-      releaseLater()
+      if (sound) releaseLater()
     }
-  }, [on, beat, onBeat])
+  }, [on, sound, flash, beat, onBeat])
   return running
 }

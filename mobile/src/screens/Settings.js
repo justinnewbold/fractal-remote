@@ -37,7 +37,8 @@ import MissingPick from '../components/MissingPick'
 import { playingOf } from '../lib/relay-rules'
 import UnitCard, { NotUsingOne } from '../components/UnitCard'
 import { useRig } from '../lib/rig'
-import { setFlashTiming, setMetronome, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
+import { setEdgeFlash, setFlashTiming, setMetronome, useEdgeFlash, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
+import { EDGE_WORDS } from '../lib/edgeFlash'
 import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, nudgeFloor, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
@@ -528,6 +529,8 @@ export default function Settings({
   const clickHeard = useUnitHeardOn(rigSlug)
   /* Flash timing, offered wherever the phone's own click can be the one that sounds. */
   const flashTiming = useFlashTiming()
+  /* The flash round the edge as a choice, and whether this account is offered it (lib/edgeFlash). */
+  const edgeChoice = useEdgeFlash()
   const phoneMayClick = clicks({ ...clickSetting, on: true }, unitCan.can, clickHeard).phone
   /* Which one, and told when it changes. Read as `demoUnit()` this never
      redrew, so the five buttons stayed lit on whichever unit the app started
@@ -1821,6 +1824,22 @@ export default function Settings({
                   : ''
               }`}
             </Note>
+            {/*
+              THE FLASH, AS A CHOICE (lib/edgeFlash). "On the phone have an
+              option for the screen to flash somewhere like the outside edge
+              of the screen." Off, the click and the tap carry on with no
+              light; on with the click on the unit alone, the edge lights in
+              silence. Drawn only for an account it is offered to.
+            */}
+            {edgeChoice.offered ? (
+              <>
+                <Section>{EDGE_WORDS.section}</Section>
+                <Press label={edgeChoice.on ? EDGE_WORDS.on : EDGE_WORDS.off} tone="live" on={edgeChoice.on} onPress={() => setEdgeFlash(!edgeChoice.on)} />
+                <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
+                  {`${EDGE_WORDS.note(deviceNoun())}${edgeChoice.on && unitCan.can && clickSetting.where !== 'phone' ? ` ${EDGE_WORDS.apart}` : ''}`}
+                </Text>
+              </>
+            ) : null}
             {/*
               FLASH TIMING. "The visual edge screen flash is not actually
               matching up with the sound that the phone makes." The flash now

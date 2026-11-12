@@ -6840,6 +6840,8 @@ addToSetlist(test)
 console.log('\nall presets as a wheel, a choice beside the list, his account only')
 const { run: presetWheel } = await import('./preset-wheel.mjs')
 presetWheel(test)
+const { run: edgeFlash } = await import('./edge-flash.mjs')
+edgeFlash(test)
 
 console.log('\nPlay’s tiles as squares on a big screen, and a phone held upright as it was')
 const { run: squarePlay } = await import('./square-play.mjs')
