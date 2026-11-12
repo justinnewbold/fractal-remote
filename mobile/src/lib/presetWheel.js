@@ -38,8 +38,26 @@ export const presetWheelOn = ({ admin = false, everyone = false } = {}) => admin
 /** Where the choice is kept, on the device (lib/store carries keys that start `fractal.`). */
 export const WHEEL_KEY = 'fractal.presetWheel'
 
-/** What a device has until somebody chooses: the list, and clicks for the day the wheel is chosen. */
-export const WHEEL_DEFAULT = Object.freeze({ on: false, clicks: true })
+/** What a device has until somebody chooses: the list, and clicks for the day the wheel is chosen, heard and felt. */
+export const WHEEL_DEFAULT = Object.freeze({ on: false, clicks: true, feel: 'both' })
+
+/*
+ * WHAT A CLICK IS MADE OF. "On the clicker, it's mostly the sound not
+ * matching ... maybe there's an option we can add also that we're just the
+ * sound. Is there instead of the haptic feedback or vice versa?" (Justin,
+ * 12 November 2026.) The sound and the tap are asked of the device by two
+ * different roads, and the sound's is the slower, so a player can have
+ * both, the sound alone, or the tap alone. (`clicks`, the tick box over
+ * these, is still what turns all of it off.)
+ */
+export const WHEEL_FEELS = Object.freeze(['both', 'sound', 'tap'])
+
+/** What a setting asks for on each preset that passes: `{ sound, tap }`. Nothing with the clicks off. */
+export function wheelFeel(setting) {
+  if (setting?.clicks !== true) return { sound: false, tap: false }
+  const feel = WHEEL_FEELS.includes(setting?.feel) ? setting.feel : WHEEL_DEFAULT.feel
+  return { sound: feel !== 'tap', tap: feel !== 'sound' }
+}
 
 /** The setting out of whatever is on disk: anything unreadable is the default, and each half is true or false and nothing else. */
 export function wheelSetting(storage) {
@@ -52,7 +70,8 @@ export function wheelSetting(storage) {
   const kept = raw && typeof raw === 'object' ? raw : {}
   return {
     on: typeof kept.on === 'boolean' ? kept.on : WHEEL_DEFAULT.on,
-    clicks: typeof kept.clicks === 'boolean' ? kept.clicks : WHEEL_DEFAULT.clicks
+    clicks: typeof kept.clicks === 'boolean' ? kept.clicks : WHEEL_DEFAULT.clicks,
+    feel: WHEEL_FEELS.includes(kept.feel) ? kept.feel : WHEEL_DEFAULT.feel
   }
 }
 
@@ -61,6 +80,7 @@ export function saveWheel(patch, storage) {
   const next = { ...wheelSetting(storage) }
   if (typeof patch?.on === 'boolean') next.on = patch.on
   if (typeof patch?.clicks === 'boolean') next.clicks = patch.clicks
+  if (WHEEL_FEELS.includes(patch?.feel)) next.feel = patch.feel
   try {
     storage?.setItem?.(WHEEL_KEY, JSON.stringify(next))
   } catch {
@@ -77,7 +97,9 @@ export const WHEEL_WORDS = Object.freeze({
   wheel: 'Wheel',
   wheelSub: 'Run your thumb round the wheel to move through your presets, slowly for one at a time or with a flick to fly through them, then press Load. Nothing loads until you do.',
   clicks: 'Click and tap as the wheel turns',
-  clicksSub: 'A click you hear and a small tap you feel for each preset that passes. No sound in silent mode.'
+  clicksSub: 'A click you hear and a small tap you feel for each preset that passes. No sound in silent mode.',
+  feels: Object.freeze({ both: 'Sound and tap', sound: 'Sound only', tap: 'Tap only' }),
+  feelSub: 'The tap usually lands closer to the preset than the sound does.'
 })
 
 /* -------------------------------------------------------------- the wheel */
@@ -365,6 +387,37 @@ export function wheelDrawn(centre, reach, count) {
 export const wheelAround = (at, count, reach = WHEEL_REACH) => wheelDrawn(at, reach, count)
 /** Rows either side of the bar that a screen shows, with a few to spare. */
 export const WHEEL_REACH = 8
+
+/*
+ * FLYING. "It also lags quite a bit too if you scroll really fast, it
+ * doesn't keep up" (Justin, 12 November 2026). Drawing the rows again is
+ * the slowest thing the wheel does, and at speed it was doing it every
+ * frame for names nobody can read as they pass. So past WHEEL_FLY_FROM
+ * presets a second the rows are put away and ONE line says where the list
+ * is: the slot it is passing, big, with its name under it, as the music
+ * player showed a letter over a list that was flying. Nothing is drawn
+ * again until the list slows under WHEEL_FLY_UNTIL, or stops, and then
+ * the rows come back once, round where it is. The gap between the two
+ * numbers is so it does not flick in and out at one speed.
+ */
+export const WHEEL_FLY_FROM = 40
+export const WHEEL_FLY_UNTIL = 18
+/** The least time between two changes of the flying line: a number that changes faster than this cannot be read either. */
+export const WHEEL_FLY_SAY_MS = 50
+
+/** How fast the list is moving, in rows a second, kept from one move to the next: `{ at, rate }`. A move after a rest starts from nothing. */
+export function wheelPace(was, moved, now = 0) {
+  const at = Number(now) || 0
+  const gap = at - (was?.at || 0)
+  if (!was || gap > WHEEL_STILL_MS) return { at, rate: 0 }
+  /* Two moves in the same instant are one: the next one counts them both. */
+  if (!(gap > 0)) return was
+  const just = (Math.abs(Number(moved) || 0) / gap) * 1000
+  return { at, rate: was.rate + (just - was.rate) * (1 - Math.exp(-gap / WHEEL_SPEED_MS)) }
+}
+
+/** Whether the list is flying, from whether it was and how fast it is going now. */
+export const wheelFlying = (was, rate) => (was === true ? rate > WHEEL_FLY_UNTIL : rate >= WHEEL_FLY_FROM)
 
 /* -------------------------------------------------------------- the click */
 

@@ -61,7 +61,7 @@ import {
 } from '../lib/gigSize'
 import { REPLAY } from '../lib/onboarding'
 import { sync, useStored } from '../lib/store'
-import { WHEEL_WORDS, saveWheel, wheelSetting } from '../lib/presetWheel'
+import { WHEEL_FEELS, WHEEL_WORDS, saveWheel, wheelSetting } from '../lib/presetWheel'
 import { usePresetWheelOffered } from '../lib/usePresetWheel'
 import { isPairAccount } from '../lib/pairing'
 import { mayDrive, mayDriveBluetooth } from '../lib/unlock-rule'
@@ -2352,6 +2352,19 @@ function TileSize({ onScrollLock }) {
           {wheel.on ? (
             <Choice on={wheel.clicks} label={WHEEL_WORDS.clicks} sub={WHEEL_WORDS.clicksSub} onPress={() => saveWheel({ clicks: !wheel.clicks }, sync)} />
           ) : null}
+          {/* Which halves of the click: the sound, the tap, or both. "Maybe there's an option ... just the sound ... instead of the haptic feedback or vice versa." Only while it clicks at all. */}
+          {wheel.on && wheel.clicks
+            ? WHEEL_FEELS.map((feel) => (
+                <Choice
+                  key={feel}
+                  role="radio"
+                  on={wheel.feel === feel}
+                  label={WHEEL_WORDS.feels[feel]}
+                  sub={feel === 'tap' ? WHEEL_WORDS.feelSub : undefined}
+                  onPress={() => saveWheel({ feel }, sync)}
+                />
+              ))
+            : null}
         </>
       ) : null}
     </View>

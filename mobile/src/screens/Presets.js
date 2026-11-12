@@ -15,7 +15,7 @@ import { ADDED_MS, ADD_WORDS, COLOUR_AFTER_MS, addChoices, addedSays, landedIn }
 import { useAddToSetlist } from '../lib/useAddToSetlist'
 import { sync, useStored } from '../lib/store'
 /* All presets as a wheel, where Settings has chosen it (lib/presetWheel): the same rows, drawn by components/PresetWheel. */
-import { wheelSetting } from '../lib/presetWheel'
+import { wheelFeel, wheelSetting } from '../lib/presetWheel'
 import { usePresetWheelOffered } from '../lib/usePresetWheel'
 import PresetWheel from '../components/PresetWheel'
 import { loadPreset, useRig } from '../lib/rig'
@@ -597,6 +597,7 @@ export default function Presets({ onBack, stay = false }) {
           row={(n) => rowOf(n, true)}
           startAt={!hunting && slots && Number.isInteger(preset?.number) ? Math.min(preset.number, slots - 1) : 0}
           clicks={wheelKept.clicks}
+          feel={wheelFeel(wheelKept)}
           onAround={around}
           empty={emptyRows}
           footer={lastLine}
