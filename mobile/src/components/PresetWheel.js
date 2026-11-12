@@ -1,8 +1,9 @@
-import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Animated, PanResponder, Platform, Pressable, Text, View } from 'react-native'
 
 import { color, font, mono, space } from '../lib/theme'
 import {
+  WHEEL_FLY_SAY_MS,
   WHEEL_GAP,
   WHEEL_NAME,
   WHEEL_NAME_ROUND,
@@ -20,10 +21,12 @@ import {
   wheelDrawn,
   wheelFlow,
   wheelFlowStart,
+  wheelFlying,
   wheelGain,
   wheelGlideAt,
   wheelLayout,
   wheelLetGo,
+  wheelPace,
   wheelPlace,
   wheelRow,
   wheelSettle,
@@ -39,6 +42,8 @@ const face = Platform.select(mono)
 const WHEEL_END = 44
 /* What the middle button says. */
 export const WHEEL_LOAD = 'Load'
+/* A click's two halves, both wanted unless the setting says otherwise. */
+const BOTH = Object.freeze({ sound: true, tap: true })
 /* The marks on the ring that go round with it: eight, so a fast spin still reads as turning the way it is. */
 const WHEEL_MARKS = [0, 45, 90, 135, 180, 225, 270, 315]
 
@@ -64,12 +69,17 @@ const stamp = (e) => Number(e?.nativeEvent?.timestamp) || Date.now()
  * words, press, hold and star). `listRef` is given the two things the
  * screen asks of its list: toRow(i) and toTop().
  */
-export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = true, onAround, footer = null, empty = null }) {
+export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = true, feel = BOTH, onAround, footer = null, empty = null }) {
   const count = data.length
   const counted = useRef(count)
   counted.current = count
   const clicking = useRef(clicks)
   clicking.current = clicks
+  /* Which halves of a click are wanted: the sound, the tap, or both (lib/presetWheel wheelFeel). */
+  const feeling = useRef(feel)
+  feeling.current = feel
+  const items = useRef(data)
+  items.current = data
   const around = useRef(onAround)
   around.current = onAround
 
@@ -111,17 +121,47 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
     [marks]
   )
 
+  /* The rows drawn again, round the preset under the bar: the one place they are. */
+  const redraw = useCallback(() => {
+    if (drawn.current === on.current) return
+    drawn.current = on.current
+    setCentre(on.current)
+  }, [])
+
+  /*
+   * FLYING (lib/presetWheel has the why): past a speed the rows are put
+   * away and one line says the slot the list is passing, so nothing is
+   * drawn again while it flies. `pace` is how fast the list is moving;
+   * `soaring` whether it is flying this instant; `line` is that one line,
+   * told where the list is a few times a second. It lands when the list
+   * slows, when it comes to rest, or when no move has come for a moment
+   * (a thumb stopped dead on the ring), and the rows come back once.
+   */
+  const pace = useRef(null)
+  const soaring = useRef(false)
+  const [flying, setFlying] = useState(false)
+  const line = useRef(null)
+  const lineSaid = useRef(0)
+  const landing = useRef(null)
+  const land = useCallback(() => {
+    clearTimeout(landing.current)
+    if (soaring.current) {
+      soaring.current = false
+      setFlying(false)
+    }
+    redraw()
+  }, [redraw])
+  useEffect(() => () => clearTimeout(landing.current), [])
+
   /* The names around the bar are asked for once the list rests, never during a spin or a coast: each name is a read of the unit (lib/presetNames). */
   const rest = useRef(null)
   const calm = useCallback(() => {
-    if (drawn.current !== on.current) {
-      drawn.current = on.current
-      setCentre(on.current)
-    }
+    pace.current = null
+    land()
     setRested(on.current)
     clearTimeout(rest.current)
     rest.current = setTimeout(() => around.current?.(wheelAround(on.current, counted.current)), WHEEL_REST_MS)
-  }, [])
+  }, [land])
   useEffect(() => () => clearTimeout(rest.current), [])
 
   /*
@@ -135,24 +175,35 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
     (place, loud = true) => {
       const next = wheelPlace(place, counted.current)
       if (next < 0) return
+      const now = Date.now()
+      pace.current = wheelPace(pace.current, next - where.current, now)
       where.current = next
       slide.setValue(-next * WHEEL_ROW)
       const under = wheelUnder(next, on.current, counted.current)
-      if (under === on.current) return
+      const passed = under !== on.current
       on.current = under
-      if (loud && clicking.current) {
-        const now = Date.now()
-        if (clickDue(now, lastClick.current)) {
-          lastClick.current = now
-          wheelClick()
+      if (passed && loud && clicking.current && clickDue(now, lastClick.current)) {
+        lastClick.current = now
+        wheelClick(feeling.current)
+      }
+      /* Flying, or not: the rows are put away past a speed, and nothing is drawn again until it lands. */
+      const fly = wheelFlying(soaring.current, pace.current.rate)
+      if (fly && !soaring.current) {
+        soaring.current = true
+        setFlying(true)
+      } else if (!fly && soaring.current) land()
+      if (soaring.current) {
+        if (now - lineSaid.current >= WHEEL_FLY_SAY_MS) {
+          lineSaid.current = now
+          line.current?.say(under)
         }
+        clearTimeout(landing.current)
+        landing.current = setTimeout(land, WHEEL_STILL_MS)
+        return
       }
-      if (Math.abs(under - drawn.current) >= WHEEL_REDRAW) {
-        drawn.current = under
-        setCentre(under)
-      }
+      if (passed && Math.abs(under - drawn.current) >= WHEEL_REDRAW) redraw()
     },
-    [slide]
+    [land, redraw, slide]
   )
 
   /*
@@ -229,12 +280,13 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
     calm()
   }, [calm])
 
-  /* The sound's players live as long as a wheel that clicks is on screen. */
+  /* The sound's players live as long as a wheel that clicks out loud is on screen: none are made for a wheel that only taps. */
+  const heard = clicks && feel?.sound !== false
   useEffect(() => {
-    if (!clicks) return undefined
+    if (!heard) return undefined
     openWheelClick()
     return closeWheelClick
-  }, [clicks])
+  }, [heard])
 
   /*
    * THE RING. Where the thumb is round the middle is read from the touch
@@ -356,7 +408,7 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
         <>
           <View {...rows.panHandlers} style={{ height: plan.rows * WHEEL_ROW, overflow: 'hidden' }}>
             {/* The strip: every drawn preset at its own place down it, and the whole of it slid under the bar. */}
-            <Animated.View style={{ position: 'absolute', left: space.lg, right: space.lg, top: plan.middle * WHEEL_ROW, height: count * WHEEL_ROW, transform: [{ translateY: slide }] }}>
+            <Animated.View style={{ position: 'absolute', left: space.lg, right: space.lg, top: plan.middle * WHEEL_ROW, height: count * WHEEL_ROW, opacity: flying ? 0 : 1, transform: [{ translateY: slide }] }}>
               {strip.map((index) => (
                 <WheelSlot key={index % pool} index={index} item={data[index]} look={look} handed={handed.current} />
               ))}
@@ -366,7 +418,7 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
               pointerEvents="none"
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
-              style={{ position: 'absolute', left: space.lg, right: space.lg, top: plan.middle * WHEEL_ROW, height: WHEEL_ROW, borderRadius: 10, backgroundColor: color.silk, overflow: 'hidden' }}
+              style={{ position: 'absolute', left: space.lg, right: space.lg, top: plan.middle * WHEEL_ROW, height: WHEEL_ROW, borderRadius: 10, backgroundColor: color.silk, overflow: 'hidden', opacity: flying ? 0 : 1 }}
             >
               <Animated.View style={{ position: 'absolute', left: 0, right: 0, top: 0, height: count * WHEEL_ROW, transform: [{ translateY: slide }] }}>
                 {wheelDrawn(centre, WHEEL_SPARE, count).map((index) => (
@@ -374,6 +426,8 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
                 ))}
               </Animated.View>
             </View>
+            {/* While the list flies: the one line that says where it is, in the rows' place. */}
+            <WheelFlying ref={line} shown={flying} items={items} look={look} start={on.current} />
           </View>
 
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: WHEEL_GAP }}>
@@ -459,6 +513,32 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
     </View>
   )
 }
+
+/**
+ * THE LINE THAT SAYS WHERE A FLYING LIST IS: the slot it is passing, big,
+ * and that preset's name under it. Its own small piece, told where the list
+ * is (`say`) a few times a second, so nothing else on the wheel is drawn
+ * again for it. It takes no touch, and a screen reader is not told a
+ * number that changes many times a second: the ring says the preset when
+ * the list rests.
+ */
+const WheelFlying = forwardRef(function WheelFlying({ shown, items, look, start = 0 }, ref) {
+  const [at, setAt] = useState(start)
+  useImperativeHandle(ref, () => ({ say: (index) => setAt(index) }), [])
+  if (!shown) return null
+  const item = items.current[at]
+  const says = item === undefined ? null : look.current(item)
+  return (
+    <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: 'absolute', left: space.lg, right: space.lg, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+      <Text numberOfLines={1} style={{ color: color.silk, fontSize: 44, fontWeight: '700', fontFamily: face }}>
+        {String(says?.sub || '').split(' · ')[0]}
+      </Text>
+      <Text numberOfLines={1} style={{ color: color.silkDim, fontSize: WHEEL_NAME, fontWeight: '700' }}>
+        {says?.label || ''}
+      </Text>
+    </View>
+  )
+})
 
 /**
  * ONE PLACE ON THE STRIP. A preset sits at its own place down the strip,

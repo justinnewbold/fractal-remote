@@ -54,6 +54,7 @@ const PLAYERS = IOS ? 4 : 1
 let players = null
 let turn = 0
 let users = 0
+const BOTH = Object.freeze({ sound: true, tap: true })
 
 const quietly = (run) => {
   try {
@@ -92,10 +93,15 @@ export function closeWheelClick() {
 /* The tap. An iPhone's is the picker's own. Android has one made for exactly this, the tick of a clock's dial being turned, which the phone plays itself with nothing to wait for; an Android too old to have it gets the picker's. */
 const tap = () => (!IOS && Haptics.performAndroidHapticsAsync && Haptics.AndroidHaptics?.Clock_Tick ? Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Clock_Tick) : Haptics.selectionAsync())
 
-/** One click: the tap, and the sound if the players are there. */
-export function wheelClick() {
-  quietly(tap)
-  if (!players) return
+/**
+ * One click: the tap, and the sound if the players are there. `feel` says
+ * which halves are wanted (lib/presetWheel wheelFeel): both, unless told.
+ * "Maybe there's an option ... just the sound ... instead of the haptic
+ * feedback or vice versa" (Justin, 12 November 2026).
+ */
+export function wheelClick(feel = BOTH) {
+  if (feel?.tap !== false) quietly(tap)
+  if (feel?.sound === false || !players) return
   quietly(() => {
     if (!IOS) {
       const back = players[0].seekTo(0)

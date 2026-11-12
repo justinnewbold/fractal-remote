@@ -1209,6 +1209,19 @@ tick box, Click and tap as the wheel turns). Kept on the device
   played quietly: silent in silent mode, over a backing track rather than
   stopping it. The metronome's own out-loud mode is never set back by it
   (lib/audioMode.js).
+- **Sound, tap or both, and a flying line (12 November 2026).** Asked
+  which part was worst: "it's mostly the sound not matching. But it also
+  lags quite a bit too if you scroll really fast, it doesn't keep up..
+  maybe there's an option we can add also that we're just the sound. Is
+  there instead of the haptic feedback or vice versa?" So while the wheel
+  clicks, Settings offers Sound and tap, Sound only, Tap only (the
+  setting's `feel`; `wheelFeel` says which halves a click is made of, and
+  no sound is loaded for a wheel that only taps). And past 40 presets a
+  second the rows are put away and one line says the slot the list is
+  passing, big, with its name under it (`wheelFlying`, `WheelFlying`):
+  drawing the rows again was the slowest thing the wheel did, every frame,
+  for names nobody could read. They come back once when it slows under
+  18, rests, or a thumb stops dead.
 - **What an update cannot do:** the tap and the click are asked for
   through Expo's own haptics and sound, which answer a few hundredths of
   a second after they are asked. Making them land dead on the row needs a
