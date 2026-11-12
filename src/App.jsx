@@ -6094,6 +6094,20 @@ export default function App() {
               </span>
             </button>
 
+            {/*
+              AMP & PEDAL NAMES, ITS OWN BUTTON, RIGHT UNDER THE ACCOUNT, as
+              on the phone: "Let's move the amp and pedal button out of the
+              Help menu and make it its own button in the settings menu. Put
+              it right below the profile menu." (Justin, 12 November 2026.)
+              The row it always was, in a list of one, in no section.
+            */}
+            <div className="setup-rows setup-door">
+              <SetupRow key="gear-names" title="Amp & pedal names" status="What each model on your unit really is" onClick={() => {
+                  setSheetBack('settings')
+                  setSheet('gear')
+                }} />
+            </div>
+
             <SetupGroup title="My rig" hint={pairSaid}>
               <div className="setup-rows">
                 {/* One row for the whole chain: this end, the computer, and the unit plugged into it. */}
@@ -6147,10 +6161,6 @@ export default function App() {
                   names that path; this is another way in to the same form.
                 */}
                 <SetupRow key="feedback" title="Feedback" status={FEEDBACK_LINE} onClick={() => setSetupPage('feedback')} />
-                <SetupRow key="gear-names" title="Amp & pedal names" status="What each model on your unit really is" onClick={() => {
-                    setSheetBack('settings')
-                    setSheet('gear')
-                  }} />
                 <SetupRow
                   key="walkthrough"
                   title={REPLAY}

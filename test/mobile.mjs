@@ -145,7 +145,8 @@ async function clickOnTheBench(os = 'ios') {
       export const readUnitMetronome = async () => { reads++; return switchAt }
     `,
     'rig.js': "export const useRig = (pick) => pick({ deviceSlug: 'fm3' })\n",
-    'bluetooth.js': 'export const useBluetoothOn = () => false\n',
+    /* Whose account it is, for what is offered to his alone (the flash as a choice): nobody's, unless a test says so. */
+    'bluetooth.js': 'export const useBluetoothOn = () => false\nexport const useBluetoothAdmin = () => globalThis.__clickAdmin === true\n',
     'demo.js': 'export const isDemo = () => false\n',
     'feedback.js': 'export let ticks = 0\nexport const tick = () => { ticks++ }\n',
     'debugLog.js': 'export const said = []\nexport const logDebug = (...a) => said.push(a.join(" "))\n',
@@ -179,6 +180,9 @@ async function clickOnTheBench(os = 'ios') {
     'device-word.js': read('mobile/src/lib/device-word.js'),
     /* Who has set how the device plays sound (the metronome marks it, the preset wheel's click reads it): as it is. */
     'audioMode.js': read('mobile/src/lib/audioMode.js'),
+    /* The flash as a choice: its rules as they are, and its switch off, as it is for every account but his. */
+    'edgeFlash.js': read('mobile/src/lib/edgeFlash.js'),
+    'features.js': 'export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false\n',
     'metronome.js': ("import * as __clock from './clock.js'\n" + esm(read('mobile/src/lib/metronome.js')))
       .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
       .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
@@ -5702,7 +5706,7 @@ export function run(test) {
     assert.match(m.metronomeNote(unit, 'am4', 120), /only the phone keeps time/)
     /* The phone's own click hears the same rule, from the unit and the link it is on. */
     const metronome = read('mobile/src/lib/metronome.js').replace(/\s+/g, ' ')
-    assert.match(metronome, /const \{ can, heard: heardOn \} = useUnitCan\(\) const on = clicks\(s, can, heardOn\)\.phone/, 'the phone stays silent where the unit cannot click')
+    assert.match(metronome, /const \{ can, heard: heardOn \} = useUnitCan\(\) const sound = clicks\(s, can, heardOn\)\.phone/, 'the phone stays silent where the unit cannot click')
     assert.match(metronome, /const can = unitClick\(slug, here\)\.can const before = clicks\(setting, can\)\.unit/)
     assert.match(metronome, /if \(!clicks\(setting, unitClick\(slug, \{ bluetooth \}\)\.can\)\.unit\) \{ stopFollowing\(\) return \} switchUnit\(slug, true\)/)
     /* "ok" only means the unit did not object: what it then says it is at goes into the log. */
@@ -5951,6 +5955,72 @@ export function run(test) {
       const log = await import(pathToFileURL(join(dir, 'debugLog.js')).href)
       assert.ok(log.said.some((l) => /the click starts about 100 ms after the beat; the flash comes 40 ms after it/.test(l)), 'the click’s real delay never reaches the log')
     } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('the edge lights in silence while the unit clicks alone, for an account offered the choice, and the click carries on with the flash switched off', async () => {
+    /*
+     * "On the phone have an option for the screen to flash somewhere like
+     * the outside edge of the screen." (Justin, 12 November 2026.) The flash
+     * was tied to the phone's own click. Now, for his account: with the
+     * click on the unit alone the edge lights and the phone makes no sound
+     * and no tap; and switched off, the click and the tap go on unlit.
+     */
+    const { dir, click, unitEnd, clock, audio, feedback, settle } = await clickOnTheBench('ios')
+    try {
+      unitEnd.__answer(1)
+      await click.setMetronome({ on: true, where: 'unit' }, 'fm3')
+      await clock.advance(0)
+      await settle()
+      assert.equal(click.unitHeardOn('fm3'), true, 'the unit was not heard clicking')
+
+      /* Every other account: the unit clicks, and the phone does nothing at all, as it always has. */
+      globalThis.__clickAdmin = false
+      assert.equal(click.usePhoneClick(120, () => {}), false)
+      assert.equal(globalThis.__clickEffect(), undefined, 'a beat is kept for an account the choice is not offered to')
+
+      /* His: the edge lights on every beat, with no sound, no tap and no audio opened. */
+      globalThis.__clickAdmin = true
+      const flashes = []
+      assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true)
+      const stop = globalThis.__clickEffect()
+      const from = clock.now()
+      await clock.advance(1600)
+      assert.deepEqual(flashes.map((t) => t - from), [0, 500, 1000, 1500], 'the light is not on the beat')
+      assert.equal(audio.made.length, 0, 'a silent beat made a player')
+      assert.ok(!audio.calls.some((c) => /^(play|mode|session)/.test(c)), `a silent beat touched the sound: ${audio.calls.join(', ')}`)
+      assert.equal(feedback.ticks, 0, 'a silent beat tapped')
+      stop()
+      await clock.advance(3000)
+      assert.equal(flashes.length, 4, 'the light goes on after the beat is stopped')
+      assert.ok(!audio.calls.some((c) => c.startsWith('session')), 'stopping a silent beat let go of audio it never took')
+
+      /* Switched off: nothing is kept for the unit's click. */
+      click.setEdgeFlash(false)
+      assert.equal(click.usePhoneClick(120, () => {}), false)
+      assert.equal(globalThis.__clickEffect(), undefined)
+
+      /* And with the phone clicking, off is no light: the click and the tap carry on. */
+      await click.setMetronome({ where: 'phone' }, 'fm3')
+      const lit = []
+      assert.equal(click.usePhoneClick(120, () => lit.push(1)), true)
+      const stopClick = globalThis.__clickEffect()
+      await clock.advance(1100)
+      assert.ok(audio.calls.filter((c) => c.startsWith('play')).length >= 2, 'the click stopped with the flash')
+      assert.ok(feedback.ticks >= 2, 'the tap stopped with the flash')
+      assert.deepEqual(lit, [], 'the edge lit with the flash switched off')
+      stopClick()
+
+      /* Back on: the light is with the click again. */
+      click.setEdgeFlash(true)
+      assert.equal(click.usePhoneClick(120, () => lit.push(1)), true)
+      const stopLit = globalThis.__clickEffect()
+      await clock.advance(700)
+      assert.ok(lit.length >= 1)
+      stopLit()
+    } finally {
+      globalThis.__clickAdmin = false
       rmSync(dir, { recursive: true, force: true })
     }
   })
@@ -6499,7 +6569,7 @@ export function run(test) {
       rmSync(dir, { recursive: true, force: true })
     }
     const metronome = read('mobile/src/lib/metronome.js').replace(/\s+/g, ' ')
-    assert.match(metronome, /tick\(\) onBeat\?\.\(\) for \(const fn of beatWatchers\) fn\(\)/, 'the light, the flash and the tap are not on the same beat')
+    assert.match(metronome, /if \(sound\) tick\(\) if \(flash\) onBeat\?\.\(\) for \(const fn of beatWatchers\) fn\(\)/, 'the light, the flash and the tap are not on the same beat')
   })
 
   test('the browser flashes on the beep as it is heard, and takes back beeps not yet heard when it stops', () => {
@@ -6647,7 +6717,7 @@ export function run(test) {
     const hook = lib.slice(lib.indexOf('export function usePhoneClick'))
     assert.match(hook, /const running = Boolean\(on && beat\)/, 'the phone is kept awake on something other than the click running')
     assert.match(hook, /if \(!on \|\| !beat\) return undefined/, 'the click and the keep-awake no longer start on the same thing')
-    assert.match(hook, /\}, \[on, beat, onBeat\]\)\s*return running\s*\}/, 'usePhoneClick no longer says whether it is clicking')
+    assert.match(hook, /\}, \[on, sound, flash, beat, onBeat\]\)\s*return running\s*\}/, 'usePhoneClick no longer says whether it is clicking')
 
     /* No new package: the one the Play screen already uses, so nothing native moves. */
     assert.ok(JSON.parse(read('mobile/package.json')).dependencies['expo-keep-awake'], 'expo-keep-awake is gone from the phone')
@@ -9496,6 +9566,13 @@ export function run(test) {
      * one row, on his account only.
      */
     assert.deepEqual(order, [
+      /*
+       * "Let's move the amp and pedal button out of the Help menu and make
+       * it its own button in the settings menu. Put it right below the
+       * profile menu." (12 November 2026.) Its own button, in no section,
+       * first under the account card.
+       */
+      'Amp & pedal names',
       '# My rig',
       /*
        * "Move the Bluetooth card from the phone and computer menu to its own
@@ -9519,7 +9596,6 @@ export function run(test) {
        * which keeps its own Feedback row too.
        */
       'Feedback',
-      'Amp & pedal names',
       'REPLAY',
       'Apple Watch',
       /* "When you click on that, it shows the sub menus instead of just another

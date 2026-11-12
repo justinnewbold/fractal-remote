@@ -7944,6 +7944,7 @@ export function run(test) {
       'About 30 feet of range.',
       'The adapter connects to one thing at a time.',
       'On the AM4, scene names take a moment the first time a preset is seen.',
+      'On the FM3, FM9 and Axe-Fx III, a cab is chosen with the computer.',
       'No looper, volume button, unit metronome click or Footswitches page.'
     ]) {
       assert.ok(page.includes(`'${line}'`), `the page does not say: ${line}`)
@@ -11498,9 +11499,13 @@ export function run(test) {
     /* Closed: today's words, letter for letter. */
     assert.equal(ew.editingLine(false), 'No editing or saving over Bluetooth.')
     assert.equal(ew.limitsLine(false), 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. No editing or saving.')
-    /* Open: what Edit does, and that nothing saves. */
-    assert.equal(ew.editingLine(true), 'Knobs, models and effects on and off change in Edit. No saving over Bluetooth: save on the unit itself.')
-    assert.equal(ew.limitsLine(true), 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. Knobs, models and effects on and off change in Edit. No saving over Bluetooth: save on the unit itself.')
+    /* Open: what Edit does is the paragraph's, and what still needs the computer is the list's first line. Each said once: the page used to say one sentence in both places. */
+    assert.equal(ew.editingLine(true), 'No saving over Bluetooth: save on the unit itself. Moving, adding and removing blocks, modifiers, renaming and copying a channel need the computer.')
+    assert.equal(ew.limitsLine(true), 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. In Edit: knobs, models and effects on and off.')
+    assert.ok(!ew.limitsLine(true).includes(ew.editingLine(true)), 'the page says the same sentence twice')
+    /* Saving is still the computer's: the page may not promise it while the wire says it cannot. */
+    assert.match(src('mobile/src/lib/bleWire.js'), /supportsSave: false/)
+    assert.match(ew.editingLine(true), /^No saving over Bluetooth/)
     /* Anything but a yes is closed. */
     for (const v of [undefined, null, 0, 'yes', 1]) {
       assert.equal(ew.editingLine(v), ew.NO_EDITING_LINE)

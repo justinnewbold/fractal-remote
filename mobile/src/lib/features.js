@@ -194,3 +194,17 @@ export const ADD_TO_SETLIST_FOR_EVERYONE = true
  * says so, with its What's new line in that pull request.
  */
 export const PRESET_WHEEL_FOR_EVERYONE = false
+
+/**
+ * THE METRONOME'S FLASH ROUND THE EDGE OF THE SCREEN, AS A CHOICE
+ * (lib/edgeFlash): a switch on Settings → Metronome that turns the flash
+ * off, and that lets it run without the device's own click, so the screen
+ * lights in silence while the unit clicks. "On the phone have an option for
+ * the screen to flash somewhere like the outside edge of the screen"
+ * (Justin, 12 November 2026). Built on his account first, as every new
+ * thing is. Off, the switch is drawn for his account only, and for every
+ * other account the edge flashes with the device's own click and never
+ * without it, as it always has. It opens to everyone when he says so, with
+ * its What's new line in that pull request.
+ */
+export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false

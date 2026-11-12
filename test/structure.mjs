@@ -1572,8 +1572,9 @@ export function run(test) {
     const phone = readFileSync(new URL('../mobile/src/screens/Settings.js', import.meta.url), 'utf8')
 
     const titles = [...phone.matchAll(/<SetupRow\s+title=(?:"([^"]+)"|\{(PAIR_TITLE)\})/g)].map((m) => m[1] || m[2])
-    /* Settings in groups now: the rig first, then the play screen, then help —
-       where the amp and pedal names went, beside the other things to look up. */
+    /* Settings in groups: the rig first, then help, then about. The amp and
+       pedal names were under Help until 12 November 2026, and are their own
+       button over the groups now. */
     /*
      * PAIR_TITLE is Phone & computer, or iPad & computer on an iPad
      * (device-word.mjs). Bluetooth over it since 7 November 2026, where this
@@ -1581,7 +1582,8 @@ export function run(test) {
      * connection options go"), and Phone & computer first wherever it does
      * not: the row is drawn only behind its gate (test/bluetooth.mjs).
      */
-    assert.deepEqual(titles.slice(0, 2), ['Bluetooth', 'PAIR_TITLE'], `the phone's Setup opens on ${titles.join(', ')}`)
+    /* And over them both, in no section, right under the account card: "Put it right below the profile menu" (12 November 2026). */
+    assert.deepEqual(titles.slice(0, 3), ['Amp & pedal names', 'Bluetooth', 'PAIR_TITLE'], `the phone's Setup opens on ${titles.join(', ')}`)
     assert.ok(titles.includes('Amp & pedal names'), 'the amp and pedal names left Settings')
 
     /* The row's own component, not a colour pasted per row: one place to be
@@ -1650,6 +1652,8 @@ export function run(test) {
     assert.deepEqual(
       rows,
       [
+        /* Its own button, in no section, right under the account card, as on the phone (12 November 2026). */
+        'Amp & pedal names',
         '# My rig',
         /* "Phone & computer", or "iPad & computer" on an iPad: the phone's own name for it (shared/device-word.mjs pairTitle). */
         'PAIR_TITLE',
@@ -1668,7 +1672,6 @@ export function run(test) {
         'Troubleshooting',
         /* The feedback form one tap from Settings, as on the phone; Troubleshooting keeps it too. */
         'Feedback',
-        'Amp & pedal names',
         'REPLAY',
         /*
          * About and Developer list their rows themselves since 2 November

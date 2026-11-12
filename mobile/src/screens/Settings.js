@@ -37,7 +37,8 @@ import MissingPick from '../components/MissingPick'
 import { playingOf } from '../lib/relay-rules'
 import UnitCard, { NotUsingOne } from '../components/UnitCard'
 import { useRig } from '../lib/rig'
-import { setFlashTiming, setMetronome, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
+import { setEdgeFlash, setFlashTiming, setMetronome, useEdgeFlash, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
+import { EDGE_WORDS } from '../lib/edgeFlash'
 import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, nudgeFloor, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
@@ -528,6 +529,8 @@ export default function Settings({
   const clickHeard = useUnitHeardOn(rigSlug)
   /* Flash timing, offered wherever the phone's own click can be the one that sounds. */
   const flashTiming = useFlashTiming()
+  /* The flash round the edge as a choice, and whether this account is offered it (lib/edgeFlash). */
+  const edgeChoice = useEdgeFlash()
   const phoneMayClick = clicks({ ...clickSetting, on: true }, unitCan.can, clickHeard).phone
   /* Which one, and told when it changes. Read as `demoUnit()` this never
      redrew, so the five buttons stayed lit on whichever unit the app started
@@ -719,6 +722,21 @@ export default function Settings({
             }}
           />
 
+          {/*
+            AMP & PEDAL NAMES, ITS OWN BUTTON, RIGHT UNDER THE PROFILE. "Let's
+            move the amp and pedal button out of the Help menu and make it its
+            own button in the settings menu. Put it right below the profile
+            menu." (Justin, 12 November 2026.) It was the third row inside
+            Help, two taps away and behind a heading that does not say it. It
+            is looked up while playing, so it is one tap from Settings now:
+            the row it always was, in a card of its own, in no section.
+          */}
+          {onOpenGear ? (
+            <GlassCard clip bare>
+              <SetupRow title="Amp & pedal names" status="What each model on your unit really is" onPress={onOpenGear} />
+            </GlassCard>
+          ) : null}
+
           <Group title="My rig" hint={pairStatus}>
             {/*
               CONNECT YOUR UNIT, FIRST, since 10 November 2026: "easier for a
@@ -816,11 +834,6 @@ export default function Settings({
             */}
             {onOpenReport ? (
               <SetupRow title="Feedback" status={FEEDBACK_LINE} onPress={onOpenReport} />
-            ) : null}
-            {/* What each model on the unit really is — something to look up
-                while playing, so it sits with the help rather than first. */}
-            {onOpenGear ? (
-              <SetupRow title="Amp & pedal names" status="What each model on your unit really is" onPress={onOpenGear} />
             ) : null}
             {onReplay ? <SetupRow title={REPLAY} status={REPLAY_LINE} onPress={onReplay} /> : null}
             {/* "Add a watch section to the iOS app so that people know how to
@@ -1821,6 +1834,22 @@ export default function Settings({
                   : ''
               }`}
             </Note>
+            {/*
+              THE FLASH, AS A CHOICE (lib/edgeFlash). "On the phone have an
+              option for the screen to flash somewhere like the outside edge
+              of the screen." Off, the click and the tap carry on with no
+              light; on with the click on the unit alone, the edge lights in
+              silence. Drawn only for an account it is offered to.
+            */}
+            {edgeChoice.offered ? (
+              <>
+                <Section>{EDGE_WORDS.section}</Section>
+                <Press label={edgeChoice.on ? EDGE_WORDS.on : EDGE_WORDS.off} tone="live" on={edgeChoice.on} onPress={() => setEdgeFlash(!edgeChoice.on)} />
+                <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
+                  {`${EDGE_WORDS.note(deviceNoun())}${edgeChoice.on && unitCan.can && clickSetting.where !== 'phone' ? ` ${EDGE_WORDS.apart}` : ''}`}
+                </Text>
+              </>
+            ) : null}
             {/*
               FLASH TIMING. "The visual edge screen flash is not actually
               matching up with the sound that the phone makes." The flash now

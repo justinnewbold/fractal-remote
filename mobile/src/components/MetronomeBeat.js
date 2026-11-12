@@ -14,6 +14,11 @@ import { color } from '../lib/theme'
  * with it (usePhoneClick). Over everything and touching nothing — it never
  * takes a press away from the screen under it. Drawn only while the setting
  * says the phone clicks and there is a tempo to click at.
+ *
+ * The frame is a choice for an account offered it (lib/edgeFlash): switched
+ * off, usePhoneClick never calls `onBeat` and the frame stays dark; and with
+ * the click on the unit alone it calls it in silence, so the frame is all
+ * the phone does.
  */
 /** Above the top bar's 3 (components/TopBar), which is the highest thing beside it. */
 const BEAT_Z = 10
