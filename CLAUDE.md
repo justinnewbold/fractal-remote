@@ -1066,7 +1066,7 @@ asked for once, when he says the list is whole. Waiting there now:
 
 So the list is untouched, and the wheel is a choice: Settings → Play screen
 → Tiles & scenes → Preset list (List or Wheel, and while Wheel is chosen a
-tick box, Click and tap as presets pass). Kept on the device
+tick box, Click and tap as the wheel turns). Kept on the device
 (`fractal.presetWheel`), the list until somebody chooses.
 
 - **The switch** is `PRESET_WHEEL_FOR_EVERYONE` in
@@ -1074,46 +1074,58 @@ tick box, Click and tap as presets pass). Kept on the device
   only, and every other account's All presets is the list whatever the
   device has kept. It opens when he says so, with its What's new line in
   that pull request (it has none yet).
-- **Reworked the same day, on his phone's word.** "I tried out the scroll
-  wheel. It's very clunky doesn't match up with the clicks properly. I
-  think on that we probably want to remove the boxes around the outside
-  edge of the presets as well and make the size of the preset names a
-  little smaller. But let's make sure we don't touch the other ones so far
-  just only the new version that's on mine." So:
-  - *A row is never moved.* The first wheel drew its rows closer together
-    away from the middle by moving them, so a preset under a thumb slid at
-    half the thumb's speed. Now a row is only drawn smaller and fainter
-    (`WHEEL_STEPS`, scale and brightness alone), in a short slot (54
-    points, a row 50), and follows the thumb exactly. No translate, ever.
-  - *No boxes.* A preset on the wheel is its name and its slot as two
-    lines of type (components/PresetWheel `WheelPreset`), amber and
-    "Playing" for the one being played, a short bar for a colour tag, the
-    star alone at the end. Two faint lines mark the middle slot, and a
-    name crossing one is the click.
-  - *Smaller names*: `WHEEL_NAME` 19 (it was 22; the list's is 15).
+- **It is a real click wheel, the third version (12 November 2026).** The
+  first two were a scrolling list that clicked, and both felt wrong on his
+  phone: first "very clunky doesn't match up with the clicks properly ...
+  remove the boxes around the outside edge of the presets as well and make
+  the size of the preset names a little smaller", then, after the rows
+  were made to follow the thumb, "it still needs. Research how the iPod
+  touch used to scroll through the songs, but I wanna make it like a wheel
+  right now it doesn't feel like a touch wheel.. and the haptics and the
+  sound still are not matching up properly so when you scroll fast, it
+  doesn't click at the right time when it slows down or at all sometimes".
+  Shown a ring to spin (A) and a drum to drag (B): "let's do number A".
+  - *Why a list could never click on time:* a flicked list coasts on its
+    own and the app can only watch it and click after the fact. The music
+    player this is named for had a ring the thumb ran round; the list
+    moved only while the thumb did, a notch at a time, each notch a click;
+    and a long fast spin geared up. Nothing coasted. DO NOT GO BACK TO A
+    SCROLLING LIST WITH CLICKS ON IT: a test fails on one.
+  - *What it is* (components/PresetWheel.js): a ring under a short list.
+    A notch (15 degrees, 24 to a turn) moves a light bar one preset, and
+    the bar moving, the click and the tap are one step of the same code
+    (`step`). A sustained fast spin is worth two, five, then ten presets a
+    notch (`wheelGear`), so 512 presets are about four turns. The middle
+    button, Load, loads the preset under the bar by that row's own press;
+    a row can be tapped too, and the rows dragged a row for a row, with
+    no coasting.
+  - *No boxes, smaller names:* a preset is its name, slot and star on one
+    line; the row under the bar is the bar (light, dark ink); the one
+    being played is amber and says "Playing". Names 19 under the bar, 17
+    round it. Drawn in the plain colours, never the glass, so Classic is
+    the same.
   - *The click is ready before it is needed* (lib/wheelClick.js): on an
-    iPhone four players take turns and each is rewound two clicks ahead
-    of its turn, and the device's sound is kept awake while a wheel is on
-    screen. The first try rewound and played in one breath and let the
-    sound sleep between clicks, which is what put the click late.
+    iPhone four players take turns, each rewound two clicks ahead of its
+    turn, and the device's sound is kept awake while a wheel is on screen.
   - *The list is not touched.* Its row in screens/Presets is word for word
-    what it was before there was a wheel; the wheel's is a separate early
-    return in `rowOf`, handed the same words, press, hold and star (a test
-    counts each twice). Keep it that way: never bend the list's row to
-    share code with the wheel's.
-- **NOTHING LOADS UNTIL A ROW IS TAPPED.** The middle is where the eye is,
-  never what the unit plays.
+    what it was before there was a wheel ("let's make sure we don't touch
+    the other ones"); for the wheel, `rowOf(n, true)` answers what the
+    same preset says and does (a test counts each of them twice). Never
+    bend the list's row to share code with the wheel's.
+- **NOTHING LOADS UNTIL LOAD OR A ROW IS PRESSED.** The bar is where the
+  eye is, never what the unit plays.
 - **The arithmetic** is mobile/src/lib/presetWheel.js (imports nothing):
-  row i is in the middle at i slots of scroll, so the list stops on a row.
-  The drawing is components/PresetWheel.js, driven straight from the
-  scroll.
+  the turn of a thumb into notches (`wheelSpin`), the gears, the bar's
+  place, and how the room is shared between ring and rows.
 - **The click** is the system's picker tap and the metronome's click
   played quietly: silent in silent mode, over a backing track rather than
-  stopping it, only under a thumb or its flick, and never more than one
-  every 32 ms. The metronome's own out-loud mode is never set back by it
-  (lib/audioMode.js).
-- **The rework has not run on a device either.** Whether it now feels
-  right under a thumb and the click lands on the line are his to say.
+  stopping it, and one for every notch. The metronome's own out-loud mode
+  is never set back by it (lib/audioMode.js).
+- **None of the three has run on a device here.** How far a notch should
+  be, how soon the gears come in, the ring's size and whether the click
+  lands with the notch on his phone are his to say; they are single
+  numbers in lib/presetWheel.js (`WHEEL_NOTCH_DEG`, `WHEEL_GEARS`,
+  `WHEEL_FAST_MS`, `wheelLayout`).
 
 **In Edit the knobs come first.** "In edit move search bar and amp and
 pedal names to the bottom. Have the Bluetooth warning also move to the

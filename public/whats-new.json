@@ -1,6 +1,17 @@
 {
   "days": [
     {
+      "date": "2026-11-12",
+      "day": "12 November 2026",
+      "version": "1.90.38",
+      "lines": [
+        {
+          "text": "On a tablet or other big screen, the button that puts a second screen beside Play is now called Split View (it was Two sides).",
+          "only": null
+        }
+      ]
+    },
+    {
       "date": "2026-11-10",
       "day": "10 November 2026",
       "version": "1.90.31",
@@ -260,25 +271,6 @@
         {
           "text": "The back button inside Settings goes up one page instead of jumping straight to Play, and on the feedback screen it asks before throwing away what you wrote.",
           "only": "android"
-        }
-      ]
-    },
-    {
-      "date": "2026-10-31",
-      "day": "31 October 2026",
-      "version": "1.89.18",
-      "lines": [
-        {
-          "text": "New: What’s new, under Settings → About, lists what each update changed.",
-          "only": null
-        },
-        {
-          "text": "On a wide screen, such as a tablet or a folding phone opened out, Previous and Next sit at the two ends of the buttons under Play.",
-          "only": null
-        },
-        {
-          "text": "Shorter Bluetooth pages, and the heat warning is shown only for the FM3, the one unit that needs it.",
-          "only": null
         }
       ]
     }

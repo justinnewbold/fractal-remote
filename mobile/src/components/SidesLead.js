@@ -104,7 +104,7 @@ export default function SidesLead({
     if (!big) return null
     return (
       <View style={ROW} {...measured}>
-        <Press label={SIDE_WORDS.two} height={HIGH} labelSize={font.small} onPress={onTwo} accessibilityLabel="Show two sides" style={CHIP} />
+        <Press label={SIDE_WORDS.two} height={HIGH} labelSize={font.small} onPress={onTwo} accessibilityLabel="Show Split View" style={CHIP} />
       </View>
     )
   }
@@ -117,7 +117,7 @@ export default function SidesLead({
     return (
       <View style={ROW} {...measured}>
         {toolName}
-        <Press label={SIDE_WORDS.two} height={HIGH} labelSize={font.small} onPress={() => onFull?.(false)} accessibilityLabel="Show two sides" style={CHIP} />
+        <Press label={SIDE_WORDS.two} height={HIGH} labelSize={font.small} onPress={() => onFull?.(false)} accessibilityLabel="Show Split View" style={CHIP} />
       </View>
     )
   }

@@ -1,68 +1,101 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import { Animated, Platform, Pressable, Text, View } from 'react-native'
+import { Animated, PanResponder, Platform, Pressable, Text, View } from 'react-native'
 
 import { color, font, mono, space } from '../lib/theme'
-import { WHEEL_NAME, WHEEL_REST_MS, WHEEL_ROW, WHEEL_SLOT, clickDue, wheelAround, wheelCentre, wheelCurve, wheelOffset, wheelPad } from '../lib/presetWheel'
+import {
+  WHEEL_GAP,
+  WHEEL_NAME,
+  WHEEL_NAME_ROUND,
+  WHEEL_REST_MS,
+  WHEEL_ROW,
+  clickDue,
+  onWheelRing,
+  wheelAngle,
+  wheelAround,
+  wheelDrag,
+  wheelLayout,
+  wheelMove,
+  wheelSpin,
+  wheelSpinStart,
+  wheelWindow
+} from '../lib/presetWheel'
 import { closeWheelClick, openWheelClick, wheelClick } from '../lib/wheelClick'
 import { thud, tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
 
 const face = Platform.select(mono)
 
-/* How wide the star's place is at the end of a row, and the colour tag's at its start: a thumb's 44, so the name between them is in the middle of the screen. */
+/* How wide the star's place is at the end of a row: a thumb's 44. */
 const WHEEL_END = 44
+/* What the middle button says. */
+export const WHEEL_LOAD = 'Load'
 
 /**
- * ALL PRESETS AS A WHEEL (lib/presetWheel has the why and the arithmetic).
+ * ALL PRESETS ON A CLICK WHEEL (lib/presetWheel has the why and the
+ * arithmetic).
  *
- * The rows are names with no box round them (WheelPreset, below, handed
- * what screens/Presets hands its list's rows): this component decides how
- * big and bright each one is, from how far it is from the middle of the
- * room, and nothing else. A tap, a hold and the star all go where they go
- * in the list, and NOTHING LOADS UNTIL A ROW IS TAPPED.
+ * A ring to run a thumb round, a short list over it with a bar on its
+ * middle row, and a button in the middle of the ring. A notch of the ring
+ * moves the bar one preset, and the bar moving, the click and the tap are
+ * one step of this file's own code (`step`): nothing here scrolls, and
+ * nothing coasts, so a click cannot be late. NOTHING LOADS UNTIL THE MIDDLE
+ * BUTTON OR A ROW IS PRESSED, and both do what screens/Presets hands the
+ * row: this file draws and counts notches, and never loads, stars or saves.
  *
- * HOW IT IS LAID OUT. Every row has one slot of the scroll (WHEEL_SLOT), and
- * the space over the first and under the last is half the room, so row i is
- * in the middle when the list has scrolled i slots: a whole number, which is
- * what lets the list stop on a row (snapToInterval) and lets "go to row i"
- * be one multiplication. A ROW IS NEVER MOVED from where the scroll puts it,
- * so it follows a thumb exactly; only its size and brightness change, as
- * transforms driven straight from the scroll, so they keep up without
- * waiting for a render. Two faint lines mark the middle slot, and a name
- * crossing one is the click.
- *
- * `listRef` is given the two things the screen asks of its list: toRow(i)
- * and toTop().
+ * `row(item)` answers what a preset's row says and does (the list's own
+ * words, press, hold and star). `listRef` is given the two things the
+ * screen asks of its list: toRow(i) and toTop().
  */
 export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = true, onAround, footer = null, empty = null }) {
-  /* How tall the list's own room is. Nothing is drawn until it is known: the space over the first row is half of it. */
-  const [room, setRoom] = useState(0)
-  const pad = wheelPad(room)
-  const list = useRef(null)
   const count = data.length
-  const first = Math.min(Math.max(0, startAt), Math.max(0, count - 1))
-  const y = useRef(new Animated.Value(wheelOffset(first))).current
+  const [at, setAt] = useState(() => wheelMove(startAt, 0, count))
+  /* The bar as the code knows it this instant: a notch is worked out from it, not from what was last drawn. */
+  const where = useRef(at)
+  const counted = useRef(count)
+  counted.current = count
+  const clicking = useRef(clicks)
+  clicking.current = clicks
+  const around = useRef(onAround)
+  around.current = onAround
 
-  useImperativeHandle(
-    listRef,
-    () => ({
-      toRow: (index, animated = false) => {
-        try {
-          list.current?.scrollToOffset({ offset: wheelOffset(index), animated })
-        } catch {
-          /* Only while the list is still measuring; the next ask works. */
-        }
-      },
-      toTop: () => {
-        try {
-          list.current?.scrollToOffset({ offset: 0, animated: false })
-        } catch {
-          /* The same. */
-        }
-      }
-    }),
-    []
+  /* How big the room is, and so how big the ring and how many rows. Nothing is drawn until it is known. */
+  const [box, setBox] = useState({ w: 0, h: 0 })
+  const plan = useMemo(() => wheelLayout(box.w, box.h), [box.w, box.h])
+
+  /* The names around the bar are asked for once the wheel rests, never during a spin: each name is a read of the unit (lib/presetNames). */
+  const rest = useRef(null)
+  const settle = useCallback(() => {
+    clearTimeout(rest.current)
+    rest.current = setTimeout(() => around.current?.(wheelAround(where.current, counted.current)), WHEEL_REST_MS)
+  }, [])
+  useEffect(() => () => clearTimeout(rest.current), [])
+
+  /* The bar to a row outright: opening, a jump, a search. No click: nobody turned the wheel. */
+  const go = useCallback(
+    (index) => {
+      const next = wheelMove(index, 0, counted.current)
+      where.current = next
+      setAt(next)
+      settle()
+    },
+    [settle]
   )
+  useImperativeHandle(listRef, () => ({ toRow: (index) => go(index), toTop: () => go(0) }), [go])
+
+  /* A list whose presets arrive after the wheel does opens on the row it was asked for; one that has shrunk under the bar (a search) keeps the bar on a row it has. */
+  const placed = useRef(count > 0)
+  const first = useRef(startAt)
+  first.current = startAt
+  useEffect(() => {
+    if (!count) return
+    if (!placed.current) {
+      placed.current = true
+      go(first.current)
+    } else if (where.current > count - 1 || where.current < 0) go(where.current < 0 ? 0 : count - 1)
+  }, [count, go])
+  useEffect(() => {
+    settle()
+  }, [settle])
 
   /* The sound's players live as long as a wheel that clicks is on screen. */
   useEffect(() => {
@@ -72,161 +105,190 @@ export default function PresetWheel({ listRef, data, row, startAt = 0, clicks = 
   }, [clicks])
 
   /*
-   * WHICH ROW IS IN THE MIDDLE, kept as the scroll moves. A change is a
-   * click, but only under a thumb or the flick it leaves behind (`moving`):
-   * the list jumping to the preset being played when it opens, or back to
-   * the top of a search, is not somebody turning the wheel.
-   *
-   * A thumb that stops on the glass and then carries on is still one drag
-   * (`dragging`), and the list says it began only once: so the wheel is
-   * moving for as long as the thumb is down, however still it holds, and
-   * after it lifts until the flick has run out.
-   *
-   * And the names around the middle are asked for once the wheel rests,
-   * never during a flick: each name is a read of the unit (lib/presetNames).
+   * ONE STEP: the bar moves, and the click and the tap go with it, here and
+   * nowhere else. At either end of the list the bar does not move, and a
+   * wheel that moved nothing does not click.
    */
-  const centre = useRef(first)
-  const moving = useRef(false)
-  const dragging = useRef(false)
   const lastClick = useRef(0)
-  const rest = useRef(null)
-  const around = useRef(onAround)
-  around.current = onAround
-  const counted = useRef(count)
-  counted.current = count
-  const clicking = useRef(clicks)
-  clicking.current = clicks
-
-  const settle = useCallback(() => {
-    clearTimeout(rest.current)
-    rest.current = setTimeout(() => {
-      if (!dragging.current) moving.current = false
-      around.current?.(wheelAround(centre.current, counted.current))
-    }, WHEEL_REST_MS)
-  }, [])
-  useEffect(() => () => clearTimeout(rest.current), [])
-
-  const scrolled = useCallback(
-    (e) => {
-      const at = wheelCentre(e.nativeEvent.contentOffset.y, counted.current)
-      settle()
-      if (at === centre.current) return
-      centre.current = at
-      if (!moving.current || !clicking.current) return
+  const step = useCallback(
+    (moves) => {
+      const next = wheelMove(where.current, moves, counted.current)
+      if (next === where.current || next < 0) return
+      where.current = next
+      setAt(next)
       const now = Date.now()
-      if (!clickDue(now, lastClick.current)) return
-      lastClick.current = now
-      wheelClick()
+      if (clicking.current && clickDue(now, lastClick.current)) {
+        lastClick.current = now
+        wheelClick()
+      }
+      settle()
     },
     [settle]
   )
-  const onScroll = useMemo(
-    () => Animated.event([{ nativeEvent: { contentOffset: { y } } }], { useNativeDriver: true, listener: scrolled }),
-    [y, scrolled]
+
+  /*
+   * THE RING. Where the thumb is round the middle is read from the touch
+   * itself: the first touch says where on the ring it landed, and so where
+   * the ring's middle is on the page, and every move after is measured
+   * from there. (Nothing inside the ring takes a touch, so the ring is
+   * what the first touch lands on; the middle button is over it, not in
+   * it.) A thumb that wanders off the ring keeps turning it until it lifts.
+   */
+  const spin = useRef(null)
+  const middle = useRef({ x: 0, y: 0 })
+  const size = useRef(plan)
+  size.current = plan
+  const [turning, setTurning] = useState(false)
+  const dot = useRef(new Animated.Value(0)).current
+  const ring = useMemo(() => {
+    const onRing = (e) => {
+      const { ring: d, inner } = size.current
+      return onWheelRing(e.nativeEvent.locationX - d / 2, e.nativeEvent.locationY - d / 2, d / 2, inner)
+    }
+    const angleOf = (e) => wheelAngle(e.nativeEvent.pageX - middle.current.x, e.nativeEvent.pageY - middle.current.y)
+    return PanResponder.create({
+      onStartShouldSetPanResponder: onRing,
+      onPanResponderGrant: (e) => {
+        const d = size.current.ring
+        middle.current = { x: e.nativeEvent.pageX - e.nativeEvent.locationX + d / 2, y: e.nativeEvent.pageY - e.nativeEvent.locationY + d / 2 }
+        const angle = angleOf(e)
+        spin.current = wheelSpinStart(angle, Date.now())
+        dot.setValue(angle)
+        setTurning(true)
+      },
+      onPanResponderMove: (e) => {
+        /* Too near the middle to say which way round: the angle there swings with a hair of movement. */
+        if (Math.hypot(e.nativeEvent.pageX - middle.current.x, e.nativeEvent.pageY - middle.current.y) < size.current.inner * 0.6) return
+        const angle = angleOf(e)
+        const turned = wheelSpin(spin.current, angle, Date.now())
+        spin.current = turned.state
+        dot.setValue(angle)
+        if (turned.moves) step(turned.moves)
+      },
+      onPanResponderRelease: () => setTurning(false),
+      onPanResponderTerminate: () => setTurning(false),
+      /* Nothing takes the wheel from a thumb that is turning it. */
+      onPanResponderTerminationRequest: () => false
+    })
+  }, [dot, step])
+
+  /* THE ROWS, DRAGGED: a row of thumb for a row of list, with the same step and no coasting. A tap is still the row's own. */
+  const pull = useRef({ carry: 0, last: 0 })
+  const rows = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 8 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderGrant: () => {
+          pull.current = { carry: 0, last: 0 }
+        },
+        onPanResponderMove: (_, g) => {
+          const moved = wheelDrag(pull.current.carry, g.dy - pull.current.last)
+          pull.current = { carry: moved.carry, last: g.dy }
+          if (moved.moves) step(moved.moves)
+        }
+      }),
+    [step]
   )
 
-  /* Once the room is known: exactly on the row it opened for, and its neighbours' names asked for. */
-  const placed = useRef(false)
-  useEffect(() => {
-    if (!room || placed.current) return undefined
-    placed.current = true
-    const id = requestAnimationFrame(() => {
-      try {
-        list.current?.scrollToOffset({ offset: wheelOffset(first), animated: false })
-      } catch {
-        /* A list that will not go there shows its top, as the list used to. */
-      }
-      around.current?.(wheelAround(first, counted.current))
-    })
-    return () => cancelAnimationFrame(id)
-  }, [room, first])
+  const shown = wheelWindow(at, plan.rows, count)
+  const under = at >= 0 && at < count ? row(data[at]) : null
+  const d = plan.ring
+  const knob = Math.round(plan.inner * 2)
 
   return (
-    <View style={{ flex: 1 }} onLayout={(e) => setRoom(e.nativeEvent.layout.height)}>
-      {room ? (
-        <Animated.FlatList
-          ref={list}
-          data={data}
-          keyExtractor={(n) => String(n)}
-          /* Half the room over the first row and under the last, so each can reach the middle. The list's own offsets do not count this space, which is what puts row i in the middle at i slots. */
-          contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: pad, paddingBottom: pad }}
-          showsVerticalScrollIndicator={false}
-          initialNumToRender={15}
-          maxToRenderPerBatch={20}
-          windowSize={7}
-          getItemLayout={(_, i) => ({ length: WHEEL_SLOT, offset: WHEEL_SLOT * i, index: i })}
-          initialScrollIndex={count ? first : undefined}
-          onScrollToIndexFailed={() => {
-            /* Only while the list is still measuring: it stays where it is. */
-          }}
-          /* It stops on a row, like the wheel it is named for. */
-          snapToInterval={WHEEL_SLOT}
-          decelerationRate="normal"
-          scrollEventThrottle={16}
-          onScroll={onScroll}
-          onScrollBeginDrag={() => {
-            dragging.current = true
-            moving.current = true
-          }}
-          onScrollEndDrag={() => {
-            /* The thumb is up: moving until the flick runs out, or at once if there is none. */
-            dragging.current = false
-            settle()
-          }}
-          renderItem={({ item, index }) => (
-            <WheelRow y={y} index={index}>
-              {row(item)}
-            </WheelRow>
-          )}
-          ListEmptyComponent={empty}
-          ListFooterComponent={footer}
-        />
-      ) : null}
-      {/* The middle slot, marked by a faint line over it and one under it. They stay put while the names go by, and are never in the way of a press. */}
-      {room && count ? (
-        <View pointerEvents="none" style={{ position: 'absolute', left: space.lg, right: space.lg, top: room / 2 - WHEEL_SLOT / 2, height: WHEEL_SLOT, borderTopWidth: 1, borderBottomWidth: 1, borderColor: color.rule }} />
-      ) : null}
+    <View style={{ flex: 1 }} onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+      {!box.h ? null : !count ? (
+        <View style={{ paddingHorizontal: space.lg }}>{empty}</View>
+      ) : (
+        <>
+          <View {...rows.panHandlers} style={{ height: plan.rows * WHEEL_ROW, paddingHorizontal: space.lg, overflow: 'hidden' }}>
+            {shown.map((index, k) =>
+              index === null ? (
+                <View key={`blank-${k}`} style={{ height: WHEEL_ROW }} />
+              ) : (
+                <WheelPreset key={String(data[index])} {...row(data[index])} under={k === plan.middle} />
+              )
+            )}
+          </View>
+
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: WHEEL_GAP }}>
+            <View style={{ width: d, height: d }}>
+              <View
+                {...ring.panHandlers}
+                accessible
+                accessibilityRole="adjustable"
+                accessibilityLabel="Preset wheel"
+                accessibilityValue={{ text: under ? [under.label, under.sub].filter(Boolean).join(', ') : '' }}
+                accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+                onAccessibilityAction={(e) => step(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
+                style={{ width: d, height: d, borderRadius: d / 2, backgroundColor: color.panelHi, borderWidth: 1, borderColor: color.rule }}
+              >
+                {/* Where the thumb is on the ring, while it is: a spot that goes round with it. Never in the way of the touch. */}
+                <Animated.View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    width: d,
+                    height: d,
+                    opacity: turning ? 1 : 0,
+                    transform: [{ rotate: dot.interpolate({ inputRange: [-180, 180], outputRange: ['-180deg', '180deg'] }) }]
+                  }}
+                >
+                  <View style={{ position: 'absolute', right: (d / 2 - plan.inner) / 2 - 14, top: d / 2 - 14, width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: color.signal, backgroundColor: color.signalWash }} />
+                </Animated.View>
+              </View>
+              {/* The middle button: it loads the preset under the bar, by that row's own press. */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={under ? `${WHEEL_LOAD} ${under.label}` : WHEEL_LOAD}
+                disabled={!under}
+                onPress={() => {
+                  thud()
+                  fire(`press ${said(WHEEL_LOAD, under?.label)}`, under?.onPress)
+                }}
+                style={({ pressed }) => ({
+                  position: 'absolute',
+                  left: d / 2 - knob / 2,
+                  top: d / 2 - knob / 2,
+                  width: knob,
+                  height: knob,
+                  borderRadius: knob / 2,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: pressed ? color.panel : color.chassis,
+                  borderWidth: 1,
+                  borderColor: color.rule
+                })}
+              >
+                <Text style={{ color: color.silk, fontSize: font.body + 1, fontWeight: '700' }}>{WHEEL_LOAD}</Text>
+              </Pressable>
+            </View>
+            {footer}
+          </View>
+        </>
+      )}
     </View>
   )
 }
 
 /**
- * One row of the wheel: its slot of the scroll, and the two things the
- * scroll tells it, how big and how bright. Never where it is.
- */
-function WheelRow({ y, index, children }) {
-  const drawn = useMemo(() => {
-    const curve = wheelCurve(index)
-    return {
-      scale: y.interpolate({ inputRange: curve.input, outputRange: curve.scale, extrapolate: 'clamp' }),
-      opacity: y.interpolate({ inputRange: curve.input, outputRange: curve.opacity, extrapolate: 'clamp' })
-    }
-  }, [y, index])
-  return <Animated.View style={{ height: WHEEL_SLOT, justifyContent: 'center', opacity: drawn.opacity, transform: [{ scale: drawn.scale }] }}>{children}</Animated.View>
-}
-
-/**
- * A PRESET ON THE WHEEL: its name and its slot, with no box round them.
- *
- * "We probably want to remove the boxes around the outside edge of the
- * presets as well and make the size of the preset names a little smaller"
- * (Justin, 11 November 2026). So it is two lines of type: the name
- * (WHEEL_NAME, drawn smaller only when it would not fit) and the slot under
- * it. The one being played is amber and says "Playing", as its row in the
- * list does; a colour tag is a short bar before the name; the star is the
- * star alone, on a thumb's worth of its own at the end, away from the part
- * that loads the preset.
+ * A PRESET ON THE WHEEL'S LIST: its name, its slot and its star on one
+ * line, with no box round it ("remove the boxes around the outside edge of
+ * the presets", Justin, 11 November 2026). The row under the bar is the
+ * bar: light, with dark ink. The one being played is amber and says
+ * "Playing", as its row in the list does; a colour tag is a short bar
+ * before the name.
  *
  * It does what the list's row does and nothing of its own: screens/Presets
- * hands it the same press, hold and star it hands the list's.
+ * hands it the same words, press, hold and star it hands the list's.
  */
-export function WheelPreset({ label, sub, here = false, bar = null, starred = false, starLabel, hint, onPress, onLongPress, onStar }) {
-  const ink = here ? color.signal : color.silk
+export function WheelPreset({ label, sub, here = false, bar = null, starred = false, starLabel, hint, onPress, onLongPress, onStar, under = false }) {
+  const ink = under ? color.chassis : here ? color.signal : color.silk
+  const small = under ? color.chassis : here ? color.signal : color.silkDim
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', height: WHEEL_ROW }}>
-      <View style={{ width: WHEEL_END, alignItems: 'center' }}>
-        {bar ? <View style={{ width: 4, height: WHEEL_ROW - 22, borderRadius: 2, backgroundColor: bar }} /> : null}
-      </View>
+    <View style={{ flexDirection: 'row', alignItems: 'center', height: WHEEL_ROW, borderRadius: 10, backgroundColor: under ? color.silk : 'transparent' }}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ selected: here }}
@@ -245,12 +307,13 @@ export function WheelPreset({ label, sub, here = false, bar = null, starred = fa
             : undefined
         }
         delayLongPress={450}
-        style={({ pressed }) => ({ flex: 1, height: WHEEL_ROW, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
+        style={({ pressed }) => ({ flex: 1, height: WHEEL_ROW, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.md, opacity: pressed ? 0.6 : 1 })}
       >
-        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ color: ink, fontSize: WHEEL_NAME, fontWeight: '700', textAlign: 'center' }}>
+        {bar ? <View style={{ width: 4, height: WHEEL_ROW - 20, borderRadius: 2, backgroundColor: bar }} /> : null}
+        <Text numberOfLines={1} style={{ flex: 1, color: ink, fontSize: under ? WHEEL_NAME : WHEEL_NAME_ROUND, fontWeight: '700', opacity: under || here ? 1 : 0.8 }}>
           {label}
         </Text>
-        <Text numberOfLines={1} style={{ color: here ? color.signal : color.silkDim, fontSize: font.micro, fontFamily: face, textAlign: 'center', marginTop: 1 }}>
+        <Text numberOfLines={1} style={{ color: small, fontSize: font.small, fontFamily: face }}>
           {sub}
         </Text>
       </Pressable>
@@ -264,7 +327,7 @@ export function WheelPreset({ label, sub, here = false, bar = null, starred = fa
         }}
         style={({ pressed }) => ({ width: WHEEL_END, height: WHEEL_ROW, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
       >
-        <Text style={{ color: starred ? color.signal : color.silkFaint, fontSize: font.lead + 2, fontFamily: face }}>{starred ? '★' : '☆'}</Text>
+        <Text style={{ color: starred ? (under ? color.chassis : color.signal) : under ? color.chassis : color.silkFaint, fontSize: font.lead, fontFamily: face, opacity: starred || !under ? 1 : 0.45 }}>{starred ? '★' : '☆'}</Text>
       </Pressable>
     </View>
   )

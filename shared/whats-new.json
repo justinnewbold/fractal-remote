@@ -3,6 +3,13 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-12",
+      "version": "1.90.38",
+      "lines": [
+        "On a tablet or other big screen, the button that puts a second screen beside Play is now called Split View (it was Two sides)."
+      ]
+    },
+    {
       "date": "2026-11-10",
       "version": "1.90.31",
       "lines": [

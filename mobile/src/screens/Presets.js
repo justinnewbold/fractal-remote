@@ -17,7 +17,7 @@ import { sync, useStored } from '../lib/store'
 /* All presets as a wheel, where Settings has chosen it (lib/presetWheel): the same rows, drawn by components/PresetWheel. */
 import { wheelSetting } from '../lib/presetWheel'
 import { usePresetWheelOffered } from '../lib/usePresetWheel'
-import PresetWheel, { WheelPreset } from '../components/PresetWheel'
+import PresetWheel from '../components/PresetWheel'
 import { loadPreset, useRig } from '../lib/rig'
 import { thud, tick } from '../lib/feedback'
 import { TAG_HOLD, presetTag, presetTarget } from '../lib/colourPage'
@@ -98,12 +98,12 @@ const STRIDE = ROW + GAP
  *
  * AND AS A WHEEL, where Settings → Tiles & scenes → Preset list says so
  * (lib/presetWheel, his account until features PRESET_WHEEL_FOR_EVERYONE):
- * the same presets as names with no box round them, the middle one big and
- * the rest shrinking away from it, with a click as each crosses the middle.
- * Everything a row does is what it does in the list (one press, one hold,
- * one star, made once in rowOf and handed to both); only how it is drawn
- * and scrolled is the wheel's (components/PresetWheel). The list is the
- * list it always was.
+ * a ring to run a thumb round, a bar that moves one preset a notch with a
+ * click, and a middle button that loads the preset under the bar.
+ * Everything a row does is what it does in the list (the same press, hold
+ * and star, said in rowOf for both); only how it is drawn and moved through
+ * is the wheel's (components/PresetWheel). The list is the list it always
+ * was.
  */
 export default function Presets({ onBack, stay = false }) {
   const preset = useRig(ofPreset)
@@ -370,9 +370,10 @@ export default function Presets({ onBack, stay = false }) {
    *
    * THE LIST'S ROW IS WORD FOR WORD WHAT IT WAS BEFORE THERE WAS A WHEEL:
    * "let's make sure we don't touch the other ones" (Justin, 11 November
-   * 2026). The wheel's (`tall`) is the same preset as a name with no box
-   * round it (components/PresetWheel WheelPreset), handed the same words,
-   * press, hold and star; test/preset-wheel.mjs holds the two to each other.
+   * 2026). For the wheel (`tall`) it answers what the same preset's row
+   * says and does, and components/PresetWheel draws it (WheelPreset) and
+   * hands its press to the wheel's middle button: the same words, press,
+   * hold and star; test/preset-wheel.mjs holds the two to each other.
    */
   const rowOf = (n, tall = false) => {
     const name = nameHere(n)
@@ -383,25 +384,23 @@ export default function Presets({ onBack, stay = false }) {
     const words = typeof name === 'string' && name.trim() ? `${slotLabel(n, addressing)} ${name.trim()}` : slotLabel(n, addressing)
     const target = presetTarget(n, { words })
     if (tall) {
-      return (
-        <WheelPreset
-          label={typeof name === 'string' ? (name || 'Empty') : `Slot ${slotLabel(n, addressing)}`}
-          sub={here ? `${slotLabel(n, addressing)} · Playing` : slotLabel(n, addressing)}
-          here={here}
-          /* Its colour tag, a short bar before the name: the colour the list's bar is. */
-          bar={tagEdge(tag)?.borderLeftColor || null}
-          starred={starred}
-          starLabel={`${starred ? 'Unstar' : 'Star'} ${name || `slot ${slotLabel(n, addressing)}`}`}
-          hint={addOpen ? ADD_WORDS.hint : target ? TAG_HOLD.hint : undefined}
-          /* The list's own press, word for word: not awaited, and beside Play the wheel stays open after a pick. */
-          onPress={() => {
-            loadPreset(n)
-            if (!stay) onBack?.()
-          }}
-          onLongPress={addOpen ? () => hold({ n, words, target }) : target ? () => setPainting(target) : undefined}
-          onStar={() => toggleFavourite(device, n)}
-        />
-      )
+      return {
+        label: typeof name === 'string' ? (name || 'Empty') : `Slot ${slotLabel(n, addressing)}`,
+        sub: here ? `${slotLabel(n, addressing)} · Playing` : slotLabel(n, addressing),
+        here,
+        /* Its colour tag, a short bar before the name: the colour the list's bar is. */
+        bar: tagEdge(tag)?.borderLeftColor || null,
+        starred,
+        starLabel: `${starred ? 'Unstar' : 'Star'} ${name || `slot ${slotLabel(n, addressing)}`}`,
+        hint: addOpen ? ADD_WORDS.hint : target ? TAG_HOLD.hint : undefined,
+        /* The list's own press, word for word: not awaited, and beside Play the wheel stays open after a pick. The wheel's middle button is this too. */
+        onPress: () => {
+          loadPreset(n)
+          if (!stay) onBack?.()
+        },
+        onLongPress: addOpen ? () => hold({ n, words, target }) : target ? () => setPainting(target) : undefined,
+        onStar: () => toggleFavourite(device, n)
+      }
     }
     return (
       <View style={{ flexDirection: 'row', gap: space.sm, height: ROW, marginBottom: GAP }}>
@@ -591,7 +590,7 @@ export default function Presets({ onBack, stay = false }) {
       ) : null}
 
       {wheel ? (
-        /* The wheel (lib/presetWheel), opened on the preset being played: the same presets as names, and nothing loads until one is tapped. */
+        /* The click wheel (lib/presetWheel), opened with its bar on the preset being played: nothing loads until its middle button or a row is pressed. */
         <PresetWheel
           listRef={wheelRef}
           data={shown}
