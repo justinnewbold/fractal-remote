@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-12",
     "day": "12 November 2026",
-    "version": "1.90.39",
+    "version": "1.90.41",
     "lines": [
+      {
+        "text": "Bluetooth → What Bluetooth can’t do now lists everything that still needs the computer: saving, moving blocks, modifiers, renaming, copying a channel, and choosing a cab on an FM3, FM9 or Axe-Fx III.",
+        "only": null
+      },
       {
         "text": "On Play, the line beside Chain now says Hold for quick edit: hold an effect and its knobs come up over the A to D channels.",
         "only": null

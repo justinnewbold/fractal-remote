@@ -285,6 +285,8 @@ const DIFFERENT = [
   'About 30 feet of range.',
   'The adapter connects to one thing at a time.',
   'On the AM4, scene names take a moment the first time a preset is seen.',
+  /* lib/gen3-edit: there is no cab state over Bluetooth, so a cab is not picked there. An AM4's is. */
+  'On the FM3, FM9 and Axe-Fx III, a cab is chosen with the computer.',
   /* Found by their absence until this line: every one of them is hidden over Bluetooth, not broken. */
   'No looper, volume button, unit metronome click or Footswitches page.'
 ]

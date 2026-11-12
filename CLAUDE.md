@@ -729,6 +729,18 @@ that ForgeFX's tables for them (an amp's Gain is setting 7 on an FM3, 11 on
 an FM9 and 1 on a III) are what the unit takes; the phone sends exactly
 what the computer sends for the same edit, and a test holds it there.
 
+- **Saving over Bluetooth is still not built, and the page says what
+  else is not** (12 November 2026). He thought it was: "I think we can
+  actually save on Bluetooth now and I don't know that there's really
+  anything else that we can't do on Bluetooth so we can do on the computer
+  yet correct? If so, what are those items?" It is not (bleWire's
+  `supportsSave: false`), and he was told, with the list. Bluetooth → What
+  Bluetooth can't do (lib/editWords, screens/Bluetooth `DIFFERENT`) now
+  says each thing once: what Edit does in the paragraph, and in the list
+  no saving, no moving, adding or removing blocks, no modifiers, renaming
+  or copying a channel, a cab chosen with the computer on the three gen-3
+  units, and no looper, volume button, unit metronome click or
+  Footswitches page. Keep that page true whenever one of these is built.
 - **The switch is one line**: `EDIT_FROM_STORE` in
   mobile/src/lib/ble-rule.js, one entry per unit whose knobs are built,
   null until a store version opens it. To get it out to everyone, set the

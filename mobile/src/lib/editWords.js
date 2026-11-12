@@ -50,13 +50,28 @@ export const EDIT_WHY_MS = 5000
  * has opened, lib/ble-rule.js EDIT_FROM_STORE).
  */
 export const NO_EDITING_LINE = 'No editing or saving over Bluetooth.'
-export const EDITING_LINE = 'Knobs, models and effects on and off change in Edit. No saving over Bluetooth: save on the unit itself.'
+/*
+ * THE OPEN FORM, REVIEWED 12 NOVEMBER 2026. "Review this section again now
+ * that we've made lots of changes to Bluetooth I think we can actually save
+ * on Bluetooth now and I don't know that there's really anything else that
+ * we can't do on Bluetooth so we can do on the computer yet correct? If so,
+ * what are those items?" (Justin, with a picture of the page.) Saving over
+ * Bluetooth is not built (bleWire says `supportsSave: false`; saving is the
+ * computer's, lib/saveViaComputer), so the page was right about that. It
+ * was wrong two other ways: it said the same sentence twice, once in the
+ * paragraph and again as the first line of the list, and it left out what
+ * else in Edit needs the computer (Edit's own BLE_NO_CHAIN, and copying a
+ * channel). So what Edit DOES is the paragraph's (`EDIT_DOES`), and what it
+ * does not is the list's first line, said once each.
+ */
+export const EDIT_DOES = 'In Edit: knobs, models and effects on and off.'
+export const EDITING_LINE = 'No saving over Bluetooth: save on the unit itself. Moving, adding and removing blocks, modifiers, renaming and copying a channel need the computer.'
 /** "What's different from USB", its first line. */
 export const editingLine = (open) => (open === true ? EDITING_LINE : NO_EDITING_LINE)
 
 /* What Bluetooth does, the page's paragraph over that list, for every unit but the VP4 (which has its own, VP4_OVER_BLUETOOTH). */
 export const LIMITS_DOES = 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer.'
 export const LIMITS_CLOSED = `${LIMITS_DOES} No editing or saving.`
-export const LIMITS_OPEN = `${LIMITS_DOES} ${EDITING_LINE}`
+export const LIMITS_OPEN = `${LIMITS_DOES} ${EDIT_DOES}`
 /** The paragraph, closed or open. */
 export const limitsLine = (open) => (open === true ? LIMITS_OPEN : LIMITS_CLOSED)
