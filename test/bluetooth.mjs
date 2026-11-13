@@ -10116,7 +10116,9 @@ export function run(test) {
      * update cannot change, so the way out is said where it is needed.
      */
     const gear = await import('../shared/bluetooth-gear.mjs')
-    assert.equal(gear.CLOSE_AND_REOPEN, 'Still not connecting after unplugging and plugging the adapter back in? Close the app completely (swipe it away) and open it again.')
+    /* The adapter first, said outright: "I just restarted the device the Bluetooth device. I don't know if that's in troubleshooting it or not, but it should be." (Justin, 13 November 2026.) */
+    assert.equal(gear.CLOSE_AND_REOPEN, 'Not connecting? Unplug the Bluetooth adapter for a few seconds and plug it back in. Still nothing? Close the app completely (swipe it away) and open it again.')
+    assert.ok(gear.CLOSE_AND_REOPEN.indexOf('Unplug the Bluetooth adapter') < gear.CLOSE_AND_REOPEN.indexOf('Close the app completely'), 'closing the app is said before the adapter is restarted')
     assert.ok(!/this phone|beta/i.test(gear.CLOSE_AND_REOPEN))
     const page = flat('mobile/src/screens/Bluetooth.js')
     assert.match(page, /const quiet = b\.on && b\.phase === 'connected' && !b\.answeredAs && \(unitState === 'missing' \|\| unitState === 'silent'\)/)

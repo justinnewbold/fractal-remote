@@ -12,8 +12,16 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-13",
     "day": "13 November 2026",
-    "version": "1.90.47",
+    "version": "1.90.50",
     "lines": [
+      {
+        "text": "In Edit, tapping the number under a knob now highlights it, so you can type a new number straight over it.",
+        "only": null
+      },
+      {
+        "text": "When Bluetooth won’t connect, the app now says the first thing to try: unplug the Bluetooth adapter for a few seconds and plug it back in.",
+        "only": null
+      },
       {
         "text": "Over Bluetooth or a USB cable on an Axe-Fx III, Play now shows the Crossover, Vocoder, Tone Match and Dynamic Distortion blocks, and turns them on and off like your other effects. On an FM9, the Crossover, Vocoder and Tone Match too.",
         "only": null

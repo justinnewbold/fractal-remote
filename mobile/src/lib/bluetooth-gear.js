@@ -148,7 +148,7 @@ export const TRIED_NOTES = {
   am4: 'From an iPhone and an Android phone, 26 October 2026; the WIDI Jack on 28 October; by USB cable from an iPhone, 27 October 2026 (its own USB-C straight in, and a C2MIDI Pro plugged straight into the iPhone), and again 3 November.',
   fm3: 'From an iPhone and an Android phone, 26 October 2026, with the U2MIDI Pro: the WIDI Master and the C2MIDI Pro got very hot on it.',
   fm9: 'Confirmed working, 1 November 2026. Which phone and adapter were not said.',
-  axefx3: 'From an iPhone, 31 October 2026: a customer confirmed it works. Which adapter was not said.'
+  axefx3: 'From an iPhone, 31 October 2026: a customer confirmed it works. Which adapter was not said. Justin’s own (Mark II, firmware 33.01) from his iPhone, 13 November 2026: Edit’s knobs on the NAM block all work.'
 }
 
 /*
@@ -629,9 +629,18 @@ export const ALSO_ON_AM4 =
  * JavaScript (the phone's own MIDI connection, made once per launch), so
  * the way out until a store build changes that is the player's: said on
  * the page wherever it is not connecting, and in the guide.
+ *
+ * AND THE ADAPTER FIRST, SAID OUTRIGHT (13 November 2026). The line used to
+ * open "Still not connecting after unplugging and plugging the adapter back
+ * in?", which took for granted a step nothing on the page had told anybody
+ * to take. "Bluetooth isn't connecting for some reason ... I got Bluetooth
+ * reconnected I just restarted the device the Bluetooth device. I don't
+ * know if that's in troubleshooting it or not, but it should be." (Justin,
+ * that day.) So the first sentence is the step itself, and closing the app
+ * is what comes after it.
  */
 export const CLOSE_AND_REOPEN =
-  'Still not connecting after unplugging and plugging the adapter back in? Close the app completely (swipe it away) and open it again.'
+  'Not connecting? Unplug the Bluetooth adapter for a few seconds and plug it back in. Still nothing? Close the app completely (swipe it away) and open it again.'
 
 /*
  * NO HEAT CHECK BUT THE FM3'S. Each untried way said "In the first minute,

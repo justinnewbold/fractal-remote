@@ -298,7 +298,7 @@ export function run(test) {
     const body = /export function fmt\(n\) \{([\s\S]*?)\n\}/.exec(knob)?.[1]
     assert.ok(body, 'Edit’s fmt is not where this test reads it (components/Knob.js)')
     const fmt = new Function('n', body)
-    assert.match(read('mobile/src/screens/Edit.js'), /value=\{text !== null \? text : `\$\{fmt\(value\)\}\$\{param\?\.unit \? ` \$\{param\.unit\}` : ''\}`\}/, 'the box under a knob no longer writes the value and then the unit')
+    assert.match(read('mobile/src/screens/Edit.js'), /value=\{field \? field\.typed : `\$\{fmt\(value\)\}\$\{param\?\.unit \? ` \$\{param\.unit\}` : ''\}`\}/, 'the box under a knob no longer writes the value and then the unit')
     for (const v of [0, 5, 6.2, -3, 100, 999.994, 1000, 1234.5, 20000, -1234.5, 0.004, -0.004, 3.333, 632.456, 0.12, 47.9]) {
       assert.equal(watchKnobText(v), fmt(v), `the watch writes ${v} another way than Edit does`)
       assert.equal(watchKnobText(v, 'dB'), `${fmt(v)} dB`)
