@@ -4,6 +4,7 @@
  * same picture at both ends. The phone's copy is mobile/src/lib/blockIcons.js.
  */
 import { blockIconName } from '../../shared/block-icons.mjs'
+import { OWN_ICON } from '../../shared/own-blocks.mjs'
 import amp from '../../mobile/assets/icons/amp.png'
 import cab from '../../mobile/assets/icons/cab.png'
 import comp from '../../mobile/assets/icons/comp.png'
@@ -36,6 +37,7 @@ import returnfx from '../../mobile/assets/icons/returnfx.png'
 const FILES = { amp, cab, comp, delay, drive, flanger, phaser, reverb, wah, chorus, enhancer, filter, formant, gate, geq, looper, mixer, multiplexer, peq, pitch, resonator, ringmod, rotary, synth, tremolo, volpan, sendfx, returnfx }
 
 export function blockIcon(slug) {
-  const name = blockIconName(slug)
+  /* And the blocks Play names for itself (shared/own-blocks.mjs), each in the picture it borrows: the NAM block the amp's, the IR Player the cab's. */
+  const name = blockIconName(slug) || OWN_ICON[String(slug || '').toLowerCase()] || null
   return name ? FILES[name] || null : null
 }

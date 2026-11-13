@@ -840,7 +840,8 @@ what the computer sends for the same edit, and a test holds it there.
     knobs." (`OWN_KNOBS_NEED_COMPUTER`), so COMPUTER_NEEDED did not move.
     NOTHING HAS BEEN TURNED THROUGH THE COMPUTER ON THESE BLOCKS YET: his
     Raspberry Pi is the first check. The browser and the computer's own
-    window still say New block.
+    window name them on Play since 1.90.56, his account only (below); their
+    Edit still says New block.
   - *THE NAM BLOCK'S KNOBS HAVE BEEN TURNED ON A REAL UNIT, AND THEY
     WORK.* "Knobs all work over Bluetooth correctly" (Justin, 13 November
     2026, his AX3 from his iPhone, app 1.90.48). That is the first write
@@ -960,10 +961,25 @@ what the computer sends for the same edit, and a test holds it there.
     hold on it opens its channels (`knobs: false`). The switch is
     `OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE` in features.js, false;
     nobody has switched one through a computer yet, and his Raspberry Pi
-    is the first check. The browser and the computer's own window still
-    say New block (naming them there is a computer release). Edit through
-    the computer for these blocks came in 1.90.51 (above): the engine
-    serves their knobs, and the phone still names them.
+    is the first check. Edit through the computer for these blocks came in
+    1.90.51 (above): the engine serves their knobs, and the phone still
+    names them.
+  - *The browser and the computer's own window name them on Play too, HIS
+    ACCOUNT ONLY* (1.90.56). "Nam blocks are showing in the APP but not
+    computer" (13 November 2026, a picture of the computer app's window on
+    his Raspberry Pi: an Axe-Fx III on a preset called NAM, no NAM tile).
+    That end drew only blocks with a slug. shared/own-blocks.mjs is the
+    phone's list for this end (the same ids, names and borrowed pictures,
+    held equal to the phone's by test/own-blocks.mjs), and ONLY PLAY ASKS
+    IT (src/components/Gig.jsx names a copy of the chain it draws): a tile
+    with its on and off and, on a hold, its channels, switched by the id
+    as Edit's strip has always switched a New block. The chain the page
+    keeps is untouched, so Edit there, the chain editor and the report
+    still say New block, and no knobs of theirs are drawn in the browser.
+    The switch is `OWN_BLOCKS_ON_THE_WEB_FOR_EVERYONE` in that file, false
+    (`ownBlocksOpenTo(link.account?.id)`). It is inside the computer app,
+    so it came with a computer release, and a change to the list is one
+    too: KEEP IT IN STEP WITH mobile/src/lib/gen3Catalog.js `OWN`.
   - *A value's text is a C string in a 32-byte buffer*: the text, a NUL,
     and old bytes from earlier answers after it. The codec's decodeReply
     trims noughts off the end and wants the rest printable, so every value

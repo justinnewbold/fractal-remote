@@ -257,7 +257,7 @@ export function run(test) {
     assert.match(app, /const sideUp = sidewaysPlay && status === 'live' && view === 'play' /)
     assert.match(app, /<div className="shell" data-sideways=\{sideUp \? 'yes' : undefined\}>/)
     assert.match(app, /sideways=\{sideUp\} headSlot=\{setHeadSlot\}/, 'the top bar is not told, or has no place for the preset’s row')
-    assert.match(app, /phoneScreen=\{phoneScreen\} sideways=\{sidewaysPlay\} headSlot=\{headSlot\}/, 'Play is not told')
+    assert.match(app, /phoneScreen=\{phoneScreen\} sideways=\{sidewaysPlay\} ownOpen=\{ownBlocksOpenTo\(link\.account\?\.id\)\} headSlot=\{headSlot\}/, 'Play is not told')
     /* The tab row gives way only where Play has its own Edit button. */
     assert.match(app, /const tabsWorthShowing = status === 'live' && views\.length > 1 && !\(sideUp && chainShows\)/)
     assert.equal((app.match(/\bsidewaysPlay\b(?!')/g) || []).length, 3, 'the answer is used somewhere new; say here what for')
@@ -266,7 +266,7 @@ export function run(test) {
 
   test('a phone’s browser on its side: Play draws two halves, one row of five, and the preset’s row here or in the bar; closed, it draws what it always drew', () => {
     const gig = flat(read('src/components/Gig.jsx'))
-    assert.match(gig, /sideways = false, headSlot = null,/, 'Play is on its side unless told otherwise')
+    assert.match(gig, /sideways = false, ownOpen = false, headSlot = null,/, 'Play is on its side unless told otherwise')
     /* Everything hangs on one attribute, which the styles read. */
     assert.match(gig, /data-sideways=\{sideways \? 'yes' : undefined\}/)
     assert.match(gig, /data-head-up=\{headUp \? 'yes' : undefined\}/)
