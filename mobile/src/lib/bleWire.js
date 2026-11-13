@@ -1039,6 +1039,31 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * names an AM4, nor stops a connection whose unit has since answered.
      */
     const ownEcho = isEcho(f, now) && !(job && job.opts.allowEcho)
+    /*
+     * THE ANSWER THAT IS THE QUESTION, BYTE FOR BYTE. "Which blocks?" is the
+     * status frame with nothing in it, and a preset with no blocks answers
+     * with the status frame with nothing in it: the same bytes. The echo
+     * guard dropped that answer as the phone's own message coming back, so
+     * an empty preset read as "no answer to the blocks in 1500 ms" and Play
+     * said the unit did not answer in time (a customer's FM3, 13 November
+     * 2026: the same preset, twice, and nothing else unanswered around it).
+     *
+     * So a question that says what its own bytes coming back mean
+     * (`opts.same`) is answered by them, on a unit that has answered
+     * something else on this connection, so a plug that loops with no unit
+     * behind it is never an empty preset. Where nothing has been echoed on
+     * this connection, the first copy is the unit's answer. Where something
+     * has (MIDI Thru on), the first copy is the echo, dropped as ever, and
+     * the second is the answer; a full list behind the echo is still read
+     * as the list it is.
+     */
+    if (ownEcho && job && job.opts.same !== undefined && answered && sameBytes(f, job.out)) {
+      job.sames = (job.sames || 0) + 1
+      if (echoes === 0 || job.sames >= 2) {
+        job.back = f
+        return end(job, job.opts.same)
+      }
+    }
     if (ownEcho || (f[4] !== model && askedAroundEcho(f))) {
       echoes++
       if (echoes >= 3 && !thruTold) {
@@ -1094,8 +1119,16 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
          * two, a 00 is written down as what it is and taken as no refusal:
          * never an error, and never the tuner put down. Anywhere else a 00
          * still reads as the codec reads it (a damaged message).
+         *
+         * AND 64 12 00 AFTER THE TUNER PAGE, on an FM3: a customer's log of
+         * 13 November 2026 has it after every open and every close, four of
+         * four, each frame's checksum right and every other message on that
+         * connection taken clean. The log said "the unit refused the tuner
+         * page: the message arrived damaged", which nothing bore out. Nothing
+         * is done with the page's answer either way (startAsking,
+         * gen3TunerOff), so this changes the line in the log and no more.
          */
-        if ((no.fn === FN.TAP || no.fn === FN.TUNER) && no.code === 0x00) {
+        if ((no.fn === FN.TAP || no.fn === FN.TUNER || no.fn === FN.PAGE) && no.code === 0x00) {
           say(`the unit answered ${job.opts.what || 'it'} with ${toHex([0x64, no.fn, 0x00])}, whose meaning Fractal has not published: not taken as a refusal`)
           return end(job, null)
         }
@@ -1519,7 +1552,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const tempoNow = (priority = 'read') => ask(buildGetTempo(model), (f) => parseTempo(f, model), WAIT.tempo, 'the tempo', { priority })
   /* Every answer also says which blocks Edit's frames may go to (gen3Sender): the ones in the preset now. */
   const statusNow = (priority = 'read') =>
-    ask(buildStatusDump(model), (f) => parseStatusDump(f, model), WAIT.status, 'the blocks', { priority }).then((list) => {
+    ask(buildStatusDump(model), (f) => parseStatusDump(f, model), WAIT.status, 'the blocks', { priority, same: [] }).then((list) => {
       if (Array.isArray(list)) editPlaced = list.map((b) => b.effectId)
       return list
     })

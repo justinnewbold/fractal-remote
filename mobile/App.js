@@ -77,6 +77,7 @@ import {
   restoreBluetooth,
   setBluetooth,
   turnOnBluetooth,
+  useAdapterGone,
   useBluetoothOn,
   useBluetoothTrouble,
   useCableNow
@@ -2608,6 +2609,8 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
   /* A unit on a USB cable (lib/bleAdapters isCable): no adapter, no Bluetooth to switch on, so the line and Look again say the cable and the unit. */
   const cableKept = useCableNow()
   const cable = bluetooth && cableKept
+  /* An iPhone whose Bluetooth adapter has gone, once a try has missed it (lib/bluetooth useAdapterGone): Look again is offered at once, below. */
+  const gone = useAdapterGone()
   const said =
     link.link === 'connected'
       ? 'Asking your unit what it is\u2026'
@@ -2738,6 +2741,25 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
         only a way to look again. Turning Bluetooth off is what Stop does,
         and the link starts looking for the computer the moment it is off.
       */}
+      {/*
+        ON AN IPHONE WHOSE ADAPTER HAS GONE, THE WAY TO GET IT BACK, AT ONCE.
+        Only Apple's Bluetooth screen connects an adapter to an iPhone again,
+        and the button that opens it came after fifteen seconds, under the
+        note, with Use the computer instead the one thing to press until
+        then: a customer with no computer sat on "Finding WIDI Core
+        Bluetooth…" and sent a report (13 November 2026). Now it is here from
+        the first try that misses the adapter, the screen's main button,
+        saying what it opens; the one under the note is not drawn twice.
+      */}
+      {gone && link.link !== 'connected' ? (
+        <Press
+          label="Look for the adapter again"
+          sub={APPLE_SCREEN_OPENS}
+          tone="live"
+          style={{ alignSelf: 'stretch' }}
+          onPress={() => lookForAdapterAgain(onRetry)}
+        />
+      ) : null}
       {bluetooth ? (
         <View style={{ alignSelf: 'stretch' }}>
           <Press label="Use the computer instead" onPress={() => setBluetooth(false)} />
@@ -2810,11 +2832,13 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
               pops up unannounced, Done tapped before Connected, and
               nothing connects. */}
           {bluetooth ? (
-            <Press
-              label={cable ? CABLE_LOOK_AGAIN : 'Look for the adapter again'}
-              sub={opensApplesScreen() ? APPLE_SCREEN_OPENS : undefined}
-              onPress={() => lookForAdapterAgain(onRetry)}
-            />
+            gone ? null : (
+              <Press
+                label={cable ? CABLE_LOOK_AGAIN : 'Look for the adapter again'}
+                sub={opensApplesScreen() ? APPLE_SCREEN_OPENS : undefined}
+                onPress={() => lookForAdapterAgain(onRetry)}
+              />
+            )
           ) : (
             <LookAgain onRetry={onRetry} />
           )}

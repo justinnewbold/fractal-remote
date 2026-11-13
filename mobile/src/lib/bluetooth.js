@@ -436,6 +436,21 @@ export const useWaitingForBluetooth = () => useSyncExternalStore(subscribeBlueto
 export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth, readTrouble, readTrouble)
 
 /*
+ * AN IPHONE WHOSE ADAPTER HAS GONE, AND A TRY HAS MISSED IT: for the waiting
+ * screen, which then offers Look for the adapter again at once. A customer's
+ * report of 13 November 2026: an iPhone back at the rig after three hours,
+ * the adapter no longer connected to it, and for the first fifteen seconds
+ * the only button under "Finding WIDI Core Bluetooth…" was Use the computer
+ * instead. Only Apple's screen brings an adapter back to an iPhone
+ * (adapterAway), so the button that opens it does not wait. Never with
+ * something else known to be in the way (Bluetooth not allowed), which the
+ * screen says instead, never where Apple's screen stays shut, and never for
+ * a unit on a USB cable (opensApplesScreen). A true or false.
+ */
+const readAdapterGone = () => saved.on === true && now.phase === 'connecting' && now.notThere === true && !now.trouble && opensApplesScreen()
+export const useAdapterGone = () => useSyncExternalStore(subscribeBluetooth, readAdapterGone, readAdapterGone)
+
+/*
  * WHO MAY USE IT: JUSTIN'S ACCOUNT ON EVERY COPY, AND EVERYBODY ELSE ONLY ON
  * A COPY BUILT TO OPEN IT.
  *

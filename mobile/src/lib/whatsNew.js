@@ -12,8 +12,16 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-13",
     "day": "13 November 2026",
-    "version": "1.90.51",
+    "version": "1.90.53",
     "lines": [
+      {
+        "text": "On an iPhone or iPad, when your Bluetooth adapter has dropped off, Look for the adapter again now shows straight away instead of after fifteen seconds.",
+        "only": "ios"
+      },
+      {
+        "text": "Over Bluetooth or a USB cable on an FM3, FM9 or Axe-Fx III, a preset with no blocks in it no longer says the unit did not answer in time.",
+        "only": null
+      },
       {
         "text": "On an Axe-Fx III over Bluetooth or a USB cable, Edit now has the NAM block’s knobs: Input Gain, Bass, Mid, Treble, Bright, Bright Cap and Level. The capture is still chosen on the unit.",
         "only": null

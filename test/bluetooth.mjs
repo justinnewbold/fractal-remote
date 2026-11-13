@@ -310,6 +310,8 @@ function fakeGen3(sx, o) {
         return
       case 0x12:
         state.page = p[0] === 0x1e
+        /* What a customer's FM3 sent back after every open and every close of the page (13 November 2026). */
+        if (opt.pageAck) reply(0x64, [0x12, 0x00])
         return
       /*
        * A block read whole, for Edit: the header naming it and how many
@@ -2378,6 +2380,56 @@ export function run(test) {
     /* And a write's echo is not taken as a change made on the unit. */
     await t.post('/preset/blocks/58/bypass', { bypassed: true })
     assert.deepEqual(t.events, [{ type: 'changed', scope: 'grid' }])
+  })
+
+  test('a preset with no blocks: the unit’s answer is the question’s own bytes, and is read as an empty chain, MIDI Thru on or off', async () => {
+    /*
+     * A customer's FM3, 13 November 2026: the same preset, twice, "no answer
+     * to the blocks in 1500 ms" and Play's "The unit did not answer in
+     * time.", with every other message around it answered. "Which blocks?"
+     * is the status frame with nothing in it, and so is the answer of a
+     * preset with nothing in it: the echo guard dropped the unit's answer as
+     * the phone's own message coming back.
+     */
+    for (const unit of ['fm3', 'fm9', 'axefx3']) {
+      for (const thru of [false, true]) {
+        const t = await onTheLine(unit, { thru })
+        const full = await t.get('/preset/blocks')
+        assert.ok(full.length > 1, `${unit}, thru ${thru}: the pretend unit's full preset was not read (${full.length})`)
+        t.unit.state.blocks.length = 0
+        const asked = t.sent.length
+        const empty = await t.get('/preset/blocks')
+        assert.deepEqual(empty.filter((b) => !b.fixed), [], `${unit}, thru ${thru}: an empty preset came back with blocks`)
+        assert.ok(!t.logs.some((l) => /no answer to the blocks/.test(l)), `${unit}, thru ${thru}: the empty answer was dropped as an echo: ${t.logs.slice(-4).join(' | ')}`)
+        /* One question, not one and a second after a wait. */
+        assert.equal(t.sent.slice(asked).filter((x) => x.bytes[5] === 0x13).length, 1, `${unit}, thru ${thru}: the blocks were asked more than once`)
+      }
+    }
+    /* With MIDI Thru on, a full preset behind the echo is still the full preset: the echo alone is never the answer. */
+    const loud = await onTheLine('fm3', { thru: true })
+    for (let i = 0; i < 3; i++) assert.ok((await loud.get('/preset/blocks')).length > 1, 'the echo of the question was read as an empty preset')
+    /* And a plug that only loops, with no unit answering behind it, is never an empty preset. */
+    const loop = await onTheLine('fm3', { thru: true, silent: true })
+    await assert.rejects(loop.get('/preset/blocks'), 'a looping plug with no unit was read as an empty preset')
+    const wire = flat('mobile/src/lib/bleWire.js')
+    assert.match(wire, /if \(ownEcho && job && job\.opts\.same !== undefined && answered && sameBytes\(f, job\.out\)\) \{ job\.sames = \(job\.sames \|\| 0\) \+ 1 if \(echoes === 0 \|\| job\.sames >= 2\) \{ job\.back = f return end\(job, job\.opts\.same\) \} \}/)
+    /* Only the blocks question says what its own bytes mean: nothing else is ever answered by an echo. */
+    assert.equal(wire.match(/\bsame: /g).length, 1)
+    assert.match(wire, /ask\(buildStatusDump\(model\), \(f\) => parseStatusDump\(f, model\), WAIT\.status, 'the blocks', \{ priority, same: \[\] \}\)/)
+  })
+
+  test('64 12 00 after the tuner page is written down as what it is, never as a refusal or a damaged message', async () => {
+    /* The same log: "the unit refused the tuner page: the message arrived damaged" after every open and close, each frame's checksum right. */
+    const t = await onTheLine('fm3', { pageAck: true })
+    await t.post('/tuner', { on: true })
+    await t.post('/tuner', { on: false })
+    assert.ok(!t.logs.some((l) => /refused the tuner page/.test(l)), t.logs.join(' | '))
+    assert.ok(t.logs.includes('the unit answered the tuner page with 64 12 00, whose meaning Fractal has not published: not taken as a refusal'), t.logs.join(' | '))
+    assert.ok(t.logs.includes('the unit answered the tuner page closed with 64 12 00, whose meaning Fractal has not published: not taken as a refusal'), t.logs.join(' | '))
+    /* The page opened and closed on the unit all the same. */
+    assert.equal(t.unit.state.page, false)
+    /* Any other code on the page is still the unit's own reason. */
+    assert.match(flat('mobile/src/lib/bleWire.js'), /if \(\(no\.fn === FN\.TAP \|\| no\.fn === FN\.TUNER \|\| no\.fn === FN\.PAGE\) && no\.code === 0x00\) \{/)
   })
 
   test('a frame with a bad checksum, or from another unit, is not taken as the answer', async () => {
@@ -5889,6 +5941,28 @@ export function run(test) {
      */
     assert.match(waking, /<Press label=\{cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\} sub=\{opensApplesScreen\(\) \? APPLE_SCREEN_OPENS : undefined\} onPress=\{\(\) => lookForAdapterAgain\(onRetry\)\} \/>/)
     /*
+     * AND ON AN IPHONE WHOSE ADAPTER HAS GONE IT DOES NOT WAIT FIFTEEN
+     * SECONDS. A customer's report of 13 November 2026: back at the rig
+     * after three hours, the iPhone no longer connected to the adapter, and
+     * until the note came up the one button under "Finding WIDI Core
+     * Bluetooth…" was Use the computer instead. Only Apple's screen brings
+     * an adapter back to an iPhone, so from the first try that misses it the
+     * button that opens it is the screen's main one, above the way back to
+     * the computer, saying what it opens; and it is not drawn a second time
+     * under the note.
+     */
+    assert.match(waking, /const gone = useAdapterGone\(\)/)
+    const early = "{gone && link.link !== 'connected' ? ( <Press label=\"Look for the adapter again\" sub={APPLE_SCREEN_OPENS} tone=\"live\" style={{ alignSelf: 'stretch' }} onPress={() => lookForAdapterAgain(onRetry)} /> ) : null}"
+    assert.ok(waking.includes(early), 'the waiting screen does not offer Look for the adapter again at once on an iPhone whose adapter has gone')
+    assert.ok(waking.indexOf(early) < waking.indexOf('<Press label="Use the computer instead"'), 'the way to get the adapter back is under the way back to the computer')
+    assert.ok(waking.indexOf(early) < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the early Look again waits for the note')
+    assert.match(waking, /\{bluetooth \? \( gone \? null : \( <Press label=\{cable \? CABLE_LOOK_AGAIN : 'Look for the adapter again'\}/, 'Look for the adapter again is drawn twice')
+    /* The rule: on, connecting, a try missed, nothing else known in the way, and only where the tap opens Apple's screen (an iPhone, never a cable, never where that screen stays shut). */
+    assert.match(
+      flat('mobile/src/lib/bluetooth.js'),
+      /const readAdapterGone = \(\) => saved\.on === true && now\.phase === 'connecting' && now\.notThere === true && !now\.trouble && opensApplesScreen\(\) export const useAdapterGone = \(\) => useSyncExternalStore\(subscribeBluetooth, readAdapterGone, readAdapterGone\)/
+    )
+    /*
      * And the way back to the computer is there from the first second, not
      * four taps away behind the gear: "How do I get out of Bluetooth mode so
      * I can go back to connecting to computer?" Before the fifteen-second
@@ -5897,7 +5971,7 @@ export function run(test) {
     assert.match(waking, /\{bluetooth \? \( <View style=\{\{ alignSelf: 'stretch' \}\}> <Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/, 'the Bluetooth waiting screen has no way back to the computer')
     assert.ok(waking.indexOf('Use the computer instead') < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way back to the computer waits fifteen seconds')
     /* turnOnBluetooth since 7 November 2026: the waiting screen's Turn on Bluetooth, under the note that says it is off. */
-    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, adapterInsteadOfCable, allowBluetooth, editBuiltFor, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, turnOnBluetooth, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
+    assert.match(app, /import \{ ALLOW_WORDS, APPLE_SCREEN_OPENS, RESTRICTED_WORDS, adapterInsteadOfCable, allowBluetooth, editBuiltFor, editOverBluetooth, lookForAdapterAgain, opensApplesScreen, restoreBluetooth, setBluetooth, turnOnBluetooth, useAdapterGone, useBluetoothOn, useBluetoothTrouble, useCableNow \} from '\.\/src\/lib\/bluetooth' import \{ useBluetoothOffered \} from '\.\/src\/lib\/useBluetoothOffered'/)
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     /* Handed only through the Settings row's own gate: test 'every way onto the Bluetooth page' holds it. */
     assert.match(app, /onBluetooth=\{bluetoothOffered \? \(\) => openSettings\('bluetooth'\) : null\}/)
@@ -16326,7 +16400,7 @@ export function run(test) {
     /* In the file: kept for this connection only, as each is sent, and apart from allowEcho. */
     const wire = flat('mobile/src/lib/bleWire.js')
     assert.match(wire, /if \(o\.am4 && !am4Allowed\(o\.frame\)\) continue askedAround\.push\(o\.frame\)/)
-    assert.match(wire, /const ownEcho = isEcho\(f, now\) && !\(job && job\.opts\.allowEcho\) if \(ownEcho \|\| \(f\[4\] !== model && askedAroundEcho\(f\)\)\) \{/)
+    assert.match(wire, /const ownEcho = isEcho\(f, now\) && !\(job && job\.opts\.allowEcho\) (?:\/\*.*?\*\/ )?if \(ownEcho && job && job\.opts\.same !== undefined && answered && sameBytes\(f, job\.out\)\) \{.*?\} if \(ownEcho \|\| \(f\[4\] !== model && askedAroundEcho\(f\)\)\) \{/)
   })
 
   test('the FM3 rule: Switch to FM3 is never offered, nor carried, on an adapter the app does not name for an FM3', async () => {
