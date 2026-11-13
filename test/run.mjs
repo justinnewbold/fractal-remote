@@ -6893,6 +6893,9 @@ editSettings(test)
 console.log('\nTONE3000, first piece: signing in and picking on its own page, the tone and its captures, a capture counted')
 const { run: tone3000 } = await import('./tone3000.mjs')
 tone3000(test)
+console.log('\nAn Axe-Fx III’s NAM block and the others the engine sends unnamed, on Play in the browser and the computer’s window')
+const { run: ownBlocksWeb } = await import('./own-blocks.mjs')
+ownBlocksWeb(test)
 
 console.log('\nwhat works: the gear notes, off unless somebody says yes')
 const { run: gearShare } = await import('./gear-share.mjs')
@@ -16434,7 +16437,7 @@ test('Play says where the looper went, and still never draws one', async () => {
   assert.ok(!/gig-note-action">\s*<button type="button" onClick=\{\(\) => setLooping/.test(gig), 'the looper still has its own button under the chain')
   assert.match(gig, /const tileCount = blocks\.length \+ \(looperHere \? 1 : 0\)/, 'the fit does not count the looper pedal')
   assert.match(gig, /blocks: fitCount,/, 'the fit does not count the looper pedal')
-  assert.match(gig, /allBlocks\.filter\(\(b\) => b\.slug && !STAGE_HIDDEN\.includes\(b\.slug\)\)/, 'Play draws a tile for the looper, input or output')
+  assert.match(gig, /nameOwnBlocks\(allBlocks, deviceKey, ownOpen\)\.filter\(\(b\) => b\.slug && !STAGE_HIDDEN\.includes\(b\.slug\)\)/, 'Play draws a tile for the looper, input or output')
 })
 
 test('the looper’s Rec and Play sit in the two top corners, and no corner word is drawn on a picture', async () => {

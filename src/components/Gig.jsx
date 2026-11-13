@@ -39,6 +39,7 @@ import ComputerCard from './ComputerCard'
 import { linkAwayMs } from '../lib/tapGate'
 import { downBandTop } from '../lib/downBand'
 import { STAGE_HIDDEN } from '../lib/guardrails'
+import { nameOwnBlocks } from '../../shared/own-blocks.mjs'
 import { findLooper, LOOPER_LABEL } from '../../shared/looper.mjs'
 import { cornerFit, mustSayFit } from '../../shared/tile-corners.mjs'
 import { BOOST, boostLabel, boostTitle, boostWord, pedalBoost, pedalUnit } from '../../shared/am4-boost.mjs'
@@ -194,6 +195,8 @@ export default function Gig({
    * in one row along the bottom. False, and this is the Play it always was.
    */
   sideways = false,
+  /* Whether the blocks the engine has no name for are named on this screen (App `ownBlocksOpenTo`, shared/own-blocks.mjs): an Axe-Fx III's NAM block and five more. False, and Play leaves them out, as it always did. */
+  ownOpen = false,
   /* The place in the top bar for the preset's name and Setlists, when moving them up there buys bigger squares (TopBar `headSlot`). */
   headSlot = null,
   /*
@@ -291,9 +294,10 @@ export default function Gig({
   const naming = Number.isInteger(here) && here !== preset?.number
 
   // Input, output and looper are not stage controls. The gate is — see STAGE_HIDDEN.
+  /* And the ones the engine has no name for, named here for an FM9 or an Axe-Fx III (shared/own-blocks.mjs: its NAM block and five more), for whoever they are open to. Still a New block to everything but this screen. */
   const blocks = useMemo(
-    () => allBlocks.filter((b) => b.slug && !STAGE_HIDDEN.includes(b.slug)),
-    [allBlocks]
+    () => nameOwnBlocks(allBlocks, deviceKey, ownOpen).filter((b) => b.slug && !STAGE_HIDDEN.includes(b.slug)),
+    [allBlocks, deviceKey, ownOpen]
   )
 
   const [meters, setMeters] = useState([])

@@ -16,6 +16,7 @@ import { setMetronome, useMetronome, useUnitHeardOn, useUnitMetronome, wakeScree
 import { metronomeNote, placeLit, placesFor, unitClick } from '../shared/metronome.mjs'
 import { deviceSlug as slugOfUnit, stageKey } from '../shared/device-slug.mjs'
 import { NEW_BLOCK_NAME, isNewBlock } from '../shared/new-block.mjs'
+import { ownBlocksOpenTo } from '../shared/own-blocks.mjs'
 import SaveBar, { SaveLate, useSaidSaved } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
 import { overwriteCheck } from './lib/overwrite'
@@ -5164,6 +5165,8 @@ export default function App() {
           phoneScreen={phoneScreen}
           /* On its side, in a phone's browser: two halves of squares, and the place in the bar for the preset's row. */
           sideways={sidewaysPlay}
+          /* An Axe-Fx III's NAM block and the others the engine sends unnamed, on Play for whoever they are open to (shared/own-blocks.mjs). */
+          ownOpen={ownBlocksOpenTo(link.account?.id)}
           headSlot={headSlot}
           /* The hold tip's card over the pedals (components/Coach): due, remembered on Try it or the hold itself, and put away on Skip or Got it. */
           holdTip={holdTipDue}
