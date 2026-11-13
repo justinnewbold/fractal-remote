@@ -625,9 +625,18 @@ export const ALSO_ON_AM4 =
  * JavaScript (the phone's own MIDI connection, made once per launch), so
  * the way out until a store build changes that is the player's: said on
  * the page wherever it is not connecting, and in the guide.
+ *
+ * AND THE ADAPTER FIRST, SAID OUTRIGHT (13 November 2026). The line used to
+ * open "Still not connecting after unplugging and plugging the adapter back
+ * in?", which took for granted a step nothing on the page had told anybody
+ * to take. "Bluetooth isn't connecting for some reason ... I got Bluetooth
+ * reconnected I just restarted the device the Bluetooth device. I don't
+ * know if that's in troubleshooting it or not, but it should be." (Justin,
+ * that day.) So the first sentence is the step itself, and closing the app
+ * is what comes after it.
  */
 export const CLOSE_AND_REOPEN =
-  'Still not connecting after unplugging and plugging the adapter back in? Close the app completely (swipe it away) and open it again.'
+  'Not connecting? Unplug the Bluetooth adapter for a few seconds and plug it back in. Still nothing? Close the app completely (swipe it away) and open it again.'
 
 /*
  * NO HEAT CHECK BUT THE FM3'S. Each untried way said "In the first minute,
