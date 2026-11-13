@@ -251,3 +251,22 @@ export const WATCH_QUICK_EDIT_FOR_EVERYONE = false
  * all.
  */
 export const NAM_KNOBS_FOR_EVERYONE = false
+
+/*
+ * AN AXE-FX III'S AND AN FM9'S OWN BLOCKS ON PLAY THROUGH THE COMPUTER,
+ * NAMED BY THE PHONE (lib/ownBlocks).
+ *
+ * "NAM shows up on Bluetooth but not when connected through my raspberry
+ * pie" and "I would rather use the pi if that's possible." (Justin, 13
+ * November 2026.) Through the computer the engine passes the NAM block, the
+ * IR Player, the Crossover, the Vocoder, Tone Match and Dynamic Distortion
+ * on with no name, so Play left them out. The phone names them from the
+ * list it uses over Bluetooth, and Play draws and switches them through the
+ * computer's own on/off and channel routes, which take any block's id.
+ * Built on his account first, as every new thing is: nobody has switched
+ * one of these through a computer yet, and his Raspberry Pi is the first
+ * check. Off, it is his account only (lib/ownBlocksHere), and for every
+ * other account each stays the New block it was. It opens to everyone when
+ * he says so, with its What's new line in that pull request.
+ */
+export const OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE = false

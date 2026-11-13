@@ -10802,7 +10802,7 @@ export function run(test) {
       [['irplayer', 'IR Player 1', true, 'A'], ['nam', 'NAM 1', false, 'B'], ['nam', 'NAM 2', true, 'A']]
     )
     /* And Play draws them (device.js stageBlocks keeps them, as any block with a name). */
-    assert.match(src('mobile/src/lib/device.js'), /export const stageBlocks = \(blocks\) =>\s+\(blocks \|\| \[\]\)\.filter\(\(b\) => b && !isNewBlock\(b\) && !STAGE_HIDDEN\.includes\(b\.slug\)\)/)
+    assert.match(src('mobile/src/lib/device.js'), /export const stageBlocks = \(blocks\) =>\s+\(blocks \|\| \[\]\)\.filter\(\(b\) => b && \(!isNewBlock\(b\) \|\| b\.onPlay === true\) && !STAGE_HIDDEN\.includes\(b\.slug\)\)/)
 
     /* Their words on the tile: a lone " 1" dropped, as Amp and Amp 2. */
     const { pedalName } = await import('../mobile/src/lib/tileGrid.js')

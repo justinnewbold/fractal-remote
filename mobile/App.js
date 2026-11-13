@@ -56,6 +56,8 @@ import Presets from './src/screens/Presets'
 import Setlists from './src/screens/Setlists'
 import Stage from './src/screens/Stage'
 import { hydrate, sync } from './src/lib/store'
+/* For what it does on the way in: hands lib/device the phone's own names for the blocks a computer passes on with none (lib/ownBlocks). */
+import './src/lib/ownBlocksHere'
 import { keepSetlistsInStep } from './src/lib/cloudSetlists'
 import { keepVp4SetupIn, vp4Here } from './src/lib/device'
 import { clearLinkFault, useRig, writeTuner } from './src/lib/rig'
