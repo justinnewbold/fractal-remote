@@ -217,6 +217,8 @@ function fakeGen3(sx, o) {
     pushing: false,
     /* EDIT'S SETTINGS (`edit`): each block's values as fn 0x1F hands them over, {count, values}, four channels one after another. */
     settings: o.settings ?? new Map(),
+    /* Every question the reader asked it (lib/gen3-describe), in order. */
+    described: [],
     edits: []
   }
   const nameBytes = (name) => {
@@ -339,7 +341,56 @@ function fakeGen3(sx, o) {
           if (opt.sysexPreset) state.preset = v
         } else if (sub === 0x09 && eid === 2 && pid === 0x20) state.bpm = Math.round(sx.bitsFloat(v))
         else if (sub === 0x19 && eid === 0x23 && pid === 2) reply(0x01, [...p.slice(0, 6), ...sx.floatSeptets(state.page ? state.hz : 0), 0, 0, 0, 0])
-        else if (opt.edit && (sub === 0x52 || sub === 0x09) && state.settings.has(eid) && find(eid)) {
+        else if (opt.describe && (sub === 0x1c || sub === 0x1f || sub === 0x00)) {
+          /*
+           * The unit's own account of a setting (lib/gen3-describe): a
+           * definition, its value as it writes it, or one label of a list.
+           * A place with nothing at it answers an all-nothing definition,
+           * and a label past the end of a list an answer with nothing in
+           * it, as a real one does. `describeSilentFrom` is how many
+           * questions it answers before it goes quiet.
+           */
+          state.described.push({ sub, eid, pid, which: sx.decode14(p[6], p[7]) })
+          if (opt.describeSilentFrom !== undefined && state.described.length > opt.describeSilentFrom) return
+          const s = (opt.describe.get(eid) || [])[pid]
+          const raw = (() => {
+            if (sub === 0x1c) {
+              const buf = new DataView(new ArrayBuffer(36))
+              if (s) {
+                buf.setUint32(0, s.wireId ?? 1000 + pid, true)
+                buf.setUint32(4, s.tc ?? 16, true)
+                ;[s.min, s.max, s.scale ?? 0, s.def ?? s.min, s.step ?? 0].forEach((x, i) => buf.setFloat32(8 + 4 * i, x, true))
+              }
+              return [...new Uint8Array(buf.buffer)]
+            }
+            if (!s) return []
+            const text = sub === 0x00 ? s.value : (s.labels || [])[sx.decode14(p[6], p[7]) - Math.round(s.min)]
+            return text === undefined ? [] : [...text].map((c) => c.charCodeAt(0))
+          })()
+          const wire = []
+          let acc = 0
+          let bits = 0
+          for (const byte of raw) {
+            acc = (acc << 8) | byte
+            bits += 8
+            while (bits >= 7) {
+              bits -= 7
+              wire.push((acc >> bits) & 0x7f)
+              acc &= (1 << bits) - 1
+            }
+          }
+          if (bits > 0) wire.push((acc << (7 - bits)) & 0x7f)
+          const inner = new Array(15).fill(0)
+          inner[0] = sub
+          inner[2] = 1
+          inner[3] = p[3]
+          inner[4] = p[4]
+          inner[5] = p[5]
+          inner[6] = raw.length ? 0x3a : 0x40
+          inner[13] = raw.length & 0xff
+          inner[14] = raw.length >> 8
+          reply(0x01, [...inner, ...wire])
+        } else if (opt.edit && (sub === 0x52 || sub === 0x09) && state.settings.has(eid) && find(eid)) {
           /* One of Edit's: a knob as its place along 0..65534, a typed write as its number, on the channel the block is on. */
           const chunk = state.settings.get(eid)
           const x = sx.bitsFloat(v)
@@ -775,6 +826,7 @@ async function onTheLine(kind, options = {}) {
       remember: (m) => remembered.push(m),
       onForeign: (name) => foreign.push(name),
       edit: options.edit,
+      reader: options.reader,
       send: (b) => {
         if (line.gone || line.refuses?.(b)) return false
         sent.push({ at: clock.now(), bytes: [...b] })
@@ -5320,7 +5372,9 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own, and so are Play's settle waits (own-echo, for REREAD_MAX_MS). */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './axefx3-edit.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3Catalog.js', './own-echo.js'])
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './axefx3-edit.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3Catalog.js', './own-echo.js'])
+    /* The developer's block reader (test/gen3-describe.mjs): the frame helpers and nothing else, so it reaches the unit only through the wire it is handed to. */
+    assert.deepEqual(imports(read('gen3-describe.js')), ['./fractal-sysex.mjs'], 'the block reader imports something')
     assert.deepEqual(imports(read('own-echo.js')), [], 'Play’s settle waits import something')
     /* The block lists, for the ids that are not blocks (NOT_BLOCKS): the FM3's list and nothing that sends. */
     assert.deepEqual(imports(read('gen3Catalog.js')), ['../data/blocks.json'], 'the block lists import something')
@@ -10590,6 +10644,124 @@ export function run(test) {
     t.unit.state.blocks.splice(0, t.unit.state.blocks.length, ...NAM_62())
     return t
   }
+
+  /*
+   * THE DEVELOPER'S BLOCK READER ON THE WIRE (lib/gen3-describe, whose own
+   * tests are test/gen3-describe.mjs). "Yes build the NAM reader now."
+   * (Justin, 12 November 2026.) A block the unit has just listed, read whole
+   * and asked about itself: for his account alone, only when the request
+   * says it is the reader's, and with nothing sent that is not a question.
+   */
+  const NAM_SAYS = () => {
+    const nam = []
+    nam[0] = { min: 0, max: 10, scale: 1, step: 0.001, value: '6.20' }
+    nam[1] = { min: -80, max: 20, scale: 1, step: 0.1, value: '-3.0 dB' }
+    nam[2] = { min: 0, max: 2, value: 'MY CAPTURE 01', labels: ['EMPTY', 'MY CAPTURE 01', 'PLEXI DIMED'] }
+    /* Whole ends and a scale: never asked for a label. */
+    nam[3] = { min: 0, max: 100, scale: 1, step: 1, value: '50' }
+    return new Map([[206, nam]])
+  }
+  const reading = (t, path) => drive(t.clock, t.wire.request(path, { reading: true }))
+  const readerLine = (options = {}) =>
+    onANamIII({ describe: NAM_SAYS(), settings: new Map([[206, { count: 8, values: [40632, 52427, 1, 32767, 0, 0, 0, 0] }]]), edit: () => false, reader: () => true, ...options })
+
+  test('the block reader on an Axe-Fx III: NAM 1 read whole and asked about itself, with nothing sent that is not a question', async () => {
+    const d = await import('../mobile/src/lib/gen3-describe.js')
+    const t = await readerLine()
+    /* What it may be pointed at: the unit's own list, the ones with no knobs first, and never the ids that are not blocks. */
+    const list = await reading(t, '/reader/blocks')
+    assert.deepEqual(list.filter((b) => !b.known), [
+      { effectId: 195, name: 'IR Player 1', known: false },
+      { effectId: 201, name: null, known: false },
+      { effectId: 206, name: 'NAM 1', known: false },
+      { effectId: 207, name: 'NAM 2', known: false }
+    ])
+    assert.ok(list.slice(4).length > 0 && list.slice(4).every((b) => b.known && b.name), 'the blocks the app already knows are not offered to check the reader against')
+    assert.ok(!list.some((b) => b.effectId === 200), 'Preset FC, which is not a block, is offered to the reader')
+    t.sent.length = 0
+
+    const out = await reading(t, '/reader/blocks/206')
+    assert.equal(out.block, 206)
+    assert.equal(out.stopped, null)
+    assert.equal(out.unit, 'Axe-Fx III')
+    assert.deepEqual([out.channel, out.bypassed], [1, false])
+    assert.deepEqual(out.bulk, { count: 8, values: [40632, 52427, 1, 32767, 0, 0, 0, 0] }, 'the block’s whole read is not in what the reader hands back')
+    assert.deepEqual(out.settings.map((s) => [s.id, s.value, s.list, s.labels]), [
+      [0, '6.20', false, []],
+      [1, '-3.0 dB', false, []],
+      [2, 'MY CAPTURE 01', true, ['EMPTY', 'MY CAPTURE 01', 'PLEXI DIMED']],
+      [3, '50', false, []]
+    ])
+    assert.deepEqual([out.settings[1].min, out.settings[1].max, out.settings[1].scale], [-80, 20, 1])
+    /* What went to the unit: its list of blocks, the one whole read, and questions. Nothing else, and never a write. */
+    const frames = t.frames().filter((f) => f[0] === 0xf0)
+    const kinds = frames.map((f) => (f[5] === 0x13 ? 'blocks' : t.sx.sameBytes(f, t.sx.frame(0x10, 0x1f, t.sx.encode14(206))) ? 'whole' : d.describeAllowed(f, 0x10) ? 'question' : `OTHER ${t.sx.toHex(f)}`))
+    /* Play's own watch of the unit (its scene, its preset's name, its tempo) goes on meanwhile, as it always does. */
+    const mine = kinds.filter((k, i) => ![0x0c, 0x0d, 0x14].includes(frames[i][5]))
+    assert.deepEqual([...new Set(mine)].sort(), ['blocks', 'question', 'whole'], 'the reader sent something that is not a question')
+    assert.equal(mine.filter((k) => k === 'whole').length, 1)
+    assert.equal(mine.filter((k) => k === 'question').length, out.asked)
+    assert.equal(out.asked, 128 + 4 + 3)
+    assert.deepEqual(t.unit.state.edits, [], 'the reader changed a setting')
+    /* Labels: of the one plain list, at its three values, and of nothing else. */
+    assert.deepEqual(t.unit.state.described.filter((q) => q.sub === 0x1f).map((q) => [q.eid, q.pid, q.which]), [[206, 2, 0], [206, 2, 1], [206, 2, 2]])
+    assert.ok(t.unit.state.described.every((q) => q.eid === 206), 'the reader asked about another block')
+    assert.ok(t.logs.some((l) => /the reader asked block 206 135 questions in [\d.]+ s: 4 settings$/.test(l)), 'the reader’s work is not in the log')
+
+    /* A block that is not in the preset, and an id that is not a block: refused with nothing sent to it. */
+    t.sent.length = 0
+    t.unit.state.described.length = 0
+    await assert.rejects(reading(t, '/reader/blocks/66'), (e) => e.status === 409 && /isn’t in the preset/.test(e.message))
+    await assert.rejects(reading(t, '/reader/blocks/200'), (e) => e.status === 400)
+    assert.deepEqual(t.unit.state.described, [])
+    assert.ok(!t.frames().some((f) => f[5] === 0x1f), 'a whole read went for a block that is not in the preset')
+  })
+
+  test('the block reader is his account’s alone, and only for a request that says it is the reader’s; and it stops at a unit that goes quiet', async () => {
+    /* Anybody else's wire: no such route, and nothing sent. */
+    for (const options of [{ reader: () => false }, { reader: undefined }]) {
+      const t = await readerLine(options)
+      t.sent.length = 0
+      await assert.rejects(reading(t, '/reader/blocks/206'), (e) => e.unsupported === true)
+      await assert.rejects(reading(t, '/reader/blocks'), (e) => e.unsupported === true)
+      assert.deepEqual(t.frames().filter((f) => f[0] === 0xf0 && (f[5] === 0x1f || f[5] === 0x01)), [], 'the reader asked the unit something for an account it is not open to')
+      assert.deepEqual(t.unit.state.described, [])
+    }
+    /* His wire, and a request that does not say it is the reader's: Play's and Edit's are what they were. */
+    const mine = await readerLine()
+    await assert.rejects(drive(mine.clock, mine.wire.request('/reader/blocks/206')), (e) => e.unsupported === true)
+    await assert.rejects(drive(mine.clock, mine.wire.request('/reader/blocks/206', { editing: true })), (e) => e.unsupported === true)
+    assert.deepEqual(mine.unit.state.described, [])
+    /* Never an AM4, which speaks another way. */
+    const am4 = await onTheLine('am4', { reader: () => true })
+    await assert.rejects(reading(am4, '/reader/blocks'), (e) => e.unsupported === true)
+
+    /* The one frame of Edit's shape it may send: the whole read of the block it has open, and only that. */
+    const { gen3Sender } = await import(WIRE)
+    const g3 = await import('../mobile/src/lib/gen3-edit.js')
+    const went = []
+    const send = gen3Sender((b) => went.push(b), () => {}, 0x10, () => null, () => 206)
+    assert.equal(send(g3.buildReadAll(0x10, 206)), 'sent')
+    assert.equal(send(g3.buildReadAll(0x10, 207)), 'refused', 'the reader’s leave for one block let another’s read through')
+    assert.equal(send(g3.buildKnob(0x10, 206, 1, 0.5)), 'refused', 'a knob write went to the block the reader has open')
+    /* And it opens none of Edit's writes: a block the catalog names is still held to Edit's own rule, which has nothing placed here. */
+    const axe = await import('../mobile/src/lib/axefx3-edit.js')
+    const amp = Array.from({ length: 300 }, (_, i) => i + 1).find((eid) => axe.editBlock(eid)?.slug === 'amp')
+    assert.ok(amp, 'the Axe-Fx III’s catalog has no amp')
+    assert.equal(gen3Sender((b) => went.push(b), () => {}, 0x10, () => null, () => amp)(g3.buildTyped(0x10, amp, 1, 0.5)), 'refused', 'the reader’s leave let one of Edit’s writes through')
+    assert.equal(gen3Sender((b) => went.push(b), () => {}, 0x10, () => null, () => amp)(g3.buildKnob(0x10, amp, 1, 0.5)), 'refused')
+    assert.equal(send(g3.buildReadAll(0x11, 206)), 'sent', 'a frame for another model is not this sender’s to hold, and goes as it always went')
+    assert.equal(gen3Sender((b) => went.push(b), () => {}, 0x10, () => null)(g3.buildReadAll(0x10, 206)), 'refused', 'with no reader, a block with no knobs is read whole')
+    assert.equal(went.length, 2)
+
+    /* A unit that stops answering part-way: two unanswered, and no more is asked. What it read is handed back. */
+    const quiet = await readerLine({ describeSilentFrom: 6 })
+    const out = await reading(quiet, '/reader/blocks/206')
+    assert.equal(out.stopped, 'the unit stopped answering')
+    assert.equal(quiet.unit.state.described.length, 8, 'the reader went on asking a unit that had stopped answering')
+    assert.equal(out.asked, 8)
+    assert.deepEqual(out.settings.map((s) => s.id), [0, 1, 2])
+  })
 
   test('on an Axe-Fx III, NAM 1 and 2 and the IR Player are on Play by name, with a colour, a picture and three letters; the FM3 and FM9 have none of them', async () => {
     const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')

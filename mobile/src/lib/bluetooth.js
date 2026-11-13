@@ -1993,7 +1993,9 @@ export function openWire() {
     /* The wrong unit was picked: the page says which one answered (bleWire heardAnother, and heardAnAm4, which also stops the wire), and null takes it off when the one picked answers after all (heardFromIt). */
     onForeign: (name) => noteBluetooth({ answeredAs: name || null }),
     /* Edit's knobs over Bluetooth, for this unit, asked at every request (editOverBluetooth). */
-    edit: () => editOverBluetooth(unit)
+    edit: () => editOverBluetooth(unit),
+    /* The developer's block reader (lib/gen3-describe), his account's alone, asked at every request. */
+    reader: () => allUnits === true
   })
   const mine = wire
   joiner = createJoiner({
