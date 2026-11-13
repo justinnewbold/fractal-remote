@@ -101,6 +101,7 @@ async function pretend(settings, { silentFrom, refuseAt } = {}) {
       }
       return answer(q, [...new Uint8Array(buf.buffer)])
     }
+    if (s && view === d.VIEW.value && s.valueBytes) return answer(q, s.valueBytes)
     const text = !s ? undefined : view === d.VIEW.value ? s.value : (s.labels || [])[which - Math.round(s.min)]
     return answer(q, text === undefined ? [] : [...text].map((c) => c.charCodeAt(0)))
   }
@@ -218,6 +219,25 @@ export function run(test) {
     assert.equal(big.settings[0].labels.length, l.d.LABELS_MOST)
     assert.equal(big.settings[0].more, true)
     assert.equal(l.asked.filter((a) => a.view === l.d.VIEW.label).length, l.d.LABELS_MOST)
+
+    /*
+     * A value the unit answers with something that is not plain text is
+     * kept as it came, never a bare "?": his Axe-Fx III answered every
+     * value that has a unit this way, and a "?" said nothing about how.
+     * One it does not answer at all says so.
+     */
+    const odd = []
+    odd[0] = { min: -80, max: 20, scale: 0, step: 0.05, valueBytes: [0x30, 0x2e, 0x30, 0x30, 0x00, 0x64, 0x42] }
+    odd[1] = { min: 0, max: 10, scale: 1, step: 0.01, value: '5.00' }
+    const o = await pretend(odd)
+    let nth = 0
+    const strange = await o.d.describeBlock({ ask: async (f) => (++nth === 4 ? null : o.ask(f)), pause: o.pause, model: AX3, block: 206 })
+    assert.equal(strange.settings[0].value, null)
+    assert.equal(strange.settings[0].raw, 'tag 3A, 7 bytes: 30 2E 30 30 00 64 42')
+    assert.deepEqual([strange.settings[1].value, strange.settings[1].silent], [null, true])
+    const oddText = o.d.describeText({ ...strange, name: 'NAM 1' })
+    assert.match(oddText, /now \? \(tag 3A, 7 bytes: 30 2E 30 30 00 64 42\)$/m)
+    assert.match(oddText, /now \? \(no answer\)$/m)
 
     /* What it is as text: a line a setting, the list’s names, and the whole read’s numbers. */
     const text = t.d.describeText({ ...out, name: 'NAM 1', bulk: { count: 8, values: [1, 2, 3, 4, 5, 6, 7, 8] } })

@@ -1837,21 +1837,21 @@ export function run(test) {
   })
 
   test('a block this app has no name for is said in the log by its number, once, and left off the chain', async () => {
-    /* The Axe-Fx III's NAM block (firmware 33) came in every status answer and reached no log: its number is what naming it needs. 201: nobody's id. */
+    /* The Axe-Fx III's NAM block (firmware 33) came in every status answer and reached no log: its number is what naming it needs. 240: nobody's id. (It was 201 here until his own III said what 201 is: the preset's Performance page.) */
     const t = await onTheLine('fm3')
-    t.unit.state.blocks.push({ eid: 201, bypassed: false, channel: 1 })
+    t.unit.state.blocks.push({ eid: 240, bypassed: false, channel: 1 })
     const chain = await t.get('/preset/blocks')
-    assert.ok(!chain.some((b) => b.effectId === 201), 'a block the app has no name for was put on the chain')
+    assert.ok(!chain.some((b) => b.effectId === 240), 'a block the app has no name for was put on the chain')
     const said = () => t.logs.filter((l) => /no name for yet/.test(l))
     assert.equal(said().length, 1, `the unknown block was not said once: ${t.logs.join(' | ')}`)
-    assert.match(said()[0], /id 201 \(on, channel B\)/)
+    assert.match(said()[0], /id 240 \(on, channel B\)/)
     await t.get('/preset/blocks')
     assert.equal(said().length, 1, 'the same unknown block was said again on the next read')
     /* Switched on the unit: said again, as it is now. */
-    t.unit.state.blocks.find((b) => b.eid === 201).bypassed = true
+    t.unit.state.blocks.find((b) => b.eid === 240).bypassed = true
     await t.get('/preset/blocks')
     assert.equal(said().length, 2)
-    assert.match(said()[1], /id 201 \(off, channel B\)/)
+    assert.match(said()[1], /id 240 \(off, channel B\)/)
   })
 
   test('the chain answer leaves out the input, the output and the looper', async () => {
@@ -10624,7 +10624,8 @@ export function run(test) {
    * preset by preset: 206 and 207 only in his NAM presets, always one on and
    * one off, so NAM 1 and NAM 2; 195, IR Player 1 in Fractal's enum; 200,
    * Preset FC, in every preset and not a block; 201, in every preset, the one
-   * with no NAM too, and nobody's yet. Preset 62 as it was, with a drive and
+   * with no NAM too, and nobody's until his own III said it is the preset's
+   * Performance page (13 November 2026). Preset 62 as it was, with a drive and
    * a delay of its own and the two ends.
    */
   const NAM_62 = () => [
@@ -10672,12 +10673,11 @@ export function run(test) {
     const list = await reading(t, '/reader/blocks')
     assert.deepEqual(list.filter((b) => !b.known), [
       { effectId: 195, name: 'IR Player 1', known: false },
-      { effectId: 201, name: null, known: false },
       { effectId: 206, name: 'NAM 1', known: false },
       { effectId: 207, name: 'NAM 2', known: false }
     ])
-    assert.ok(list.slice(4).length > 0 && list.slice(4).every((b) => b.known && b.name), 'the blocks the app already knows are not offered to check the reader against')
-    assert.ok(!list.some((b) => b.effectId === 200), 'Preset FC, which is not a block, is offered to the reader')
+    assert.ok(list.slice(3).length > 0 && list.slice(3).every((b) => b.known && b.name), 'the blocks the app already knows are not offered to check the reader against')
+    assert.ok(!list.some((b) => b.effectId === 200 || b.effectId === 201), 'Preset FC or the Performance page, which are not blocks, is offered to the reader')
     t.sent.length = 0
 
     const out = await reading(t, '/reader/blocks/206')
@@ -10713,6 +10713,7 @@ export function run(test) {
     t.unit.state.described.length = 0
     await assert.rejects(reading(t, '/reader/blocks/66'), (e) => e.status === 409 && /isn’t in the preset/.test(e.message))
     await assert.rejects(reading(t, '/reader/blocks/200'), (e) => e.status === 400)
+    await assert.rejects(reading(t, '/reader/blocks/201'), (e) => e.status === 400)
     assert.deepEqual(t.unit.state.described, [])
     assert.ok(!t.frames().some((f) => f[5] === 0x1f), 'a whole read went for a block that is not in the preset')
   })
@@ -10855,7 +10856,7 @@ export function run(test) {
     assert.deepEqual([...new Set(ids)].sort((a, b) => a - b), chain.map((b) => b.effectId).sort((a, b) => a - b))
     /* Preset FC, and the rest that are not blocks: a bypass or a channel for one is refused, and nothing goes. */
     const { NOT_BLOCKS } = await import('../mobile/src/lib/gen3Catalog.js')
-    assert.deepEqual(NOT_BLOCKS, [2, 190, 199, 200])
+    assert.deepEqual(NOT_BLOCKS, [2, 190, 199, 200, 201])
     t.sent.length = 0
     for (const id of NOT_BLOCKS) {
       await assert.rejects(t.post(`/preset/blocks/${id}/bypass`, { bypassed: true }), (e) => e.status === 400)
@@ -10874,36 +10875,35 @@ export function run(test) {
     assert.deepEqual(c.frames().filter((f) => f[5] === 0x0a).map(hex), [c.sx.buildSetBypass(0x10, 118, true), c.sx.buildSetBypass(0x10, 118, false)].map(hex))
   })
 
-  test('the log stops naming the III’s NAM, IR Player and Preset FC, and still names 201 and anything else it has no name for', async () => {
+  test('the log stops naming the III’s NAM, IR Player, Preset FC and Performance page, and still names anything else it has no name for', async () => {
     const said = (t) => t.logs.filter((l) => /no name for yet/.test(l))
     const t = await onANamIII()
     await t.get('/preset')
     await t.get('/preset/blocks')
-    assert.equal(said(t).length, 1, t.logs.join(' | '))
-    assert.match(said(t)[0], /: id 201 \(on, channel A\)$/, 'the line names a block the app now knows')
-    for (const id of [195, 196, 197, 198, 199, 200, 206, 207]) assert.ok(!new RegExp(`id ${id}\\b`).test(said(t)[0]), `the line still names ${id}`)
-    /* Preset 61, with no NAM: 201 alone, said again because the preset changed. */
+    /* 201 was the one id still said here, on every preset of a III, until his own III said what it is: the preset's Performance page (docs/ax3-readings.md). */
+    assert.equal(said(t).length, 0, `a preset with nothing unknown in it was said: ${said(t).join(' | ')}`)
+    /* Preset 61, with no NAM: nothing unknown either. */
     t.unit.state.preset = 61
     t.unit.state.blocks.splice(0, t.unit.state.blocks.length, { eid: 37, bypassed: false, channel: 0 }, { eid: 201, bypassed: false, channel: 0 }, { eid: 200, bypassed: false, channel: 0 }, { eid: 42, bypassed: false, channel: 0 })
     await t.get('/preset')
     await t.get('/preset/blocks')
-    assert.equal(said(t).length, 2)
-    assert.match(said(t)[1], /on preset 61: id 201 \(on, channel A\)$/)
-    /* A preset with nothing unknown in it: nothing said. And another id nobody has named yet still is. */
+    assert.equal(said(t).length, 0)
+    /* And an id nobody has named yet still is said, alone. */
     t.unit.state.preset = 63
-    t.unit.state.blocks.splice(0, t.unit.state.blocks.length, ...NAM_62().filter((b) => b.eid !== 201))
+    t.unit.state.blocks.splice(0, t.unit.state.blocks.length, ...NAM_62())
     await t.get('/preset')
     await t.get('/preset/blocks')
-    assert.equal(said(t).length, 2, 'a preset with nothing unknown in it was said')
+    assert.equal(said(t).length, 0)
     t.unit.state.blocks.push({ eid: 208, bypassed: true, channel: 3 })
     await t.get('/preset/blocks')
+    assert.equal(said(t).length, 1)
     assert.match(said(t).at(-1), /on preset 63: id 208 \(off, channel D\)$/)
     /* On an FM9 the III's own are strangers still, and Preset FC is not. */
     const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
     const nine = await onTheLine('fm9', { catalog: catalogFor('fm9') })
     nine.unit.state.blocks.splice(0, nine.unit.state.blocks.length, ...NAM_62())
     await nine.get('/preset/blocks')
-    assert.match(said(nine)[0], /: id 195 \(off, channel A\); id 206 \(on, channel B\); id 207 \(off, channel A\); id 201 \(on, channel A\)$/)
+    assert.match(said(nine)[0], /: id 195 \(off, channel A\); id 206 \(on, channel B\); id 207 \(off, channel A\)$/)
   })
 
   test('Edit opens the III’s NAM and IR Player on their on and off, says their knobs aren’t in the app yet, and never reads or writes anything else of theirs', async () => {

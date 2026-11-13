@@ -58,8 +58,9 @@ Never hold work for an answer that cannot arrive until the run is over.
 
 His own short word for it, in what he writes and in replies to him. The
 app, the website, the store texts and the logs still say "Axe-Fx III",
-which is the unit's name. He has one since that day (firmware 33, with an
-FC), as well as the FM3 and the AM4.
+which is the unit's name. He has one since that day, with an FC, as well as
+the FM3 and the AM4. Its firmware has the NAM block, so 33 or later; he
+has not said which.
 
 **Write it for a guitarist, not a developer.** Justin is not a programmer.
 Say what a change does to the app in front of him, not what it does to the
@@ -764,8 +765,25 @@ what the computer sends for the same edit, and a test holds it there.
     from what he reads off the AX3's own screen or Axe-Edit III (never a
     picture of theirs committed). Then NAM gets a catalog and Edit its
     knobs, in a store version if it is new for customers.
-  - It has not run on a unit: his first read is the first check, and the
-    page offers a block the app already knows (an amp) to check it against.
+  - *It ran on his AX3 on 13 November 2026, and docs/ax3-readings.md is
+    what it read.* It agreed with the app's own table on the block it was
+    checked against (Input 1). NAM 1 and NAM 2 are the same: 16 settings,
+    18 values a channel. Known from the unit: the capture list, Level,
+    Balance, on and off, phase, the tone stack's twelve types and its
+    three 0 to 10 knobs. STILL WANTED, from a photo of the NAM block's
+    pages on the AX3 or in Axe-Edit III: the names of settings 3, 5, 7, 8,
+    14 and 15, and the choices of 8 and 13. Until then NAM has no catalog.
+  - *Block 201, in every III preset, is the preset's Performance page*
+    (ten controls: a label, the block it points at, the setting it turns),
+    so it is in `NOT_BLOCKS` and no longer in the log's line of unnamed
+    blocks. Its ten settings named the app's Axe-Fx III table right, ten
+    for ten: the first check of ForgeFX's III tables against a unit. Edit
+    itself has still not been turned on one. Reading that page into the
+    app (his ten controls, his labels, per preset) was offered and not
+    asked for.
+  - A value the unit answers with something that is not plain text (every
+    value with a unit did, on his AX3) is printed as it came, never a bare
+    "?".
 - **Saving over Bluetooth is still not built, and the page says what
   else is not** (12 November 2026). He thought it was: "I think we can
   actually save on Bluetooth now and I don't know that there's really

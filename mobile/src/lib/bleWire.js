@@ -1518,8 +1518,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * III, NAM 1 and 2 at 206 and 207 and the IR Player at 195 to 198, named
    * in 1.89.73 from what this line said in a customer's log), and the ids
    * that are not blocks at all (lib/gen3Catalog NOT_BLOCKS: the III's
-   * Preset FC, 200, was in every preset's line). Anything else, such as the
-   * 201 in every preset of that III, still is.
+   * Preset FC, 200, was in every preset's line, and so was 201, which his
+   * own III said is the preset's Performance page). Anything else still is.
    */
   function sayStrangers(states) {
     const known = new Set([...blocks.filter((c) => Number.isInteger(c?.page) && c.slug).map((c) => c.page), ...NOT_BLOCKS])
@@ -2645,7 +2645,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /*
    * GET /reader/blocks: what the reader may be pointed at, out of the
    * unit's own list of what is in its preset now. Every block but the ids
-   * that are not blocks (NOT_BLOCKS: the Controllers, the Foot Controller),
+   * that are not blocks (NOT_BLOCKS: the Controllers, the Foot Controller,
+   * the Performance page),
    * each with the name the catalog has for it, or none, and whether Edit
    * already has its knobs: the ones it has none for come first, and one it
    * does have is there to check the reader against what is already known.

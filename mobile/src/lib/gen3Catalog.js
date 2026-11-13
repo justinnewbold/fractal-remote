@@ -104,8 +104,14 @@ const OWN = {
  * every preset's status answer, so the log said it on every preset change;
  * now it is known, left off Play as before, and a bypass or channel for one
  * is refused with nothing sent (bleWire).
+ *
+ * And 201, the preset's Performance page, which is not in Fractal's
+ * published enum: read off Justin's own Axe-Fx III on 13 November 2026 with
+ * the block reader (docs/ax3-readings.md). Ten controls, each a label, the
+ * block it points at and the setting it turns. In every preset's status
+ * answer on a III, and nothing a player switches.
  */
-export const NOT_BLOCKS = Object.freeze([2, 190, 199, 200])
+export const NOT_BLOCKS = Object.freeze([2, 190, 199, 200, 201])
 
 /*
  * WHAT EDIT SAYS ON ONE OF THEM, under its on and off, where the knobs would
