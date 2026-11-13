@@ -86,8 +86,10 @@
  *      They follow the capture: they moved when he chose another capture
  *      and changed nothing else of theirs. Never written.
  *
- * NOTHING HERE HAS BEEN TURNED ON A UNIT. Every number above was READ off
- * his; no write of Edit's has gone to a NAM block yet. The writes are the
+ * THE KNOBS HAVE BEEN TURNED ON HIS UNIT, AND THEY WORK: "Knobs all work
+ * over Bluetooth correctly" (Justin, 13 November 2026, app 1.90.48). The
+ * switches have not: Edit draws none yet, so nobody could tap one. The
+ * writes are the
  * ones gen3-edit builds for any knob or switch on any gen-3 block, nothing
  * new on the wire, and fewer of them: a knob here is sent its place along
  * its travel (fn 0x01, 52 00) and never the typed write of the same place

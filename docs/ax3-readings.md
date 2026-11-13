@@ -177,8 +177,13 @@ Input Mode (`mobile/src/lib/axefx3-own-knobs.js`, behind
 draws no switch of any block, so the five are read and can be written through
 the wire, with nothing on the screen for them. The capture (0), the block's
 own bypass (4), setting 7 (Scene Ignore, named after the list was written)
-and values 16 and 17 are left out, so nothing can be written to them. All of the above was READ off the unit. Nothing has been
-written to a NAM block from the app yet.
+and values 16 and 17 are left out, so nothing can be written to them. All of the above was READ off the unit.
+
+**The knobs were then turned from the app, and they work**: "Knobs all work
+over Bluetooth correctly" (Justin, 13 November 2026, app 1.90.48, his iPhone
+over Bluetooth). The first write of Edit's to a NAM block, and the first knob
+Edit turned on any Axe-Fx III. The five switches have not been written: Edit
+draws none yet.
 
 ## The blocks the app had no name for (13 November 2026)
 

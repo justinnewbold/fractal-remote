@@ -741,8 +741,8 @@ an FM9 and 1 on a III) are what the unit takes; the phone sends exactly
 what the computer sends for the same edit, and a test holds it there.
 
 - **The NAM block has its knobs in Edit for his account only, written by
-  hand from what his AX3 said, and not one of them has been turned on a
-  unit yet** (13 November 2026). Over Bluetooth, or the unit's USB cable
+  hand from what his AX3 said, and he has turned them on his unit: "Knobs
+  all work over Bluetooth correctly"** (13 November 2026). Over Bluetooth, or the unit's USB cable
   into the phone, Play draws and switches NAM 1 and NAM 2 (206 and 207, off
   a customer's log) for everybody. The codec's catalog has no NAM
   (axefx3-knobs.js is generated and never hand-edited), so its settings are
@@ -804,15 +804,19 @@ what the computer sends for the same edit, and a test holds it there.
     Distortion's Type is a switch, not a model. One way only for all of
     them, and none has been turned on a unit. An FM9 has no hand-written
     list: there these blocks keep their on and off and no knobs.
-  - *NOTHING HAS BEEN WRITTEN TO A NAM BLOCK ON A REAL UNIT.* The numbers
-    were read off his; the writes are the ones every gen-3 knob and switch
-    gets (fn 0x01: 52 00 for a knob's place, 09 00 for the switch's
-    number), and whether the III takes them at a NAM is his first turn of
-    a knob to find out. And fewer than other blocks get: a NAM's knob is
-    never sent the typed way the app falls back to elsewhere when a write
-    does not read back as asked (gen3-edit `typedKnobs: false`, "ONE WAY
-    ONLY"); the retry sends nothing and Edit says what the unit holds. Do
-    not open the switch before he has turned them.
+  - *THE NAM BLOCK'S KNOBS HAVE BEEN TURNED ON A REAL UNIT, AND THEY
+    WORK.* "Knobs all work over Bluetooth correctly" (Justin, 13 November
+    2026, his AX3 from his iPhone, app 1.90.48). That is the first write
+    of Edit's to go to a NAM block, and the first knob of Edit's turned on
+    any Axe-Fx III: the knob write every gen-3 knob gets (fn 0x01, 52 00
+    for its place) is taken there. A NAM's knob is still never sent the
+    typed way the app falls back to elsewhere (gen3-edit `typedKnobs:
+    false`, "ONE WAY ONLY"): it did not need it. NOT TURNED YET: the NAM
+    block's five switches (Edit draws none, so there is nothing to tap),
+    and every knob of the other five blocks in the list. The switch is
+    still his account only: it opens when he says so, and it carries the
+    five unturned blocks with it unless they are given a switch of their
+    own first.
 - **The block reader is how a block is asked what is in it** (12 November
   2026: "Yes build the NAM reader now"). No catalog named what is inside
   the NAM block, and through the computer it is still a New block. So
@@ -850,7 +854,7 @@ what the computer sends for the same edit, and a test holds it there.
     blocks. Its ten settings named the app's Axe-Fx III table right, ten
     for ten: the first check of ForgeFX's III tables against a unit, and
     Axe-Edit III's Perform page showed the same ten the same day. Edit
-    itself has still not been turned on one. Reading that page into the
+    itself was first turned on one that day too, on the NAM block (above). Reading that page into the
     app (his ten controls, his labels, per preset) was offered and not
     asked for.
   - *The blocks the app had no name for* ("double check we have all those

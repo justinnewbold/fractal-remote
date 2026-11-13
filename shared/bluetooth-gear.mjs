@@ -144,7 +144,7 @@ export const TRIED_NOTES = {
   am4: 'From an iPhone and an Android phone, 26 October 2026; the WIDI Jack on 28 October; by USB cable from an iPhone, 27 October 2026 (its own USB-C straight in, and a C2MIDI Pro plugged straight into the iPhone), and again 3 November.',
   fm3: 'From an iPhone and an Android phone, 26 October 2026, with the U2MIDI Pro: the WIDI Master and the C2MIDI Pro got very hot on it.',
   fm9: 'Confirmed working, 1 November 2026. Which phone and adapter were not said.',
-  axefx3: 'From an iPhone, 31 October 2026: a customer confirmed it works. Which adapter was not said.'
+  axefx3: 'From an iPhone, 31 October 2026: a customer confirmed it works. Which adapter was not said. Justin’s own (Mark II, firmware 33.01) from his iPhone, 13 November 2026: Edit’s knobs on the NAM block all work.'
 }
 
 /*
