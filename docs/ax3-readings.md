@@ -224,7 +224,11 @@ comes out as the unit showed it. What read the same as its neighbours, has no
 name, or picks an impulse response is left out. None has been turned from the
 app yet.
 
-Through the computer the engine (ForgeFX, at the pin) has no name for any of
+From 1.90.51 the computer app serves these blocks' knobs too (ForgeFX
+0488f11, `server/src/ownBlocks.ts`, this same list), for a block read by its
+effect id, on an Axe-Fx III. Its chain read is unchanged:
+
+Through the computer the engine (ForgeFX) has no name in the chain for any of
 them, nor for the NAM block: it passes each on with its place, its on and
 off, its channel and its effect id, and its on/off and channel routes take
 any id. From 1.90.48 the phone names them itself on the way in
@@ -241,11 +245,11 @@ moves or edits the chain.
 | 2 | Bands | 4..24; 16 |
 | 3 | Min Frequency | 20..2000 Hz; 200.0 |
 | 4 | Max Frequency | 2000..20000 Hz; 5000 |
-| 5 | Filter Resonance | 0.5..2; 1.000 |
+| 5 | Frequency Shift | 0.5..2; 1.000 |
 | 6 | Freeze | list: OFF, ON |
 | 7 | Master Level | 0..1 on the wire, shown as a percentage; 100.0 % |
 | 8 | Master Pan | -1..1 on the wire |
-| 9 | Frequency Shift | 0.2..5; 1.000 |
+| 9 | Filter Resonance | 0.2..5; 1.000 |
 | 10 | Attack | 0.005..1 s, shown in ms; 10.00 ms |
 | 11 | Decay | 0.005..1 s, shown in ms; 50.00 ms |
 | 12 | Highpass Mix | 0..100 %; 0.0 % |
@@ -260,6 +264,22 @@ moves or edits the chain.
 
 Its first whole read gave no answer; the second, minutes later, gave 67
 values, one for each setting.
+
+**Settings 5 and 9 were entered the other way round until 1.90.51.** Both
+read 1.000, so the page could not say which was which. The codec's own
+table for the III (forgefx-midi AXE3_PARAMS, mined from the editor's
+definitions) names setting 5 VOCODER_CSHIFT, "Frequency Shift", 0.5 to 2,
+and setting 9 VOCODER_RES, "Filter Resonance", 0.2 to 5: the ranges the unit
+gave at those two settings. It also names setting 17 (VOCODER_GLOBALMIX).
+
+That table has every one of these five blocks (VOCODER, CROSSOVER,
+TONEMATCH, IRPLAYER, DYNDIST) with the record counts read here (67, 15, 22,
+20, 14). It settles the Crossover: 2 Low Level Left, 3 Hi Level Left, 4 Low
+Level Right, 5 Hi Level Right, and the pans 6 to 9 in the same order; 10 is
+its mix. On Tone Match, 4 is Match, 13 Reference Solo, 14 a taper, 15
+accumulate. Its ranges are not all the unit's own (Dynamic Distortion's
+Drive is 1 to 1000 there; the unit shows 0 to 10), so the app serves the
+rows written here, and checks names against it.
 
 ### Crossover (142)
 

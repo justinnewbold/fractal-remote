@@ -2686,7 +2686,12 @@ export function run(test) {
     assert.match(read('src/components/GridEditor.jsx'), /if \(item\.kind === 'held'\) \{[\s\S]{0,600}\{NEW_BLOCK_NAME\}[\s\S]{0,200}\{NEW_BLOCK_NOTE\}/, 'the browser’s chain editor does not draw a new block in words')
     const edit = read('mobile/src/screens/Edit.js')
     assert.match(edit, /item\.kind === 'held' \? \([\s\S]{0,600}label=\{NEW_BLOCK_NAME\} disabled[\s\S]{0,200}\{NEW_BLOCK_NOTE\}/, 'the phone’s chain editor does not draw a new block in words, with nothing to press')
-    assert.match(edit, /const blocks = useMemo\(\(\) => knownBlocks\(chainAll\), \[chainAll\]\)/, 'the phone’s Edit opens and turns blocks it has no name for')
+    /* Edit's own list: the blocks the app knows, and one whose knobs the computer answers (lib/ownBlocks `turns`), and no other with no name. The chain editor is still handed the whole chain, which holds every such block's cell. */
+    assert.match(edit, /const blocks = useMemo\(\(\) => editBlocks\(chainAll\), \[chainAll\]\)/, 'the phone’s Edit opens and turns blocks it has no name for')
+    assert.match(read('mobile/src/lib/device.js').replace(/\s+/g, ' '), /export const editBlocks = \(blocks\) => \(Array\.isArray\(blocks\) \? blocks : \[\]\)\.filter\(\(b\) => b && \(!isNewBlock\(b\) \|\| b\.turns === true\)\)/, 'Edit’s list lets in a block with no name')
+    assert.match(edit, /<ChainEditor blocks=\{chainAll\} /, 'the chain editor is no longer handed the whole chain')
+    assert.match(edit, /const modBlocks = useMemo\(\(\) => knownBlocks\(blocks\), \[blocks\]\)/)
+    assert.match(edit, /<Modifiers key=\{.*\} blocks=\{modBlocks\} /, 'Modifiers is offered a block the app has no name for')
   })
 
   test('the phone keeps a block newer than the app, marked, and Play still leaves it out', async () => {
@@ -2769,6 +2774,24 @@ export function run(test) {
         ['dynadist', 'dynadist', 'Dynamic Distortion 1', false, true, true]
       ]
     )
+    assert.ok(named.every((b) => !('turns' in b)), 'a block was marked as one the computer turns with no knobs asked for')
+    /*
+     * AND WHERE THE COMPUTER CAN ANSWER ITS KNOBS (13 November 2026: "right
+     * now I have no knobs showing when I'm connected over raspberry pie"):
+     * on a III the block is marked `turns` in place of `knobs: false`, by
+     * how much of the list the account gets. All of it (his account), the
+     * NAM block alone (every account), or none.
+     */
+    const marks = (level, unit = 'axefxiii') => Object.fromEntries(nameOwnBlocks(marked, unit, true, level).filter((b) => b.onPlay).map((b) => [b.effectId, [b.turns === true, b.knobs]]))
+    assert.deepEqual(marks(true), { 142: [true, undefined], 206: [true, undefined], 207: [true, undefined], 195: [true, undefined], 202: [true, undefined] })
+    assert.deepEqual(marks('nam'), { 142: [false, false], 206: [true, undefined], 207: [true, undefined], 195: [false, false], 202: [false, false] })
+    for (const none of [false, undefined, null, 'all', 1]) assert.deepEqual(marks(none), { 142: [false, false], 206: [false, false], 207: [false, false], 195: [false, false], 202: [false, false] }, String(none))
+    /* Never an FM9: the computer has no such list for one. */
+    assert.deepEqual(marks(true, 'fm9'), { 142: [false, false] })
+    /* Still a New block, `turns` or not: nothing that moves or edits the chain may touch it. */
+    for (const b of nameOwnBlocks(marked, 'axefxiii', true, true)) if (b.onPlay) assert.equal(isNewBlock(b), true, `${b.effectId} is no longer protected`)
+    /* Closed to the account, the knobs change nothing: the very list back. */
+    assert.equal(nameOwnBlocks(marked, 'axefxiii', false, true), marked)
     /* What it was sent is kept: where it sits, whether it is on, its channel. */
     assert.deepEqual([by[206].row, by[206].col, by[206].bypassed, by[206].channel, by[206].effectId], [1, 4, false, 'B', 206])
     /* STILL A NEW BLOCK to every list that moves or edits the chain. */
@@ -2791,10 +2814,16 @@ export function run(test) {
 
     /* Open to his account alone until the switch says everybody, asked at every read, and set in one place. */
     const here = read('mobile/src/lib/ownBlocksHere.js').replace(/\s+/g, ' ')
-    assert.match(here, /setChainNamer\(\(blocks\) => nameOwnBlocks\(blocks, getState\(\)\.deviceSlug, bluetoothAdmin\(\) === true \|\| OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE\)\)/)
+    assert.match(here, /setChainNamer\(\(blocks\) => nameOwnBlocks\(blocks, getState\(\)\.deviceSlug, bluetoothAdmin\(\) === true \|\| OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE, ownKnobsLevel\(bluetoothAdmin\(\) === true\)\)\)/)
     assert.match(read('mobile/src/lib/features.js'), /export const OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE = false\n/, 'the phone’s own names through a computer are open to everybody before he said so')
     assert.equal((read('mobile/App.js').match(/^import '\.\/src\/lib\/ownBlocksHere'$/gm) || []).length, 1)
     assert.equal(read('mobile/src/lib/ownBlocks.js').match(/^import .*$/gm).join('\n'), "import { catalogFor } from './gen3Catalog.js'")
+    /* On a computer app from before it could answer them, the block's read has no knobs, and Edit says what to do, once the read is back. */
+    const { OWN_KNOBS_NEED_COMPUTER, turnsThroughComputer } = await import('../mobile/src/lib/ownBlocks.js')
+    assert.equal(OWN_KNOBS_NEED_COMPUTER, 'Update the computer app to turn this block’s knobs.')
+    assert.ok(!/\byet\b|coming|beta|soon|this phone|Bluetooth/i.test(OWN_KNOBS_NEED_COMPUTER))
+    assert.match(read('mobile/src/screens/Edit.js'), /\{block\.turns === true && answered && !loading && !params\.length \? <Note>\{OWN_KNOBS_NEED_COMPUTER\}<\/Note> : null\}/)
+    assert.deepEqual([turnsThroughComputer('axefx3', 'nam', 'nam'), turnsThroughComputer('axefx3', 'vocoder', 'nam'), turnsThroughComputer('axefx3', 'vocoder', true), turnsThroughComputer('fm9', 'crossover', true), turnsThroughComputer('axefx3', 'amp', true), turnsThroughComputer('axefx3', 'nam', false)], [true, false, true, false, false, false])
     /* And nothing of it in the files the computer app is made of. */
     for (const f of ['shared/new-block.mjs', 'shared/grid-plan.mjs']) assert.ok(!/\bonPlay\b|\bownBlocks\b|nameOwnBlocks/.test(read(f)), f)
   })
@@ -2843,6 +2872,25 @@ export function run(test) {
     /* Nothing was asked of it but that: no knobs, no type, no params. */
     assert.equal(asked(/\/preset\/blocks\/(206|207|195|142|202)\/(params|type)/), 0)
     assert.equal(asked(/\/blocks\/(nam|irplayer|crossover|dynadist)\//), 0)
+
+    /*
+     * AND WITH ITS KNOBS THE COMPUTER'S TO ANSWER: the NAM blocks are in
+     * Edit's own list and the control search, and nothing else with no name
+     * is. The chain editor's lanes still hold their cells.
+     */
+    device.setChainNamer((blocks) => nameOwnBlocks(blocks, rig.getState().deviceSlug, true, 'nam'))
+    await rig.refreshBlocks()
+    s = rig.getState()
+    assert.deepEqual(s.blocks.map((b) => b.effectId), [118, 142, 206, 207, 195, 202, 58])
+    assert.deepEqual(device.editBlocks(s.allBlocks).map((b) => b.effectId), [118, 206, 207, 58], 'Edit’s list is not the known blocks and the NAM blocks')
+    assert.deepEqual(device.knobBlocks(s.allBlocks).map((b) => b.effectId), [118, 206, 207, 58])
+    assert.deepEqual(knownBlocks(s.allBlocks).map((b) => b.effectId), [118, 58])
+    const lane2 = lanesFor(s.allBlocks, { grid: { rows: 6, cols: 14 } }).find((l) => l.row === 1)
+    for (const col of [2, 3, 4, 5, 6, 7, 8]) assert.ok(!lane2.gaps.includes(col), `the cell of a block the computer turns (column ${col}) is offered as free`)
+    device.setChainNamer((blocks) => nameOwnBlocks(blocks, rig.getState().deviceSlug, true, true))
+    await rig.refreshBlocks()
+    assert.deepEqual(device.editBlocks(rig.getState().allBlocks).map((b) => b.effectId), [118, 142, 206, 207, 195, 202, 58])
+    assert.deepEqual(device.editBlocks(null), [])
 
     /* A namer only names: one that drops a block, or answers something that is no list, is not listened to. */
     for (const bad of [(blocks) => blocks.slice(1), () => null, () => 'nam']) {

@@ -13,8 +13,8 @@
  */
 import { setChainNamer } from './device'
 import { getState } from './rig'
-import { bluetoothAdmin } from './bluetooth'
+import { bluetoothAdmin, ownKnobsLevel } from './bluetooth'
 import { OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE } from './features'
 import { nameOwnBlocks } from './ownBlocks'
 
-setChainNamer((blocks) => nameOwnBlocks(blocks, getState().deviceSlug, bluetoothAdmin() === true || OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE))
+setChainNamer((blocks) => nameOwnBlocks(blocks, getState().deviceSlug, bluetoothAdmin() === true || OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE, ownKnobsLevel(bluetoothAdmin() === true)))

@@ -250,15 +250,26 @@ export const WATCH_QUICK_EDIT_FOR_EVERYONE = false
  * (lib/ble-rule.js EDIT_FROM_STORE) still decides whether a copy edits at
  * all.
  *
- * AND THE SAME SWITCH FOR THE REST OF THE III'S OWN BLOCKS (1.90.49): the IR
- * Player, the Vocoder, the Crossover, Tone Match and Dynamic Distortion,
- * whose knobs are in the same hand-written list (lib/axefx3-own-knobs.js)
- * and are read through the same second Edit of the III's. One list, one
- * gate: there is no opening the NAM block's without theirs. Each was read
- * off his unit once and none has been turned, so the same rule holds for
- * all of them before this says true.
+ * OPEN TO EVERYONE SINCE 13 NOVEMBER 2026. He turned them on his own
+ * Axe-Fx III over Bluetooth that day ("Knobs all work over Bluetooth
+ * correctly") and, asked whether to open them now or keep them on his
+ * account, said "Open them to everyone". So this is true: every account
+ * whose Edit is open on an Axe-Fx III gets the NAM block's knobs (lib/bleWire
+ * ownEditOf `'nam'`, axefx3-edit `namOnly`). Off, they are his account's
+ * alone again.
  */
-export const NAM_KNOBS_FOR_EVERYONE = false
+export const NAM_KNOBS_FOR_EVERYONE = true
+
+/**
+ * AND THE REST OF THE III'S OWN BLOCKS' KNOBS (1.90.49): the IR Player, the
+ * Vocoder, the Crossover, Tone Match and Dynamic Distortion, in the same
+ * hand-written list (lib/axefx3-own-knobs.js). His account only: each was
+ * read off his unit once and NOT ONE HAS BEEN TURNED from the app, so they
+ * did not open with the NAM block's. This says true when he has turned one
+ * and says so, with its What's new line in that pull request; then every
+ * account is read through the whole list (axefx3-edit `withNam`).
+ */
+export const OWN_KNOBS_FOR_EVERYONE = false
 
 /*
  * AN AXE-FX III'S AND AN FM9'S OWN BLOCKS ON PLAY THROUGH THE COMPUTER,

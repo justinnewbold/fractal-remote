@@ -26,10 +26,12 @@
  * lib/grid-plan, Edit's own list, the scenes): its cell is taken, it is
  * never moved, replaced or dealt in a drag, and Edit does not open it. The
  * engine has no name for it, so a placement write that named it would be a
- * write nobody has seen it take. What is new is two marks: `onPlay`, which
- * lib/device stageBlocks lets through, and `knobs: false`, the mark the
- * Bluetooth wire gives a block with no knob catalog, so a hold on Play
- * opens its channels and asks for no knobs.
+ * write nobody has seen it take. What is new is its marks: `onPlay`, which
+ * lib/device stageBlocks lets through, and either `knobs: false`, the mark
+ * the Bluetooth wire gives a block with no knob catalog, so a hold on Play
+ * opens its channels and asks for no knobs, or `turns: true` where the
+ * computer can answer its knobs (turnsThroughComputer, below), which
+ * lib/device editBlocks lets into Edit's own list.
  *
  * Only on an FM9 or an Axe-Fx III, by the name the computer gives the unit
  * (lib/device-slug), and only the six families lib/gen3Catalog OWN adds:
@@ -46,11 +48,33 @@ const UNIT_OF = Object.freeze({ axefxiii: 'axefx3', fm9: 'fm9' })
 export const ownUnit = (deviceSlug) => UNIT_OF[String(deviceSlug || '').toLowerCase()] || null
 
 /**
+ * WHETHER A BLOCK NAMED HERE HAS KNOBS THE COMPUTER CAN ANSWER (13 November
+ * 2026: "right now I have no knobs showing when I'm connected over raspberry
+ * pie"). The computer app's device server opens an Axe-Fx III's own blocks
+ * since the release that carries ForgeFX 0488f11 (desktop/forgefx.lock.json):
+ * the same hand-written list the phone uses over Bluetooth
+ * (lib/axefx3-own-knobs.js), served for a block's read by its effect id. So
+ * on a III such a block is marked `turns: true` in place of `knobs: false`:
+ * Edit and the hold pop-up open it and ask the computer for its knobs, as
+ * they do any block. It is STILL `unknown` to everything that moves or
+ * edits the chain. Never an FM9, which the computer has no such list for.
+ * An older computer app answers no knobs, and Edit says to update it
+ * (OWN_KNOBS_NEED_COMPUTER).
+ */
+export const turnsThroughComputer = (unit, slug, knobs) => unit === 'axefx3' && OWN_FAMILIES.includes(slug) && (knobs === true || (knobs === 'nam' && slug === 'nam'))
+
+/** What Edit says where such a block's read came back with no knobs: the computer app is older than its list. */
+export const OWN_KNOBS_NEED_COMPUTER = 'Update the computer app to turn this block’s knobs.'
+
+/**
  * The chain as it came from the computer, with each block the phone can name
  * named. `open` is whether this account is offered it (lib/ownBlocksHere).
- * The same list back, untouched, when there is nothing to name.
+ * `knobs` is how much of an Axe-Fx III's own blocks' knobs the account gets
+ * (lib/bluetooth ownKnobsLevel: true for all of them, 'nam' for the NAM block
+ * alone, false for none). The same list back, untouched, when there is
+ * nothing to name.
  */
-export function nameOwnBlocks(blocks, deviceSlug, open) {
+export function nameOwnBlocks(blocks, deviceSlug, open, knobs = false) {
   if (open !== true || !Array.isArray(blocks)) return blocks
   const unit = ownUnit(deviceSlug)
   if (!unit) return blocks
@@ -62,7 +86,9 @@ export function nameOwnBlocks(blocks, deviceSlug, open) {
     const own = list.find((c) => c.page === b.effectId && OWN_FAMILIES.includes(c.slug))
     if (!own) return b
     named = true
-    return { ...b, slug: own.slug, family: own.family, name: own.name, knobs: false, onPlay: true }
+    const called = { ...b, slug: own.slug, family: own.family, name: own.name, onPlay: true }
+    /* Its knobs are the computer's to answer (`turns`, above), or it has none here (`knobs: false`). */
+    return turnsThroughComputer(unit, own.slug, knobs) ? { ...called, turns: true } : { ...called, knobs: false }
   })
   return named ? out : blocks
 }

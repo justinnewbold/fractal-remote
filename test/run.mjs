@@ -2627,17 +2627,37 @@ test('the browser’s Copy Logs and Send logs to developer, run: the computer’
     assert.deepEqual(asked.map((a) => a.path), ['/diag'])
     assert.ok(asked[0].signal && typeof asked[0].signal.aborted === 'boolean', 'the direct fetch to the computer has no deadline of its own')
 
+    /*
+     * HOW LONG THE PRESS ITSELF WAITED, not how long the clock ran. This test
+     * starts while the other test files are still being read, and reading
+     * them holds the event loop for a second or more on a slow machine: the
+     * wall clock then said "past the deadline" of a press that had waited
+     * its 60 ms and no longer (13 November 2026, three runs in five). A
+     * ticker counts the loop's own turns instead: a held loop gives it one
+     * late tick, not a hundred, and a press that really waits (the fetch's
+     * five seconds, say) still runs it up.
+     */
+    const waited = async (press) => {
+      let ticks = 0
+      const ticker = setInterval(() => ticks++, 10)
+      try {
+        return { said: await press(), ms: ticks * 10 }
+      } finally {
+        clearInterval(ticker)
+      }
+    }
+
     /* Not answering at all: one line, at the deadline and no later. */
     answer = 'never'
-    let began = Date.now()
-    assert.equal(await macReport(60), "COMPUTER'S DEVICE SERVER — could not be asked: it did not answer within 60 ms")
-    assert.ok(Date.now() - began < 1500, 'the press waited past the deadline')
+    let press = await waited(() => macReport(60))
+    assert.equal(press.said, "COMPUTER'S DEVICE SERVER — could not be asked: it did not answer within 60 ms")
+    assert.ok(press.ms < 1500, 'the press waited past the deadline')
 
     /* Not there: one line in the browser's own words, at once. */
     answer = 'refuse'
-    began = Date.now()
-    assert.match(await macReport(2000), /^COMPUTER'S DEVICE SERVER — could not be asked: Can’t reach the Fractal Remote app on your computer\./)
-    assert.ok(Date.now() - began < 1500, 'a computer that is not there held the press')
+    press = await waited(() => macReport(2000))
+    assert.match(press.said, /^COMPUTER'S DEVICE SERVER — could not be asked: Can’t reach the Fractal Remote app on your computer\./)
+    assert.ok(press.ms < 1500, 'a computer that is not there held the press')
 
     /* The demo: no computer to blame. */
     fx.setDemo(true)
@@ -17372,7 +17392,7 @@ test('the computer app carries the device server that answers only its own calle
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+am4tunerlease\+serverguard(\+|$)/, 'the computer app carries a device server any web page can sign out')
   /* Pinned at 93c1530, or at a later commit of the same branch that carries it (Axiom's own list, c7b4d3c, and the replug watch, e2030f4, sit on top). */
-  assert.ok(['93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5'].includes(lock.forgefx.commit), 'the pin moved off the guard')
+  assert.ok(['93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b'].includes(lock.forgefx.commit), 'the pin moved off the guard')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /93c1530/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17396,7 +17416,7 @@ test('the computer app carries the device server that can let Axiom onto the uni
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+serverguard\+deviceorigins(\+|$)/, 'the computer app carries a device server with no way to let Axiom in')
   /* Pinned at c7b4d3c, or at a later commit of the same branch that carries it (the replug watch, e2030f4, sits on top). */
-  assert.ok(['c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5'].includes(lock.forgefx.commit), 'the pin moved off FORGEFX_DEVICE_ORIGINS')
+  assert.ok(['c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b'].includes(lock.forgefx.commit), 'the pin moved off FORGEFX_DEVICE_ORIGINS')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /c7b4d3c/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17418,7 +17438,7 @@ test('the computer app carries the device server that can let Axiom onto the uni
 test('the computer app carries the device server that finds a unit unplugged and plugged back in by itself', () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+deviceorigins\+replug(\+|$)/, 'the computer app carries a device server that never notices its unit was replugged')
-  assert.ok(['e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5'].includes(lock.forgefx.commit), 'the pin moved off the replug watch')
+  assert.ok(['e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b'].includes(lock.forgefx.commit), 'the pin moved off the replug watch')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /e2030f4/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17440,8 +17460,9 @@ test('the computer app carries the device server that finds a unit unplugged and
  */
 test('the computer app carries the device server that reads the footswitch page and refuses writes to the footswitch setup', () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
-  assert.match(lock.forgefx.tag, /\+replug\+fcread$/, 'the computer app carries a device server without the footswitch reads')
-  assert.equal(lock.forgefx.commit, '18a9d8066b843e001aaaa2622c462102af8be2a5')
+  assert.match(lock.forgefx.tag, /\+replug\+fcread(\+|$)/, 'the computer app carries a device server without the footswitch reads')
+  /* Pinned at 18a9d80, or at a later commit of the same branch that carries it (an Axe-Fx III's own blocks, 0488f11, sit on top). */
+  assert.ok(['18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b'].includes(lock.forgefx.commit), 'the pin moved off the footswitch reads')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   const why = lock._why.find((w) => /18a9d80/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
@@ -17450,6 +17471,30 @@ test('the computer app carries the device server that reads the footswitch page 
   }
   const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
   assert.ok(mods.includes('| Read, for an FM3, which layout and view are on'), 'licences/MODIFICATIONS.md has no row for the footswitch reads')
+})
+
+/*
+ * And an Axe-Fx III's own blocks open with their knobs through the computer
+ * (ForgeFX 0488f11, on top of the footswitch reads): "right now I have no
+ * knobs showing when I'm connected over raspberry pie" (Justin, 13 November
+ * 2026). The server had no family for the Vocoder, Crossover, Tone Match,
+ * IR Player, Dynamic Distortion or the NAM block, so a block read of one
+ * answered no knobs. The chain read is unchanged, so every screen draws as
+ * before, and a phone on an older computer says the knobs need the update:
+ * the red update line does not move.
+ */
+test('the computer app carries the device server that opens an Axe-Fx III’s own blocks with their knobs', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+fcread\+ownblocks$/, 'the computer app carries a device server with no knobs for an Axe-Fx III’s own blocks')
+  assert.equal(lock.forgefx.commit, '0488f1104f1ee467309e5ddbc0331fab91895a8b')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  const why = lock._why.find((w) => /0488f11/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/Vocoder \(134\)/, /NAM block firmware 33 brought \(206, 207\)/, /src\/ownBlocks\.ts/, /axefx3-own-knobs\.js/, /no slug/, /an FM3 and an FM9 open nothing/, /COMPUTER_NEEDED stays/, /one commit on top of 18a9d80/]) {
+    assert.match(why, said, `the lock's reason leaves out ${said}`)
+  }
+  const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
+  assert.ok(mods.includes("| Open an Axe-Fx III's Vocoder, Crossover, Tone Match, IR Player, Dynamic Distortion and NAM blocks with their knobs and switches"), 'licences/MODIFICATIONS.md has no row for the III’s own blocks')
 })
 
 /*
@@ -17465,7 +17510,7 @@ test('the computer app carries the server whose keep of the AM4’s own tuner en
   assert.match(lock.forgefx.tag, /\+am4tunerkeep\+am4tunerlease(\+|$)/, 'the computer app carries a keep that only a Close can end')
   /* Pinned at 41a0c1b, or at a later commit of the same branch that carries it (the device server's guard, 93c1530, sits on top). */
   assert.ok(
-    ['41a0c1b05d6172b057223c70565eec364dff4d67', '93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5'].includes(lock.forgefx.commit),
+    ['41a0c1b05d6172b057223c70565eec364dff4d67', '93c153067c06834e9aef6cf06f62e5ed4f093f03', 'c7b4d3c7caa44247dcf56f051204ce5679b28170', 'e2030f420a2d18f01234fad3c85dc25d52ada337', '18a9d8066b843e001aaaa2622c462102af8be2a5', '0488f1104f1ee467309e5ddbc0331fab91895a8b'].includes(lock.forgefx.commit),
     'the pin moved off the tuner lease'
   )
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')

@@ -384,6 +384,18 @@ const OFF_STAGE = ['input', 'output', 'looper']
 
 const silentTuner = () => ({ type: 'tuner', note: '', octave: undefined, cents: null })
 
+
+/**
+ * WHICH EDIT OF THE UNIT'S an account is read, written and guarded through,
+ * by what `namKnobs` answers (lib/bluetooth): `true`, the whole hand-written
+ * list of an Axe-Fx III's own blocks (axefx3-edit `withNam`: his account,
+ * until lib/features OWN_KNOBS_FOR_EVERYONE); `'nam'`, the NAM block alone
+ * (`namOnly`: every account since lib/features NAM_KNOBS_FOR_EVERYONE said
+ * true); anything else, or a unit with no such list, the codec's catalog as
+ * it was.
+ */
+export const ownEditOf = (edit, level) => (level === true && edit?.withNam ? edit.withNam : level === 'nam' && edit?.namOnly ? edit.namOnly : edit)
+
 /**
  * THE AM4'S ONE WAY OUT. Every message for the AM4 passes through this. A
  * SysEx frame goes only if it is on AM4_ALLOWED, or, while Edit is open to
@@ -439,7 +451,7 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
   /* The unit's own Edit; a model with none has nothing of Edit's that may go. Which ids are blocks is the codec's, the same on every gen-3 unit, and the III's NAM with them whoever is asking: a typed write at one is Edit's to hold, open or closed. */
   const edit = GEN3_EDIT_BY_MODEL[model] || null
   const blockAt = (edit?.withNam || edit || fm3Edit).editBlock
-  const editNow = () => (edit?.withNam && namKnobs() === true ? edit.withNam : edit)
+  const editNow = () => ownEditOf(edit, namKnobs())
   const editShaped = (b) =>
     Array.isArray(b) &&
     b[0] === 0xf0 &&
@@ -519,8 +531,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * NAM in it (axefx3-edit `withNam`); closed, or on any other unit, through
    * the codec's catalog alone (g3Edit), exactly as before there was one.
    */
-  const namOn = () => typeof namKnobs === 'function' && namKnobs() === true
-  const g3 = () => (g3Edit?.withNam && namOn() ? g3Edit.withNam : g3Edit)
+  const namOn = () => (typeof namKnobs === 'function' ? namKnobs() : false)
+  const g3 = () => ownEditOf(g3Edit, namOn())
   /* The block codes of the last preset answer believed (readStructure), which Edit's frames are held to. */
   let editPlaced = null
   /* The developer's reader (gen3Describe): his account's, on a gen-3 unit, and the one block whose whole read it has out. */

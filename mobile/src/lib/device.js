@@ -453,7 +453,15 @@ export const stageBlocks = (blocks) =>
 
 /** The ones whose controls may be searched and turned: not the gate's threshold (EXCLUDED_BLOCKS), and not a block whose knobs the app has no catalog for on this wire (bleWire `knobs: false`: an Axe-Fx III's NAM and IR Player over Bluetooth). */
 export const knobBlocks = (blocks) =>
-  (blocks || []).filter((b) => b && !isNewBlock(b) && !EXCLUDED_BLOCKS.includes(b.slug) && b.knobs !== false)
+  (blocks || []).filter((b) => b && (!isNewBlock(b) || b.turns === true) && !EXCLUDED_BLOCKS.includes(b.slug) && b.knobs !== false)
+
+/**
+ * The ones Edit opens: every block the app knows, and one the computer has
+ * no name for whose knobs it can still answer (`turns`, lib/ownBlocks: an
+ * Axe-Fx III's NAM through the computer). Such a block is in Edit's own list
+ * and nowhere that moves or edits the chain, which goes by lib/new-block.
+ */
+export const editBlocks = (blocks) => (Array.isArray(blocks) ? blocks : []).filter((b) => b && (!isNewBlock(b) || b.turns === true))
 
 /**
  * What this preset's scenes are called.
