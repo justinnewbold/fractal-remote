@@ -211,8 +211,13 @@ Distortion. **The RTA has none**, nor a Level or a Bypass Mode, and Axe-Edit's
 page for it has no Bypass button: there is nothing for Play to switch, so it
 is in `NOT_BLOCKS` (`mobile/src/lib/gen3Catalog.js`) and never drawn.
 
-None of these has knobs in the app yet. Play draws and switches them over
-Bluetooth, and Edit gives each its on and off.
+Play draws and switches them over Bluetooth. From 1.90.49 Edit over Bluetooth
+has knobs for five of them on an Axe-Fx III, for his account first
+(`mobile/src/lib/axefx3-own-knobs.js`): only the settings below whose name is
+Axe-Edit's, whose range the unit gave, and whose number in the whole read
+comes out as the unit showed it. What read the same as its neighbours, has no
+name, or picks an impulse response is left out. None has been turned from the
+app yet.
 
 Through the computer the engine (ForgeFX, at the pin) has no name for any of
 them, nor for the NAM block: it passes each on with its place, its on and
