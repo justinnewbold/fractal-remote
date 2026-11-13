@@ -1137,23 +1137,43 @@ the capture on the unit, which is the hard half.
   and over a Bluetooth adapter on the MIDI jacks (3,125 bytes a second)
   about half a minute. An estimate until the packing is known: he was
   first told Bluetooth could not carry one, which was wrong.
-- **THE MISSING PIECE IS HOW AXE-EDIT PUTS A CAPTURE ON THE UNIT.** Axe-Edit
-  III turns a .nam into binary SysEx and sends it; Fractal has not
-  published it, the pinned codec has nothing for it, and the engine cannot
-  send any file to a unit. It is learned from HIS RECORDING: MIDI Monitor
-  on his Mac ("Spy on output to destinations") while Axe-Edit III's Manage
-  NAM takes one .nam file, with that same .nam, an exported file if Manage
-  NAM offers one, the slot, the name it shows and Axe-Edit's version. He
-  was given the steps on 13 November and has not sent it yet. The recording
-  should also show how Axe-Edit reads the 257 capture names, which is what
-  the capture picker needs (the NAM block's Type, setting 0, is still not
-  written by the app). Never ask for his Fractal-Bot backup: it holds
-  Fractal's own captures.
-- **The order after the recording:** install through the computer or the
-  Pi (it fetches the capture, packs it, sends it by USB), the capture
-  picker, the TONE3000 screen where a player meets it, then install over
-  Bluetooth and the USB cable with a progress bar. Only an Axe-Fx III has
-  a NAM block.
+- **HOW AXE-EDIT PUTS A CAPTURE ON THE UNIT IS KNOWN, from his recording
+  (13 November 2026; docs/nam-install.md has all of it).** MIDI Monitor on
+  his Mac while Axe-Edit III loaded one TONE3000 capture into slot 29,
+  read the list back, pointed NAM 1 at it and saved. A capture on the unit
+  is one record of 16,384 words: seven 32-byte lines of text (name, maker,
+  gear make, model, gear kind, tone kind, a spare), thirty-two bytes
+  Axe-Edit fills and Fractal's own captures leave at nought, four numbers
+  (loudness, gain, two levels), then the file's 14,017 numbers as floats,
+  lite network first. It goes as function 0x54 (slot and size), 128 of
+  0x55 (128 words each) and 0x56 (every word XORed), the unit answering
+  each; 0.4 seconds on USB, about 83 KB, so about 27 seconds over a
+  Bluetooth adapter. The 257 slot names are read with function 0x01,
+  08 01, and a NAM block is pointed at a slot by an ordinary typed write
+  of its setting 0. mobile/src/lib/nam-install.js builds and reads all of
+  it, and rebuilt the recorded upload byte for byte.
+  - *NOTHING SENDS A RECORD YET* (`NAM_PACKING_PROVEN` is false). That the
+    14,017 are the file's numbers untouched fits everything seen, but the
+    .nam that was loaded has not been set beside the recording: he sent the
+    recording and not the file. A capture packed wrong plays as noise, so
+    the sender waits for that one comparison. The file is the TONE3000
+    capture "Orange Amp: Flat EQ, Gain 6, AK…" (gear "Orange OTR 120
+    2X12"); a download needs his TONE3000 sign-in.
+  - *The recording is not in the repository* (a creator's capture, and the
+    names of Fractal's own). He has it as NAM.mmon. Never ask for his
+    Fractal-Bot backup either: it holds Fractal's own captures.
+  - *Slots over 127 are not named by an upload yet*: the 0x54 message was
+    only seen for slot 29, so which bytes hold a bigger number is a guess.
+    His unit had 31 captures (0 to 28 and 256) and Axe-Edit took the first
+    empty one.
+- **The order from here:** the .nam set beside the recording; then the
+  sender, his account only, on the Developer card first (over Bluetooth or
+  the USB cable the phone can send it itself, with a progress bar; through
+  the computer or the Pi it needs an engine route, a new pin and a
+  computer release); the capture picker (the list read, and the typed
+  write of setting 0); then the TONE3000 screen where a player meets it.
+  Only an Axe-Fx III has a NAM block. A slot is only ever written when it
+  reads <EMPTY>, unless the player says to replace what is there.
 - **No build for it yet.** A build now would cut every store copy off from
   updates until it is in the stores, and the in-app TONE3000 screen will
   add native pieces of its own, so the build pair waits for the list to be
