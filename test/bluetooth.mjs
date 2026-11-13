@@ -849,6 +849,7 @@ async function onTheLine(kind, options = {}) {
       onForeign: (name) => foreign.push(name),
       edit: options.edit,
       reader: options.reader,
+      captures: options.captures,
       namKnobs: options.namKnobs,
       save: options.save,
       send: (b) => {
@@ -5446,7 +5447,7 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own, and so are Play's settle waits (own-echo, for REREAD_MAX_MS). */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './axefx3-edit.js', './bleSave.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3Catalog.js', './own-echo.js'])
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './axefx3-edit.js', './bleSave.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3Catalog.js', './nam-install.js', './own-echo.js'])
     /* The developer's block reader (test/gen3-describe.mjs): the frame helpers and nothing else, so it reaches the unit only through the wire it is handed to. */
     assert.deepEqual(imports(read('gen3-describe.js')), ['./fractal-sysex.mjs'], 'the block reader imports something')
     assert.deepEqual(imports(read('own-echo.js')), [], 'Play’s settle waits import something')
@@ -10871,6 +10872,248 @@ export function run(test) {
     assert.deepEqual(out.settings.map((s) => s.id), [0, 1, 2])
   })
 
+  /*
+   * AN AXE-FX III'S CAPTURES ON THE WIRE (lib/nam-install, whose own tests
+   * are test/nam-install.mjs; bleWire namEmptySlot, namInstall, namPick).
+   * "Next I want to add TONE3000 so users can search, preview and download
+   * tones for the NAM block directly in the app." (Justin, 13 November 2026.)
+   * The unit here answers as his did in the recording of Axe-Edit III
+   * loading one: each slot's head on asking, 64 54 00, 64 55 00 after every
+   * 128 words, 64 56 00, "a transfer is under way" said back, and a pick
+   * answered with the slot over 256 and the capture's name.
+   */
+  const A2 = (name, from = 1) => {
+    const w = (n, at) => Array.from({ length: n }, (_, i) => Math.fround((at + i) / 100000))
+    return JSON.stringify({
+      version: '0.7.0',
+      architecture: 'SlimmableContainer',
+      config: { submodels: [{ max_value: 0.5, model: { weights: w(1871, from) } }, { max_value: 1, model: { weights: w(12146, from + 50000) } }] },
+      weights: [],
+      sample_rate: 48000,
+      metadata: { name, modeled_by: 'somebody', gear_type: 'amp', tone_type: 'crunch', loudness: -17.5, gain: 0.5 }
+    })
+  }
+  const capturesLine = async (options = {}) => {
+    const nam = await import('../mobile/src/lib/nam-install.js')
+    const t = await onANamIII({ edit: () => false, captures: () => true, ...options })
+    const sx = t.sx
+    const bytesOf = (words, n) => {
+      const out = []
+      for (let i = 0; i < n; i++) out.push(words[i] & 0xff, (words[i] >>> 8) & 0xff, (words[i] >>> 16) & 0xff, words[i] >>> 24)
+      return out
+    }
+    const empty = () => [...'<EMPTY>'].map((c) => c.charCodeAt(0)).concat(new Array(265).fill(0))
+    /* What the unit holds: a slot's first 272 bytes, by slot. The first three are taken. */
+    const held = new Map()
+    for (const [slot, name] of [[0, 'Brit Crunch'], [1, 'Clean One'], [2, 'High Gain Three']]) held.set(slot, bytesOf(nam.namRecord(A2(name)).words, 68))
+    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], silentAt: null, refuseAt: null, quietBusy: false }
+    const headOf = (slot) => held.get(slot) || empty()
+    const said = (b, payload) => t.say(sx.frame(0x10, 0x01, [...b.slice(6, 12), ...payload]))
+    const hear = t.unit.hear
+    t.unit.hear = (b) => {
+      if (b[0] !== 0xf0 || b[4] !== 0x10) return hear(b)
+      const fn = b[5]
+      if (fn === 0x54) {
+        u.begun.push({ slot: sx.decode14(b[7], b[8]), words: b[9] | (b[10] << 7) | (b[11] << 14) })
+        u.chunks = []
+        return t.say(sx.frame(0x10, 0x64, [0x54, 0x00]))
+      }
+      if (fn === 0x55) {
+        const n = u.chunks.length
+        if (u.silentAt === n) return
+        if (u.refuseAt === n) return t.say(sx.frame(0x10, 0x64, [0x55, 0x03]))
+        const words = []
+        for (let i = 8; i < b.length - 2; i += 5) words.push(sx.fromSeptets32(b, i))
+        u.chunks.push({ count: sx.decode14(b[6], b[7]), words })
+        return t.say(sx.frame(0x10, 0x64, [0x55, 0x00]))
+      }
+      if (fn === 0x56) {
+        const words = u.chunks.flatMap((c) => c.words)
+        const slot = u.begun[u.begun.length - 1].slot
+        u.kept.push({ slot, words, xor: sx.fromSeptets32(b, 6) })
+        /* As his unit did: the name's 32nd byte is the unit's own ending. */
+        const head = bytesOf(words, 68)
+        head[31] = 0
+        held.set(slot, head)
+        return t.say(sx.frame(0x10, 0x64, [0x56, 0x00]))
+      }
+      if (fn !== 0x01) return hear(b)
+      const sub = sx.decode14(b[6], b[7])
+      const eid = sx.decode14(b[8], b[9])
+      const pid = sx.decode14(b[10], b[11])
+      if (sub === 0x88) return said(b, [...sx.septets32(207), 0, 0, ...sx.encode14(272), ...sx.packMsb(headOf(sx.fromSeptets32(b, 12)))])
+      if (sub === 0x09 && eid === 1 && pid === 114) {
+        u.busy.push(sx.bitsFloat(sx.fromSeptets32(b, 12)))
+        if (u.quietBusy) return
+        return said(b, [...b.slice(12, 17), 0, 0, ...sx.encode14(32), ...sx.packMsb(new Array(32).fill(0))])
+      }
+      if (sub === 0x09 && (eid === 206 || eid === 207) && pid === 0) {
+        const slot = sx.bitsFloat(sx.fromSeptets32(b, 12))
+        u.picked.push([eid, slot])
+        return said(b, [...sx.floatSeptets(slot / 256), 0, 0, ...sx.encode14(32), ...sx.packMsb(headOf(slot).slice(0, 32))])
+      }
+      return hear(b)
+    }
+    const asks = (path, options2 = {}) => drive(t.clock, t.wire.request(path, { capturing: true, ...options2 }))
+    /* Every frame of a capture's shapes that left the phone. */
+    const shaped = () => t.frames().filter((f) => nam.namShaped(f, 0x10))
+    return { t, u, nam, asks, shaped, record: (name, from) => nam.namRecord(A2(name, from)) }
+  }
+
+  test('a capture goes to an Axe-Fx III as Axe-Edit sends one: the first empty slot found, 130 messages each taken, and the slot read back', async () => {
+    const { t, u, nam, asks, shaped, record } = await capturesLine()
+    t.sent.length = 0
+    /* The first empty slot, read from the first up and no further than it. */
+    const found = await asks('/nam/empty')
+    assert.equal(found.slot, 3)
+    assert.deepEqual(found.heads, [
+      { slot: 0, name: 'Brit Crunch', empty: false },
+      { slot: 1, name: 'Clean One', empty: false },
+      { slot: 2, name: 'High Gain Three', empty: false },
+      { slot: 3, name: '<EMPTY>', empty: true }
+    ])
+    assert.deepEqual(shaped().map((f) => t.sx.toHex(f)), [0, 1, 2, 3].map((slot) => t.sx.toHex(nam.namSlotQuery(0x10, slot))), 'more was asked than the slots up to the first empty one')
+
+    const rec = record('Plexi Dimed 57', 7)
+    assert.equal(rec.ok, true)
+    t.sent.length = 0
+    const steps = []
+    const late = []
+    const got = await asks('/nam/slots/3', {
+      method: 'POST',
+      body: { words: rec.words },
+      onProgress: (sent, of) => {
+        steps.push([sent, of])
+        /* A scene pressed while the capture is going: refused, with nothing sent. */
+        if (sent === 40) t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ index: 2 }) }).then(() => late.push('went'), (e) => late.push(e))
+      }
+    })
+    assert.deepEqual([got.slot, got.name, got.replaced], [3, 'Plexi Dimed 57', null])
+    assert.ok(got.seconds >= 0)
+    /* What the unit took: the slot and the size, 128 lots of 128 words, and the XOR of them all. */
+    assert.deepEqual(u.begun, [{ slot: 3, words: 16384 }])
+    assert.equal(u.kept.length, 1)
+    assert.deepEqual(u.kept[0].words, rec.words, 'the unit was not sent the record, word for word')
+    assert.equal(u.kept[0].xor, nam.namXor(rec.words))
+    assert.ok(u.chunks.every((c) => c.count === 128 && c.words.length === 128))
+    /* "A transfer is under way" before the first, "it is over" after the last. */
+    assert.deepEqual(u.busy, [1, 0])
+    /* Every message taken was said, to the last. */
+    assert.equal(steps.length, 130)
+    assert.deepEqual(steps[129], [130, 130])
+    /* What left the phone of these shapes: the slot asked, the two writes round it, the 130, and the slot asked again. Nothing else. */
+    const want = [nam.namSlotQuery(0x10, 3), nam.namBusyFrame(0x10, true), ...nam.namUploadFrames(0x10, 3, rec.words), nam.namBusyFrame(0x10, false), nam.namSlotQuery(0x10, 3)]
+    assert.equal(shaped().length, want.length)
+    assert.ok(shaped().every((f, i) => t.sx.sameBytes(f, want[i])), 'a capture message left the phone that is not Axe-Edit’s, or out of its order')
+    /* The scene pressed meanwhile: refused in words, and the unit's scene is what it was. */
+    assert.equal(late.length, 1)
+    assert.ok(late[0] instanceof Error && late[0].status === 409 && /is taking a capture/.test(late[0].message), 'a scene went to the unit in the middle of a capture')
+    assert.ok(!t.frames().some((f) => f[5] === 0x0c && f[6] !== 0x7f), 'a scene was written during the upload')
+    /* And once it is over, Play writes again. */
+    assert.deepEqual(await t.post('/scene', { index: 2 }), { ok: true })
+    /* The next empty slot is the one after. */
+    assert.equal((await asks('/nam/empty')).slot, 4)
+  })
+
+  test('a slot in use is never written over unless the request says so, and a NAM block is pointed at a slot by the one write', async () => {
+    const { t, u, nam, asks, shaped, record } = await capturesLine()
+    const rec = record('Another One', 3)
+    t.sent.length = 0
+    await assert.rejects(asks('/nam/slots/1', { method: 'POST', body: { words: rec.words } }), (e) => e.status === 409 && e.holds === 'Clean One' && /already holds “Clean One”\. Nothing was sent\./.test(e.message))
+    assert.deepEqual(u.begun, [])
+    assert.deepEqual(u.busy, [])
+    assert.ok(shaped().every((f) => t.sx.sameBytes(f, nam.namSlotQuery(0x10, 1))), 'something of a capture went to a slot that is in use')
+    /* Said to replace it: it goes, and says what was there. */
+    const got = await asks('/nam/slots/1', { method: 'POST', body: { words: rec.words, replace: true } })
+    assert.deepEqual([got.slot, got.name, got.replaced], [1, 'Another One', 'Clean One'])
+    /* Not a record, and a slot no upload has been seen to name: refused before anything is asked. */
+    t.sent.length = 0
+    for (const words of [rec.words.slice(1), [...rec.words.slice(1), -1], [...rec.words.slice(1), 1.5], 'words', null]) {
+      await assert.rejects(asks('/nam/slots/5', { method: 'POST', body: { words } }), (e) => e.status === 400)
+    }
+    await assert.rejects(asks('/nam/slots/128', { method: 'POST', body: { words: rec.words } }), (e) => e.status === 400 && /slots 001 to 128/.test(e.message))
+    assert.deepEqual(shaped(), [])
+
+    /* NAM 1 pointed at slot 002: the one typed write, answered with the slot and its name. */
+    t.sent.length = 0
+    assert.deepEqual(await asks('/nam/blocks/206/slot', { method: 'POST', body: { slot: 1 } }), { block: 206, slot: 1, name: 'Another One' })
+    assert.deepEqual(u.picked, [[206, 1]])
+    assert.deepEqual(shaped().map((f) => t.sx.toHex(f)), [t.sx.toHex(nam.namPickFrame(0x10, 206, 1))])
+    /* Not a NAM block, no such slot, and a NAM block that is not in the preset. */
+    await assert.rejects(asks('/nam/blocks/58/slot', { method: 'POST', body: { slot: 1 } }), (e) => e.status === 400)
+    await assert.rejects(asks('/nam/blocks/206/slot', { method: 'POST', body: { slot: 257 } }), (e) => e.status === 400)
+    t.unit.state.blocks.splice(t.unit.state.blocks.findIndex((b) => b.eid === 207), 1)
+    await assert.rejects(asks('/nam/blocks/207/slot', { method: 'POST', body: { slot: 1 } }), (e) => e.status === 409 && /NAM 2 isn’t in the preset/.test(e.message))
+    assert.deepEqual(u.picked, [[206, 1]])
+  })
+
+  test('a unit that stops answering part-way is told it is over, the failure says the slot may hold part of a capture, and the tools are free again', async () => {
+    const { u, asks, record } = await capturesLine()
+    const rec = record('Cut Short', 9)
+    u.silentAt = 5
+    await assert.rejects(asks('/nam/slots/3', { method: 'POST', body: { words: rec.words } }), (e) => e.status === 504 && e.partial === true && e.slot === 3 && /stopped answering after 6 of 130 messages\. Slot 004 may hold part of a capture now: send it again to the same slot\./.test(e.message))
+    assert.deepEqual(u.busy, [1, 0], '"it is over" was not said after a send that stopped')
+    assert.equal(u.kept.length, 0)
+    /* A refusal in the middle says what the unit answered. */
+    u.silentAt = null
+    u.refuseAt = 2
+    await assert.rejects(asks('/nam/slots/3', { method: 'POST', body: { words: rec.words } }), (e) => e.status === 502 && e.partial === true && /refused the capture at message 4 of 130 \(it answered 3\)/.test(e.message))
+    assert.deepEqual(u.busy, [1, 0, 1, 0])
+    /* A unit that does not answer "a transfer is under way" is sent nothing of the capture. */
+    u.refuseAt = null
+    u.quietBusy = true
+    await assert.rejects(asks('/nam/slots/3', { method: 'POST', body: { words: rec.words } }), (e) => e.status === 504 && !e.partial && /didn’t answer the start of the transfer\. Nothing was sent\./.test(e.message))
+    assert.equal(u.begun.length, 2, 'a capture was begun on a unit that never answered the start')
+    /* And it goes when the unit answers again. */
+    u.quietBusy = false
+    const got = await asks('/nam/slots/3', { method: 'POST', body: { words: rec.words, replace: true } })
+    assert.deepEqual([got.slot, got.name], [3, 'Cut Short'])
+  })
+
+  test('the captures are his account’s alone, an Axe-Fx III’s alone, and only for a request that says it is theirs; and the way out passes nothing else of their shapes', async () => {
+    const nam = await import('../mobile/src/lib/nam-install.js')
+    for (const options of [{ captures: () => false }, { captures: undefined }]) {
+      const { t, asks, shaped, record } = await capturesLine(options)
+      t.sent.length = 0
+      await assert.rejects(asks('/nam/empty'), (e) => e.unsupported === true)
+      await assert.rejects(asks('/nam/slots/3', { method: 'POST', body: { words: record('x').words } }), (e) => e.unsupported === true)
+      await assert.rejects(asks('/nam/blocks/206/slot', { method: 'POST', body: { slot: 1 } }), (e) => e.unsupported === true)
+      assert.deepEqual(shaped(), [], 'something of a capture went for an account the captures are not open to')
+    }
+    /* His wire, and a request that does not say it is the captures'. */
+    const mine = await capturesLine()
+    mine.t.sent.length = 0
+    await assert.rejects(drive(mine.t.clock, mine.t.wire.request('/nam/empty')), (e) => e.unsupported === true)
+    await assert.rejects(drive(mine.t.clock, mine.t.wire.request('/nam/empty', { reading: true })), (e) => e.unsupported === true)
+    assert.deepEqual(mine.shaped(), [])
+    /* An FM3 has no NAM block: no such route, whoever asks. */
+    const fm3 = await onTheLine('fm3', { captures: () => true })
+    await assert.rejects(drive(fm3.clock, fm3.wire.request('/nam/empty', { capturing: true })), (e) => e.unsupported === true)
+
+    /* The way out, on its own: each shape goes only as the very thing being done. */
+    const { gen3Sender } = await import(WIRE)
+    const sx = await import(SX)
+    const words = nam.namRecord(A2('Guarded')).words
+    const upload = nam.namUploadFrames(0x10, 3, words)
+    const every = [nam.namSlotQuery(0x10, 0), nam.namSlotQuery(0x10, 256), nam.namBusyFrame(0x10, true), nam.namBusyFrame(0x10, false), upload[0], upload[1], upload[129], nam.namPickFrame(0x10, 206, 3), nam.namPickFrame(0x10, 207, 3)]
+    const passes = (going) => {
+      const out = []
+      const sender = gen3Sender((b) => (out.push(b), true), () => {}, 0x10, () => [206, 207], () => null, () => true, () => null, () => going)
+      return every.map((f) => sender(f) === 'sent')
+    }
+    assert.deepEqual(passes(null), every.map(() => false), 'a capture message went with nothing of the captures going')
+    assert.deepEqual(passes({ list: true }), [true, true, false, false, false, false, false, false, false])
+    assert.deepEqual(passes({ frames: [nam.namBusyFrame(0x10, true), nam.namBusyFrame(0x10, false), ...upload] }), [false, false, true, true, true, true, true, false, false])
+    assert.deepEqual(passes({ pick: { block: 206, slot: 3 } }), [false, false, false, false, false, false, false, true, false])
+    /* The same upload to another slot, or another capture to the same one, is not this upload. */
+    const other = gen3Sender(() => true, () => {}, 0x10, () => [206], () => null, () => true, () => null, () => ({ frames: upload }))
+    assert.equal(other(nam.namUploadFrames(0x10, 4, words)[0]), 'refused')
+    assert.equal(other(nam.namUploadFrames(0x10, 3, nam.namRecord(A2('Another', 5)).words)[1]), 'refused')
+    /* What the wire always sent still goes: a scene, the blocks question, a bypass. */
+    const plain = gen3Sender(() => true, () => {}, 0x10)
+    for (const f of [sx.buildGetScene(0x10), sx.frame(0x10, 0x13, []), sx.buildSetBypass(0x10, 206, true)]) assert.equal(plain(f), 'sent')
+  })
+
   test('on an Axe-Fx III, NAM 1 and 2 and the IR Player are on Play by name, with a colour, a picture and three letters; the FM3 and FM9 have none of them', async () => {
     const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
     const iii = catalogFor('axefx3')
@@ -12092,7 +12335,7 @@ export function run(test) {
     /* lib/bluetooth hands the wire the level: all of the list for his account (allUnits), the NAM block for everybody. Beside Edit's own door and the reader's. */
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
     assert.match(ble, /import \{ NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
-    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\) \}\)/)
+    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, captures: \(\) => allUnits === true, namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\) \}\)/)
     assert.match(ble, /export const ownKnobsLevel = \(admin\) => \(admin === true \|\| OWN_KNOBS_FOR_EVERYONE \? true : NAM_KNOBS_FOR_EVERYONE \? 'nam' : false\)/)
     assert.equal((ble.match(/NAM_KNOBS_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
     assert.equal((ble.match(/OWN_KNOBS_FOR_EVERYONE/g) || []).length, 2)

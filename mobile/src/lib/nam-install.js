@@ -18,10 +18,9 @@
  *                    ("amp_cab"), the tone's kind ("crunch"), one spare.
  *                    The unit keeps 31 characters of the name and ends it
  *                    itself (it wrote a NUL over the 32nd byte it was sent).
- *   bytes 224..255   thirty-two bytes Axe-Edit fills for a TONE3000 capture
- *                    and Fractal's own captures leave at nought, so the unit
- *                    plays one without them. What they are is not known;
- *                    this file sends noughts.
+ *   bytes 224..255   the file's own `weights_hash` ("nam-content-v1:" and
+ *                    64 hex digits), as its 32 bytes. Fractal's own captures
+ *                    have noughts there, so a file with none sends noughts.
  *   words  64..67    four numbers: loudness (dB), gain, the input level and
  *                    the output level (dBu), each "not a number" where the
  *                    file has none.
@@ -30,14 +29,11 @@
  *                    1,871, then the full network's 12,146.
  *   words 14085..14094  ten "not a number"s, and noughts to the end.
  *
- * WHAT IS NOT PROVEN YET (`NAM_PACKING_PROVEN`): that the 14,017 are the
- * file's own numbers untouched. Everything says so (the count is exact, the
- * lite network ends at word 1938 on the same closing number the full one
- * ends on, as an A2 file's two networks do, and the four numbers before
- * them are the file's own notes), but the .nam that was loaded has not been
- * set beside the recording. Until it has, NOTHING IN THE APP SENDS A
- * RECORD: this file only builds and reads. A capture packed wrong would
- * play as noise.
+ * THE PACKING IS PROVEN (`NAM_PACKING_PROVEN`, 13 November 2026): the file
+ * that was loaded ("Orange Amp: Flat EQ, Gain 6, AKG 414 + sm57") packed by
+ * `namRecord` is the record Axe-Edit sent, word for word, but for one byte:
+ * the name's 32nd, which Axe-Edit sent and the unit overwrote with its own
+ * ending. All 14,017 numbers, the four before them and the thirty-two bytes.
  *
  * HOW IT GOES TO THE UNIT (all function bytes of the unit's own model):
  *
@@ -68,11 +64,11 @@
  *
  * Pure: the phone's own byte helpers, the file reader, and nothing else.
  */
-import { FN, bitsFloat, checksumOk, encode14, floatBits, floatSeptets, frame, fromSeptets32, isFractal, septets32, unpackMsb, buildEditFrame } from './fractal-sysex.mjs'
+import { FN, bitsFloat, checksumOk, encode14, floatBits, floatSeptets, frame, fromSeptets32, isFractal, sameBytes, septets32, unpackMsb, buildEditFrame } from './fractal-sysex.mjs'
 import { namNetworks } from './nam-file.js'
 
-/** Whether the .nam that was loaded has been set beside the recording and the packing found right. Until it has, nothing sends a record. */
-export const NAM_PACKING_PROVEN = false
+/** The .nam that was loaded has been set beside the recording, and the packing is right (13 November 2026). A sender may be built on it. */
+export const NAM_PACKING_PROVEN = true
 
 /** How many slots a unit has for captures: 0 to 256. */
 export const NAM_SLOTS = 257
@@ -128,9 +124,9 @@ const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? floatBits(x) :
 /**
  * A .nam file's text as the record a unit keeps: `{ ok: true, words, name }`
  * (16,384 whole numbers, each 32 bits) or `{ ok: false, why }` in plain
- * words. `said` is what the app knows the capture by where the file itself
- * does not say (a TONE3000 file often has no name in it): name, by, make,
- * model, gearType, toneType. An A2 capture only, with its two networks the
+ * words. The file's own notes name it, as they named the one Axe-Edit
+ * loaded; `said` is what the app knows the capture by where the file does
+ * not say: name, by, make, model, gearType, toneType. An A2 capture only, with its two networks the
  * sizes an A2's are: anything else is refused rather than guessed at.
  */
 export function namRecord(text, said = {}) {
@@ -141,19 +137,22 @@ export function namRecord(text, said = {}) {
     return { ok: false, why: 'This capture isn’t the A2 kind the Axe-Fx III’s NAM block plays.' }
   }
   const meta = got.metadata
+  const own = (x, other) => (typeof x === 'string' && x.trim() ? x : other)
   const texts = {
-    name: said.name ?? meta.name,
-    by: said.by ?? meta.modeled_by,
-    make: said.make ?? meta.gear_make,
-    model: said.model ?? meta.gear_model,
-    gearType: said.gearType ?? meta.gear_type,
-    toneType: said.toneType ?? meta.tone_type
+    name: own(meta.name, said.name),
+    by: own(meta.modeled_by, said.by),
+    make: own(meta.gear_make, said.make),
+    model: own(meta.gear_model, said.model),
+    gearType: own(meta.gear_type, said.gearType),
+    toneType: own(meta.tone_type, said.toneType)
   }
   const head = []
   for (const key of NAM_FIELDS) head.push(...field(texts[key]))
   if (!head[0]) return { ok: false, why: 'This capture has no name to file it under.' }
-  /* The spare field and the thirty-two bytes: noughts, as Fractal's own captures have them. */
-  while (head.length < 256) head.push(0)
+  /* The spare field: noughts. Then the file's own hash of its numbers as 32 bytes, or noughts where it has none, as Fractal's own captures have. */
+  while (head.length < 224) head.push(0)
+  const hash = /^nam-content-v1:([0-9a-f]{64})$/i.exec(typeof meta.weights_hash === 'string' ? meta.weights_hash.trim() : '')
+  for (let i = 0; i < 32; i++) head.push(hash ? parseInt(hash[1].slice(i * 2, i * 2 + 2), 16) : 0)
 
   const words = new Array(NAM_RECORD_WORDS).fill(0)
   for (let i = 0; i < 64; i++) words[i] = (head[i * 4] | (head[i * 4 + 1] << 8) | (head[i * 4 + 2] << 16) | (head[i * 4 + 3] << 24)) >>> 0
@@ -263,6 +262,8 @@ export function readNamPick(f, model, block) {
   if (f[8] !== lo || f[9] !== hi || f[10] !== NAM_TYPE_SETTING || f[11] !== 0) return null
   const share = bitsFloat(fromSeptets32(f, 12))
   const len = (f[HEAD_LEN_AT] & 0x7f) | ((f[HEAD_LEN_AT + 1] & 0x7f) << 7)
+  /* The write's own bytes coming back (MIDI Thru) carry no name: not the unit's answer. */
+  if (len !== FIELD || f.length < HEAD_AT + Math.ceil((FIELD * 8) / 7) + 2) return null
   const text = unpackMsb(f.slice(HEAD_AT, f.length - 2), len)
   return { slot: Math.round(share * 256), name: textAt(text, 0) }
 }
@@ -272,3 +273,52 @@ export function firstEmptySlot(heads) {
   for (let i = 0; i < heads.length && i <= NAM_SLOT_PROVEN_MOST; i++) if (heads[i]?.empty) return i
   return null
 }
+
+/** The NAM blocks of an Axe-Fx III: NAM 1 and NAM 2. */
+export const NAM_BLOCKS = Object.freeze([206, 207])
+
+/** The unit's answer to namBusyFrame: its own write said back, longer than the write. */
+export const namBusyAnswer = (f, model) =>
+  isFractal(f) && checksumOk(f) && f[4] === model && f[5] === FN.PARAM && f[6] === NAM_SUB.typed && f[7] === 0 && f[8] === NAM_BUSY.block && f[9] === 0 && f[10] === NAM_BUSY.setting && f[11] === 0 && f.length > 23
+
+/**
+ * THE ONE WAY OUT. Whether these bytes have the shape of anything this file
+ * builds: a message of an upload, the list's question, "a transfer is under
+ * way", or a NAM block pointed at a slot. Nothing else the app sends has any
+ * of these shapes, so the wire holds every such frame to `namAllowed`.
+ */
+export function namShaped(bytes, model) {
+  if (!Array.isArray(bytes) || bytes[0] !== 0xf0 || bytes[4] !== model) return false
+  if (bytes[5] === NAM_FN.begin || bytes[5] === NAM_FN.words || bytes[5] === NAM_FN.end) return true
+  if (bytes[5] !== FN.PARAM) return false
+  if (bytes[6] === (NAM_SUB.slotHead & 0x7f) && bytes[7] === NAM_SUB.slotHead >> 7) return true
+  if (bytes[6] !== NAM_SUB.typed || bytes[7] !== 0) return false
+  const block = (bytes[8] & 0x7f) | ((bytes[9] & 0x7f) << 7)
+  const setting = (bytes[10] & 0x7f) | ((bytes[11] & 0x7f) << 7)
+  return (block === NAM_BUSY.block && setting === NAM_BUSY.setting) || (NAM_BLOCKS.includes(block) && setting === NAM_TYPE_SETTING)
+}
+
+/**
+ * Whether a frame of those shapes may go, given what the wire is doing with
+ * captures at this moment (`going`, null when nothing):
+ *   going.list    the list is being read: any slot's question, 0 to 256;
+ *   going.frames  an upload is being sent: only those very frames, byte for
+ *                 byte (its 130 messages and the two "under way" writes);
+ *   going.pick    { block, slot }: only that one write, to a NAM block.
+ * Anything else of the shape is refused, with nothing sent.
+ */
+export function namAllowed(bytes, model, going) {
+  if (!going || !namShaped(bytes, model)) return false
+  if (going.list === true && bytes[5] === FN.PARAM && bytes[6] === (NAM_SUB.slotHead & 0x7f)) {
+    const slot = fromSeptets32(bytes, 12)
+    return slot < NAM_SLOTS && sameBytes(bytes, namSlotQuery(model, slot))
+  }
+  if (Array.isArray(going.frames) && going.frames.some((f) => sameBytes(f, bytes))) return true
+  if (going.pick && NAM_BLOCKS.includes(going.pick.block) && Number.isInteger(going.pick.slot) && going.pick.slot >= 0 && going.pick.slot < NAM_SLOTS) {
+    return sameBytes(bytes, namPickFrame(model, going.pick.block, going.pick.slot))
+  }
+  return false
+}
+
+/** A slot as a player reads it: Axe-Edit counts from 001. */
+export const namSlotSaid = (slot) => String(slot + 1).padStart(3, '0')

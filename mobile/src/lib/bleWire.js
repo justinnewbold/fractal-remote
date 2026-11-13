@@ -106,6 +106,23 @@ import * as fm3Edit from './fm3-edit.js'
 import * as fm9Edit from './fm9-edit.js'
 import * as axefx3Edit from './axefx3-edit.js'
 import { ANSWER_MS, describeAllowed, describeBlock, describeEcho } from './gen3-describe.js'
+import {
+  NAM_BLOCKS,
+  NAM_RECORD_WORDS,
+  NAM_SLOTS,
+  NAM_SLOT_PROVEN_MOST,
+  namAllowed,
+  namAnswer,
+  namBusyAnswer,
+  namBusyFrame,
+  namPickFrame,
+  namShaped,
+  namSlotQuery,
+  namSlotSaid,
+  namUploadFrames,
+  readNamPick,
+  readNamSlot
+} from './nam-install.js'
 import { presetMissLine } from './bluetooth-gear.js'
 import { PRESET_SETTLE_MS } from './own-echo.js'
 import { NOT_BLOCKS } from './gen3Catalog.js'
@@ -195,7 +212,10 @@ export const WAIT = {
   am4ReadAll: 10000,
   /* The same for an FM3's block (fm3-edit.js): an amp is about 1,700 bytes, half a second at 31,250 baud. */
   gen3ReadAllGap: 2500,
-  gen3ReadAll: 10000
+  gen3ReadAll: 10000,
+  /* An Axe-Fx III's captures (lib/nam-install): one slot's head (334 bytes back, a ninth of a second down an adapter), and one message of an upload (650 bytes out and the unit's answer). */
+  namSlot: 2500,
+  namChunk: 4000
 }
 
 /** A frame identical to one just sent, arriving within this, is the phone hearing itself. */
@@ -449,7 +469,7 @@ const GEN3_EDIT_BY_MODEL = Object.freeze({ [MODELS.fm3]: fm3Edit, [MODELS.fm9]: 
  * knobs and five switches of that block and nothing else of it, and passes
  * a knob of it only as its place (52 00), never the typed way.
  */
-export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false, saving = () => null) {
+export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false, saving = () => null, capturing = () => null) {
   /* The unit's own Edit; a model with none has nothing of Edit's that may go. Which ids are blocks is the codec's, the same on every gen-3 unit, and the III's NAM with them whoever is asking: a typed write at one is Edit's to hold, open or closed. */
   const edit = GEN3_EDIT_BY_MODEL[model] || null
   const blockAt = (edit?.withNam || edit || fm3Edit).editBlock
@@ -471,6 +491,23 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
     return Number.isInteger(eid) && sameBytes(b, fm3Edit.buildReadAll(model, eid))
   }
   return (bytes) => {
+    /*
+     * AN AXE-FX III'S CAPTURES (lib/nam-install): a message of an upload, the
+     * list's question, "a transfer is under way", a NAM block pointed at a
+     * slot. Each goes only as the very thing the wire is doing with captures
+     * at this moment (`capturing`): an upload's own frames byte for byte, a
+     * slot's question while the list is read, the one pick being made.
+     * Anything else of those shapes, or one with nothing going, is refused.
+     * Nothing this file sent before had any of them, and the pick is asked
+     * here ahead of Edit, whose catalog has no such setting and refuses it.
+     */
+    if (namShaped(bytes, model)) {
+      if (!namAllowed(bytes, model, capturing())) {
+        log(`refused to send ${toHex(bytes.slice(0, 24))}${bytes.length > 24 ? ' …' : ''}: it is one of the capture messages, and not one being sent now`)
+        return 'refused'
+      }
+      return send(bytes) === false ? 'failed' : 'sent'
+    }
     /*
      * A SAVE (lib/bleSave: function 0x01, 26 00) goes only as the one save
      * being sent, over the preset the unit has just said it is on (`saving`).
@@ -509,9 +546,10 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {(name:string|null) => void} [o.onForeign]  called once, with its bare name, when another unit answers a connection before the one picked has, so the page can say which; and with null when the one picked answers after it (heardFromIt)
  * @param {() => boolean} [o.edit]  whether Edit is open over Bluetooth to this account on this unit (ble-rule editOffered), asked at each request
  * @param {() => boolean} [o.reader]  whether the developer's block reader is open to this account (his alone: lib/bluetooth bluetoothAdmin), asked at each request
+ * @param {() => boolean} [o.captures]  whether an Axe-Fx III's captures may be listed, sent and picked from this device (lib/nam-install; his account's alone: lib/bluetooth), asked at every request
  * @param {() => boolean} [o.namKnobs]  whether an Axe-Fx III's NAM block has its knobs in Edit for this account (lib/features NAM_KNOBS_FOR_EVERYONE, his account until then), asked at each request and each send
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save, captures } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -564,6 +602,18 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const readerOn = () => !am4 && !!g3Edit && typeof reader === 'function' && reader() === true
   let readerOpen = null
   /*
+   * AN AXE-FX III'S CAPTURES (lib/nam-install; namEmptySlot, namInstall,
+   * namPick below): his account's, on an Axe-Fx III only. `capturing` is
+   * what the way out is held to, for exactly as long as one of the three is
+   * at work; `captureBusy` is an upload in flight, during which the watch
+   * asks nothing and nothing else is written; `captureTurn` keeps two of
+   * them from running at once.
+   */
+  const captureOn = () => unit === 'axefx3' && typeof captures === 'function' && captures() === true
+  let capturing = null
+  let captureBusy = false
+  let captureTurn = false
+  /*
    * EDIT'S BLOCKS, KEPT FOR A MOMENT. A knob let go is a write, a read to see
    * it took, and the screen's own read straight after: three whole reads of
    * the block, five seconds and more down an adapter. So a block's read is
@@ -582,7 +632,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const sendFrame = am4
     ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null))
-    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null))
+    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null), () => (captureOn() ? capturing : null))
 
   const handlers = new Set()
   const emit = (event) => {
@@ -851,6 +901,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       return isWrite(opts.priority) ? Promise.reject(unheard()) : Promise.resolve(null)
     }
     const priority = PRI[opts.priority] ?? PRI.read
+    /* A capture is going to the unit (namInstall): the watch does not ask meanwhile, and nothing else is written until it is over. */
+    if (captureBusy && opts.capture !== true) {
+      if (priority === PRI.poll) return Promise.resolve(SKIPPED)
+      if (isWrite(opts.priority)) return Promise.reject(failure(`The ${spec.name} is taking a capture. Try again when it has finished.`, 409))
+    }
     if (priority === PRI.poll && (current || waiting.length || draining())) return Promise.resolve(SKIPPED)
     if (deadline !== null && time.now() >= deadline) {
       say(`not sent, past its deadline: ${opts.what || 'a message'}`)
@@ -2869,6 +2924,134 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return { ...out, bulk, channel: st.channel, channels: st.channels, bypassed: st.bypassed, unit: spec.name }
   }
 
+  /*
+   * AN AXE-FX III'S NAM CAPTURES, FROM THE PHONE (lib/nam-install, which has
+   * the messages and where they came from: a recording of Axe-Edit III
+   * loading one, 13 November 2026). His account's alone, and only when the
+   * request says it is theirs.
+   *
+   *   GET  /nam/empty               the first empty slot, read from slot 001
+   *                                 up, stopping at the first that says
+   *                                 <EMPTY>
+   *   POST /nam/slots/<slot>        { words, replace }: a capture's record
+   *                                 into that slot
+   *   POST /nam/blocks/<eid>/slot   { slot }: NAM 1 or NAM 2 pointed at it
+   *
+   * AN UPLOAD IS AXE-EDIT'S, MESSAGE FOR MESSAGE: "a transfer is under way",
+   * the 130 messages each sent only when the unit has answered the one
+   * before, "it is over". A slot is read first and is only written when it
+   * says <EMPTY>, unless the request says to replace what is there. A unit
+   * that stops answering part-way has been sent part of a capture: the
+   * failure says so, and that the same slot should be sent again.
+   */
+  const captureRun = async (going, run) => {
+    if (!captureOn()) throw unsupported()
+    if (captureTurn) throw failure('The capture tools are already at work. Try again in a moment.', 409)
+    captureTurn = true
+    capturing = going
+    try {
+      return await run()
+    } finally {
+      captureTurn = false
+      capturing = null
+      captureBusy = false
+    }
+  }
+
+  async function namSlotHead(slot) {
+    const got = await ex(namSlotQuery(model, slot), { match: (f) => readNamSlot(f, model) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `capture slot ${namSlotSaid(slot)}`, priority: 'editRead', capture: true })
+    if (rejected(got)) throw failure(`The ${spec.name} would not say what is in capture slot ${namSlotSaid(slot)} (${rejectedWords(got.rejected)}). Its firmware may be older than the NAM block.`, 502)
+    if (!got) throw failure(`The ${spec.name} didn’t say what is in capture slot ${namSlotSaid(slot)}.`, 504)
+    return got
+  }
+
+  const namEmptySlot = () =>
+    captureRun({ list: true }, async () => {
+      const heads = []
+      for (let slot = 0; slot <= NAM_SLOT_PROVEN_MOST; slot++) {
+        const head = await namSlotHead(slot)
+        heads.push({ slot, name: head.name, empty: head.empty })
+        if (head.empty) return { slot, heads }
+      }
+      return { slot: null, heads }
+    })
+
+  function namInstall(slot, body, onProgress) {
+    const words = body?.words
+    if (!Number.isInteger(slot) || slot < 0 || slot > NAM_SLOT_PROVEN_MOST) throw badInput(`A capture can go into slots 001 to ${namSlotSaid(NAM_SLOT_PROVEN_MOST)} from here.`)
+    if (!Array.isArray(words) || words.length !== NAM_RECORD_WORDS || !words.every((w) => Number.isInteger(w) && w >= 0 && w <= 0xffffffff)) throw badInput('That isn’t a capture’s record.')
+    const said = namSlotSaid(slot)
+    const frames = namUploadFrames(model, slot, words)
+    const on = namBusyFrame(model, true)
+    const off = namBusyFrame(model, false)
+    const busy = (f) => (namBusyAnswer(f, model) ? true : undefined)
+    return captureRun({ list: true, frames: [on, off, ...frames] }, async () => {
+      const started = time.now()
+      const before = await namSlotHead(slot)
+      if (!before.empty && body?.replace !== true) throw failure(`Capture slot ${said} already holds “${before.name}”. Nothing was sent.`, 409, { holds: before.name })
+      captureBusy = true
+      const told = await ex(on, { match: busy, ms: WAIT.namSlot, fn: FN.PARAM, what: 'that a capture is coming', priority: 'write', capture: true })
+      if (rejected(told)) throw failure(`The ${spec.name} refused the start of the transfer (${rejectedWords(told.rejected)}). Nothing was sent.`, 502)
+      if (!told) throw failure(`The ${spec.name} didn’t answer the start of the transfer. Nothing was sent.`, 504)
+      let sent = 0
+      try {
+        for (const f of frames) {
+          const a = await ex(f, {
+            match: (g) => {
+              const x = namAnswer(g, model)
+              return x && x.fn === f[5] ? x : undefined
+            },
+            ms: WAIT.namChunk,
+            what: `message ${sent + 1} of ${frames.length} of a capture`,
+            priority: 'write',
+            capture: true
+          })
+          const again = sent > 0 ? ` Slot ${said} may hold part of a capture now: send it again to the same slot.` : ' Nothing was kept.'
+          if (!a) throw failure(`The ${spec.name} stopped answering after ${sent} of ${frames.length} messages.${again}`, 504, { partial: sent > 0, slot })
+          if (!a.ok) throw failure(`The ${spec.name} refused the capture at message ${sent + 1} of ${frames.length} (it answered ${a.code}).${again}`, 502, { partial: sent > 0, slot })
+          sent++
+          try {
+            if (typeof onProgress === 'function') onProgress(sent, frames.length)
+          } catch {
+            // A screen that has gone cannot stop the upload it started.
+          }
+        }
+      } finally {
+        /* "It is over", whether it went or not, as Axe-Edit says it after the last message. */
+        await ex(off, { match: busy, ms: WAIT.namSlot, fn: FN.PARAM, what: 'that the capture is over', priority: 'write', capture: true }).catch(() => null)
+        captureBusy = false
+      }
+      let after = null
+      try {
+        after = await namSlotHead(slot)
+      } catch {
+        after = null
+      }
+      const seconds = (time.now() - started) / 1000
+      say(`a capture went to slot ${said} in ${seconds.toFixed(1)} s, ${frames.length} messages: ${after ? `the slot now reads “${after.name}”` : 'the slot did not read back'}`)
+      return { slot, name: after ? after.name : null, replaced: before.empty ? null : before.name, seconds }
+    })
+  }
+
+  function namPick(eid, body) {
+    const slot = body?.slot
+    if (!NAM_BLOCKS.includes(eid)) throw badInput('Only a NAM block plays a capture.')
+    if (!Number.isInteger(slot) || slot < 0 || slot >= NAM_SLOTS) throw badInput('There is no such capture slot.')
+    const which = `NAM ${NAM_BLOCKS.indexOf(eid) + 1}`
+    return captureRun({ pick: { block: eid, slot } }, async () => {
+      const list = await statusNow('editRead')
+      if (!Array.isArray(list)) throw failure(`The ${spec.name} didn’t say what’s in this preset. Try again in a moment.`, 504)
+      if (!list.some((b) => b.effectId === eid)) throw failure(`${which} isn’t in the preset the ${spec.name} is on now.`, 409)
+      const got = await ex(namPickFrame(model, eid, slot), { match: (f) => readNamPick(f, model, eid) || undefined, ms: WAIT.namSlot, fn: FN.PARAM, what: `${which} pointed at capture slot ${namSlotSaid(slot)}`, priority: 'write', capture: true })
+      if (rejected(got)) throw failure(`The ${spec.name} refused it (${rejectedWords(got.rejected)}).`, 502)
+      if (!got) throw failure(`The ${spec.name} didn’t answer, so ${which} may not have changed.`, 504)
+      forgetEdits(eid)
+      if (got.slot !== slot) throw failure(`The ${spec.name} says ${which} is on capture slot ${namSlotSaid(got.slot)}, not ${namSlotSaid(slot)}.`, 502)
+      say(`${which} is on capture slot ${namSlotSaid(slot)} now: “${got.name}”`)
+      return { block: eid, slot: got.slot, name: got.name }
+    })
+  }
+
   async function am4TunerTick(run) {
     const values = []
     try {
@@ -3327,6 +3510,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (opts?.reading === true && readerOn() && method === 'GET' && part[0] === 'reader' && part[1] === 'blocks') {
       if (part.length === 2) return editRoute(gen3ReaderList)
       if (part.length === 3 && isNum(part[2])) return editRoute(() => gen3Describe(Number(part[2])))
+    }
+    /* An Axe-Fx III's captures (lib/nam-install), only when the request says it is theirs and they are open to this account (captureOn): his alone. */
+    if (opts?.capturing === true && captureOn() && part[0] === 'nam') {
+      if (method === 'GET' && part.length === 2 && part[1] === 'empty') return editRoute(namEmptySlot)
+      if (method === 'POST' && part.length === 3 && part[1] === 'slots' && isNum(part[2])) return editRoute(() => namInstall(Number(part[2]), body, opts.onProgress))
+      if (method === 'POST' && part.length === 4 && part[1] === 'blocks' && isNum(part[2]) && part[3] === 'slot') return editRoute(() => namPick(Number(part[2]), body))
     }
     if (method === 'GET') {
       if (path === '/device/detect') return am4 ? am4Detect : gen3Detect

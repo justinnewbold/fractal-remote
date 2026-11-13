@@ -11,7 +11,13 @@
  * was rebuilt from the recording by this code, byte for byte, before it
  * was merged (130 messages).
  *
- * Nothing here sends anything, and nothing in the app does yet.
+ * And the packing is proven: the .nam that was loaded ("Orange Amp: Flat EQ,
+ * Gain 6, AKG 414 + sm57", sent by Justin the same day) packs to the record
+ * Axe-Edit sent, word for word but for the one byte the unit overwrites.
+ * The file is not in the repository either (TONE3000's terms).
+ *
+ * Nothing here sends anything. The sender is the wire's (bleWire
+ * namInstall), held by test/bluetooth.mjs against a pretend unit.
  */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -163,8 +169,16 @@ export function run(test) {
     assert.equal(rec.words[1], 0x41206567)
     assert.equal(rec.words[7] >>> 24, 0, 'the name’s 32nd byte is not the ending')
     assert.equal(rec.words[8], 0x656e6f74, '"tone", where who made it starts')
-    /* The spare line and the thirty-two bytes: noughts, as Fractal's own captures have them. */
+    /* The spare line, and the thirty-two bytes where the file has no hash of its own: noughts, as Fractal's own captures have them. */
     for (let i = 48; i < 64; i++) assert.equal(rec.words[i], 0, `word ${i}`)
+    /* A file that says its hash ("nam-content-v1:" and 64 hex digits) has it there as 32 bytes, as Axe-Edit sent the one it loaded. */
+    const hash = '209cca8ae21199eb3dd7ed2eee89c99546e068a01e6265a5fe08db7251d47947'
+    const hashed = namRecord(a2({ metadata: { name: 'Hashed', weights_hash: `nam-content-v1:${hash}` } }))
+    assert.deepEqual([hashed.words[56].toString(16), hashed.words[63].toString(16)], ['8aca9c20', '4779d451'])
+    for (const not of ['nam-content-v2:' + hash, hash, 'nam-content-v1:' + hash.slice(2), 7]) {
+      const none = namRecord(a2({ metadata: { name: 'Not hashed', weights_hash: not } }))
+      for (let i = 56; i < 64; i++) assert.equal(none.words[i], 0, `${not} word ${i}`)
+    }
     /* Loudness, gain, and the two levels the file does not give. */
     assert.deepEqual([bitsFloat(rec.words[64]), bitsFloat(rec.words[65])], [-11.75, 0.25])
     assert.deepEqual([rec.words[66], rec.words[67]], [0x7fc00000, 0x7fc00000])
@@ -177,9 +191,10 @@ export function run(test) {
     for (let i = 14085; i < 14095; i++) assert.equal(rec.words[i], 0x7fc00000, `word ${i}`)
     for (let i = 14095; i < NAM_RECORD_WORDS; i++) assert.equal(rec.words[i], 0)
 
-    /* What the file says of itself is used where the app says nothing; what is not plain ASCII is left out. */
-    const own = namRecord(a2({ metadata: { name: '  Café  “Plexi”\n100 ', modeled_by: 'me' } }))
+    /* What the file says of itself names it, as it named the one Axe-Edit loaded, whatever the app would call it; what is not plain ASCII is left out. */
+    const own = namRecord(a2({ metadata: { name: '  Café  “Plexi”\n100 ', modeled_by: 'me' } }), { name: 'The app’s name for it', by: 'someone else' })
     assert.equal(own.name, 'Cafe Plexi 100')
+    assert.equal(own.words[8], 0x0000656d, '"me", who made it by the file’s own word')
 
     /* Refused in plain words, never guessed at. */
     assert.match(namRecord(a2({ lite: 1870 }), { name: 'x' }).why, /isn’t the A2 kind/)
@@ -189,21 +204,48 @@ export function run(test) {
     assert.match(namRecord('not a file', { name: 'x' }).why, /isn’t a NAM capture/)
   })
 
-  test('nothing sends a record yet: the packing waits to be set beside the file that was loaded, and no screen or wire reaches this file', async () => {
-    const { NAM_PACKING_PROVEN, NAM_SLOT_PROVEN_MOST } = await lib()
-    assert.equal(NAM_PACKING_PROVEN, false, 'when the .nam has been set beside the recording, say so in docs/nam-install.md and build the sender with its own way out')
+  test('the packing is proven, and the capture messages reach a unit through the wire alone, each held at its one way out', async () => {
+    const { NAM_PACKING_PROVEN, NAM_SLOT_PROVEN_MOST, namShaped, namAllowed, namSlotQuery, namPickFrame, namBusyFrame, namUploadFrames, namSlotSaid, NAM_RECORD_WORDS } = await lib()
+    assert.equal(NAM_PACKING_PROVEN, true)
     assert.equal(NAM_SLOT_PROVEN_MOST, 127)
+    assert.deepEqual([namSlotSaid(0), namSlotSaid(29), namSlotSaid(256)], ['001', '030', '257'])
     const src = read('mobile/src/lib/nam-install.js')
     assert.deepEqual(src.match(/^import .*$/gm), [
-      "import { FN, bitsFloat, checksumOk, encode14, floatBits, floatSeptets, frame, fromSeptets32, isFractal, septets32, unpackMsb, buildEditFrame } from './fractal-sysex.mjs'",
+      "import { FN, bitsFloat, checksumOk, encode14, floatBits, floatSeptets, frame, fromSeptets32, isFractal, sameBytes, septets32, unpackMsb, buildEditFrame } from './fractal-sysex.mjs'",
       "import { namNetworks } from './nam-file.js'"
     ])
-    /* Nothing imports it but this test: no wire, no screen. The pull request that builds the sender changes this list. */
-    for (const f of ['mobile/src/lib/bleWire.js', 'mobile/src/lib/device.js', 'mobile/src/components/Tone3000Test.js', 'mobile/src/screens/Settings.js', 'mobile/App.js']) {
-      assert.ok(!/nam-install/.test(read(f)), `${f} reaches the capture messages before the packing is proven`)
-    }
+    /* Every frame the recording holds of these shapes is one, and nothing the app sent before is. */
+    for (const seen of [SEEN.begin29, SEEN.end, SEEN.ask29, SEEN.ask256, SEEN.pick, SEEN.busy, SEEN.idle]) assert.equal(namShaped(hex(seen), III), true, seen)
+    const { buildGetScene, buildSetBypass, buildEditFrame, floatSeptets, frame } = await sx()
+    const before = [buildGetScene(III), buildSetBypass(III, 206, true), frame(III, 0x13, []), frame(III, 0x1f, [0x4e, 0x01]), buildEditFrame(III, 0x09, 2, 0x20, floatSeptets(120)), buildEditFrame(III, 0x09, 206, 5, floatSeptets(3)), buildEditFrame(III, 0x52, 206, 5, floatSeptets(3)), buildEditFrame(III, 0x26, 0, 0, [0, 3, 0, 0, 0])]
+    for (const f of before) assert.equal(namShaped(f, III), false, 'a message the app already sends is taken for a capture message')
+    /* Another unit's frames are not this one's. */
+    assert.equal(namShaped(hex(SEEN.begin29), 0x11), false)
+    /* With nothing going, nothing of the shape goes; and each thing going passes only itself. */
+    const words = new Array(NAM_RECORD_WORDS).fill(0)
+    const upload = namUploadFrames(III, 29, words)
+    assert.equal(namAllowed(hex(SEEN.ask29), III, null), false)
+    assert.equal(namAllowed(hex(SEEN.ask29), III, { list: true }), true)
+    assert.equal(namAllowed(upload[0], III, { list: true }), false)
+    assert.equal(namAllowed(upload[0], III, { frames: upload }), true)
+    assert.equal(namAllowed(namUploadFrames(III, 30, words)[0], III, { frames: upload }), false)
+    assert.equal(namAllowed(namBusyFrame(III, true), III, { frames: upload }), false, '"a transfer is under way" went without being one of the frames in hand')
+    assert.equal(namAllowed(hex(SEEN.pick), III, { pick: { block: 206, slot: 29 } }), true)
+    assert.equal(namAllowed(hex(SEEN.pick), III, { pick: { block: 206, slot: 30 } }), false)
+    assert.equal(namAllowed(namPickFrame(III, 207, 29), III, { pick: { block: 206, slot: 29 } }), false)
+    assert.equal(namAllowed(namSlotQuery(III, 3), III, { pick: { block: 206, slot: 29 } }), false)
+
+    /* Who reaches this file: the wire, which sends; the card, which packs and names a slot; and nothing else. */
+    assert.match(read('mobile/src/lib/bleWire.js'), /from '\.\/nam-install\.js'/)
+    assert.match(read('mobile/src/components/Tone3000Test.js'), /import \{ NAM_BLOCKS, namRecord, namSlotSaid \} from '\.\.\/lib\/nam-install'/)
+    for (const f of ['mobile/src/lib/device.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/lib/bluetooth.js']) assert.ok(!/nam-install['.]/.test(read(f).replace(/\/\*[\s\S]*?\*\//g, '')), `${f} builds capture messages of its own`)
+    /* The card sends through the three calls and no other way, and only the wire's own switch opens them: his account's. */
+    const card = read('mobile/src/components/Tone3000Test.js')
+    assert.match(card, /import \{ namEmptySlotHere, namInstallHere, namPickHere \} from '\.\.\/lib\/device'/)
+    assert.ok(!/bluetoothWire|\.request\(|bleWire/.test(card), 'the card talks to the wire itself')
+    assert.match(read('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' '), /captures: \(\) => allUnits === true,/)
     /* And the notes say what the recording taught, without the recording. */
     const doc = read('docs/nam-install.md')
-    for (const said of [/0x54/, /0x55/, /0x56/, /16,384/, /14,017/, /257/, /<EMPTY>/, /not in the repository/, /NAM_PACKING_PROVEN/]) assert.match(doc, said)
+    for (const said of [/0x54/, /0x55/, /0x56/, /16,384/, /14,017/, /257/, /<EMPTY>/, /not in the repository/, /NAM_PACKING_PROVEN/, /weights_hash/, /word for word/]) assert.match(doc, said)
   })
 }

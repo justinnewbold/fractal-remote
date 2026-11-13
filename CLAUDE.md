@@ -1088,7 +1088,8 @@ what the computer sends for the same edit, and a test holds it there.
   words are exactly what every customer copy has always shown.
 
 **TONE3000 for the AX3's NAM block: started 13 November 2026, HIS ACCOUNT
-ONLY, and nothing is sent to a unit yet.**
+ONLY. A capture can be sent to the unit from the Developer card since
+1.90.58; nothing has been sent to a real unit from the app yet.**
 
 > "Next I want to add TONE3000 so users can search, preview and download
 > tones for the NAM block directly in the app. ... I already set up in
@@ -1152,13 +1153,32 @@ the capture on the unit, which is the hard half.
   08 01, and a NAM block is pointed at a slot by an ordinary typed write
   of its setting 0. mobile/src/lib/nam-install.js builds and reads all of
   it, and rebuilt the recorded upload byte for byte.
-  - *NOTHING SENDS A RECORD YET* (`NAM_PACKING_PROVEN` is false). That the
-    14,017 are the file's numbers untouched fits everything seen, but the
-    .nam that was loaded has not been set beside the recording: he sent the
-    recording and not the file. A capture packed wrong plays as noise, so
-    the sender waits for that one comparison. The file is the TONE3000
-    capture "Orange Amp: Flat EQ, Gain 6, AK…" (gear "Orange OTR 120
-    2X12"); a download needs his TONE3000 sign-in.
+  - *THE PACKING IS PROVEN* (`NAM_PACKING_PROVEN`, 13 November 2026). He
+    sent the three .nam files he had for that tone ("theses are the files i
+    could find"); the one loaded is "Orange Amp: Flat EQ, Gain 6, AKG 414 +
+    sm57". All 14,017 numbers are the recording's bit for bit, its loudness
+    and gain are the two numbers before them, and the thirty-two bytes are
+    the file's own `weights_hash`. `namRecord` packs that file to the
+    record Axe-Edit sent, word for word but for the name's 32nd byte, which
+    the unit overwrites. The files are not in the repository.
+  - *THE SENDER IS BUILT (1.90.58), HIS ACCOUNT ONLY: Developer → Testing →
+    TONE3000.* A fetched capture has Send to the Axe-Fx III: the phone
+    reads the unit's slots from the first up to the first that says
+    <EMPTY>, sends Axe-Edit's own sequence into it (the slot read, "a
+    transfer is under way", 130 messages each sent when the one before is
+    answered, "it is over", the slot read back) with a count as it goes,
+    and then offers Play it in NAM 1 / NAM 2 (the typed write of setting
+    0). Over Bluetooth or the unit's USB cable into the device, on an
+    Axe-Fx III only (bleWire `namEmptySlot`, `namInstall`, `namPick`;
+    lib/device `namEmptySlotHere` and the two beside it). A slot in use is
+    never written, except the one a stopped send of the card's own left
+    half-filled. While it goes the watch asks nothing and any other write
+    is refused. Every frame of these shapes is held at the way out
+    (`namShaped`, `namAllowed`). The switch is the wire's `captures`
+    option (lib/bluetooth: his account). NOTHING HAS BEEN SENT TO A REAL
+    UNIT FROM THE APP: his first send is the first check, and so is his
+    first pick. Nothing is saved on the unit by it: the preset is saved the
+    usual way.
   - *The recording is not in the repository* (a creator's capture, and the
     names of Fractal's own). He has it as NAM.mmon. Never ask for his
     Fractal-Bot backup either: it holds Fractal's own captures.
@@ -1166,14 +1186,14 @@ the capture on the unit, which is the hard half.
     only seen for slot 29, so which bytes hold a bigger number is a guess.
     His unit had 31 captures (0 to 28 and 256) and Axe-Edit took the first
     empty one.
-- **The order from here:** the .nam set beside the recording; then the
-  sender, his account only, on the Developer card first (over Bluetooth or
-  the USB cable the phone can send it itself, with a progress bar; through
-  the computer or the Pi it needs an engine route, a new pin and a
-  computer release); the capture picker (the list read, and the typed
-  write of setting 0); then the TONE3000 screen where a player meets it.
-  Only an Axe-Fx III has a NAM block. A slot is only ever written when it
-  reads <EMPTY>, unless the player says to replace what is there.
+- **The order from here:** his first send from the card; then a capture
+  picker in Edit (the list of all 257, read once and kept, and the same
+  typed write); sending through the computer or the Pi (an engine route, a
+  new pin and a computer release); then the TONE3000 screen where a player
+  meets it, which is a store version (new for customers, and its in-app
+  browser and preview are native). Only an Axe-Fx III has a NAM block. A
+  slot is only ever written when it reads <EMPTY>, unless the player says
+  to replace what is there.
 - **No build for it yet.** A build now would cut every store copy off from
   updates until it is in the stores, and the in-app TONE3000 screen will
   add native pieces of its own, so the build pair waits for the list to be
