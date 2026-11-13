@@ -1071,6 +1071,80 @@ what the computer sends for the same edit, and a test holds it there.
   lines follow the same switch (`editingLine`, `limitsLine`): closed, its
   words are exactly what every customer copy has always shown.
 
+**TONE3000 for the AX3's NAM block: started 13 November 2026, HIS ACCOUNT
+ONLY, and nothing is sent to a unit yet.**
+
+> "Next I want to add TONE3000 so users can search, preview and download
+> tones for the NAM block directly in the app. ... I already set up in
+> another app I made called HeadRush remote." Then: "I already have approval
+> from TONE3000 so you can skip that", and of the unit: "I'm not worried
+> about damaging anything as I literally bought this just to test
+> everything out ... it's a test unit." (13 November 2026)
+
+His HeadRush app (justinnewbold/headrush) has it because that board is on
+Wi-Fi and talks to TONE3000 itself; the app only asks the board. A Fractal
+unit has no internet, so here the app talks to TONE3000 and then has to put
+the capture on the unit, which is the hard half.
+
+- **TONE3000's side is settled.** He has their approval (a paid app needs a
+  commercial agreement and their sign-off before it is published; do not
+  raise it again) and the key for Fractal Remote, made in tone3000.com →
+  Settings → API Keys: the PUBLISHABLE one (`t3k_pub_…`, the client id,
+  made to be shipped in apps) is in mobile/src/lib/tone3000.js, with
+  `fractalremote://tone3000` on its list of return addresses. The secret
+  one (`t3k_cs_…`) is never in the app, the repository or the chat. Their
+  terms, which the code keeps: everything browsed is TONE3000's own page
+  under TONE3000's name ("Powered by TONE3000"), the creator and licence
+  are always shown, a capture is fetched only when a player asks for it,
+  nothing is cached or fetched ahead.
+- **Use TONE3000's own example, never memory.** github.com/tone-3000/api
+  has the same three demo apps in six stacks; web/src/tone3000-client.ts
+  is where every address, field and answer in lib/tone3000.js came from
+  (the pick-a-tone page is `prompt=select_tone` with `format=nam`,
+  `architecture=2`, `preview=true`; leaving `architecture` out returns the
+  older kind only). Its react-native/ example is the in-app version: a web
+  view and a native C++ preview player, both native, so the next build.
+- **What is built (1.90.55): Developer → Testing → TONE3000.** Browse
+  opens TONE3000's page in the device's browser (sign in, search, audition
+  on its own players, pick), TONE3000 sends the device back by the app's
+  link, and the card shows the tone, its creator and licence and its A2
+  captures; a capture can be fetched and counted (lib/nam-file.js). No new
+  package and no build: SHA-256 is written out (lib/sha256.js), the pass is
+  in the app's ordinary storage (secure storage is native), and the
+  one-time word uses the engine's secure random numbers where it has them.
+  On a page only his account has, so it has no switch yet; it gets one in
+  lib/features when it moves to where a player meets it.
+- **What a capture is, measured** (the open NAM engine's own A2 example):
+  666 KB of text holding 14,017 numbers, 1,871 in the lite network and
+  12,146 in the full one, about 56 KB at four bytes a number and about 64
+  KB as MIDI. So through a computer or a USB cable it is a second or two,
+  and over a Bluetooth adapter on the MIDI jacks (3,125 bytes a second)
+  about half a minute. An estimate until the packing is known: he was
+  first told Bluetooth could not carry one, which was wrong.
+- **THE MISSING PIECE IS HOW AXE-EDIT PUTS A CAPTURE ON THE UNIT.** Axe-Edit
+  III turns a .nam into binary SysEx and sends it; Fractal has not
+  published it, the pinned codec has nothing for it, and the engine cannot
+  send any file to a unit. It is learned from HIS RECORDING: MIDI Monitor
+  on his Mac ("Spy on output to destinations") while Axe-Edit III's Manage
+  NAM takes one .nam file, with that same .nam, an exported file if Manage
+  NAM offers one, the slot, the name it shows and Axe-Edit's version. He
+  was given the steps on 13 November and has not sent it yet. The recording
+  should also show how Axe-Edit reads the 257 capture names, which is what
+  the capture picker needs (the NAM block's Type, setting 0, is still not
+  written by the app). Never ask for his Fractal-Bot backup: it holds
+  Fractal's own captures.
+- **The order after the recording:** install through the computer or the
+  Pi (it fetches the capture, packs it, sends it by USB), the capture
+  picker, the TONE3000 screen where a player meets it, then install over
+  Bluetooth and the USB cable with a progress bar. Only an Axe-Fx III has
+  a NAM block.
+- **No build for it yet.** A build now would cut every store copy off from
+  updates until it is in the stores, and the in-app TONE3000 screen will
+  add native pieces of its own, so the build pair waits for the list to be
+  whole. He has 7 iPhone and 10 Android builds left in November, by his
+  own count. The free Android APK from a side branch is where the native
+  pieces can be tried first.
+
 **Two sides on a big screen: open to everyone since 9 November 2026; the
 plan is docs/two-sides/README.md.**
 

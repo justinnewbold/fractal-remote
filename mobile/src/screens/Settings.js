@@ -84,6 +84,7 @@ import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH } from '..
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage, { BluetoothLimits, BluetoothTools, BluetoothTried, BluetoothTrouble, BluetoothWays } from './Bluetooth'
 import BlockReader from '../components/BlockReader'
+import Tone3000Test from '../components/Tone3000Test'
 import AccessTool from '../components/AccessTool'
 import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
@@ -1321,6 +1322,9 @@ export default function Settings({
               <BlockReader />
             </>
           ) : null}
+          {/* "Next I want to add TONE3000" (13 November 2026): its first piece, signing in and picking on TONE3000's own page. Needs no unit and no Bluetooth; his account's, as this page is. */}
+          <Section>TONE3000</Section>
+          <Tone3000Test />
         </>
       ) : null}
 
