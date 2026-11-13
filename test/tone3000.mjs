@@ -317,7 +317,7 @@ export function run(test) {
     assert.ok(!/0xf0|0xF0|sysex|buildFrame|frame\(/i.test(code(src)))
   })
 
-  test('tone3000: the card is on the Developer testing page only, sends nothing to a unit, and says whose page and whose tone it is', async () => {
+  test('tone3000: the card is on the Developer testing page only, reaches a unit only through the captures’ three calls, and says whose page and whose tone it is', async () => {
     const card = read('mobile/src/components/Tone3000Test.js')
     const here = read('mobile/src/lib/tone3000Here.js')
     const settings = flat(read('mobile/src/screens/Settings.js'))
@@ -334,10 +334,16 @@ export function run(test) {
       }
       assert.ok(!/tone3000/i.test(src), `${p} reaches TONE3000`)
     }
-    /* Nothing of the unit's: no wire, no device, no Bluetooth. */
-    for (const src of [card, here, read('mobile/src/lib/tone3000.js')]) {
+    /* Nothing of the unit's in the client or its bindings: no wire, no device, no Bluetooth. */
+    for (const src of [here, read('mobile/src/lib/tone3000.js')]) {
       assert.ok(!/from '\.\.?\/(lib\/)?(device|bleWire|bluetooth|rig|link)'/.test(src), 'the TONE3000 piece imports the unit’s code')
     }
+    /* The card reaches a unit by the captures' three calls and nothing else of the unit's (test/nam-install.mjs, test/bluetooth.mjs hold what they send). */
+    assert.deepEqual(card.match(/from '\.\.\/lib\/(device|bleWire|bluetooth|rig|link)'/g), ["from '../lib/device'"])
+    assert.match(card, /import \{ namEmptySlotHere, namInstallHere, namPickHere \} from '\.\.\/lib\/device'/)
+    /* A capture's text is kept for as long as the card is up and no longer: never in storage. */
+    assert.ok(!/AsyncStorage|setItem|writeAsString/.test(card), 'the card writes a capture down')
+    assert.match(card, /texts\.current = \{\}/)
     /* TONE3000's terms: its name on it, the creator and licence with the tone, a capture fetched only on its own tap. */
     assert.match(card, /\{T3K_POWERED\}/)
     assert.match(card, /\{toneCredit\(tone\)\}/)

@@ -606,6 +606,28 @@ export const readerBlocks = () => readerAsks('/reader/blocks')
 /** One block, read whole and asked about itself: {block, settings, asked, stopped, bulk, channel, channels, bypassed, unit}. */
 export const describeBlockHere = (eid) => readerAsks(`/reader/blocks/${eid}`)
 
+/*
+ * AN AXE-FX III'S NAM CAPTURES, FROM THIS DEVICE (lib/nam-install, bleWire
+ * namEmptySlot, namInstall, namPick): the first empty slot, a capture's
+ * record sent into a slot, a NAM block pointed at one. Only over the
+ * device's own wire (Bluetooth, or the unit's USB cable into it), only on
+ * an Axe-Fx III, and only for his account: the wire answers it for nobody
+ * else, and never unless the request says it is the captures'.
+ */
+const CAPTURING = Object.freeze({ capturing: true })
+export const CAPTURES_NEED_THE_WIRE = 'Sending a capture works through an adapter, or with the Axe-Fx III’s USB cable plugged into this device.'
+const captureAsks = (path, options = {}) => {
+  const ble = demoDevice() || onVp4 ? null : bluetoothWire()
+  if (!ble) return Promise.reject(Object.assign(new Error(CAPTURES_NEED_THE_WIRE), { status: 501 }))
+  return ble.request(path, { ...CAPTURING, ...options })
+}
+/** The first empty capture slot: { slot, heads: [{ slot, name, empty }] }, slot null where the first 128 are all taken. */
+export const namEmptySlotHere = () => captureAsks('/nam/empty')
+/** A capture's record (lib/nam-install namRecord) into a slot: { slot, name, replaced, seconds }. `onProgress(sent, of)` as each message is taken. */
+export const namInstallHere = (slot, words, { replace = false, onProgress } = {}) => captureAsks(`/nam/slots/${slot}`, { method: 'POST', body: { words, replace }, onProgress })
+/** NAM 1 (206) or NAM 2 (207) pointed at a slot: { block, slot, name }. */
+export const namPickHere = (block, slot) => captureAsks(`/nam/blocks/${block}/slot`, { method: 'POST', body: { slot } })
+
 /** What the unit's footswitches can do — see lib/footswitches and the Footswitches page. */
 export const fcModel = () => remoteRequest('/fc/model')
 /** One switch's settings, by its path from fcStatePath; paced by readView. */

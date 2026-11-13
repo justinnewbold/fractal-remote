@@ -54,23 +54,41 @@ slot number is a guess, so the code names no slot over 127
 | bytes 128–159 | the gear's kind (`amp`, `amp_cab`) |
 | bytes 160–191 | the tone's kind (`crunch`, `hi_gain`, `metal`) |
 | bytes 192–223 | spare, noughts |
-| bytes 224–255 | thirty-two bytes Axe-Edit fills for a TONE3000 capture. **Not known what.** Fractal's own captures have noughts there, so the unit plays one without them; the code sends noughts. |
+| bytes 224–255 | the file's own `weights_hash` (`nam-content-v1:` and 64 hex digits) as its 32 bytes. Fractal's own captures have noughts there, so the unit plays one without them, and a file with no hash sends noughts. |
 | words 64–67 | loudness (dB), gain, input level and output level (dBu), each `7FC00000` ("not a number") where the file has none |
 | words 68–14084 | the capture's 14,017 numbers as single-precision floats in the file's order: the lite network's 1,871, then the full network's 12,146 |
 | words 14085–14094 | ten `7FC00000` |
 | the rest | noughts |
 
-## What is not proven yet: `NAM_PACKING_PROVEN`
+## The packing is proven: `NAM_PACKING_PROVEN`
 
-That words 68–14084 are the `.nam` file's own numbers, untouched and in the
-file's order. Everything says so: the count is exactly an A2 capture's, the
-lite network ends at word 1938 on the same closing number the full network
-ends on (as both networks of the open NAM engine's A2 example do), and the
-four numbers before them are the file's own notes. But the `.nam` that was
-loaded has not been set beside the recording. **Until it has, nothing in
-the app sends a record**: a capture packed wrong would play as noise. When
-it has, say so here, set the switch, and build the sender with its own way
-out, as every other write over the wire has.
+Justin sent the three `.nam` files he had for that tone the same day. The
+one that was loaded is "Orange Amp: Flat EQ, Gain 6, AKG 414 + sm57": all
+14,017 of its numbers are the recording's, bit for bit as single-precision
+floats, in the file's order; its loudness and gain are the two numbers
+before them; and its `weights_hash` is the thirty-two bytes. Packed by
+`namRecord`, the file is the record Axe-Edit sent, word for word, but for
+one byte: the name's 32nd, which Axe-Edit sent (0x60) and the unit
+overwrote with its own ending. The other two files (other microphones)
+share not one number with it. The files are not in the repository either
+(TONE3000's terms: a capture is fetched when a player asks, and not kept).
+
+## The sender
+
+The wire's (mobile/src/lib/bleWire.js `namEmptySlot`, `namInstall`,
+`namPick`), over Bluetooth or the unit's USB cable into the device, on an
+Axe-Fx III only and for his account only, from Developer → Testing →
+TONE3000. It is Axe-Edit's sequence: the slot read first (written only if
+it says `<EMPTY>`, unless told to replace), "a transfer is under way", the
+130 messages each sent only when the unit has answered the one before, "it
+is over", the slot read back. While it goes the watch asks nothing and any
+other write is refused. Every frame of these shapes is held at the way out
+(`namShaped`, `namAllowed`): an upload's own frames byte for byte, a slot's
+question while the list is read, the one pick being made. test/bluetooth.mjs
+holds it against a unit that answers as his did.
+
+**Nothing has been sent to a real unit from the app yet.** His first send
+is the first check.
 
 ## The list of slots
 

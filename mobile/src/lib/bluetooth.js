@@ -2012,6 +2012,8 @@ export function openWire() {
     edit: () => editOverBluetooth(unit),
     /* The developer's block reader (lib/gen3-describe), his account's alone, asked at every request. */
     reader: () => allUnits === true,
+    /* An Axe-Fx III's captures listed, sent and picked from this device (lib/nam-install), his account's alone, asked at every request. */
+    captures: () => allUnits === true,
     /* An Axe-Fx III's own blocks with their knobs in Edit (lib/axefx3-own-knobs): the whole list for his account, the NAM block for everyone (ownKnobsLevel, below); asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
     namKnobs: () => ownKnobsLevel(allUnits === true),
     /* Save from the phone (lib/bleSave): his account's, until lib/features SAVE_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request. Edit's own door still has to be open (`edit`, above). */
