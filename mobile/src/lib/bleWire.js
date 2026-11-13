@@ -426,11 +426,20 @@ const GEN3_EDIT_BY_MODEL = Object.freeze({ [MODELS.fm3]: fm3Edit, [MODELS.fm9]: 
  * (`placed`) and a setting the unit's own catalog names (its editAllowed:
  * fm3EditAllowed, fm9EditAllowed, axefx3EditAllowed). The tempo's typed
  * write is at the Controllers (2), not a block, and goes as before.
+ *
+ * THE AXE-FX III'S NAM BLOCK (lib/axefx3-own-knobs.js) is in none of those
+ * catalogs, so a read or a write of Edit's at 206 or 207 is refused here, as
+ * it always was. It goes only while `namKnobs` says the NAM block's knobs are
+ * open to this account, asked at each send: then the III's frames are held
+ * to the catalog with NAM in it (axefx3-edit `withNam`), which names eight
+ * knobs and five switches of that block and nothing else of it, and passes
+ * a knob of it only as its place (52 00), never the typed way.
  */
-export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null) {
-  /* The unit's own Edit; a model with none has nothing of Edit's that may go. Which ids are blocks is the codec's, the same on every gen-3 unit. */
+export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false) {
+  /* The unit's own Edit; a model with none has nothing of Edit's that may go. Which ids are blocks is the codec's, the same on every gen-3 unit, and the III's NAM with them whoever is asking: a typed write at one is Edit's to hold, open or closed. */
   const edit = GEN3_EDIT_BY_MODEL[model] || null
-  const blockAt = (edit || fm3Edit).editBlock
+  const blockAt = (edit?.withNam || edit || fm3Edit).editBlock
+  const editNow = () => (edit?.withNam && namKnobs() === true ? edit.withNam : edit)
   const editShaped = (b) =>
     Array.isArray(b) &&
     b[0] === 0xf0 &&
@@ -448,7 +457,7 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
     return Number.isInteger(eid) && sameBytes(b, fm3Edit.buildReadAll(model, eid))
   }
   return (bytes) => {
-    if (editShaped(bytes) && !(edit && edit.editAllowed(bytes, placed(), model)) && !readersOwn(bytes)) {
+    if (editShaped(bytes) && !(edit && editNow().editAllowed(bytes, placed(), model)) && !readersOwn(bytes)) {
       log(`refused to send ${toHex(bytes)}: it is not one of Edit’s reads or writes for a block in this preset`)
       return 'refused'
     }
@@ -472,8 +481,9 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {(name:string|null) => void} [o.onForeign]  called once, with its bare name, when another unit answers a connection before the one picked has, so the page can say which; and with null when the one picked answers after it (heardFromIt)
  * @param {() => boolean} [o.edit]  whether Edit is open over Bluetooth to this account on this unit (ble-rule editOffered), asked at each request
  * @param {() => boolean} [o.reader]  whether the developer's block reader is open to this account (his alone: lib/bluetooth bluetoothAdmin), asked at each request
+ * @param {() => boolean} [o.namKnobs]  whether an Axe-Fx III's NAM block has its knobs in Edit for this account (lib/features NAM_KNOBS_FOR_EVERYONE, his account until then), asked at each request and each send
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -502,6 +512,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const g3Edit = am4 ? null : GEN3_EDIT[unit] || null
   const editHere = am4 || !!g3Edit
   const editOn = () => editHere && (typeof edit === 'function' ? edit() === true : edit === true)
+  /*
+   * THE NAM BLOCK'S KNOBS (lib/axefx3-own-knobs.js), on an Axe-Fx III: open
+   * to this account or not, asked at every request and every send, as Edit
+   * is. Open, the III is read, written and guarded through its catalog with
+   * NAM in it (axefx3-edit `withNam`); closed, or on any other unit, through
+   * the codec's catalog alone (g3Edit), exactly as before there was one.
+   */
+  const namOn = () => typeof namKnobs === 'function' && namKnobs() === true
+  const g3 = () => (g3Edit?.withNam && namOn() ? g3Edit.withNam : g3Edit)
   /* The block codes of the last preset answer believed (readStructure), which Edit's frames are held to. */
   let editPlaced = null
   /* The developer's reader (gen3Describe): his account's, on a gen-3 unit, and the one block whose whole read it has out. */
@@ -526,7 +545,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const sendFrame = am4
     ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null))
-    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null))
+    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn)
 
   const handlers = new Set()
   const emit = (event) => {
@@ -1492,8 +1511,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * so Edit opens them on their on and off alone and says why, rather than
    * ask for a read that is refused (gen3Params) and put the refusal up red.
    * Every block the catalog's knobs do name is handed on exactly as before.
+   *
+   * The NAM block is marked only for an account its knobs are closed to
+   * (namOn, above): open, the catalog this asks has NAM in it, so the block
+   * is handed on as any block with knobs is, and Edit, Play's hold pop-up
+   * and the watch's quick edit, which all read this mark, open its knobs.
+   * The IR Player has none for anybody.
    */
-  const knobsSaid = (b) => (g3Edit && !g3Edit.editBlock(b.effectId) ? { ...b, knobs: false } : b)
+  const knobsSaid = (b) => (g3Edit && !g3().editBlock(b.effectId) ? { ...b, knobs: false } : b)
 
   /* An id that is not a block a player switches (lib/gen3Catalog NOT_BLOCKS): refused with nothing sent, as forgefx-midi refuses it. */
   const switchable = (eid) => {
@@ -2588,11 +2613,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   async function gen3Params(eid) {
     const e = blockNumber(eid)
-    const b = g3Edit.editBlock(e)
+    /* The unit's Edit for this request, taken once (g3: with the III's NAM in it or not), so one read is named by one catalog from start to end; the way out asks again at each send. */
+    const ed = g3()
+    const b = ed.editBlock(e)
     if (!b) throw badInput(`The app can’t open block ${e} from here yet.`)
     const kept = editKept.get(e)
     if (kept && !kept.stale.size && time.now() - kept.at < EDIT_FRESH_MS && time.now() - kept.whole < EDIT_WHOLE_MS) {
-      return g3Edit.blockParamsOf(e, kept.bulk, { channel: kept.channel })
+      return ed.blockParamsOf(e, kept.bulk, { channel: kept.channel })
     }
     const started = time.now()
     /* As on an AM4: a scene or preset changed while this was read, and it is answered but not kept (moved). */
@@ -2607,7 +2634,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (!got) throw failure(`The ${spec.name} didn’t send the ${b.name}’s settings. Try again.`, 504)
     if (got.damaged) throw failure(`The ${b.name}’s settings came back damaged. Try again.`, 502)
     if (moves === at) editKept.set(e, { at: time.now(), whole: time.now(), channel: st.channel, bulk: got, stale: new Set() })
-    const out = g3Edit.blockParamsOf(e, got, { channel: st.channel })
+    const out = ed.blockParamsOf(e, got, { channel: st.channel })
     say(`read the ${b.name}’s settings in ${((time.now() - started) / 1000).toFixed(1)} s: ${out.named.length} knobs, channel ${CH[st.channel] ?? st.channel}`)
     return out
   }
@@ -2616,9 +2643,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   async function gen3WriteKnob(eid, id, body) {
     const at = moves
     const e = blockNumber(eid)
-    if (!g3Edit.editBlock(e)) throw badInput(`The app can’t change block ${e} from here yet.`)
-    const made = g3Edit.knobFrame(model, e, id, body)
+    const ed = g3()
+    if (!ed.editBlock(e)) throw badInput(`The app can’t change block ${e} from here yet.`)
+    const made = ed.knobFrame(model, e, id, body)
     if (made.refused) throw badInput(made.refused)
+    /* The second way of sending a knob, asked of a block that is only sent the first (gen3-edit ONE WAY ONLY: the III's NAM): nothing goes, and it is answered as not done rather than refused, so the screen's own check reads the unit and says what it holds. */
+    if (made.unsent) {
+      say(`${made.unsent}: nothing sent`)
+      return { ok: false }
+    }
     await gen3PlacedHere(e)
     movedSince(at, made.what)
     const r = await fire(made.frame, made.what, EDIT_WRITE)
@@ -2631,7 +2664,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   async function gen3WriteModel(eid, value) {
     const at = moves
     const e = blockNumber(eid)
-    const made = g3Edit.modelFrame(model, e, value)
+    const made = g3().modelFrame(model, e, value)
     if (made.refused) throw badInput(made.refused)
     await gen3PlacedHere(e)
     movedSince(at, made.what)
@@ -2658,7 +2691,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const states = list.filter((b) => !NOT_BLOCKS.includes(b.effectId)).map((b) => ({ effectId: b.effectId, bypassed: b.bypassed, channel: channelLetter(b.channel) }))
     const names = new Map((outlineChain(states, blocks) || []).map((b) => [b.effectId, b.name]))
     return states
-      .map((b) => ({ effectId: b.effectId, name: names.get(b.effectId) || null, known: !!g3Edit.editBlock(b.effectId) }))
+      .map((b) => ({ effectId: b.effectId, name: names.get(b.effectId) || null, known: !!g3().editBlock(b.effectId) }))
       .sort((x, y) => Number(x.known) - Number(y.known) || x.effectId - y.effectId)
   }
 
@@ -3168,7 +3201,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (method === 'POST' && part.length === 4 && part[3] === 'type') return editRoute(() => (am4 ? am4WriteModel(eid, body?.value) : gen3WriteModel(eid, body?.value)))
     }
     if (editing && method === 'GET' && part[0] === 'blocks' && part.length === 3 && part[2] === 'types') {
-      return editRoute(() => (am4 ? modelsOf(decodeURIComponent(part[1])) : g3Edit.modelsOf(decodeURIComponent(part[1]))))
+      return editRoute(() => (am4 ? modelsOf(decodeURIComponent(part[1])) : g3().modelsOf(decodeURIComponent(part[1]))))
     }
     /* The developer's reader, only when the request says it is the reader's and it is open to this account (readerOn): his alone. */
     if (opts?.reading === true && readerOn() && method === 'GET' && part[0] === 'reader' && part[1] === 'blocks') {

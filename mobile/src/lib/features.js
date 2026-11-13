@@ -228,3 +228,26 @@ export const METRONOME_FLASH_CHOICE_FOR_EVERYONE = false
  * everyone when he says so, with its What's new line in that pull request.
  */
 export const WATCH_QUICK_EDIT_FOR_EVERYONE = false
+
+/**
+ * THE NAM BLOCK'S KNOBS IN EDIT, on an Axe-Fx III over Bluetooth or its USB
+ * cable into the phone (lib/axefx3-own-knobs, lib/axefx3-edit `withNam`):
+ * Input Gain, Bass, Mid, Treble, Bright, Bright Cap and the block's Level,
+ * with five of its switches read and guarded beside them.
+ *
+ * "Yes build the NAM reader now" (Justin, 12 November 2026), and the reader
+ * ran on his own Axe-Fx III the next day: what it read, with the names off
+ * Axe-Edit III's NAM page, is docs/ax3-readings.md. Built on his account
+ * first, as every new thing is, and for a harder reason than most: these
+ * settings were read off one unit and no write has gone to a NAM block
+ * yet, so the first knob he turns is the first check that the unit takes
+ * them. Off, it is his account only (lib/bluetooth hands the wire
+ * `namKnobs`), and for every other account the III's NAM is exactly what it
+ * was: its name, its on and off, a line saying its knobs aren't in the app
+ * yet, and its reads and writes refused at the way out (bleWire
+ * gen3Sender). It opens to everyone when he says so, after it has run on
+ * his unit, with its What's new line in that pull request; Edit's own door
+ * (lib/ble-rule.js EDIT_FROM_STORE) still decides whether a copy edits at
+ * all.
+ */
+export const NAM_KNOBS_FOR_EVERYONE = false

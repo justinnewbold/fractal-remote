@@ -33,6 +33,14 @@
  * Through the computer nothing changes: it passes them on with no slug, and
  * they stay a New block (shared/new-block.mjs).
  *
+ * Since 13 November 2026 the NAM block has a hand-written list of its knobs
+ * (lib/axefx3-own-knobs.js, off Justin's own III and Axe-Edit III's NAM
+ * page), for the accounts lib/features NAM_KNOBS_FOR_EVERYONE opens it to:
+ * his alone, so far. For them the wire does not mark a NAM, and Edit opens
+ * its knobs with one line under them (NAM_ON_THE_UNIT, below). For every
+ * other account, and for the IR Player on every account, the paragraph
+ * above is still the whole of it.
+ *
  * Not here, and not drawn: the rest the FM3 has none of (Crossover, Vocoder,
  * Tone Match, Dynamic Distortion), which have no family on Play yet
  * (shared/bluetooth-gear missingBlocksLine says so on the page), and the ids
@@ -119,6 +127,15 @@ export const NOT_BLOCKS = Object.freeze([2, 190, 199, 200, 201])
  * for, and no refusal put up red.
  */
 export const NO_KNOBS_YET = 'This block’s knobs aren’t in the app yet.'
+
+/*
+ * WHAT EDIT SAYS ON A NAM BLOCK WHOSE KNOBS ARE OPEN, once, under its knobs
+ * and its Level, where a block's model would be: what the app leaves to the
+ * unit. The capture is a list of whatever is loaded on that unit, which the
+ * app cannot name, so there is no picker for it (lib/axefx3-own-knobs.js).
+ * Only what is true now: no promise of when.
+ */
+export const NAM_ON_THE_UNIT = 'The capture is chosen on the unit itself.'
 
 /* A block's name for its instance: "Amp 2", from the FM3's "Amp", or "Drive 3" from "Drive 1". */
 const named = (base, instance, many) => {

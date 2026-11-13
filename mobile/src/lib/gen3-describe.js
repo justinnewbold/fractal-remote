@@ -149,7 +149,20 @@ const whole = (x) => Number.isFinite(x) && x === Math.round(x)
  * def, step}, {view: 'label', text}, {view: 'value', text}, or null for an
  * answer with nothing in it (the unit's "not there") or one that is neither.
  * The codec's decodeReply, which reads the same whichever tag the unit
- * marked the answer with.
+ * marked the answer with, but for one thing, on purpose:
+ *
+ * TEXT ENDS AT ITS FIRST NUL. The unit answers a value with a buffer (32
+ * bytes on his Axe-Fx III) holding a C string: the text, a NUL, and after
+ * it whatever an earlier answer left there ("0.0 dB", NUL, then "%", NUL,
+ * "Blo"; "LEFT", NUL, then the "+R" of the "SUM L+R" before it). The codec
+ * drops the noughts off the END and then wants every byte left to be
+ * printable, so the NUL in the middle made every such answer nothing, and
+ * every value with a unit on his III read "?" (13 November 2026). Here a
+ * value's or a label's text is the bytes up to the first NUL, when there is
+ * at least one and every one is printable. An answer with no NUL in it, or
+ * only noughts after its text, reads exactly as the codec reads it; a
+ * definition is not touched. Anything that still is not text is kept as it
+ * came (answerBytes).
  */
 export function decodeDescribe(f) {
   if (!isFractal(f) || f[5] !== FN.PARAM || f.length < 10) return null
@@ -168,8 +181,8 @@ export function decodeDescribe(f) {
     const d = { view: 'definition', wireId: u32(raw, 0), tc: u32(raw, 4), min: f32(raw, 8), max: f32(raw, 12), scale: f32(raw, 16), def: f32(raw, 20), step: f32(raw, 24) }
     if ([d.min, d.max, d.scale, d.def, d.step].every((x) => Number.isFinite(x))) return d
   }
-  let end = raw.length
-  while (end > 0 && raw[end - 1] === 0) end -= 1
+  const nul = raw.indexOf(0)
+  const end = nul < 0 ? raw.length : nul
   if (!end) return null
   for (let i = 0; i < end; i++) if (raw[i] < 0x20 || raw[i] >= 0x7f) return null
   const text = String.fromCharCode(...raw.slice(0, end))
@@ -182,8 +195,10 @@ export function decodeDescribe(f) {
  * What an answer carried, as it came, for one this file could not read as
  * a definition or as text: the unit's mark on it and its bytes in hex (the
  * first 48). His Axe-Fx III answered every value that has a unit (dB, Hz,
- * ms) with something that is not plain text (13 November 2026), and a "?"
- * says nothing about what it was. This does.
+ * ms) with something this file could not read (13 November 2026), and a "?"
+ * said nothing about what it was. This did: text, a NUL, and old bytes
+ * after it, which decodeDescribe reads now. Kept for whatever still is not
+ * text.
  */
 export function answerBytes(f) {
   if (!isFractal(f) || f[5] !== FN.PARAM || f.length < 23) return null

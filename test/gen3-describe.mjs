@@ -102,6 +102,7 @@ async function pretend(settings, { silentFrom, refuseAt } = {}) {
       return answer(q, [...new Uint8Array(buf.buffer)])
     }
     if (s && view === d.VIEW.value && s.valueBytes) return answer(q, s.valueBytes)
+    if (s && view === d.VIEW.label && s.labelBytes) return answer(q, s.labelBytes[which - Math.round(s.min)] ?? [])
     const text = !s ? undefined : view === d.VIEW.value ? s.value : (s.labels || [])[which - Math.round(s.min)]
     return answer(q, text === undefined ? [] : [...text].map((c) => c.charCodeAt(0)))
   }
@@ -223,20 +224,23 @@ export function run(test) {
     /*
      * A value the unit answers with something that is not plain text is
      * kept as it came, never a bare "?": his Axe-Fx III answered every
-     * value that has a unit this way, and a "?" said nothing about how.
+     * value that has a unit with something the reader could not read, and
+     * a "?" said nothing about how. (Those turned out to be text, a NUL and
+     * old bytes after it, which is read now: the next test. This one is a
+     * number's own four bytes, which is still not text.)
      * One it does not answer at all says so.
      */
     const odd = []
-    odd[0] = { min: -80, max: 20, scale: 0, step: 0.05, valueBytes: [0x30, 0x2e, 0x30, 0x30, 0x00, 0x64, 0x42] }
+    odd[0] = { min: -80, max: 20, scale: 0, step: 0.05, valueBytes: [0x9a, 0x99, 0x19, 0x3e, 0x00, 0x64, 0x42] }
     odd[1] = { min: 0, max: 10, scale: 1, step: 0.01, value: '5.00' }
     const o = await pretend(odd)
     let nth = 0
     const strange = await o.d.describeBlock({ ask: async (f) => (++nth === 4 ? null : o.ask(f)), pause: o.pause, model: AX3, block: 206 })
     assert.equal(strange.settings[0].value, null)
-    assert.equal(strange.settings[0].raw, 'tag 3A, 7 bytes: 30 2E 30 30 00 64 42')
+    assert.equal(strange.settings[0].raw, 'tag 3A, 7 bytes: 9A 99 19 3E 00 64 42')
     assert.deepEqual([strange.settings[1].value, strange.settings[1].silent], [null, true])
     const oddText = o.d.describeText({ ...strange, name: 'NAM 1' })
-    assert.match(oddText, /now \? \(tag 3A, 7 bytes: 30 2E 30 30 00 64 42\)$/m)
+    assert.match(oddText, /now \? \(tag 3A, 7 bytes: 9A 99 19 3E 00 64 42\)$/m)
     assert.match(oddText, /now \? \(no answer\)$/m)
 
     /* What it is as text: a line a setting, the list’s names, and the whole read’s numbers. */
@@ -246,6 +250,82 @@ export function run(test) {
     assert.match(text, /^ {4}2 .* now "STANDARD" \[LEAN \| STANDARD \| FULL\]$/m)
     assert.match(text, /^ {2}whole read: count 8, 8 values\n {2}1 2 3 4 5 6 7 8$/m)
     assert.match(t.d.describeText({ ...big, name: 'NAM 1', bulk: { note: 'no answer' } }), /\| …\]\n {2}whole read: no answer$/)
+  })
+
+  test('the block reader reads a value’s text up to its first NUL, as his Axe-Fx III sends it: a C string in a buffer with old bytes after it', async () => {
+    /*
+     * WHAT HIS AX3 ANSWERED (13 November 2026, NAM 1, app 1.90.45), the
+     * bytes of five value answers once the seven-bit bytes are put back
+     * together. Each is a 32-byte buffer: the text, a NUL, and whatever an
+     * earlier answer left behind it. The first four are on record only as
+     * far as they are written here; the rest of each buffer is stood in
+     * with noughts. The capture's name is all 32.
+     */
+    const H = (h) => h.split(' ').map((x) => parseInt(x, 16))
+    const buffer = (h) => {
+      const b = H(h)
+      while (b.length < 32) b.push(0)
+      return b
+    }
+    const HIS = [
+      ['Level', buffer('30 2E 30 20 64 42 00 25 00 42 6C 6F 00'), '0.0 dB'],
+      ['Input Gain', buffer('30 2E 30 30 20 64 42 00 00 48 7A 00'), '0.00 dB'],
+      ['Bright Cap', buffer('34 37 30 2E 30 20 70 46 00 00 6D 6D 00'), '470.0 pF'],
+      /* The "+R" after the NUL is left over from "SUM L+R", which it said before he changed it. */
+      ['Input Mode', buffer('4C 45 46 54 00 2B 52 00'), 'LEFT'],
+      ['Type', H('4D 56 32 35 20 43 68 31 20 43 72 75 6E 63 68 00 42 41 4C 32 00 47 61 69 6E 20 36 2C 20 41 4B 00'), 'MV25 Ch1 Crunch']
+    ]
+    const settings = HIS.map(([, bytes]) => ({ min: 0, max: 1, scale: 1, step: 0.01, valueBytes: bytes }))
+    const t = await pretend(settings)
+    for (const [i, [name, bytes, text]] of HIS.entries()) {
+      assert.equal(bytes.length, 32, name)
+      const back = await t.ask(t.d.describeQuery(AX3, t.d.VIEW.value, 206, i))
+      assert.deepEqual(t.d.decodeDescribe(back), { view: 'value', text }, `${name} is not read as the unit wrote it`)
+      /*
+       * A DELIBERATE DIFFERENCE FROM THE PINNED CODEC, whose decodeReply
+       * drops the noughts off the end and then wants every byte left to be
+       * printable: by that rule each of these has a NUL in the middle of
+       * what is left (or, for the capture's name, old text after one), and
+       * is nothing. That is why every one read "?".
+       */
+      let end = bytes.length
+      while (end > 0 && bytes[end - 1] === 0) end -= 1
+      assert.ok(bytes.slice(0, end).includes(0), `${name}: the codec’s own rule would have read this one`)
+    }
+    /* And through the walk: the five values as text, none of them kept as bytes. */
+    const out = await t.d.describeBlock({ ask: t.ask, pause: t.pause, model: AX3, block: 206 })
+    assert.deepEqual(out.settings.map((s) => [s.value, s.raw]), HIS.map(([, , text]) => [text, undefined]))
+    assert.match(t.d.describeText({ ...out, name: 'NAM 1' }), /now "470\.0 pF"$/m)
+
+    /* A label is a C string too: its text, a NUL, the last one's tail. */
+    const list = []
+    list[0] = { min: 0, max: 2, value: 'POST', labelBytes: [H('50 52 45 00 54 00 00 00'), H('50 4F 53 54 00 00 00 00'), H('4F 46 46 00 54 00 00 00')] }
+    const l = await pretend(list)
+    const walked = await l.d.describeBlock({ ask: l.ask, pause: l.pause, model: AX3, block: 206 })
+    assert.deepEqual(walked.settings[0].labels, ['PRE', 'POST', 'OFF'])
+
+    /*
+     * EVERYTHING ELSE IS AS IT WAS. Text with no NUL, or with only noughts
+     * after it, reads as the codec reads it (the first test holds the
+     * codec's own frames). A NUL first, nothing at all, or a byte that is
+     * not a letter before any NUL, is still not text; and a definition is
+     * not looked at this way at all.
+     */
+    const one = async (bytes, view = t.d.VIEW.value) => {
+      const p = await pretend([view === t.d.VIEW.value ? { min: 0, max: 1, scale: 1, step: 0.01, valueBytes: bytes } : { min: 0, max: 0, labelBytes: [bytes] }])
+      return p.d.decodeDescribe(await p.ask(p.d.describeQuery(AX3, view, 206, 0)))
+    }
+    assert.deepEqual(await one(H('35 2E 30 30')), { view: 'value', text: '5.00' })
+    assert.deepEqual(await one(H('35 2E 30 30 00 00 00 00')), { view: 'value', text: '5.00' })
+    assert.deepEqual(await one(H('35 2E 30 30 00 FF 01 00')), { view: 'value', text: '5.00' }, 'old bytes after the NUL that are not letters spoiled the text')
+    assert.equal(await one(H('00 35 2E 30 30 00')), null, 'a buffer that starts with a NUL was read as text')
+    assert.equal(await one(H('00 00 00 00')), null)
+    assert.equal(await one(H('35 01 30 00')), null, 'a byte that is not a letter, before the NUL, was read as text')
+    assert.equal(await one(H('35 2E FF')), null)
+    assert.deepEqual(await one(H('4C 45 46 54 00 2B 52 00'), t.d.VIEW.label), { view: 'label', text: 'LEFT' })
+    const def = t.d.decodeDescribe(fromHex(R_DEF))
+    assert.deepEqual([def.view, def.wireId, def.tc, def.min, def.max], ['definition', 1234, 16, 0, 10])
+    assert.match(code(read('mobile/src/lib/gen3-describe.js')), /const nul = raw\.indexOf\(0\)\s+const end = nul < 0 \? raw\.length : nul\s+if \(!end\) return null/)
   })
 
   test('the block reader stops rather than asks on: nothing at a block’s first places, two questions unanswered, or a refusal, and keeps what it read', async () => {

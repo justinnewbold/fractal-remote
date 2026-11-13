@@ -15,6 +15,7 @@ import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { namedForFm3, neverOnFm3, notAnAdapter, unitForReport } from './bluetooth-gear'
+import { NAM_KNOBS_FOR_EVERYONE } from './features'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -1995,7 +1996,9 @@ export function openWire() {
     /* Edit's knobs over Bluetooth, for this unit, asked at every request (editOverBluetooth). */
     edit: () => editOverBluetooth(unit),
     /* The developer's block reader (lib/gen3-describe), his account's alone, asked at every request. */
-    reader: () => allUnits === true
+    reader: () => allUnits === true,
+    /* An Axe-Fx III's NAM block with its knobs in Edit (lib/axefx3-own-knobs): his account's, until lib/features NAM_KNOBS_FOR_EVERYONE opens it; asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
+    namKnobs: () => allUnits === true || NAM_KNOBS_FOR_EVERYONE
   })
   const mine = wire
   joiner = createJoiner({

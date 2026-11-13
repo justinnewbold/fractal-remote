@@ -29,7 +29,7 @@ import { useCableNow } from '../lib/bluetooth'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
 import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
 import { VP4_NO_EDITS, VP4_NO_KNOBS } from '../lib/vp4-safety'
-import { NO_KNOBS_YET } from '../lib/gen3Catalog'
+import { NAM_ON_THE_UNIT, NO_KNOBS_YET } from '../lib/gen3Catalog'
 import {
   CAB_REFUSED,
   CAB_UNDO_LOST,
@@ -1372,6 +1372,8 @@ export function BlockPanel({
   const tidy = tidyOn && !panel && !bare && !knobless
   /* The row's own on and off (the button under the knobs is not drawn then). */
   const flip = () => writeBlockBypass(eid, engaged)
+  /* A NAM whose knobs the wire does have (an Axe-Fx III over Bluetooth, for an account lib/features NAM_KNOBS_FOR_EVERYONE opens them to): it opens like any block, with NAM_ON_THE_UNIT under its knobs for what is left to the unit. Not in the hold pop-up, which is the knobs only. */
+  const namOnUnit = block.slug === 'nam' && !knobless && !bare
   /* The model picker in that row (a panel wide enough): then it is not under the knobs. */
   const modelUp = tidy && headShape(wide).model && models.length > 0
   /* The i beside the model, for a kind Amp & pedal names has a page for (lib/editMore gearStart): only the Edit screen hands onModelInfo over. */
@@ -1672,6 +1674,8 @@ export function BlockPanel({
           )}
         </View>
       ) : null}
+
+      {namOnUnit ? <Note>{NAM_ON_THE_UNIT}</Note> : null}
 
       {/*
         UNDER THE KNOBS: copying the channel, on and off, and the model.

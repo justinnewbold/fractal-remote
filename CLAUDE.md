@@ -59,8 +59,8 @@ Never hold work for an answer that cannot arrive until the run is over.
 His own short word for it, in what he writes and in replies to him. The
 app, the website, the store texts and the logs still say "Axe-Fx III",
 which is the unit's name. He has one since that day, with an FC, as well as
-the FM3 and the AM4. Its firmware has the NAM block, so 33 or later; he
-has not said which.
+the FM3 and the AM4. It is an Axe-Fx III Mark II on firmware 33.01 (Axe-Edit
+III said so, 13 November 2026).
 
 **Write it for a guitarist, not a developer.** Justin is not a programmer.
 Say what a change does to the app in front of him, not what it does to the
@@ -740,11 +740,64 @@ that ForgeFX's tables for them (an amp's Gain is setting 7 on an FM3, 11 on
 an FM9 and 1 on a III) are what the unit takes; the phone sends exactly
 what the computer sends for the same edit, and a test holds it there.
 
-- **The NAM block's knobs wait on what his AX3 says, and the reader is
-  how it is asked** (12 November 2026: "Yes build the NAM reader now").
-  Over Bluetooth Play draws and switches NAM 1 and NAM 2 (206 and 207, off
-  a customer's log); Edit has no knobs for them, and through the computer
-  the block is still a New block. No catalog names what is inside it. So
+- **The NAM block has its knobs in Edit for his account only, written by
+  hand from what his AX3 said, and not one of them has been turned on a
+  unit yet** (13 November 2026). Over Bluetooth, or the unit's USB cable
+  into the phone, Play draws and switches NAM 1 and NAM 2 (206 and 207, off
+  a customer's log) for everybody. The codec's catalog has no NAM
+  (axefx3-knobs.js is generated and never hand-edited), so its settings are
+  in a file of their own, mobile/src/lib/axefx3-own-knobs.js, laid beside
+  the catalog in axefx3-edit.js as a second Edit of the III's (`withNam`).
+  - *The switch is `NAM_KNOBS_FOR_EVERYONE` in mobile/src/lib/features.js,
+    and it is false.* lib/bluetooth hands the wire `namKnobs` (his account,
+    or the switch), asked at each request and each send. Closed, which is
+    every other account, the III is exactly what it was: NAM is marked
+    `knobs: false`, Edit says "This block's knobs aren't in the app yet",
+    and a read or write of Edit's at 206 or 207 is refused at the way out
+    (bleWire gen3Sender). Open, the wire reads and guards the III through
+    `withNam`. It opens to everyone only when he says so, after it has run
+    on his unit, with its What's new line then; Edit's own door
+    (`EDIT_FROM_STORE`) still decides whether a copy edits at all.
+  - *What is in it: only what is certain.* Eight knobs: Input Gain
+    (setting 5), Bass, Mid and Treble (10, 11, 12), Bright (14) and Bright
+    Cap (15, in pF, along a logarithmic travel), and the block's Level (1)
+    and Balance (2) entered as every block's are, so Edit treats them as it
+    treats any (the Level a box to type in, never below the floor; Balance
+    no knob on the phone). And five switches, numbered as the UNIT numbers
+    them (Axe-Edit sorts its menus by the alphabet): Bypass Mode (3: 0
+    THRU, 1 MUTE), Phase Invert (6: 0 NORMAL, 1 INVERT), Tone Stack
+    Location (8: 0 PRE, 1 POST, 2 OFF), Tone Stack Type (9, twelve names)
+    and Input Mode (13: 0 LEFT, 1 RIGHT, 2 SUM L+R). Every number was read
+    off his unit but two, PRE and RIGHT, which are the one choice left in a
+    list of three; the file's own comment says which is which. A test holds
+    the rows to two reads of channel A, before and after he set four of
+    the switches in Axe-Edit, coming out as Axe-Edit showed them.
+  - *The phone's Edit draws no switch, of any block* (a block's params read
+    carries them in `enums`, and the screen draws `named` only). So the
+    five are read, guarded and can be written through the wire, and have
+    nothing on screen: that is an Edit feature nobody has built, not a NAM
+    one.
+  - *What is left out, so no frame can be built for it:* Type, the capture
+    (0: 257 slots named by whatever is loaded on that unit, numbered from 0
+    where Axe-Edit counts from 001, so the block has no model picker and
+    no model write, `typeId: null`); the block's own bypass (4), which
+    Play's on and off does; setting 7, a list OFF / ON that nobody has a
+    name for (it is not Phase Invert); and values 16 and 17 of each
+    channel, which follow the capture and are never written. Edit says the
+    capture is chosen on the unit (lib/gen3Catalog `NAM_ON_THE_UNIT`). The
+    IR Player still has no knobs for anybody.
+  - *NOTHING HAS BEEN WRITTEN TO A NAM BLOCK ON A REAL UNIT.* The numbers
+    were read off his; the writes are the ones every gen-3 knob and switch
+    gets (fn 0x01: 52 00 for a knob's place, 09 00 for the switch's
+    number), and whether the III takes them at a NAM is his first turn of
+    a knob to find out. And fewer than other blocks get: a NAM's knob is
+    never sent the typed way the app falls back to elsewhere when a write
+    does not read back as asked (gen3-edit `typedKnobs: false`, "ONE WAY
+    ONLY"); the retry sends nothing and Edit says what the unit holds. Do
+    not open the switch before he has turned them.
+- **The block reader is how a block is asked what is in it** (12 November
+  2026: "Yes build the NAM reader now"). No catalog named what is inside
+  the NAM block, and through the computer it is still a New block. So
   Developer → Testing → Block reader (mobile/src/components/BlockReader,
   lib/gen3-describe, bleWire `gen3Describe`), his account only, over
   Bluetooth or the unit's USB cable into the phone, on an FM3, FM9 or
@@ -763,16 +816,15 @@ what the computer sends for the same edit, and a test holds it there.
     these to get more out of a unit.
   - *The unit does not say a setting's NAME.* Those are matched by hand
     from what he reads off the AX3's own screen or Axe-Edit III (never a
-    picture of theirs committed). Then NAM gets a catalog and Edit its
-    knobs, in a store version if it is new for customers.
+    picture of theirs committed). That is how NAM got its list (above);
+    opening it to customers is a store version if it is new for them.
   - *It ran on his AX3 on 13 November 2026, and docs/ax3-readings.md is
     what it read.* It agreed with the app's own table on the block it was
     checked against (Input 1). NAM 1 and NAM 2 are the same: 16 settings,
-    18 values a channel. Known from the unit: the capture list, Level,
-    Balance, on and off, phase, the tone stack's twelve types and its
-    three 0 to 10 knobs. STILL WANTED, from a photo of the NAM block's
-    pages on the AX3 or in Axe-Edit III: the names of settings 3, 5, 7, 8,
-    14 and 15, and the choices of 8 and 13. Until then NAM has no catalog.
+    18 values a channel. The names came from Axe-Edit III's NAM page the
+    same day, and a second read after he set four switches there gave
+    their numbering; both are in that file. STILL NOT KNOWN: the name of
+    setting 7, and what values 16 and 17 mean (they follow the capture).
   - *Block 201, in every III preset, is the preset's Performance page*
     (ten controls: a label, the block it points at, the setting it turns),
     so it is in `NOT_BLOCKS` and no longer in the log's line of unnamed
@@ -781,9 +833,13 @@ what the computer sends for the same edit, and a test holds it there.
     itself has still not been turned on one. Reading that page into the
     app (his ten controls, his labels, per preset) was offered and not
     asked for.
-  - A value the unit answers with something that is not plain text (every
-    value with a unit did, on his AX3) is printed as it came, never a bare
-    "?".
+  - *A value's text is a C string in a 32-byte buffer*: the text, a NUL,
+    and old bytes from earlier answers after it. The codec's decodeReply
+    trims noughts off the end and wants the rest printable, so every value
+    with a unit read "?" on his AX3. The reader takes the bytes up to the
+    FIRST NUL (gen3-describe decodeDescribe), on purpose unlike the pinned
+    codec, which has the same blind spot. What still is not text is
+    printed as it came, never a bare "?".
 - **Saving over Bluetooth is still not built, and the page says what
   else is not** (12 November 2026). He thought it was: "I think we can
   actually save on Bluetooth now and I don't know that there's really
