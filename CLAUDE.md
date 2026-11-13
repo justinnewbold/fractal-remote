@@ -51,6 +51,16 @@ The failure this guards against is not asking too much. It is stopping: a
 question mid-run reads as waiting, and he is not there to unblock anything.
 Never hold work for an answer that cannot arrive until the run is over.
 
+**"AX3" is the Axe-Fx III.**
+
+> "Also moving forward, I'm gonna call AXe-fx III the AX3. So when I say
+> AX3, know that's what I mean." (12 November 2026)
+
+His own short word for it, in what he writes and in replies to him. The
+app, the website, the store texts and the logs still say "Axe-Fx III",
+which is the unit's name. He has one since that day (firmware 33, with an
+FC), as well as the FM3 and the AM4.
+
 **Write it for a guitarist, not a developer.** Justin is not a programmer.
 Say what a change does to the app in front of him, not what it does to the
 code. Name the file only when he needs to find it. "The buttons move up next
@@ -729,6 +739,33 @@ that ForgeFX's tables for them (an amp's Gain is setting 7 on an FM3, 11 on
 an FM9 and 1 on a III) are what the unit takes; the phone sends exactly
 what the computer sends for the same edit, and a test holds it there.
 
+- **The NAM block's knobs wait on what his AX3 says, and the reader is
+  how it is asked** (12 November 2026: "Yes build the NAM reader now").
+  Over Bluetooth Play draws and switches NAM 1 and NAM 2 (206 and 207, off
+  a customer's log); Edit has no knobs for them, and through the computer
+  the block is still a New block. No catalog names what is inside it. So
+  Developer → Testing → Block reader (mobile/src/components/BlockReader,
+  lib/gen3-describe, bleWire `gen3Describe`), his account only, over
+  Bluetooth or the unit's USB cable into the phone, on an FM3, FM9 or
+  Axe-Fx III: a block the unit has just listed is read whole and then asked
+  to describe each of its settings (function 0x01 with a view: its range,
+  its value as the unit writes it, the names in its lists), and what comes
+  back is text he copies and pastes here.
+  - *It only asks.* One way out (`describeAllowed`), and the wire answers
+    it for nobody else and only for a request that says it is the reader's.
+  - *It asks less than the computer's own walk* (forgefx-midi liveWalk,
+    which this is a port of for one block): settings 0 to 127, a label only
+    of a setting that is plainly a list, 48 labels at most, a pause before
+    every question, and it stops at the second in a row with no answer. A
+    label asked of a setting with no list froze an FM3 once (FORGEFX-32 in
+    the codec's notes; switching it off and on cured it). Never loosen
+    these to get more out of a unit.
+  - *The unit does not say a setting's NAME.* Those are matched by hand
+    from what he reads off the AX3's own screen or Axe-Edit III (never a
+    picture of theirs committed). Then NAM gets a catalog and Edit its
+    knobs, in a store version if it is new for customers.
+  - It has not run on a unit: his first read is the first check, and the
+    page offers a block the app already knows (an amp) to check it against.
 - **Saving over Bluetooth is still not built, and the page says what
   else is not** (12 November 2026). He thought it was: "I think we can
   actually save on Bluetooth now and I don't know that there's really

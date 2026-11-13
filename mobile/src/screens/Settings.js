@@ -83,6 +83,7 @@ import { CABLE_LOOK_AGAIN, CABLE_NO_SIGNAL, CABLE_PAGE_SUB, CABLE_ROW_ON, cableC
 import { BLUETOOTH_ROW_OFF, BLUETOOTH_WAYS_SHORT, NO_SIGNAL_BLUETOOTH } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage, { BluetoothLimits, BluetoothTools, BluetoothTried, BluetoothTrouble, BluetoothWays } from './Bluetooth'
+import BlockReader from '../components/BlockReader'
 import AccessTool from '../components/AccessTool'
 import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
@@ -1316,6 +1317,8 @@ export default function Settings({
             <>
               <Section>Bluetooth check</Section>
               <BluetoothTools />
+              {/* "Yes build the NAM reader now" (12 November 2026): a block the app has no knobs for, asked about itself. His account's, as this page is. */}
+              <BlockReader />
             </>
           ) : null}
         </>

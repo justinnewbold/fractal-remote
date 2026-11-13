@@ -104,6 +104,7 @@ import { am4EditAllowed, blockParamsOf, buildAm4ReadAll, editBlock, knobFrame, m
 import * as fm3Edit from './fm3-edit.js'
 import * as fm9Edit from './fm9-edit.js'
 import * as axefx3Edit from './axefx3-edit.js'
+import { ANSWER_MS, describeAllowed, describeBlock, describeEcho } from './gen3-describe.js'
 import { presetMissLine } from './bluetooth-gear.js'
 import { PRESET_SETTLE_MS } from './own-echo.js'
 import { NOT_BLOCKS } from './gen3Catalog.js'
@@ -426,7 +427,7 @@ const GEN3_EDIT_BY_MODEL = Object.freeze({ [MODELS.fm3]: fm3Edit, [MODELS.fm9]: 
  * fm3EditAllowed, fm9EditAllowed, axefx3EditAllowed). The tempo's typed
  * write is at the Controllers (2), not a block, and goes as before.
  */
-export function gen3Sender(send, log = () => {}, model, placed = () => null) {
+export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null) {
   /* The unit's own Edit; a model with none has nothing of Edit's that may go. Which ids are blocks is the codec's, the same on every gen-3 unit. */
   const edit = GEN3_EDIT_BY_MODEL[model] || null
   const blockAt = (edit || fm3Edit).editBlock
@@ -435,8 +436,19 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null) {
     b[0] === 0xf0 &&
     b[4] === model &&
     (b[5] === fm3Edit.READ_ALL || (b[5] === FN.PARAM && ((b[6] === fm3Edit.KNOB[0] && b[7] === fm3Edit.KNOB[1]) || (b[6] === fm3Edit.TYPED[0] && b[7] === fm3Edit.TYPED[1] && !!blockAt((b[8] & 0x7f) | ((b[9] & 0x7f) << 7))))))
+  /*
+   * THE DEVELOPER'S READER'S ONE FRAME OF THIS SHAPE (lib/gen3-describe, the
+   * wire's gen3Describe): the whole read of the one block it has open, a
+   * block the unit has just listed, which no catalog names yet (the Axe-Fx
+   * III's NAM). Byte for byte the read Edit sends, and nothing else: never a
+   * knob, never a typed write.
+   */
+  const readersOwn = (b) => {
+    const eid = reading()
+    return Number.isInteger(eid) && sameBytes(b, fm3Edit.buildReadAll(model, eid))
+  }
   return (bytes) => {
-    if (editShaped(bytes) && !(edit && edit.editAllowed(bytes, placed(), model))) {
+    if (editShaped(bytes) && !(edit && edit.editAllowed(bytes, placed(), model)) && !readersOwn(bytes)) {
       log(`refused to send ${toHex(bytes)}: it is not one of Edit’s reads or writes for a block in this preset`)
       return 'refused'
     }
@@ -459,8 +471,9 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null) {
  * @param {(methods:object) => void} [o.remember]  called when auto learns a way, to keep it on the phone
  * @param {(name:string|null) => void} [o.onForeign]  called once, with its bare name, when another unit answers a connection before the one picked has, so the page can say which; and with null when the one picked answers after it (heardFromIt)
  * @param {() => boolean} [o.edit]  whether Edit is open over Bluetooth to this account on this unit (ble-rule editOffered), asked at each request
+ * @param {() => boolean} [o.reader]  whether the developer's block reader is open to this account (his alone: lib/bluetooth bluetoothAdmin), asked at each request
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -491,6 +504,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const editOn = () => editHere && (typeof edit === 'function' ? edit() === true : edit === true)
   /* The block codes of the last preset answer believed (readStructure), which Edit's frames are held to. */
   let editPlaced = null
+  /* The developer's reader (gen3Describe): his account's, on a gen-3 unit, and the one block whose whole read it has out. */
+  const readerOn = () => !am4 && !!g3Edit && typeof reader === 'function' && reader() === true
+  let readerOpen = null
   /*
    * EDIT'S BLOCKS, KEPT FOR A MOMENT. A knob let go is a write, a read to see
    * it took, and the screen's own read straight after: three whole reads of
@@ -510,7 +526,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const sendFrame = am4
     ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null))
-    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null))
+    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null))
 
   const handlers = new Set()
   const emit = (event) => {
@@ -2626,6 +2642,79 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return { ok: true }
   }
 
+  /*
+   * GET /reader/blocks: what the reader may be pointed at, out of the
+   * unit's own list of what is in its preset now. Every block but the ids
+   * that are not blocks (NOT_BLOCKS: the Controllers, the Foot Controller),
+   * each with the name the catalog has for it, or none, and whether Edit
+   * already has its knobs: the ones it has none for come first, and one it
+   * does have is there to check the reader against what is already known.
+   */
+  async function gen3ReaderList() {
+    const list = await statusNow('editRead')
+    if (rejected(list)) throw refusedBy(list.rejected)
+    if (!Array.isArray(list)) throw timedOut()
+    const states = list.filter((b) => !NOT_BLOCKS.includes(b.effectId)).map((b) => ({ effectId: b.effectId, bypassed: b.bypassed, channel: channelLetter(b.channel) }))
+    const names = new Map((outlineChain(states, blocks) || []).map((b) => [b.effectId, b.name]))
+    return states
+      .map((b) => ({ effectId: b.effectId, name: names.get(b.effectId) || null, known: !!g3Edit.editBlock(b.effectId) }))
+      .sort((x, y) => Number(x.known) - Number(y.known) || x.effectId - y.effectId)
+  }
+
+  /*
+   * THE DEVELOPER'S READER: GET /reader/blocks/<eid>, his account's alone.
+   * A block the unit has just listed in its preset, read whole (the read
+   * Edit sends) and then asked to describe its own settings, one question
+   * at a time (lib/gen3-describe: only questions, fewer than the computer's
+   * walk asks, and it stops at the second in a row with no answer). For the
+   * blocks no catalog names yet: the Axe-Fx III's NAM. Nothing is written,
+   * nothing is kept, and Play's own messages go ahead of it.
+   */
+  async function gen3Describe(eid) {
+    const e = blockNumber(eid)
+    if (NOT_BLOCKS.includes(e)) throw badInput(`Block ${e} is not one the reader asks about.`)
+    const list = await statusNow('editRead')
+    if (!Array.isArray(list)) throw failure(`The ${spec.name} didn’t say what’s in this preset. Try again in a moment.`, 504)
+    const st = list.find((b) => b.effectId === e)
+    if (!st) throw failure(`That block isn’t in the preset the ${spec.name} is on now.`, 409)
+    const started = time.now()
+    let bulk
+    readerOpen = e
+    try {
+      const got = await ask(fm3Edit.buildReadAll(model, e), null, WAIT.gen3ReadAllGap, `the whole of block ${e}`, {
+        cap: WAIT.gen3ReadAll,
+        collect: fm3Edit.readAllCollector(model, e),
+        priority: 'editRead'
+      })
+      bulk = rejected(got) ? { note: `refused (${rejectedWords(got.rejected)})` } : !got ? { note: 'no answer' } : got.damaged ? { note: 'came back damaged' } : got
+    } catch (err) {
+      bulk = { note: err?.message || 'not sent' }
+    } finally {
+      readerOpen = null
+    }
+    const out = await describeBlock({
+      model,
+      block: e,
+      pause,
+      ask: async (q) => {
+        /* The one way out for the reader's questions, asked again here where they leave. */
+        if (!describeAllowed(q, model)) return { refused: 'not one of the reader’s questions' }
+        const echo = describeEcho(q)
+        let back = null
+        try {
+          back = await ex(q, { match: (f) => (echo(f) ? f : undefined), ms: ANSWER_MS, fn: FN.PARAM, what: `block ${e}’s own account of itself`, priority: 'editRead' })
+        } catch {
+          /* Not sent (the line went, or the sender would not take it): the same as no answer, and two of those end the walk. */
+          return null
+        }
+        if (rejected(back)) return { refused: rejectedWords(back.rejected) }
+        return Array.isArray(back) ? back : null
+      }
+    })
+    say(`the reader asked block ${e} ${out.asked} questions in ${((time.now() - started) / 1000).toFixed(1)} s: ${out.settings.length} settings${out.stopped ? `, stopped: ${out.stopped}` : ''}`)
+    return { ...out, bulk, channel: st.channel, channels: st.channels, bypassed: st.bypassed, unit: spec.name }
+  }
+
   async function am4TunerTick(run) {
     const values = []
     try {
@@ -3079,6 +3168,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     if (editing && method === 'GET' && part[0] === 'blocks' && part.length === 3 && part[2] === 'types') {
       return editRoute(() => (am4 ? modelsOf(decodeURIComponent(part[1])) : g3Edit.modelsOf(decodeURIComponent(part[1]))))
+    }
+    /* The developer's reader, only when the request says it is the reader's and it is open to this account (readerOn): his alone. */
+    if (opts?.reading === true && readerOn() && method === 'GET' && part[0] === 'reader' && part[1] === 'blocks') {
+      if (part.length === 2) return editRoute(gen3ReaderList)
+      if (part.length === 3 && isNum(part[2])) return editRoute(() => gen3Describe(Number(part[2])))
     }
     if (method === 'GET') {
       if (path === '/device/detect') return am4 ? am4Detect : gen3Detect

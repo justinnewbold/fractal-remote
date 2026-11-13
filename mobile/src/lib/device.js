@@ -548,6 +548,28 @@ export const getTempo = () => remoteRequest('/tempo')
  */
 export const blockParams = async (eid) => fixRead(await remoteRequest(`/preset/blocks/${eid}/params`, EDITING))
 
+/*
+ * THE DEVELOPER'S BLOCK READER (lib/gen3-describe, bleWire gen3Describe): a
+ * block of the preset the unit is on, read whole and asked to describe its
+ * own settings. For a block no catalog names yet (the Axe-Fx III's NAM).
+ * Only over the phone's own wire (Bluetooth, or the unit's USB cable into
+ * this device), only on a gen-3 unit, and only for his account: the wire
+ * answers it for nobody else, and never unless the request says it is the
+ * reader's. It only asks; nothing is written.
+ */
+const READING = Object.freeze({ reading: true })
+/* What is said where the reader cannot run: through the computer, in the demo, on a VP4. */
+export const READER_NEEDS_THE_WIRE = 'The reader works through an adapter, or with the unit’s USB cable plugged into this device.'
+const readerAsks = (path) => {
+  const ble = demoDevice() || onVp4 ? null : bluetoothWire()
+  if (!ble) return Promise.reject(Object.assign(new Error(READER_NEEDS_THE_WIRE), { status: 501 }))
+  return ble.request(path, READING)
+}
+/** What it may be pointed at: the blocks of the preset the unit is on, [{effectId, name, known}], the ones Edit has no knobs for first. */
+export const readerBlocks = () => readerAsks('/reader/blocks')
+/** One block, read whole and asked about itself: {block, settings, asked, stopped, bulk, channel, channels, bypassed, unit}. */
+export const describeBlockHere = (eid) => readerAsks(`/reader/blocks/${eid}`)
+
 /** What the unit's footswitches can do — see lib/footswitches and the Footswitches page. */
 export const fcModel = () => remoteRequest('/fc/model')
 /** One switch's settings, by its path from fcStatePath; paced by readView. */
