@@ -49,6 +49,15 @@ Reverb 13 Mix, Compressor 13 Compression, Phaser 2 Rate, Chorus 2 Rate,
 Flanger 1 Rate, Rotary 0 Rate. That is the first check of ForgeFX's Axe-Fx III
 tables against a unit. It is ten settings, not the whole table.
 
+**Axe-Edit III's Perform page confirmed it the same day.** Its "Per-Preset
+Performance Controls" are ten slots, in the reader's order and with the
+reader's words: Amp GEQ (Off / On), BOOST (Off/On), AMP1 (Fat), then DLY1 Mix,
+REV1 Mix, CMP1 Compression, PHR1 Rate, CHO1 Rate, FLG1 Rate and ROT1 Rate.
+Three switches and then seven knobs, which is the kinds 7, 7, 7 and 1 seven
+times. A player can rename a slot's label there. Beside them Axe-Edit has
+"Global Performance Controls", ten more slots, all empty on his unit; where
+those live was not read.
+
 ## The NAM block (effects 206 and 207)
 
 NAM 1 and NAM 2 read the same: 16 settings, and a whole read of 72 values,
@@ -100,7 +109,7 @@ Setting N is value N of those, for N = 0 to 15. Put side by side:
 | 4 | (the block's bypass) | ENGAGED / BYPASSED |
 | 5 | Input Gain | -20..20 dB, step 0.1; 32767 is 0.00 dB, so a straight line |
 | 6 | Phase Invert | list: 0 NORMAL, 1 INVERT (the second read, below) |
-| 7 | NOT KNOWN | list: OFF, ON. Not Phase Invert |
+| 7 | Scene Ignore | list: 0 OFF, 1 ON (the third read, below) |
 | 8 | Tone Stack Location | 0 PRE, 1 POST, 2 OFF (the second read, below; PRE by elimination) |
 | 9 | Tone Stack Type | list of 12, from 0: ACTIVE, BROWNFACE, BLACKFACE, BASSGUY, TOP BOOST, PLEXI, USA MARK IV, USA PRE LD2, RECTO ORANGE, RECTO RED, SKYLINE, PVH 6160 |
 | 10, 11, 12 | Bass, Mid, Treble | 0..1 on the wire, shown ×10 (0..10); 32767 is 5.00, a straight line |
@@ -140,9 +149,20 @@ are the one choice left in a list of three; the amp block's own lists in the
 app's table run the same way (Tonestack Location PRE, POST …; Input Select
 LEFT, RIGHT, SUM L+R).
 
+### The third read: setting 7 is Scene Ignore
+
+Axe-Edit III's NAM page has a Scene Ignore button beside Bypass. He switched
+it on, with every other switch back where it started, and read NAM 1 again
+(03:01 UTC, app 1.90.45). Channel A was:
+
+    28 52427 32767 0 0 32767 0 1 1 0 32767 32767 32767 2 32767 36526 8640 54248
+
+Setting 7 read "ON", value 1, and nothing else had moved from its default
+(3 THRU, 6 NORMAL, 8 POST, 13 SUM L+R). So setting 7 is Scene Ignore: 0 OFF,
+1 ON. It is a value of the channel (channels B, C and D still read 0).
+
 **Still not known:**
 
-- the name of setting 7 (a list, OFF or ON);
 - what values 16 and 17 of each channel mean. They follow the capture, no
   setting describes them, and nothing ever writes them;
 - the capture list is per unit: its names are whatever is loaded, so no list
@@ -156,9 +176,175 @@ Input Mode (`mobile/src/lib/axefx3-own-knobs.js`, behind
 `NAM_KNOBS_FOR_EVERYONE` in `mobile/src/lib/features.js`). The phone's Edit
 draws no switch of any block, so the five are read and can be written through
 the wire, with nothing on the screen for them. The capture (0), the block's
-own bypass (4), setting 7 and values 16 and 17 are left out, so nothing can be
-written to them. All of the above was READ off the unit. Nothing has been
+own bypass (4), setting 7 (Scene Ignore, named after the list was written)
+and values 16 and 17 are left out, so nothing can be written to them. All of the above was READ off the unit. Nothing has been
 written to a NAM block from the app yet.
+
+## The blocks the app had no name for (13 November 2026)
+
+"double check we have all those blocks already set up" (Justin, with
+Axe-Edit III's list of every block on his unit). Five kinds were not on Play
+over Bluetooth. He put one of each in a preset (0385) with a NAM and an IR
+Player, read each with the block reader (app 1.90.45), and sent Axe-Edit III's
+page for each. What follows is the unit's numbers beside Axe-Edit's names.
+A name marked "by position" is where Axe-Edit draws it, not proven by a
+second read.
+
+| Effect id | Block | Channels | Settings | Whole read | On Play since |
+|---|---|---|---|---|---|
+| 134 | Vocoder | none | 67 | 67 values | 1.90.47 |
+| 142 | Crossover 1 (143 is Crossover 2, the next id, not read) | A and B | 15 | 30 = 2 × 15 | 1.90.47 |
+| 170 | Tone Match | none | 22 | 22 values | 1.90.47 |
+| 174 | RTA, the Realtime Analyzer | none | 5 | 6 values | never: it has no on and off |
+| 195 | IR Player 1 | four | 20 | 80 = 4 × 20 | 1.89.73 |
+| 202 | Dynamic Distortion 1 (203 is Dynamic Distortion 2, the next id, not read) | four | 14 | 56 = 4 × 14 | 1.90.47 |
+
+134, 142, 170, 174 and 195 are also what Fractal's published effect-ID enum
+says (ID_VOCODER1, ID_CROSSOVER1, ID_TONEMATCH1, ID_RTA1, ID_IRPLAYER1), so
+these reads confirm the enum on five ids. 202 is not in the enum: it is the
+unit's own id, as NAM's 206 and 207 are. Axe-Edit's block list on this
+firmware offers two Crossovers and two Dynamic Distortions.
+
+A bypass (type code 224, ENGAGED / BYPASSED) is setting 18 of the Vocoder, 14
+of the Crossover, 8 of Tone Match, 10 of the IR Player and 11 of Dynamic
+Distortion. **The RTA has none**, nor a Level or a Bypass Mode, and Axe-Edit's
+page for it has no Bypass button: there is nothing for Play to switch, so it
+is in `NOT_BLOCKS` (`mobile/src/lib/gen3Catalog.js`) and never drawn.
+
+None of these has knobs in the app yet. Play draws and switches them over
+Bluetooth, and Edit gives each its on and off.
+
+### Vocoder (134)
+
+| Setting | Axe-Edit's name | What the unit said |
+|---|---|---|
+| 0 | Analysis Source | list, 0..9; reads "INPUT 2" at 1 |
+| 1 | Analysis Channel | list: LEFT, RIGHT |
+| 2 | Bands | 4..24; 16 |
+| 3 | Min Frequency | 20..2000 Hz; 200.0 |
+| 4 | Max Frequency | 2000..20000 Hz; 5000 |
+| 5 | Filter Resonance | 0.5..2; 1.000 |
+| 6 | Freeze | list: OFF, ON |
+| 7 | Master Level | 0..1 on the wire, shown as a percentage; 100.0 % |
+| 8 | Master Pan | -1..1 on the wire |
+| 9 | Frequency Shift | 0.2..5; 1.000 |
+| 10 | Attack | 0.005..1 s, shown in ms; 10.00 ms |
+| 11 | Decay | 0.005..1 s, shown in ms; 50.00 ms |
+| 12 | Highpass Mix | 0..100 %; 0.0 % |
+| 13 | Mix | 0..100 %; 100.0 % |
+| 14 | Level | -80..20 dB |
+| 15 | Balance | -1..1, shown ×100 |
+| 16 | Bypass Mode | list: THRU, MUTE FX OUT, MUTE OUT |
+| 17 | not named (type code 208) | list: OFF, ON. Probably the global-mix switch beside Mix; not proven |
+| 18 | (the block's bypass) | ENGAGED / BYPASSED |
+| 19–42 | band Level 1 to 24 | 0.1..10; all 1.000 |
+| 43–66 | band Pan 1 to 24 | -1..1, shown ×100; all 0.0 |
+
+Its first whole read gave no answer; the second, minutes later, gave 67
+values, one for each setting.
+
+### Crossover (142)
+
+| Setting | Axe-Edit's name | What the unit said |
+|---|---|---|
+| 0 | Freq | 40..800 Hz; 100.0 |
+| 1 | Freq Multiplier | list: X 1, X 10 |
+| 2, 3, 4, 5 | Low Level Left, Low Level Right, Hi Level Left, Hi Level Right | four levels, -80..0 dB, all 0.00. WHICH IS WHICH IS NOT PROVEN: all four read the same |
+| 6, 7 | the two Left pans (Low Pan Left, Hi Pan Left) | both read "-50.0" |
+| 8, 9 | the two Right pans (Low Pan Right, Hi Pan Right) | both read "50.0" |
+| 10 | not named (type code 0) | 0..1 |
+| 11 | Level | -80..20 dB |
+| 12 | Balance | -1..1, shown ×100 |
+| 13 | Bypass Mode | list: THRU, MUTE |
+| 14 | (the block's bypass) | ENGAGED / BYPASSED |
+
+The pans run Left, Left, Right, Right, so most likely the levels do too (2 Low
+Level Left, 3 Hi Level Left, 4 Low Level Right, 5 Hi Level Right) and each
+pair is Low then Hi. Moving one knob in Axe-Edit and reading again would
+settle it. Axe-Edit offers this block channels A and B only, and the whole
+read is two sets of 15.
+
+### Tone Match (170)
+
+Axe-Edit's pages for it are Capture, Config, Monitor and Export.
+
+| Setting | Axe-Edit's name | What the unit said |
+|---|---|---|
+| 0 | Amount | 0..100 %; 100.0 % |
+| 1 | Smoothing | 0..100 %; 0.0 % |
+| 2 | Start Reference (by position) | list: OFF, ON |
+| 3 | Start Local (by position) | list: OFF, ON |
+| 4 | a button, Match or Start Both; not known which | a list with no labels, 0..0 |
+| 5 | Level | -80..20 dB |
+| 6 | Balance | -1..1, shown ×100 |
+| 7 | Bypass Mode | reads "THRU" |
+| 8 | (the block's bypass) | ENGAGED / BYPASSED |
+| 9 | Reference Source | list, 0..14; reads "INPUT 3" at 2 |
+| 10 | Averaging Time | 0.1..100; 5.000 |
+| 11, 12 | Reference Channel, Local Channel (by position) | lists, 0..2; both read "LEFT" |
+| 13 | Reference Solo, probably | 0..1; reads "OFF" |
+| 14 | not on any page seen | 0..2; reads "LIN" |
+| 15 | not known | 0..1; reads "OFF" |
+| 16, 17 | nothing | no definition |
+| 18 | the export's bank | 2..3; reads "USER 1" |
+| 19 | the export's number | 0..1023 |
+| 20 | Reference Level | -40..20 dB; 0.00 |
+| 21 | Mode | list: LIVE, OFF-LINE |
+
+### RTA, the Realtime Analyzer (174)
+
+| Setting | Axe-Edit's name | What the unit said |
+|---|---|---|
+| 0 | Input Select | list: Left, Right, L+R |
+| 1 | Bands | 0..2; reads "64" at 1 |
+| 2 | Decay Time | 0..0.1 s, shown in ms; 25.0 ms |
+| 3 | Window Type | list: Hann, Blackman |
+| 4 | not on the page | a list with no labels, 0..127 |
+
+### IR Player (195)
+
+| Setting | Axe-Edit's name | What the unit said |
+|---|---|---|
+| 0 | the first IR's bank | list, 0..6; reads "FACTORY 1" |
+| 1 | the first IR's number | 0..1023; Axe-Edit counts from 1, the unit from 0 |
+| 2 | Low Cut | 20..2000 Hz; 20.0 |
+| 3 | High Cut | 200..20000 Hz; 20000 |
+| 4 | Filter Slope | list: 6 dB/OCT, 12 dB/OCT |
+| 5 | Input Select | list, 0..3; reads "STEREO" |
+| 6 | the first IR's Length | 0..4; reads "MAX" |
+| 7 | Level | -80..20 dB |
+| 8 | Balance | -1..1, shown ×100 |
+| 9 | Bypass Mode | reads "THRU" |
+| 10 | (the block's bypass) | ENGAGED / BYPASSED |
+| 11 | the second IR's bank | list, 0..6 |
+| 12 | the second IR's number | 0..1023 |
+| 13 | the second IR's Length | 0..4; reads "OFF" at 4 |
+| 14, 15 | the two IRs' Levels (first then second, by position) | -40..0 dB |
+| 16, 17 | the two IRs' Pans (first then second, by position) | -1..1, shown ×100 |
+| 18 | Mix | 0..100 % |
+| 19 | Mode | list: PARALLEL, SERIES |
+
+### Dynamic Distortion (202)
+
+| Setting | Axe-Edit's name | What the unit said |
+|---|---|---|
+| 0 | Filter Type | list, 4..6; reads "PEAKING" at 6 |
+| 1 | Frequency | 20..20000 Hz; 500.0 |
+| 2 | Q | 0.1..10; 0.500 |
+| 3 | Gain | -20..20 dB; 0.00 |
+| 4 | Clip Shape | list, 0..4; reads "MEDIUM" at 2 |
+| 5 | not on Axe-Edit's page | 0..1, shown ×10; reads "5.00" |
+| 6 | Bias | 0..1, shown ×10; 0.00 |
+| 7 | Drive | 0.1..100; 6.67 |
+| 8 | Level | -80..20 dB |
+| 9 | Pan (Axe-Edit says Pan here, not Balance) | -1..1, shown ×100 |
+| 10 | Bypass Mode | list: THRU, MUTE |
+| 11 | (the block's bypass) | ENGAGED / BYPASSED |
+| 12 | Mono/Stereo | list: MONO, STEREO |
+| 13 | Type | list of 7, from 0: Flat, Dynamic Mid Boost, Dynamic Mid Cut, Dynamic Presence Boost, Dynamic Presence Cut, Dynamic Depth Boost, Dynamic Depth Cut |
+
+Its first whole read gave no answer; the second gave 56 values, four
+channels of 14.
 
 ## What the readings say about the wire
 
@@ -199,3 +385,9 @@ written to a NAM block from the app yet.
 - **One read stopped part-way** (NAM 1, "the unit stopped answering" at 152
   questions) and the next ran to its end. Two questions in a row went
   unanswered; the reader stopped as it is meant to.
+- **A whole read that gets no answer is the link, not the block.** The
+  Vocoder's and Dynamic Distortion's whole reads came back with nothing the
+  first time, while each of their settings answered, and both answered whole
+  a few minutes later.
+- **Not every block has four channels.** The Crossover has two; the Vocoder,
+  Tone Match and the RTA have none, and their whole read is one set.

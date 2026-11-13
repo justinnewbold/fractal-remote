@@ -985,23 +985,28 @@ export const VP4_CANT_HEAR =
   'The app can’t hear a VP4 over Bluetooth, so this only says the adapter is connected. If presets don’t change, check the black plug is in the VP4’s MIDI IN, and on the VP4 that SETUP > MIDI/Remote has Receive MIDI PC ON.'
 
 /*
- * THE BLOCKS PLAY DOES NOT DRAW YET, on the units that have them. Fractal's
- * Blocks Guide (June 2023) gives the FM9 and Axe-Fx III blocks the FM3 has
- * none of: Crossover, Vocoder and Tone Match on both, and IR Player and
- * Dynamic Distortion on the III alone. None of those has a family on Play
- * (no color, no picture, no place in the signal order), and the computer
- * app does not draw them either, so they come together on both paths in one
- * later change. Until then the page says so, rather than leave an owner
- * looking for a block that is in the preset.
+ * THE BLOCKS PLAY DOES NOT DRAW YET, on the units that have them: none, now,
+ * so this answers null for every unit and the page draws no line (it draws
+ * the bullet only for a sentence).
  *
- * Not the III's IR Player any more, nor its NAM (firmware 33): over
- * Bluetooth, which is all this line speaks for, Play draws and switches both
- * since 1.89.73 (mobile/src/lib/gen3Catalog.js OWN).
+ * Fractal's Blocks Guide (June 2023) gives the FM9 and Axe-Fx III blocks the
+ * FM3 has none of: Crossover, Vocoder and Tone Match on both, and IR Player
+ * and Dynamic Distortion on the III alone. While Play left them out, the
+ * page said so here, rather than leave an owner looking for a block that is
+ * in the preset: "A few blocks the FM3 doesn't have (…) aren't shown on Play
+ * yet." Over Bluetooth, which is all this line speaks for, Play has drawn
+ * and switched the III's IR Player and its NAM (firmware 33) since 1.89.73,
+ * and the rest since 1.90.47 (mobile/src/lib/gen3Catalog.js OWN, with where
+ * each id came from).
+ *
+ * Kept, with its table empty, for the next block a unit gets before the app
+ * does: a sentence under the unit's key is on the page again. It never
+ * names the RTA, which has no on and off and is not a block Play would draw
+ * (gen3Catalog NOT_BLOCKS).
  */
+const MISSING_BLOCKS = Object.freeze({})
 export function missingBlocksLine(unit) {
-  if (unit === 'fm9') return 'A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match) aren’t shown on Play yet.'
-  if (unit === 'axefx3') return 'A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match, Dynamic Distortion) aren’t shown on Play yet.'
-  return null
+  return MISSING_BLOCKS[unit] || null
 }
 
 /*

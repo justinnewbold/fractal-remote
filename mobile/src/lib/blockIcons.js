@@ -37,15 +37,22 @@ import { blockIconName } from './block-icons'
 const FILES = { amp, cab, comp, delay, drive, flanger, phaser, reverb, wah, chorus, enhancer, filter, formant, gate, geq, looper, mixer, multiplexer, peq, pitch, resonator, ringmod, rotary, synth, tremolo, volpan, sendfx, returnfx }
 
 /*
- * THE PHONE'S OWN TWO, for the Axe-Fx III's blocks that only reach Play over
- * Bluetooth (lib/gen3Catalog OWN), each wearing the picture of the family it
- * stands in for, and no new picture: the NAM block is an amp (a captured amp,
- * where an amp sits) and wears the amp's; the IR Player plays cabinet
- * responses and wears the cab's. Here and not in shared/block-icons.mjs,
- * which is inside the computer app, whose blocks never come with these
- * names: they stay a New block there (shared/new-block.mjs).
+ * THE PHONE'S OWN, for the blocks that only reach Play over Bluetooth
+ * (lib/gen3Catalog OWN), each wearing the picture of the family it stands in
+ * for, and no new picture: the NAM block is an amp (a captured amp, where an
+ * amp sits) and wears the amp's; the IR Player plays cabinet responses and
+ * wears the cab's. Here and not in shared/block-icons.mjs, which is inside
+ * the computer app, whose blocks never come with these names: they stay a
+ * New block there (shared/new-block.mjs).
+ *
+ * And the four named on 13 November 2026, the same way: Dynamic Distortion
+ * is a distortion and wears the drive's; a crossover is a pair of filters
+ * that splits the lows from the highs, and wears the filter's; Tone Match
+ * is an EQ curve matched to another sound, and wears the graphic EQ's; the
+ * Vocoder shapes a sound with a voice, as the formant filter does with a
+ * vowel, and wears the formant's.
  */
-export const PHONE_ONLY = Object.freeze({ nam: 'amp', irplayer: 'cab' })
+export const PHONE_ONLY = Object.freeze({ nam: 'amp', irplayer: 'cab', dynadist: 'drive', crossover: 'filter', tonematch: 'geq', vocoder: 'formant' })
 
 export function blockIcon(slug) {
   const name = blockIconName(slug) || PHONE_ONLY[String(slug || '').toLowerCase()] || null

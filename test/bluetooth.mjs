@@ -10587,7 +10587,9 @@ export function run(test) {
       multicomp: [154, 2, 2], tentap: [158, 2, 2], resonator: [162, 2, 2], looper: [166, 1, 1], plex: [178, 1, 2], send: [182, 2, 2],
       return: [186, 2, 2], multiplexer: [191, 2, 2],
       /* The III's alone: IR Player 1–4 (Fractal's enum, 195–198), and NAM 1 and 2 (firmware 33, 206 and 207, the ids a customer's III listed). */
-      irplayer: [195, 0, 4], nam: [206, 0, 2]
+      irplayer: [195, 0, 4], nam: [206, 0, 2],
+      /* Since 1.90.47, the rest the FM3 has none of: the Vocoder, two Crossovers and Tone Match on both (Fractal's enum, and read off Justin's III), and the III's two Dynamic Distortions (202 read off his III, 203 the next id). */
+      vocoder: [134, 1, 1], crossover: [142, 2, 2], tonematch: [170, 1, 1], dynadist: [202, 0, 2]
     }
     for (const [unit, col] of [['fm9', 1], ['axefx3', 2]]) {
       const list = catalogFor(unit)
@@ -10606,22 +10608,24 @@ export function run(test) {
     }
     /*
      * ForgeFX's /blocks for the two units, at the pin (drivers/gen3.ts), written in here: the same ids. And on the III the
-     * phone's own six beside them (lib/gen3Catalog OWN), which ForgeFX passes on with no slug: the computer leaves them a New block.
+     * phone's own beside them (lib/gen3Catalog OWN), which ForgeFX passes on with no slug: the computer leaves them a New block.
      */
     const FORGEFX_EXTRA = {
       fm9: [39, 40, 44, 52, 53, 56, 57, 59, 63, 67, 104, 105, 120, 139, 148, 149, 155, 159],
       axefx3: [39, 40, 41, 44, 45, 48, 49, 52, 53, 56, 57, 59, 63, 67, 72, 73, 104, 105, 111, 120, 121, 131, 139, 148, 149, 155, 159, 179]
     }
-    const PHONE_OWN = { fm9: [], axefx3: [195, 196, 197, 198, 206, 207] }
+    const PHONE_OWN = { fm9: [134, 142, 143, 170], axefx3: [134, 142, 143, 170, 195, 196, 197, 198, 202, 203, 206, 207] }
     const fm3 = new Set(catalog.map((b) => b.page))
     for (const [unit, extra] of Object.entries(FORGEFX_EXTRA)) {
-      assert.deepEqual(catalogFor(unit).map((b) => b.page).filter((p) => !fm3.has(p)).sort((a, b) => a - b), [...extra, ...PHONE_OWN[unit]], unit)
+      assert.deepEqual(catalogFor(unit).map((b) => b.page).filter((p) => !fm3.has(p)).sort((a, b) => a - b), [...extra, ...PHONE_OWN[unit]].sort((a, b) => a - b), unit)
     }
-    /* The blocks nobody names yet stay off: Crossover, Vocoder, Tone Match, RTA, and the ids that are not blocks (Scene MIDI, the Foot Controller, Preset FC). The IR Player only off the III. */
+    /* What stays off: the RTA, which has no on and off (174), and the ids that are not blocks (Scene MIDI, the Foot Controller, Preset FC, the Performance page). The IR Player, Dynamic Distortion and NAM only off the III. */
     for (const unit of ['fm9', 'axefx3']) {
-      for (const id of [134, 142, 143, 170, 174, 190, 199, 200, 201]) assert.ok(!catalogFor(unit).some((b) => b.page === id), `${unit}: ${id} is drawn`)
+      for (const id of [2, 174, 190, 199, 200, 201]) assert.ok(!catalogFor(unit).some((b) => b.page === id), `${unit}: ${id} is drawn`)
     }
-    for (const id of [195, 196, 206, 207]) assert.ok(!catalogFor('fm9').some((b) => b.page === id), `fm9: ${id} is drawn`)
+    for (const id of [195, 196, 202, 203, 206, 207]) assert.ok(!catalogFor('fm9').some((b) => b.page === id), `fm9: ${id} is drawn`)
+    /* And the FM3, which has none of them, lists none of them. */
+    for (const id of [134, 142, 143, 170, 174, 202, 203]) assert.ok(!catalogFor('fm3').some((b) => b.page === id), `fm3: ${id} is drawn`)
   })
 
   /*
@@ -10818,7 +10822,7 @@ export function run(test) {
 
     /* The picture: one of the app's own, the family each stands in for (the amp's, the cab's), phone only, and no new file. */
     const icons = src('mobile/src/lib/blockIcons.js')
-    assert.match(icons, /export const PHONE_ONLY = Object\.freeze\(\{ nam: 'amp', irplayer: 'cab' \}\)/)
+    assert.match(icons, /export const PHONE_ONLY = Object\.freeze\(\{ nam: 'amp', irplayer: 'cab', dynadist: 'drive', crossover: 'filter', tonematch: 'geq', vocoder: 'formant' \}\)/)
     assert.match(icons, /const name = blockIconName\(slug\) \|\| PHONE_ONLY\[String\(slug \|\| ''\)\.toLowerCase\(\)\] \|\| null/)
     for (const f of ['amp', 'cab']) assert.ok(existsSync(new URL(`../mobile/assets/icons/${f}.png`, import.meta.url)))
     for (const f of ['nam', 'irplayer']) assert.ok(!existsSync(new URL(`../mobile/assets/icons/${f}.png`, import.meta.url)), `a new picture for ${f}`)
@@ -10862,7 +10866,7 @@ export function run(test) {
     assert.deepEqual([...new Set(ids)].sort((a, b) => a - b), chain.map((b) => b.effectId).sort((a, b) => a - b))
     /* Preset FC, and the rest that are not blocks: a bypass or a channel for one is refused, and nothing goes. */
     const { NOT_BLOCKS } = await import('../mobile/src/lib/gen3Catalog.js')
-    assert.deepEqual(NOT_BLOCKS, [2, 190, 199, 200, 201])
+    assert.deepEqual(NOT_BLOCKS, [2, 174, 190, 199, 200, 201])
     t.sent.length = 0
     for (const id of NOT_BLOCKS) {
       await assert.rejects(t.post(`/preset/blocks/${id}/bypass`, { bypassed: true }), (e) => e.status === 400)
@@ -10912,6 +10916,144 @@ export function run(test) {
     assert.match(said(nine)[0], /: id 195 \(off, channel A\); id 206 \(on, channel B\); id 207 \(off, channel A\)$/)
   })
 
+  /*
+   * THE REST THE FM3 HAS NONE OF (1.90.47). "double check we have all those
+   * blocks already set up" (Justin, 13 November 2026, with Axe-Edit III's
+   * list of every block on his Axe-Fx III). Five kinds were not: he put each
+   * in a preset, the block reader read them, and each answered as the block
+   * Axe-Edit showed (docs/ax3-readings.md). 134 the Vocoder, 142 Crossover 1,
+   * 170 Tone Match and 174 the RTA are also what Fractal's enum says; 202 is
+   * Dynamic Distortion 1, the unit's own id, as NAM's are. 143 and 203 are
+   * each family's second by the rule every family keeps, and were not read.
+   * The RTA has no on and off, so it is known and never drawn.
+   */
+  const PRESET_385 = () => [
+    { eid: 37, bypassed: false, channel: 0 },
+    { eid: 142, bypassed: false, channel: 0 },
+    { eid: 202, bypassed: false, channel: 0 },
+    { eid: 174, bypassed: false, channel: 0 },
+    { eid: 170, bypassed: false, channel: 0 },
+    { eid: 206, bypassed: false, channel: 0 },
+    { eid: 134, bypassed: true, channel: 0 },
+    { eid: 195, bypassed: false, channel: 0 },
+    { eid: 118, bypassed: false, channel: 0 },
+    { eid: 201, bypassed: false, channel: 0 },
+    { eid: 200, bypassed: false, channel: 0 },
+    { eid: 42, bypassed: false, channel: 0 }
+  ]
+  const onPreset385 = async (unit = 'axefx3', options = {}) => {
+    const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
+    const t = await onTheLine(unit, { catalog: catalogFor(unit), ...options })
+    t.unit.state.blocks.splice(0, t.unit.state.blocks.length, ...PRESET_385())
+    return t
+  }
+
+  test('on an Axe-Fx III the Crossover, Vocoder, Tone Match and Dynamic Distortion are on Play by name and switch by the published bypass, byte for byte; an FM9 has the first three; the RTA is known and never drawn', async () => {
+    const { catalogFor, NOT_BLOCKS } = await import('../mobile/src/lib/gen3Catalog.js')
+    const rows = (unit) => catalogFor(unit).filter((b) => ['vocoder', 'crossover', 'tonematch', 'dynadist'].includes(b.slug)).map((b) => [b.page, b.slug, b.family, b.name, b.instance])
+    assert.deepEqual(rows('axefx3'), [
+      [134, 'vocoder', 'vocoder', 'Vocoder', 1],
+      [142, 'crossover', 'crossover', 'Crossover 1', 1],
+      [143, 'crossover', 'crossover', 'Crossover 2', 2],
+      [170, 'tonematch', 'tonematch', 'Tone Match', 1],
+      [202, 'dynadist', 'dynadist', 'Dynamic Distortion 1', 1],
+      [203, 'dynadist', 'dynadist', 'Dynamic Distortion 2', 2]
+    ])
+    /* An FM9 has no Dynamic Distortion. An FM3 and an AM4 have none of the four. */
+    assert.deepEqual(rows('fm9'), rows('axefx3').filter((r) => r[1] !== 'dynadist'))
+    assert.deepEqual(rows('fm3'), [])
+    assert.deepEqual(rows('am4'), [])
+    assert.ok(NOT_BLOCKS.includes(174) && !catalogFor('axefx3').some((b) => b.page === 174), 'the RTA, which has no on and off, is drawn')
+
+    /* The chain the wire hands Play from his preset 385: every block in it but the ends Play never shows, the RTA and the two that are not blocks. */
+    const t = await onPreset385()
+    const chain = await t.get('/preset/blocks')
+    const by = Object.fromEntries(chain.map((b) => [b.effectId, b]))
+    assert.deepEqual(chain.map((b) => b.effectId).sort((a, b) => a - b), [118, 134, 142, 170, 195, 202, 206])
+    assert.deepEqual(
+      [134, 142, 170, 202].map((id) => [by[id].slug, by[id].name, by[id].bypassed]),
+      [['vocoder', 'Vocoder', true], ['crossover', 'Crossover 1', false], ['tonematch', 'Tone Match', false], ['dynadist', 'Dynamic Distortion 1', false]]
+    )
+    /* No knob catalog names one, so each comes marked, and Edit gives it its on and off and "This block’s knobs aren’t in the app yet." */
+    assert.deepEqual(chain.filter((b) => b.knobs === false).map((b) => b.effectId).sort((a, b) => a - b), [134, 142, 170, 195, 202, 206])
+    /* Nothing in that preset is a block with no name any more. */
+    assert.deepEqual(t.logs.filter((l) => /no name for yet/.test(l)), [])
+
+    /* Their words on the tile: a lone " 1" dropped; and the three letters the list gives a family it has no letters for. */
+    const { pedalName } = await import('../mobile/src/lib/tileGrid.js')
+    const { shortBlock } = await import('../mobile/src/lib/shortName.js')
+    assert.deepEqual([134, 142, 170, 202].map((id) => pedalName(by[id])), ['Vocoder', 'Crossover', 'Tone Match', 'Dynamic Distortion'])
+    assert.deepEqual([134, 142, 170, 202].map((id) => shortBlock(by[id])), ['VOC', 'CRO', 'TON', 'DYN'])
+    assert.equal(shortBlock({ slug: 'crossover', name: 'Crossover 2' }), 'CRO 2')
+
+    /* A colour each family already had, in every look, and a picture that is one of the app's own. */
+    const pal = await import('../mobile/src/lib/blockPalettes.js')
+    for (const family of ['vocoder', 'crossover', 'tonematch', 'dynadist']) {
+      assert.deepEqual(pal.familyOf(family), { key: family, family })
+      assert.ok(pal.PALETTES.gen3[family], `no colour for ${family}`)
+      for (const look of pal.LOOKS.filter((l) => l.id !== pal.FRACTAL_REMOTE_LOOK)) assert.ok(look.families[family] || look.byUnit?.gen3?.[family], `${look.id} has no colour for ${family}`)
+      assert.ok(!existsSync(new URL(`../mobile/assets/icons/${family}.png`, import.meta.url)), `a new picture for ${family}`)
+    }
+    for (const f of ['drive', 'filter', 'geq', 'formant']) assert.ok(existsSync(new URL(`../mobile/assets/icons/${f}.png`, import.meta.url)), f)
+    const { BLOCK_ICON } = await import('../shared/block-icons.mjs')
+    for (const family of ['vocoder', 'crossover', 'tonematch', 'dynadist']) assert.ok(!(family in BLOCK_ICON), 'the computer app’s pictures changed')
+
+    /* The frames, pinned: F0 00 01 74, the unit (10 the III, 12 the FM9), SET_BYPASS (0A), the id in 14 bits, 00 on or 01 off, the checksum. */
+    const PINNED = {
+      axefx3: {
+        134: { on: 'F0 00 01 74 10 0A 06 01 00 18 F7', off: 'F0 00 01 74 10 0A 06 01 01 19 F7' },
+        142: { on: 'F0 00 01 74 10 0A 0E 01 00 10 F7', off: 'F0 00 01 74 10 0A 0E 01 01 11 F7' },
+        170: { on: 'F0 00 01 74 10 0A 2A 01 00 34 F7', off: 'F0 00 01 74 10 0A 2A 01 01 35 F7' },
+        202: { on: 'F0 00 01 74 10 0A 4A 01 00 54 F7', off: 'F0 00 01 74 10 0A 4A 01 01 55 F7' }
+      },
+      fm9: {
+        134: { on: 'F0 00 01 74 12 0A 06 01 00 1A F7', off: 'F0 00 01 74 12 0A 06 01 01 1B F7' },
+        142: { on: 'F0 00 01 74 12 0A 0E 01 00 12 F7', off: 'F0 00 01 74 12 0A 0E 01 01 13 F7' },
+        170: { on: 'F0 00 01 74 12 0A 2A 01 00 36 F7', off: 'F0 00 01 74 12 0A 2A 01 01 37 F7' }
+      }
+    }
+    for (const [unit, frames] of Object.entries(PINNED)) {
+      const w = unit === 'axefx3' ? t : await onPreset385('fm9')
+      await w.get('/preset/blocks')
+      for (const [eid, bytes] of Object.entries(frames)) {
+        const id = Number(eid)
+        for (const off of [false, true]) {
+          w.sent.length = 0
+          assert.deepEqual(await w.post(`/preset/blocks/${id}/bypass`, { bypassed: off }), { ok: true })
+          assert.deepEqual(w.frames().map(hex), [off ? bytes.off : bytes.on], `${unit}: block ${id} ${off ? 'off' : 'on'} went another way`)
+          assert.equal(w.unit.state.blocks.find((b) => b.eid === id).bypassed, off)
+        }
+      }
+    }
+    /* The second of each pair is the next id (143, 203), by the same frame. */
+    assert.equal(hex(t.sx.buildSetBypass(0x10, 143, true)), 'F0 00 01 74 10 0A 0F 01 01 10 F7')
+    assert.equal(hex(t.sx.buildSetBypass(0x10, 203, true)), 'F0 00 01 74 10 0A 4B 01 01 54 F7')
+
+    /* The RTA: a bypass or a channel for it is refused, and nothing goes. */
+    t.sent.length = 0
+    await assert.rejects(t.post('/preset/blocks/174/bypass', { bypassed: true }), (e) => e.status === 400)
+    await assert.rejects(t.post('/preset/blocks/174/channel', { channel: 'B' }), (e) => e.status === 400)
+    assert.deepEqual(t.frames(), [], 'something went to the RTA')
+
+    /* On an FM9 the III's own are still strangers, and the three it has are not: only the Dynamic Distortion, the IR Player and the NAM are said. */
+    const nine = await onPreset385('fm9')
+    const all = await nine.get('/preset/blocks')
+    assert.deepEqual(all.map((b) => b.effectId).sort((a, b) => a - b), [118, 134, 142, 170])
+    const said = nine.logs.filter((l) => /no name for yet/.test(l))
+    assert.equal(said.length, 1)
+    assert.match(said[0], /: id 202 \(on, channel A\); id 206 \(on, channel A\); id 195 \(on, channel A\)$/)
+    /* And on an FM3, which has none of them, they are strangers as they were, and nothing of theirs is on Play. */
+    const three = await onTheLine('fm3')
+    three.unit.state.blocks.splice(0, three.unit.state.blocks.length, ...PRESET_385())
+    assert.deepEqual((await three.get('/preset/blocks')).map((b) => b.effectId), [118])
+
+    /* The check's own switch leaves them alone, as it leaves the amp, the cab, the NAM and the IR Player: the drive goes. */
+    const c = await onPreset385()
+    const r = await drive(c.clock, c.wire.check('write-bypass'))
+    assert.equal(r.ok, true, r.error)
+    assert.deepEqual(c.frames().filter((f) => f[5] === 0x0a).map(hex), [c.sx.buildSetBypass(0x10, 118, true), c.sx.buildSetBypass(0x10, 118, false)].map(hex))
+  })
+
   test('with the NAM block’s knobs closed to the account, Edit opens the III’s NAM and IR Player on their on and off, says their knobs aren’t in the app yet, and never reads or writes anything else of theirs', async () => {
     const e = await import('../mobile/src/lib/axefx3-edit.js')
     const k = await import('../mobile/src/lib/axefx3-knobs.js')
@@ -10938,7 +11080,7 @@ export function run(test) {
       for (const unit of ['fm3', 'fm9', 'axefx3']) {
         const { catalogFor } = await import('../mobile/src/lib/gen3Catalog.js')
         const w = await onTheLine(unit, { catalog: catalogFor(unit), namKnobs })
-        w.unit.state.blocks.splice(0, w.unit.state.blocks.length, ...catalogFor(unit).filter((b) => !['nam', 'irplayer'].includes(b.slug)).map((b) => ({ eid: b.page, bypassed: false, channel: 0 })))
+        w.unit.state.blocks.splice(0, w.unit.state.blocks.length, ...catalogFor(unit).filter((b) => !['nam', 'irplayer', 'vocoder', 'crossover', 'tonematch', 'dynadist'].includes(b.slug)).map((b) => ({ eid: b.page, bypassed: false, channel: 0 })))
         const all = await w.get('/preset/blocks')
         assert.ok(all.length > 20, unit)
         assert.deepEqual(all.filter((b) => 'knobs' in b).map((b) => b.effectId), [], `${unit}: a block with knobs is marked as having none`)
@@ -11559,11 +11701,14 @@ export function run(test) {
       assert.equal(gear.tunerQuietLine(unit), `No readings from the ${name} yet. Play a string; if nothing shows, check that Send Realtime Sysex is On (Setup → MIDI/Remote on the ${name}). Until then, use the ${name}’s own display.`)
       assert.ok(gear.firmwareLineFor(unit).startsWith(`Use ${name} firmware`))
     }
-    assert.ok(gear.missingBlocksLine('fm9').startsWith('A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match'))
-    /* The III's IR Player and NAM are drawn over Bluetooth since 1.89.73 (lib/gen3Catalog OWN): the line no longer names them. */
-    assert.equal(gear.missingBlocksLine('axefx3'), 'A few blocks the FM3 doesn’t have (Crossover, Vocoder, Tone Match, Dynamic Distortion) aren’t shown on Play yet.')
-    assert.ok(!/IR Player|NAM/.test(gear.missingBlocksLine('axefx3')))
-    assert.ok(!/IR Player/.test(src('public/bluetooth-guide.html')), 'the guide still says the IR Player is not shown')
+    /*
+     * No block is left off Play on either any more: the III's IR Player and NAM since 1.89.73, and the Crossover, Vocoder,
+     * Tone Match and the III's Dynamic Distortion since 1.90.47 (lib/gen3Catalog OWN). So the line that said "A few blocks
+     * the FM3 doesn’t have (…) aren’t shown on Play yet." is said for no unit, and the page draws nothing for it.
+     */
+    for (const unit of ['fm9', 'axefx3']) assert.equal(gear.missingBlocksLine(unit), null, `${unit}: the page still says a block is not shown`)
+    assert.ok(!/aren’t shown on Play/.test(src('shared/bluetooth-gear.mjs').replace(/\/\*[\s\S]*?\*\//g, '')), 'a sentence about blocks not shown is still in the code')
+    assert.ok(!/IR Player|Crossover|Vocoder|Tone Match|Dynamic Distortion/.test(src('public/bluetooth-guide.html')), 'the guide still names a block as not shown')
     for (const unit of ['am4', 'fm3', null, 'vp5']) {
       assert.equal(gear.missingBlocksLine(unit), null)
       assert.equal(gear.tunerQuietLine(unit), null)
