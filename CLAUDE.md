@@ -785,8 +785,25 @@ what the computer sends for the same edit, and a test holds it there.
     named after the list was written: he switched it on in Axe-Edit and
     the next read showed it), and values 16 and 17 of each channel, which
     follow the capture and are never written. Edit says the
-    capture is chosen on the unit (lib/gen3Catalog `NAM_ON_THE_UNIT`). The
-    IR Player still has no knobs for anybody.
+    capture is chosen on the unit (lib/gen3Catalog `NAM_ON_THE_UNIT`).
+  - *The same list and the same switch carry the III's other own blocks
+    since 1.90.49* ("Want to get it all done", 13 November 2026): the IR
+    Player, the Vocoder, the Crossover, Tone Match and Dynamic Distortion,
+    his account only. A knob is in the list when Axe-Edit names it, the
+    unit gave its range, and the number in the block's whole read comes
+    out as what the unit showed (a test holds every row to its read). A
+    number part-way along the travel also proves how the travel runs;
+    where it sat at an end the row says "end only" (a cut frequency takes
+    its type code's travel, which other settings proved logarithmic; a
+    percentage is a straight line). A switch is in only when the unit
+    listed its choices itself. LEFT OUT: what read the same as its
+    neighbours (the Crossover's four levels and four pans, the IR Player's
+    two IR levels and pans, the Vocoder's 48 band knobs), anything with no
+    name on Axe-Edit's page, every bank, number and length of an impulse
+    response, and Tone Match's start, match and export controls. Dynamic
+    Distortion's Type is a switch, not a model. One way only for all of
+    them, and none has been turned on a unit. An FM9 has no hand-written
+    list: there these blocks keep their on and off and no knobs.
   - *NOTHING HAS BEEN WRITTEN TO A NAM BLOCK ON A REAL UNIT.* The numbers
     were read off his; the writes are the ones every gen-3 knob and switch
     gets (fn 0x01: 52 00 for a knob's place, 09 00 for the switch's
@@ -846,13 +863,13 @@ what the computer sends for the same edit, and a test holds it there.
     (lib/gen3Catalog `OWN`). The III's were read off his unit (143 and 203
     are the next id of each pair, not read); the FM9's stand on Fractal's
     enum and Blocks Guide, not on a unit. The RTA (174) has no on and off,
-    so it is in `NOT_BLOCKS` and never drawn. None of them, nor the IR
-    Player, has knobs in the app yet: Edit gives each its on and off.
-    Their knobs, the switches Edit draws for no block, the NAM capture
-    picker, and all of this through the computer (where they are still a
-    New block: a ForgeFX change and a computer release) are the work left,
-    in that order. Not settled by a read: which of the Crossover's four
-    levels and four pans is which.
+    so it is in `NOT_BLOCKS` and never drawn. On the III they have knobs
+    for his account since 1.90.49 (above); for everybody else, and on an
+    FM9, Edit gives each its on and off. The switches Edit draws for no
+    block, the NAM capture picker, and all of this through the computer
+    (where they are still a New block: a ForgeFX change and a computer
+    release) are the work left, in that order. Not settled by a read:
+    which of the Crossover's four levels and four pans is which.
   - *Through the computer the phone names them itself, HIS ACCOUNT ONLY*
     (1.90.48). "NAM shows up on Bluetooth but not when connected through
     my raspberry pie" and "I would rather use the pi if that's possible"

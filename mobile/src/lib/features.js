@@ -249,6 +249,14 @@ export const WATCH_QUICK_EDIT_FOR_EVERYONE = false
  * his unit, with its What's new line in that pull request; Edit's own door
  * (lib/ble-rule.js EDIT_FROM_STORE) still decides whether a copy edits at
  * all.
+ *
+ * AND THE SAME SWITCH FOR THE REST OF THE III'S OWN BLOCKS (1.90.49): the IR
+ * Player, the Vocoder, the Crossover, Tone Match and Dynamic Distortion,
+ * whose knobs are in the same hand-written list (lib/axefx3-own-knobs.js)
+ * and are read through the same second Edit of the III's. One list, one
+ * gate: there is no opening the NAM block's without theirs. Each was read
+ * off his unit once and none has been turned, so the same rule holds for
+ * all of them before this says true.
  */
 export const NAM_KNOBS_FOR_EVERYONE = false
 

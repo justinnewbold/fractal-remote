@@ -1,5 +1,6 @@
 /**
- * THE AXE-FX III'S OWN BLOCKS' KNOBS, WRITTEN BY HAND: THE NAM BLOCK.
+ * THE AXE-FX III'S OWN BLOCKS' KNOBS, WRITTEN BY HAND: THE NAM BLOCK FIRST,
+ * AND THEN THE REST THE CODEC HAS NONE FOR (below the NAM block's notes).
  *
  * The III's knob catalog (lib/axefx3-knobs.js) is written from the codec the
  * computer app carries, and that codec is from before firmware 33: it has no
@@ -101,14 +102,164 @@
  * is nobody's layout but the list's.
  */
 
-/** NAM 1 and NAM 2: [slug, family, name, palette page], as AXE3_BLOCKS has every other block. */
+/*
+ * AND THE REST THE CODEC HAS NO KNOBS FOR (1.90.49): the IR Player, the
+ * Vocoder, the Crossover, Tone Match and Dynamic Distortion. "Want to get it
+ * all done" (Justin, 13 November 2026). Read off the same unit the same day,
+ * each with Axe-Edit III's page beside it; docs/ax3-readings.md has every
+ * setting of each, these and the ones left out.
+ *
+ * The same rule, ONLY WHAT IS CERTAIN, and here it leaves more out, because
+ * each block was read once, as it came out of the box:
+ *
+ * - A KNOB is here when Axe-Edit names it, the unit gave its range, and the
+ *   number in the block's whole read comes out as what the unit showed for
+ *   it. Where that number sits part-way along the travel, it also says how
+ *   the travel runs: the Crossover's Freq (20045 read as 100.0 Hz of 40 to
+ *   800) and Dynamic Distortion's Frequency (30538 as 500.0 Hz of 20 to
+ *   20000) can only be logarithmic, and a NAM's Bass (32767 as 5.00 of 0 to
+ *   10) only a straight line. test/bluetooth.mjs holds every row to its read.
+ * - WHERE THE NUMBER SAT AT AN END (a Mix at 100 %, a Low Cut at 20 Hz), the
+ *   read does not say how the travel runs. A cut frequency takes the travel
+ *   of the unit's own type code for it, which three other settings with the
+ *   same code proved logarithmic (577: the Vocoder's Min Frequency and
+ *   Dynamic Distortion's Frequency; 576: the Vocoder's Max Frequency). A
+ *   percentage is a straight line, as every percentage in the codec's table
+ *   for this unit is. Each such row says so beside it: "end only".
+ * - A SWITCH is here only when the unit itself listed its choices, in its
+ *   own order. One whose choices were never listed (the IR Player's Input
+ *   Select, Dynamic Distortion's Clip Shape) is left out, however plain its
+ *   name.
+ * - LEFT OUT: anything read the same as its neighbours, so which is which
+ *   is not known (the Crossover's four levels and four pans, the IR Player's
+ *   two IR levels and pans, the Vocoder's 24 band levels and 24 band pans);
+ *   anything with no name on Axe-Edit's page; every bank, number and length
+ *   of an impulse response; the Vocoder's Master Pan, which read "100.0 %";
+ *   Tone Match's start, match and export controls, which do things rather
+ *   than hold a value; and each block's own bypass, which Play does.
+ *
+ * Dynamic Distortion's Type is entered as a switch, not as the block's
+ * model: a model change is its own kind of write, and nobody has seen this
+ * block take one.
+ *
+ * Every family is sent one way only, as the NAM block is (`typedKnobs:
+ * false`), and NOTHING HERE HAS BEEN TURNED ON A UNIT.
+ */
+
+/** [slug, family, name, palette page], as AXE3_BLOCKS has every other block. */
 export const AXE3_OWN_BLOCKS = Object.freeze({
+  134: ['vocoder', 'VOCODER', 'Vocoder', 134],
+  142: ['crossover', 'CROSSOVER', 'Crossover', 142],
+  143: ['crossover', 'CROSSOVER', 'Crossover', 142],
+  170: ['tonematch', 'TONEMATCH', 'Tone Match', 170],
+  195: ['irplayer', 'IRPLAYER', 'IR Player', 195],
+  196: ['irplayer', 'IRPLAYER', 'IR Player', 195],
+  197: ['irplayer', 'IRPLAYER', 'IR Player', 195],
+  198: ['irplayer', 'IRPLAYER', 'IR Player', 195],
+  202: ['dynadist', 'DYNADIST', 'Dynamic Distortion', 202],
+  203: ['dynadist', 'DYNADIST', 'Dynamic Distortion', 202],
   206: ['nam', 'NAM', 'NAM', 206],
   207: ['nam', 'NAM', 'NAM', 206]
 })
 
-/** The NAM family: knobs as [setting, name, min, max, logarithmic, unit], switches as [setting, name, first, last, names]. */
+/** Each family: knobs as [setting, name, min, max, logarithmic, unit], switches as [setting, name, first, last, names]. */
 export const AXE3_OWN_FAMILIES = Object.freeze({
+  /* The Vocoder: 67 settings and no channels (its whole read is one set of 67). */
+  VOCODER: {
+    stride: 67,
+    typeId: null,
+    typedKnobs: false,
+    knobs: [
+      [3, 'Min Frequency', 20, 2000, 1, 'Hz'], // 32767 read as 200.0 Hz
+      [4, 'Max Frequency', 2000, 20000, 1, 'Hz'], // 26079 read as 5000 Hz
+      [5, 'Filter Resonance', 0.5, 2, 1, null], // 32767 read as 1.000
+      [7, 'Master Level', 0, 100, 0, '%'], // end only: 65534 read as 100.0 %
+      [9, 'Frequency Shift', 0.2, 5, 1, null], // 32767 read as 1.000
+      [10, 'Attack', 5, 1000, 1, 'ms'], // 8573 read as 10.00 ms
+      [11, 'Decay', 5, 1000, 1, 'ms'], // 28480 read as 50.00 ms
+      [12, 'Highpass Mix', 0, 100, 0, '%'], // end only: 0 read as 0.0 %
+      [13, 'Mix', 0, 100, 0, '%'], // end only: 65534 read as 100.0 %
+      [14, 'Level', -80, 20, 0, 'dB'], // 52427 read as 0.0 dB
+      [15, 'Balance', -100, 100, 0, '%'] // 32767 read as 0.0
+    ],
+    switches: [
+      [1, 'Analysis Channel', 0, 1, ['LEFT', 'RIGHT']],
+      [6, 'Freeze', 0, 1, ['OFF', 'ON']],
+      [16, 'Bypass Mode', 0, 2, ['THRU', 'MUTE FX OUT', 'MUTE OUT']]
+    ],
+    selectors: {}
+  },
+  /* The Crossover: 15 settings, channels A and B only (its whole read is two sets of 15). */
+  CROSSOVER: {
+    stride: 15,
+    typeId: null,
+    typedKnobs: false,
+    knobs: [
+      [0, 'Freq', 40, 800, 1, 'Hz'], // 20045 read as 100.0 Hz
+      [11, 'Level', -80, 20, 0, 'dB'], // 52427 read as 0.0 dB
+      [12, 'Balance', -100, 100, 0, '%'] // 32767 read as 0.0
+    ],
+    switches: [
+      [1, 'Freq Multiplier', 0, 1, ['X 1', 'X 10']],
+      [13, 'Bypass Mode', 0, 1, ['THRU', 'MUTE']]
+    ],
+    selectors: {}
+  },
+  /* Tone Match: 22 settings and no channels. */
+  TONEMATCH: {
+    stride: 22,
+    typeId: null,
+    typedKnobs: false,
+    knobs: [
+      [0, 'Amount', 0, 100, 0, '%'], // end only: 65534 read as 100.0 %
+      [1, 'Smoothing', 0, 100, 0, '%'], // end only: 0 read as 0.0 %
+      [5, 'Level', -80, 20, 0, 'dB'], // 52427 read as 0.0 dB
+      [6, 'Balance', -100, 100, 0, '%'], // 32767 read as 0.0
+      [10, 'Averaging Time', 0.1, 100, 1, null], // 37113 read as 5.000
+      [20, 'Reference Level', -40, 20, 0, 'dB'] // 43689 read as 0.00 dB
+    ],
+    switches: [[21, 'Mode', 0, 1, ['LIVE', 'OFF-LINE']]],
+    selectors: {}
+  },
+  /* The IR Player: 20 settings, four channels. */
+  IRPLAYER: {
+    stride: 20,
+    typeId: null,
+    typedKnobs: false,
+    knobs: [
+      [2, 'Low Cut', 20, 2000, 1, 'Hz'], // end only: 0 read as 20.0 Hz
+      [3, 'High Cut', 200, 20000, 1, 'Hz'], // end only: 65534 read as 20000 Hz
+      [7, 'Level', -80, 20, 0, 'dB'], // 52427 read as 0.0 dB
+      [8, 'Balance', -100, 100, 0, '%'], // 32767 read as 0.0
+      [18, 'Mix', 0, 100, 0, '%'] // end only: 65534 read as 100.0 %
+    ],
+    switches: [
+      [4, 'Filter Slope', 0, 1, ['6 dB/OCT', '12 dB/OCT']],
+      [19, 'Mode', 0, 1, ['PARALLEL', 'SERIES']]
+    ],
+    selectors: {}
+  },
+  /* Dynamic Distortion: 14 settings, four channels. */
+  DYNADIST: {
+    stride: 14,
+    typeId: null,
+    typedKnobs: false,
+    knobs: [
+      [1, 'Frequency', 20, 20000, 1, 'Hz'], // 30538 read as 500.0 Hz
+      [2, 'Q', 0.1, 10, 1, null], // 22903 read as 0.500
+      [3, 'Gain', -20, 20, 0, 'dB'], // 32767 read as 0.00 dB
+      [6, 'Bias', 0, 10, 0, null], // end only: 0 read as 0.00
+      [7, 'Drive', 0, 10, 0, null], // 43689 read as 6.67: its place along the travel, times ten
+      [8, 'Level', -80, 20, 0, 'dB'], // 52427 read as 0.0 dB
+      [9, 'Pan', -100, 100, 0, '%'] // 32767 read as 0.0. Axe-Edit calls this one Pan
+    ],
+    switches: [
+      [10, 'Bypass Mode', 0, 1, ['THRU', 'MUTE']],
+      [12, 'Mono/Stereo', 0, 1, ['MONO', 'STEREO']],
+      [13, 'Type', 0, 6, ['Flat', 'Dynamic Mid Boost', 'Dynamic Mid Cut', 'Dynamic Presence Boost', 'Dynamic Presence Cut', 'Dynamic Depth Boost', 'Dynamic Depth Cut']]
+    ],
+    selectors: {}
+  },
   NAM: {
     stride: 18,
     typeId: null,

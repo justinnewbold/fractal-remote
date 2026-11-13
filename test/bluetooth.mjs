@@ -11165,8 +11165,9 @@ export function run(test) {
     const e = await import('../mobile/src/lib/axefx3-edit.js')
     const nam = own.AXE3_OWN_FAMILIES.NAM
     /* Beside the codec's catalog, never in it: no id and no family the two share, so nothing generated is overridden (and if the codec ever carries NAM, its rows win: axefx3-edit.js). */
-    assert.deepEqual(Object.keys(own.AXE3_OWN_BLOCKS), ['206', '207'])
-    assert.deepEqual(Object.keys(own.AXE3_OWN_FAMILIES), ['NAM'])
+    assert.deepEqual(Object.keys(own.AXE3_OWN_BLOCKS), ['134', '142', '143', '170', '195', '196', '197', '198', '202', '203', '206', '207'])
+    assert.deepEqual(Object.keys(own.AXE3_OWN_FAMILIES).sort(), ['CROSSOVER', 'DYNADIST', 'IRPLAYER', 'NAM', 'TONEMATCH', 'VOCODER'])
+    for (const f of Object.keys(own.AXE3_OWN_FAMILIES)) assert.equal(k.AXE3_FAMILIES[f], undefined, `the codec’s catalog carries ${f} now: the hand-written one goes`)
     for (const id of Object.keys(own.AXE3_OWN_BLOCKS)) assert.equal(k.AXE3_BLOCKS[id], undefined, `the codec’s catalog carries ${id} now: the hand-written one goes`)
     assert.equal(k.AXE3_FAMILIES.NAM, undefined)
     assert.deepEqual(own.AXE3_OWN_BLOCKS[206], ['nam', 'NAM', 'NAM', 206])
@@ -11285,7 +11286,11 @@ export function run(test) {
     for (const id of Object.keys(k.AXE3_BLOCKS)) assert.deepEqual(e.withNam.editBlock(Number(id)), e.editBlock(Number(id)))
     assert.deepEqual(e.withNam.modelsOf('amp'), e.modelsOf('amp'))
     assert.deepEqual(e.withNam.modelsOf('cab'), [])
-    for (const id of [195, 196, 197, 198]) assert.equal(e.withNam.editBlock(id), null, 'the IR Player has knobs now')
+    /* The IR Player has rows of its own since 1.90.49, in the hand-written list and never in the codec's Edit. */
+    for (const id of [195, 196, 197, 198]) {
+      assert.equal(e.editBlock(id), null, 'the codec’s own Edit names the IR Player')
+      assert.deepEqual(e.withNam.editBlock(id), { eid: id, family: 'IRPLAYER', name: 'IR Player', page: 195, slug: 'irplayer' })
+    }
   })
 
   test('a NAM knob is written with the frame every gen-3 knob gets, byte for byte, and only that one; Edit’s way out passes only its read, its eight knobs and its five switches', async () => {
@@ -11405,10 +11410,14 @@ export function run(test) {
     assert.equal(passed, 2 * (NAM_KNOB_IDS.length * VALUES.filter((x) => x >= 0 && x <= 1).length + Object.values(NAM_SWITCHES).reduce((n, last) => n + whole(last), 0)))
     /* Never a "model": the capture (setting 0) has no number that passes, as a knob or typed. */
     for (const v of [0, 1, 28, 256]) assert.equal(e.withNam.editAllowed(raw(g3.TYPED, 206, 0, v), placed), null, 'a capture was chosen')
-    /* The IR Player, with either Edit: nothing. */
-    for (const way of [e, e.withNam]) {
-      assert.equal(way.editAllowed(e.buildReadAll(AX3, 195), placed), null)
-      assert.equal(way.editAllowed(raw(g3.KNOB, 195, 1, 0.5), placed), null)
+    /* The IR Player: nothing with the codec's Edit, which has no row for it. With the hand-written rows its read and its named knobs pass, and a setting it has no row for (1, an IR's number) does not. */
+    assert.equal(e.editAllowed(e.buildReadAll(AX3, 195), placed), null)
+    assert.equal(e.editAllowed(raw(g3.KNOB, 195, 18, 0.5), placed), null)
+    assert.equal(e.withNam.editAllowed(e.buildReadAll(AX3, 195), placed), 'block settings read')
+    assert.ok(e.withNam.editAllowed(raw(g3.KNOB, 195, 18, 0.5), placed), 'the IR Player’s Mix is refused')
+    for (const pid of [0, 1, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16, 17]) {
+      assert.equal(e.withNam.editAllowed(raw(g3.KNOB, 195, pid, 0.5), placed), null, `setting ${pid} of an IR Player went as a knob`)
+      assert.equal(e.withNam.editAllowed(raw(g3.TYPED, 195, pid, 1), placed), null, `setting ${pid} of an IR Player went typed`)
     }
     /* And for a block the codec's catalog names, the two Edits give one answer to every frame tried here, the typed way for a knob with them. */
     const kinds = new Set()
@@ -11428,8 +11437,8 @@ export function run(test) {
     let open = false
     const send = gen3Sender((b) => went.push(b), () => {}, AX3, () => placed, () => null, () => open)
     const NAMS = [e.buildReadAll(AX3, 206), e.buildReadAll(AX3, 207), g3.buildKnob(AX3, 206, 10, 0.7), g3.buildKnob(AX3, 207, 15, 0.5), g3.buildKnob(AX3, 206, 1, 0.8), g3.buildTyped(AX3, 207, NAM_SWITCH, 11), g3.buildTyped(AX3, 206, 3, 1), g3.buildTyped(AX3, 207, 6, 1), g3.buildTyped(AX3, 206, 8, 2), g3.buildTyped(AX3, 207, 13, 0)]
-    /* Never, open or closed: a knob the typed way, the capture, the switch nobody has a name for, a switch past its last number or sent as a knob, the values past the sixteenth, a thirteenth tone stack, the block's own bypass as a setting, the IR Player. */
-    const NEVER = [g3.buildTyped(AX3, 206, 5, 0.5), g3.buildTyped(AX3, 207, 10, 0.7), g3.buildKnob(AX3, 206, 0, 0.5), g3.buildTyped(AX3, 206, 0, 28), g3.buildTyped(AX3, 207, 7, 1), g3.buildTyped(AX3, 206, 3, 2), g3.buildTyped(AX3, 207, 8, 3), g3.buildTyped(AX3, 206, 13, 3), g3.buildKnob(AX3, 207, 6, 1), g3.buildKnob(AX3, 206, 16, 0.5), g3.buildTyped(AX3, 206, 17, 1), g3.buildTyped(AX3, 206, NAM_SWITCH, 12), g3.buildTyped(AX3, 206, 4, 1), e.buildReadAll(AX3, 195)]
+    /* Never, open or closed: a knob the typed way, the capture, the switch nobody has a name for, a switch past its last number or sent as a knob, the values past the sixteenth, a thirteenth tone stack, the block's own bypass as a setting, and a setting of the IR Player's that has no row (an IR's number). */
+    const NEVER = [g3.buildTyped(AX3, 206, 5, 0.5), g3.buildTyped(AX3, 207, 10, 0.7), g3.buildKnob(AX3, 206, 0, 0.5), g3.buildTyped(AX3, 206, 0, 28), g3.buildTyped(AX3, 207, 7, 1), g3.buildTyped(AX3, 206, 3, 2), g3.buildTyped(AX3, 207, 8, 3), g3.buildTyped(AX3, 206, 13, 3), g3.buildKnob(AX3, 207, 6, 1), g3.buildKnob(AX3, 206, 16, 0.5), g3.buildTyped(AX3, 206, 17, 1), g3.buildTyped(AX3, 206, NAM_SWITCH, 12), g3.buildTyped(AX3, 206, 4, 1), g3.buildKnob(AX3, 195, 1, 0.5), g3.buildTyped(AX3, 195, 1, 3)]
     for (const f of [...NAMS, ...NEVER]) assert.equal(send(f), 'refused', `${hex(f)} went to a NAM with its knobs closed`)
     assert.deepEqual(went, [])
     open = true
@@ -11460,7 +11469,7 @@ export function run(test) {
     }
   })
 
-  test('with the NAM block’s knobs open, Edit over Bluetooth reads a NAM on its channel and turns its knobs; closed again, the next request is refused; and the IR Player has none either way', async () => {
+  test('with the NAM block’s knobs open, Edit over Bluetooth reads a NAM on its channel and turns its knobs; closed again, the next request is refused; and the IR Player’s open and close with them', async () => {
     const e = await import('../mobile/src/lib/axefx3-edit.js')
     const g3 = await import('../mobile/src/lib/gen3-edit.js')
     let open = true
@@ -11470,15 +11479,15 @@ export function run(test) {
     /* Everything of Edit's shape that names a NAM or the IR Player, as it left. */
     const theirs = () => t.frames().filter((f) => f[0] === 0xf0 && ((f[5] === 0x1f && [195, 206, 207].includes(t.sx.decode14(f[6], f[7]))) || (f[5] === 0x01 && (f[6] === 0x52 || f[6] === 0x09) && [195, 206, 207].includes(t.sx.decode14(f[8], f[9])))))
 
-    /* The chain: the NAMs handed on as any block with knobs, the IR Player still marked. */
+    /* The chain: the NAMs and the IR Player handed on as any block with knobs (the IR Player has rows of its own since 1.90.49). */
     const chain = await t.get('/preset/blocks')
-    assert.deepEqual(chain.filter((b) => b.knobs === false).map((b) => b.effectId), [195])
-    assert.ok(chain.filter((b) => b.effectId !== 195).every((b) => !('knobs' in b)))
+    assert.deepEqual(chain.filter((b) => b.knobs === false).map((b) => b.effectId), [])
+    assert.ok(chain.every((b) => !('knobs' in b)))
     assert.deepEqual(chain.filter((b) => b.slug === 'nam').map((b) => [b.effectId, b.name, b.channel]), [[206, 'NAM 1', 'B'], [207, 'NAM 2', 'A']])
-    /* So Play's hold pop-up has knobs for a NAM and not for the IR Player (lib/holdPop popKnobsFor, which the watch's quick edit asks too), and the control search takes the NAMs in. */
+    /* So Play's hold pop-up has knobs for a NAM and for the IR Player (lib/holdPop popKnobsFor, which the watch's quick edit asks too), and the control search takes them in. */
     const { popKnobsFor } = await import('../mobile/src/lib/holdPop.js')
     const by = Object.fromEntries(chain.map((b) => [b.effectId, b]))
-    assert.deepEqual([206, 207, 195].map((id) => popKnobsFor(true, by[id])), [true, true, false])
+    assert.deepEqual([206, 207, 195].map((id) => popKnobsFor(true, by[id])), [true, true, true])
 
     /* NAM 2 is on channel A in this preset: his unit's read, as Axe-Edit showed it. One whole read, the one every block gets. */
     t.sent.length = 0
@@ -11548,7 +11557,7 @@ export function run(test) {
     await assert.rejects(put(206, 3, { value: 2, continuous: false }), /Bypass Mode has no setting 2/)
     await assert.rejects(put(206, 13, { value: 3, continuous: false }), /Input Mode has no setting 3/)
     await assert.rejects(ask('/preset/blocks/206/type', { method: 'POST', body: JSON.stringify({ value: 28 }) }), /no models to choose from/)
-    await assert.rejects(ask('/preset/blocks/195/params'), (err) => err.status === 400)
+    /* The IR Player: a setting it has no row for (1, an IR's number) is refused, with nothing sent. */
     await assert.rejects(put(195, 1, { value: 0.5 }), (err) => err.status === 400)
     assert.deepEqual(await ask('/blocks/nam/types'), [])
     assert.deepEqual(theirs(), [], 'a refused request sent something')
@@ -11577,11 +11586,162 @@ export function run(test) {
     nine.unit.state.blocks.splice(0, nine.unit.state.blocks.length, ...NAM_62())
     await assert.rejects(drive(nine.clock, nine.wire.request('/preset/blocks/206/params', { editing: true })), (err) => err.status === 400)
     assert.ok(nine.frames().every((f) => f[5] !== 0x1f))
-    /* The developer's reader, on his wire, now lists the NAMs with the blocks the app knows, to check the reader against; the IR Player is still the one it has nothing for. */
+    /* The developer's reader, on his wire, now lists the NAMs and the IR Player with the blocks the app knows, to check the reader against. */
     const mine = await onANamIII({ edit: () => true, reader: () => true, namKnobs: () => true, settings: namSettings() })
     const list = await drive(mine.clock, mine.wire.request('/reader/blocks', { reading: true }))
-    assert.deepEqual(list.filter((b) => !b.known).map((b) => b.effectId), [195])
-    assert.deepEqual(list.filter((b) => b.known && [206, 207].includes(b.effectId)).map((b) => b.name), ['NAM 1', 'NAM 2'])
+    assert.deepEqual(list.filter((b) => !b.known).map((b) => b.effectId), [])
+    assert.deepEqual(list.filter((b) => b.known && [195, 206, 207].includes(b.effectId)).map((b) => b.name), ['IR Player 1', 'NAM 1', 'NAM 2'])
+  })
+
+  /*
+   * THE REST THE CODEC HAS NO KNOBS FOR (1.90.49): the IR Player, the Vocoder,
+   * the Crossover, Tone Match and Dynamic Distortion. "Want to get it all
+   * done" (Justin, 13 November 2026). Each block's whole read is what his own
+   * Axe-Fx III answered that day (docs/ax3-readings.md), and beside it what
+   * the unit itself showed for each setting. A row is in the list only if
+   * the number comes out as that.
+   */
+  const OWN_READS = () => ({
+    134: { count: 67, values: [1, 0, 16, 32767, 26079, 32767, 0, 65534, 65534, 32767, 8573, 28480, 0, 65534, 52427, 32767, 0, 0, 0, ...Array(48).fill(32767)] },
+    142: { count: 30, values: [20045, 0, 65534, 65534, 65534, 65534, 0, 0, 65534, 65534, 0, 52427, 32767, 0, 0, 20045, 0, 65534, 65534, 65534, 65534, 0, 0, 65534, 65534, 0, 52427, 32767, 0, 0] },
+    170: { count: 22, values: [65534, 0, 0, 0, 0, 52427, 32767, 0, 0, 2, 37113, 1, 1, 0, 1, 0, 0, 0, 2, 0, 43689, 0] },
+    195: { count: 80, values: Array.from({ length: 4 }, () => [0, 0, 0, 65534, 0, 0, 0, 52427, 32767, 0, 0, 0, 0, 4, 65534, 65534, 32767, 32767, 65534, 0]).flat() },
+    202: { count: 56, values: Array.from({ length: 4 }, () => [6, 30538, 22903, 32767, 2, 32767, 0, 43689, 52427, 32767, 0, 0, 0, 0]).flat() }
+  })
+  /* What the unit showed, setting by setting: [setting, name, the number on its screen, how close the row must come]. */
+  const OWN_SHOWN = {
+    134: { family: 'VOCODER', stride: 67, channels: 1, knobs: [[3, 'Min Frequency', 200, 0.1], [4, 'Max Frequency', 5000, 1], [5, 'Filter Resonance', 1, 0.001], [7, 'Master Level', 100, 0], [9, 'Frequency Shift', 1, 0.001], [10, 'Attack', 10, 0.01], [11, 'Decay', 50, 0.01], [12, 'Highpass Mix', 0, 0], [13, 'Mix', 100, 0], [14, 'Level', 0, 0.01], [15, 'Balance', 0, 0.01]], switches: [[1, 'Analysis Channel', 'LEFT'], [6, 'Freeze', 'OFF'], [16, 'Bypass Mode', 'THRU']], out: [0, 2, 8, 17, 18, 19, 42, 43, 66] },
+    142: { family: 'CROSSOVER', stride: 15, channels: 2, knobs: [[0, 'Freq', 100, 0.01], [11, 'Level', 0, 0.01], [12, 'Balance', 0, 0.01]], switches: [[1, 'Freq Multiplier', 'X 1'], [13, 'Bypass Mode', 'THRU']], out: [2, 3, 4, 5, 6, 7, 8, 9, 10, 14] },
+    170: { family: 'TONEMATCH', stride: 22, channels: 1, knobs: [[0, 'Amount', 100, 0], [1, 'Smoothing', 0, 0], [5, 'Level', 0, 0.01], [6, 'Balance', 0, 0.01], [10, 'Averaging Time', 5, 0.001], [20, 'Reference Level', 0, 0.01]], switches: [[21, 'Mode', 'LIVE']], out: [2, 3, 4, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19] },
+    195: { family: 'IRPLAYER', stride: 20, channels: 4, knobs: [[2, 'Low Cut', 20, 0], [3, 'High Cut', 20000, 0], [7, 'Level', 0, 0.01], [8, 'Balance', 0, 0.01], [18, 'Mix', 100, 0]], switches: [[4, 'Filter Slope', '6 dB/OCT'], [19, 'Mode', 'PARALLEL']], out: [0, 1, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16, 17] },
+    202: { family: 'DYNADIST', stride: 14, channels: 4, knobs: [[1, 'Frequency', 500, 0.1], [2, 'Q', 0.5, 0.001], [3, 'Gain', 0, 0.01], [6, 'Bias', 0, 0], [7, 'Drive', 6.67, 0.005], [8, 'Level', 0, 0.01], [9, 'Pan', 0, 0.01]], switches: [[10, 'Bypass Mode', 'THRU'], [12, 'Mono/Stereo', 'MONO'], [13, 'Type', 'Flat']], out: [0, 4, 5, 11] }
+  }
+
+  test('the knobs of the IR Player, Vocoder, Crossover, Tone Match and Dynamic Distortion, written by hand: each row comes out as his Axe-Fx III showed it, and what nobody is sure of is left out', async () => {
+    const own = await import('../mobile/src/lib/axefx3-own-knobs.js')
+    const e = await import('../mobile/src/lib/axefx3-edit.js')
+    const reads = OWN_READS()
+    for (const [eid, want] of Object.entries(OWN_SHOWN)) {
+      const [slug, family, name, page] = own.AXE3_OWN_BLOCKS[eid]
+      assert.equal(family, want.family)
+      assert.equal(page, Number(eid), `${name} is painted as another block`)
+      const fam = own.AXE3_OWN_FAMILIES[family]
+      /* One way only, no model, and the stride the unit's own whole read divides by. */
+      assert.equal(fam.typedKnobs, false, `${name}: a knob may go the typed way, which nobody has seen this block take`)
+      assert.equal(fam.typeId, null, `${name} has a model setting`)
+      assert.deepEqual(fam.selectors, {})
+      assert.equal(fam.stride, want.stride)
+      const cut = e.sliceOf(fam.stride, reads[eid], 0)
+      assert.deepEqual([cut.stride, cut.channels, cut.base], [want.stride, want.channels, 0], `${name}: the whole read is not cut into its channels`)
+      /* Every knob, and no other: the number in the read comes out as the unit showed it. */
+      assert.deepEqual(fam.knobs.map((r) => [r[0], r[1]]), want.knobs.map((r) => [r[0], r[1]]), name)
+      for (const [pid, label, shown, slack] of want.knobs) {
+        const row = fam.knobs.find((r) => r[0] === pid)
+        const got = e.shownKnob(row, reads[eid].values[pid]).value
+        assert.ok(Math.abs(got - shown) <= slack + 1e-9, `${name} ${label}: ${reads[eid].values[pid]} reads as ${got}, and the unit showed ${shown}`)
+        assert.ok(row[2] < row[3] && (!row[4] || row[2] > 0), `${name} ${label} has no travel`)
+      }
+      /* Every switch, and no other: numbered from 0, a name for every number, and the one read is the one the unit showed. */
+      assert.deepEqual(fam.switches.map((r) => [r[0], r[1]]), want.switches.map((r) => [r[0], r[1]]), name)
+      for (const [pid, label, shown] of want.switches) {
+        const [, , first, last, labels] = fam.switches.find((r) => r[0] === pid)
+        assert.ok(first === 0 && labels.length === last + 1, `${name} ${label} has a number with no name`)
+        assert.equal(labels[reads[eid].values[pid]], shown, `${name} ${label}`)
+      }
+      /* Left out: what read the same as its neighbours, what has no name, what picks an impulse response, and the block's own bypass. */
+      const named = [...fam.knobs, ...fam.switches].map((r) => r[0])
+      assert.equal(new Set(named).size, named.length, `${name} names a setting twice`)
+      for (const pid of want.out) assert.ok(!named.includes(pid), `setting ${pid} of the ${name} is in the list, and nobody is sure of it`)
+      assert.ok(named.every((pid) => pid >= 0 && pid < want.stride), `${name}: a setting past its last`)
+      /* The same block through the open Edit, and no block at all through the codec's. */
+      assert.equal(e.editBlock(Number(eid)), null)
+      assert.deepEqual(e.withNam.editBlock(Number(eid)), { eid: Number(eid), family, name, page, slug })
+      assert.deepEqual(e.withNam.modelsOf(slug), [])
+    }
+    /* The second of each pair, and the IR Player's four, are the first one's twin. */
+    for (const [twin, first] of [[143, 142], [203, 202], [196, 195], [197, 195], [198, 195]]) assert.deepEqual(own.AXE3_OWN_BLOCKS[twin], own.AXE3_OWN_BLOCKS[first])
+    /* The travel a part-way number proves: these could only be logarithmic. A straight line would show something else. */
+    for (const [family, pid] of [['CROSSOVER', 0], ['DYNADIST', 1], ['DYNADIST', 2], ['VOCODER', 3], ['VOCODER', 4], ['VOCODER', 5], ['VOCODER', 9], ['VOCODER', 10], ['VOCODER', 11], ['TONEMATCH', 10]]) {
+      assert.equal(own.AXE3_OWN_FAMILIES[family].knobs.find((r) => r[0] === pid)[4], 1, `${family} ${pid} is not logarithmic`)
+    }
+  })
+
+  test('with the knobs open, Edit over Bluetooth reads a Dynamic Distortion, a Crossover and a Vocoder and turns a knob of each one way only; closed, each is the block it was', async () => {
+    const e = await import('../mobile/src/lib/axefx3-edit.js')
+    const g3 = await import('../mobile/src/lib/gen3-edit.js')
+    const settings = () => new Map(Object.entries(OWN_READS()).map(([eid, read]) => [Number(eid), read]))
+    let open = true
+    const t = await onPreset385('axefx3', { edit: () => true, namKnobs: () => open, settings: settings() })
+    const ask = (path, opts = {}) => drive(t.clock, t.wire.request(path, { editing: true, ...opts }))
+    const put = (eid, pid, body) => ask(`/preset/blocks/${eid}/params/${pid}`, { method: 'PUT', body: JSON.stringify(body) })
+    const IDS = [134, 142, 170, 195, 202]
+    const theirs = () => t.frames().filter((f) => f[0] === 0xf0 && ((f[5] === 0x1f && IDS.includes(t.sx.decode14(f[6], f[7]))) || (f[5] === 0x01 && (f[6] === 0x52 || f[6] === 0x09) && IDS.includes(t.sx.decode14(f[8], f[9])))))
+
+    /* The chain: every one handed on as a block with knobs. */
+    const chain = await t.get('/preset/blocks')
+    assert.deepEqual(chain.filter((b) => b.knobs === false).map((b) => b.effectId), [])
+
+    /* Dynamic Distortion: one whole read, and its knobs as the unit showed them. */
+    t.sent.length = 0
+    const dd = await ask('/preset/blocks/202/params')
+    assert.deepEqual(theirs().map(hex), [hex(e.buildReadAll(0x10, 202))])
+    assert.deepEqual([dd.block, dd.slug, dd.type], ['Dynamic Distortion', 'dynadist', null])
+    assert.deepEqual(dd.named.map((p) => [p.id, p.name]), [[1, 'Frequency'], [2, 'Q'], [3, 'Gain'], [6, 'Bias'], [7, 'Drive'], [8, 'Level'], [9, 'Pan']])
+    assert.ok(Math.abs(dd.named[0].value - 500) < 0.1 && Math.abs(dd.named[1].value - 0.5) < 0.001 && Math.abs(dd.named[4].value - 6.67) < 0.005)
+    assert.deepEqual(dd.enums.map((s) => [s.id, s.options[s.value].label]), [[10, 'THRU'], [12, 'MONO'], [13, 'Flat']])
+    /* The Crossover has two channels, and the Vocoder none: each read is cut as the unit sent it. */
+    const xo = await ask('/preset/blocks/142/params')
+    assert.deepEqual(xo.named.map((p) => p.name), ['Freq', 'Level', 'Balance'])
+    assert.ok(Math.abs(xo.named[0].value - 100) < 0.01)
+    const vo = await ask('/preset/blocks/134/params')
+    assert.equal(vo.named.length, 11)
+    assert.ok(Math.abs(vo.named.find((p) => p.name === 'Attack').value - 10) < 0.01)
+
+    /* A knob of each, turned: the one frame every gen-3 knob gets, at the block's own id, and never the typed way. */
+    for (const [eid, pid] of [[202, 7], [142, 0], [134, 5], [170, 10], [195, 18]]) {
+      t.sent.length = 0
+      assert.deepEqual(await put(eid, pid, { value: 0.25, continuous: true }), { ok: true })
+      assert.deepEqual(theirs().map(hex), [hex(g3.buildKnob(0x10, eid, pid, 0.25))], `setting ${pid} of ${eid} went another way`)
+    }
+    /* A switch: its number, typed. And one past its last is refused with nothing sent. */
+    t.sent.length = 0
+    assert.deepEqual(await put(202, 13, { value: 3, continuous: false }), { ok: true })
+    assert.deepEqual(theirs().map(hex), [hex(g3.buildTyped(0x10, 202, 13, 3))])
+    t.sent.length = 0
+    await assert.rejects(put(202, 13, { value: 7, continuous: false }), /Type has no setting 7/)
+    /* A setting with no row is refused: the Crossover's levels and pans, Dynamic Distortion's Clip Shape, an IR's number. */
+    for (const [eid, pid] of [[142, 2], [142, 6], [202, 4], [202, 5], [195, 1], [134, 19], [170, 4]]) await assert.rejects(put(eid, pid, { value: 0.5 }), (err) => err.status === 400, `${eid} ${pid}`)
+    assert.deepEqual(theirs(), [], 'a refused request sent something')
+
+    /* Closed, at the very next request: each is the block it was, marked, and nothing of Edit's goes to it. The on and off still does. */
+    open = false
+    assert.deepEqual((await t.get('/preset/blocks')).filter((b) => b.knobs === false).map((b) => b.effectId).sort((a, b) => a - b), [134, 142, 170, 195, 202, 206])
+    t.sent.length = 0
+    for (const eid of IDS) {
+      await assert.rejects(ask(`/preset/blocks/${eid}/params`), (err) => err.status === 400)
+      await assert.rejects(put(eid, eid === 142 ? 0 : eid === 134 ? 5 : eid === 170 ? 10 : eid === 195 ? 18 : 7, { value: 0.5, continuous: true }), (err) => err.status === 400)
+    }
+    assert.deepEqual(theirs(), [], 'something of Edit’s went to a block whose knobs are closed')
+    assert.deepEqual(await t.post('/preset/blocks/202/bypass', { bypassed: true }), { ok: true })
+
+    /* The sender itself, asked at each send: closed, the frames above are refused; open, they go. */
+    const { gen3Sender } = await import(WIRE)
+    const placed = [37, 142, 202, 170, 206, 134, 195, 118, 42]
+    const went = []
+    let on = false
+    const send = gen3Sender((b) => went.push(b), () => {}, 0x10, () => placed, () => null, () => on)
+    const OURS = [e.buildReadAll(0x10, 202), g3.buildKnob(0x10, 202, 7, 0.5), g3.buildKnob(0x10, 142, 0, 0.5), g3.buildKnob(0x10, 134, 5, 0.5), g3.buildKnob(0x10, 170, 10, 0.5), g3.buildKnob(0x10, 195, 18, 0.5), g3.buildTyped(0x10, 202, 13, 6)]
+    const NEVER = [g3.buildTyped(0x10, 202, 7, 0.5), g3.buildKnob(0x10, 142, 2, 0.5), g3.buildTyped(0x10, 202, 13, 7), g3.buildKnob(0x10, 202, 11, 1), g3.buildKnob(0x10, 195, 1, 0.5), g3.buildKnob(0x10, 174, 0, 0.5), e.buildReadAll(0x10, 174)]
+    for (const f of [...OURS, ...NEVER]) assert.equal(send(f), 'refused', `${hex(f)} went with the knobs closed`)
+    on = true
+    for (const f of OURS) assert.equal(send(f), 'sent', `${hex(f)} was refused with the knobs open`)
+    for (const f of NEVER) assert.equal(send(f), 'refused', `${hex(f)} went with the knobs open`)
+    assert.deepEqual(went, OURS)
+
+    /* An FM9 has no hand-written list: the same blocks there stay as they were, whoever asks. */
+    const nine = await onPreset385('fm9', { edit: () => true, namKnobs: () => true, settings: settings() })
+    assert.deepEqual((await nine.get('/preset/blocks')).filter((b) => b.knobs === false).map((b) => b.effectId).sort((a, b) => a - b), [134, 142, 170])
+    await assert.rejects(drive(nine.clock, nine.wire.request('/preset/blocks/142/params', { editing: true })), (err) => err.status === 400)
   })
 
   test('the NAM block’s knobs are his account’s alone: one switch in features, asked by the wire at each request, and one line in Edit for what is left to the unit', async () => {
