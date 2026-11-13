@@ -853,6 +853,27 @@ what the computer sends for the same edit, and a test holds it there.
     New block: a ForgeFX change and a computer release) are the work left,
     in that order. Not settled by a read: which of the Crossover's four
     levels and four pans is which.
+  - *Through the computer the phone names them itself, HIS ACCOUNT ONLY*
+    (1.90.48). "NAM shows up on Bluetooth but not when connected through
+    my raspberry pie" and "I would rather use the pi if that's possible"
+    (13 November 2026). The engine passes each of these on with its place,
+    its on and off, its channel and its effect id, and no slug, and its
+    on/off and channel routes take whatever id they are handed (ForgeFX at
+    the pin: placedBlocks, setBypass). So no engine change and no computer
+    release: lib/ownBlocks names a block the computer sent with no slug
+    from the list the phone uses over Bluetooth (by the unit's name, an
+    FM9 or a III only), lib/device takes it as a namer (`setChainNamer`,
+    set once in lib/ownBlocksHere), and Play draws and switches it. IT
+    STAYS `unknown: true`, so everything that moves or edits the chain
+    still treats it as a New block (its cell held, never replaced, not
+    opened in Edit): only `stageBlocks` lets it through, on `onPlay`. A
+    hold on it opens its channels (`knobs: false`). The switch is
+    `OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE` in features.js, false;
+    nobody has switched one through a computer yet, and his Raspberry Pi
+    is the first check. The browser and the computer's own window still
+    say New block (naming them there is a computer release). Left: Edit
+    through the computer for these blocks, which needs the engine to know
+    them.
   - *A value's text is a C string in a 32-byte buffer*: the text, a NUL,
     and old bytes from earlier answers after it. The codec's decodeReply
     trims noughts off the end and wants the rest printable, so every value

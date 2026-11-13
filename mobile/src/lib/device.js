@@ -366,8 +366,30 @@ export async function presetBlocks() {
    * out (stageBlocks, knobBlocks, Edit's own list).
    */
   const marked = markNewBlocks(list)
-  sayNewBlocks(marked)
-  return marked
+  /*
+   * AND ONE THE COMPUTER HAS NO NAME FOR MAY BE ONE THE PHONE HAS (see
+   * setChainNamer, below): named here, on the way in, and still `unknown`
+   * to everything that moves or edits the chain.
+   */
+  const named = chainNamer ? chainNamer(marked) : marked
+  /* A namer names; it never drops or adds a block. One that answered anything else is not listened to. */
+  const out = Array.isArray(named) && named.length === marked.length ? named : marked
+  sayNewBlocks(out)
+  return out
+}
+
+/*
+ * THE NAMER. Whoever knows the unit's own blocks hands one in
+ * (lib/ownBlocksHere, with lib/ownBlocks: an Axe-Fx III's NAM through the
+ * computer, which the engine passes on with no slug). It is given the marked
+ * chain and answers the same chain with what it can name named: a slug, a
+ * name, `knobs: false` and `onPlay: true`, and `unknown` left as it was.
+ * None set, which is every test that copies this file alone, and the chain
+ * is exactly what it always was.
+ */
+let chainNamer = null
+export const setChainNamer = (fn) => {
+  chainNamer = typeof fn === 'function' ? fn : null
 }
 
 /*
@@ -378,7 +400,7 @@ export async function presetBlocks() {
 let newBlocksSaid = ''
 function sayNewBlocks(blocks) {
   const line = blocks
-    .filter((b) => b?.unknown)
+    .filter((b) => b?.unknown && b.onPlay !== true)
     .map((b) => `${b.name || 'no name'}${Number.isInteger(b.effectId) ? ` (id ${b.effectId})` : ''}${Number.isInteger(b.row) && Number.isInteger(b.col) ? ` at row ${b.row}, column ${b.col}` : ''}${b.bypassed === true ? ', off' : b.bypassed === false ? ', on' : ''}`)
     .join('; ')
   if (!line || line === newBlocksSaid) return
@@ -419,9 +441,15 @@ export const presetSummary = (number) => remoteRequest(`/presets/${number}/summa
    asks it to let them go first. Through a computer, nothing to do. */
 export const freshSceneNames = () => bluetoothWire()?.forgetSceneNames?.()
 
-/** The ones that belong on a stage: everything but the three you never kick. The gate is one you do. */
+/**
+ * The ones that belong on a stage: everything but the three you never kick. The gate is one you do.
+ *
+ * And a block the computer has no name for that the phone has named for
+ * Play (`onPlay`, lib/ownBlocks): it is still a New block to every list that
+ * moves or edits the chain, and it is switched like any other.
+ */
 export const stageBlocks = (blocks) =>
-  (blocks || []).filter((b) => b && !isNewBlock(b) && !STAGE_HIDDEN.includes(b.slug))
+  (blocks || []).filter((b) => b && (!isNewBlock(b) || b.onPlay === true) && !STAGE_HIDDEN.includes(b.slug))
 
 /** The ones whose controls may be searched and turned: not the gate's threshold (EXCLUDED_BLOCKS), and not a block whose knobs the app has no catalog for on this wire (bleWire `knobs: false`: an Axe-Fx III's NAM and IR Player over Bluetooth). */
 export const knobBlocks = (blocks) =>

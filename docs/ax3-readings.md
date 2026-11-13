@@ -214,6 +214,14 @@ is in `NOT_BLOCKS` (`mobile/src/lib/gen3Catalog.js`) and never drawn.
 None of these has knobs in the app yet. Play draws and switches them over
 Bluetooth, and Edit gives each its on and off.
 
+Through the computer the engine (ForgeFX, at the pin) has no name for any of
+them, nor for the NAM block: it passes each on with its place, its on and
+off, its channel and its effect id, and its on/off and channel routes take
+any id. From 1.90.48 the phone names them itself on the way in
+(`mobile/src/lib/ownBlocks.js`) and Play draws and switches them through the
+computer, for his account first. They stay a New block to everything that
+moves or edits the chain.
+
 ### Vocoder (134)
 
 | Setting | Axe-Edit's name | What the unit said |

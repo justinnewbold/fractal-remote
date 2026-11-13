@@ -2726,6 +2726,144 @@ export function run(test) {
     assert.deepEqual(device.stageBlocks(s.allBlocks).map((b) => b.effectId), [118, 195, 206, 207])
   })
 
+  /*
+   * THE SAME BLOCKS THROUGH THE COMPUTER. "NAM shows up on Bluetooth but not
+   * when connected through my raspberry pie" (Justin, 13 November 2026). The
+   * engine passes them on with a place, an effect id and NO SLUG (ForgeFX
+   * placedBlocks, at the pin: slugForEffectId(...) ?? '', name eid_N), and
+   * its on/off and channel routes take whatever id they are handed. So the
+   * phone names them itself (lib/ownBlocks), for the accounts it is open to.
+   */
+  const III_FROM_THE_COMPUTER = () => [
+    { slug: 'drive', name: 'Drive 1', effectId: 118, bypassed: false, channel: 'A', row: 1, col: 1 },
+    { slug: '', name: 'eid_142', effectId: 142, bypassed: false, channel: 'A', row: 1, col: 2 },
+    { slug: '', name: 'eid_174', effectId: 174, bypassed: false, channel: 'A', row: 1, col: 3 },
+    { slug: '', name: 'eid_206', effectId: 206, bypassed: false, channel: 'B', row: 1, col: 4 },
+    { slug: '', name: 'eid_207', effectId: 207, bypassed: true, channel: 'A', row: 1, col: 5 },
+    { slug: '', name: 'eid_195', effectId: 195, bypassed: true, channel: 'A', row: 1, col: 6 },
+    { slug: '', name: 'eid_202', effectId: 202, bypassed: false, channel: 'A', row: 1, col: 7 },
+    { slug: '', name: 'eid_208', effectId: 208, bypassed: false, channel: 'A', row: 1, col: 8 },
+    { slug: 'amp', name: 'Amp 1', effectId: 58, bypassed: false, channel: 'A', row: 1, col: 9 }
+  ]
+
+  test('the phone names an Axe-Fx III’s own blocks out of what the computer sends with no name, by effect id, and only on an FM9 or a III', async () => {
+    const { nameOwnBlocks, ownUnit, OWN_FAMILIES } = await import('../mobile/src/lib/ownBlocks.js')
+    const { markNewBlocks, isNewBlock } = await import('../shared/new-block.mjs')
+    const { deviceSlug } = await import('../mobile/src/lib/device-slug.js')
+    /* The unit's key, from the slug the rig files it under: the name the computer gives it, squeezed. */
+    assert.equal(ownUnit(deviceSlug('Axe-Fx III')), 'axefx3')
+    assert.equal(ownUnit(deviceSlug('FM9')), 'fm9')
+    for (const other of ['FM3', 'AM4', 'VP4', 'Axe-Fx II XL+', '', null]) assert.equal(ownUnit(deviceSlug(other)), null, String(other))
+    assert.deepEqual(OWN_FAMILIES, ['irplayer', 'nam', 'vocoder', 'crossover', 'tonematch', 'dynadist'])
+
+    const marked = markNewBlocks(III_FROM_THE_COMPUTER())
+    const named = nameOwnBlocks(marked, 'axefxiii', true)
+    const by = Object.fromEntries(named.map((b) => [b.effectId, b]))
+    assert.deepEqual(
+      [142, 206, 207, 195, 202].map((id) => [by[id].slug, by[id].family, by[id].name, by[id].knobs, by[id].onPlay, by[id].unknown]),
+      [
+        ['crossover', 'crossover', 'Crossover 1', false, true, true],
+        ['nam', 'nam', 'NAM 1', false, true, true],
+        ['nam', 'nam', 'NAM 2', false, true, true],
+        ['irplayer', 'irplayer', 'IR Player 1', false, true, true],
+        ['dynadist', 'dynadist', 'Dynamic Distortion 1', false, true, true]
+      ]
+    )
+    /* What it was sent is kept: where it sits, whether it is on, its channel. */
+    assert.deepEqual([by[206].row, by[206].col, by[206].bypassed, by[206].channel, by[206].effectId], [1, 4, false, 'B', 206])
+    /* STILL A NEW BLOCK to every list that moves or edits the chain. */
+    for (const id of [142, 206, 207, 195, 202]) assert.equal(isNewBlock(by[id]), true, `${id} is no longer protected`)
+    /* The RTA has no on and off, and 208 is nobody's: each stays the New block it was, untouched. */
+    for (const id of [174, 208]) assert.equal(by[id], marked.find((b) => b.effectId === id))
+    /* A block the computer named is never renamed, whatever its id. */
+    assert.equal(by[118], marked[0])
+    assert.equal(nameOwnBlocks(markNewBlocks([{ slug: 'drive', name: 'Drive 1', effectId: 206 }]), 'axefxiii', true)[0].slug, 'drive')
+    /* An FM9 has no NAM, IR Player or Dynamic Distortion: only its Crossover of these. */
+    assert.deepEqual(nameOwnBlocks(marked, 'fm9', true).filter((b) => b.onPlay).map((b) => b.effectId), [142])
+    /* Closed to the account, another unit, or no unit said yet: the very list back. */
+    assert.equal(nameOwnBlocks(marked, 'axefxiii', false), marked)
+    assert.equal(nameOwnBlocks(marked, 'axefxiii', undefined), marked)
+    for (const slug of ['fm3', 'am4', 'vp4', 'device', '', null]) assert.equal(nameOwnBlocks(marked, slug, true), marked, String(slug))
+    assert.equal(nameOwnBlocks(null, 'axefxiii', true), null)
+    /* Nothing to name: the same list, not a copy. */
+    const plain = markNewBlocks([{ slug: 'amp', name: 'Amp 1', effectId: 58 }])
+    assert.equal(nameOwnBlocks(plain, 'axefxiii', true), plain)
+
+    /* Open to his account alone until the switch says everybody, asked at every read, and set in one place. */
+    const here = read('mobile/src/lib/ownBlocksHere.js').replace(/\s+/g, ' ')
+    assert.match(here, /setChainNamer\(\(blocks\) => nameOwnBlocks\(blocks, getState\(\)\.deviceSlug, bluetoothAdmin\(\) === true \|\| OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE\)\)/)
+    assert.match(read('mobile/src/lib/features.js'), /export const OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE = false\n/, 'the phone’s own names through a computer are open to everybody before he said so')
+    assert.equal((read('mobile/App.js').match(/^import '\.\/src\/lib\/ownBlocksHere'$/gm) || []).length, 1)
+    assert.equal(read('mobile/src/lib/ownBlocks.js').match(/^import .*$/gm).join('\n'), "import { catalogFor } from './gen3Catalog.js'")
+    /* And nothing of it in the files the computer app is made of. */
+    for (const f of ['shared/new-block.mjs', 'shared/grid-plan.mjs']) assert.ok(!/\bonPlay\b|\bownBlocks\b|nameOwnBlocks/.test(read(f)), f)
+  })
+
+  test('through the computer, a III’s NAM the phone has named is on Play and switches by its own id, and is still a New block to Edit and the chain', async () => {
+    const { nameOwnBlocks } = await import('../mobile/src/lib/ownBlocks.js')
+    const { rig, device, asked, log } = await rigOnTheBench({ short: 'Axe-Fx III', blocks: III_FROM_THE_COMPUTER() })
+    /* With no namer, which is every account it is not open to: exactly as it was. Kept, marked, and off Play. */
+    let s = rig.getState()
+    assert.equal(s.deviceSlug, 'axefxiii')
+    assert.deepEqual(s.blocks.map((b) => b.effectId), [118, 58])
+    assert.equal(s.allBlocks.filter((b) => b.unknown).length, 7)
+    assert.ok(s.allBlocks.every((b) => !('onPlay' in b)))
+
+    /* Open: the next read of the chain names what the phone can. */
+    device.setChainNamer((blocks) => nameOwnBlocks(blocks, rig.getState().deviceSlug, true))
+    log.length = 0
+    await rig.refreshBlocks()
+    s = rig.getState()
+    assert.deepEqual(s.blocks.map((b) => b.effectId), [118, 142, 206, 207, 195, 202, 58], 'Play leaves out a block the phone named')
+    const nam = s.blocks.find((b) => b.effectId === 206)
+    assert.deepEqual([nam.slug, nam.name, nam.bypassed, nam.channel, nam.knobs], ['nam', 'NAM 1', false, 'B', false])
+    /* The whole chain still has all nine, the RTA and the stranger as they were. */
+    assert.deepEqual(s.allBlocks.map((b) => b.effectId), [118, 142, 174, 206, 207, 195, 202, 208, 58])
+    assert.deepEqual(s.allBlocks.filter((b) => b.unknown && !b.onPlay).map((b) => b.effectId), [174, 208])
+    /* The log names only what is still nobody's. */
+    const said = log.filter((l) => /no name for yet/.test(l.message)).map((l) => l.message)
+    assert.equal(said.length, 1)
+    assert.match(said[0], /eid_174 \(id 174\)[^;]*; eid_208 \(id 208\)/)
+    assert.ok(!/206|207|195|142|202/.test(said[0]), said[0])
+
+    /* Edit, the scenes and the control search still leave them out; the chain editor still holds their cells. */
+    const { knownBlocks } = await import('../shared/new-block.mjs')
+    assert.deepEqual(knownBlocks(s.allBlocks).map((b) => b.effectId), [118, 58])
+    assert.deepEqual(device.knobBlocks(s.allBlocks).map((b) => b.effectId), [118, 58])
+    const { lanesFor } = await import('../shared/grid-plan.mjs')
+    const lane = lanesFor(s.allBlocks, { grid: { rows: 6, cols: 14 } }).find((l) => l.row === 1)
+    for (const col of [2, 3, 4, 5, 6, 7, 8]) assert.ok(!lane.gaps.includes(col), `the cell of a named block (column ${col}) is offered as free`)
+
+    /* A tap: the engine's own route, by the block's own id. Off, then on. And its channel. */
+    assert.equal(await rig.writeBypass(206, true), true, 'a tap on the NAM was refused')
+    assert.equal(asked('POST /preset/blocks/206/bypass'), 1)
+    assert.equal(rig.getState().blocks.find((b) => b.effectId === 206).bypassed, true)
+    assert.equal(await rig.writeBypass(207, false), true)
+    assert.equal(asked('POST /preset/blocks/207/bypass'), 1)
+    /* Nothing was asked of it but that: no knobs, no type, no params. */
+    assert.equal(asked(/\/preset\/blocks\/(206|207|195|142|202)\/(params|type)/), 0)
+    assert.equal(asked(/\/blocks\/(nam|irplayer|crossover|dynadist)\//), 0)
+
+    /* A namer only names: one that drops a block, or answers something that is no list, is not listened to. */
+    for (const bad of [(blocks) => blocks.slice(1), () => null, () => 'nam']) {
+      device.setChainNamer(bad)
+      await rig.refreshBlocks()
+      assert.deepEqual(rig.getState().allBlocks.map((b) => b.effectId), [118, 142, 174, 206, 207, 195, 202, 208, 58])
+      assert.deepEqual(rig.getState().blocks.map((b) => b.effectId), [118, 58])
+    }
+    /* The namer taken away (a sign-out, another account): the next read is as it was. */
+    device.setChainNamer(null)
+    await rig.refreshBlocks()
+    assert.deepEqual(rig.getState().blocks.map((b) => b.effectId), [118, 58])
+
+    /* On an FM3 the same namer names nothing: the ids are not its own. */
+    const three = await rigOnTheBench({ blocks: III_FROM_THE_COMPUTER() })
+    three.device.setChainNamer((blocks) => nameOwnBlocks(blocks, three.rig.getState().deviceSlug, true))
+    await three.rig.refreshBlocks()
+    assert.equal(three.rig.getState().deviceSlug, 'fm3')
+    assert.deepEqual(three.rig.getState().blocks.map((b) => b.effectId), [118, 58])
+  })
+
   test('the preset report never says every block is off over a new block that is on', async () => {
     const { silenceFaults, formatPresetReport } = await import('../src/lib/presetReport.js')
     const blocks = [
@@ -4514,7 +4652,7 @@ export function run(test) {
        but what it filters is checked against the real list above. */
     assert.match(
       device,
-      /export const stageBlocks = \(blocks\) =>\s*\(blocks \|\| \[\]\)\.filter\(\(b\) => b && !isNewBlock\(b\) && !STAGE_HIDDEN\.includes\(b\.slug\)\)/,
+      /export const stageBlocks = \(blocks\) =>\s*\(blocks \|\| \[\]\)\.filter\(\(b\) => b && \(!isNewBlock\(b\) \|\| b\.onPlay === true\) && !STAGE_HIDDEN\.includes\(b\.slug\)\)/,
       'the stage list is no longer the chain less the three you never kick'
     )
 
@@ -4570,7 +4708,7 @@ export function run(test) {
     assert.match(read('desktop/forgefx.lock.json'), /\+am4scenes/, 'the computer app does not carry the device server that answers /presets/{n}/scenes')
     assert.match(
       device,
-      /export async function presetBlocks\(\) \{[\s\S]*?const marked = markNewBlocks\(list\)\s*sayNewBlocks\(marked\)\s*return marked\s*\}/,
+      /export async function presetBlocks\(\) \{[\s\S]*?const marked = markNewBlocks\(list\)[\s\S]*?const named = chainNamer \? chainNamer\(marked\) : marked[\s\S]*?const out = Array\.isArray\(named\) && named\.length === marked\.length \? named : marked\s*sayNewBlocks\(out\)\s*return out\s*\}/,
       'the read itself is filtering again, so the edit screen cannot see the ends of the chain'
     )
 
