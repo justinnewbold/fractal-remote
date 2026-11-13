@@ -1874,6 +1874,24 @@ iPad is not offered one), the feature names "Phone remote" and the computer's
 sentences in shared/vp4-safety.mjs, which are the computer's own word for
 word.
 
+**Over Bluetooth, an answer can be the question's own bytes.** A customer's
+FM3 log (13 November 2026) had "no answer to the blocks in 1500 ms" and
+Play's "The unit did not answer in time." on one preset, twice, with
+everything around it answered. "Which blocks?" is the status frame with
+nothing in it, and a preset with no blocks answers with the same frame, so
+the echo guard (bleWire, for MIDI Thru) dropped the unit's answer as the
+phone's own message coming back. A question may now say what its own bytes
+coming back mean (`opts.same`; only the blocks question does): taken at once
+where nothing has echoed on that connection, on the second copy where
+something has, and never from a unit that has answered nothing else. That
+the customer's preset was empty is the reading that fits, not something the
+log proves. The same log's "the unit refused the tuner page: the message
+arrived damaged" was 64 12 00 after every open and close of an FM3's tuner
+page, with every checksum right: it is written down as what it is now, not
+as a refusal. And on an iPhone whose adapter has gone, the waiting screen
+offers Look for the adapter again from the first try that misses it
+(lib/bluetooth `useAdapterGone`), not after fifteen seconds.
+
 **The phone and the browser share one relay allowlist.** `shared/relay-rules.mjs`
 is the source; `mobile/src/lib/relay-rules.js` is generated from it by
 `npm run sync:rules` and a test fails if it is stale. Never hand-edit the
