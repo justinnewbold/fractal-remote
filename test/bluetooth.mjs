@@ -219,7 +219,9 @@ function fakeGen3(sx, o) {
     settings: o.settings ?? new Map(),
     /* Every question the reader asked it (lib/gen3-describe), in order. */
     described: [],
-    edits: []
+    edits: [],
+    /* Every preset it was told to save its edit buffer over (fn 0x01, 26 00), in order. `refuseSave` answers a refusal instead. */
+    saved: []
   }
   const nameBytes = (name) => {
     const b = [...name].map((c) => c.charCodeAt(0))
@@ -335,6 +337,11 @@ function fakeGen3(sx, o) {
         const eid = sx.decode14(p[2], p[3])
         const pid = sx.decode14(p[4], p[5])
         const v = sx.fromSeptets32(p, 6)
+        if (sub === 0x26) {
+          if (opt.refuseSave) return reply(0x64, [0x01, opt.refuseSave])
+          state.saved.push(v)
+          return
+        }
         if (sub === 0x24) state.scene = v
         else if (sub === 0x16) find(eid).channel = v
         else if (sub === 0x27) {
@@ -556,7 +563,9 @@ function fakeAm4(sx, o) {
      * one, is what the real one froze on, and freezes this one.
      */
     settings: o.settings ?? new Map(),
-    edits: []
+    edits: [],
+    /* Every location it was told to save its edit buffer over (action 0x1B), in order. */
+    saved: []
   }
   /* Whether a register belongs to a block in the preset now: its own code, or the first amp's cab section. */
   const registerHere = (reg) => state.slots.includes(reg) || (reg === 0x3e && state.slots.includes(0x3a))
@@ -654,6 +663,17 @@ function fakeAm4(sx, o) {
       }
       state.frozen = true
       state.unknown.push(b)
+      return
+    }
+    /*
+     * Its save (action 0x1B at register 0, a location and nothing else): the
+     * message ForgeFX sends an AM4 for Save, recorded off a real one. Taken
+     * only in exactly that shape; anything else unexpected still stops it
+     * answering, below.
+     */
+    if (b[4] === 0x15 && b[5] === 0x01 && b.length === 23 && sx.decode14(b[10], b[11]) === 0x1b && sx.decode14(b[6], b[7]) === 0 && sx.decode14(b[8], b[9]) === 0 && sx.decode14(b[12], b[13]) === 0 && sx.decode14(b[14], b[15]) === 4 && sx.checksumOk(b)) {
+      if (state.frozen) return
+      state.saved.push(sx.am4ReadU32(b, 16))
       return
     }
     if (!sx.isAllowedAm4(b) && !editFrame(b)) {
@@ -828,6 +848,7 @@ async function onTheLine(kind, options = {}) {
       edit: options.edit,
       reader: options.reader,
       namKnobs: options.namKnobs,
+      save: options.save,
       send: (b) => {
         if (line.gone || line.refuses?.(b)) return false
         sent.push({ at: clock.now(), bytes: [...b] })
@@ -5373,7 +5394,7 @@ export function run(test) {
     assert.deepEqual(imports(read('fractal-sysex.mjs')), [], 'the codec imports something')
     assert.deepEqual(imports(read('bleSwitch.js')), [], 'the switch imports something')
     /* The gear file's words (presetMissLine) are plain data with no imports of their own, and so are Play's settle waits (own-echo, for REREAD_MAX_MS). */
-    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './axefx3-edit.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3Catalog.js', './own-echo.js'])
+    assert.deepEqual(imports(read('bleWire.js')).sort(), ['./am4-edit.js', './axefx3-edit.js', './bleSave.js', './bleVp4.js', './bluetooth-gear.js', './chain-outline.js', './fm3-edit.js', './fm9-edit.js', './fractal-sysex.mjs', './gen3-describe.js', './gen3Catalog.js', './own-echo.js'])
     /* The developer's block reader (test/gen3-describe.mjs): the frame helpers and nothing else, so it reaches the unit only through the wire it is handed to. */
     assert.deepEqual(imports(read('gen3-describe.js')), ['./fractal-sysex.mjs'], 'the block reader imports something')
     assert.deepEqual(imports(read('own-echo.js')), [], 'Play’s settle waits import something')
@@ -6982,7 +7003,7 @@ export function run(test) {
     /* Editing first, by the switch, from the one place its words live (lib/editWords): closed, today's words. */
     const ew = await import('../mobile/src/lib/editWords.js')
     assert.equal(ew.editingLine(false), 'No editing or saving over Bluetooth.')
-    assert.match(flat('mobile/src/screens/Bluetooth.js'), /\{\[editingLine\(editOpen\), \.\.\.DIFFERENT\]\.map\(/)
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /\{\[editingLine\(editOpen, saves\), \.\.\.DIFFERENT\]\.map\(/)
     assert.match(different, /Slower to load the preset list\./)
     /*
      * And on a VP4 too: over Bluetooth it gets presets and scenes only, and
@@ -7869,11 +7890,11 @@ export function run(test) {
     assert.match(page, /const pickable = units\.some\(\(u\) => u\.name === b\.answeredAs\)/)
   })
 
-  test('over Bluetooth nothing is marked unsaved, so no Save button appears that cannot work', () => {
+  test('over Bluetooth nothing is marked unsaved where the app cannot save, so no Save button appears that cannot work', () => {
     const rig = flat('mobile/src/lib/rig.js')
     assert.match(
       rig,
-      /const unsaved = pendingFor\(number\) \/\*[^*]*\*\/ if \(state\.capabilities\?\.via === 'bluetooth'\) return \/\*/,
+      /const unsaved = pendingFor\(number\) \/\*[^*]*\*\/ if \(state\.capabilities\?\.via === 'bluetooth' && state\.capabilities\?\.supportsSave !== true\) return \/\*/,
       'noteEdited marks a Bluetooth preset as unsaved'
     )
   })
@@ -9431,9 +9452,9 @@ export function run(test) {
     assert.match(ways, /\{b\.unit \? <Hint>\{ONE_AT_A_TIME\}<\/Hint> : null\} \{b\.unit \? <Hint>\{SELLERS_LINE\}<\/Hint> : null\}/)
     /* What Bluetooth can't do: the paragraph, and the list of what is different from USB. */
     const limits = page.slice(page.indexOf('export function BluetoothLimits('), page.indexOf('function Bullet('))
-    assert.ok(limits.includes('{vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen)}'))
+    assert.ok(limits.includes('{vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen, saves)}'))
     assert.ok((await import('../mobile/src/lib/editWords.js')).LIMITS_CLOSED.endsWith('with no computer. No editing or saving.'))
-    assert.ok(limits.includes('<Heading>What’s different from USB</Heading> {[editingLine(editOpen), ...DIFFERENT].map('))
+    assert.ok(limits.includes('<Heading>What’s different from USB</Heading> {[editingLine(editOpen, saves), ...DIFFERENT].map('))
     /* The usual reason a connected adapter hears nothing: the plugs swapped. */
     assert.match(page, /\{quiet && !footswitch && \(!cable \|\| jacks\) \? <Hint>\{PLUGS_CHECK\}<\/Hint> : null\}/)
 
@@ -11750,6 +11771,239 @@ export function run(test) {
   })
 
   /*
+   * SAVING FROM THE PHONE (mobile/src/lib/bleSave.js, bleWire storePreset).
+   * "It still says we can't save in Bluetooth when you pull up the quick
+   * edit menus and stuff. Please enable that and remove the warning."
+   * (Justin, 13 November 2026.) The computer app's own save, byte for byte,
+   * only over the preset the unit says it is on, his account first.
+   */
+  test('saving over Bluetooth: the two messages are the computer app’s own, byte for byte, and the way out passes one only as the save being sent over that preset', async () => {
+    const sx = await import(SX)
+    const s = await import('../mobile/src/lib/bleSave.js')
+    const { gen3Sender, am4Sender } = await import(WIRE)
+    /* forgefx-midi at the pinned commit: createModernFractalCodec(model).buildStorePreset(n), and buildSaveToLocation(n). */
+    const CODEC = [
+      [0x10, 0, 'F0 00 01 74 10 01 26 00 00 00 00 00 00 00 00 00 00 00 00 00 00 32 F7'],
+      [0x10, 1, 'F0 00 01 74 10 01 26 00 00 00 00 00 01 00 00 00 00 00 00 00 00 33 F7'],
+      [0x10, 127, 'F0 00 01 74 10 01 26 00 00 00 00 00 7F 00 00 00 00 00 00 00 00 4D F7'],
+      [0x10, 128, 'F0 00 01 74 10 01 26 00 00 00 00 00 00 01 00 00 00 00 00 00 00 33 F7'],
+      [0x10, 383, 'F0 00 01 74 10 01 26 00 00 00 00 00 7F 02 00 00 00 00 00 00 00 4F F7'],
+      [0x10, 511, 'F0 00 01 74 10 01 26 00 00 00 00 00 7F 03 00 00 00 00 00 00 00 4E F7'],
+      [0x11, 0, 'F0 00 01 74 11 01 26 00 00 00 00 00 00 00 00 00 00 00 00 00 00 33 F7'],
+      [0x11, 1, 'F0 00 01 74 11 01 26 00 00 00 00 00 01 00 00 00 00 00 00 00 00 32 F7'],
+      [0x11, 128, 'F0 00 01 74 11 01 26 00 00 00 00 00 00 01 00 00 00 00 00 00 00 32 F7'],
+      [0x11, 511, 'F0 00 01 74 11 01 26 00 00 00 00 00 7F 03 00 00 00 00 00 00 00 4F F7'],
+      [0x12, 127, 'F0 00 01 74 12 01 26 00 00 00 00 00 7F 00 00 00 00 00 00 00 00 4F F7'],
+      [0x12, 383, 'F0 00 01 74 12 01 26 00 00 00 00 00 7F 02 00 00 00 00 00 00 00 4D F7'],
+      [0x15, 0, 'F0 00 01 74 15 01 00 00 00 00 1B 00 00 00 04 00 00 00 00 00 00 0E F7'],
+      [0x15, 1, 'F0 00 01 74 15 01 00 00 00 00 1B 00 00 00 04 00 00 40 00 00 00 4E F7'],
+      [0x15, 3, 'F0 00 01 74 15 01 00 00 00 00 1B 00 00 00 04 00 01 40 00 00 00 4F F7'],
+      [0x15, 4, 'F0 00 01 74 15 01 00 00 00 00 1B 00 00 00 04 00 02 00 00 00 00 0C F7'],
+      [0x15, 50, 'F0 00 01 74 15 01 00 00 00 00 1B 00 00 00 04 00 19 00 00 00 00 17 F7'],
+      [0x15, 103, 'F0 00 01 74 15 01 00 00 00 00 1B 00 00 00 04 00 33 40 00 00 00 7D F7']
+    ]
+    for (const [model, slot, bytes] of CODEC) {
+      const made = s.buildSave(model, slot)
+      assert.equal(hex(made), bytes, `0x${model.toString(16)} preset ${slot}`)
+      assert.ok(sx.checksumOk(made))
+      assert.equal(s.saveShaped(made, model), true)
+      /* Only as the save over that one preset: the next one along, none, or another model's, is not it. */
+      assert.equal(s.saveAllowed(made, model, slot), true)
+      for (const other of [slot + 1, slot - 1, null, undefined, String(slot), 1.5]) assert.equal(s.saveAllowed(made, model, other), false, `0x${model.toString(16)} ${slot} passes as the save over ${other}`)
+      for (const m of [0x10, 0x11, 0x12, 0x15].filter((x) => x !== model)) assert.equal(s.saveAllowed(made, m, slot), false)
+    }
+    /* No save is built for a slot no unit has, a unit with none, or a VP4 (which has no model here at all). */
+    for (const [model, slot] of [[0x11, -1], [0x11, 1024], [0x11, 1.5], [0x11, '5'], [0x15, 104], [0x15, -1], [0x14, 5], [undefined, 5], [0x11, undefined]]) assert.equal(s.buildSave(model, slot), null, `${model} ${slot}`)
+    assert.throws(() => s.buildGen3Store(0x15, 5), /not a unit a save is built for/)
+    assert.throws(() => s.buildAm4Save(104), /not 0\.\.103/)
+    /* What has the shape and what does not: everything Play and Edit already send is not a save. */
+    const g3 = await import('../mobile/src/lib/gen3-edit.js')
+    for (const f of [g3.buildKnob(0x11, 58, 1, 0.5), g3.buildTyped(0x11, 58, 1, 3), g3.buildReadAll(0x11, 58), sx.buildGetScene(0x11), sx.buildStatusDump(0x11)]) assert.equal(s.saveShaped(f, 0x11), false, hex(f))
+    for (const f of [sx.buildAm4Structure(), sx.buildAm4Scene(2), sx.buildAm4Preset(7), sx.buildAm4StoredName(7)]) assert.equal(s.saveShaped(f, 0x15), false, hex(f))
+    for (const none of [null, undefined, [], [0xf0], 'F0']) assert.equal(s.saveShaped(none, 0x11), false)
+    /* And the AM4's own lists know no save: it goes only by the rule here. */
+    const am4Edit = await import('../mobile/src/lib/am4-edit.js')
+    assert.equal(sx.am4Allowed(s.buildSave(0x15, 5)), null, 'a save is on the list of what an AM4 is always sent')
+    assert.equal(am4Edit.am4EditAllowed(s.buildSave(0x15, 5), [0x3a, 0x76]), null, 'a save passes as one of Edit’s')
+
+    /* THE WAY OUT, gen 3: nothing of the shape with no save going; the one save while it is; never another preset's. */
+    for (const model of [0x10, 0x11, 0x12]) {
+      const went = []
+      let saving = null
+      const send = gen3Sender((b) => went.push(b), () => {}, model, () => [58], () => null, () => false, () => saving)
+      const twelve = s.buildSave(model, 12)
+      const thirteen = s.buildSave(model, 13)
+      assert.equal(send(twelve), 'refused', 'a save went with no save being sent')
+      saving = 12
+      assert.equal(send(thirteen), 'refused', 'a save over another preset went')
+      assert.equal(send(twelve), 'sent')
+      saving = null
+      assert.equal(send(twelve), 'refused', 'the gate was asked once, not at each send')
+      assert.deepEqual(went, [twelve])
+      /* A sender never told about saving, as every caller before this made it: closed. */
+      const untold = gen3Sender((b) => went.push(b), () => {}, model, () => [58])
+      assert.equal(untold(twelve), 'refused')
+      /* And what went before still goes: a scene read, with or without a save going. */
+      assert.equal(send(sx.buildGetScene(model)), 'sent')
+    }
+    /* THE WAY OUT, an AM4: the same. */
+    {
+      const went = []
+      let saving = null
+      const send = am4Sender((b) => went.push(b), () => {}, () => null, () => null, () => saving)
+      const five = s.buildSave(0x15, 5)
+      assert.equal(send(five), 'refused')
+      saving = 6
+      assert.equal(send(five), 'refused')
+      saving = 5
+      assert.equal(send(five), 'sent')
+      saving = null
+      assert.equal(send(five), 'refused')
+      assert.equal(am4Sender((b) => went.push(b))(five), 'refused')
+      assert.deepEqual(went, [five])
+      assert.equal(send(sx.buildAm4Structure()), 'sent', 'the AM4’s own reads are held by the save’s gate')
+    }
+    /* Pure: the phone's own byte helpers and nothing else. */
+    assert.equal(src('mobile/src/lib/bleSave.js').match(/^import .*$/gm).join('\n'), "import { AM4, FN, MODELS, am4Frame, am4U32, encode14, frame, sameBytes } from './fractal-sysex.mjs'")
+    /* The words promise nothing and name no device. */
+    for (const said of [s.SAVE_NOT_OPEN, s.saveElsewhere(13), s.saveElsewhere(null)]) assert.ok(said.length > 20 && !/\byet\b|coming|beta|soon|this phone|Bluetooth/i.test(said), said)
+    assert.notEqual(s.saveElsewhere(13), s.saveElsewhere(null))
+  })
+
+  test('saving over Bluetooth on the wire: the unit is asked which preset it is on, then sent the one save over it; closed, moved or refused, nothing is saved and the reason is said', async () => {
+    const s = await import('../mobile/src/lib/bleSave.js')
+    const sx = await import(SX)
+    for (const [kind, model, at] of [['fm3', 0x11, 12], ['fm9', 0x12, 12], ['axefx3', 0x10, 12]]) {
+      let open = true
+      let edit = true
+      const t = await onTheLine(kind, { edit: () => edit, save: () => open })
+      const save = (n) => drive(t.clock, t.wire.storePreset(n))
+      const saves = () => t.frames().filter((f) => s.saveShaped(f, model))
+      /* The wire says it can, where Edit and saving are both open to the account. */
+      assert.equal((await t.get('/device/detect')).capabilities.supportsSave, true, kind)
+      /* A save: the preset asked for first, on this connection, then the one frame. */
+      t.sent.length = 0
+      assert.deepEqual(await save(at), { ok: true, number: at }, kind)
+      assert.deepEqual(t.unit.state.saved, [at])
+      const out = t.frames().filter((f) => f[0] === 0xf0)
+      assert.equal(hex(out.at(-1)), hex(s.buildSave(model, at)), `${kind}: the save was not the last thing sent`)
+      assert.ok(out.slice(0, -1).some((f) => hex(f) === hex(sx.buildGetPreset(model))), `${kind}: the unit was not asked which preset it is on before the save`)
+      assert.equal(saves().length, 1)
+      assert.ok(t.logs.some((l) => l === `saved over preset ${at}`), t.logs.slice(-4).join(' | '))
+      /* The unit has moved on (a footswitch): nothing is saved, and Save says so. */
+      t.unit.state.preset = 13
+      t.sent.length = 0
+      await assert.rejects(save(at), (e) => e.message === s.saveElsewhere(13) && e.status === 409, `${kind}: a save went over a preset the unit had left`)
+      assert.equal(saves().length, 0)
+      assert.deepEqual(t.unit.state.saved, [at])
+      t.unit.state.preset = at
+      /* Nothing to save over: never a frame. */
+      for (const bad of [-1, 1.5, '12', null, undefined, 5000]) await assert.rejects(save(bad), (e) => e.status === 400, `${kind}: ${bad}`)
+      assert.equal(saves().length, 0)
+      /* Closed to the account, or with Edit closed: refused in words, and the wire says it cannot. */
+      open = false
+      t.sent.length = 0
+      await assert.rejects(save(at), (e) => e.message === s.SAVE_NOT_OPEN && e.status === 403)
+      assert.equal(t.frames().length, 0, `${kind}: something was sent for a save that is closed`)
+      assert.equal((await t.get('/device/detect')).capabilities.supportsSave, false)
+      open = true
+      edit = false
+      await assert.rejects(save(at), (e) => e.message === s.SAVE_NOT_OPEN)
+      assert.equal((await t.get('/device/detect')).capabilities.supportsSave, false, `${kind}: saving is offered where Edit is closed`)
+      edit = true
+      assert.deepEqual(t.unit.state.saved, [at])
+    }
+    /* A wire never told about saving, as every caller before this made it: closed. */
+    const plain = await onTheLine('fm3', { edit: () => true })
+    assert.equal((await plain.get('/device/detect')).capabilities.supportsSave, false)
+    await assert.rejects(drive(plain.clock, plain.wire.storePreset(12)), (e) => e.message === s.SAVE_NOT_OPEN)
+    /* The unit's own refusal is said as one, and nothing is taken as saved. */
+    const no = await onTheLine('fm3', { edit: () => true, save: () => true, refuseSave: 0x04 })
+    await assert.rejects(drive(no.clock, no.wire.storePreset(12)), /The unit refused it/)
+    assert.deepEqual(no.unit.state.saved, [])
+    /* A unit that does not say which preset it is on: nothing is sent. */
+    const quiet = await onTheLine('fm3', { edit: () => true, save: () => true })
+    quiet.unit.state.preset = 12
+    const answers = quiet.unit.hear
+    quiet.unit.hear = (b) => (b[5] === 0x0d ? undefined : answers(b))
+    quiet.sent.length = 0
+    await assert.rejects(drive(quiet.clock, quiet.wire.storePreset(12)), (e) => e.message === s.saveElsewhere(null))
+    assert.equal(quiet.frames().filter((f) => s.saveShaped(f, 0x11)).length, 0)
+
+    /* AN AM4: its structure read afresh for the location, then the one save. */
+    let open = true
+    const a = await onTheLine('am4', { edit: () => true, save: () => open })
+    const asave = (n) => drive(a.clock, a.wire.storePreset(n))
+    assert.equal((await a.get('/device/detect')).capabilities.supportsSave, true)
+    a.sent.length = 0
+    assert.deepEqual(await asave(5), { ok: true, number: 5 })
+    assert.deepEqual(a.unit.state.saved, [5])
+    const sent = a.frames().filter((f) => f[0] === 0xf0)
+    assert.equal(hex(sent.at(-1)), hex(s.buildSave(0x15, 5)))
+    assert.ok(sent.slice(0, -1).some((f) => hex(f) === hex(sx.buildAm4Structure())), 'the AM4 was not asked where it is before the save')
+    /* Asked again each time, never from the copy kept a moment ago: it has moved, and nothing is saved. */
+    a.unit.state.location = 9
+    a.sent.length = 0
+    await assert.rejects(asave(5), (e) => e.message === s.saveElsewhere(9))
+    assert.equal(a.frames().filter((f) => s.saveShaped(f, 0x15)).length, 0)
+    assert.ok(a.frames().some((f) => hex(f) === hex(sx.buildAm4Structure())), 'the AM4’s location came from a copy kept a moment ago')
+    assert.deepEqual(a.unit.state.saved, [5])
+    await assert.rejects(asave(104), (e) => e.status === 400)
+    open = false
+    await assert.rejects(asave(9), (e) => e.message === s.SAVE_NOT_OPEN)
+    assert.deepEqual(a.unit.state.saved, [5])
+
+    /* A VP4 has no save at all: its wire has no such thing, and says it cannot. */
+    const { createBleWire } = await import(WIRE)
+    const vp4 = createBleWire({ unit: 'vp4', send: () => true, save: () => true, edit: () => true })
+    assert.equal(vp4.storePreset, undefined, 'a VP4’s wire can be told to save')
+    assert.match(src('mobile/src/lib/bleVp4.js'), /supportsSave: false,/)
+  })
+
+  test('saving over Bluetooth is his account’s alone: one switch, the Save button’s own path, a change that counts as unsaved, and no note where the app saves', async () => {
+    assert.match(src('mobile/src/lib/features.js'), /^export const SAVE_OVER_BLUETOOTH_FOR_EVERYONE = false$/m, 'saving over Bluetooth is open to every account before he has saved from his phone, and before a store version says so')
+    const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
+    assert.match(ble, /export const saveOverBluetooth = \(\) => allUnits === true \|\| SAVE_OVER_BLUETOOTH_FOR_EVERYONE/)
+    assert.equal((ble.match(/SAVE_OVER_BLUETOOTH_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
+    /* The wire wants Edit open too, and asks both at every request. */
+    const wire = code('mobile/src/lib/bleWire.js').replace(/\s+/g, ' ')
+    assert.match(wire, /const saveOn = \(\) => editOn\(\) && typeof save === 'function' && save\(\) === true/)
+    assert.match(wire, /supportsSave: saveOn\(\)/)
+    assert.match(wire, /if \(!saveOn\(\)\) throw failure\(SAVE_NOT_OPEN, 403\)/)
+    assert.match(wire, /savingSlot = slot let answer try \{ answer = await fire\(out, `the save over preset \$\{slot\}`\) \} finally \{ savingSlot = null \}/, 'the way out is left open to a save after the save')
+    assert.match(wire, /\(\) => \(saveOn\(\) \? savingSlot : null\)/)
+    /* Handed to the wire directly, never as the computer's route, which a phone is refused. */
+    const device = code('mobile/src/lib/device.js').replace(/\s+/g, ' ')
+    assert.match(device, /export async function saveOnWire\(slot\) \{ const wire = bluetoothWire\(\) if \(!wire \|\| typeof wire\.storePreset !== 'function'\) return null return wire\.storePreset\(slot\) \}/)
+    assert.ok(!/preset\/store/.test(code('mobile/src/lib/bleWire.js')), 'the wire answers the computer’s save route')
+    /* The Save button: the VP4 and the "still on this preset" checks first, then the wire's save in place of a request left for a computer. */
+    const sheet = code('mobile/src/components/SaveToSlot.js').replace(/\s+/g, ' ')
+    assert.match(sheet, /if \(caps\?\.via === 'bluetooth'\) \{ let said try \{ const res = caps\?\.supportsSave === true \? await saveOnWire\(preset\?\.number\) : null if \(!res\?\.ok\) throw new Error\(SAVE_NOT_OPEN\) savedToSlot\(res\.number\)/)
+    assert.ok(sheet.indexOf('if (isVp4(slug))') < sheet.indexOf("if (caps?.via === 'bluetooth')"), 'a VP4 is asked to save over Bluetooth')
+    assert.ok(sheet.indexOf('await stillOnPreset(currentPreset, preset?.number)') < sheet.indexOf("if (caps?.via === 'bluetooth')"), 'the unit is not asked where it is before a save on its own wire')
+    assert.ok(sheet.indexOf("if (caps?.via === 'bluetooth')") < sheet.indexOf('const run = startComputerSave({'), 'a request is left for a computer that is not there')
+    /* A change counts as unsaved only where the wire says the app can save. */
+    assert.match(flat('mobile/src/lib/rig.js'), /if \(state\.capabilities\?\.via === 'bluetooth' && state\.capabilities\?\.supportsSave !== true\) return/)
+    /* THE NOTE that says a change is not kept unless it is saved on the unit: not drawn where the app saves, in Edit, the panel and the hold pop-up. */
+    const ew = await import('../mobile/src/lib/editWords.js')
+    assert.equal(ew.editNoteUp({ viaBle: true, up: true, saves: false }), true)
+    assert.equal(ew.editNoteUp({ viaBle: true, up: true }), true)
+    assert.equal(ew.editNoteUp({ viaBle: true, up: true, saves: true }), false, 'the note says the app cannot save where it can')
+    assert.equal(ew.editNoteUp({ viaBle: true, up: false }), false)
+    assert.equal(ew.editNoteUp({ viaBle: false, up: true }), false)
+    assert.equal(ew.editNoteUp(), false)
+    for (const v of [1, 'yes', null, undefined]) assert.equal(ew.editNoteUp({ viaBle: true, up: true, saves: v }), true, 'anything but a yes takes the note away')
+    for (const f of ['mobile/src/screens/Edit.js', 'mobile/src/components/BlockSide.js', 'mobile/src/components/PopKnobs.js']) {
+      const text = code(f).replace(/\s+/g, ' ')
+      assert.match(text, /\{editNoteUp\(\{ viaBle, up: bleNoteUp, saves: caps\?\.supportsSave === true \}\) \? \(/, f)
+      assert.ok(!/\{viaBle && bleNoteUp \? \(/.test(text), `${f} still draws the note by itself`)
+    }
+    /* The Bluetooth page: Save in what Edit does, and no line about saving, for an account it is open to. */
+    const page = code('mobile/src/screens/Bluetooth.js').replace(/\s+/g, ' ')
+    assert.match(page, /const saves = editOpen && saveOverBluetooth\(\)/)
+  })
+
+  /*
    * "Open them to everyone" (Justin, 13 November 2026, after "Knobs all work
    * over Bluetooth correctly" on his own Axe-Fx III): the NAM block's knobs
    * are every account's. The other five blocks in the hand-written list have
@@ -11763,8 +12017,8 @@ export function run(test) {
     assert.deepEqual([f.NAM_KNOBS_FOR_EVERYONE, f.OWN_KNOBS_FOR_EVERYONE], [true, false])
     /* lib/bluetooth hands the wire the level: all of the list for his account (allUnits), the NAM block for everybody. Beside Edit's own door and the reader's. */
     const ble = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
-    assert.match(ble, /import \{ NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE \} from '\.\/features'/)
-    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, namKnobs: \(\) => ownKnobsLevel\(allUnits === true\) \}\)/)
+    assert.match(ble, /import \{ NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE \} from '\.\/features'/)
+    assert.match(ble, /edit: \(\) => editOverBluetooth\(unit\), reader: \(\) => allUnits === true, namKnobs: \(\) => ownKnobsLevel\(allUnits === true\), save: \(\) => saveOverBluetooth\(\) \}\)/)
     assert.match(ble, /export const ownKnobsLevel = \(admin\) => \(admin === true \|\| OWN_KNOBS_FOR_EVERYONE \? true : NAM_KNOBS_FOR_EVERYONE \? 'nam' : false\)/)
     assert.equal((ble.match(/NAM_KNOBS_FOR_EVERYONE/g) || []).length, 2, 'the switch is read somewhere else in lib/bluetooth')
     assert.equal((ble.match(/OWN_KNOBS_FOR_EVERYONE/g) || []).length, 2)
@@ -12445,7 +12699,7 @@ export function run(test) {
     const edit = flat('mobile/src/screens/Edit.js')
     assert.match(edit, /const viaBle = overBluetooth\(caps\)/)
     /* Up until its cross is pressed: "Make it so that this is a dismissible thing ... until they hit like an X". */
-    assert.match(edit, /\{viaBle && bleNoteUp \? \( <Note onDismiss=\{\(\) => \{ setBleNoteUp\(false\) markBleEditNote\(\) \}\} > \{onCable \? CABLE_EDIT_NOTE : BLE_NOTE\} <\/Note> \) : null\}/)
+    assert.match(edit, /\{editNoteUp\(\{ viaBle, up: bleNoteUp, saves: caps\?\.supportsSave === true \}\) \? \( <Note onDismiss=\{\(\) => \{ setBleNoteUp\(false\) markBleEditNote\(\) \}\} > \{onCable \? CABLE_EDIT_NOTE : BLE_NOTE\} <\/Note> \) : null\}/)
     /* On a unit's own USB cable, the same wire: the note says the cable, never Bluetooth, and the same no saving. */
     assert.match(edit, /const onCable = useCableNow\(\)/)
     const { CABLE_EDIT_NOTE } = await import('../mobile/src/lib/cableWords.js')
@@ -12566,9 +12820,18 @@ export function run(test) {
     assert.equal(ew.editingLine(true), 'No saving over Bluetooth: save on the unit itself. Moving, adding and removing blocks, modifiers, renaming and copying a channel need the computer.')
     assert.equal(ew.limitsLine(true), 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. In Edit: knobs, models and effects on and off.')
     assert.ok(!ew.limitsLine(true).includes(ew.editingLine(true)), 'the page says the same sentence twice')
-    /* Saving is still the computer's: the page may not promise it while the wire says it cannot. */
-    assert.match(src('mobile/src/lib/bleWire.js'), /supportsSave: false/)
+    /* Saving is the app's only where the wire says so (lib/bleSave, his account until a store version): the page may not promise it anywhere else. */
+    assert.match(src('mobile/src/lib/bleWire.js'), /supportsSave: saveOn\(\)/)
     assert.match(ew.editingLine(true), /^No saving over Bluetooth/)
+    assert.match(ew.editingLine(true, false), /^No saving over Bluetooth/)
+    /* And where it does: Save joins what Edit does, and the list's first line says nothing of saving. The rest of each line is word for word the same. */
+    assert.equal(ew.editingLine(true, true), 'Moving, adding and removing blocks, modifiers, renaming and copying a channel need the computer.')
+    assert.equal(ew.limitsLine(true, true), 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer. In Edit: knobs, models, effects on and off, and Save.')
+    assert.equal(ew.editingLine(true), `No saving over Bluetooth: save on the unit itself. ${ew.editingLine(true, true)}`)
+    for (const v of [undefined, null, 0, 'yes', 1]) assert.equal(ew.editingLine(true, v), ew.EDITING_LINE, 'anything but a yes saves')
+    /* Closed is closed whatever saving says. */
+    assert.equal(ew.editingLine(false, true), ew.NO_EDITING_LINE)
+    assert.equal(ew.limitsLine(false, true), ew.LIMITS_CLOSED)
     /* Anything but a yes is closed. */
     for (const v of [undefined, null, 0, 'yes', 1]) {
       assert.equal(ew.editingLine(v), ew.NO_EDITING_LINE)
@@ -12593,8 +12856,8 @@ export function run(test) {
     const page = flat('mobile/src/screens/Bluetooth.js')
     const limits = page.slice(page.indexOf('export function BluetoothLimits('), page.indexOf('function Bullet('))
     assert.match(limits, /const editOpen = editOverBluetooth\(b\.unit\)/)
-    assert.ok(limits.includes('{vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen)}'))
-    assert.ok(limits.includes('{[editingLine(editOpen), ...DIFFERENT].map('))
+    assert.ok(limits.includes('{vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen, saves)}'))
+    assert.ok(limits.includes('{[editingLine(editOpen, saves), ...DIFFERENT].map('))
     assert.ok(!code('mobile/src/screens/Bluetooth.js').includes('No editing or saving'), 'the page types the closed words itself, beside the switch’s')
     /* And nothing open promises a unit, or saving. */
     assert.ok(!/\b(AM4|FM3|FM9|Axe-Fx|VP4)\b|\byet\b|coming/i.test(ew.EDITING_LINE + ew.LIMITS_OPEN))

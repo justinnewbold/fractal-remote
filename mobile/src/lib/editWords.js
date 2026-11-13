@@ -66,12 +66,34 @@ export const NO_EDITING_LINE = 'No editing or saving over Bluetooth.'
  */
 export const EDIT_DOES = 'In Edit: knobs, models and effects on and off.'
 export const EDITING_LINE = 'No saving over Bluetooth: save on the unit itself. Moving, adding and removing blocks, modifiers, renaming and copying a channel need the computer.'
+/*
+ * AND WHERE THE APP SAVES OVER BLUETOOTH (lib/bleSave; `saves`: his account
+ * until a store version opens it, lib/features
+ * SAVE_OVER_BLUETOOTH_FOR_EVERYONE): "It still says we can't save in
+ * Bluetooth ... Please enable that and remove the warning." (Justin, 13
+ * November 2026.) Save joins what Edit does, and the list's first line
+ * loses its sentence about saving. Every other account reads the two lines
+ * above, word for word as before.
+ */
+export const EDIT_DOES_SAVES = 'In Edit: knobs, models, effects on and off, and Save.'
+export const EDITING_LINE_SAVES = 'Moving, adding and removing blocks, modifiers, renaming and copying a channel need the computer.'
 /** "What's different from USB", its first line. */
-export const editingLine = (open) => (open === true ? EDITING_LINE : NO_EDITING_LINE)
+export const editingLine = (open, saves = false) => (open !== true ? NO_EDITING_LINE : saves === true ? EDITING_LINE_SAVES : EDITING_LINE)
+
+/**
+ * WHETHER EDIT'S ONE-TIME NOTE IS UP over Bluetooth or a USB cable (Edit's
+ * BLE_NOTE and lib/cableWords CABLE_EDIT_NOTE, in Edit, the panel beside
+ * Play and the hold pop-up). The note says a change plays and is not kept
+ * unless it is saved on the unit itself: where the app saves there
+ * (`saves`), that is not true, and the note is not drawn at all. `up` is
+ * whether it has not been put away on this device (lib/coach).
+ */
+export const editNoteUp = ({ viaBle = false, up = false, saves = false } = {}) => viaBle === true && up === true && saves !== true
 
 /* What Bluetooth does, the page's paragraph over that list, for every unit but the VP4 (which has its own, VP4_OVER_BLUETOOTH). */
 export const LIMITS_DOES = 'Presets, scenes, names, effects on and off, channels, tempo and the tuner, with no computer.'
 export const LIMITS_CLOSED = `${LIMITS_DOES} No editing or saving.`
 export const LIMITS_OPEN = `${LIMITS_DOES} ${EDIT_DOES}`
-/** The paragraph, closed or open. */
-export const limitsLine = (open) => (open === true ? LIMITS_OPEN : LIMITS_CLOSED)
+export const LIMITS_SAVES = `${LIMITS_DOES} ${EDIT_DOES_SAVES}`
+/** The paragraph: closed, open, or open with the app's own Save. */
+export const limitsLine = (open, saves = false) => (open !== true ? LIMITS_CLOSED : saves === true ? LIMITS_SAVES : LIMITS_OPEN)

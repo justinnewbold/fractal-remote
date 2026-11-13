@@ -26,6 +26,7 @@ import {
   chooseCableHere,
   connectOwedUntil,
   editOverBluetooth,
+  saveOverBluetooth,
   findAdapters,
   forgetAdapter,
   forgetAdapterFor,
@@ -1206,14 +1207,16 @@ export function BluetoothLimits() {
   const vp4 = b.unit === 'vp4'
   /* Edit over Bluetooth on the unit picked, for this account on this copy: never on a VP4, which is not one whose Edit is built. */
   const editOpen = editOverBluetooth(b.unit)
+  /* And whether this account saves from the app there (lib/bleSave): his until a store version opens it. */
+  const saves = editOpen && saveOverBluetooth()
   return (
     <View style={{ gap: space.md }}>
       {/* A VP4's own: presets and scenes, and nothing heard back (lib/bleVp4.js). Its words are the same whatever the switch says. */}
       <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
-        {vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen)}
+        {vp4 ? VP4_OVER_BLUETOOTH : limitsLine(editOpen, saves)}
       </Text>
       <Heading>What’s different from USB</Heading>
-      {[editingLine(editOpen), ...DIFFERENT].map((line) => (
+      {[editingLine(editOpen, saves), ...DIFFERENT].map((line) => (
         <Bullet key={line}>{line}</Bullet>
       ))}
       {/* The unit's own: a block Play does not draw yet, when a unit has one (shared/bluetooth-gear missingBlocksLine: none since 1.90.47, so no line). */}

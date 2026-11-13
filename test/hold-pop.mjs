@@ -217,7 +217,9 @@ export function run(test) {
     assert.match(panel, /const tidy = tidyOn && !panel && !bare && !knobless\n/)
     /* And where a NAM block's one line about what is left to the unit is ruled out for a bare view, which is the knobs only (lib/gen3Catalog NAM_ON_THE_UNIT; test/bluetooth.mjs holds the line itself). */
     assert.match(panel, /const namOnUnit = block\.slug === 'nam' && !knobless && !bare\n/)
-    assert.equal(panel.match(/\bbare\b/g).length, 7, '`bare` changes something else in Edit’s block view')
+    /* And the block's list settings (lib/editSettings) are not in the pop-up, which is knobs over channels and nothing else. */
+    assert.match(panel, /const settings = settingsOn && !bare && !knobless \? blockSettings\(enums, block\.slug\) : \[\]\n/)
+    assert.equal(panel.match(/\bbare\b/g).length, 8, '`bare` changes something else in Edit’s block view')
     /* The knobs themselves, and the pages, are not behind `bare` at all: the same lines Edit draws. */
     assert.match(panel, /\{pages\.length > 1 \? \(\s+<SideScroll/)
     assert.match(panel, /<Knob\s+param=\{p\}\s+label=\{p\.label \|\| p\.name\}\s+value=\{valueOf\(p\)\}/)

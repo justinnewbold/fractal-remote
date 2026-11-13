@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 
 import { font } from '../lib/theme'
 import { logDebug } from '../lib/debugLog'
-import { currentPreset, parkSave, readSaveProgress, readSaveResult, saveInDemo } from '../lib/device'
+import { currentPreset, parkSave, readSaveProgress, readSaveResult, saveInDemo, saveOnWire } from '../lib/device'
 import { isDemo } from '../lib/demo'
 import { startComputerSave } from '../lib/saveViaComputer'
 import { isVp4, VP4_NO_SAVE } from '../lib/vp4-safety'
+import { SAVE_NOT_OPEN } from '../lib/bleSave'
 import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS, stillOnPreset } from '../lib/save-wait'
 import { onConfigDoc, savedToSlot, useRig } from '../lib/rig'
 import Note from './Note'
@@ -21,6 +22,7 @@ export const SAID_FOR_MS = 10000
 
 const ofPreset = (s) => s.preset
 const ofSlug = (s) => s.deviceSlug
+const ofCaps = (s) => s.capabilities
 
 /**
  * SAVE, and it asks twice.
@@ -43,6 +45,7 @@ const ofSlug = (s) => s.deviceSlug
 export function useSaveToSlot() {
   const preset = useRig(ofPreset)
   const slug = useRig(ofSlug)
+  const caps = useRig(ofCaps)
   const [armed, setArmed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [said, setSaid] = useState(null)
@@ -118,6 +121,30 @@ export function useSaveToSlot() {
       setSaving(false)
       logDebug('write', `save to slot ${preset?.number}`, `stopped — the unit is on ${here.on}`)
       setSaid({ tone: 'warn', text: here.error })
+      return
+    }
+    /*
+     * WITH NO COMPUTER, ON THE UNIT'S OWN WIRE (over Bluetooth or its USB
+     * cable, where the wire says the app can save: lib/bleSave). There is no
+     * request to leave and nobody to wait for: the phone sends the unit its
+     * save, over the preset it was just asked about, and the wire asks it
+     * once more itself before the frame goes. Never reached where the wire
+     * cannot save: nothing is marked unsaved there (rig.noteEdited), so
+     * there is no Save to press.
+     */
+    if (caps?.via === 'bluetooth') {
+      let said
+      try {
+        const res = caps?.supportsSave === true ? await saveOnWire(preset?.number) : null
+        if (!res?.ok) throw new Error(SAVE_NOT_OPEN)
+        savedToSlot(res.number)
+        said = { tone: 'hint', text: `Saved to slot ${res.number}.`, done: true }
+      } catch (err) {
+        said = { tone: 'warn', text: err?.message || String(err) }
+      }
+      setSaving(false)
+      logDebug('write', `save to slot ${preset?.number} on the unit’s own wire`, said.done ? 'saved' : `failed — ${said.text}`)
+      setSaid(said)
       return
     }
     const run = startComputerSave({

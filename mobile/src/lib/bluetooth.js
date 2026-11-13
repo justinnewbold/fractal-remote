@@ -15,7 +15,7 @@ import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { namedForFm3, neverOnFm3, notAnAdapter, unitForReport } from './bluetooth-gear'
-import { NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE } from './features'
+import { NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE, SAVE_OVER_BLUETOOTH_FOR_EVERYONE } from './features'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -1998,7 +1998,9 @@ export function openWire() {
     /* The developer's block reader (lib/gen3-describe), his account's alone, asked at every request. */
     reader: () => allUnits === true,
     /* An Axe-Fx III's own blocks with their knobs in Edit (lib/axefx3-own-knobs): the whole list for his account, the NAM block for everyone (ownKnobsLevel, below); asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
-    namKnobs: () => ownKnobsLevel(allUnits === true)
+    namKnobs: () => ownKnobsLevel(allUnits === true),
+    /* Save from the phone (lib/bleSave): his account's, until lib/features SAVE_OVER_BLUETOOTH_FOR_EVERYONE; asked at every request. Edit's own door still has to be open (`edit`, above). */
+    save: () => saveOverBluetooth()
   })
   const mine = wire
   joiner = createJoiner({
@@ -2057,3 +2059,11 @@ export async function runCheck(step) {
  * since NAM_KNOBS_FOR_EVERYONE; false is none.
  */
 export const ownKnobsLevel = (admin) => (admin === true || OWN_KNOBS_FOR_EVERYONE ? true : NAM_KNOBS_FOR_EVERYONE ? 'nam' : false)
+
+/**
+ * Whether this account saves from the app over Bluetooth or a USB cable
+ * (lib/bleSave): his, by the sign-in kept on the device, until lib/features
+ * SAVE_OVER_BLUETOOTH_FOR_EVERYONE. For the wire, which also wants Edit open
+ * on the unit, and for the Bluetooth page's words.
+ */
+export const saveOverBluetooth = () => allUnits === true || SAVE_OVER_BLUETOOTH_FOR_EVERYONE

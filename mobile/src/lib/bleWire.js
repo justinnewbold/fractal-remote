@@ -25,6 +25,7 @@
  * are in here, the "auto" setting tries one and checks, and whichever worked
  * is remembered on the phone (`remember`). The check panel can force either.
  */
+import { SAVE_NOT_OPEN, buildSave, saveAllowed, saveElsewhere, saveShaped } from './bleSave.js'
 import {
   AM4,
   AM4_BLOCKS,
@@ -407,10 +408,11 @@ export const ownEditOf = (edit, level) => (level === true && edit?.withNam ? edi
  * read, nothing short goes at all. Anything else is logged and dropped.
  * 'sent', 'refused' or 'failed' (the adapter would not take it).
  */
-export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null) {
+export function am4Sender(send, log = () => {}, learned = () => null, placed = () => null, saving = () => null) {
   return (bytes) => {
     const sysex = Array.isArray(bytes) && bytes[0] === 0xf0
-    const ok = sysex ? am4Allowed(bytes) || am4EditAllowed(bytes, placed()) : am4ShortAllowed(bytes, learned())
+    /* A save (lib/bleSave) goes only as the one save being sent, over the location the AM4 has just said it is on (`saving`): never on the lists below, which know no save. */
+    const ok = sysex ? (saveShaped(bytes, MODELS.am4) ? saveAllowed(bytes, MODELS.am4, saving()) : am4Allowed(bytes) || am4EditAllowed(bytes, placed())) : am4ShortAllowed(bytes, learned())
     if (!ok) {
       log(`refused to send the AM4 ${toHex(bytes)}: it is not one of the messages the AM4 is ever sent`)
       return 'refused'
@@ -447,7 +449,7 @@ const GEN3_EDIT_BY_MODEL = Object.freeze({ [MODELS.fm3]: fm3Edit, [MODELS.fm9]: 
  * knobs and five switches of that block and nothing else of it, and passes
  * a knob of it only as its place (52 00), never the typed way.
  */
-export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false) {
+export function gen3Sender(send, log = () => {}, model, placed = () => null, reading = () => null, namKnobs = () => false, saving = () => null) {
   /* The unit's own Edit; a model with none has nothing of Edit's that may go. Which ids are blocks is the codec's, the same on every gen-3 unit, and the III's NAM with them whoever is asking: a typed write at one is Edit's to hold, open or closed. */
   const edit = GEN3_EDIT_BY_MODEL[model] || null
   const blockAt = (edit?.withNam || edit || fm3Edit).editBlock
@@ -469,6 +471,20 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
     return Number.isInteger(eid) && sameBytes(b, fm3Edit.buildReadAll(model, eid))
   }
   return (bytes) => {
+    /*
+     * A SAVE (lib/bleSave: function 0x01, 26 00) goes only as the one save
+     * being sent, over the preset the unit has just said it is on (`saving`).
+     * Any other frame of that shape, or one with no save going, is refused:
+     * nothing else this file sends has the shape, so nothing that went before
+     * is held by this.
+     */
+    if (saveShaped(bytes, model)) {
+      if (!saveAllowed(bytes, model, saving())) {
+        log(`refused to send ${toHex(bytes)}: it is a save, and not the one save being sent over the preset the unit is on`)
+        return 'refused'
+      }
+      return send(bytes) === false ? 'failed' : 'sent'
+    }
     if (editShaped(bytes) && !(edit && editNow().editAllowed(bytes, placed(), model)) && !readersOwn(bytes)) {
       log(`refused to send ${toHex(bytes)}: it is not one of Edit’s reads or writes for a block in this preset`)
       return 'refused'
@@ -495,7 +511,7 @@ export function gen3Sender(send, log = () => {}, model, placed = () => null, rea
  * @param {() => boolean} [o.reader]  whether the developer's block reader is open to this account (his alone: lib/bluetooth bluetoothAdmin), asked at each request
  * @param {() => boolean} [o.namKnobs]  whether an Axe-Fx III's NAM block has its knobs in Edit for this account (lib/features NAM_KNOBS_FOR_EVERYONE, his account until then), asked at each request and each send
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign, edit, reader, namKnobs, save } = {}) {
   /* A VP4 is sent presets and scenes by plain MIDI, and nothing this file sends: its own wire, with its own one way out. */
   if (unit === 'vp4') return createVp4Wire({ send, clock, log, onForeign, nameOf: modelName })
   const spec = SPEC[unit]
@@ -533,6 +549,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const namOn = () => (typeof namKnobs === 'function' ? namKnobs() : false)
   const g3 = () => ownEditOf(g3Edit, namOn())
+  /*
+   * SAVING FROM THE PHONE (lib/bleSave), where Edit is open: open to this
+   * account or not (`save`, lib/bluetooth: his account until lib/features
+   * SAVE_OVER_BLUETOOTH_FOR_EVERYONE), asked at every request, as Edit is.
+   * `savingSlot` is the one preset a save is being sent over, for exactly as
+   * long as it is being sent: the way out passes a save to that slot only.
+   */
+  const saveOn = () => editOn() && typeof save === 'function' && save() === true
+  let savingSlot = null
   /* The block codes of the last preset answer believed (readStructure), which Edit's frames are held to. */
   let editPlaced = null
   /* The developer's reader (gen3Describe): his account's, on a gen-3 unit, and the one block whose whole read it has out. */
@@ -556,8 +581,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * (gen3Sender).
    */
   const sendFrame = am4
-    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null))
-    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn)
+    ? am4Sender(send, say, () => tuner.unitCc, () => (editOn() ? editPlaced : null), () => (saveOn() ? savingSlot : null))
+    : gen3Sender(send, say, model, () => (editOn() ? editPlaced : null), () => (readerOn() && readerOpen !== null && Array.isArray(editPlaced) && editPlaced.includes(readerOpen) ? readerOpen : null), namOn, () => (saveOn() ? savingSlot : null))
 
   const handlers = new Set()
   const emit = (event) => {
@@ -1373,6 +1398,46 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* The way to use now: the one the player chose, or the one auto found, or null to find out. */
   const wayFor = (key) => (ways[key] !== 'auto' ? ways[key] : learnedWay(key))
 
+  /* ---------------- saving ---------------- */
+
+  /**
+   * SAVE THE EDIT BUFFER OVER THE PRESET THE UNIT IS ON (lib/bleSave, which
+   * says what is sent and why it is only ever this).
+   *
+   * The unit is asked which preset it is on straight before, on this
+   * connection, and the save goes only if that is the slot the screen meant:
+   * a preset changed on the unit's own switches since the knob was turned
+   * would otherwise be written over with another preset's sound. Then the
+   * one frame, through the way out that passes it only while `savingSlot`
+   * names its slot. A gen-3 unit answers an accepted write with nothing and
+   * a refused one with a refusal, which is said in its own words.
+   *
+   * Answers {ok: true, number} or throws a failure in words.
+   */
+  async function storePreset(slot) {
+    if (!saveOn()) throw failure(SAVE_NOT_OPEN, 403)
+    if (!Number.isInteger(slot) || slot < 0) throw badInput('No preset is loaded to save.')
+    const out = buildSave(model, slot)
+    if (!out) throw badInput('No preset is loaded to save.')
+    /* Asked now, never from a copy kept a moment ago: an AM4's structure read afresh, a gen-3 unit's preset name. */
+    const here = am4 ? await readStructure({ priority: 'write', fresh: true }) : await presetNow('write')
+    const on = am4 ? (here && here !== SKIPPED ? here.location : null) : here && !rejected(here) ? here.number : null
+    if (on !== slot) {
+      say(`save over preset ${slot} stopped: the unit ${Number.isInteger(on) ? `is on preset ${on}` : 'did not say which preset it is on'}`)
+      throw failure(saveElsewhere(on), 409)
+    }
+    savingSlot = slot
+    let answer
+    try {
+      answer = await fire(out, `the save over preset ${slot}`)
+    } finally {
+      savingSlot = null
+    }
+    if (rejected(answer)) throw refusedBy(answer.rejected)
+    say(`saved over preset ${slot}`)
+    return { ok: true, number: slot }
+  }
+
   /* ---------------- the answers both families give ---------------- */
 
   const CH = ['A', 'B', 'C', 'D']
@@ -1391,7 +1456,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       cabIrs: false,
       fc: { model: false, liveState: false },
       tuner: true,
-      supportsSave: false
+      /* Save from the phone (lib/bleSave), where it is open to this account: asked when the app asks what the unit can do. */
+      supportsSave: saveOn()
     }
     if (am4) {
       return { ...common, slotModel: 'linear', sceneCount: AM4.SCENES, presets: { count: AM4.LOCATIONS, addressing: 'bankLetter', canScanNames: false } }
@@ -3911,6 +3977,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * Kept until the preset changes otherwise, so a scene renamed on the
      * unit's own screen never showed, under a button promising a fresh read.
      */
+    /** Save the unit's edit buffer over the preset it is on (lib/bleSave): see storePreset, above. */
+    storePreset,
     forgetSceneNames() {
       sceneCache = null
       am4Names.clear()

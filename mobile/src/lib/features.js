@@ -289,3 +289,52 @@ export const OWN_KNOBS_FOR_EVERYONE = false
  * he says so, with its What's new line in that pull request.
  */
 export const OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE = false
+
+/**
+ * A BLOCK'S LIST SETTINGS IN EDIT, under its knobs (lib/editSettings,
+ * components/BlockSettings): Bypass Mode, Tone Stack Type, Input Mode and
+ * every other setting that is one of a list, which Edit read with each block
+ * and drew none of.
+ *
+ * "Yes, I like B for the edit screen" and "Menu style B" (Justin, 13
+ * November 2026, of three ways shown on a NAM block): two or three choices
+ * are buttons, more is a row that opens a list. On every unit and every
+ * connection Edit opens on, since the settings come with the block's own
+ * read and are written by the write Edit already had for one (lib/device
+ * setEnum); never a Cab's.
+ *
+ * His account first, as every new thing is: no switch of any block has been
+ * tapped from the app on a unit. Off, it is his account only
+ * (lib/useEditSettings), and every other account's Edit is the knobs it
+ * always was. It opens to everyone when he says so, with its What's new
+ * line in that pull request.
+ */
+export const EDIT_SETTINGS_FOR_EVERYONE = false
+
+/**
+ * SAVING FROM THE APP OVER BLUETOOTH OR THE UNIT'S USB CABLE (lib/bleSave,
+ * bleWire storePreset): Edit's Save, and Play's, write the unit's edit
+ * buffer over the preset it is on, with no computer.
+ *
+ * "It still says we can't save in Bluetooth when you pull up the quick edit
+ * menus and stuff. Please enable that and remove the warning." (Justin, 13
+ * November 2026.) It was not built: a change played and was lost at the next
+ * preset change unless it was saved on the unit. Now the phone sends the
+ * computer app's own save, byte for byte, on an AM4, FM3, FM9 and Axe-Fx
+ * III, only over the preset the unit says it is on. Never a VP4.
+ *
+ * His account first, and for a harder reason than most: A SAVE WRITES A
+ * PRESET, and no save has gone from the phone to a unit yet. Off, it is his
+ * account only (lib/bluetooth saveOverBluetooth): every other account's
+ * Bluetooth says what it always said, shows no Save, and a save's frame is
+ * refused at the way out.
+ *
+ * OPENING IT TO CUSTOMERS IS A STORE VERSION, not this switch alone: every
+ * copy out was reviewed with notes, and a listing, that say there is no
+ * saving over Bluetooth (CLAUDE.md, "It is switched on for customers only in
+ * a new store version"), as Edit over Bluetooth itself was (lib/ble-rule.js
+ * EDIT_FROM_STORE). So this says true only in the pull request of a build
+ * pair whose texts say saving works over Bluetooth, keyed to that store
+ * version, and only once he has saved from his phone and said so.
+ */
+export const SAVE_OVER_BLUETOOTH_FOR_EVERYONE = false

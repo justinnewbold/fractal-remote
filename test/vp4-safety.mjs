@@ -151,8 +151,10 @@ async function phoneSaveOnABench({ slug = 'vp4', demo = false } = {}) {
       export const readSaveProgress = async () => null
       export const readSaveResult = async () => null
       export const saveInDemo = async (n) => { asked.push('demo save ' + n); return n }
+      export const saveOnWire = async (n) => { asked.push('wire save ' + n); return { ok: true, number: n } }
     `,
     'demo.mjs': `export const isDemo = () => ${demo ? 'true' : 'false'}\n`,
+    'bleSave.mjs': "export const SAVE_NOT_OPEN = 'Saving from the app isn’t available on this connection. Save on the unit itself.'\n",
     'saveViaComputer.mjs': `
       export const started = []
       export const startComputerSave = (o) => { started.push(o); return { done: Promise.resolve({ ok: true, slot: o.slot }), cancel: () => {} } }
@@ -173,6 +175,7 @@ async function phoneSaveOnABench({ slug = 'vp4', demo = false } = {}) {
     ['from "../lib/demo"', "from './demo.mjs'"],
     ['from "../lib/saveViaComputer"', "from './saveViaComputer.mjs'"],
     ['from "../lib/vp4-safety"', `from '${repoUrl('shared/vp4-safety.mjs')}'`],
+    ['from "../lib/bleSave"', "from './bleSave.mjs'"],
     ['from "../lib/save-wait"', `from '${repoUrl('shared/save-wait.mjs')}'`],
     ['from "../lib/device-word"', `from '${repoUrl('shared/device-word.mjs')}'`],
     ['from "../lib/rig"', "from './rig.mjs'"],
