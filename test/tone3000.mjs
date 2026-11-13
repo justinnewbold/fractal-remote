@@ -310,10 +310,10 @@ export function run(test) {
       assert.ok(r.why.length > 10)
       assert.equal(n.namSaid(r), r.why)
     }
-    /* Nothing in it builds a message for a unit: how a capture is packed is not known yet, and the file says so. */
+    /* Nothing in it builds a message for a unit: how a capture is packed is lib/nam-install's (test/nam-install.mjs), and the file says so. */
     const src = read('mobile/src/lib/nam-file.js')
     assert.ok(!/\bimport\b|\brequire\(/.test(code(src)))
-    assert.match(flat(src).replace(/ \* /g, ' '), /HOW AXE-EDIT PACKS THOSE NUMBERS FOR THE UNIT IS NOT KNOWN YET/)
+    assert.match(flat(src).replace(/ \* /g, ' '), /How Axe-Edit packs those numbers for the unit is in lib\/nam-install\.js, from a recording of it/)
     assert.ok(!/0xf0|0xF0|sysex|buildFrame|frame\(/i.test(code(src)))
   })
 
