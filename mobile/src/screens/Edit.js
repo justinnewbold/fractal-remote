@@ -86,6 +86,7 @@ import Tile from '../components/Tile'
 import ColourSheet from '../components/ColourSheet'
 import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 import { HEAD_TALL, headShape, knobCell, knobSize } from '../lib/tidyEdit'
+import { fieldNumber, fieldSelection, fieldSelectionMoved, fieldTyped, openField } from '../lib/value-field'
 import { useTidyEdit } from '../lib/useTidyEdit'
 import { CHAIN_TILE, FIND_LABEL, MORE_LABEL, MORE_ROWS, MORE_TITLE, firstOpen, gearStart } from '../lib/editMore'
 import Sheet from '../components/Sheet'
@@ -2903,26 +2904,49 @@ function gearLine(model) {
  * applies to every write anyway.
  */
 function ValueBox({ param, value, onCommit }) {
-  const [text, setText] = useState(null)
+  /* What is typed and how much of it is selected: lib/value-field. Null until the box is tapped. */
+  const [field, setField] = useState(null)
+  const input = useRef(null)
 
   const finish = () => {
-    if (text === null) return
-    const n = Number(text.replace(',', '.').trim())
-    setText(null)
-    if (!Number.isFinite(n) || n === value) return
+    if (!field) return
+    const n = fieldNumber(field)
+    setField(null)
+    if (n === null || n === value) return
     const lo = typeof param.min === 'number' ? param.min : -Infinity
     const hi = typeof param.max === 'number' ? param.max : Infinity
     onCommit(Math.min(hi, Math.max(lo, n)))
   }
 
+  /*
+   * THE WHOLE NUMBER SELECTED AS THE BOX OPENS, so "-3" typed straight in
+   * replaces it. The `selection` below goes down with the swapped text; this
+   * says it once more by hand, for the number whose text did not change as
+   * the box opened (nothing is sent for a text that is the same).
+   */
+  const opened = field ? field.at : null
+  useEffect(() => {
+    if (opened === null) return
+    const at = fieldSelection(field)
+    if (at) input.current?.setSelection?.(at.start, at.end)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opened])
+
   return (
     <TextInput
-      value={text !== null ? text : `${fmt(value)}${param?.unit ? ` ${param.unit}` : ''}`}
+      ref={input}
+      value={field ? field.typed : `${fmt(value)}${param?.unit ? ` ${param.unit}` : ''}`}
       onFocus={() =>
         /* The unit drops out, so typing replaces rather than appends to "6.70 dB". */
-        setText(typeof value === 'number' ? String(Math.round(value * 100) / 100) : '')
+        setField(openField(value, Date.now()))
       }
-      onChangeText={setText}
+      /* The whole number while it is held: a thumb's tap on an iPhone selects nothing by itself. */
+      selection={fieldSelection(field)}
+      onSelectionChange={(e) => {
+        const at = e?.nativeEvent?.selection
+        setField((f) => fieldSelectionMoved(f, at, Date.now()))
+      }}
+      onChangeText={(t) => setField((f) => fieldTyped(f, t))}
       onBlur={finish}
       onSubmitEditing={finish}
       selectTextOnFocus

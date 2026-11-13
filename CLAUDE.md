@@ -1458,6 +1458,16 @@ ahead and implement that." So (mobile/src/lib/editMore.js):
   that model, and a knob held still (`HOLD_MS`) opens Modifiers on it. The
   number box under every knob is where a value is typed.
 
+**A tap on the number under a knob selects all of it** (13 November 2026):
+"in tapping on one of the numbers it highlights it so that you can just
+quickly type -3 or whatever number without having to go to the back and
+delete it and then retype." An iPhone ignores `selectTextOnFocus` on a
+thumb's tap, and the box swaps its text as it opens, so the box hands
+TextInput the selection itself (mobile/src/lib/value-field.js, the tempo
+box's rule with a clock in place of its pop-up; Edit's `ValueBox`, which is
+the Level's box too). An emptied box, or one tapped and left as it opened,
+writes nothing to the unit: it used to write 0, or its own rounding.
+
 The Bluetooth note (and its USB-cable twin) stays at the foot of the page.
 Nothing new goes above the knobs: over the chain there is only the title
 row, Save's own lines, a fault, what the chain's read says, and the search

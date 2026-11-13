@@ -6313,6 +6313,90 @@ export function run(test) {
     assert.doesNotMatch(withoutComments(read('mobile/src/lib/tempo-field.js')), /^\s*import /m)
   })
 
+  /*
+   * "We need to make it so in tapping on one of the numbers it highlights it
+   * so that you can just quickly type -3 or whatever number without having to
+   * go to the back and delete it and then retype" (13 November 2026, the
+   * number under a knob in Edit, on an iPhone).
+   */
+  test('the number under a knob opens selected whole, so "-3" typed straight in replaces it, and a thumb can still place the cursor', async () => {
+    const f = await import('../mobile/src/lib/value-field.js')
+    /* What the phone does with a key over a selection: replaces it, or for Backspace deletes it. */
+    const key = (text, sel, k) => {
+      const s = sel || { start: text.length, end: text.length }
+      if (k === 'Backspace') return s.start !== s.end ? text.slice(0, s.start) + text.slice(s.end) : text.slice(0, Math.max(0, s.start - 1)) + text.slice(s.end)
+      return text.slice(0, s.start) + k + text.slice(s.end)
+    }
+    const T = 1000
+    /* The box opens on the plain number, no unit, all of it asked for. */
+    let field = f.openField(6.4, T)
+    assert.equal(field.typed, '6.4')
+    assert.deepEqual(f.fieldSelection(field), { start: 0, end: 3 }, 'the number under a knob opens with nothing selected')
+    assert.equal(f.openField(-3.004, T).typed, '-3')
+    assert.equal(f.openField(undefined, T).typed, '')
+    assert.equal(f.fieldSelection(f.openField(undefined, T)), undefined)
+    assert.equal(f.fieldSelection(null), undefined, 'a box nobody tapped asks for a selection')
+    /* Typing "-3" over it: the first key replaces the whole number, the second follows it. */
+    let typed = f.fieldTyped(field, key(field.typed, f.fieldSelection(field), '-'))
+    assert.equal(typed.typed, '-', 'the first key was added to the number instead of replacing it')
+    assert.equal(f.fieldSelection(typed), undefined, 'the selection is still held after a keystroke, so the next key replaces the first')
+    typed = f.fieldTyped(typed, key(typed.typed, null, '3'))
+    assert.equal(typed.typed, '-3')
+    assert.equal(f.fieldNumber(typed), -3)
+    /* A comma for a decimal point, as some keyboards give. */
+    assert.equal(f.fieldNumber(f.fieldTyped(field, '4,5')), 4.5)
+    /* Backspace empties it, and an emptied box writes nothing: it used to write 0. */
+    const cleared = f.fieldTyped(field, key(field.typed, f.fieldSelection(field), 'Backspace'))
+    assert.equal(cleared.typed, '')
+    assert.equal(f.fieldNumber(cleared), null, 'an emptied box sends the knob to zero')
+    /* Tapped and left as it opened: nothing written, not the rounding it opened on. */
+    assert.equal(f.fieldNumber(f.openField(-3.004, T)), null, 'a box tapped and left alone writes its own rounding to the unit')
+    assert.equal(f.fieldNumber(f.fieldTyped(field, 'abc')), null)
+    assert.equal(f.fieldNumber(null), null)
+    /* AN IPHONE, which never reports a selection the code made. The tap that opened the box parks a caret: put back. */
+    let ios = f.openField(6.4, T)
+    ios = f.fieldSelectionMoved(ios, { start: 3, end: 3 }, T + 20)
+    assert.equal(ios.held, true, 'the caret of the tap that opened the box took the selection away')
+    /* The selection of the text the box showed before it opened ("6.40 dB"), arriving late: not a finger either. */
+    assert.equal(f.fieldSelectionMoved(ios, { start: 0, end: 7 }, T + 30).held, true)
+    assert.deepEqual(f.fieldSelection(ios), { start: 0, end: 3 })
+    /* Later, a thumb in the number: the cursor is theirs. */
+    assert.equal(f.fieldSelectionMoved(ios, { start: 1, end: 1 }, T + f.SETTLE_MS).held, false, 'on an iPhone a thumb in the number snaps back to the whole of it')
+    assert.ok(f.SETTLE_MS >= 250 && f.SETTLE_MS <= 600, 'a caret is taken for the opening tap for too short or too long a time')
+    /* ANDROID, which reports the selection the box asked for: from then a caret is a finger, at once. */
+    let droid = f.openField(6.4, T)
+    droid = f.fieldSelectionMoved(droid, { start: 0, end: 3 }, T + 10)
+    assert.equal(droid.held, true)
+    assert.equal(droid.seen, true)
+    assert.equal(f.fieldSelectionMoved(droid, { start: 2, end: 2 }, T + 40).held, false, 'on Android a thumb in the number snaps back to the whole of it')
+    /* After a keystroke, or with no box open, there is nothing to hold. */
+    assert.equal(f.fieldSelectionMoved(typed, { start: 0, end: 2 }, T + 5000), typed)
+    assert.equal(f.fieldSelectionMoved(null, { start: 0, end: 2 }, T), null)
+    assert.equal(f.fieldTyped(null, '5'), null)
+    /* Pure: nothing imported, so this is the rule the app runs. */
+    assert.doesNotMatch(withoutComments(read('mobile/src/lib/value-field.js')), /^\s*import /m)
+  })
+
+  test('Edit’s number box hands TextInput the whole number as its selection, with the text it opens on', () => {
+    const src = withoutComments(read('mobile/src/screens/Edit.js'))
+    const at = src.indexOf('function ValueBox(')
+    assert.ok(at > 0)
+    const box = src.slice(at, src.indexOf('\nfunction ', at + 10)).replace(/\s+/g, ' ')
+    /* Opened on the tap, by the rule's own function, and never by a copy of its arithmetic here. */
+    assert.match(box, /onFocus=\{\(\) => setField\(openField\(value, Date\.now\(\)\)\) \}/)
+    assert.match(box, /value=\{field \? field\.typed : /)
+    /* The selection is a prop: on an iPhone selectTextOnFocus does nothing for a thumb's tap. */
+    assert.match(box, /selection=\{fieldSelection\(field\)\}/, 'the number under a knob is left to selectTextOnFocus, which an iPhone ignores on a tap')
+    assert.match(box, /onSelectionChange=\{\(e\) => \{ const at = e\?\.nativeEvent\?\.selection setField\(\(f\) => fieldSelectionMoved\(f, at, Date\.now\(\)\)\) \}\}/)
+    assert.match(box, /onChangeText=\{\(t\) => setField\(\(f\) => fieldTyped\(f, t\)\)\}/)
+    assert.match(box, /\bselectTextOnFocus\b/)
+    /* What is written is the rule's answer, clamped to the control's own range, and nothing when it says null. */
+    assert.match(box, /const n = fieldNumber\(field\) setField\(null\) if \(n === null \|\| n === value\) return/)
+    assert.match(box, /onCommit\(Math\.min\(hi, Math\.max\(lo, n\)\)\)/)
+    /* The Level's box is the same box, so it opens selected too. */
+    assert.match(src, /<ValueBox\s+param=\{\{ \.\.\.level,/)
+  })
+
   test('the phone’s tempo box draws the number from its first frame and hands TextInput the selection, on both phones', () => {
     const src = read('mobile/src/components/TempoBox.js')
     const code = withoutComments(src)
