@@ -1788,8 +1788,21 @@ export function run(test) {
       await tick(70)
       const early = asks
       assert.ok(early >= 2, `it asked ${early} times in its quick first stretch`)
+      /*
+       * COUNTED FROM AFTER THE QUICK STRETCH, NOT FROM ITS EDGE. The pace is
+       * chosen at each turn by the clock (later()), so a turn that lands just
+       * inside the 80 ms books one more quick one, and `early` is read at 70,
+       * a turn or two before the edge: three more after it is the page
+       * keeping its own rule (turns near 70, 80 and 90), and on 13 November
+       * 2026 that failed a run that had passed minutes before on the same
+       * commit. By 130 every quick turn booked inside the stretch has been
+       * taken, and the next is five seconds off: nothing more in 250 ms, bar
+       * one whose answer was still on its way.
+       */
+      await tick(60)
+      const settled = asks
       await tick(250)
-      assert.ok(asks - early <= 2, `it went on asking ${asks - early} more times once the quick stretch was over`)
+      assert.ok(asks - settled <= 1, `it went on asking ${asks - settled} more times once the quick stretch was over`)
       /* Coming back to the window asks at once. */
       const before = asks
       fire(heard.window, 'focus')
