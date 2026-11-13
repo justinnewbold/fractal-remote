@@ -178,6 +178,22 @@ export function decodeDescribe(f) {
   return null
 }
 
+/**
+ * What an answer carried, as it came, for one this file could not read as
+ * a definition or as text: the unit's mark on it and its bytes in hex (the
+ * first 48). His Axe-Fx III answered every value that has a unit (dB, Hz,
+ * ms) with something that is not plain text (13 November 2026), and a "?"
+ * says nothing about what it was. This does.
+ */
+export function answerBytes(f) {
+  if (!isFractal(f) || f[5] !== FN.PARAM || f.length < 23) return null
+  const inner = f.slice(6, f.length - 2)
+  const count = inner[13] | (inner[14] << 8)
+  const raw = fromSeptets(inner, Math.min(count, 48), 15)
+  const hex = raw.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
+  return `tag ${inner[6].toString(16).padStart(2, '0').toUpperCase()}, ${count} bytes${hex ? `: ${hex}` : ''}${count > 48 ? ' …' : ''}`
+}
+
 /** An empty place: every field nothing (the codec's isFillerDefinition). */
 export const emptyDef = (d) => d.wireId === 0 && d.tc === 0 && d.min === 0 && d.max === 0 && d.def === 0 && d.step === 0
 
@@ -207,19 +223,23 @@ export const plainList = (d) => d.step === 0 && d.scale === 0 && whole(d.min) &&
  * stopped}: each setting {id, wireId, tc, min, max, def, step, scale, list,
  * value, labels, more}, and `stopped` a few words when the walk ended
  * early, null when it ran to its end. What was read before it stopped is
- * kept.
+ * kept. A value the unit answered with something that is not text has
+ * `raw`, what it sent (answerBytes); one it did not answer has `silent`.
  */
 export async function describeBlock({ ask, pause, model, block, onStep = () => {} }) {
   const settings = []
   let asked = 0
   let silent = 0
   let stopped = null
+  /* The last answer as it came, or null: for a value that could not be read as text. */
+  let came = null
   const put = async (view, param, which = 0) => {
     const q = describeQuery(model, view, block, param, which)
     /* Checked again where it leaves: nothing that is not one of the three questions goes. */
     if (!describeAllowed(q, model)) throw new Error('the reader built something that is not one of its questions')
     await pause(PACE_MS)
     asked += 1
+    came = null
     const back = await ask(q)
     if (back && !Array.isArray(back)) {
       stopped = `the unit refused a question${back.refused === undefined ? '' : ` (${back.refused})`}`
@@ -231,6 +251,7 @@ export async function describeBlock({ ask, pause, model, block, onStep = () => {
       return undefined
     }
     silent = 0
+    came = back
     return decodeDescribe(back)
   }
   for (let param = 0; param <= PARAM_MOST && !stopped; param++) {
@@ -246,6 +267,8 @@ export async function describeBlock({ ask, pause, model, block, onStep = () => {
     const value = await put(VIEW.value, param)
     if (stopped) break
     if (value && value.view === 'value') s.value = value.text
+    else if (came) s.raw = answerBytes(came)
+    else s.silent = true
     if (s.list) {
       const lo = Math.round(def.min)
       const span = Math.round(def.max - def.min + 1)
@@ -277,7 +300,7 @@ export function describeText({ name, block, settings, asked, stopped, bulk = nul
   for (const s of settings) {
     const range = `${num(s.min)}..${num(s.max)} def ${num(s.def)} step ${num(s.step)} scale ${num(s.scale)}`
     const list = s.labels.length ? ` [${s.labels.join(' | ')}${s.more ? ' | …' : ''}]` : s.list ? ' [list, no labels]' : ''
-    lines.push(`  ${String(s.id).padStart(3)}  tc ${s.tc}  ${range}  now ${s.value === null ? '?' : JSON.stringify(s.value)}${list}`)
+    lines.push(`  ${String(s.id).padStart(3)}  tc ${s.tc}  ${range}  now ${s.value !== null ? JSON.stringify(s.value) : s.raw ? `? (${s.raw})` : '? (no answer)'}${list}`)
   }
   if (bulk && Array.isArray(bulk.values)) {
     lines.push(`  whole read: count ${bulk.count}, ${bulk.values.length} values`, `  ${bulk.values.join(' ')}`)
