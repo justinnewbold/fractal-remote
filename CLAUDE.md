@@ -776,11 +776,10 @@ what the computer sends for the same edit, and a test holds it there.
     list of three; the file's own comment says which is which. A test holds
     the rows to two reads of channel A, before and after he set four of
     the switches in Axe-Edit, coming out as Axe-Edit showed them.
-  - *The phone's Edit draws no switch, of any block* (a block's params read
-    carries them in `enums`, and the screen draws `named` only). So the
-    six are read, guarded and can be written through the wire, and have
-    nothing on screen: that is an Edit feature nobody has built, not a NAM
-    one.
+  - *The switches are drawn since 1.90.52, for his account* (a block's
+    params read carries them in `enums`): see "A block's list settings in
+    Edit", below. Before that the six were read, guarded and could be
+    written through the wire, and had nothing on screen.
   - *What is left out, so no frame can be built for it:* Type, the capture
     (0: 257 slots named by whatever is loaded on that unit, numbered from 0
     where Axe-Edit counts from 001, so the block has no model picker and
@@ -854,6 +853,40 @@ what the computer sends for the same edit, and a test holds it there.
     and every knob of the other five blocks in the list, which is why
     they have a switch of their own (`OWN_KNOBS_FOR_EVERYONE`, false) and
     did not open with the NAM block's.
+- **A block's list settings in Edit, under its knobs: built 13 November
+  2026, HIS ACCOUNT ONLY** ("Yes, I like B for the edit screen" and "Menu
+  style B", of three ways shown on a NAM block; the picture is in the
+  session's scratchpad, not the repository). Edit drew knobs and nothing
+  else; every setting that is one of a list (Bypass Mode, Tone Stack Type,
+  Input Mode) came with each block's read, in `enums`, and had nowhere to
+  go. Now, under the knobs and the Level of the page showing, a SETTINGS
+  heading and one entry a setting (mobile/src/lib/editSettings.js,
+  components/BlockSettings.js): two or three choices are buttons, one tap
+  (`SHORT_MOST`); more is one button with its name over the choice it is
+  on, which opens a list (with a find box from thirteen choices).
+  - *The switch* is `EDIT_SETTINGS_FOR_EVERYONE` in features.js, false:
+    his account only (lib/useEditSettings). It opens when he says so, with
+    its What's new line then. NO SWITCH OF ANY BLOCK HAS BEEN TAPPED FROM
+    THE APP ON A UNIT: his first tap is the first check.
+  - *Every unit and connection Edit opens on*, since the settings come
+    with the block's own read and go out by the write Edit already had for
+    one (lib/device `setEnum`: through the computer its route, over
+    Bluetooth the wire's typed write, held to the unit's catalog as ever).
+    After a choice the block is read again (a choice can change what other
+    settings read, and which pages there are), and what the read says is
+    what the buttons show.
+  - *Which page a setting is on* is the one Fractal's editor has it on,
+    as the knobs are (`settingsByPage`, which reads lib/editPages and does
+    not change it: that file is the browser's too). Mixer-row settings go
+    with the Mix page; what the editor places nowhere, or on a page with
+    no knobs of ours, goes on the last page (Extras); with no pages from
+    the unit, the last page (a NAM block's only one).
+  - *Words are the unit's own* ("THRU", "SUM L+R"): nothing is renamed.
+  - *Left out:* a list with one choice, one the unit gave only numbers
+    for, the block's own bypass, EVERY SETTING OF A CAB (its lists are
+    impulse responses and mics, the cab picker's), and the hold pop-up,
+    which stays knobs over channels. The browser draws none: that is a
+    computer release nobody has asked for.
 - **The block reader is how a block is asked what is in it** (12 November
   2026: "Yes build the NAM reader now"). No catalog named what is inside
   the NAM block, and through the computer it is still a New block. So

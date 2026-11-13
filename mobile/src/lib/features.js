@@ -289,3 +289,24 @@ export const OWN_KNOBS_FOR_EVERYONE = false
  * he says so, with its What's new line in that pull request.
  */
 export const OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE = false
+
+/**
+ * A BLOCK'S LIST SETTINGS IN EDIT, under its knobs (lib/editSettings,
+ * components/BlockSettings): Bypass Mode, Tone Stack Type, Input Mode and
+ * every other setting that is one of a list, which Edit read with each block
+ * and drew none of.
+ *
+ * "Yes, I like B for the edit screen" and "Menu style B" (Justin, 13
+ * November 2026, of three ways shown on a NAM block): two or three choices
+ * are buttons, more is a row that opens a list. On every unit and every
+ * connection Edit opens on, since the settings come with the block's own
+ * read and are written by the write Edit already had for one (lib/device
+ * setEnum); never a Cab's.
+ *
+ * His account first, as every new thing is: no switch of any block has been
+ * tapped from the app on a unit. Off, it is his account only
+ * (lib/useEditSettings), and every other account's Edit is the knobs it
+ * always was. It opens to everyone when he says so, with its What's new
+ * line in that pull request.
+ */
+export const EDIT_SETTINGS_FOR_EVERYONE = false

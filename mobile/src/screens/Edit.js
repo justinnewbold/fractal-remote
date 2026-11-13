@@ -88,10 +88,13 @@ import Tile from '../components/Tile'
 import ColourSheet from '../components/ColourSheet'
 import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 import { HEAD_TALL, headShape, knobCell, knobSize } from '../lib/tidyEdit'
+import { blockSettings, settingsByPage } from '../lib/editSettings'
+import { useEditSettings } from '../lib/useEditSettings'
 import { fieldNumber, fieldSelection, fieldSelectionMoved, fieldTyped, openField } from '../lib/value-field'
 import { useTidyEdit } from '../lib/useTidyEdit'
 import { CHAIN_TILE, FIND_LABEL, MORE_LABEL, MORE_ROWS, MORE_TITLE, firstOpen, gearStart } from '../lib/editMore'
 import Sheet from '../components/Sheet'
+import BlockSettings from '../components/BlockSettings'
 import searchIcon from '../../assets/icons/search.png'
 import moreIcon from '../../assets/icons/more.png'
 import moreAndroidIcon from '../../assets/icons/more-vertical.png'
@@ -929,6 +932,14 @@ export function BlockPanel({
   const [loading, setLoading] = useState(false)
   /* The block's read has come back at least once (for the line that says its knobs need a newer computer app, below). */
   const [answered, setAnswered] = useState(false)
+  /*
+   * THE BLOCK'S LIST SETTINGS (lib/editSettings): what its read said they
+   * are, and the choice just tapped on one while its write is out. Drawn
+   * under the knobs for the accounts lib/useEditSettings opens them to.
+   */
+  const [enums, setEnums] = useState([])
+  const [choosing, setChoosing] = useState({})
+  const settingsOn = useEditSettings()
   /* Values a finger has moved but the unit has not confirmed yet. */
   const [local, setLocal] = useState({})
   /* One checked write per control at a time — see commit. */
@@ -992,6 +1003,7 @@ export function BlockPanel({
         const c = bare ? null : block.slug === 'cab' ? await readCab(() => cabState(eid), p) : null
         if (stop) return
         setParams(p?.named || [])
+        setEnums(p?.enums || [])
         setAnswered(true)
         setLayout(p?.layout || null)
         setModels(t || [])
@@ -1042,6 +1054,41 @@ export function BlockPanel({
   const pages = editPages(editable, layout)
   const onPage = pageFor(pages, tab)
   const shown = onPage?.params || []
+
+  /*
+   * The list settings that go with the page of knobs showing (lib/editSettings
+   * settingsByPage). Not in the hold pop-up, which is knobs over channels and
+   * nothing else, and not where the block has no knobs to read.
+   */
+  const settings = settingsOn && !bare && !knobless ? blockSettings(enums, block.slug) : []
+  const pageSettings = settings.length ? settingsByPage(settings, layout, pages).get(onPage?.key) || [] : []
+  /*
+   * A choice tapped: the write Edit already has for a list setting (lib/device
+   * setEnum, the unit's own number for the choice), then the block read again,
+   * since a choice can change what other settings read (and, on some blocks,
+   * which pages there are). What the read says is what the buttons show: a
+   * choice the unit did not take goes back by itself.
+   */
+  const pickSetting = async (setting, value) => {
+    if (restoring) return
+    setChoosing((prev) => ({ ...prev, [setting.id]: value }))
+    try {
+      await setEnum(eid, setting.id, value)
+      noteEdited()
+      const fresh = await blockParams(eid)
+      setParams(fresh?.named || [])
+      setEnums(fresh?.enums || [])
+      setLayout(fresh?.layout || null)
+    } catch (err) {
+      onError(err.message)
+    } finally {
+      setChoosing((prev) => {
+        const copy = { ...prev }
+        delete copy[setting.id]
+        return copy
+      })
+    }
+  }
 
   /*
    * Search opens the right block, then puts your eyes on the control you named.
@@ -1100,6 +1147,7 @@ export function BlockPanel({
       noteEdited()
       const fresh = await blockParams(eid)
       setParams(fresh?.named || [])
+      setEnums(fresh?.enums || [])
       if (!res.ok) onError(didNotTake(p, res.actual, fresh?.named || []))
       setLocal((prev) => {
         if (prev[p.id] !== next) return prev
@@ -1684,6 +1732,9 @@ export function BlockPanel({
           )}
         </View>
       ) : null}
+
+      {/* The page's list settings, under its knobs and its Level (lib/editSettings; "Menu style B"). */}
+      {pageSettings.length ? <BlockSettings settings={pageSettings} choosing={choosing} disabled={!!restoring} onPick={pickSetting} /> : null}
 
       {namOnUnit ? <Note>{NAM_ON_THE_UNIT}</Note> : null}
 
