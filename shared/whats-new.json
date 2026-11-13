@@ -3,6 +3,13 @@
   "shownInApp": 10,
   "days": [
     {
+      "date": "2026-11-13",
+      "version": "1.90.47",
+      "lines": [
+        "Over Bluetooth or a USB cable on an Axe-Fx III, Play now shows the Crossover, Vocoder, Tone Match and Dynamic Distortion blocks, and turns them on and off like your other effects. On an FM9, the Crossover, Vocoder and Tone Match too."
+      ]
+    },
+    {
       "date": "2026-11-12",
       "version": "1.90.41",
       "lines": [

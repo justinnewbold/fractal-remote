@@ -1,6 +1,17 @@
 {
   "days": [
     {
+      "date": "2026-11-13",
+      "day": "13 November 2026",
+      "version": "1.90.47",
+      "lines": [
+        {
+          "text": "Over Bluetooth or a USB cable on an Axe-Fx III, Play now shows the Crossover, Vocoder, Tone Match and Dynamic Distortion blocks, and turns them on and off like your other effects. On an FM9, the Crossover, Vocoder and Tone Match too.",
+          "only": null
+        }
+      ]
+    },
+    {
       "date": "2026-11-12",
       "day": "12 November 2026",
       "version": "1.90.41",
@@ -252,37 +263,6 @@
         {
           "text": "Show the walkthrough no longer leaves you stuck at the sign-in screen: when you’re already signed in, Back to your own rig at the top takes you straight back. And when you press Previous or Next quickly a few times and one press doesn’t go through, Play now shows the preset your unit is really on.",
           "only": null
-        }
-      ]
-    },
-    {
-      "date": "2026-11-02",
-      "day": "2 November 2026",
-      "version": "1.89.27",
-      "lines": [
-        {
-          "text": "Settings → About opens straight onto its rows, the Bluetooth page’s three help pages open properly again, and Phone & computer has its Connect over Bluetooth button back and checks again for your computers and their units each time it opens.",
-          "only": null
-        },
-        {
-          "text": "Stars and setlists you make while trying the demo now stay in the demo, never changing your real ones or your account’s. The end of the demo walkthrough and the sign-in screen say you can connect with a computer or, with no computer, by Bluetooth, and that the computer is the best way.",
-          "only": null
-        },
-        {
-          "text": "Restore a purchase, tapped while signed out, says first that the purchase belongs to the account you bought it with, and offers to sign in to it. On a VP4, the purchase page and the demo say presets and scenes go as the messages a MIDI foot controller sends, and the FM3 warning on the Bluetooth page reads more plainly.",
-          "only": null
-        },
-        {
-          "text": "On an iPhone or iPad set to another language, the Bluetooth page no longer mistakes its own Wi-Fi MIDI connection for your adapter. With no adapter connected, it now says so.",
-          "only": "ios"
-        },
-        {
-          "text": "Settings → Siri shows the newer way to stop Siri using the app on iOS 27.2 and later, and the Apple Watch tips say plainly to keep your iPhone unlocked on Play for every tap to land, and to tap again if the first one after a long pause doesn’t.",
-          "only": "ios"
-        },
-        {
-          "text": "The back button inside Settings goes up one page instead of jumping straight to Play, and on the feedback screen it asks before throwing away what you wrote.",
-          "only": "android"
         }
       ]
     }

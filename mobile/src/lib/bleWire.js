@@ -1517,6 +1517,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * is handed on as any block with knobs is, and Edit, Play's hold pop-up
    * and the watch's quick edit, which all read this mark, open its knobs.
    * The IR Player has none for anybody.
+   *
+   * And so, by the same question and nothing written for them here, the
+   * blocks named on 13 November 2026 (lib/gen3Catalog OWN): the Crossover,
+   * the Vocoder and Tone Match on an FM9 and an Axe-Fx III, and the III's
+   * Dynamic Distortion. No knob catalog names one, so each is marked, for
+   * every account.
    */
   const knobsSaid = (b) => (g3Edit && !g3().editBlock(b.effectId) ? { ...b, knobs: false } : b)
 
@@ -1544,7 +1550,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * in 1.89.73 from what this line said in a customer's log), and the ids
    * that are not blocks at all (lib/gen3Catalog NOT_BLOCKS: the III's
    * Preset FC, 200, was in every preset's line, and so was 201, which his
-   * own III said is the preset's Performance page). Anything else still is.
+   * own III said is the preset's Performance page; and the RTA, 174, which
+   * has no on and off). And since 13 November 2026 the Crossover, the
+   * Vocoder, Tone Match and the III's Dynamic Distortion, named from what
+   * his own III answered. Anything else still is.
    */
   function sayStrangers(states) {
     const known = new Set([...blocks.filter((c) => Number.isInteger(c?.page) && c.slug).map((c) => c.page), ...NOT_BLOCKS])
@@ -2679,7 +2688,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * GET /reader/blocks: what the reader may be pointed at, out of the
    * unit's own list of what is in its preset now. Every block but the ids
    * that are not blocks (NOT_BLOCKS: the Controllers, the Foot Controller,
-   * the Performance page),
+   * the Performance page, the RTA),
    * each with the name the catalog has for it, or none, and whether Edit
    * already has its knobs: the ones it has none for come first, and one it
    * does have is there to check the reader against what is already known.
@@ -3483,7 +3492,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * was. The first effect the catalog names, before the amp and the cab
      * (an amp switched off is a silent rig for the moment it takes) and
      * the Axe-Fx III's NAM and IR Player, which stand where they do, and
-     * never the input, output or looper, which Play does not show. With
+     * before the Crossover, the Vocoder, Tone Match and Dynamic Distortion
+     * (lib/gen3Catalog OWN), so the check switches what it switched before
+     * they had names: a crossover splits a rig between two speakers, and
+     * the check is not the place to find out what one does switched off.
+     * Never the input, output or looper, which Play does not show. With
      * nothing but the amp and the cab, the amp, by name, whichever the unit
      * lists first: the step's `warn` says so before it is tapped.
      */
@@ -3492,7 +3505,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (!Array.isArray(list)) throw failure('The unit did not list its blocks.', 504)
       const slugOf = (b) => blocks.find((c) => c?.page === b.effectId)?.slug
       const known = list.filter((b) => slugOf(b) && !OFF_STAGE.includes(slugOf(b)))
-      const block = known.find((b) => !['amp', 'cab', 'nam', 'irplayer'].includes(slugOf(b))) || known.find((b) => slugOf(b) === 'amp') || known[0]
+      const block = known.find((b) => !['amp', 'cab', 'nam', 'irplayer', 'crossover', 'vocoder', 'tonematch', 'dynadist'].includes(slugOf(b))) || known.find((b) => slugOf(b) === 'amp') || known[0]
       if (!block) throw failure('There is no effect to switch in this preset.', 409)
       const eid = block.effectId
       const name = nameOf(eid)

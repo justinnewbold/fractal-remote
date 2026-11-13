@@ -781,9 +781,10 @@ what the computer sends for the same edit, and a test holds it there.
     (0: 257 slots named by whatever is loaded on that unit, numbered from 0
     where Axe-Edit counts from 001, so the block has no model picker and
     no model write, `typeId: null`); the block's own bypass (4), which
-    Play's on and off does; setting 7, a list OFF / ON that nobody has a
-    name for (it is not Phase Invert); and values 16 and 17 of each
-    channel, which follow the capture and are never written. Edit says the
+    Play's on and off does; setting 7, which is Scene Ignore (OFF / ON,
+    named after the list was written: he switched it on in Axe-Edit and
+    the next read showed it), and values 16 and 17 of each channel, which
+    follow the capture and are never written. Edit says the
     capture is chosen on the unit (lib/gen3Catalog `NAM_ON_THE_UNIT`). The
     IR Player still has no knobs for anybody.
   - *NOTHING HAS BEEN WRITTEN TO A NAM BLOCK ON A REAL UNIT.* The numbers
@@ -823,16 +824,35 @@ what the computer sends for the same edit, and a test holds it there.
     checked against (Input 1). NAM 1 and NAM 2 are the same: 16 settings,
     18 values a channel. The names came from Axe-Edit III's NAM page the
     same day, and a second read after he set four switches there gave
-    their numbering; both are in that file. STILL NOT KNOWN: the name of
-    setting 7, and what values 16 and 17 mean (they follow the capture).
+    their numbering; both are in that file, with a third read that named
+    setting 7 (Scene Ignore). STILL NOT KNOWN: what values 16 and 17 mean
+    (they follow the capture).
   - *Block 201, in every III preset, is the preset's Performance page*
     (ten controls: a label, the block it points at, the setting it turns),
     so it is in `NOT_BLOCKS` and no longer in the log's line of unnamed
     blocks. Its ten settings named the app's Axe-Fx III table right, ten
-    for ten: the first check of ForgeFX's III tables against a unit. Edit
+    for ten: the first check of ForgeFX's III tables against a unit, and
+    Axe-Edit III's Perform page showed the same ten the same day. Edit
     itself has still not been turned on one. Reading that page into the
     app (his ten controls, his labels, per preset) was offered and not
     asked for.
+  - *The blocks the app had no name for* ("double check we have all those
+    blocks already set up", 13 November 2026). He put one of each in a
+    preset, read them, and sent Axe-Edit III's page for each; the numbers
+    and names are in docs/ax3-readings.md. Since 1.90.47 Play over
+    Bluetooth draws and switches the Vocoder (134), Crossover 1 and 2
+    (142, 143) and Tone Match (170) on an FM9 and an Axe-Fx III, and the
+    III's Dynamic Distortion 1 and 2 (202, 203), for everybody
+    (lib/gen3Catalog `OWN`). The III's were read off his unit (143 and 203
+    are the next id of each pair, not read); the FM9's stand on Fractal's
+    enum and Blocks Guide, not on a unit. The RTA (174) has no on and off,
+    so it is in `NOT_BLOCKS` and never drawn. None of them, nor the IR
+    Player, has knobs in the app yet: Edit gives each its on and off.
+    Their knobs, the switches Edit draws for no block, the NAM capture
+    picker, and all of this through the computer (where they are still a
+    New block: a ForgeFX change and a computer release) are the work left,
+    in that order. Not settled by a read: which of the Crossover's four
+    levels and four pans is which.
   - *A value's text is a C string in a 32-byte buffer*: the text, a NUL,
     and old bytes from earlier answers after it. The codec's decodeReply
     trims noughts off the end and wants the rest printable, so every value

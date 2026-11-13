@@ -1216,7 +1216,7 @@ export function BluetoothLimits() {
       {[editingLine(editOpen), ...DIFFERENT].map((line) => (
         <Bullet key={line}>{line}</Bullet>
       ))}
-      {/* The unit's own: blocks Play does not draw yet on an FM9 or Axe-Fx III (shared/bluetooth-gear missingBlocksLine). */}
+      {/* The unit's own: a block Play does not draw yet, when a unit has one (shared/bluetooth-gear missingBlocksLine: none since 1.90.47, so no line). */}
       {missingBlocksLine(b.unit) ? <Bullet>{missingBlocksLine(b.unit)}</Bullet> : null}
       <Hint>{BLUETOOTH_WAYS}</Hint>
     </View>
