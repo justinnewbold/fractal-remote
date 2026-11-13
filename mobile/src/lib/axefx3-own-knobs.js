@@ -145,7 +145,21 @@
  * block take one.
  *
  * Every family is sent one way only, as the NAM block is (`typedKnobs:
- * false`), and NOTHING HERE HAS BEEN TURNED ON A UNIT.
+ * false`). The NAM block's knobs have been turned on his unit and held (13
+ * November 2026); NOTHING ELSE HERE HAS BEEN TURNED ON A UNIT.
+ *
+ * THE COMPUTER APP SERVES THIS SAME LIST (ForgeFX server/src/ownBlocks.ts,
+ * from the pin 0488f11, 1.90.51), for a block read through the computer.
+ * The two are changed together: a row added or renamed here goes there too,
+ * with a new pin and a computer release.
+ *
+ * AND THE CODEC HAS A MINED TABLE OF ITS OWN for the five that are not NAM
+ * (forgefx-midi AXE3_PARAMS: VOCODER, CROSSOVER, TONEMATCH, IRPLAYER,
+ * DYNDIST), which nothing reached because the codec has no effect id for
+ * those blocks. It is the editor's own names, so a name is checked against
+ * it: it put the Vocoder's settings 5 and 9 right, which were entered here
+ * the other way round (both read 1.000). Its ranges are not all what the
+ * unit shows, so the rows below stay the ones read off the unit.
  */
 
 /** [slug, family, name, palette page], as AXE3_BLOCKS has every other block. */
@@ -174,9 +188,9 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
     knobs: [
       [3, 'Min Frequency', 20, 2000, 1, 'Hz'], // 32767 read as 200.0 Hz
       [4, 'Max Frequency', 2000, 20000, 1, 'Hz'], // 26079 read as 5000 Hz
-      [5, 'Filter Resonance', 0.5, 2, 1, null], // 32767 read as 1.000
+      [5, 'Frequency Shift', 0.5, 2, 1, null], // 32767 read as 1.000. The codec's own table (VOCODER_CSHIFT), see below
       [7, 'Master Level', 0, 100, 0, '%'], // end only: 65534 read as 100.0 %
-      [9, 'Frequency Shift', 0.2, 5, 1, null], // 32767 read as 1.000
+      [9, 'Filter Resonance', 0.2, 5, 1, null], // 32767 read as 1.000. The codec's own table (VOCODER_RES)
       [10, 'Attack', 5, 1000, 1, 'ms'], // 8573 read as 10.00 ms
       [11, 'Decay', 5, 1000, 1, 'ms'], // 28480 read as 50.00 ms
       [12, 'Highpass Mix', 0, 100, 0, '%'], // end only: 0 read as 0.0 %
@@ -279,6 +293,7 @@ export const AXE3_OWN_FAMILIES = Object.freeze({
     switches: [
       [3, 'Bypass Mode', 0, 1, ['THRU', 'MUTE']],
       [6, 'Phase Invert', 0, 1, ['NORMAL', 'INVERT']],
+      [7, 'Scene Ignore', 0, 1, ['OFF', 'ON']],
       [8, 'Tone Stack Location', 0, 2, ['PRE', 'POST', 'OFF']],
       [9, 'Tone Stack Type', 0, 11, ['ACTIVE', 'BROWNFACE', 'BLACKFACE', 'BASSGUY', 'TOP BOOST', 'PLEXI', 'USA MARK IV', 'USA PRE LD2', 'RECTO ORANGE', 'RECTO RED', 'SKYLINE', 'PVH 6160']],
       [13, 'Input Mode', 0, 2, ['LEFT', 'RIGHT', 'SUM L+R']]

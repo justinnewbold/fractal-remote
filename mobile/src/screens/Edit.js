@@ -12,6 +12,7 @@ import {
   blockTypes,
   cabState,
   clearCell,
+  editBlocks,
   idOf,
   listIrBanks,
   modifierModel,
@@ -30,6 +31,7 @@ import { CABLE_EDIT_NOTE } from '../lib/cableWords'
 import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
 import { VP4_NO_EDITS, VP4_NO_KNOBS } from '../lib/vp4-safety'
 import { NAM_ON_THE_UNIT, NO_KNOBS_YET } from '../lib/gen3Catalog'
+import { OWN_KNOBS_NEED_COMPUTER } from '../lib/ownBlocks'
 import {
   CAB_REFUSED,
   CAB_UNDO_LOST,
@@ -216,7 +218,9 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
    * blocks the app knows, for everything here that opens, turns or names one.
    */
   const chainAll = useRig(ofBlocks)
-  const blocks = useMemo(() => knownBlocks(chainAll), [chainAll])
+  const blocks = useMemo(() => editBlocks(chainAll), [chainAll])
+  /* Modifiers go by the blocks the app knows: never one the phone named for itself (lib/ownBlocks `turns`). */
+  const modBlocks = useMemo(() => knownBlocks(blocks), [blocks])
   const scene = useRig(ofScene)
   /* The preset loaded again: same block, channel and scene, other values. */
   const bufferRev = useRig(ofBufferRev)
@@ -688,7 +692,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
       */}
       {toolShown && tool === 'chain' ? <ChainEditor blocks={chainAll} caps={caps} onError={setError} onScrollLock={setHeld} onClose={() => setTool(null)} /> : null}
       {toolShown && tool === 'modifiers' ? (
-        <Modifiers key={modStart ? `${modStart.eid}:${modStart.paramId}` : 'more'} blocks={blocks} onError={setError} start={modStart} onClose={() => setTool(null)} />
+        <Modifiers key={modStart ? `${modStart.eid}:${modStart.paramId}` : 'more'} blocks={modBlocks} onError={setError} start={modStart} onClose={() => setTool(null)} />
       ) : null}
       {toolShown && tool === 'rename' ? <RenameDoor onClose={() => setTool(null)} /> : null}
 
@@ -733,7 +737,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
             /* The i beside the model: Amp & pedal names, on that model (lib/editMore gearStart). */
             onModelInfo={onOpenGear ? (start) => onOpenGear(start) : null}
             /* A knob held still: Modifiers, on that knob (lib/editMore HOLD_MS). Only where More offers Modifiers. */
-            onHoldKnob={modsHere ? (eid, paramId) => openTool('modifiers', { eid, paramId }) : null}
+            onHoldKnob={modsHere && block.turns !== true ? (eid, paramId) => openTool('modifiers', { eid, paramId }) : null}
           />
         </View>
       ) : !toolShown && blocks.length && !chainNow.elsewhere && !vp4Bench() ? (
@@ -923,6 +927,8 @@ export function BlockPanel({
   /* What is typed into the model find box. */
   const [hunt, setHunt] = useState('')
   const [loading, setLoading] = useState(false)
+  /* The block's read has come back at least once (for the line that says its knobs need a newer computer app, below). */
+  const [answered, setAnswered] = useState(false)
   /* Values a finger has moved but the unit has not confirmed yet. */
   const [local, setLocal] = useState({})
   /* One checked write per control at a time — see commit. */
@@ -986,6 +992,7 @@ export function BlockPanel({
         const c = bare ? null : block.slug === 'cab' ? await readCab(() => cabState(eid), p) : null
         if (stop) return
         setParams(p?.named || [])
+        setAnswered(true)
         setLayout(p?.layout || null)
         setModels(t || [])
         setType_(p?.type ?? null)
@@ -1564,6 +1571,8 @@ export function BlockPanel({
       ) : null}
 
       {noKnobsYet ? <Note>{NO_KNOBS_YET}</Note> : null}
+      {/* One the computer answers the knobs of (lib/ownBlocks `turns`), on a computer app from before it could: its read came back with none. */}
+      {block.turns === true && answered && !loading && !params.length ? <Note>{OWN_KNOBS_NEED_COMPUTER}</Note> : null}
 
       {/* ------------------------------------------------------------ knobs */}
       {/*

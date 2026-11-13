@@ -40,3 +40,21 @@ export const withNam = gen3Edit({
   rosters: AXE3_ROSTERS,
   pages: AXE3_PAGES
 })
+
+/**
+ * AND WITH THE NAM BLOCK ALONE (13 November 2026). "Open them to everyone":
+ * the NAM block's knobs had been turned on his own Axe-Fx III and held, and
+ * the other five blocks in the hand-written list had not been turned at all.
+ * So every account gets the codec's catalog and the NAM block, and nothing
+ * else of that list; the whole of it (`withNam`, above, whose name is from
+ * when NAM was the only one in it) stays his account's until one of the five
+ * has been turned (lib/features OWN_KNOBS_FOR_EVERYONE).
+ */
+const NAM_BLOCKS = Object.fromEntries(Object.entries(AXE3_OWN_BLOCKS).filter(([, b]) => b[1] === 'NAM'))
+export const namOnly = gen3Edit({
+  model: MODELS.axefx3,
+  blocks: { ...NAM_BLOCKS, ...AXE3_BLOCKS },
+  families: { NAM: AXE3_OWN_FAMILIES.NAM, ...AXE3_FAMILIES },
+  rosters: AXE3_ROSTERS,
+  pages: AXE3_PAGES
+})

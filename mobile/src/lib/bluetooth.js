@@ -15,7 +15,7 @@ import { installedStoreVersion } from './storeVersion'
 import { EDIT_UNITS, bluetoothOpen, editOffered, unitOffered } from './ble-rule'
 import { deviceNoun } from './device-word'
 import { namedForFm3, neverOnFm3, notAnAdapter, unitForReport } from './bluetooth-gear'
-import { NAM_KNOBS_FOR_EVERYONE } from './features'
+import { NAM_KNOBS_FOR_EVERYONE, OWN_KNOBS_FOR_EVERYONE } from './features'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -1997,8 +1997,8 @@ export function openWire() {
     edit: () => editOverBluetooth(unit),
     /* The developer's block reader (lib/gen3-describe), his account's alone, asked at every request. */
     reader: () => allUnits === true,
-    /* An Axe-Fx III's NAM block with its knobs in Edit (lib/axefx3-own-knobs): his account's, until lib/features NAM_KNOBS_FOR_EVERYONE opens it; asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
-    namKnobs: () => allUnits === true || NAM_KNOBS_FOR_EVERYONE
+    /* An Axe-Fx III's own blocks with their knobs in Edit (lib/axefx3-own-knobs): the whole list for his account, the NAM block for everyone (ownKnobsLevel, below); asked at every request and every send. Edit's own door still has to be open (`edit`, above). */
+    namKnobs: () => ownKnobsLevel(allUnits === true)
   })
   const mine = wire
   joiner = createJoiner({
@@ -2047,3 +2047,13 @@ export async function runCheck(step) {
     return { step, ok: false, rows: [], error: err?.message || String(err) }
   }
 }
+
+/**
+ * HOW MUCH OF AN AXE-FX III'S OWN BLOCKS' KNOBS an account gets in Edit, for
+ * the wire (bleWire ownEditOf) and for a block named through the computer
+ * (lib/ownBlocksHere): `true` is every block in the hand-written list
+ * (lib/axefx3-own-knobs), his account's until lib/features
+ * OWN_KNOBS_FOR_EVERYONE; `'nam'` is the NAM block alone, every account's
+ * since NAM_KNOBS_FOR_EVERYONE; false is none.
+ */
+export const ownKnobsLevel = (admin) => (admin === true || OWN_KNOBS_FOR_EVERYONE ? true : NAM_KNOBS_FOR_EVERYONE ? 'nam' : false)

@@ -740,32 +740,36 @@ that ForgeFX's tables for them (an amp's Gain is setting 7 on an FM3, 11 on
 an FM9 and 1 on a III) are what the unit takes; the phone sends exactly
 what the computer sends for the same edit, and a test holds it there.
 
-- **The NAM block has its knobs in Edit for his account only, written by
-  hand from what his AX3 said, and he has turned them on his unit: "Knobs
-  all work over Bluetooth correctly"** (13 November 2026). Over Bluetooth, or the unit's USB cable
+- **The NAM block has its knobs in Edit for EVERY account since 1.90.51,
+  written by hand from what his AX3 said. He turned them on his unit
+  ("Knobs all work over Bluetooth correctly") and, asked whether to open
+  them or keep them on his account, said "Open them to everyone"** (13 November 2026). Over Bluetooth, or the unit's USB cable
   into the phone, Play draws and switches NAM 1 and NAM 2 (206 and 207, off
   a customer's log) for everybody. The codec's catalog has no NAM
   (axefx3-knobs.js is generated and never hand-edited), so its settings are
   in a file of their own, mobile/src/lib/axefx3-own-knobs.js, laid beside
   the catalog in axefx3-edit.js as a second Edit of the III's (`withNam`).
-  - *The switch is `NAM_KNOBS_FOR_EVERYONE` in mobile/src/lib/features.js,
-    and it is false.* lib/bluetooth hands the wire `namKnobs` (his account,
-    or the switch), asked at each request and each send. Closed, which is
-    every other account, the III is exactly what it was: NAM is marked
-    `knobs: false`, Edit says "This block's knobs aren't in the app yet",
-    and a read or write of Edit's at 206 or 207 is refused at the way out
-    (bleWire gen3Sender). Open, the wire reads and guards the III through
-    `withNam`. It opens to everyone only when he says so, after it has run
-    on his unit, with its What's new line then; Edit's own door
+  - *Two switches in mobile/src/lib/features.js, and one level.*
+    `NAM_KNOBS_FOR_EVERYONE` is true; `OWN_KNOBS_FOR_EVERYONE`, for the
+    other five blocks in the list (below), is false. lib/bluetooth turns
+    them into one answer (`ownKnobsLevel`), asked by the wire at each
+    request and each send: `true`, the whole list, for his account
+    (axefx3-edit `withNam`, named from when NAM was alone in it); `'nam'`,
+    the NAM block alone, for everybody (`namOnly`); false, the codec's
+    catalog as it was. Where a block is not in the account's Edit it is
+    marked `knobs: false`, Edit says "This block's knobs aren't in the app
+    yet", and a read or write of Edit's at its id is refused at the way
+    out (bleWire gen3Sender, `ownEditOf`). Edit's own door
     (`EDIT_FROM_STORE`) still decides whether a copy edits at all.
   - *What is in it: only what is certain.* Eight knobs: Input Gain
     (setting 5), Bass, Mid and Treble (10, 11, 12), Bright (14) and Bright
     Cap (15, in pF, along a logarithmic travel), and the block's Level (1)
     and Balance (2) entered as every block's are, so Edit treats them as it
     treats any (the Level a box to type in, never below the floor; Balance
-    no knob on the phone). And five switches, numbered as the UNIT numbers
+    no knob on the phone). And six switches, numbered as the UNIT numbers
     them (Axe-Edit sorts its menus by the alphabet): Bypass Mode (3: 0
-    THRU, 1 MUTE), Phase Invert (6: 0 NORMAL, 1 INVERT), Tone Stack
+    THRU, 1 MUTE), Phase Invert (6: 0 NORMAL, 1 INVERT), Scene Ignore (7:
+    0 OFF, 1 ON, in the list since 1.90.51), Tone Stack
     Location (8: 0 PRE, 1 POST, 2 OFF), Tone Stack Type (9, twelve names)
     and Input Mode (13: 0 LEFT, 1 RIGHT, 2 SUM L+R). Every number was read
     off his unit but two, PRE and RIGHT, which are the one choice left in a
@@ -774,16 +778,14 @@ what the computer sends for the same edit, and a test holds it there.
     the switches in Axe-Edit, coming out as Axe-Edit showed them.
   - *The phone's Edit draws no switch, of any block* (a block's params read
     carries them in `enums`, and the screen draws `named` only). So the
-    five are read, guarded and can be written through the wire, and have
+    six are read, guarded and can be written through the wire, and have
     nothing on screen: that is an Edit feature nobody has built, not a NAM
     one.
   - *What is left out, so no frame can be built for it:* Type, the capture
     (0: 257 slots named by whatever is loaded on that unit, numbered from 0
     where Axe-Edit counts from 001, so the block has no model picker and
     no model write, `typeId: null`); the block's own bypass (4), which
-    Play's on and off does; setting 7, which is Scene Ignore (OFF / ON,
-    named after the list was written: he switched it on in Axe-Edit and
-    the next read showed it), and values 16 and 17 of each channel, which
+    Play's on and off does; and values 16 and 17 of each channel, which
     follow the capture and are never written. Edit says the
     capture is chosen on the unit (lib/gen3Catalog `NAM_ON_THE_UNIT`).
   - *The same list and the same switch carry the III's other own blocks
@@ -804,6 +806,42 @@ what the computer sends for the same edit, and a test holds it there.
     Distortion's Type is a switch, not a model. One way only for all of
     them, and none has been turned on a unit. An FM9 has no hand-written
     list: there these blocks keep their on and off and no knobs.
+  - *THE CODEC HAS A MINED TABLE FOR FIVE OF THE SIX, AND IT PUT TWO
+    NAMES RIGHT* (found 13 November 2026). forgefx-midi's AXE3_PARAMS
+    carries VOCODER, CROSSOVER, TONEMATCH, IRPLAYER and DYNDIST, from the
+    editor's own definitions, with the same record counts as his unit's
+    reads; nothing reached them because the codec has no effect id for
+    those blocks. The Vocoder's Frequency Shift is setting 5 (0.5 to 2)
+    and its Filter Resonance setting 9 (0.2 to 5): the hand-written list
+    had the two names the other way round, since both read 1.000, and is
+    corrected in 1.90.51. The mined table also names what a read could not
+    settle (the Crossover's levels are 2 Low Left, 3 Hi Left, 4 Low Right,
+    5 Hi Right, its pans 6 to 9 the same order; Tone Match 4 is Match, 13
+    Reference Solo; the Vocoder's 17 is its global mix), but its ranges
+    are not all what the unit shows (Dynamic Distortion's Drive is 1 to
+    1000 there and 0 to 10 on the unit's screen), so the hand-written rows
+    stay what both ends serve. Check a name against it before guessing.
+  - *THROUGH THE COMPUTER THE SAME LIST IS SERVED BY THE COMPUTER APP,
+    from the release that carries ForgeFX 0488f11* (1.90.51: "let's get
+    the computer out built ... right now I have no knobs showing when I'm
+    connected over raspberry pie"). ForgeFX's server/src/ownBlocks.ts is
+    this list, for an Axe-Fx III only (its ids mapped to their families in
+    the III's profile, the rows served in the mined table's place, no
+    editor layout, no walk laid over them). THE TWO ARE CHANGED TOGETHER:
+    a row added or renamed in mobile/src/lib/axefx3-own-knobs.js goes into
+    ownBlocks.ts, a new pin and a computer release. The chain read still
+    passes these blocks on with no slug, so the phone still names them
+    (lib/ownBlocks, below) and marks one whose knobs the computer answers
+    `turns: true` in place of `knobs: false` (`turnsThroughComputer`: a
+    III only, by the same level as over Bluetooth). Edit's own list and
+    the hold pop-up take a `turns` block (lib/device `editBlocks`,
+    `knobBlocks`); it is still `unknown` to the chain editor and never
+    offered to Modifiers. On an older computer app its read answers no
+    knobs and Edit says "Update the computer app to turn this block's
+    knobs." (`OWN_KNOBS_NEED_COMPUTER`), so COMPUTER_NEEDED did not move.
+    NOTHING HAS BEEN TURNED THROUGH THE COMPUTER ON THESE BLOCKS YET: his
+    Raspberry Pi is the first check. The browser and the computer's own
+    window still say New block.
   - *THE NAM BLOCK'S KNOBS HAVE BEEN TURNED ON A REAL UNIT, AND THEY
     WORK.* "Knobs all work over Bluetooth correctly" (Justin, 13 November
     2026, his AX3 from his iPhone, app 1.90.48). That is the first write
@@ -812,11 +850,10 @@ what the computer sends for the same edit, and a test holds it there.
     for its place) is taken there. A NAM's knob is still never sent the
     typed way the app falls back to elsewhere (gen3-edit `typedKnobs:
     false`, "ONE WAY ONLY"): it did not need it. NOT TURNED YET: the NAM
-    block's five switches (Edit draws none, so there is nothing to tap),
-    and every knob of the other five blocks in the list. The switch is
-    still his account only: it opens when he says so, and it carries the
-    five unturned blocks with it unless they are given a switch of their
-    own first.
+    block's six switches (Edit draws none, so there is nothing to tap),
+    and every knob of the other five blocks in the list, which is why
+    they have a switch of their own (`OWN_KNOBS_FOR_EVERYONE`, false) and
+    did not open with the NAM block's.
 - **The block reader is how a block is asked what is in it** (12 November
   2026: "Yes build the NAM reader now"). No catalog named what is inside
   the NAM block, and through the computer it is still a New block. So
@@ -870,10 +907,9 @@ what the computer sends for the same edit, and a test holds it there.
     so it is in `NOT_BLOCKS` and never drawn. On the III they have knobs
     for his account since 1.90.49 (above); for everybody else, and on an
     FM9, Edit gives each its on and off. The switches Edit draws for no
-    block, the NAM capture picker, and all of this through the computer
-    (where they are still a New block: a ForgeFX change and a computer
-    release) are the work left, in that order. Not settled by a read:
-    which of the Crossover's four levels and four pans is which.
+    block and the NAM capture picker are the work left, in that order.
+    Which of the Crossover's four levels and four pans is which was
+    settled by the codec's mined table (above), not by a read.
   - *Through the computer the phone names them itself, HIS ACCOUNT ONLY*
     (1.90.48). "NAM shows up on Bluetooth but not when connected through
     my raspberry pie" and "I would rather use the pi if that's possible"
@@ -892,9 +928,9 @@ what the computer sends for the same edit, and a test holds it there.
     `OWN_BLOCKS_THROUGH_COMPUTER_FOR_EVERYONE` in features.js, false;
     nobody has switched one through a computer yet, and his Raspberry Pi
     is the first check. The browser and the computer's own window still
-    say New block (naming them there is a computer release). Left: Edit
-    through the computer for these blocks, which needs the engine to know
-    them.
+    say New block (naming them there is a computer release). Edit through
+    the computer for these blocks came in 1.90.51 (above): the engine
+    serves their knobs, and the phone still names them.
   - *A value's text is a C string in a 32-byte buffer*: the text, a NUL,
     and old bytes from earlier answers after it. The codec's decodeReply
     trims noughts off the end and wants the rest printable, so every value

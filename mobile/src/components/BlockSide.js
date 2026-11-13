@@ -2,13 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ScrollView, Text, View } from 'react-native'
 
 import { color, font, space } from '../lib/theme'
-import { idOf, sameBlock } from '../lib/device'
+import { editBlocks, idOf, sameBlock } from '../lib/device'
 import { overBluetooth } from '../lib/bleSwitch'
 import { useCableNow } from '../lib/bluetooth'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
 import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
 import { chainActs } from '../lib/chain-view'
-import { knownBlocks } from '../lib/new-block'
 import { blockColor } from '../lib/blockColors'
 import { useRig } from '../lib/rig'
 import { PANEL_FOOT, panelFollows } from '../lib/twoSides'
@@ -76,7 +75,7 @@ export default function BlockSide({
   useEffect(() => () => lockOut.current?.(false), [])
 
   const chainAll = useRig(ofBlocks)
-  const blocks = useMemo(() => knownBlocks(chainAll), [chainAll])
+  const blocks = useMemo(() => editBlocks(chainAll), [chainAll])
   const scene = useRig(ofScene)
   const bufferRev = useRig(ofBufferRev)
   const caps = useRig(ofCaps)
@@ -215,7 +214,7 @@ export default function BlockSide({
 export function KnobsFollow({ eid, onClose }) {
   const chainAll = useRig(ofBlocks)
   const chainNow = useChain({ editing: true })
-  const found = useMemo(() => knownBlocks(chainAll).some((b) => sameBlock(b, eid)), [chainAll, eid])
+  const found = useMemo(() => editBlocks(chainAll).some((b) => sameBlock(b, eid)), [chainAll, eid])
   const says = panelFollows({ found, elsewhere: chainNow.elsewhere, acts: chainActs(chainNow.view) })
   const close = useRef(onClose)
   close.current = onClose

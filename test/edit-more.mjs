@@ -120,7 +120,7 @@ export function run(test) {
     assert.match(app, /onOpenGear=\{\(\) => \{ setGearStart\(null\) setGearBack\('settings'\) setScreen\('gear'\) \}\}/, 'Settings opens Amp & pedal names on the last model Edit asked for')
     /* A held knob: longer than a phone's own long press, no further than a few points, writes nothing, and only where More offers Modifiers. */
     assert.ok(HOLD_MS >= 600 && HOLD_SLOP <= 8)
-    assert.match(edit, /onHoldKnob=\{modsHere \? \(eid, paramId\) => openTool\('modifiers', \{ eid, paramId \}\) : null\}/)
+    assert.match(edit, /onHoldKnob=\{modsHere && block\.turns !== true \? \(eid, paramId\) => openTool\('modifiers', \{ eid, paramId \}\) : null\}/)
     const knob = flat(read('mobile/src/components/Knob.js'))
     assert.match(knob, /if \(holdWait\.current && \(Math\.abs\(gesture\.dy\) > HOLD_SLOP \|\| Math\.abs\(gesture\.dx\) > HOLD_SLOP\)\) stopHold\(\) if \(holding\.current\) return/)
     assert.equal((knob.match(/if \(holding\.current\) \{ holding\.current = false dragged\.current = undefined return \}/g) || []).length, 2, 'a held knob writes a value when it is let go')

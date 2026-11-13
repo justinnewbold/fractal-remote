@@ -641,7 +641,7 @@ export function run(test) {
     assert.match(view, /caption="Model"/)
     assert.match(view, /pages\.map\(\(pg\) => \(/)
     /* No second copy of the knob code, and nothing of its own on the wire: the panel only finds the block and hands it to Edit's view, whose senders are all marked as Edit's (lib/device EDITING). */
-    assert.match(side, /import \{ idOf, sameBlock \} from '\.\.\/lib\/device'/)
+    assert.match(side, /import \{ editBlocks, idOf, sameBlock \} from '\.\.\/lib\/device'/)
     assert.equal(side.match(/from '\.\.\/lib\/device'/g).length, 1)
     assert.doesNotMatch(side, /setParam|setEnum|setType|blockParams|blockTypes|remoteRequest|writeChannel|writeBlockBypass|writeBypass|<Knob\b|ValueBox|ChannelCopy|BlockColour/, 'the panel reads or writes the unit itself, or draws a control of its own')
     const device = read('mobile/src/lib/device.js')

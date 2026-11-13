@@ -12,8 +12,12 @@ export const WHATS_NEW = [
   {
     "date": "2026-11-13",
     "day": "13 November 2026",
-    "version": "1.90.50",
+    "version": "1.90.51",
     "lines": [
+      {
+        "text": "On an Axe-Fx III over Bluetooth or a USB cable, Edit now has the NAM block’s knobs: Input Gain, Bass, Mid, Treble, Bright, Bright Cap and Level. The capture is still chosen on the unit.",
+        "only": null
+      },
       {
         "text": "In Edit, tapping the number under a knob now highlights it, so you can type a new number straight over it.",
         "only": null
