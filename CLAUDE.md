@@ -971,18 +971,55 @@ what the computer sends for the same edit, and a test holds it there.
     FIRST NUL (gen3-describe decodeDescribe), on purpose unlike the pinned
     codec, which has the same blind spot. What still is not text is
     printed as it came, never a bare "?".
-- **Saving over Bluetooth is still not built, and the page says what
-  else is not** (12 November 2026). He thought it was: "I think we can
-  actually save on Bluetooth now and I don't know that there's really
-  anything else that we can't do on Bluetooth so we can do on the computer
-  yet correct? If so, what are those items?" It is not (bleWire's
-  `supportsSave: false`), and he was told, with the list. Bluetooth → What
-  Bluetooth can't do (lib/editWords, screens/Bluetooth `DIFFERENT`) now
-  says each thing once: what Edit does in the paragraph, and in the list
-  no saving, no moving, adding or removing blocks, no modifiers, renaming
-  or copying a channel, a cab chosen with the computer on the three gen-3
-  units, and no looper, volume button, unit metronome click or
-  Footswitches page. Keep that page true whenever one of these is built.
+- **Saving over Bluetooth is built, HIS ACCOUNT ONLY, since 1.90.52 (13
+  November 2026).** He had thought it existed ("I think we can actually
+  save on Bluetooth now", 12 November, and was told it did not), and then
+  asked for it: "It still says we can't save in Bluetooth when you pull up
+  the quick edit menus and stuff. Please enable that and remove the
+  warning."
+  - *What is sent* is the computer app's own save, byte for byte
+    (mobile/src/lib/bleSave.js, held to forgefx-midi's frames by a test):
+    on an FM3, FM9 or Axe-Fx III, function 0x01 with 26 00 and the slot
+    (buildStorePreset); on an AM4, action 0x1B with the location
+    (buildSaveToLocation, which ForgeFX calls hardware-confirmed). NEVER A
+    VP4, whose wire has no save.
+  - *Only over the preset the unit is on.* There is no "save to another
+    slot" anywhere in it. The Save button asks the unit where it is
+    (shared save-wait `stillOnPreset`), and the wire asks again itself
+    straight before the frame (bleWire `storePreset`: a gen-3 unit's
+    preset, an AM4's structure read afresh); a unit that has moved, or
+    does not say, is sent nothing. The way out (gen3Sender, am4Sender)
+    passes a frame of a save's shape only while that one save is being
+    sent, and only as the save over that slot (`saveAllowed`).
+  - *The switch* is `SAVE_OVER_BLUETOOTH_FOR_EVERYONE` in features.js,
+    false. lib/bluetooth `saveOverBluetooth()` (his account, or the
+    switch) is handed to the wire as `save`, which also wants Edit open;
+    the wire's capabilities then say `supportsSave`, a change counts as
+    unsaved (rig.noteEdited), and Edit's Save and Play's appear as they do
+    through a computer (components/SaveToSlot, whose Bluetooth path calls
+    lib/device `saveOnWire`).
+  - *The note is gone where the app saves*: Edit's one-time line that a
+    change is lost unless it is saved on the unit (BLE_NOTE, and the
+    cable's) is not drawn in Edit, the panel or the hold pop-up
+    (lib/editWords `editNoteUp`), and the Bluetooth page says Save among
+    what Edit does and drops its sentence about saving (`editingLine` and
+    `limitsLine`, with `saves`). Every other account reads every word as
+    before.
+  - *NOTHING HAS BEEN SAVED FROM THE PHONE TO A UNIT YET.* His first save
+    is the first check, on each unit: an AM4, an FM3 and an Axe-Fx III are
+    his to try; an FM9 he does not have.
+  - *OPENING IT TO CUSTOMERS IS A STORE VERSION, not the switch alone.*
+    Every copy out was reviewed with notes, and a listing, that say there
+    is no saving over Bluetooth, exactly as Edit over Bluetooth was until
+    1.90.0. So it goes in a build pair's pull request, keyed to that store
+    version as `EDIT_FROM_STORE` keys Edit, with the review notes, What's
+    New and the website's pages saying so, and never by an update.
+  - Bluetooth → What Bluetooth can't do (lib/editWords, screens/Bluetooth
+    `DIFFERENT`) still says, for everybody: no moving, adding or removing
+    blocks, no modifiers, renaming or copying a channel, a cab chosen with
+    the computer on the three gen-3 units, and no looper, volume button,
+    unit metronome click or Footswitches page. Keep that page true
+    whenever one of these is built.
 - **The switch is one line**: `EDIT_FROM_STORE` in
   mobile/src/lib/ble-rule.js, one entry per unit whose knobs are built,
   null until a store version opens it. To get it out to everyone, set the

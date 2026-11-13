@@ -763,6 +763,19 @@ export function parkSave(slug, request) {
 }
 
 /**
+ * Save with no computer, on the unit's own wire (lib/bleSave, bleWire
+ * storePreset): the unit's edit buffer over the preset it is on. Handed to
+ * the wire directly, as the demo's save is to the simulated unit below, and
+ * never sent as POST /preset/store. With no such wire, or one that has no
+ * save, it answers null and the caller says so.
+ */
+export async function saveOnWire(slot) {
+  const wire = bluetoothWire()
+  if (!wire || typeof wire.storePreset !== 'function') return null
+  return wire.storePreset(slot)
+}
+
+/**
  * Save in the demo, which has no computer to ask: the simulated unit keeps the
  * preset on this phone.
  *

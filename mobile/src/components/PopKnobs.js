@@ -6,6 +6,7 @@ import { idOf } from '../lib/device'
 import { overBluetooth } from '../lib/bleSwitch'
 import { useCableNow } from '../lib/bluetooth'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
+import { editNoteUp } from '../lib/editWords'
 import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
 import { useRig } from '../lib/rig'
 import { BLE_NOTE, BlockPanel } from '../screens/Edit'
@@ -84,7 +85,7 @@ export default function PopKnobs({
   if (!block) return null
   return (
     <View style={{ gap: space.md }}>
-      {viaBle && bleNoteUp ? (
+      {editNoteUp({ viaBle, up: bleNoteUp, saves: caps?.supportsSave === true }) ? (
         <Note
           onDismiss={() => {
             setBleNoteUp(false)

@@ -2221,7 +2221,7 @@ export function run(test) {
     const tools = at("{toolShown && tool === 'chain' ? <ChainEditor ")
     const panel = at('<View onLayout={panelLaid}> <BlockPanel')
     const tap = at('<Note>Tap a block to open its controls.</Note>')
-    const ble = at('{viaBle && bleNoteUp ? ( <Note onDismiss={() => { setBleNoteUp(false) markBleEditNote() }} > {onCable ? CABLE_EDIT_NOTE : BLE_NOTE} </Note> ) : null}')
+    const ble = at('{editNoteUp({ viaBle, up: bleNoteUp, saves: caps?.supportsSave === true }) ? ( <Note onDismiss={() => { setBleNoteUp(false) markBleEditNote() }} > {onCable ? CABLE_EDIT_NOTE : BLE_NOTE} </Note> ) : null}')
     const more = at('<Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title={MORE_TITLE}>')
     const end = at('</ScrollView>')
     const order = [head, find, chain, tools, panel, tap, ble, more, end]

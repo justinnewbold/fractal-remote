@@ -6,6 +6,7 @@ import { editBlocks, idOf, sameBlock } from '../lib/device'
 import { overBluetooth } from '../lib/bleSwitch'
 import { useCableNow } from '../lib/bluetooth'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
+import { editNoteUp } from '../lib/editWords'
 import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
 import { chainActs } from '../lib/chain-view'
 import { blockColor } from '../lib/blockColors'
@@ -154,7 +155,7 @@ export default function BlockSide({
         nestedScrollEnabled
       >
         <SaveNotes s={saveTo} />
-        {viaBle && bleNoteUp ? (
+        {editNoteUp({ viaBle, up: bleNoteUp, saves: caps?.supportsSave === true }) ? (
           <Note
             onDismiss={() => {
               setBleNoteUp(false)

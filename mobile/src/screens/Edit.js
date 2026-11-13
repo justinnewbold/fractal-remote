@@ -28,6 +28,7 @@ import { demoUnit, isDemo } from '../lib/demo'
 import { overBluetooth } from '../lib/bleSwitch'
 import { useCableNow } from '../lib/bluetooth'
 import { CABLE_EDIT_NOTE } from '../lib/cableWords'
+import { editNoteUp } from '../lib/editWords'
 import { bleEditNoteSeen, markBleEditNote } from '../lib/coach'
 import { VP4_NO_EDITS, VP4_NO_KNOBS } from '../lib/vp4-safety'
 import { NAM_ON_THE_UNIT, NO_KNOBS_YET } from '../lib/gen3Catalog'
@@ -243,7 +244,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
   const preset = useRig(ofPreset)
   const unsaved = useRig(ofUnsaved)
   const pending = !!unsaved && unsaved.number === preset?.number
-  /* Over Bluetooth: knobs, models and on/off, and no Save (rig.noteEdited marks nothing there). See BLE_NOTE. */
+  /* Over Bluetooth: knobs, models and on/off; and Save only where the wire says the app can (lib/bleSave: rig.noteEdited marks nothing unsaved anywhere else). See BLE_NOTE. */
   const viaBle = overBluetooth(caps)
   /* Whether the unit can be told to attach a modifier, as the computer says (capabilities.modifiers.bind); absent, from an older computer, it is offered as before. */
   const modifiersBind = caps?.modifiers?.bind !== false
@@ -755,7 +756,7 @@ export default function Edit({ onBack, onOpenGear, jump = null, beside = false }
         two are read together, and out of the knobs' way. Up until its cross
         is pressed, once per device, as before.
       */}
-      {viaBle && bleNoteUp ? (
+      {editNoteUp({ viaBle, up: bleNoteUp, saves: caps?.supportsSave === true }) ? (
         <Note
           onDismiss={() => {
             setBleNoteUp(false)
