@@ -8,6 +8,7 @@
  * axefx3EditAllowed before it goes (bleWire gen3Sender).
  */
 import { AXE3_BLOCKS, AXE3_FAMILIES, AXE3_PAGES, AXE3_ROSTERS } from './axefx3-knobs.js'
+import { AXE3_OWN_BLOCKS, AXE3_OWN_FAMILIES } from './axefx3-own-knobs.js'
 import { MODELS } from './fractal-sysex.mjs'
 import { gen3Edit } from './gen3-edit.js'
 
@@ -18,3 +19,24 @@ const axefx3 = gen3Edit({ model: MODELS.axefx3, blocks: AXE3_BLOCKS, families: A
 export const { editBlock, modelsOf, layoutFor, blockParamsOf, knobFrame, modelFrame, editAllowed } = axefx3
 /** Whether an Axe-Fx III may be sent this frame because it is one of Edit's (gen3-edit editAllowed): a name for it, or null. */
 export const axefx3EditAllowed = editAllowed
+
+/**
+ * THE SAME, WITH THE NAM BLOCK'S KNOBS IN IT (lib/axefx3-own-knobs.js: NAM 1
+ * and NAM 2, 206 and 207, which the codec's catalog does not carry). A second
+ * Edit of the III's, not a change to the first: everything above is the
+ * codec's catalog alone, as it was, and stays what every account gets. The
+ * wire reads and guards through this one only while the NAM block's knobs are
+ * open to the account (bleWire `namKnobs`, asked at each request and each
+ * send; lib/features NAM_KNOBS_FOR_EVERYONE), so closed, a NAM's read or
+ * write is refused where it always was.
+ *
+ * The codec's rows go on last: an id or a family it ever carries itself is
+ * the codec's, never the hand-written one's.
+ */
+export const withNam = gen3Edit({
+  model: MODELS.axefx3,
+  blocks: { ...AXE3_OWN_BLOCKS, ...AXE3_BLOCKS },
+  families: { ...AXE3_OWN_FAMILIES, ...AXE3_FAMILIES },
+  rosters: AXE3_ROSTERS,
+  pages: AXE3_PAGES
+})

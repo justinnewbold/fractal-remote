@@ -2,9 +2,9 @@
 
 The block reader (Developer → Testing → Block reader; `mobile/src/lib/gen3-describe.js`)
 ran on a real unit for the first time on 13 November 2026: Justin's own
-Axe-Fx III ("AX3"), over Bluetooth from an iPhone, app 1.90.44. The firmware
-was not said; it has the NAM block, so 33 or later. This is what it read, kept
-here so it is not only in a conversation.
+Axe-Fx III ("AX3"), over Bluetooth from an iPhone, app 1.90.44. It is an
+Axe-Fx III Mark II on firmware 33.01 (Axe-Edit III said so the same day).
+This is what it read, kept here so it is not only in a conversation.
 
 Nothing here is Fractal's artwork or text: it is numbers and names the unit
 itself sent when asked.
@@ -77,7 +77,88 @@ what they are is not known.
 
 **The names marked "not confirmed" come from the unit's own screen**, which
 the wire does not send: a photo of the NAM block's pages, or Axe-Edit III's.
-Until then NAM has no catalog and Edit no knobs for it.
+They came the same day, and are the next section.
+
+### The names, from Axe-Edit III's NAM page, 13 November 2026
+
+Axe-Edit III, on the same unit, showed channel A of the block as: Level 0.0
+dB, Balance 0.0, Input Gain 0.00 dB, Bass 5.00, Mid 5.00, Treble 5.00, Tone
+Stack Type Active, Tone Stack Location Post, Input Mode Sum L+R, Bright 0.00,
+Bright Cap 470.0 pF. (Type was slot 0 then.) The block's whole read of that
+channel, 18 values, was:
+
+    0 52427 32767 0 0 32767 0 0 1 0 32767 32767 32767 2 32767 36526 56445 63805
+
+Setting N is value N of those, for N = 0 to 15. Put side by side:
+
+| Setting | Axe-Edit's name | What the unit said |
+|---|---|---|
+| 0 | Type (the NAM capture) | list, 0..256: 257 slots, named by whatever is loaded on that unit. Axe-Edit numbers them from 001, so 28 on the wire shows as "029: MV25 Ch1 Crunch" |
+| 1 | Level | -80..20 dB, step 0.05 |
+| 2 | Balance | -1..1 on the wire, shown ×100 (-100..100) |
+| 3 | Bypass Mode | 0 THRU, 1 MUTE (the second read, below). Defined as 0..1 in steps of 0.001, type code 176, not as a plain list, yet it reads 0 and 1 |
+| 4 | (the block's bypass) | ENGAGED / BYPASSED |
+| 5 | Input Gain | -20..20 dB, step 0.1; 32767 is 0.00 dB, so a straight line |
+| 6 | Phase Invert | list: 0 NORMAL, 1 INVERT (the second read, below) |
+| 7 | NOT KNOWN | list: OFF, ON. Not Phase Invert |
+| 8 | Tone Stack Location | 0 PRE, 1 POST, 2 OFF (the second read, below; PRE by elimination) |
+| 9 | Tone Stack Type | list of 12, from 0: ACTIVE, BROWNFACE, BLACKFACE, BASSGUY, TOP BOOST, PLEXI, USA MARK IV, USA PRE LD2, RECTO ORANGE, RECTO RED, SKYLINE, PVH 6160 |
+| 10, 11, 12 | Bass, Mid, Treble | 0..1 on the wire, shown ×10 (0..10); 32767 is 5.00, a straight line |
+| 13 | Input Mode | 0 LEFT, 1 RIGHT, 2 SUM L+R (the second read, below; RIGHT by elimination) |
+| 14 | Bright | -1..1 on the wire, shown ×10 (-10..10); 32767 is 0.00, a straight line |
+| 15 | Bright Cap | 10..10000 pF; 36526 is 470.0 pF, so the travel is LOGARITHMIC: 10 × 1000^(36526 ÷ 65534) is 469.98 |
+
+So the "frequency, at about 470 Hz" above is a capacitor, in picofarads, and
+the "level in dB" at setting 5 is the Input Gain.
+
+### The second read: four switches set in Axe-Edit, and another capture
+
+To find out which number is which choice, he set four switches in Axe-Edit III
+on NAM 1, channel A: Bypass Mode to Mute, Phase Invert on, Tone Stack Location
+to Off and Input Mode to Left, with capture slot "029: MV25 Ch1 Crunch" loaded,
+and read the block again (app 1.90.45). Channel A was then:
+
+    28 52427 32767 1 0 32767 1 0 2 0 32767 32767 32767 0 32767 36526 8640 54248
+
+and the unit's own text for the settings that moved:
+
+| Setting | Before | After | So |
+|---|---|---|---|
+| 0 | 0 | 28, "MV25 Ch1 Crunch" | Axe-Edit's "029" is the unit's 28: Axe-Edit numbers the captures from 001, the unit from 0 |
+| 3 | 0, "THRU" | 1, "MUTE" | Bypass Mode: 0 THRU, 1 MUTE. Both read |
+| 6 | 0, "NORMAL" | 1, "INVERT" | setting 6 is Phase Invert: 0 NORMAL, 1 INVERT. Both read |
+| 7 | 0, "OFF" | 0, "OFF" | setting 7 did not move, so it is not Phase Invert. A list OFF / ON, still with no name |
+| 8 | 1, "POST" | 2, "OFF" | Tone Stack Location: 1 POST, 2 OFF read; 0 is PRE by elimination |
+| 13 | 2, "SUM L+R" | 0, "LEFT" | Input Mode: 0 LEFT, 2 SUM L+R read; 1 is RIGHT by elimination |
+| 16, 17 | 56445, 63805 | 8640, 54248 | they moved when the capture changed and nothing else of theirs did: they follow the capture |
+
+Axe-Edit's own menus list exactly: Bypass Mode: Mute, Thru. Tone Stack
+Location: Off, Post, Pre. Input Mode: Left, Right, Sum L+R. **Axe-Edit sorts
+its menus by the alphabet, so its order is not the unit's numbering**: the
+numbers above are the unit's. The two by elimination (PRE at 0, RIGHT at 1)
+are the one choice left in a list of three; the amp block's own lists in the
+app's table run the same way (Tonestack Location PRE, POST …; Input Select
+LEFT, RIGHT, SUM L+R).
+
+**Still not known:**
+
+- the name of setting 7 (a list, OFF or ON);
+- what values 16 and 17 of each channel mean. They follow the capture, no
+  setting describes them, and nothing ever writes them;
+- the capture list is per unit: its names are whatever is loaded, so no list
+  in the app can name them.
+
+**What the app does with it** (1.90.46, his account only): Edit over Bluetooth
+has the NAM block's Input Gain, Bass, Mid, Treble, Bright and Bright Cap as
+knobs and its Level as every block's Level is, and reads its Balance and five
+switches: Bypass Mode, Phase Invert, Tone Stack Location, Tone Stack Type and
+Input Mode (`mobile/src/lib/axefx3-own-knobs.js`, behind
+`NAM_KNOBS_FOR_EVERYONE` in `mobile/src/lib/features.js`). The phone's Edit
+draws no switch of any block, so the five are read and can be written through
+the wire, with nothing on the screen for them. The capture (0), the block's
+own bypass (4), setting 7 and values 16 and 17 are left out, so nothing can be
+written to them. All of the above was READ off the unit. Nothing has been
+written to a NAM block from the app yet.
 
 ## What the readings say about the wire
 
@@ -91,6 +172,23 @@ Until then NAM has no catalog and Edit no knobs for it.
   name, though NAM 2's read). The ranges came through, which is what a
   catalog needs. From 1.90.45 the reader prints what the unit sent for such a
   value instead of a bare "?".
+- **And what it sent is a C string in a 32-byte buffer, with old bytes after
+  the NUL.** The unit answers a value with the text, a NUL, and whatever an
+  earlier answer left in the buffer behind it:
+
+      Level       30 2E 30 20 64 42 00 25 00 42 6C 6F 00 …        "0.0 dB"
+      Input Gain  30 2E 30 30 20 64 42 00 00 48 7A 00 …           "0.00 dB"
+      Bright Cap  34 37 30 2E 30 20 70 46 00 00 6D 6D 00 …        "470.0 pF"
+      Input Mode  4C 45 46 54 00 2B 52 00 …                       "LEFT"  (the "+R" is left from "SUM L+R")
+      Type        4D 56 32 35 20 43 68 31 20 43 72 75 6E 63 68 00 42 41 4C 32 00 47 61 69 6E 20 36 2C 20 41 4B 00
+                                                                  "MV25 Ch1 Crunch"
+
+  The codec's reader (and ours, a port of it) dropped the noughts off the end
+  and then wanted every byte left to be a letter, so the NUL in the middle
+  made each of these nothing. From 1.90.46 the reader takes a value's or a
+  label's text as the bytes up to the first NUL
+  (`mobile/src/lib/gen3-describe.js` decodeDescribe). That is a deliberate
+  difference from the pinned codec, which has the same blind spot.
 - **A label asked of a setting that is not a list was answered with nothing,
   and the unit carried on.** Thirty times, on block 201's first thirty
   values. That is this unit on this firmware; the rule against asking on a
