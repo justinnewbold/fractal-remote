@@ -701,20 +701,33 @@ sheet down closes it, as it always has, and nothing said so.
 
 **It is in two halves, and the words are already merged.** By update, on
 iOS 27 and later the app says "then swipe that screen down" wherever it
-said "then Done" (lib/bluetooth `appleDoneGone`, `APPLE_SCREEN_OPENS`,
-`APPLE_SCREEN_HINT`), until a build answers `pairHasDone`. The button
-itself is native, so it waits here.
+said "then Done" (lib/bluetooth `appleDoneGone`, `appleScreenOpens()`,
+`appleScreenHint()`), until a build answers `pairHasDone`. The device is
+asked when those words are drawn, never at launch. The button itself is
+native, so it waits here.
 
 **What the patch does.** Apple's screen is no longer the screen the sheet
 shows: it is a child of one of the app's own (`PairingHost`, in
-FractalBleMidiModule.swift), whose bar Apple's code never sees and so
-cannot write on. That bar has Apple's own title, Done on the right (it
-closes the sheet, as the old Done did, and settles the same promise once),
-and Edit on the left, which does what Apple's Edit does (the list's own
-editing: how an adapter is forgotten there). While the list is being
-edited there is one button, Done on the left, which ends the editing:
-never two Dones that do different things. Every button is the system's
-own, so each is in the phone's language as Apple's screen is. Apple's iOS
+FractalBleMidiModule.swift), whose bar is not Apple's own navigation
+item, which is the one its code rewrites. That bar has Apple's own title,
+Done on the right (it closes the sheet, as the old Done did, and settles
+the same promise once), and Edit on the left, which does what Apple's Edit
+does (the list's own editing: how an adapter is forgotten there). While
+the list is being edited there is one button, Done on the left, which ends
+the editing (or closes the sheet, if Apple's screen ended the editing by
+itself): never two Dones that do different things.
+
+**Done is a button with the word on it, not the system's Done item.**
+Since iOS 26 the system's Done item is drawn as a tick, and this app is
+built with the new SDK and no compatibility flag, so the first version of
+this patch (the system item) would have put a tick on the right while the
+app's words went back to "then Done": the same trouble again, after a
+build. Both reviewers of the patch caught it (14 November 2026). So both
+Dones are titled actions (`UIAction(title: "Done")`), which are drawn as
+their word on every iOS, and a test fails on `systemItem: .done`. Edit
+stays the system's own, which is still a word. And however the sheet goes
+(Done, a swipe, or anything else that closes it), the host tells the
+module, so the promise always settles (`PairingHost.gone`). Apple's iOS
 27 workaround (the table handed over first, `viewDidLoad` run once by
 hand) is untouched and still comes before the host is made. And
 `pairHasDone` answers true, which is what turns the words back to "then
@@ -734,8 +747,13 @@ device code only, since the simulator has no Bluetooth MIDI screen at all.
 
 **What only a real iPhone can show**, most likely first:
 
-- That Done is there, top right, on iOS 27, and stays while the screen
-  looks for adapters and after one connects. This is the point of it.
+- That Done is there, top right, on iOS 27, as the word Done, and stays
+  while the screen looks for adapters and after one connects. This is the
+  point of it. Why iOS 27 drops the old one is not known for certain (the
+  likeliest reason: with Apple's workaround, its `viewDidLoad` now runs
+  before the old Done was put on, and its later redraws keep only what was
+  there then); the host's bar is another object, so it does not depend on
+  the reason.
 - That the list is not hidden under the bar, and scrolls under it as it
   did (the host tells the bar which list it sits over).
 - That Edit on the left still lets an adapter be forgotten. Apple's own
@@ -744,7 +762,8 @@ device code only, since the simulator has no Bluetooth MIDI screen at all.
   changes nothing, and the way that has always worked is still there
   (the iPhone's Settings → Bluetooth, ⓘ, Forget This Device).
 - The same on an iPad, where the sheet is a card in the middle of the
-  screen, and on iOS 26, where the old Done still showed.
+  screen, and on iOS 26 (where the old Done, the system's item, was most
+  likely already a tick).
 
 **What goes with it in the build pull request, outside the patch:**
 nothing has to. The words follow the build by themselves. Say in that

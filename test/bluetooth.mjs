@@ -8397,9 +8397,20 @@ export function run(test) {
     assert.match(added, /final class PairingHost: UIViewController \{/)
     assert.match(added, /addChild\(central\)[\s\S]*?view\.addSubview\(central\.view\)[\s\S]*?central\.didMove\(toParent: self\)/, 'Apple’s screen is not put inside the host as a child')
     assert.match(added, /let host = PairingHost\(central\)\s*let sheet = UINavigationController\(rootViewController: host\)/, 'the sheet does not hold the host')
-    /* Done on the right, closing the sheet; and while the list is edited, one Done, on the left, that ends the editing. */
-    assert.match(added, /navigationItem\.rightBarButtonItem = UIBarButtonItem\(systemItem: \.done, primaryAction: UIAction \{ \[weak self\] _ in\s*self\?\.close\(\)\s*\}\)/, 'there is no Done on the right that closes the sheet')
-    assert.match(added, /if central\.isEditing \{\s*navigationItem\.leftBarButtonItem = UIBarButtonItem\(systemItem: \.done,[\s\S]*?navigationItem\.rightBarButtonItem = nil\s*\} else \{\s*navigationItem\.leftBarButtonItem = UIBarButtonItem\(systemItem: \.edit,/, 'while the list is edited there are two Dones, or no Edit when it is not')
+    /*
+     * Done on the right, closing the sheet, and it SAYS Done: a titled
+     * action, never the system's Done item, which iOS 26 and 27 draw as a
+     * tick ("a button that says done" is what was asked for, and the words
+     * go back to "then Done" in the build that has it). While the list is
+     * edited, one Done, on the left, that ends the editing, or closes the
+     * sheet if Apple's screen ended the editing by itself.
+     */
+    assert.match(added, /navigationItem\.rightBarButtonItem = UIBarButtonItem\(primaryAction: UIAction\(title: "Done"\) \{ \[weak self\] _ in\s*self\?\.close\(\)\s*\}\)/, 'there is no button on the right that says Done and closes the sheet')
+    assert.ok(!/systemItem: \.done/.test(added), 'a Done is the system’s Done item, which iOS 26 and later draw as a tick, not the word')
+    assert.match(added, /if central\.isEditing \{\s*navigationItem\.leftBarButtonItem = UIBarButtonItem\(primaryAction: UIAction\(title: "Done"\) \{ \[weak self\] _ in\s*guard let self = self else \{ return \}[\s\S]*?if self\.central\.isEditing \{\s*self\.edit\(false\)\s*\} else \{\s*self\.close\(\)\s*\}\s*\}\)\s*navigationItem\.rightBarButtonItem = nil\s*\} else \{\s*navigationItem\.leftBarButtonItem = UIBarButtonItem\(systemItem: \.edit,/, 'while the list is edited there are two Dones, no Edit when it is not, or a Done that can be left doing nothing')
+    /* And however the sheet goes, the promise settles: the host says so when it has gone, and pairingDone takes the first call. */
+    assert.match(added, /override func viewDidDisappear\(_ animated: Bool\) \{\s*super\.viewDidDisappear\(animated\)\s*if isBeingDismissed \|\| navigationController\?\.isBeingDismissed == true \{\s*gone\(\)\s*\}\s*\}/)
+    assert.match(added, /host\.gone = \{ \[weak self\] in\s*self\?\.pairingDone\(\)\s*\}/)
     /* Compiled only where Apple's screen exists: the simulator has none. */
     assert.match(added, /#if !targetEnvironment\(simulator\)\s*\/\*[\s\S]*?\*\/\s*final class PairingHost/)
     /* The Done that Apple's screen wiped is no longer put on Apple's own bar. */

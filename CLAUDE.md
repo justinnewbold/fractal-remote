@@ -1526,13 +1526,19 @@ asked for once, when he says the list is whole. Waiting there now:
   iOS 27 Apple's screen takes it off again, so the sheet showed only Edit
   while every sentence in the app said "then Done". The patch draws
   Apple's screen inside a screen whose bar is the app's own (`PairingHost`
-  in FractalBleMidiModule.swift): Done top right, Edit on the left. It
-  moves the ios line only. THE WORDS WENT OUT BY UPDATE (1.90.60): on iOS
+  in FractalBleMidiModule.swift): Done top right (the word, not the
+  system's tick), Edit on the left. It moves the ios line only. THE WORDS WENT OUT BY UPDATE (1.90.60): on iOS
   27 and later, in a build that does not answer `pairHasDone`, the app
   says "then swipe that screen down" (lib/bluetooth `appleDoneGone`),
   which has always closed that sheet. Never write "then Done" about
-  Apple's screen in a sentence of its own again: use `APPLE_SCREEN_OPENS`
-  or `APPLE_SCREEN_HINT`, which know.
+  Apple's screen in a sentence of its own again: use `appleScreenOpens()`
+  or `appleScreenHint()`, which know (and which ask the device only when
+  they are drawn: a customer Bluetooth is not open to is asked nothing).
+  AND A BAR BUTTON THAT MUST SAY A WORD IS NEVER A SYSTEM ITEM: since iOS
+  26 the system's Done, Cancel and Close items are drawn as symbols (a
+  tick, a cross). The patch's Done is a titled action for that reason;
+  its first version was the system item, and the two reviewers of the
+  patch caught it before a build was spent.
 - **Not in, by his word:** a second screen and home-screen widgets ("go
   ahead and skip the second screen and the widgets for now").
 - **Offered, not yet answered:** keyboard and foot-pedal keys, lining the
