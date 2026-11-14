@@ -886,6 +886,11 @@ what the computer sends for the same edit, and a test holds it there.
     no knobs of ours, goes on the last page (Extras); with no pages from
     the unit, the last page (a NAM block's only one).
   - *Words are the unit's own* ("THRU", "SUM L+R"): nothing is renamed.
+  - *They are short buttons.* "Make these buttons a little bit smaller
+    they're kind of big" (14 November 2026, of a NAM block's page): a
+    choice is 44 points tall, as Copy channel under it, and the button
+    that opens a list 48 (`SETTING_TALL`, `SETTING_LIST_TALL` in
+    lib/editSettings). Not the full button height again.
   - *Left out:* a list with one choice, one the unit gave only numbers
     for, the block's own bypass, EVERY SETTING OF A CAB (its lists are
     impulse responses and mics, the cab picker's), and the hold pop-up,

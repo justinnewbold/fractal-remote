@@ -168,8 +168,12 @@ export function run(test) {
     const comp = code(read('mobile/src/components/BlockSettings.js'))
     assert.ok(!/setEnum|setParam|blockParams|remoteRequest|lib\/device|lib\/rig/.test(comp), 'the settings component writes or reads the unit itself')
     assert.match(flat(comp), /if \(settingKind\(s\) === 'buttons'\) \{/)
-    assert.match(flat(comp), /<Press label=\{o\.label\} height=\{TAP\} tone="signal" on=\{o\.value === at\} disabled=\{disabled\} accessibilityLabel=\{`\$\{s\.name\}: \$\{o\.label\}`\} onPress=\{\(\) => pick\(s, o\.value\)\} \/>/)
-    assert.match(flat(comp), /<Press key=\{s\.id\} label=\{s\.name\} sub=\{`\$\{choiceSaid\(s, at\)\} ▾`\} disabled=\{disabled\}/)
+    assert.match(flat(comp), /<Press label=\{o\.label\} height=\{SETTING_TALL\} tone="signal" on=\{o\.value === at\} disabled=\{disabled\} accessibilityLabel=\{`\$\{s\.name\}: \$\{o\.label\}`\} onPress=\{\(\) => pick\(s, o\.value\)\} \/>/)
+    assert.match(flat(comp), /<Press key=\{s\.id\} label=\{s\.name\} sub=\{`\$\{choiceSaid\(s, at\)\} ▾`\} height=\{SETTING_LIST_TALL\} disabled=\{disabled\}/)
+    /* "A little bit smaller": a choice is as tall as Copy channel under it, never the full button height, and still big enough for a thumb. */
+    const sizes = await import('../mobile/src/lib/editSettings.js')
+    assert.deepEqual([sizes.SETTING_TALL, sizes.SETTING_LIST_TALL], [44, 48])
+    assert.match(flat(code(read('mobile/src/screens/Edit.js'))), /label=\{working \? 'Copying…' : `Copy channel \$\{from\} to…`\} height=\{44\}/)
     assert.match(flat(comp), /<Sheet open=\{!!shown\} onClose=\{close\} title=\{shown\?\.name \|\| ''\}>/)
     assert.match(flat(comp), /const pick = \(setting, value\) => \{ if \(disabled \|\| value === settingValue\(setting, choosing\)\) return onPick\(setting, value\) \}/)
     /* Phone only, and the page rule it reads is not changed: nothing of it in the files the computer app is made of. */

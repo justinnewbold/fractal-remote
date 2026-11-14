@@ -44,6 +44,16 @@ export const SETTINGS_HEAD = 'SETTINGS'
 /** The most choices drawn as buttons; one more and it is a row that opens a list. */
 export const SHORT_MOST = 3
 
+/**
+ * How tall a setting is drawn. "Make these buttons a little bit smaller
+ * they're kind of big" (Justin, 14 November 2026, of a NAM block's page at
+ * the full button height, 56): a choice is as tall as Copy channel under
+ * it, and the button that opens a list a little taller, since it carries
+ * its name over the choice it is on.
+ */
+export const SETTING_TALL = 44
+export const SETTING_LIST_TALL = 48
+
 /** Blocks whose lists are not drawn here: the cab picker owns a Cab's. */
 export const NO_SETTINGS_ON = Object.freeze(['cab'])
 
