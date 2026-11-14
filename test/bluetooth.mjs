@@ -5500,13 +5500,16 @@ export function run(test) {
       'package.json': '{ "type": "module" }',
       'relay.js':
         'export const asked = []\n' +
-        "export async function remoteRequest(path, options = {}) { asked.push(String(options.method || 'GET').toUpperCase() + ' ' + path); return { number: 7, name: 'FROM THE COMPUTER', ok: true } }\n",
+        /* And what each carried, and a way for a test to have the computer refuse one. */
+        'export const bodies = []\n' +
+        'export const hooks = { fail: null }\n' +
+        "export async function remoteRequest(path, options = {}) { asked.push(String(options.method || 'GET').toUpperCase() + ' ' + path); bodies.push(options.body ?? null); const bad = hooks.fail && hooks.fail(path, options); if (bad) throw bad; return { number: 7, name: 'FROM THE COMPUTER', ok: true } }\n",
       'demo.js': 'export const demoDevice = () => null\n',
       'demoWire.js': "export const demoRequest = () => { throw new Error('no demo on this bench') }\n",
       'debugLog.js': 'export const logDebug = () => {}\n',
       'lineage.js': 'export const withLineage = (slug, x) => x\n'
     }
-    for (const f of ['bleSwitch.js', 'tapGate.js', 'tapTimes.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'new-block.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js', 'bleVp4.js', 'fractal-sysex.mjs']) {
+    for (const f of ['bleSwitch.js', 'nam-travel.js', 'tapGate.js', 'tapTimes.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'new-block.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js', 'bleVp4.js', 'fractal-sysex.mjs']) {
       files[f] = esm(lib(f))
     }
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
@@ -5518,6 +5521,74 @@ export function run(test) {
     const vp4wire = await import(at('bleVp4.js'))
     return { device, sw, relay, gate, vp4wire, done: () => rmSync(dir, { recursive: true, force: true }) }
   }
+
+  /*
+   * A CAPTURE GOES BY WHICHEVER WAY THE DEVICE IS CONNECTED. "But this will
+   * only work over Bluetooth or plugged in directly? Why not over a
+   * raspberry pi?" (Justin, 14 November 2026.) With Bluetooth off the three
+   * calls go to the computer app, which sends the unit's messages itself:
+   * the record in one message, as base64 of its words. With it on they go
+   * to the wire, marked as the captures', and the computer hears nothing.
+   */
+  test('a capture goes through the computer when the device is not on its own wire, and to the wire when it is', async () => {
+    const { device, sw, relay, done } = await deviceOnABench()
+    try {
+      const words = new Uint32Array(16384)
+      for (let i = 0; i < 14095; i++) words[i] = (0x41424344 + i * 2654435761) >>> 0
+      words[0] = 0x6e61724f
+
+      /* Off: the computer, the paths its three routes have, and the bodies they take. */
+      sw.setSwitch({ on: false })
+      assert.equal(device.capturesThroughComputer(), true)
+      await device.namEmptySlotHere()
+      await device.namInstallHere(30, words, { replace: true, onProgress: () => assert.fail('a count was promised through the computer') })
+      await device.namPickHere(206, 30)
+      assert.deepEqual(relay.asked, ['GET /nam/empty', 'POST /nam/slots/30', 'POST /nam/blocks/206/slot'])
+      assert.equal(relay.bodies[0], null)
+      const sent = JSON.parse(relay.bodies[1])
+      assert.deepEqual(Object.keys(sent), ['record'], 'the computer was sent more than the record: it has no replace to ask for')
+      const raw = Buffer.from(sent.record, 'base64')
+      assert.equal(raw.length, 14095 * 4, 'the record did not travel up to its last word that is not nought')
+      for (const i of [0, 1, 67, 68, 9000, 14094]) assert.equal(raw.readUInt32LE(i * 4), words[i], `word ${i} did not travel as it was`)
+      assert.equal(relay.bodies[2], JSON.stringify({ slot: 30 }))
+
+      /* What is not a record is not sent at all. */
+      relay.asked.length = 0
+      await assert.rejects(device.namInstallHere(30, new Uint32Array(10)), /not a capture/)
+      assert.deepEqual(relay.asked, [])
+
+      /* A computer app from before the routes, and a unit that is not a III, are said in words. */
+      relay.hooks.fail = (path, options) => Object.assign(new Error('Route not found'), { status: (options.method || 'GET') === 'GET' ? 404 : 403, remoteBlocked: (options.method || 'GET') !== 'GET' })
+      await assert.rejects(device.namEmptySlotHere(), (e) => e.message === device.CAPTURES_NEED_COMPUTER && e.status === 404)
+      await assert.rejects(device.namInstallHere(30, words), (e) => e.message === device.CAPTURES_NEED_COMPUTER && e.status === 403)
+      relay.hooks.fail = () => Object.assign(new Error('only an Axe-Fx III has NAM captures'), { status: 501 })
+      await assert.rejects(device.namPickHere(206, 30), (e) => e.message === device.CAPTURES_ONLY_A_III && e.status === 501)
+      /* The computer's own words come through as they are: a slot in use, a unit that stopped part-way. */
+      relay.hooks.fail = () => Object.assign(new Error('Slot 031 already holds "Clean One"; nothing was sent.'), { status: 409 })
+      await assert.rejects(device.namInstallHere(30, words), (e) => e.status === 409 && /already holds "Clean One"; nothing was sent/.test(e.message))
+      relay.hooks.fail = null
+
+      /* On, connected: the wire, with the record's words themselves and the captures' mark, and the computer hears nothing. */
+      relay.asked.length = 0
+      const heard = []
+      const wire = { request: async (path, options = {}) => (heard.push([path, options]), { slot: 30, name: 'x', replaced: null, seconds: 1 }) }
+      sw.setSwitch({ on: true, wire })
+      assert.equal(device.capturesThroughComputer(), false)
+      const count = () => {}
+      await device.namEmptySlotHere()
+      await device.namInstallHere(30, words, { replace: true, onProgress: count })
+      await device.namPickHere(207, 30)
+      assert.deepEqual(heard.map(([path]) => path), ['/nam/empty', '/nam/slots/30', '/nam/blocks/207/slot'])
+      assert.ok(heard.every(([, o]) => o.capturing === true), 'a capture request reached the wire without saying it is the captures’')
+      assert.equal(heard[1][1].body.words, words)
+      assert.equal(heard[1][1].body.replace, true)
+      assert.equal(heard[1][1].onProgress, count)
+      assert.deepEqual(heard[2][1].body, { slot: 30 })
+      assert.deepEqual(relay.asked, [], 'a capture went to the computer while the device was on its own wire')
+    } finally {
+      done()
+    }
+  })
 
   /*
    * A VP4 OVER BLUETOOTH, THROUGH DEVICE.JS, as Play reaches it: device.js

@@ -248,4 +248,73 @@ export function run(test) {
     const doc = read('docs/nam-install.md')
     for (const said of [/0x54/, /0x55/, /0x56/, /16,384/, /14,017/, /257/, /<EMPTY>/, /not in the repository/, /NAM_PACKING_PROVEN/, /weights_hash/, /word for word/]) assert.match(doc, said)
   })
+
+  /*
+   * THROUGH THE COMPUTER OR THE RASPBERRY PI (14 November 2026): the device
+   * packs the record and hands it to the computer app in one message, and
+   * the computer app sends Axe-Edit's messages (ForgeFX namCaptures.ts, held
+   * to the same recorded frames by its own test). What is held here is what
+   * travels, and what a device may ask a computer for.
+   */
+  test('a record travels to the computer as base64 of its words, and a device may ask a computer for exactly the three capture requests', async () => {
+    const { namRecordTravels, base64Of, NAM_TRAVEL_WORDS_LEAST } = await import('../mobile/src/lib/nam-travel.js')
+    const { NAM_RECORD_WORDS, NAM_HEAD_WORDS } = await lib()
+    assert.equal(NAM_TRAVEL_WORDS_LEAST, NAM_HEAD_WORDS, 'the fewest words that travel is not a record’s head')
+
+    /* base64, against Node's own, at every length that pads differently. */
+    for (const n of [0, 1, 2, 3, 4, 5, 271, 272, 1000]) {
+      const bytes = Uint8Array.from({ length: n }, (_, i) => (i * 37 + 11) & 0xff)
+      assert.equal(base64Of(bytes), Buffer.from(bytes).toString('base64'), `${n} bytes`)
+    }
+
+    /* A record: up to its last word that is not nought, four bytes a word, low byte first. */
+    const words = new Uint32Array(NAM_RECORD_WORDS)
+    for (let i = 0; i < 14085; i++) words[i] = (0x3f000000 + i * 7919) >>> 0
+    for (let i = 14085; i < 14095; i++) words[i] = 0x7fc00000
+    const b64 = namRecordTravels(words)
+    assert.match(b64, /^[A-Za-z0-9+/]+={0,2}$/)
+    assert.ok(b64.length < 80000, 'a capture is bigger on its way to the computer than one message was counted to carry')
+    const raw = Buffer.from(b64, 'base64')
+    assert.equal(raw.length, 14095 * 4)
+    for (let i = 0; i < 14095; i++) assert.equal(raw.readUInt32LE(i * 4), words[i])
+    /* A plain array travels the same, and a negative number as its 32 bits. */
+    assert.equal(namRecordTravels(Array.from(words)), b64)
+    const neg = new Array(NAM_HEAD_WORDS).fill(0)
+    neg[0] = -1
+    assert.equal(Buffer.from(namRecordTravels(neg), 'base64').readUInt32LE(0), 0xffffffff)
+    /* Never shorter than the head, however many noughts it ends in; and what is not a record is nothing. */
+    const bare = new Uint32Array(NAM_RECORD_WORDS)
+    bare[0] = 0x41
+    assert.equal(Buffer.from(namRecordTravels(bare), 'base64').length, NAM_HEAD_WORDS * 4)
+    for (const not of [null, undefined, [], new Uint32Array(67), 'words', {}]) assert.equal(namRecordTravels(not), null)
+    assert.deepEqual([...read('mobile/src/lib/nam-travel.js').matchAll(/^import .* from '([^']+)'/gm)], [], 'the travelling record imports something')
+
+    /* What a device may ask a computer for: the host's own rule, mirrored (ForgeFX remote.ts remoteAllowed). */
+    const rules = await import('../shared/relay-rules.mjs')
+    assert.equal(rules.hostAllows('GET', '/nam/empty'), true)
+    assert.equal(rules.hostAllows('POST', '/nam/slots/30'), true)
+    assert.equal(rules.hostAllows('POST', '/nam/blocks/206/slot'), true)
+    for (const [method, path] of [['PUT', '/nam/slots/30'], ['DELETE', '/nam/slots/30'], ['POST', '/nam/slots'], ['POST', '/nam/slots/30/replace'], ['POST', '/nam/slots/x'], ['POST', '/nam/blocks/206'], ['POST', '/nam/blocks/206/slot/1'], ['POST', '/nam/empty'], ['POST', '/nam']]) {
+      assert.equal(rules.hostAllows(method, path), false, `a device may ask ${method} ${path}`)
+    }
+    assert.equal(rules.hostAllows('POST', '/preset/store'), false, 'the rule got looser than a preset write')
+    /* A capture is never sent twice, and each of the three is given the long wait. */
+    assert.equal(rules.repeatable('/nam/slots/30'), false)
+    for (const path of ['/nam/empty', '/nam/slots/30', '/nam/blocks/206/slot']) assert.equal(rules.timeoutFor('POST', path), 45000, path)
+
+    /* Who asks: the card, through lib/device's three calls, and nobody else in the app. */
+    const device = read('mobile/src/lib/device.js')
+    assert.match(device, /import \{ namRecordTravels \} from '\.\/nam-travel'/)
+    assert.match(device.replace(/\s+/g, ' '), /if \(ble\) return ble\.request\(path, \{ \.\.\.CAPTURING, \.\.\.onWire \}\) return remoteRequest\(path, typeof throughComputer === 'function' \? throughComputer\(\) : undefined\)\.catch\(captureSaid\)/)
+    assert.match(device, /body: JSON\.stringify\(\{ record \}\)/, 'the computer is sent more than the record, or not the record')
+    const { readdirSync } = await import('node:fs')
+    const walk = (dir) => readdirSync(new URL(`../${dir}`, import.meta.url), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${dir}/${e.name}`) : /\.jsx?$/.test(e.name) ? [`${dir}/${e.name}`] : []))
+    const askers = [...walk('mobile/src'), 'mobile/App.js', ...walk('src')].filter((f) => /namEmptySlotHere|namInstallHere|namPickHere|\/nam\/(empty|slots|blocks)/.test(read(f).replace(/\/\*[\s\S]*?\*\//g, '')))
+    assert.deepEqual(askers.sort(), ['mobile/src/components/Tone3000Test.js', 'mobile/src/lib/device.js'], 'something else asks for a capture to be sent')
+    /* Nothing a customer needs: the red update line stays where it was. */
+    const lock = JSON.parse(read('desktop/forgefx.lock.json'))
+    assert.match(lock.forgefx.tag, /\+namcaptures$/)
+    const doc = read('docs/nam-install.md')
+    for (const said of [/Through the computer/, /\/nam\/empty/, /\/nam\/slots\/<n>/, /\/nam\/blocks\/<id>\/slot/, /no\s+replace/, /base64/, /namCaptures\.ts/]) assert.match(doc, said)
+  })
 }

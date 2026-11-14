@@ -11,10 +11,14 @@
  *
  * AND A CAPTURE CAN BE SENT TO AN AXE-FX III (lib/nam-install: Axe-Edit
  * III's own messages, from a recording of it, 13 November 2026), over
- * Bluetooth or the unit's USB cable into this device. It goes into the
- * first empty slot, the app never writes over a capture unless that slot was
- * left half-sent by this card, and NAM 1 or NAM 2 can then be pointed at
- * it. Nothing is saved on the unit: the preset is saved the usual way.
+ * Bluetooth or the unit's USB cable into this device, or, since 14 November
+ * 2026, through the computer or the Raspberry Pi, whichever the device is
+ * connected by (lib/device decides; this card asks the same three calls).
+ * It goes into the first empty slot, the app never writes over a capture
+ * unless that slot was left half-sent by this card over the device's own
+ * wire (the computer never writes over one at all), and NAM 1 or NAM 2 can
+ * then be pointed at it. Nothing is saved on the unit: the preset is saved
+ * the usual way.
  *
  * On a page only his account has, so it is his alone without a switch of
  * its own; it gets one (lib/features) when it moves to where a player meets

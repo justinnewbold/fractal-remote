@@ -112,6 +112,16 @@ export function hostAllows(method, p) {
        * no slot.
        */
       p === '/preset/looper/control' ||
+      /*
+       * An Axe-Fx III's NAM captures. Added to the host on the pinned fork
+       * (see desktop/forgefx.lock.json): a capture's record into a slot, and
+       * a NAM block pointed at a slot. The host writes a slot only when it
+       * reads <EMPTY> (it has no replace), so nothing on the unit can be
+       * written over from a phone, and pointing a block at a slot is an
+       * edit-buffer write like any knob. Finding the empty slot is a GET.
+       */
+      /^\/nam\/slots\/\d+$/.test(p) ||
+      /^\/nam\/blocks\/\d+\/slot$/.test(p) ||
       /^\/am4\/(bypass|scene|preset)$/.test(p)
     )
   /*
@@ -194,7 +204,13 @@ const SLOW_READS = [
    * The layout names: up to twelve questions a layout, nine layouts, each
    * allowed 800ms by the host (gen3.ts fcReadLayoutNames).
    */
-  /^\/fc\/names$/
+  /^\/fc\/names$/,
+  /*
+   * An Axe-Fx III's NAM captures: finding the first empty slot reads the
+   * slots one at a time from the first up, and a capture is 130 messages
+   * each sent when the unit has answered the one before.
+   */
+  /^\/nam\//
 ]
 
 export function timeoutFor(method, path) {
@@ -491,7 +507,13 @@ const NOT_REPEATABLE = [
    * on, off, on again, or a second Undo taking away a layer nobody asked to
    * lose. Same as a tap of the tempo.
    */
-  /^\/preset\/looper\/control$/
+  /^\/preset\/looper\/control$/,
+  /*
+   * A capture into a slot. The host writes only an empty slot, so one that
+   * landed and lost its answer would be refused the second time as a slot
+   * in use, and the screen would say "not sent" of a capture that is there.
+   */
+  /^\/nam\/slots\/\d+$/
 ]
 
 export const repeatable = (path) => !NOT_REPEATABLE.some((re) => re.test(cleanPath(path)))

@@ -90,6 +90,39 @@ holds it against a unit that answers as his did.
 **Nothing has been sent to a real unit from the app yet.** His first send
 is the first check.
 
+## Through the computer, or the Raspberry Pi
+
+"But this will only work over Bluetooth or plugged in directly? Why not over
+a raspberry pi?" (Justin, 14 November 2026.) Since the computer release that
+carries ForgeFX 4e6f05b, the computer app sends the same messages itself
+(ForgeFX `server/src/namCaptures.ts`, a port of the message half of
+`nam-install.js`; THE TWO ARE KEPT THE SAME, each held to the recorded frames
+by its own test). Three routes, for an Axe-Fx III only:
+
+- `GET /nam/empty`: the slots read from the first up to the first that says
+  `<EMPTY>`.
+- `POST /nam/slots/<n>` with `{ record }`: the record the device packed, as
+  base64 of its words (four bytes a word, low byte first, up to the last word
+  that is not nought; `mobile/src/lib/nam-travel.js`). The computer reads the
+  slot, says "a transfer is under way", sends the 130 messages each when the
+  one before is answered, says "it is over", and reads the slot back. The
+  meters' polling is held while it goes.
+- `POST /nam/blocks/<id>/slot` with `{ slot }`: NAM 1 or NAM 2 pointed at a
+  slot, only when that block is in the preset.
+
+The computer packs nothing: one packer, the device's, proven. And it has no
+replace: a slot is written only when it reads `<EMPTY>`, which is why a
+device may ask for these through the relay at all (`remoteAllowed` in
+ForgeFX, `hostAllows` in shared/relay-rules.mjs, kept in step). A capture is
+never sent twice (`NOT_REPEATABLE`), and gets the long wait. There is no
+count as it goes: it is one message to the computer, about 75,000 characters,
+and on USB the unit takes it in about a second.
+
+The Developer card's buttons are the same; lib/device sends by whichever way
+the device is connected. An older computer app is answered "Update the
+computer app to send a capture through it." **Nothing has been sent to a
+real unit through the computer yet.**
+
 ## The list of slots
 
 257 slots, 0 to 256 (Axe-Edit counts from 001). Function `0x01`, sub-action
