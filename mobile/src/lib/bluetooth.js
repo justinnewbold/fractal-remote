@@ -1898,7 +1898,8 @@ export const opensApplesScreen = () => adapterAway() && !pairScreenShut()
  * appleScreenOpens().
  */
 export const APPLE_SCREEN_OPENS_DONE = 'Opens Apple’s Bluetooth screen: tap your adapter, wait for Connected, then Done.'
-export const APPLE_SCREEN_OPENS_SWIPE = 'Opens Apple’s Bluetooth screen: tap your adapter, wait for Connected, then swipe that screen down.'
+/* Shorter than the Done one by design: a button's line under it is two lines at most, and at a larger text size the long one lost its last words, which were these. */
+export const APPLE_SCREEN_OPENS_SWIPE = 'Opens Apple’s screen: tap your adapter, wait for Connected, then swipe that screen down.'
 /* The hint under Connect on the Bluetooth page, the same two ways. */
 export const APPLE_SCREEN_HINT_DONE = 'In Apple’s screen, tap your adapter, wait until it says Connected, then tap Done.'
 export const APPLE_SCREEN_HINT_SWIPE = 'In Apple’s screen, tap your adapter, wait until it says Connected, then swipe that screen down to close it.'
@@ -1914,12 +1915,16 @@ export const APPLE_SCREEN_HINT_SWIPE = 'In Apple’s screen, tap your adapter, w
  * the button off again, so the words sent people to a button that is not
  * there. Swiping the sheet down has always closed it.
  *
- * So on iOS 27 and later the words say to swipe it down, until a build that
- * draws Apple's screen under a bar of its own (docs/pending/bluetooth-done,
- * the module's pairHasDone) says its Done is there. Pure, so a test can ask
- * it every way; the answer for this device is read below, when it is needed.
+ * So the words say to swipe it down, until a build that draws Apple's
+ * screen under a bar of its own (docs/pending/bluetooth-done, the module's
+ * pairHasDone) says its Done is there. FROM iOS 26, not 27: since iOS 26
+ * the system's Done item, which is what every build out today puts there,
+ * is drawn as a tick and not the word, so "then tap Done" names nothing on
+ * that screen either, and swiping is true on every iOS. (Only iOS 27.2.1
+ * has been seen, in his picture.) Pure, so a test can ask it every way; the
+ * answer for this device is read below, when it is needed.
  */
-export const appleDoneGone = ({ os, version, hasDone = false } = {}) => os === 'ios' && hasDone !== true && parseInt(String(version), 10) >= 27
+export const appleDoneGone = ({ os, version, hasDone = false } = {}) => os === 'ios' && hasDone !== true && parseInt(String(version), 10) >= 26
 
 /*
  * THIS DEVICE'S ANSWER, ASKED WHEN THE WORDS ARE DRAWN AND NEVER BEFORE. The

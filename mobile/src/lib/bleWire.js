@@ -394,6 +394,15 @@ const refusedBy = (code) => failure(`The unit refused it: ${rejectedWords(code)}
 /* A poll that found the line busy, told apart from one the unit did not answer. */
 const SKIPPED = Symbol('skipped')
 
+/*
+ * The rests round the end of a capture's upload, in milliseconds, from the
+ * recording of Axe-Edit III (lib/nam-install): it said "it is over" 124 ms
+ * after the unit answered the last message, and read its list of slots 335
+ * ms after that. `again` is the app's own: a slot that reads empty is asked
+ * once more, this long after.
+ */
+export const NAM_REST = Object.freeze({ over: 150, read: 350, again: 1000 })
+
 const realClock = {
   now: () => Date.now(),
   setTimeout: (fn, ms) => setTimeout(fn, ms),
@@ -901,7 +910,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       return isWrite(opts.priority) ? Promise.reject(unheard()) : Promise.resolve(null)
     }
     const priority = PRI[opts.priority] ?? PRI.read
-    /* A capture is going to the unit (namInstall): the watch does not ask meanwhile, and nothing else is written until it is over. */
+    /*
+     * A capture is going to the unit (namInstall): the watch does not ask
+     * meanwhile, and nothing else is written until it is over. A READ asked
+     * meanwhile is taken and waits its turn in pump(), which starts nothing
+     * but the capture's own messages until "it is over" has been answered.
+     */
     if (captureBusy && opts.capture !== true) {
       if (priority === PRI.poll) return Promise.resolve(SKIPPED)
       if (isWrite(opts.priority)) return Promise.reject(failure(`The ${spec.name} is taking a capture. Try again when it has finished.`, 409))
@@ -931,6 +945,23 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   function pump() {
     if (current || closed || wrongUnit || !waiting.length) return
+    /*
+     * WHILE A CAPTURE GOES, NOTHING ELSE LEAVES THE PHONE. Axe-Edit sent
+     * not one other message between "a transfer is under way" and the
+     * unit's answer to the last of the 130. The first build let reads
+     * through: the rig's half-minute "which preset are you on?" went between
+     * two lots of a capture that takes half a minute over Bluetooth, and a
+     * pretend unit showed a preset, a blocks and a scene question inside
+     * one upload. Whether that is why Justin's first send was not kept is
+     * not known (lib/nam-install: the name's check byte is the likelier
+     * reason); it is not what Axe-Edit does, so it is not done. What was
+     * asked meanwhile stays in the line and goes when the capture is over.
+     */
+    if (captureBusy) {
+      const mine = waiting.findIndex((j) => j.opts.capture === true)
+      if (mine < 0) return
+      if (mine > 0) waiting.unshift(waiting.splice(mine, 1)[0])
+    }
     /* An AM4 still sending a preset nobody waited out is sent nothing until it stops. */
     const still = drainUntil - time.now()
     if (still > 0) {
@@ -2969,6 +3000,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       captureTurn = false
       capturing = null
       captureBusy = false
+      /* Anything a capture held back goes now, however the capture ended. */
+      pump()
     }
   }
 
@@ -3031,18 +3064,35 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
           }
         }
       } finally {
-        /* "It is over", whether it went or not, as Axe-Edit says it after the last message. */
+        /* "It is over", whether it went or not, as Axe-Edit says it after the last message, and after the moment Axe-Edit left first. */
+        await pause(NAM_REST.over)
         await ex(off, { match: busy, ms: WAIT.namSlot, fn: FN.PARAM, what: 'that the capture is over', priority: 'write', capture: true }).catch(() => null)
         captureBusy = false
+        /* What was asked meanwhile goes now. */
+        pump()
       }
+      /*
+       * The slot read back, after the rest Axe-Edit took before it read its
+       * list (a third of a second). A slot that still says <EMPTY> is asked
+       * once more a second later before it is called not kept: nothing is
+       * known of how long a unit takes to file a capture that arrived over
+       * half a minute.
+       */
       let after = null
       try {
+        await pause(NAM_REST.read)
         after = await namSlotHead(slot)
+        if (after.empty) {
+          await pause(NAM_REST.again)
+          after = await namSlotHead(slot)
+        }
       } catch {
-        after = null
+        /* What it read before it stopped answering stands; nothing read is "did not read back". */
       }
       const seconds = (time.now() - started) / 1000
-      say(`a capture went to slot ${said} in ${seconds.toFixed(1)} s, ${frames.length} messages: ${after ? `the slot now reads “${after.name}”` : 'the slot did not read back'}`)
+      /* A slot that still reads empty after every message was taken was not kept: said so here, and by the card. */
+      const reads = !after ? 'the slot did not read back' : after.empty ? `the slot STILL READS “${after.name}”: the unit took every message and did not keep it` : `the slot now reads “${after.name}”`
+      say(`a capture went to slot ${said} in ${seconds.toFixed(1)} s, ${frames.length} messages, its name’s check byte 0x${((words[7] >>> 24) & 0xff).toString(16).padStart(2, '0')}: ${reads}`)
       return { slot, name: after ? after.name : null, replaced: before.empty ? null : before.name, seconds }
     })
   }
@@ -3608,6 +3658,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       /* The computer's own documents simply do not exist here, which the app already handles. */
       throw method === 'GET' && (clean === '/device' || clean.startsWith('/store/')) ? notHere() : unsupported()
     }
+    /*
+     * A capture is going (namInstall): what would change the unit is refused
+     * here, whole, before its route asks anything. A route that reads before
+     * it writes (a scene tap asks where the unit is first) would otherwise
+     * have its read held with the others and then write once the capture is
+     * over: a scene landing half a minute after the tap.
+     */
+    if (captureBusy && method !== 'GET' && options?.capturing !== true) throw failure(`The ${spec.name} is taking a capture. Try again when it has finished.`, 409)
     /* Play's, counted while it is answered: nothing of Edit's starts meanwhile (editWaits). */
     const play = route.edit === true ? null : playBegins(method === 'GET' && BLOCK_READS.includes(clean))
     tapUntil = deadline

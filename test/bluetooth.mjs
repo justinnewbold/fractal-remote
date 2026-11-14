@@ -8018,7 +8018,9 @@ export function run(test) {
     const ble = src('mobile/src/lib/bluetooth.js')
     assert.match(ble, /export const APPLE_SCREEN_OPENS_DONE = 'Opens Apple’s Bluetooth screen: tap your adapter, wait for Connected, then Done\.'/)
     /* Where Apple's screen has no Done (iOS 27, appleDoneGone), the same button says how that screen is closed. */
-    assert.match(ble, /export const APPLE_SCREEN_OPENS_SWIPE = 'Opens Apple’s Bluetooth screen: tap your adapter, wait for Connected, then swipe that screen down\.'/)
+    assert.match(ble, /export const APPLE_SCREEN_OPENS_SWIPE = 'Opens Apple’s screen: tap your adapter, wait for Connected, then swipe that screen down\.'/)
+    /* It is drawn under a button, two lines at most: no longer than this, or a larger text size cuts off the way out. */
+    assert.ok(/APPLE_SCREEN_OPENS_SWIPE = '([^']*)'/.exec(ble)[1].length <= 88, 'the line under the button grew: at a larger text size its last words are cut off')
     assert.match(ble, /export const appleScreenOpens = \(\) => \(doneGoneHere\(\) \? APPLE_SCREEN_OPENS_SWIPE : APPLE_SCREEN_OPENS_DONE\)/)
     assert.match(ble, /export const opensApplesScreen = \(\) => adapterAway\(\) && !pairScreenShut\(\)/)
     assert.match(ble, /export async function lookForAdapterAgain\(poke\) \{\n  if \(opensApplesScreen\(\)\) \{/, 'the tap and the words under the button ask different questions')
@@ -8343,14 +8345,18 @@ export function run(test) {
   test('on iOS 27 the app says to swipe Apple’s screen down, and its Done comes back in a build that draws that screen under its own bar', async () => {
     const cases = [
       ['iOS 18', { version: 18 }, false],
-      ['iOS 26.4', { version: '26.4' }, false],
+      /* Since iOS 26 the system's Done, which every build out today puts there, is drawn as a tick: "then tap Done" names nothing there either. */
+      ['iOS 26.4', { version: '26.4' }, true],
+      ['iOS 26.4, a build that says its Done is its own', { version: '26.4', extra: { pairHasDone: () => true } }, false],
       ['iOS 27.2.1, every copy out today', { version: '27.2.1', extra: { pairsOnIOS27: () => true } }, true],
       ['iOS 27.0, a build with no word on it', { version: 27 }, true],
       ['iOS 27.2.1, a build that says its Done is its own', { version: '27.2.1', extra: { pairsOnIOS27: () => true, pairHasDone: () => true } }, false],
       ['iOS 27, a build that answers something else', { version: 27, extra: { pairHasDone: () => 'yes' } }, true],
       ['iOS 27, a build that throws when asked', { version: 27, extra: { pairHasDone: () => { throw new Error('no') } } }, true],
       ['iOS 28', { version: '28.0' }, true],
-      ['Android 16', { os: 'android', version: 36 }, false]
+      ['Android 16', { os: 'android', version: 36 }, false],
+      /* And never asked there, even of a module that would answer. */
+      ['Android 16, with a module that would answer', { os: 'android', version: 36, extra: { pairHasDone: () => true } }, false]
     ]
     for (const [what, { os = 'ios', version, extra = {} }, gone] of cases) {
       const asked = []
@@ -11109,7 +11115,7 @@ export function run(test) {
     /* What the unit holds: a slot's first 272 bytes, by slot. The first three are taken. */
     const held = new Map()
     for (const [slot, name] of [[0, 'Brit Crunch'], [1, 'Clean One'], [2, 'High Gain Three']]) held.set(slot, bytesOf(nam.namRecord(A2(name)).words, 68))
-    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], silentAt: null, refuseAt: null, quietBusy: false }
+    const u = { held, busy: [], picked: [], begun: [], chunks: [], kept: [], unkept: [], silentAt: null, refuseAt: null, quietBusy: false }
     const headOf = (slot) => held.get(slot) || empty()
     const said = (b, payload) => t.say(sx.frame(0x10, 0x01, [...b.slice(6, 12), ...payload]))
     const hear = t.unit.hear
@@ -11134,10 +11140,19 @@ export function run(test) {
         const words = u.chunks.flatMap((c) => c.words)
         const slot = u.begun[u.begun.length - 1].slot
         u.kept.push({ slot, words, xor: sx.fromSeptets32(b, 6) })
-        /* As his unit did: the name's 32nd byte is the unit's own ending. */
+        /*
+         * As his unit did, as far as it is understood (14 November 2026): a
+         * record whose name does not XOR to nought over its 32 bytes is
+         * answered "taken" like any other and NOT KEPT, so the slot still
+         * reads as it did. One that is kept is listed with a NUL where the
+         * check byte was.
+         */
         const head = bytesOf(words, 68)
-        head[31] = 0
-        held.set(slot, head)
+        if (head.slice(0, 32).reduce((x, c) => x ^ c, 0) !== 0) u.unkept.push(slot)
+        else {
+          head[31] = 0
+          held.set(slot, head)
+        }
         return t.say(sx.frame(0x10, 0x64, [0x56, 0x00]))
       }
       if (fn !== 0x01) return hear(b)
@@ -11182,6 +11197,7 @@ export function run(test) {
     t.sent.length = 0
     const steps = []
     const late = []
+    const asked = []
     const got = await asks('/nam/slots/3', {
       method: 'POST',
       body: { words: rec.words },
@@ -11189,6 +11205,8 @@ export function run(test) {
         steps.push([sent, of])
         /* A scene pressed while the capture is going: refused, with nothing sent. */
         if (sent === 40) t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ index: 2 }) }).then(() => late.push('went'), (e) => late.push(e))
+        /* And something asked meanwhile (the rig's own "which preset are you on?", every half-minute): taken, and sent only when the capture is over. */
+        if (sent === 60) t.wire.request('/preset').then((p) => asked.push(p), (e) => asked.push(e))
       }
     })
     assert.deepEqual([got.slot, got.name, got.replaced], [3, 'Plexi Dimed 57', null])
@@ -11208,6 +11226,23 @@ export function run(test) {
     const want = [nam.namSlotQuery(0x10, 3), nam.namBusyFrame(0x10, true), ...nam.namUploadFrames(0x10, 3, rec.words), nam.namBusyFrame(0x10, false), nam.namSlotQuery(0x10, 3)]
     assert.equal(shaped().length, want.length)
     assert.ok(shaped().every((f, i) => t.sx.sameBytes(f, want[i])), 'a capture message left the phone that is not Axe-Edit’s, or out of its order')
+    /*
+     * NOTHING ELSE LEFT THE PHONE WHILE IT WENT. Axe-Edit sends nothing
+     * between "a transfer is under way" and "it is over" but the capture's
+     * own messages; the first build let a read through between two of them.
+     * The preset asked for at message 60 went after "it is over", and was
+     * answered.
+     */
+    const all = t.frames()
+    const from = all.findIndex((f) => t.sx.sameBytes(f, nam.namBusyFrame(0x10, true)))
+    const to = all.findIndex((f) => t.sx.sameBytes(f, nam.namBusyFrame(0x10, false)))
+    assert.ok(from >= 0 && to > from)
+    assert.equal(to - from - 1, 130, 'something else was sent between "a transfer is under way" and "it is over"')
+    assert.ok(all.slice(from + 1, to).every((f) => nam.namShaped(f, 0x10)), 'a message that is not the capture’s went to the unit in the middle of it')
+    assert.ok(all.slice(to + 1).some((f) => f[5] === 0x0d), 'what was asked during the capture was never sent once it was over')
+    await drive(t.clock, Promise.resolve())
+    assert.equal(asked.length, 1, 'what was asked during the capture was never answered')
+    assert.ok(asked[0] && !(asked[0] instanceof Error), `the preset asked for during the capture failed: ${asked[0]?.message}`)
     /* The scene pressed meanwhile: refused in words, and the unit's scene is what it was. */
     assert.equal(late.length, 1)
     assert.ok(late[0] instanceof Error && late[0].status === 409 && /is taking a capture/.test(late[0].message), 'a scene went to the unit in the middle of a capture')
@@ -11216,6 +11251,54 @@ export function run(test) {
     assert.deepEqual(await t.post('/scene', { index: 2 }), { ok: true })
     /* The next empty slot is the one after. */
     assert.equal((await asks('/nam/empty')).slot, 4)
+  })
+
+  /*
+   * JUSTIN'S FIRST SEND (14 November 2026): every one of the 130 messages was
+   * answered "taken", and the unit then named the slot "<EMPTY>". The app's
+   * record differed from Axe-Edit's by one byte, the check byte at the end
+   * of the name (lib/nam-install `namCheck`), which it sent as a NUL. The
+   * record carries it now; and a unit that takes a capture and does not keep
+   * it is said so, in the log and by the card, never "done".
+   */
+  test('the name’s check byte goes as Axe-Edit sends it, and a capture the unit took and did not keep is said so, never offered to play', async () => {
+    const { t, u, nam, asks, record } = await capturesLine()
+    const rec = record('Mesa Recto Red Modern Classic', 5)
+    /* The record the app builds: its name's 32 bytes XOR to nought, the last of them the other 31 XORed. */
+    const name = []
+    for (let i = 0; i < 8; i++) name.push(rec.words[i] & 0xff, (rec.words[i] >>> 8) & 0xff, (rec.words[i] >>> 16) & 0xff, rec.words[i] >>> 24)
+    assert.equal(name.reduce((x, c) => x ^ c, 0), 0, 'the name does not XOR to nought')
+    assert.equal(name[31], nam.namCheck(name))
+    assert.notEqual(name[31], 0)
+    /* And the name itself is what it was: the check byte is no part of it. */
+    assert.equal(rec.name, 'Mesa Recto Red Modern Classic')
+    /* Sent as it is, the unit keeps it. */
+    const kept = await asks('/nam/slots/3', { method: 'POST', body: { words: rec.words } })
+    assert.deepEqual([kept.slot, kept.name], [3, 'Mesa Recto Red Modern Classic'])
+    assert.deepEqual(u.unkept, [])
+    assert.ok(t.logs.some((l) => /a capture went to slot 004 in [\d.]+ s, 130 messages, its name’s check byte 0x[0-9a-f]{2}: the slot now reads “Mesa Recto Red Modern Classic”/.test(l)), t.logs.slice(-3).join(' | '))
+
+    /* The record as the first build sent it, a NUL where the check byte goes: taken at every message, and not kept. */
+    const old = rec.words.slice()
+    old[7] = old[7] & 0x00ffffff
+    t.sent.length = 0
+    const seen4 = () => t.frames().filter((f) => t.sx.sameBytes(f, nam.namSlotQuery(0x10, 4)))
+    const lost = await asks('/nam/slots/4', { method: 'POST', body: { words: old } })
+    assert.deepEqual(u.unkept, [4])
+    assert.deepEqual([lost.slot, lost.name], [4, '<EMPTY>'], 'a slot the unit did not keep was not read back as empty')
+    /* Asked again a second later before it is called not kept: the slot before the send, and twice after it. */
+    assert.equal(seen4().length, 3, 'a slot that read empty was not asked a second time')
+    assert.ok(t.logs.some((l) => /a capture went to slot 005 .*: the slot STILL READS “<EMPTY>”: the unit took every message and did not keep it/.test(l)), t.logs.slice(-3).join(' | '))
+    /* The slot is still the first empty one, so the next send goes back into it and litters nothing. */
+    assert.equal((await asks('/nam/empty')).slot, 4)
+
+    /* The card: a slot that reads empty after a send is "did not keep it", with no Play button; and a block pointed at an empty slot says so. */
+    const card = src('mobile/src/components/Tone3000Test.js').replace(/\s+/g, ' ')
+    assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ logDebug\('tone3000', `capture \$\{m\.id\} was NOT KEPT: [^`]*`\) setSend\(\{ id: m\.id, slot, line: `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\.` \}\) return \}/)
+    assert.match(card, /if \(got\.name === NAM_EMPTY\) played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and the Axe-Fx III says that slot is empty, so there is nothing to hear\.`\)/)
+    /* The send's line and the block's line each keep their place: one never writes over the other. */
+    assert.match(card, /\{send\?\.id === m\.id \? <Note>\{send\.line\}<\/Note> : null\} \{send\?\.id === m\.id && send\.played \? <Note>\{send\.played\}<\/Note> : null\}/)
+    assert.ok(!/setSend\(\(was\) => \(was \? \{ \.\.\.was, line:/.test(card), 'what the block said is written over what became of the send')
   })
 
   test('a slot in use is never written over unless the request says so, and a NAM block is pointed at a slot by the one write', async () => {

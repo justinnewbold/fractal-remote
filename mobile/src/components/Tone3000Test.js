@@ -20,6 +20,16 @@
  * then be pointed at it. Nothing is saved on the unit: the preset is saved
  * the usual way.
  *
+ * ONE BUTTON DOES THE WHOLE OF IT, since 14 November 2026: "How do we
+ * preview the file live? ... this whole screen is confusing to me. What am
+ * I supposed to be doing?" (Justin, after his first send.) So the card says
+ * its steps in order, each capture has one button that fetches it, sends it
+ * and points NAM 1 at it, and what the unit said of the slot and of the
+ * block each keep a line of their own. A slot the unit still calls
+ * "<EMPTY>" after a send is said as not kept, with no Play button: his
+ * first send ended "NAM 1 is playing “<EMPTY>” now", which told him
+ * nothing (lib/nam-install has what was wrong with that send).
+ *
  * On a page only his account has, so it is his alone without a switch of
  * its own; it gets one (lib/features) when it moves to where a player meets
  * it. TONE3000's terms: everything browsed is its own page under its own
@@ -33,13 +43,23 @@ import { logDebug } from '../lib/debugLog'
 import { T3K_POWERED, toneCredit } from '../lib/tone3000'
 import { onTone3000Return, t3k } from '../lib/tone3000Here'
 import { namSaid, readNam } from '../lib/nam-file'
-import { NAM_BLOCKS, namRecord, namSlotSaid } from '../lib/nam-install'
+import { NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
 import { namEmptySlotHere, namInstallHere, namPickHere } from '../lib/device'
 import Note from './Note'
 import Press from './Press'
 
-/** A capture's button: its name, and its size where TONE3000 says one. */
+/** A capture's name, as TONE3000 gives it. */
 export const captureLabel = (m) => (m?.name ? String(m.name) : `Capture ${m?.id}`)
+
+/** What to do here, in order: the card's first lines. */
+export const STEPS = Object.freeze([
+  'Browse TONE3000 opens its own page. Sign in, search, and pick a tone. What you hear on that page is TONE3000’s own demo recording, not your rig.',
+  'Back here, each capture of that tone has a Send it and play it button.',
+  'That button puts the capture in the Axe-Fx III’s first empty capture slot and points NAM 1 at it, so you hear it through your own rig. It takes about half a minute over Bluetooth, a second or two through the computer or by USB.'
+])
+export const STEPS_FOOT = 'The preset you are on needs a NAM block in it. Nothing is saved until you save the preset, and a capture already on the unit is never written over.'
+export const SEND_AND_PLAY = 'Send it and play it in NAM 1'
+export const SEND_AND_PLAY_SUB = 'Into the first empty capture slot on the Axe-Fx III'
 
 export default function Tone3000Test() {
   const [signedIn, setSignedIn] = useState(false)
@@ -53,7 +73,7 @@ export default function Tone3000Test() {
   const alive = useRef(true)
   /* A fetched capture's text, by its id, for as long as this card is up and no longer: it is what gets sent. Never written down. */
   const texts = useRef({})
-  /* The send in hand: { id, line, slot, done, again }. */
+  /* The send in hand: { id, line, slot, done, again, played }. `line` is what became of the send, `played` what the NAM block said. */
   const [send, setSend] = useState(null)
 
   const load = async (toneId) => {
@@ -144,6 +164,9 @@ export default function Tone3000Test() {
    */
   const sendToUnit = async (m, again = null) => {
     if (busy) return
+    /* Not fetched yet: this tap asks for it (the one place a capture is fetched, `check`). What is not an A2 capture says so there and goes no further. */
+    if (!texts.current[m.id]) await check(m)
+    if (!alive.current || !texts.current[m.id]) return
     const rec = namRecord(texts.current[m.id], { name: captureLabel(m), by: tone?.user?.username })
     if (!rec.ok) {
       setSend({ id: m.id, line: rec.why })
@@ -173,8 +196,18 @@ export default function Tone3000Test() {
           if (alive.current && (sent % 10 === 0 || sent === of)) setSend({ id: m.id, slot, line: `Sending “${rec.name}” to slot ${said}: ${sent} of ${of}` })
         }
       })
-      logDebug('tone3000', `capture ${m.id} is in slot ${said} after ${got.seconds.toFixed(1)} s; the unit reads the slot as “${got.name ?? 'nothing it would say'}”`)
-      if (alive.current) setSend({ id: m.id, slot, done: true, line: `In slot ${said}${got.name ? ` as “${got.name}”` : ''}, in ${Math.round(got.seconds)} seconds.` })
+      logDebug('tone3000', `capture ${m.id} went to slot ${said} in ${got.seconds.toFixed(1)} s; the unit reads the slot as “${got.name ?? 'nothing it would say'}”`)
+      if (!alive.current) return
+      /* Every message was taken and the slot still reads empty: the unit did not keep it. Never "done", and nothing to play. */
+      if (got.name === NAM_EMPTY) {
+        logDebug('tone3000', `capture ${m.id} was NOT KEPT: slot ${said} still reads ${NAM_EMPTY} after every message was taken`)
+        setSend({ id: m.id, slot, line: `The Axe-Fx III took the capture and then still shows slot ${said} as empty, so it did not keep it.` })
+        return
+      }
+      setSend({ id: m.id, slot, done: true, line: `In slot ${said}${got.name ? ` as “${got.name}”` : ''}, in ${Math.round(got.seconds)} seconds.` })
+      /* And straight into NAM 1, which is what makes it heard. */
+      setBusy(`pick ${NAM_BLOCKS[0]}`)
+      await point(NAM_BLOCKS[0], slot)
     } catch (err) {
       logDebug('tone3000', `capture ${m.id} was not sent: ${err?.message || err}`)
       if (alive.current) setSend({ id: m.id, line: err?.message || 'The capture was not sent.', again: err?.partial === true && Number.isInteger(err?.slot) ? err.slot : null })
@@ -183,17 +216,26 @@ export default function Tone3000Test() {
     }
   }
 
+  /* NAM 1 or NAM 2 pointed at a slot, and what the unit said of it, on a line of its own under the send's. Never throws. */
+  const point = async (block, slot) => {
+    const which = `NAM ${NAM_BLOCKS.indexOf(block) + 1}`
+    const played = (line) => alive.current && setSend((was) => (was ? { ...was, played: line } : was))
+    try {
+      const got = await namPickHere(block, slot)
+      logDebug('tone3000', `${which} is on slot ${namSlotSaid(slot)} now: the unit names it “${got.name}”`)
+      if (got.name === NAM_EMPTY) played(`${which} is on slot ${namSlotSaid(slot)}, and the Axe-Fx III says that slot is empty, so there is nothing to hear.`)
+      else played(`${which} is playing “${got.name}” now, through your own rig. Save the preset to keep it there.`)
+    } catch (err) {
+      logDebug('tone3000', `${which} was not pointed at slot ${namSlotSaid(slot)}: ${err?.message || err}`)
+      played(err?.message || `${which} was not changed.`)
+    }
+  }
+
   const useIn = async (block, slot) => {
     if (busy) return
     setBusy(`pick ${block}`)
-    const which = `NAM ${NAM_BLOCKS.indexOf(block) + 1}`
     try {
-      const got = await namPickHere(block, slot)
-      logDebug('tone3000', `${which} is on slot ${namSlotSaid(slot)} now: “${got.name}”`)
-      if (alive.current) setSend((was) => (was ? { ...was, line: `${which} is playing “${got.name}” now. Save the preset to keep it there.` } : was))
-    } catch (err) {
-      logDebug('tone3000', `${which} was not pointed at slot ${namSlotSaid(slot)}: ${err?.message || err}`)
-      if (alive.current) setSend((was) => (was ? { ...was, line: err?.message || `${which} was not changed.` } : was))
+      await point(block, slot)
     } finally {
       if (alive.current) setBusy(null)
     }
@@ -216,11 +258,12 @@ export default function Tone3000Test() {
       <Text accessibilityRole="header" style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5, textTransform: 'uppercase' }}>
         TONE3000
       </Text>
-      <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>
-        Browse opens TONE3000’s own page in the browser: sign in there, search, listen with its preview players, and pick a
-        tone. It comes back here with the tone and its captures. A fetched capture can be sent to an Axe-Fx III, over
-        Bluetooth or its USB cable into this device: into the first empty slot, never over one that is in use.
-      </Text>
+      {STEPS.map((step, i) => (
+        <Text key={step} style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>
+          {`${i + 1}. ${step}`}
+        </Text>
+      ))}
+      <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 19 }}>{STEPS_FOOT}</Text>
       <Press label={busy === 'open' ? 'Opening…' : tone ? 'Browse TONE3000 again' : 'Browse TONE3000'} tone="live" disabled={!!busy} onPress={browse} />
       {busy === 'tone' ? <Note>Fetching the tone you picked…</Note> : null}
       {said ? <Note>{said}</Note> : null}
@@ -233,27 +276,19 @@ export default function Tone3000Test() {
           {models && !models.length ? <Note>This tone has no A2 captures, which is the kind the Axe-Fx III’s NAM block plays.</Note> : null}
           {(models || []).map((m) => (
             <View key={m.id} style={{ gap: space.xs }}>
-              <Press
-                label={busy === m.id ? `Fetching ${captureLabel(m)}…` : captureLabel(m)}
-                sub={checked[m.id] ? 'Fetched and checked' : `Fetch and check${m.size ? ` · ${m.size}` : ''}`}
-                disabled={!!busy}
-                onPress={() => check(m)}
-              />
-              {checked[m.id] ? (
-                <Text selectable style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>
-                  {checked[m.id]}
-                </Text>
-              ) : null}
-              {texts.current[m.id] ? (
+              <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '600' }}>{`${captureLabel(m)}${m.size ? ` · ${m.size}` : ''}`}</Text>
+              {/* The one button: fetch it, send it, play it. Gone once the unit has it, when the two below take over. */}
+              {send?.id === m.id && send.done ? null : (
                 <Press
-                  label={busy === `send ${m.id}` ? 'Sending…' : send?.id === m.id && send.done ? 'Send it to another slot' : 'Send to the Axe-Fx III'}
-                  sub="Into the first empty capture slot"
+                  label={busy === m.id ? 'Fetching…' : busy === `send ${m.id}` ? 'Sending…' : SEND_AND_PLAY}
+                  sub={SEND_AND_PLAY_SUB}
                   tone="live"
                   disabled={!!busy}
                   onPress={() => sendToUnit(m)}
                 />
-              ) : null}
+              )}
               {send?.id === m.id ? <Note>{send.line}</Note> : null}
+              {send?.id === m.id && send.played ? <Note>{send.played}</Note> : null}
               {send?.id === m.id && Number.isInteger(send.again) ? (
                 <Press label={`Send it again to slot ${namSlotSaid(send.again)}`} sub="Over what the stopped send left there" disabled={!!busy} onPress={() => sendToUnit(m, send.again)} />
               ) : null}
@@ -262,6 +297,13 @@ export default function Tone3000Test() {
                     <Press key={block} label={busy === `pick ${block}` ? 'Changing…' : `Play it in NAM ${i + 1}`} sub="In the preset the unit is on" disabled={!!busy} onPress={() => useIn(block, send.slot)} />
                   ))
                 : null}
+              {checked[m.id] ? (
+                <Text selectable style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 19 }}>
+                  {checked[m.id]}
+                </Text>
+              ) : (
+                <Press label="Check the file only" sub="Fetches it and says what kind it is: nothing goes to the unit" height={40} disabled={!!busy} onPress={() => check(m)} />
+              )}
             </View>
           ))}
         </View>

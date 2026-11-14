@@ -47,13 +47,13 @@ slot number is a guess, so the code names no slot over 127
 
 | Where | What |
 | --- | --- |
-| bytes 0–31 | the name. The unit keeps 31 characters and ends it itself: Axe-Edit sent a 32nd, and the unit's own list answered with a NUL there. |
+| bytes 0–31 | the name: 31 characters and a check byte. The 32nd byte is the other 31 XORed together (`namCheck`), so the field XORs to nought: Axe-Edit sent 0x60 there, which is exactly that for the name it sent. The unit's own list answers a NUL in its place. |
 | bytes 32–63 | who made it (`modeled_by`) |
 | bytes 64–95 | the gear's make |
 | bytes 96–127 | the gear's model |
 | bytes 128–159 | the gear's kind (`amp`, `amp_cab`) |
 | bytes 160–191 | the tone's kind (`crunch`, `hi_gain`, `metal`) |
-| bytes 192–223 | spare, noughts |
+| bytes 192–223 | a seventh line of text. Axe-Edit sent noughts there for the file it loaded, and so does the app. It is not always empty on a unit: 20 of the 31 captures on his hold `TONE3000` there and 11 hold noughts (the one Axe-Edit had just loaded among them), so the unit keeps both and stamps nothing itself. |
 | bytes 224–255 | the file's own `weights_hash` (`nam-content-v1:` and 64 hex digits) as its 32 bytes. Fractal's own captures have noughts there, so the unit plays one without them, and a file with no hash sends noughts. |
 | words 64–67 | loudness (dB), gain, input level and output level (dBu), each `7FC00000` ("not a number") where the file has none |
 | words 68–14084 | the capture's 14,017 numbers as single-precision floats in the file's order: the lite network's 1,871, then the full network's 12,146 |
@@ -67,11 +67,33 @@ one that was loaded is "Orange Amp: Flat EQ, Gain 6, AKG 414 + sm57": all
 14,017 of its numbers are the recording's, bit for bit as single-precision
 floats, in the file's order; its loudness and gain are the two numbers
 before them; and its `weights_hash` is the thirty-two bytes. Packed by
-`namRecord`, the file is the record Axe-Edit sent, word for word, but for
-one byte: the name's 32nd, which Axe-Edit sent (0x60) and the unit
-overwrote with its own ending. The other two files (other microphones)
+`namRecord`, the file is the record Axe-Edit sent, word for word, the
+name's check byte (0x60) included. The other two files (other microphones)
 share not one number with it. The files are not in the repository either
 (TONE3000's terms: a capture is fetched when a player asks, and not kept).
+
+## The name's check byte, and the first send that was not kept
+
+The first build sent a NUL as the name's 32nd byte: Axe-Edit had sent 0x60
+there and the unit's own list answered a NUL, so it was taken for something
+the unit wrote over. Justin's first send (14 November 2026, a different A2
+capture, over Bluetooth) was answered "taken" at all 130 messages, and when
+NAM 1 was then pointed at the slot the unit named it `<EMPTY>`: it took the
+capture and did not keep it.
+
+0x60 is the other 31 bytes of that name XORed together, so the name field
+XORs to nought. That byte was the one difference between the app's record
+and Axe-Edit's, and `namRecord` now sends it. This is the best explanation
+of the bytes, not something seen to work yet: until a send from the app is
+kept by a unit, treat it as likely and not proven. For a name shorter than
+31 characters the byte still goes 32nd (the rest of the field is noughts,
+so it is the name's own characters XORed); only a 31-character name has
+been seen.
+
+What the app does now so that the next try says why, whichever way it goes:
+after a send it reads the slot back, and a slot that still reads `<EMPTY>`
+is said as "took it and did not keep it", with no Play button; the log
+carries the slot's name as the unit said it, and the pick's answer.
 
 ## The sender
 

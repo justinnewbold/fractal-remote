@@ -700,8 +700,8 @@ by the time the sheet is up, Edit is the only button on it. Swiping the
 sheet down closes it, as it always has, and nothing said so.
 
 **It is in two halves, and the words are already merged.** By update, on
-iOS 27 and later the app says "then swipe that screen down" wherever it
-said "then Done" (lib/bluetooth `appleDoneGone`, `appleScreenOpens()`,
+iOS 26 and later (where the system's Done became a tick) the app says
+"then swipe that screen down" wherever it said "then Done" (lib/bluetooth `appleDoneGone`, `appleScreenOpens()`,
 `appleScreenHint()`), until a build answers `pairHasDone`. The device is
 asked when those words are drawn, never at launch. The button itself is
 native, so it waits here.

@@ -1160,8 +1160,33 @@ the capture on the unit, which is the hard half.
     sm57". All 14,017 numbers are the recording's bit for bit, its loudness
     and gain are the two numbers before them, and the thirty-two bytes are
     the file's own `weights_hash`. `namRecord` packs that file to the
-    record Axe-Edit sent, word for word but for the name's 32nd byte, which
-    the unit overwrites. The files are not in the repository.
+    record Axe-Edit sent, word for word, the name's check byte included
+    (below). The files are not in the repository.
+  - *THE FIRST SEND WAS TAKEN AND NOT KEPT, AND THE NAME HAS A CHECK BYTE
+    (14 November 2026).* His first send from the card, over Bluetooth: all
+    130 messages answered "taken", and then "NAM 1 is playing “<EMPTY>”
+    now". The app's record differed from Axe-Edit's by ONE byte, the name's
+    32nd: Axe-Edit sent 0x60, the unit's list answers a NUL there, and the
+    first build took that for the unit's own ending and sent a NUL. 0x60 is
+    the name's other 31 bytes XORed together, so the name field XORs to
+    nought (`namCheck`); `namRecord` sends it since 1.90.60. LIKELY, NOT
+    PROVEN: it is the best reading of the bytes, and it stays "likely"
+    until a send from the app is kept by his unit. The lesson either way:
+    A BYTE AXE-EDIT SENDS IS SENT, even one the unit seems to throw away;
+    "the unit overwrote it" was a guess from one sample.
+  - *The card after that send*: "this whole screen is confusing to me. What
+    am I supposed to be doing?" It now says its steps in order, each
+    capture has ONE button (Send it and play it in NAM 1: fetch, send,
+    point NAM 1 at it), what became of the send and what the block said
+    keep a line each, and a slot that still reads <EMPTY> after a send is
+    said as "took the capture and ... did not keep it" with no Play button
+    (the wire's log says the same, with the check byte it sent). What he
+    hears on TONE3000's page is TONE3000's own demo, never his rig: the
+    card says so.
+  - *I cannot read his phone's log from here* (the read-only door for
+    reports still waits on his key). He pastes a log when one is needed;
+    the [tone3000] lines and "a capture went to slot" say what the unit
+    answered.
   - *THE SENDER IS BUILT (1.90.58), HIS ACCOUNT ONLY: Developer → Testing →
     TONE3000.* A fetched capture has Send to the Axe-Fx III: the phone
     reads the unit's slots from the first up to the first that says
@@ -1528,9 +1553,11 @@ asked for once, when he says the list is whole. Waiting there now:
   Apple's screen inside a screen whose bar is the app's own (`PairingHost`
   in FractalBleMidiModule.swift): Done top right (the word, not the
   system's tick), Edit on the left. It moves the ios line only. THE WORDS WENT OUT BY UPDATE (1.90.60): on iOS
-  27 and later, in a build that does not answer `pairHasDone`, the app
+  26 and later (26, since that is where the system's Done became a tick),
+  in a build that does not answer `pairHasDone`, the app
   says "then swipe that screen down" (lib/bluetooth `appleDoneGone`),
-  which has always closed that sheet. Never write "then Done" about
+  which has always closed that sheet. The line under a button is two lines
+  at most, so that sentence is kept to 88 characters (a test holds it). Never write "then Done" about
   Apple's screen in a sentence of its own again: use `appleScreenOpens()`
   or `appleScreenHint()`, which know (and which ask the device only when
   they are drawn: a customer Bluetooth is not open to is asked nothing).

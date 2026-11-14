@@ -295,7 +295,7 @@ export function run(test) {
     assert.equal(n.DIN_BYTES_A_SECOND, 3125)
     assert.equal(
       n.namSaid(got),
-      'An A2 capture: 14,017 numbers (1,871 and 12,146). About 63 KB to send: about 21 seconds over a Bluetooth adapter, a second or two by USB. An estimate until installing is built.'
+      'An A2 capture: 14,017 numbers (1,871 and 12,146). About 63 KB to send: about 21 seconds over a Bluetooth adapter, a second or two by USB.'
     )
     /* The older kind is read, and said to be what the NAM block does not play. */
     const a1 = n.readNam(JSON.stringify({ version: '0.5.0', architecture: 'WaveNet', config: { layers: [] }, weights: [0.1, 0.2, 0.3] }))
