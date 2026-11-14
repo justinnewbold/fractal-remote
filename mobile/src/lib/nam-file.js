@@ -134,5 +134,6 @@ export function namSaid(read) {
   if (!read?.ok) return read?.why || 'This capture could not be read.'
   if (!read.a2) return `This is an older kind of capture (${read.architecture}). The Axe-Fx III’s NAM block plays A2 captures only.`
   const parts = read.networks.length > 1 ? ` (${read.networks.map((x) => x.numbers.toLocaleString('en-US')).join(' and ')})` : ''
-  return `An A2 capture: ${read.numbers.toLocaleString('en-US')} numbers${parts}. About ${Math.round(RECORD_SEND.midiBytes / 1024)} KB to send: about ${RECORD_SEND.dinSeconds} seconds over a Bluetooth adapter, a second or two by USB.`
+  /* "About half a minute", not a figure to the second: 27 seconds is a 5-pin MIDI jack's speed, and over Bluetooth each of the 130 messages also waits for its answer. */
+  return `An A2 capture: ${read.numbers.toLocaleString('en-US')} numbers${parts}. About ${Math.round(RECORD_SEND.midiBytes / 1024)} KB to send: about half a minute over a Bluetooth adapter, a second or two by USB.`
 }

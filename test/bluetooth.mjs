@@ -3899,7 +3899,40 @@ export function run(test) {
     }
     /* A unit that was answering is left as it was: only a "not answering" is taken back. */
     const src = readFileSync(new URL('../mobile/src/lib/bleLink.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
-    assert.match(src, /if \(getState\(\)\.unit === 'missing' \|\| getState\(\)\.unit === 'silent'\) setRig\(\{ unit: 'unknown' \}\) noteBluetooth\(\{ phase: 'connected'/)
+    assert.match(src, /if \(getState\(\)\.unit === 'missing' \|\| getState\(\)\.unit === 'silent'\) \{ askedOver = getState\(\)\.unit setRig\(\{ unit: 'unknown' \}\) \} noteBluetooth\(\{ phase: 'connected'/)
+
+    /*
+     * AND A READ THAT FAILS BEFORE IT SAYS ANYTHING PUTS THE OLD WORD BACK.
+     * Left at "being asked", nothing takes it back: the rig's watch reads a
+     * unit whole again only when one called missing or silent answers, so
+     * the bar would say Looking for good, with no Connect again.
+     */
+    const t = await onTheLine('am4', {})
+    const b = await linkOnABench(t)
+    try {
+      b.link.startBluetoothLink(() => {})
+      await advance(t.clock, 2000)
+      b.rig.unit = 'silent'
+      const back = b.away()
+      b.drop()
+      b.bench.refreshAll = async () => {
+        throw new Error('the read failed before it said anything')
+      }
+      back()
+      await advance(t.clock, 3000)
+      assert.equal(b.rig.unit, 'silent', 'a read that failed left the unit as being asked, which nothing takes back')
+      /* And a read that says something leaves what it said. */
+      const again = b.away()
+      b.drop()
+      b.bench.refreshAll = async () => {
+        b.rig.unit = 'present'
+      }
+      again()
+      await advance(t.clock, 3000)
+      assert.equal(b.rig.unit, 'present')
+    } finally {
+      b.done()
+    }
   })
 
   test('the link: a 0 owed by a wire let go of is sent by the next connection, after the rig has read everything', async () => {
@@ -11358,7 +11391,9 @@ export function run(test) {
     const card = src('mobile/src/components/Tone3000Test.js').replace(/\s+/g, ' ')
     assert.match(card, /if \(got\.name === NAM_EMPTY\) \{ logDebug\('tone3000', `capture \$\{m\.id\} was NOT KEPT: [^`]*`\) setSend\(\{ id: m\.id, slot, line: `The Axe-Fx III took the capture and then still shows slot \$\{said\} as empty, so it did not keep it\. Send it once more; if it says this again, the app’s log has what the unit answered\.` \}\) return \}/)
     /* And a pick that names the slot <EMPTY> takes the send back from "done": its button returns, and the two Play buttons, which could only point at the same empty slot, go. */
-    assert.match(card, /if \(got\.name === NAM_EMPTY\) played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and the Axe-Fx III says that slot is empty, so there is nothing to hear\. Send it once more\.`, \{ done: false \}\)/)
+    assert.match(card, /if \(got\.name === NAM_EMPTY\) played\(`\$\{which\} is on slot \$\{namSlotSaid\(slot\)\}, and it is empty, so there is nothing to hear\.`, \{ done: false, line: `The Axe-Fx III shows slot \$\{namSlotSaid\(slot\)\} as empty now, so the capture did not stay there\. Send it once more\.` \}\)/)
+    /* And a slot that never said what it holds is not said to hold the capture. */
+    assert.match(card, /line: got\.name \? `In slot \$\{said\} as “\$\{got\.name\}”, in \$\{Math\.round\(got\.seconds\)\} seconds\.` : `Sent to slot \$\{said\} in \$\{Math\.round\(got\.seconds\)\} seconds, but the unit didn’t say what the slot holds now\.`/)
     assert.match(card, /const played = \(line, more = null\) => alive\.current && setSend\(\(was\) => \(was \? \{ \.\.\.was, played: line, \.\.\.more \} : was\)\)/)
     /* One send at a time, whoever draws the card: kept outside any one drawing of it, set before the send's first message and cleared however it ends. */
     assert.match(card, /let atWork = 0/)
@@ -16104,6 +16139,11 @@ export function run(test) {
       assert.equal(typeof heard.onDevices, 'function', 'the list is not listened to after a search')
       heard.onDevices({ devices: [UHOST] })
       assert.equal(b.useBluetooth().said, note, 'the note went while the list still said the same')
+      /* The adapter named flickers off and on: the note goes with it and comes back with it, or its row is left with no word that it is the one he called wrong. */
+      heard.onDevices({ devices: [{ ...UHOST, offline: true }] })
+      assert.equal(b.useBluetooth().said ?? null, null, 'the note says the adapter is connected while its row says it is not')
+      heard.onDevices({ devices: [UHOST] })
+      assert.equal(b.useBluetooth().said, note, 'the note did not come back with the adapter it names')
       /* Past the few seconds in which a port new after Apple's screen is taken by itself (tookAfterScreen): this is the note's own rule. */
       const realNow = Date.now
       Date.now = () => realNow() + 10000
@@ -17114,9 +17154,39 @@ export function run(test) {
     } finally {
       bench.done()
     }
+    /*
+     * AND NEVER AN ADAPTER KEPT FOR ANOTHER UNIT, IN THOSE SECONDS. "Just
+     * connected" is connected now and not before the screen (14 November
+     * 2026), so an adapter the phone already knew that comes online in the
+     * window counts, tapped or not; one kept for another unit would be
+     * moved to this unit by it. It is left in the list, for a tap.
+     */
+    {
+      const { ADMINS } = await import('../shared/admin.mjs')
+      const AM4S = { id: '61:62', name: 'WIDI Jack Bluetooth', driver: BT, offline: false }
+      let rows = [{ ...AM4S, offline: true }]
+      const heard = {}
+      const disk = { 'fractal.bluetooth': JSON.stringify({ on: false, unit: 'fm9', adapter: null }), 'fractal.bluetooth.adapters': JSON.stringify({ am4: { id: AM4S.id, name: AM4S.name } }) }
+      const two = await bluetoothOnABench({ mod: { supported: () => true, devices: () => rows, authorization: () => 'allowedAlways', pair: async () => {}, addListener: (event, fn) => ((heard[event] = fn), { remove() {} }) }, disk })
+      try {
+        const b = two.ble
+        assert.equal(b.allowBluetooth(ADMINS[0]), true)
+        await b.restoreBluetooth()
+        assert.equal(b.adapterKeptFor(AM4S.id), 'am4')
+        assert.equal((await b.findAdapters()) ?? null, null)
+        rows = [AM4S]
+        heard.onDevices({ devices: rows })
+        assert.equal(b.bluetoothSettings().adapter ?? null, null, 'the AM4’s adapter, come online by itself after Apple’s screen, was taken for another unit')
+        assert.equal(b.adapterKeptFor(AM4S.id), 'am4')
+        assert.deepEqual(b.useBluetooth().devices.map((d) => d.id), [AM4S.id], 'it is not listed for a tap')
+      } finally {
+        two.done()
+      }
+    }
     const lib = flat('mobile/src/lib/bluetooth.js')
     assert.match(lib, /const AFTER_SCREEN_MS = 4000/)
     assert.match(lib, /if \(Date\.now\(\) > a\.until\) \{ afterScreen = null return \}/, 'a port long after the screen is taken as its')
+    assert.match(lib, /if \(!pick \|\| !just\.has\(pick\.id\)\) return \/\*[^*]*\*\/ if \(takenIds\(\)\.has\(pick\.id\)\) return/)
   })
 
   test('the page and Play: Turn on Bluetooth under Bluetooth off, Connect again while the unit says nothing, Switch to the unit on the adapter, and Apple’s screen for an adapter not connected', () => {

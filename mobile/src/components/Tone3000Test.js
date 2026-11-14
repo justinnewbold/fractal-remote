@@ -78,7 +78,7 @@ let atWork = 0
  */
 const STILL_GOING_MS = 5 * 60 * 1000
 const goingNow = () => atWork !== 0 && Date.now() - atWork < STILL_GOING_MS
-export const STILL_GOING = 'A capture is still going to the unit. Wait for it to finish.'
+export const STILL_GOING = 'A capture is still going to the unit. Tap again when it has finished.'
 
 export default function Tone3000Test() {
   const [signedIn, setSignedIn] = useState(false)
@@ -189,7 +189,11 @@ export default function Tone3000Test() {
     }
     /* Not fetched yet: this tap asks for it (the one place a capture is fetched, `check`). What is not an A2 capture says so there and goes no further. */
     if (!texts.current[m.id]) await check(m)
-    if (!alive.current || !texts.current[m.id] || goingNow()) return
+    if (!alive.current || !texts.current[m.id]) return
+    if (goingNow()) {
+      setSend({ id: m.id, line: STILL_GOING })
+      return
+    }
     /* Named by the file's own word, else TONE3000's name for it, else its number there: a name in another script keeps none of its letters on the unit. */
     const rec = namRecord(texts.current[m.id], { name: captureLabel(m), fallback: `Capture ${m.id}`, by: tone?.user?.username })
     if (!rec.ok) {
@@ -229,7 +233,8 @@ export default function Tone3000Test() {
         setSend({ id: m.id, slot, line: `The Axe-Fx III took the capture and then still shows slot ${said} as empty, so it did not keep it. Send it once more; if it says this again, the app’s log has what the unit answered.` })
         return
       }
-      setSend({ id: m.id, slot, done: true, line: `In slot ${said}${got.name ? ` as “${got.name}”` : ''}, in ${Math.round(got.seconds)} seconds.` })
+      /* A slot that never said what it holds (asked twice) is not said to hold the capture: the send went, and pointing NAM 1 at it is what finds out. */
+      setSend({ id: m.id, slot, done: true, line: got.name ? `In slot ${said} as “${got.name}”, in ${Math.round(got.seconds)} seconds.` : `Sent to slot ${said} in ${Math.round(got.seconds)} seconds, but the unit didn’t say what the slot holds now.` })
       /* And straight into NAM 1, which is what makes it heard. */
       setBusy(`pick ${NAM_BLOCKS[0]}`)
       await point(NAM_BLOCKS[0], slot)
@@ -256,7 +261,7 @@ export default function Tone3000Test() {
     try {
       const got = await namPickHere(block, slot)
       logDebug('tone3000', `${which} is on slot ${namSlotSaid(slot)} now: the unit names it “${got.name}”`)
-      if (got.name === NAM_EMPTY) played(`${which} is on slot ${namSlotSaid(slot)}, and the Axe-Fx III says that slot is empty, so there is nothing to hear. Send it once more.`, { done: false })
+      if (got.name === NAM_EMPTY) played(`${which} is on slot ${namSlotSaid(slot)}, and it is empty, so there is nothing to hear.`, { done: false, line: `The Axe-Fx III shows slot ${namSlotSaid(slot)} as empty now, so the capture did not stay there. Send it once more.` })
       else played(`${which} is playing “${got.name}” now, through your own rig. Save the preset to keep it there.`)
     } catch (err) {
       logDebug('tone3000', `${which} was not pointed at slot ${namSlotSaid(slot)}: ${err?.message || err}`)

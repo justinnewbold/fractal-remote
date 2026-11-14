@@ -1150,10 +1150,12 @@ function sayWhyNotPicked(list, just) {
  * any other the page has put up is left alone).
  */
 function sameSaidStill(devices) {
-  if (!sameSaid || now.said !== sameSaid) return
-  if (whyNotPicked(Array.isArray(devices) ? devices : now.devices, new Set(), pickRule())?.letGo) return
-  sameSaid = null
-  noteBluetooth({ said: null })
+  if (!sameSaid) return
+  /* Still the list's own answer: nothing kept, and the only one here is the one let go of. */
+  const still = !saved.adapter && whyNotPicked(Array.isArray(devices) ? devices : now.devices, new Set(), pickRule())?.letGo === true
+  /* Down when the list no longer says so; and back when it says so again with no other note up (the adapter named flickered off and on: the row was left with no word that it is the one he called wrong). */
+  if (now.said === sameSaid && !still) noteBluetooth({ said: null })
+  else if (!now.said && still) noteBluetooth({ said: sameSaid })
 }
 
 /**
@@ -1318,6 +1320,8 @@ function tookAfterScreen(devices) {
   if (!just.size) return
   const pick = pickAdapter(list, just, pickRule())
   if (!pick || !just.has(pick.id)) return
+  /* Never one kept for another unit, in this window: it may only have come online by itself, and taking it would move it to this unit with no tap. It stays in the list, marked as that unit's. */
+  if (takenIds().has(pick.id)) return
   afterScreen = null
   fresh = just
   showList(list)
@@ -1367,6 +1371,8 @@ export async function findAdapters({ cableFirst = true } = {}) {
   stopWaitingForBluetooth()
   afterScreen = null
   offAtConnect = null
+  /* And the note about the adapter he had is this search's to say afresh, or not at all. */
+  sameSaid = null
   noteBluetooth({ trouble: null, said: null })
   /*
    * A UNIT ON A USB CABLE FIRST, before anything about Bluetooth. "I've

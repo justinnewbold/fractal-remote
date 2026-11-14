@@ -295,7 +295,7 @@ export function run(test) {
     assert.equal(n.DIN_BYTES_A_SECOND, 3125)
     assert.equal(
       n.namSaid(got),
-      'An A2 capture: 14,017 numbers (1,871 and 12,146). About 81 KB to send: about 27 seconds over a Bluetooth adapter, a second or two by USB.'
+      'An A2 capture: 14,017 numbers (1,871 and 12,146). About 81 KB to send: about half a minute over a Bluetooth adapter, a second or two by USB.'
     )
     /* What it says a send takes is the record as it really goes (lib/nam-install: 130 messages), not the guess made before the packing was known. */
     const inst = await import('../mobile/src/lib/nam-install.js')

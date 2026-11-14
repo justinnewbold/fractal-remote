@@ -165,7 +165,7 @@ export function namRecord(text, said = {}) {
   const lasts = (x) => typeof x === 'string' && field(x)[0] !== 0
   const own = (x, other) => (lasts(x) ? x : other)
   /* And a capture is never filed under the unit's own word for an empty slot: it would read as not kept, and be written over by the next send. */
-  const named = (x) => lasts(x) && String.fromCharCode(...field(x).filter(Boolean)) !== NAM_EMPTY
+  const named = (x) => lasts(x) && String.fromCharCode(...field(x).filter(Boolean)).toUpperCase() !== NAM_EMPTY
   const texts = {
     name: [meta.name, said.name, said.fallback].find(named),
     by: own(meta.modeled_by, said.by),

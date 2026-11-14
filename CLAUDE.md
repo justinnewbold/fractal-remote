@@ -2150,6 +2150,24 @@ what the page offered:
 - **A throw in the wire's send step is a failed send**, said in the log,
   and no longer leaves every later request waiting for ever (bleWire
   `pump`).
+- **A new connection starts as a unit being asked** (bleLink `connected`,
+  from the review of the above). The rig's "missing" or "silent" outlived
+  the connection it was said of, so the page redrew "isn't answering" the
+  moment another adapter came up, with the adapter just left offered in
+  the button's place. It is taken back to "unknown" as the connection is
+  announced; and if that connection's first read fails before it says
+  anything, the old word goes back (`askedOver`), because the rig's own
+  watch reads a unit whole again only when one called missing or silent
+  starts answering. A unit that was answering keeps its word across a
+  drop, so nothing flashes mid-song.
+- **The way to another adapter is on Play too**: the note under the pill
+  has Use a different adapter beside Connect again (which only reconnects
+  to the same adapter), opening the Bluetooth page. After each restart
+  that morning he landed on Play, not on that page.
+- **The few seconds after Apple's screen** (`tookAfterScreen`) never take
+  an adapter kept for another unit: with "just connected" meaning
+  connected now and not before, one that only came online by itself would
+  otherwise be moved to this unit with no tap.
 
 On an iPhone "connected" means CoreMIDI took the port, and "sent" that it
 took the bytes: neither says a byte left the phone or reached a unit. When

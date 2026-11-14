@@ -744,6 +744,10 @@ it rides the next build pair, which is both phones together.
 every waiting patch and builds the app for a real iPhone with Xcode 27.1,
 which is the one compile this Swift gets before a build: the screen is
 device code only, since the simulator has no Bluetooth MIDI screen at all.
+Run 43540853860 (14 November 2026, on b41424d0, the patch as it is here,
+with the titled Done) went green. The first version, with the system's
+Done item, had compiled too (43538197057): a compile says nothing about how
+a button is drawn.
 
 **What only a real iPhone can show**, most likely first:
 

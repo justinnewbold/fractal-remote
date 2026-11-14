@@ -118,6 +118,8 @@ let missed = false
  * every new round: Connect, Disconnect, another unit or adapter.
  */
 let afresh = false
+/* The rig's "missing" or "silent" that a new connection took back to "being asked" (connected), kept until a read has said something in its place. */
+let askedOver = null
 /* Android said Bluetooth was off at the last try (the trouble 'bluetooth-off'): its going is the moment to try again (settingsMoved). */
 let wasOff = false
 /*
@@ -354,7 +356,10 @@ async function connected(e) {
    * with Use WIDI Master where the button just tapped had been. Until the
    * first read says, the unit is being asked.
    */
-  if (getState().unit === 'missing' || getState().unit === 'silent') setRig({ unit: 'unknown' })
+  if (getState().unit === 'missing' || getState().unit === 'silent') {
+    askedOver = getState().unit
+    setRig({ unit: 'unknown' })
+  }
   noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null, notThere: false })
   tell?.({ link: 'connected', macName: name, hostVersion: null })
   say(`connected to ${name}${isCable(s.adapter) ? ' by USB cable' : ''}; asking the ${unitName(s.unit)} what it is`)
@@ -418,6 +423,16 @@ async function connected(e) {
   } catch {
     // The rig store keeps what it learned, including the failure.
   }
+  /*
+   * A READ THAT FAILED BEFORE IT SAID ANYTHING leaves the word at "being
+   * asked", which nothing ever takes back: the rig's own watch reads a unit
+   * whole again only when one called missing or silent starts answering, so
+   * the bar would say Looking for good, with no Connect again and no Use a
+   * different adapter. The word this connection took over (askedOver) goes
+   * back, on this same wire, and the watch finds it as it always did.
+   */
+  if (wire === made && askedOver && getState().unit === 'unknown') setRig({ unit: askedOver })
+  if (getState().unit !== 'unknown') askedOver = null
   if (wire !== made || !running) return
   /*
    * BACK WITH THE TUNER STILL OPEN. A drop leaves the app's tuner open and
@@ -695,6 +710,7 @@ function settingsMoved(s) {
   return letGoOfWireInTurn((had) => {
     if (unitMoved) {
       resetRig()
+      askedOver = null
       /* Another unit: an owed close, the AM4's 0 or a Gen 3 unit's, is not for it. */
       unitTunerOwed = false
       gen3TunerOwed = null

@@ -220,7 +220,7 @@ export function run(test) {
     const both = namRecord(a2({ metadata: { name: '日本語' } }), { name: 'アンプ', fallback: 'Capture 42' })
     assert.deepEqual([both.ok, both.name], [true, 'Capture 42'])
     assert.match(namRecord(a2({ metadata: { name: '日本語' } }), { name: 'アンプ' }).why, /no name/)
-    const empty = namRecord(a2({ metadata: { name: '<EMPTY>' } }), { name: ' <EMPTY> ', fallback: 'Capture 7' })
+    const empty = namRecord(a2({ metadata: { name: '<EMPTY>' } }), { name: ' <Empty> ', fallback: 'Capture 7' })
     assert.deepEqual([empty.ok, empty.name], [true, 'Capture 7'])
     /* The other lines of text fall back the same way. */
     assert.equal(namRecord(a2({ metadata: { name: 'Plexi', modeled_by: 'アンプ' } }), { by: 'somebody' }).words[8], 0x656d6f73, '"some", who made it by the app’s word when the file’s keeps no letter')
