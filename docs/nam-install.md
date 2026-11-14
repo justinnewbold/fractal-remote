@@ -47,7 +47,7 @@ slot number is a guess, so the code names no slot over 127
 
 | Where | What |
 | --- | --- |
-| bytes 0–31 | the name: 31 characters and a check byte. The 32nd byte is the other 31 XORed together (`namCheck`), so the field XORs to nought: Axe-Edit sent 0x60 there, which is exactly that for the name it sent. The unit's own list answers a NUL in its place. |
+| bytes 0–31 | the name: 31 characters and one more byte. Axe-Edit sent 0x60 there, which is the other 31 XORed together (`namCheck`) for the name it sent. Whether the byte is that XOR for any name, or 0x60 every time, is not settled (below: two kept, three dropped). The unit's own list answers a NUL in its place. |
 | bytes 32–63 | who made it (`modeled_by`) |
 | bytes 64–95 | the gear's make |
 | bytes 96–127 | the gear's model |
@@ -71,6 +71,38 @@ before them; and its `weights_hash` is the thirty-two bytes. Packed by
 name's check byte (0x60) included. The other two files (other microphones)
 share not one number with it. The files are not in the repository either
 (TONE3000's terms: a capture is fetched when a player asks, and not kept).
+
+## The 32nd byte of the name is not settled: two kept, three dropped
+
+14 November 2026, through his Raspberry Pi. The first captures sent from
+the app that his unit kept, and the ones it dropped, every message of each
+answered "taken":
+
+| What became of it | The byte | The capture |
+| --- | --- | --- |
+| kept | `7C` | Jcm800 (a short name, as it was) |
+| kept | `78` | MES DRECF RD Gain2 BAL O808 CAB |
+| dropped, three times, two slots | `02` | FNDR BFSR VB Edge WRM2 CAB FREE |
+| dropped | `1D`, and `3D` with its name filled out | CL Gain 1 Bright |
+| dropped | `1D`, filled out or not | CL Gain 3 |
+
+The byte was the name XORed, as the section below explains. Every byte
+kept, and Axe-Edit's own `60`, has `60`'s two bits set; none dropped has.
+So the likelier reading is that the byte is no check of the name, and that
+Axe-Edit sends `60` every time: the one name it was recorded sending
+happens to XOR to `60`. It is not proven. The other reading, that the XOR
+is right and the three were dropped for something in their files, fits what
+was seen as well.
+
+So from 1.90.70 a capture the unit takes and does not keep is sent again
+another way, into the same slot (`mobile/src/lib/captureSend.js`,
+`CAPTURE_WAYS`): `60` with the file's hash, the name XORed with the hash,
+then each with no hash (noughts, as Fractal's own captures have). The log
+says what each try sent and what the unit did with it, with the file's own
+notes once. The computer no longer writes the XOR over the byte the phone
+packed (ForgeFX `namNameChecked`, 64c44a7), and answers which byte went
+and how long the closing message took. The filling out of a short name
+with spaces, below, is no longer sent: a short name was kept as it was.
 
 ## The name's check byte, and the first send that was not kept
 

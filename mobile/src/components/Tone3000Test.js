@@ -32,9 +32,10 @@
  * (`onDone`, with what the block said), and a capture already on the unit
  * has Play it in that block and Use it and go back. What each button does
  * is lib/tone3000Words', said for the place it is in. TONE3000's own
- * page (Browse TONE3000) is still one tap away on every view, which is its
- * rule for an app that lists its tones itself: "Always provide a clear,
- * persistent path to browse the full TONE3000 catalog via the Select flow."
+ * catalog page (Browse TONE3000) is drawn only where lib/tone3000Words
+ * `T3K_CATALOG_PAGE` is on, which it is not: that file says why, and what
+ * TONE3000's own rule ("Always provide a clear, persistent path to browse
+ * the full TONE3000 catalog via the Select flow") would need.
  *
  * WHAT TONE3000 ASKS OF A LIST LIKE THIS (its Design Requirements,
  * tone3000.com/api), and where each is kept: before a sign-in, a card
@@ -92,20 +93,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { tick } from '../lib/feedback'
+import { thud, tick } from '../lib/feedback'
 import { deviceNoun } from '../lib/device-word'
 import { logDebug } from '../lib/debugLog'
 import { gearSaid, readCallback, T3K_POWERED, toneCredit } from '../lib/tone3000'
 import { creatorImage, creatorOf, makesOf, toneBrowser, toneImage } from '../lib/tone3000Browse'
-import { capturesNote, getSays, namBlockSaid, previewSays, stepsFoot, stepsFor, USE_AND_BACK, useAndBackSub } from '../lib/tone3000Words'
+import { capturesNote, getSays, namBlockSaid, ON_UNIT, onUnitLine, previewSays, SENT_TO_UNIT, stepsFoot, stepsFor, T3K_CATALOG_PAGE, USE_AND_BACK, useAndBackSub } from '../lib/tone3000Words'
 import { hostPage, onTone3000Return, pageInApp, startOutside, t3k } from '../lib/tone3000Here'
 import { namSaid, readNam } from '../lib/nam-file'
 import { NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
-import { sendCapture } from '../lib/captureSend'
+import { captureOrder, sendCapture } from '../lib/captureSend'
 import { namEmptySlotHere, namInstallHere, namPickHere } from '../lib/device'
 import Avatar from './Avatar'
 import Note from './Note'
 import Press from './Press'
+import SentCard from './SentCard'
 import Tone3000Browser from './Tone3000Browser'
 import Tone3000Page from './Tone3000Page'
 import playIcon from '../../assets/icons/play.png'
@@ -153,6 +155,13 @@ export const COMING_BACK = 'Coming back from TONE3000…'
  * here, outside any one drawing of the card.
  */
 let atWork = 0
+/*
+ * The way of sending the unit last kept a capture by (lib/captureSend
+ * CAPTURE_WAYS), for as long as the app runs: the next capture goes that
+ * way first, so a unit that drops the first way is not sent every capture
+ * twice.
+ */
+let keptWay = null
 /*
  * When the send in hand began, or 0. Not a plain yes: a request that never
  * came back (nothing here is known to do that, but a relay can) would close
@@ -304,7 +313,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
     placed.delete(String(id))
     if (alive.current) setOnUnit(placedNow())
   }
-  /* A send that stopped part-way, by capture: { again, fill, play, line }. Kept apart from the send in hand, which a Play under another capture takes over. */
+  /* A send that stopped part-way, by capture: { again, way, play, back, line }. Kept apart from the send in hand, which a Play under another capture takes over. */
   const [stopped, setStopped] = useState({})
   /* Which of a capture's two buttons was tapped, for the word on it while it works: 'play' or 'keep'. */
   const [tapped, setTapped] = useState(null)
@@ -496,7 +505,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
    * Preview's: NAM 1 is pointed at it once it is there. Get's (`play`
    * false) leaves what is playing alone.
    */
-  const sendToUnit = async (m, again = null, fill = false, play = true, back = false) => {
+  const sendToUnit = async (m, again = null, way = null, play = true, back = false) => {
     if (busy) return
     /* On the unit already, put there by the app since it was opened: never a second copy in another slot. */
     if (again === null && placed.has(String(m.id))) return
@@ -553,19 +562,19 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
         named,
         slot,
         replace: again !== null,
-        fill,
+        /* The way that was going when a send stopped, else the way the unit last kept one, first. */
+        order: captureOrder(Number.isInteger(way) ? way : keptWay),
         install: (to, words, how) =>
           namInstallHere(to, words, {
             replace: how.replace,
-            filled: how.filled,
             onProgress: (sent, of) => {
               /* Every tenth message and the last: 130 redraws are no use to anybody. */
-              if (alive.current && (sent % 10 === 0 || sent === of)) setSend({ id: m.id, slot, line: `Sending “${rec.name}” to slot ${said}${how.second ? ' once more' : ''}: ${sent} of ${of}` })
+              if (alive.current && (sent % 10 === 0 || sent === of)) setSend({ id: m.id, slot, line: `Sending “${rec.name}” to slot ${said}${how.second ? ' another way' : ''}: ${sent} of ${of}` })
             }
           }),
         log: (line) => logDebug('tone3000', `capture ${m.id}, slot ${said}: ${line}`),
-        onSecond: () => {
-          if (alive.current) setSend({ id: m.id, slot, line: 'The Axe-Fx III took it and didn’t keep it. Sending it once more, a little differently…' })
+        onNext: (n) => {
+          if (alive.current) setSend({ id: m.id, slot, line: `The Axe-Fx III took it and didn’t keep it. Sending it again another way (try ${n})…` })
         }
       })
       /*
@@ -575,26 +584,33 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
        * capture was offered again and went into a second slot. Written down
        * before anything asks whether the page is there to be told.
        */
-      if (went.ok && went.got.name !== NAM_EMPTY) place(m.id, slot, !!went.got.name)
+      if (went.ok && went.got.name !== NAM_EMPTY) {
+        place(m.id, slot, !!went.got.name)
+        /* Only a way the unit named the capture after: that is one it kept. */
+        if (went.got.name && Number.isInteger(went.way)) keptWay = went.way
+      }
       if (!alive.current) return
       if (!went.ok) {
         setSend({ id: m.id, line: went.why })
         return
       }
-      const { got, twice } = went
+      const { got, tries } = went
       /* Every message was taken and the slot still reads empty: the unit did not keep it. Never "done", and nothing to play. */
       if (got.name === NAM_EMPTY) {
         setSend({
           id: m.id,
           slot,
-          line: twice
-            ? `The Axe-Fx III took the capture twice and still shows slot ${said} as empty, so it did not keep it. The app’s log has what the unit answered both times.`
-            : `The Axe-Fx III took the capture and then still shows slot ${said} as empty, so it did not keep it. Send it once more; if it says this again, the app’s log has what the unit answered.`
+          line:
+            tries > 1
+              ? `The Axe-Fx III took the capture ${tries} different ways and still shows slot ${said} as empty, so it did not keep it. The app’s log has what the unit answered each time.`
+              : `The Axe-Fx III took the capture and then still shows slot ${said} as empty, so it did not keep it. Send it once more; if it says this again, the app’s log has what the unit answered.`
         })
         return
       }
       /* A slot that never said what it holds (asked twice) is not said to hold the capture: the send went, and pointing NAM 1 at it is what finds out. */
-      setSend({ id: m.id, slot, done: true, line: got.name ? `In slot ${said} as “${got.name}”, in ${Math.round(got.seconds)} seconds${twice ? ', on the second try' : ''}.` : `Sent to slot ${said} in ${Math.round(got.seconds)} seconds, but the unit didn’t say what the slot holds now.` })
+      setSend({ id: m.id, slot, done: true, line: got.name ? `In slot ${said} as “${got.name}”, in ${Math.round(got.seconds)} seconds${tries > 1 ? `, on try ${tries}` : ''}.` : `Sent to slot ${said} in ${Math.round(got.seconds)} seconds, but the unit didn’t say what the slot holds now.` })
+      /* It is on the unit, by the unit's own word: felt as well as seen. */
+      if (got.name) thud()
       /* Get stops here: it is on the unit, and what is playing is left alone. */
       if (!play) return
       /* Preview goes straight into NAM 1, which is what makes it heard. */
@@ -608,7 +624,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       const line = err?.message || 'The capture was not sent.'
       setSend({ id: m.id, line })
       /* A send that stopped part-way is offered again into the same slot, with its name as it was going (a second try that stopped is not started over from the first) and as the button it was. */
-      if (err?.partial === true && Number.isInteger(err?.slot)) setStopped((was) => ({ ...was, [m.id]: { again: err.slot, fill: err?.filled === true, play, back, line } }))
+      if (err?.partial === true && Number.isInteger(err?.slot)) setStopped((was) => ({ ...was, [m.id]: { again: err.slot, way: Number.isInteger(err?.way) ? err.way : null, play, back, line } }))
     } finally {
       if (atWork === mine) atWork = 0
       if (alive.current) setBusy(null)
@@ -630,14 +646,15 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       const got = await namPickHere(block, slot)
       logDebug('tone3000', `${which} is on slot ${namSlotSaid(slot)} now: the unit names it “${got.name}”`)
       if (got.name === NAM_EMPTY) {
-        played(`${which} is on slot ${namSlotSaid(slot)}, and it is empty, so there is nothing to hear.`, { done: false, line: `The Axe-Fx III shows slot ${namSlotSaid(slot)} as empty now, so the capture did not stay there. Send it once more.` })
+        played(`${which} is on slot ${namSlotSaid(slot)}, and it is empty, so there is nothing to hear.`, { playing: false, done: false, line: `The Axe-Fx III shows slot ${namSlotSaid(slot)} as empty now, so the capture did not stay there. Send it once more.` })
         /* Not on the unit after all: its two buttons come back. */
         unplace(id)
         /* The block is on that slot all the same, empty as it is: the unit named it, and an earlier slot is no longer where the block is. */
         if (block === playIn) onPointed?.(slot)
       } else {
         const line = `${which} is playing “${got.name}” now, through your own rig. Save the preset to keep it there.`
-        played(line)
+        /* `playing`: this line is the block saying it plays the capture, which the card under the capture carries. */
+        played(line, { playing: true })
         /* The unit has named what the slot holds: it is on the unit, whatever the read after the send did not say. */
         if (placed.has(String(id))) place(id, slot, true)
         /* The block this page is for is on that slot now, by the unit's own word. Said before anything asks whether the page is still up. */
@@ -647,7 +664,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       }
     } catch (err) {
       logDebug('tone3000', `${which} was not pointed at slot ${namSlotSaid(slot)}: ${err?.message || err}`)
-      played(err?.message || `${which} was not changed.`)
+      played(err?.message || `${which} was not changed.`, { playing: false })
       /* The pick may have landed with its answer lost: where the block is now is not known, so no earlier slot is vouched for. */
       if (block === playIn) onPointed?.(null)
     }
@@ -836,21 +853,25 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
                   <Text numberOfLines={2} style={{ flex: 1, minWidth: 96, color: color.silk, fontSize: font.body, fontWeight: '600' }}>
                     {`${named}${m.size ? ` · ${m.size}` : ''}`}
                   </Text>
-                  {there ? (
-                    /* "On the unit" only where the unit has said the slot holds it; a send it took and said nothing of is "Sent to". */
-                    <Text style={{ color: color.silkDim, fontSize: font.small }}>{at.sure ? `On the unit · slot ${namSlotSaid(at.slot)}` : `Sent to slot ${namSlotSaid(at.slot)}`}</Text>
-                  ) : noUse ? null : (
+                  {there || noUse ? null : (
                     <>
                       <LineButton icon={playIcon} label={word('play', PREVIEW)} says={previewSays(named, where.n)} disabled={!!busy} onPress={() => sendToUnit(m, null, false, true)} />
                       <LineButton icon={saveIcon} label={word('keep', GET)} says={getSays(named, where)} lit disabled={!!busy} onPress={() => sendToUnit(m, null, false, where.held, where.held)} />
                     </>
                   )}
                 </View>
-                {mine ? <Note>{send.line}</Note> : null}
-                {mine && send.played ? <Note>{send.played}</Note> : null}
+                {/*
+                  On the unit: a card nobody can miss ("Need better confirmation that a tone was sent"). "On" the unit, green and with a
+                  tick, only where the unit has said the slot holds it; a send it took and said nothing of is "Sent to", plain. What the
+                  block says it is playing is the card's last line; the send's own line and a pick that failed keep theirs under it.
+                */}
+                {there ? <SentCard sure={at.sure} head={at.sure ? ON_UNIT : SENT_TO_UNIT} line={onUnitLine(namSlotSaid(at.slot), named)} more={mine && send.playing === true ? send.played : ''} /> : null}
+                {/* The send's own line goes only where the card says all of it: the unit named the slot. One it did not name keeps its line ("the unit didn’t say what the slot holds now"). */}
+                {mine && !(there && send.done && at.sure) ? <Note>{send.line}</Note> : null}
+                {mine && send.played && !(there && send.playing === true) ? <Note>{send.played}</Note> : null}
                 {/* Why it stopped stays under its own capture when the send in hand is another's. */}
                 {halted && !mine ? <Note>{halted.line}</Note> : null}
-                {halted ? <Press label={`Send it again to slot ${namSlotSaid(halted.again)}`} sub="Over what the stopped send left there" disabled={!!busy} onPress={() => sendToUnit(m, halted.again, halted.fill, halted.play, halted.back === true)} /> : null}
+                {halted ? <Press label={`Send it again to slot ${namSlotSaid(halted.again)}`} sub="Over what the stopped send left there" disabled={!!busy} onPress={() => sendToUnit(m, halted.again, halted.way, halted.play, halted.back === true)} /> : null}
                 {/* On the unit: which NAM block plays it is one tap, for a capture got without a preview and for trying it in the other block. From a held block there is one block, and the way back to its knobs with the capture playing. */}
                 {there && !where.held
                   ? NAM_BLOCKS.map((nam, i) => (
@@ -874,9 +895,9 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
         </View>
       ) : null}
 
-      {/* Always one tap from everything TONE3000 has, on its own page (its rule for an app that lists its tones itself). */}
-      {signedIn ? <Press label={busy === 'open' ? 'Opening…' : 'Browse TONE3000'} sub="Every capture the NAM block can play, on its own page, with play buttons" disabled={!!busy} onPress={() => browse()} /> : null}
-      {signedIn && pageInApp() ? <Press label={BROWSE_OUTSIDE} sub={BROWSE_OUTSIDE_SUB} height={40} disabled={!!busy} onPress={() => browse(true)} /> : null}
+      {/* TONE3000's own catalog page, where it is offered (lib/tone3000Words T3K_CATALOG_PAGE, which says why it is not). */}
+      {signedIn && T3K_CATALOG_PAGE ? <Press label={busy === 'open' ? 'Opening…' : 'Browse TONE3000'} sub="Every capture the NAM block can play, on its own page, with play buttons" disabled={!!busy} onPress={() => browse()} /> : null}
+      {signedIn && T3K_CATALOG_PAGE && pageInApp() ? <Press label={BROWSE_OUTSIDE} sub={BROWSE_OUTSIDE_SUB} height={40} disabled={!!busy} onPress={() => browse(true)} /> : null}
       {/* Not in a held block's pop-up: one stray tap there would cost an email and a code. The Developer page has it. */}
       {signedIn && !where.held ? <Press label="Sign out of TONE3000" height={40} disabled={!!busy} onPress={signOut} /> : null}
       <Text style={{ color: color.silkFaint, fontSize: font.micro }}>{T3K_POWERED}</Text>

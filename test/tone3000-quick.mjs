@@ -76,7 +76,7 @@ export function run(test) {
     /* Another block held, or the pop-up closed, starts on the knobs with nothing said. */
     assert.match(sheet, /useEffect\(\(\) => \{ setBrowsing\(false\) setCame\(''\) \}, \[library\.id\]\)/)
     /* And what the block said it is playing is over the knobs when a Get hands them back. */
-    assert.match(sheet, /\{came \? <Text style=\{\{[^}]*\}\}>\{came\}<\/Text> : null\}/)
+    assert.match(sheet, /\{came \? <NowPlayingCard line=\{came\} \/> : null\}/)
     /* Play's own file holds the door and nothing of TONE3000's: no client, no card, no words of its own. */
     const src = code(read('mobile/src/screens/Stage.js'))
     assert.deepEqual([...src.matchAll(/from '([^']*[Tt]one3000[^']*)'/g)].map((m) => m[1]), ['../components/Tone3000Quick'])
@@ -90,7 +90,9 @@ export function run(test) {
     assert.match(door, /<Press label=\{from === 'captures' \? BACK_TO_CAPTURES : backToKnobs\(n\)\} height=\{44\} disabled=\{working\} onPress=\{\(\) => onBack\(''\)\} \/> <Tone3000Test block=\{id\} held backTo=\{from\} onDone=\{\(line\) => onBack\(line \|\| ''\)\} onWorking=\{setWorking\} onPointed=\{onPointed\} \/>/)
     assert.match(door, /export function Tone3000InPop\(\{ id, n, onBack, from = 'knobs', onPointed = null \}\)/)
     /* The button's words are in the live colour: over the captures on the unit it is a row's size and shape, and in plain ink read as one more capture. */
-    assert.match(door, /export function Tone3000Door\(\{ n, onPress \}\) \{ return <Press label=\{T3K_QUICK\} sub=\{quickSub\(n\)\} tone="live" inkColor=\{color\.live\} height=\{56\} onPress=\{onPress\} \/> \}/)
+    assert.match(door, /export function Tone3000Door\(\{ n, onPress \}\) \{ return <Press label=\{T3K_QUICK\} sub=\{quickSub\(n\)\} tone="live" inkColor=\{color\.live\} subInk=\{color\.live\} height=\{56\} onPress=\{onPress\} \/> \}/)
+    /* Both lines of it, and only while it is neither lit nor disabled, like the label's own colour. */
+    assert.match(flat(code(read('mobile/src/components/Press.js'))), /color: on \? color\.onSignal : subInk && !disabled \? subInk : color\.silkDim,/)
     /* The way back waits while a capture is being fetched, sent or pointed at, as the page's own Back does; not while TONE3000's page opens or a tone is read. */
     assert.match(card, /const working = busy !== null && busy !== 'open' && busy !== 'back' && busy !== 'tone' useEffect\(\(\) => \{ onWorking\?\.\(working\) \}, \[working\]\)/)
     /*
@@ -99,7 +101,7 @@ export function run(test) {
      * before anything asks whether the page is there: forgotten, the same
      * capture was offered again and went into a second slot.
      */
-    assert.match(card, /if \(went\.ok && went\.got\.name !== NAM_EMPTY\) place\(m\.id, slot, !!went\.got\.name\) if \(!alive\.current\) return if \(!went\.ok\) \{/)
+    assert.match(card, /if \(went\.ok && went\.got\.name !== NAM_EMPTY\) \{ place\(m\.id, slot, !!went\.got\.name\) if \(went\.got\.name && Number\.isInteger\(went\.way\)\) keptWay = went\.way \} if \(!alive\.current\) return if \(!went\.ok\) \{/)
     assert.equal((card.match(/\bplace\(m\.id, slot,/g) || []).length, 1)
     /* The steps and the note are said for the place the page is in, never the Developer page's by default. */
     assert.match(card, /\{stepsFor\(where\)\.map\(/)
@@ -134,12 +136,12 @@ export function run(test) {
     const point = card.slice(card.indexOf('const point = async (block, slot, id) => {'), card.indexOf('const useIn = async'))
     assert.deepEqual(point.match(/return [^ ]+/g), ['return line', 'return null'])
     assert.match(point, /if \(got\.name === NAM_EMPTY\) \{ played\(/)
-    assert.match(point, /\} else \{ const line = `\$\{which\} is playing “\$\{got\.name\}” now, through your own rig\. Save the preset to keep it there\.` played\(line\)/)
+    assert.match(point, /\} else \{ const line = `\$\{which\} is playing “\$\{got\.name\}” now, through your own rig\. Save the preset to keep it there\.` played\(line, \{ playing: true \}\)/)
     const answered = point.indexOf('return line')
     assert.ok(answered > 0 && answered < point.indexOf('} catch (err) {'), 'only a pick the unit answered returns a line')
     /* A send that stopped part-way and is sent again is still the button it was: a Get from a held block still goes back. */
-    assert.match(card, /\[m\.id\]: \{ again: err\.slot, fill: err\?\.filled === true, play, back, line \}/)
-    assert.match(card, /sendToUnit\(m, halted\.again, halted\.fill, halted\.play, halted\.back === true\)/)
+    assert.match(card, /\[m\.id\]: \{ again: err\.slot, way: Number\.isInteger\(err\?\.way\) \? err\.way : null, play, back, line \}/)
+    assert.match(card, /sendToUnit\(m, halted\.again, halted\.way, halted\.play, halted\.back === true\)/)
     /* A capture already on the unit, there: hear it in that block, or take it and go back. Not the other block's button, which is not what was held. */
     assert.match(card, /\{there && where\.held \? \( <> <Press label=\{busy === `pick \$\{playIn\}` && mine \? 'Changing…' : `Play it in \$\{namBlockSaid\(where\.n\)\}`\} sub="In the preset the unit is on" height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(playIn, at\.slot, m\.id\)\} \/> <Press label=\{USE_AND_BACK\} sub=\{useAndBackSub\(where\.n, where\.back\)\} tone="live" height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(playIn, at\.slot, m\.id, true\)\} \/> <\/> \) : null\}/)
     /* The Developer page is handed nothing, so it is what it was: NAM 1, Get leaves what is playing alone, and nothing goes back anywhere. */
@@ -166,7 +168,10 @@ export function run(test) {
     assert.equal(w.capturesNote(), 'Preview and Get both put the capture in an empty slot on the unit, and it stays there. Preview also plays it in NAM 1.')
     assert.match(w.stepsFor()[1], /Get puts it on the unit and leaves what you are playing alone\.$/)
     assert.match(w.stepsFoot(), /^For Preview, the preset you are on needs NAM 1 in it/)
-    assert.equal(w.stepsFor().length, 4)
+    /* Three steps: the fourth named TONE3000's own page, which is not offered (T3K_CATALOG_PAGE). No step names a button the page does not have. */
+    assert.equal(w.stepsFor().length, 3)
+    assert.equal(w.T3K_CATALOG_PAGE, false)
+    for (const at of [{}, { n: 2, held: true }, { n: 1, held: true, back: 'captures' }]) assert.ok(!/Browse TONE3000/.test(w.stepsFor(at).join(' ')))
     /* A held block's page never names the block that was not held, and never says the preset needs a block: it was opened from one. */
     for (const n of [1, 2]) {
       const said = [...w.stepsFor({ n, held: true }), w.stepsFoot({ n, held: true }), w.capturesNote({ n, held: true }), w.getSays('X', { n, held: true }), w.previewSays('X', n), w.quickSub(n), w.backToKnobs(n), w.useAndBackSub(n)].join(' ')
@@ -190,7 +195,7 @@ export function run(test) {
     assert.match(picker, /const library = useTone3000Door\(block\)/)
     assert.match(edit, /<CapturePicker slot=\{capture\.slot\} choosing=\{capturing\} disabled=\{!!restoring \|\| capturing !== null \|\| rereading\} onPick=\{pickCapture\} block=\{block\} onChanged=\{captureChanged\} \/>/)
     /* Over the list ("they see the ones they've already downloaded but then they can also click tone 3000 from that"), and nothing where it is not offered. */
-    assert.match(picker, /<View style=\{\{ gap: space\.sm \}\}> \{library\.offered \? <Tone3000Door n=\{library\.n\} onPress=\{browse\} \/> : null\} \{came \? <Note>\{came\}<\/Note> : null\} \{reading \? <Note>\{reading\}<\/Note> : null\}/)
+    assert.match(picker, /<View style=\{\{ gap: space\.sm \}\}> \{library\.offered \? <Tone3000Door n=\{library\.n\} onPress=\{browse\} \/> : null\} \{came \? <NowPlayingCard line=\{came\} \/> : null\} \{reading \? <Note>\{reading\}<\/Note> : null\}/)
     assert.equal((picker.match(/<Tone3000Door /g) || []).length, 1)
     /* The page is in the SAME sheet, in the list's place, taller while it is up and starting at its own top; never where it is not offered. */
     assert.match(picker, /tall=\{browsing && library\.offered\} scrollKey=\{browsing && library\.offered \? 'library' : undefined\}/)
@@ -207,7 +212,7 @@ export function run(test) {
     assert.match(card, /if \(placed\.has\(String\(id\)\)\) place\(id, slot, true\) if \(block === playIn\) onPointed\?\.\(slot\) return line/)
     /* An empty slot is said too (the block is on it), and a pick that failed says none: it may have landed, so the slot said before it is not vouched for any more. */
     assert.match(card, /unplace\(id\) if \(block === playIn\) onPointed\?\.\(slot\) \} else \{/)
-    assert.match(card, /played\(err\?\.message \|\| `\$\{which\} was not changed\.`\) if \(block === playIn\) onPointed\?\.\(null\) \} return null/)
+    assert.match(card, /played\(err\?\.message \|\| `\$\{which\} was not changed\.`, \{ playing: false \}\) if \(block === playIn\) onPointed\?\.\(null\) \} return null/)
     assert.equal((card.match(/onPointed\?\.\(/g) || []).length, 3)
     /* And the picker keeps whatever it was last told, none included. */
     assert.match(picker, /onPointed=\{\(at\) => \{ pointed\.current = at /)

@@ -138,7 +138,30 @@ const field = (text) => {
 
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? floatBits(x) : NAN_BITS)
 
-/** The name's check byte: its first 31 bytes XORed together, which goes in the 32nd. */
+/**
+ * THE 32ND BYTE OF THE NAME IS NOT SETTLED (14 November 2026). Axe-Edit sent
+ * 0x60 there for the one capture it was seen to load, which is that name's
+ * other 31 bytes XORed together, so from 1.90.60 the app sent the XOR
+ * (`namCheck`). His unit then KEPT two captures sent that way and DROPPED
+ * three, every message "taken" each time:
+ *
+ *   kept     0x7C  Jcm800 (a short name, as it was)
+ *   kept     0x78  MES DRECF RD Gain2 BAL O808 CAB
+ *   dropped  0x02  FNDR BFSR VB Edge WRM2 CAB FREE (three times, two slots)
+ *   dropped  0x1D  CL Gain 1 Bright (0x3D with its name filled out: dropped too)
+ *   dropped  0x1D  CL Gain 3
+ *
+ * Every byte kept, Axe-Edit's own included, has 0x60's two bits set, and
+ * none dropped has. So the byte may be no check of the name at all, and
+ * Axe-Edit may send 0x60 every time: one recording cannot tell the two
+ * apart, since that name happens to XOR to 0x60. `NAM_NAME_BYTE_AXE` is
+ * the byte Axe-Edit sent, and `namRecord` packs either (`check`); which a
+ * unit keeps is found out by sending (lib/captureSend), and the log says.
+ * A short name needs no filling out: one was kept as it was.
+ */
+export const NAM_NAME_BYTE_AXE = 0x60
+
+/** A name's first 31 bytes XORed together: one of the two bytes tried in its 32nd place. */
 export const namCheck = (bytes) => {
   let x = 0
   for (let i = 0; i < FIELD - 1; i++) x ^= bytes[i] & 0xff
@@ -153,15 +176,18 @@ export const namCheck = (bytes) => {
  * not say: name, by, make, model, gearType, toneType. An A2 capture only, with its two networks the
  * sizes an A2's are: anything else is refused rather than guessed at.
  *
- * `said.fill` FILLS THE NAME OUT TO ALL 31 PLACES WITH SPACES. The one
- * capture seen kept by a unit had a name that filled them (31 characters
- * and the check byte); for a shorter name the check byte's place and rule
- * are the same on trust. A name filled out is that proven shape whatever
- * the rule for a short one is, so the card sends a short-named capture as
- * it is first (as Axe-Edit must, since the unit lists short names with no
- * spaces after them) and, only if the unit does not keep it, once more
- * filled out. `name` in what comes back is the name without the spaces,
- * and `filled` says whether any were added.
+ * `said.fill` fills the name out to all 31 places with spaces. NOTHING
+ * SENDS IT ANY MORE: it was tried when a short name was thought to need
+ * it, and a short name was then kept as it was (lib/captureSend). `name`
+ * in what comes back is the name without the spaces, and `filled` says
+ * whether any were added.
+ *
+ * `said.check` is the 32nd byte of the name: 'axe' for the byte Axe-Edit
+ * sent (`NAM_NAME_BYTE_AXE`), anything else for the name XORed (above:
+ * which is right is not settled). `said.hash === false` leaves the file's
+ * hash out (noughts, as Fractal's own captures have). What comes back says
+ * what was packed: `byte`, `xor` (the name XORed, whichever went in),
+ * `hashed`, and `facts`, the file's own notes for the log.
  */
 export function namRecord(text, said = {}) {
   const got = namNetworks(text)
@@ -200,11 +226,14 @@ export function namRecord(text, said = {}) {
       }
     }
   }
-  /* The name's check byte, as Axe-Edit sends it: without it the unit took every message and filed the slot as empty. */
-  head[FIELD - 1] = namCheck(head)
+  /* The 32nd byte of the name: with a nought there the unit took every message and filed the slot as empty. Which of the two it wants is not settled (above). */
+  const xor = namCheck(head)
+  const byte = said.check === 'axe' ? NAM_NAME_BYTE_AXE : xor
+  head[FIELD - 1] = byte
   /* The seventh line of text: noughts, as Axe-Edit sent it. Then the file's own hash of its numbers as 32 bytes, or noughts where it has none, as Fractal's own captures have. */
   while (head.length < 224) head.push(0)
-  const hash = /^nam-content-v1:([0-9a-f]{64})$/i.exec(typeof meta.weights_hash === 'string' ? meta.weights_hash.trim() : '')
+  const fileHash = /^nam-content-v1:([0-9a-f]{64})$/i.exec(typeof meta.weights_hash === 'string' ? meta.weights_hash.trim() : '')
+  const hash = said.hash === false ? null : fileHash
   for (let i = 0; i < 32; i++) head.push(hash ? parseInt(hash[1].slice(i * 2, i * 2 + 2), 16) : 0)
 
   const words = new Array(NAM_RECORD_WORDS).fill(0)
@@ -221,7 +250,21 @@ export function namRecord(text, said = {}) {
     }
   }
   for (let i = 0; i < NAM_TAIL_NANS; i++) words[at++] = NAN_BITS
-  return { ok: true, words, name: String.fromCharCode(...head.slice(0, FIELD - 1).filter(Boolean)).replace(/ +$/, ''), filled }
+  const numberOf = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : null)
+  /* The file's own notes as they were packed, for the log: what differs between a capture a unit keeps and one it drops has to be findable there. */
+  const facts = {
+    by: texts.by ?? null,
+    make: texts.make ?? null,
+    model: texts.model ?? null,
+    gearType: texts.gearType ?? null,
+    toneType: texts.toneType ?? null,
+    loudness: numberOf(meta.loudness),
+    gain: numberOf(meta.gain),
+    levelIn: numberOf(meta.input_level_dbu),
+    levelOut: numberOf(meta.output_level_dbu),
+    hash: !!fileHash
+  }
+  return { ok: true, words, name: String.fromCharCode(...head.slice(0, FIELD - 1).filter(Boolean)).replace(/ +$/, ''), filled, byte, xor, hashed: !!hash, facts }
 }
 
 /** Every word of a record XORed together: what the 0x56 message carries. */

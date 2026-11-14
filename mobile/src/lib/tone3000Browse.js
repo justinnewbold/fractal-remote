@@ -33,6 +33,7 @@
  * again the next time it opens (their terms: nothing cached).
  */
 import { gearSaid, T3K_GEARS, T3K_SORTS } from './tone3000.js'
+import { T3K_CATALOG_PAGE } from './tone3000Words.js'
 
 export const ASKING = 'Asking TONE3000…'
 export const NO_TONES = 'No tones found.'
@@ -43,13 +44,14 @@ export const NO_TONES = 'No tones found.'
  * is. "Every capture the NAM block can play", not "everything": TONE3000's
  * own page is opened for those captures alone.
  */
-const ELSEWHERE = 'Browse TONE3000, below, has every capture the NAM block can play.'
+/* Only where that button is drawn (lib/tone3000Words `T3K_CATALOG_PAGE`): a sentence never names a button the view does not have. */
+const ELSEWHERE = T3K_CATALOG_PAGE ? ' Browse TONE3000, below, has every capture the NAM block can play.' : ''
 /** There is a short list of what is trending to show instead. */
-export const TRENDING_ONLY = `TONE3000 hasn’t opened its search to this app yet, so this is its own short trending list. ${ELSEWHERE}`
+export const TRENDING_ONLY = `TONE3000 hasn’t opened its search to this app yet, so this is its own short trending list.${ELSEWHERE}`
 /** There is a short list of the newest to show instead. */
-export const NEWEST_ONLY = `TONE3000 hasn’t opened its search to this app yet, so these are from its newest tones. ${ELSEWHERE}`
-/** There is nothing to show instead (a search for words, or Most downloaded). */
-export const SEARCH_NOT_OPEN = `TONE3000 hasn’t opened its search to this app yet. ${ELSEWHERE}`
+export const NEWEST_ONLY = `TONE3000 hasn’t opened its search to this app yet, so these are from its newest tones.${ELSEWHERE}`
+/** There is nothing to show instead (a search for words, or Most downloaded): the sentence says where there is something, by the two chips' own names. */
+export const SEARCH_NOT_OPEN = `TONE3000 hasn’t opened its search to this app yet.${ELSEWHERE || ` With the search box empty, ${T3K_SORTS[0].label} and ${T3K_SORTS[1].label} show its own short lists.`}`
 
 /** 44988 as "44,988". Written out: the phone's engine is not relied on for it. */
 export function grouped(n) {

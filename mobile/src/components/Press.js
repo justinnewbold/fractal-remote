@@ -162,7 +162,9 @@ export default function Press({
    * neither lit nor disabled: the Bluetooth page's Connect, in Bluetooth's
    * blue (color.ble). Lit or disabled, the ink is the button's as always.
    */
-  inkColor = null
+  inkColor = null,
+  /* The line under the words in a colour of its own too, by the same rule: neither lit nor disabled. The TONE3000 button over a list of captures, whose two lines are both in the live colour. */
+  subInk = null
 }) {
   const accent = tone === 'signal' ? color.signal : tone === 'live' ? color.live : color.silk
   const ink = on ? color.onSignal : disabled ? color.silkFaint : color.silk
@@ -343,7 +345,7 @@ export default function Press({
             <Text
               numberOfLines={2}
               style={{
-                color: on ? color.onSignal : color.silkDim,
+                color: on ? color.onSignal : subInk && !disabled ? subInk : color.silkDim,
                 fontSize: font.micro,
                 marginTop: 2,
                 textAlign: 'center'
