@@ -4503,7 +4503,7 @@ export function run(test) {
     }
   })
 
-  test('the patches waiting for a build apply one after another, in the README’s order', () => {
+  test('the patches waiting for a build apply one after another, in the README’s order, and each is still found whole when they are all in', () => {
     /*
      * The day a build is agreed, the README says to apply them "in the order
      * of the table". Each one applying alone (above) is not that: on 23
@@ -4512,6 +4512,17 @@ export function run(test) {
      * mobile/package.json beside each other and its context was the line r8
      * puts a package after. So they are tried as the build will take them, in
      * a copy of the files they touch, never in the tree.
+     *
+     * AND APPLYING IN ORDER IS NOT ENOUGH EITHER. On 14 November 2026
+     * tone3000-in-app.patch applied alone, and applied after the other three,
+     * and web.yml's second run would still have gone red: it put
+     * expo-secure-store on the line under phone-turns' expo-screen-orientation
+     * (its place by the alphabet), so with both in, phone-turns' own lines no
+     * longer sat together, and the test above, which asks each patch whether
+     * it is in the tree by taking it back out (`git apply --reverse --check`),
+     * said phone-turns was not. A later patch may add beside an earlier one's
+     * lines, never between them. So once they are all in the copy, each is
+     * asked that same question there.
      */
     const root = fileURLToPath(new URL('../', import.meta.url))
     const readme = readFileSync(join(root, 'docs/pending/README.md'), 'utf8')
@@ -4547,6 +4558,16 @@ export function run(test) {
           assert.fail(`docs/pending/${name} does not apply after ${done.join(', ') || 'nothing'}, the order the README asks for: ${String(err.stderr || err.message).trim()}`)
         }
         done.push(name)
+      }
+      for (const name of order) {
+        try {
+          execFileSync('git', ['apply', '--reverse', '--check', join(root, 'docs/pending', name)], { cwd: copy, stdio: 'pipe', env: plain })
+        } catch (err) {
+          assert.fail(
+            `docs/pending/${name} can no longer be found whole once ${order.join(', ')} are all in: another patch put a line between its lines. ` +
+              `web.yml’s second run asks each patch whether it is in the tree, and would say this one is not: ${String(err.stderr || err.message).trim()}`
+          )
+        }
       }
     } finally {
       rmSync(copy, { recursive: true, force: true })
@@ -4607,6 +4628,15 @@ export function run(test) {
       })
 
       for (const word of loose) {
+        /*
+         * `require`, in the one file that asks for the native packages a build
+         * may not have (lib/tone3000Parts): the bundler rewrites each
+         * `require('a-name')` into its own loader's call when the app is
+         * bundled, so it is not a name looked up on the phone. That file is
+         * held to three of them, each a name in quotes inside a try
+         * (test/tone3000-page.mjs). Nowhere else.
+         */
+        if (word === 'require' && name === 'src/lib/tone3000Parts.js') continue
         assert.ok(
           PHONE_GLOBALS.has(word),
           `${name} uses ${word}, which is neither imported, declared, nor a global a phone has — ` +

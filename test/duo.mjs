@@ -221,7 +221,7 @@ export function run(test) {
     const { SAFE_EDGES } = await screenShape()
     assert.deepEqual([...SAFE_EDGES].sort(), ['bottom', 'left', 'right', 'top'])
     const frames = everyUse('SafeAreaView', 'edges')
-    assert.deepEqual(frames.map((f) => f.file).sort(), ['mobile/App.js', 'mobile/src/components/SongPicker.js'], 'a frame was added or lost; each one keeps clear of every side')
+    assert.deepEqual(frames.map((f) => f.file).sort(), ['mobile/App.js', 'mobile/src/components/SongPicker.js', 'mobile/src/components/Tone3000Page.js'], 'a frame was added or lost; each one keeps clear of every side')
     for (const f of frames) {
       assert.equal(f.name, 'SAFE_EDGES', `${f.file}:${f.line} keeps clear of some sides only`)
       assert.ok(f.imported, `${f.file}:${f.line} has its own SAFE_EDGES, not lib/screenShape's`)
@@ -249,6 +249,7 @@ export function run(test) {
         'mobile/src/components/SongNotes.js',
         'mobile/src/components/SongPicker.js',
         'mobile/src/components/TempoBox.js',
+        'mobile/src/components/Tone3000Page.js',
         'mobile/src/components/Tuner.js',
         'mobile/src/components/Volume.js'
       ],
@@ -1327,16 +1328,17 @@ export function run(test) {
     assert.ok(tempoRight(466, 44) <= 466 - 44 - 24, 'the tempo box reaches under the Duo’s strip')
     assert.equal(tempoRight(393, 0), 393 - 24, 'the tempo box moved on a phone held upright')
 
-    /* Every pop-up in the phone app but Add songs (whose own frame keeps clear of every side, SAFE_EDGES) takes its sides from clearSides, with the phone's own insets. */
+    /* Every pop-up in the phone app but the two that fill the screen, Add songs and TONE3000's page (whose own frames keep clear of every side, SAFE_EDGES), takes its sides from clearSides, with the phone's own insets. */
     const popups = everyUse('Modal', 'supportedOrientations').map((p) => p.file).sort()
+    const ownFrame = ['mobile/src/components/SongPicker.js', 'mobile/src/components/Tone3000Page.js']
     for (const file of popups) {
-      if (file === 'mobile/src/components/SongPicker.js') continue
+      if (ownFrame.includes(file)) continue
       const src = code(read(file))
       assert.match(src, /import \{[^}]*\bclearSides\b[^}]*\} from '\.\.\/lib\/screenShape'/, `${file} does not keep clear of the phone’s own sides`)
       assert.match(src, /useSafeAreaInsets\(\)/, `${file} does not ask the phone what it keeps down its sides`)
       assert.doesNotMatch(src, /paddingHorizontal: (tight \? space\.lg : )?space\.xl\b/, `${file} still has a margin from the glass’s edge`)
     }
-    assert.match(code(read('mobile/src/components/SongPicker.js')), /edges=\{SAFE_EDGES\}/)
+    for (const file of ownFrame) assert.match(code(read(file)), /edges=\{SAFE_EDGES\}/, `${file} fills the screen and does not keep clear of every side`)
     const tuner = code(read('mobile/src/components/Tuner.js'))
     assert.match(tuner, /const sides = clearSides\(insets, space\.xl\)\n\s*const dial = Math\.min\(width - sides\.paddingLeft - sides\.paddingRight, 420\)/, 'the tuner’s dial is as wide as the window, strip and all')
     assert.match(tuner, /padding: space\.xl,\s*\.\.\.sides,/)

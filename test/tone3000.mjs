@@ -455,14 +455,20 @@ export function run(test) {
     assert.match(flat(code(card)), /const check = async \(m\) => \{ if \(busy\) return setBusy\(m\.id\) setFault\(''\) try \{ const text = await t3k\.modelText\(m\)/)
     /* The pass and the one-time word are never written to the log. */
     for (const line of code(card).match(/logDebug\([^\n]*\)/g) || []) assert.ok(!/access|refresh|verifier|token|code\b/i.test(line), line)
-    /* The phone's bindings: its storage, its browser, its network, and both ways a link can arrive. */
-    assert.match(here, /open: \(url\) => Linking\.openURL\(url\)/)
+    /*
+     * The phone's bindings: its storage, its browser, its network, and both
+     * ways a link can arrive. The browser is still what opens TONE3000's
+     * page on a copy without the web view, and is listened for on every
+     * copy (test/tone3000-page.mjs has the page inside the app, and which
+     * native packages the app may list and when).
+     */
+    assert.match(flat(code(here)), /const open = \(url\) => \{ if \(WebView && host && !outside\) \{ host\(url\) return undefined \} return Linking\.openURL\(url\) \}/)
     assert.match(here, /Linking\.addEventListener\('url'/)
     assert.match(here, /Linking\.getInitialURL\(\)/)
-    /* No new package: nothing native is asked for that the build does not have. */
+    /* Never the phone's sign-in sheet or its in-app browser: TONE3000's own examples use a web view instead, and say why. */
     const pkg = JSON.parse(read('mobile/package.json'))
-    for (const name of ['expo-web-browser', 'expo-auth-session', 'expo-crypto', 'expo-secure-store', 'react-native-webview']) {
-      assert.equal(pkg.dependencies[name], undefined, `${name} is a native package: that is a build`)
+    for (const name of ['expo-web-browser', 'expo-auth-session']) {
+      assert.equal(pkg.dependencies[name], undefined, `${name} is not how TONE3000’s page is shown`)
     }
   })
 }
