@@ -611,23 +611,34 @@ export function runPreviewAndGet(test) {
      * outside any one drawing of the page, and forgotten only when the unit
      * names the slot empty. Nothing that clears the view clears it.
      */
-    assert.match(card, /if \(again === null && placed\.has\(String\(m\.id\)\)\) return/)
-    assert.equal((card.match(/const placed = new Map\(\)/g) || []).length, 1)
-    assert.ok(card.indexOf('const placed = new Map()') < card.indexOf('export default function Tone3000Test('), 'what is on the unit is forgotten with each drawing of the page')
+    assert.match(card, /if \(again === null && isPlaced\(m\.id\)\) \{ setOnUnit\(placedNow\(\)\) return \}/)
+    /* Kept in lib/capturePlaced, outside the page: once, at the top of its file, and nowhere in the page's own. */
+    const kept = flat(code(read('mobile/src/lib/capturePlaced.js')))
+    assert.equal((kept.match(/const placed = new Map\(\)/g) || []).length, 1)
+    assert.ok(kept.indexOf('const placed = new Map()') < kept.indexOf('export'), 'what is on the unit is not kept at the top of its file')
+    assert.ok(!/new Map\(\)/.test(card.slice(card.indexOf('export default function Tone3000Test('))), 'the page keeps a list of its own')
+    assert.match(card, /import \{ isPlaced, place, placedNow, settled, unplace, watchPlaced \} from '\.\.\/lib\/capturePlaced'/)
     assert.match(card, /const \[onUnit, setOnUnit\] = useState\(placedNow\)/)
-    assert.deepEqual(card.match(/placed\.(set|delete|clear)\(/g), ['placed.set(', 'placed.delete('])
-    assert.match(card, /const place = \(id, slot, sure\) => \{ placed\.set\(String\(id\), \{ slot, sure \}\) if \(alive\.current\) setOnUnit\(placedNow\(\)\) \}/)
-    assert.match(card, /const unplace = \(id\) => \{ placed\.delete\(String\(id\)\) if \(alive\.current\) setOnUnit\(placedNow\(\)\) \}/)
+    assert.deepEqual(kept.match(/placed\.(set|delete|clear)\(/g), ['placed.set(', 'placed.delete('])
+    assert.ok(!/\bplaced\./.test(card), 'the page reaches into the list itself')
+    /*
+     * And every drawing of the page hears of a capture as it lands,
+     * whichever drawing its send was started on (a send goes on after its
+     * page is left): once as it is drawn, then each change. The page opened
+     * after a send used to offer Preview and Get on a capture that had
+     * landed, and a tap on either did nothing, with nothing shown.
+     */
+    assert.match(card, /useEffect\(\(\) => \{ setOnUnit\(placedNow\(\)\) return watchPlaced\(\(now\) => \{ setOnUnit\(now\) if \(!goingNow\(\)\) setSend\(waitOver\) \}\) \}, \[\]\)/)
     assert.equal((card.match(/\bunplace\(/g) || []).length, 1, 'something other than an empty slot takes a capture off the list of what is on the unit')
     assert.ok(!/setOnUnit\(\{\}\)/.test(card))
     /* "On the unit" only where the unit said the slot holds it; a send it took and said nothing of is "Sent to slot", until a block pointed at it names what is there. */
-    assert.match(card, /<SentCard sure=\{at\.sure\} head=\{at\.sure \? ON_UNIT : SENT_TO_UNIT\} line=\{onUnitLine\(namSlotSaid\(at\.slot\), named\)\}/)
-    assert.match(card, /if \(placed\.has\(String\(id\)\)\) place\(id, slot, true\)/)
+    assert.match(card, /\{captureLine\(\{ working, fetching: busy === m\.id, mine, send, at, slotSaid: at \? namSlotSaid\(at\.slot\) : '', name: named, halted \}\)/)
+    assert.match(card, /if \(isPlaced\(id\)\) place\(id, slot, true\)/)
     /* What a fetched file turned out to be is still said under a capture that cannot be sent, and under the one in hand. */
     assert.match(card, /\{checked\[m\.id\] && \(noUse \|\| mine\) \? \( <Text selectable style=\{\{[^}]*\}\}> \{checked\[m\.id\]\} <\/Text> \) : null\}/)
     /* Once on the unit, which NAM block plays it is one tap, whichever button put it there, and what the block says lands under THAT capture. */
     assert.match(card, /\{there && !where\.held \? NAM_BLOCKS\.map\(\(nam, i\) => \( <Press key=\{nam\} label=\{busy === `pick \$\{nam\}` && mine \? 'Changing…' : `Play it in NAM \$\{i \+ 1\}`\} sub="In the preset the unit is on" height=\{48\} disabled=\{!!busy\} onPress=\{\(\) => useIn\(nam, at\.slot, m\.id\)\} \/> \)\) : null\}/)
-    assert.match(card, /const useIn = async \(block, slot, id, back = false\) => \{ if \(busy\) return setSend\(\(was\) => \(was\?\.id === id \? was : \{ id, slot, done: true, line: `In slot \$\{namSlotSaid\(slot\)\}\.` \}\)\)/)
+    assert.match(card, /const useIn = async \(block, slot, id, back = false\) => \{ if \(busy\) return setSend\(\(was\) => \(was\?\.id === id \? \{ \.\.\.was, wait: '' \} : \{ id, slot, done: true, line: '' \}\)\) if \(goingNow\(\)\) \{ setSend\(\(was\) => \(was \? \{ \.\.\.was, wait: STILL_GOING \} : was\)\) return \}/)
     /* A send that stopped part-way belongs to the view: forgotten with the tone, the list and the sign-in, and when that capture is sent again. */
     assert.equal((card.match(/setChecked\(\{\}\) setStopped\(\{\}\)/g) || []).length, 4)
     assert.equal((card.match(/setChecked\(\{\}\)/g) || []).length, 4)

@@ -94,14 +94,17 @@ import { useEffect, useRef, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { thud, tick } from '../lib/feedback'
+import { fire } from '../lib/tapped'
 import { deviceNoun } from '../lib/device-word'
 import { logDebug } from '../lib/debugLog'
 import { gearSaid, readCallback, T3K_POWERED, toneCredit } from '../lib/tone3000'
 import { creatorImage, creatorOf, makesOf, toneBrowser, toneImage } from '../lib/tone3000Browse'
-import { capturesNote, getSays, namBlockSaid, ON_UNIT, onUnitLine, previewSays, SENT_TO_UNIT, stepsFoot, stepsFor, T3K_CATALOG_PAGE, USE_AND_BACK, useAndBackSub } from '../lib/tone3000Words'
+import { capturesNote, getSays, namBlockSaid, previewSays, stepsFoot, stepsFor, T3K_CATALOG_PAGE, USE_AND_BACK, useAndBackSub } from '../lib/tone3000Words'
 import { hostPage, onTone3000Return, pageInApp, startOutside, t3k } from '../lib/tone3000Here'
 import { namSaid, readNam } from '../lib/nam-file'
 import { NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
+import { captureLine, waitOver } from '../lib/captureLine'
+import { isPlaced, place, placedNow, settled, unplace, watchPlaced } from '../lib/capturePlaced'
 import { captureOrder, sendCapture } from '../lib/captureSend'
 import { namEmptySlotHere, namInstallHere, namPickHere } from '../lib/device'
 import Avatar from './Avatar'
@@ -187,18 +190,7 @@ export const PICK_AFTER_SEND = 'A capture is still going to the unit, so that to
  */
 const taken = new Set()
 
-/*
- * THE CAPTURES THIS APP HAS PUT ON THE UNIT, AND WHERE, for as long as the
- * app runs: TONE3000's capture id to { slot, sure }. Not one drawing of a
- * tone's view: Back and the same tone again would offer Preview and Get on
- * a capture that is already there, and a second copy takes a second slot,
- * which nothing in the app can give back. `sure` is whether the unit said,
- * after the send, that the slot holds it; where it did not say, the line
- * reads "Sent to slot", never "On the unit". One is forgotten only when the
- * unit names its slot <EMPTY>.
- */
-const placed = new Map()
-const placedNow = () => Object.fromEntries(placed)
+/* The captures this app has put on the unit, and where, for as long as the app runs: lib/capturePlaced, which every drawing of this page hears from. */
 
 /**
  * One of the two buttons on a capture's line: a small picture and a word,
@@ -215,7 +207,8 @@ function LineButton({ icon, label, says, lit = false, disabled, onPress }) {
       disabled={disabled}
       onPress={() => {
         tick()
-        onPress()
+        /* In the log like every other button (lib/tapped), with how long it took: a tap on Preview or Get left no line, so a log could not say whether one had been made. */
+        fire(`press ${label}`, onPress)
       }}
       style={({ pressed }) => ({
         minHeight: TAP,
@@ -301,18 +294,27 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
   const [checked, setChecked] = useState({})
   /* A fetched capture's text, by its id, for as long as this card is up and no longer: it is what gets sent. Never written down. */
   const texts = useRef({})
-  /* The send in hand: { id, line, slot, done, again, played, play }. `line` is what became of the send, `played` what the NAM block said, `play` whether it was Preview's. */
+  /* The send in hand: { id, line, slot, done, again, played, play, wait }. `wait` is the line of a tap taken while another send was going: nothing was sent. `line` is what became of the send, `played` what the NAM block said, `play` whether it was Preview's. */
   const [send, setSend] = useState(null)
-  /* What the app has put on the unit (`placed`, above), as this drawing sees it: { id: { slot, sure } }. */
+  /*
+   * What the app has put on the unit (lib/capturePlaced), as this drawing
+   * sees it: { id: { slot, sure } }. Heard as it changes, whichever drawing
+   * of the page the send was started on: one that went on after its page
+   * was left lands under the page that is up now. And once as this is
+   * drawn, for one that landed between the first look and the listening.
+   * A "still going" line (`wait`) comes down once nothing is going: the
+   * other send has ended, kept or not (`settled`). Not before: a Preview
+   * places its capture and THEN points the block, and is still going
+   * between the two.
+   */
   const [onUnit, setOnUnit] = useState(placedNow)
-  const place = (id, slot, sure) => {
-    placed.set(String(id), { slot, sure })
-    if (alive.current) setOnUnit(placedNow())
-  }
-  const unplace = (id) => {
-    placed.delete(String(id))
-    if (alive.current) setOnUnit(placedNow())
-  }
+  useEffect(() => {
+    setOnUnit(placedNow())
+    return watchPlaced((now) => {
+      setOnUnit(now)
+      if (!goingNow()) setSend(waitOver)
+    })
+  }, [])
   /* A send that stopped part-way, by capture: { again, way, play, back, line }. Kept apart from the send in hand, which a Play under another capture takes over. */
   const [stopped, setStopped] = useState({})
   /* Which of a capture's two buttons was tapped, for the word on it while it works: 'play' or 'keep'. */
@@ -482,6 +484,8 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
     if (busy) return
     setBusy(m.id)
     setFault('')
+    /* Asked for again: what the last try said comes down, so it is not read under "Getting it…" as this try's. */
+    setSend((was) => (was?.id === m.id ? null : was))
     try {
       const text = await t3k.modelText(m).catch(whenSignedOut)
       const read = readNam(text)
@@ -492,8 +496,9 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       if (rec?.ok) texts.current[m.id] = text
       if (alive.current) setChecked((was) => ({ ...was, [m.id]: line }))
     } catch (err) {
-      /* A sign-in that has run out is said once, by the sign-in view. */
-      if (alive.current && err?.status !== 401) setFault(err?.message || 'That capture couldn’t be fetched.')
+      logDebug('tone3000', `capture ${m.id} was not fetched: ${err?.message || err}`)
+      /* A sign-in that has run out is said once, by the sign-in view. Anything else is said under the capture that was tapped, where the eye is, not at the top of the page. */
+      if (alive.current && err?.status !== 401) setSend({ id: m.id, line: err?.message || 'That capture couldn’t be fetched.' })
     } finally {
       if (alive.current) setBusy(null)
     }
@@ -507,12 +512,16 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
    */
   const sendToUnit = async (m, again = null, way = null, play = true, back = false) => {
     if (busy) return
-    /* On the unit already, put there by the app since it was opened: never a second copy in another slot. */
-    if (again === null && placed.has(String(m.id))) return
+    /* On the unit already, put there by the app since it was opened: never a second copy in another slot. And never a tap that is taken with nothing shown: the drawing is given where it is, so its card is up. */
+    if (again === null && isPlaced(m.id)) {
+      setOnUnit(placedNow())
+      return
+    }
     /* Get from a held block plays too (`back`): it is still Get's word that says what it is doing. */
     setTapped(play && !back ? 'play' : 'keep')
     if (goingNow()) {
-      setSend({ id: m.id, line: STILL_GOING })
+      /* `wait`, and no line of its own: nothing has become of THIS capture, so it is a plain note and never the "Not on your Axe-Fx III" card. */
+      setSend({ id: m.id, line: '', wait: STILL_GOING })
       return
     }
     /*
@@ -626,7 +635,11 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       /* A send that stopped part-way is offered again into the same slot, with its name as it was going (a second try that stopped is not started over from the first) and as the button it was. */
       if (err?.partial === true && Number.isInteger(err?.slot)) setStopped((was) => ({ ...was, [m.id]: { again: err.slot, way: Number.isInteger(err?.way) ? err.way : null, play, back, line } }))
     } finally {
-      if (atWork === mine) atWork = 0
+      /* Over, kept or not, and every drawing of the page is told: one that said "still going" stops saying so. */
+      if (atWork === mine) {
+        atWork = 0
+        settled()
+      }
       if (alive.current) setBusy(null)
     }
   }
@@ -656,7 +669,7 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
         /* `playing`: this line is the block saying it plays the capture, which the card under the capture carries. */
         played(line, { playing: true })
         /* The unit has named what the slot holds: it is on the unit, whatever the read after the send did not say. */
-        if (placed.has(String(id))) place(id, slot, true)
+        if (isPlaced(id)) place(id, slot, true)
         /* The block this page is for is on that slot now, by the unit's own word. Said before anything asks whether the page is still up. */
         if (block === playIn) onPointed?.(slot)
         /* What the block is playing, for whoever asked: the one answer that means it is. */
@@ -673,10 +686,11 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
 
   const useIn = async (block, slot, id, back = false) => {
     if (busy) return
-    /* The lines under a capture are the send in hand's: a Play tapped on another capture's line makes that one the one in hand, so what the block says lands under it. */
-    setSend((was) => (was?.id === id ? was : { id, slot, done: true, line: `In slot ${namSlotSaid(slot)}.` }))
+    /* The lines under a capture are the send in hand's: a Play tapped on another capture's line makes that one the one in hand, so what the block says lands under it. No line of its own: the card over it has the slot, and "In slot 035." under "Slot 035" said it twice. */
+    setSend((was) => (was?.id === id ? { ...was, wait: '' } : { id, slot, done: true, line: '' }))
     if (goingNow()) {
-      setSend((was) => (was ? { ...was, played: STILL_GOING } : was))
+      /* `wait`, not the block's own line: the block has said nothing, and what it last said stays. */
+      setSend((was) => (was ? { ...was, wait: STILL_GOING } : was))
       return
     }
     const mine = (atWork = Date.now())
@@ -685,7 +699,10 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
       const nowPlaying = await point(block, slot, id)
       if (back && nowPlaying && alive.current) onDone?.(nowPlaying)
     } finally {
-      if (atWork === mine) atWork = 0
+      if (atWork === mine) {
+        atWork = 0
+        settled()
+      }
       if (alive.current) setBusy(null)
     }
   }
@@ -861,16 +878,13 @@ export default function Tone3000Test({ block = NAM_BLOCKS[0], held = false, onDo
                   )}
                 </View>
                 {/*
-                  On the unit: a card nobody can miss ("Need better confirmation that a tone was sent"). "On" the unit, green and with a
-                  tick, only where the unit has said the slot holds it; a send it took and said nothing of is "Sent to", plain. What the
-                  block says it is playing is the card's last line; the send's own line and a pick that failed keep theirs under it.
+                  What is becoming of a capture, on its own line, in a card nobody can miss ("Need better confirmation that a tone was
+                  sent"; "This is the screen that shows up after hitting send"): lib/captureLine says which, for every state, and is
+                  run whole by a test. This draws what it answers, in order.
                 */}
-                {there ? <SentCard sure={at.sure} head={at.sure ? ON_UNIT : SENT_TO_UNIT} line={onUnitLine(namSlotSaid(at.slot), named)} more={mine && send.playing === true ? send.played : ''} /> : null}
-                {/* The send's own line goes only where the card says all of it: the unit named the slot. One it did not name keeps its line ("the unit didn’t say what the slot holds now"). */}
-                {mine && !(there && send.done && at.sure) ? <Note>{send.line}</Note> : null}
-                {mine && send.played && !(there && send.playing === true) ? <Note>{send.played}</Note> : null}
-                {/* Why it stopped stays under its own capture when the send in hand is another's. */}
-                {halted && !mine ? <Note>{halted.line}</Note> : null}
+                {captureLine({ working, fetching: busy === m.id, mine, send, at, slotSaid: at ? namSlotSaid(at.slot) : '', name: named, halted }).map((x, i) =>
+                  x.card ? <SentCard key={i} tone={x.card} head={x.head} line={x.line} more={x.more} /> : <Note key={i}>{x.note}</Note>
+                )}
                 {halted ? <Press label={`Send it again to slot ${namSlotSaid(halted.again)}`} sub="Over what the stopped send left there" disabled={!!busy} onPress={() => sendToUnit(m, halted.again, halted.way, halted.play, halted.back === true)} /> : null}
                 {/* On the unit: which NAM block plays it is one tap, for a capture got without a preview and for trying it in the other block. From a held block there is one block, and the way back to its knobs with the capture playing. */}
                 {there && !where.held

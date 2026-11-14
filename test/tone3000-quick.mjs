@@ -209,7 +209,7 @@ export function run(test) {
     assert.match(picker, /const pointed = useRef\(null\) const left = useRef\(true\) const changed = useRef\(onChanged\) changed\.current = onChanged const browse = \(\) => \{ pointed\.current = null left\.current = false setBrowsing\(true\) \} const leave = \(\) => \{ left\.current = true changed\.current\?\.\(pointed\.current\) \}/)
     assert.equal((picker.match(/onChanged/g) || []).length, 3, 'Edit is told from somewhere that does not go through the newest onChanged')
     /* And the page says it: by the unit's own word, for the block it is drawn for, before anything asks whether the page is still up. */
-    assert.match(card, /if \(placed\.has\(String\(id\)\)\) place\(id, slot, true\) if \(block === playIn\) onPointed\?\.\(slot\) return line/)
+    assert.match(card, /if \(isPlaced\(id\)\) place\(id, slot, true\) if \(block === playIn\) onPointed\?\.\(slot\) return line/)
     /* An empty slot is said too (the block is on it), and a pick that failed says none: it may have landed, so the slot said before it is not vouched for any more. */
     assert.match(card, /unplace\(id\) if \(block === playIn\) onPointed\?\.\(slot\) \} else \{/)
     assert.match(card, /played\(err\?\.message \|\| `\$\{which\} was not changed\.`, \{ playing: false \}\) if \(block === playIn\) onPointed\?\.\(null\) \} return null/)

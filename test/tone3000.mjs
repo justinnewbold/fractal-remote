@@ -462,7 +462,7 @@ export function run(test) {
     assert.match(card, /\{T3K_POWERED\}/)
     assert.match(card, /\{toneCredit\(tone\)\}/)
     assert.equal(code(card).match(/t3k\.modelText\(/g).length, 1)
-    assert.match(flat(code(card)), /const check = async \(m\) => \{ if \(busy\) return setBusy\(m\.id\) setFault\(''\) try \{ const text = await t3k\.modelText\(m\)/)
+    assert.match(flat(code(card)), /const check = async \(m\) => \{ if \(busy\) return setBusy\(m\.id\) setFault\(''\) setSend\(\(was\) => \(was\?\.id === m\.id \? null : was\)\) try \{ const text = await t3k\.modelText\(m\)/)
     /* The pass and the one-time word are never written to the log. */
     for (const line of code(card).match(/logDebug\([^\n]*\)/g) || []) assert.ok(!/access|refresh|verifier|token|code\b/i.test(line), line)
     /*
