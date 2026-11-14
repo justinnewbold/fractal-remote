@@ -654,9 +654,9 @@ const captureAsks = async (path, onWire = {}, throughComputer = undefined) => {
 export const capturesThroughComputer = () => !demoDevice() && !onVp4 && !bluetoothWire()
 /** The first empty capture slot: { slot, heads: [{ slot, name, empty }] }, slot null where the first 128 are all taken. */
 export const namEmptySlotHere = () => captureAsks('/nam/empty')
-/** A capture's record (lib/nam-install namRecord) into a slot: { slot, name, replaced, seconds }. `onProgress(sent, of)` as each message is taken, over the device's own wire. */
-export const namInstallHere = (slot, words, { replace = false, onProgress } = {}) =>
-  captureAsks(`/nam/slots/${slot}`, { method: 'POST', body: { words, replace }, onProgress }, () => {
+/** A capture's record (lib/nam-install namRecord) into a slot: { slot, name, replaced, seconds }. `onProgress(sent, of)` as each message is taken, over the device's own wire. `filled` is for the wire's log alone: the name was filled out to all 31 places (namRecord's `fill`). */
+export const namInstallHere = (slot, words, { replace = false, onProgress, filled = false } = {}) =>
+  captureAsks(`/nam/slots/${slot}`, { method: 'POST', body: { words, replace, filled: filled === true }, onProgress }, () => {
     const record = namRecordTravels(words)
     if (!record) throw new Error('That is not a capture’s record.')
     return { method: 'POST', body: JSON.stringify({ record }) }

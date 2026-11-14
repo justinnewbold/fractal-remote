@@ -3147,8 +3147,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       /* How long the name is goes in the log with its check byte: the recording proves the byte for a name that fills all 31 places, and a shorter one is the same rule on trust. */
       let named = 0
       while (named < 31 && ((words[named >> 2] >>> ((named & 3) * 8)) & 0xff) !== 0) named++
-      /* A name filled out with spaces to all 31 places (namRecord's `fill`) is said so: which shape a unit kept is the thing to know. */
-      const filledOut = named === 31 && ((words[7] >>> 16) & 0xff) === 0x20
+      /* A name filled out with spaces to all 31 places (namRecord's `fill`) is said so: which shape a unit kept is the thing to know. The request says it; read off the name's last place, a long name cut at a space said it too. */
+      const filledOut = body?.filled === true
       say(`a capture went to slot ${said} in ${seconds.toFixed(1)} s, ${frames.length} messages, its name ${named} characters${filledOut ? ' (filled out with spaces)' : ''}, check byte 0x${((words[7] >>> 24) & 0xff).toString(16).padStart(2, '0')}, the closing message answered in ${closing ?? '?'} ms: ${reads}`)
       return { slot, name: after ? after.name : null, replaced: before.empty ? null : before.name, seconds }
     })

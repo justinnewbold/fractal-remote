@@ -266,7 +266,7 @@ export function run(test) {
 
     /* Who reaches this file: the wire, which sends; the card, which packs and names a slot; and nothing else. */
     assert.match(read('mobile/src/lib/bleWire.js'), /from '\.\/nam-install\.js'/)
-    assert.match(read('mobile/src/components/Tone3000Test.js'), /import \{ NAM_BLOCKS, NAM_EMPTY, NAM_NAME_PLACES, namRecord, namSlotSaid \} from '\.\.\/lib\/nam-install'/)
+    assert.match(read('mobile/src/components/Tone3000Test.js'), /import \{ NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid \} from '\.\.\/lib\/nam-install'/)
     for (const f of ['mobile/src/lib/device.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/lib/bluetooth.js']) assert.ok(!/nam-install['.]/.test(read(f).replace(/\/\*[\s\S]*?\*\//g, '')), `${f} builds capture messages of its own`)
     /* The card sends through the three calls and no other way, and only the wire's own switch opens them: his account's. */
     const card = read('mobile/src/components/Tone3000Test.js')

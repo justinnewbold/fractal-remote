@@ -104,6 +104,24 @@ kept as it is, the fill is never used; if only the filled one is kept, the
 short rule is not this one, and `namRecord` fills every name until it is
 understood. If neither is kept, the check byte was not the reason.
 
+The send and its second try are `mobile/src/lib/captureSend.js` (1.90.62),
+handed the sender by the card, so every path of them is run against the
+stand-in unit. Three things an independent read found in the first day's
+version, inside the card, are fixed there:
+
+- **A unit slow to file.** The sender looks at the slot twice before it says
+  not kept (350 ms after "it is over", and a second later). A unit that
+  takes longer has the capture by the time the second try looks, and the
+  second try is refused "already holds". That refusal, for a slot that holds
+  this capture, is the first send kept (`heldAlready`): nothing more is
+  sent, the slot is said to hold it, and the log says "KEPT AS IT WAS".
+  Before, the card said the capture was not sent and the next tap put a
+  second copy in the next slot.
+- **A second try that stops part-way** is offered again as it was going
+  (the failure carries `filled`), not started over from the short name.
+- **"Filled out" in the wire's log** is what the request says, not the
+  name's last place: a long name cut at a space ends in one too.
+
 What the app does now so that the next try says why, whichever way it goes:
 after a send it reads the slot back, and a slot that still reads `<EMPTY>`
 is said as "took it and did not keep it", with no Play button; the log
