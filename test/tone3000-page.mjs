@@ -133,7 +133,8 @@ export function run(test) {
     f.httpError(400, 'https://www.tone3000.com/api/v1/oauth/authorize?client_id=x')
     /* In words, and the number TONE3000 answered with beside them for the log: never on the screen. */
     assert.deepEqual(told, [['fault', PAGE_REFUSED, 400]])
-    assert.equal(PAGE_REFUSED, 'TONE3000 turned the sign-in down. Tap Browse TONE3000 again.')
+    /* It names no button: before a sign-in the way in is Continue, after one it is Browse TONE3000. */
+    assert.equal(PAGE_REFUSED, 'TONE3000 turned the sign-in down. Try again.')
     assert.ok(!/\d/.test(PAGE_REFUSED.replaceAll('TONE3000', '')) && !/\d/.test(PAGE_UNREACHED.replaceAll('TONE3000', '')), 'a web error number is in words the card shows')
     assert.equal(f.mayLoad('https://www.tone3000.com/'), false)
 
@@ -497,7 +498,7 @@ export function run(test) {
     /* The page: inside the app only with the web view AND somebody drawing it, and never when the browser was asked for. */
     assert.match(here, /export const pageInApp = \(\) => !!WebView/)
     assert.match(here, /export function hostPage\(show\) \{ host = show return \(\) => \{ if \(host === show\) host = null \} \}/)
-    assert.match(here, /export async function startOutside\(\) \{ outside = true try \{ return await t3k\.start\(\) \} finally \{ outside = false \} \}/)
+    assert.match(here, /export async function startOutside\(how\) \{ outside = true try \{ return await t3k\.start\(how\) \} finally \{ outside = false \} \}/)
   })
 
   test('tone3000 in the app: the two names the sign-in is kept under are names the secure storage takes', async () => {
@@ -546,10 +547,14 @@ export function run(test) {
     assert.match(card, /const unhost = hostPage\(\(url\) => alive\.current && setPage\(url\)\)/)
     assert.match(card, /return \(\) => \{ alive\.current = false stop\(\) unhost\(\) \}/)
     /* One return is finished once, whichever way it came, and the page closes for it either way. */
-    assert.match(card, /const returned = async \(url\) => \{ if \(!readCallback\(url\) \|\| url === lastReturn\.current\) return lastReturn\.current = url if \(!alive\.current\) return setPage\(null\)/)
+    assert.match(card, /const returned = async \(url\) => \{ if \(!readCallback\(url\) \|\| taken\.has\(url\)\) return taken\.add\(url\) if \(!alive\.current\) return setPage\(null\)/)
+    /* Remembered for as long as the app runs, not for one drawing of the card: the phone hands the link that started the app back at every drawing, and finishing an old return throws away the sign-in under way. */
+    assert.equal((card.match(/const taken = new Set\(\)/g) || []).length, 1)
+    assert.ok(card.indexOf('const taken = new Set()') < card.indexOf('export default function Tone3000Test()'), 'the returns taken up are forgotten with each drawing of the card')
+    assert.ok(!/lastReturn/.test(card))
     assert.match(card, /const stop = onTone3000Return\(returned\)/)
     /* A return that could not be finished on the device may be handed over again, and says so on the card. */
-    assert.match(card, /catch \(err\) \{ logDebug\('tone3000', `the return was not finished: \$\{err\?\.message \|\| err\}`\) lastReturn\.current = null if \(alive\.current\) setFault\(/)
+    assert.match(card, /catch \(err\) \{ logDebug\('tone3000', `the return was not finished: \$\{err\?\.message \|\| err\}`\) taken\.delete\(url\) if \(alive\.current\) setFault\(/)
     assert.match(card, /<Tone3000Page url=\{page\} onReturn=\{returned\}/)
     /* The number TONE3000 answered with is written to the log, and only there. */
     assert.match(card, /onFault=\{\(why, status\) => \{ logDebug\('tone3000', `TONE3000’s page was closed: \$\{why\}\$\{status \? ` It answered \$\{status\}\.` : ''\}`\)/)
@@ -557,9 +562,13 @@ export function run(test) {
     /* Browse is never handed the tap itself, which would read as "in the browser". */
     assert.match(card, /onPress=\{\(\) => browse\(\)\}/)
     assert.ok(!/onPress=\{browse\}/.test(card))
-    assert.match(card, /await \(outside === true \? startOutside\(\) : t3k\.start\(\)\)/)
+    assert.match(card, /const how = \{ pick: pick !== false \} await \(outside === true \? startOutside\(how\) : t3k\.start\(how\)\)/)
     /* The browser is offered beside it only where the page inside the app exists: every copy today shows the card as it was. */
-    assert.match(card, /\{pageInApp\(\) \? <Press label=\{BROWSE_OUTSIDE\} sub=\{BROWSE_OUTSIDE_SUB\} height=\{40\} disabled=\{!!busy\} onPress=\{\(\) => browse\(true\)\} \/> : null\}/)
+    assert.match(card, /\{signedIn && pageInApp\(\) \? <Press label=\{BROWSE_OUTSIDE\} sub=\{BROWSE_OUTSIDE_SUB\} height=\{40\} disabled=\{!!busy\} onPress=\{\(\) => browse\(true\)\} \/> : null\}/)
+    /* And before a sign-in, beside Continue, for the sign-in alone. */
+    assert.match(card, /\{pageInApp\(\) \? <Press label=\{BROWSE_OUTSIDE\} sub=\{BROWSE_OUTSIDE_SUB\} height=\{40\} disabled=\{!!busy\} onPress=\{\(\) => browse\(true, false\)\} \/> : null\}/)
+    /* Nowhere else: the browser is never offered on a copy that has no page inside the app to stand in for. */
+    assert.equal((card.match(/BROWSE_OUTSIDE\}/g) || []).length, 2)
     /* A send that is going keeps its own word on the buttons when a return comes in under it. */
     assert.match(card, /setBusy\(\(was\) => \(was === null \|\| was === 'open' \? 'back' : was\)\)/)
     assert.match(card, /setBusy\(\(was\) => \(was === 'back' \? null : was\)\)/)

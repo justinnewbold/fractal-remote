@@ -421,14 +421,17 @@ export function run(test) {
     assert.ok(!/0xf0|0xF0|sysex|buildFrame|frame\(/i.test(code(src)))
   })
 
-  test('tone3000: the card is on the Developer testing page only, reaches a unit only through the captures’ three calls, and says whose page and whose tone it is', async () => {
+  test('tone3000: the card is on a Developer page of its own only, reaches a unit only through the captures’ three calls, and says whose page and whose tone it is', async () => {
     const card = read('mobile/src/components/Tone3000Test.js')
     const here = read('mobile/src/lib/tone3000Here.js')
     const settings = flat(read('mobile/src/screens/Settings.js'))
-    /* Drawn once, on the Testing page, his account's. */
+    /* Drawn once, on a page of its own that is drawn for his account alone, and opened from his account's Developer rows and nowhere else. */
     assert.equal(settings.match(/<Tone3000Test \/>/g).length, 1)
-    const testing = settings.slice(settings.indexOf("{head('Testing', 'back')}"), settings.indexOf("{head('Footswitches', 'back')}"))
-    assert.ok(testing.includes('<Tone3000Test />'), 'the TONE3000 card is not on the Developer testing page')
+    assert.match(settings, /\{page === 'tone3000' && isAdmin\(account\?\.id\) \? \( <> \{head\('TONE3000', 'back'\)\} <Tone3000Test \/> <\/> \) : null\}/, 'the TONE3000 page is drawn for somebody other than his account')
+    assert.equal((settings.match(/setPage\(\s*['"`]tone3000['"`]\s*\)/g) || []).length, 1)
+    const rows = settings.slice(settings.indexOf('<Group title="Developer" hint={DEVELOPER_HINT}>'), settings.indexOf('<Group title="Play screen"'))
+    assert.match(rows, /<SetupRow title="TONE3000" status="Search for a capture and send it to the Axe-Fx III" onPress=\{\(\) => setPage\('tone3000'\)\} \/>/, 'the TONE3000 page is opened from somewhere other than his account’s Developer rows')
+    assert.ok(settings.lastIndexOf('{isAdmin(account?.id) ? (', settings.indexOf('<Group title="Developer" hint={DEVELOPER_HINT}>')) > settings.indexOf('<Group title="Help"'), 'the Developer rows are not behind his account')
     for (const p of ['mobile/App.js', 'mobile/src/screens/Edit.js', 'mobile/src/screens/Stage.js', 'mobile/src/screens/Bluetooth.js']) {
       let src = ''
       try {

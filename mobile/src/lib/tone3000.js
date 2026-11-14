@@ -93,8 +93,15 @@ export const challengeOf = (verifier) => base64url(sha256(utf8(verifier)))
  * the A2 kind (what the Axe-Fx III's NAM block plays; left out, TONE3000
  * answers with the older kind only), its audition players on, and its own
  * back and close buttons, whose close comes back to the app as `canceled`.
+ *
+ * With `pick: false`, the address of TONE3000's sign-in and nothing after
+ * it ("prompt omitted: standard authorization only", its documentation):
+ * the player signs in and is sent straight back, to the app's own list.
+ * The four words that belong to the pick-a-tone page are left out with it;
+ * its bar stays, which TONE3000 says applies to "the sign-in page shown
+ * when prompt is omitted" too.
  */
-export function authorizeUrl({ challenge, state, key = T3K_KEY, redirect = T3K_REDIRECT }) {
+export function authorizeUrl({ challenge, state, key = T3K_KEY, redirect = T3K_REDIRECT, pick = true }) {
   return `${T3K_ORIGIN}/api/v1/oauth/authorize?${queryOf([
     ['client_id', key],
     ['redirect_uri', redirect],
@@ -102,10 +109,14 @@ export function authorizeUrl({ challenge, state, key = T3K_KEY, redirect = T3K_R
     ['code_challenge', challenge],
     ['code_challenge_method', 'S256'],
     ['state', state],
-    ['prompt', 'select_tone'],
-    ['format', 'nam'],
-    ['architecture', '2'],
-    ['preview', 'true'],
+    ...(pick
+      ? [
+          ['prompt', 'select_tone'],
+          ['format', 'nam'],
+          ['architecture', '2'],
+          ['preview', 'true']
+        ]
+      : []),
     ['menubar', 'true']
   ])}`
 }
@@ -169,6 +180,79 @@ export const T3K_LICENSES = Object.freeze({
   cco: 'CC0'
 })
 export const licenseSaid = (code) => T3K_LICENSES[code] || (code ? String(code) : 'Licence not stated')
+
+/*
+ * THE LIST IN THE APP ITSELF (14 November 2026). "Not just going off a
+ * built-in web browser in our app but actually native in our app using the
+ * API", like the Tones tab of his HeadRush app, where the board does the
+ * asking; a Fractal unit has no internet, so here the phone asks TONE3000's
+ * search itself. Their documentation (tone3000.com/api, read that day) and
+ * their own client (react-native/src/t3k/tone3000-client.ts,
+ * buildSearchTonesQuery) are where every name below comes from:
+ *
+ *   GET /api/v1/tones/search   page, page_size (25 at most), query, sort,
+ *                              gears, format, architecture
+ *                              → { data, page, page_size, total, total_pages }
+ *   GET /api/v1/tones/trending its own top ten, ?gear= for one kind
+ *   GET /api/v1/tones/latest   its ten newest, no questions
+ *   GET /api/v1/user           whose sign-in this is
+ *
+ * Always `format=nam` and `architecture=2`: the only kind an Axe-Fx III's
+ * NAM block plays, and leaving `architecture` out answers with the older
+ * kind only. TONE3000 limits search more heavily than the rest ("heavily
+ * rate-limited by default"), so nothing here asks on its own: the screen
+ * asks when it opens, when Search is tapped, when a chip is, and for More.
+ */
+
+/** How the list is ordered: what the chip says, and TONE3000's word for it. */
+export const T3K_SORTS = Object.freeze([
+  Object.freeze({ key: 'trending', label: 'Trending', sort: 'trending' }),
+  Object.freeze({ key: 'newest', label: 'Newest', sort: 'newest' }),
+  Object.freeze({ key: 'downloads', label: 'Most downloaded', sort: 'downloads-all-time' })
+])
+
+/** Which kind of gear: what the chip says, and TONE3000's word for it ('' is every kind). */
+export const T3K_GEARS = Object.freeze([
+  Object.freeze({ key: '', label: 'All' }),
+  Object.freeze({ key: 'amp', label: 'Amps' }),
+  Object.freeze({ key: 'amp-cab', label: 'Amp + Cab' }),
+  Object.freeze({ key: 'pedal', label: 'Pedals' })
+])
+
+/** A kind of gear in TONE3000's own words for it (its site's and its example's labels). */
+const GEAR_SAID = Object.freeze({
+  amp: 'Amp Head',
+  'amp-cab': 'Amp + Cab',
+  'full-rig': 'Amp + Cab',
+  pedal: 'Pedal',
+  outboard: 'Outboard',
+  cab: 'Cabinet',
+  space: 'Spaces',
+  experimental: 'Experimental'
+})
+export const gearSaid = (gear) => (gear ? GEAR_SAID[gear] || String(gear) : '')
+
+/** Tones to a page: the most TONE3000's search gives. */
+export const T3K_PAGE_SIZE = 25
+
+/** The address of one page of a search, in the order TONE3000's own client writes it. */
+export function searchPath({ query = '', page = 1, sort = 'trending', gear = '' } = {}) {
+  const order = T3K_SORTS.find((s) => s.key === sort) || T3K_SORTS[0]
+  const kind = T3K_GEARS.find((g) => g.key === gear) || T3K_GEARS[0]
+  const text = String(query || '').trim()
+  const pairs = [
+    ['page', Math.max(1, Math.floor(Number(page)) || 1)],
+    ['page_size', T3K_PAGE_SIZE]
+  ]
+  if (text) pairs.push(['query', text])
+  pairs.push(['sort', order.sort])
+  if (kind.key) pairs.push(['gears', kind.key])
+  pairs.push(['format', 'nam'], ['architecture', '2'])
+  return `/api/v1/tones/search?${queryOf(pairs)}`
+}
+
+/** A tone the list can show and the NAM block can play: it has an id, and where it says what it is, it is a NAM tone with an A2 capture. */
+const listable = (t) => !!t && t.id != null && (t.format == null || t.format === 'nam') && (t.a2_models_count == null || Number(t.a2_models_count) > 0)
 
 /** One line about a tone: who made it and under what licence. */
 export const toneCredit = (tone) => `by ${tone?.user?.username || 'an unnamed creator'} · ${licenseSaid(tone?.license)}`
@@ -257,13 +341,14 @@ export function tone3000({ fetch, store, open, now = () => Date.now(), random = 
   /**
    * Start: a fresh one-time word and state, kept on the device for the
    * return (the app may be closed while the browser is in front), and
-   * TONE3000's page opened.
+   * TONE3000's page opened: the one to pick a tone on, or with
+   * `pick: false` its sign-in alone.
    */
-  async function start() {
+  async function start({ pick = true } = {}) {
     const verifier = base64url(random(32))
     const state = base64url(random(16))
     await keep(T3K_PENDING_KEY, { verifier, state, at: now() })
-    const url = authorizeUrl({ challenge: challengeOf(verifier), state, key, redirect })
+    const url = authorizeUrl({ challenge: challengeOf(verifier), state, key, redirect, pick: pick !== false })
     await open(url)
     return url
   }
@@ -382,6 +467,35 @@ export function tone3000({ fetch, store, open, now = () => Date.now(), random = 
     return res.body
   }
 
+  /**
+   * One page of TONE3000's search: `{ tones, page, pages, total }`. A
+   * failure carries TONE3000's status (403 where search is not open to this
+   * app's key, 429 where it has been asked too often).
+   */
+  async function search(what = {}) {
+    const got = await ask(searchPath(what), 'That search', (r) => r.json())
+    const tones = Array.isArray(got?.data) ? got.data.filter(listable) : []
+    return {
+      tones,
+      page: Math.max(1, Number(got?.page) || Number(what.page) || 1),
+      pages: Math.max(1, Number(got?.total_pages) || 1),
+      total: Math.max(tones.length, Number(got?.total) || 0)
+    }
+  }
+
+  /** TONE3000's own short lists, ten at most and not in pages: 'trending' (for one kind of gear, where one is asked for) or 'latest'. */
+  async function feed(which, gear = '') {
+    const kind = T3K_GEARS.find((g) => g.key === gear && g.key)
+    const at = which === 'latest' ? '/api/v1/tones/latest' : `/api/v1/tones/trending${kind ? `?${queryOf([['gear', kind.key]])}` : ''}`
+    const got = await ask(at, 'TONE3000’s list', (r) => r.json())
+    const tones = Array.isArray(got?.data) ? got.data.filter(listable) : []
+    /* The newest ten are of every kind: the kind asked for is picked out here. */
+    return which === 'latest' && kind ? tones.filter((t) => t.gear === kind.key) : tones
+  }
+
+  /** Whose sign-in this is: `{ username, display_name, avatar_url }` and more, as TONE3000 has them. */
+  const me = () => ask('/api/v1/user', 'Your TONE3000 account', (r) => r.json())
+
   /** A tone, by the id the pick came back with. */
   const tone = (id) => ask(`/api/v1/tones/${encodeURIComponent(String(id))}?architecture=2`, 'That tone', (r) => r.json())
 
@@ -399,5 +513,5 @@ export function tone3000({ fetch, store, open, now = () => Date.now(), random = 
    */
   const modelText = (model) => ask(String(model?.model_url || '').replace(/^https?:\/\/[^/]+/, ''), 'That capture', (r) => r.text(), T3K_FILE_WAIT_MS)
 
-  return { start, finish, signedIn, signOut, tone, models, modelText }
+  return { start, finish, signedIn, signOut, tone, models, modelText, search, feed, me }
 }

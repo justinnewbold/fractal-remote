@@ -88,11 +88,11 @@ export const t3k = tone3000({
   random: sureRandom(Crypto ? (bytes) => Crypto.getRandomValues(bytes) : null, randomBytes, said)
 })
 
-/** A start whose page opens in the device's browser, whatever this copy has. */
-export async function startOutside() {
+/** A start whose page opens in the device's browser, whatever this copy has. `how` is `start`'s. */
+export async function startOutside(how) {
   outside = true
   try {
-    return await t3k.start()
+    return await t3k.start(how)
   } finally {
     outside = false
   }

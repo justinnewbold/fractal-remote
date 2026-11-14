@@ -1,5 +1,31 @@
 /*
- * TONE3000, FIRST PIECE: Developer → Testing, his account only.
+ * TONE3000 IN THE APP: Developer → TONE3000, his account only.
+ *
+ * THE LIST IS THE APP'S OWN, since 14 November 2026: "It to look like that
+ * and function like that. Not just going off a built-in web browser in our
+ * app but actually native in our app using the API" (Justin, with a
+ * picture of the Tones tab of his HeadRush app). So signed in, this opens
+ * on components/Tone3000Browser: a search box, chips for the order and the
+ * kind of gear, and a row for each tone, asked of TONE3000's search by the
+ * phone. A tap on a tone shows it here with its captures. TONE3000's own
+ * page (Browse TONE3000) is still one tap away on every view, which is its
+ * rule for an app that lists its tones itself: "Always provide a clear,
+ * persistent path to browse the full TONE3000 catalog via the Select flow."
+ *
+ * WHAT TONE3000 ASKS OF A LIST LIKE THIS (its Design Requirements,
+ * tone3000.com/api), and where each is kept: before a sign-in, a card
+ * saying what this is, and Continue (PARTNER, below); the sign-in is
+ * TONE3000's own page (email, then a code it sends); the list shows each
+ * tone's picture, title, kind of gear, format and maker, with TONE3000's
+ * name on the view and whose sign-in it is (the name and picture across
+ * the top); a tone's own view shows its picture, title, kind, format,
+ * maker and description, and its captures to choose between.
+ * NOT YET, and wanted before TONE3000 signs off anything a customer sees:
+ * its Favorites, Created and Downloaded lists; its logo in place of its
+ * name in type; the way in from where a capture is chosen (Edit's NAM
+ * block) rather than a Developer page; its mark on a block that plays one.
+ *
+ * AS IT BEGAN, 13 November 2026:
  *
  * "Next I want to add TONE3000 so users can search, preview and download
  * tones for the NAM block directly in the app." (Justin, 13 November 2026.)
@@ -40,17 +66,22 @@
  * only when it is asked for.
  */
 import { useEffect, useRef, useState } from 'react'
-import { Text, View } from 'react-native'
-import { color, font, space } from '../lib/theme'
+import { Image, Pressable, Text, View } from 'react-native'
+import { color, font, radius, space, TAP } from '../lib/theme'
+import { tick } from '../lib/feedback'
+import { deviceNoun } from '../lib/device-word'
 import { logDebug } from '../lib/debugLog'
-import { readCallback, T3K_POWERED, toneCredit } from '../lib/tone3000'
+import { gearSaid, readCallback, T3K_POWERED, toneCredit } from '../lib/tone3000'
+import { creatorImage, creatorOf, toneBrowser, toneImage } from '../lib/tone3000Browse'
 import { hostPage, onTone3000Return, pageInApp, startOutside, t3k } from '../lib/tone3000Here'
 import { namSaid, readNam } from '../lib/nam-file'
 import { NAM_BLOCKS, NAM_EMPTY, namRecord, namSlotSaid } from '../lib/nam-install'
 import { sendCapture } from '../lib/captureSend'
 import { namEmptySlotHere, namInstallHere, namPickHere } from '../lib/device'
+import Avatar from './Avatar'
 import Note from './Note'
 import Press from './Press'
+import Tone3000Browser from './Tone3000Browser'
 import Tone3000Page from './Tone3000Page'
 
 /** A capture's name, as TONE3000 gives it. */
@@ -58,11 +89,24 @@ export const captureLabel = (m) => (m?.name ? String(m.name) : `Capture ${m?.id}
 
 /** What to do here, in order: the card's first lines. */
 export const STEPS = Object.freeze([
-  'Browse TONE3000 opens its own page. Sign in, search, and pick a tone. What you hear on that page is TONE3000’s own demo recording, not your rig.',
-  'Back here, each capture of that tone has a Send it and play it button.',
+  'Search here, or pick an order and a kind of gear. Only tones the Axe-Fx III’s NAM block can play are listed. Tap one to see its captures.',
+  'Each capture has a Send it and play it button. Browse TONE3000 opens TONE3000’s own page, which has play buttons: what you hear there is its own demo recording, not your rig.',
   'That button puts the capture in the Axe-Fx III’s first empty capture slot and points NAM 1 at it, so you hear it through your own rig. It takes about half a minute over Bluetooth, a second or two through the computer or by USB.'
 ])
 export const STEPS_FOOT = 'The preset you are on needs NAM 1 in it (with only NAM 2 there, Play it in NAM 2 comes up after the send). Nothing is saved until you save the preset, and a capture already on the unit is never written over.'
+/**
+ * Before a sign-in: what this is, in the words TONE3000 gives an app for it
+ * (its Design Requirements, "Partnership splash"), with the app's name in
+ * and the impulse responses out, since only captures are listed here.
+ */
+export const PARTNER = 'Fractal Remote has partnered with TONE3000 to give you access to a massive library of Neural Amp Modeler (NAM) captures of real analog gear, created by a global community of musicians.'
+/** Read when it is shown: it names the device in hand. */
+export const partnerMore = () => `Continue opens TONE3000’s own sign-in: your email, then a code it sends you. After that it stays signed in on this ${deviceNoun()}.`
+export const CONTINUE = 'Continue'
+export const BACK_TO_LIST = '‹ Back to the list'
+/** TONE3000 no longer takes the sign-in kept here. */
+export const SIGN_IN_AGAIN = 'Your TONE3000 sign-in has run out. Tap Continue to sign in again.'
+export const HOW_IT_WORKS = 'How it works'
 export const SEND_AND_PLAY = 'Send it and play it in NAM 1'
 export const SEND_AND_PLAY_SUB = 'Into the first empty capture slot on the Axe-Fx III'
 /** Only where the page comes up inside the app: the way round a sign-in that will not work there. */
@@ -89,9 +133,55 @@ let atWork = 0
 const STILL_GOING_MS = 5 * 60 * 1000
 const goingNow = () => atWork !== 0 && Date.now() - atWork < STILL_GOING_MS
 export const STILL_GOING = 'A capture is still going to the unit. Tap again when it has finished.'
+/** A tone picked on TONE3000's page while a capture is going: opening it would put its view, and its buttons, over the send's. */
+export const PICK_AFTER_SEND = 'A capture is still going to the unit, so that tone wasn’t opened. Pick it again when it has finished.'
+
+/*
+ * EVERY RETURN OF TONE3000'S THAT HAS BEEN TAKEN UP, for as long as the app
+ * runs, not for one drawing of the card. The phone hands the link that
+ * STARTED the app back every time it is asked (lib/tone3000Here asks at each
+ * drawing), so a card opened again was handed an old return again; finishing
+ * it throws away whatever sign-in is under way at that moment (lib/tone3000
+ * forgets the one-time word before it looks at the return), and the real
+ * return, minutes later, found nothing waiting. The page inside the app and
+ * the phone's own link can also each hand over the same one.
+ */
+const taken = new Set()
 
 export default function Tone3000Test() {
-  const [signedIn, setSignedIn] = useState(false)
+  /* null until the device has said whether a sign-in is kept: neither the list nor the sign-in card is drawn on a guess. */
+  const [signedIn, setSignedIn] = useState(null)
+  /* Whose sign-in it is, as TONE3000 has them: shown across the top (its rule for a list of its tones). */
+  const [me, setMe] = useState(null)
+  /* The steps, behind the ⓘ. */
+  const [info, setInfo] = useState(false)
+  const alive = useRef(true)
+  /* Which fetch of a tone is the one wanted: a tone left (Back) while it was being fetched does not come back up when its answer lands. */
+  const wanted = useRef(0)
+  /*
+   * TONE3000 says the sign-in is gone (it ran out and could not be renewed,
+   * or was taken back on its site): the card goes back to its sign-in view
+   * and says why, in place of a list that can only fail. The error still
+   * goes to whoever asked.
+   */
+  const whenSignedOut = (err) => {
+    if (err?.status === 401 && alive.current) {
+      list.current = newList()
+      /* A tone being fetched is dropped, and its "busy" with it: the fetch's own ending no longer clears it (it is not the one wanted), and Continue would stay greyed for good. */
+      wanted.current += 1
+      setBusy((was) => (was === 'tone' ? null : was))
+      setSignedIn(false)
+      setTone(null)
+      setModels(null)
+      setFault('')
+      setSaid(SIGN_IN_AGAIN)
+    }
+    throw err
+  }
+  const newList = () => toneBrowser({ search: (what) => t3k.search(what).catch(whenSignedOut), feed: (which, gear) => t3k.feed(which, gear).catch(whenSignedOut) })
+  /* The list, for as long as this card is up: opening a tone and coming back does not ask TONE3000 for it again. */
+  const list = useRef(null)
+  if (!list.current) list.current = newList()
   const [busy, setBusy] = useState(null)
   const [fault, setFault] = useState('')
   const [said, setSaid] = useState('')
@@ -99,33 +189,59 @@ export default function Tone3000Test() {
   const [models, setModels] = useState(null)
   /* What each capture fetched turned out to be, by its id. */
   const [checked, setChecked] = useState({})
-  const alive = useRef(true)
   /* A fetched capture's text, by its id, for as long as this card is up and no longer: it is what gets sent. Never written down. */
   const texts = useRef({})
   /* The send in hand: { id, line, slot, done, again, played }. `line` is what became of the send, `played` what the NAM block said. */
   const [send, setSend] = useState(null)
   /* TONE3000's page, while it is up inside the app: its address, or null. */
   const [page, setPage] = useState(null)
-  /* The last return of TONE3000's that was taken up: the page inside the app and the phone's own link can each hand over the same one. */
-  const lastReturn = useRef(null)
+  /* Asked again at each sign-in that finishes: a pick on TONE3000's page can come back under another account. */
+  const [meAsk, setMeAsk] = useState(0)
 
   const load = async (toneId) => {
+    const mine = ++wanted.current
     setBusy('tone')
     setFault('')
     try {
-      const [got, list] = await Promise.all([t3k.tone(toneId), t3k.models(toneId)])
-      if (!alive.current) return
+      const [got, captures] = await Promise.all([t3k.tone(toneId).catch(whenSignedOut), t3k.models(toneId).catch(whenSignedOut)])
+      if (!alive.current || mine !== wanted.current) return
       setTone(got)
-      setModels(list)
+      setModels(captures)
       setChecked({})
       texts.current = {}
       setSend(null)
-      logDebug('tone3000', `picked tone ${toneId}: ${got?.title || 'untitled'}, ${list.length} A2 capture${list.length === 1 ? '' : 's'}`)
+      logDebug('tone3000', `picked tone ${toneId}: ${got?.title || 'untitled'}, ${captures.length} A2 capture${captures.length === 1 ? '' : 's'}`)
     } catch (err) {
-      if (alive.current) setFault(err?.message || 'TONE3000 couldn’t be reached.')
+      if (alive.current && mine === wanted.current) setFault(err?.message || 'TONE3000 couldn’t be reached.')
     } finally {
-      if (alive.current) setBusy(null)
+      if (alive.current && mine === wanted.current) setBusy((was) => (was === 'tone' ? null : was))
     }
+  }
+
+  /* A tone tapped in the list: up at once with what the list has of it, its captures and the rest fetched behind it. */
+  const openTone = (picked) => {
+    if (busy || picked?.id == null) return
+    setSaid('')
+    setTone(picked)
+    setModels(null)
+    setChecked({})
+    texts.current = {}
+    setSend(null)
+    load(picked.id)
+  }
+
+  /* Back to the list, which is as it was left. Not while a capture is being fetched or sent: its lines are on this view. */
+  const toList = () => {
+    if (busy && busy !== 'tone') return
+    wanted.current += 1
+    setBusy((was) => (was === 'tone' ? null : was))
+    setTone(null)
+    setModels(null)
+    setChecked({})
+    texts.current = {}
+    setSend(null)
+    setFault('')
+    setSaid('')
   }
 
   /*
@@ -135,8 +251,8 @@ export default function Tone3000Test() {
    * twice is finished once.
    */
   const returned = async (url) => {
-    if (!readCallback(url) || url === lastReturn.current) return
-    lastReturn.current = url
+    if (!readCallback(url) || taken.has(url)) return
+    taken.add(url)
     if (!alive.current) return
     setPage(null)
     /* Only over nothing, or over the opening of the page: a send that is going keeps its own word. */
@@ -148,8 +264,8 @@ export default function Tone3000Test() {
       /* The device would not read or let go of what it kept for the sign-in (lib/tone3000 says everything else in words of its own). */
       logDebug('tone3000', `the return was not finished: ${err?.message || err}`)
       /* Not taken up after all: the same return may be handed over again. */
-      lastReturn.current = null
-      if (alive.current) setFault('The sign-in to TONE3000 couldn’t be finished on this device. Tap Browse TONE3000 again.')
+      taken.delete(url)
+      if (alive.current) setFault(`The sign-in to TONE3000 couldn’t be finished on this ${deviceNoun()}. Try again.`)
       return
     } finally {
       if (alive.current) setBusy((was) => (was === 'back' ? null : was))
@@ -163,18 +279,23 @@ export default function Tone3000Test() {
       return
     }
     setSignedIn(true)
+    setMeAsk((n) => n + 1)
     setFault('')
-    if (done.toneId) {
-      setSaid('')
-      load(done.toneId)
-    } else {
-      setSaid('Signed in. No tone was picked.')
-    }
+    setSaid('')
+    /* A sign-in alone lands on the list. */
+    if (!done.toneId) return
+    /* A pick on TONE3000's own page opens that tone, but never over a capture that is going: its lines and its buttons are on the view the tone would replace. */
+    if (goingNow()) setSaid(PICK_AFTER_SEND)
+    else load(done.toneId)
   }
 
   useEffect(() => {
     alive.current = true
-    t3k.signedIn().then((yes) => alive.current && setSignedIn(yes))
+    t3k
+      .signedIn()
+      .then((yes) => alive.current && setSignedIn(yes === true))
+      /* A device that will not say is taken as not signed in: the sign-in view, never an empty card. */
+      .catch(() => alive.current && setSignedIn(false))
     const stop = onTone3000Return(returned)
     /* While this card is up it is where TONE3000's page is drawn, on a copy that can draw it. */
     const unhost = hostPage((url) => alive.current && setPage(url))
@@ -185,14 +306,37 @@ export default function Tone3000Test() {
     }
   }, [])
 
-  const browse = async (outside = false) => {
+  /* Whose sign-in it is, asked once for each sign-in. Not knowing is no fault: the top says "Signed in". An answer that lands after a sign-out, or after a newer sign-in, is nobody's. */
+  useEffect(() => {
+    if (signedIn !== true) {
+      setMe(null)
+      return undefined
+    }
+    let live = true
+    t3k
+      .me()
+      .then((who) => live && alive.current && setMe(who || null))
+      .catch((err) => (live ? whenSignedOut(err) : null))
+      .catch((err) => logDebug('tone3000', `whose sign-in it is was not read: ${err?.message || err}`))
+    return () => {
+      live = false
+    }
+  }, [signedIn, meAsk])
+
+  /*
+   * TONE3000's own page: the one to pick a tone on (Browse TONE3000), or
+   * with `pick` false its sign-in alone, which comes straight back to the
+   * list here (Continue, before a sign-in).
+   */
+  const browse = async (outside = false, pick = true) => {
     if (busy) return
     setBusy('open')
     setFault('')
     setSaid('')
     try {
-      await (outside === true ? startOutside() : t3k.start())
-      logDebug('tone3000', `opened TONE3000’s page ${outside !== true && pageInApp() ? 'inside the app' : 'in the browser'} to pick a tone`)
+      const how = { pick: pick !== false }
+      await (outside === true ? startOutside(how) : t3k.start(how))
+      logDebug('tone3000', `opened TONE3000’s page ${outside !== true && pageInApp() ? 'inside the app' : 'in the browser'} to ${how.pick ? 'pick a tone' : 'sign in'}`)
     } catch (err) {
       setFault(`TONE3000’s page didn’t open: ${err?.message || err}`)
     } finally {
@@ -206,14 +350,15 @@ export default function Tone3000Test() {
     setBusy(m.id)
     setFault('')
     try {
-      const text = await t3k.modelText(m)
+      const text = await t3k.modelText(m).catch(whenSignedOut)
       const read = readNam(text)
       const line = namSaid(read)
       logDebug('tone3000', `capture ${m.id} (${captureLabel(m)}): ${text.length} characters. ${line}`)
       if (read.ok && read.a2) texts.current[m.id] = text
       if (alive.current) setChecked((was) => ({ ...was, [m.id]: line }))
     } catch (err) {
-      if (alive.current) setFault(err?.message || 'That capture couldn’t be fetched.')
+      /* A sign-in that has run out is said once, by the sign-in view. */
+      if (alive.current && err?.status !== 401) setFault(err?.message || 'That capture couldn’t be fetched.')
     } finally {
       if (alive.current) setBusy(null)
     }
@@ -369,35 +514,113 @@ export default function Tone3000Test() {
     if (!alive.current) return
     texts.current = {}
     setSend(null)
+    wanted.current += 1
     setSignedIn(false)
+    /* The list was one account's (its own tones are in it): the next sign-in starts a new one. */
+    list.current = newList()
     setTone(null)
     setModels(null)
     setChecked({})
     setSaid('Signed out of TONE3000 on this device.')
   }
 
+  const whoSaid = me?.username ? `@${me.username}` : 'Signed in'
+  const picture = tone ? toneImage(tone) : null
+  const madeBy = tone ? creatorOf(tone) : ''
+
   return (
     <View style={{ gap: space.md }}>
-      <Text accessibilityRole="header" style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5, textTransform: 'uppercase' }}>
-        TONE3000
-      </Text>
-      {STEPS.map((step, i) => (
-        <Text key={step} style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>
-          {`${i + 1}. ${step}`}
+      {/* TONE3000's name on every view, whose sign-in it is, and the steps behind the ⓘ. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <Text accessibilityRole="header" style={{ flex: 1, color: color.silk, fontSize: font.lead, fontWeight: '800', letterSpacing: 1 }}>
+          TONE3000
         </Text>
-      ))}
-      <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 19 }}>{STEPS_FOOT}</Text>
-      <Press label={busy === 'open' ? 'Opening…' : tone ? 'Browse TONE3000 again' : 'Browse TONE3000'} tone="live" disabled={!!busy} onPress={() => browse()} />
-      {pageInApp() ? <Press label={BROWSE_OUTSIDE} sub={BROWSE_OUTSIDE_SUB} height={40} disabled={!!busy} onPress={() => browse(true)} /> : null}
+        {signedIn ? (
+          <View accessible accessibilityLabel={`Signed in to TONE3000${me?.username ? ` as ${me.username}` : ''}`} style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, flexShrink: 1 }}>
+            <Avatar uri={typeof me?.avatar_url === 'string' && /^https:\/\//.test(me.avatar_url) ? me.avatar_url : null} size={22} />
+            <Text numberOfLines={1} style={{ flexShrink: 1, color: color.silkDim, fontSize: font.small }}>
+              {whoSaid}
+            </Text>
+          </View>
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={HOW_IT_WORKS}
+          accessibilityState={{ expanded: info }}
+          hitSlop={8}
+          onPress={() => {
+            tick()
+            setInfo((was) => !was)
+          }}
+          style={({ pressed }) => ({ minWidth: TAP, minHeight: TAP, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: pressed || info ? color.panelHi : 'transparent' })}
+        >
+          <Text style={{ color: info ? color.silk : color.silkDim, fontSize: font.lead }}>ⓘ</Text>
+        </Pressable>
+      </View>
+      {info ? (
+        <View style={{ gap: space.sm }}>
+          {STEPS.map((step, i) => (
+            <Text key={step} style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>
+              {`${i + 1}. ${step}`}
+            </Text>
+          ))}
+          <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 19 }}>{STEPS_FOOT}</Text>
+        </View>
+      ) : null}
+
       {busy === 'back' ? <Note>{COMING_BACK}</Note> : null}
-      {busy === 'tone' ? <Note>Fetching the tone you picked…</Note> : null}
+      {busy === 'tone' && !tone ? <Note>Fetching the tone you picked…</Note> : null}
       {said ? <Note>{said}</Note> : null}
       {fault ? <Note tone="warn">{fault}</Note> : null}
-      {tone ? (
-        <View style={{ gap: space.sm }}>
-          <Text style={{ color: color.silk, fontSize: font.lead, fontWeight: '700' }}>{tone.title || 'Untitled tone'}</Text>
-          {/* The creator and the licence, always (TONE3000's terms). */}
-          <Text style={{ color: color.silkDim, fontSize: font.small }}>{toneCredit(tone)}</Text>
+
+      {/* Before a sign-in: what this is, and Continue to TONE3000's own sign-in. */}
+      {signedIn === false ? (
+        <View style={{ gap: space.md }}>
+          <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>{PARTNER}</Text>
+          <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>{partnerMore()}</Text>
+          <Press label={busy === 'open' ? 'Opening…' : CONTINUE} tone="live" disabled={!!busy} onPress={() => browse(false, false)} />
+          {pageInApp() ? <Press label={BROWSE_OUTSIDE} sub={BROWSE_OUTSIDE_SUB} height={40} disabled={!!busy} onPress={() => browse(true, false)} /> : null}
+        </View>
+      ) : null}
+
+      {/* Signed in, no tone open: the list. */}
+      {signedIn && !tone ? <Tone3000Browser list={list.current} disabled={!!busy} onOpen={openTone} /> : null}
+
+      {/* A tone: what it is, who made it, and its captures. */}
+      {signedIn && tone ? (
+        <View style={{ gap: space.md }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to the list"
+            disabled={!!busy && busy !== 'tone'}
+            onPress={() => {
+              tick()
+              toList()
+            }}
+            style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: TAP, justifyContent: 'center', paddingRight: space.lg, opacity: busy && busy !== 'tone' ? 0.5 : pressed ? 0.7 : 1 })}
+          >
+            <Text style={{ color: color.live, fontSize: font.body, fontWeight: '600' }}>{BACK_TO_LIST}</Text>
+          </Pressable>
+          <View style={{ flexDirection: 'row', gap: space.md, alignItems: 'flex-start' }}>
+            {picture ? <Image source={{ uri: picture }} accessible={false} resizeMode="cover" style={{ width: 64, height: 64, borderRadius: radius.md, backgroundColor: color.panelHi }} /> : <View accessible={false} style={{ width: 64, height: 64, borderRadius: radius.md, backgroundColor: color.panelHi }} />}
+            <View style={{ flex: 1, gap: space.xs }}>
+              <Text style={{ color: color.silk, fontSize: font.lead, fontWeight: '700' }}>{tone.title || 'Untitled tone'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+                {madeBy ? <Avatar uri={creatorImage(tone)} size={16} /> : null}
+                <Text numberOfLines={1} style={{ flex: 1, color: color.silkDim, fontSize: font.small }}>
+                  {[madeBy, gearSaid(tone.gear), 'NAM'].filter(Boolean).join(' · ')}
+                </Text>
+              </View>
+              {/* The creator and the licence, always (TONE3000's terms). The licence comes with the tone's own read, so the line waits for it. */}
+              {busy === 'tone' && tone.license == null ? null : <Text style={{ color: color.silkDim, fontSize: font.small }}>{toneCredit(tone)}</Text>}
+            </View>
+          </View>
+          {tone.description ? (
+            <Text numberOfLines={4} style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>
+              {String(tone.description)}
+            </Text>
+          ) : null}
+          {busy === 'tone' ? <Note>Fetching its captures…</Note> : null}
           {models && !models.length ? <Note>This tone has no A2 captures, which is the kind the Axe-Fx III’s NAM block plays.</Note> : null}
           {(models || []).map((m) => (
             <View key={m.id} style={{ gap: space.xs }}>
@@ -433,7 +656,11 @@ export default function Tone3000Test() {
           ))}
         </View>
       ) : null}
-      {signedIn ? <Press label="Sign out of TONE3000" disabled={!!busy} onPress={signOut} /> : null}
+
+      {/* Always one tap from everything TONE3000 has, on its own page (its rule for an app that lists its tones itself). */}
+      {signedIn ? <Press label={busy === 'open' ? 'Opening…' : 'Browse TONE3000'} sub="Every capture the NAM block can play, on its own page, with play buttons" disabled={!!busy} onPress={() => browse()} /> : null}
+      {signedIn && pageInApp() ? <Press label={BROWSE_OUTSIDE} sub={BROWSE_OUTSIDE_SUB} height={40} disabled={!!busy} onPress={() => browse(true)} /> : null}
+      {signedIn ? <Press label="Sign out of TONE3000" height={40} disabled={!!busy} onPress={signOut} /> : null}
       <Text style={{ color: color.silkFaint, fontSize: font.micro }}>{T3K_POWERED}</Text>
       {/* TONE3000's page inside the app; nothing at all on a copy built without the web view. */}
       <Tone3000Page

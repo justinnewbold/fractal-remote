@@ -953,6 +953,8 @@ export default function Settings({
               <SetupRow title="Customers" status="Sales, sign-ups, and giving access" onPress={() => setPage('customers')} />
               <SetupRow title="App health" status="What's live, what works, and what's been tried" onPress={() => setPage('health')} />
               <SetupRow title="Testing" status="View as a new customer, Bluetooth check" onPress={() => setPage('testing')} />
+              {/* A page of its own since 14 November 2026: TONE3000's list drawn in the app is a screen, not a card at the foot of the testing tools. His account's, as every row here is. */}
+              <SetupRow title="TONE3000" status="Search for a capture and send it to the Axe-Fx III" onPress={() => setPage('tone3000')} />
               {/*
                 "Also let Axiom use this pedal" (shared/axiom.mjs), for the
                 computer this phone is connected to: in his Developer section
@@ -1322,8 +1324,19 @@ export default function Settings({
               <BlockReader />
             </>
           ) : null}
-          {/* "Next I want to add TONE3000" (13 November 2026): its first piece, signing in and picking on TONE3000's own page. Needs no unit and no Bluetooth; his account's, as this page is. */}
-          <Section>TONE3000</Section>
+        </>
+      ) : null}
+
+      {/*
+        "Next I want to add TONE3000" (13 November 2026), and "actually
+        native in our app using the API" (14 November 2026): its list, a
+        tone's captures, and the send to the unit. Needs no unit to browse;
+        his account's alone. The card says TONE3000's name itself, so the
+        page's head is the only other place it is written.
+      */}
+      {page === 'tone3000' && isAdmin(account?.id) ? (
+        <>
+          {head('TONE3000', 'back')}
           <Tone3000Test />
         </>
       ) : null}

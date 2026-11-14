@@ -36,8 +36,8 @@ export const T3K_PAGE_CLOSE = 'Close'
 
 /** A page that would not load. */
 export const PAGE_UNREACHED = 'TONE3000 couldn’t be reached. Check the internet and try again.'
-/** TONE3000 answered the sign-in with an error page. The number it answered with is for the log, not the screen. */
-export const PAGE_REFUSED = 'TONE3000 turned the sign-in down. Tap Browse TONE3000 again.'
+/** TONE3000 answered the sign-in with an error page. The number it answered with is for the log, not the screen. Names no button: the way in is Continue before a sign-in and Browse TONE3000 after. */
+export const PAGE_REFUSED = 'TONE3000 turned the sign-in down. Try again.'
 
 /** The origins the web view may load itself: the web, and the scheme TONE3000 sends the player back by. */
 export const pageOrigins = (redirect = T3K_REDIRECT) => ['https://*', 'http://*', `${String(redirect).split(':')[0]}://*`]
